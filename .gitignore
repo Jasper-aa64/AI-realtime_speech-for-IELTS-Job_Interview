@@ -1,0 +1,24 @@
+# 构建产物
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+test_spdlog
+
+# vcpkg 安装目录（可选，如需保留可移除）
+vcpkg_installed/
+
+# 系统文件
+.DS_Store
+
+# 日志文件
+logs/
+termi.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
