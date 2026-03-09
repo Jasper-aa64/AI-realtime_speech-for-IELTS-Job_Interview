@@ -1,55 +1,45 @@
 #include "services/llm_client.h"
-#include "common/config.h"
+#include <curl/curl.h>
 #include "common/logger.h"
 #include "common/utils.h"
-#include <curl/curl.h>
-#include <sstream>
-#include <stdexcept>
-#include <algorithm>
-
-// Undefine Windows macros that conflict with our methods
-#ifdef SendMessage
-#undef SendMessage
-#endif
-#ifdef min
-#undef min
-#endif
-#ifdef max
-#undef max
-#endif
+#include "common/config.h"
 
 namespace interview {
 namespace services {
 
-// CURL写入回调函数
-static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
-    userp->append(static_cast<char*>(contents), size * nmemb);
-    return size * nmemb;
-}
-
 class LLMClient::LLMClientImpl {
 public:
+    static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+        size_t total_size = size * nmemb;
+        std::string* response = static_cast<std::string*>(userp);
+        response->append(static_cast<char*>(contents), total_size);
+        return total_size;
+    }
+
     LLMClientImpl() {
+        // 初始化用于调用 LLM API 的 HTTP/网络资源。
         curl_global_init(CURL_GLOBAL_DEFAULT);
     }
 
     ~LLMClientImpl() {
-        curl_global_cleanup();
+        // 清理 HTTP/网络资源。
+        curl_global_cleanup(); 
     }
 
     std::string CallAPI(const nlohmann::json& request_body) {
-        auto& cfg = common::Config::Instance().llm_config;
-
+        // 将 request_body 发送到配置的 LLM 接口，并返回原始响应字符串。
+        auto cfg = common::Config::Instance().llm_config;
         if (cfg.api_key.empty()) {
             throw std::runtime_error("LLM API key not configured");
         }
-
+        if (cfg.api_url.empty()) {
+            throw std::runtime_error("LLM API URL not configured");
+        }
         CURL* curl = curl_easy_init();
         if (!curl) {
-            throw std::runtime_error("Failed to initialize CURL");
+            throw std::runtime_error("Failed to initialize curl");
         }
-
-        // 将JSON转换为UTF-8字符串并保持变量存活
+        
         std::string request_json = request_body.dump();
         LOG_INFO("=== LLM API Request ===");
         LOG_INFO("URL: {}", cfg.api_url);
@@ -60,64 +50,57 @@ public:
         struct curl_slist* headers = nullptr;
 
         try {
-            // 设置请求头，明确指定UTF-8编码
             headers = curl_slist_append(headers, "Content-Type: application/json; charset=utf-8");
             std::string auth_header = "Authorization: Bearer " + cfg.api_key;
             headers = curl_slist_append(headers, auth_header.c_str());
 
             // 设置CURL选项
-            curl_easy_setopt(curl, CURLOPT_URL, cfg.api_url.c_str());
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_URL, cfg.api_url.c_str());
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_json.c_str());
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, request_json.size());
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, cfg.timeout_seconds);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT, cfg.timeout_seconds);
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);  // 开发环境可以禁用SSL验证
 
             // 执行请求
             CURLcode res = curl_easy_perform(curl);
 
             if (res != CURLE_OK) {
                 std::string error = "CURL request failed: " + std::string(curl_easy_strerror(res));
-                curl_easy_cleanup(curl);
-                curl_slist_free_all(headers);
                 throw std::runtime_error(error);
             }
-
-            // 检查HTTP状态码
+            // 检查响应状态码
             long http_code = 0;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-
+            
             LOG_INFO("=== LLM API Response ===");
             LOG_INFO("HTTP Status: {}", http_code);
             LOG_INFO("Response Body:\n{}", response_string);
 
             if (http_code != 200) {
-                LOG_ERROR("LLM API returned HTTP {}: {}", http_code, response_string);
-                curl_easy_cleanup(curl);
-                curl_slist_free_all(headers);
-                throw std::runtime_error("LLM API request failed with HTTP " + std::to_string(http_code));
+                LOG_ERROR("LLM API returned error: {}", response_string);
+                throw std::runtime_error("LLM API returned error: " + response_string);
             }
 
             curl_easy_cleanup(curl);
             curl_slist_free_all(headers);
 
             return response_string;
-
-        } catch (...) {
+        } catch (const std::exception& e) {
             curl_easy_cleanup(curl);
-            if (headers) curl_slist_free_all(headers);
+            curl_slist_free_all(headers);
+            LOG_ERROR("Error in LLM API call: {}", e.what());
             throw;
-        }
+        } 
     }
 
+    // 基于对话消息构建与服务端兼容的请求 JSON。
     nlohmann::json BuildRequestBody(const std::vector<Message>& messages) {
         auto& cfg = common::Config::Instance().llm_config;
-
+        
         nlohmann::json request;
 
-        // Token Pony API requires model_config with model name
+        // 构建 LLM API 请求体，兼容 server 预期结构
         nlohmann::json model_config;
         model_config["name"] = cfg.model;  // 模型名称放在 model_config.name
         model_config["temperature"] = cfg.temperature;
@@ -129,31 +112,37 @@ public:
         request["temperature"] = cfg.temperature;
         request["max_tokens"] = cfg.max_tokens;
 
-        nlohmann::json messages_array = nlohmann::json::array();
-        for (const auto& msg : messages) {
-            nlohmann::json msg_obj;
-            msg_obj["role"] = msg.role;
-            msg_obj["content"] = msg.content;
-            messages_array.push_back(msg_obj);
+        // 封装消息
+        nlohmann::json arr = nlohmann::json::array();
+        for(const auto& msg : messages){
+            nlohmann::json item;
+            item["role"] = msg.role;
+            item["content"] = msg.content;
+            arr.push_back(item);
         }
-        request["messages"] = messages_array;
+        request["messages"] = arr;
 
         return request;
     }
 
     std::string ExtractResponse(const std::string& response_str) {
         try {
+            // 解析 LLM API JSON 响应，提取 assistant 生成的文本内容
             auto response_json = nlohmann::json::parse(response_str);
 
+            // 检查返回格式，确认包含 choices 列表且非空
             if (response_json.contains("choices") && !response_json["choices"].empty()) {
-                auto& choice = response_json["choices"][0];
+                const auto& choice = response_json["choices"][0];
+                // message.content 是常见的返回格式
                 if (choice.contains("message") && choice["message"].contains("content")) {
                     return choice["message"]["content"].get<std::string>();
                 }
+                // 兼容 legacy 格式，直接有 text 字段
+                if (choice.contains("text")) {
+                    return choice["text"].get<std::string>();
+                }
             }
-
-            throw std::runtime_error("Invalid response format from LLM API");
-
+            throw std::runtime_error("Invalid response format from LLM API: missing expected keys.");
         } catch (const nlohmann::json::exception& e) {
             throw std::runtime_error("Failed to parse LLM response: " + std::string(e.what()));
         }
@@ -192,37 +181,36 @@ std::string LLMClient::SendConversation(const std::vector<Message>& messages) {
 }
 
 nlohmann::json LLMClient::GenerateQuestionsFromResume(const std::string& resume_text, int min_questions) {
-    std::string system_prompt = R"(你是一位资深的C++技术面试官。请仔细阅读候选人的简历，并根据简历内容生成至少)" +
-                               std::to_string(min_questions) + R"(个技术面试问题。
-
-要求：
-1. 问题必须与候选人简历中的项目经验、技术栈紧密相关
-2. 难度分布：30%基础题、50%中级题、20%高级题
-3. 覆盖C++核心知识：语法、内存管理、面向对象、STL、多线程、性能优化等
-4. 每个问题都要有明确的考察点
-5. 问题要具体、可量化评估
-
-请以JSON数组格式返回问题列表，每个问题包含以下字段：
-- question: 问题内容
-- category: 类别（如"内存管理"、"多线程"等）
-- level: 难度（basic/intermediate/advanced）
-- key_points: 关键考察点数组
-- expected_keywords: 期望答案中包含的关键词数组
-
-示例格式：
-[
-  {
-    "question": "在你的XX项目中，如何管理内存以避免内存泄漏？",
-    "category": "内存管理",
-    "level": "intermediate",
-    "key_points": ["智能指针", "RAII", "资源管理"],
-    "expected_keywords": ["shared_ptr", "unique_ptr", "RAII", "析构函数"]
-  }
-])";
+    std::string system_prompt = 
+        u8"你是一位资深的C++技术面试官。请仔细阅读候选人的简历，并根据简历内容生成至少" +
+        std::to_string(min_questions) + 
+        u8"个技术面试问题。\n\n"
+        "要求：\n"
+        "1. 问题必须与候选人简历中的项目经验、技术栈紧密相关\n"
+        "2. 难度分布：30%基础题、50%中级题、20%高级题\n"
+        "3. 覆盖C++核心知识：语法、内存管理、面向对象、STL、多线程、性能优化等\n"
+        "4. 每个问题都要有明确的考察点\n"
+        "5. 问题要具体、可量化评估\n\n"
+        "请以JSON数组格式返回问题列表，每个问题包含以下字段：\n"
+        "- question: 问题内容\n"
+        "- category: 类别（如\"内存管理\"、\"多线程\"等）\n"
+        "- level: 难度（basic/intermediate/advanced）\n"
+        "- key_points: 关键考察点数组\n"
+        "- expected_keywords: 期望答案中包含的关键词数组\n\n"
+        "示例格式：\n"
+        "[\n"
+        "  {\n"
+        "    \"question\": \"在你的XX项目中，如何管理内存以避免内存泄漏？\",\n"
+        "    \"category\": \"内存管理\",\n"
+        "    \"level\": \"intermediate\",\n"
+        "    \"key_points\": [\"智能指针\", \"RAII\", \"资源管理\"],\n"
+        "    \"expected_keywords\": [\"shared_ptr\", \"unique_ptr\", \"RAII\", \"析构函数\"]\n"
+        "  }\n"
+        "]";
 
     std::string user_prompt = "候选人简历内容：\n\n" + resume_text +
-                             "\n\n请根据以上简历生成" + std::to_string(min_questions) +
-                             "个面试问题，以JSON格式返回。";
+    "\n\n请根据以上简历生成" + std::to_string(min_questions) +
+    "个面试问题，以JSON格式返回。";
 
     LOG_INFO(">>> Calling LLM: GenerateQuestionsFromResume");
     LOG_INFO("Resume text length: {} characters", resume_text.length());
@@ -274,19 +262,22 @@ nlohmann::json LLMClient::EvaluateAnswer(const std::string& question, const std:
 3. 评估要看答案的准确性、完整性和深度
 4. 追问不是必须的，只在有价值时才追问
 
-请以JSON格式返回评估结果，包含以下字段：
-- score: 分数（0-100）
-- feedback: 简短反馈（1-2句话，要客观真实）
-- need_followup: 是否需要追问（true/false）
-- followup_question: 追问的问题（如果need_followup为true）
-- strengths: 回答的优点数组
-- weaknesses: 回答的不足数组
+请以标准JSON格式返回评估结果，字段如下：
+{
+  "score": 整数,                        // 分数（0-100）
+  "feedback": "简短客观反馈",            // 一两句话的简要评价
+  "need_followup": true/false,           // 是否需要追问
+  "followup_question": "追问内容，如不追问可省略或设为null", // 只有need_followup为true时必填
+  "strengths": ["优点1", "优点2"],        // 回答的优点，可为空数组
+  "weaknesses": ["不足1", "不足2"]        // 回答不足，可为空数组
+}
 
 示例1（优秀回答，不追问）：
 {
   "score": 88,
   "feedback": "回答准确全面，展现了对智能指针的深入理解，包括引用计数和线程安全等关键点",
   "need_followup": false,
+  "followup_question": null,
   "strengths": ["理解了智能指针的原理", "提到了引用计数实现", "了解线程安全问题"],
   "weaknesses": ["可以进一步说明weak_ptr的应用场景"]
 }
@@ -306,36 +297,50 @@ nlohmann::json LLMClient::EvaluateAnswer(const std::string& question, const std:
   "score": 35,
   "feedback": "回答不准确，对智能指针的理解存在明显错误，建议系统学习",
   "need_followup": false,
+  "followup_question": null,
   "strengths": [],
   "weaknesses": ["概念混淆", "答非所问", "没有抓住问题重点"]
 })";
 
-    std::string user_prompt = "问题：" + question + "\n\n候选人回答：" + answer +
-                             "\n\n请评估这个回答，判断是否需要追问，并以JSON格式返回结果。";
+    std::string user_prompt = "面试问题：\n" + question + "\n\n候选人回答：\n" + answer +
+        "\n\n请根据上述评分标准和要求进行专业、严格的评估，直接返回标准化的JSON格式，无须解释说明。";
 
     LOG_INFO(">>> Calling LLM: EvaluateAnswer");
     LOG_INFO("Question: {}", question);
     LOG_INFO("Answer: {}", answer);
 
-    std::string response = SendMessage(user_prompt, system_prompt);
-
     try {
-        // 使用utils中的JSON解析函数
-        auto evaluation = common::ParseJSONFromResponse(response);
+        std::string response = SendMessage(user_prompt, system_prompt);
 
-        LOG_INFO("<<< Evaluation Result - Score: {}", evaluation["score"].get<int>());
-        return evaluation;
+        // 使用utils中的JSON解析函数，仅提取大括号中的主对象
+        auto eval_json = common::ParseJSONFromResponse(response, '{', '}');
 
+        // 兼容部分LLM可能多返回内容的情况
+        if (!eval_json.is_object() || eval_json.empty() || !eval_json.contains("score")) {
+            LOG_ERROR("Parsed JSON is not a valid evaluation object or missing essential fields");
+            throw std::runtime_error("Invalid evaluation JSON format");
+        }
+
+        LOG_INFO("Evaluation result: score={}, need_followup={}", 
+                 eval_json.value("score", -1),
+                 eval_json.value("need_followup", false));
+        return eval_json;
+
+    } catch (const nlohmann::json::exception& e) {
+        LOG_ERROR("JSON parse error in EvaluateAnswer: {}", e.what());
+        throw std::runtime_error("Failed to parse evaluation JSON: " + std::string(e.what()));
     } catch (const std::exception& e) {
-        LOG_ERROR("Failed to parse evaluation JSON: {}", e.what());
-        // 返回默认评估
-        nlohmann::json default_eval;
-        default_eval["score"] = 50;
-        default_eval["feedback"] = "评估失败，给予中等分数";
-        default_eval["strengths"] = nlohmann::json::array();
-        default_eval["weaknesses"] = nlohmann::json::array();
-        default_eval["suggestions"] = nlohmann::json::array();
-        return default_eval;
+        LOG_ERROR("EvaluateAnswer error: {}", e.what());
+        // 返回默认评分
+        nlohmann::json default_obj = {
+            {"score", 50},
+            {"feedback", "未能正确评估，返回默认分数。"},
+            {"need_followup", false},
+            {"followup_question", nullptr},
+            {"strengths", nlohmann::json::array()},
+            {"weaknesses", nlohmann::json::array()}
+        };
+        return default_obj;
     }
 }
 

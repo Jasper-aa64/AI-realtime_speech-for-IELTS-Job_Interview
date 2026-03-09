@@ -4,6 +4,7 @@
     "boost-asio",
     "boost-beast",
     "boost-thread",
+    "curl",
     "nlohmann-json",
     "openssl",
     "podofo",

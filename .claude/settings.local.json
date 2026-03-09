@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake ..)",
+      "Bash(make services_test)",
+      "Bash(vcpkg list)"
+    ]
+  }
+}

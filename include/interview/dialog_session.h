@@ -11,7 +11,7 @@
  * 3. 处理服务器事件（TTS开始/结束、ASR结果、用户说话状态）
  * 4. 控制面试流程（问题切换、回答处理、评分、追问）
  * 5. 实现状态机（空闲、说话、思考等状态转换）
- */
+ */ 
 
 #pragma once
 
@@ -40,23 +40,6 @@ namespace session {
  * 3. 运行时通过状态机控制面试流程
  * 4. 接收服务器事件，触发状态转换和动作
  * 5. Stop()关闭连接、保存报告
- *
- * 使用示例：
- * @code
- * // 创建面试会话
- * session::DialogSession session("张三");
- *
- * // 配置简历驱动面试
- * session.ConfigureResumeInterview("resume.pdf", 50);
- *
- * // 启动会话
- * session.Start();
- *
- * // 等待会话结束
- * while (session.IsRunning()) {
- *     std::this_thread::sleep_for(std::chrono::milliseconds(100));
- * }
- * @endcode
  */
 class DialogSession {
 public:
@@ -93,7 +76,7 @@ public:
      *
      * 工作流程：
      * 1. 使用PDFParser解析PDF文件，提取文本内容
-     * 2. 调用LLM API，根据简历内容生成min_questions个问题
+     * 2. 调用LLM API，根据简历内容生成 min_questions 个问题
      * 3. 问题包含难度分级、类别、考察点等元数据
      * 4. 存储问题列表，供面试流程使用
      *
@@ -147,7 +130,7 @@ public:
 
     /**
      * @brief 检查会话是否正在运行
-     *
+     * 
      * 查询会话的运行状态。主线程可以通过轮询此方法等待会话结束。
      *
      * @return true=会话正在运行，false=会话已停止
