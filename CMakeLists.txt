@@ -174,3 +174,45 @@ add_test(
     NAME services_test
     COMMAND services_test
 )
+
+# ==================== Interview Test ====================
+
+add_executable(
+    interview_test
+    tests/interview_test.cpp
+    src/interview/interview_manager.cpp
+    src/services/llm_client.cpp
+    src/services/pdf_parser.cpp
+    src/common/config.cpp
+    src/common/logger.cpp
+)
+
+target_include_directories(
+    interview_test
+    PRIVATE
+    ${VCPKG_LOCAL}/include
+    ${VCPKG_GLOBAL}/include
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(
+    interview_test
+    PRIVATE
+    ${VCPKG_GLOBAL}/lib/libgtest.a
+    spdlog::spdlog
+    podofo::podofo
+    CURL::libcurl
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    BZip2::BZip2
+    LibLZMA::LibLZMA
+    unofficial::brotli::brotlidec
+    expat::expat
+    Iconv::Iconv
+)
+
+add_test(
+    NAME interview_test
+    COMMAND interview_test
+)

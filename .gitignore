@@ -20,5 +20,6 @@ termi.txt
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
