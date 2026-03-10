@@ -4,6 +4,9 @@ project(AIProject)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
 enable_testing()
 
@@ -11,6 +14,116 @@ enable_testing()
 set(VCPKG_LOCAL  "${PROJECT_SOURCE_DIR}/vcpkg_installed/arm64-osx")
 set(VCPKG_GLOBAL "$ENV{HOME}/Desktop/CS/Cplusplus/vcpkg/installed/arm64-osx")
 list(PREPEND CMAKE_PREFIX_PATH "${VCPKG_LOCAL}")
+
+# ==================== Application ====================
+
+add_executable(
+    CppInterviewSystem
+    src/main.cpp
+    src/interview/dialog_session.cpp
+    src/interview/interview_manager.cpp
+    src/services/audio_manager.cpp
+    src/services/llm_client.cpp
+    src/services/pdf_parser.cpp
+    src/services/realtime_client.cpp
+    src/common/config.cpp
+    src/common/logger.cpp
+    src/common/protocol.cpp
+    src/common/interview_state.cpp
+)
+
+target_include_directories(
+    CppInterviewSystem
+    PRIVATE
+    ${VCPKG_LOCAL}/include
+    ${VCPKG_GLOBAL}/include
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(
+    CppInterviewSystem
+    PRIVATE
+    spdlog::spdlog
+    podofo::podofo
+    CURL::libcurl
+    portaudio_static
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    BZip2::BZip2
+    LibLZMA::LibLZMA
+    unofficial::brotli::brotlidec
+    expat::expat
+    Iconv::Iconv
+    Boost::thread
+    Boost::chrono
+    Boost::date_time
+    Boost::atomic
+)
+
+# ==================== Qt GUI Application ====================
+
+find_package(Qt6 COMPONENTS Widgets QUIET)
+if(NOT Qt6_FOUND)
+    find_package(Qt5 COMPONENTS Widgets QUIET)
+endif()
+
+if(Qt6_FOUND OR Qt5_FOUND)
+    if(Qt6_FOUND)
+        set(QT_LIB Qt6::Widgets)
+    else()
+        set(QT_LIB Qt5::Widgets)
+    endif()
+
+    add_executable(
+        CppInterviewSystemQt
+        src/main_qt.cpp
+        include/ui/mainwindow.h
+        include/ui/config_dialog.h
+        src/ui/mainwindow.cpp
+        src/ui/config_dialog.cpp
+        src/interview/dialog_session.cpp
+        src/interview/interview_manager.cpp
+        src/services/audio_manager.cpp
+        src/services/llm_client.cpp
+        src/services/pdf_parser.cpp
+        src/services/realtime_client.cpp
+        src/common/config.cpp
+        src/common/logger.cpp
+        src/common/protocol.cpp
+        src/common/interview_state.cpp
+    )
+
+    target_include_directories(
+        CppInterviewSystemQt
+        PRIVATE
+        ${VCPKG_LOCAL}/include
+        ${VCPKG_GLOBAL}/include
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/src
+    )
+
+    target_link_libraries(
+        CppInterviewSystemQt
+        PRIVATE
+        ${QT_LIB}
+        spdlog::spdlog
+        podofo::podofo
+        CURL::libcurl
+        portaudio_static
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        BZip2::BZip2
+        LibLZMA::LibLZMA
+        unofficial::brotli::brotlidec
+        expat::expat
+        Iconv::Iconv
+        Boost::thread
+        Boost::chrono
+        Boost::date_time
+        Boost::atomic
+    )
+endif()
 
 # ==================== Config Test ====================
 

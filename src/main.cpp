@@ -24,11 +24,8 @@
  */
 
 #include <iostream>
-#include <memory>
 #include <csignal>
 #include <thread>
-#include <chrono>
-#include <CLI/CLI.hpp>
 #include "interview/dialog_session.h"
 #include "common/config.h"
 #include "common/logger.h"
@@ -75,58 +72,89 @@ int main(int argc, char* argv[]) {
 #endif
 
     // ========== 命令行参数解析 ==========
-    // 使用CLI11库解析命令行参数，提供友好的用户接口
-    CLI::App app{"C++ Technical Interview System - AI-driven voice interview platform"};
-
-    // 配置文件路径
     std::string config_file_path;
-    app.add_option("--config-file", config_file_path, "Path to JSON configuration file")
-        ->required()
-        ->check(CLI::ExistingFile);
-
-    // 基本参数配置
     std::string candidate_name = "候选人";
-    app.add_option("-c,--candidate", candidate_name, "Candidate name")
-        ->default_val("候选人");
-
     std::string resume_pdf_path;
-    app.add_option("-r,--resume", resume_pdf_path, "PDF resume file for AI-driven interview")
-        ->check(CLI::ExistingFile);  // 自动验证文件存在性
-
     int min_questions = 15;
-    app.add_option("-q,--questions", min_questions, "Number of questions to generate from resume")
-        ->default_val(15)
-        ->check(CLI::Range(5, 100));  // 验证问题数量在合理范围内
-
-    // LLM配置参数
-    // 注意：这些参数是可选的，如果不提供则使用Config中的默认值
     std::string llm_api_url;
-    app.add_option("--api-url", llm_api_url, "LLM API URL");
-
     std::string llm_api_key;
-    app.add_option("--api-key", llm_api_key, "LLM API key");
-
     std::string llm_model;
-    app.add_option("-m,--model", llm_model, "LLM model name (e.g., qwen3-8b)");
-
-    float llm_temperature = -1.0f;  // -1表示未设置，使用默认值
-    app.add_option("-t,--temperature", llm_temperature, "LLM temperature (0.0-2.0)")
-        ->check(CLI::Range(0.0f, 2.0f));  // 验证温度参数范围
-
-    // 调试模式标志
+    float llm_temperature = -1.0f;
     bool debug_mode = false;
-    app.add_flag("-d,--debug", debug_mode, "Enable debug mode");
 
-    // 解析命令行参数
+    auto print_usage = []() {
+        std::cout
+            << "Usage:\n"
+            << "  CppInterviewSystem --config-file <path> [options]\n\n"
+            << "Options:\n"
+            << "  -c, --candidate <name>\n"
+            << "  -r, --resume <pdf_path>\n"
+            << "  -q, --questions <5-100>\n"
+            << "      --api-url <url>\n"
+            << "      --api-key <key>\n"
+            << "  -m, --model <model>\n"
+            << "  -t, --temperature <0.0-2.0>\n"
+            << "  -d, --debug\n";
+    };
+
     try {
-        app.parse(argc, argv);
-    } catch (const CLI::ParseError &e) {
-        return app.exit(e);  // 解析失败时打印帮助信息并退出
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+            auto require_next = [&](const std::string& name) -> std::string {
+                if (i + 1 >= argc) {
+                    throw std::runtime_error("Missing value for argument: " + name);
+                }
+                return argv[++i];
+            };
+
+            if (arg == "--config-file") {
+                config_file_path = require_next(arg);
+            } else if (arg == "-c" || arg == "--candidate") {
+                candidate_name = require_next(arg);
+            } else if (arg == "-r" || arg == "--resume") {
+                resume_pdf_path = require_next(arg);
+            } else if (arg == "-q" || arg == "--questions") {
+                min_questions = std::stoi(require_next(arg));
+            } else if (arg == "--api-url") {
+                llm_api_url = require_next(arg);
+            } else if (arg == "--api-key") {
+                llm_api_key = require_next(arg);
+            } else if (arg == "-m" || arg == "--model") {
+                llm_model = require_next(arg);
+            } else if (arg == "-t" || arg == "--temperature") {
+                llm_temperature = std::stof(require_next(arg));
+            } else if (arg == "-d" || arg == "--debug") {
+                debug_mode = true;
+            } else if (arg == "-h" || arg == "--help") {
+                print_usage();
+                return 0;
+            } else {
+                throw std::runtime_error("Unknown argument: " + arg);
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Argument parse error: " << e.what() << std::endl;
+        print_usage();
+        return 1;
+    }
+
+    if (config_file_path.empty()) {
+        std::cerr << "Error: --config-file is required" << std::endl;
+        print_usage();
+        return 1;
+    }
+    if (min_questions < 5 || min_questions > 100) {
+        std::cerr << "Error: --questions must be in range [5, 100]" << std::endl;
+        return 1;
+    }
+    if (llm_temperature >= 0.0f && llm_temperature > 2.0f) {
+        std::cerr << "Error: --temperature must be in range [0.0, 2.0]" << std::endl;
+        return 1;
     }
 
     // ========== 加载配置文件 ==========
     try {
-        config::Config::Instance().LoadFromFile(config_file_path);
+        common::Config::Instance().LoadFromFile(config_file_path);
     } catch (const std::exception& e) {
         std::cerr << "Failed to load configuration: " << e.what() << std::endl;
         return 1;
@@ -134,7 +162,7 @@ int main(int argc, char* argv[]) {
 
     // ========== 初始化日志系统 ==========
     // 必须在所有其他操作之前初始化日志
-    utils::Logger::Init("interview.log", debug_mode);
+    common::Logger::Init("interview.log", debug_mode);
 
     LOG_INFO("========================================");
     LOG_INFO("C++ Technical Interview System v1.0");
@@ -143,7 +171,7 @@ int main(int argc, char* argv[]) {
     // ========== 配置LLM参数 ==========
     // 如果用户提供了LLM配置参数，覆盖Config中的默认值
     if (!llm_api_url.empty() || !llm_api_key.empty() || !llm_model.empty() || llm_temperature >= 0) {
-        auto& cfg = config::Config::Instance().llm_config;
+        auto& cfg = common::Config::Instance().llm_config;
         if (!llm_api_url.empty()) {
             cfg.api_url = llm_api_url;
             LOG_INFO("LLM API URL: {}", cfg.api_url);
@@ -174,7 +202,7 @@ int main(int argc, char* argv[]) {
         LOG_INFO("");
 
         // 延迟3秒，给用户准备时间
-        std::this_thread::sleep_for(config::timing::INTERVIEW_START_DELAY);
+        std::this_thread::sleep_for(common::timing::INTERVIEW_START_DELAY);
 
         // 创建对话会话
         session::DialogSession session(candidate_name);
@@ -214,7 +242,7 @@ int main(int argc, char* argv[]) {
 
         // 轮询检查会话状态（每100ms检查一次）
         while (session.IsRunning()) {
-            std::this_thread::sleep_for(config::timing::MAIN_LOOP_INTERVAL);
+            std::this_thread::sleep_for(common::timing::MAIN_LOOP_INTERVAL);
         }
 
         // 会话正常结束

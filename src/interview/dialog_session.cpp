@@ -357,8 +357,12 @@ public:
             // 面试官说话期间持续发送静音包，避免服务端因长时间无音频输入而超时
             if (is_playing_audio) {
                 std::vector<uint8_t> silent_audio(samples_per_interval * sizeof(int16_t), 0);
-                if (realtime_client) {
-                    realtime_client->SendAudioData(silent_audio);
+                try {
+                    if (realtime_client) {
+                        realtime_client->SendAudioData(silent_audio);
+                    }
+                } catch (const std::exception& e) {
+                    LOG_WARNING("静音音频发送失败，跳过本帧: {}", e.what());
                 }
                 accumulated_buffer.clear();
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));

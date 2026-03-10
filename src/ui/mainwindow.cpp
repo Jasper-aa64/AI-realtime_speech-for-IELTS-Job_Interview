@@ -2,6 +2,8 @@
 #include "ui/config_dialog.h"
 #include "interview/dialog_session.h"
 #include "common/logger.h"
+#include <QAction>
+#include <QKeySequence>
 #include <QMenuBar>
 #include <QToolBar>
 #include <QStatusBar>
