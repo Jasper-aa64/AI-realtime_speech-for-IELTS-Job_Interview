@@ -54,3 +54,8 @@ TEST(ConfigTest, LoadDefaultConfig)
     EXPECT_NEAR(config.llm_config.max_tokens, 32000, 1);
     EXPECT_EQ(config.llm_config.timeout_seconds, 60);
 }
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

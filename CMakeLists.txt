@@ -137,6 +137,7 @@ target_include_directories(
     config_test
     PRIVATE
     ${VCPKG_LOCAL}/include
+    ${VCPKG_GLOBAL}/include
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src
 )
