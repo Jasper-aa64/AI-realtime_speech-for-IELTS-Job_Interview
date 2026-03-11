@@ -147,7 +147,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: --questions must be in range [5, 100]" << std::endl;
         return 1;
     }
-    if (llm_temperature >= 0.0f && llm_temperature > 2.0f) {
+    if (llm_temperature != -1.0f && (llm_temperature < 0.0f || llm_temperature > 2.0f)) {
         std::cerr << "Error: --temperature must be in range [0.0, 2.0]" << std::endl;
         return 1;
     }

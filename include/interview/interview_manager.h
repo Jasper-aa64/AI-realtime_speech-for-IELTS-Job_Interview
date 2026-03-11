@@ -92,7 +92,7 @@ public:
      *
      * @param candidate_name 候选人姓名，用于个性化交互和报告生成
      */
-    InterviewSession(const std::string& candidate_name = "候选人");
+    explicit InterviewSession(const std::string& candidate_name = "候选人");
 
     /**
      * @brief 析构函数

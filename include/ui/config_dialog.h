@@ -2,6 +2,7 @@
  
 #include <QtWidgets/QDialog> 
 #include <QtWidgets/QWidget> 
+#include <QtCore/QObject>
 #include <QtWidgets/QLineEdit> 
 #include <QtWidgets/QSpinBox> 
 #include <QtWidgets/QCheckBox> 

@@ -14,6 +14,7 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <cstring>
 
 namespace interview {
 namespace session {
@@ -179,7 +180,7 @@ public:
             }
 
             // 缓存为空时，现场生成总结
-            if (summary_copy.empty() && interview_session) {
+            if (summary_copy.empty()) {
                 try {
                     summary_copy = interview_session->GenerateSummary();
                     if (!summary_copy.empty()) {
@@ -204,11 +205,16 @@ public:
             // 1. SERVER_ACK：协议里 SERVER_ACK 常用于服务端确认包
             // 2. 确保这条 ACK 里确实有二进制 payload；没有 payload 的 ACK 或 JSON ACK 不应按音频处理。
         if (response.message_type == "SERVER_ACK" && !response.payload_bytes.empty()) {
-            // 服务器返回的PCM格式是Float32
-            size_t float_count = response.payload_bytes.size() / sizeof(float);
-            const float* float_data = reinterpret_cast<const float*>(response.payload_bytes.data());
+            // 服务器返回的PCM格式是Float32，避免不安全的指针重解释转换
+            const size_t byte_count = response.payload_bytes.size();
+            if (byte_count % sizeof(float) != 0) {
+                LOG_WARNING("忽略异常音频包：payload字节数({})不是float32对齐", byte_count);
+                return;
+            }
 
-            std::vector<float> audio_float(float_data, float_data + float_count);
+            const size_t float_count = byte_count / sizeof(float);
+            std::vector<float> audio_float(float_count);
+            std::memcpy(audio_float.data(), response.payload_bytes.data(), byte_count);
 
             // LOG_DEBUG("Received audio: {} bytes = {} float32 samples", response.payload_bytes.size(), float_count);
 
