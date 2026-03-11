@@ -344,7 +344,7 @@ void MainWindow::OnStateChangedFromMachine(InterviewState old_state, InterviewSt
     }
 }
 
-void MainWindow::UpdateUIState(InterviewState state) {
+void MainWindow::UpdateUIState(InterviewState state) { 
     QString baseStyle = "QLabel { padding: 8px 12px; font-weight: bold; font-size: 12pt; "
                        "background-color: #fff; border: 1px solid #ddd; border-radius: 4px; ";
     

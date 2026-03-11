@@ -1,0 +1,7 @@
+[2026-03-10 10:12:54.772] [info] [t:1124244] [logger.cpp:50 Init] Logger initialized. debug_mode=true, log_file=interview_qt.log
+[2026-03-10 10:12:54.772] [info] [t:1124244] [main_qt.cpp:18 main] ========================================
+[2026-03-10 10:12:54.772] [info] [t:1124244] [main_qt.cpp:19 main] C++ Interview System (Qt GUI) v1.0
+[2026-03-10 10:12:54.772] [info] [t:1124244] [main_qt.cpp:20 main] ========================================
+[2026-03-10 10:12:54.772] [info] [t:1124244] [main_qt.cpp:37 main] Configuration loaded from: config/default_config.json
+[2026-03-10 10:12:55.135] [info] [t:1124244] [main_qt.cpp:59 main] Qt GUI started
+[2026-03-10 10:13:20.477] [info] [t:1124244] [main_qt.cpp:64 main] Application exiting with code: 0

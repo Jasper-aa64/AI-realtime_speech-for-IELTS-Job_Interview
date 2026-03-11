@@ -1,0 +1,242 @@
+[2026-03-10 09:40:33.041] [info] [t:1087158] [logger.cpp:50 Init] Logger initialized. debug_mode=false, log_file=interview.log
+[2026-03-10 09:40:33.041] [info] [t:1087158] [interview_manager.cpp:93 InterviewSession] Interview session created for: 测试候选人
+[2026-03-10 09:40:33.041] [info] [t:1087158] [interview_manager.cpp:93 InterviewSession] Interview session created for: 测试候选人
+[2026-03-10 09:40:33.041] [info] [t:1087158] [interview_manager.cpp:93 InterviewSession] Interview session created for: 测试候选人
+[2026-03-10 09:40:33.042] [info] [t:1087158] [interview_manager.cpp:93 InterviewSession] Interview session created for: 测试候选人
+[2026-03-10 09:40:33.042] [info] [t:1087158] [interview_manager.cpp:93 InterviewSession] Interview session created for: 测试候选人
+[2026-03-10 09:40:33.042] [info] [t:1087158] [interview_manager.cpp:451 SaveReport] Interview report saved to: interview_test_report.json
+[2026-03-10 10:08:03.486] [info] [t:1117877] [logger.cpp:50 Init] Logger initialized. debug_mode=false, log_file=interview.log
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:170 main] ========================================
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:171 main] C++ Technical Interview System v1.0
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:172 main] ========================================
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:198 main] ========================================
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:199 main] Starting Voice Interview
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:200 main] ========================================
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:201 main] Candidate: 测试候选人
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:202 main] 
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:203 main] Please prepare your microphone and speaker.
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:204 main] The interview will begin in 3 seconds...
+[2026-03-10 10:08:03.486] [info] [t:1117877] [main.cpp:205 main] 
+[2026-03-10 10:08:06.507] [info] [t:1117877] [interview_manager.cpp:93 InterviewSession] Interview session created for: 测试候选人
+[2026-03-10 10:08:06.507] [info] [t:1117877] [interview_state.cpp:60 Reset] State machine reset to idle
+[2026-03-10 10:08:06.507] [info] [t:1117877] [main.cpp:232 main] Starting session...
+[2026-03-10 10:08:06.616] [info] [t:1117877] [audio_manager.cpp:24 AudioManagerImpl] PortAudio initialized successfully
+[2026-03-10 10:08:06.624] [info] [t:1117877] [dialog_session.cpp:102 Start] Connecting to server...
+[2026-03-10 10:08:06.624] [info] [t:1117877] [interview_state.cpp:32 SetState] State transition: 空闲 -> 连接中
+[2026-03-10 10:08:06.624] [info] [t:1117877] [dialog_session.cpp:69 TransitionToState] 状态: TODO - %s
+[2026-03-10 10:08:07.034] [info] [t:1117877] [realtime_client.cpp:127 Connect] Connected to wss://openspeech.bytedance.com/api/v3/realtime/dialogue
+[2026-03-10 10:08:07.034] [info] [t:1117877] [realtime_client.cpp:344 SendStartConnection] SendStartConnection message: 14 bytes
+[2026-03-10 10:08:07.131] [info] [t:1117877] [realtime_client.cpp:358 SendStartConnection] StartConnection response event: 50
+[2026-03-10 10:08:07.132] [info] [t:1117877] [realtime_client.cpp:377 SendStartSession] SendStartSession message: 2123 bytes
+[2026-03-10 10:08:07.132] [info] [t:1117877] [realtime_client.cpp:381 SendStartSession] StartSession request sent, response will be handled by receive thread
+[2026-03-10 10:08:07.132] [info] [t:1117877] [realtime_client.cpp:228 StartReceiveThread] Receive thread started
+[2026-03-10 10:08:09.345] [info] [t:1117877] [audio_manager.cpp:69 OpenInputStream] Input stream opened: 
+[2026-03-10 10:08:09.404] [info] [t:1117877] [audio_manager.cpp:112 OpenOutputStream] Output stream opened: 
+[2026-03-10 10:08:09.404] [info] [t:1118159] [dialog_session.cpp:341 MicrophoneThreadFunc] 麦克风线程启动
+[2026-03-10 10:08:09.404] [info] [t:1118160] [dialog_session.cpp:426 PlaybackThreadFunc] 播放线程启动
+[2026-03-10 10:08:09.404] [info] [t:1117877] [realtime_client.cpp:190 SendTextQuery] Sent prompt query: 直接朗读下面文字：现在开始C++技术面试。
+    请你作为一位专业且友好的面试官，
+    用简短温和的语气向候选人问好（比如'你好，欢迎参加今天的面试'），
+    然后礼貌地邀请候选人做一个简单的自我介绍。
+    记住要简短，不超过3句话。
+    后续对应于面试者的回答都只回复(好的，我们继续)。后续对应于面试者的回答都只回复[好的，我们继续],不要承接或评论
+[2026-03-10 10:08:09.404] [info] [t:1117877] [dialog_session.cpp:134 Start] Dialog session started
+[2026-03-10 10:08:09.404] [info] [t:1117877] [main.cpp:241 main] 
+[2026-03-10 10:08:09.404] [info] [t:1117877] [main.cpp:242 main] Interview session is running...
+[2026-03-10 10:08:09.404] [info] [t:1117877] [main.cpp:243 main] Press Ctrl+C to stop.
+[2026-03-10 10:08:09.404] [info] [t:1117877] [main.cpp:244 main] 
+[2026-03-10 10:08:09.425] [error] [t:1118006] [realtime_client.cpp:437 ReceiveLoop] Receive loop error: 
+[2026-03-10 10:08:09.429] [error] [t:1118159] [realtime_client.cpp:162 SendAudioData] Failed to send audio: Operation canceled [system:89 at /Users/mac/Desktop/CS/Cplusplus/vcpkg/installed/arm64-osx/include/boost/beast/websocket/impl/stream_impl.hpp:355:68 in function 'check_stop_now']
+[2026-03-10 10:08:54.285] [info] [t:1118987] [logger.cpp:50 Init] Logger initialized. debug_mode=false, log_file=interview.log
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:170 main] ========================================
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:171 main] C++ Technical Interview System v1.0
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:172 main] ========================================
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:198 main] ========================================
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:199 main] Starting Voice Interview
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:200 main] ========================================
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:201 main] Candidate: 测试候选人
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:202 main] 
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:203 main] Please prepare your microphone and speaker.
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:204 main] The interview will begin in 3 seconds...
+[2026-03-10 10:08:54.285] [info] [t:1118987] [main.cpp:205 main] 
+[2026-03-10 10:08:57.303] [info] [t:1118987] [interview_manager.cpp:93 InterviewSession] Interview session created for: 测试候选人
+[2026-03-10 10:08:57.303] [info] [t:1118987] [interview_state.cpp:60 Reset] State machine reset to idle
+[2026-03-10 10:08:57.303] [info] [t:1118987] [main.cpp:232 main] Starting session...
+[2026-03-10 10:08:57.405] [info] [t:1118987] [audio_manager.cpp:24 AudioManagerImpl] PortAudio initialized successfully
+[2026-03-10 10:08:57.413] [info] [t:1118987] [dialog_session.cpp:102 Start] Connecting to server...
+[2026-03-10 10:08:57.413] [info] [t:1118987] [interview_state.cpp:32 SetState] State transition: 空闲 -> 连接中
+[2026-03-10 10:08:57.413] [info] [t:1118987] [dialog_session.cpp:69 TransitionToState] 状态: TODO - %s
+[2026-03-10 10:08:57.588] [info] [t:1118987] [realtime_client.cpp:127 Connect] Connected to wss://openspeech.bytedance.com/api/v3/realtime/dialogue
+[2026-03-10 10:08:57.588] [info] [t:1118987] [realtime_client.cpp:344 SendStartConnection] SendStartConnection message: 14 bytes
+[2026-03-10 10:08:57.630] [info] [t:1118987] [realtime_client.cpp:358 SendStartConnection] StartConnection response event: 50
+[2026-03-10 10:08:57.630] [info] [t:1118987] [realtime_client.cpp:377 SendStartSession] SendStartSession message: 2123 bytes
+[2026-03-10 10:08:57.631] [info] [t:1118987] [realtime_client.cpp:381 SendStartSession] StartSession request sent, response will be handled by receive thread
+[2026-03-10 10:08:57.631] [info] [t:1118987] [realtime_client.cpp:228 StartReceiveThread] Receive thread started
+[2026-03-10 10:08:57.832] [info] [t:1118987] [audio_manager.cpp:69 OpenInputStream] Input stream opened: 
+[2026-03-10 10:08:57.894] [info] [t:1118987] [audio_manager.cpp:112 OpenOutputStream] Output stream opened: 
+[2026-03-10 10:08:57.894] [info] [t:1118987] [realtime_client.cpp:190 SendTextQuery] Sent prompt query: 直接朗读下面文字：现在开始C++技术面试。
+    请你作为一位专业且友好的面试官，
+    用简短温和的语气向候选人问好（比如'你好，欢迎参加今天的面试'），
+    然后礼貌地邀请候选人做一个简单的自我介绍。
+    记住要简短，不超过3句话。
+    后续对应于面试者的回答都只回复(好的，我们继续)。后续对应于面试者的回答都只回复[好的，我们继续],不要承接或评论
+[2026-03-10 10:08:57.894] [info] [t:1118987] [dialog_session.cpp:134 Start] Dialog session started
+[2026-03-10 10:08:57.894] [info] [t:1118987] [main.cpp:241 main] 
+[2026-03-10 10:08:57.894] [info] [t:1118987] [main.cpp:242 main] Interview session is running...
+[2026-03-10 10:08:57.894] [info] [t:1118987] [main.cpp:243 main] Press Ctrl+C to stop.
+[2026-03-10 10:08:57.894] [info] [t:1118987] [main.cpp:244 main] 
+[2026-03-10 10:08:57.895] [info] [t:1119164] [dialog_session.cpp:341 MicrophoneThreadFunc] 麦克风线程启动
+[2026-03-10 10:08:57.895] [info] [t:1119165] [dialog_session.cpp:430 PlaybackThreadFunc] 播放线程启动
+[2026-03-10 10:08:58.105] [info] [t:1119073] [interview_state.cpp:32 SetState] State transition: 连接中 -> 面试官说话中
+[2026-03-10 10:08:58.105] [info] [t:1119073] [dialog_session.cpp:69 TransitionToState] 状态: TODO - %s
+[2026-03-10 10:08:58.588] [warning] [t:1119165] [audio_manager.cpp:144 WriteAudio] Output underflow detected
+[2026-03-10 10:08:59.385] [debug] [t:1119073] [dialog_session.cpp:262 HandleEvent] TTS_END received, tts_cnt now: 0
+[2026-03-10 10:09:01.913] [debug] [t:1119165] [dialog_session.cpp:472 PlaybackThreadFunc] 音频队列已空且无待播放TTS，切换到空闲状态
+[2026-03-10 10:09:01.913] [info] [t:1119165] [interview_state.cpp:32 SetState] State transition: 面试官说话中 -> 空闲
+[2026-03-10 10:09:01.913] [info] [t:1119165] [dialog_session.cpp:69 TransitionToState] 状态: TODO - %s
+[2026-03-10 10:09:02.510] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:03.112] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:03.707] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:04.307] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:04.912] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:05.511] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:06.112] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:06.710] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:07.508] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:08.110] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:08.710] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:09.311] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:09.910] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:10.506] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:11.106] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:11.711] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:11.956] [error] [t:1119073] [dialog_session.cpp:231 HandleServerResponse] ========================================
+[2026-03-10 10:09:11.956] [error] [t:1119073] [dialog_session.cpp:232 HandleServerResponse] [服务器错误]
+[2026-03-10 10:09:11.957] [error] [t:1119073] [dialog_session.cpp:233 HandleServerResponse] 错误码: 55000001
+[2026-03-10 10:09:11.957] [error] [t:1119073] [dialog_session.cpp:234 HandleServerResponse] 错误详情: {
+  "error": "{\"error\":\"sami error: codes=52000042, desc=DialogAudioIdleTimeoutError\"}"
+}
+[2026-03-10 10:09:11.957] [error] [t:1119073] [dialog_session.cpp:235 HandleServerResponse] ========================================
+[2026-03-10 10:09:12.511] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:13.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:13.708] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:14.308] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:14.909] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:15.507] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:16.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:16.708] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:17.506] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:18.106] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:18.706] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:19.307] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:19.911] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:20.510] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:21.111] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:21.706] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:22.509] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:23.110] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:23.705] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:24.310] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:24.907] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:25.509] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:26.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:26.710] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:27.510] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:28.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:28.711] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:29.310] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:29.906] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:30.506] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:31.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:31.706] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:32.509] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:33.106] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:33.709] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:34.311] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:34.906] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:35.507] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:36.109] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:36.706] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:37.511] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:38.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:38.710] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:39.310] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:39.910] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:40.511] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:41.106] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:41.706] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:42.505] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:43.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:43.710] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:44.309] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:44.910] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:45.506] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:46.106] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:46.708] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:47.510] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:48.110] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:48.710] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:49.310] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:49.909] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:50.508] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:51.105] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:51.708] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:52.508] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:53.109] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:53.709] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:54.310] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:54.909] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:55.508] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:56.110] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:56.706] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:57.506] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:58.106] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:58.706] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:59.308] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:09:59.906] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:00.510] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:01.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:01.707] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:02.508] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:03.110] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:03.707] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:04.309] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:04.904] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:05.505] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:06.110] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:06.704] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:07.509] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:08.108] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:08.706] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:09.307] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:09.905] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:10.504] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:11.107] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:11.320] [info] [t:1118987] [dialog_session.cpp:142 Stop] Stopping dialog session
+[2026-03-10 10:10:11.320] [info] [t:1119165] [dialog_session.cpp:479 PlaybackThreadFunc] 播放线程退出
+[2026-03-10 10:10:11.707] [error] [t:1119164] [dialog_session.cpp:420 MicrophoneThreadFunc] 麦克风读取失败: Failed to read input stream: Input overflowed
+[2026-03-10 10:10:11.813] [info] [t:1119164] [dialog_session.cpp:426 MicrophoneThreadFunc] 麦克风线程退出
+[2026-03-10 10:10:11.929] [info] [t:1118987] [audio_manager.cpp:164 Cleanup] Input stream closed
+[2026-03-10 10:10:12.059] [info] [t:1118987] [audio_manager.cpp:178 Cleanup] Output stream closed
+[2026-03-10 10:10:12.059] [info] [t:1118987] [audio_manager.cpp:188 Cleanup] PortAudio terminated
+[2026-03-10 10:10:12.059] [info] [t:1118987] [realtime_client.cpp:237 Close] Closing connection...
+[2026-03-10 10:10:12.059] [info] [t:1118987] [realtime_client.cpp:249 Close] Finish session sent
+[2026-03-10 10:10:12.121] [info] [t:1118987] [realtime_client.cpp:411 SendFinishConnection] FinishConnection response event: 
+[2026-03-10 10:10:12.121] [info] [t:1118987] [realtime_client.cpp:259 Close] Finish connection sent
+[2026-03-10 10:10:12.168] [info] [t:1118987] [realtime_client.cpp:270 Close] WebSocket closed
+[2026-03-10 10:10:12.169] [error] [t:1119073] [realtime_client.cpp:437 ReceiveLoop] Receive loop error: 
+[2026-03-10 10:10:12.169] [info] [t:1118987] [realtime_client.cpp:280 Close] Receive thread joined
+[2026-03-10 10:10:12.169] [info] [t:1118987] [realtime_client.cpp:291 Close] Connection closed successfully
+[2026-03-10 10:10:12.169] [info] [t:1118987] [interview_manager.cpp:451 SaveReport] Interview report saved to: interview_report_20260310_101012.json
+[2026-03-10 10:10:12.169] [info] [t:1118987] [dialog_session.cpp:166 Stop] Interview report saved: interview_report_20260310_101012.json
+[2026-03-10 10:10:12.169] [info] [t:1118987] [dialog_session.cpp:566 LogMultilineBlock] ========================================
+[2026-03-10 10:10:12.169] [info] [t:1118987] [dialog_session.cpp:567 LogMultilineBlock] [面试总结回顾]
+[2026-03-10 10:10:12.169] [info] [t:1118987] [dialog_session.cpp:568 LogMultilineBlock] ========================================
+[2026-03-10 10:10:12.169] [info] [t:1118987] [dialog_session.cpp:576 LogMultilineBlock] 本次面试尚未开始，暂无总结。
+[2026-03-10 10:10:12.169] [info] [t:1118987] [dialog_session.cpp:579 LogMultilineBlock] ========================================
+[2026-03-10 10:10:12.169] [info] [t:1118987] [dialog_session.cpp:199 Stop] Dialog session stopped
+[2026-03-10 10:10:12.169] [info] [t:1118987] [main.cpp:252 main] ========================================
+[2026-03-10 10:10:12.169] [info] [t:1118987] [main.cpp:253 main] Interview Completed!
+[2026-03-10 10:10:12.169] [info] [t:1118987] [main.cpp:254 main] ========================================
+[2026-03-10 10:10:12.169] [info] [t:1118987] [main.cpp:255 main] Thank you for participating!
+[2026-03-10 10:10:12.169] [info] [t:1118987] [main.cpp:256 main] The interview report has been saved.

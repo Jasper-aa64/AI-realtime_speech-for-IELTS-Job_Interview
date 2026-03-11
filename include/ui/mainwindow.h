@@ -11,7 +11,7 @@
 #include "common/interview_state.h"
 
 namespace interview {
-namespace session {
+namespace session { 
     class DialogSession;
 }
 
@@ -25,7 +25,7 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
+    
 private slots:
     void OnNewSession();
     void OnStartSession();
@@ -49,11 +49,11 @@ private:
     QPushButton* new_session_button_;
     
     std::unique_ptr<session::DialogSession> session_;
-    std::thread session_thread_;
+    std::thread session_thread_; 
     
-    QString candidate_name_;
+    QString candidate_name_; 
     QString resume_path_;
-    int min_questions_;
+    int min_questions_; 
 };
 
 } // namespace ui
