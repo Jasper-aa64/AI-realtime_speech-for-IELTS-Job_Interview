@@ -1,10 +1,14 @@
 # 构建产物
 build/
+build-*/
+cmake-build-*/
+out/
 *.o
 *.a
 *.so
 *.dylib
 *.exe
+*.dSYM/
 test_spdlog
 
 # vcpkg 安装目录（可选，如需保留可移除）
@@ -15,11 +19,14 @@ vcpkg_installed/
 
 # 日志文件
 logs/
+*.log
+interview_report_*.json
 termi.txt
 
 # IDE
 .vscode/
 .idea/
 .claude/
+.cache/
 *.swp
 *.swo
