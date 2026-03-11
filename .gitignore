@@ -26,7 +26,6 @@ termi.txt
 # IDE
 .vscode/
 .idea/
-.claude/
 .cache/
 *.swp
 *.swo
