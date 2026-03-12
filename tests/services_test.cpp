@@ -103,6 +103,13 @@ TEST(ServicesTest, ConfigSingleton) {
     // 应该是同一个实例
     EXPECT_EQ(&config1, &config2);
 
+    // 显式加载默认配置，避免依赖未初始化的单例状态
+    EXPECT_NO_THROW(
+        config1.LoadFromFile(
+            std::string(PROJECT_ROOT) + "/config/default_config.json"
+        )
+    );
+
     // 测试默认配置值
     EXPECT_EQ(config1.input_audio_config.sample_rate, 16000);
     EXPECT_EQ(config1.output_audio_config.sample_rate, 24000);

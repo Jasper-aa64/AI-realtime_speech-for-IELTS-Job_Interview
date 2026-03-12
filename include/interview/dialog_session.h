@@ -58,7 +58,7 @@ public:
      *
      * @param candidate_name 候选人姓名，用于面试报告和个性化交互
      */
-    DialogSession(const std::string& candidate_name = "候选人");
+    explicit DialogSession(const std::string& candidate_name = "候选人");
 
     /**
      * @brief 析构函数
