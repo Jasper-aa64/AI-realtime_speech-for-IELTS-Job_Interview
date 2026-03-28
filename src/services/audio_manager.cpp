@@ -46,12 +46,16 @@ public:
         input_params.suggestedLatency = Pa_GetDeviceInfo(input_params.device)->defaultLowInputLatency;
         input_params.hostApiSpecificStreamInfo = nullptr;
 
+        // framesPerBuffer 使用 0 (paFramesPerBufferUnspecified) 让 PortAudio 自选内部缓冲区大小。
+        // 实测：蓝牙设备(如 OPPO Enco X3) 在 16kHz + framesPerBuffer=3200 时
+        // Pa_ReadStream 会阻塞 600ms（应为 200ms），原因是 Core Audio 回调调度异常。
+        // 传 0 后 Pa_ReadStream(3200) 恢复正常的 200ms 阻塞时间。
         PaError err = Pa_OpenStream(
             &input_stream_,
             &input_params,
             nullptr,  // 无输出
             input_config_.sample_rate,
-            input_config_.chunk,
+            paFramesPerBufferUnspecified,
             paClipOff,
             nullptr,  // 无回调，使用阻塞模式
             nullptr
@@ -120,7 +124,11 @@ public:
 
         std::vector<int16_t> buffer(input_config_.chunk * input_config_.channels);
         PaError err = Pa_ReadStream(input_stream_, buffer.data(), input_config_.chunk);
-        if(err!=paNoError){
+        if (err == paInputOverflowed) {
+            // overflow 时 PortAudio 仍返回数据，只记录警告不抛异常，
+            // 否则 catch 里 sleep 100ms 会让缓冲区继续积压，陷入永久 overflow
+            LOG_WARNING("Input overflow detected (buffer overrun)");
+        } else if (err != paNoError) {
             throw std::runtime_error("Failed to read input stream: " + std::string(Pa_GetErrorText(err)));
         }
         return buffer;
@@ -136,9 +144,9 @@ public:
             return;
         }
 
-        std::vector<int16_t> buffer(input_config_.chunk * input_config_.channels);
-
-        PaError err = Pa_WriteStream(output_stream_, audio.data(), audio.size());
+        // frame_count = 采样点数 / 声道数（PortAudio 以 frame 为单位，1 frame = N 声道）
+        unsigned long frame_count = audio.size() / output_config_.channels;
+        PaError err = Pa_WriteStream(output_stream_, audio.data(), frame_count);
 
         if (err == paOutputUnderflowed) {
             LOG_WARNING("Output underflow detected");

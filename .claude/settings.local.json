@@ -1,7 +1,23 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(ls /Users/mac/Desktop/CS/Cplusplus/AI_project/build*)",
+      "Bash(cmake --build build --target CppInterviewSystemQt)",
+      "Bash(cmake --build /Users/mac/Desktop/CS/Cplusplus/AI_project/build --target CppInterviewSystemQt)",
+      "Read(//Users/mac/Desktop/CS/Cplusplus/ai-interview-main/src/interview/**)",
+      "Read(//Users/mac/Desktop/CS/Cplusplus/ai-interview-main/src/services/**)",
+      "Bash(pkill -f CppInterviewSystemQt)",
+      "Bash(python3 -m json.tool)",
+      "Bash(ls -lt /Users/mac/Desktop/CS/Cplusplus/AI_project/*.log)",
+      "Bash(clang++ -std=c++17 test_pa_read.cpp -I vcpkg_installed/arm64-osx/include -L vcpkg_installed/arm64-osx/lib -lportaudio -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreFoundation -framework CoreServices -o test_pa_read 2>&1)",
+      "Bash(./test_pa_read 2>&1)",
+      "Bash(clang++ -std=c++17 test_pa_read2.cpp -I vcpkg_installed/arm64-osx/include -L vcpkg_installed/arm64-osx/lib -lportaudio -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreFoundation -framework CoreServices -o test_pa_read2)",
+      "Bash(./test_pa_read2)",
+      "Bash(mkdir -p build)",
+      "Bash(cmake .. -DCMAKE_BUILD_TYPE=Release)",
+      "Bash(tree /Users/mac/Desktop/CS/Cplusplus/AI_project/include -I spdlog*)",
+      "Bash(find /Users/mac/Desktop/CS/Cplusplus/AI_project/include -type f -name *.h)"
     ]
   }
 }

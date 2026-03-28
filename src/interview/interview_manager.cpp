@@ -104,20 +104,20 @@ void InterviewSession::GenerateDefaultQuestions(int min_questions) {
         );
 
         // 生成通用C++面试题，用于没有简历时的标准面试流程
-        std::string generic_resume = R"(
+        std::string job_requirements = R"(
         C++开发工程师岗位，要求掌握：
-        - C++基础（指针、引用、const）
-        - 内存管理（智能指针、RAII）
-        - STL容器和算法
-        - 面向对象（继承、多态、虚函数）
-        - C++11/14/17新特性
-        - 多线程编程
-        - 设计模式
-        )";
+            - C++基础（指针、引用、const）
+            - 内存管理（智能指针、RAII）
+            - STL容器和算法
+            - 面向对象（继承、多态、虚函数）
+            - C++11/14/17新特性
+            - 多线程编程
+            - 设计模式
+            )";
 
         // 调用LLM生成问题
-        pimpl_->llm_questions = pimpl_->llm_client->GenerateQuestionsFromResume(
-            generic_resume, min_questions
+        pimpl_->llm_questions = pimpl_->llm_client->GenerateQuestionsFromRequirements(
+            job_requirements, min_questions
         );
 
         if (pimpl_->llm_questions.empty()) {
@@ -141,7 +141,6 @@ void InterviewSession::GenerateDefaultQuestions(int min_questions) {
 void InterviewSession::LoadQuestionsFromResume(const std::string& resume_pdf_path, int min_questions) {
     try {
         LOG_INFO("Loading resume from: {}", resume_pdf_path);
-
         // 解析PDF简历
         services::PDFParser pdf_parser;
 
@@ -198,14 +197,14 @@ std::string InterviewSession::GetFirstQuestion() {
         pimpl_->current_question_index = 0;
         auto& q = pimpl_->llm_questions[pimpl_->current_question_index];
         std::string question_text = q["question"].get<std::string>();
-        return "第1题：" + question_text;
+        return "第1题：" + question_text; 
     }
 
-    // 如果没有LLM问题，抛出错误
+    // 如果没有LLM问题，抛出错误 
     throw std::runtime_error("No questions loaded. Call GenerateDefaultQuestions() or LoadQuestionsFromResume() first.");
 }
 
-// ”获取下一个问题“的提示词
+// 获取下一个问题
 std::string InterviewSession::GetNextQuestion() {
     if (!pimpl_->llm_questions.empty()) {
         pimpl_->current_question_index++;
@@ -236,17 +235,19 @@ std::string InterviewSession::GetFollowUpQuestion() {
     return "";
 }
 
-// 记录候选人回答
+// 记录候选人回答并触发 LLM 评分
+    // 评分结果含分数、反馈及是否追问标志，可通过 GetLastScore() / * ShouldFollowUp() 查询。
 void InterviewSession::RecordAnswer(const std::string& answer) {
+    // 第一步：构建 record 
     InterviewRecord record;
     record.answer = answer;
     record.timestamp = pimpl_->GetCurrentTime();
 
-    if (!pimpl_->llm_questions.empty() &&
-        pimpl_->current_question_index < pimpl_->max_questions) {
+    if (!pimpl_->llm_questions.empty() &&  pimpl_->current_question_index < pimpl_->max_questions) {
 
         auto& q = pimpl_->llm_questions[pimpl_->current_question_index];
-        // 根据是否已有followup_question判断是否是追问
+        // 第二步：判断是普通问题还是追问
+            // 根据是否已有followup_question判断是否是追问
         bool is_followup = !pimpl_->followup_question.empty();
         
         if (!is_followup) {
@@ -255,7 +256,8 @@ void InterviewSession::RecordAnswer(const std::string& answer) {
             record.question = "追问 - " + q["question"].get<std::string>();
         }
 
-        // 获取题目类别和难度等级
+        // 第三步：LLM 评分
+            // 获取题目类别和难度等级
         record.category = q.value("category", "general");
         record.level = q.value("level", "intermediate");
 
@@ -266,7 +268,9 @@ void InterviewSession::RecordAnswer(const std::string& answer) {
             record.score = llm_eval["score"].get<int>();
             record.feedback = llm_eval["feedback"].get<std::string>();
 
+            // 第四步：决定是否追问
             if (!is_followup && !pimpl_->has_followed_up && llm_eval.value("need_followup", false)) {
+                // 把 LLM 返回的 followup_question 存进 pimpl_，供外部调用
                 if (llm_eval.contains("followup_question")) {
                     pimpl_->followup_question = llm_eval["followup_question"].get<std::string>();
                 }
@@ -289,6 +293,7 @@ void InterviewSession::RecordAnswer(const std::string& answer) {
              record.score, record.feedback, pimpl_->records.size());
 }
 
+// 获取最后一次回答的分数
 int InterviewSession::GetLastScore() const {
     if (pimpl_->records.empty()) {
         return 0;
@@ -306,6 +311,7 @@ bool InterviewSession::IsComplete() const {
 
 // 生成面试总结
 std::string InterviewSession::GenerateSummary() const {
+    // 第一步：缓存检查
     if (!pimpl_->summary_text.empty()) {
         return pimpl_->summary_text;
     }
@@ -323,7 +329,7 @@ std::string InterviewSession::GenerateSummary() const {
             records_json.push_back(record.ToJson());
         }
 
-        // 调用LLM生成总结
+        // *** 调用LLM生成总结
         auto llm_summary = pimpl_->llm_client->GenerateSummary(
             records_json,
             pimpl_->resume_text

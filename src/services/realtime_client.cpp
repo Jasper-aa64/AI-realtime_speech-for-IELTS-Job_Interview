@@ -10,14 +10,12 @@
 #include <boost/asio/ssl/stream.hpp>
 #include <nlohmann/json.hpp>
 #include <thread>
-#include <random>
-#include <sstream>
-#include <iomanip>
+
 #include <mutex>
 #include <atomic>
 
 namespace beast = boost::beast;
-namespace http = beast::http;
+// namespace http = beast::http;
 namespace websocket = beast::websocket;
 namespace net = boost::asio;
 namespace ssl = boost::asio::ssl;
@@ -119,7 +117,9 @@ public:
             timeout_opt.keep_alive_pings = false;
             ws_->set_option(timeout_opt);
 
-            // WebSocket握手
+            // WebSocket 握手（这里发 HTTP Upgrade 请求）
+                // Boost.Beast 在这一步内部自动构造并发送
+                // 升级完成后就是纯 WebSocket 二进制帧传输，不再有 HTTP 
             ws_->handshake(host_, path_);
 
             connected_ = true; 
@@ -361,7 +361,9 @@ private:
             throw;
         }
     }
-
+    
+    // 作用：在已连接基础上，创建一场具体面试会话
+        // payload 里带会话参数（采样率、音频格式、VAD/TTS等配置）
     void SendStartSession(){
         try {
             // 生成session_id
@@ -394,7 +396,8 @@ private:
         ws_->write(net::buffer(message));
     }
 
-    void SendFinishConnection() {
+    void SendFinishConnection() { 
+        // 作用：在会话结束后，关闭WebSocket连接
         nlohmann::json payload = nlohmann::json::object();
         auto message = common::Protocol::BuildFullRequest(common::events::FINISH_CONNECTION, "", payload);
 

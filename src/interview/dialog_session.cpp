@@ -26,27 +26,27 @@ public:
     std::shared_ptr<InterviewSession> interview_session;
 
     // 流程状态
-    bool is_intro_done; // 开场阶段是否结束
-    std::atomic<bool> is_running; // 整个会话是否在运行
+    bool is_intro_done;             // 开场阶段是否结束
+    std::atomic<bool> is_running;   // 整个会话是否在运行
     std::atomic<bool> is_playing_audio; // 当前是否在播放 TTS
-    std::atomic<int> tts_cnt;
+    std::atomic<int>  tts_cnt;
 
     // 暂存候选人最新待处理回答
-    std::string pending_answer; 
-    std::mutex pending_answer_mutex;
+    std::string pending_answer;
+    std::mutex  pending_answer_mutex;
 
     // 保存最终总结文本
     std::string final_summary;
-    std::mutex final_summary_mutex;
+    std::mutex  final_summary_mutex;
 
     // 对话内容回调
     DialogSession::DialogContentCallback dialog_content_callback;
 
-    std::thread microphone_thread; // 采集麦克风音频的工作线程。
-    std::thread playback_thread; // 播放线程
+    std::thread microphone_thread; // 采集麦克风音频的工作线程
+    std::thread playback_thread;   // 播放 TTS 音频的工作线程
 
-    std::queue<std::vector<float>> audio_queue; // 音频队列
-    std::mutex audio_queue_mutex; 
+    std::queue<std::vector<float>> audio_queue; // TTS 音频播放队列
+    std::mutex             audio_queue_mutex;
     std::condition_variable audio_queue_cv;
 
     DialogSessionImpl(const std::string& name)
@@ -54,9 +54,7 @@ public:
         , is_running(false)
         , is_playing_audio(false)
         , tts_cnt(0) {
-        // 初始化面试会话实例
         interview_session = std::make_shared<InterviewSession>(name);
-        // 初始化全局状态机
         common::InterviewStateMachine::Instance().Reset();
     }
 
@@ -65,67 +63,55 @@ public:
     }
 
     void TransitionToState(common::InterviewState new_state) {
-        // 实现状态转换
         common::InterviewStateMachine::Instance().SetState(new_state);
-        LOG_INFO("状态: TODO - %s", common::InterviewStateMachine::GetStateName(new_state));
+        LOG_INFO("状态: %s", common::InterviewStateMachine::GetStateName(new_state));
     }
 
+    // 开始对话：建立 WebSocket 连接，启动音频线程，发送开场白
     void Start() {
         if (is_running) {
             LOG_WARNING("Session already running");
             return;
         }
-        
+
         auto& cfg = common::Config::Instance();
 
-        // 创建音频管理器
         services::AudioConfig input_cfg;
         input_cfg.sample_rate = cfg.input_audio_config.sample_rate;
-        input_cfg.channels = cfg.input_audio_config.channels;
-        input_cfg.chunk = cfg.input_audio_config.chunk;
+        input_cfg.channels    = cfg.input_audio_config.channels;
+        input_cfg.chunk       = cfg.input_audio_config.chunk;
 
         services::AudioConfig output_cfg;
         output_cfg.sample_rate = cfg.output_audio_config.sample_rate;
-        output_cfg.channels = cfg.output_audio_config.channels;
-        output_cfg.chunk = cfg.output_audio_config.chunk;
+        output_cfg.channels    = cfg.output_audio_config.channels;
+        output_cfg.chunk       = cfg.output_audio_config.chunk;
 
-        audio_manager = std::make_unique<services::AudioDeviceManager>(input_cfg, output_cfg);
-        
-        // 创建WebSocket客户端
+        audio_manager   = std::make_unique<services::AudioDeviceManager>(input_cfg, output_cfg);
         realtime_client = std::make_unique<services::RealtimeClient>(cfg.ws_config.base_url, cfg.ws_config.headers);
 
-        // 设置响应回调
         realtime_client->SetResponseCallback([this](const common::ParsedResponse& response) {
             HandleServerResponse(response);
         });
 
-        // 连接到服务器
         LOG_INFO("Connecting to server...");
         TransitionToState(common::InterviewState::kConnecting);
         realtime_client->Connect();
 
-        // 等待一小段时间让连接稳定
         std::this_thread::sleep_for(common::timing::CONNECTION_STABILIZE_DELAY);
 
-        // 打开音频流
+        LOG_INFO("Opening audio streams...");
         audio_manager->OpenInputStream();
         audio_manager->OpenOutputStream();
 
         is_running = true;
 
-        // 启动麦克风线程
-        microphone_thread = std::thread([this]() {
-            MicrophoneThreadFunc();
-        });
-
-        // 启动播放线程
-        playback_thread = std::thread([this]() {
-            PlaybackThreadFunc();
-        });
+        // 播放线程先启动，确保 TTS 音频队列消费者就绪
+        playback_thread   = std::thread([this]() { PlaybackThreadFunc(); });
+        // 麦克风线程后启动，确保 TTS 音频队列生产者就绪
+        microphone_thread = std::thread([this]() { MicrophoneThreadFunc(); });
 
         is_playing_audio = true;
 
-        // 发送开场白
         if (dialog_content_callback) {
             dialog_content_callback("interviewer", "你好，欢迎参加今天的面试，先做一个简单的自我介绍。", 0);
         }
@@ -135,6 +121,7 @@ public:
         LOG_INFO("Dialog session started");
     }
 
+    // 停止对话：关闭线程、音频流、WebSocket，保存报告
     void Stop() {
         if (!is_running) {
             return;
@@ -144,25 +131,15 @@ public:
         is_running = false;
         audio_queue_cv.notify_all();
 
-        // 等待线程结束
-        if (microphone_thread.joinable()) {
-            microphone_thread.join();
-        }
+        if (microphone_thread.joinable()) microphone_thread.join();
+        if (playback_thread.joinable())   playback_thread.join();
 
-        if (playback_thread.joinable()) {
-            playback_thread.join();
-        }
+        // 先关 WebSocket，再清理音频（顺序与参考一致）
+        if (realtime_client) realtime_client->Close();
+        if (audio_manager)   audio_manager->Cleanup();
 
-        // 关闭音频流
-        audio_manager->Cleanup();
-
-        // 关闭WebSocket连接
-        realtime_client->Close();
-
-        // 保存面试报告
         if (interview_session) {
             try {
-                // 将报告保存为格式化的JSON文件
                 std::string report_file = interview_session->SaveReport();
                 LOG_INFO("Interview report saved: {}", report_file);
             } catch (const std::exception& e) {
@@ -170,21 +147,18 @@ public:
             }
         }
 
-        // 生成面试总结
         if (interview_session) {
-            // 读取共享字符串
             std::string summary_copy;
             {
-                std::lock_guard<std::mutex> summary_lock(final_summary_mutex);
+                std::lock_guard<std::mutex> lk(final_summary_mutex);
                 summary_copy = final_summary;
             }
 
-            // 缓存为空时，现场生成总结
-            if (summary_copy.empty()) {
+            if (summary_copy.empty() && interview_session) {
                 try {
                     summary_copy = interview_session->GenerateSummary();
                     if (!summary_copy.empty()) {
-                        std::lock_guard<std::mutex> summary_lock(final_summary_mutex);
+                        std::lock_guard<std::mutex> lk(final_summary_mutex);
                         final_summary = summary_copy;
                     }
                 } catch (const std::exception& e) {
@@ -200,25 +174,19 @@ public:
         LOG_INFO("Dialog session stopped");
     }
 
-    // 处理服务器响应
+    // 处理服务器推送：音频包入队，事件分发给 HandleEvent
     void HandleServerResponse(const common::ParsedResponse& response) {
-            // 1. SERVER_ACK：协议里 SERVER_ACK 常用于服务端确认包
-            // 2. 确保这条 ACK 里确实有二进制 payload；没有 payload 的 ACK 或 JSON ACK 不应按音频处理。
+        
         if (response.message_type == "SERVER_ACK" && !response.payload_bytes.empty()) {
-            // 服务器返回的PCM格式是Float32，避免不安全的指针重解释转换
+            // TTS 音频（Float32 PCM）入播放队列
             const size_t byte_count = response.payload_bytes.size();
             if (byte_count % sizeof(float) != 0) {
-                LOG_WARNING("忽略异常音频包：payload字节数({})不是float32对齐", byte_count);
+                LOG_WARNING("忽略异常音频包：payload 字节数({})不是 float32 对齐", byte_count);
                 return;
             }
-
             const size_t float_count = byte_count / sizeof(float);
             std::vector<float> audio_float(float_count);
             std::memcpy(audio_float.data(), response.payload_bytes.data(), byte_count);
-
-            // LOG_DEBUG("Received audio: {} bytes = {} float32 samples", response.payload_bytes.size(), float_count);
-
-            // 加入播放队列
             {
                 std::lock_guard<std::mutex> lock(audio_queue_mutex);
                 audio_queue.push(audio_float);
@@ -227,89 +195,74 @@ public:
             return;
         }
 
-        // 服务器事件
-            // 3. SERVER_FULL_RESPONSE：服务器完整响应，包含JSON payload
         if (response.message_type == "SERVER_FULL_RESPONSE") {
             HandleEvent(response.event, response.payload);
         } else if (response.message_type == "SERVER_ERROR_RESPONSE" || response.message_type == "SERVER_ERROR") {
-            // 4. SERVER_ERROR_RESPONSE：服务器错误响应，包含错误码和错误消息
-            // 5. SERVER_ERROR：服务器错误响应，包含错误码和错误消息
             LOG_ERROR("========================================");
             LOG_ERROR("[服务器错误]");
             LOG_ERROR("错误码: {}", response.code);
             LOG_ERROR("错误详情: {}", response.payload.dump(2));
             LOG_ERROR("========================================");
 
-            // 服务器错误时，如果正在等待TTS响应，切换到空闲状态
-            if (is_playing_audio && tts_cnt > 0) {
-                LOG_WARNING("服务器错误导致无法播放TTS，切换到空闲状态");
+            // tts_cnt==0 时服务端不会再推 TTS，直接切换到空闲
+            if (is_playing_audio && tts_cnt == 0) {
+                LOG_WARNING("服务器错误导致无法播放 TTS，切换到空闲状态");
                 is_playing_audio = false;
-                TransitionToState(common::InterviewState::kIdle);
             }
         } else {
-            // 未知服务器响应类型
-            LOG_ERROR("Unknown server response message type: {}", response.message_type);
+            LOG_WARNING("Received unexpected message type: {}", response.message_type);
         }
     }
 
     void HandleEvent(int event, const nlohmann::json& payload) {
-        // Event TTS_START: TTS开始
+        // TTS_START：面试官开始说话
         if (event == common::events::TTS_START) {
             tts_cnt++;
             is_playing_audio = true;
-            TransitionToState(common::InterviewState::kInterviewerSpeaking);
+            // kSessionEnding 期间的总结 TTS 不改变状态，保持 kSessionEnding
+            auto cur = common::InterviewStateMachine::Instance().GetState();
+            if (cur != common::InterviewState::kSessionEnding) {
+                TransitionToState(common::InterviewState::kInterviewerSpeaking);
+            }
         }
-        // Event TTS_END: TTS结束
-        if (event == common::events::TTS_END) {
-            tts_cnt--;
-            // 注意：不要在这里立即切换到 kIdle 状态
-            // 因为音频队列中可能还有数据在播放
-            // 状态切换应该在 PlaybackThreadFunc 中音频队列真正为空时处理
+        // TTS_END：一段 TTS 结束（队列里可能还有数据，状态切换由播放线程负责）
+        else if (event == common::events::TTS_END) {
+            if (tts_cnt > 0) tts_cnt--;
             LOG_DEBUG("TTS_END received, tts_cnt now: {}", tts_cnt.load());
         }
-        // Event USER_START_SPEAKING: 用户开始说话
-        if (event == common::events::USER_START_SPEAKING) {
-            // 如果面试官正在说话，忽略此事件（可能是误触发）
-            if (is_playing_audio ) {
-                LOG_DEBUG("[忽略] USER_START_SPEAKING received, but interviewer is speaking, ignoring");
+        // USER_START_SPEAKING：候选人开始说话
+        else if (event == common::events::USER_START_SPEAKING) {
+            if (is_playing_audio) {
+                LOG_WARNING("[忽略] USER_START_SPEAKING during TTS playback (likely false trigger)");
                 return;
             }
-
             TransitionToState(common::InterviewState::kCandidateSpeaking);
-
-            // 清队列 + tts_cnt=0  ，强制切断旧 TTS ，系统立刻进入“候选人说话优先”
+            // 候选人抢话：立即清空 TTS 队列并重置计数
             {
                 std::lock_guard<std::mutex> lock(audio_queue_mutex);
-                while (!audio_queue.empty()) { // 清空播放队列
-                    audio_queue.pop();
-                }
+                while (!audio_queue.empty()) audio_queue.pop();
             }
-            tts_cnt = 0; // 强制重置计数器，立即结束TTS状态
+            tts_cnt = 0;
         }
-
-        // Event ASR_RESULT: ASR识别结果
+        // ASR_RESULT：识别结果
         else if (event == common::events::ASR_RESULT && !payload.empty()) {
-            // 如果面试官正在说话，忽略ASR结果（应该是静音数据的误识别）
-            if (is_playing_audio) {
-                LOG_DEBUG("[忽略] ASR_RESULT received, but interviewer is speaking, ignoring");
+            auto cur = common::InterviewStateMachine::Instance().GetState();
+            if (is_playing_audio || cur == common::InterviewState::kSessionEnding) {
+                LOG_DEBUG("[忽略] ASR_RESULT (playing={} state={})", is_playing_audio.load(),
+                          common::InterviewStateMachine::GetStateName(cur));
                 return;
             }
-
-            // 处理ASR识别结果
             auto results = payload.value("results", nlohmann::json::array());
             if (!results.empty()) {
                 auto result = results[0];
                 bool is_final = !result.value("is_interim", true);
                 std::string text = result.value("text", std::string());
 
-                // is_final: 用户这次说话已经识别完成，正式入库并推动流程进入下一步
                 if (is_final) {
-                    // 回调给UI层，更新候选人回答文本
                     if (dialog_content_callback) {
                         int qidx = interview_session ? interview_session->GetCurrentQuestionIndex() + 1 : 1;
                         dialog_content_callback("candidate", text, qidx);
                     }
-                    // 把这条最终回答存到待处理区，供后续评分/追问逻辑消费
                     {
                         std::lock_guard<std::mutex> lock(pending_answer_mutex);
                         pending_answer = std::move(text);
@@ -322,10 +275,8 @@ public:
                 LOG_DEBUG("ASR_RESULT event received but results array is empty");
             }
         }
-
-        // Event USER_STOP_SPEAKING: 用户说话结束
+        // USER_STOP_SPEAKING：候选人说完
         else if (event == common::events::USER_STOP_SPEAKING) {
-            // 如果面试官正在说话，忽略此事件（可能是误触发）
             if (is_playing_audio) {
                 LOG_WARNING("[忽略] USER_STOP_SPEAKING during TTS playback (likely false trigger)");
                 return;
@@ -333,137 +284,81 @@ public:
             TransitionToState(common::InterviewState::kInterviewerThinking);
             LOG_INFO("[候选人说话结束]");
         }
-        // Event SESSION_FINISHED/SESSION_ENDED: 会话结束
+        // SESSION_FINISHED/SESSION_ENDED：会话结束
         else if (event == common::events::SESSION_FINISHED || event == common::events::SESSION_ENDED) {
             LOG_INFO("Session finished event: {}", event);
             TransitionToState(common::InterviewState::kSessionEnding);
             Stop();
             TransitionToState(common::InterviewState::kCompleted);
-            LOG_INFO("会话结束");
         }
     }
 
+    // 麦克风线程：始终读取音频（防止 PortAudio 缓冲区溢出），TTS 期间发静音
     void MicrophoneThreadFunc() {
         LOG_INFO("麦克风线程启动");
-
-        // 获取配置
-        auto& cfg = common::Config::Instance();
-        const int chunk_size = cfg.input_audio_config.chunk; // 每次读取的采样点数
-        const int sample_rate = cfg.input_audio_config.sample_rate; // 采样率
-
-        // 计算发送间隔对应的采样点数（10ms）
-        const int send_interval_ms = 10;
-        const size_t samples_per_interval = static_cast<size_t>(sample_rate) * send_interval_ms / 1000; // 160 samples @16kHz
-
-        // 缓冲区用于累积音频数据
-        std::vector<int16_t> accumulated_buffer;
-        accumulated_buffer.reserve(chunk_size * 2); // 预留足够空间
+        int loop_count = 0;
 
         while (is_running) {
-            // 面试官说话期间持续发送静音包，避免服务端因长时间无音频输入而超时
-            if (is_playing_audio) {
-                std::vector<uint8_t> silent_audio(samples_per_interval * sizeof(int16_t), 0);
-                try {
-                    if (realtime_client) {
-                        realtime_client->SendAudioData(silent_audio);
-                    }
-                } catch (const std::exception& e) {
-                    LOG_WARNING("静音音频发送失败，跳过本帧: {}", e.what());
-                }
-                accumulated_buffer.clear();
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                continue;
-            }
-
             try {
-                // 从音频管理器读取一个chunk（阻塞读取，约200ms的数据）
-                std::vector<int16_t> audio_data = audio_manager->ReadAudio();
+                auto t0 = std::chrono::steady_clock::now();
+                auto audio_data = audio_manager->ReadAudio();
+                auto t1 = std::chrono::steady_clock::now();
 
-                // 将读取的数据添加到累积缓冲区
-                accumulated_buffer.insert(accumulated_buffer.end(),
-                                         audio_data.begin(), audio_data.end());
-
-                // 当累积缓冲区有足够的数据时，发送给服务器
-                while (accumulated_buffer.size() >= samples_per_interval && is_running) {
-                    // 如果面试官开始说话，停止发送并清空缓冲区
-                    if (is_playing_audio) {
-                        accumulated_buffer.clear();
-                        break;
-                    }
-
-                    // 提取一个间隔的数据
-                    std::vector<int16_t> send_chunk(
-                        accumulated_buffer.begin(),
-                        accumulated_buffer.begin() + samples_per_interval
-                    );
-
-                    // 将int16_t转换为uint8_t（小端序）
-                    std::vector<uint8_t> audio_bytes;
-                    audio_bytes.reserve(send_chunk.size() * sizeof(int16_t));
-
-                    for (int16_t sample : send_chunk) {
-                        // 小端序：低字节在前
-                        audio_bytes.push_back(static_cast<uint8_t>(sample & 0xFF));
-                        audio_bytes.push_back(static_cast<uint8_t>((sample >> 8) & 0xFF));
-                    }
-
-                    // 发送给服务器
-                    if (realtime_client) {
-                        realtime_client->SendAudioData(audio_bytes);
-                    }
-
-                    // 从累积缓冲区中移除已发送的数据
-                    accumulated_buffer.erase(
-                        accumulated_buffer.begin(),
-                        accumulated_buffer.begin() + samples_per_interval
-                    );
-
-                    // 等待下一个发送间隔
-                    std::this_thread::sleep_for(std::chrono::milliseconds(send_interval_ms));
+                std::vector<uint8_t> audio_bytes(audio_data.size() * 2);
+                if (!is_playing_audio) {
+                    std::memcpy(audio_bytes.data(), audio_data.data(), audio_bytes.size());
+                } else {
+                    std::memset(audio_bytes.data(), 0, audio_bytes.size());
                 }
+
+                realtime_client->SendAudioData(audio_bytes);
+                auto t2 = std::chrono::steady_clock::now();
+
+                auto read_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+                auto send_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+
+                // 前10次 + 每50次打印一次循环耗时，帮助定位瓶颈
+                if (loop_count < 10 || loop_count % 50 == 0) {
+                    LOG_DEBUG("Mic loop #{}: read={}ms send={}ms", loop_count, read_ms, send_ms);
+                }
+                loop_count++;
+
+                std::this_thread::sleep_for(common::timing::AUDIO_SEND_INTERVAL);
 
             } catch (const std::exception& e) {
                 LOG_ERROR("麦克风读取失败: {}", e.what());
-                // 发生错误时等待一段时间后重试
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::this_thread::sleep_for(common::timing::ERROR_RETRY_DELAY);
             }
         }
 
         LOG_INFO("麦克风线程退出");
     }
 
+    // 播放线程：消费 audio_queue，队列为空且 tts_cnt==0 时切换到空闲并触发下一步逻辑
     void PlaybackThreadFunc() {
         LOG_INFO("播放线程启动");
 
         while (is_running) {
             std::vector<float> audio_data;
+            bool queue_empty = false;
 
-            // 等待音频数据或超时
             {
                 std::unique_lock<std::mutex> lock(audio_queue_mutex);
-                if (audio_queue_cv.wait_for(lock, common::timing::AUDIO_QUEUE_WAIT, [this] {
-                     return !audio_queue.empty() || !is_running; })) 
-                {
-                    if (!is_running) {
-                        break;
-                    }
-                    if (!audio_queue.empty()) {
-                        audio_data = std::move(audio_queue.front());
-                        audio_queue.pop();
-                    }
+                audio_queue_cv.wait_for(lock, common::timing::AUDIO_QUEUE_WAIT, [this]() {
+                    return !audio_queue.empty() || !is_running;
+                });
+
+                if (!is_running) break;
+
+                if (!audio_queue.empty()) {
+                    audio_data = audio_queue.front();
+                    audio_queue.pop();
                 } else {
-                    // 超时，检查是否应该结束播放状态
-                    if (tts_cnt == 0 && is_playing_audio) {
-                        LOG_DEBUG("音频队列超时且无待播放TTS，切换到空闲状态");
-                        is_playing_audio = false;
-                        TransitionToState(common::InterviewState::kIdle);
-                    }
-                    continue;
+                    queue_empty = true;
                 }
             }
 
-            // 播放音频数据
-            if (!audio_data.empty() && audio_manager) {
+            if (!audio_data.empty()) {
                 try {
                     audio_manager->WriteAudio(audio_data);
                 } catch (const std::exception& e) {
@@ -471,89 +366,108 @@ public:
                 }
             }
 
-            // 检查是否还有待播放数据
-            {
-                std::lock_guard<std::mutex> lock(audio_queue_mutex);
-                if (audio_queue.empty() && tts_cnt == 0 && is_playing_audio) {
-                    LOG_DEBUG("音频队列已空且无待播放TTS，切换到空闲状态");
-                    is_playing_audio = false;
+            // 队列空且无 TTS 在途 → 面试官说完，切换到空闲并处理候选人回答
+            // kSessionEnding 状态下不做任何处理，由结束线程负责 Stop
+            if (queue_empty && tts_cnt == 0) {
+                auto cur = common::InterviewStateMachine::Instance().GetState();
+                if (cur == common::InterviewState::kSessionEnding) {
+                    continue;  // 总结 TTS 播完，不再切换状态
+                }
+                bool was_playing = is_playing_audio.exchange(false);
+                if (was_playing) {
+                    LOG_INFO("[面试官说完了，请候选人回答] - 麦克风已恢复录音");
                     TransitionToState(common::InterviewState::kIdle);
                 }
+                ProcessPendingAnswer();
             }
         }
 
         LOG_INFO("播放线程退出");
     }
 
-    bool IsRunning() const {
-        return is_running;
-    }
+    bool IsRunning() const { return is_running; }
 
-    // 把“候选人刚说完的一段话”变成“追问 / 下一题 / 总结并结束” 三选一动作，并处理了开场白到正式问答的切换
+    // 处理候选人回答：自我介绍 → 第一题；正式回答 → 追问/下一题/总结结束
     void ProcessPendingAnswer() {
-        if (!interview_session) {
-            return;
-        }
+        if (!interview_session) return;
 
         std::string answer_to_process;
         {
             std::lock_guard<std::mutex> lock(pending_answer_mutex);
+            if (pending_answer.empty()) return;
             answer_to_process = std::move(pending_answer);
+            pending_answer.clear();
         }
 
-        if (answer_to_process.empty()) {
-            return;
-        }
+        if (answer_to_process.empty()) return;
 
-        // 处理开场白后的自我介绍
+        // 开场白阶段：自我介绍完毕，发第一题
         if (!is_intro_done) {
             is_intro_done = true;
-            std::string prompt = interview_session->GetFirstQuestion();
-            SendNextPrompt(prompt);
+            SendNextPrompt(interview_session->GetFirstQuestion());
             return;
         }
 
         // 记录回答并评分
         interview_session->RecordAnswer(answer_to_process);
 
-        // 判断是否需要追问
-        std::string next_prompt;
         if (interview_session->ShouldFollowUp()) {
-            next_prompt = interview_session->GetFollowUpQuestion();
-        }
-        else if (interview_session->IsComplete()) {
-            next_prompt = interview_session->GetNextQuestion();
-        }
-        else {
+            SendNextPrompt(interview_session->GetFollowUpQuestion());
+        } else if (!interview_session->IsComplete()) {
+            SendNextPrompt(interview_session->GetNextQuestion());
+        } else {
+            // 所有题目问完 → 先静音麦克风防止用户继续触发 VAD
+            is_playing_audio = true;
+            TransitionToState(common::InterviewState::kSessionEnding);
+            // 清空候选人在评分期间可能积累的新回答，防止二次触发总结
+            {
+                std::lock_guard<std::mutex> lock(pending_answer_mutex);
+                pending_answer.clear();
+            }
+
+            // 生成总结（LLM 调用，耗时较长）
             std::string summary = interview_session->GenerateSummary();
             {
-                std::lock_guard<std::mutex> lock(final_summary_mutex);
+                std::lock_guard<std::mutex> lk(final_summary_mutex);
                 final_summary = summary;
-                SendNextPrompt(summary);
-                TransitionToState(common::InterviewState::kIdle);
-                // 保证总结说完后停止 因为语音异步，所以这里延迟一段时间后停止
-                std::this_thread::sleep_for(common::timing::INTERVIEW_END_DELAY);
-                Stop();
-                return;
             }
-        }
+            SendNextPrompt(summary);
 
-        SendNextPrompt(next_prompt);
+            // 等 TTS 真正播完再 Stop：先等 TTS 开始（tts_cnt>0），再等 TTS 结束
+            std::thread([this]() {
+                // 阶段1：等待服务器返回 TTS_START（最多等 10 秒）
+                for (int i = 0; i < 50 && is_running && tts_cnt == 0; i++) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                }
+                // 阶段2：等待 TTS 播完（队列清空 + tts_cnt 归零）
+                while (is_running && (tts_cnt > 0 || !audio_queue.empty())) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                }
+                // 阶段3：等最后一段音频从 PortAudio 缓冲区播出
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                Stop();
+            }).detach();
+        }
     }
 
+    // 发送面试官下一句话（提问 / 追问 / 总结）。
+    // 调用前 LLM 已生成好文本，这里做三件事：
+    //   1. 立即置 is_playing_audio=true，让麦克风线程改发静音帧，防止 VAD 误触发；
+    //   2. 通过 dialog_content_callback 把文本推给 UI 显示；
+    //   3. 把文本送给 SendInterviewerPrompt → WebSocket → 服务端 TTS 合成并流式回传音频。
     void SendNextPrompt(const std::string& prompt) {
         is_playing_audio = true;
-        // 计算当前题号（给 UI 展示用）
+        // 题号从 0-based 转为 1-based，仅供 UI 展示，不影响流程逻辑
         int qidx = interview_session ? interview_session->GetCurrentQuestionIndex() + 1 : 1;
-        // 把这句面试官文本先通知给上层
         if (dialog_content_callback) {
             dialog_content_callback("interviewer", prompt, qidx);
         }
-        // 见下面
         SendInterviewerPrompt(prompt);
     }
 
-    // 把 prompt 发给服务端，触发 TTS/语音链路 （说话！）
+    // 把文本包装成 CHAT_TEXT_QUERY 协议帧，通过 WebSocket 发给服务端。
+    // 服务端收到后触发 TTS 合成，音频帧以 SERVER_ACK 流式回传，
+    // 接收线程将其 push 进 audio_queue，由播放线程消费播出。
     void SendInterviewerPrompt(const std::string& text) {
         if (!realtime_client) {
             LOG_WARNING("Realtime client not ready, cannot send prompt");
@@ -563,8 +477,6 @@ public:
             LOG_WARNING("Attempted to send empty interviewer prompt");
             return;
         }
-        
-        // 再发送到服务器进行TTS
         realtime_client->SendTextQuery(text);
     }
 
@@ -572,16 +484,12 @@ public:
         LOG_INFO("========================================");
         LOG_INFO("{}", title);
         LOG_INFO("========================================");
-
         std::istringstream iss(text);
         std::string line;
         while (std::getline(iss, line)) {
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
-            }
+            if (!line.empty() && line.back() == '\r') line.pop_back();
             LOG_INFO("{}", line);
         }
-
         LOG_INFO("========================================");
     }
 };
@@ -591,19 +499,15 @@ DialogSession::DialogSession(const std::string& candidate_name)
 
 DialogSession::~DialogSession() = default;
 
-// 配置简历驱动面试
 void DialogSession::ConfigureResumeInterview(const std::string& resume_pdf_path, int min_questions) {
     pimpl_->interview_session->LoadQuestionsFromResume(resume_pdf_path, min_questions);
 }
 
-// 配置默认面试
 void DialogSession::ConfigureDefaultInterview(int min_questions) {
     pimpl_->interview_session->GenerateDefaultQuestions(min_questions);
 }
 
-void DialogSession::Start() {
-    pimpl_->Start();
-}
+void DialogSession::Start() { pimpl_->Start(); }
 
 void DialogSession::SetDialogContentCallback(DialogContentCallback callback) {
     pimpl_->dialog_content_callback = std::move(callback);
@@ -613,13 +517,9 @@ void DialogSession::HandleServerResponse(const common::ParsedResponse& response)
     pimpl_->HandleServerResponse(response);
 }
 
-void DialogSession::Stop() {
-    pimpl_->Stop();
-}
+void DialogSession::Stop() { pimpl_->Stop(); }
 
-bool DialogSession::IsRunning() const {
-    return pimpl_->IsRunning();
-}
+bool DialogSession::IsRunning() const { return pimpl_->IsRunning(); }
 
 } // namespace session
 } // namespace interview

@@ -14,75 +14,210 @@ ConfigDialog::ConfigDialog(QWidget *parent)
     : QDialog(parent) {
     SetupUi();
     setWindowTitle("新建面试会话");
-    resize(500, 300);
+    resize(520, 400);
 }
 
 ConfigDialog::~ConfigDialog() {
 }
 
 void ConfigDialog::SetupUi() {
+    // 全局对话框样式
+    setStyleSheet(
+        "QDialog {"
+        "  background-color: #f8fafc;"
+        "}"
+        "QGroupBox {"
+        "  background-color: #ffffff;"
+        "  border: 1px solid #e5e7eb;"
+        "  border-radius: 8px;"
+        "  margin-top: 14px;"
+        "  padding-top: 14px;"
+        "  font-weight: 600;"
+        "  font-size: 13px;"
+        "  color: #374151;"
+        "}"
+        "QGroupBox::title {"
+        "  subcontrol-origin: margin;"
+        "  left: 14px;"
+        "  padding: 0 6px;"
+        "  color: #6366f1;"
+        "}"
+        "QLineEdit {"
+        "  padding: 8px 12px;"
+        "  border: 1px solid #d1d5db;"
+        "  border-radius: 6px;"
+        "  background-color: #ffffff;"
+        "  font-size: 13px;"
+        "  color: #1f2937;"
+        "  selection-background-color: #c7d2fe;"
+        "}"
+        "QLineEdit:focus {"
+        "  border-color: #818cf8;"
+        "  background-color: #fefefe;"
+        "}"
+        "QLineEdit:disabled {"
+        "  background-color: #f3f4f6;"
+        "  color: #9ca3af;"
+        "}"
+        "QSpinBox {"
+        "  padding: 8px 12px;"
+        "  border: 1px solid #d1d5db;"
+        "  border-radius: 6px;"
+        "  background-color: #ffffff;"
+        "  font-size: 13px;"
+        "  color: #1f2937;"
+        "}"
+        "QSpinBox:focus {"
+        "  border-color: #818cf8;"
+        "}"
+        "QCheckBox {"
+        "  font-size: 13px;"
+        "  color: #374151;"
+        "  spacing: 8px;"
+        "}"
+        "QCheckBox::indicator {"
+        "  width: 18px;"
+        "  height: 18px;"
+        "  border-radius: 4px;"
+        "  border: 2px solid #d1d5db;"
+        "  background: #ffffff;"
+        "}"
+        "QCheckBox::indicator:checked {"
+        "  background-color: #6366f1;"
+        "  border-color: #6366f1;"
+        "}"
+        "QLabel {"
+        "  font-size: 13px;"
+        "  color: #374151;"
+        "}"
+    );
+
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    
+    mainLayout->setContentsMargins(20, 8, 20, 16);
+    mainLayout->setSpacing(8);
+
     // 候选人信息组
-    QGroupBox* candidateGroup = new QGroupBox("候选人信息", this);
+    QGroupBox* candidateGroup = new QGroupBox("  候选人信息", this);
     QFormLayout* candidateLayout = new QFormLayout(candidateGroup);
-    
+    candidateLayout->setContentsMargins(16, 20, 16, 12);
+
     name_edit_ = new QLineEdit(this);
     name_edit_->setPlaceholderText("请输入候选人姓名");
     candidateLayout->addRow("姓名:", name_edit_);
-    
+
     mainLayout->addWidget(candidateGroup);
-    
+
     // 简历配置组
-    QGroupBox* resumeGroup = new QGroupBox("简历设置", this);
+    QGroupBox* resumeGroup = new QGroupBox("  简历设置", this);
     QVBoxLayout* resumeLayout = new QVBoxLayout(resumeGroup);
-    
+    resumeLayout->setContentsMargins(16, 20, 16, 12);
+    resumeLayout->setSpacing(10);
+
     use_resume_check_ = new QCheckBox("使用简历驱动面试", this);
     use_resume_check_->setChecked(false);
     resumeLayout->addWidget(use_resume_check_);
-    
+
     QHBoxLayout* resumePathLayout = new QHBoxLayout();
+    resumePathLayout->setSpacing(8);
     resume_edit_ = new QLineEdit(this);
     resume_edit_->setPlaceholderText("选择PDF简历文件");
     resume_edit_->setEnabled(false);
     resumePathLayout->addWidget(resume_edit_);
-    
+
     browse_button_ = new QPushButton("浏览...", this);
     browse_button_->setEnabled(false);
+    browse_button_->setStyleSheet(
+        "QPushButton {"
+        "  padding: 8px 16px;"
+        "  border: 1px solid #d1d5db;"
+        "  border-radius: 6px;"
+        "  background-color: #ffffff;"
+        "  color: #374151;"
+        "  font-size: 13px;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #f3f4f6;"
+        "  border-color: #9ca3af;"
+        "}"
+        "QPushButton:disabled {"
+        "  background-color: #f3f4f6;"
+        "  color: #9ca3af;"
+        "}"
+    );
     resumePathLayout->addWidget(browse_button_);
     resumeLayout->addLayout(resumePathLayout);
-    
-    QLabel* hint = new QLabel("提示: 如不提供简历，将生成默认C++技术问题", this);
-    hint->setStyleSheet("QLabel { color: #666; font-style: italic; }");
+
+    QLabel* hint = new QLabel("  如不提供简历，将生成默认C++技术问题", this);
+    hint->setStyleSheet("QLabel { color: #9ca3af; font-size: 12px; font-style: italic; }");
     resumeLayout->addWidget(hint);
-    
+
     mainLayout->addWidget(resumeGroup);
-    
+
     // 问题设置组
-    QGroupBox* questionGroup = new QGroupBox("问题设置", this);
+    QGroupBox* questionGroup = new QGroupBox("  问题设置", this);
     QFormLayout* questionLayout = new QFormLayout(questionGroup);
-    
+    questionLayout->setContentsMargins(16, 20, 16, 12);
+
     questions_spin_box_ = new QSpinBox(this);
     questions_spin_box_->setRange(1, 50);
     questions_spin_box_->setValue(5);
     questions_spin_box_->setSuffix(" 个");
-    questionLayout->addRow("问题数量(1~50):", questions_spin_box_);
-    
+    questionLayout->addRow("问题数量 (1~50):", questions_spin_box_);
+
     mainLayout->addWidget(questionGroup);
-    
+
+    // 弹性空间
+    mainLayout->addStretch();
+
     // 按钮
     QHBoxLayout* buttonLayout = new QHBoxLayout();
+    buttonLayout->setSpacing(10);
     buttonLayout->addStretch();
-    
+
     cancel_button_ = new QPushButton("取消", this);
-    ok_button_ = new QPushButton("开始面试", this);
+    cancel_button_->setStyleSheet(
+        "QPushButton {"
+        "  padding: 10px 28px;"
+        "  border: 1px solid #d1d5db;"
+        "  border-radius: 6px;"
+        "  background-color: #ffffff;"
+        "  color: #374151;"
+        "  font-size: 13px;"
+        "  font-weight: 600;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #f3f4f6;"
+        "}"
+    );
+
+    ok_button_ = new QPushButton("  开始面试", this);
     ok_button_->setDefault(true);
-    
+    ok_button_->setStyleSheet(
+        "QPushButton {"
+        "  padding: 10px 28px;"
+        "  border: none;"
+        "  border-radius: 6px;"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #6366f1, stop:1 #8b5cf6);"
+        "  color: white;"
+        "  font-size: 13px;"
+        "  font-weight: 600;"
+        "}"
+        "QPushButton:hover {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #4f46e5, stop:1 #7c3aed);"
+        "}"
+        "QPushButton:pressed {"
+        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+        "    stop:0 #4338ca, stop:1 #6d28d9);"
+        "}"
+    );
+
     buttonLayout->addWidget(cancel_button_);
     buttonLayout->addWidget(ok_button_);
-    
+
     mainLayout->addLayout(buttonLayout);
-    
+
     // 连接信号
     connect(use_resume_check_, &QCheckBox::toggled, this, &ConfigDialog::OnUseResumeToggled);
     connect(browse_button_, &QPushButton::clicked, this, &ConfigDialog::OnBrowseResume);

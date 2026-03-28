@@ -159,6 +159,19 @@ public:
     nlohmann::json GenerateQuestionsFromResume(const std::string& resume_text, int min_questions = 50);
 
     /**
+     * @brief 在无简历场景生成通用C++面试问题
+     *
+     * 适用于候选人未上传简历时的标准技术面试流程。
+     * 该方法不会使用“候选人简历内容”文案，而是基于岗位要求生成问题。
+     *
+     * @param job_requirements 岗位要求/能力画像文本
+     * @param min_questions 最少生成的问题数量，默认50个
+     * @return JSON数组，包含问题列表
+     * @throws std::runtime_error LLM调用失败或JSON解析失败
+     */
+    nlohmann::json GenerateQuestionsFromRequirements(const std::string& job_requirements, int min_questions = 50);
+
+    /**
      * @brief 评估候选人的回答
      *
      * 使用LLM智能评估回答质量并决定是否追问。

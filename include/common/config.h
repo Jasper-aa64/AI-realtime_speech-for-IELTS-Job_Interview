@@ -28,8 +28,8 @@ namespace timing {
     // 主循环轮询间隔
     constexpr auto MAIN_LOOP_INTERVAL = std::chrono::milliseconds(100);
 
-    // 音频队列等待超时时间
-    constexpr auto AUDIO_QUEUE_WAIT = std::chrono::seconds(1);
+    // 音频队列等待超时时间（短超时使播放线程能快速检测队列清空，减少麦克风恢复延迟）
+    constexpr auto AUDIO_QUEUE_WAIT = std::chrono::milliseconds(50);
 }
 
 /**
