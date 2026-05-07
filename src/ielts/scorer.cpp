@@ -150,10 +150,13 @@ std::string Scorer::RunCodexExec(const std::string& prompt) {
     std::array<char, 8192> buf{};
     std::string result;
     FILE* pipe = ::popen(cmd.c_str(), "r");
-    std::filesystem::remove(temp_path);
-    if (!pipe) throw std::runtime_error("Failed to start codex CLI");
+    if (!pipe) {
+        std::filesystem::remove(temp_path);
+        throw std::runtime_error("Failed to start codex CLI");
+    }
     while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) result += buf.data();
     const int status = ::pclose(pipe);
+    std::filesystem::remove(temp_path);
     if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
         throw std::runtime_error("codex exec exited with non-zero status");
     if (result.empty()) throw std::runtime_error("codex exec returned empty output");
@@ -183,10 +186,13 @@ std::string Scorer::RunOpenAIAPI(const std::string& prompt) {
     std::array<char, 8192> buf{};
     std::string result;
     FILE* pipe = ::popen(cmd.c_str(), "r");
-    std::filesystem::remove(temp_path);
-    if (!pipe) throw std::runtime_error("Failed to start codex CLI (openai_api)");
+    if (!pipe) {
+        std::filesystem::remove(temp_path);
+        throw std::runtime_error("Failed to start codex CLI (openai_api)");
+    }
     while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) result += buf.data();
     const int status = ::pclose(pipe);
+    std::filesystem::remove(temp_path);
     if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
         throw std::runtime_error("codex exec (openai_api) exited with non-zero status");
     if (result.empty()) throw std::runtime_error("codex exec (openai_api) returned empty output");
@@ -212,10 +218,13 @@ std::string Scorer::RunClaude(const std::string& prompt) {
     std::array<char, 8192> buf{};
     std::string result;
     FILE* pipe = ::popen(cmd.c_str(), "r");
-    std::filesystem::remove(temp_path);
-    if (!pipe) throw std::runtime_error("Failed to start claude CLI");
+    if (!pipe) {
+        std::filesystem::remove(temp_path);
+        throw std::runtime_error("Failed to start claude CLI");
+    }
     while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) result += buf.data();
     const int status = ::pclose(pipe);
+    std::filesystem::remove(temp_path);
     if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
         throw std::runtime_error("claude CLI exited with non-zero status");
     if (result.empty()) throw std::runtime_error("claude CLI returned empty output");
