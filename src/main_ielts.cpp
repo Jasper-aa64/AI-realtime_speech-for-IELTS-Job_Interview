@@ -8,6 +8,8 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <termios.h>
+#include <unistd.h>
 
 namespace {
 
@@ -109,6 +111,7 @@ int main(int argc, char* argv[]) {
         ielts::IELTSManager manager(data_dir, reports_dir, *g_client);
 
         while (true) {
+            ::tcflush(STDIN_FILENO, TCIFLUSH);
             PrintMenu();
             std::string choice;
             std::getline(std::cin, choice);

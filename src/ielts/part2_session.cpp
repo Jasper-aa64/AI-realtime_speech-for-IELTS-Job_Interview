@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <sys/select.h>
+#include <termios.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -195,6 +196,7 @@ void Part2Session::RecordSpeech(int max_seconds) {
         }
         std::cout << "Paste or type the final Part 2 transcript, then press Enter:\n> ";
         std::getline(std::cin, transcript_);
+        ::tcflush(STDIN_FILENO, TCIFLUSH);
     }
 
     auto recorded_samples = capture.samples;
