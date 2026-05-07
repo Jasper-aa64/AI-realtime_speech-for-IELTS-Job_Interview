@@ -135,6 +135,13 @@ public:
     void SetResponseCallback(ResponseCallback callback);
 
     /**
+     * @brief 返回当前 WebSocket 是否已连接。
+     *
+     * 用于上层 CLI 在实时服务不可用时选择文本输入降级路径。
+     */
+    bool IsConnected() const;
+
+    /**
      * @brief 关闭连接
      *
      * 停止接收线程，发送结束请求，关闭WebSocket连接。

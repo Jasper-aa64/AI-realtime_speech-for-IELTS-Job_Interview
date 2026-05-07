@@ -137,6 +137,8 @@ public:
 
         }catch (const std::exception& e) {
             connected_ = false;
+            running_ = false;
+            ws_.reset();
             throw std::runtime_error(std::string("Failed to connect: ") + e.what());
         }
     }
@@ -209,8 +211,19 @@ public:
 
         // using ResponseCallback = std::function<void(const common::ParsedResponse&)>;
     void SetResponseCallback(ResponseCallback callback) {
-        std::lock_guard<std::mutex> lock(callback_mutex_);
-        callback_ = std::move(callback);
+        bool should_start = false;
+        {
+            std::lock_guard<std::mutex> lock(callback_mutex_);
+            callback_ = std::move(callback);
+            should_start = connected_ && callback_ && !running_;
+        }
+        if (should_start) {
+            StartReceiveThread();
+        }
+    }
+
+    bool IsConnected() const {
+        return connected_;
     }
 
     void StartReceiveThread() {
@@ -219,18 +232,39 @@ public:
             std::lock_guard<std::mutex> lock(callback_mutex_);
             has_callback = static_cast<bool>(callback_);
         }
-        if (has_callback && !running_) {
-            // 启动接收线程
-            running_ = true;
-            receive_thread_ = std::thread([this]() {
-                ReceiveLoop();
-            });
-            LOG_INFO("Receive thread started");
+        if (!has_callback || !connected_) {
+            return;
         }
+
+        std::lock_guard<std::mutex> lock(receive_thread_mutex_);
+        if (running_) {
+            return;
+        }
+        if (receive_thread_.joinable()) {
+            if (receive_thread_.get_id() == std::this_thread::get_id()) {
+                return;
+            }
+            receive_thread_.join();
+        }
+
+        // 启动接收线程
+        running_ = true;
+        receive_thread_ = std::thread([this]() {
+            ReceiveLoop();
+        });
+        LOG_INFO("Receive thread started");
     }
 
     void Close() {
         if (!connected_ && !running_) {
+            std::lock_guard<std::mutex> lock(receive_thread_mutex_);
+            if (receive_thread_.joinable()) {
+                if (receive_thread_.get_id() == std::this_thread::get_id()) {
+                    receive_thread_.detach();
+                } else {
+                    receive_thread_.join();
+                }
+            }
             return;
         }
 
@@ -274,10 +308,16 @@ public:
             }
 
             // 5. 等待接收线程退出
+            std::lock_guard<std::mutex> lock(receive_thread_mutex_);
             if (receive_thread_.joinable()) {
                 try {
-                    receive_thread_.join();
-                    LOG_INFO("Receive thread joined");
+                    if (receive_thread_.get_id() == std::this_thread::get_id()) {
+                        receive_thread_.detach();
+                        LOG_INFO("Receive thread detached during self-close");
+                    } else {
+                        receive_thread_.join();
+                        LOG_INFO("Receive thread joined");
+                    }
                 } catch (const std::exception& e) {
                     LOG_ERROR("Error joining receive thread: {}", e.what());
                 }
@@ -402,16 +442,6 @@ private:
         auto message = common::Protocol::BuildFullRequest(common::events::FINISH_CONNECTION, "", payload);
 
         ws_->write(net::buffer(message));
-
-        // 接收响应
-        beast::flat_buffer resp_buffer;
-        ws_->read(resp_buffer);
-
-        std::vector<uint8_t> resp_data(resp_buffer.size());
-        net::buffer_copy(net::buffer(resp_data), resp_buffer.data());
-
-        auto response = common::Protocol::ParseResponse(resp_data);
-        LOG_INFO("FinishConnection response event: ", response.event);
     }
 
     void ReceiveLoop() {
@@ -432,12 +462,16 @@ private:
                 if (response.event == common::events::SESSION_FINISHED ||
                     response.event == common::events::SESSION_ENDED) {
                     LOG_INFO("Session finished event: ", response.event);
+                    connected_ = false;
                     running_ = false;
                     break;
                 }
 
             } catch (const std::exception& e) {
-                LOG_ERROR("Receive loop error: ", e.what());
+                if (running_) {
+                    LOG_ERROR("Receive loop error: ", e.what());
+                }
+                connected_ = false;
                 running_ = false;
                 break;
             }
@@ -463,6 +497,7 @@ private:
     std::atomic<bool> connected_;
     std::atomic<bool> running_;
     std::thread receive_thread_;
+    std::mutex receive_thread_mutex_;
     std::mutex callback_mutex_;
     // callback_ 在 RealtimeClient 里
     // 就是“把服务端消息抛给上层业务”的函数指针（std::function）。
@@ -494,6 +529,10 @@ common::ParsedResponse RealtimeClient::ReceiveResponse() {
 
 void RealtimeClient::SetResponseCallback(ResponseCallback callback) {
     pimpl_->SetResponseCallback(std::move(callback));
+}
+
+bool RealtimeClient::IsConnected() const {
+    return pimpl_->IsConnected();
 }
 
 void RealtimeClient::Close() {

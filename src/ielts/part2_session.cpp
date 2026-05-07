@@ -1,8 +1,7 @@
 #include "ielts/part2_session.h"
 
 #include "common/logger.h"
-#include "common/config.h"
-#include "services/audio_manager.h"
+#include "ielts/realtime_speech_capture.h"
 #include "services/realtime_client.h"
 #include <chrono>
 #include <ctime>
@@ -170,63 +169,37 @@ void Part2Session::RunCountdown(int seconds) {
 
 void Part2Session::RecordSpeech(int max_seconds) {
     std::cout << "\nRecording window started. Press Enter to stop early.\n";
-    const auto start = std::chrono::steady_clock::now();
 
-    std::vector<int16_t> recorded_samples;
-    int sample_rate = 16000;
-    int channels = 1;
-    bool audio_recorded = false;
+    RealtimeCaptureOptions options;
+    options.max_seconds = max_seconds;
+    options.stop_on_first_final = false;
+    options.allow_enter_stop = true;
+    options.record_audio_without_realtime = true;
+    options.status_label = "Recording";
 
-    try {
-        auto& cfg = interview::common::Config::Instance();
-        sample_rate = cfg.input_audio_config.sample_rate;
-        channels = cfg.input_audio_config.channels;
+    const auto capture = CaptureSpeechWithRealtime(rt_client_, options);
+    actual_duration_ = capture.duration_seconds;
+    transcript_ = capture.transcript;
 
-        interview::services::AudioDeviceManager audio(cfg.input_audio_config, cfg.output_audio_config);
-        audio.OpenInputStream();
-
-        while (true) {
-            const int elapsed = static_cast<int>(
-                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start).count()
-            );
-            std::cout << "\rRecording... " << ProgressBar(std::min(elapsed, max_seconds), max_seconds)
-                      << " " << elapsed << " / " << max_seconds << "s " << std::flush;
-            if (elapsed >= max_seconds || (elapsed > 0 && EnterPressed())) {
-                break;
-            }
-            auto chunk = audio.ReadAudio();
-            recorded_samples.insert(recorded_samples.end(), chunk.begin(), chunk.end());
-            audio_recorded = true;
+    if (capture.used_realtime_stt) {
+        std::cout << "\033[2mRealtime transcript:\033[0m " << transcript_ << "\n";
+    } else {
+        if (!capture.fallback_reason.empty()) {
+            LOG_WARNING("P2 realtime STT unavailable, using terminal transcript: {}", capture.fallback_reason);
         }
-        audio.Cleanup();
-    } catch (const std::exception& e) {
-        LOG_WARNING("P2 microphone recording failed, falling back to timed transcript entry: {}", e.what());
-        for (int elapsed = 0; elapsed <= max_seconds; ++elapsed) {
-            std::cout << "\rRecording... " << ProgressBar(elapsed, max_seconds)
-                      << " " << elapsed << " / " << max_seconds << "s " << std::flush;
-            if (elapsed > 0 && EnterPressed()) {
-                break;
-            }
-            if (elapsed == max_seconds) {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
+        std::cout << "Paste or type the final Part 2 transcript, then press Enter:\n> ";
+        std::getline(std::cin, transcript_);
     }
 
-    actual_duration_ = static_cast<int>(
-        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start).count()
-    );
-    std::cout << "\nPaste or type the final Part 2 transcript, then press Enter:\n> ";
-    std::getline(std::cin, transcript_);
-
-    if (!audio_recorded) {
-        recorded_samples.assign(static_cast<size_t>(std::max(1, actual_duration_) * sample_rate * channels), 0);
+    auto recorded_samples = capture.samples;
+    if (recorded_samples.empty()) {
+        recorded_samples.assign(static_cast<size_t>(std::max(1, actual_duration_) * capture.sample_rate * capture.channels), 0);
     }
+
     WritePcmWav(std::filesystem::path(reports_dir_) / ("ielts_part2_" + TimestampForFilename() + ".wav"),
                 recorded_samples,
-                sample_rate,
-                channels);
+                capture.sample_rate,
+                capture.channels);
 }
 
 } // namespace ielts

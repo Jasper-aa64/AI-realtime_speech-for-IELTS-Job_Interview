@@ -1,6 +1,7 @@
 #include "ielts/part1_session.h"
 
 #include "common/logger.h"
+#include "ielts/realtime_speech_capture.h"
 #include "services/realtime_client.h"
 #include <algorithm>
 #include <cctype>
@@ -19,6 +20,27 @@ std::string ReadAnswerFromTerminal(const std::string& prompt) {
     std::string answer;
     std::getline(std::cin, answer);
     return answer;
+}
+
+std::string CaptureAnswerOrFallback(interview::services::RealtimeClient& client,
+                                    const std::string& fallback_prompt) {
+    RealtimeCaptureOptions options;
+    options.max_seconds = 75;
+    options.stop_on_first_final = true;
+    options.allow_enter_stop = true;
+    options.record_audio_without_realtime = false;
+    options.status_label = "Listening for answer";
+
+    const auto capture = CaptureSpeechWithRealtime(client, options);
+    if (capture.used_realtime_stt) {
+        std::cout << "\033[2mTranscript:\033[0m " << capture.transcript << "\n";
+        return capture.transcript;
+    }
+
+    if (!capture.fallback_reason.empty()) {
+        LOG_WARNING("P1 realtime STT unavailable, using terminal transcript: {}", capture.fallback_reason);
+    }
+    return ReadAnswerFromTerminal(fallback_prompt);
 }
 
 int WordCount(const std::string& text) {
@@ -57,7 +79,8 @@ void Part1Session::Start() {
     const auto questions = bank_.SampleP1Questions(num_questions_);
 
     std::cout << "\n\033[1;36mIELTS Speaking - Part 1\033[0m\n";
-    std::cout << "Answer each question in English. Press Enter after each answer.\n\n";
+    std::cout << "Answer each question in English. Realtime STT will capture your speech when available.\n";
+    std::cout << "Press Enter to stop early or type the transcript if realtime is unavailable.\n\n";
 
     int index = 1;
     for (const auto& item : questions) {
@@ -65,7 +88,7 @@ void Part1Session::Start() {
         std::cout << "\033[1;33m[" << item.topic << "] Examiner:\033[0m " << item.question << "\n";
         SafeSpeak(rt_client_, question);
 
-        const std::string answer = ReadAnswerFromTerminal("Candidate answer transcript:");
+        const std::string answer = CaptureAnswerOrFallback(rt_client_, "Candidate answer transcript:");
         transcript_ += "Examiner: " + item.question + "\nCandidate: " + answer + "\n";
 
         if (ShouldFollowUp(answer)) {
@@ -73,7 +96,7 @@ void Part1Session::Start() {
             std::cout << "\033[1;33mFollow-up:\033[0m " << follow_up << "\n";
             SafeSpeak(rt_client_, follow_up);
 
-            const std::string follow_answer = ReadAnswerFromTerminal("Candidate follow-up answer transcript:");
+            const std::string follow_answer = CaptureAnswerOrFallback(rt_client_, "Candidate follow-up answer transcript:");
             transcript_ += "Examiner: " + follow_up + "\nCandidate: " + follow_answer + "\n";
         }
         ++index;

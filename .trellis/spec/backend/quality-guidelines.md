@@ -40,6 +40,14 @@ the boundary behavior instead of relying only on manual end-to-end runs.
   ```cpp
   IELTSScore Scorer::Score(const std::string& transcript);
   ```
+- Realtime capture:
+  ```cpp
+  bool interview::services::RealtimeClient::IsConnected() const;
+
+  RealtimeCaptureResult CaptureSpeechWithRealtime(
+      interview::services::RealtimeClient& rt_client,
+      const RealtimeCaptureOptions& options);
+  ```
 
 ### 3. Contracts
 
@@ -74,6 +82,15 @@ the boundary behavior instead of relying only on manual end-to-end runs.
   and score objects when that part was run.
 - Overall IELTS band is recomputed locally from the four scoring dimensions and
   rounded upward to the next 0.5. Do not trust a model-provided overall value.
+- P1/P2 speech capture should use realtime STT when `RealtimeClient` is
+  connected. If realtime is disconnected, send fails, or no transcript returns,
+  the CLI must keep the exam usable through terminal transcript fallback.
+- P2 must keep recording microphone samples for WAV output even when realtime
+  STT is unavailable, as long as the local audio device can be opened.
+- `RealtimeClient::SetResponseCallback()` may be called after `Connect()`.
+  Implementations must start the receive thread exactly once and must not
+  restart over a joinable thread. If the receive loop ends or fails, connection
+  state must be reset so upper layers can choose fallback behavior.
 
 ### 4. Validation & Error Matrix
 
@@ -86,6 +103,13 @@ the boundary behavior instead of relying only on manual end-to-end runs.
   starts.
 - Codex/Claude CLI unavailable, non-zero, or empty output -> log the failure and
   use deterministic fallback scoring/questions where the session can continue.
+- Realtime disconnected before capture -> return a fallback reason and do not
+  attempt STT audio sends.
+- Realtime send failure during capture -> continue local recording, log a
+  warning, and return a fallback reason.
+- Realtime returns no final/interim transcript -> fall back to terminal input
+  for P1/P2 transcript text.
+- Realtime receive-loop failure/session end -> mark the client disconnected.
 - Report or WAV write failure -> throw a runtime error; do not silently ignore
   failed output writes.
 
@@ -95,8 +119,12 @@ the boundary behavior instead of relying only on manual end-to-end runs.
   changes are needed and the next run can sample it.
 - Base: `IELTSSpeakingSimulator --help` works without connecting to realtime
   services.
+- Base: Realtime connection fails at startup; the IELTS CLI logs the issue and
+  continues in transcript fallback mode.
 - Bad: A session hardcodes `reports/` instead of using `--reports-dir`; this
   breaks testability and user-selected output locations.
+- Bad: `Close()` reads from the websocket while the receive thread is also
+  reading; only one receive path may own websocket reads at a time.
 
 ### 6. Tests Required
 
@@ -105,6 +133,8 @@ the boundary behavior instead of relying only on manual end-to-end runs.
 - `IELTSSpeakingSimulator --help` must exit successfully.
 - `ielts_data_test` must load bundled Part 1, Part 2, and prompt files and
   assert non-empty sampled data.
+- Realtime capture changes must build both the IELTS target and existing tests,
+  because `RealtimeClient` is shared with the original interview flow.
 - `ctest --output-on-failure` should pass for the configured build directory.
 
 ### 7. Wrong vs Correct
@@ -137,6 +167,9 @@ if (!wav) {
   artifacts.
 - Do not let LLM-generated JSON scores define `overall_band`; recompute it from
   the validated dimensions.
+- Do not let IELTS P1/P2 require live realtime credentials to run; keep terminal
+  transcript fallback available.
+- Do not introduce competing websocket readers in `RealtimeClient` shutdown.
 
 ---
 
@@ -147,6 +180,8 @@ if (!wav) {
   requiring recompilation.
 - Shell-out integrations must have a deterministic fallback or a clear runtime
   error, depending on whether the user flow can safely continue.
+- Realtime integrations used by CLI flows must expose a connection check and
+  route disconnected/no-transcript cases to explicit fallback behavior.
 
 ---
 
@@ -166,3 +201,5 @@ if (!wav) {
 - Are external CLI failures handled explicitly?
 - Are JSON file formats validated at load time?
 - Can the core target and its smoke/data tests run without live credentials?
+- Does realtime capture preserve fallback behavior and avoid regressions to the
+  shared interview realtime client?

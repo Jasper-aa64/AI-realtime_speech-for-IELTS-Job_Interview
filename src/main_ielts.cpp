@@ -96,7 +96,12 @@ int main(int argc, char* argv[]) {
 
         auto& cfg = interview::common::Config::Instance();
         g_client = std::make_unique<interview::services::RealtimeClient>(cfg.ws_config.base_url, cfg.ws_config.headers);
-        g_client->Connect();
+        try {
+            g_client->Connect();
+        } catch (const std::exception& e) {
+            LOG_WARNING("Realtime service unavailable; IELTS CLI will use transcript fallback: {}", e.what());
+            std::cerr << "Realtime service unavailable; continuing with transcript fallback.\n";
+        }
 
         std::signal(SIGINT, SignalHandler);
         std::signal(SIGTERM, SignalHandler);
@@ -128,7 +133,9 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        g_client->Close();
+        if (g_client->IsConnected()) {
+            g_client->Close();
+        }
         g_client.reset();
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << "\n";

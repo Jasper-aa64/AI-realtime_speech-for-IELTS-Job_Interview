@@ -135,6 +135,7 @@ add_executable(
     src/ielts/part2_session.cpp
     src/ielts/part3_session.cpp
     src/ielts/question_bank.cpp
+    src/ielts/realtime_speech_capture.cpp
     src/ielts/scorer.cpp
     src/services/audio_manager.cpp
     src/services/llm_client.cpp
