@@ -93,7 +93,8 @@ IELTSScore HeuristicScore(const std::string& transcript, const std::string& reas
 
 } // namespace
 
-Scorer::Scorer(const std::string& data_dir) {
+Scorer::Scorer(const std::string& data_dir, ScorerConfig config)
+    : config_(std::move(config)) {
     system_prompt_ = ReadTextFile(std::filesystem::path(data_dir) / "prompts" / "scorer_system.md");
 }
 
@@ -103,64 +104,121 @@ IELTSScore Scorer::Score(const std::string& transcript) {
     }
 
     try {
+        const std::string backend_name =
+            config_.backend == ScorerBackend::kCodexExec  ? "codex_exec" :
+            config_.backend == ScorerBackend::kOpenAIAPI  ? "openai_api" :
+            config_.backend == ScorerBackend::kClaude     ? "claude"     : "heuristic";
+        LOG_INFO("IELTS Scorer backend: {}", backend_name);
+
         const std::string prompt = system_prompt_ + "\n\nTranscript:\n" + transcript + "\n";
-        const std::string response = RunCodex(prompt);
+        const std::string response = RunBackend(prompt);
         return ParseResponse(response);
     } catch (const std::exception& e) {
-        LOG_ERROR("IELTS Codex scoring failed: {}", e.what());
+        LOG_ERROR("IELTS scoring failed: {}", e.what());
         return HeuristicScore(transcript, e.what());
     }
 }
 
-std::string Scorer::RunCodex(const std::string& user_prompt) {
+std::string Scorer::RunBackend(const std::string& prompt) {
+    switch (config_.backend) {
+        case ScorerBackend::kCodexExec:  return RunCodexExec(prompt);
+        case ScorerBackend::kOpenAIAPI:  return RunOpenAIAPI(prompt);
+        case ScorerBackend::kClaude:     return RunClaude(prompt);
+        case ScorerBackend::kHeuristic:  throw std::runtime_error("heuristic backend selected");
+    }
+    throw std::runtime_error("unknown backend");
+}
+
+std::string Scorer::RunCodexExec(const std::string& prompt) {
     const auto temp_path = std::filesystem::temp_directory_path() /
         ("ielts_scorer_" + std::to_string(::getpid()) + ".txt");
-    const auto output_path = std::filesystem::temp_directory_path() /
-        ("ielts_scorer_output_" + std::to_string(::getpid()) + ".txt");
-
     {
-        std::ofstream output(temp_path);
-        if (!output) {
-            throw std::runtime_error("Failed to write temporary Codex prompt: " + temp_path.string());
-        }
-        output << user_prompt;
+        std::ofstream out(temp_path);
+        if (!out) throw std::runtime_error("Failed to write prompt file");
+        out << prompt;
     }
 
-    const std::string command =
-        ShellQuote(CodexBinary()) +
-        " exec --model gpt-4o-mini --ask-for-approval never --sandbox read-only --color never " +
-        "--output-last-message " + ShellQuote(output_path.string()) +
-        " - < " + ShellQuote(temp_path.string()) + " 2>/dev/null";
+    const std::string codex_bin = std::filesystem::exists("/opt/homebrew/bin/codex")
+        ? "/opt/homebrew/bin/codex" : "codex";
 
-    std::array<char, 4096> buffer{};
+    std::string cmd = "cat " + ShellQuote(temp_path.string()) + " | " + ShellQuote(codex_bin) + " exec";
+    if (!config_.model.empty()) {
+        cmd += " -m " + ShellQuote(config_.model);
+    }
+    cmd += " 2>/dev/null";
+
+    std::array<char, 8192> buf{};
     std::string result;
-    FILE* pipe = ::popen(command.c_str(), "r");
-    if (!pipe) {
-        std::filesystem::remove(temp_path);
-        std::filesystem::remove(output_path);
-        throw std::runtime_error("Failed to start codex CLI");
-    }
-
-    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
-        result += buffer.data();
-    }
-    const int status = ::pclose(pipe);
+    FILE* pipe = ::popen(cmd.c_str(), "r");
     std::filesystem::remove(temp_path);
+    if (!pipe) throw std::runtime_error("Failed to start codex CLI");
+    while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) result += buf.data();
+    const int status = ::pclose(pipe);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        throw std::runtime_error("codex exec exited with non-zero status");
+    if (result.empty()) throw std::runtime_error("codex exec returned empty output");
+    return result;
+}
 
-    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        std::filesystem::remove(output_path);
-        throw std::runtime_error("codex CLI exited with non-zero status");
+std::string Scorer::RunOpenAIAPI(const std::string& prompt) {
+    const auto temp_path = std::filesystem::temp_directory_path() /
+        ("ielts_scorer_api_" + std::to_string(::getpid()) + ".txt");
+    {
+        std::ofstream out(temp_path);
+        if (!out) throw std::runtime_error("Failed to write prompt file");
+        out << prompt;
     }
-    if (std::filesystem::exists(output_path)) {
-        const std::string last_message = ReadTextFile(output_path);
-        std::filesystem::remove(output_path);
-        if (!last_message.empty()) {
-            result = last_message;
-        }
+
+    const std::string codex_bin = std::filesystem::exists("/opt/homebrew/bin/codex")
+        ? "/opt/homebrew/bin/codex" : "codex";
+    const std::string model = config_.model.empty() ? "gpt-4o" : config_.model;
+
+    if (!config_.api_key.empty()) {
+        ::setenv("OPENAI_API_KEY", config_.api_key.c_str(), 1);
     }
-    if (result.empty()) {
-        throw std::runtime_error("codex CLI returned empty output");
+
+    std::string cmd = "cat " + ShellQuote(temp_path.string()) + " | " +
+        ShellQuote(codex_bin) + " exec -m " + ShellQuote(model) + " 2>/dev/null";
+
+    std::array<char, 8192> buf{};
+    std::string result;
+    FILE* pipe = ::popen(cmd.c_str(), "r");
+    std::filesystem::remove(temp_path);
+    if (!pipe) throw std::runtime_error("Failed to start codex CLI (openai_api)");
+    while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) result += buf.data();
+    const int status = ::pclose(pipe);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        throw std::runtime_error("codex exec (openai_api) exited with non-zero status");
+    if (result.empty()) throw std::runtime_error("codex exec (openai_api) returned empty output");
+    return result;
+}
+
+std::string Scorer::RunClaude(const std::string& prompt) {
+    const std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
+    const std::string claude_bin = std::filesystem::exists(home + "/.local/bin/claude")
+        ? home + "/.local/bin/claude" : "claude";
+
+    const auto temp_path = std::filesystem::temp_directory_path() /
+        ("ielts_scorer_claude_" + std::to_string(::getpid()) + ".txt");
+    {
+        std::ofstream out(temp_path);
+        if (!out) throw std::runtime_error("Failed to write claude prompt");
+        out << prompt;
     }
+
+    std::string cmd = "cat " + ShellQuote(temp_path.string()) + " | " +
+        ShellQuote(claude_bin) + " --print 2>/dev/null";
+
+    std::array<char, 8192> buf{};
+    std::string result;
+    FILE* pipe = ::popen(cmd.c_str(), "r");
+    std::filesystem::remove(temp_path);
+    if (!pipe) throw std::runtime_error("Failed to start claude CLI");
+    while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) result += buf.data();
+    const int status = ::pclose(pipe);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        throw std::runtime_error("claude CLI exited with non-zero status");
+    if (result.empty()) throw std::runtime_error("claude CLI returned empty output");
     return result;
 }
 

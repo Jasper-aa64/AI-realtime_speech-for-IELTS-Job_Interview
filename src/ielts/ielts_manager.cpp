@@ -4,6 +4,7 @@
 #include "ielts/part2_session.h"
 #include "ielts/part3_session.h"
 #include "common/logger.h"
+#include "common/config.h"
 #include <ctime>
 #include <cmath>
 #include <filesystem>
@@ -69,7 +70,7 @@ IELTSManager::IELTSManager(const std::string& data_dir,
     : data_dir_(data_dir)
     , report_dir_(report_dir)
     , rt_client_(rt_client)
-    , scorer_(data_dir) {
+    , scorer_(data_dir, interview::common::Config::Instance().scorer_config) {
     bank_.LoadPart1(data_dir_);
     bank_.LoadPart2(data_dir_);
 }

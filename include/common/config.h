@@ -4,6 +4,7 @@
 #include <map>
 #include <chrono>
 #include <nlohmann/json.hpp>
+#include "ielts/scorer.h"
 
 namespace interview {
 namespace common {
@@ -250,6 +251,9 @@ public:
 
     // LLM（大语言模型）配置
     LLMConfig llm_config;
+
+    // Scorer 配置
+    ielts::ScorerConfig scorer_config;
 
     /**
      * @brief 从JSON配置文件加载所有设置

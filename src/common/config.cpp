@@ -1,5 +1,6 @@
 #include "common/config.h"
 #include "common/utils.h"
+#include "ielts/scorer.h"
 #include <fstream>
 #include <stdexcept>
 
@@ -115,6 +116,21 @@ void Config::LoadFromFile(const std::string& path) {
     llm_config.max_tokens = Require<int>(llm, "max_tokens");
     llm_config.timeout_seconds = Require<int>(llm, "timeout_seconds");
     
+
+    // scorer section (optional, defaults to codex_exec)
+    if (root.contains("scorer")) {
+        const auto& sc = root.at("scorer");
+        const std::string backend_str = sc.value("backend", "codex_exec");
+        if (backend_str == "openai_api") {
+            scorer_config.backend = ielts::ScorerBackend::kOpenAIAPI;
+        } else if (backend_str == "claude") {
+            scorer_config.backend = ielts::ScorerBackend::kClaude;
+        } else {
+            scorer_config.backend = ielts::ScorerBackend::kCodexExec;
+        }
+        scorer_config.model = sc.value("model", "");
+        scorer_config.api_key = sc.value("api_key", "");
+    }
 
     // 验证配置参数有效性
     ValidateConfiguration();
