@@ -73,3 +73,37 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Scorer 多后端 + codex exec 修 bug
+
+**Date**: 2026-05-08
+**Task**: Scorer 多后端 + codex exec 修 bug
+**Branch**: `main`
+
+### Summary
+
+新增 ScorerBackend enum + ScorerConfig，支持 codex_exec（ChatGPT 账号）/ openai_api / claude 三后端；修 codex exec gpt-4o-mini 400 错误；修 temp 文件在 pclose 前被删导致 cat No such file 问题；config.json 新增 scorer 段。全链路验收通过：STT 识别英文、codex 评分返回真实 LLM feedback
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fccc1af` | (see git log) |
+| `a3ca973` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
