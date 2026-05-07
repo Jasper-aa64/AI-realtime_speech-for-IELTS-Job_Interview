@@ -40,3 +40,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: 修复 stdin 缓冲区污染主菜单 bug
+
+**Date**: 2026-05-08
+**Task**: 修复 stdin 缓冲区污染主菜单 bug
+**Branch**: `main`
+
+### Summary
+
+主菜单读取前加 tcflush(STDIN_FILENO, TCIFLUSH)，Part2Session::RecordSpeech 结束后同样 flush，防止多行粘贴残留换行污染主菜单循环导致 Unknown menu option 无限打印
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `22a20c9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
