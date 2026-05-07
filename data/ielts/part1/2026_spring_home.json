@@ -4,10 +4,11 @@
   "topic": "home",
   "questions": [
     "Do you live in a house or a flat?",
-    "What do you like most about where you live?",
-    "How long have you lived there?",
-    "Which room in your home do you spend the most time in?",
-    "Is there anything you would like to change about your home?",
-    "Do you think the area where you live will change much in the future?"
+    "Who do you live with?",
+    "What is your favourite room in your home?",
+    "What do you like most about your home?",
+    "What changes would you like to make to your home?",
+    "Is your neighbourhood a good place to live?",
+    "Do you plan to continue living there in the future?"
   ]
 }

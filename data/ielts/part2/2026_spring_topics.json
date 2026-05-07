@@ -3,84 +3,104 @@
   "part": 2,
   "topics": [
     {
-      "title": "Describe a skill you recently learned",
+      "title": "Describe a time when you felt proud of a family member",
       "bullets": [
-        "What the skill is",
-        "How you learned it",
-        "Why you decided to learn it"
-      ],
-      "rounding": "And explain how this skill has been useful to you.",
-      "p3_theme": "skills_and_learning"
-    },
-    {
-      "title": "Describe a building that impressed you",
-      "bullets": [
-        "Where the building is",
-        "What it looks like",
-        "When you first saw it"
-      ],
-      "rounding": "And explain why it impressed you.",
-      "p3_theme": "architecture_and_public_spaces"
-    },
-    {
-      "title": "Describe a person you admire",
-      "bullets": [
-        "Who this person is",
-        "How you know this person",
-        "What qualities this person has"
-      ],
-      "rounding": "And explain why you admire this person.",
-      "p3_theme": "role_models_and_personal_qualities"
-    },
-    {
-      "title": "Describe a shopping experience that made you happy",
-      "bullets": [
-        "What you bought",
-        "Where you bought it",
-        "Who you were with"
-      ],
-      "rounding": "And explain why this shopping experience made you happy.",
-      "p3_theme": "shopping_and_consumer_choices"
-    },
-    {
-      "title": "Describe a country you would like to visit",
-      "bullets": [
-        "Which country it is",
-        "What you know about it",
-        "What you would like to do there"
-      ],
-      "rounding": "And explain why you would like to visit this country.",
-      "p3_theme": "international_travel_and_culture"
-    },
-    {
-      "title": "Describe a song that is meaningful to you",
-      "bullets": [
-        "What the song is",
-        "When you first heard it",
-        "What the song reminds you of"
-      ],
-      "rounding": "And explain why this song is meaningful to you.",
-      "p3_theme": "music_and_memory"
-    },
-    {
-      "title": "Describe a person who helped you",
-      "bullets": [
-        "Who helped you",
-        "What problem you had",
-        "How this person helped you"
-      ],
-      "rounding": "And explain how you felt after receiving this help.",
-      "p3_theme": "helping_others_and_community"
-    },
-    {
-      "title": "Describe a successful experience you had",
-      "bullets": [
-        "What the experience was",
         "When it happened",
-        "What you did to succeed"
+        "Who the person is",
+        "What the person did"
       ],
-      "rounding": "And explain why this success was important to you.",
-      "p3_theme": "success_and_personal_goals"
+      "rounding": "And explain why you felt proud of him or her.",
+      "p3_theme": "family_pride_and_achievement"
+    },
+    {
+      "title": "Describe a perfect job you would like to have in the future",
+      "bullets": [
+        "What the job is",
+        "How you found out about it",
+        "What you would need to learn to get the job"
+      ],
+      "rounding": "And explain why you think it would be a perfect job for you.",
+      "p3_theme": "career_choices_and_job_satisfaction"
+    },
+    {
+      "title": "Describe a famous person you would like to meet",
+      "bullets": [
+        "Who he or she is",
+        "How you know about this person",
+        "Where and how you would like to meet him or her"
+      ],
+      "rounding": "And explain why you would like to meet this person.",
+      "p3_theme": "fame_and_celebrity"
+    },
+    {
+      "title": "Describe an occasion when you were not allowed to use your mobile phone",
+      "bullets": [
+        "When it was",
+        "Where it was",
+        "Why you were not allowed to use your mobile phone"
+      ],
+      "rounding": "And explain how you felt about it.",
+      "p3_theme": "mobile_phone_use_and_digital_etiquette"
+    },
+    {
+      "title": "Describe a piece of technology (not a phone) that you would like to own",
+      "bullets": [
+        "What it is",
+        "How much it costs",
+        "What you would use it for"
+      ],
+      "rounding": "And explain why you would like to own it.",
+      "p3_theme": "technology_and_society"
+    },
+    {
+      "title": "Describe a movie you watched and enjoyed recently",
+      "bullets": [
+        "When and where you watched it",
+        "Who you watched it with",
+        "What it was about"
+      ],
+      "rounding": "And explain why you enjoyed this movie.",
+      "p3_theme": "movies_and_cinema_culture"
+    },
+    {
+      "title": "Describe a trip you would like to make again",
+      "bullets": [
+        "Where and when you went",
+        "Who you made the trip with",
+        "What you did during the trip"
+      ],
+      "rounding": "And explain why you would like to make the trip again.",
+      "p3_theme": "travel_motivations"
+    },
+    {
+      "title": "Describe a time when you told your friend an important truth",
+      "bullets": [
+        "When it was",
+        "Who the friend was",
+        "What the important truth was"
+      ],
+      "rounding": "And explain how your friend reacted.",
+      "p3_theme": "honesty_and_relationships"
+    },
+    {
+      "title": "Describe a positive change you made to your daily routine",
+      "bullets": [
+        "What the change was",
+        "When and why you made this change",
+        "How this change affected your life"
+      ],
+      "rounding": "And explain whether this change was easy or difficult to make.",
+      "p3_theme": "habits_and_self_improvement"
+    },
+    {
+      "title": "Describe an invention that changed how people live",
+      "bullets": [
+        "What the invention is",
+        "How it was invented or who invented it",
+        "How it changed people's lives"
+      ],
+      "rounding": "And explain whether this change has been positive or negative.",
+      "p3_theme": "technology_and_innovation"
     }
   ]
 }

@@ -3,11 +3,12 @@
   "part": 1,
   "topic": "food",
   "questions": [
-    "What kind of food do you like most?",
-    "Do you often cook at home?",
+    "What's your favourite food?",
+    "Do you enjoy cooking? How often do you cook?",
     "Do you prefer eating at home or eating out?",
-    "Is there any food you disliked as a child but like now?",
-    "How popular is food delivery where you live?",
-    "Do you think young people should learn how to cook?"
+    "When was the last time you tried a new dish?",
+    "Do you have a healthy diet?",
+    "What do you think of fast food?",
+    "Is there any food you didn't like as a child that you do now?"
   ]
 }
