@@ -30,4 +30,11 @@ RealtimeCaptureResult CaptureSpeechWithRealtime(
     interview::services::RealtimeClient& rt_client,
     const RealtimeCaptureOptions& options);
 
+// Returns a realtime STT transcript when available, otherwise prompts for a
+// terminal transcript so the CLI flow can continue without realtime services.
+std::string CaptureAnswerOrFallback(
+    interview::services::RealtimeClient& client,
+    const std::string& fallback_prompt,
+    int max_seconds = 75);
+
 } // namespace ielts

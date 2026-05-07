@@ -1,6 +1,7 @@
 #include "ielts/part3_session.h"
 
 #include "common/logger.h"
+#include "ielts/realtime_speech_capture.h"
 #include "services/realtime_client.h"
 #include <algorithm>
 #include <array>
@@ -42,6 +43,52 @@ std::string ShellQuote(const std::string& value) {
     }
     quoted += "'";
     return quoted;
+}
+
+std::string Trim(std::string value) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return "";
+    }
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
+std::string ClaudeBinary() {
+    const char* home = std::getenv("HOME");
+    if (home != nullptr) {
+        const auto local_claude = std::filesystem::path(home) / ".local/bin/claude";
+        if (std::filesystem::exists(local_claude)) {
+            return local_claude.string();
+        }
+    }
+    return "claude";
+}
+
+std::string RunClaudeWithPromptFile(const std::filesystem::path& prompt_path) {
+    const std::string command =
+        ShellQuote(ClaudeBinary()) +
+        " --print --output-format text --input-format text --allowedTools none < " +
+        ShellQuote(prompt_path.string()) +
+        " 2>/dev/null";
+
+    std::array<char, 4096> buffer{};
+    std::string result;
+    FILE* pipe = ::popen(command.c_str(), "r");
+    if (!pipe) {
+        throw std::runtime_error("Failed to start claude CLI");
+    }
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+        result += buffer.data();
+    }
+    const int status = ::pclose(pipe);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        throw std::runtime_error("claude CLI exited with non-zero status");
+    }
+    if (result.empty()) {
+        throw std::runtime_error("claude CLI returned empty output");
+    }
+    return result;
 }
 
 std::string ExtractJsonArray(const std::string& text) {
@@ -92,18 +139,14 @@ void Part3Session::Start() {
     for (const auto& question : questions) {
         std::cout << "\033[1;33mExaminer:\033[0m " << question << "\n";
         SafeSpeak(rt_client_, question);
-        std::cout << "Candidate answer transcript:\n> ";
-        std::string answer;
-        std::getline(std::cin, answer);
+        const std::string answer = CaptureAnswerOrFallback(rt_client_, "Candidate answer transcript:");
         transcript_ += "Examiner: " + question + "\nCandidate: " + answer + "\n";
 
         if (ShouldFollowUp(answer)) {
-            const std::string follow_up = "Why do you think that is the case?";
+            const std::string follow_up = GetFollowUpQuestion(question, answer);
             std::cout << "\033[1;33mFollow-up:\033[0m " << follow_up << "\n";
             SafeSpeak(rt_client_, follow_up);
-            std::cout << "Candidate follow-up answer transcript:\n> ";
-            std::string follow_answer;
-            std::getline(std::cin, follow_answer);
+            const std::string follow_answer = CaptureAnswerOrFallback(rt_client_, "Candidate follow-up answer transcript:");
             transcript_ += "Examiner: " + follow_up + "\nCandidate: " + follow_answer + "\n";
         }
     }
@@ -133,27 +176,14 @@ std::vector<std::string> Part3Session::GenerateQuestions(const std::string& them
             output << prompt;
         }
 
-        const std::string claude = std::filesystem::exists(std::filesystem::path(std::getenv("HOME") ? std::getenv("HOME") : "") / ".local/bin/claude")
-            ? (std::filesystem::path(std::getenv("HOME")) / ".local/bin/claude").string()
-            : "claude";
-        const std::string command = claude + " -p \"$(cat " + ShellQuote(temp_path.string()) + ")\" --allowedTools none -- " +
-            ShellQuote("P2 Topic: " + p2_topic_.title + ", Theme: " + theme) + " 2>/dev/null";
-
-        std::array<char, 4096> buffer{};
         std::string result;
-        FILE* pipe = ::popen(command.c_str(), "r");
-        if (!pipe) {
+        try {
+            result = RunClaudeWithPromptFile(temp_path);
+        } catch (...) {
             std::filesystem::remove(temp_path);
-            throw std::runtime_error("Failed to start claude CLI");
+            throw;
         }
-        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
-            result += buffer.data();
-        }
-        const int status = ::pclose(pipe);
         std::filesystem::remove(temp_path);
-        if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0 || result.empty()) {
-            throw std::runtime_error("claude CLI did not return questions");
-        }
 
         const auto parsed = nlohmann::json::parse(ExtractJsonArray(result));
         std::vector<std::string> questions;
@@ -176,6 +206,59 @@ std::vector<std::string> Part3Session::GenerateQuestions(const std::string& them
         "What are the advantages and disadvantages for society?",
         "How do you think this topic will develop in the future?"
     };
+}
+
+std::string Part3Session::GetFollowUpQuestion(const std::string& question,
+                                               const std::string& answer) {
+    static const std::vector<std::string> kFallbacks = {
+        "Could you explain your reasoning in more detail?",
+        "What makes you think that?",
+        "Can you give a concrete example from your own experience?",
+        "How does that compare to the situation in other countries?",
+        "Do you think this will change in the future? Why?"
+    };
+    static size_t fallback_index = 0;
+
+    try {
+        const std::string prompt =
+            "You are an IELTS examiner. The candidate gave a short/thin answer to the question below.\n"
+            "Generate ONE natural follow-up probe question in one sentence.\n"
+            "Question: " + question + "\n"
+            "Candidate answer: " + answer + "\n"
+            "Output ONLY the question, no explanation.\n";
+        const auto temp_path = std::filesystem::temp_directory_path() /
+            ("ielts_p3_followup_" + std::to_string(::getpid()) + ".txt");
+        {
+            std::ofstream output(temp_path);
+            if (!output) {
+                throw std::runtime_error("Failed to write temporary Claude follow-up prompt");
+            }
+            output << prompt;
+        }
+
+        std::string result;
+        try {
+            result = Trim(RunClaudeWithPromptFile(temp_path));
+        } catch (...) {
+            std::filesystem::remove(temp_path);
+            throw;
+        }
+        std::filesystem::remove(temp_path);
+
+        const auto newline = result.find_first_of("\r\n");
+        if (newline != std::string::npos) {
+            result = Trim(result.substr(0, newline));
+        }
+        if (!result.empty()) {
+            return result;
+        }
+    } catch (const std::exception& e) {
+        LOG_WARNING("P3 follow-up generation failed, using fallback probe: {}", e.what());
+    }
+
+    const std::string fallback = kFallbacks[fallback_index % kFallbacks.size()];
+    ++fallback_index;
+    return fallback;
 }
 
 bool Part3Session::ShouldFollowUp(const std::string& answer) {

@@ -239,4 +239,30 @@ RealtimeCaptureResult CaptureSpeechWithRealtime(
     return result;
 }
 
+std::string CaptureAnswerOrFallback(interview::services::RealtimeClient& client,
+                                    const std::string& fallback_prompt,
+                                    int max_seconds) {
+    RealtimeCaptureOptions options;
+    options.max_seconds = max_seconds;
+    options.stop_on_first_final = true;
+    options.allow_enter_stop = true;
+    options.record_audio_without_realtime = false;
+    options.status_label = "Listening for answer";
+
+    const auto capture = CaptureSpeechWithRealtime(client, options);
+    if (capture.used_realtime_stt) {
+        std::cout << "\033[2mTranscript:\033[0m " << capture.transcript << "\n";
+        return capture.transcript;
+    }
+
+    if (!capture.fallback_reason.empty()) {
+        LOG_WARNING("Realtime STT unavailable, using terminal transcript: {}", capture.fallback_reason);
+    }
+
+    std::cout << fallback_prompt << "\n> ";
+    std::string answer;
+    std::getline(std::cin, answer);
+    return answer;
+}
+
 } // namespace ielts

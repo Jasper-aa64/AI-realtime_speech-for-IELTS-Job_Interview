@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend conventions for the IELTS CLI follow-up implementation."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Keep new IELTS helpers/data in the established C++ module layout."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Handle CLI shell-out, realtime fallback, and data loading failures consistently."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Contains the IELTS CLI contracts, realtime fallback requirements, and test expectations."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse RealtimeSpeechCapture and existing IELTS/session patterns instead of duplicating capture logic."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Changes span CLI, realtime service, question data, shell-out LLM calls, and tests."}
+{"file": "docs/IELTS_CLI_NEXT_STEPS.md", "reason": "Phase-by-phase implementation plan for the remaining P2/P3/scorer/question-bank gaps."}

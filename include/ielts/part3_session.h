@@ -23,8 +23,9 @@ public:
     std::string GetTranscript() const;
 
 private:
-    // Calls: claude -p "$(cat prompts/p3_question_gen.md)" -- "<theme>"
+    // Generates questions via Claude CLI and falls back to deterministic prompts.
     std::vector<std::string> GenerateQuestions(const std::string& theme);
+    std::string GetFollowUpQuestion(const std::string& question, const std::string& answer);
     bool ShouldFollowUp(const std::string& answer);
 
     P2Topic                                p2_topic_;

@@ -1,0 +1,86 @@
+{
+  "season": "2026-spring",
+  "part": 2,
+  "topics": [
+    {
+      "title": "Describe a skill you recently learned",
+      "bullets": [
+        "What the skill is",
+        "How you learned it",
+        "Why you decided to learn it"
+      ],
+      "rounding": "And explain how this skill has been useful to you.",
+      "p3_theme": "skills_and_learning"
+    },
+    {
+      "title": "Describe a building that impressed you",
+      "bullets": [
+        "Where the building is",
+        "What it looks like",
+        "When you first saw it"
+      ],
+      "rounding": "And explain why it impressed you.",
+      "p3_theme": "architecture_and_public_spaces"
+    },
+    {
+      "title": "Describe a person you admire",
+      "bullets": [
+        "Who this person is",
+        "How you know this person",
+        "What qualities this person has"
+      ],
+      "rounding": "And explain why you admire this person.",
+      "p3_theme": "role_models_and_personal_qualities"
+    },
+    {
+      "title": "Describe a shopping experience that made you happy",
+      "bullets": [
+        "What you bought",
+        "Where you bought it",
+        "Who you were with"
+      ],
+      "rounding": "And explain why this shopping experience made you happy.",
+      "p3_theme": "shopping_and_consumer_choices"
+    },
+    {
+      "title": "Describe a country you would like to visit",
+      "bullets": [
+        "Which country it is",
+        "What you know about it",
+        "What you would like to do there"
+      ],
+      "rounding": "And explain why you would like to visit this country.",
+      "p3_theme": "international_travel_and_culture"
+    },
+    {
+      "title": "Describe a song that is meaningful to you",
+      "bullets": [
+        "What the song is",
+        "When you first heard it",
+        "What the song reminds you of"
+      ],
+      "rounding": "And explain why this song is meaningful to you.",
+      "p3_theme": "music_and_memory"
+    },
+    {
+      "title": "Describe a person who helped you",
+      "bullets": [
+        "Who helped you",
+        "What problem you had",
+        "How this person helped you"
+      ],
+      "rounding": "And explain how you felt after receiving this help.",
+      "p3_theme": "helping_others_and_community"
+    },
+    {
+      "title": "Describe a successful experience you had",
+      "bullets": [
+        "What the experience was",
+        "When it happened",
+        "What you did to succeed"
+      ],
+      "rounding": "And explain why this success was important to you.",
+      "p3_theme": "success_and_personal_goals"
+    }
+  ]
+}

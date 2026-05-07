@@ -22,8 +22,8 @@ std::string ReadAnswerFromTerminal(const std::string& prompt) {
     return answer;
 }
 
-std::string CaptureAnswerOrFallback(interview::services::RealtimeClient& client,
-                                    const std::string& fallback_prompt) {
+std::string CapturePart1AnswerOrFallback(interview::services::RealtimeClient& client,
+                                         const std::string& fallback_prompt) {
     RealtimeCaptureOptions options;
     options.max_seconds = 75;
     options.stop_on_first_final = true;
@@ -88,7 +88,7 @@ void Part1Session::Start() {
         std::cout << "\033[1;33m[" << item.topic << "] Examiner:\033[0m " << item.question << "\n";
         SafeSpeak(rt_client_, question);
 
-        const std::string answer = CaptureAnswerOrFallback(rt_client_, "Candidate answer transcript:");
+        const std::string answer = CapturePart1AnswerOrFallback(rt_client_, "Candidate answer transcript:");
         transcript_ += "Examiner: " + item.question + "\nCandidate: " + answer + "\n";
 
         if (ShouldFollowUp(answer)) {
@@ -96,7 +96,7 @@ void Part1Session::Start() {
             std::cout << "\033[1;33mFollow-up:\033[0m " << follow_up << "\n";
             SafeSpeak(rt_client_, follow_up);
 
-            const std::string follow_answer = CaptureAnswerOrFallback(rt_client_, "Candidate follow-up answer transcript:");
+            const std::string follow_answer = CapturePart1AnswerOrFallback(rt_client_, "Candidate follow-up answer transcript:");
             transcript_ += "Examiner: " + follow_up + "\nCandidate: " + follow_answer + "\n";
         }
         ++index;

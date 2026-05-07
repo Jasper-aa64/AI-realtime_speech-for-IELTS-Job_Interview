@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend conventions for reviewing IELTS CLI follow-up changes."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Review failure handling for CLI shell-out, realtime fallback, and JSON data loading."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Review against IELTS CLI contracts, realtime fallback requirements, and test expectations."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check that shared capture/scorer/session logic is reused rather than duplicated."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check behavior across CLI, service, data, shell-out, and tests."}
+{"file": "docs/IELTS_CLI_NEXT_STEPS.md", "reason": "Acceptance criteria and phase plan for review."}

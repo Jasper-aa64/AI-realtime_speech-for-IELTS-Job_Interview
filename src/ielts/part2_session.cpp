@@ -118,6 +118,12 @@ void Part2Session::Start() {
 
     ShowCueCard(topic_);
     SafeSpeak(rt_client_, "IELTS Speaking Part 2. " + topic_.title);
+
+    std::cout << "\nCue card displayed. Press [Enter] when you are ready to start your 1-minute preparation time.\n";
+    std::cout << "> ";
+    std::string discard;
+    std::getline(std::cin, discard);
+
     RunCountdown(prep_seconds_);
     RecordSpeech(speak_seconds_);
 

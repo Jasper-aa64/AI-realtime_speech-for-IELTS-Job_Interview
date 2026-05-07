@@ -352,15 +352,15 @@ public:
 
                 if (!audio_queue.empty()) {
                     audio_data = audio_queue.front();
-                    audio_queue.pop();
+                    audio_queue.pop(); 
                 } else {
-                    queue_empty = true;
+                    queue_empty = true; 
                 }
             }
 
             if (!audio_data.empty()) {
                 try {
-                    audio_manager->WriteAudio(audio_data);
+                    audio_manager -> WriteAudio(audio_data);
                 } catch (const std::exception& e) {
                     LOG_ERROR("音频播放失败: {}", e.what());
                 }

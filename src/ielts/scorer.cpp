@@ -42,6 +42,12 @@ std::string ShellQuote(const std::string& value) {
     return quoted;
 }
 
+std::string CodexBinary() {
+    return std::filesystem::exists("/opt/homebrew/bin/codex")
+        ? "/opt/homebrew/bin/codex"
+        : "codex";
+}
+
 float ClampBand(float value) {
     if (value < 0.0f) return 0.0f;
     if (value > 9.0f) return 9.0f;
@@ -109,6 +115,8 @@ IELTSScore Scorer::Score(const std::string& transcript) {
 std::string Scorer::RunCodex(const std::string& user_prompt) {
     const auto temp_path = std::filesystem::temp_directory_path() /
         ("ielts_scorer_" + std::to_string(::getpid()) + ".txt");
+    const auto output_path = std::filesystem::temp_directory_path() /
+        ("ielts_scorer_output_" + std::to_string(::getpid()) + ".txt");
 
     {
         std::ofstream output(temp_path);
@@ -118,18 +126,18 @@ std::string Scorer::RunCodex(const std::string& user_prompt) {
         output << user_prompt;
     }
 
-    const std::string codex = std::filesystem::exists("/opt/homebrew/bin/codex")
-        ? "/opt/homebrew/bin/codex"
-        : "codex";
     const std::string command =
-        codex + " --model gpt-4o-mini --quiet --full-auto \"$(cat " +
-        ShellQuote(temp_path.string()) + ")\" 2>/dev/null";
+        ShellQuote(CodexBinary()) +
+        " exec --model gpt-4o-mini --ask-for-approval never --sandbox read-only --color never " +
+        "--output-last-message " + ShellQuote(output_path.string()) +
+        " - < " + ShellQuote(temp_path.string()) + " 2>/dev/null";
 
     std::array<char, 4096> buffer{};
     std::string result;
     FILE* pipe = ::popen(command.c_str(), "r");
     if (!pipe) {
         std::filesystem::remove(temp_path);
+        std::filesystem::remove(output_path);
         throw std::runtime_error("Failed to start codex CLI");
     }
 
@@ -140,7 +148,15 @@ std::string Scorer::RunCodex(const std::string& user_prompt) {
     std::filesystem::remove(temp_path);
 
     if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        std::filesystem::remove(output_path);
         throw std::runtime_error("codex CLI exited with non-zero status");
+    }
+    if (std::filesystem::exists(output_path)) {
+        const std::string last_message = ReadTextFile(output_path);
+        std::filesystem::remove(output_path);
+        if (!last_message.empty()) {
+            result = last_message;
+        }
     }
     if (result.empty()) {
         throw std::runtime_error("codex CLI returned empty output");

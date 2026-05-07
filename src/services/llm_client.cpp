@@ -15,7 +15,7 @@ public:
         response->append(static_cast<char*>(contents), total_size);
         return total_size;
     }
-
+    
     LLMClientImpl() {
         // 初始化用于调用 LLM API 的 HTTP/网络资源。
         curl_global_init(CURL_GLOBAL_DEFAULT);
