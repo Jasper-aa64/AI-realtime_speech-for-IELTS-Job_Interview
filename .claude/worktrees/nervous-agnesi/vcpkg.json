@@ -1,0 +1,16 @@
+{
+  "builtin-baseline": "0a434205c521ca43d66921271ae2a1d051e718a5",
+  "dependencies": [
+    "boost-asio",
+    "boost-beast",
+    "boost-thread",
+    "curl",
+    "nlohmann-json",
+    "openssl",
+    "podofo",
+    "portaudio",
+    "qtbase",
+    "spdlog",
+    "zlib"
+  ]
+}

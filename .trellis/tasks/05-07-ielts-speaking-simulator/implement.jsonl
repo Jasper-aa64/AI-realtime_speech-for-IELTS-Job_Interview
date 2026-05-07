@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend layer entry point for C++ service/module conventions before implementing IELTS CLI modules."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Guide placement of new src/ielts and include/ielts files within the existing backend layout."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Handle JSON loading, CLI shell-out failures, missing data files, and report write errors consistently."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Keep IELTS runtime logs consistent with the existing common logger."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Implementation quality rules for new backend modules and CMake target wiring."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "The task depends on reusing existing audio, realtime, LLM, config, and follow-up patterns."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "The new flow spans CLI, services, data files, reports, and LLM CLI boundaries."}
+{"file": "docs/IELTS_SIMULATOR_PLAN.md", "reason": "Detailed implementation sequence, interfaces, data formats, CLI commands, and CMake target plan."}

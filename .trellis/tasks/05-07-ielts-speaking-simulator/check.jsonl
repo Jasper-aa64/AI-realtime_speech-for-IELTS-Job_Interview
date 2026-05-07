@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend layer entry point for checking the IELTS CLI implementation."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify robust handling of JSON loading, shell-out failures, missing data, and report writes."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify runtime logging follows project expectations."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality gate for new backend modules, build wiring, and maintainability."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check whether existing services and patterns were reused instead of duplicated."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check data flow across CLI, services, question bank files, reports, and LLM CLI calls."}
+{"file": "docs/IELTS_SIMULATOR_PLAN.md", "reason": "Acceptance and implementation plan to validate against after code changes."}

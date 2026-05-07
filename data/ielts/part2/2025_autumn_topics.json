@@ -1,0 +1,56 @@
+{
+  "season": "2025-autumn",
+  "part": 2,
+  "topics": [
+    {
+      "title": "Describe a book you have recently read",
+      "bullets": [
+        "What the book was about",
+        "Why you chose to read it",
+        "What you learned or enjoyed about it"
+      ],
+      "rounding": "And explain whether you would recommend it to others.",
+      "p3_theme": "reading_and_books"
+    },
+    {
+      "title": "Describe a time when you helped someone",
+      "bullets": [
+        "Who you helped",
+        "What the situation was",
+        "How you helped them"
+      ],
+      "rounding": "And explain how you felt about helping that person.",
+      "p3_theme": "helping_others_and_community"
+    },
+    {
+      "title": "Describe a place you would like to visit in the future",
+      "bullets": [
+        "Where the place is",
+        "What you know about it",
+        "Why you want to go there"
+      ],
+      "rounding": "And explain what you hope to experience there.",
+      "p3_theme": "travel_and_tourism"
+    },
+    {
+      "title": "Describe a skill you would like to learn",
+      "bullets": [
+        "What the skill is",
+        "Why you want to learn it",
+        "How you plan to learn it"
+      ],
+      "rounding": "And explain how this skill would benefit you.",
+      "p3_theme": "learning_and_self_improvement"
+    },
+    {
+      "title": "Describe a memorable event from your childhood",
+      "bullets": [
+        "What the event was",
+        "When and where it happened",
+        "Who was with you"
+      ],
+      "rounding": "And explain why it is memorable to you.",
+      "p3_theme": "childhood_and_memory"
+    }
+  ]
+}

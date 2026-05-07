@@ -125,6 +125,59 @@ if(Qt6_FOUND OR Qt5_FOUND)
     )
 endif()
 
+# ==================== IELTS CLI Application ====================
+
+add_executable(
+    IELTSSpeakingSimulator
+    src/main_ielts.cpp
+    src/ielts/ielts_manager.cpp
+    src/ielts/part1_session.cpp
+    src/ielts/part2_session.cpp
+    src/ielts/part3_session.cpp
+    src/ielts/question_bank.cpp
+    src/ielts/scorer.cpp
+    src/services/audio_manager.cpp
+    src/services/llm_client.cpp
+    src/services/realtime_client.cpp
+    src/common/config.cpp
+    src/common/logger.cpp
+    src/common/protocol.cpp
+    src/common/interview_state.cpp
+)
+
+target_include_directories(
+    IELTSSpeakingSimulator
+    PRIVATE
+    ${VCPKG_LOCAL}/include
+    ${VCPKG_GLOBAL}/include
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(
+    IELTSSpeakingSimulator
+    PRIVATE
+    spdlog::spdlog
+    CURL::libcurl
+    portaudio_static
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    BZip2::BZip2
+    LibLZMA::LibLZMA
+    unofficial::brotli::brotlidec
+    expat::expat
+    Iconv::Iconv
+    Boost::thread
+    Boost::chrono
+    Boost::date_time
+    Boost::atomic
+)
+
+target_compile_definitions(
+    IELTSSpeakingSimulator
+    PRIVATE PROJECT_ROOT="${PROJECT_SOURCE_DIR}"
+)
+
 # ==================== Config Test ====================
 
 add_executable(
@@ -156,6 +209,42 @@ target_compile_definitions(
 add_test(
     NAME config_test
     COMMAND config_test
+)
+
+# ==================== IELTS Data Test ====================
+
+add_executable(
+    ielts_data_test
+    tests/ielts_data_test.cpp
+    src/ielts/question_bank.cpp
+    src/ielts/scorer.cpp
+    src/common/logger.cpp
+)
+
+target_include_directories(
+    ielts_data_test
+    PRIVATE
+    ${VCPKG_LOCAL}/include
+    ${VCPKG_GLOBAL}/include
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(
+    ielts_data_test
+    PRIVATE
+    ${VCPKG_GLOBAL}/lib/libgtest.a
+    spdlog::spdlog
+)
+
+target_compile_definitions(
+    ielts_data_test
+    PRIVATE PROJECT_ROOT="${PROJECT_SOURCE_DIR}"
+)
+
+add_test(
+    NAME ielts_data_test
+    COMMAND ielts_data_test
 )
 
 # ==================== Protocol Test ====================

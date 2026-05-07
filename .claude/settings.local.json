@@ -17,7 +17,12 @@
       "Bash(mkdir -p build)",
       "Bash(cmake .. -DCMAKE_BUILD_TYPE=Release)",
       "Bash(tree /Users/mac/Desktop/CS/Cplusplus/AI_project/include -I spdlog*)",
-      "Bash(find /Users/mac/Desktop/CS/Cplusplus/AI_project/include -type f -name *.h)"
+      "Bash(find /Users/mac/Desktop/CS/Cplusplus/AI_project/include -type f -name *.h)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python3 *)",
+      "Bash(codex --version)",
+      "Bash(claude --version)"
     ]
   }
 }

@@ -1,0 +1,69 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "CppInterviewSystem (Console)",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": ["build.py", "--run"],
+      "cwd": ".",
+      "port": null,
+      "description": "Build and run the console version of the AI interview system"
+    },
+    {
+      "name": "CppInterviewSystemQt (GUI)",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": ["build.py", "--run"],
+      "cwd": ".",
+      "port": null,
+      "description": "Build and run the Qt GUI version (requires Qt development libraries)"
+    },
+    {
+      "name": "Unit Tests - All",
+      "runtimeExecutable": "ctest",
+      "runtimeArgs": ["--output-on-failure"],
+      "cwd": ".",
+      "port": null,
+      "description": "Run all unit tests via ctest"
+    },
+    {
+      "name": "Unit Tests - Config",
+      "runtimeExecutable": "./build/config_test",
+      "runtimeArgs": [],
+      "cwd": ".",
+      "port": null,
+      "description": "Run configuration unit tests"
+    },
+    {
+      "name": "Unit Tests - Protocol",
+      "runtimeExecutable": "./build/protocol_test",
+      "runtimeArgs": [],
+      "cwd": ".",
+      "port": null,
+      "description": "Run protocol unit tests"
+    },
+    {
+      "name": "Unit Tests - Logger",
+      "runtimeExecutable": "./build/logger_test",
+      "runtimeArgs": [],
+      "cwd": ".",
+      "port": null,
+      "description": "Run logger unit tests"
+    },
+    {
+      "name": "Unit Tests - Services",
+      "runtimeExecutable": "./build/services_test",
+      "runtimeArgs": [],
+      "cwd": ".",
+      "port": null,
+      "description": "Run services unit tests"
+    },
+    {
+      "name": "Unit Tests - Interview",
+      "runtimeExecutable": "./build/interview_test",
+      "runtimeArgs": [],
+      "cwd": ".",
+      "port": null,
+      "description": "Run interview manager unit tests"
+    }
+  ]
+}
