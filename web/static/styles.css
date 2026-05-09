@@ -257,7 +257,7 @@ h1 {
   display: grid;
   place-items: center;
   text-align: center;
-  font-size: clamp(32px, 4.2vw, 58px);
+  font-size: clamp(30px, 3.2vw, 42px);
   font-weight: 760;
 }
 

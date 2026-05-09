@@ -257,7 +257,13 @@ python3 web/ielts_server.py --host 127.0.0.1 --port 8765 --data-dir data/ielts -
   attempts cannot be aborted.
 - `/api/attempts/{id}/score` must reject aborted attempts and incomplete
   attempts with JSON errors.
-- `/api/history` must exclude aborted attempts by default.
+- `/api/history`, `/api/history/{id}`, and `latest_report` must use the same
+  scored-report gate. A report is valid only when `status == "scored"`,
+  `ielts_score.overall_band` is a finite numeric value, there is at least one
+  turn, and every turn has `status == "completed"`.
+- Started, `ready_to_score`, aborted, malformed scored-looking, or partially
+  completed attempts must not appear in history and must not render as report
+  detail.
 - Each turn must persist:
   `transcript_raw`, `transcript_cleaned`, `transcript_status`,
   `pronunciation`, `band7_version`, `model_audio`, and `upgrade_notes`.

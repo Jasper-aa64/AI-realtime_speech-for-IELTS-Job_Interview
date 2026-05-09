@@ -208,13 +208,20 @@ class AppState:
         with path.open("w", encoding="utf-8") as handle:
             json.dump(attempt, handle, indent=2, ensure_ascii=False)
             handle.write("\n")
-        self.latest_report = attempt | {"path": str(path)}
+        if is_scored_report(attempt):
+            self.latest_report = attempt | {"path": str(path)}
 
     def load_attempt(self, attempt_id: str) -> dict[str, Any]:
         path = self.attempt_path(attempt_id)
         if not path.exists():
             raise FileNotFoundError(f"Attempt not found: {attempt_id}")
         return read_json(path)
+
+    def load_report_attempt(self, attempt_id: str) -> dict[str, Any]:
+        attempt = self.load_attempt(attempt_id)
+        if not is_scored_report(attempt):
+            raise ValueError("Attempt report is not available until scoring is complete.")
+        return attempt
 
     def history(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -223,7 +230,7 @@ class AppState:
                 attempt = read_json(path)
             except ValueError:
                 continue
-            if attempt.get("status") == "aborted":
+            if not is_scored_report(attempt):
                 continue
             score = attempt.get("ielts_score") or {}
             pron = attempt.get("pronunciation") or {}
@@ -243,6 +250,19 @@ class AppState:
                 }
             )
         return rows
+
+
+def is_scored_report(attempt: dict[str, Any]) -> bool:
+    score = attempt.get("ielts_score")
+    if attempt.get("status") != "scored" or not isinstance(score, dict):
+        return False
+    overall_band = score.get("overall_band")
+    if not isinstance(overall_band, (int, float)) or isinstance(overall_band, bool):
+        return False
+    if not math.isfinite(float(overall_band)):
+        return False
+    turns = attempt.get("turns")
+    return isinstance(turns, list) and bool(turns) and all(turn.get("status") == "completed" for turn in turns)
 
 
 def timers_for_part(part: str) -> dict[str, int]:
@@ -954,7 +974,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 return
             match = re.fullmatch(r"/api/history/([^/]+)", path)
             if match:
-                self.send_json(self.state.load_attempt(match.group(1)))
+                self.send_json(self.state.load_report_attempt(match.group(1)))
                 return
             match = re.fullmatch(r"/api/audio/([^/]+)/([^/]+)/(candidate|examiner)", path)
             if match:

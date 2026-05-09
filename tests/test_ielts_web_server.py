@@ -44,6 +44,15 @@ class IELTSWebServerTest(unittest.TestCase):
         with opener.open(self.base_url + path, timeout=5) as response:
             return json.loads(response.read().decode("utf-8"))
 
+    def get_raw(self, path):
+        request = urllib.request.Request(self.base_url + path)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            opener.open(request, timeout=5)
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read().decode("utf-8"))
+        self.fail("Expected HTTPError")
+
     def post_json(self, path, payload):
         request = urllib.request.Request(
             self.base_url + path,
@@ -171,6 +180,57 @@ class IELTSWebServerTest(unittest.TestCase):
 
         history = self.get_json("/api/history")
         self.assertFalse(any(item["id"] == attempt["id"] for item in history["items"]))
+
+        status, payload = self.get_raw(f"/api/history/{attempt['id']}")
+        self.assertEqual(status, 400)
+        self.assertIn("not available until scoring is complete", payload["error"])
+
+    def test_non_scored_attempts_are_excluded_from_history_and_detail(self):
+        latest_before = self.get_json("/api/reports/latest")
+        started = self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"})
+        ready = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        turn = ready["turns"][0]
+        self.upload_audio(ready["id"], turn["id"], b"fake-webm-audio")
+        completed = self.post_json(
+            f"/api/attempts/{ready['id']}/turns/{turn['id']}/complete",
+            {"transcript_raw": "I would describe a useful skill and explain why it matters in daily life."},
+        )
+        self.assertEqual(completed["attempt"]["status"], "ready_to_score")
+
+        history = self.get_json("/api/history")
+        history_ids = {item["id"] for item in history["items"]}
+        self.assertNotIn(started["id"], history_ids)
+        self.assertNotIn(ready["id"], history_ids)
+        self.assertEqual(self.get_json("/api/reports/latest"), latest_before)
+
+        for attempt_id in (started["id"], ready["id"]):
+            status, payload = self.get_raw(f"/api/history/{attempt_id}")
+            self.assertEqual(status, 400)
+            self.assertIn("not available until scoring is complete", payload["error"])
+
+    def test_history_requires_numeric_score_and_completed_turns(self):
+        base_attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        invalid_score = dict(base_attempt)
+        invalid_score["id"] = "invalid-score"
+        invalid_score["status"] = "scored"
+        invalid_score["ielts_score"] = {"overall_band": "pending"}
+        IELTSHandler.state.save_attempt(invalid_score)
+
+        incomplete_scored = dict(base_attempt)
+        incomplete_scored["id"] = "incomplete-scored"
+        incomplete_scored["status"] = "scored"
+        incomplete_scored["ielts_score"] = {"overall_band": 6.0}
+        IELTSHandler.state.save_attempt(incomplete_scored)
+
+        history = self.get_json("/api/history")
+        history_ids = {item["id"] for item in history["items"]}
+        self.assertNotIn("invalid-score", history_ids)
+        self.assertNotIn("incomplete-scored", history_ids)
+
+        for attempt_id in ("invalid-score", "incomplete-scored"):
+            status, payload = self.get_raw(f"/api/history/{attempt_id}")
+            self.assertEqual(status, 400)
+            self.assertIn("not available until scoring is complete", payload["error"])
 
     def test_empty_transcript_marks_missing_and_keeps_audio(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})

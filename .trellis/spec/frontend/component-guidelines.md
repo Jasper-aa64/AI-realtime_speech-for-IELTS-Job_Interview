@@ -42,6 +42,9 @@ a static UI served by the local/backend API server.
   color, strong timer/status areas, and readable transcript/feedback sections.
 - Avoid marketing hero layouts and decorative card stacks for the core practice
   app.
+- Dynamic prompt typography must have a fixed upper bound. Short P1/P3
+  questions may scale up for readability, but they must not exceed the prompt
+  card's professional display size or dominate the whole workspace.
 
 ---
 
