@@ -35,7 +35,8 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 P1_TURN_COUNT = 10
-P3_TURN_COUNT = 5
+P3_MAIN_COUNT = 5
+P3_TURN_COUNT = 10
 
 
 def clamp_band(value: float | int | None) -> float:
@@ -210,6 +211,19 @@ class AppState:
             handle.write("\n")
         if is_scored_report(attempt):
             self.latest_report = attempt | {"path": str(path)}
+            if attempt.get("part") == "p1" or attempt.get("mode") == "p1":
+                self.delete_older_p1_reports(str(attempt["id"]))
+
+    def delete_older_p1_reports(self, keep_attempt_id: str) -> None:
+        for path in self.attempts_dir.glob("*.json"):
+            if path == self.attempt_path(keep_attempt_id):
+                continue
+            try:
+                attempt = read_json(path)
+            except ValueError:
+                continue
+            if is_scored_report(attempt) and (attempt.get("part") == "p1" or attempt.get("mode") == "p1"):
+                path.unlink(missing_ok=True)
 
     def load_attempt(self, attempt_id: str) -> dict[str, Any]:
         path = self.attempt_path(attempt_id)
@@ -288,7 +302,7 @@ def cue_examiner_text(topic: dict[str, Any]) -> str:
     )
 
 
-def fallback_p3(theme: str, prior_answer: str = "", count: int = P3_TURN_COUNT) -> dict[str, Any]:
+def fallback_p3(theme: str, prior_answer: str = "", count: int = P3_MAIN_COUNT) -> dict[str, Any]:
     label = theme.replace("_", " ").strip() or "this topic"
     questions = [
         f"Why do people have different opinions about {label}?",
@@ -327,6 +341,29 @@ def p3_with_claude(theme: str, prior_answer: str) -> dict[str, Any]:
     if len(questions) < 5:
         raise RuntimeError("claude returned fewer than five questions")
     return {"questions": questions[:5], "follow_up": str(payload.get("follow_up", "")), "backend": "claude"}
+
+
+def generate_p3_plan(theme: str, prior_answer: str, source: str) -> dict[str, Any]:
+    try:
+        result = p3_with_claude(theme, prior_answer)
+        status = "generated"
+    except Exception as exc:  # noqa: BLE001 - dynamic P3 must degrade cleanly
+        result = fallback_p3(theme, prior_answer, P3_MAIN_COUNT)
+        status = f"fallback: {exc}"
+    questions = [clean_report_text(item) for item in result.get("questions", [])]
+    questions = [item for item in questions if item][:P3_MAIN_COUNT]
+    fallback_questions = fallback_p3(theme, prior_answer, P3_MAIN_COUNT)["questions"]
+    while len(questions) < P3_MAIN_COUNT:
+        questions.append(fallback_questions[len(questions)])
+    follow_up = clean_report_text(str(result.get("follow_up") or "")) or fallback_p3(theme, prior_answer)["follow_up"]
+    return {
+        "questions": questions,
+        "follow_up": follow_up,
+        "backend": result.get("backend", "fallback"),
+        "status": status,
+        "source": source,
+        "theme": theme,
+    }
 
 
 def volcengine_tts(state: AppState, text: str, voice: str = "en_male_adam", role: str = "model", cache_key: str | None = None) -> dict[str, Any]:
@@ -416,6 +453,7 @@ def create_turn(
         "band7_version": "",
         "model_audio": None,
         "upgrade_notes": [],
+        "ai_coaching": "",
     }
 
 
@@ -431,38 +469,104 @@ def ensure_examiner_tts(state: AppState, attempt_id: str, turn: dict[str, Any]) 
     )
 
 
-def build_turns(state: AppState, attempt_id: str, mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], dict[str, Any] | None]:
+def append_p3_turns(
+    state: AppState,
+    attempt: dict[str, Any],
+    theme: str,
+    prior_answer: str,
+    source: str,
+) -> None:
+    plan = generate_p3_plan(theme, prior_answer, source)
+    start_index = len(attempt.get("turns") or [])
+    for main_index, question in enumerate(plan["questions"]):
+        main_turn = create_turn(
+            state,
+            str(attempt["id"]),
+            "p3",
+            start_index + (main_index * 2),
+            start_index + P3_TURN_COUNT,
+            question,
+            {"theme": theme, "question": question, "role": "main", "source": source},
+        )
+        follow_up = plan["follow_up"]
+        follow_turn = create_turn(
+            state,
+            str(attempt["id"]),
+            "p3",
+            start_index + (main_index * 2) + 1,
+            start_index + P3_TURN_COUNT,
+            follow_up,
+            {"theme": theme, "question": follow_up, "role": "follow_up", "after_main": main_index + 1, "source": source},
+        )
+        attempt["turns"].extend([main_turn, follow_turn])
+    for index, turn in enumerate(attempt["turns"]):
+        turn["index"] = index
+        turn["total"] = len(attempt["turns"])
+    attempt["p3_generation_status"] = plan["status"]
+    attempt["p3_generation_source"] = plan["source"]
+    attempt["p3_generation_backend"] = plan["backend"]
+    attempt["p3_theme"] = theme
+
+
+def adapt_p3_follow_up(state: AppState, attempt: dict[str, Any], completed_turn: dict[str, Any], next_turn: dict[str, Any] | None) -> None:
+    if not next_turn or completed_turn.get("part") != "p3" or next_turn.get("part") != "p3":
+        return
+    if completed_turn.get("prompt", {}).get("role") != "main" or next_turn.get("prompt", {}).get("role") != "follow_up":
+        return
+    theme = str(completed_turn.get("prompt", {}).get("theme") or attempt.get("p3_theme") or "general speaking")
+    prior_answer = str(completed_turn.get("transcript_cleaned") or completed_turn.get("transcript_raw") or "")
+    plan = generate_p3_plan(theme, prior_answer, "adaptive_answer")
+    follow_up = clean_report_text(str(plan.get("follow_up") or ""))
+    if not follow_up:
+        return
+    next_turn["question"] = follow_up
+    next_turn["examiner_text"] = follow_up
+    next_turn["prompt"] = {
+        **(next_turn.get("prompt") or {}),
+        "question": follow_up,
+        "source": "adaptive_answer",
+        "adapted_from_turn": completed_turn.get("id"),
+    }
+    next_turn["examiner_tts"] = {"provider": "volcengine", "status": "pending", "audio_url": None}
+
+
+def build_turns(state: AppState, attempt_id: str, mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], dict[str, Any] | None, dict[str, Any]]:
     sample = state.bank.sample(P1_TURN_COUNT)
+    metadata: dict[str, Any] = {}
     if mode == "mock":
         cue = sample["part2"]
-        p3_theme = str(cue.get("p3_theme") or "general speaking")
-        p3_questions = fallback_p3(p3_theme)["questions"]
         turns = [
-            create_turn(state, attempt_id, "p1", index, P1_TURN_COUNT + 1 + P3_TURN_COUNT, item["question"], {"topic": item["topic"], "question": item["question"]})
+            create_turn(state, attempt_id, "p1", index, P1_TURN_COUNT + 1, item["question"], {"topic": item["topic"], "question": item["question"]})
             for index, item in enumerate(sample["part1"])
         ]
-        turns.append(create_turn(state, attempt_id, "p2", len(turns), P1_TURN_COUNT + 1 + P3_TURN_COUNT, cue_to_text(cue), cue, cue))
-        for question in p3_questions:
-            turns.append(create_turn(state, attempt_id, "p3", len(turns), P1_TURN_COUNT + 1 + P3_TURN_COUNT, question, {"question": question, "theme": p3_theme}))
-        return "mock", "Full mock exam", turns, cue
+        turns.append(create_turn(state, attempt_id, "p2", len(turns), P1_TURN_COUNT + 1, cue_to_text(cue), cue, cue))
+        metadata = {
+            "p3_generation_status": "pending_after_p2",
+            "p3_generation_source": "p2_answer",
+            "p3_theme": str(cue.get("p3_theme") or cue.get("title") or "general speaking"),
+        }
+        return "mock", "Full mock exam", turns, cue, metadata
     if mode == "p1":
         questions = random.sample(state.bank.p1, min(P1_TURN_COUNT, len(state.bank.p1)))
         turns = [
             create_turn(state, attempt_id, "p1", index, len(questions), item["question"], {"topic": item["topic"], "question": item["question"]})
             for index, item in enumerate(questions)
         ]
-        return "p1", "Part 1 practice", turns, None
+        return "p1", "Part 1 practice", turns, None, metadata
     if mode == "p2":
         cue = sample["part2"]
-        return "p2", str(cue["title"]), [create_turn(state, attempt_id, "p2", 0, 1, cue_to_text(cue), cue, cue)], cue
+        return "p2", str(cue["title"]), [create_turn(state, attempt_id, "p2", 0, 1, cue_to_text(cue), cue, cue)], cue, metadata
     if mode == "p3":
-        theme = str(payload.get("theme") or sample["part2"]["p3_theme"])
-        questions = fallback_p3(theme, str(payload.get("prior_answer") or ""))["questions"]
-        turns = [
-            create_turn(state, attempt_id, "p3", index, len(questions), question, {"theme": theme, "question": question})
-            for index, question in enumerate(questions)
-        ]
-        return "p3", "Part 3 discussion", turns, None
+        theme = str(payload.get("theme") or payload.get("topic") or "society and daily life").strip()
+        generated = {"id": attempt_id, "turns": []}
+        append_p3_turns(state, generated, theme, str(payload.get("prior_answer") or ""), "topic")
+        metadata = {
+            "p3_generation_status": generated.get("p3_generation_status"),
+            "p3_generation_source": generated.get("p3_generation_source"),
+            "p3_generation_backend": generated.get("p3_generation_backend"),
+            "p3_theme": theme,
+        }
+        return "p3", f"Part 3 discussion: {theme}", generated["turns"], None, metadata
     raise ValueError(f"Unsupported mode: {mode}")
 
 
@@ -536,6 +640,23 @@ def clean_band7_output(value: str) -> str:
         if stripped:
             kept.append(stripped)
     return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+
+
+def clean_report_text(value: str) -> str:
+    text = clean_band7_output(value)
+    text = re.sub(r"\s+", " ", text).strip()
+    blocked = (
+        "trellis sessionstart",
+        "workflow-state",
+        "session context",
+        "current task",
+        "active tasks",
+        "git status",
+    )
+    lowered = text.lower()
+    if not text or any(marker in lowered for marker in blocked):
+        return ""
+    return text
 
 
 def plausible_spoken_answer(value: str) -> bool:
@@ -880,9 +1001,10 @@ def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, A
             band7 = ""
     if not plausible_spoken_answer(band7):
         band7 = build_turn_band7_fallback(turn, transcript)
-    turn["band7_version"] = band7
-    turn["model_audio"] = volcengine_tts(state, band7, role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
+    turn["band7_version"] = clean_report_text(band7) or build_turn_band7_fallback(turn, transcript)
+    turn["model_audio"] = volcengine_tts(state, turn["band7_version"], role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
     turn["upgrade_notes"] = build_upgrade_notes(transcript)
+    turn["ai_coaching"] = build_ai_coaching(turn, transcript)
 
 
 def build_upgrade_notes(transcript: str) -> list[dict[str, str]]:
@@ -915,6 +1037,21 @@ def build_upgrade_notes(transcript: str) -> list[dict[str, str]]:
     return notes
 
 
+def build_ai_coaching(turn: dict[str, Any], transcript: str) -> str:
+    question = short_question(str(turn.get("question") or "this question"), 120)
+    if len(transcript.split()) < 35:
+        coaching = (
+            f"For this question, focus first on building a fuller answer: give a direct opinion, one clear reason, "
+            f"and a concrete example before you close. That will make your response to \"{question}\" sound less fragmented."
+        )
+    else:
+        coaching = (
+            f"Your answer has enough material to develop. For \"{question}\", tighten the opening sentence, connect the example "
+            "more explicitly to the question, and add one contrast or consequence so the answer sounds more like Band 7 speech."
+        )
+    return clean_report_text(coaching)
+
+
 def build_detailed_report(
     state: AppState,
     attempt: dict[str, Any],
@@ -927,8 +1064,8 @@ def build_detailed_report(
         pron_band = clamp_band(float(pronunciation["pron_score"]) / 100.0 * 9.0)
     score["pronunciation_estimate"] = pron_band
     score["overall_band"] = rounded_overall(score)
-    summary = score.get("feedback") or "Score generated from the completed speaking section."
-    band7 = build_band7_version(attempt, transcript)
+    summary = clean_report_text(str(score.get("feedback") or "")) or "Score generated from the completed speaking section."
+    band7 = clean_report_text(build_band7_version(attempt, transcript))
     model_tts = volcengine_tts(state, band7, role="model", cache_key=f"{attempt['id']}_band7")
     return {
         "feedback_summary": summary,
@@ -945,9 +1082,10 @@ def build_detailed_report(
                 "suggestion": "Configure Azure Speech for real pronunciation scoring." if pron_band is None else "Review low-accuracy words and repeat the model answer aloud.",
             },
         },
-        "band7_version": band7,
+        "band7_version": band7 or build_band7_version(attempt, transcript),
         "model_audio": model_tts,
         "upgrade_notes": build_upgrade_notes(transcript),
+        "ai_coaching": clean_report_text("Focus on answering directly, extending each point with a concrete example, and linking ideas naturally across the full section."),
     }
 
 
@@ -1054,7 +1192,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if mode == "full":
             mode = "mock"
         attempt_id = uuid.uuid4().hex
-        part, title, turns, cue_card = build_turns(self.state, attempt_id, mode, payload)
+        part, title, turns, cue_card, metadata = build_turns(self.state, attempt_id, mode, payload)
         attempt = {
             "id": attempt_id,
             "timestamp": now_iso(),
@@ -1073,6 +1211,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             "band7_version": "",
             "model_audio": None,
             "upgrade_notes": [],
+            "ai_coaching": "",
+            **metadata,
         }
         if attempt["turns"]:
             ensure_examiner_tts(self.state, attempt_id, attempt["turns"][0])
@@ -1139,7 +1279,17 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             "message": "No candidate audio was uploaded; pronunciation is not assessed.",
         }
         turn["status"] = "completed"
+        if (
+            attempt.get("mode") == "mock"
+            and turn.get("part") == "p2"
+            and attempt.get("p3_generation_status") == "pending_after_p2"
+        ):
+            cue = attempt.get("cue_card") or {}
+            theme = str(cue.get("p3_theme") or cue.get("title") or attempt.get("p3_theme") or "general speaking")
+            prior_answer = turn.get("transcript_cleaned") or turn.get("transcript_raw") or ""
+            append_p3_turns(self.state, attempt, theme, str(prior_answer), "p2_answer")
         next_turn = self.next_turn(attempt, turn_id)
+        adapt_p3_follow_up(self.state, attempt, turn, next_turn)
         if next_turn:
             ensure_examiner_tts(self.state, attempt_id, next_turn)
         attempt["current_turn"] = next_turn["id"] if next_turn else None

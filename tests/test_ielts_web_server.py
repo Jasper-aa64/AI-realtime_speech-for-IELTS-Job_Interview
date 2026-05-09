@@ -141,6 +141,7 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("band7_version", scored)
         self.assertIn("model_audio", scored)
         self.assertTrue(scored["turns"][0]["band7_version"])
+        self.assertTrue(scored["turns"][0]["ai_coaching"])
         self.assertTrue(scored["turns"][0]["upgrade_notes"])
         self.assertIn("model_audio", scored["turns"][0])
 
@@ -150,7 +151,7 @@ class IELTSWebServerTest(unittest.TestCase):
         detail = self.get_json(f"/api/history/{attempt['id']}")
         self.assertEqual(detail["id"], attempt["id"])
 
-    def test_p2_start_preserves_cue_card_and_p3_has_five_turns(self):
+    def test_p2_start_preserves_cue_card_and_p3_has_high_intensity_topic_flow(self):
         p2 = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
         self.assertEqual(p2["part"], "p2")
         self.assertEqual(len(p2["turns"]), 1)
@@ -159,14 +160,62 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(p2["turns"][0]["examiner_behavior"], "auto_play_instruction_only")
         self.assertNotIn("You should say", p2["turns"][0]["examiner_text"])
         self.assertNotIn(p2["cue_card"]["title"], p2["turns"][0]["examiner_text"])
+        for bullet in p2["cue_card"]["bullets"]:
+            self.assertNotIn(bullet, p2["turns"][0]["examiner_text"])
         self.assertIn("one minute to think", p2["turns"][0]["examiner_text"])
         self.assertIn("You should say", p2["turns"][0]["question"])
 
-        p3 = self.post_json("/api/attempts/start", {"part": "p3", "mode": "p3"})
+        p3 = self.post_json("/api/attempts/start", {"part": "p3", "mode": "p3", "theme": "urban transport"})
         self.assertEqual(p3["part"], "p3")
-        self.assertEqual(len(p3["turns"]), 5)
+        self.assertEqual(len(p3["turns"]), 10)
+        self.assertEqual(p3["p3_generation_source"], "topic")
+        self.assertIn("urban transport", p3["title"])
+        self.assertNotEqual(p3.get("p3_theme"), p2["cue_card"]["p3_theme"])
         self.assertEqual(p3["turns"][0]["timers"]["prep_seconds"], 7)
         self.assertEqual(p3["turns"][0]["examiner_behavior"], "auto_play_question")
+        self.assertEqual(p3["turns"][1]["prompt"]["role"], "follow_up")
+
+        first_turn = p3["turns"][0]
+        self.upload_audio(p3["id"], first_turn["id"], b"fake-webm-audio")
+        completed = self.post_json(
+            f"/api/attempts/{p3['id']}/turns/{first_turn['id']}/complete",
+            {
+                "transcript_raw": (
+                    "In my city, public transport is useful because buses and trains reduce pressure on roads, "
+                    "but people still choose private cars when services are unreliable, expensive, or too crowded "
+                    "during the morning commute, especially when they need to drop children at school, carry heavy "
+                    "bags, or arrive exactly on time for work."
+                )
+            },
+        )
+        self.assertEqual(completed["next_turn"]["prompt"]["source"], "adaptive_answer")
+        self.assertIn("opposite argument", completed["next_turn"]["question"])
+
+    def test_mock_p3_is_generated_after_p2_answer(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "mock", "mode": "mock"})
+        self.assertEqual(attempt["part"], "mock")
+        self.assertEqual(len(attempt["turns"]), 11)
+        self.assertEqual(attempt["p3_generation_status"], "pending_after_p2")
+        self.assertFalse(any(turn["part"] == "p3" for turn in attempt["turns"]))
+
+        completed = None
+        for turn in attempt["turns"]:
+            self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+            completed = self.post_json(
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                {
+                    "transcript_raw": (
+                        "I would answer with a clear reason and an example from my everyday life "
+                        "so the examiner can follow my idea."
+                    )
+                },
+            )
+        self.assertIsNotNone(completed)
+        updated = completed["attempt"]
+        self.assertEqual(updated["p3_generation_source"], "p2_answer")
+        self.assertEqual(len(updated["turns"]), 21)
+        self.assertEqual(len([turn for turn in updated["turns"] if turn["part"] == "p3"]), 10)
+        self.assertEqual(completed["next_turn"]["part"], "p3")
 
     def test_abort_marks_attempt_blocks_score_and_excludes_history(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
@@ -231,6 +280,21 @@ class IELTSWebServerTest(unittest.TestCase):
             status, payload = self.get_raw(f"/api/history/{attempt_id}")
             self.assertEqual(status, 400)
             self.assertIn("not available until scoring is complete", payload["error"])
+
+    def test_new_p1_score_deletes_older_p1_report_files(self):
+        first = self.complete_and_score_attempt(self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"}))
+        first_path = IELTSHandler.state.attempt_path(first["id"])
+        self.assertTrue(first_path.exists())
+
+        second = self.complete_and_score_attempt(self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"}))
+        second_path = IELTSHandler.state.attempt_path(second["id"])
+        self.assertFalse(first_path.exists())
+        self.assertTrue(second_path.exists())
+
+        history = self.get_json("/api/history")
+        p1_ids = {item["id"] for item in history["items"] if item.get("part") == "p1"}
+        self.assertIn(second["id"], p1_ids)
+        self.assertNotIn(first["id"], p1_ids)
 
     def test_empty_transcript_marks_missing_and_keeps_audio(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
@@ -298,6 +362,20 @@ class IELTSWebServerTest(unittest.TestCase):
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with opener.open(request, timeout=5) as response:
             return json.loads(response.read().decode("utf-8"))
+
+    def complete_and_score_attempt(self, attempt):
+        for turn in attempt["turns"]:
+            self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+            self.post_json(
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                {
+                    "transcript_raw": (
+                        "I usually answer this question with a clear reason, a concrete example, "
+                        "and a short conclusion so my response sounds complete."
+                    )
+                },
+            )
+        return self.post_json(f"/api/attempts/{attempt['id']}/score", {})
 
     def test_api_errors_are_json(self):
         status, payload = self.post_raw("/api/score", "{not-json")

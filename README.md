@@ -41,3 +41,101 @@ cmake --build build --target IELTSSpeakingSimulator -j
 ```
 
 题库会在启动时扫描 `data/ielts/part1/*.json` 和 `data/ielts/part2/*.json`。新增 P1 题库 JSON 后重启程序即可加载，无需重新编译。报告写入 `reports/ielts_YYYYMMDD_HHMMSS.json`。
+
+## IELTS Web Voice App
+
+The Web app is a voice-first browser UI plus a lightweight Python
+standard-library backend boundary. It does not place API keys, scorer prompts,
+or local CLI commands in frontend code.
+
+Run locally from the repository root:
+
+```
+python3 web/ielts_server.py --host 127.0.0.1 --port 8765 --data-dir data/ielts --reports-dir reports
+```
+
+Open:
+
+```
+http://127.0.0.1:8765
+```
+
+The UI supports Mock Exam, Part 1, Part 2, Part 3, History, and Settings.
+Practice answers are recorded with the browser microphone using `MediaRecorder`.
+Browser dictation, when available, is used only as an automatic transcript
+source. The formal UI does not provide a typed-answer workflow.
+
+Default flow:
+
+- Part 1: 10 questions, 3 seconds preparation and 35 seconds speaking per turn,
+  then one section report.
+- Part 2: cue card at the top, 60 seconds preparation and 120 seconds speaking,
+  then one report.
+- Part 3: 5 questions, 7 seconds preparation and 75 seconds speaking per turn,
+  then one section report.
+- Mock: P1 -> P2 -> P3 in one session.
+
+History replaces the old Reports page. Each recorded attempt is saved under the
+configured reports directory and can be opened as a detailed report with:
+
+- compact IELTS score summary
+- criterion-level feedback
+- candidate recording playback per turn
+- cleaned transcript
+- Band 7 model answer
+- model-answer playback through generated audio when server TTS succeeds, with
+  browser speech synthesis as fallback
+- upgrade notes
+
+Backend JSON contracts:
+
+```
+GET  /api/question-bank/summary
+POST /api/question-bank/sample
+POST /api/session/start
+POST /api/score
+POST /api/attempts/start
+POST /api/attempts/{id}/turns/{turn_id}/audio
+POST /api/attempts/{id}/turns/{turn_id}/complete
+POST /api/attempts/{id}/score
+POST /api/tts
+GET  /api/history
+GET  /api/history/{id}
+GET  /api/audio/{id}/{turn_id}/candidate
+GET  /api/audio/{id}/{turn_id}/examiner
+GET  /api/audio/{id}/model
+GET  /api/tts-audio/{role}/{filename}
+POST /api/p3/questions
+POST /api/p3/follow-up
+GET  /api/reports/latest
+```
+
+By default, the backend tries local `codex`, `claude`, and server-side
+VolcEngine TTS integrations when they are available. If a CLI/TTS path is
+missing or fails, deterministic/browser fallbacks keep the demo usable.
+Pronunciation is not faked from text. Configure Azure Speech on the server when
+you want real pronunciation assessment:
+
+```
+export AZURE_SPEECH_KEY=...
+export AZURE_SPEECH_REGION=...
+```
+
+To force fallback mode:
+
+```
+IELTS_WEB_DISABLE_CODEX=1 python3 web/ielts_server.py
+IELTS_WEB_DISABLE_CLAUDE=1 python3 web/ielts_server.py
+IELTS_WEB_DISABLE_VOLCENGINE_TTS=1 python3 web/ielts_server.py
+```
+
+Blog/deploy notes:
+
+- Link blog readers to the hosted Web URL directly; the first screen is the
+  practice experience, not a landing page.
+- Serve `web/static/` and route `/api/*` to `web/ielts_server.py` or an
+  equivalent backend process.
+- Keep any future CLI/API credentials only in the backend environment. Do not
+  put secrets in `web/static/`.
+- Public static hosting alone can show the UI shell, but live sampling,
+  scoring, reports, and P3 generation require the backend boundary.

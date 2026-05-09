@@ -20,6 +20,8 @@ const state = {
   browserTtsUtterance: null,
   activeHistoryId: null,
   abortingAttemptId: null,
+  p3Topics: [],
+  p3SelectedTopic: "",
 };
 
 const viewCopy = {
@@ -27,7 +29,7 @@ const viewCopy = {
   p1: ["Part 1", "10 short questions. Report appears after the full section."],
   p2: ["Part 2", "Cue card, one-minute preparation, two-minute long turn."],
   p3: ["Part 3", "5 abstract discussion questions. Report appears after the full section."],
-  history: ["History", "Review recordings and detailed reports."],
+  history: ["History", ""],
   settings: ["Settings", "Server-side AI, TTS, and speech configuration."],
 };
 
@@ -41,6 +43,15 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function renderMarkdown(value) {
+  if (!value) return "";
+  return String(value)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code>$1</code>")
+    .replace(/\n/g, "<br>");
 }
 
 async function api(path, body = null) {
@@ -86,6 +97,7 @@ function switchView(view) {
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#settingsPanel").classList.toggle("hidden", view !== "settings");
   $("#historyTopRail").classList.toggle("hidden", view !== "history");
+  $("#viewTitleBlock").classList.toggle("hidden", view === "history");
   text("viewTitle", viewCopy[view][0]);
   text("viewSubtitle", viewCopy[view][1]);
   if (view === "history") loadHistory();
@@ -102,6 +114,7 @@ function resetPracticeSurface() {
   $("#browserTtsFallback").classList.add("hidden");
   $("#cueTop").classList.add("hidden");
   $("#promptPane").classList.remove("hidden");
+  $("#p3TopicPanel").classList.toggle("hidden", state.view !== "p3");
   $("#practiceGrid").classList.remove("p2-mode");
   $("#summaryPanel").classList.add("hidden");
   $("#summaryPanel").innerHTML = "";
@@ -120,10 +133,9 @@ function resetPracticeSurface() {
 function setRecordButton(status, title, hint) {
   state.status = status;
   $("#recordControl").className = `record-control ${status}`;
-  $("#recordControl").disabled = ["examiner_playing", "preparing", "processing", "scoring", "turn_saved"].includes(status);
+  $("#recordControl").disabled = ["loading", "examiner_playing", "processing", "scoring", "turn_saved"].includes(status);
   text("recordTitle", title);
   text("recordHint", hint);
-  $(".waveform").classList.toggle("active", status === "recording");
 }
 
 function setPromptHtml(html, size = "medium") {
@@ -141,36 +153,55 @@ function promptSize(question) {
 async function startPractice() {
   const mode = state.view === "mock" ? "mock" : state.view;
   state.abortingAttemptId = null;
-  await withBusy("Loading exam section...", async () => {
+  $("#exitPractice").classList.remove("hidden");
+  setRecordButton("loading", "Loading...", "Preparing exam section.");
+  try {
+    const theme = state.p3SelectedTopic || "";
     const attempt = await api("/api/attempts/start", {
       mode,
       candidate: $("#candidateName").value || "web-user",
+      ...(mode === "p3" && theme ? { theme } : {}),
     });
     state.attempt = attempt;
     state.currentTurn = attempt.turns[0];
-    $("#exitPractice").classList.remove("hidden");
     $("#summaryPanel").classList.add("hidden");
     renderTurn(state.currentTurn);
     beginExaminerPhase();
-  }).catch(showError);
+  } catch (error) {
+    showError(error);
+  }
 }
 
 function renderTurn(turn) {
   if (!turn) return;
   const partLabel = turn.part.toUpperCase();
+  const isP2 = turn.part === "p2";
   text("progressTrack", `${partLabel} · Question ${turn.index + 1}/${turn.total}`);
-  text("promptKicker", partLabel === "P2" ? "Cue card" : "Question");
+  text("promptKicker", isP2 ? "Cue card" : "Question");
   text("followUp", "");
-  $("#practiceGrid").classList.toggle("p2-mode", turn.part === "p2");
-  $("#promptPane").classList.toggle("hidden", turn.part === "p2");
-  renderExaminerAudio(turn);
-  if (turn.part === "p2" && turn.cue_card) {
-    renderCueTop(turn.cue_card);
-    return;
-  }
+  $("#practiceGrid").classList.toggle("p2-mode", isP2);
   $("#cueTop").classList.add("hidden");
   $("#promptPane").classList.remove("hidden");
+  renderExaminerAudio(turn);
+  if (isP2 && turn.cue_card) {
+    renderCueCardInPrompt(turn.cue_card);
+    return;
+  }
   setPromptHtml(`<p>${escapeHtml(turn.question)}</p>`, promptSize(turn.question));
+}
+
+function cueCardHtml(cue) {
+  const bullets = (cue.bullets || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  return `
+    <h2>${escapeHtml(cue.title)}</h2>
+    <p class="cue-label">You should say:</p>
+    <ul>${bullets}</ul>
+    <p>${escapeHtml(cue.rounding || "")}</p>
+  `;
+}
+
+function renderCueCardInPrompt(cue) {
+  setPromptHtml(cueCardHtml(cue), "cue");
 }
 
 function renderCueTop(cue) {
@@ -186,15 +217,11 @@ function renderCueTop(cue) {
 
 function renderExaminerAudio(turn) {
   const tts = turn.examiner_tts || {};
-  $("#browserTtsFallback").onclick = () => beginBrowserExaminerPlayback(turn.examiner_text || turn.question);
+  $("#examinerAudio").classList.add("hidden");
+  $("#browserTtsFallback").classList.add("hidden");
   if (tts.audio_url) {
     $("#examinerAudio").src = tts.audio_url;
     $("#examinerAudio").load();
-    $("#examinerAudio").classList.remove("hidden");
-    $("#browserTtsFallback").classList.add("hidden");
-  } else {
-    $("#examinerAudio").classList.add("hidden");
-    $("#browserTtsFallback").classList.remove("hidden");
   }
 }
 
@@ -236,7 +263,6 @@ function beginExaminerPhase() {
 }
 
 function beginBrowserExaminerPlayback(value) {
-  $("#browserTtsFallback").classList.remove("hidden");
   if (!value || !window.speechSynthesis) {
     beginPreparation();
     return;
@@ -257,9 +283,10 @@ function beginBrowserExaminerPlayback(value) {
 
 function beginPreparation() {
   const seconds = state.currentTurn?.timers?.prep_seconds || 3;
-  setRecordButton("preparing", "Prepare", "Recording starts automatically.");
+  const isP2 = state.currentTurn?.part === "p2";
+  setRecordButton("preparing", isP2 ? "Skip" : "Prepare", isP2 ? "Click to start recording now." : "Recording starts automatically.");
   text("phaseLabel", `Preparing · ${state.currentTurn.part.toUpperCase()} ${state.currentTurn.index + 1}/${state.currentTurn.total}`);
-  text("recordStatus", `Prepare your answer. Recording starts in ${seconds} seconds.`);
+  text("recordStatus", isP2 ? `Prepare your answer (${seconds}s). Click to start recording early.` : `Prepare your answer. Recording starts in ${seconds} seconds.`);
   startCountdown(seconds, "Preparing", () => startRecording().catch(showError));
 }
 
@@ -363,9 +390,8 @@ async function finalizeTurn(mimeType) {
   await waitForFinalDictation();
   if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
   const blob = new Blob(state.audioChunks, { type: mimeType });
-  $("#candidateAudio").src = URL.createObjectURL(blob);
-  $("#candidateAudio").classList.remove("hidden");
-  await withBusy("Uploading answer audio...", async () => {
+  setRecordButton("processing", "Saving", "Uploading answer audio...");
+  try {
     const upload = await fetch(`/api/attempts/${attempt.id}/turns/${turn.id}/audio`, {
       method: "POST",
       headers: { "Content-Type": mimeType.split(";")[0] },
@@ -374,41 +400,57 @@ async function finalizeTurn(mimeType) {
     const body = await upload.text();
     const payload = body ? JSON.parse(body) : {};
     if (!upload.ok) throw new Error(payload.error || "Audio upload failed");
-  });
-  const payload = await withBusy("Saving turn...", () => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, {
-    transcript_raw: state.transcript,
-    transcript_status: state.transcriptStatus,
-    transcript_source: "browser_dictation",
-  }));
-  if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
-  state.attempt = payload.attempt;
-  if (payload.next_turn) {
-    state.currentTurn = payload.next_turn;
-    renderTurn(payload.next_turn);
-    setRecordButton("turn_saved", "Next", "Moving to the next question.");
-    text("recordStatus", "Question saved. The next examiner prompt will start automatically.");
-    clearAutoNextTimeout();
-    state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(), 650);
-  } else {
-    state.currentTurn = null;
-    await scoreAttempt();
+    setRecordButton("processing", "Saving", "Saving turn...");
+    const completePayload = await api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, {
+      transcript_raw: state.transcript,
+      transcript_status: state.transcriptStatus,
+      transcript_source: "browser_dictation",
+    });
+    if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+    state.attempt = completePayload.attempt;
+    if (completePayload.next_turn) {
+      state.currentTurn = completePayload.next_turn;
+      renderTurn(completePayload.next_turn);
+      setRecordButton("turn_saved", "Next", "Moving to the next question.");
+      text("recordStatus", "Question saved. The next examiner prompt will start automatically.");
+      clearAutoNextTimeout();
+      state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(), 650);
+    } else {
+      state.currentTurn = null;
+      await scoreAttempt();
+    }
+  } catch (error) {
+    showError(error);
   }
 }
 
 async function scoreAttempt() {
   if (!state.attempt) return;
   const attemptId = state.attempt.id;
-  setRecordButton("scoring", "Analyzing", "Generating section report.");
+  setRecordButton("scoring", "Analyzing", "正在分析整轮回答 / 正在评分 / 正在生成报告");
   text("recordStatus", "正在分析整轮回答 / 正在评分 / 正在生成报告");
-  const scored = await withBusy("Generating section report...", () => api(`/api/attempts/${attemptId}/score`, {}));
-  if (state.abortingAttemptId === attemptId || state.attempt?.id !== attemptId) return;
-  state.attempt = scored;
-  renderSummary(scored);
-  await loadHistory(false);
-  setRecordButton("summary", "Start Again", "Record another section.");
-  text("recordStatus", "Section report is ready.");
-  text("phaseLabel", "Scored");
-  text("timerValue", "00:00");
+  try {
+    const scored = await api(`/api/attempts/${attemptId}/score`, {});
+    if (state.abortingAttemptId === attemptId || state.attempt?.id !== attemptId) return;
+    state.attempt = scored;
+    renderSummary(scored);
+    await loadHistory(false);
+    setRecordButton("summary", "Start Again", "Record another section.");
+    text("recordStatus", "Section report is ready.");
+    text("phaseLabel", "Scored");
+    text("timerValue", "00:00");
+    scrollToSummary();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function scrollToSummary() {
+  const panel = $("#summaryPanel");
+  panel.classList.remove("summary-highlight");
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  window.setTimeout(() => panel.classList.add("summary-highlight"), 120);
+  window.setTimeout(() => panel.classList.remove("summary-highlight"), 1700);
 }
 
 function startDictation() {
@@ -527,61 +569,80 @@ async function loadHistory(showBusy = true) {
 function renderHistoryList(items) {
   if (!items.length) {
     $("#historyList").textContent = "No attempts yet.";
+    $("#detailPanel").innerHTML = "<h2>Attempt Details</h2><p class=\"muted\">No attempts to display.</p>";
     return;
   }
-  $("#historyList").innerHTML = items.map((item) => `
+  $("#historyList").innerHTML = items.map((item) => {
+    const part = (item.mode || item.part || "").toLowerCase();
+    const tagClass = ["p1", "p2", "p3"].includes(part) ? part : "";
+    return `
     <button class="history-item ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
-      <span>${escapeHtml((item.mode || item.part || "").toUpperCase())}</span>
-      <strong>${escapeHtml(item.title || item.question || "Untitled")}</strong>
-      <small>${escapeHtml(item.display_time || "")} · Band ${escapeHtml(item.overall_band ?? "—")}</small>
+      <div class="history-item-top">
+        <span class="history-item-tag ${tagClass}">${escapeHtml(part.toUpperCase())}</span>
+        <span class="history-item-band">Band ${escapeHtml(item.overall_band ?? "—")}</span>
+      </div>
+      <strong class="history-item-title">${escapeHtml(item.title || item.question || "Untitled")}</strong>
+      <small class="history-item-time">${escapeHtml(item.display_time || "")}</small>
     </button>
-  `).join("");
+  `;}).join("");
   document.querySelectorAll(".history-item").forEach((button) => {
     button.addEventListener("click", async () => {
+      if (state.activeHistoryId === button.dataset.attemptId) return;
       state.activeHistoryId = button.dataset.attemptId;
       document.querySelectorAll(".history-item").forEach((item) => {
         item.classList.toggle("active", item.dataset.attemptId === state.activeHistoryId);
       });
-      const detail = await withBusy("Loading detailed report...", () => api(`/api/history/${button.dataset.attemptId}`));
-      renderDetail(detail);
+      const detail = await api(`/api/history/${button.dataset.attemptId}`);
+      renderDetail(detail, false);
     });
   });
+  if (!state.activeHistoryId && items.length) {
+    state.activeHistoryId = items[0].id;
+    document.querySelector(".history-item")?.classList.add("active");
+    api(`/api/history/${items[0].id}`).then((detail) => renderDetail(detail, false)).catch(showError);
+  }
 }
 
-function renderDetail(attempt) {
-  switchView("history");
+function renderDetail(attempt, updateView = true) {
+  if (updateView) switchView("history");
   state.activeHistoryId = attempt.id;
   const score = attempt.ielts_score || {};
   const criteria = attempt.criteria_feedback || {};
   const turns = attempt.turns || [];
+  const isP2 = attempt.mode === "p2" || (turns[0]?.part === "p2");
+
   $("#detailPanel").innerHTML = `
-    ${attempt.cue_card ? cueDetail(attempt.cue_card) : ""}
-    <div class="detail-header">
-      <div>
-        <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
-        <p class="muted">${escapeHtml(attempt.title || "")} · ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
+    <div class="detail-section">
+      <div class="detail-header">
+        <div>
+          <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
+          <p class="muted">${escapeHtml(attempt.title || "")} · ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
+        </div>
+        <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
       </div>
-      <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
+      <div class="score-row compact">
+        ${scoreCell("FC", score.fluency_coherence)}
+        ${scoreCell("LR", score.lexical_resource)}
+        ${scoreCell("GRA", score.grammatical_range)}
+        ${scoreCell("Pron", score.pronunciation_estimate ?? "Not assessed")}
+      </div>
+      <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
     </div>
-    <div class="score-row compact">
-      ${scoreCell("FC", score.fluency_coherence)}
-      ${scoreCell("LR", score.lexical_resource)}
-      ${scoreCell("GRA", score.grammatical_range)}
-      ${scoreCell("Pron", score.pronunciation_estimate ?? "Not assessed")}
-    </div>
-    <p class="feedback">${escapeHtml(attempt.feedback_summary || "")}</p>
-    <h3>📊 各维度评分</h3>
-    <div class="criteria-grid">
-      ${criterionBlock("Fluency & Coherence", criteria.fluency_coherence)}
-      ${criterionBlock("Lexical Resource", criteria.lexical_resource)}
-      ${criterionBlock("Grammatical Range & Accuracy", criteria.grammatical_range_accuracy)}
-      ${criterionBlock("Pronunciation", criteria.pronunciation)}
-    </div>
-    <div class="turn-report-wrap">
+    ${attempt.cue_card ? `<div class="detail-section">${cueDetail(attempt.cue_card)}</div>` : ""}
+    <div class="detail-section">
       <table class="turn-report-table">
-        <thead><tr><th>题目</th><th>Your recording</th><th>Band 7 spoken version</th><th>升级了什么</th></tr></thead>
-        <tbody>${turns.map((turn) => turnReportRow(attempt.id, turn, attempt)).join("")}</tbody>
+        <thead><tr>${isP2 ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>" : "<th>题目</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>"}</tr></thead>
+        <tbody>${turns.map((turn) => turnReportRow(attempt.id, turn, attempt, isP2)).join("")}</tbody>
       </table>
+    </div>
+    <div class="detail-section">
+      <h3>📊 各维度评分</h3>
+      <div class="criteria-grid">
+        ${criterionBlock("Fluency & Coherence", criteria.fluency_coherence)}
+        ${criterionBlock("Lexical Resource", criteria.lexical_resource)}
+        ${criterionBlock("Grammatical Range & Accuracy", criteria.grammatical_range_accuracy)}
+        ${criterionBlock("Pronunciation", criteria.pronunciation)}
+      </div>
     </div>
   `;
   document.querySelectorAll("[data-speak-band7]").forEach((button) => {
@@ -595,29 +656,33 @@ function cueDetail(cue) {
 }
 
 function transcriptText(turn) {
-  if (turn.transcript_cleaned) return escapeHtml(turn.transcript_cleaned);
+  if (turn.transcript_cleaned) return renderMarkdown(turn.transcript_cleaned);
   if (turn.transcript_status === "missing" && (turn.audio || {}).url) {
     return "Recording exists, but transcript was not captured.";
   }
   return "Recording exists, but transcript was not captured.";
 }
 
-function upgradeNotesHtml(notes = []) {
-  if (!notes.length) return "<p class=\"muted\">No upgrade notes generated for this turn.</p>";
+function aiCoachingHtml(turn, attempt) {
+  const coaching = turn.ai_coaching || attempt.ai_coaching || "";
+  if (coaching) return `<p>${renderMarkdown(coaching)}</p>`;
+  const notes = turn.upgrade_notes || attempt.upgrade_notes || [];
+  if (!notes.length) return "<p class=\"muted\">No AI coaching generated for this turn.</p>";
   return `<ul>${notes.map((item) => `
-    <li><strong>${escapeHtml(item.criterion || "Change")}:</strong> ${escapeHtml(item.band7_change || item.original_problem || "")}</li>
+    <li><strong>${escapeHtml(item.criterion || "Change")}:</strong> ${renderMarkdown(item.band7_change || item.original_problem || "")}</li>
   `).join("")}</ul>`;
 }
 
-function turnReportRow(attemptId, turn, attempt) {
+function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const modelAudio = turn.model_audio || {};
   const band7 = turn.band7_version || attempt.band7_version || "";
   const statusLabel = turn.transcript_status === "interim_fallback"
     ? "Interim transcript used"
     : (turn.transcript_status === "captured" ? "Transcript captured" : "Transcript missing");
+  const questionCell = isP2 ? "" : `<td><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong><p>${escapeHtml(turn.question)}</p></td>`;
   return `
     <tr>
-      <td><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong><p>${escapeHtml(turn.question)}</p></td>
+      ${questionCell}
       <td>
         ${(turn.audio || {}).url ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>` : "<p class=\"muted\">No recording uploaded.</p>"}
         <p class="transcript-status">${escapeHtml(statusLabel)}</p>
@@ -625,22 +690,22 @@ function turnReportRow(attemptId, turn, attempt) {
       </td>
       <td>
         ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(band7)}">Play with browser voice</button>`}
-        <p>${escapeHtml(band7)}</p>
+        <p>${renderMarkdown(band7)}</p>
       </td>
-      <td>${upgradeNotesHtml(turn.upgrade_notes || attempt.upgrade_notes || [])}</td>
+      <td>${aiCoachingHtml(turn, attempt)}</td>
     </tr>
   `;
 }
 
 function criterionBlock(title, item = {}) {
-  const strengths = (item.strengths || []).map((value) => `<li>${escapeHtml(value)}</li>`).join("");
-  const problems = (item.problems || []).map((value) => `<li>${escapeHtml(typeof value === "string" ? value : JSON.stringify(value))}</li>`).join("");
+  const strengths = (item.strengths || []).map((value) => `<li>${renderMarkdown(value)}</li>`).join("");
+  const problems = (item.problems || []).map((value) => `<li>${renderMarkdown(typeof value === "string" ? value : JSON.stringify(value))}</li>`).join("");
   return `
     <article class="criterion">
       <h4>${escapeHtml(title)} · Band ${escapeHtml(item.band ?? "—")}</h4>
       ${strengths ? `<strong>亮点</strong><ul>${strengths}</ul>` : ""}
       ${problems ? `<strong>问题</strong><ul>${problems}</ul>` : ""}
-      <strong>建议</strong><p>${escapeHtml(item.suggestion || "")}</p>
+      <strong>建议</strong><p>${renderMarkdown(item.suggestion || "")}</p>
     </article>
   `;
 }
@@ -704,6 +769,9 @@ function bindEvents() {
   $("#recordControl").addEventListener("click", () => {
     if (state.status === "recording") {
       stopRecording();
+    } else if (state.status === "preparing") {
+      clearTimer();
+      startRecording().catch(showError);
     } else if (state.status === "idle" || state.status === "ready" || state.status === "summary") {
       if (state.currentTurn && state.status === "ready") {
         beginExaminerPhase();
@@ -712,8 +780,26 @@ function bindEvents() {
       }
     }
   });
-  $("#refreshHistory").addEventListener("click", () => loadHistory());
   $("#exitPractice").addEventListener("click", () => exitPractice());
+  $("#p3TopicChips").addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-p3-topic]");
+    if (!chip) return;
+    state.p3SelectedTopic = chip.dataset.p3Topic || "";
+    document.querySelectorAll("#p3TopicChips .topic-chip").forEach((c) => {
+      c.classList.toggle("active", c === chip);
+    });
+  });
+}
+
+function renderP3TopicChips(topics) {
+  state.p3Topics = topics.slice(0, 8);
+  $("#p3TopicChips").innerHTML = state.p3Topics.map((topic) => (
+    `<button type="button" class="topic-chip${state.p3SelectedTopic === topic ? " active" : ""}" data-p3-topic="${escapeHtml(topic)}">${escapeHtml(topic.replaceAll("_", " "))}</button>`
+  )).join("");
+  if (state.p3Topics.length && !state.p3SelectedTopic) {
+    state.p3SelectedTopic = state.p3Topics[0];
+    document.querySelector("#p3TopicChips .topic-chip")?.classList.add("active");
+  }
 }
 
 async function init() {
@@ -722,6 +808,7 @@ async function init() {
   try {
     const summary = await api("/api/question-bank/summary");
     text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);
+    renderP3TopicChips(summary.part2_themes || []);
   } catch (error) {
     text("bankStatus", error.message);
   }

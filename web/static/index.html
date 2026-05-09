@@ -23,16 +23,14 @@
 
       <main class="workspace">
         <header class="topbar">
-          <div>
+          <div id="viewTitleBlock">
             <h1 id="viewTitle">Mock</h1>
             <p id="viewSubtitle">P1, P2, and P3 in one voice-first exam flow.</p>
           </div>
           <div id="historyTopRail" class="history-top-rail hidden">
             <div class="history-header">
-              <h2>Recent attempts</h2>
-              <button id="refreshHistory" class="ghost">Refresh</button>
+              <span class="history-hint">选择一个历史报告</span>
             </div>
-            <div class="history-scroll-hint">Scroll horizontally to review recent reports</div>
             <div id="historyList" class="history-list">No attempts yet.</div>
           </div>
         </header>
@@ -49,13 +47,17 @@
               <span id="phaseLabel">Ready</span>
             </div>
             <div class="exam-actions">
-              <button id="exitPractice" class="ghost exit-button hidden" type="button">Exit</button>
               <div class="inline-timer" id="timerValue">00:00</div>
             </div>
           </div>
           <div class="phase-meter"><span id="phaseMeter"></span></div>
 
           <article id="cueTop" class="cue-top hidden"></article>
+
+          <div id="p3TopicPanel" class="p3-topic-panel hidden">
+            <label>Choose a topic for Part 3</label>
+            <div id="p3TopicChips" class="topic-chips" aria-label="Suggested Part 3 topics"></div>
+          </div>
 
           <div id="practiceGrid" class="practice-grid">
             <article id="promptPane" class="prompt-pane">
@@ -68,13 +70,17 @@
 
             <article id="recorderPane" class="recorder-pane">
               <div class="section-label">Voice answer</div>
-              <button id="recordControl" class="record-control" type="button">
-                <span id="recordIcon"></span>
-                <strong id="recordTitle">Start</strong>
-                <small id="recordHint">No typing. Record your answer aloud.</small>
-              </button>
-              <div class="waveform" aria-hidden="true">
-                <span></span><span></span><span></span><span></span><span></span>
+              <div class="record-row">
+                <button id="recordControl" class="record-control" type="button">
+                  <span id="recordIcon"></span>
+                  <strong id="recordTitle">Start</strong>
+                  <small id="recordHint">No typing. Record your answer aloud.</small>
+                </button>
+                <button id="exitPractice" class="icon-exit-button hidden" type="button" aria-label="Exit practice" title="Exit practice">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M7 7l10 10M17 7L7 17"></path>
+                  </svg>
+                </button>
               </div>
               <div id="recordStatus" class="record-status">Microphone will be requested when recording starts.</div>
               <audio id="candidateAudio" controls class="hidden"></audio>
