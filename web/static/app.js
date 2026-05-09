@@ -1,0 +1,730 @@
+const state = {
+  view: "mock",
+  status: "idle",
+  attempt: null,
+  currentTurn: null,
+  timer: null,
+  timerRemaining: 0,
+  timerTotal: 1,
+  mediaRecorder: null,
+  mediaStream: null,
+  audioChunks: [],
+  cancelRecording: false,
+  autoNextTimeout: null,
+  recognition: null,
+  transcript: "",
+  transcriptFinal: "",
+  transcriptInterim: "",
+  transcriptStatus: "missing",
+  dictationFinalWait: null,
+  browserTtsUtterance: null,
+  activeHistoryId: null,
+  abortingAttemptId: null,
+};
+
+const viewCopy = {
+  mock: ["Mock", "P1, P2, and P3 in one voice-first exam flow."],
+  p1: ["Part 1", "10 short questions. Report appears after the full section."],
+  p2: ["Part 2", "Cue card, one-minute preparation, two-minute long turn."],
+  p3: ["Part 3", "5 abstract discussion questions. Report appears after the full section."],
+  history: ["History", "Review recordings and detailed reports."],
+  settings: ["Settings", "Server-side AI, TTS, and speech configuration."],
+};
+
+const $ = (selector) => document.querySelector(selector);
+const text = (id, value) => { document.getElementById(id).textContent = value; };
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+async function api(path, body = null) {
+  const options = body
+    ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+    : {};
+  const response = await fetch(path, options);
+  const raw = await response.text();
+  let payload = null;
+  if (raw) {
+    try {
+      payload = JSON.parse(raw);
+    } catch (error) {
+      if (!response.ok) throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+      throw new Error(`Invalid JSON response from ${path}`);
+    }
+  }
+  if (!response.ok) throw new Error(payload?.error || `Request failed: ${response.status} ${response.statusText}`);
+  return payload;
+}
+
+function setBusy(message) {
+  $("#busyBar").classList.toggle("hidden", !message);
+  text("busyText", message || "");
+}
+
+async function withBusy(message, action) {
+  setBusy(message);
+  try {
+    return await action();
+  } finally {
+    setBusy("");
+  }
+}
+
+function switchView(view) {
+  stopAllRuntime("Ready");
+  state.view = view;
+  document.querySelectorAll(".nav-button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === view);
+  });
+  $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
+  $("#historyPanel").classList.toggle("hidden", view !== "history");
+  $("#settingsPanel").classList.toggle("hidden", view !== "settings");
+  $("#historyTopRail").classList.toggle("hidden", view !== "history");
+  text("viewTitle", viewCopy[view][0]);
+  text("viewSubtitle", viewCopy[view][1]);
+  if (view === "history") loadHistory();
+  if (["mock", "p1", "p2", "p3"].includes(view)) resetPracticeSurface();
+}
+
+function resetPracticeSurface() {
+  state.status = "idle";
+  state.attempt = null;
+  state.currentTurn = null;
+  state.transcript = "";
+  $("#candidateAudio").classList.add("hidden");
+  $("#examinerAudio").classList.add("hidden");
+  $("#browserTtsFallback").classList.add("hidden");
+  $("#cueTop").classList.add("hidden");
+  $("#promptPane").classList.remove("hidden");
+  $("#practiceGrid").classList.remove("p2-mode");
+  $("#summaryPanel").classList.add("hidden");
+  $("#summaryPanel").innerHTML = "";
+  $("#exitPractice").classList.add("hidden");
+  text("progressTrack", state.view === "mock" ? "Mock: P1 → P2 → P3" : `${viewCopy[state.view][0]} ready`);
+  text("phaseLabel", "Ready");
+  text("timerValue", "00:00");
+  $("#phaseMeter").style.width = "0%";
+  text("promptKicker", "Prompt");
+  setPromptHtml("Start a voice practice session to load a question.", "short");
+  text("followUp", "");
+  setRecordButton("ready", "Start", "Record the full section. No typing.");
+  text("recordStatus", "Microphone will be requested when recording starts.");
+}
+
+function setRecordButton(status, title, hint) {
+  state.status = status;
+  $("#recordControl").className = `record-control ${status}`;
+  $("#recordControl").disabled = ["examiner_playing", "preparing", "processing", "scoring", "turn_saved"].includes(status);
+  text("recordTitle", title);
+  text("recordHint", hint);
+  $(".waveform").classList.toggle("active", status === "recording");
+}
+
+function setPromptHtml(html, size = "medium") {
+  $("#promptCard").className = `prompt-card ${size}-prompt`;
+  $("#promptCard").innerHTML = html;
+}
+
+function promptSize(question) {
+  const length = String(question || "").length;
+  if (length < 90) return "short";
+  if (length < 190) return "medium";
+  return "long";
+}
+
+async function startPractice() {
+  const mode = state.view === "mock" ? "mock" : state.view;
+  state.abortingAttemptId = null;
+  await withBusy("Loading exam section...", async () => {
+    const attempt = await api("/api/attempts/start", {
+      mode,
+      candidate: $("#candidateName").value || "web-user",
+    });
+    state.attempt = attempt;
+    state.currentTurn = attempt.turns[0];
+    $("#exitPractice").classList.remove("hidden");
+    $("#summaryPanel").classList.add("hidden");
+    renderTurn(state.currentTurn);
+    beginExaminerPhase();
+  }).catch(showError);
+}
+
+function renderTurn(turn) {
+  if (!turn) return;
+  const partLabel = turn.part.toUpperCase();
+  text("progressTrack", `${partLabel} · Question ${turn.index + 1}/${turn.total}`);
+  text("promptKicker", partLabel === "P2" ? "Cue card" : "Question");
+  text("followUp", "");
+  $("#practiceGrid").classList.toggle("p2-mode", turn.part === "p2");
+  $("#promptPane").classList.toggle("hidden", turn.part === "p2");
+  renderExaminerAudio(turn);
+  if (turn.part === "p2" && turn.cue_card) {
+    renderCueTop(turn.cue_card);
+    return;
+  }
+  $("#cueTop").classList.add("hidden");
+  $("#promptPane").classList.remove("hidden");
+  setPromptHtml(`<p>${escapeHtml(turn.question)}</p>`, promptSize(turn.question));
+}
+
+function renderCueTop(cue) {
+  const bullets = (cue.bullets || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  $("#cueTop").classList.remove("hidden");
+  $("#cueTop").innerHTML = `
+    <h2>${escapeHtml(cue.title)}</h2>
+    <p class="cue-label">You should say:</p>
+    <ul>${bullets}</ul>
+    <p>${escapeHtml(cue.rounding || "")}</p>
+  `;
+}
+
+function renderExaminerAudio(turn) {
+  const tts = turn.examiner_tts || {};
+  $("#browserTtsFallback").onclick = () => beginBrowserExaminerPlayback(turn.examiner_text || turn.question);
+  if (tts.audio_url) {
+    $("#examinerAudio").src = tts.audio_url;
+    $("#examinerAudio").load();
+    $("#examinerAudio").classList.remove("hidden");
+    $("#browserTtsFallback").classList.add("hidden");
+  } else {
+    $("#examinerAudio").classList.add("hidden");
+    $("#browserTtsFallback").classList.remove("hidden");
+  }
+}
+
+function preloadNextExaminerAudio(turn) {
+  const nextIndex = Number(turn?.index ?? -1) + 1;
+  const nextTurn = (state.attempt?.turns || [])[nextIndex];
+  const nextUrl = nextTurn?.examiner_tts?.audio_url;
+  if (!nextUrl) return;
+  const preload = new Audio();
+  preload.preload = "auto";
+  preload.src = nextUrl;
+}
+
+function beginExaminerPhase() {
+  if (!state.currentTurn) return;
+  clearTimer();
+  const turn = state.currentTurn;
+  preloadNextExaminerAudio(turn);
+  setRecordButton("examiner_playing", "Listening...", "The examiner is asking the question.");
+  const progress = `${turn.part.toUpperCase()} · Question ${turn.index + 1}/${turn.total}`;
+  text("progressTrack", progress);
+  text("phaseLabel", `${progress} · Examiner`);
+  text("timerValue", "00:00");
+  $("#phaseMeter").style.width = "0%";
+  text("recordStatus", turn.examiner_behavior === "auto_play_instruction_only"
+    ? "Listen to the examiner instruction, then read the cue card during preparation."
+    : "Listen to the examiner question. Preparation starts automatically.");
+
+  const audio = $("#examinerAudio");
+  const tts = turn.examiner_tts || {};
+  if (tts.audio_url) {
+    audio.onended = () => beginPreparation();
+    audio.onerror = () => beginBrowserExaminerPlayback(turn.examiner_text || turn.question);
+    audio.currentTime = 0;
+    audio.play().catch(() => beginBrowserExaminerPlayback(turn.examiner_text || turn.question));
+    return;
+  }
+  beginBrowserExaminerPlayback(turn.examiner_text || turn.question);
+}
+
+function beginBrowserExaminerPlayback(value) {
+  $("#browserTtsFallback").classList.remove("hidden");
+  if (!value || !window.speechSynthesis) {
+    beginPreparation();
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(value);
+  state.browserTtsUtterance = utterance;
+  utterance.lang = "en-US";
+  utterance.rate = 0.92;
+  utterance.onend = () => {
+    if (state.browserTtsUtterance === utterance) beginPreparation();
+  };
+  utterance.onerror = () => {
+    if (state.browserTtsUtterance === utterance) beginPreparation();
+  };
+  window.speechSynthesis.speak(utterance);
+}
+
+function beginPreparation() {
+  const seconds = state.currentTurn?.timers?.prep_seconds || 3;
+  setRecordButton("preparing", "Prepare", "Recording starts automatically.");
+  text("phaseLabel", `Preparing · ${state.currentTurn.part.toUpperCase()} ${state.currentTurn.index + 1}/${state.currentTurn.total}`);
+  text("recordStatus", `Prepare your answer. Recording starts in ${seconds} seconds.`);
+  startCountdown(seconds, "Preparing", () => startRecording().catch(showError));
+}
+
+function startCountdown(seconds, label, onDone) {
+  clearTimer();
+  state.timerRemaining = Number(seconds || 0);
+  state.timerTotal = Math.max(1, state.timerRemaining);
+  updateTimer(label);
+  state.timer = setInterval(() => {
+    state.timerRemaining -= 1;
+    updateTimer(label);
+    if (state.timerRemaining <= 0) {
+      clearTimer();
+      onDone();
+    }
+  }, 1000);
+}
+
+function startRecordingTimer(seconds) {
+  clearTimer();
+  state.timerRemaining = Number(seconds || 0);
+  state.timerTotal = Math.max(1, state.timerRemaining);
+  updateTimer("Recording");
+  state.timer = setInterval(() => {
+    state.timerRemaining -= 1;
+    updateTimer("Recording");
+    if (state.timerRemaining <= 0) stopRecording();
+  }, 1000);
+}
+
+function updateTimer(label) {
+  const remaining = Math.max(0, state.timerRemaining);
+  const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const seconds = String(remaining % 60).padStart(2, "0");
+  text("phaseLabel", `${label} · ${minutes}:${seconds}`);
+  text("timerValue", `${minutes}:${seconds}`);
+  const elapsed = Math.max(0, state.timerTotal - remaining);
+  $("#phaseMeter").style.width = `${Math.min(100, (elapsed / state.timerTotal) * 100)}%`;
+}
+
+function clearTimer() {
+  if (state.timer) clearInterval(state.timer);
+  state.timer = null;
+}
+
+function clearAutoNextTimeout() {
+  if (state.autoNextTimeout) window.clearTimeout(state.autoNextTimeout);
+  state.autoNextTimeout = null;
+}
+
+async function startRecording() {
+  if (!state.currentTurn) return;
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  state.mediaStream = stream;
+  state.audioChunks = [];
+  state.transcript = "";
+  state.transcriptFinal = "";
+  state.transcriptInterim = "";
+  state.transcriptStatus = "missing";
+  const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+    ? "audio/webm;codecs=opus"
+    : "audio/webm";
+  state.mediaRecorder = new MediaRecorder(stream, { mimeType });
+  state.mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) state.audioChunks.push(event.data);
+  };
+  state.mediaRecorder.onstop = () => {
+    if (state.cancelRecording) {
+      state.cancelRecording = false;
+      return;
+    }
+    finalizeTurn(mimeType).catch(showError);
+  };
+  state.mediaRecorder.start();
+  state.cancelRecording = false;
+  startDictation();
+  setRecordButton("recording", "Stop", "Recording. Press to finish early.");
+  text("recordStatus", "Recording your answer...");
+  startRecordingTimer(state.currentTurn.timers.speak_seconds);
+}
+
+function stopRecording() {
+  if (state.status !== "recording") return;
+  clearTimer();
+  setRecordButton("processing", "Saving", "Uploading this answer.");
+  text("recordStatus", "正在保存本题录音与转写");
+  stopDictation();
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+    state.mediaRecorder.stop();
+  }
+  if (state.mediaStream) {
+    state.mediaStream.getTracks().forEach((track) => track.stop());
+    state.mediaStream = null;
+  }
+}
+
+async function finalizeTurn(mimeType) {
+  const attempt = state.attempt;
+  const turn = state.currentTurn;
+  if (!attempt || !turn) return;
+  await waitForFinalDictation();
+  if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+  const blob = new Blob(state.audioChunks, { type: mimeType });
+  $("#candidateAudio").src = URL.createObjectURL(blob);
+  $("#candidateAudio").classList.remove("hidden");
+  await withBusy("Uploading answer audio...", async () => {
+    const upload = await fetch(`/api/attempts/${attempt.id}/turns/${turn.id}/audio`, {
+      method: "POST",
+      headers: { "Content-Type": mimeType.split(";")[0] },
+      body: blob,
+    });
+    const body = await upload.text();
+    const payload = body ? JSON.parse(body) : {};
+    if (!upload.ok) throw new Error(payload.error || "Audio upload failed");
+  });
+  const payload = await withBusy("Saving turn...", () => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, {
+    transcript_raw: state.transcript,
+    transcript_status: state.transcriptStatus,
+    transcript_source: "browser_dictation",
+  }));
+  if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+  state.attempt = payload.attempt;
+  if (payload.next_turn) {
+    state.currentTurn = payload.next_turn;
+    renderTurn(payload.next_turn);
+    setRecordButton("turn_saved", "Next", "Moving to the next question.");
+    text("recordStatus", "Question saved. The next examiner prompt will start automatically.");
+    clearAutoNextTimeout();
+    state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(), 650);
+  } else {
+    state.currentTurn = null;
+    await scoreAttempt();
+  }
+}
+
+async function scoreAttempt() {
+  if (!state.attempt) return;
+  const attemptId = state.attempt.id;
+  setRecordButton("scoring", "Analyzing", "Generating section report.");
+  text("recordStatus", "正在分析整轮回答 / 正在评分 / 正在生成报告");
+  const scored = await withBusy("Generating section report...", () => api(`/api/attempts/${attemptId}/score`, {}));
+  if (state.abortingAttemptId === attemptId || state.attempt?.id !== attemptId) return;
+  state.attempt = scored;
+  renderSummary(scored);
+  await loadHistory(false);
+  setRecordButton("summary", "Start Again", "Record another section.");
+  text("recordStatus", "Section report is ready.");
+  text("phaseLabel", "Scored");
+  text("timerValue", "00:00");
+}
+
+function startDictation() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    state.transcript = "";
+    state.transcriptStatus = "missing";
+    text("recordStatus", "Recording audio. Browser dictation unavailable; transcript may be incomplete.");
+    return;
+  }
+  state.recognition = new SpeechRecognition();
+  state.recognition.continuous = true;
+  state.recognition.interimResults = true;
+  state.recognition.lang = "en-US";
+  state.recognition.onresult = (event) => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const result = event.results[i];
+      if (result.isFinal) {
+        state.transcriptFinal = `${state.transcriptFinal} ${result[0].transcript}`.trim();
+      } else {
+        interim += result[0].transcript;
+      }
+    }
+    state.transcriptInterim = interim.trim();
+    state.transcript = (state.transcriptFinal || state.transcriptInterim).trim();
+    state.transcriptStatus = state.transcriptFinal
+      ? "captured"
+      : (state.transcriptInterim ? "interim_fallback" : "missing");
+    resolveDictationWait();
+  };
+  state.recognition.onerror = () => text("recordStatus", "Recording audio. Browser dictation had an error.");
+  try {
+    state.recognition.start();
+  } catch (error) {
+    state.transcript = "";
+  }
+}
+
+function stopDictation() {
+  if (!state.recognition) return;
+  try {
+    state.recognition.stop();
+  } catch (error) {
+    // Browser recognition may already be stopped.
+  }
+  state.recognition = null;
+}
+
+function waitForFinalDictation() {
+  if (state.transcriptFinal) {
+    state.transcript = state.transcriptFinal.trim();
+    state.transcriptStatus = "captured";
+    return Promise.resolve();
+  }
+  if (state.transcriptInterim) {
+    state.transcript = state.transcriptInterim.trim();
+    state.transcriptStatus = "interim_fallback";
+  } else {
+    state.transcript = "";
+    state.transcriptStatus = "missing";
+  }
+  return new Promise((resolve) => {
+    state.dictationFinalWait = resolve;
+    window.setTimeout(() => {
+      if (state.transcriptFinal) {
+        state.transcript = state.transcriptFinal.trim();
+        state.transcriptStatus = "captured";
+      }
+      resolveDictationWait();
+    }, 450);
+  });
+}
+
+function resolveDictationWait() {
+  if (!state.dictationFinalWait) return;
+  const resolve = state.dictationFinalWait;
+  state.dictationFinalWait = null;
+  resolve();
+}
+
+function renderSummary(attempt) {
+  const score = attempt.ielts_score || {};
+  const pron = attempt.pronunciation || {};
+  $("#summaryPanel").classList.remove("hidden");
+  $("#summaryPanel").innerHTML = `
+    <div class="score-row">
+      ${scoreCell("Overall", score.overall_band)}
+      ${scoreCell("Fluency", score.fluency_coherence)}
+      ${scoreCell("Lexical", score.lexical_resource)}
+      ${scoreCell("Grammar", score.grammatical_range)}
+      ${scoreCell("Pronunciation", score.pronunciation_estimate ?? "Not assessed")}
+    </div>
+    <p class="feedback">${escapeHtml(attempt.feedback_summary || "No feedback generated.")}</p>
+    <div class="summary-actions">
+      <button id="viewDetails">View Details</button>
+    </div>
+    <p class="muted">Pronunciation: ${escapeHtml(pron.message || pron.status || "unknown")}</p>
+  `;
+  $("#viewDetails").addEventListener("click", () => renderDetail(attempt));
+}
+
+function scoreCell(label, value) {
+  return `<div class="score-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "—")}</strong></div>`;
+}
+
+async function loadHistory(showBusy = true) {
+  const action = async () => {
+    const payload = await api("/api/history");
+    renderHistoryList(payload.items || []);
+  };
+  if (showBusy) return withBusy("Loading history...", action).catch(showError);
+  return action().catch(showError);
+}
+
+function renderHistoryList(items) {
+  if (!items.length) {
+    $("#historyList").textContent = "No attempts yet.";
+    return;
+  }
+  $("#historyList").innerHTML = items.map((item) => `
+    <button class="history-item ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
+      <span>${escapeHtml((item.mode || item.part || "").toUpperCase())}</span>
+      <strong>${escapeHtml(item.title || item.question || "Untitled")}</strong>
+      <small>${escapeHtml(item.display_time || "")} · Band ${escapeHtml(item.overall_band ?? "—")}</small>
+    </button>
+  `).join("");
+  document.querySelectorAll(".history-item").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.activeHistoryId = button.dataset.attemptId;
+      document.querySelectorAll(".history-item").forEach((item) => {
+        item.classList.toggle("active", item.dataset.attemptId === state.activeHistoryId);
+      });
+      const detail = await withBusy("Loading detailed report...", () => api(`/api/history/${button.dataset.attemptId}`));
+      renderDetail(detail);
+    });
+  });
+}
+
+function renderDetail(attempt) {
+  switchView("history");
+  state.activeHistoryId = attempt.id;
+  const score = attempt.ielts_score || {};
+  const criteria = attempt.criteria_feedback || {};
+  const turns = attempt.turns || [];
+  $("#detailPanel").innerHTML = `
+    ${attempt.cue_card ? cueDetail(attempt.cue_card) : ""}
+    <div class="detail-header">
+      <div>
+        <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
+        <p class="muted">${escapeHtml(attempt.title || "")} · ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
+      </div>
+      <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
+    </div>
+    <div class="score-row compact">
+      ${scoreCell("FC", score.fluency_coherence)}
+      ${scoreCell("LR", score.lexical_resource)}
+      ${scoreCell("GRA", score.grammatical_range)}
+      ${scoreCell("Pron", score.pronunciation_estimate ?? "Not assessed")}
+    </div>
+    <p class="feedback">${escapeHtml(attempt.feedback_summary || "")}</p>
+    <h3>📊 各维度评分</h3>
+    <div class="criteria-grid">
+      ${criterionBlock("Fluency & Coherence", criteria.fluency_coherence)}
+      ${criterionBlock("Lexical Resource", criteria.lexical_resource)}
+      ${criterionBlock("Grammatical Range & Accuracy", criteria.grammatical_range_accuracy)}
+      ${criterionBlock("Pronunciation", criteria.pronunciation)}
+    </div>
+    <div class="turn-report-wrap">
+      <table class="turn-report-table">
+        <thead><tr><th>题目</th><th>Your recording</th><th>Band 7 spoken version</th><th>升级了什么</th></tr></thead>
+        <tbody>${turns.map((turn) => turnReportRow(attempt.id, turn, attempt)).join("")}</tbody>
+      </table>
+    </div>
+  `;
+  document.querySelectorAll("[data-speak-band7]").forEach((button) => {
+    button.addEventListener("click", () => speakWithBrowser(button.dataset.speakBand7 || ""));
+  });
+}
+
+function cueDetail(cue) {
+  const bullets = (cue.bullets || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  return `<article class="cue-detail"><h2>${escapeHtml(cue.title)}</h2><p>You should say:</p><ul>${bullets}</ul><p>${escapeHtml(cue.rounding || "")}</p></article>`;
+}
+
+function transcriptText(turn) {
+  if (turn.transcript_cleaned) return escapeHtml(turn.transcript_cleaned);
+  if (turn.transcript_status === "missing" && (turn.audio || {}).url) {
+    return "Recording exists, but transcript was not captured.";
+  }
+  return "Recording exists, but transcript was not captured.";
+}
+
+function upgradeNotesHtml(notes = []) {
+  if (!notes.length) return "<p class=\"muted\">No upgrade notes generated for this turn.</p>";
+  return `<ul>${notes.map((item) => `
+    <li><strong>${escapeHtml(item.criterion || "Change")}:</strong> ${escapeHtml(item.band7_change || item.original_problem || "")}</li>
+  `).join("")}</ul>`;
+}
+
+function turnReportRow(attemptId, turn, attempt) {
+  const modelAudio = turn.model_audio || {};
+  const band7 = turn.band7_version || attempt.band7_version || "";
+  const statusLabel = turn.transcript_status === "interim_fallback"
+    ? "Interim transcript used"
+    : (turn.transcript_status === "captured" ? "Transcript captured" : "Transcript missing");
+  return `
+    <tr>
+      <td><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong><p>${escapeHtml(turn.question)}</p></td>
+      <td>
+        ${(turn.audio || {}).url ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>` : "<p class=\"muted\">No recording uploaded.</p>"}
+        <p class="transcript-status">${escapeHtml(statusLabel)}</p>
+        <p>${transcriptText(turn)}</p>
+      </td>
+      <td>
+        ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(band7)}">Play with browser voice</button>`}
+        <p>${escapeHtml(band7)}</p>
+      </td>
+      <td>${upgradeNotesHtml(turn.upgrade_notes || attempt.upgrade_notes || [])}</td>
+    </tr>
+  `;
+}
+
+function criterionBlock(title, item = {}) {
+  const strengths = (item.strengths || []).map((value) => `<li>${escapeHtml(value)}</li>`).join("");
+  const problems = (item.problems || []).map((value) => `<li>${escapeHtml(typeof value === "string" ? value : JSON.stringify(value))}</li>`).join("");
+  return `
+    <article class="criterion">
+      <h4>${escapeHtml(title)} · Band ${escapeHtml(item.band ?? "—")}</h4>
+      ${strengths ? `<strong>亮点</strong><ul>${strengths}</ul>` : ""}
+      ${problems ? `<strong>问题</strong><ul>${problems}</ul>` : ""}
+      <strong>建议</strong><p>${escapeHtml(item.suggestion || "")}</p>
+    </article>
+  `;
+}
+
+function speakWithBrowser(value) {
+  if (!value || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(value);
+  utterance.lang = "en-US";
+  utterance.rate = 0.92;
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopAllRuntime(label = "Ready") {
+  clearTimer();
+  clearAutoNextTimeout();
+  stopDictation();
+  $("#examinerAudio").pause();
+  $("#examinerAudio").removeAttribute("src");
+  $("#examinerAudio").load();
+  $("#examinerAudio").onended = null;
+  $("#examinerAudio").onerror = null;
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  state.browserTtsUtterance = null;
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+    state.cancelRecording = true;
+    state.mediaRecorder.stop();
+  }
+  if (state.mediaStream) {
+    state.mediaStream.getTracks().forEach((track) => track.stop());
+    state.mediaStream = null;
+  }
+  text("phaseLabel", label);
+  text("timerValue", "00:00");
+}
+
+async function exitPractice() {
+  const attemptId = state.attempt?.id;
+  state.abortingAttemptId = attemptId || null;
+  stopAllRuntime("Ready");
+  setBusy("");
+  if (attemptId) {
+    await api(`/api/attempts/${attemptId}/abort`, {}).catch(() => null);
+  }
+  resetPracticeSurface();
+}
+
+function showError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  setBusy("");
+  setRecordButton("ready", "Try Again", "The last attempt failed. Start again when ready.");
+  text("recordStatus", message);
+  $("#summaryPanel").classList.remove("hidden");
+  $("#summaryPanel").innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
+}
+
+function bindEvents() {
+  document.querySelectorAll(".nav-button").forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.view));
+  });
+  $("#recordControl").addEventListener("click", () => {
+    if (state.status === "recording") {
+      stopRecording();
+    } else if (state.status === "idle" || state.status === "ready" || state.status === "summary") {
+      if (state.currentTurn && state.status === "ready") {
+        beginExaminerPhase();
+      } else {
+        startPractice();
+      }
+    }
+  });
+  $("#refreshHistory").addEventListener("click", () => loadHistory());
+  $("#exitPractice").addEventListener("click", () => exitPractice());
+}
+
+async function init() {
+  bindEvents();
+  switchView("mock");
+  try {
+    const summary = await api("/api/question-bank/summary");
+    text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);
+  } catch (error) {
+    text("bankStatus", error.message);
+  }
+}
+
+init();

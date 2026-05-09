@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>IELTS Speaking Studio</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="nav" aria-label="IELTS practice navigation">
+        <div>
+          <div class="brand">IELTS Studio</div>
+          <div class="status" id="bankStatus">Loading bank...</div>
+        </div>
+        <button class="nav-button active" data-view="mock">Mock</button>
+        <button class="nav-button" data-view="p1">P1</button>
+        <button class="nav-button" data-view="p2">P2</button>
+        <button class="nav-button" data-view="p3">P3</button>
+        <button class="nav-button" data-view="history">History</button>
+        <button class="nav-button" data-view="settings">Settings</button>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <h1 id="viewTitle">Mock</h1>
+            <p id="viewSubtitle">P1, P2, and P3 in one voice-first exam flow.</p>
+          </div>
+          <div id="historyTopRail" class="history-top-rail hidden">
+            <div class="history-header">
+              <h2>Recent attempts</h2>
+              <button id="refreshHistory" class="ghost">Refresh</button>
+            </div>
+            <div class="history-scroll-hint">Scroll horizontally to review recent reports</div>
+            <div id="historyList" class="history-list">No attempts yet.</div>
+          </div>
+        </header>
+
+        <div id="busyBar" class="busy-bar hidden" role="status" aria-live="polite">
+          <span class="spinner"></span>
+          <span id="busyText"></span>
+        </div>
+
+        <section id="practicePanel" class="panel practice-panel">
+          <div class="exam-status">
+            <div>
+              <strong id="progressTrack">Choose a mode to begin.</strong>
+              <span id="phaseLabel">Ready</span>
+            </div>
+            <div class="exam-actions">
+              <button id="exitPractice" class="ghost exit-button hidden" type="button">Exit</button>
+              <div class="inline-timer" id="timerValue">00:00</div>
+            </div>
+          </div>
+          <div class="phase-meter"><span id="phaseMeter"></span></div>
+
+          <article id="cueTop" class="cue-top hidden"></article>
+
+          <div id="practiceGrid" class="practice-grid">
+            <article id="promptPane" class="prompt-pane">
+              <div class="section-label" id="promptKicker">Prompt</div>
+              <div id="promptCard" class="prompt-card short-prompt">Start a voice practice session to load a question.</div>
+              <div id="followUp" class="follow-up"></div>
+              <audio id="examinerAudio" controls class="tts-player hidden"></audio>
+              <button id="browserTtsFallback" class="ghost hidden">Play with browser voice</button>
+            </article>
+
+            <article id="recorderPane" class="recorder-pane">
+              <div class="section-label">Voice answer</div>
+              <button id="recordControl" class="record-control" type="button">
+                <span id="recordIcon"></span>
+                <strong id="recordTitle">Start</strong>
+                <small id="recordHint">No typing. Record your answer aloud.</small>
+              </button>
+              <div class="waveform" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div id="recordStatus" class="record-status">Microphone will be requested when recording starts.</div>
+              <audio id="candidateAudio" controls class="hidden"></audio>
+            </article>
+          </div>
+
+          <section id="summaryPanel" class="summary-panel hidden" aria-live="polite"></section>
+        </section>
+
+        <section id="historyPanel" class="panel hidden">
+          <div class="history-layout">
+            <article id="detailPanel" class="detail-panel">
+              <h2>Attempt Details</h2>
+              <p class="muted">Select a history item to review the full report.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="settingsPanel" class="panel hidden">
+          <div class="settings-grid">
+            <label>Backend mode
+              <select id="backendMode">
+                <option>hybrid</option>
+                <option>local CLI</option>
+                <option>cloud API</option>
+              </select>
+            </label>
+            <label>Text scorer
+              <select id="textScorer">
+                <option>codex CLI</option>
+                <option>OpenAI API</option>
+                <option>Gemini API</option>
+              </select>
+            </label>
+            <label>TTS backend
+              <select id="ttsBackend">
+                <option>VolcEngine server TTS</option>
+                <option>Browser fallback</option>
+              </select>
+            </label>
+            <label>Candidate name
+              <input id="candidateName" value="web-user">
+            </label>
+          </div>
+          <div class="notice">
+            API keys and unofficial TTS calls stay server-side. If TTS fails, the page falls back to browser voice.
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

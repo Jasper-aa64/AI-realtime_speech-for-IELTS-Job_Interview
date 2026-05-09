@@ -203,3 +203,117 @@ if (!wav) {
 - Can the core target and its smoke/data tests run without live credentials?
 - Does realtime capture preserve fallback behavior and avoid regressions to the
   shared interview realtime client?
+
+## Scenario: IELTS Web API Boundary
+
+### 1. Scope / Trigger
+
+- Trigger: The browser UI must be shareable by link while keeping Codex/Claude
+  CLI usage and any future credentials server-side.
+- Scope: `web/ielts_server.py`, `web/static/*`, `tests/test_ielts_web_server.py`,
+  question-bank JSON, reports, and README run/deploy instructions.
+
+### 2. Signatures
+
+```text
+GET  /api/question-bank/summary
+POST /api/question-bank/sample
+POST /api/session/start
+POST /api/score
+POST /api/p3/questions
+POST /api/p3/follow-up
+GET  /api/reports/latest
+POST /api/attempts/start
+POST /api/attempts/{id}/turns/{turn_id}/audio
+POST /api/attempts/{id}/turns/{turn_id}/complete
+POST /api/attempts/{id}/score
+POST /api/attempts/{id}/abort
+GET  /api/history
+GET  /api/history/{id}
+GET  /api/audio/{id}/{turn_id}/candidate
+GET  /api/audio/{id}/{turn_id}/examiner
+GET  /api/audio/{id}/model
+POST /api/tts
+```
+
+Local server command:
+
+```bash
+python3 web/ielts_server.py --host 127.0.0.1 --port 8765 --data-dir data/ielts --reports-dir reports
+```
+
+### 3. Contracts
+
+- Frontend code must never contain API keys, Claude/Codex credentials, or local
+  shell commands.
+- Server-side scoring may use CLI integrations only when explicitly enabled by
+  server environment/config; fallback scoring must keep the demo usable.
+- API responses must be JSON for both success and expected error cases.
+
+### IELTS Web Attempt Contract
+
+- Attempts use `status`: `started`, `ready_to_score`, `scored`, or `aborted`.
+- `POST /api/attempts/{id}/abort` sets `status=aborted` and `aborted_at`; scored
+  attempts cannot be aborted.
+- `/api/attempts/{id}/score` must reject aborted attempts and incomplete
+  attempts with JSON errors.
+- `/api/history` must exclude aborted attempts by default.
+- Each turn must persist:
+  `transcript_raw`, `transcript_cleaned`, `transcript_status`,
+  `pronunciation`, `band7_version`, `model_audio`, and `upgrade_notes`.
+- `transcript_status` is one of `captured`, `interim_fallback`, or `missing`.
+  Missing transcript turns may still have playable uploaded audio.
+- P2 `examiner_text` is instruction-only and must not include the cue title,
+  cue bullets, or `You should say`; the full cue card remains in `turn.question`
+  and `attempt.cue_card` for scoring/reporting.
+- Band 7 model output must be cleaned before storage. Remove Trellis/session
+  bootstrap text, workflow/status logs, Markdown fences, and non-answer
+  prefixes; use deterministic fallback when cleaned output is not a plausible
+  spoken answer.
+- Session start returns the sampled questions/topics needed by the selected
+  mode and a `session_id` the UI can pass back to scoring/report endpoints.
+- Reports are stored server-side under the configured report directory.
+
+### 4. Validation & Error Matrix
+
+- Unknown endpoint -> `404` JSON error.
+- Malformed JSON request -> `400` JSON error.
+- Missing transcript on score request -> `400` JSON error.
+- Missing/malformed question-bank data -> non-2xx JSON error naming the
+  problem.
+- Claude/Codex disabled or unavailable -> deterministic fallback response, not
+  a frontend crash.
+
+### 5. Good/Base/Bad Cases
+
+- Good: Blog links point to the Web UI while the backend owns all model/scoring
+  execution.
+- Base: Server runs with no CLI tools enabled and still supports demo practice
+  with fallback questions/scores.
+- Bad: Browser JavaScript builds command strings for `codex`, `claude`, or
+  embeds secrets.
+
+### 6. Tests Required
+
+- Python unit/API tests for summary, session start, scoring validation, P3
+  fallback, and JSON error paths.
+- HTTP smoke checks for `/`, static assets, and core APIs.
+- Existing C++ CMake/CTest must remain green because the Web UI shares data and
+  product contracts with the CLI.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```js
+fetch("/run-codex?prompt=" + encodeURIComponent(transcript));
+```
+
+#### Correct
+
+```http
+POST /api/score
+Content-Type: application/json
+
+{"part":"part2","transcript":"..."}
+```
