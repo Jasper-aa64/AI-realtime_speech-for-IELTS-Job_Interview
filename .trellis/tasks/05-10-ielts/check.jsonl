@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Validate scoring behavior and API contract after the rounding change."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Validate label and copy changes on summary/history/report surfaces."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Check for cross-layer regressions and duplicated presentation logic."}

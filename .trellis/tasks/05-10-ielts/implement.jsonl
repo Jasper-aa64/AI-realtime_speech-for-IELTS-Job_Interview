@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend scoring and API response rules for overall band rounding and report payloads."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend presentation rules for pronunciation labels, report wording, and view copy."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer and code-reuse guidance for changes spanning backend, frontend, and tests."}
