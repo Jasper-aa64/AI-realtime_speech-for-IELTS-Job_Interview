@@ -55,8 +55,18 @@
           <article id="cueTop" class="cue-top hidden"></article>
 
           <div id="p3TopicPanel" class="p3-topic-panel hidden">
-            <label>Choose a topic for Part 3</label>
+            <div class="p3-topic-head">
+              <div>
+                <label>Choose a topic for Part 3</label>
+                <p>Pick a topic and practice mode before the exam cards appear.</p>
+              </div>
+              <div class="p3-mode-switch" role="group" aria-label="Part 3 mode">
+                <button type="button" class="p3-mode-option active" data-p3-intensity="normal">Normal</button>
+                <button type="button" class="p3-mode-option" data-p3-intensity="high">High intensity</button>
+              </div>
+            </div>
             <div id="p3TopicChips" class="topic-chips" aria-label="Suggested Part 3 topics"></div>
+            <button id="p3StartButton" class="p3-start-button" type="button">Start Part 3</button>
           </div>
 
           <div id="practiceGrid" class="practice-grid">

@@ -168,6 +168,7 @@ class IELTSWebServerTest(unittest.TestCase):
         p3 = self.post_json("/api/attempts/start", {"part": "p3", "mode": "p3", "theme": "urban transport"})
         self.assertEqual(p3["part"], "p3")
         self.assertEqual(len(p3["turns"]), 10)
+        self.assertEqual(p3["p3_intensity"], "high")
         self.assertEqual(p3["p3_generation_source"], "topic")
         self.assertIn("urban transport", p3["title"])
         self.assertNotEqual(p3.get("p3_theme"), p2["cue_card"]["p3_theme"])
@@ -190,6 +191,37 @@ class IELTSWebServerTest(unittest.TestCase):
         )
         self.assertEqual(completed["next_turn"]["prompt"]["source"], "adaptive_answer")
         self.assertIn("opposite argument", completed["next_turn"]["question"])
+
+        normal_p3 = self.post_json(
+            "/api/attempts/start",
+            {"part": "p3", "mode": "p3", "theme": "urban transport", "p3_intensity": "normal"},
+        )
+        self.assertEqual(normal_p3["p3_intensity"], "normal")
+        self.assertEqual(len(normal_p3["turns"]), 5)
+        self.assertTrue(all(turn["prompt"]["role"] == "main" for turn in normal_p3["turns"]))
+
+    def test_p2_score_includes_markdown_ready_transcript_and_model_answer(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        turn = attempt["turns"][0]
+        self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+        self.post_json(
+            f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+            {
+                "transcript_raw": (
+                    "I want to describe a neighbour who helped me after I moved house. "
+                    "She explained where to buy food and how to use the local bus. "
+                    "That made me feel less nervous because the area was new to me."
+                )
+            },
+        )
+
+        scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {})
+        scored_turn = scored["turns"][0]
+        self.assertTrue(scored_turn["transcript_cleaned"])
+        self.assertTrue(scored_turn["band7_version"])
+        self.assertIn("\n\n", scored_turn["transcript_markdown"])
+        self.assertIn("\n\n", scored_turn["band7_markdown"])
+        self.assertIn("neighbour who helped me", scored_turn["transcript_markdown"])
 
     def test_mock_p3_is_generated_after_p2_answer(self):
         attempt = self.post_json("/api/attempts/start", {"part": "mock", "mode": "mock"})

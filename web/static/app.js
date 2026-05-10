@@ -22,13 +22,14 @@ const state = {
   abortingAttemptId: null,
   p3Topics: [],
   p3SelectedTopic: "",
+  p3Intensity: "normal",
 };
 
 const viewCopy = {
   mock: ["Mock", "P1, P2, and P3 in one voice-first exam flow."],
   p1: ["Part 1", "10 short questions. Report appears after the full section."],
   p2: ["Part 2", "Cue card, one-minute preparation, two-minute long turn."],
-  p3: ["Part 3", "5 abstract discussion questions. Report appears after the full section."],
+  p3: ["Part 3", "Choose a topic, then run a normal or high-intensity discussion."],
   history: ["History", ""],
   settings: ["Settings", "Server-side AI, TTS, and speech configuration."],
 };
@@ -47,11 +48,24 @@ function escapeHtml(value) {
 
 function renderMarkdown(value) {
   if (!value) return "";
-  return String(value)
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`(.+?)`/g, "<code>$1</code>")
-    .replace(/\n/g, "<br>");
+  const codeSpans = [];
+  let html = escapeHtml(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  html = html.replace(/`([^`\n]+?)`/g, (_match, code) => {
+    const token = `@@CODE_SPAN_${codeSpans.length}@@`;
+    codeSpans.push(`<code>${code}</code>`);
+    return token;
+  });
+  html = html
+    .replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^\*])\*([^*\n]+?)\*/g, "$1<em>$2</em>");
+  codeSpans.forEach((code, index) => {
+    html = html.replaceAll(`@@CODE_SPAN_${index}@@`, code);
+  });
+  return html
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim().replace(/\n/g, "<br>"))
+    .filter(Boolean)
+    .join("<br><br>");
 }
 
 async function api(path, body = null) {
@@ -115,7 +129,8 @@ function resetPracticeSurface() {
   $("#cueTop").classList.add("hidden");
   $("#promptPane").classList.remove("hidden");
   $("#p3TopicPanel").classList.toggle("hidden", state.view !== "p3");
-  $("#practiceGrid").classList.remove("p2-mode");
+  $("#practiceGrid").classList.remove("p2-mode", "practice-enter");
+  $("#practiceGrid").classList.toggle("hidden", state.view === "p3");
   $("#summaryPanel").classList.add("hidden");
   $("#summaryPanel").innerHTML = "";
   $("#exitPractice").classList.add("hidden");
@@ -154,12 +169,14 @@ async function startPractice() {
   const mode = state.view === "mock" ? "mock" : state.view;
   state.abortingAttemptId = null;
   $("#exitPractice").classList.remove("hidden");
+  if (mode === "p3") revealP3PracticeGrid();
   setRecordButton("loading", "Loading...", "Preparing exam section.");
   try {
     const theme = state.p3SelectedTopic || "";
     const attempt = await api("/api/attempts/start", {
       mode,
       candidate: $("#candidateName").value || "web-user",
+      ...(mode === "p3" ? { p3_intensity: state.p3Intensity } : {}),
       ...(mode === "p3" && theme ? { theme } : {}),
     });
     state.attempt = attempt;
@@ -172,10 +189,19 @@ async function startPractice() {
   }
 }
 
+function revealP3PracticeGrid() {
+  $("#p3TopicPanel").classList.add("hidden");
+  const grid = $("#practiceGrid");
+  grid.classList.remove("hidden", "practice-enter");
+  void grid.offsetWidth;
+  grid.classList.add("practice-enter");
+}
+
 function renderTurn(turn) {
   if (!turn) return;
   const partLabel = turn.part.toUpperCase();
   const isP2 = turn.part === "p2";
+  if (turn.part === "p3") $("#p3TopicPanel").classList.add("hidden");
   text("progressTrack", `${partLabel} · Question ${turn.index + 1}/${turn.total}`);
   text("promptKicker", isP2 ? "Cue card" : "Question");
   text("followUp", "");
@@ -656,6 +682,7 @@ function cueDetail(cue) {
 }
 
 function transcriptText(turn) {
+  if (turn.transcript_markdown) return renderMarkdown(turn.transcript_markdown);
   if (turn.transcript_cleaned) return renderMarkdown(turn.transcript_cleaned);
   if (turn.transcript_status === "missing" && (turn.audio || {}).url) {
     return "Recording exists, but transcript was not captured.";
@@ -676,6 +703,7 @@ function aiCoachingHtml(turn, attempt) {
 function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const modelAudio = turn.model_audio || {};
   const band7 = turn.band7_version || attempt.band7_version || "";
+  const band7Markdown = turn.band7_markdown || attempt.band7_markdown || band7;
   const statusLabel = turn.transcript_status === "interim_fallback"
     ? "Interim transcript used"
     : (turn.transcript_status === "captured" ? "Transcript captured" : "Transcript missing");
@@ -690,7 +718,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
       </td>
       <td>
         ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(band7)}">Play with browser voice</button>`}
-        <p>${renderMarkdown(band7)}</p>
+        <p>${renderMarkdown(band7Markdown)}</p>
       </td>
       <td>${aiCoachingHtml(turn, attempt)}</td>
     </tr>
@@ -781,6 +809,15 @@ function bindEvents() {
     }
   });
   $("#exitPractice").addEventListener("click", () => exitPractice());
+  $("#p3StartButton").addEventListener("click", () => startPractice());
+  document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.p3Intensity = button.dataset.p3Intensity || "normal";
+      document.querySelectorAll("[data-p3-intensity]").forEach((option) => {
+        option.classList.toggle("active", option === button);
+      });
+    });
+  });
   $("#p3TopicChips").addEventListener("click", (event) => {
     const chip = event.target.closest("[data-p3-topic]");
     if (!chip) return;

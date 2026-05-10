@@ -448,9 +448,11 @@ def create_turn(
         "audio": None,
         "transcript_raw": "",
         "transcript_cleaned": "",
+        "transcript_markdown": "",
         "transcript_status": "missing",
         "duration_seconds": None,
         "band7_version": "",
+        "band7_markdown": "",
         "model_audio": None,
         "upgrade_notes": [],
         "ai_coaching": "",
@@ -475,30 +477,37 @@ def append_p3_turns(
     theme: str,
     prior_answer: str,
     source: str,
+    intensity: str = "high",
 ) -> None:
     plan = generate_p3_plan(theme, prior_answer, source)
     start_index = len(attempt.get("turns") or [])
+    use_follow_ups = intensity == "high"
+    new_turns: list[dict[str, Any]] = []
     for main_index, question in enumerate(plan["questions"]):
         main_turn = create_turn(
             state,
             str(attempt["id"]),
             "p3",
-            start_index + (main_index * 2),
-            start_index + P3_TURN_COUNT,
+            start_index + len(new_turns),
+            start_index + (P3_TURN_COUNT if use_follow_ups else P3_MAIN_COUNT),
             question,
             {"theme": theme, "question": question, "role": "main", "source": source},
         )
+        new_turns.append(main_turn)
+        if not use_follow_ups:
+            continue
         follow_up = plan["follow_up"]
         follow_turn = create_turn(
             state,
             str(attempt["id"]),
             "p3",
-            start_index + (main_index * 2) + 1,
+            start_index + len(new_turns),
             start_index + P3_TURN_COUNT,
             follow_up,
             {"theme": theme, "question": follow_up, "role": "follow_up", "after_main": main_index + 1, "source": source},
         )
-        attempt["turns"].extend([main_turn, follow_turn])
+        new_turns.append(follow_turn)
+    attempt["turns"].extend(new_turns)
     for index, turn in enumerate(attempt["turns"]):
         turn["index"] = index
         turn["total"] = len(attempt["turns"])
@@ -506,6 +515,7 @@ def append_p3_turns(
     attempt["p3_generation_source"] = plan["source"]
     attempt["p3_generation_backend"] = plan["backend"]
     attempt["p3_theme"] = theme
+    attempt["p3_intensity"] = intensity
 
 
 def adapt_p3_follow_up(state: AppState, attempt: dict[str, Any], completed_turn: dict[str, Any], next_turn: dict[str, Any] | None) -> None:
@@ -558,13 +568,17 @@ def build_turns(state: AppState, attempt_id: str, mode: str, payload: dict[str, 
         return "p2", str(cue["title"]), [create_turn(state, attempt_id, "p2", 0, 1, cue_to_text(cue), cue, cue)], cue, metadata
     if mode == "p3":
         theme = str(payload.get("theme") or payload.get("topic") or "society and daily life").strip()
+        intensity = str(payload.get("p3_intensity") or payload.get("intensity") or "high").strip().lower()
+        if intensity not in {"normal", "high"}:
+            intensity = "high"
         generated = {"id": attempt_id, "turns": []}
-        append_p3_turns(state, generated, theme, str(payload.get("prior_answer") or ""), "topic")
+        append_p3_turns(state, generated, theme, str(payload.get("prior_answer") or ""), "topic", intensity)
         metadata = {
             "p3_generation_status": generated.get("p3_generation_status"),
             "p3_generation_source": generated.get("p3_generation_source"),
             "p3_generation_backend": generated.get("p3_generation_backend"),
             "p3_theme": theme,
+            "p3_intensity": generated.get("p3_intensity"),
         }
         return "p3", f"Part 3 discussion: {theme}", generated["turns"], None, metadata
     raise ValueError(f"Unsupported mode: {mode}")
@@ -657,6 +671,22 @@ def clean_report_text(value: str) -> str:
     if not text or any(marker in lowered for marker in blocked):
         return ""
     return text
+
+
+def spoken_markdown(value: str) -> str:
+    text = clean_band7_output(value)
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    if not text:
+        return ""
+    existing = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", text) if paragraph.strip()]
+    if len(existing) > 1:
+        return "\n\n".join(existing)
+    sentences = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text).strip())
+    sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
+    if not sentences:
+        return text
+    paragraphs = [" ".join(sentences[index:index + 2]) for index in range(0, len(sentences), 2)]
+    return "\n\n".join(paragraphs)
 
 
 def plausible_spoken_answer(value: str) -> bool:
@@ -936,7 +966,8 @@ def model_answer_with_codex(attempt: dict[str, Any], transcript: str) -> str:
     prompt = (
         "Write a natural IELTS Speaking Band 7 spoken version. Preserve the candidate's core ideas, "
         "but improve cohesion, vocabulary, and grammar. Do not include the original question or cue-card bullets. "
-        "Return only the answer text.\n\n"
+        "Format the answer as concise Markdown paragraphs with blank lines between paragraphs. "
+        "Return only the answer text: no title, no labels, no cue-card text, no logs.\n\n"
         f"Section: {attempt.get('mode')}\nQuestions:\n{questions_text(attempt)}\n\nCandidate transcript:\n{transcript}\n"
     )
     result = subprocess.run([codex, "exec"], input=prompt, text=True, capture_output=True, timeout=45, check=True)
@@ -1002,6 +1033,7 @@ def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, A
     if not plausible_spoken_answer(band7):
         band7 = build_turn_band7_fallback(turn, transcript)
     turn["band7_version"] = clean_report_text(band7) or build_turn_band7_fallback(turn, transcript)
+    turn["band7_markdown"] = spoken_markdown(band7) or spoken_markdown(turn["band7_version"])
     turn["model_audio"] = volcengine_tts(state, turn["band7_version"], role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
     turn["upgrade_notes"] = build_upgrade_notes(transcript)
     turn["ai_coaching"] = build_ai_coaching(turn, transcript)
@@ -1066,7 +1098,8 @@ def build_detailed_report(
     score["overall_band"] = rounded_overall(score)
     summary = clean_report_text(str(score.get("feedback") or "")) or "Score generated from the completed speaking section."
     band7 = clean_report_text(build_band7_version(attempt, transcript))
-    model_tts = volcengine_tts(state, band7, role="model", cache_key=f"{attempt['id']}_band7")
+    final_band7 = band7 or build_band7_version(attempt, transcript)
+    model_tts = volcengine_tts(state, final_band7, role="model", cache_key=f"{attempt['id']}_band7")
     return {
         "feedback_summary": summary,
         "ielts_score": score,
@@ -1082,7 +1115,8 @@ def build_detailed_report(
                 "suggestion": "Configure Azure Speech for real pronunciation scoring." if pron_band is None else "Review low-accuracy words and repeat the model answer aloud.",
             },
         },
-        "band7_version": band7 or build_band7_version(attempt, transcript),
+        "band7_version": final_band7,
+        "band7_markdown": spoken_markdown(final_band7),
         "model_audio": model_tts,
         "upgrade_notes": build_upgrade_notes(transcript),
         "ai_coaching": clean_report_text("Focus on answering directly, extending each point with a concrete example, and linking ideas naturally across the full section."),
@@ -1264,6 +1298,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         cleaned = clean_transcript(transcript)
         turn["transcript_raw"] = transcript
         turn["transcript_cleaned"] = cleaned["text"]
+        turn["transcript_markdown"] = spoken_markdown(cleaned["text"])
         turn["transcript_status"] = transcript_status
         turn["cleaning_notes"] = cleaned["notes"]
         turn["duration_seconds"] = payload.get("duration_seconds")
