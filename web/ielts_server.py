@@ -605,7 +605,7 @@ class BillingStore:
                 "INSERT INTO users (user_id, display_name, balance_u, reserved_u, status, created_at, updated_at) VALUES (?, ?, 0, 0, 'active', ?, ?)",
                 (user_id, display_name, now, now),
             )
-            self._append_entry(conn, user_id, None, "grant", DEFAULT_INITIAL_GRANT_U, None, None, "grant:initial", {"reason": "initial 5 RMB local balance"})
+            self._append_entry(conn, user_id, None, "grant", DEFAULT_INITIAL_GRANT_U, None, None, f"grant:initial:{user_id}", {"reason": "initial 5 RMB local balance"})
             conn.execute(
                 "UPDATE users SET balance_u = balance_u + ?, updated_at = ? WHERE user_id = ?",
                 (DEFAULT_INITIAL_GRANT_U, now, user_id),
@@ -640,6 +640,19 @@ class BillingStore:
             "usage_id": row["usage_id"],
             "created_at": row["created_at"],
             "metadata": json.loads(row["metadata_json"] or "{}"),
+        }
+
+    def _reservation_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "reservation_id": row["reservation_id"],
+            "user_id": row["user_id"],
+            "call_id": row["call_id"],
+            "reserved_u": int(row["reserved_u"]),
+            "reserved_rmb": round(int(row["reserved_u"]) / MICRO_RMB_PER_RMB, 6),
+            "status": row["status"],
+            "expires_at": row["expires_at"],
+            "created_at": row["created_at"],
+            "released_at": row["released_at"],
         }
 
     def normalize_usage(self, usage: dict[str, Any]) -> dict[str, int]:
@@ -708,9 +721,98 @@ class BillingStore:
                     json_dumps(usage),
                     "codex_cli_json_v1",
                     now_iso(),
-                ),
-            )
+            ),
+        )
         return {"usage_id": usage_id, **normalized}
+
+    def reserve_usage(
+        self,
+        user_id: str,
+        call_id: str,
+        reserved_u: int,
+        snapshot_id: str | None = None,
+        ttl_seconds: int = 24 * 60 * 60,
+    ) -> dict[str, Any]:
+        self.ensure_user(user_id, "Local user")
+        amount_u = max(0, int(reserved_u))
+        if amount_u <= 0:
+            raise ValueError("reserved_u must be greater than zero")
+        now = now_iso()
+        expires_at = (utcnow() + dt.timedelta(seconds=max(60, int(ttl_seconds)))).isoformat()
+        key = f"reserve:{call_id}"
+        with self.connection() as conn:
+            existing = conn.execute("SELECT * FROM wallet_reservations WHERE call_id = ?", (call_id,)).fetchone()
+            if existing:
+                return self._reservation_to_dict(existing)
+            user = conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
+            if not user:
+                raise ValueError("User not found")
+            if int(user["balance_u"]) < amount_u:
+                raise ValueError("Insufficient balance for reservation")
+            conn.execute(
+                """
+                INSERT INTO wallet_reservations (
+                    reservation_id, user_id, call_id, reserved_u, status, expires_at, created_at, released_at
+                ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, NULL)
+                """,
+                (f"reservation_{hashlib.sha1(call_id.encode('utf-8')).hexdigest()[:20]}", user_id, call_id, amount_u, expires_at, now),
+            )
+            conn.execute(
+                "UPDATE users SET balance_u = balance_u - ?, reserved_u = reserved_u + ?, updated_at = ? WHERE user_id = ?",
+                (amount_u, amount_u, now, user_id),
+            )
+            self._append_entry(
+                conn,
+                user_id,
+                call_id,
+                "reserve",
+                -amount_u,
+                snapshot_id,
+                None,
+                key,
+                {"reserved_u": amount_u, "expires_at": expires_at},
+            )
+            row = conn.execute("SELECT * FROM wallet_reservations WHERE call_id = ?", (call_id,)).fetchone()
+        return self._reservation_to_dict(row)
+
+    def release_reservation(self, user_id: str, call_id: str) -> dict[str, Any]:
+        key = f"release:{call_id}"
+        now = now_iso()
+        with self.connection() as conn:
+            row = conn.execute("SELECT * FROM wallet_reservations WHERE call_id = ?", (call_id,)).fetchone()
+            if not row:
+                raise ValueError("Reservation not found")
+            owner_user_id = row["user_id"]
+            if row["status"] == "released":
+                return self._reservation_to_dict(row)
+            if row["status"] != "reserved":
+                return self._reservation_to_dict(row)
+            reserved_u = int(row["reserved_u"])
+            if reserved_u > 0:
+                conn.execute(
+                    "UPDATE users SET balance_u = balance_u + ?, reserved_u = reserved_u - ?, updated_at = ? WHERE user_id = ?",
+                    (reserved_u, reserved_u, now, owner_user_id),
+                )
+                self._append_entry(
+                    conn,
+                    owner_user_id,
+                    call_id,
+                    "release",
+                    reserved_u,
+                    None,
+                    None,
+                    key,
+                    {"released_u": reserved_u, "reservation_id": row["reservation_id"]},
+                )
+            conn.execute(
+                "UPDATE wallet_reservations SET status = 'released', released_at = ? WHERE call_id = ?",
+                (now, call_id),
+            )
+            row = conn.execute("SELECT * FROM wallet_reservations WHERE call_id = ?", (call_id,)).fetchone()
+        return self._reservation_to_dict(row)
+
+    def reconcile_usage(self, user_id: str, call_id: str, usage: dict[str, Any] | None, snapshot_id: str | None = None) -> dict[str, Any]:
+        return self.settle_usage(user_id, call_id, usage, snapshot_id)
 
     def settle_usage(self, user_id: str, call_id: str, usage: dict[str, Any] | None, snapshot_id: str | None = None) -> dict[str, Any]:
         self.ensure_user(user_id, "Local user")
@@ -724,12 +826,67 @@ class BillingStore:
             existing = conn.execute("SELECT * FROM wallet_ledger_entries WHERE idempotency_key = ?", (key,)).fetchone()
             if existing:
                 return {"status": "already_settled", "charged_u": abs(int(existing["amount_u"])), "usage_id": existing["usage_id"], "snapshot_id": existing["snapshot_id"]}
-            self._append_entry(conn, user_id, call_id, "settle", -charge["amount_u"], charge["snapshot_id"], captured["usage_id"], key, {"usage": charge["usage"], "charge_numerator_u": charge["charge_numerator_u"], "carry_numerator_u": charge["carry_numerator_u"]})
-            conn.execute(
-                "UPDATE users SET balance_u = balance_u - ?, carry_numerator_u = carry_numerator_u + ?, updated_at = ? WHERE user_id = ?",
-                (charge["amount_u"], charge["carry_numerator_u"], now, user_id),
+            reservation = conn.execute("SELECT * FROM wallet_reservations WHERE call_id = ?", (call_id,)).fetchone()
+            ledger_user_id = reservation["user_id"] if reservation else user_id
+            reserved_u = int(reservation["reserved_u"]) if reservation and reservation["status"] == "reserved" else 0
+            settled_from_reservation = min(reserved_u, int(charge["amount_u"])) if reserved_u else 0
+            released_from_reservation = max(0, reserved_u - int(charge["amount_u"])) if reserved_u else 0
+            extra_charged = max(0, int(charge["amount_u"]) - reserved_u) if reserved_u else int(charge["amount_u"])
+            if reserved_u:
+                conn.execute(
+                    "UPDATE users SET reserved_u = reserved_u - ?, carry_numerator_u = carry_numerator_u + ?, updated_at = ? WHERE user_id = ?",
+                    (reserved_u, charge["carry_numerator_u"], now, ledger_user_id),
+                )
+                if extra_charged:
+                    conn.execute(
+                        "UPDATE users SET balance_u = balance_u - ?, updated_at = ? WHERE user_id = ?",
+                        (extra_charged, now, ledger_user_id),
+                    )
+                if released_from_reservation:
+                    conn.execute(
+                        "UPDATE users SET balance_u = balance_u + ?, updated_at = ? WHERE user_id = ?",
+                        (released_from_reservation, now, ledger_user_id),
+                    )
+                conn.execute(
+                    "UPDATE wallet_reservations SET status = 'settled', released_at = ? WHERE call_id = ?",
+                    (now, call_id),
+                )
+                if released_from_reservation > 0:
+                    self._append_entry(
+                        conn,
+                        ledger_user_id,
+                        call_id,
+                        "release",
+                        released_from_reservation,
+                        charge["snapshot_id"],
+                        captured["usage_id"],
+                        f"release:{call_id}",
+                        {"released_u": released_from_reservation, "reservation_id": reservation["reservation_id"]},
+                    )
+            else:
+                conn.execute(
+                    "UPDATE users SET balance_u = balance_u - ?, carry_numerator_u = carry_numerator_u + ?, updated_at = ? WHERE user_id = ?",
+                    (charge["amount_u"], charge["carry_numerator_u"], now, ledger_user_id),
+                )
+            self._append_entry(
+                conn,
+                ledger_user_id,
+                call_id,
+                "settle",
+                -charge["amount_u"],
+                charge["snapshot_id"],
+                captured["usage_id"],
+                key,
+                {"usage": charge["usage"], "charge_numerator_u": charge["charge_numerator_u"], "carry_numerator_u": charge["carry_numerator_u"], "settled_from_reservation_u": settled_from_reservation, "released_from_reservation_u": released_from_reservation, "extra_charged_u": extra_charged},
             )
-        return {"status": "settled", "charged_u": charge["amount_u"], "usage_id": captured["usage_id"], "snapshot_id": charge["snapshot_id"], "usage": charge["usage"]}
+        result = {"status": "settled", "charged_u": charge["amount_u"], "usage_id": captured["usage_id"], "snapshot_id": charge["snapshot_id"], "usage": charge["usage"]}
+        if reserved_u:
+            result["reserved_u"] = reserved_u
+        if released_from_reservation:
+            result["released_u"] = released_from_reservation
+        if extra_charged:
+            result["extra_charged_u"] = extra_charged
+        return result
 
     def _append_entry(
         self,
@@ -2053,7 +2210,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         try:
-            path = urlparse(self.path).path
+            parsed_url = urlparse(self.path)
+            path = parsed_url.path
             if path == "/api/question-bank/summary":
                 self.send_json(self.state.bank.summary())
                 return
@@ -2064,7 +2222,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 self.send_json({"items": self.state.training.weak_items(DEFAULT_USER_ID)})
                 return
             if path == "/api/training/replay-queue":
-                query = urlparse(self.path).query
+                query = parsed_url.query
                 limit = 10
                 if query:
                     params = dict(part.split("=", 1) if "=" in part else (part, "") for part in query.split("&") if part)
@@ -2075,7 +2233,9 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 self.send_json({"items": self.state.training.replay_queue(DEFAULT_USER_ID, limit=limit, bank=self.state.bank)})
                 return
             if path == "/api/billing/wallet":
-                self.send_json(self.state.billing.wallet(DEFAULT_USER_ID))
+                query = parsed_url.query
+                params = dict(part.split("=", 1) if "=" in part else (part, "") for part in query.split("&") if part)
+                self.send_json(self.state.billing.wallet(str(params.get("user_id") or DEFAULT_USER_ID)))
                 return
             match = re.fullmatch(r"/api/history/([^/]+)", path)
             if match:
@@ -2127,6 +2287,25 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 self.handle_tts(payload)
             elif path == "/api/attempts/start":
                 self.handle_attempt_start(payload)
+            elif path == "/api/billing/reserve":
+                call_id = str(payload.get("call_id") or "").strip()
+                if not call_id:
+                    raise ValueError("Missing call_id")
+                reserved_u = int(payload.get("reserved_u") or 0)
+                snapshot_id = str(payload.get("snapshot_id") or "") or None
+                ttl_seconds = int(payload.get("ttl_seconds") or 24 * 60 * 60)
+                self.send_json(self.state.billing.reserve_usage(str(payload.get("user_id") or DEFAULT_USER_ID), call_id, reserved_u, snapshot_id, ttl_seconds))
+            elif path == "/api/billing/release":
+                call_id = str(payload.get("call_id") or "").strip()
+                if not call_id:
+                    raise ValueError("Missing call_id")
+                self.send_json(self.state.billing.release_reservation(str(payload.get("user_id") or DEFAULT_USER_ID), call_id))
+            elif path == "/api/billing/reconcile":
+                call_id = str(payload.get("call_id") or "").strip()
+                if not call_id:
+                    raise ValueError("Missing call_id")
+                result = self.state.billing.reconcile_usage(str(payload.get("user_id") or DEFAULT_USER_ID), call_id, payload.get("usage"), str(payload.get("snapshot_id") or "") or None)
+                self.send_json(result)
             elif path == "/api/billing/settle-usage":
                 self.handle_billing_settle(payload)
             else:

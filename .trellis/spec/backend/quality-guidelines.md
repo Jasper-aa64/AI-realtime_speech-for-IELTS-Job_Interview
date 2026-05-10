@@ -337,6 +337,10 @@ Content-Type: application/json
 GET  /api/training/weak-items
 GET  /api/training/replay-queue
 GET  /api/billing/wallet
+GET  /api/billing/wallet?user_id={user_id}
+POST /api/billing/reserve
+POST /api/billing/release
+POST /api/billing/reconcile
 POST /api/billing/settle-usage
 ```
 
@@ -348,25 +352,59 @@ POST /api/billing/settle-usage
 - `GET /api/training/replay-queue` prefers due weak items first and then keeps pending weak items in the queue.
 - The billing wallet is stored in integer micro-RMB units.
 - The initial local grant is exactly 5 RMB (`5_000_000` micro-RMB).
+- Initial grant ledger idempotency is per user (`grant:initial:{user_id}`), not
+  global, because local billing APIs can query or reserve balances for
+  different `user_id` values.
+- `POST /api/billing/reserve` accepts `call_id`, `reserved_u`, optional
+  `snapshot_id`, optional `ttl_seconds`, and optional `user_id`. It deducts
+  `reserved_u` from available balance, increments `reserved_u`, writes a
+  `reserve` ledger entry, and is idempotent by `call_id`.
+- `POST /api/billing/release` accepts `call_id` and optional `user_id`. Once a
+  reservation exists, the reservation owner is authoritative; release must
+  restore the owner wallet balance and must not credit an arbitrary requester.
+- `POST /api/billing/reconcile` accepts `call_id`, optional `usage`, optional
+  `snapshot_id`, and optional `user_id`. It delegates to settlement. If the
+  `call_id` has a reserved wallet row, settlement must debit/release against
+  the reservation owner, not the requester.
 - `POST /api/billing/settle-usage` must treat `call_id` as the idempotency key for settlement.
 - Cached input tokens, uncached input tokens, and output tokens are charged separately from the active price snapshot.
 - `reasoning_output_tokens` are captured for auditability but do not contribute to the current charge.
 - Missing authoritative usage returns a pending reconciliation response and must not guess a charge.
+- If actual usage is lower than a reservation, reconciliation settles the
+  actual charge and releases the unused reservation back to available balance.
+- If actual usage is higher than a reservation, reconciliation consumes the
+  reservation and deducts only the extra charge from available balance.
+- Releasing a reservation after it has already been settled must be a no-op and
+  must not double-credit the wallet.
 
 ### 4. Validation & Error Matrix
 
 - Scored attempt without weak candidates -> no weak-item rows are emitted.
 - Weak-item query with no matches -> empty list, not an error.
 - Missing `call_id` -> `400` JSON error.
+- Missing or non-positive `reserved_u` on reserve -> `400` JSON error.
+- Reserve amount greater than available balance -> `400` JSON error.
+- Release for an unknown reservation -> `400` JSON error.
 - Missing `usage` -> `pending_reconciliation`, zero charge.
 - Repeated `call_id` settlement -> `already_settled`, no duplicate charge.
+- Repeated `call_id` reserve -> return the existing reservation, no duplicate
+  deduction.
+- Repeated release of a released reservation -> return the existing released
+  reservation, no duplicate credit.
 - Snapshot lookup failure -> explicit error, not a fallback charge guess.
 
 ### 5. Good/Base/Bad Cases
 
 - Good: A scored attempt records weak-question rows, and the UI can surface a replay queue.
 - Base: The wallet starts with a known local grant and the recent ledger can be inspected in the UI.
+- Good: A call reserves 0.30 RMB, later releases it, and the wallet balance and
+  reserved balance return to their starting values.
+- Good: A call reserves 2.00 RMB, actual usage costs 0.12 RMB, and reconciliation
+  releases the remaining 1.88 RMB while preventing a later release from
+  crediting again.
 - Bad: Treating `reasoning_output_tokens` as billable output again; that double-counts the request.
+- Bad: Reconciling an existing reservation with a different request `user_id`
+  and charging or releasing the requester instead of the reservation owner.
 
 ### 6. Tests Required
 
@@ -376,6 +414,11 @@ POST /api/billing/settle-usage
 - Settlement test must assert cached and uncached input tokens are charged differently.
 - Settlement test must assert repeated `call_id` settlement is idempotent.
 - Missing-usage test must assert no blind deduction occurs.
+- Reserve/release test must assert reservation idempotency and balance restoration.
+- Reservation settlement test must assert unused reservation release and no
+  second release after settlement.
+- Reservation owner test must assert reconciliation uses the reservation owner
+  when the request `user_id` differs.
 
 ### 7. Wrong vs Correct
 
@@ -391,4 +434,17 @@ if usage:
 ```python
 if not usage:
     return {"status": "pending_reconciliation", "charged_u": 0}
+```
+
+#### Wrong
+
+```python
+conn.execute("UPDATE users SET balance_u = balance_u + ? WHERE user_id = ?", (released_u, payload_user_id))
+```
+
+#### Correct
+
+```python
+owner_user_id = reservation["user_id"]
+conn.execute("UPDATE users SET balance_u = balance_u + ? WHERE user_id = ?", (released_u, owner_user_id))
 ```

@@ -80,6 +80,31 @@ class IELTSWebServerTest(unittest.TestCase):
             return error.code, json.loads(error.read().decode("utf-8"))
         self.fail("Expected HTTPError")
 
+    def start_isolated_server(self, name):
+        previous_state = IELTSHandler.state
+        state_dir = Path(self.temp_dir.name) / name
+        IELTSHandler.state = AppState(ROOT / "data" / "ielts", state_dir)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), IELTSHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return f"http://127.0.0.1:{server.server_port}", server, thread, previous_state
+
+    def get_json_from(self, base_url, path):
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(base_url + path, timeout=5) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def post_json_to(self, base_url, path, payload):
+        request = urllib.request.Request(
+            base_url + path,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=5) as response:
+            return json.loads(response.read().decode("utf-8"))
+
     def test_question_bank_summary_and_sample(self):
         summary = self.get_json("/api/question-bank/summary?cache_bust=1")
         self.assertGreaterEqual(summary["part1_count"], 15)
@@ -534,6 +559,95 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(result["charged_u"], 0)
         after = self.get_json("/api/billing/wallet")["balance_u"]
         self.assertEqual(after, before)
+
+    def test_billing_reserve_release_and_reconcile_round_trip(self):
+        base_url, server, thread, previous_state = self.start_isolated_server("billing-reserve-release")
+        try:
+            start = self.get_json_from(base_url, "/api/billing/wallet")
+            reserve = self.post_json_to(base_url, "/api/billing/reserve", {"call_id": "call_reserve_1", "reserved_u": 300_000})
+            self.assertEqual(reserve["status"], "reserved")
+            after_reserve = self.get_json_from(base_url, "/api/billing/wallet")
+            self.assertEqual(after_reserve["balance_u"], start["balance_u"] - 300_000)
+            self.assertEqual(after_reserve["reserved_u"], start["reserved_u"] + 300_000)
+
+            reserve_repeat = self.post_json_to(base_url, "/api/billing/reserve", {"call_id": "call_reserve_1", "reserved_u": 300_000})
+            self.assertEqual(reserve_repeat["reservation_id"], reserve["reservation_id"])
+
+            release = self.post_json_to(base_url, "/api/billing/release", {"call_id": "call_reserve_1"})
+            self.assertEqual(release["status"], "released")
+            after_release = self.get_json_from(base_url, "/api/billing/wallet")
+            self.assertEqual(after_release["balance_u"], start["balance_u"])
+            self.assertEqual(after_release["reserved_u"], start["reserved_u"])
+
+            release_repeat = self.post_json_to(base_url, "/api/billing/release", {"user_id": "other", "call_id": "call_reserve_1"})
+            self.assertEqual(release_repeat["status"], "released")
+            self.assertEqual(release_repeat["user_id"], start["user_id"])
+            after_release_repeat = self.get_json_from(base_url, "/api/billing/wallet")
+            self.assertEqual(after_release_repeat["balance_u"], start["balance_u"])
+            self.assertEqual(after_release_repeat["reserved_u"], start["reserved_u"])
+
+            reconcile_missing = self.post_json_to(base_url, "/api/billing/reconcile", {"call_id": "call_reserve_1"})
+            self.assertEqual(reconcile_missing["status"], "pending_reconciliation")
+            self.assertEqual(reconcile_missing["charged_u"], 0)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            IELTSHandler.state = previous_state
+
+    def test_billing_reservation_settlement_cannot_be_released_twice(self):
+        base_url, server, thread, previous_state = self.start_isolated_server("billing-reserve-settle")
+        try:
+            start = self.get_json_from(base_url, "/api/billing/wallet")
+            self.post_json_to(base_url, "/api/billing/reserve", {"call_id": "call_reserve_settle_once", "reserved_u": 2_000_000})
+            usage = {"input_tokens": 10_000, "cached_input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": 0}
+            settled = self.post_json_to(base_url, "/api/billing/reconcile", {"call_id": "call_reserve_settle_once", "usage": usage})
+            self.assertEqual(settled["status"], "settled")
+            self.assertEqual(settled["charged_u"], 120_000)
+            self.assertEqual(settled["released_u"], 1_880_000)
+            after_settle = self.get_json_from(base_url, "/api/billing/wallet")
+            self.assertEqual(after_settle["balance_u"], start["balance_u"] - 120_000)
+            self.assertEqual(after_settle["reserved_u"], start["reserved_u"])
+
+            release_after_settle = self.post_json_to(base_url, "/api/billing/release", {"call_id": "call_reserve_settle_once"})
+            self.assertEqual(release_after_settle["status"], "settled")
+            after_release = self.get_json_from(base_url, "/api/billing/wallet")
+            self.assertEqual(after_release["balance_u"], after_settle["balance_u"])
+            self.assertEqual(after_release["reserved_u"], after_settle["reserved_u"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            IELTSHandler.state = previous_state
+
+    def test_billing_reconcile_uses_reservation_owner(self):
+        base_url, server, thread, previous_state = self.start_isolated_server("billing-reserve-owner")
+        try:
+            owner_start = self.get_json_from(base_url, "/api/billing/wallet?user_id=owner")
+            other_start = self.get_json_from(base_url, "/api/billing/wallet?user_id=other")
+            self.post_json_to(base_url, "/api/billing/reserve", {"user_id": "owner", "call_id": "call_owner_reservation", "reserved_u": 500_000})
+
+            usage = {"input_tokens": 10_000, "cached_input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": 0}
+            settled = self.post_json_to(base_url, "/api/billing/reconcile", {"user_id": "other", "call_id": "call_owner_reservation", "usage": usage})
+            self.assertEqual(settled["status"], "settled")
+            self.assertEqual(settled["charged_u"], 120_000)
+            self.assertEqual(settled["released_u"], 380_000)
+
+            settled_repeat = self.post_json_to(base_url, "/api/billing/reconcile", {"user_id": "other", "call_id": "call_owner_reservation", "usage": usage})
+            self.assertEqual(settled_repeat["status"], "already_settled")
+            self.assertEqual(settled_repeat["charged_u"], 120_000)
+
+            owner_after = self.get_json_from(base_url, "/api/billing/wallet?user_id=owner")
+            other_after = self.get_json_from(base_url, "/api/billing/wallet?user_id=other")
+            self.assertEqual(owner_after["balance_u"], owner_start["balance_u"] - 120_000)
+            self.assertEqual(owner_after["reserved_u"], owner_start["reserved_u"])
+            self.assertEqual(other_after["balance_u"], other_start["balance_u"])
+            self.assertEqual(other_after["reserved_u"], other_start["reserved_u"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            IELTSHandler.state = previous_state
 
     def test_codex_json_usage_is_settled_when_available(self):
         previous_disable = os.environ.pop("IELTS_WEB_DISABLE_CODEX", None)
