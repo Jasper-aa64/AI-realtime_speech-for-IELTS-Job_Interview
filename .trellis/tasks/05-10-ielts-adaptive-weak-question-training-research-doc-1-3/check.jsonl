@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Review against backend expectations for deterministic fallback behavior and persisted reports."}
+{"file": "research/adaptive_weak_item_modeling.md", "reason": "Validate the modeling assumptions, formulas, and implementation guidance."}
+{"file": "docs/IELTS_ADAPTIVE_WEAK_QUESTION_TRAINING_1_3.md", "reason": "Review the final standalone doc for clarity, rigor, and actionable guidance."}

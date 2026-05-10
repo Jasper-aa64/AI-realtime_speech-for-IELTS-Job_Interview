@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend report must render China explanation as guidance, not alternate scoring."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend must keep official IELTS scoring and local explanation separate."}

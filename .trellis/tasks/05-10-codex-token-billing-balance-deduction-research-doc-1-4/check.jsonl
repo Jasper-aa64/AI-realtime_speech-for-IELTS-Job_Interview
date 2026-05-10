@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Review the billing plan against backend persistence, fallback, and error-matrix expectations."}
+{"file": "research/codex_usage_billing_notes.md", "reason": "Verify the usage semantics and token-to-billing assumptions before writing the final plan."}
+{"file": "docs/CODEX_TOKEN_BILLING_BALANCE_DEDUCTION_1_4.md", "reason": "Review the final implementation plan for accuracy, accounting rigor, and implementation realism."}

@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend UI tone and state consistency guidance for the IELTS web surface."}
+{"file":"web/static/app.js","reason":"Top nav and history cards derive tone classes in the client rendering logic."}
+{"file": "web/static/styles.css", "reason": "Tone palette and active-state CSS for top nav and history cards."}

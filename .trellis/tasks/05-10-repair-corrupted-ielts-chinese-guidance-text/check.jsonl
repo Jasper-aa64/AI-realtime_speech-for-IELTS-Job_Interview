@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify backend explanation text stays rubric-bound and does not introduce a second score system."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify frontend report labels and fallback text are readable and not garbled."}

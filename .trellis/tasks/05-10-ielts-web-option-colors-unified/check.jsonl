@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend UI consistency guidance for validating tone mapping and active states."}
+{"file": "web/static/styles.css", "reason": "Verify unified tone palette and active-state CSS for top nav and history cards."}

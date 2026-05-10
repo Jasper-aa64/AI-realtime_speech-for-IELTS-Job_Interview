@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Ground the adaptive replay research in the current backend contracts and history/report behavior."}
+{"file": "web/ielts_server.py", "reason": "Inspect the current question bank sampling and history persistence pattern that the new feature must extend."}
+{"file": "web/static/app.js", "reason": "Inspect how history and reports are surfaced to the learner, since weak-item labels will affect the UI."}
+{"file": "research/adaptive_weak_item_modeling.md", "reason": "Primary research notes for the 1.3 adaptive weak-item research document."}

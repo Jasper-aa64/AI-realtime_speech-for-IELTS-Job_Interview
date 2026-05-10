@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Ground the billing plan in backend persistence, error handling, and deterministic fallback expectations."}
+{"file": "web/ielts_server.py", "reason": "Main runtime path for Codex-backed web calls that will need usage capture and balance settlement."}
+{"file": "src/ielts/scorer.cpp", "reason": "Existing Codex shell-out path in the CLI must be included in the billing plan."}
+{"file": "research/codex_usage_billing_notes.md", "reason": "Primary local evidence for usage fields and the absence of direct RMB cost."}

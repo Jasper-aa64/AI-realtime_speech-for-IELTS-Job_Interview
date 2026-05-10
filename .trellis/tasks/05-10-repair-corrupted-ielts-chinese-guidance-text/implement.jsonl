@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend contract for IELTS web boundary and rubric-bound Chinese explanation wording."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend contract for natural Chinese labels and readable report rendering."}
