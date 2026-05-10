@@ -201,10 +201,14 @@ function renderTurn(turn) {
   if (!turn) return;
   const partLabel = turn.part.toUpperCase();
   const isP2 = turn.part === "p2";
+  const isFollowUp = turn.prompt?.role === "follow_up";
   if (turn.part === "p3") $("#p3TopicPanel").classList.add("hidden");
-  text("progressTrack", `${partLabel} · Question ${turn.index + 1}/${turn.total}`);
-  text("promptKicker", isP2 ? "Cue card" : "Question");
-  text("followUp", "");
+  const questionNumber = Number(turn.index ?? 0) + 1;
+  text("progressTrack", isFollowUp
+    ? `${partLabel} · Follow-up after Question ${questionNumber}/${turn.total}`
+    : `${partLabel} · Question ${questionNumber}/${turn.total}`);
+  text("promptKicker", isP2 ? "Cue card" : (isFollowUp ? "Follow-up" : "Question"));
+  text("followUp", isFollowUp ? "Follow-up question" : "");
   $("#practiceGrid").classList.toggle("p2-mode", isP2);
   $("#cueTop").classList.add("hidden");
   $("#promptPane").classList.remove("hidden");
@@ -265,15 +269,21 @@ function beginExaminerPhase() {
   if (!state.currentTurn) return;
   clearTimer();
   const turn = state.currentTurn;
+  const isFollowUp = turn.prompt?.role === "follow_up";
+  const questionNumber = Number(turn.index ?? 0) + 1;
   preloadNextExaminerAudio(turn);
   setRecordButton("examiner_playing", "Listening...", "The examiner is asking the question.");
-  const progress = `${turn.part.toUpperCase()} · Question ${turn.index + 1}/${turn.total}`;
+  const progress = isFollowUp
+    ? `${turn.part.toUpperCase()} · Follow-up after Question ${questionNumber}/${turn.total}`
+    : `${turn.part.toUpperCase()} · Question ${questionNumber}/${turn.total}`;
   text("progressTrack", progress);
   text("phaseLabel", `${progress} · Examiner`);
   text("timerValue", "00:00");
   $("#phaseMeter").style.width = "0%";
   text("recordStatus", turn.examiner_behavior === "auto_play_instruction_only"
     ? "Listen to the examiner instruction, then read the cue card during preparation."
+    : isFollowUp
+    ? "Listen to the examiner follow-up question. Preparation starts automatically."
     : "Listen to the examiner question. Preparation starts automatically.");
 
   const audio = $("#examinerAudio");

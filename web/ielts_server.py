@@ -35,6 +35,20 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 P1_TURN_COUNT = 10
+P1_INTRO_QUESTIONS = [
+    {
+        "topic": "intro",
+        "question": "What is your full name?",
+        "flow": "intro",
+        "role": "name",
+    },
+    {
+        "topic": "intro",
+        "question": "Do you work, study at university, or go to school?",
+        "flow": "intro",
+        "role": "work_study",
+    },
+]
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
 
@@ -366,6 +380,50 @@ def generate_p3_plan(theme: str, prior_answer: str, source: str) -> dict[str, An
     }
 
 
+def fallback_p1_identity_follow_up(answer: str) -> str:
+    normalized = answer.lower()
+    if any(word in normalized for word in ("university", "college", "major", "degree", "undergraduate", "postgraduate")):
+        return "Why did you choose that subject or major?"
+    if any(word in normalized for word in ("school", "middle school", "high school", "primary school", "secondary school")):
+        return "What subject do you enjoy most at school?"
+    if any(word in normalized for word in ("study", "student", "studying")):
+        return "What do you enjoy most about your studies?"
+    if any(word in normalized for word in ("work", "job", "company", "office", "teacher", "engineer", "business")):
+        return "What do you like most about your work?"
+    return "Could you tell me a little more about what you do now?"
+
+
+def generate_p1_identity_follow_up(answer: str) -> dict[str, str]:
+    fallback = fallback_p1_identity_follow_up(answer)
+    if os.environ.get("IELTS_WEB_DISABLE_CLAUDE") == "1":
+        return {"question": fallback, "backend": "fallback", "status": "fallback"}
+    claude = shutil.which("claude")
+    if not claude:
+        return {"question": fallback, "backend": "fallback", "status": "fallback"}
+    prompt = (
+        "You are an IELTS Speaking examiner. Generate exactly one short Part 1 follow-up question "
+        "based on whether the candidate works, studies at university, or goes to school. "
+        "Return JSON only with key question. "
+        f"Candidate answer: {answer}\n"
+    )
+    try:
+        result = subprocess.run(
+            [claude, "--print"],
+            input=prompt,
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=True,
+        )
+        payload = extract_json_object(result.stdout)
+        question = clean_report_text(str(payload.get("question") or ""))
+        if not question:
+            raise RuntimeError("claude returned empty follow-up")
+        return {"question": question, "backend": "claude", "status": "ready"}
+    except Exception:
+        return {"question": fallback, "backend": "fallback", "status": "fallback"}
+
+
 def volcengine_tts(state: AppState, text: str, voice: str = "en_male_adam", role: str = "model", cache_key: str | None = None) -> dict[str, Any]:
     text = text.strip()
     if not text:
@@ -459,6 +517,55 @@ def create_turn(
     }
 
 
+def is_p1_work_study_identity_question(question: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", " ", question.lower()).strip()
+    return any(
+        phrase in normalized
+        for phrase in (
+            "do you work or are you",
+            "are you a student or do you work",
+            "do you work or study",
+            "do you work or are you a full time student",
+            "what subject are you studying or what did you study",
+        )
+    )
+
+
+def build_p1_turns(
+    state: AppState,
+    attempt_id: str,
+    total: int = P1_TURN_COUNT,
+    display_total: int | None = None,
+) -> list[dict[str, Any]]:
+    intro_count = min(len(P1_INTRO_QUESTIONS), total)
+    remaining_count = max(0, total - intro_count)
+    ordinary_pool = [
+        item
+        for item in state.bank.p1
+        if not is_p1_work_study_identity_question(str(item.get("question") or ""))
+    ]
+    if len(ordinary_pool) < remaining_count:
+        raise ValueError("Not enough ordinary IELTS Part 1 questions after reserving intro identity turns.")
+    ordinary_questions = random.sample(ordinary_pool, remaining_count)
+    turn_items = P1_INTRO_QUESTIONS[:intro_count] + ordinary_questions
+    return [
+        create_turn(
+            state,
+            attempt_id,
+            "p1",
+            index,
+            display_total or len(turn_items),
+            item["question"],
+            {
+                "topic": item["topic"],
+                "question": item["question"],
+                **({"flow": item["flow"], "role": item["role"]} if item.get("flow") else {}),
+            },
+        )
+        for index, item in enumerate(turn_items)
+    ]
+
+
 def ensure_examiner_tts(state: AppState, attempt_id: str, turn: dict[str, Any]) -> None:
     current = turn.get("examiner_tts") or {}
     if current.get("audio_url") or current.get("status") not in (None, "pending"):
@@ -540,15 +647,54 @@ def adapt_p3_follow_up(state: AppState, attempt: dict[str, Any], completed_turn:
     next_turn["examiner_tts"] = {"provider": "volcengine", "status": "pending", "audio_url": None}
 
 
+def insert_p1_identity_follow_up(state: AppState, attempt: dict[str, Any], completed_turn: dict[str, Any]) -> None:
+    prompt = completed_turn.get("prompt") or {}
+    if completed_turn.get("part") != "p1" or prompt.get("role") != "work_study":
+        return
+    turns = attempt.get("turns") or []
+    try:
+        completed_position = turns.index(completed_turn)
+    except ValueError:
+        return
+    if completed_position + 1 < len(turns):
+        next_prompt = turns[completed_position + 1].get("prompt") or {}
+        if next_prompt.get("flow") == "intro" and next_prompt.get("role") == "follow_up":
+            return
+    plan = generate_p1_identity_follow_up(
+        str(completed_turn.get("transcript_cleaned") or completed_turn.get("transcript_raw") or "")
+    )
+    question = clean_report_text(plan.get("question") or "") or fallback_p1_identity_follow_up("")
+    follow_turn = create_turn(
+        state,
+        str(attempt["id"]),
+        "p1",
+        int(completed_turn.get("index") or 0),
+        int(completed_turn.get("total") or P1_TURN_COUNT),
+        question,
+        {
+            "topic": "intro",
+            "question": question,
+            "flow": "intro",
+            "role": "follow_up",
+            "after_role": "work_study",
+            "after_turn": completed_turn.get("id"),
+            "source": "identity_answer",
+            "backend": plan.get("backend", "fallback"),
+            "generation_status": plan.get("status", "fallback"),
+            "counts_toward_total": False,
+        },
+    )
+    follow_turn["id"] = f"{completed_turn.get('id', 't2')}_followup"
+    follow_turn["counts_toward_total"] = False
+    turns.insert(completed_position + 1, follow_turn)
+
+
 def build_turns(state: AppState, attempt_id: str, mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], dict[str, Any] | None, dict[str, Any]]:
     sample = state.bank.sample(P1_TURN_COUNT)
     metadata: dict[str, Any] = {}
     if mode == "mock":
         cue = sample["part2"]
-        turns = [
-            create_turn(state, attempt_id, "p1", index, P1_TURN_COUNT + 1, item["question"], {"topic": item["topic"], "question": item["question"]})
-            for index, item in enumerate(sample["part1"])
-        ]
+        turns = build_p1_turns(state, attempt_id, P1_TURN_COUNT, P1_TURN_COUNT + 1)
         turns.append(create_turn(state, attempt_id, "p2", len(turns), P1_TURN_COUNT + 1, cue_to_text(cue), cue, cue))
         metadata = {
             "p3_generation_status": "pending_after_p2",
@@ -557,11 +703,7 @@ def build_turns(state: AppState, attempt_id: str, mode: str, payload: dict[str, 
         }
         return "mock", "Full mock exam", turns, cue, metadata
     if mode == "p1":
-        questions = random.sample(state.bank.p1, min(P1_TURN_COUNT, len(state.bank.p1)))
-        turns = [
-            create_turn(state, attempt_id, "p1", index, len(questions), item["question"], {"topic": item["topic"], "question": item["question"]})
-            for index, item in enumerate(questions)
-        ]
+        turns = build_p1_turns(state, attempt_id, P1_TURN_COUNT)
         return "p1", "Part 1 practice", turns, None, metadata
     if mode == "p2":
         cue = sample["part2"]
@@ -1323,6 +1465,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             theme = str(cue.get("p3_theme") or cue.get("title") or attempt.get("p3_theme") or "general speaking")
             prior_answer = turn.get("transcript_cleaned") or turn.get("transcript_raw") or ""
             append_p3_turns(self.state, attempt, theme, str(prior_answer), "p2_answer")
+        insert_p1_identity_follow_up(self.state, attempt, turn)
         next_turn = self.next_turn(attempt, turn_id)
         adapt_p3_follow_up(self.state, attempt, turn, next_turn)
         if next_turn:

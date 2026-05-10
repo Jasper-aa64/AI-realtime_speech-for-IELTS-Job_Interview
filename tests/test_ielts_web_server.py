@@ -111,6 +111,21 @@ class IELTSWebServerTest(unittest.TestCase):
         attempt = self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"})
         self.assertEqual(attempt["part"], "p1")
         self.assertEqual(len(attempt["turns"]), 10)
+        self.assertEqual(attempt["turns"][0]["question"], "What is your full name?")
+        self.assertEqual(attempt["turns"][0]["prompt"]["flow"], "intro")
+        self.assertEqual(attempt["turns"][0]["prompt"]["role"], "name")
+        self.assertEqual(attempt["turns"][1]["question"], "Do you work, study at university, or go to school?")
+        self.assertEqual(attempt["turns"][1]["prompt"]["flow"], "intro")
+        self.assertEqual(attempt["turns"][1]["prompt"]["role"], "work_study")
+        ordinary_questions = [turn["question"].lower() for turn in attempt["turns"][2:]]
+        scattered_work_study = [
+            "do you work or are you a full-time student?",
+            "are you a student or do you work?",
+            "do you work or study?",
+            "what subject are you studying or what did you study?",
+        ]
+        for question in ordinary_questions:
+            self.assertNotIn(question, scattered_work_study)
         self.assertEqual(attempt["turns"][0]["timers"]["prep_seconds"], 3)
         self.assertEqual(attempt["turns"][0]["examiner_behavior"], "auto_play_question")
         self.assertEqual(attempt["turns"][0]["examiner_tts"]["status"], "fallback")
@@ -119,18 +134,44 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("Complete all speaking turns", payload["error"])
 
-        for turn in attempt["turns"]:
+        initial_turn_ids = {turn["id"] for turn in attempt["turns"]}
+        turn = attempt["turns"][0]
+        completed = None
+        completed_ids = []
+        while turn:
             self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
-            completed = self.post_json(
-                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
-                {
-                    "transcript_raw": (
+            transcript = (
+                "I study computer science at university because I enjoy solving practical problems."
+                if (turn.get("prompt") or {}).get("role") == "work_study"
+                else (
+                    "I chose that major because it connects logical thinking with useful real-world tools."
+                    if (turn.get("prompt") or {}).get("role") == "follow_up"
+                    else (
                         "I usually answer this question with one reason and one example "
                         "because that makes my speaking clearer."
                     )
-                },
+                )
             )
+            completed = self.post_json(
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                {"transcript_raw": transcript},
+            )
+            completed_ids.append(turn["id"])
+            if (turn.get("prompt") or {}).get("role") == "work_study":
+                follow_up = completed["next_turn"]
+                self.assertIsNotNone(follow_up)
+                self.assertNotIn(follow_up["id"], initial_turn_ids)
+                self.assertEqual(follow_up["part"], "p1")
+                self.assertEqual(follow_up["prompt"]["flow"], "intro")
+                self.assertEqual(follow_up["prompt"]["role"], "follow_up")
+                self.assertEqual(follow_up["prompt"]["after_role"], "work_study")
+                self.assertFalse(follow_up["prompt"]["counts_toward_total"])
+                self.assertEqual(follow_up["total"], 10)
+                self.assertIn("major", follow_up["question"].lower())
+                self.assertEqual(len(completed["attempt"]["turns"]), 11)
+            turn = completed["next_turn"]
         self.assertIsNone(completed["next_turn"])
+        self.assertEqual(len(completed_ids), 11)
 
         scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {})
         self.assertEqual(scored["status"], "scored")
@@ -231,21 +272,31 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertFalse(any(turn["part"] == "p3" for turn in attempt["turns"]))
 
         completed = None
-        for turn in attempt["turns"]:
+        turn = attempt["turns"][0]
+        while turn and turn.get("part") != "p3":
             self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
-            completed = self.post_json(
-                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
-                {
-                    "transcript_raw": (
+            transcript = (
+                "I study mathematics at university because I want to become a teacher."
+                if (turn.get("prompt") or {}).get("role") == "work_study"
+                else (
+                    "The most interesting part is learning how abstract ideas can solve practical problems."
+                    if (turn.get("prompt") or {}).get("role") == "follow_up"
+                    else (
                         "I would answer with a clear reason and an example from my everyday life "
                         "so the examiner can follow my idea."
                     )
-                },
+                )
             )
+            completed = self.post_json(
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                {"transcript_raw": transcript},
+            )
+            turn = completed["next_turn"]
         self.assertIsNotNone(completed)
         updated = completed["attempt"]
         self.assertEqual(updated["p3_generation_source"], "p2_answer")
-        self.assertEqual(len(updated["turns"]), 21)
+        self.assertEqual(len(updated["turns"]), 22)
+        self.assertEqual(len([turn for turn in updated["turns"] if turn["part"] == "p1"]), 11)
         self.assertEqual(len([turn for turn in updated["turns"] if turn["part"] == "p3"]), 10)
         self.assertEqual(completed["next_turn"]["part"], "p3")
 
@@ -396,9 +447,10 @@ class IELTSWebServerTest(unittest.TestCase):
             return json.loads(response.read().decode("utf-8"))
 
     def complete_and_score_attempt(self, attempt):
-        for turn in attempt["turns"]:
+        turn = attempt["turns"][0]
+        while turn:
             self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
-            self.post_json(
+            completed = self.post_json(
                 f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
                 {
                     "transcript_raw": (
@@ -407,6 +459,7 @@ class IELTSWebServerTest(unittest.TestCase):
                     )
                 },
             )
+            turn = completed["next_turn"]
         return self.post_json(f"/api/attempts/{attempt['id']}/score", {})
 
     def test_api_errors_are_json(self):
