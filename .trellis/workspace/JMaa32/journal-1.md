@@ -107,3 +107,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: IELTS UI wording and readability cleanup
+
+**Date**: 2026-05-10
+**Task**: IELTS UI wording and readability cleanup
+**Branch**: `main`
+
+### Summary
+
+Improved IELTS Web UI readability, fixed China-facing explanation wording, clarified pronunciation estimate copy, and recorded spec conventions for natural Chinese guidance and dark-tone sidebar contrast.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c0a810a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
