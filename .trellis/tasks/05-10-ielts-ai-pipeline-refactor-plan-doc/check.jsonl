@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Verify the plan preserves a single official IELTS scoring source and treats local explanation as guidance."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Verify the plan's report guidance wording fits existing frontend conventions."}
+{"file": "docs/IELTS_AI_PIPELINE_REFACTOR_PLAN.md", "reason": "Review the final Chinese implementation plan and acceptance checklist."}

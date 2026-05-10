@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Keep scoring, AI guidance, and China-facing explanation contracts separated in the plan."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Keep report wording and guidance presentation aligned with existing frontend conventions."}
+{"file": "docs/IELTS_SCORING_ISSUES_AND_PROMPT_PLAN.md", "reason": "Existing scoring and prompt issue log that this unified AI pipeline plan builds on."}
+{"file": "docs/IELTS_CLI_NEXT_STEPS.md", "reason": "Existing CLI implementation plan contains legacy Claude references that the new plan supersedes."}
