@@ -24,6 +24,24 @@ report["china_explanation"] = build_china_explanation(score, pronunciation)
 
 **Related**: Frontend report rendering should display the explanation block as guidance, not as a band conversion.
 
+### Convention: Keep local explanation natural and rubric-bound
+
+**What**: `build_china_explanation()` should write plain Chinese that sounds like product copy for domestic learners, while still describing the official IELTS Speaking rubric.
+
+**Why**: Literal labels like `中国语境解释`, `Common weak points`, or blunt fallbacks like `暂无` make the report sound mechanical. That weakens trust even when the score itself is correct.
+
+**Example**:
+```python
+return {
+    "title": "中文说明",
+    "official_note": "本项目始终按官方 IELTS Speaking rubric 评分；这里的中文说明只是把结果翻成更适合中国考生阅读的练习反馈，不代表另一套国内分数体系。",
+    "weak_points": ["回答容易停顿或重复，先把一个观点说完整。"],
+    "next_steps": ["每个问题都先用一句直接回答开头。"],
+}
+```
+
+**Related**: Keep `ielts_score` as the single official band source; use `china_explanation` only for guidance wording.
+
 ---
 
 ## Guidelines Index

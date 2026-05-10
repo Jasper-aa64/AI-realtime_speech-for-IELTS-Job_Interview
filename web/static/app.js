@@ -159,7 +159,7 @@ function resetPracticeSurface() {
   setPromptHtml("Start a voice practice session to load a question.", "short");
   text("followUp", "");
   setRecordButton("ready", "Start", "Record the full section. No typing.");
-  text("recordStatus", "???????????...");
+  text("recordStatus", "点击开始录音，系统会自动加载题目。");
 }
 
 function setRecordButton(status, title, hint) {
@@ -226,10 +226,10 @@ function renderTurn(turn) {
   const isFollowUp = turn.prompt?.role === "follow_up";
   if (turn.part === "p3") $("p3TopicPanel").classList.add("hidden");
   const questionNumber = Number(turn.index ?? 0) + 1;
-  text("progressTrack", state.view === "mock" ? "Mock practice: P1 ? P2 ? P3" : `${viewCopy[state.view][0]} ready`);
+  text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
   const progress = isFollowUp
-    ? `${partLabel} ? Follow-up after Question ${questionNumber}/${turn.total}`
-    : `${partLabel} ? Question ${questionNumber}/${turn.total}`;
+    ? `${partLabel} -> Follow-up after Question ${questionNumber}/${turn.total}`
+    : `${partLabel} -> Question ${questionNumber}/${turn.total}`;
   text("phaseLabel", progress);
   text("promptKicker", isP2 ? "Cue card" : (isFollowUp ? "Follow-up" : "Question"));
   text("followUp", isFollowUp ? "Follow-up question" : "");
@@ -299,10 +299,10 @@ function beginExaminerPhase() {
   preloadNextExaminerAudio(turn);
   setRecordButton("examiner_playing", "Listening...", "The examiner is asking the question.");
   const progress = isFollowUp
-    ? `${turn.part.toUpperCase()} ? Follow-up after Question ${questionNumber}/${turn.total}`
-    : `${turn.part.toUpperCase()} ? Question ${questionNumber}/${turn.total}`;
-  text("progressTrack", state.view === "mock" ? "Mock practice: P1 ? P2 ? P3" : `${viewCopy[state.view][0]} ready`);
-  text("phaseLabel", `${progress} ? Examiner`);
+    ? `${turn.part.toUpperCase()} -> Follow-up after Question ${questionNumber}/${turn.total}`
+    : `${turn.part.toUpperCase()} -> Question ${questionNumber}/${turn.total}`;
+  text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
+  text("phaseLabel", `${progress} -> Examiner`);
   text("timerValue", "00:00");
   $("phaseMeter").style.width = "0%";
   text("recordStatus", isP2
@@ -346,7 +346,7 @@ function beginPreparation() {
   const seconds = state.currentTurn?.timers?.prep_seconds || 3;
   const isP2 = state.currentTurn?.part === "p2";
   setRecordButton("preparing", isP2 ? "Skip" : "Prepare", isP2 ? "Click to start recording now." : "Recording starts automatically.");
-  text("phaseLabel", `Preparing ? ${state.currentTurn.part.toUpperCase()} ${state.currentTurn.index + 1}/${state.currentTurn.total}`);
+  text("phaseLabel", `Preparing -> ${state.currentTurn.part.toUpperCase()} ${state.currentTurn.index + 1}/${state.currentTurn.total}`);
   text("recordStatus", isP2 ? "Prepare your answer. Click to start recording early." : `Prepare your answer. Recording starts in ${seconds} seconds.`);
   startCountdown(seconds, "Preparing", () => startRecording().catch(showError));
 }
@@ -382,7 +382,7 @@ function updateTimer(label) {
   const remaining = Math.max(0, state.timerRemaining);
   const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
   const seconds = String(remaining % 60).padStart(2, "0");
-  text("phaseLabel", `${label} ? ${minutes}:${seconds}`);
+  text("phaseLabel", `${label} -> ${minutes}:${seconds}`);
   text("timerValue", `${minutes}:${seconds}`);
   const elapsed = Math.max(0, state.timerTotal - remaining);
   $("phaseMeter").style.width = `${Math.min(100, (elapsed / state.timerTotal) * 100)}%`;
@@ -673,7 +673,7 @@ function renderHistoryList(items) {
     <button class="history-item ${toneClass} ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
       <div class="history-item-top">
         <span class="history-item-tag ${tagClass}">${escapeHtml(part.toUpperCase())}</span>
-        <span class="history-item-band">Band ${escapeHtml(item.overall_band ?? "?")}</span>
+        <span class="history-item-band">Band ${escapeHtml(item.overall_band ?? "—")}</span>
       </div>
       <strong class="history-item-title">${escapeHtml(item.title || item.question || "Untitled")}</strong>
       <small class="history-item-time">${escapeHtml(item.display_time || "")}</small>
@@ -744,21 +744,25 @@ function renderDetail(attempt, updateView = true) {
 function chinaExplanationBlock(item = {}) {
   const weakPoints = (item.weak_points || []).map((value) => `<li>${renderMarkdown(value)}</li>`).join("");
   const nextSteps = (item.next_steps || []).map((value) => `<li>${renderMarkdown(value)}</li>`).join("");
+  const summary = item.summary || "中文说明会把官方 IELTS Speaking rubric 的结果转成更适合练习复盘的反馈。";
+  const officialNote = item.official_note || "本项目始终以官方 IELTS Speaking rubric 作为唯一评分来源；中文说明不构成独立评分体系。";
+  const pronunciationNote = item.pronunciation_note || "发音反馈用于练习参考，不是官方考官评分。";
+  const localContext = item.local_context || "先把回答说完整，再逐步提升词汇变化、语法准确性和发音稳定性。";
   return `
     <div class="detail-section china-explanation">
-      <h3>${escapeHtml(item.title || "中国语境解释")}</h3>
-      <p class="feedback">${renderMarkdown(item.summary || "")}</p>
-      <p class="muted">${escapeHtml(item.official_note || "")}</p>
-      <p class="muted">${escapeHtml(item.pronunciation_note || "")}</p>
-      <p class="muted">${escapeHtml(item.local_context || "")}</p>
+      <h3>${escapeHtml(item.title || "中文说明")}</h3>
+      <p class="feedback">${renderMarkdown(summary)}</p>
+      <p class="muted">${escapeHtml(officialNote)}</p>
+      <p class="muted">${escapeHtml(pronunciationNote)}</p>
+      <p class="muted">${escapeHtml(localContext)}</p>
       <div class="criteria-grid">
         <article class="criterion">
-          <h4>Common weak points</h4>
-          <ul>${weakPoints || "<li>暂无</li>"}</ul>
+          <h4>常见短板</h4>
+          <ul>${weakPoints || "<li>暂未发现明显短板</li>"}</ul>
         </article>
         <article class="criterion">
-          <h4>Next steps</h4>
-          <ul>${nextSteps || "<li>暂无</li>"}</ul>
+          <h4>下一步建议</h4>
+          <ul>${nextSteps || "<li>先把回答说完整，再逐步增加例子和衔接</li>"}</ul>
         </article>
       </div>
     </div>
@@ -773,7 +777,7 @@ function partScoreBlock(part, item = {}) {
         ${scoreCell("FC", item.fluency_coherence)}
         ${scoreCell("LR", item.lexical_resource)}
         ${scoreCell("GRA", item.grammatical_range)}
-        ${scoreCell("Pron", item.pronunciation_estimate ?? "Not assessed")}
+        ${scoreCell("发音", item.pronunciation_estimate ?? "暂未评估")}
       </div>
     </div>
   `;
@@ -912,7 +916,7 @@ function stopAllRuntime(label = "Ready") {
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("exitPractice")?.classList.add("hidden");
   setRecordButton("ready", label, "Record the full section. No typing.");
-  text("recordStatus", "Microphone will be requested when recording starts.");
+  text("recordStatus", "点击开始录音，系统会自动加载题目。");
   updateSidebarLock();
 }
 

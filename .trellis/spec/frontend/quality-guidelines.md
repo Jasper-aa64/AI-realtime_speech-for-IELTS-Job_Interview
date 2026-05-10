@@ -149,6 +149,11 @@ await api("/api/score", {
 - Treat critical runtime bindings in `bindEvents()` as optional-safe when the
   target node may be missing in a partial render, so a single absent control
   does not prevent the rest of the page from initializing.
+- Keep dark tone navigation readable: if a tone is intentionally near-black
+  (for example Mock), increase contrast with text and borders so it remains
+  legible against the black sidebar.
+- Replace placeholder or garbled initial status text with a natural sentence
+  before shipping; visible `????` / broken fallback text is a release blocker.
 
 ---
 

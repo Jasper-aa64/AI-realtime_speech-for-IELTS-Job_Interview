@@ -1319,7 +1319,6 @@ def build_part_scores(attempt: dict[str, Any], score: dict[str, Any], pronunciat
 
 def build_china_explanation(score: dict[str, Any], pronunciation: dict[str, Any]) -> dict[str, Any]:
     overall = score.get("overall_band")
-    overall_text = f"Band {overall:g}" if isinstance(overall, (int, float)) else "Band ?"
     fluency = float(score.get("fluency_coherence") or 0.0)
     lexical = float(score.get("lexical_resource") or 0.0)
     grammar = float(score.get("grammatical_range") or 0.0)
@@ -1346,20 +1345,21 @@ def build_china_explanation(score: dict[str, Any], pronunciation: dict[str, Any]
     if not weak_points:
         weak_points.append("整体已经比较稳定，重点放在更自然的展开和更丰富的例子。")
     if not next_steps:
-        next_steps.append("继续按官方 IELTS rubric 训练四个维度，不要把中国语境误解成独立评分体系。")
+        next_steps.append("继续按官方 IELTS Speaking rubric 训练四个维度，不要把中国语境误解成独立评分体系。")
 
-    band_comment = "这次结果仍然按官方 IELTS Speaking rubric 计算。中文解释只是在帮助中国考生理解这个 band 的表现。"
+    band_comment = "这次结果仍然只按官方 IELTS Speaking rubric 计算。中文说明只是帮助中国考生理解这个 band 的表现。"
     if isinstance(overall, (int, float)):
+        overall_text = f"Band {overall:g}"
         if overall >= 7.0:
-            band_comment = f"按官方 IELTS Speaking rubric，这次大致在 {overall_text}。中国语境下，可以理解为你已经能比较自然地展开观点，但还可以把细节和衔接做得更稳。"
+            band_comment = f"按官方 IELTS Speaking rubric，本次唯一分数来源为 {overall_text}。中文语境下，可以理解为你已经能比较自然地展开观点，但还可以把细节和衔接做得更稳。"
         elif overall >= 6.0:
-            band_comment = f"按官方 IELTS Speaking rubric，这次大致在 {overall_text}。中国语境下，通常意味着你能完成回答，但展开深度、词汇变化或语法稳定性还有提升空间。"
+            band_comment = f"按官方 IELTS Speaking rubric，本次唯一分数来源为 {overall_text}。中文语境下，通常意味着你能完成回答，但展开深度、词汇变化或语法稳定性还有提升空间。"
         else:
-            band_comment = f"按官方 IELTS Speaking rubric，这次大致在 {overall_text}。中国语境下，通常意味着你已经能回答问题，但还容易短、散、重复，先把回答说完整更重要。"
+            band_comment = f"按官方 IELTS Speaking rubric，本次唯一分数来源为 {overall_text}。中文语境下，通常意味着你已经能回答问题，但还容易短、散、重复，先把回答说完整更重要。"
 
     return {
-        "title": "中国语境解释",
-        "official_note": "本项目始终以官方 IELTS Speaking rubric 为准；中文说明只用于帮助理解，不构成独立评分体系。",
+        "title": "中文说明",
+        "official_note": "本项目始终以官方 IELTS Speaking rubric 作为唯一评分来源；中文说明只用于帮助理解，不构成独立评分体系。",
         "summary": band_comment,
         "weak_points": weak_points[:3],
         "next_steps": next_steps[:3],

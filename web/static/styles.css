@@ -114,14 +114,14 @@ h1, h2, h3, h4, p { margin: 0; }
 }
 
 :root {
-  --tone-mock-bg: rgba(18, 24, 28, 0.95);
-  --tone-mock-fg: #f3f4f6;
-  --tone-mock-surface: #eef0f2;
-  --tone-mock-border: #111827;
-  --tone-p1-bg: rgba(6, 95, 70, 0.95);
-  --tone-p1-fg: #d1fae5;
-  --tone-p1-surface: #e6f7f4;
-  --tone-p1-border: #0f766e;
+  --tone-mock-bg: #2b3440;
+  --tone-mock-fg: #ffffff;
+  --tone-mock-surface: #f3f5f7;
+  --tone-mock-border: #92a0ab;
+  --tone-p1-bg: rgba(34, 197, 94, 0.92);
+  --tone-p1-fg: #ffffff;
+  --tone-p1-surface: #ecfdf3;
+  --tone-p1-border: #16a34a;
   --tone-p2-bg: rgba(30, 64, 175, 0.95);
   --tone-p2-fg: #dbeafe;
   --tone-p2-surface: #e8efff;
@@ -140,12 +140,15 @@ h1, h2, h3, h4, p { margin: 0; }
 
 .nav-button.tone-mock {
   color: var(--tone-mock-fg);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .nav-button.tone-mock.active,
 .nav-button.tone-mock:hover {
   background: var(--tone-mock-bg);
   border-color: var(--tone-mock-border);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .nav-button.tone-p1.active,
