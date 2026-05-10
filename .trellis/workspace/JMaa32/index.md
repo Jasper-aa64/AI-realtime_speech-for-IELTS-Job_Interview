@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-05-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~142 | Active |
+| `journal-1.md` | ~177 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-05-10 | Implement IELTS docs 1.1-1.4 | `e1ab8ad`, `028eafc`, `d98b17e` | `main` |
 | 4 | 2026-05-10 | IELTS UI wording and readability cleanup | `c0a810a` | `main` |
 | 3 | 2026-05-08 | Scorer 多后端 + codex exec 修 bug | `fccc1af`, `a3ca973` | `main` |
 | 2 | 2026-05-08 | 修复 stdin 缓冲区污染主菜单 bug | `22a20c9` | `main` |

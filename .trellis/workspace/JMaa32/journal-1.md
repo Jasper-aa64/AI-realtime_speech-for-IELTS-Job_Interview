@@ -140,3 +140,38 @@ Improved IELTS Web UI readability, fixed China-facing explanation wording, clari
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Implement IELTS docs 1.1-1.4
+
+**Date**: 2026-05-10
+**Task**: Implement IELTS docs 1.1-1.4
+**Branch**: `main`
+
+### Summary
+
+Implemented IELTS China-facing scoring guidance, weak-question training persistence/replay APIs, local Codex usage billing ledger, UI settings surfaces, tests, and related code-spec contracts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e1ab8ad` | (see git log) |
+| `028eafc` | (see git log) |
+| `d98b17e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
