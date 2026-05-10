@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Verify score/explanation separation and natural local guidance"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify Web API contracts, history/report gates, and test coverage"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Verify frontend explanation rendering remains guidance, not scoring"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify frontend remains usable and syntax-valid"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Check cross-layer consistency for API/data/UI/billing flows"}
+{"file": "docs/IELTS_CHINA_SCORING_STANDARD_1_1.md", "reason": "Check implemented 1.1 behavior against documented requirements"}
+{"file": "docs/IELTS_ADAPTIVE_WEAK_QUESTION_TRAINING_1_3.md", "reason": "Check implemented weak-question behavior against documented requirements"}
+{"file": "docs/CODEX_TOKEN_BILLING_BALANCE_DEDUCTION_1_4.md", "reason": "Check billing implementation against ledger and settlement requirements"}
