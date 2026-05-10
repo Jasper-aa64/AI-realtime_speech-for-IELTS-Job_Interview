@@ -36,7 +36,13 @@ const viewCopy = {
   settings: ["Settings", "Server-side AI, TTS, and speech configuration."],
 };
 
-const $ = (selector) => document.querySelector(selector);
+const $ = (selector) => {
+  if (typeof selector !== "string") return null;
+  if (selector.startsWith("#") || selector.startsWith(".") || selector.startsWith("[") || selector.includes(" ") || selector.includes(">") || selector.includes(":")) {
+    return document.querySelector(selector);
+  }
+  return document.getElementById(selector) || document.querySelector(selector);
+};
 const text = (id, value) => { document.getElementById(id).textContent = value; };
 const byId = (id) => document.getElementById(id);
 
@@ -132,19 +138,20 @@ function resetPracticeSurface() {
   state.attempt = null;
   state.currentTurn = null;
   state.transcript = "";
-  $("#candidateAudio").classList.add("hidden");
-  $("#examinerAudio").classList.add("hidden");
-  $("#browserTtsFallback").classList.add("hidden");
-  $("#cueTop").classList.add("hidden");
-  $("#promptPane").classList.remove("hidden");
-  $("#p3TopicPanel").classList.toggle("hidden", state.view !== "p3");
-  $("#practiceGrid").classList.remove("p2-mode", "practice-enter");
-  $("#practiceGrid").classList.toggle("hidden", state.view === "p3");
-  $("#summaryPanel").classList.add("hidden");
-  $("#summaryPanel").innerHTML = "";
-  $("#exitPractice").classList.add("hidden");
+  const summaryPanel = $("#summaryPanel");
+  $("#candidateAudio")?.classList.add("hidden");
+  $("#examinerAudio")?.classList.add("hidden");
+  $("#browserTtsFallback")?.classList.add("hidden");
+  $("#cueTop")?.classList.add("hidden");
+  $("#promptPane")?.classList.remove("hidden");
+  $("#p3TopicPanel")?.classList.toggle("hidden", state.view !== "p3");
+  $("#practiceGrid")?.classList.remove("p2-mode", "practice-enter");
+  $("#practiceGrid")?.classList.toggle("hidden", state.view === "p3");
+  summaryPanel?.classList.add("hidden");
+  if (summaryPanel) summaryPanel.innerHTML = "";
+  $("#exitPractice")?.classList.add("hidden");
   updateSidebarLock();
-  text("progressTrack", state.view === "mock" ? "Mock practice: P1 ? P2 ? P3" : `${viewCopy[state.view][0]} ready`);
+  text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
   text("phaseLabel", "Ready");
   text("timerValue", "00:00");
   $("#phaseMeter").style.width = "0%";
@@ -620,7 +627,7 @@ function renderSummary(attempt) {
   if (!summaryPanel) return;
   summaryPanel.classList.remove("hidden");
   summaryPanel.innerHTML = `
-    <div class="score-row">
+      <div class="score-row">
       ${scoreCell("Overall", score.overall_band)}
       ${scoreCell("Fluency", score.fluency_coherence)}
       ${scoreCell("Lexical", score.lexical_resource)}
@@ -640,7 +647,7 @@ function renderSummary(attempt) {
 }
 
 function scoreCell(label, value) {
-  return `<div class="score-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "?")}</strong></div>`;
+  return `<div class="score-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "—")}</strong></div>`;
 }
 
 async function loadHistory(showBusy = true) {
@@ -705,9 +712,9 @@ function renderDetail(attempt, updateView = true) {
       <div class="detail-header">
         <div>
           <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
-          <p class="muted">${escapeHtml(attempt.title || "")} ? ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
+          <p class="muted">${escapeHtml(attempt.title || "")} - ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
         </div>
-        <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "?")}</strong>
+        <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
       </div>
       <div class="score-row compact">
         ${scoreCell("FC", score.fluency_coherence)}
@@ -761,7 +768,7 @@ function chinaExplanationBlock(item = {}) {
 function partScoreBlock(part, item = {}) {
   return `
     <div class="part-score-block">
-      <div class="part-score-band">Band ${escapeHtml(item.band ?? "?")}</div>
+      <div class="part-score-band">Band ${escapeHtml(item.band ?? "—")}</div>
       <div class="score-row mini">
         ${scoreCell("FC", item.fluency_coherence)}
         ${scoreCell("LR", item.lexical_resource)}
@@ -865,7 +872,7 @@ function criterionBlock(title, item = {}) {
   const advice = item.advice || item.suggestion || "";
   return `
     <article class="criterion">
-      <h4>${escapeHtml(title)} - Band ${escapeHtml(item.band ?? "?")}</h4>
+      <h4>${escapeHtml(title)} - Band ${escapeHtml(item.band ?? "—")}</h4>
       <strong>Standard</strong><p>${renderMarkdown(standard)}</p>
       <strong>Focus</strong><p>${renderMarkdown(focus)}</p>
       <strong>Advice</strong><p>${renderMarkdown(advice)}</p>
@@ -893,16 +900,17 @@ function stopAllRuntime(label = "Ready") {
   state.transcriptInterim = "";
   state.transcriptStatus = "missing";
   state.practiceLocked = false;
-  $("examinerAudio").pause();
-  $("examinerAudio").removeAttribute("src");
-  $("browserTtsFallback").classList.add("hidden");
-  $("cueTop").classList.add("hidden");
-  $("promptPane").classList.remove("cue");
-  $("promptPane").classList.add("hidden");
-  $("practiceGrid").classList.remove("p2-mode", "practice-enter");
-  $("summaryPanel").classList.add("hidden");
-  $("summaryPanel").innerHTML = "";
-  $("exitPractice").classList.add("hidden");
+  const summaryPanel = $("#summaryPanel");
+  $("examinerAudio")?.pause();
+  $("examinerAudio")?.removeAttribute("src");
+  $("browserTtsFallback")?.classList.add("hidden");
+  $("cueTop")?.classList.add("hidden");
+  $("promptPane")?.classList.remove("cue");
+  $("promptPane")?.classList.add("hidden");
+  $("practiceGrid")?.classList.remove("p2-mode", "practice-enter");
+  summaryPanel?.classList.add("hidden");
+  if (summaryPanel) summaryPanel.innerHTML = "";
+  $("exitPractice")?.classList.add("hidden");
   setRecordButton("ready", label, "Record the full section. No typing.");
   text("recordStatus", "Microphone will be requested when recording starts.");
   updateSidebarLock();
@@ -945,7 +953,7 @@ function bindEvents() {
       switchView(button.dataset.view);
     });
   });
-  $("recordControl").addEventListener("click", () => {
+  $("recordControl")?.addEventListener("click", () => {
     if (state.status === "recording") {
       stopRecording();
     } else if (state.status === "preparing") {
@@ -959,8 +967,8 @@ function bindEvents() {
       }
     }
   });
-  $("exitPractice").addEventListener("click", () => exitPractice());
-  $("p3StartButton").addEventListener("click", () => startPractice());
+  $("exitPractice")?.addEventListener("click", () => exitPractice());
+  $("p3StartButton")?.addEventListener("click", () => startPractice());
   document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
     button.addEventListener("click", () => {
       state.p3Intensity = button.dataset.p3Intensity || "normal";
@@ -969,7 +977,7 @@ function bindEvents() {
       });
     });
   });
-  $("p3TopicChips").addEventListener("click", (event) => {
+  $("p3TopicChips")?.addEventListener("click", (event) => {
     const chip = event.target.closest("[data-p3-topic]");
     if (!chip) return;
     state.p3SelectedTopic = chip.dataset.p3Topic || "";
@@ -995,7 +1003,7 @@ async function init() {
   switchView("mock");
   try {
     const summary = await api("/api/question-bank/summary");
-    text("bankStatus", `${summary.part1_count} P1 ? ${summary.part2_count} P2`);
+    text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);
     renderP3TopicChips(summary.part2_themes || []);
   } catch (error) {
     text("bankStatus", error.message);

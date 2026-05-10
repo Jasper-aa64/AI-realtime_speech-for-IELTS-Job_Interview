@@ -143,6 +143,12 @@ await api("/api/score", {
   resurrect the old attempt UI.
 - Use defensive API parsing in the frontend; assume errors may be non-JSON or
   malformed.
+- Use an id-aware DOM helper for the IELTS web UI: if a helper like `$()`
+  accepts a bare token, it must resolve ids via `getElementById()` before
+  falling back to `querySelector()`.
+- Treat critical runtime bindings in `bindEvents()` as optional-safe when the
+  target node may be missing in a partial render, so a single absent control
+  does not prevent the rest of the page from initializing.
 
 ---
 
