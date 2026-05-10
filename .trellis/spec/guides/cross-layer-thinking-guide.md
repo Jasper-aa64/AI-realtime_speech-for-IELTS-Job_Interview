@@ -77,6 +77,7 @@ Before implementation:
 - [ ] Identified all layer boundaries
 - [ ] Defined format at each boundary
 - [ ] Decided where validation happens
+- [ ] Confirmed that any explanation layer is not being treated as a scoring source
 
 After implementation:
 - [ ] Tested with edge cases (null, empty, invalid)

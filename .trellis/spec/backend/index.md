@@ -8,6 +8,22 @@
 
 This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
 
+## Project Conventions
+
+### Convention: Keep IELTS scoring and local explanation separate
+
+**What**: The backend may emit a `china_explanation` block in scored reports, but the official IELTS score stays in `ielts_score`.
+
+**Why**: This prevents a local-language explanation layer from being mistaken for a second scoring system.
+
+**Example**:
+```python
+report["ielts_score"] = score
+report["china_explanation"] = build_china_explanation(score, pronunciation)
+```
+
+**Related**: Frontend report rendering should display the explanation block as guidance, not as a band conversion.
+
 ---
 
 ## Guidelines Index

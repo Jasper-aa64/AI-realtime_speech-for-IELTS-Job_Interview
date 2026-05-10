@@ -102,6 +102,14 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("overall_band", payload["score"])
         self.assertEqual(payload["report"]["candidate"], "jasper")
 
+    def test_overall_band_rounds_to_nearest_half(self):
+        from ielts_server import rounded_overall  # noqa: E402
+
+        self.assertEqual(rounded_overall({"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.0, "pronunciation_estimate": 6.24}), 6.0)
+        self.assertEqual(rounded_overall({"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.0, "pronunciation_estimate": 7.0}), 6.5)
+        self.assertEqual(rounded_overall({"fluency_coherence": 6.5, "lexical_resource": 6.5, "grammatical_range": 6.5, "pronunciation_estimate": 6.75}), 6.5)
+        self.assertEqual(rounded_overall({"fluency_coherence": 6.5, "lexical_resource": 6.5, "grammatical_range": 7.0, "pronunciation_estimate": 7.0}), 7.0)
+
     def test_p3_generation_falls_back_without_server_cli_env(self):
         payload = self.post_json("/api/p3/questions", {"theme": "technology_and_society"})
         self.assertEqual(payload["backend"], "fallback")
@@ -190,6 +198,11 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertTrue(scored["turns"][0]["ai_coaching"])
         self.assertTrue(scored["turns"][0]["upgrade_notes"])
         self.assertIn("model_audio", scored["turns"][0])
+        self.assertIn("estimate", scored["criteria_feedback"]["pronunciation"]["focus"].lower())
+        self.assertIn("estimate", scored["criteria_feedback"]["pronunciation"]["problems"][0].lower())
+        self.assertIn("china_explanation", scored)
+        self.assertIn("官方 IELTS Speaking rubric", scored["china_explanation"]["official_note"])
+        self.assertTrue(scored["china_explanation"]["weak_points"])
 
         history = self.get_json("/api/history")
         self.assertTrue(any(item["id"] == attempt["id"] for item in history["items"]))
@@ -270,6 +283,8 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("neighbour who helped me", scored_turn["transcript_markdown"])
         self.assertIn("Band 7 version", scored_turn["ai_coaching"])
         self.assertIn("Describe", scored_turn["ai_coaching"])
+        self.assertEqual(scored["pronunciation"]["status"], "not_configured")
+        self.assertIsNone(scored["ielts_score"]["pronunciation_estimate"])
 
     def test_mock_p3_is_generated_after_p2_answer(self):
         attempt = self.post_json("/api/attempts/start", {"part": "mock", "mode": "mock"})
@@ -317,6 +332,11 @@ class IELTSWebServerTest(unittest.TestCase):
             self.assertIn("grammatical_range", scored["part_scores"][part])
             self.assertIn("pronunciation_estimate", scored["part_scores"][part])
         self.assertEqual(scored["part_scores"]["p1"]["part"], "p1")
+
+        detail = self.get_json(f"/api/history/{attempt['id']}")
+        self.assertIn("part_scores", detail)
+        self.assertEqual(["p1", "p2", "p3"], [part for part in ("p1", "p2", "p3") if part in detail["part_scores"]])
+        self.assertIn("cue_card", detail)
 
     def test_followup_turns_keep_audio_warning_and_badge_fields(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"})

@@ -8,6 +8,21 @@
 
 This directory contains guidelines for frontend development. Fill in each file with your project's specific conventions.
 
+## Project Conventions
+
+### Convention: Render local explanation as guidance, not scoring
+
+**What**: The frontend can render a `china_explanation` section in the report, but it must not present it as a separate band or alternate score.
+
+**Why**: Users need a Chinese explanation of the official IELTS result, not a second scoring system.
+
+**Example**:
+```js
+const chinaExplanation = attempt.china_explanation || {};
+```
+
+**Related**: Keep pronunciation estimate labels explicit when no audio analysis is available.
+
 ---
 
 ## Guidelines Index

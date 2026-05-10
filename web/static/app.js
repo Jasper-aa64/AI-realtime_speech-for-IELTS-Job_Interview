@@ -23,19 +23,22 @@ const state = {
   p3Topics: [],
   p3SelectedTopic: "",
   p3Intensity: "normal",
+  practiceLocked: false,
+  navToastTimer: null,
 };
 
 const viewCopy = {
-  mock: ["Mock", "P1, P2, and P3 in one voice-first exam flow."],
-  p1: ["Part 1", "10 short questions. Report appears after the full section."],
-  p2: ["Part 2", "Cue card, one-minute preparation, two-minute long turn."],
-  p3: ["Part 3", "Choose a topic, then run a normal or high-intensity discussion."],
+  mock: ["Mock", "Practice flow: P1, P2, then P3 generated from your P2 answer."],
+  p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
+  p2: ["Part 2", "Cue card, one-minute preparation, then a long turn."],
+  p3: ["Part 3", "Discussion generated from your P2 answer with normal or high-intensity practice."],
   history: ["History", ""],
   settings: ["Settings", "Server-side AI, TTS, and speech configuration."],
 };
 
 const $ = (selector) => document.querySelector(selector);
 const text = (id, value) => { document.getElementById(id).textContent = value; };
+const byId = (id) => document.getElementById(id);
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -106,6 +109,10 @@ function switchView(view) {
   state.view = view;
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
+    button.classList.toggle("tone-mock", button.dataset.view === "mock");
+    button.classList.toggle("tone-p1", button.dataset.view === "p1");
+    button.classList.toggle("tone-p2", button.dataset.view === "p2");
+    button.classList.toggle("tone-p3", button.dataset.view === "p3");
   });
   $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
   $("#historyPanel").classList.toggle("hidden", view !== "history");
@@ -120,6 +127,7 @@ function switchView(view) {
 }
 
 function resetPracticeSurface() {
+  state.practiceLocked = false;
   state.status = "idle";
   state.attempt = null;
   state.currentTurn = null;
@@ -136,7 +144,7 @@ function resetPracticeSurface() {
   $("#summaryPanel").innerHTML = "";
   $("#exitPractice").classList.add("hidden");
   updateSidebarLock();
-  text("progressTrack", state.view === "mock" ? "Mock: P1 → P2 → P3" : `${viewCopy[state.view][0]} ready`);
+  text("progressTrack", state.view === "mock" ? "Mock practice: P1 ? P2 ? P3" : `${viewCopy[state.view][0]} ready`);
   text("phaseLabel", "Ready");
   text("timerValue", "00:00");
   $("#phaseMeter").style.width = "0%";
@@ -144,7 +152,7 @@ function resetPracticeSurface() {
   setPromptHtml("Start a voice practice session to load a question.", "short");
   text("followUp", "");
   setRecordButton("ready", "Start", "Record the full section. No typing.");
-  text("recordStatus", "Microphone will be requested when recording starts.");
+  text("recordStatus", "???????????...");
 }
 
 function setRecordButton(status, title, hint) {
@@ -171,7 +179,9 @@ function promptSize(question) {
 async function startPractice() {
   const mode = state.view === "mock" ? "mock" : state.view;
   state.abortingAttemptId = null;
+  state.practiceLocked = true;
   $("#exitPractice").classList.remove("hidden");
+  updateSidebarLock();
   if (mode === "p3") revealP3PracticeGrid();
   setRecordButton("loading", "Loading...", "Preparing exam section.");
   try {
@@ -188,6 +198,8 @@ async function startPractice() {
     renderTurn(state.currentTurn);
     beginExaminerPhase();
   } catch (error) {
+    state.practiceLocked = false;
+    updateSidebarLock();
     showError(error);
   }
 }
@@ -205,16 +217,18 @@ function renderTurn(turn) {
   const partLabel = turn.part.toUpperCase();
   const isP2 = turn.part === "p2";
   const isFollowUp = turn.prompt?.role === "follow_up";
-  if (turn.part === "p3") $("#p3TopicPanel").classList.add("hidden");
+  if (turn.part === "p3") $("p3TopicPanel").classList.add("hidden");
   const questionNumber = Number(turn.index ?? 0) + 1;
-  text("progressTrack", isFollowUp
-    ? `${partLabel} · Follow-up after Question ${questionNumber}/${turn.total}`
-    : `${partLabel} · Question ${questionNumber}/${turn.total}`);
+  text("progressTrack", state.view === "mock" ? "Mock practice: P1 ? P2 ? P3" : `${viewCopy[state.view][0]} ready`);
+  const progress = isFollowUp
+    ? `${partLabel} ? Follow-up after Question ${questionNumber}/${turn.total}`
+    : `${partLabel} ? Question ${questionNumber}/${turn.total}`;
+  text("phaseLabel", progress);
   text("promptKicker", isP2 ? "Cue card" : (isFollowUp ? "Follow-up" : "Question"));
   text("followUp", isFollowUp ? "Follow-up question" : "");
-  $("#practiceGrid").classList.toggle("p2-mode", isP2);
-  $("#cueTop").classList.add("hidden");
-  $("#promptPane").classList.remove("hidden");
+  $("practiceGrid").classList.toggle("p2-mode", isP2);
+  $("cueTop").classList.add("hidden");
+  $("promptPane").classList.remove("hidden");
   renderExaminerAudio(turn);
   if (isP2 && turn.cue_card) {
     renderCueCardInPrompt(turn.cue_card);
@@ -239,8 +253,8 @@ function renderCueCardInPrompt(cue) {
 
 function renderCueTop(cue) {
   const bullets = (cue.bullets || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-  $("#cueTop").classList.remove("hidden");
-  $("#cueTop").innerHTML = `
+  $("cueTop").classList.remove("hidden");
+  $("cueTop").innerHTML = `
     <h2>${escapeHtml(cue.title)}</h2>
     <p class="cue-label">You should say:</p>
     <ul>${bullets}</ul>
@@ -250,11 +264,11 @@ function renderCueTop(cue) {
 
 function renderExaminerAudio(turn) {
   const tts = turn.examiner_tts || {};
-  $("#examinerAudio").classList.add("hidden");
-  $("#browserTtsFallback").classList.add("hidden");
+  $("examinerAudio").classList.add("hidden");
+  $("browserTtsFallback").classList.add("hidden");
   if (tts.audio_url) {
-    $("#examinerAudio").src = tts.audio_url;
-    $("#examinerAudio").load();
+    $("examinerAudio").src = tts.audio_url;
+    $("examinerAudio").load();
   }
 }
 
@@ -272,24 +286,25 @@ function beginExaminerPhase() {
   if (!state.currentTurn) return;
   clearTimer();
   const turn = state.currentTurn;
+  const isP2 = turn.part === "p2";
   const isFollowUp = turn.prompt?.role === "follow_up";
   const questionNumber = Number(turn.index ?? 0) + 1;
   preloadNextExaminerAudio(turn);
   setRecordButton("examiner_playing", "Listening...", "The examiner is asking the question.");
   const progress = isFollowUp
-    ? `${turn.part.toUpperCase()} · Follow-up after Question ${questionNumber}/${turn.total}`
-    : `${turn.part.toUpperCase()} · Question ${questionNumber}/${turn.total}`;
-  text("progressTrack", progress);
-  text("phaseLabel", `${progress} · Examiner`);
+    ? `${turn.part.toUpperCase()} ? Follow-up after Question ${questionNumber}/${turn.total}`
+    : `${turn.part.toUpperCase()} ? Question ${questionNumber}/${turn.total}`;
+  text("progressTrack", state.view === "mock" ? "Mock practice: P1 ? P2 ? P3" : `${viewCopy[state.view][0]} ready`);
+  text("phaseLabel", `${progress} ? Examiner`);
   text("timerValue", "00:00");
-  $("#phaseMeter").style.width = "0%";
-  text("recordStatus", turn.examiner_behavior === "auto_play_instruction_only"
+  $("phaseMeter").style.width = "0%";
+  text("recordStatus", isP2
     ? "Listen to the examiner instruction, then read the cue card during preparation."
     : isFollowUp
     ? "Listen to the examiner follow-up question. Preparation starts automatically."
     : "Listen to the examiner question. Preparation starts automatically.");
 
-  const audio = $("#examinerAudio");
+  const audio = $("examinerAudio");
   const tts = turn.examiner_tts || {};
   if (tts.audio_url) {
     audio.onended = () => beginPreparation();
@@ -324,8 +339,8 @@ function beginPreparation() {
   const seconds = state.currentTurn?.timers?.prep_seconds || 3;
   const isP2 = state.currentTurn?.part === "p2";
   setRecordButton("preparing", isP2 ? "Skip" : "Prepare", isP2 ? "Click to start recording now." : "Recording starts automatically.");
-  text("phaseLabel", `Preparing · ${state.currentTurn.part.toUpperCase()} ${state.currentTurn.index + 1}/${state.currentTurn.total}`);
-  text("recordStatus", isP2 ? `Prepare your answer (${seconds}s). Click to start recording early.` : `Prepare your answer. Recording starts in ${seconds} seconds.`);
+  text("phaseLabel", `Preparing ? ${state.currentTurn.part.toUpperCase()} ${state.currentTurn.index + 1}/${state.currentTurn.total}`);
+  text("recordStatus", isP2 ? "Prepare your answer. Click to start recording early." : `Prepare your answer. Recording starts in ${seconds} seconds.`);
   startCountdown(seconds, "Preparing", () => startRecording().catch(showError));
 }
 
@@ -360,10 +375,10 @@ function updateTimer(label) {
   const remaining = Math.max(0, state.timerRemaining);
   const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
   const seconds = String(remaining % 60).padStart(2, "0");
-  text("phaseLabel", `${label} · ${minutes}:${seconds}`);
+  text("phaseLabel", `${label} ? ${minutes}:${seconds}`);
   text("timerValue", `${minutes}:${seconds}`);
   const elapsed = Math.max(0, state.timerTotal - remaining);
-  $("#phaseMeter").style.width = `${Math.min(100, (elapsed / state.timerTotal) * 100)}%`;
+  $("phaseMeter").style.width = `${Math.min(100, (elapsed / state.timerTotal) * 100)}%`;
 }
 
 function clearTimer() {
@@ -378,6 +393,7 @@ function clearAutoNextTimeout() {
 
 async function startRecording() {
   if (!state.currentTurn) return;
+  state.status = "recording";
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   state.mediaStream = stream;
   state.audioChunks = [];
@@ -403,15 +419,16 @@ async function startRecording() {
   state.cancelRecording = false;
   startDictation();
   setRecordButton("recording", "Stop", "Recording. Press to finish early.");
-  text("recordStatus", "Recording your answer...");
+  text("recordStatus", "Recording in progress...");
   startRecordingTimer(state.currentTurn.timers.speak_seconds);
 }
 
 function stopRecording() {
   if (state.status !== "recording") return;
+  state.status = "processing";
   clearTimer();
   setRecordButton("processing", "Saving", "Uploading this answer.");
-  text("recordStatus", "正在保存本题录音与转写");
+  text("recordStatus", "Saving this answer...");
   stopDictation();
   if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
     state.mediaRecorder.stop();
@@ -458,26 +475,28 @@ async function finalizeTurn(mimeType) {
       state.currentTurn = null;
       await scoreAttempt();
     }
-  } catch (error) {
-    showError(error);
+  } finally {
+    state.audioChunks = [];
   }
 }
 
 async function scoreAttempt() {
   if (!state.attempt) return;
   const attemptId = state.attempt.id;
-  setRecordButton("scoring", "Analyzing", "正在分析整轮回答 / 正在评分 / 正在生成报告");
-  text("recordStatus", "正在分析整轮回答 / 正在评分 / 正在生成报告");
+  setRecordButton("scoring", "Analyzing", "Analyzing the full section and generating the report.");
+  text("recordStatus", "Analyzing the full section and generating the report.");
   try {
     const scored = await api(`/api/attempts/${attemptId}/score`, {});
     if (state.abortingAttemptId === attemptId || state.attempt?.id !== attemptId) return;
     state.attempt = scored;
     renderSummary(scored);
     await loadHistory(false);
+    state.practiceLocked = false;
+    updateSidebarLock();
+    state.status = "summary";
     setRecordButton("summary", "Start Again", "Record another section.");
     text("recordStatus", "Section report is ready.");
     text("phaseLabel", "Scored");
-    text("timerValue", "00:00");
     scrollToSummary();
   } catch (error) {
     showError(error);
@@ -485,126 +504,143 @@ async function scoreAttempt() {
 }
 
 function updateSidebarLock() {
-  const locked = !["idle", "summary"].includes(state.status);
+  const locked = !!state.practiceLocked;
   document.querySelectorAll(".nav-button").forEach((button) => {
-    button.disabled = locked;
+    button.disabled = false;
+    button.setAttribute("aria-disabled", locked ? "true" : "false");
     button.classList.toggle("locked", locked);
   });
-  $("#navLockHint").classList.toggle("hidden", !locked);
-  $("#viewTitleBlock").classList.toggle("locked-flow", locked);
-  $("#historyTopRail").classList.toggle("locked-flow", locked && state.view === "history");
+  const hint = $("navLockHint");
+  hint?.classList.add("hidden");
+  $("viewTitleBlock")?.classList.toggle("locked-flow", locked);
+  $("historyTopRail")?.classList.toggle("locked-flow", locked && state.view === "history");
+}
+
+function showNavLockHint(button) {
+  const hint = $("navLockHint");
+  if (!hint || !button) return;
+  const nav = button.closest(".nav");
+  if (!nav) return;
+  const buttonRect = button.getBoundingClientRect();
+  const navRect = nav.getBoundingClientRect();
+  hint.textContent = "Practice is active. Click the X to end it before switching views.";
+  hint.style.top = `${Math.max(12, buttonRect.top - navRect.top + buttonRect.height + 8)}px`;
+  hint.classList.remove("hidden", "toast-hide");
+  void hint.offsetWidth;
+  hint.classList.add("toast-show");
+  clearTimeout(state.navToastTimer);
+  state.navToastTimer = window.setTimeout(() => {
+    hint.classList.add("toast-hide");
+    hint.classList.remove("toast-show");
+  }, 1400);
+  window.setTimeout(() => {
+    hint.classList.add("hidden");
+  }, 2000);
 }
 
 function scrollToSummary() {
-  const panel = $("#summaryPanel");
-  panel.classList.remove("summary-highlight");
-  panel.scrollIntoView({ behavior: "smooth", block: "start" });
-  window.setTimeout(() => panel.classList.add("summary-highlight"), 120);
-  window.setTimeout(() => panel.classList.remove("summary-highlight"), 1700);
+  $("summaryPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function startDictation() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    state.transcript = "";
     state.transcriptStatus = "missing";
-    text("recordStatus", "Recording audio. Browser dictation unavailable; transcript may be incomplete.");
     return;
   }
-  state.recognition = new SpeechRecognition();
-  state.recognition.continuous = true;
-  state.recognition.interimResults = true;
-  state.recognition.lang = "en-US";
-  state.recognition.onresult = (event) => {
+  const recognition = new SpeechRecognition();
+  state.dictationRecognition = recognition;
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+  recognition.onresult = (event) => {
     let interim = "";
+    let finalText = state.transcriptFinal || "";
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
       const result = event.results[i];
+      const textValue = result[0]?.transcript || "";
       if (result.isFinal) {
-        state.transcriptFinal = `${state.transcriptFinal} ${result[0].transcript}`.trim();
+        finalText = `${finalText} ${textValue}`.trim();
       } else {
-        interim += result[0].transcript;
+        interim = textValue;
       }
     }
-    state.transcriptInterim = interim.trim();
-    state.transcript = (state.transcriptFinal || state.transcriptInterim).trim();
-    state.transcriptStatus = state.transcriptFinal
-      ? "captured"
-      : (state.transcriptInterim ? "interim_fallback" : "missing");
+    state.transcriptFinal = finalText;
+    state.transcriptInterim = interim;
+    state.transcript = [finalText, interim].filter(Boolean).join(" ").trim();
+    state.transcriptStatus = finalText ? "captured" : (interim ? "interim_fallback" : "missing");
+  };
+  recognition.onerror = () => {
+    state.transcriptStatus = "missing";
+  };
+  recognition.onend = () => {
     resolveDictationWait();
   };
-  state.recognition.onerror = () => text("recordStatus", "Recording audio. Browser dictation had an error.");
   try {
-    state.recognition.start();
-  } catch (error) {
-    state.transcript = "";
+    recognition.start();
+  } catch {
+    state.transcriptStatus = "missing";
   }
 }
 
 function stopDictation() {
-  if (!state.recognition) return;
-  try {
-    state.recognition.stop();
-  } catch (error) {
-    // Browser recognition may already be stopped.
+  if (state.dictationRecognition) {
+    try {
+      state.dictationRecognition.stop();
+    } catch {
+      // ignore
+    }
+    state.dictationRecognition = null;
   }
-  state.recognition = null;
+  resolveDictationWait();
 }
 
 function waitForFinalDictation() {
-  if (state.transcriptFinal) {
-    state.transcript = state.transcriptFinal.trim();
-    state.transcriptStatus = "captured";
-    return Promise.resolve();
-  }
-  if (state.transcriptInterim) {
-    state.transcript = state.transcriptInterim.trim();
-    state.transcriptStatus = "interim_fallback";
-  } else {
-    state.transcript = "";
-    state.transcriptStatus = "missing";
-  }
-  return new Promise((resolve) => {
+  if (!state.dictationRecognition) return Promise.resolve();
+  if (state.dictationFinalWait) return state.dictationFinalWaitPromise;
+  state.dictationFinalWaitPromise = new Promise((resolve) => {
     state.dictationFinalWait = resolve;
-    window.setTimeout(() => {
-      if (state.transcriptFinal) {
-        state.transcript = state.transcriptFinal.trim();
-        state.transcriptStatus = "captured";
-      }
-      resolveDictationWait();
-    }, 450);
   });
+  return state.dictationFinalWaitPromise;
 }
 
 function resolveDictationWait() {
-  if (!state.dictationFinalWait) return;
-  const resolve = state.dictationFinalWait;
-  state.dictationFinalWait = null;
-  resolve();
+  if (state.dictationFinalWait) {
+    const resolve = state.dictationFinalWait;
+    state.dictationFinalWait = null;
+    state.dictationFinalWaitPromise = null;
+    resolve();
+  }
 }
 
 function renderSummary(attempt) {
   const score = attempt.ielts_score || {};
   const pron = attempt.pronunciation || {};
-  $("#summaryPanel").classList.remove("hidden");
-  $("#summaryPanel").innerHTML = `
+  const summaryPanel = $("summaryPanel");
+  if (!summaryPanel) return;
+  summaryPanel.classList.remove("hidden");
+  summaryPanel.innerHTML = `
     <div class="score-row">
       ${scoreCell("Overall", score.overall_band)}
       ${scoreCell("Fluency", score.fluency_coherence)}
       ${scoreCell("Lexical", score.lexical_resource)}
       ${scoreCell("Grammar", score.grammatical_range)}
-      ${scoreCell("Pronunciation", score.pronunciation_estimate ?? "Not assessed")}
+      ${scoreCell("Pronunciation", score.pronunciation_estimate ?? "Estimate")}
     </div>
     <p class="feedback">${escapeHtml(attempt.feedback_summary || "No feedback generated.")}</p>
     <div class="summary-actions">
       <button id="viewDetails">View Details</button>
     </div>
-    <p class="muted">Pronunciation: ${escapeHtml(pron.message || pron.status || "unknown")}</p>
+    <p class="muted">Pronunciation estimate: ${escapeHtml(pron.message || pron.status || "unknown")}</p>
   `;
-  $("#viewDetails").addEventListener("click", () => renderDetail(attempt));
+  const viewDetails = byId("viewDetails");
+  if (viewDetails) {
+    viewDetails.addEventListener("click", () => renderDetail(attempt));
+  }
 }
 
 function scoreCell(label, value) {
-  return `<div class="score-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "—")}</strong></div>`;
+  return `<div class="score-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "?")}</strong></div>`;
 }
 
 async function loadHistory(showBusy = true) {
@@ -618,18 +654,19 @@ async function loadHistory(showBusy = true) {
 
 function renderHistoryList(items) {
   if (!items.length) {
-    $("#historyList").textContent = "No attempts yet.";
-    $("#detailPanel").innerHTML = "<h2>Attempt Details</h2><p class=\"muted\">No attempts to display.</p>";
+    $("historyList").textContent = "No attempts yet.";
+    $("detailPanel").innerHTML = '<h2>Attempt Details</h2><p class="muted">No attempts to display.</p>';
     return;
   }
-  $("#historyList").innerHTML = items.map((item) => {
+  $("historyList").innerHTML = items.map((item) => {
     const part = (item.mode || item.part || "").toLowerCase();
-    const tagClass = ["p1", "p2", "p3"].includes(part) ? part : "";
+    const tagClass = ["p1", "p2", "p3", "mock"].includes(part) ? part : "";
+    const toneClass = part === "mock" ? "tone-mock" : `tone-${tagClass || "neutral"}`;
     return `
-    <button class="history-item ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
+    <button class="history-item ${toneClass} ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
       <div class="history-item-top">
         <span class="history-item-tag ${tagClass}">${escapeHtml(part.toUpperCase())}</span>
-        <span class="history-item-band">Band ${escapeHtml(item.overall_band ?? "—")}</span>
+        <span class="history-item-band">Band ${escapeHtml(item.overall_band ?? "?")}</span>
       </div>
       <strong class="history-item-title">${escapeHtml(item.title || item.question || "Untitled")}</strong>
       <small class="history-item-time">${escapeHtml(item.display_time || "")}</small>
@@ -658,33 +695,32 @@ function renderDetail(attempt, updateView = true) {
   state.activeHistoryId = attempt.id;
   const score = attempt.ielts_score || {};
   const criteria = attempt.criteria_feedback || {};
+  const chinaExplanation = attempt.china_explanation || {};
   const turns = attempt.turns || [];
   const isP2 = attempt.mode === "p2" || (turns[0]?.part === "p2");
   const isMock = attempt.mode === "mock" || attempt.part === "mock";
-  const partScores = isMock ? partScoresHtml(attempt) : "";
 
-  $("#detailPanel").innerHTML = `
+  $("detailPanel").innerHTML = `
     <div class="detail-section">
       <div class="detail-header">
         <div>
           <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
-          <p class="muted">${escapeHtml(attempt.title || "")} · ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
+          <p class="muted">${escapeHtml(attempt.title || "")} ? ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
         </div>
-        <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
+        <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "?")}</strong>
       </div>
       <div class="score-row compact">
         ${scoreCell("FC", score.fluency_coherence)}
         ${scoreCell("LR", score.lexical_resource)}
         ${scoreCell("GRA", score.grammatical_range)}
-        ${scoreCell("Pron", score.pronunciation_estimate ?? "Not assessed")}
+        ${scoreCell("Pron", score.pronunciation_estimate ?? "Estimate")}
       </div>
       <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
     </div>
-    ${partScores}
-    ${attempt.cue_card ? `<div class="detail-section">${cueDetail(attempt.cue_card)}</div>` : ""}
+    ${chinaExplanationBlock(chinaExplanation)}
     ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
     <div class="detail-section">
-      <h3>📊 参考：雅思各维度评分标准，以及提升建议</h3>
+      <h3>Scoring criteria and upgrade guidance</h3>
       <div class="criteria-grid">
         ${criterionBlock("Fluency & Coherence", criteria.fluency_coherence)}
         ${criterionBlock("Lexical Resource", criteria.lexical_resource)}
@@ -698,31 +734,39 @@ function renderDetail(attempt, updateView = true) {
   });
 }
 
-function partScoresHtml(attempt) {
-  const partScores = attempt.part_scores || {};
-  const parts = ["p1", "p2", "p3"].filter((part) => partScores[part]);
-  if (!parts.length) return "";
+function chinaExplanationBlock(item = {}) {
+  const weakPoints = (item.weak_points || []).map((value) => `<li>${renderMarkdown(value)}</li>`).join("");
+  const nextSteps = (item.next_steps || []).map((value) => `<li>${renderMarkdown(value)}</li>`).join("");
   return `
-    <div class="detail-section">
-      <h3>Part scores</h3>
-      <div class="part-score-grid">
-        ${parts.map((part) => {
-          const item = partScores[part] || {};
-          return `
-            <article class="part-score-card">
-              <div class="part-score-head">
-                <strong>${escapeHtml(part.toUpperCase())}</strong>
-                <span>Band ${escapeHtml(item.band ?? "—")}</span>
-              </div>
-              <div class="score-row mini">
-                ${scoreCell("FC", item.fluency_coherence)}
-                ${scoreCell("LR", item.lexical_resource)}
-                ${scoreCell("GRA", item.grammatical_range)}
-                ${scoreCell("Pron", item.pronunciation_estimate ?? "Not assessed")}
-              </div>
-            </article>
-          `;
-        }).join("")}
+    <div class="detail-section china-explanation">
+      <h3>${escapeHtml(item.title || "中国语境解释")}</h3>
+      <p class="feedback">${renderMarkdown(item.summary || "")}</p>
+      <p class="muted">${escapeHtml(item.official_note || "")}</p>
+      <p class="muted">${escapeHtml(item.pronunciation_note || "")}</p>
+      <p class="muted">${escapeHtml(item.local_context || "")}</p>
+      <div class="criteria-grid">
+        <article class="criterion">
+          <h4>Common weak points</h4>
+          <ul>${weakPoints || "<li>暂无</li>"}</ul>
+        </article>
+        <article class="criterion">
+          <h4>Next steps</h4>
+          <ul>${nextSteps || "<li>暂无</li>"}</ul>
+        </article>
+      </div>
+    </div>
+  `;
+}
+
+function partScoreBlock(part, item = {}) {
+  return `
+    <div class="part-score-block">
+      <div class="part-score-band">Band ${escapeHtml(item.band ?? "?")}</div>
+      <div class="score-row mini">
+        ${scoreCell("FC", item.fluency_coherence)}
+        ${scoreCell("LR", item.lexical_resource)}
+        ${scoreCell("GRA", item.grammatical_range)}
+        ${scoreCell("Pron", item.pronunciation_estimate ?? "Not assessed")}
       </div>
     </div>
   `;
@@ -732,7 +776,7 @@ function turnTableSection(attempt, turns, isP2 = false) {
   return `
     <div class="detail-section">
       <table class="turn-report-table">
-        <thead><tr>${isP2 ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>" : "<th>题目</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>"}</tr></thead>
+        <thead><tr>${isP2 ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>" : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>"}</tr></thead>
         <tbody>${turns.map((turn) => turnReportRow(attempt.id, turn, attempt, isP2)).join("")}</tbody>
       </table>
     </div>
@@ -740,16 +784,23 @@ function turnTableSection(attempt, turns, isP2 = false) {
 }
 
 function mockTurnSections(attempt, turns) {
+  const partScores = attempt.part_scores || {};
   return ["p1", "p2", "p3"].map((part) => {
     const partTurns = turns.filter((turn) => turn.part === part);
     if (!partTurns.length) return "";
+    const scoreBlock = partScores[part] ? partScoreBlock(part, partScores[part]) : "";
+    const cueCard = part === "p2" && attempt.cue_card ? `<div class="detail-cue-wrap">${cueDetail(attempt.cue_card)}</div>` : "";
     return `
       <div class="detail-section">
-        <h3>${escapeHtml(part.toUpperCase())} answers</h3>
-        <table class="turn-report-table">
-          <thead><tr>${part === "p2" ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>" : "<th>题目</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>"}</tr></thead>
-          <tbody>${partTurns.map((turn) => turnReportRow(attempt.id, turn, attempt, part === "p2")).join("")}</tbody>
-        </table>
+        <h3>${escapeHtml(part.toUpperCase())}</h3>
+        <div class="part-detail-box">
+          ${scoreBlock}
+          ${cueCard}
+          <table class="turn-report-table">
+            <thead><tr>${part === "p2" ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>" : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>"}</tr></thead>
+            <tbody>${partTurns.map((turn) => turnReportRow(attempt.id, turn, attempt, part === "p2")).join("")}</tbody>
+          </table>
+        </div>
       </div>
     `;
   }).join("");
@@ -773,7 +824,7 @@ function aiCoachingHtml(turn, attempt) {
   const coaching = turn.ai_coaching || attempt.ai_coaching || "";
   if (coaching) return `<p>${renderMarkdown(coaching)}</p>`;
   const notes = turn.upgrade_notes || attempt.upgrade_notes || [];
-  if (!notes.length) return "<p class=\"muted\">No AI coaching generated for this turn.</p>";
+  if (!notes.length) return '<p class="muted">No AI coaching generated for this turn.</p>';
   return `<ul>${notes.map((item) => `
     <li><strong>${escapeHtml(item.criterion || "Change")}:</strong> ${renderMarkdown(item.band7_change || item.original_problem || "")}</li>
   `).join("")}</ul>`;
@@ -792,10 +843,10 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
     <tr>
       ${questionCell}
       <td>
-        ${isFollowUp ? `<span class="follow-up-pill">Follow-up</span>` : ""}
+        ${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}
         ${(turn.audio || {}).url
           ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
-          : "<p class=\"audio-warning\">Recording missing. This turn has no playable audio.</p>"}
+          : '<p class="audio-warning">Recording missing. This turn has no playable audio.</p>'}
         <p class="transcript-status">${escapeHtml(statusLabel)}</p>
         <p>${transcriptText(turn)}</p>
       </td>
@@ -814,10 +865,10 @@ function criterionBlock(title, item = {}) {
   const advice = item.advice || item.suggestion || "";
   return `
     <article class="criterion">
-      <h4>${escapeHtml(title)} · Band ${escapeHtml(item.band ?? "—")}</h4>
-      <strong>评分标准</strong><p>${renderMarkdown(standard)}</p>
-      <strong>当前关注</strong><p>${renderMarkdown(focus)}</p>
-      <strong>提升建议</strong><p>${renderMarkdown(advice)}</p>
+      <h4>${escapeHtml(title)} - Band ${escapeHtml(item.band ?? "?")}</h4>
+      <strong>Standard</strong><p>${renderMarkdown(standard)}</p>
+      <strong>Focus</strong><p>${renderMarkdown(focus)}</p>
+      <strong>Advice</strong><p>${renderMarkdown(advice)}</p>
     </article>
   `;
 }
@@ -835,30 +886,39 @@ function stopAllRuntime(label = "Ready") {
   clearTimer();
   clearAutoNextTimeout();
   stopDictation();
-  $("#examinerAudio").pause();
-  $("#examinerAudio").removeAttribute("src");
-  $("#examinerAudio").load();
-  $("#examinerAudio").onended = null;
-  $("#examinerAudio").onerror = null;
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
   state.browserTtsUtterance = null;
-  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
-    state.cancelRecording = true;
-    state.mediaRecorder.stop();
-  }
-  if (state.mediaStream) {
-    state.mediaStream.getTracks().forEach((track) => track.stop());
-    state.mediaStream = null;
-  }
-  text("phaseLabel", label);
-  text("timerValue", "00:00");
+  state.currentTurn = null;
+  state.transcript = "";
+  state.transcriptFinal = "";
+  state.transcriptInterim = "";
+  state.transcriptStatus = "missing";
+  state.practiceLocked = false;
+  $("examinerAudio").pause();
+  $("examinerAudio").removeAttribute("src");
+  $("browserTtsFallback").classList.add("hidden");
+  $("cueTop").classList.add("hidden");
+  $("promptPane").classList.remove("cue");
+  $("promptPane").classList.add("hidden");
+  $("practiceGrid").classList.remove("p2-mode", "practice-enter");
+  $("summaryPanel").classList.add("hidden");
+  $("summaryPanel").innerHTML = "";
+  $("exitPractice").classList.add("hidden");
+  setRecordButton("ready", label, "Record the full section. No typing.");
+  text("recordStatus", "Microphone will be requested when recording starts.");
+  updateSidebarLock();
 }
 
 async function exitPractice() {
   const attemptId = state.attempt?.id;
-  state.abortingAttemptId = attemptId || null;
-  stopAllRuntime("Ready");
-  setBusy("");
+  state.abortingAttemptId = attemptId;
+  if (state.status === "recording") {
+    state.cancelRecording = true;
+    stopRecording();
+  } else {
+    stopAllRuntime("Ready");
+  }
+  state.practiceLocked = false;
+  updateSidebarLock();
   if (attemptId) {
     await api(`/api/attempts/${attemptId}/abort`, {}).catch(() => null);
   }
@@ -869,16 +929,23 @@ function showError(error) {
   const message = error instanceof Error ? error.message : String(error);
   setBusy("");
   setRecordButton("ready", "Try Again", "The last attempt failed. Start again when ready.");
-  text("recordStatus", message);
-  $("#summaryPanel").classList.remove("hidden");
-  $("#summaryPanel").innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
+  text("recordStatus", "Something went wrong. Please try again.");
+  $("summaryPanel").classList.remove("hidden");
+  $("summaryPanel").innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
 }
 
 function bindEvents() {
   document.querySelectorAll(".nav-button").forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.view));
+    button.addEventListener("click", (event) => {
+      if (state.practiceLocked && button.dataset.view !== state.view) {
+        event.preventDefault();
+        showNavLockHint(button);
+        return;
+      }
+      switchView(button.dataset.view);
+    });
   });
-  $("#recordControl").addEventListener("click", () => {
+  $("recordControl").addEventListener("click", () => {
     if (state.status === "recording") {
       stopRecording();
     } else if (state.status === "preparing") {
@@ -892,8 +959,8 @@ function bindEvents() {
       }
     }
   });
-  $("#exitPractice").addEventListener("click", () => exitPractice());
-  $("#p3StartButton").addEventListener("click", () => startPractice());
+  $("exitPractice").addEventListener("click", () => exitPractice());
+  $("p3StartButton").addEventListener("click", () => startPractice());
   document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
     button.addEventListener("click", () => {
       state.p3Intensity = button.dataset.p3Intensity || "normal";
@@ -902,7 +969,7 @@ function bindEvents() {
       });
     });
   });
-  $("#p3TopicChips").addEventListener("click", (event) => {
+  $("p3TopicChips").addEventListener("click", (event) => {
     const chip = event.target.closest("[data-p3-topic]");
     if (!chip) return;
     state.p3SelectedTopic = chip.dataset.p3Topic || "";
@@ -914,7 +981,7 @@ function bindEvents() {
 
 function renderP3TopicChips(topics) {
   state.p3Topics = topics.slice(0, 8);
-  $("#p3TopicChips").innerHTML = state.p3Topics.map((topic) => (
+  $("p3TopicChips").innerHTML = state.p3Topics.map((topic) => (
     `<button type="button" class="topic-chip${state.p3SelectedTopic === topic ? " active" : ""}" data-p3-topic="${escapeHtml(topic)}">${escapeHtml(topic.replaceAll("_", " "))}</button>`
   )).join("");
   if (state.p3Topics.length && !state.p3SelectedTopic) {
@@ -928,7 +995,7 @@ async function init() {
   switchView("mock");
   try {
     const summary = await api("/api/question-bank/summary");
-    text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);
+    text("bankStatus", `${summary.part1_count} P1 ? ${summary.part2_count} P2`);
     renderP3TopicChips(summary.part2_themes || []);
   } catch (error) {
     text("bankStatus", error.message);
