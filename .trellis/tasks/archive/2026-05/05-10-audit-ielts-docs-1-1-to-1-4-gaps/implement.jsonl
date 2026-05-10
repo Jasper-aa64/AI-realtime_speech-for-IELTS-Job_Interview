@@ -1,0 +1,7 @@
+﻿{"file":".trellis/spec/backend/index.md","reason":"Backend implementation contracts for IELTS scoring, training, billing ledger, and API behavior."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Backend quality and validation rules for the IELTS web server and billing/training APIs."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend contracts for the IELTS web UI settings, report copy, and navigation behavior."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Frontend validation rules for IELTS report copy, settings panels, and UI state safety."}
+{"file":"docs/IELTS_CHINA_SCORING_STANDARD_1_1.md","reason":"Research basis for China-facing scoring explanation and rubric binding."}
+{"file":"docs/IELTS_ADAPTIVE_WEAK_QUESTION_TRAINING_1_3.md","reason":"Research basis for weak-question persistence and replay scheduling."}
+{"file":"docs/CODEX_TOKEN_BILLING_BALANCE_DEDUCTION_1_4.md","reason":"Research basis for billing ledger, usage capture, reservation, and settlement semantics."}

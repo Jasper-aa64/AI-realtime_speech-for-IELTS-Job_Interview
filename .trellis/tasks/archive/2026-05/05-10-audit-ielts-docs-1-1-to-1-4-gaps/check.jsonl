@@ -1,0 +1,4 @@
+﻿{"file":".trellis/spec/backend/index.md","reason":"Backend implementation contracts for IELTS scoring, training, billing ledger, and API behavior."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Backend quality and validation rules for the IELTS web server and billing/training APIs."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend contracts for the IELTS web UI settings, report copy, and navigation behavior."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Frontend validation rules for IELTS report copy, settings panels, and UI state safety."}
