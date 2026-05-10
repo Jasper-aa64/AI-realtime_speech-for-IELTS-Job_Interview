@@ -318,6 +318,21 @@ class IELTSWebServerTest(unittest.TestCase):
             self.assertIn("pronunciation_estimate", scored["part_scores"][part])
         self.assertEqual(scored["part_scores"]["p1"]["part"], "p1")
 
+    def test_followup_turns_keep_audio_warning_and_badge_fields(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"})
+        turn = attempt["turns"][1]
+        self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+        completed = self.post_json(
+            f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+            {"transcript_raw": "I study software engineering because I like building practical tools."},
+        )
+        followup = next(
+            item for item in completed["attempt"]["turns"] if item.get("prompt", {}).get("role") == "follow_up"
+        )
+        self.assertEqual(followup["prompt"]["role"], "follow_up")
+        self.assertEqual(followup["counts_toward_total"], False)
+        self.assertIn("audio", followup)
+
     def test_abort_marks_attempt_blocks_score_and_excludes_history(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
         aborted = self.post_json(f"/api/attempts/{attempt['id']}/abort", {})

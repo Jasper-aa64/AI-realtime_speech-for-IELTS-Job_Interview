@@ -943,6 +943,32 @@ button.ghost {
   margin: 0 0 8px;
 }
 
+.follow-up-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #ffedd5;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.audio-warning {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .transcript-status {
   color: var(--muted);
   font-size: 12px;

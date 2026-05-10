@@ -772,12 +772,16 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const statusLabel = turn.transcript_status === "interim_fallback"
     ? "Interim transcript used"
     : (turn.transcript_status === "captured" ? "Transcript captured" : "Transcript missing");
+  const isFollowUp = turn.prompt?.role === "follow_up";
   const questionCell = isP2 ? "" : `<td><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong><p>${escapeHtml(turn.question)}</p></td>`;
   return `
     <tr>
       ${questionCell}
       <td>
-        ${(turn.audio || {}).url ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>` : "<p class=\"muted\">No recording uploaded.</p>"}
+        ${isFollowUp ? `<span class="follow-up-pill">Follow-up</span>` : ""}
+        ${(turn.audio || {}).url
+          ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
+          : "<p class=\"audio-warning\">Recording missing. This turn has no playable audio.</p>"}
         <p class="transcript-status">${escapeHtml(statusLabel)}</p>
         <p>${transcriptText(turn)}</p>
       </td>
