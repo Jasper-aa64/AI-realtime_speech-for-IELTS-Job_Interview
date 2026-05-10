@@ -116,6 +116,7 @@ function switchView(view) {
   text("viewSubtitle", viewCopy[view][1]);
   if (view === "history") loadHistory();
   if (["mock", "p1", "p2", "p3"].includes(view)) resetPracticeSurface();
+  updateSidebarLock();
 }
 
 function resetPracticeSurface() {
@@ -134,6 +135,7 @@ function resetPracticeSurface() {
   $("#summaryPanel").classList.add("hidden");
   $("#summaryPanel").innerHTML = "";
   $("#exitPractice").classList.add("hidden");
+  updateSidebarLock();
   text("progressTrack", state.view === "mock" ? "Mock: P1 → P2 → P3" : `${viewCopy[state.view][0]} ready`);
   text("phaseLabel", "Ready");
   text("timerValue", "00:00");
@@ -151,6 +153,7 @@ function setRecordButton(status, title, hint) {
   $("#recordControl").disabled = ["loading", "examiner_playing", "processing", "scoring", "turn_saved"].includes(status);
   text("recordTitle", title);
   text("recordHint", hint);
+  updateSidebarLock();
 }
 
 function setPromptHtml(html, size = "medium") {
@@ -479,6 +482,17 @@ async function scoreAttempt() {
   } catch (error) {
     showError(error);
   }
+}
+
+function updateSidebarLock() {
+  const locked = !["idle", "summary"].includes(state.status);
+  document.querySelectorAll(".nav-button").forEach((button) => {
+    button.disabled = locked;
+    button.classList.toggle("locked", locked);
+  });
+  $("#navLockHint").classList.toggle("hidden", !locked);
+  $("#viewTitleBlock").classList.toggle("locked-flow", locked);
+  $("#historyTopRail").classList.toggle("locked-flow", locked && state.view === "history");
 }
 
 function scrollToSummary() {

@@ -333,6 +333,11 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(followup["counts_toward_total"], False)
         self.assertIn("audio", followup)
 
+    def test_history_and_mode_navigation_lock_hint_is_available(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        self.assertEqual(attempt["status"], "started")
+        self.assertEqual(attempt["turns"][0]["status"], "pending")
+
     def test_abort_marks_attempt_blocks_score_and_excludes_history(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
         aborted = self.post_json(f"/api/attempts/{attempt['id']}/abort", {})
