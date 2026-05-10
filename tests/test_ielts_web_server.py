@@ -184,6 +184,7 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("band7_version", scored)
         self.assertIn("part_scores", scored)
         self.assertIn("p1", scored["part_scores"])
+        self.assertEqual(scored["part_scores"]["p1"]["part"], "p1")
         self.assertIn("model_audio", scored)
         self.assertTrue(scored["turns"][0]["band7_version"])
         self.assertTrue(scored["turns"][0]["ai_coaching"])
@@ -315,6 +316,7 @@ class IELTSWebServerTest(unittest.TestCase):
             self.assertIn("lexical_resource", scored["part_scores"][part])
             self.assertIn("grammatical_range", scored["part_scores"][part])
             self.assertIn("pronunciation_estimate", scored["part_scores"][part])
+        self.assertEqual(scored["part_scores"]["p1"]["part"], "p1")
 
     def test_abort_marks_attempt_blocks_score_and_excludes_history(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})

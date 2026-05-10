@@ -647,6 +647,7 @@ function renderDetail(attempt, updateView = true) {
   const turns = attempt.turns || [];
   const isP2 = attempt.mode === "p2" || (turns[0]?.part === "p2");
   const isMock = attempt.mode === "mock" || attempt.part === "mock";
+  const partScores = isMock ? partScoresHtml(attempt) : "";
 
   $("#detailPanel").innerHTML = `
     <div class="detail-section">
@@ -665,7 +666,7 @@ function renderDetail(attempt, updateView = true) {
       </div>
       <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
     </div>
-    ${partScoresHtml(attempt)}
+    ${partScores}
     ${attempt.cue_card ? `<div class="detail-section">${cueDetail(attempt.cue_card)}</div>` : ""}
     ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
     <div class="detail-section">
