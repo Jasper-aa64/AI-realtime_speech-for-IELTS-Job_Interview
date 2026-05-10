@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+import hashlib
 import json
 import math
 import mimetypes
@@ -17,12 +18,14 @@ import os
 import random
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
 import urllib.error
 import urllib.request
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -52,6 +55,9 @@ P1_INTRO_QUESTIONS = [
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
 DEFAULT_CANDIDATE = "jasper"
+DEFAULT_USER_ID = "local-default"
+MICRO_RMB_PER_RMB = 1_000_000
+DEFAULT_INITIAL_GRANT_U = 5 * MICRO_RMB_PER_RMB
 
 
 def clamp_band(value: float | int | None) -> float:
@@ -110,6 +116,28 @@ def safe_slug(value: str) -> str:
 def short_question(value: str, limit: int = 92) -> str:
     clean = re.sub(r"\s+", " ", value).strip()
     return clean if len(clean) <= limit else clean[: limit - 1].rstrip() + "…"
+
+
+def stable_question_id(part: str, question: str) -> str:
+    digest = hashlib.sha1(f"{part}:{question}".encode("utf-8")).hexdigest()[:16]
+    return f"{part}_{digest}"
+
+
+def json_dumps(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def parse_iso_datetime(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        return dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 class QuestionBank:
@@ -186,11 +214,554 @@ class QuestionBank:
         return {"part1": random.sample(self.p1, p1_count), "part2": random.choice(self.p2)}
 
 
+class TrainingStore:
+    def __init__(self, db_path: Path) -> None:
+        self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_schema()
+
+    def connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    @contextmanager
+    def connection(self) -> sqlite3.Connection:
+        conn = self.connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def _init_schema(self) -> None:
+        with self.connection() as conn:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS training_observations (
+                    observation_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    attempt_id TEXT NOT NULL,
+                    turn_id TEXT NOT NULL,
+                    question_id TEXT NOT NULL,
+                    part TEXT NOT NULL,
+                    question TEXT NOT NULL,
+                    transcript TEXT NOT NULL,
+                    overall_band REAL,
+                    fluency_coherence REAL,
+                    lexical_resource REAL,
+                    grammatical_range REAL,
+                    pronunciation_estimate REAL,
+                    relevance REAL NOT NULL,
+                    weak_item_flag INTEGER NOT NULL,
+                    weak_reason_json TEXT NOT NULL,
+                    model_version TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    next_due TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_training_user_due
+                    ON training_observations(user_id, next_due, weak_item_flag);
+                CREATE INDEX IF NOT EXISTS idx_training_question
+                    ON training_observations(question_id);
+                """
+            )
+
+    def record_attempt(self, attempt: dict[str, Any]) -> list[dict[str, Any]]:
+        score = attempt.get("ielts_score") or {}
+        user_id = str(attempt.get("user_id") or DEFAULT_USER_ID)
+        observed_at = now_iso()
+        recorded: list[dict[str, Any]] = []
+        for turn in attempt.get("turns") or []:
+            if turn.get("status") != "completed":
+                continue
+            transcript = str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
+            question = str(turn.get("question") or "").strip()
+            part = str(turn.get("part") or attempt.get("part") or "unknown").lower()
+            question_id = str(turn.get("question_id") or stable_question_id(part, question))
+            relevance = prompt_relevance(question, transcript)
+            word_count = len(re.findall(r"[A-Za-z']+", transcript))
+            reasons: list[str] = []
+            if isinstance(score.get("overall_band"), (int, float)) and float(score["overall_band"]) < 5.5:
+                reasons.append("low_band")
+            if relevance < 0.20:
+                reasons.append("off_topic")
+            if word_count < 25:
+                reasons.append("short_answer")
+            if (turn.get("pronunciation") or {}).get("status") not in {"assessed"}:
+                reasons.append("pronunciation_unreliable")
+            weak = bool(reasons)
+            due_days = 1 if weak else 14
+            next_due = (utcnow() + dt.timedelta(days=due_days)).isoformat()
+            observation = {
+                "observation_id": f"{attempt['id']}_{turn['id']}",
+                "user_id": user_id,
+                "attempt_id": attempt["id"],
+                "turn_id": turn["id"],
+                "question_id": question_id,
+                "part": part,
+                "question": question,
+                "transcript": transcript,
+                "overall_band": score.get("overall_band"),
+                "fluency_coherence": score.get("fluency_coherence"),
+                "lexical_resource": score.get("lexical_resource"),
+                "grammatical_range": score.get("grammatical_range"),
+                "pronunciation_estimate": score.get("pronunciation_estimate"),
+                "relevance": round(relevance, 3),
+                "weak_item_flag": weak,
+                "weak_reason": reasons,
+                "model_version": str(score.get("backend") or "unknown"),
+                "observed_at": observed_at,
+                "next_due": next_due,
+            }
+            self.record_observation(observation)
+            recorded.append(observation)
+        return recorded
+
+    def record_observation(self, item: dict[str, Any]) -> None:
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO training_observations (
+                    observation_id, user_id, attempt_id, turn_id, question_id, part, question, transcript,
+                    overall_band, fluency_coherence, lexical_resource, grammatical_range, pronunciation_estimate,
+                    relevance, weak_item_flag, weak_reason_json, model_version, observed_at, next_due
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item["observation_id"],
+                    item["user_id"],
+                    item["attempt_id"],
+                    item["turn_id"],
+                    item["question_id"],
+                    item["part"],
+                    item["question"],
+                    item["transcript"],
+                    item.get("overall_band"),
+                    item.get("fluency_coherence"),
+                    item.get("lexical_resource"),
+                    item.get("grammatical_range"),
+                    item.get("pronunciation_estimate"),
+                    item["relevance"],
+                    1 if item["weak_item_flag"] else 0,
+                    json_dumps(item["weak_reason"]),
+                    item["model_version"],
+                    item["observed_at"],
+                    item["next_due"],
+                ),
+            )
+
+    def weak_items(self, user_id: str = DEFAULT_USER_ID, limit: int = 50) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT question_id, part, question, COUNT(*) AS attempts,
+                       MAX(observed_at) AS last_seen,
+                       MIN(next_due) AS next_due,
+                       AVG(COALESCE(overall_band, 0)) AS avg_band,
+                       AVG(relevance) AS avg_relevance,
+                       SUM(weak_item_flag) AS weak_count,
+                       '[' || GROUP_CONCAT(weak_reason_json) || ']' AS reasons_json
+                FROM training_observations
+                WHERE user_id = ?
+                GROUP BY question_id, part, question
+                HAVING weak_count > 0
+                ORDER BY weak_count DESC, last_seen DESC, next_due ASC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            ).fetchall()
+        current = now_iso()
+        return [self._weak_row_to_dict(row, current) for row in rows]
+
+    def replay_queue(self, user_id: str = DEFAULT_USER_ID, limit: int = 10, bank: QuestionBank | None = None) -> list[dict[str, Any]]:
+        weak_items = self.weak_items(user_id, limit=100)
+        due = [self._queue_item(item, "weak") for item in weak_items if item["due"]]
+        pending = [self._queue_item(item, "weak") for item in weak_items if not item["due"]]
+        queue = (due + pending)[:limit]
+        if len(queue) < limit and bank is not None:
+            weak_ids = {item["question_id"] for item in weak_items}
+            queue.extend(self.coverage_queue(weak_ids, limit - len(queue), bank))
+        return queue[:limit]
+
+    def coverage_queue(self, weak_question_ids: set[str], limit: int, bank: QuestionBank) -> list[dict[str, Any]]:
+        candidates: list[dict[str, Any]] = []
+        for item in sorted(bank.p1, key=lambda row: (row["topic"], row["question"])):
+            question = str(item.get("question") or "").strip()
+            if not question:
+                continue
+            question_id = stable_question_id("p1", question)
+            if question_id in weak_question_ids:
+                continue
+            candidates.append(
+                self._queue_item(
+                    {
+                        "question_id": question_id,
+                        "part": "p1",
+                        "question": question,
+                        "weak_reason": [],
+                        "next_due": None,
+                        "due": False,
+                    },
+                    "coverage",
+                )
+            )
+            if len(candidates) >= limit:
+                return candidates
+        for item in sorted(bank.p2, key=lambda row: (row["p3_theme"], row["title"])):
+            title = str(item.get("title") or "").strip()
+            bullets = [str(b).strip() for b in item.get("bullets") or [] if str(b).strip()]
+            question = "\n".join([title, *[f"- {bullet}" for bullet in bullets]]).strip()
+            if not question:
+                continue
+            question_id = stable_question_id("p2", question)
+            if question_id in weak_question_ids:
+                continue
+            candidates.append(
+                self._queue_item(
+                    {
+                        "question_id": question_id,
+                        "part": "p2",
+                        "question": question,
+                        "weak_reason": [],
+                        "next_due": None,
+                        "due": False,
+                    },
+                    "coverage",
+                )
+            )
+            if len(candidates) >= limit:
+                break
+        return candidates[:limit]
+
+    def _queue_item(self, item: dict[str, Any], source: str) -> dict[str, Any]:
+        result = dict(item)
+        result["source"] = source
+        result["weak_item_flag"] = source == "weak"
+        return result
+
+    def _weak_row_to_dict(self, row: sqlite3.Row, current: str) -> dict[str, Any]:
+        reasons: set[str] = set()
+        try:
+            grouped = json.loads(row["reasons_json"] or "[]")
+            for group in grouped:
+                for reason in group:
+                    reasons.add(str(reason))
+        except (TypeError, ValueError):
+            pass
+        avg_band = row["avg_band"]
+        avg_relevance = row["avg_relevance"]
+        return {
+            "question_id": row["question_id"],
+            "part": row["part"],
+            "question": row["question"],
+            "attempts": int(row["attempts"] or 0),
+            "weak_count": int(row["weak_count"] or 0),
+            "weak_reason": sorted(reasons),
+            "avg_band": round(float(avg_band), 2) if avg_band is not None else None,
+            "avg_relevance": round(float(avg_relevance), 2) if avg_relevance is not None else None,
+            "last_seen": row["last_seen"],
+            "next_due": row["next_due"],
+            "due": (parse_iso_datetime(row["next_due"]) or parse_iso_datetime(current) or utcnow())
+            <= (parse_iso_datetime(current) or utcnow()),
+        }
+
+
+class BillingStore:
+    DEFAULT_SNAPSHOT = {
+        "snapshot_id": "local_2026_05_default",
+        "model": "codex-cli",
+        "input_price_u_per_1m_tokens": 12_000_000,
+        "cached_input_price_u_per_1m_tokens": 3_000_000,
+        "output_price_u_per_1m_tokens": 48_000_000,
+        "reasoning_price_u_per_1m_tokens": 0,
+        "effective_from": "2026-05-10T00:00:00+00:00",
+        "effective_to": None,
+        "source": "local_config_snapshot",
+    }
+
+    def __init__(self, db_path: Path) -> None:
+        self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_schema()
+        self.ensure_price_snapshot(self.DEFAULT_SNAPSHOT)
+        self.ensure_user(DEFAULT_USER_ID, "Local user")
+
+    def connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    @contextmanager
+    def connection(self) -> sqlite3.Connection:
+        conn = self.connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def _init_schema(self) -> None:
+        with self.connection() as conn:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    balance_u INTEGER NOT NULL,
+                    reserved_u INTEGER NOT NULL DEFAULT 0,
+                    carry_numerator_u INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS wallet_ledger_entries (
+                    entry_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    call_id TEXT,
+                    entry_type TEXT NOT NULL,
+                    amount_u INTEGER NOT NULL,
+                    snapshot_id TEXT,
+                    usage_id TEXT,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    metadata_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS codex_usage_events (
+                    usage_id TEXT PRIMARY KEY,
+                    call_id TEXT NOT NULL UNIQUE,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    raw_jsonl_path TEXT,
+                    input_tokens INTEGER NOT NULL,
+                    cached_input_tokens INTEGER NOT NULL,
+                    output_tokens INTEGER NOT NULL,
+                    reasoning_output_tokens INTEGER NOT NULL,
+                    raw_usage_json TEXT NOT NULL,
+                    semantics_version TEXT NOT NULL,
+                    captured_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS price_snapshots (
+                    snapshot_id TEXT PRIMARY KEY,
+                    model TEXT NOT NULL,
+                    input_price_u_per_1m_tokens INTEGER NOT NULL,
+                    cached_input_price_u_per_1m_tokens INTEGER NOT NULL,
+                    output_price_u_per_1m_tokens INTEGER NOT NULL,
+                    reasoning_price_u_per_1m_tokens INTEGER NOT NULL,
+                    effective_from TEXT NOT NULL,
+                    effective_to TEXT,
+                    source TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS wallet_reservations (
+                    reservation_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    call_id TEXT NOT NULL UNIQUE,
+                    reserved_u INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    released_at TEXT
+                );
+                """
+            )
+
+    def ensure_price_snapshot(self, snapshot: dict[str, Any]) -> None:
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO price_snapshots (
+                    snapshot_id, model, input_price_u_per_1m_tokens, cached_input_price_u_per_1m_tokens,
+                    output_price_u_per_1m_tokens, reasoning_price_u_per_1m_tokens,
+                    effective_from, effective_to, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    snapshot["snapshot_id"],
+                    snapshot["model"],
+                    snapshot["input_price_u_per_1m_tokens"],
+                    snapshot["cached_input_price_u_per_1m_tokens"],
+                    snapshot["output_price_u_per_1m_tokens"],
+                    snapshot["reasoning_price_u_per_1m_tokens"],
+                    snapshot["effective_from"],
+                    snapshot["effective_to"],
+                    snapshot["source"],
+                ),
+            )
+
+    def ensure_user(self, user_id: str, display_name: str) -> None:
+        now = now_iso()
+        with self.connection() as conn:
+            row = conn.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,)).fetchone()
+            if row:
+                return
+            conn.execute(
+                "INSERT INTO users (user_id, display_name, balance_u, reserved_u, status, created_at, updated_at) VALUES (?, ?, 0, 0, 'active', ?, ?)",
+                (user_id, display_name, now, now),
+            )
+            self._append_entry(conn, user_id, None, "grant", DEFAULT_INITIAL_GRANT_U, None, None, "grant:initial", {"reason": "initial 5 RMB local balance"})
+            conn.execute(
+                "UPDATE users SET balance_u = balance_u + ?, updated_at = ? WHERE user_id = ?",
+                (DEFAULT_INITIAL_GRANT_U, now, user_id),
+            )
+
+    def wallet(self, user_id: str = DEFAULT_USER_ID) -> dict[str, Any]:
+        self.ensure_user(user_id, "Local user")
+        with self.connection() as conn:
+            user = conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
+            entries = conn.execute(
+                "SELECT * FROM wallet_ledger_entries WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
+                (user_id,),
+            ).fetchall()
+        return {
+            "user_id": user["user_id"],
+            "display_name": user["display_name"],
+            "balance_u": int(user["balance_u"]),
+            "reserved_u": int(user["reserved_u"]),
+            "balance_rmb": round(int(user["balance_u"]) / MICRO_RMB_PER_RMB, 6),
+            "reserved_rmb": round(int(user["reserved_u"]) / MICRO_RMB_PER_RMB, 6),
+            "entries": [self._entry_to_dict(row) for row in entries],
+        }
+
+    def _entry_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "entry_id": row["entry_id"],
+            "call_id": row["call_id"],
+            "entry_type": row["entry_type"],
+            "amount_u": int(row["amount_u"]),
+            "amount_rmb": round(int(row["amount_u"]) / MICRO_RMB_PER_RMB, 6),
+            "snapshot_id": row["snapshot_id"],
+            "usage_id": row["usage_id"],
+            "created_at": row["created_at"],
+            "metadata": json.loads(row["metadata_json"] or "{}"),
+        }
+
+    def normalize_usage(self, usage: dict[str, Any]) -> dict[str, int]:
+        input_tokens = int(usage.get("input_tokens") or 0)
+        cached = int(usage.get("cached_input_tokens") or usage.get("input_tokens_details", {}).get("cached_tokens") or 0)
+        output = int(usage.get("output_tokens") or 0)
+        reasoning = int(usage.get("reasoning_output_tokens") or usage.get("output_tokens_details", {}).get("reasoning_tokens") or 0)
+        cached = max(0, min(cached, input_tokens))
+        return {
+            "input_tokens": input_tokens,
+            "cached_input_tokens": cached,
+            "uncached_input_tokens": max(0, input_tokens - cached),
+            "output_tokens": output,
+            "reasoning_output_tokens": reasoning,
+        }
+
+    def calculate_charge(self, usage: dict[str, Any], snapshot_id: str | None = None) -> dict[str, Any]:
+        normalized = self.normalize_usage(usage)
+        snapshot = self.get_snapshot(snapshot_id)
+        numerator = (
+            normalized["uncached_input_tokens"] * int(snapshot["input_price_u_per_1m_tokens"])
+            + normalized["cached_input_tokens"] * int(snapshot["cached_input_price_u_per_1m_tokens"])
+            + normalized["output_tokens"] * int(snapshot["output_price_u_per_1m_tokens"])
+        )
+        amount_u = numerator // 1_000_000
+        carry_numerator_u = numerator % 1_000_000
+        return {
+            "amount_u": int(amount_u),
+            "carry_numerator_u": int(carry_numerator_u),
+            "charge_numerator_u": int(numerator),
+            "usage": normalized,
+            "snapshot_id": snapshot["snapshot_id"],
+        }
+
+    def get_snapshot(self, snapshot_id: str | None = None) -> sqlite3.Row:
+        with self.connection() as conn:
+            if snapshot_id:
+                row = conn.execute("SELECT * FROM price_snapshots WHERE snapshot_id = ?", (snapshot_id,)).fetchone()
+            else:
+                row = conn.execute("SELECT * FROM price_snapshots ORDER BY effective_from DESC LIMIT 1").fetchone()
+        if not row:
+            raise ValueError("No billing price snapshot configured")
+        return row
+
+    def capture_usage(self, call_id: str, usage: dict[str, Any], provider: str = "codex", model: str = "codex-cli", raw_jsonl_path: str | None = None) -> dict[str, Any]:
+        normalized = self.normalize_usage(usage)
+        usage_id = f"usage_{hashlib.sha1(call_id.encode('utf-8')).hexdigest()[:20]}"
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO codex_usage_events (
+                    usage_id, call_id, provider, model, raw_jsonl_path, input_tokens, cached_input_tokens,
+                    output_tokens, reasoning_output_tokens, raw_usage_json, semantics_version, captured_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    usage_id,
+                    call_id,
+                    provider,
+                    model,
+                    raw_jsonl_path,
+                    normalized["input_tokens"],
+                    normalized["cached_input_tokens"],
+                    normalized["output_tokens"],
+                    normalized["reasoning_output_tokens"],
+                    json_dumps(usage),
+                    "codex_cli_json_v1",
+                    now_iso(),
+                ),
+            )
+        return {"usage_id": usage_id, **normalized}
+
+    def settle_usage(self, user_id: str, call_id: str, usage: dict[str, Any] | None, snapshot_id: str | None = None) -> dict[str, Any]:
+        self.ensure_user(user_id, "Local user")
+        if not usage:
+            return {"status": "pending_reconciliation", "charged_u": 0, "reason": "missing authoritative usage"}
+        captured = self.capture_usage(call_id, usage)
+        charge = self.calculate_charge(usage, snapshot_id)
+        key = f"settle:{call_id}"
+        now = now_iso()
+        with self.connection() as conn:
+            existing = conn.execute("SELECT * FROM wallet_ledger_entries WHERE idempotency_key = ?", (key,)).fetchone()
+            if existing:
+                return {"status": "already_settled", "charged_u": abs(int(existing["amount_u"])), "usage_id": existing["usage_id"], "snapshot_id": existing["snapshot_id"]}
+            self._append_entry(conn, user_id, call_id, "settle", -charge["amount_u"], charge["snapshot_id"], captured["usage_id"], key, {"usage": charge["usage"], "charge_numerator_u": charge["charge_numerator_u"], "carry_numerator_u": charge["carry_numerator_u"]})
+            conn.execute(
+                "UPDATE users SET balance_u = balance_u - ?, carry_numerator_u = carry_numerator_u + ?, updated_at = ? WHERE user_id = ?",
+                (charge["amount_u"], charge["carry_numerator_u"], now, user_id),
+            )
+        return {"status": "settled", "charged_u": charge["amount_u"], "usage_id": captured["usage_id"], "snapshot_id": charge["snapshot_id"], "usage": charge["usage"]}
+
+    def _append_entry(
+        self,
+        conn: sqlite3.Connection,
+        user_id: str,
+        call_id: str | None,
+        entry_type: str,
+        amount_u: int,
+        snapshot_id: str | None,
+        usage_id: str | None,
+        idempotency_key: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        entry_id = f"entry_{hashlib.sha1(f'{user_id}:{idempotency_key}'.encode('utf-8')).hexdigest()[:20]}"
+        conn.execute(
+            """
+            INSERT INTO wallet_ledger_entries (
+                entry_id, user_id, call_id, entry_type, amount_u, snapshot_id,
+                usage_id, idempotency_key, metadata_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (entry_id, user_id, call_id, entry_type, amount_u, snapshot_id, usage_id, idempotency_key, json_dumps(metadata), now_iso()),
+        )
+
+
 @dataclass
 class AppState:
     data_dir: Path
     reports_dir: Path
     bank: QuestionBank = field(init=False)
+    training: TrainingStore = field(init=False)
+    billing: BillingStore = field(init=False)
     latest_report: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
@@ -200,6 +771,8 @@ class AppState:
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.model_audio_dir.mkdir(parents=True, exist_ok=True)
         self.examiner_audio_dir.mkdir(parents=True, exist_ok=True)
+        self.training = TrainingStore(self.reports_dir / "training" / "training.sqlite3")
+        self.billing = BillingStore(self.reports_dir / "billing" / "billing.sqlite3")
 
     @property
     def attempts_dir(self) -> Path:
@@ -833,6 +1406,77 @@ def spoken_markdown(value: str) -> str:
     return "\n\n".join(paragraphs)
 
 
+def extract_codex_json_events(stdout: str, raw_path: Path | None = None) -> tuple[str, dict[str, Any] | None]:
+    events: list[dict[str, Any]] = []
+    for line in str(stdout or "").splitlines():
+        stripped = line.strip()
+        if not stripped or not stripped.startswith("{"):
+            continue
+        try:
+            event = json.loads(stripped)
+        except ValueError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+    if raw_path and events:
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_text("\n".join(json_dumps(event) for event in events) + "\n", encoding="utf-8")
+    usage = None
+    final_text = ""
+    for event in events:
+        event_usage = event.get("usage")
+        if isinstance(event_usage, dict):
+            usage = event_usage
+        if event.get("type") == "turn.completed" and isinstance(event.get("usage"), dict):
+            usage = event["usage"]
+        message = event.get("message") or event.get("item") or event.get("response")
+        if isinstance(message, dict):
+            content = message.get("content") or message.get("text")
+            if isinstance(content, str):
+                final_text = content
+            elif isinstance(content, list):
+                parts = []
+                for part in content:
+                    if isinstance(part, dict):
+                        value = part.get("text") or part.get("content")
+                        if isinstance(value, str):
+                            parts.append(value)
+                    elif isinstance(part, str):
+                        parts.append(part)
+                if parts:
+                    final_text = "\n".join(parts)
+        elif isinstance(event.get("content"), str):
+            final_text = event["content"]
+    if not events:
+        return str(stdout or ""), None
+    return final_text or str(stdout or ""), usage
+
+
+def run_codex(prompt: str, call_id: str, billing: BillingStore | None = None) -> tuple[str, dict[str, Any] | None]:
+    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
+        raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
+    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
+    if not shutil.which(codex) and not Path(codex).exists():
+        raise RuntimeError("codex CLI not found")
+    raw_path = billing.db_path.parent / "codex_jsonl" / f"{safe_slug(call_id)}.jsonl" if billing else None
+    try:
+        result = subprocess.run(
+            [codex, "exec", "--json"],
+            input=prompt,
+            text=True,
+            capture_output=True,
+            timeout=45,
+            check=True,
+        )
+        output, usage = extract_codex_json_events(result.stdout, raw_path)
+    except Exception:
+        result = subprocess.run([codex, "exec"], input=prompt, text=True, capture_output=True, timeout=45, check=True)
+        output, usage = result.stdout, None
+    if billing:
+        billing.settle_usage(DEFAULT_USER_ID, call_id, usage)
+    return output, usage
+
+
 def plausible_spoken_answer(value: str) -> bool:
     text = clean_band7_output(value)
     words = re.findall(r"[A-Za-z']+", text)
@@ -1075,12 +1719,7 @@ def heuristic_score(transcript: str, reason: str, question: str = "") -> dict[st
     return cap_off_topic_score(result, question, transcript)
 
 
-def score_with_codex(transcript: str, data_dir: Path, question: str = "") -> dict[str, Any]:
-    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
-        raise RuntimeError("codex scoring disabled by IELTS_WEB_DISABLE_CODEX=1")
-    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
-    if not shutil.which(codex) and not Path(codex).exists():
-        raise RuntimeError("codex CLI not found")
+def score_with_codex(transcript: str, data_dir: Path, question: str = "", billing: BillingStore | None = None, call_id: str | None = None) -> dict[str, Any]:
     prompt_path = data_dir / "prompts" / "scorer_system.md"
     prompt = (
         prompt_path.read_text(encoding="utf-8")
@@ -1092,21 +1731,8 @@ def score_with_codex(transcript: str, data_dir: Path, question: str = "") -> dic
         + transcript
         + "\n"
     )
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
-        handle.write(prompt)
-        temp_name = handle.name
-    try:
-        result = subprocess.run(
-            [codex, "exec"],
-            input=Path(temp_name).read_text(encoding="utf-8"),
-            text=True,
-            capture_output=True,
-            timeout=45,
-            check=True,
-        )
-    finally:
-        Path(temp_name).unlink(missing_ok=True)
-    payload = extract_json_object(result.stdout)
+    output, usage = run_codex(prompt, call_id or f"score_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
+    payload = extract_json_object(output)
     scores: dict[str, Any] = {
         "fluency_coherence": clamp_band(payload.get("fluency_coherence")),
         "lexical_resource": clamp_band(payload.get("lexical_resource")),
@@ -1115,6 +1741,8 @@ def score_with_codex(transcript: str, data_dir: Path, question: str = "") -> dic
     }
     scores["overall_band"] = rounded_overall(scores)
     result_payload = {**scores, "feedback": str(payload.get("feedback", "")), "backend": "codex"}
+    if usage:
+        result_payload["billing_usage"] = billing.normalize_usage(usage) if billing else usage
     return cap_off_topic_score(result_payload, question, transcript)
 
 
@@ -1137,12 +1765,7 @@ def cap_off_topic_score(scores: dict[str, Any], question: str, transcript: str) 
     return scores
 
 
-def model_answer_with_codex(attempt: dict[str, Any], transcript: str) -> str:
-    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
-        raise RuntimeError("codex model-answer generation disabled")
-    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
-    if not shutil.which(codex) and not Path(codex).exists():
-        raise RuntimeError("codex CLI not found")
+def model_answer_with_codex(attempt: dict[str, Any], transcript: str, billing: BillingStore | None = None, call_id: str | None = None) -> str:
     prompt = (
         "Write a natural IELTS Speaking Band 7 spoken version. Preserve the candidate's core ideas, "
         "but improve cohesion, vocabulary, and grammar. Do not include the original question or cue-card bullets. "
@@ -1150,8 +1773,8 @@ def model_answer_with_codex(attempt: dict[str, Any], transcript: str) -> str:
         "Return only the answer text: no title, no labels, no cue-card text, no logs.\n\n"
         f"Section: {attempt.get('mode')}\nQuestions:\n{questions_text(attempt)}\n\nCandidate transcript:\n{transcript}\n"
     )
-    result = subprocess.run([codex, "exec"], input=prompt, text=True, capture_output=True, timeout=45, check=True)
-    cleaned = clean_band7_output(result.stdout)
+    output, _usage = run_codex(prompt, call_id or f"band7_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
+    cleaned = clean_band7_output(output)
     if not plausible_spoken_answer(cleaned):
         raise RuntimeError("codex model answer was not a plausible spoken answer")
     return cleaned
@@ -1161,11 +1784,11 @@ def questions_text(attempt: dict[str, Any]) -> str:
     return "\n".join(f"{turn['index'] + 1}. {turn['question']}" for turn in attempt.get("turns", []))
 
 
-def build_band7_version(attempt: dict[str, Any], transcript: str) -> str:
+def build_band7_version(state: AppState, attempt: dict[str, Any], transcript: str) -> str:
     if not transcript:
         return "Record a full answer first. A Band 7 spoken version will appear after the system has a transcript to work from."
     try:
-        generated = model_answer_with_codex(attempt, transcript)
+        generated = model_answer_with_codex(attempt, transcript, state.billing, f"band7_attempt_{attempt['id']}")
         if plausible_spoken_answer(generated):
             return generated
     except Exception:
@@ -1207,7 +1830,7 @@ def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, A
     band7 = ""
     if transcript:
         try:
-            band7 = model_answer_with_codex({**attempt, "turns": [turn]}, transcript)
+            band7 = model_answer_with_codex({**attempt, "turns": [turn]}, transcript, state.billing, f"band7_turn_{attempt['id']}_{turn['id']}")
         except Exception:
             band7 = ""
     if not plausible_spoken_answer(band7):
@@ -1385,8 +2008,8 @@ def build_detailed_report(
     score["pronunciation_estimate"] = pron_band
     score["overall_band"] = rounded_overall(score)
     summary = clean_report_text(str(score.get("feedback") or "")) or "Score generated from the completed speaking section."
-    band7 = clean_report_text(build_band7_version(attempt, transcript))
-    final_band7 = band7 or build_band7_version(attempt, transcript)
+    band7 = clean_report_text(build_band7_version(state, attempt, transcript))
+    final_band7 = band7 or build_band7_version(state, attempt, transcript)
     model_tts = volcengine_tts(state, final_band7, role="model", cache_key=f"{attempt['id']}_band7")
     return {
         "feedback_summary": summary,
@@ -1436,6 +2059,23 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 return
             if path == "/api/history":
                 self.send_json({"items": self.state.history()})
+                return
+            if path == "/api/training/weak-items":
+                self.send_json({"items": self.state.training.weak_items(DEFAULT_USER_ID)})
+                return
+            if path == "/api/training/replay-queue":
+                query = urlparse(self.path).query
+                limit = 10
+                if query:
+                    params = dict(part.split("=", 1) if "=" in part else (part, "") for part in query.split("&") if part)
+                    try:
+                        limit = max(1, min(50, int(params.get("limit") or 10)))
+                    except ValueError:
+                        limit = 10
+                self.send_json({"items": self.state.training.replay_queue(DEFAULT_USER_ID, limit=limit, bank=self.state.bank)})
+                return
+            if path == "/api/billing/wallet":
+                self.send_json(self.state.billing.wallet(DEFAULT_USER_ID))
                 return
             match = re.fullmatch(r"/api/history/([^/]+)", path)
             if match:
@@ -1487,6 +2127,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 self.handle_tts(payload)
             elif path == "/api/attempts/start":
                 self.handle_attempt_start(payload)
+            elif path == "/api/billing/settle-usage":
+                self.handle_billing_settle(payload)
             else:
                 turn_complete = re.fullmatch(r"/api/attempts/([^/]+)/turns/([^/]+)/complete", path)
                 score_match = re.fullmatch(r"/api/attempts/([^/]+)/score", path)
@@ -1524,6 +2166,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             "id": attempt_id,
             "timestamp": now_iso(),
             "status": "started",
+            "user_id": str(payload.get("user_id") or DEFAULT_USER_ID),
             "mode": mode,
             "part": part,
             "title": title,
@@ -1653,7 +2296,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         prompt_text = questions_text(attempt)
         pronunciation = aggregate_pronunciation(completed)
         try:
-            score = score_with_codex(transcript, self.state.data_dir, prompt_text)
+            score = score_with_codex(transcript, self.state.data_dir, prompt_text, self.state.billing, f"score_attempt_{attempt_id}")
         except Exception as exc:  # noqa: BLE001
             score = heuristic_score(transcript, str(exc), prompt_text)
         detailed = build_detailed_report(self.state, attempt, score, pronunciation, transcript)
@@ -1661,9 +2304,25 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         for turn in completed:
             build_turn_band7(self.state, attempt, turn)
         attempt["transcript_cleaned"] = transcript
+        attempt["training_observations"] = self.state.training.record_attempt(attempt)
         attempt["status"] = "scored"
         self.state.save_attempt(attempt)
         self.send_json(attempt)
+
+    def handle_billing_settle(self, payload: dict[str, Any]) -> None:
+        call_id = str(payload.get("call_id") or "").strip()
+        if not call_id:
+            raise ValueError("Missing call_id")
+        usage = payload.get("usage")
+        if usage is not None and not isinstance(usage, dict):
+            raise ValueError("usage must be an object when provided")
+        result = self.state.billing.settle_usage(
+            str(payload.get("user_id") or DEFAULT_USER_ID),
+            call_id,
+            usage,
+            str(payload.get("snapshot_id") or "") or None,
+        )
+        self.send_json(result)
 
     def handle_legacy_score(self, payload: dict[str, Any]) -> None:
         transcript = str(payload.get("transcript") or "").strip()
@@ -1671,7 +2330,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if not transcript:
             raise ValueError("Missing transcript")
         try:
-            score = score_with_codex(transcript, self.state.data_dir, question)
+            score = score_with_codex(transcript, self.state.data_dir, question, self.state.billing, f"score_legacy_{hashlib.sha1(transcript.encode('utf-8')).hexdigest()[:20]}")
         except Exception as exc:  # noqa: BLE001
             score = heuristic_score(transcript, str(exc), question)
         report = {

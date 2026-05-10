@@ -118,6 +118,23 @@
         </section>
 
         <section id="settingsPanel" class="panel hidden">
+          <div class="settings-status-grid">
+            <article class="settings-card">
+              <h2>钱包</h2>
+              <div id="walletStatus" class="settings-metric">加载中...</div>
+              <div id="ledgerList" class="settings-list"></div>
+            </article>
+            <article class="settings-card">
+              <h2>弱题训练</h2>
+              <div id="weakTrainingStatus" class="settings-metric">加载中...</div>
+              <div id="weakTrainingList" class="settings-list"></div>
+            </article>
+            <article class="settings-card">
+              <h2>复习队列</h2>
+              <div id="replayQueueStatus" class="settings-metric">加载中...</div>
+              <div id="replayQueueList" class="settings-list"></div>
+            </article>
+          </div>
           <div class="settings-grid">
             <label>Backend mode
               <select id="backendMode">

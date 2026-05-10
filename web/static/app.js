@@ -128,6 +128,7 @@ function switchView(view) {
   text("viewTitle", viewCopy[view][0]);
   text("viewSubtitle", viewCopy[view][1]);
   if (view === "history") loadHistory();
+  if (view === "settings") loadSettings();
   if (["mock", "p1", "p2", "p3"].includes(view)) resetPracticeSurface();
   updateSidebarLock();
 }
@@ -724,6 +725,7 @@ function renderDetail(attempt, updateView = true) {
       </div>
       <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
     </div>
+    ${trainingObservationBlock(attempt.training_observations || [])}
     ${chinaExplanationBlock(chinaExplanation)}
     ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
     <div class="detail-section">
@@ -739,6 +741,20 @@ function renderDetail(attempt, updateView = true) {
   document.querySelectorAll("[data-speak-band7]").forEach((button) => {
     button.addEventListener("click", () => speakWithBrowser(button.dataset.speakBand7 || ""));
   });
+}
+
+function trainingObservationBlock(items = []) {
+  if (!items.length) return "";
+  const weakItems = items.filter((item) => item.weak_item_flag);
+  const body = weakItems.length
+    ? weakItems.map((item) => `<li><strong>${escapeHtml((item.part || "").toUpperCase())}</strong> ${escapeHtml(item.question || "")}<br><span>${escapeHtml((item.weak_reason || []).join("、") || "未命中明显弱项")}</span></li>`).join("")
+    : "<li>本次练习没有记录到明显弱项。</li>";
+  return `
+    <div class="detail-section training-observations">
+      <h3>弱题训练</h3>
+      <ul>${body}</ul>
+    </div>
+  `;
 }
 
 function chinaExplanationBlock(item = {}) {
@@ -999,6 +1015,60 @@ function renderP3TopicChips(topics) {
   if (state.p3Topics.length && !state.p3SelectedTopic) {
     state.p3SelectedTopic = state.p3Topics[0];
     document.querySelector("#p3TopicChips .topic-chip")?.classList.add("active");
+  }
+}
+
+async function loadSettings() {
+  await Promise.all([loadWallet(), loadWeakTraining(), loadReplayQueue()]);
+}
+
+function formatLocalTime(value) {
+  if (!value) return "未安排";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "未安排";
+  return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+async function loadWallet() {
+  try {
+    const wallet = await api("/api/billing/wallet");
+    text("walletStatus", `余额 ¥${Number(wallet.balance_rmb || 0).toFixed(6)} · 预留 ¥${Number(wallet.reserved_rmb || 0).toFixed(6)}`);
+    const entries = wallet.entries || [];
+    $("ledgerList").innerHTML = entries.length
+      ? entries.slice(0, 5).map((entry) => `<div class="settings-list-row"><strong>${escapeHtml(entry.entry_type)}</strong><span>¥${Number(entry.amount_rmb || 0).toFixed(6)}</span><small>${escapeHtml(entry.metadata?.reason || entry.created_at || "")}</small></div>`).join("")
+      : '<p class="muted">暂无流水。</p>';
+  } catch (error) {
+    text("walletStatus", error.message);
+  }
+}
+
+async function loadWeakTraining() {
+  try {
+    const payload = await api("/api/training/weak-items");
+    const items = payload.items || [];
+    text("weakTrainingStatus", `${items.length} 条弱题记录`);
+    $("weakTrainingList").innerHTML = items.length
+      ? items.slice(0, 6).map((item) => `<div class="settings-list-row"><strong>${escapeHtml((item.part || "").toUpperCase())}</strong><span>${escapeHtml((item.weak_reason || []).join("、") || "未命中明显弱项")}</span><small>${escapeHtml(item.question || "")}</small><small>下次复习：${escapeHtml(formatLocalTime(item.next_due))}</small></div>`).join("")
+      : '<p class="muted">暂无弱题记录。</p>';
+  } catch (error) {
+    text("weakTrainingStatus", error.message);
+  }
+}
+
+async function loadReplayQueue() {
+  try {
+    const payload = await api("/api/training/replay-queue");
+    const items = payload.items || [];
+    text("replayQueueStatus", `${items.length} 个复习项`);
+    $("replayQueueList").innerHTML = items.length
+      ? items.slice(0, 8).map((item) => {
+          const sourceLabel = item.source === "weak" ? "弱项" : "补位";
+          const detail = item.source === "weak" ? (item.weak_reason || []).join("、") || "未命中明显弱项" : "用于补足当前复习覆盖";
+          return `<div class="settings-list-row"><strong>${escapeHtml(sourceLabel)}</strong><span>${escapeHtml((item.part || "").toUpperCase())}</span><small>${escapeHtml(item.question || "")}</small><small>${escapeHtml(detail)}</small></div>`;
+        }).join("")
+      : '<p class="muted">暂无复习队列。</p>';
+  } catch (error) {
+    text("replayQueueStatus", error.message);
   }
 }
 

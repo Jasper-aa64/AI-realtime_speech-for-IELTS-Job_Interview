@@ -1,8 +1,10 @@
 import json
 import os
+import subprocess
 import tempfile
 import threading
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -11,7 +13,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "web"))
-from ielts_server import AppState, IELTSHandler, build_ai_coaching, clean_band7_output  # noqa: E402
+from ielts_server import AppState, IELTSHandler, build_ai_coaching, clean_band7_output, score_with_codex  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -436,6 +438,132 @@ class IELTSWebServerTest(unittest.TestCase):
         p1_ids = {item["id"] for item in history["items"] if item.get("part") == "p1"}
         self.assertIn(second["id"], p1_ids)
         self.assertNotIn(first["id"], p1_ids)
+
+    def test_training_observations_and_weak_item_api_after_scoring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            previous_state = IELTSHandler.state
+            try:
+                IELTSHandler.state = AppState(ROOT / "data" / "ielts", Path(tmp))
+                server = ThreadingHTTPServer(("127.0.0.1", 0), IELTSHandler)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                base_url = f"http://127.0.0.1:{server.server_port}"
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+                def get_json(path):
+                    with opener.open(base_url + path, timeout=5) as response:
+                        return json.loads(response.read().decode("utf-8"))
+
+                def post_json(path, payload):
+                    request = urllib.request.Request(
+                        base_url + path,
+                        data=json.dumps(payload).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with opener.open(request, timeout=5) as response:
+                        return json.loads(response.read().decode("utf-8"))
+
+                def upload_audio(attempt_id, turn_id, data):
+                    request = urllib.request.Request(
+                        f"{base_url}/api/attempts/{attempt_id}/turns/{turn_id}/audio",
+                        data=data,
+                        headers={"Content-Type": "audio/webm"},
+                        method="POST",
+                    )
+                    with opener.open(request, timeout=5) as response:
+                        return json.loads(response.read().decode("utf-8"))
+
+                attempt = post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+                turn = attempt["turns"][0]
+                upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+                post_json(
+                    f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                    {"transcript_raw": "Cat bus apple."},
+                )
+                scored = post_json(f"/api/attempts/{attempt['id']}/score", {})
+                self.assertIn("training_observations", scored)
+                self.assertTrue(scored["training_observations"])
+                self.assertTrue(scored["training_observations"][0]["weak_item_flag"])
+                self.assertIn("short_answer", scored["training_observations"][0]["weak_reason"])
+
+                weak_items = get_json("/api/training/weak-items")
+                self.assertTrue(any(item["question_id"] == scored["training_observations"][0]["question_id"] for item in weak_items["items"]))
+
+                replay = get_json("/api/training/replay-queue?limit=30")
+                self.assertTrue(replay["items"])
+                self.assertEqual(replay["items"][0]["source"], "weak")
+                self.assertTrue(any(item["source"] == "coverage" for item in replay["items"]))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+                IELTSHandler.state = previous_state
+
+    def test_billing_wallet_initial_grant_and_idempotent_usage_settlement(self):
+        wallet = self.get_json("/api/billing/wallet")
+        self.assertEqual(wallet["balance_u"], 5_000_000)
+        self.assertAlmostEqual(wallet["balance_rmb"], 5.0)
+        self.assertTrue(any(entry["entry_type"] == "grant" for entry in wallet["entries"]))
+
+        usage = {
+            "input_tokens": 1_000_000,
+            "cached_input_tokens": 250_000,
+            "output_tokens": 100_000,
+            "reasoning_output_tokens": 50_000,
+        }
+        settled = self.post_json("/api/billing/settle-usage", {"call_id": "call_test_1", "usage": usage})
+        self.assertEqual(settled["status"], "settled")
+        self.assertEqual(settled["usage"]["uncached_input_tokens"], 750_000)
+        self.assertEqual(settled["usage"]["cached_input_tokens"], 250_000)
+        expected_charge = 750_000 * 12_000_000 + 250_000 * 3_000_000 + 100_000 * 48_000_000
+        self.assertEqual(settled["charged_u"], expected_charge // 1_000_000)
+
+        repeated = self.post_json("/api/billing/settle-usage", {"call_id": "call_test_1", "usage": usage})
+        self.assertEqual(repeated["status"], "already_settled")
+
+        after = self.get_json("/api/billing/wallet")
+        self.assertEqual(after["balance_u"], 5_000_000 - settled["charged_u"])
+        settle_entries = [entry for entry in after["entries"] if entry["entry_type"] == "settle" and entry["call_id"] == "call_test_1"]
+        self.assertEqual(len(settle_entries), 1)
+
+    def test_billing_missing_usage_does_not_charge(self):
+        before = self.get_json("/api/billing/wallet")["balance_u"]
+        result = self.post_json("/api/billing/settle-usage", {"call_id": "call_without_usage"})
+        self.assertEqual(result["status"], "pending_reconciliation")
+        self.assertEqual(result["charged_u"], 0)
+        after = self.get_json("/api/billing/wallet")["balance_u"]
+        self.assertEqual(after, before)
+
+    def test_codex_json_usage_is_settled_when_available(self):
+        previous_disable = os.environ.pop("IELTS_WEB_DISABLE_CODEX", None)
+        state = AppState(ROOT / "data" / "ielts", Path(self.temp_dir.name) / "codex-json-usage")
+        output = "\n".join(
+            [
+                json.dumps({"type": "message", "content": "{\"fluency_coherence\":6,\"lexical_resource\":6,\"grammatical_range\":6,\"overall_band\":6,\"feedback\":\"Clear enough.\"}"}),
+                json.dumps({"type": "turn.completed", "usage": {"input_tokens": 1000, "cached_input_tokens": 200, "output_tokens": 100, "reasoning_output_tokens": 50}}),
+            ]
+        )
+        try:
+            with mock.patch("ielts_server.shutil.which", return_value="codex"), mock.patch("ielts_server.subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess(["codex", "exec", "--json"], 0, stdout=output, stderr="")
+                score = score_with_codex(
+                    "I usually answer with a clear reason and example.",
+                    ROOT / "data" / "ielts",
+                    "Do you like routines?",
+                    state.billing,
+                    "call_json_usage",
+                )
+            self.assertEqual(score["backend"], "codex")
+            wallet = state.billing.wallet()
+            settle_entries = [entry for entry in wallet["entries"] if entry["entry_type"] == "settle" and entry["call_id"] == "call_json_usage"]
+            self.assertEqual(len(settle_entries), 1)
+            self.assertEqual(wallet["balance_u"], 5_000_000 - abs(settle_entries[0]["amount_u"]))
+        finally:
+            if previous_disable is not None:
+                os.environ["IELTS_WEB_DISABLE_CODEX"] = previous_disable
+            else:
+                os.environ["IELTS_WEB_DISABLE_CODEX"] = "1"
 
     def test_empty_transcript_marks_missing_and_keeps_audio(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
