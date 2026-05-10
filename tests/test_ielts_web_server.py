@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "web"))
-from ielts_server import AppState, IELTSHandler, clean_band7_output  # noqa: E402
+from ielts_server import AppState, IELTSHandler, build_ai_coaching, clean_band7_output  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,6 +100,7 @@ class IELTSWebServerTest(unittest.TestCase):
         )
         self.assertEqual(payload["score"]["backend"], "heuristic")
         self.assertIn("overall_band", payload["score"])
+        self.assertEqual(payload["report"]["candidate"], "jasper")
 
     def test_p3_generation_falls_back_without_server_cli_env(self):
         payload = self.post_json("/api/p3/questions", {"theme": "technology_and_society"})
@@ -110,6 +111,7 @@ class IELTSWebServerTest(unittest.TestCase):
     def test_p1_attempt_uses_ten_turns_and_scores_after_completion(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"})
         self.assertEqual(attempt["part"], "p1")
+        self.assertEqual(attempt["candidate"], "jasper")
         self.assertEqual(len(attempt["turns"]), 10)
         self.assertEqual(attempt["turns"][0]["question"], "What is your full name?")
         self.assertEqual(attempt["turns"][0]["prompt"]["flow"], "intro")
@@ -180,6 +182,8 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIsNone(scored["ielts_score"]["pronunciation_estimate"])
         self.assertIn("criteria_feedback", scored)
         self.assertIn("band7_version", scored)
+        self.assertIn("part_scores", scored)
+        self.assertIn("p1", scored["part_scores"])
         self.assertIn("model_audio", scored)
         self.assertTrue(scored["turns"][0]["band7_version"])
         self.assertTrue(scored["turns"][0]["ai_coaching"])
@@ -263,6 +267,8 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("\n\n", scored_turn["transcript_markdown"])
         self.assertIn("\n\n", scored_turn["band7_markdown"])
         self.assertIn("neighbour who helped me", scored_turn["transcript_markdown"])
+        self.assertIn("Band 7 version", scored_turn["ai_coaching"])
+        self.assertIn("Describe", scored_turn["ai_coaching"])
 
     def test_mock_p3_is_generated_after_p2_answer(self):
         attempt = self.post_json("/api/attempts/start", {"part": "mock", "mode": "mock"})
@@ -299,6 +305,16 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(len([turn for turn in updated["turns"] if turn["part"] == "p1"]), 11)
         self.assertEqual(len([turn for turn in updated["turns"] if turn["part"] == "p3"]), 10)
         self.assertEqual(completed["next_turn"]["part"], "p3")
+
+        scored = self.complete_remaining_and_score(updated, completed["next_turn"])
+        self.assertIn("part_scores", scored)
+        self.assertEqual({"p1", "p2", "p3"}, set(scored["part_scores"]))
+        for part in ("p1", "p2", "p3"):
+            self.assertIn("band", scored["part_scores"][part])
+            self.assertIn("fluency_coherence", scored["part_scores"][part])
+            self.assertIn("lexical_resource", scored["part_scores"][part])
+            self.assertIn("grammatical_range", scored["part_scores"][part])
+            self.assertIn("pronunciation_estimate", scored["part_scores"][part])
 
     def test_abort_marks_attempt_blocks_score_and_excludes_history(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
@@ -408,6 +424,18 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertNotIn("SYSTEM", cleaned)
         self.assertIn("I usually prefer studying", cleaned)
 
+    def test_ai_coaching_fallback_compares_question_transcript_and_band7(self):
+        turn = {"question": "What do you enjoy most about your internship?"}
+        coaching = build_ai_coaching(
+            turn,
+            "It provide me a platform.",
+            "I enjoy my internship because it gives me a practical platform to do research and apply what I learn.",
+        )
+        self.assertIn("internship", coaching)
+        self.assertIn("short", coaching)
+        self.assertIn("Band 7 version", coaching)
+        self.assertNotIn("For this question, focus first on building a fuller answer", coaching)
+
     def test_tts_endpoint_degrades_to_browser_fallback_when_disabled(self):
         payload = self.post_json("/api/tts", {"text": "Why do you like technology?", "role": "examiner"})
         self.assertEqual(payload["provider"], "browser")
@@ -456,6 +484,21 @@ class IELTSWebServerTest(unittest.TestCase):
                     "transcript_raw": (
                         "I usually answer this question with a clear reason, a concrete example, "
                         "and a short conclusion so my response sounds complete."
+                    )
+                },
+            )
+            turn = completed["next_turn"]
+        return self.post_json(f"/api/attempts/{attempt['id']}/score", {})
+
+    def complete_remaining_and_score(self, attempt, turn):
+        while turn:
+            self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+            completed = self.post_json(
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                {
+                    "transcript_raw": (
+                        "I would answer this question with a clear opinion, one reason, and one example "
+                        "so my response is easier to follow."
                     )
                 },
             )

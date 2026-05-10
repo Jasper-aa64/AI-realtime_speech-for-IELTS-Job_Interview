@@ -613,6 +613,11 @@ audio {
   margin: 18px 0;
 }
 
+.score-row.mini {
+  grid-template-columns: repeat(4, minmax(58px, 1fr));
+  gap: 8px;
+}
+
 .score-cell {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -630,6 +635,14 @@ audio {
   display: block;
   margin-top: 3px;
   font-size: 24px;
+}
+
+.score-row.mini .score-cell {
+  padding: 8px;
+}
+
+.score-row.mini .score-cell strong {
+  font-size: 17px;
 }
 
 .feedback {
@@ -827,6 +840,36 @@ button.ghost {
   box-shadow: 0 4px 12px rgba(15, 118, 110, 0.25);
 }
 
+.part-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.part-score-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.part-score-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.part-score-head strong {
+  font-size: 18px;
+}
+
+.part-score-head span {
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+
 .criteria-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
@@ -967,7 +1010,9 @@ input, select {
   }
   .score-row,
   .score-row.compact,
+  .score-row.mini,
   .criteria-grid,
+  .part-score-grid,
   .settings-grid {
     grid-template-columns: 1fr;
   }

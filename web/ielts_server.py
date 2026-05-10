@@ -51,6 +51,7 @@ P1_INTRO_QUESTIONS = [
 ]
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
+DEFAULT_CANDIDATE = "jasper"
 
 
 def clamp_band(value: float | int | None) -> float:
@@ -986,26 +987,62 @@ def aggregate_pronunciation(turns: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def base_criteria(band: float, label: str, transcript: str) -> dict[str, Any]:
-    words = len(re.findall(r"[A-Za-z']+", transcript))
-    if words < 20:
-        return {
-            "band": band,
-            "strengths": [],
-            "problems": ["The speaking sample is too short or the transcript is incomplete."],
-            "suggestion": "Answer each question with a clear reason and one concrete detail.",
-        }
+def band_advice(band: float | None, low: str, mid: str, high: str) -> str:
+    if band is None:
+        return low
     if band < 5.5:
-        problems = ["Ideas are understandable but underdeveloped or loosely connected."]
-        suggestion = "Use a clearer first point, contrast, example, and conclusion."
-    else:
-        problems = ["The response would benefit from more precise examples and smoother linking."]
-        suggestion = "Extend each answer with a specific detail and a more natural closing sentence."
+        return low
+    if band < 7.0:
+        return mid
+    return high
+
+
+def base_criteria(band: float, label: str, transcript: str) -> dict[str, Any]:
+    standards = {
+        "fluency and coherence": (
+            "Assesses whether answers are developed, logically connected, and spoken without excessive hesitation or repetition."
+        ),
+        "lexical resource": (
+            "Assesses range and precision of vocabulary, including natural collocations and the ability to paraphrase."
+        ),
+        "grammar": (
+            "Assesses sentence control, tense accuracy, clause variety, and whether errors reduce clarity."
+        ),
+    }
+    advice = {
+        "fluency and coherence": band_advice(
+            band,
+            "Build each answer with a direct point, one reason, and one concrete example before closing.",
+            "Add contrast, consequence, and smoother linking so ideas feel connected rather than listed.",
+            "Refine pacing and use clearer signposting when moving from reason to example to conclusion.",
+        ),
+        "lexical resource": band_advice(
+            band,
+            "Replace repeated basic words with topic-specific phrases copied from your Band 7 version.",
+            "Paraphrase the question and add two or three natural collocations for the topic.",
+            "Use more precise topic vocabulary while keeping the answer conversational.",
+        ),
+        "grammar": band_advice(
+            band,
+            "Prioritise complete simple sentences first, then add one because/when/although clause.",
+            "Vary sentence openings and check tense consistency when giving examples.",
+            "Reduce small accuracy slips in longer complex sentences.",
+        ),
+    }
+    words = len(re.findall(r"[A-Za-z']+", transcript))
+    sample_note = (
+        "The sample is short or incomplete, so the advice focuses on building enough answer content."
+        if words < 20
+        else "The advice is a static IELTS reference for the current band range, not live AI-generated feedback."
+    )
     return {
         "band": band,
-        "strengths": [f"Some {label.lower()} control is visible across the completed answers."],
-        "problems": problems,
-        "suggestion": suggestion,
+        "standard": standards.get(label, standards["fluency and coherence"]),
+        "focus": sample_note,
+        "advice": advice.get(label, advice["fluency and coherence"]),
+        "strengths": [standards.get(label, standards["fluency and coherence"])],
+        "problems": [sample_note],
+        "suggestion": advice.get(label, advice["fluency and coherence"]),
     }
 
 
@@ -1178,7 +1215,7 @@ def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, A
     turn["band7_markdown"] = spoken_markdown(band7) or spoken_markdown(turn["band7_version"])
     turn["model_audio"] = volcengine_tts(state, turn["band7_version"], role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
     turn["upgrade_notes"] = build_upgrade_notes(transcript)
-    turn["ai_coaching"] = build_ai_coaching(turn, transcript)
+    turn["ai_coaching"] = build_ai_coaching(turn, transcript, turn["band7_version"])
 
 
 def build_upgrade_notes(transcript: str) -> list[dict[str, str]]:
@@ -1211,19 +1248,72 @@ def build_upgrade_notes(transcript: str) -> list[dict[str, str]]:
     return notes
 
 
-def build_ai_coaching(turn: dict[str, Any], transcript: str) -> str:
+def answer_development_level(text: str) -> str:
+    words = re.findall(r"[A-Za-z']+", text)
+    if len(words) < 12:
+        return "very short"
+    if len(words) < 35:
+        return "short"
+    return "developed"
+
+
+def build_ai_coaching(turn: dict[str, Any], transcript: str, band7: str = "") -> str:
     question = short_question(str(turn.get("question") or "this question"), 120)
-    if len(transcript.split()) < 35:
+    level = answer_development_level(transcript)
+    band7_words = re.findall(r"[A-Za-z']+", band7)
+    band7_has_example = any(word in band7.lower() for word in ("for example", "especially", "because", "so ", "when "))
+    if not transcript.strip():
         coaching = (
-            f"For this question, focus first on building a fuller answer: give a direct opinion, one clear reason, "
-            f"and a concrete example before you close. That will make your response to \"{question}\" sound less fragmented."
+            f"For \"{question}\", the transcript was missing, so the Band 7 version is only a general model. "
+            "Next time, make sure the recording captures a full spoken answer, then compare your real wording with the model."
+        )
+    elif level in {"very short", "short"}:
+        coaching = (
+            f"Your answer to \"{question}\" is {level}, while the Band 7 version develops the idea into about "
+            f"{len(band7_words)} words with a clearer reason"
+            f"{' and example' if band7_has_example else ''}. Next time, keep your original idea but add: "
+            "1) a direct answer, 2) one reason, and 3) one concrete detail from your life."
         )
     else:
         coaching = (
-            f"Your answer has enough material to develop. For \"{question}\", tighten the opening sentence, connect the example "
-            "more explicitly to the question, and add one contrast or consequence so the answer sounds more like Band 7 speech."
+            f"Your answer to \"{question}\" already gives usable content. Compared with the Band 7 version, "
+            "the main upgrade is clearer organisation and more natural linking between the point and the example. "
+            "Next time, start with the answer in one sentence, then add a specific example and a short result or contrast."
         )
     return clean_report_text(coaching)
+
+
+def score_for_part(turns: list[dict[str, Any]], part: str, fallback_score: dict[str, Any], pronunciation: dict[str, Any]) -> dict[str, Any]:
+    part_turns = [turn for turn in turns if turn.get("part") == part]
+    transcript = "\n".join(str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "") for turn in part_turns)
+    if not part_turns:
+        return {}
+    part_score = heuristic_score(transcript, f"{part.upper()} section estimate", "\n".join(str(turn.get("question") or "") for turn in part_turns))
+    pron = aggregate_pronunciation(part_turns)
+    pron_band = None
+    if pron.get("status") == "assessed" and pron.get("pron_score") is not None:
+        pron_band = clamp_band(float(pron["pron_score"]) / 100.0 * 9.0)
+    part_score["pronunciation_estimate"] = pron_band
+    part_score["overall_band"] = rounded_overall(part_score)
+    return {
+        "part": part,
+        "turn_count": len(part_turns),
+        "band": part_score.get("overall_band", fallback_score.get("overall_band")),
+        "fluency_coherence": part_score.get("fluency_coherence", fallback_score.get("fluency_coherence")),
+        "lexical_resource": part_score.get("lexical_resource", fallback_score.get("lexical_resource")),
+        "grammatical_range": part_score.get("grammatical_range", fallback_score.get("grammatical_range")),
+        "pronunciation_estimate": part_score.get("pronunciation_estimate"),
+        "pronunciation_status": pron.get("status") or pronunciation.get("status"),
+    }
+
+
+def build_part_scores(attempt: dict[str, Any], score: dict[str, Any], pronunciation: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    turns = attempt.get("turns") or []
+    return {
+        part: score_for_part(turns, part, score, pronunciation)
+        for part in ("p1", "p2", "p3")
+        if any(turn.get("part") == part for turn in turns)
+    }
 
 
 def build_detailed_report(
@@ -1252,11 +1342,15 @@ def build_detailed_report(
             "grammatical_range_accuracy": base_criteria(score["grammatical_range"], "grammar", transcript),
             "pronunciation": {
                 "band": pron_band,
+                "standard": "Assesses intelligibility, individual sound control, word stress, rhythm, and how naturally speech can be followed.",
+                "focus": "Pronunciation not assessed / Azure Speech is not configured." if pron_band is None else "Pronunciation was assessed from uploaded turn audio.",
+                "advice": "Configure Azure Speech for real pronunciation scoring." if pron_band is None else "Review low-accuracy words and repeat the model answer aloud.",
                 "strengths": [] if pron_band is None else ["Pronunciation was assessed from uploaded turn audio."],
-                "problems": pronunciation.get("issues", []) or [pronunciation.get("message", "Pronunciation not assessed.")],
+                "problems": pronunciation.get("issues", []) or [pronunciation.get("message", "Pronunciation not assessed / Azure Speech is not configured.")],
                 "suggestion": "Configure Azure Speech for real pronunciation scoring." if pron_band is None else "Review low-accuracy words and repeat the model answer aloud.",
             },
         },
+        "part_scores": build_part_scores(attempt, score, pronunciation),
         "band7_version": final_band7,
         "band7_markdown": spoken_markdown(final_band7),
         "model_audio": model_tts,
@@ -1380,6 +1474,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             "cue_card": cue_card,
             "turns": turns,
             "current_turn": turns[0]["id"] if turns else None,
+            "candidate": str(payload.get("candidate") or DEFAULT_CANDIDATE),
             "pronunciation": {"provider": "azure", "status": "pending"},
             "ielts_score": None,
             "feedback_summary": "",
@@ -1524,7 +1619,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             score = heuristic_score(transcript, str(exc), question)
         report = {
             "timestamp": now_iso(),
-            "candidate": str(payload.get("candidate") or "web-user"),
+            "candidate": str(payload.get("candidate") or DEFAULT_CANDIDATE),
             "mode": str(payload.get("mode") or "practice"),
             "parts": [{"part": str(payload.get("part") or "unknown"), "question": payload.get("question"), "transcript": transcript, "score": score}],
             "overall": {"band": score["overall_band"]},

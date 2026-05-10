@@ -175,7 +175,7 @@ async function startPractice() {
     const theme = state.p3SelectedTopic || "";
     const attempt = await api("/api/attempts/start", {
       mode,
-      candidate: $("#candidateName").value || "web-user",
+      candidate: $("#candidateName").value || "jasper",
       ...(mode === "p3" ? { p3_intensity: state.p3Intensity } : {}),
       ...(mode === "p3" && theme ? { theme } : {}),
     });
@@ -646,6 +646,7 @@ function renderDetail(attempt, updateView = true) {
   const criteria = attempt.criteria_feedback || {};
   const turns = attempt.turns || [];
   const isP2 = attempt.mode === "p2" || (turns[0]?.part === "p2");
+  const isMock = attempt.mode === "mock" || attempt.part === "mock";
 
   $("#detailPanel").innerHTML = `
     <div class="detail-section">
@@ -664,15 +665,11 @@ function renderDetail(attempt, updateView = true) {
       </div>
       <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
     </div>
+    ${partScoresHtml(attempt)}
     ${attempt.cue_card ? `<div class="detail-section">${cueDetail(attempt.cue_card)}</div>` : ""}
+    ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
     <div class="detail-section">
-      <table class="turn-report-table">
-        <thead><tr>${isP2 ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>" : "<th>题目</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>"}</tr></thead>
-        <tbody>${turns.map((turn) => turnReportRow(attempt.id, turn, attempt, isP2)).join("")}</tbody>
-      </table>
-    </div>
-    <div class="detail-section">
-      <h3>📊 各维度评分</h3>
+      <h3>📊 参考：雅思各维度评分标准，以及提升建议</h3>
       <div class="criteria-grid">
         ${criterionBlock("Fluency & Coherence", criteria.fluency_coherence)}
         ${criterionBlock("Lexical Resource", criteria.lexical_resource)}
@@ -684,6 +681,63 @@ function renderDetail(attempt, updateView = true) {
   document.querySelectorAll("[data-speak-band7]").forEach((button) => {
     button.addEventListener("click", () => speakWithBrowser(button.dataset.speakBand7 || ""));
   });
+}
+
+function partScoresHtml(attempt) {
+  const partScores = attempt.part_scores || {};
+  const parts = ["p1", "p2", "p3"].filter((part) => partScores[part]);
+  if (!parts.length) return "";
+  return `
+    <div class="detail-section">
+      <h3>Part scores</h3>
+      <div class="part-score-grid">
+        ${parts.map((part) => {
+          const item = partScores[part] || {};
+          return `
+            <article class="part-score-card">
+              <div class="part-score-head">
+                <strong>${escapeHtml(part.toUpperCase())}</strong>
+                <span>Band ${escapeHtml(item.band ?? "—")}</span>
+              </div>
+              <div class="score-row mini">
+                ${scoreCell("FC", item.fluency_coherence)}
+                ${scoreCell("LR", item.lexical_resource)}
+                ${scoreCell("GRA", item.grammatical_range)}
+                ${scoreCell("Pron", item.pronunciation_estimate ?? "Not assessed")}
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function turnTableSection(attempt, turns, isP2 = false) {
+  return `
+    <div class="detail-section">
+      <table class="turn-report-table">
+        <thead><tr>${isP2 ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>" : "<th>题目</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>"}</tr></thead>
+        <tbody>${turns.map((turn) => turnReportRow(attempt.id, turn, attempt, isP2)).join("")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function mockTurnSections(attempt, turns) {
+  return ["p1", "p2", "p3"].map((part) => {
+    const partTurns = turns.filter((turn) => turn.part === part);
+    if (!partTurns.length) return "";
+    return `
+      <div class="detail-section">
+        <h3>${escapeHtml(part.toUpperCase())} answers</h3>
+        <table class="turn-report-table">
+          <thead><tr>${part === "p2" ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>" : "<th>题目</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI 辅导</th>"}</tr></thead>
+          <tbody>${partTurns.map((turn) => turnReportRow(attempt.id, turn, attempt, part === "p2")).join("")}</tbody>
+        </table>
+      </div>
+    `;
+  }).join("");
 }
 
 function cueDetail(cue) {
@@ -736,14 +790,15 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
 }
 
 function criterionBlock(title, item = {}) {
-  const strengths = (item.strengths || []).map((value) => `<li>${renderMarkdown(value)}</li>`).join("");
-  const problems = (item.problems || []).map((value) => `<li>${renderMarkdown(typeof value === "string" ? value : JSON.stringify(value))}</li>`).join("");
+  const standard = item.standard || (item.strengths || [])[0] || "";
+  const focus = item.focus || (item.problems || [])[0] || "";
+  const advice = item.advice || item.suggestion || "";
   return `
     <article class="criterion">
       <h4>${escapeHtml(title)} · Band ${escapeHtml(item.band ?? "—")}</h4>
-      ${strengths ? `<strong>亮点</strong><ul>${strengths}</ul>` : ""}
-      ${problems ? `<strong>问题</strong><ul>${problems}</ul>` : ""}
-      <strong>建议</strong><p>${renderMarkdown(item.suggestion || "")}</p>
+      <strong>评分标准</strong><p>${renderMarkdown(standard)}</p>
+      <strong>当前关注</strong><p>${renderMarkdown(focus)}</p>
+      <strong>提升建议</strong><p>${renderMarkdown(advice)}</p>
     </article>
   `;
 }
