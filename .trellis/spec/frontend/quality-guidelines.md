@@ -154,6 +154,10 @@ await api("/api/score", {
   legible against the black sidebar.
 - Replace placeholder or garbled initial status text with a natural sentence
   before shipping; visible `????` / broken fallback text is a release blocker.
+- Settings and report-side guidance for Chinese learners should use natural
+  Chinese labels, not literal English placeholders. If weak-question training
+  is shown, surface the weak reason and the next review time rather than only
+  a count.
 
 ---
 

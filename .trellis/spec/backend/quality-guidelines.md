@@ -323,3 +323,72 @@ Content-Type: application/json
 
 {"part":"part2","transcript":"..."}
 ```
+
+## Scenario: IELTS Web Training and Billing Ledger
+
+### 1. Scope / Trigger
+
+- Trigger: The IELTS web app now persists weak-question observations and a local wallet ledger for Codex usage settlement.
+- Scope: `web/ielts_server.py`, `tests/test_ielts_web_server.py`, `reports/training/*`, `reports/billing/*`, and the related web UI settings/report views.
+
+### 2. Signatures
+
+```text
+GET  /api/training/weak-items
+GET  /api/training/replay-queue
+GET  /api/billing/wallet
+POST /api/billing/settle-usage
+```
+
+### 3. Contracts
+
+- Training observations are written after a scored attempt completes.
+- Each observation stores stable `question_id`, `attempt_id`, `turn_id`, `part`, `question`, `transcript`, score dimensions, relevance, `weak_item_flag`, `weak_reason`, `observed_at`, and `next_due`.
+- `GET /api/training/weak-items` returns aggregated weak items ordered by strongest weak signal and most recent observation, not by insertion order.
+- `GET /api/training/replay-queue` prefers due weak items first and then keeps pending weak items in the queue.
+- The billing wallet is stored in integer micro-RMB units.
+- The initial local grant is exactly 5 RMB (`5_000_000` micro-RMB).
+- `POST /api/billing/settle-usage` must treat `call_id` as the idempotency key for settlement.
+- Cached input tokens, uncached input tokens, and output tokens are charged separately from the active price snapshot.
+- `reasoning_output_tokens` are captured for auditability but do not contribute to the current charge.
+- Missing authoritative usage returns a pending reconciliation response and must not guess a charge.
+
+### 4. Validation & Error Matrix
+
+- Scored attempt without weak candidates -> no weak-item rows are emitted.
+- Weak-item query with no matches -> empty list, not an error.
+- Missing `call_id` -> `400` JSON error.
+- Missing `usage` -> `pending_reconciliation`, zero charge.
+- Repeated `call_id` settlement -> `already_settled`, no duplicate charge.
+- Snapshot lookup failure -> explicit error, not a fallback charge guess.
+
+### 5. Good/Base/Bad Cases
+
+- Good: A scored attempt records weak-question rows, and the UI can surface a replay queue.
+- Base: The wallet starts with a known local grant and the recent ledger can be inspected in the UI.
+- Bad: Treating `reasoning_output_tokens` as billable output again; that double-counts the request.
+
+### 6. Tests Required
+
+- Scored-attempt test must assert weak observations are persisted and listed by `/api/training/weak-items`.
+- Replay queue test must assert weak/due items are surfaced first.
+- Wallet test must assert the initial balance is exactly 5 RMB in micro-RMB.
+- Settlement test must assert cached and uncached input tokens are charged differently.
+- Settlement test must assert repeated `call_id` settlement is idempotent.
+- Missing-usage test must assert no blind deduction occurs.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+if usage:
+    charge = estimate_charge_from_prompt(payload)
+```
+
+#### Correct
+
+```python
+if not usage:
+    return {"status": "pending_reconciliation", "charged_u": 0}
+```
