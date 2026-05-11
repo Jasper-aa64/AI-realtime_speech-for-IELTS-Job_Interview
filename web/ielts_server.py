@@ -56,6 +56,7 @@ P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
 DEFAULT_CANDIDATE = "jasper"
 DEFAULT_USER_ID = "local-default"
+CODEX_REASONING_EFFORT = "low"
 MICRO_RMB_PER_RMB = 1_000_000
 DEFAULT_INITIAL_GRANT_U = 5 * MICRO_RMB_PER_RMB
 
@@ -1063,35 +1064,24 @@ def fallback_p3(theme: str, prior_answer: str = "", count: int = P3_MAIN_COUNT) 
     return {"questions": questions[:count], "follow_up": follow_up, "backend": "fallback"}
 
 
-def p3_with_claude(theme: str, prior_answer: str) -> dict[str, Any]:
-    if os.environ.get("IELTS_WEB_DISABLE_CLAUDE") == "1":
-        raise RuntimeError("claude generation disabled by IELTS_WEB_DISABLE_CLAUDE=1")
-    claude = shutil.which("claude")
-    if not claude:
-        raise RuntimeError("claude CLI not found")
+def p3_with_codex(theme: str, prior_answer: str, billing: BillingStore | None = None) -> dict[str, Any]:
     prompt = (
         "Return JSON only with keys questions (array of 5 IELTS Part 3 questions) "
         "and follow_up (one examiner follow-up). "
+        "Questions must be natural IELTS Speaking Part 3 examiner questions. "
         f"Theme: {theme}\nCandidate answer: {prior_answer}\n"
     )
-    result = subprocess.run(
-        [claude, "--print"],
-        input=prompt,
-        text=True,
-        capture_output=True,
-        timeout=25,
-        check=True,
-    )
-    payload = extract_json_object(result.stdout)
+    output, _usage = run_codex(prompt, f"p3_plan_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
+    payload = extract_json_object(output)
     questions = [str(item) for item in payload.get("questions", []) if str(item).strip()]
     if len(questions) < 5:
-        raise RuntimeError("claude returned fewer than five questions")
-    return {"questions": questions[:5], "follow_up": str(payload.get("follow_up", "")), "backend": "claude"}
+        raise RuntimeError("codex returned fewer than five questions")
+    return {"questions": questions[:5], "follow_up": str(payload.get("follow_up", "")), "backend": "codex"}
 
 
-def generate_p3_plan(theme: str, prior_answer: str, source: str) -> dict[str, Any]:
+def generate_p3_plan(theme: str, prior_answer: str, source: str, billing: BillingStore | None = None) -> dict[str, Any]:
     try:
-        result = p3_with_claude(theme, prior_answer)
+        result = p3_with_codex(theme, prior_answer, billing)
         status = "generated"
     except Exception as exc:  # noqa: BLE001 - dynamic P3 must degrade cleanly
         result = fallback_p3(theme, prior_answer, P3_MAIN_COUNT)
@@ -1125,13 +1115,8 @@ def fallback_p1_identity_follow_up(answer: str) -> str:
     return "Could you tell me a little more about what you do now?"
 
 
-def generate_p1_identity_follow_up(answer: str) -> dict[str, str]:
+def generate_p1_identity_follow_up(answer: str, billing: BillingStore | None = None) -> dict[str, str]:
     fallback = fallback_p1_identity_follow_up(answer)
-    if os.environ.get("IELTS_WEB_DISABLE_CLAUDE") == "1":
-        return {"question": fallback, "backend": "fallback", "status": "fallback"}
-    claude = shutil.which("claude")
-    if not claude:
-        return {"question": fallback, "backend": "fallback", "status": "fallback"}
     prompt = (
         "You are an IELTS Speaking examiner. Generate exactly one short Part 1 follow-up question "
         "based on whether the candidate works, studies at university, or goes to school. "
@@ -1139,19 +1124,12 @@ def generate_p1_identity_follow_up(answer: str) -> dict[str, str]:
         f"Candidate answer: {answer}\n"
     )
     try:
-        result = subprocess.run(
-            [claude, "--print"],
-            input=prompt,
-            text=True,
-            capture_output=True,
-            timeout=20,
-            check=True,
-        )
-        payload = extract_json_object(result.stdout)
+        output, _usage = run_codex(prompt, f"p1_identity_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
+        payload = extract_json_object(output)
         question = clean_report_text(str(payload.get("question") or ""))
         if not question:
-            raise RuntimeError("claude returned empty follow-up")
-        return {"question": question, "backend": "claude", "status": "ready"}
+            raise RuntimeError("codex returned empty follow-up")
+        return {"question": question, "backend": "codex", "status": "ready"}
     except Exception:
         return {"question": fallback, "backend": "fallback", "status": "fallback"}
 
@@ -1318,7 +1296,7 @@ def append_p3_turns(
     source: str,
     intensity: str = "high",
 ) -> None:
-    plan = generate_p3_plan(theme, prior_answer, source)
+    plan = generate_p3_plan(theme, prior_answer, source, state.billing)
     start_index = len(attempt.get("turns") or [])
     use_follow_ups = intensity == "high"
     new_turns: list[dict[str, Any]] = []
@@ -1364,7 +1342,7 @@ def adapt_p3_follow_up(state: AppState, attempt: dict[str, Any], completed_turn:
         return
     theme = str(completed_turn.get("prompt", {}).get("theme") or attempt.get("p3_theme") or "general speaking")
     prior_answer = str(completed_turn.get("transcript_cleaned") or completed_turn.get("transcript_raw") or "")
-    plan = generate_p3_plan(theme, prior_answer, "adaptive_answer")
+    plan = generate_p3_plan(theme, prior_answer, "adaptive_answer", state.billing)
     follow_up = clean_report_text(str(plan.get("follow_up") or ""))
     if not follow_up:
         return
@@ -1393,7 +1371,8 @@ def insert_p1_identity_follow_up(state: AppState, attempt: dict[str, Any], compl
         if next_prompt.get("flow") == "intro" and next_prompt.get("role") == "follow_up":
             return
     plan = generate_p1_identity_follow_up(
-        str(completed_turn.get("transcript_cleaned") or completed_turn.get("transcript_raw") or "")
+        str(completed_turn.get("transcript_cleaned") or completed_turn.get("transcript_raw") or ""),
+        state.billing,
     )
     question = clean_report_text(plan.get("question") or "") or fallback_p1_identity_follow_up("")
     follow_turn = create_turn(
@@ -1616,9 +1595,10 @@ def run_codex(prompt: str, call_id: str, billing: BillingStore | None = None) ->
     if not shutil.which(codex) and not Path(codex).exists():
         raise RuntimeError("codex CLI not found")
     raw_path = billing.db_path.parent / "codex_jsonl" / f"{safe_slug(call_id)}.jsonl" if billing else None
+    config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
     try:
         result = subprocess.run(
-            [codex, "exec", "--json"],
+            [codex, "exec", "--json", *config_args],
             input=prompt,
             text=True,
             capture_output=True,
@@ -1627,7 +1607,7 @@ def run_codex(prompt: str, call_id: str, billing: BillingStore | None = None) ->
         )
         output, usage = extract_codex_json_events(result.stdout, raw_path)
     except Exception:
-        result = subprocess.run([codex, "exec"], input=prompt, text=True, capture_output=True, timeout=45, check=True)
+        result = subprocess.run([codex, "exec", *config_args], input=prompt, text=True, capture_output=True, timeout=45, check=True)
         output, usage = result.stdout, None
     if billing:
         billing.settle_usage(DEFAULT_USER_ID, call_id, usage)
@@ -1848,21 +1828,33 @@ def base_criteria(band: float, label: str, transcript: str) -> dict[str, Any]:
     }
 
 
-def heuristic_score(transcript: str, reason: str, question: str = "") -> dict[str, Any]:
+def heuristic_score(transcript: str, reason: str, question: str = "", part: str = "") -> dict[str, Any]:
     words = re.findall(r"[A-Za-z']+", transcript)
     unique_ratio = len(set(word.lower() for word in words)) / max(1, len(words))
     if not words:
         base = 0.0
-    elif len(words) >= 260:
-        base = 6.5
-    elif len(words) >= 150:
-        base = 6.0
-    elif len(words) >= 70:
-        base = 5.5
-    elif len(words) < 20:
-        base = 4.0
+    elif part == "p1":
+        if len(words) >= 220:
+            base = 6.5
+        elif len(words) >= 130:
+            base = 6.0
+        elif len(words) >= 70:
+            base = 5.5
+        elif len(words) >= 25:
+            base = 5.0
+        else:
+            base = 4.5
     else:
-        base = 4.5
+        if len(words) >= 260:
+            base = 6.5
+        elif len(words) >= 150:
+            base = 6.0
+        elif len(words) >= 70:
+            base = 5.5
+        elif len(words) < 20:
+            base = 4.0
+        else:
+            base = 4.5
     lexical = base + (0.5 if unique_ratio > 0.62 and len(words) >= 50 else 0.0)
     scores: dict[str, Any] = {
         "fluency_coherence": clamp_band(base),
@@ -1876,13 +1868,52 @@ def heuristic_score(transcript: str, reason: str, question: str = "") -> dict[st
     return cap_off_topic_score(result, question, transcript)
 
 
-def score_with_codex(transcript: str, data_dir: Path, question: str = "", billing: BillingStore | None = None, call_id: str | None = None) -> dict[str, Any]:
+def score_prompt_for_part(part: str) -> str:
+    if part == "p1":
+        return (
+            "Section type: IELTS Speaking Part 1. Part 1 answers are normally short. "
+            "Do not penalize a relevant answer just because it is not a long turn; 3-5 spoken sentences per question is enough. "
+            "Score for relevance, clarity, basic sentence control, and natural short-answer development."
+        )
+    if part == "p2":
+        return (
+            "Section type: IELTS Speaking Part 2. Score the long-turn response by cue-card coverage, sustained development, "
+            "coherence across the story, vocabulary range, and grammar control."
+        )
+    if part == "p3":
+        return (
+            "Section type: IELTS Speaking Part 3. Score abstract discussion quality: clear opinions, reasons, examples, "
+            "comparison, speculation, and ability to extend ideas."
+        )
+    return "Section type: full/mock IELTS Speaking section. Score the completed section as a whole."
+
+
+def attempt_part(attempt: dict[str, Any]) -> str:
+    mode = str(attempt.get("mode") or attempt.get("part") or "").lower()
+    if mode in {"p1", "p2", "p3", "mock"}:
+        return mode
+    parts = {str(turn.get("part") or "").lower() for turn in attempt.get("turns", []) if turn.get("part")}
+    if len(parts) == 1:
+        return next(iter(parts))
+    return ""
+
+
+def score_with_codex(
+    transcript: str,
+    data_dir: Path,
+    question: str = "",
+    billing: BillingStore | None = None,
+    call_id: str | None = None,
+    part: str = "",
+) -> dict[str, Any]:
     prompt_path = data_dir / "prompts" / "scorer_system.md"
     prompt = (
         prompt_path.read_text(encoding="utf-8")
         + "\n\nReturn JSON only with numeric keys fluency_coherence, lexical_resource, "
         "grammatical_range, overall_band, and string key feedback. Do not invent a "
-        "pronunciation score from text. Score the whole completed speaking section.\n\nPrompt(s):\n"
+        "pronunciation score from text. "
+        + score_prompt_for_part(part)
+        + "\n\nPrompt(s):\n"
         + (question.strip() or "(not provided)")
         + "\n\nTranscript:\n"
         + transcript
@@ -1922,13 +1953,34 @@ def cap_off_topic_score(scores: dict[str, Any], question: str, transcript: str) 
     return scores
 
 
+def model_answer_constraints(part: str) -> str:
+    if part == "p1":
+        return (
+            "This is IELTS Speaking Part 1. Write a short natural answer, normally 3 sentences, maximum 5 sentences. "
+            "Do not turn it into a long Part 2-style speech. One concise Markdown paragraph is preferred."
+        )
+    if part == "p2":
+        return (
+            "This is IELTS Speaking Part 2. Write a natural long-turn answer in Markdown paragraphs. "
+            "Cover the cue-card points without copying the bullet list."
+        )
+    if part == "p3":
+        return (
+            "This is IELTS Speaking Part 3. Write a developed discussion answer, about 4-6 sentences, "
+            "with an opinion, reasoning, and one concrete example or contrast."
+        )
+    return "Write an answer appropriate to the IELTS Speaking part shown by the questions."
+
+
 def model_answer_with_codex(attempt: dict[str, Any], transcript: str, billing: BillingStore | None = None, call_id: str | None = None) -> str:
+    part = attempt_part(attempt)
     prompt = (
         "Write a natural IELTS Speaking Band 7 spoken version. Preserve the candidate's core ideas, "
         "but improve cohesion, vocabulary, and grammar. Do not include the original question or cue-card bullets. "
         "Format the answer as concise Markdown paragraphs with blank lines between paragraphs. "
-        "Return only the answer text: no title, no labels, no cue-card text, no logs.\n\n"
-        f"Section: {attempt.get('mode')}\nQuestions:\n{questions_text(attempt)}\n\nCandidate transcript:\n{transcript}\n"
+        "Return only the answer text: no title, no labels, no cue-card text, no logs.\n"
+        + model_answer_constraints(part)
+        + f"\n\nSection: {part or attempt.get('mode')}\nQuestions:\n{questions_text(attempt)}\n\nCandidate transcript:\n{transcript}\n"
     )
     output, _usage = run_codex(prompt, call_id or f"band7_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
     cleaned = clean_band7_output(output)
@@ -1968,12 +2020,19 @@ def build_turn_band7_fallback(turn: dict[str, Any], transcript: str) -> str:
     if not transcript:
         return "A complete transcript was not captured, so this model answer is a general spoken example for the same question."
     question = str(turn.get("question") or "this topic")
+    part = str(turn.get("part") or "").lower()
     words = [
         word.lower()
         for word in re.findall(r"[A-Za-z']+", question)
         if len(word) > 3 and word.lower() not in {"describe", "should", "would", "could", "about", "your"}
     ]
     topic_hint = " ".join(words[:5]) or "this topic"
+    if part == "p1":
+        return (
+            f"I'd say {topic_hint} is quite easy for me to answer because it connects with my daily life. "
+            "For example, I can give one simple detail from my own experience instead of only saying yes or no. "
+            "That makes the answer sound clearer and more natural."
+        )
     return (
         f"I'd say {topic_hint} is something I can talk about from my own experience. "
         "The main reason is that it connects with my daily life, so I can explain it quite naturally. "
@@ -1996,7 +2055,13 @@ def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, A
     turn["band7_markdown"] = spoken_markdown(band7) or spoken_markdown(turn["band7_version"])
     turn["model_audio"] = volcengine_tts(state, turn["band7_version"], role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
     turn["upgrade_notes"] = build_upgrade_notes(transcript)
-    turn["ai_coaching"] = build_ai_coaching(turn, transcript, turn["band7_version"])
+    turn["ai_coaching"] = build_ai_coaching(
+        turn,
+        transcript,
+        turn["band7_version"],
+        state.billing,
+        f"coach_turn_{attempt['id']}_{turn['id']}",
+    )
 
 
 def build_upgrade_notes(transcript: str) -> list[dict[str, str]]:
@@ -2038,7 +2103,46 @@ def answer_development_level(text: str) -> str:
     return "developed"
 
 
-def build_ai_coaching(turn: dict[str, Any], transcript: str, band7: str = "") -> str:
+def ai_coaching_with_codex(
+    turn: dict[str, Any],
+    transcript: str,
+    band7: str,
+    billing: BillingStore | None = None,
+    call_id: str | None = None,
+) -> str:
+    question = str(turn.get("question") or "this question")
+    part = str(turn.get("part") or "").lower()
+    part_hint = {
+        "p1": "Part 1 guidance: be concise. Coach toward a 3-sentence answer: direct answer, reason, one detail.",
+        "p2": "Part 2 guidance: coach toward cue-card coverage, story structure, and sustained development.",
+        "p3": "Part 3 guidance: coach toward abstract reasoning, comparison, examples, and clearer stance.",
+    }.get(part, "Coach according to the IELTS Speaking part.")
+    prompt = (
+        "Generate AI coaching for one IELTS Speaking answer. Return Markdown only, no title. "
+        "Compare the candidate's recording transcript with the Band 7 spoken version. "
+        "Be specific: mention one thing the candidate already said, one missing improvement, and one next sentence pattern to try. "
+        "Keep it concise: 2-4 short bullets or one short paragraph.\n"
+        f"{part_hint}\n\nQuestion:\n{question}\n\nCandidate transcript:\n{transcript or '(missing)'}\n\nBand 7 spoken version:\n{band7}\n"
+    )
+    output, _usage = run_codex(prompt, call_id or f"coach_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
+    coaching = clean_report_text(output)
+    if not coaching or len(re.findall(r"[A-Za-z']+", coaching)) < 12:
+        raise RuntimeError("codex coaching was too short")
+    return coaching
+
+
+def build_ai_coaching(
+    turn: dict[str, Any],
+    transcript: str,
+    band7: str = "",
+    billing: BillingStore | None = None,
+    call_id: str | None = None,
+) -> str:
+    if transcript.strip() and band7.strip():
+        try:
+            return ai_coaching_with_codex(turn, transcript, band7, billing, call_id)
+        except Exception:
+            pass
     question = short_question(str(turn.get("question") or "this question"), 120)
     level = answer_development_level(transcript)
     band7_words = re.findall(r"[A-Za-z']+", band7)
@@ -2069,7 +2173,12 @@ def score_for_part(turns: list[dict[str, Any]], part: str, fallback_score: dict[
     transcript = "\n".join(str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "") for turn in part_turns)
     if not part_turns:
         return {}
-    part_score = heuristic_score(transcript, f"{part.upper()} section estimate", "\n".join(str(turn.get("question") or "") for turn in part_turns))
+    part_score = heuristic_score(
+        transcript,
+        f"{part.upper()} section estimate",
+        "\n".join(str(turn.get("question") or "") for turn in part_turns),
+        part,
+    )
     pron = aggregate_pronunciation(part_turns)
     pron_band = None
     if pron.get("status") == "assessed" and pron.get("pron_score") is not None:
@@ -2473,11 +2582,12 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             for turn in completed
         )
         prompt_text = questions_text(attempt)
+        part = attempt_part(attempt)
         pronunciation = aggregate_pronunciation(completed)
         try:
-            score = score_with_codex(transcript, self.state.data_dir, prompt_text, self.state.billing, f"score_attempt_{attempt_id}")
+            score = score_with_codex(transcript, self.state.data_dir, prompt_text, self.state.billing, f"score_attempt_{attempt_id}", part)
         except Exception as exc:  # noqa: BLE001
-            score = heuristic_score(transcript, str(exc), prompt_text)
+            score = heuristic_score(transcript, str(exc), prompt_text, part)
         detailed = build_detailed_report(self.state, attempt, score, pronunciation, transcript)
         attempt.update(detailed)
         for turn in completed:
@@ -2508,10 +2618,18 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         question = str(payload.get("question") or "").strip()
         if not transcript:
             raise ValueError("Missing transcript")
+        part = str(payload.get("part") or payload.get("mode") or "").lower()
         try:
-            score = score_with_codex(transcript, self.state.data_dir, question, self.state.billing, f"score_legacy_{hashlib.sha1(transcript.encode('utf-8')).hexdigest()[:20]}")
+            score = score_with_codex(
+                transcript,
+                self.state.data_dir,
+                question,
+                self.state.billing,
+                f"score_legacy_{hashlib.sha1(transcript.encode('utf-8')).hexdigest()[:20]}",
+                part,
+            )
         except Exception as exc:  # noqa: BLE001
-            score = heuristic_score(transcript, str(exc), question)
+            score = heuristic_score(transcript, str(exc), question, part)
         report = {
             "timestamp": now_iso(),
             "candidate": str(payload.get("candidate") or DEFAULT_CANDIDATE),
@@ -2526,7 +2644,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         theme = str(payload.get("theme") or "general speaking")
         prior_answer = str(payload.get("prior_answer") or "")
         try:
-            result = p3_with_claude(theme, prior_answer)
+            result = p3_with_codex(theme, prior_answer, self.state.billing)
         except Exception:
             result = fallback_p3(theme, prior_answer)
         self.send_json(result)
@@ -2621,7 +2739,7 @@ def main() -> int:
     server = ThreadingHTTPServer((args.host, args.port), IELTSHandler)
     print(f"IELTS Web UI: http://{args.host}:{args.port}")
     print("Frontend contains no API keys. Audio, scoring, and model calls stay server-side.")
-    print("Set IELTS_WEB_DISABLE_CODEX=1, IELTS_WEB_DISABLE_CLAUDE=1, or IELTS_WEB_DISABLE_VOLCENGINE_TTS=1 to force fallbacks.")
+    print("Set IELTS_WEB_DISABLE_CODEX=1 or IELTS_WEB_DISABLE_VOLCENGINE_TTS=1 to force fallbacks.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

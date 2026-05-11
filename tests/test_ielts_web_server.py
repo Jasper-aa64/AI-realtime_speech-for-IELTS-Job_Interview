@@ -24,7 +24,6 @@ class IELTSWebServerTest(unittest.TestCase):
     def setUpClass(cls):
         cls.temp_dir = tempfile.TemporaryDirectory()
         os.environ["IELTS_WEB_DISABLE_CODEX"] = "1"
-        os.environ["IELTS_WEB_DISABLE_CLAUDE"] = "1"
         os.environ["IELTS_WEB_DISABLE_VOLCENGINE_TTS"] = "1"
         IELTSHandler.state = AppState(ROOT / "data" / "ielts", Path(cls.temp_dir.name))
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), IELTSHandler)
@@ -38,7 +37,6 @@ class IELTSWebServerTest(unittest.TestCase):
         cls.server.server_close()
         cls.temp_dir.cleanup()
         os.environ.pop("IELTS_WEB_DISABLE_CODEX", None)
-        os.environ.pop("IELTS_WEB_DISABLE_CLAUDE", None)
         os.environ.pop("IELTS_WEB_DISABLE_VOLCENGINE_TTS", None)
 
     def get_json(self, path):
@@ -668,6 +666,9 @@ class IELTSWebServerTest(unittest.TestCase):
                     state.billing,
                     "call_json_usage",
                 )
+                args = run.call_args.args[0]
+                self.assertIn("-c", args)
+                self.assertIn('model_reasoning_effort="low"', args)
             self.assertEqual(score["backend"], "codex")
             wallet = state.billing.wallet()
             settle_entries = [entry for entry in wallet["entries"] if entry["entry_type"] == "settle" and entry["call_id"] == "call_json_usage"]

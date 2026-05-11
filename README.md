@@ -110,9 +110,11 @@ POST /api/p3/follow-up
 GET  /api/reports/latest
 ```
 
-By default, the backend tries local `codex`, `claude`, and server-side
-VolcEngine TTS integrations when they are available. If a CLI/TTS path is
-missing or fails, deterministic/browser fallbacks keep the demo usable.
+By default, dynamic AI generation uses local `codex exec` with
+`model_reasoning_effort="low"`, plus server-side VolcEngine TTS integrations
+when they are available. Claude API/CLI is not used as a default dynamic
+generation path. If a CLI/TTS path is missing or fails,
+deterministic/browser fallbacks keep the demo usable.
 Pronunciation is not faked from text. Configure Azure Speech on the server when
 you want real pronunciation assessment:
 
@@ -125,7 +127,6 @@ To force fallback mode:
 
 ```
 IELTS_WEB_DISABLE_CODEX=1 python3 web/ielts_server.py
-IELTS_WEB_DISABLE_CLAUDE=1 python3 web/ielts_server.py
 IELTS_WEB_DISABLE_VOLCENGINE_TTS=1 python3 web/ielts_server.py
 ```
 

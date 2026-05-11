@@ -160,7 +160,7 @@ function resetPracticeSurface() {
   setPromptHtml("Start a voice practice session to load a question.", "short");
   text("followUp", "");
   setRecordButton("ready", "Start", "Record the full section. No typing.");
-  text("recordStatus", "点击开始录音，系统会自动加载题目。");
+  text("recordStatus", "Click Start. The examiner will load the questions automatically.");
 }
 
 function setRecordButton(status, title, hint) {
@@ -932,7 +932,7 @@ function stopAllRuntime(label = "Ready") {
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("exitPractice")?.classList.add("hidden");
   setRecordButton("ready", label, "Record the full section. No typing.");
-  text("recordStatus", "点击开始录音，系统会自动加载题目。");
+  text("recordStatus", "Click Start. The examiner will load the questions automatically.");
   updateSidebarLock();
 }
 
