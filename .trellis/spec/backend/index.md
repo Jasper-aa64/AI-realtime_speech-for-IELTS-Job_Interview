@@ -10,37 +10,31 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 ## Project Conventions
 
-### Convention: Keep IELTS scoring and local explanation separate
+### Convention: Keep scoring calibration out of report payloads
 
-**What**: The backend may emit a `china_explanation` block in scored reports, but the official IELTS score stays in `ielts_score`.
+**What**: The backend must not emit `china_explanation` or other local-language scoring explanation blocks in scored reports. China-specific IELTS calibration belongs in `data/ielts/prompts/scorer_system.md`, and the official score stays in `ielts_score`.
 
-**Why**: This prevents a local-language explanation layer from being mistaken for a second scoring system.
+**Why**: The product uses China-candidate evidence to make the scoring prompt more precise, not to show a separate or vague explanation section to the user.
 
 **Example**:
 ```python
 report["ielts_score"] = score
-report["china_explanation"] = build_china_explanation(score, pronunciation)
 ```
 
-**Related**: Frontend report rendering should display the explanation block as guidance, not as a band conversion.
+**Related**: Frontend report rendering should show official score, per-turn transcript, Band 7 spoken version, AI guidance, and rubric reference only.
 
-### Convention: Keep local explanation natural and rubric-bound
+### Convention: Keep weak-item training internal
 
-**What**: `build_china_explanation()` should write plain Chinese that sounds like product copy for domestic learners, while still describing the official IELTS Speaking rubric.
+**What**: `training_observations` may be saved to power weak-question replay and frequency adjustments, but report UI should not expose a `弱题训练` block.
 
-**Why**: Literal labels like `中国语境解释`, `Common weak points`, or blunt fallbacks like `暂无` make the report sound mechanical. That weakens trust even when the score itself is correct.
+**Why**: Weak-item records are scheduling and training metadata. Showing them in the report duplicates feedback and confuses the role of AI guidance.
 
 **Example**:
 ```python
-return {
-    "title": "中文说明",
-    "official_note": "本项目始终按官方 IELTS Speaking rubric 评分；这里的中文说明只是把结果翻成更适合中国考生阅读的练习反馈，不代表另一套国内分数体系。",
-    "weak_points": ["回答容易停顿或重复，先把一个观点说完整。"],
-    "next_steps": ["每个问题都先用一句直接回答开头。"],
-}
+attempt["training_observations"] = state.training.record_attempt(attempt)
 ```
 
-**Related**: Keep `ielts_score` as the single official band source; use `china_explanation` only for guidance wording.
+**Related**: Settings/training screens may expose weak-item queues separately when the user explicitly opens training tools.
 
 ---
 

@@ -225,9 +225,7 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("model_audio", scored["turns"][0])
         self.assertIn("estimate", scored["criteria_feedback"]["pronunciation"]["focus"].lower())
         self.assertIn("estimate", scored["criteria_feedback"]["pronunciation"]["problems"][0].lower())
-        self.assertIn("china_explanation", scored)
-        self.assertIn("官方 IELTS Speaking rubric", scored["china_explanation"]["official_note"])
-        self.assertTrue(scored["china_explanation"]["weak_points"])
+        self.assertNotIn("china_explanation", scored)
 
         history = self.get_json("/api/history")
         self.assertTrue(any(item["id"] == attempt["id"] for item in history["items"]))

@@ -2206,61 +2206,6 @@ def build_part_scores(attempt: dict[str, Any], score: dict[str, Any], pronunciat
     }
 
 
-def build_china_explanation(score: dict[str, Any], pronunciation: dict[str, Any]) -> dict[str, Any]:
-    overall = score.get("overall_band")
-    fluency = float(score.get("fluency_coherence") or 0.0)
-    lexical = float(score.get("lexical_resource") or 0.0)
-    grammar = float(score.get("grammatical_range") or 0.0)
-    pron = score.get("pronunciation_estimate")
-    weak_points: list[str] = []
-    next_steps: list[str] = []
-
-    if fluency <= lexical and fluency <= grammar:
-        weak_points.append("回答容易停顿或重复，先把一个观点说完整，再补一个理由或例子。")
-        next_steps.append("每个问题都先用一句直接回答开头，再用一句补充解释。")
-    if lexical <= fluency and lexical <= grammar:
-        weak_points.append("词汇变化还不够，容易重复同一组表达。")
-        next_steps.append("准备 2 到 3 组可替换说法，练习把同一个意思换句式说出来。")
-    if grammar <= fluency and grammar <= lexical:
-        weak_points.append("语法结构还偏单一，复杂句可以少量但要稳定。")
-        next_steps.append("优先保证简单句准确，再逐步加入一个从句或并列结构。")
-    if pron is None:
-        weak_points.append("发音目前只是估计值，没有真实音频测评。")
-        next_steps.append("如果要看发音，先接入可用音频分析，再看音素、重音和节奏。")
-    elif isinstance(pron, (int, float)) and pron < 6.0:
-        weak_points.append("发音估计偏低，通常意味着可懂度、重音或节奏还有明显问题。")
-        next_steps.append("优先练清楚单词重音和句子节奏，而不是只追求语速。")
-
-    if not weak_points:
-        weak_points.append("整体已经比较稳定，重点放在更自然的展开和更丰富的例子。")
-    if not next_steps:
-        next_steps.append("继续按官方 IELTS Speaking rubric 训练四个维度，不要把中国语境误解成独立评分体系。")
-
-    band_comment = "这次结果仍然只按官方 IELTS Speaking rubric 计算。中文说明只是帮助中国考生理解这个 band 的表现。"
-    if isinstance(overall, (int, float)):
-        overall_text = f"Band {overall:g}"
-        if overall >= 7.0:
-            band_comment = f"按官方 IELTS Speaking rubric，本次唯一分数来源为 {overall_text}。中文语境下，可以理解为你已经能比较自然地展开观点，但还可以把细节和衔接做得更稳。"
-        elif overall >= 6.0:
-            band_comment = f"按官方 IELTS Speaking rubric，本次唯一分数来源为 {overall_text}。中文语境下，通常意味着你能完成回答，但展开深度、词汇变化或语法稳定性还有提升空间。"
-        else:
-            band_comment = f"按官方 IELTS Speaking rubric，本次唯一分数来源为 {overall_text}。中文语境下，通常意味着你已经能回答问题，但还容易短、散、重复，先把回答说完整更重要。"
-
-    return {
-        "title": "中文说明",
-        "official_note": "本项目始终以官方 IELTS Speaking rubric 作为唯一评分来源；中文说明只用于帮助理解，不构成独立评分体系。",
-        "summary": band_comment,
-        "weak_points": weak_points[:3],
-        "next_steps": next_steps[:3],
-        "pronunciation_note": (
-            "发音目前只是估计值，未接入真实音频测评。"
-            if pron is None
-            else "发音已接入音频测评结果，但仍应视为练习反馈，不是官方考官评分。"
-        ),
-        "local_context": "中国考生常见的提升方向通常是先把回答展开，再把词汇变化、语法准确性和发音稳定性补齐。",
-    }
-
-
 def build_detailed_report(
     state: AppState,
     attempt: dict[str, Any],
@@ -2296,7 +2241,6 @@ def build_detailed_report(
             },
         },
         "part_scores": build_part_scores(attempt, score, pronunciation),
-        "china_explanation": build_china_explanation(score, pronunciation),
         "band7_version": final_band7,
         "band7_markdown": spoken_markdown(final_band7),
         "model_audio": model_tts,

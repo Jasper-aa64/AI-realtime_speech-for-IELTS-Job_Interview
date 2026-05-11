@@ -10,38 +10,28 @@ This directory contains guidelines for frontend development. Fill in each file w
 
 ## Project Conventions
 
-### Convention: Render local explanation as guidance, not scoring
+### Convention: Do not render calibration text in reports
 
-**What**: The frontend can render a `china_explanation` section in the report, but it must not present it as a separate band or alternate score.
+**What**: The frontend must not render `china_explanation`, `中文说明`, or similar local scoring explanation sections in attempt reports.
 
-**Why**: Users need a Chinese explanation of the official IELTS result, not a second scoring system.
+**Why**: China-candidate calibration should improve scorer prompt accuracy, not appear as vague report copy.
 
 **Example**:
 ```js
-const chinaExplanation = attempt.china_explanation || {};
+// Report body: score summary, turn table, Band 7 spoken version, AI guidance, rubric reference.
 ```
 
 **Related**: Keep pronunciation estimate labels explicit when no audio analysis is available.
 
-### Convention: Use natural Chinese labels in the explanation block
+### Convention: Keep weak training out of attempt reports
 
-**What**: Report copy for domestic learners should use natural labels such as `中文说明`, `常见短板`, and `下一步`, with human fallback text instead of `暂无`.
+**What**: The report view must not render a `弱题训练` section from `training_observations`.
 
-**Why**: The explanation block should read like a real IELTS prep product for Chinese users. Direct translations and empty placeholders make the UI feel broken or artificial even when the score data is correct.
+**Why**: Weak-item observations are for replay frequency and background training queues. User-facing improvement advice belongs in AI guidance and the rubric reference section.
 
 **Example**:
 ```js
-function chinaExplanationBlock(item = {}) {
-  return `
-    <div class="detail-section china-explanation">
-      <h3>${escapeHtml(item.title || "中文说明")}</h3>
-      <h4>常见短板</h4>
-      <ul>${weakPoints || "<li>暂未发现明显短板</li>"}</ul>
-      <h4>下一步</h4>
-      <ul>${nextSteps || "<li>先把回答说完整，再逐步增加例子和衔接</li>"}</ul>
-    </div>
-  `;
-}
+${turnTableSection(attempt, turns, isP2)}
 ```
 
 **Related**: Keep the official band labels and pronunciation estimate labels explicit.

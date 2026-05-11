@@ -703,7 +703,6 @@ function renderDetail(attempt, updateView = true) {
   state.activeHistoryId = attempt.id;
   const score = attempt.ielts_score || {};
   const criteria = attempt.criteria_feedback || {};
-  const chinaExplanation = attempt.china_explanation || {};
   const turns = attempt.turns || [];
   const isP2 = attempt.mode === "p2" || (turns[0]?.part === "p2");
   const isMock = attempt.mode === "mock" || attempt.part === "mock";
@@ -725,8 +724,6 @@ function renderDetail(attempt, updateView = true) {
       </div>
       <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
     </div>
-    ${trainingObservationBlock(attempt.training_observations || [])}
-    ${chinaExplanationBlock(chinaExplanation)}
     ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
     <div class="detail-section">
       <h3>Scoring criteria and upgrade guidance</h3>
@@ -741,48 +738,6 @@ function renderDetail(attempt, updateView = true) {
   document.querySelectorAll("[data-speak-band7]").forEach((button) => {
     button.addEventListener("click", () => speakWithBrowser(button.dataset.speakBand7 || ""));
   });
-}
-
-function trainingObservationBlock(items = []) {
-  if (!items.length) return "";
-  const weakItems = items.filter((item) => item.weak_item_flag);
-  const body = weakItems.length
-    ? weakItems.map((item) => `<li><strong>${escapeHtml((item.part || "").toUpperCase())}</strong> ${escapeHtml(item.question || "")}<br><span>${escapeHtml((item.weak_reason || []).join("、") || "未命中明显弱项")}</span></li>`).join("")
-    : "<li>本次练习没有记录到明显弱项。</li>";
-  return `
-    <div class="detail-section training-observations">
-      <h3>弱题训练</h3>
-      <ul>${body}</ul>
-    </div>
-  `;
-}
-
-function chinaExplanationBlock(item = {}) {
-  const weakPoints = (item.weak_points || []).map((value) => `<li>${renderMarkdown(value)}</li>`).join("");
-  const nextSteps = (item.next_steps || []).map((value) => `<li>${renderMarkdown(value)}</li>`).join("");
-  const summary = item.summary || "中文说明会把官方 IELTS Speaking rubric 的结果转成更适合练习复盘的反馈。";
-  const officialNote = item.official_note || "本项目始终以官方 IELTS Speaking rubric 作为唯一评分来源；中文说明不构成独立评分体系。";
-  const pronunciationNote = item.pronunciation_note || "发音反馈用于练习参考，不是官方考官评分。";
-  const localContext = item.local_context || "先把回答说完整，再逐步提升词汇变化、语法准确性和发音稳定性。";
-  return `
-    <div class="detail-section china-explanation">
-      <h3>${escapeHtml(item.title || "中文说明")}</h3>
-      <p class="feedback">${renderMarkdown(summary)}</p>
-      <p class="muted">${escapeHtml(officialNote)}</p>
-      <p class="muted">${escapeHtml(pronunciationNote)}</p>
-      <p class="muted">${escapeHtml(localContext)}</p>
-      <div class="criteria-grid">
-        <article class="criterion">
-          <h4>常见短板</h4>
-          <ul>${weakPoints || "<li>暂未发现明显短板</li>"}</ul>
-        </article>
-        <article class="criterion">
-          <h4>下一步建议</h4>
-          <ul>${nextSteps || "<li>先把回答说完整，再逐步增加例子和衔接</li>"}</ul>
-        </article>
-      </div>
-    </div>
-  `;
 }
 
 function partScoreBlock(part, item = {}) {
