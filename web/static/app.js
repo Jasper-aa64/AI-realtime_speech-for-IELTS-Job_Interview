@@ -25,7 +25,11 @@ const state = {
   p3Intensity: "normal",
   practiceLocked: false,
   navToastTimer: null,
+  fontStyle: "default",
 };
+
+const FONT_STORAGE_KEY = "ielts-font-style";
+const fontStyles = new Set(["default", "academic", "popular"]);
 
 const viewCopy = {
   mock: ["Mock", "Practice flow: P1, P2, then P3 generated from your P2 answer."],
@@ -99,6 +103,31 @@ async function api(path, body = null) {
 function setBusy(message) {
   $("#busyBar").classList.toggle("hidden", !message);
   text("busyText", message || "");
+}
+
+function applyFontStyle(value) {
+  const style = fontStyles.has(value) ? value : "default";
+  state.fontStyle = style;
+  document.body.classList.toggle("font-academic", style === "academic");
+  document.body.classList.toggle("font-popular", style === "popular");
+  document.querySelectorAll("[data-font-style]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.fontStyle === style);
+  });
+  try {
+    localStorage.setItem(FONT_STORAGE_KEY, style);
+  } catch (_error) {
+    // Ignore storage failures; the visual selection still applies for this session.
+  }
+}
+
+function loadFontStyle() {
+  let stored = "default";
+  try {
+    stored = localStorage.getItem(FONT_STORAGE_KEY) || "default";
+  } catch (_error) {
+    stored = "default";
+  }
+  applyFontStyle(stored);
 }
 
 async function withBusy(message, action) {
@@ -960,6 +989,9 @@ function bindEvents() {
       c.classList.toggle("active", c === chip);
     });
   });
+  document.querySelectorAll("[data-font-style]").forEach((button) => {
+    button.addEventListener("click", () => applyFontStyle(button.dataset.fontStyle || "default"));
+  });
 }
 
 function renderP3TopicChips(topics) {
@@ -1028,6 +1060,7 @@ async function loadReplayQueue() {
 }
 
 async function init() {
+  loadFontStyle();
   bindEvents();
   switchView("mock");
   try {

@@ -9,17 +9,33 @@
   <body>
     <div class="shell">
       <aside class="nav" aria-label="IELTS practice navigation">
-        <div>
+        <div class="nav-top">
           <div class="brand">IELTS Studio</div>
           <div class="status" id="bankStatus">Loading bank...</div>
           <div id="navLockHint" class="nav-lock-hint hidden">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
+          <nav class="nav-primary" aria-label="Practice modes">
+            <button class="nav-button active" data-view="mock">Mock</button>
+            <button class="nav-button" data-view="p1">P1</button>
+            <button class="nav-button" data-view="p2">P2</button>
+            <button class="nav-button" data-view="p3">P3</button>
+            <button class="nav-button" data-view="history">History</button>
+          </nav>
         </div>
-        <button class="nav-button active" data-view="mock">Mock</button>
-        <button class="nav-button" data-view="p1">P1</button>
-        <button class="nav-button" data-view="p2">P2</button>
-        <button class="nav-button" data-view="p3">P3</button>
-        <button class="nav-button" data-view="history">History</button>
-        <button class="nav-button" data-view="settings">Settings</button>
+        <div class="nav-bottom">
+          <div class="font-tool" aria-label="Font style">
+            <div class="font-tool-label">Typeface</div>
+            <div class="font-options" role="group" aria-label="Typeface options">
+              <button type="button" class="font-option active" data-font-style="default">Default</button>
+              <button type="button" class="font-option" data-font-style="academic">Academic</button>
+              <button type="button" class="font-option" data-font-style="popular">Popular</button>
+            </div>
+          </div>
+          <button class="nav-button settings-nav-button" data-view="settings">Settings</button>
+          <label class="nav-user">
+            <span>Candidate</span>
+            <input id="candidateName" value="jasper">
+          </label>
+        </div>
       </aside>
 
       <main class="workspace">
@@ -155,9 +171,6 @@
                 <option>VolcEngine server TTS</option>
                 <option>Browser fallback</option>
               </select>
-            </label>
-            <label>Candidate name
-              <input id="candidateName" value="jasper">
             </label>
           </div>
           <div class="notice">

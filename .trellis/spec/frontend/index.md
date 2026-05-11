@@ -36,6 +36,23 @@ ${turnTableSection(attempt, turns, isP2)}
 
 **Related**: Keep the official band labels and pronunciation estimate labels explicit.
 
+### Convention: Keep global account/settings controls in the lower-left nav
+
+**What**: The sidebar should reserve its bottom area for global controls: typeface switcher, Settings, and candidate identity. Primary practice navigation stays above.
+
+**Why**: This matches common desktop app layouts and keeps account/preferences separate from practice modes.
+
+**Example**:
+```html
+<div class="nav-bottom">
+  <div class="font-tool">...</div>
+  <button data-view="settings">Settings</button>
+  <label class="nav-user">...</label>
+</div>
+```
+
+**Related**: Typeface choice is a local UI preference persisted in `localStorage`, not a backend setting.
+
 ---
 
 ## Guidelines Index
