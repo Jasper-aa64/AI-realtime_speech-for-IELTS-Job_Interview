@@ -2,16 +2,54 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#132026">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <div class="shell">
+      <!-- Global top bar for user and settings -->
+      <div class="global-topbar">
+        <div class="global-topbar-spacer"></div>
+        <div class="global-topbar-actions">
+          <div class="nav-user-global">
+            <div class="user-avatar" id="userAvatarDesktop">J</div>
+            <input id="candidateName" value="Jasper" title="Candidate name">
+          </div>
+          <button class="settings-icon-button" data-view="settings" title="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
+        </div>
+      </div>
+
       <aside class="nav" aria-label="IELTS practice navigation">
         <div class="nav-top">
-          <div class="brand">IELTS Studio</div>
-          <div class="status" id="bankStatus">Loading bank...</div>
+          <div class="nav-top-left">
+            <div class="brand">IELTS Studio</div>
+            <div class="status" id="bankStatus">Loading bank...</div>
+          </div>
+          <div class="nav-top-right">
+            <div class="nav-user-mobile">
+              <div class="user-avatar" id="userAvatar" title="点击修改名字">J</div>
+            </div>
+            <button class="settings-icon-button-mobile" data-view="settings" title="Settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            </button>
+          </div>
+          <!-- User dropdown panel for mobile -->
+          <div id="userDropdown" class="user-dropdown hidden">
+            <div class="user-dropdown-header">
+              <div class="user-avatar-large" id="userAvatarLarge">J</div>
+              <input id="candidateNameMobileInput" class="user-name-input" value="Jasper" placeholder="输入名字">
+            </div>
+            <div class="user-dropdown-balance">
+              <span class="balance-label">余额</span>
+              <span class="balance-value" id="userBalanceMobile">--</span>
+            </div>
+          </div>
           <div id="navLockHint" class="nav-lock-hint hidden">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
           <nav class="nav-primary" aria-label="Practice modes">
             <button class="nav-button active" data-view="mock">Mock</button>
@@ -25,20 +63,17 @@
           <div class="font-tool" aria-label="Font style">
             <div class="font-tool-label">Typeface</div>
             <div class="font-options" role="group" aria-label="Typeface options">
-              <button type="button" class="font-option active" data-font-style="default">Default</button>
-              <button type="button" class="font-option" data-font-style="academic">Academic</button>
-              <button type="button" class="font-option" data-font-style="popular">Popular</button>
+              <button type="button" class="font-option active" data-font-style="default" title="Default">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+              </button>
+              <button type="button" class="font-option" data-font-style="academic" title="Academic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+              </button>
+              <button type="button" class="font-option" data-font-style="popular" title="Popular">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              </button>
             </div>
           </div>
-          <button class="nav-button settings-nav-button" data-view="settings">Settings</button>
-          <label class="nav-user">
-            <span>Candidate</span>
-            <input id="candidateName" value="jasper">
-          </label>
-          <label class="nav-user target-band-field">
-            <span>Target band</span>
-            <input id="targetBand" type="number" min="5" max="9" step="0.5" value="7">
-          </label>
         </div>
       </aside>
 
@@ -47,12 +82,6 @@
           <div id="viewTitleBlock">
             <h1 id="viewTitle">Mock</h1>
             <p id="viewSubtitle">Practice flow: P1, P2, then P3 generated from your P2 answer.</p>
-          </div>
-          <div id="historyTopRail" class="history-top-rail hidden">
-            <div class="history-header">
-              <span class="history-hint">选择一个历史练习报告</span>
-            </div>
-            <div id="historyList" class="history-list">No attempts yet.</div>
           </div>
         </header>
 
@@ -68,7 +97,17 @@
               <span id="phaseLabel">Ready</span>
             </div>
             <div class="exam-actions">
-              <div class="inline-timer" id="timerValue">00:00</div>
+              <div class="font-options mobile-font-options" role="group" aria-label="Typeface options">
+                <button type="button" class="font-option active" data-font-style="default" title="Default">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+                </button>
+                <button type="button" class="font-option" data-font-style="academic" title="Academic">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+                </button>
+                <button type="button" class="font-option" data-font-style="popular" title="Popular">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                </button>
+              </div>
             </div>
           </div>
           <div class="phase-meter"><span id="phaseMeter"></span></div>
@@ -108,6 +147,7 @@
 
             <article id="recorderPane" class="recorder-pane">
               <div class="section-label">Voice answer</div>
+              <div class="inline-timer" id="timerValue">00:00</div>
               <div class="record-row">
                 <button id="recordControl" class="record-control" type="button">
                   <span id="recordIcon"></span>
@@ -126,9 +166,18 @@
           </div>
 
           <section id="summaryPanel" class="summary-panel hidden" aria-live="polite"></section>
+          <div id="summaryOverlay" class="summary-panel-overlay hidden"></div>
         </section>
 
         <section id="historyPanel" class="panel hidden">
+          <div id="historyTopRail" class="history-top-rail hidden">
+            <span class="history-hint">选择历史练习报告</span>
+            <button type="button" class="history-toggle-btn" title="展开历史列表">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"></path></svg>
+            </button>
+            <button type="button" class="history-close-btn">收起</button>
+            <div id="historyList" class="history-list">No attempts yet.</div>
+          </div>
           <div class="history-layout">
             <article id="detailPanel" class="detail-panel">
               <h2>Attempt Details</h2>
@@ -141,7 +190,10 @@
           <div class="settings-status-grid">
             <article class="settings-card">
               <h2>钱包</h2>
-              <div id="walletStatus" class="settings-metric">加载中...</div>
+              <div class="wallet-header">
+                <div id="walletStatus" class="settings-metric">加载中...</div>
+                <button type="button" id="openRechargeBtn" class="confirm-recharge-btn">充值</button>
+              </div>
               <div id="ledgerList" class="settings-list"></div>
             </article>
             <article class="settings-card">
@@ -149,38 +201,32 @@
               <div id="weakTrainingStatus" class="settings-metric">加载中...</div>
               <div id="weakTrainingList" class="settings-list"></div>
             </article>
-            <article class="settings-card">
-              <h2>复习队列</h2>
-              <div id="replayQueueStatus" class="settings-metric">加载中...</div>
-              <div id="replayQueueList" class="settings-list"></div>
-            </article>
-          </div>
-          <div class="settings-grid">
-            <label>Backend mode
-              <select id="backendMode">
-                <option>hybrid</option>
-                <option>local CLI</option>
-                <option>cloud API</option>
-              </select>
-            </label>
-            <label>Text scorer
-              <select id="textScorer">
-                <option>codex CLI</option>
-                <option>OpenAI API</option>
-                <option>Gemini API</option>
-              </select>
-            </label>
-            <label>TTS backend
-              <select id="ttsBackend">
-                <option>VolcEngine server TTS</option>
-                <option>Browser fallback</option>
-              </select>
-            </label>
-          </div>
-          <div class="notice">
-            API keys and unofficial TTS calls stay server-side. If TTS fails, the page falls back to browser voice.
           </div>
         </section>
+        <!-- Recharge Dialog -->
+        <div id="rechargeDialog" class="recharge-dialog-overlay hidden">
+          <div class="recharge-dialog">
+            <h3>充值</h3>
+            <div class="recharge-buttons">
+              <button type="button" class="recharge-btn" data-amount="1">¥1</button>
+              <button type="button" class="recharge-btn" data-amount="5">¥5</button>
+              <button type="button" class="recharge-btn" data-amount="10">¥10</button>
+              <button type="button" class="recharge-btn" data-amount="20">¥20</button>
+              <button type="button" class="recharge-btn" data-amount="50">¥50</button>
+            </div>
+            <div class="recharge-custom">
+              <input type="number" id="rechargeAmount" placeholder="输入金额" min="0.01" step="0.01">
+            </div>
+            <div class="recharge-preview">
+              <span>充值金额:</span>
+              <strong id="rechargePreview">¥0.00</strong>
+            </div>
+            <div class="recharge-dialog-buttons">
+              <button type="button" id="cancelRechargeBtn" class="recharge-dialog-cancel">取消</button>
+              <button type="button" id="confirmRechargeBtn" class="recharge-dialog-confirm" disabled>确认充值</button>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
     <script src="/app.js"></script>

@@ -26,10 +26,11 @@ const state = {
   practiceLocked: false,
   navToastTimer: null,
   fontStyle: "default",
-  targetBand: 7,
+  pendingRecharge: 0,
 };
 
 const FONT_STORAGE_KEY = "ielts-font-style";
+const VIEW_STORAGE_KEY = "ielts-view";
 const fontStyles = new Set(["default", "academic", "popular"]);
 
 const viewCopy = {
@@ -50,16 +51,6 @@ const $ = (selector) => {
 };
 const text = (id, value) => { document.getElementById(id).textContent = value; };
 const byId = (id) => document.getElementById(id);
-
-function currentTargetBand() {
-  const value = Number($("#targetBand")?.value || state.targetBand || 7);
-  const clamped = Math.max(5, Math.min(9, Number.isFinite(value) ? value : 7));
-  return Math.round(clamped * 2) / 2;
-}
-
-function targetBandLabel(value = currentTargetBand()) {
-  return Number(value).toFixed(1).replace(/\.0$/, "");
-}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -153,6 +144,12 @@ async function withBusy(message, action) {
 function switchView(view) {
   stopAllRuntime("Ready");
   state.view = view;
+  // Save view to localStorage
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch (e) {
+    // Ignore storage errors
+  }
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
     button.classList.toggle("tone-mock", button.dataset.view === "mock");
@@ -236,7 +233,7 @@ async function startPractice() {
     const theme = state.p3SelectedTopic || "";
     const attempt = await api("/api/attempts/start", {
       mode,
-      candidate: $("#candidateName").value || "jasper",
+      candidate: $("#candidateName").value || "Jasper",
       ...(mode === "p3" ? { p3_intensity: state.p3Intensity } : {}),
       ...(mode === "p3" && theme ? { theme } : {}),
     });
@@ -531,11 +528,10 @@ async function finalizeTurn(mimeType) {
 async function scoreAttempt() {
   if (!state.attempt) return;
   const attemptId = state.attempt.id;
-  state.targetBand = currentTargetBand();
   setRecordButton("scoring", "Analyzing", "Analyzing the full section and generating the report.");
   text("recordStatus", "Analyzing the full section and generating the report.");
   try {
-    const scored = await api(`/api/attempts/${attemptId}/score`, { target_band: state.targetBand });
+    const scored = await api(`/api/attempts/${attemptId}/score`, {});
     if (state.abortingAttemptId === attemptId || state.attempt?.id !== attemptId) return;
     state.attempt = scored;
     renderSummary(scored);
@@ -666,10 +662,11 @@ function renderSummary(attempt) {
   const score = attempt.ielts_score || {};
   const pron = attempt.pronunciation || {};
   const summaryPanel = $("summaryPanel");
+  const summaryOverlay = $("summaryOverlay");
   if (!summaryPanel) return;
-  summaryPanel.classList.remove("hidden");
+
   summaryPanel.innerHTML = `
-      <div class="score-row">
+    <div class="score-row">
       ${scoreCell("Overall", score.overall_band)}
       ${scoreCell("Fluency", score.fluency_coherence)}
       ${scoreCell("Lexical", score.lexical_resource)}
@@ -679,12 +676,43 @@ function renderSummary(attempt) {
     <p class="feedback">${escapeHtml(attempt.feedback_summary || "No feedback generated.")}</p>
     <div class="summary-actions">
       <button id="viewDetails">View Details</button>
+      <button id="closeSummary" class="ghost">Close</button>
     </div>
     <p class="muted">Pronunciation estimate: ${escapeHtml(pron.message || pron.status || "unknown")}</p>
   `;
+
+  // Show panel and overlay
+  summaryPanel.classList.remove("hidden");
+  summaryPanel.classList.add("visible");
+  if (summaryOverlay) {
+    summaryOverlay.classList.remove("hidden");
+    summaryOverlay.classList.add("visible");
+  }
+
   const viewDetails = byId("viewDetails");
   if (viewDetails) {
-    viewDetails.addEventListener("click", () => renderDetail(attempt));
+    viewDetails.addEventListener("click", () => {
+      hideSummary();
+      renderDetail(attempt);
+    });
+  }
+
+  const closeSummary = byId("closeSummary");
+  if (closeSummary) {
+    closeSummary.addEventListener("click", hideSummary);
+  }
+}
+
+function hideSummary() {
+  const summaryPanel = $("summaryPanel");
+  const summaryOverlay = $("summaryOverlay");
+  if (summaryPanel) {
+    summaryPanel.classList.remove("visible");
+    summaryPanel.classList.add("hidden");
+  }
+  if (summaryOverlay) {
+    summaryOverlay.classList.remove("visible");
+    summaryOverlay.classList.add("hidden");
   }
 }
 
@@ -730,6 +758,7 @@ function renderHistoryList(items) {
       });
       const detail = await api(`/api/history/${button.dataset.attemptId}`);
       renderDetail(detail, false);
+      collapseHistoryPanel();
     });
   });
   if (!state.activeHistoryId && items.length) {
@@ -747,14 +776,14 @@ function renderDetail(attempt, updateView = true) {
   const turns = attempt.turns || [];
   const isP2 = attempt.mode === "p2" || (turns[0]?.part === "p2");
   const isMock = attempt.mode === "mock" || attempt.part === "mock";
-  const target = targetBandLabel(attempt.target_band || state.targetBand || 7);
+  const cueCard = isP2 && attempt.cue_card ? cueDetail(attempt.cue_card) : "";
 
   $("detailPanel").innerHTML = `
     <div class="detail-section">
       <div class="detail-header">
         <div>
           <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
-          <p class="muted">${escapeHtml(attempt.title || "")} - ${turns.length} question${turns.length === 1 ? "" : "s"} - Target Band ${escapeHtml(target)}</p>
+          <p class="muted">${escapeHtml(attempt.title || "")} - ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
         </div>
         <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
       </div>
@@ -766,8 +795,7 @@ function renderDetail(attempt, updateView = true) {
       </div>
       <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
     </div>
-    ${personalizedCoachingSection(attempt)}
-    ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
+    ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2, cueCard)}
     <div class="detail-section">
       <h3>Scoring criteria and upgrade guidance</h3>
       <div class="criteria-grid">
@@ -797,12 +825,14 @@ function partScoreBlock(part, item = {}) {
   `;
 }
 
-function turnTableSection(attempt, turns, isP2 = false) {
+function turnTableSection(attempt, turns, isP2 = false, cueCardHtml = "") {
   return `
-    <div class="detail-section turn-report-section">
-      <div class="turn-report-list">
-        ${turns.map((turn) => turnReportCard(attempt.id, turn, attempt, isP2)).join("")}
-      </div>
+    <div class="detail-section">
+      ${cueCardHtml}
+      <table class="turn-report-table">
+        <thead><tr>${isP2 ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>" : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>"}</tr></thead>
+        <tbody>${turns.map((turn) => turnReportRow(attempt.id, turn, attempt, isP2)).join("")}</tbody>
+      </table>
     </div>
   `;
 }
@@ -820,9 +850,10 @@ function mockTurnSections(attempt, turns) {
         <div class="part-detail-box">
           ${scoreBlock}
           ${cueCard}
-          <div class="turn-report-list">
-            ${partTurns.map((turn) => turnReportCard(attempt.id, turn, attempt, part === "p2")).join("")}
-          </div>
+          <table class="turn-report-table">
+            <thead><tr>${part === "p2" ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>" : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>"}</tr></thead>
+            <tbody>${partTurns.map((turn) => turnReportRow(attempt.id, turn, attempt, part === "p2")).join("")}</tbody>
+          </table>
         </div>
       </div>
     `;
@@ -843,104 +874,42 @@ function transcriptText(turn) {
   return "Recording exists, but transcript was not captured.";
 }
 
-function transcriptNotes(turn) {
-  const notes = turn.cleaning_notes || [];
-  if (!notes.length) return "";
-  return `<ul class="cleaning-notes">${notes.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
-}
-
 function aiCoachingHtml(turn, attempt) {
   const coaching = turn.ai_coaching || attempt.ai_coaching || "";
   if (coaching) return `<p>${renderMarkdown(coaching)}</p>`;
   const notes = turn.upgrade_notes || attempt.upgrade_notes || [];
-  if (!notes.length) return '<p class="muted">本题还没有生成 AI 辅导。</p>';
+  if (!notes.length) return '<p class="muted">No AI coaching generated for this turn.</p>';
   return `<ul>${notes.map((item) => `
     <li><strong>${escapeHtml(item.criterion || "Change")}:</strong> ${renderMarkdown(item.band7_change || item.original_problem || "")}</li>
   `).join("")}</ul>`;
 }
 
-function renderTagList(tags = []) {
-  const values = (tags || []).filter(Boolean);
-  if (!values.length) return '<p class="muted">暂未形成稳定学习标签。</p>';
-  return `<div class="tag-row">${values.map((tag) => `<span class="tag-pill">${escapeHtml(tag)}</span>`).join("")}</div>`;
-}
-
-function personalizedCoachingSection(attempt) {
-  const coaching = attempt.personalized_coaching || {};
-  if (!coaching.headline && !coaching.focus) return "";
-  const evidence = coaching.evidence || [];
-  const practice = coaching.next_practice || [];
-  const tags = coaching.habit_tags || (attempt.learning_profile || {}).habit_tags || [];
-  return `
-    <div class="detail-section">
-      <h3>个性化辅导</h3>
-      <div class="personalized-coaching">
-        <strong class="personalized-headline">${escapeHtml(coaching.headline || "个性化辅导")}</strong>
-        <p class="muted">${renderMarkdown(coaching.focus || "")}</p>
-        <div class="personalized-grid">
-          <div>
-            <h4>证据</h4>
-            ${evidence.length ? `<ul>${evidence.map((item) => `<li>${renderMarkdown(item)}</li>`).join("")}</ul>` : '<p class="muted">暂时没有足够证据。</p>'}
-          </div>
-          <div>
-            <h4>下一步练法</h4>
-            ${practice.length ? `<ul>${practice.map((item) => `<li>${renderMarkdown(item)}</li>`).join("")}</ul>` : '<p class="muted">暂时没有生成练习计划。</p>'}
-          </div>
-        </div>
-        <div>
-          <h4>学习标签</h4>
-          ${renderTagList(tags)}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function turnReportCard(attemptId, turn, attempt, isP2 = false) {
+function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const modelAudio = turn.model_audio || {};
-  const targetBand = targetBandLabel(turn.target_band || attempt.target_band || state.targetBand || 7);
-  const targetVersion = turn.target_band_version || turn.band7_version || attempt.target_band_version || attempt.band7_version || "";
-  const targetMarkdown = turn.target_band_markdown || turn.band7_markdown || attempt.target_band_markdown || attempt.band7_markdown || targetVersion;
+  const band7 = turn.band7_version || attempt.band7_version || "";
+  const band7Markdown = turn.band7_markdown || attempt.band7_markdown || band7;
   const statusLabel = turn.transcript_status === "interim_fallback"
     ? "Interim transcript used"
     : (turn.transcript_status === "captured" ? "Transcript captured" : "Transcript missing");
   const isFollowUp = turn.prompt?.role === "follow_up";
-  const questionBlock = isP2 ? "" : `
-    <div class="turn-question">
-      <span>${escapeHtml((turn.part || "").toUpperCase())} ${Number(turn.index ?? 0) + 1}</span>
-      <p>${escapeHtml(turn.question || "")}</p>
-    </div>
-  `;
+  const questionCell = isP2 ? "" : `<td><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong><p>${escapeHtml(turn.question)}</p></td>`;
   return `
-    <article class="turn-report-card">
-      <header class="turn-report-head">
-        <div>
-          <strong>${escapeHtml((turn.part || "").toUpperCase())} ${Number(turn.index ?? 0) + 1}</strong>
-          ${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}
-        </div>
-        <span class="transcript-status">${escapeHtml(statusLabel)}</span>
-      </header>
-      ${questionBlock}
-      <div class="turn-report-columns">
-        <section class="turn-report-pane candidate-pane">
-          <h4>我的回答</h4>
-          ${(turn.audio || {}).url
-            ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
-            : '<p class="audio-warning">Recording missing. This turn has no playable audio.</p>'}
-          <div class="report-text">${transcriptText(turn)}</div>
-          ${transcriptNotes(turn)}
-        </section>
-        <section class="turn-report-pane target-pane">
-          <h4>目标 ${escapeHtml(targetBand)} 分回答</h4>
-          ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(targetVersion)}">Play with browser voice</button>`}
-          <div class="report-text">${renderMarkdown(targetMarkdown)}</div>
-        </section>
-        <section class="turn-report-pane coaching-pane">
-          <h4>AI 辅导</h4>
-          <div class="report-text">${aiCoachingHtml(turn, attempt)}</div>
-        </section>
-      </div>
-    </article>
+    <tr>
+      ${questionCell}
+      <td>
+        ${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}
+        ${(turn.audio || {}).url
+          ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
+          : '<p class="audio-warning">Recording missing. This turn has no playable audio.</p>'}
+        <p class="transcript-status">${escapeHtml(statusLabel)}</p>
+        <p>${transcriptText(turn)}</p>
+      </td>
+      <td>
+        ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(band7)}">Play with browser voice</button>`}
+        <p>${renderMarkdown(band7Markdown)}</p>
+      </td>
+      <td>${aiCoachingHtml(turn, attempt)}</td>
+    </tr>
   `;
 }
 
@@ -1031,6 +1000,12 @@ function bindEvents() {
       switchView(button.dataset.view);
     });
   });
+  // Settings buttons (both desktop and mobile)
+  document.querySelectorAll(".settings-icon-button, .settings-icon-button-mobile").forEach((button) => {
+    button.addEventListener("click", () => {
+      switchView("settings");
+    });
+  });
   $("recordControl")?.addEventListener("click", () => {
     if (state.status === "recording") {
       stopRecording();
@@ -1066,6 +1041,45 @@ function bindEvents() {
   document.querySelectorAll("[data-font-style]").forEach((button) => {
     button.addEventListener("click", () => applyFontStyle(button.dataset.fontStyle || "default"));
   });
+  $("summaryOverlay")?.addEventListener("click", hideSummary);
+  // History panel toggle
+  $(".history-toggle-btn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    expandHistoryPanel();
+  });
+  $(".history-close-btn")?.addEventListener("click", collapseHistoryPanel);
+  // Recharge dialog
+  $("openRechargeBtn")?.addEventListener("click", openRechargeDialog);
+  $("cancelRechargeBtn")?.addEventListener("click", closeRechargeDialog);
+  $("confirmRechargeBtn")?.addEventListener("click", doRecharge);
+  $("rechargeDialog")?.addEventListener("click", (e) => {
+    if (e.target.id === "rechargeDialog") closeRechargeDialog();
+  });
+  document.querySelectorAll("#rechargeDialog .recharge-btn[data-amount]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const amount = parseFloat(btn.dataset.amount) || 0;
+      setRechargeAmount(amount);
+    });
+  });
+  $("rechargeAmount")?.addEventListener("input", (e) => {
+    const amount = parseFloat(e.target.value) || 0;
+    state.pendingRecharge = amount;
+    updateRechargePreview();
+    // Deselect preset buttons when custom input
+    document.querySelectorAll("#rechargeDialog .recharge-btn").forEach((btn) => {
+      btn.classList.remove("selected");
+    });
+  });
+}
+
+function collapseHistoryPanel() {
+  const topRail = $("historyTopRail");
+  if (topRail) topRail.classList.add("collapsed");
+}
+
+function expandHistoryPanel() {
+  const topRail = $("historyTopRail");
+  if (topRail) topRail.classList.remove("collapsed");
 }
 
 function renderP3TopicChips(topics) {
@@ -1096,10 +1110,63 @@ async function loadWallet() {
     text("walletStatus", `余额 ¥${Number(wallet.balance_rmb || 0).toFixed(6)} · 预留 ¥${Number(wallet.reserved_rmb || 0).toFixed(6)}`);
     const entries = wallet.entries || [];
     $("ledgerList").innerHTML = entries.length
-      ? entries.slice(0, 5).map((entry) => `<div class="settings-list-row"><strong>${escapeHtml(entry.entry_type)}</strong><span>¥${Number(entry.amount_rmb || 0).toFixed(6)}</span><small>${escapeHtml(entry.metadata?.reason || entry.created_at || "")}</small></div>`).join("")
+      ? entries.slice(0, 10).map((entry) => `<div class="settings-list-row"><strong>${escapeHtml(entry.entry_type)}</strong><span>¥${Number(entry.amount_rmb || 0).toFixed(6)}</span><small>${escapeHtml(entry.metadata?.reason || entry.created_at || "")}</small></div>`).join("")
       : '<p class="muted">暂无流水。</p>';
   } catch (error) {
     text("walletStatus", error.message);
+  }
+}
+
+function openRechargeDialog() {
+  state.pendingRecharge = 0;
+  const dialog = $("rechargeDialog");
+  if (dialog) {
+    dialog.classList.remove("hidden");
+    updateRechargePreview();
+  }
+}
+
+function closeRechargeDialog() {
+  const dialog = $("rechargeDialog");
+  if (dialog) {
+    dialog.classList.add("hidden");
+  }
+  state.pendingRecharge = 0;
+}
+
+function setRechargeAmount(amount) {
+  state.pendingRecharge = amount;
+  updateRechargePreview();
+  // Update button selection
+  document.querySelectorAll("#rechargeDialog .recharge-btn").forEach((btn) => {
+    btn.classList.toggle("selected", parseFloat(btn.dataset.amount) === amount);
+  });
+  // Clear custom input if preset amount selected
+  const input = $("rechargeAmount");
+  if (input && amount > 0) input.value = "";
+}
+
+function updateRechargePreview() {
+  const preview = $("rechargePreview");
+  const btn = $("confirmRechargeBtn");
+  if (preview) {
+    preview.textContent = `¥${state.pendingRecharge.toFixed(2)}`;
+  }
+  if (btn) {
+    btn.disabled = state.pendingRecharge <= 0;
+  }
+}
+
+async function doRecharge() {
+  if (state.pendingRecharge <= 0) return;
+
+  const amount = state.pendingRecharge;
+  try {
+    await api("/api/billing/recharge", { amount_rmb: amount });
+    closeRechargeDialog();
+    await loadWallet();
+  } catch (error) {
+    showError(error);
   }
 }
 
@@ -1136,13 +1203,72 @@ async function loadReplayQueue() {
 async function init() {
   loadFontStyle();
   bindEvents();
-  switchView("mock");
+  // Load saved view from localStorage
+  let savedView = "mock";
+  try {
+    savedView = localStorage.getItem(VIEW_STORAGE_KEY) || "mock";
+    if (!viewCopy[savedView]) savedView = "mock";
+  } catch (e) {
+    // Ignore storage errors
+  }
+  switchView(savedView);
   try {
     const summary = await api("/api/question-bank/summary");
     text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);
     renderP3TopicChips(summary.part2_themes || []);
   } catch (error) {
     text("bankStatus", error.message);
+  }
+  // Sync desktop and mobile candidate name inputs and avatars
+  const candidateDesktop = $("candidateName");
+  const candidateMobileInput = $("candidateNameMobileInput");
+  const userAvatarDesktop = $("userAvatarDesktop");
+  const userAvatarMobile = $("userAvatar");
+  const userAvatarLarge = $("userAvatarLarge");
+  const updateAvatars = (name) => {
+    const initial = (name || "J").charAt(0).toUpperCase();
+    if (userAvatarDesktop) userAvatarDesktop.textContent = initial;
+    if (userAvatarMobile) userAvatarMobile.textContent = initial;
+    if (userAvatarLarge) userAvatarLarge.textContent = initial;
+  };
+  if (candidateDesktop && candidateMobileInput) {
+    candidateMobileInput.value = candidateDesktop.value || "Jasper";
+    updateAvatars(candidateDesktop.value);
+    candidateDesktop.addEventListener("input", (e) => {
+      candidateMobileInput.value = e.target.value;
+      updateAvatars(e.target.value);
+    });
+    candidateMobileInput.addEventListener("input", (e) => {
+      candidateDesktop.value = e.target.value;
+      updateAvatars(e.target.value);
+    });
+  }
+  // Mobile user dropdown
+  const userAvatar = $("userAvatar");
+  const userDropdown = $("userDropdown");
+  if (userAvatar && userDropdown) {
+    userAvatar.addEventListener("click", (e) => {
+      e.stopPropagation();
+      userDropdown.classList.toggle("hidden");
+    });
+    document.addEventListener("click", (e) => {
+      if (!userDropdown.contains(e.target) && e.target !== userAvatar) {
+        userDropdown.classList.add("hidden");
+      }
+    });
+    // Load balance for mobile dropdown
+    loadUserBalance();
+  }
+}
+
+async function loadUserBalance() {
+  const balanceEl = $("userBalanceMobile");
+  if (!balanceEl) return;
+  try {
+    const wallet = await api("/api/wallet");
+    balanceEl.textContent = wallet.balance !== undefined ? `$${wallet.balance.toFixed(2)}` : "--";
+  } catch (e) {
+    balanceEl.textContent = "--";
   }
 }
 
