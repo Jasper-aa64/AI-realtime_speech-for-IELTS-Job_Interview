@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "web"))
-from ielts_server import AppState, IELTSHandler, build_ai_coaching, calibrate_realistic_score, clean_band7_output, score_with_codex  # noqa: E402
+from ielts_server import AppState, IELTSHandler, build_ai_coaching, build_learning_profile, calibrate_realistic_score, clean_band7_output, score_with_codex  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -338,6 +338,12 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("criteria_feedback", scored)
         self.assertIn("band7_version", scored)
         self.assertIn("part_scores", scored)
+        self.assertIn("learning_profile", scored)
+        self.assertIn("personalized_coaching", scored)
+        self.assertIn("habit_tags", scored["learning_profile"])
+        self.assertIn("primary_focus", scored["learning_profile"])
+        self.assertIn("focus", scored["personalized_coaching"])
+        self.assertIn("next_practice", scored["personalized_coaching"])
         self.assertIn("p1", scored["part_scores"])
         self.assertEqual(scored["part_scores"]["p1"]["part"], "p1")
         self.assertIn("model_audio", scored)
@@ -354,6 +360,88 @@ class IELTSWebServerTest(unittest.TestCase):
 
         detail = self.get_json(f"/api/history/{attempt['id']}")
         self.assertEqual(detail["id"], attempt["id"])
+
+    def test_learning_profile_uses_current_attempt_and_weak_history(self):
+        base_url, server, thread, previous_state = self.start_isolated_server("learning-profile")
+        try:
+            attempt = self.post_json_to(base_url, "/api/attempts/start", {"part": "p2", "mode": "p2"})
+            turn = attempt["turns"][0]
+            self.upload_audio_to(base_url, attempt["id"], turn["id"], b"fake-webm-audio")
+            self.post_json_to(
+                base_url,
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                {"transcript_raw": "It is very important for me because it is very convenient."},
+            )
+            scored = self.post_json_to(base_url, f"/api/attempts/{attempt['id']}/score", {})
+            profile = scored["learning_profile"]
+            coaching = scored["personalized_coaching"]
+            self.assertIn("habit_tags", profile)
+            self.assertIn("template_language", profile["habit_tags"])
+            self.assertIn("evidence", profile)
+            self.assertTrue(profile["evidence"])
+            self.assertIn("headline", coaching)
+            self.assertIn("next_practice", coaching)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            IELTSHandler.state = previous_state
+
+    def test_learning_profile_direct_unit_uses_turns_and_weak_history(self):
+        state = AppState(ROOT / "data" / "ielts", Path(self.temp_dir.name) / "profile-unit")
+        attempt = {
+            "id": "attempt_profile",
+            "user_id": "local-default",
+            "turns": [
+                {
+                    "part": "p2",
+                    "status": "completed",
+                    "question": "Describe a useful skill.",
+                    "transcript_cleaned": "It is very important because it is very convenient.",
+                    "pronunciation": {"status": "not_configured"},
+                },
+                {
+                    "part": "p3",
+                    "status": "completed",
+                    "question": "Why do people use technology at work?",
+                    "transcript_cleaned": "I think it is very important in modern society.",
+                    "pronunciation": {"status": "not_configured"},
+                },
+            ],
+        }
+        state.training.record_observation(
+            {
+                "observation_id": "obs1",
+                "user_id": "local-default",
+                "attempt_id": "old",
+                "turn_id": "t1",
+                "question_id": "p2_001",
+                "part": "p2",
+                "question": "Describe a useful skill.",
+                "transcript": "It is very important because it is very convenient.",
+                "overall_band": 4.5,
+                "fluency_coherence": 4.5,
+                "lexical_resource": 4.5,
+                "grammatical_range": 4.5,
+                "pronunciation_estimate": None,
+                "relevance": 0.9,
+                "weak_item_flag": True,
+                "weak_reason": ["short_answer", "template_language"],
+                "model_version": "heuristic",
+                "observed_at": "2026-05-12T00:00:00+00:00",
+                "next_due": "2026-05-13T00:00:00+00:00",
+            }
+        )
+        profile = build_learning_profile(state, attempt, {"overall_band": 4.5, "feedback": "Need more development."})
+        self.assertIn("primary_focus", profile)
+        self.assertIn("habit_tags", profile)
+        self.assertIn("recurring_weak_reasons", profile)
+        self.assertIn("repeated_phrases", profile)
+        self.assertIn("part_focus", profile)
+        self.assertIn("evidence", profile)
+        self.assertIn("short_answer", profile["habit_tags"])
+        self.assertIn("template_language", profile["habit_tags"])
+        self.assertTrue(profile["repeated_phrases"])
 
     def test_p2_start_preserves_cue_card_and_p3_has_high_intensity_topic_flow(self):
         p2 = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
@@ -426,8 +514,9 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("\n\n", scored_turn["transcript_markdown"])
         self.assertIn("\n\n", scored_turn["band7_markdown"])
         self.assertIn("neighbour who helped me", scored_turn["transcript_markdown"])
-        self.assertIn("Band 7 version", scored_turn["ai_coaching"])
-        self.assertIn("Describe", scored_turn["ai_coaching"])
+        self.assertIn("证据", scored_turn["ai_coaching"])
+        self.assertIn("问题原因", scored_turn["ai_coaching"])
+        self.assertIn("替代表达", scored_turn["ai_coaching"])
         self.assertEqual(scored["pronunciation"]["status"], "not_configured")
         self.assertIsNone(scored["ielts_score"]["pronunciation_estimate"])
 
@@ -877,10 +966,66 @@ class IELTSWebServerTest(unittest.TestCase):
             "It provide me a platform.",
             "I enjoy my internship because it gives me a practical platform to do research and apply what I learn.",
         )
+        self.assertIn("证据", coaching)
+        self.assertIn("问题原因", coaching)
+        self.assertIn("替代表达", coaching)
+        self.assertIn("下一步", coaching)
         self.assertIn("internship", coaching)
-        self.assertIn("short", coaching)
-        self.assertIn("Band 7 version", coaching)
-        self.assertNotIn("For this question, focus first on building a fuller answer", coaching)
+        self.assertNotIn("Band 7 version", coaching)
+
+    def test_ai_coaching_fallback_is_chinese_and_personalized(self):
+        profile = {
+            "primary_focus": "answer_development",
+            "primary_focus_text": "先把每道题说完整，再谈更自然的词汇和句型。",
+            "habit_tags": ["short_answer", "template_language"],
+            "repeated_phrases": ["it is very important"],
+        }
+        coaching = build_ai_coaching(
+            {"question": "Describe a useful skill.", "part": "p2"},
+            "It is very important.",
+            "",
+            profile,
+        )
+        self.assertIn("证据", coaching)
+        self.assertIn("问题原因", coaching)
+        self.assertIn("替代表达", coaching)
+        self.assertIn("下一步", coaching)
+        self.assertNotIn("Band 7 version", coaching)
+
+    def test_history_compatibility_with_old_report_payload(self):
+        legacy_id = "legacy_scored_attempt"
+        legacy_payload = {
+            "id": legacy_id,
+            "timestamp": "2026-05-12T00:00:00+00:00",
+            "status": "scored",
+            "mode": "p1",
+            "part": "p1",
+            "title": "Legacy report",
+            "question": "Do you like reading?",
+            "turns": [
+                {
+                    "id": "t1",
+                    "part": "p1",
+                    "index": 0,
+                    "status": "completed",
+                    "question": "Do you like reading?",
+                    "transcript_cleaned": "Yes, I do.",
+                }
+            ],
+            "ielts_score": {
+                "overall_band": 6.0,
+                "fluency_coherence": 6.0,
+                "lexical_resource": 6.0,
+                "grammatical_range": 6.0,
+                "pronunciation_estimate": None,
+            },
+            "feedback_summary": "Legacy report still works.",
+        }
+        IELTSHandler.state.save_attempt(legacy_payload)
+        loaded = self.get_json(f"/api/history/{legacy_id}")
+        self.assertEqual(loaded["id"], legacy_id)
+        history = self.get_json("/api/history")
+        self.assertTrue(any(item["id"] == legacy_id for item in history["items"]))
 
     def test_tts_endpoint_degrades_to_browser_fallback_when_disabled(self):
         payload = self.post_json("/api/tts", {"text": "Why do you like technology?", "role": "examiner"})
@@ -912,6 +1057,17 @@ class IELTSWebServerTest(unittest.TestCase):
     def upload_audio(self, attempt_id, turn_id, data):
         request = urllib.request.Request(
             f"{self.base_url}/api/attempts/{attempt_id}/turns/{turn_id}/audio",
+            data=data,
+            headers={"Content-Type": "audio/webm"},
+            method="POST",
+        )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=5) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def upload_audio_to(self, base_url, attempt_id, turn_id, data):
+        request = urllib.request.Request(
+            f"{base_url}/api/attempts/{attempt_id}/turns/{turn_id}/audio",
             data=data,
             headers={"Content-Type": "audio/webm"},
             method="POST",

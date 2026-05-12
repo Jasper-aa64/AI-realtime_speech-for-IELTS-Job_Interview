@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+from collections import Counter
 import hashlib
 import json
 import math
@@ -2242,12 +2243,14 @@ def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, A
     turn["band7_markdown"] = spoken_markdown(band7) or spoken_markdown(turn["band7_version"])
     turn["model_audio"] = volcengine_tts(state, turn["band7_version"], role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
     turn["upgrade_notes"] = build_upgrade_notes(transcript)
+    profile = build_learning_profile(state, {**attempt, "turns": [*attempt.get("turns", []), turn]})
     turn["ai_coaching"] = build_ai_coaching(
         turn,
         transcript,
         turn["band7_version"],
-        state.billing,
-        f"coach_turn_{attempt['id']}_{turn['id']}",
+        billing=state.billing,
+        call_id=f"coach_turn_{attempt['id']}_{turn['id']}",
+        profile=profile,
     )
 
 
@@ -2290,30 +2293,248 @@ def answer_development_level(text: str) -> str:
     return "developed"
 
 
+def transcript_word_count(text: str) -> int:
+    return len(re.findall(r"[A-Za-z']+", text))
+
+
+def repeated_phrases_from_texts(texts: list[str]) -> list[str]:
+    candidates = [
+        "it is very important",
+        "it is very convenient",
+        "in modern society",
+        "from my perspective",
+        "as far as i am concerned",
+        "there are many advantages",
+        "make me feel relaxed",
+        "broaden my horizons",
+        "learn more knowledge",
+        "for example",
+        "because it helps me",
+        "one of the main reasons",
+    ]
+    counts: Counter[str] = Counter()
+    for text in texts:
+        lowered = text.lower()
+        for phrase in candidates:
+            if phrase in lowered:
+                counts[phrase] += 1
+    return [phrase for phrase, count in counts.items() if count >= 2]
+
+
+def turn_habit_tags(turn: dict[str, Any], score: dict[str, Any] | None = None) -> list[str]:
+    transcript = str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
+    part = str(turn.get("part") or "").lower()
+    tags: set[str] = set()
+    word_count = transcript_word_count(transcript)
+    if not transcript:
+        tags.add("missing_transcript")
+    if word_count and word_count < 25:
+        tags.add("short_answer")
+    if part == "p2" and word_count and word_count < 90:
+        tags.add("limited_development")
+    if part == "p3" and word_count and word_count < 55:
+        tags.add("limited_development")
+    lowered = transcript.lower()
+    if any(phrase in lowered for phrase in ("it is very important", "it is very convenient", "in modern society", "from my perspective", "as far as i am concerned")):
+        tags.add("template_language")
+    if transcript and len(set(re.findall(r"[A-Za-z']+", lowered))) < max(8, word_count // 2 or 8):
+        tags.add("repeated_phrases")
+    if score and isinstance(score.get("overall_band"), (int, float)) and float(score["overall_band"]) < 5.5:
+        tags.add("low_band")
+    pronunciation = turn.get("pronunciation") or {}
+    if pronunciation.get("status") not in {"assessed"}:
+        tags.add("pronunciation_unreliable")
+    if transcript and prompt_relevance(str(turn.get("question") or ""), transcript) < 0.20:
+        tags.add("off_topic")
+    if part == "p1" and word_count < 15:
+        tags.add("too_short_p1")
+    return sorted(tags)
+
+
+def summarize_weak_history(weak_items: list[dict[str, Any]]) -> dict[str, Any]:
+    reasons: Counter[str] = Counter()
+    parts: Counter[str] = Counter()
+    phrases: list[str] = []
+    evidence: list[str] = []
+    for item in weak_items[:8]:
+        part = str(item.get("part") or "").lower() or "unknown"
+        parts[part] += 1
+        for reason in item.get("weak_reason") or []:
+            reasons[str(reason)] += 1
+        question = short_question(str(item.get("question") or ""), 72)
+        if question:
+            evidence.append(f"{part.upper()} 弱项：{question}")
+        transcript = str(item.get("transcript") or "").strip()
+        if transcript:
+            evidence.append(f"历史转写：{short_question(transcript, 90)}")
+            phrases.extend(repeated_phrases_from_texts([transcript]))
+    return {"reasons": reasons, "parts": parts, "phrases": sorted(set(phrases)), "evidence": evidence[:6]}
+
+
+def part_focus_text(part: str, tags: list[str], score: dict[str, Any] | None = None) -> str:
+    if part == "p2":
+        if "short_answer" in tags or "limited_development" in tags:
+            return "Part 2 ?? cue card ????????????????????"
+        if "template_language" in tags:
+            return "Part 2 ??????????????????"
+        return "Part 2 ???????????????????"
+    if part == "p3":
+        if "short_answer" in tags or "limited_development" in tags:
+            return "Part 3 ?????????????????????????"
+        return "Part 3 ?????????????????"
+    if part == "p1":
+        return "Part 1 ??????????????????????????"
+    if score and isinstance(score.get("overall_band"), (int, float)) and float(score["overall_band"]) < 5.5:
+        return "???????????????????"
+    return "??????????????????"
+
+def infer_primary_focus(tags: list[str]) -> str:
+    if "off_topic" in tags:
+        return "task_relevance"
+    if "short_answer" in tags or "limited_development" in tags:
+        return "answer_development"
+    if "template_language" in tags or "repeated_phrases" in tags:
+        return "lexical_variety"
+    if "pronunciation_unreliable" in tags:
+        return "pronunciation_clarity"
+    if "low_band" in tags:
+        return "answer_development"
+    return "answer_development"
+
+
+def build_learning_profile(state: AppState, attempt: dict[str, Any], score: dict[str, Any] | None = None) -> dict[str, Any]:
+    turns = [turn for turn in attempt.get("turns", []) if turn.get("status") == "completed"]
+    completed_transcripts = [
+        str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
+        for turn in turns
+        if str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
+    ]
+    turn_tags: Counter[str] = Counter()
+    part_focus: dict[str, str] = {}
+    part_evidence: dict[str, list[str]] = {}
+    evidence: list[str] = []
+    for turn in turns:
+        transcript = str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
+        if not transcript:
+            continue
+        tags = turn_habit_tags(turn, score)
+        turn_tags.update(tags)
+        part = str(turn.get("part") or "").lower()
+        word_count = transcript_word_count(transcript)
+        if part == "p2":
+            evidence.append(f"P2 ????? {word_count} ??????????")
+        elif part == "p3":
+            evidence.append(f"P3 ????? {word_count} ???????????????")
+        elif part == "p1":
+            evidence.append(f"P1 ????? {word_count} ???????????????")
+        part_evidence.setdefault(part, []).append(short_question(transcript, 90))
+    weak_summary = summarize_weak_history(state.training.weak_items(str(attempt.get("user_id") or DEFAULT_USER_ID)))
+    turn_tags.update(weak_summary["reasons"].keys())
+    turn_tags.update(weak_summary["phrases"])
+    evidence.extend(weak_summary["evidence"])
+    if score and score.get("feedback"):
+        evidence.append(f"?????{short_question(str(score.get('feedback')), 90)}")
+    parts = sorted({str(turn.get("part") or "").lower() for turn in turns if turn.get("part")})
+    tags = sorted(tag for tag in turn_tags if tag and tag != "missing_transcript")
+    for part in parts:
+        focus = part_focus_text(part, tags, score)
+        if weak_summary["parts"].get(part):
+            focus = f"{focus} ?????????????????"
+        part_focus[part] = focus
+    repeated_phrases = repeated_phrases_from_texts(completed_transcripts)
+    for phrase in weak_summary["phrases"]:
+        if phrase not in repeated_phrases:
+            repeated_phrases.append(phrase)
+    primary_focus = infer_primary_focus(tags)
+    primary_focus_text = {
+        "task_relevance": "?????????????????????",
+        "answer_development": "?????????????????????",
+        "lexical_variety": "????????????????????",
+        "pronunciation_clarity": "??????????????????",
+    }.get(primary_focus, "???????????????????????????")
+    recurring_weak_reasons = sorted({str(reason) for reason in weak_summary["reasons"].keys()} | set(tags))
+    return {
+        "primary_focus": primary_focus,
+        "primary_focus_text": primary_focus_text,
+        "habit_tags": tags,
+        "recurring_weak_reasons": recurring_weak_reasons[:10],
+        "repeated_phrases": repeated_phrases[:6],
+        "part_focus": part_focus,
+        "part_evidence": part_evidence,
+        "evidence": evidence[:8],
+    }
+
+def build_personalized_coaching(profile: dict[str, Any], attempt: dict[str, Any], score: dict[str, Any]) -> dict[str, Any]:
+    focus = str(profile.get("primary_focus_text") or "先把答案说完整、说具体。")
+    tags = [str(tag) for tag in profile.get("habit_tags") or []]
+    evidence = [str(item) for item in profile.get("evidence") or []]
+    repeated = [str(item) for item in profile.get("repeated_phrases") or []]
+    headline = {
+        "task_relevance": "先把题目答准，再去追求更高阶表达",
+        "answer_development": "先补答案展开，不要只停在一句点到为止",
+        "lexical_variety": "先把模板化表达换掉，改成更自然的说法",
+        "pronunciation_clarity": "先保证录音完整清晰，再谈更高分细节",
+    }.get(str(profile.get("primary_focus") or ""), "先处理最影响分数的说话习惯")
+    next_practice: list[str] = []
+    if "short_answer" in tags or "limited_development" in tags:
+        next_practice.append("每题都按“直接回答 + 原因 + 例子 + 一句收尾”练 2 轮。")
+    if "template_language" in tags or repeated:
+        next_practice.append("把高频模板词替换成你自己的经历说法，先录 1 次再回听。")
+    if "off_topic" in tags:
+        next_practice.append("每次开口前先复述题目里的关键词，确认回答没有跑题。")
+    if "pronunciation_unreliable" in tags:
+        next_practice.append("保证录音完整，先把语速放慢，句末不要吞音。")
+    if not next_practice:
+        next_practice.extend([
+            "先挑一题慢速录音，再对照 Band 7 版本改一遍。",
+            "每次练习只修一个问题，避免一次想改太多。",
+        ])
+    return {
+        "headline": headline,
+        "focus": focus,
+        "evidence": evidence[:5],
+        "next_practice": next_practice[:3],
+        "habit_tags": tags[:8],
+    }
+
+
 def ai_coaching_with_codex(
     turn: dict[str, Any],
     transcript: str,
     band7: str,
+    profile: dict[str, Any] | None = None,
     billing: BillingStore | None = None,
     call_id: str | None = None,
 ) -> str:
     question = str(turn.get("question") or "this question")
     part = str(turn.get("part") or "").lower()
     part_hint = {
-        "p1": "Part 1 guidance: be concise. Coach toward a 3-sentence answer: direct answer, reason, one detail.",
-        "p2": "Part 2 guidance: coach toward cue-card coverage, story structure, and sustained development.",
-        "p3": "Part 3 guidance: coach toward abstract reasoning, comparison, examples, and clearer stance.",
-    }.get(part, "Coach according to the IELTS Speaking part.")
-    prompt = (
-        "Generate AI coaching for one IELTS Speaking answer. Return Markdown only, no title. "
-        "Compare the candidate's recording transcript with the Band 7 spoken version. "
-        "Be specific: mention one thing the candidate already said, one missing improvement, and one next sentence pattern to try. "
-        "Keep it concise: 2-4 short bullets or one short paragraph.\n"
-        f"{part_hint}\n\nQuestion:\n{question}\n\nCandidate transcript:\n{transcript or '(missing)'}\n\nBand 7 spoken version:\n{band7}\n"
-    )
+        "p1": "Part 1 要简短、直接、自然。重点提醒：直接回答 + 一个原因 + 一个小细节。",
+        "p2": "Part 2 要覆盖 cue card，并把答案说满。重点提醒：开头点题 + 展开细节 + 例子/经历 + 收尾。",
+        "p3": "Part 3 要做抽象讨论。重点提醒：观点 + 原因 + 对比/例子 + 简短总结。",
+    }.get(part, "按对应的 IELTS Speaking 部分给出实用中文 coaching。")
+    prompt = f"""请为这一段 IELTS Speaking 回答生成中文 coaching。只输出 Markdown，不要标题。
+请结合学习画像、当前转写和 Band 7 版本，写得具体、实用、适合大陆 IELTS 学习者。
+必须包含：1) 你看到的 transcript 证据；2) 问题原因；3) 可直接替换的表达或句型；4) 下一步怎么练。
+不要空泛评价，也不要只复述分数。
+
+{part_hint}
+
+Question:
+{question}
+
+Candidate transcript:
+{transcript or '(missing)'}
+
+Band 7 spoken version:
+{band7}
+
+Learning profile:
+{json_dumps(profile or {})}
+"""
     output, _usage = run_codex(prompt, call_id or f"coach_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
     coaching = clean_report_text(output)
-    if not coaching or len(re.findall(r"[A-Za-z']+", coaching)) < 12:
+    if not coaching:
         raise RuntimeError("codex coaching was too short")
     return coaching
 
@@ -2324,37 +2545,65 @@ def build_ai_coaching(
     band7: str = "",
     billing: BillingStore | None = None,
     call_id: str | None = None,
+    profile: dict[str, Any] | None = None,
 ) -> str:
+    if profile is None and isinstance(billing, dict):
+        profile = billing
+        billing = None
+    if profile is None and isinstance(call_id, dict):
+        profile = call_id
+        call_id = None
     if transcript.strip() and band7.strip():
         try:
-            return ai_coaching_with_codex(turn, transcript, band7, billing, call_id)
+            return ai_coaching_with_codex(turn, transcript, band7, profile, billing, call_id)
         except Exception:
             pass
-    question = short_question(str(turn.get("question") or "this question"), 120)
-    level = answer_development_level(transcript)
-    band7_words = re.findall(r"[A-Za-z']+", band7)
-    band7_has_example = any(word in band7.lower() for word in ("for example", "especially", "because", "so ", "when "))
-    if not transcript.strip():
-        coaching = (
-            f"For \"{question}\", the transcript was missing, so the Band 7 version is only a general model. "
-            "Next time, make sure the recording captures a full spoken answer, then compare your real wording with the model."
-        )
-    elif level in {"very short", "short"}:
-        coaching = (
-            f"Your answer to \"{question}\" is {level}, while the Band 7 version develops the idea into about "
-            f"{len(band7_words)} words with a clearer reason"
-            f"{' and example' if band7_has_example else ''}. Next time, keep your original idea but add: "
-            "1) a direct answer, 2) one reason, and 3) one concrete detail from your life."
-        )
-    else:
-        coaching = (
-            f"Your answer to \"{question}\" already gives usable content. Compared with the Band 7 version, "
-            "the main upgrade is clearer organisation and more natural linking between the point and the example. "
-            "Next time, start with the answer in one sentence, then add a specific example and a short result or contrast."
-        )
+    profile = profile or {}
+    tags = [str(tag) for tag in profile.get("habit_tags") or []]
+    focus = str(profile.get("primary_focus_text") or "")
+    repeated_phrases = [str(item) for item in profile.get("repeated_phrases") or []]
+    part = str(turn.get("part") or "").lower()
+    transcript_text = transcript.strip()
+    transcript_words = transcript_word_count(transcript_text)
+    question_text = short_question(str(turn.get("question") or "this question"), 120)
+    evidence = short_question(transcript_text, 120) if transcript_text else "这次没有抓到完整转写。"
+    if transcript_text:
+        evidence = f"题目：{question_text}。这次回答大约 {transcript_words} 词：{evidence}"
+    reason = "当前回答偏短，先补完整再修饰。" if transcript_words < 35 else "当前回答可以再补一层展开。"
+    if "off_topic" in tags:
+        reason = "你的回答有一点跑题，先把题目关键词扣住。"
+    elif "template_language" in tags or repeated_phrases:
+        reason = "你有明显模板化表达，先换掉高频空话。"
+    elif "pronunciation_unreliable" in tags:
+        reason = "这次录音或转写不稳定，先把回答录完整。"
+    elif part == "p2" and ("short_answer" in tags or "limited_development" in tags):
+        reason = "Part 2 还没说满，先把 cue card 说完整。"
+    elif part == "p3" and ("short_answer" in tags or "limited_development" in tags):
+        reason = "Part 3 还缺抽象讨论，先补原因和对比。"
+    replacement = {
+        "p1": "可以用“直接回答 + 一个原因 + 一个小细节”来改。",
+        "p2": "可以改成“开头点题 + 经过/细节 + 结果/感受 + 收尾”。",
+        "p3": "可以改成“观点 + 原因 + 对比/例子 + 简短结论”。",
+    }.get(part, "可以改成更完整的“观点 + 原因 + 例子 + 收尾”句型。")
+    practice = {
+        "short_answer": "下一次先用 20 秒把答案补完整，再回听删掉重复句。",
+        "limited_development": "下一次把同一题说到 40-60 词，再去加更自然的词。",
+        "template_language": "下一次把“it is very important”这类句子换成你自己的经历说法。",
+        "off_topic": "下一次先复述题目关键词，确认每句话都在回答问题。",
+        "pronunciation_unreliable": "下一次把语速放慢一点，确保录音完整清晰。",
+    }
+    matched_tag = next((tag for tag in ("off_topic", "template_language", "limited_development", "short_answer", "pronunciation_unreliable") if tag in tags), "")
+    next_action = practice.get(matched_tag, "下一次先对照 Band 7 版本，挑一句最想改的句型反复练 3 次。")
+    coaching = (
+        f"**证据**：{evidence}\n\n"
+        f"**问题原因**：{reason}\n\n"
+        f"**替代表达**：{replacement}\n\n"
+        f"**下一步**：{next_action}\n\n"
+        f"**学习重点**：{focus or '先把答案说完整，再去修饰表达。'}"
+    )
+    if repeated_phrases:
+        coaching += f"\n\n**重复表达**：{', '.join(repeated_phrases[:3])}"
     return clean_report_text(coaching)
-
-
 def score_for_part(turns: list[dict[str, Any]], part: str, fallback_score: dict[str, Any], pronunciation: dict[str, Any]) -> dict[str, Any]:
     part_turns = [turn for turn in turns if turn.get("part") == part]
     transcript = "\n".join(str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "") for turn in part_turns)
@@ -2416,6 +2665,20 @@ def build_detailed_report(
     band7 = clean_report_text(build_band7_version(state, attempt, transcript))
     final_band7 = band7 or build_band7_version(state, attempt, transcript)
     model_tts = volcengine_tts(state, final_band7, role="model", cache_key=f"{attempt['id']}_band7")
+    learning_profile = build_learning_profile(state, attempt, score)
+    personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
+    for turn in attempt.get("turns", []):
+        transcript_turn = str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
+        if not transcript_turn:
+            continue
+        turn["ai_coaching"] = build_ai_coaching(
+            turn,
+            transcript_turn,
+            turn.get("band7_version") or final_band7,
+            billing=state.billing,
+            call_id=f"coach_turn_{attempt['id']}_{turn['id']}_final",
+            profile=learning_profile,
+        )
     return {
         "feedback_summary": summary,
         "ielts_score": score,
@@ -2439,10 +2702,17 @@ def build_detailed_report(
         "band7_markdown": spoken_markdown(final_band7),
         "model_audio": model_tts,
         "upgrade_notes": build_upgrade_notes(transcript),
-        "ai_coaching": clean_report_text("Focus on answering directly, extending each point with a concrete example, and linking ideas naturally across the full section."),
+        "ai_coaching": clean_report_text(personalized_coaching.get("focus") or "???????????????"),
+        "coaching_focus": personalized_coaching.get("focus") or "",
+        "learning_profile": learning_profile,
+        "personalized_coaching": personalized_coaching,
+        "report": {
+            "candidate": str(attempt.get("candidate") or DEFAULT_CANDIDATE),
+            "timestamp": attempt.get("timestamp") or now_iso(),
+            "overall_band": score.get("overall_band"),
+            "feedback_summary": summary,
+        },
     }
-
-
 class IELTSHandler(SimpleHTTPRequestHandler):
     state: AppState
 
@@ -2774,6 +3044,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             "mode": str(payload.get("mode") or "practice"),
             "parts": [{"part": str(payload.get("part") or "unknown"), "question": payload.get("question"), "transcript": transcript, "score": score}],
             "overall": {"band": score["overall_band"]},
+            "feedback_summary": score.get("feedback") or "",
+            "ielts_score": score,
         }
         self.state.latest_report = report
         self.send_json({"score": score, "report": report, "report_path": ""})

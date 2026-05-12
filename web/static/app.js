@@ -753,6 +753,7 @@ function renderDetail(attempt, updateView = true) {
       </div>
       <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
     </div>
+    ${personalizedCoachingSection(attempt)}
     ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
     <div class="detail-section">
       <h3>Scoring criteria and upgrade guidance</h3>
@@ -835,10 +836,47 @@ function aiCoachingHtml(turn, attempt) {
   const coaching = turn.ai_coaching || attempt.ai_coaching || "";
   if (coaching) return `<p>${renderMarkdown(coaching)}</p>`;
   const notes = turn.upgrade_notes || attempt.upgrade_notes || [];
-  if (!notes.length) return '<p class="muted">No AI coaching generated for this turn.</p>';
+  if (!notes.length) return '<p class="muted">本题还没有生成 AI 辅导。</p>';
   return `<ul>${notes.map((item) => `
     <li><strong>${escapeHtml(item.criterion || "Change")}:</strong> ${renderMarkdown(item.band7_change || item.original_problem || "")}</li>
   `).join("")}</ul>`;
+}
+
+function renderTagList(tags = []) {
+  const values = (tags || []).filter(Boolean);
+  if (!values.length) return '<p class="muted">暂未形成稳定学习标签。</p>';
+  return `<div class="tag-row">${values.map((tag) => `<span class="tag-pill">${escapeHtml(tag)}</span>`).join("")}</div>`;
+}
+
+function personalizedCoachingSection(attempt) {
+  const coaching = attempt.personalized_coaching || {};
+  if (!coaching.headline && !coaching.focus) return "";
+  const evidence = coaching.evidence || [];
+  const practice = coaching.next_practice || [];
+  const tags = coaching.habit_tags || (attempt.learning_profile || {}).habit_tags || [];
+  return `
+    <div class="detail-section">
+      <h3>个性化辅导</h3>
+      <div class="personalized-coaching">
+        <strong class="personalized-headline">${escapeHtml(coaching.headline || "个性化辅导")}</strong>
+        <p class="muted">${renderMarkdown(coaching.focus || "")}</p>
+        <div class="personalized-grid">
+          <div>
+            <h4>证据</h4>
+            ${evidence.length ? `<ul>${evidence.map((item) => `<li>${renderMarkdown(item)}</li>`).join("")}</ul>` : '<p class="muted">暂时没有足够证据。</p>'}
+          </div>
+          <div>
+            <h4>下一步练法</h4>
+            ${practice.length ? `<ul>${practice.map((item) => `<li>${renderMarkdown(item)}</li>`).join("")}</ul>` : '<p class="muted">暂时没有生成练习计划。</p>'}
+          </div>
+        </div>
+        <div>
+          <h4>学习标签</h4>
+          ${renderTagList(tags)}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function turnReportRow(attemptId, turn, attempt, isP2 = false) {

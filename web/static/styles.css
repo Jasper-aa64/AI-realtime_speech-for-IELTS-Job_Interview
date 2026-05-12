@@ -1215,6 +1215,65 @@ button.ghost {
   font-size: 12px;
 }
 
+.personalized-coaching {
+  display: grid;
+  gap: 14px;
+}
+
+.personalized-headline {
+  display: block;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.personalized-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.personalized-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.personalized-coaching h4 {
+  margin-bottom: 8px;
+}
+
+.personalized-coaching ul {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.personalized-coaching li,
+.personalized-coaching p {
+  color: #2f3d44;
+  line-height: 1.55;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .turn-report-wrap {
   width: 100%;
   overflow-x: auto;
@@ -1419,6 +1478,7 @@ input, select {
   .score-row.compact,
   .score-row.mini,
   .criteria-grid,
+  .personalized-grid,
   .part-score-grid,
   .settings-grid {
     grid-template-columns: 1fr;

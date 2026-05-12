@@ -36,6 +36,20 @@ attempt["training_observations"] = state.training.record_attempt(attempt)
 
 **Related**: Settings/training screens may expose weak-item queues separately when the user explicitly opens training tools.
 
+### Convention: Generate IELTS coaching in Chinese with learner context
+
+**What**: Attempt reports may include `learning_profile` and `personalized_coaching` derived from the current attempt plus weak-item history. User-facing AI coaching should be natural Chinese for mainland IELTS learners, with evidence, the reason for the issue, a replacement expression or structure, and a next practice action.
+
+**Why**: The product is for Chinese IELTS Speaking learners. English-only or generic coaching reads like a model artifact and does not help the user change their speaking habits.
+
+**Example**:
+```python
+attempt["learning_profile"] = build_learning_profile(state, attempt, score)
+attempt["personalized_coaching"] = build_personalized_coaching(profile, attempt, score)
+```
+
+**Related**: Weak-item scheduling data stays internal. The report may use weak history as evidence for personalized advice, but it must not render the scheduler itself as a separate report module.
+
 ---
 
 ## Guidelines Index
