@@ -1657,6 +1657,42 @@ def clean_transcript(transcript: str) -> dict[str, Any]:
     return {"text": text, "notes": notes}
 
 
+def clean_transcript_with_codex(
+    transcript: str,
+    question: str,
+    part: str,
+    billing: BillingStore | None = None,
+    call_id: str | None = None,
+) -> dict[str, Any]:
+    fallback = clean_transcript(transcript)
+    text = fallback["text"]
+    if not text:
+        return fallback
+    prompt = f"""Clean this IELTS Speaking ASR transcript for report display.
+Keep the candidate's meaning, wording level, grammar quality, hesitations, and any real mistakes.
+Only fix obvious speech-recognition noise, broken punctuation, duplicated filler caused by ASR, and paragraph breaks.
+Do not upgrade vocabulary, do not add new ideas, and do not make the answer sound better than the candidate.
+For Part 2, split the answer into short Markdown paragraphs when the content naturally moves between idea, example, result, and conclusion.
+Return only the cleaned transcript text.
+
+Part: {part}
+Question:
+{question}
+
+Raw ASR transcript:
+{transcript}
+"""
+    try:
+        output, _usage = run_codex(prompt, call_id or f"asr_clean_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
+        cleaned = clean_band7_output(output)
+        if not cleaned or len(re.findall(r"[A-Za-z']+", cleaned)) < max(3, len(re.findall(r"[A-Za-z']+", text)) // 3):
+            raise RuntimeError("codex ASR cleanup was too short")
+        notes = [*fallback["notes"], "ASR text was lightly cleaned and paragraph-broken by local Codex CLI."]
+        return {"text": cleaned, "notes": notes, "backend": "codex-cli"}
+    except Exception as exc:  # noqa: BLE001 - ASR cleanup must not block scoring
+        return {**fallback, "notes": [*fallback["notes"], f"AI ASR cleanup unavailable; used local cleanup: {exc}"], "backend": "fallback"}
+
+
 def clean_band7_output(value: str) -> str:
     text = str(value or "").replace("\r\n", "\n").strip()
     text = re.sub(r"```(?:[a-zA-Z0-9_-]+)?", "", text)
@@ -2160,12 +2196,28 @@ def model_answer_constraints(part: str) -> str:
     return "Write an answer appropriate to the IELTS Speaking part shown by the questions."
 
 
+def target_band(attempt: dict[str, Any]) -> float:
+    try:
+        value = float(attempt.get("target_band") or 7.0)
+    except (TypeError, ValueError):
+        value = 7.0
+    return max(5.0, min(9.0, round(value * 2) / 2))
+
+
+def target_band_label(attempt: dict[str, Any]) -> str:
+    value = target_band(attempt)
+    return str(int(value)) if value.is_integer() else f"{value:.1f}"
+
+
 def model_answer_with_codex(attempt: dict[str, Any], transcript: str, billing: BillingStore | None = None, call_id: str | None = None) -> str:
     part = attempt_part(attempt)
+    target = target_band_label(attempt)
     prompt = (
-        "Write a natural IELTS Speaking Band 7 spoken version. Preserve the candidate's core ideas, "
+        f"Write a natural IELTS Speaking Band {target} spoken version. Preserve the candidate's core ideas, "
         "but improve cohesion, vocabulary, and grammar. Do not include the original question or cue-card bullets. "
         "Format the answer as concise Markdown paragraphs with blank lines between paragraphs. "
+        "Try to keep paragraph order aligned with the candidate transcript when the transcript has usable ideas. "
+        "If the candidate transcript is too weak or lacks a conclusion, you may add a short closing paragraph. "
         "Return only the answer text: no title, no labels, no cue-card text, no logs.\n"
         + model_answer_constraints(part)
         + f"\n\nSection: {part or attempt.get('mode')}\nQuestions:\n{questions_text(attempt)}\n\nCandidate transcript:\n{transcript}\n"
@@ -2183,7 +2235,7 @@ def questions_text(attempt: dict[str, Any]) -> str:
 
 def build_band7_version(state: AppState, attempt: dict[str, Any], transcript: str) -> str:
     if not transcript:
-        return "Record a full answer first. A Band 7 spoken version will appear after the system has a transcript to work from."
+        return f"Record a full answer first. A Band {target_band_label(attempt)} spoken version will appear after the system has a transcript to work from."
     try:
         generated = model_answer_with_codex(attempt, transcript, state.billing, f"band7_attempt_{attempt['id']}")
         if plausible_spoken_answer(generated):
@@ -2204,7 +2256,7 @@ def build_band7_version(state: AppState, attempt: dict[str, Any], transcript: st
     )
 
 
-def build_turn_band7_fallback(turn: dict[str, Any], transcript: str) -> str:
+def build_turn_band7_fallback(turn: dict[str, Any], transcript: str, target: str = "7") -> str:
     if not transcript:
         return "A complete transcript was not captured, so this model answer is a general spoken example for the same question."
     question = str(turn.get("question") or "this topic")
@@ -2219,28 +2271,32 @@ def build_turn_band7_fallback(turn: dict[str, Any], transcript: str) -> str:
         return (
             f"I'd say {topic_hint} is quite easy for me to answer because it connects with my daily life. "
             "For example, I can give one simple detail from my own experience instead of only saying yes or no. "
-            "That makes the answer sound clearer and more natural."
+            f"That makes the answer sound clearer and closer to a Band {target} response."
         )
     return (
         f"I'd say {topic_hint} is something I can talk about from my own experience. "
         "The main reason is that it connects with my daily life, so I can explain it quite naturally. "
         "For example, I would give one specific situation, describe what happened, and then say why it mattered to me. "
-        "Overall, I think a clear answer with one concrete example sounds more fluent and convincing."
+        f"Overall, I think a clear answer with one concrete example sounds more fluent and closer to Band {target}."
     )
 
 
 def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, Any]) -> None:
     transcript = str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
     band7 = ""
+    target = target_band_label(attempt)
     if transcript:
         try:
             band7 = model_answer_with_codex({**attempt, "turns": [turn]}, transcript, state.billing, f"band7_turn_{attempt['id']}_{turn['id']}")
         except Exception:
             band7 = ""
     if not plausible_spoken_answer(band7):
-        band7 = build_turn_band7_fallback(turn, transcript)
-    turn["band7_version"] = clean_report_text(band7) or build_turn_band7_fallback(turn, transcript)
+        band7 = build_turn_band7_fallback(turn, transcript, target)
+    turn["band7_version"] = clean_report_text(band7) or build_turn_band7_fallback(turn, transcript, target)
     turn["band7_markdown"] = spoken_markdown(band7) or spoken_markdown(turn["band7_version"])
+    turn["target_band_version"] = turn["band7_version"]
+    turn["target_band_markdown"] = turn["band7_markdown"]
+    turn["target_band"] = target
     turn["model_audio"] = volcengine_tts(state, turn["band7_version"], role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
     turn["upgrade_notes"] = build_upgrade_notes(transcript)
     profile = build_learning_profile(state, {**attempt, "turns": [*attempt.get("turns", []), turn]})
@@ -2374,19 +2430,19 @@ def summarize_weak_history(weak_items: list[dict[str, Any]]) -> dict[str, Any]:
 def part_focus_text(part: str, tags: list[str], score: dict[str, Any] | None = None) -> str:
     if part == "p2":
         if "short_answer" in tags or "limited_development" in tags:
-            return "Part 2 ?? cue card ????????????????????"
+            return "Part 2 需要先覆盖 cue card，并把答案展开到接近两分钟。"
         if "template_language" in tags:
-            return "Part 2 ??????????????????"
-        return "Part 2 ???????????????????"
+            return "Part 2 模板痕迹偏重，先换成自己的经历说法。"
+        return "Part 2 重点是把经历、细节和感受说完整。"
     if part == "p3":
         if "short_answer" in tags or "limited_development" in tags:
-            return "Part 3 ?????????????????????????"
-        return "Part 3 ?????????????????"
+            return "Part 3 需要补上观点背后的原因、对比和例子。"
+        return "Part 3 重点是做抽象讨论，不只停留在个人经历。"
     if part == "p1":
-        return "Part 1 ??????????????????????????"
+        return "Part 1 先做到直接回答，再补一个自然的小细节。"
     if score and isinstance(score.get("overall_band"), (int, float)) and float(score["overall_band"]) < 5.5:
-        return "???????????????????"
-    return "??????????????????"
+        return "先把答案说完整、说具体，再追求高级表达。"
+    return "先处理最影响分数的表达习惯。"
 
 def infer_primary_focus(tags: list[str]) -> str:
     if "off_topic" in tags:
@@ -2422,24 +2478,24 @@ def build_learning_profile(state: AppState, attempt: dict[str, Any], score: dict
         part = str(turn.get("part") or "").lower()
         word_count = transcript_word_count(transcript)
         if part == "p2":
-            evidence.append(f"P2 ????? {word_count} ??????????")
+            evidence.append(f"P2 回答约 {word_count} 词，需要继续拉长展开。")
         elif part == "p3":
-            evidence.append(f"P3 ????? {word_count} ???????????????")
+            evidence.append(f"P3 回答约 {word_count} 词，需要补上原因、对比或例子。")
         elif part == "p1":
-            evidence.append(f"P1 ????? {word_count} ???????????????")
+            evidence.append(f"P1 回答约 {word_count} 词，需要更直接、更自然。")
         part_evidence.setdefault(part, []).append(short_question(transcript, 90))
     weak_summary = summarize_weak_history(state.training.weak_items(str(attempt.get("user_id") or DEFAULT_USER_ID)))
     turn_tags.update(weak_summary["reasons"].keys())
     turn_tags.update(weak_summary["phrases"])
     evidence.extend(weak_summary["evidence"])
     if score and score.get("feedback"):
-        evidence.append(f"?????{short_question(str(score.get('feedback')), 90)}")
+        evidence.append(f"评分反馈：{short_question(str(score.get('feedback')), 90)}")
     parts = sorted({str(turn.get("part") or "").lower() for turn in turns if turn.get("part")})
     tags = sorted(tag for tag in turn_tags if tag and tag != "missing_transcript")
     for part in parts:
         focus = part_focus_text(part, tags, score)
         if weak_summary["parts"].get(part):
-            focus = f"{focus} ?????????????????"
+            focus = f"{focus} 历史弱项里也反复出现这一部分。"
         part_focus[part] = focus
     repeated_phrases = repeated_phrases_from_texts(completed_transcripts)
     for phrase in weak_summary["phrases"]:
@@ -2447,11 +2503,11 @@ def build_learning_profile(state: AppState, attempt: dict[str, Any], score: dict
             repeated_phrases.append(phrase)
     primary_focus = infer_primary_focus(tags)
     primary_focus_text = {
-        "task_relevance": "?????????????????????",
-        "answer_development": "?????????????????????",
-        "lexical_variety": "????????????????????",
-        "pronunciation_clarity": "??????????????????",
-    }.get(primary_focus, "???????????????????????????")
+        "task_relevance": "这次主要问题是没有完全扣住题目，先把回答方向答准。",
+        "answer_development": "这次主要卡在回答展开不够，不是题目完全不会。",
+        "lexical_variety": "这次主要问题是表达重复或模板感重，需要换成更自然的说法。",
+        "pronunciation_clarity": "这次主要受录音或发音清晰度影响，需要先保证可听清。",
+    }.get(primary_focus, "先处理最影响分数的一个说话习惯。")
     recurring_weak_reasons = sorted({str(reason) for reason in weak_summary["reasons"].keys()} | set(tags))
     return {
         "primary_focus": primary_focus,
@@ -2698,11 +2754,14 @@ def build_detailed_report(
             },
         },
         "part_scores": build_part_scores(attempt, score, pronunciation),
+        "target_band": target_band(attempt),
         "band7_version": final_band7,
         "band7_markdown": spoken_markdown(final_band7),
+        "target_band_version": final_band7,
+        "target_band_markdown": spoken_markdown(final_band7),
         "model_audio": model_tts,
         "upgrade_notes": build_upgrade_notes(transcript),
-        "ai_coaching": clean_report_text(personalized_coaching.get("focus") or "???????????????"),
+        "ai_coaching": clean_report_text(personalized_coaching.get("focus") or "先把答案说完整、说具体，再根据 Band 7 示例调整表达。"),
         "coaching_focus": personalized_coaching.get("focus") or "",
         "learning_profile": learning_profile,
         "personalized_coaching": personalized_coaching,
@@ -2928,7 +2987,13 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             transcript_status = "captured" if transcript else "missing"
         if not transcript:
             transcript_status = "missing"
-        cleaned = clean_transcript(transcript)
+        cleaned = clean_transcript_with_codex(
+            transcript,
+            str(turn.get("question") or ""),
+            str(turn.get("part") or ""),
+            self.state.billing,
+            f"asr_clean_{attempt_id}_{turn_id}",
+        )
         turn["transcript_raw"] = transcript
         turn["transcript_cleaned"] = cleaned["text"]
         turn["transcript_markdown"] = spoken_markdown(cleaned["text"])
@@ -2991,6 +3056,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         )
         prompt_text = questions_text(attempt)
         part = attempt_part(attempt)
+        attempt["target_band"] = target_band({"target_band": payload.get("target_band") or attempt.get("target_band") or 7.0})
         pronunciation = aggregate_pronunciation(completed)
         try:
             score = score_with_codex(transcript, self.state.data_dir, prompt_text, self.state.billing, f"score_attempt_{attempt_id}", part)

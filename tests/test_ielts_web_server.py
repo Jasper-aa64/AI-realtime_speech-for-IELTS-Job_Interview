@@ -507,16 +507,20 @@ class IELTSWebServerTest(unittest.TestCase):
             },
         )
 
-        scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {})
+        scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {"target_band": 7.5})
         scored_turn = scored["turns"][0]
         self.assertTrue(scored_turn["transcript_cleaned"])
         self.assertTrue(scored_turn["band7_version"])
+        self.assertEqual(scored["target_band"], 7.5)
+        self.assertEqual(scored_turn["target_band"], "7.5")
+        self.assertTrue(scored_turn["target_band_version"])
+        self.assertTrue(scored_turn["target_band_markdown"])
         self.assertIn("\n\n", scored_turn["transcript_markdown"])
         self.assertIn("\n\n", scored_turn["band7_markdown"])
         self.assertIn("neighbour who helped me", scored_turn["transcript_markdown"])
-        self.assertIn("证据", scored_turn["ai_coaching"])
-        self.assertIn("问题原因", scored_turn["ai_coaching"])
-        self.assertIn("替代表达", scored_turn["ai_coaching"])
+        self.assertIn("\u8bc1\u636e", scored_turn["ai_coaching"])
+        self.assertIn("\u95ee\u9898\u539f\u56e0", scored_turn["ai_coaching"])
+        self.assertIn("\u66ff\u4ee3\u8868\u8fbe", scored_turn["ai_coaching"])
         self.assertEqual(scored["pronunciation"]["status"], "not_configured")
         self.assertIsNone(scored["ielts_score"]["pronunciation_estimate"])
 

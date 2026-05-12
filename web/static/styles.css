@@ -202,6 +202,10 @@ h1, h2, h3, h4, p { margin: 0; }
   border-color: rgba(20, 184, 166, 0.65);
 }
 
+.target-band-field input {
+  max-width: 120px;
+}
+
 .nav-button:disabled,
 .nav-button.locked {
   opacity: 0.45;
@@ -1274,43 +1278,111 @@ button.ghost {
   font-weight: 700;
 }
 
-.turn-report-wrap {
-  width: 100%;
-  overflow-x: auto;
-  margin-top: 18px;
+.turn-report-section {
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
 
-.turn-report-table {
-  width: 100%;
-  min-width: 980px;
-  border-collapse: collapse;
+.turn-report-list {
+  display: grid;
+  gap: 18px;
 }
 
-.turn-report-table th,
-.turn-report-table td {
+.turn-report-card {
   border: 1px solid var(--line);
-  padding: 14px 16px;
-  text-align: left;
-  vertical-align: middle;
-  line-height: 1.48;
+  border-radius: 10px;
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.turn-report-table th {
-  background: #f3f6f7;
+.turn-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
-.turn-report-table p {
-  margin-top: 10px;
+.turn-report-head > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.turn-question {
+  border-left: 3px solid var(--accent);
+  background: #f7fbfa;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.turn-question span {
+  display: block;
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.turn-question p {
+  margin: 0;
+  color: var(--ink);
+}
+
+.turn-report-columns {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.05fr) minmax(260px, 1.1fr) minmax(240px, 0.95fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.turn-report-pane {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 14px;
+}
+
+.turn-report-pane h4 {
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.turn-report-pane audio {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.report-text {
+  color: #2f3d44;
+  line-height: 1.58;
+}
+
+.report-text p {
+  margin: 0 0 10px;
   white-space: pre-wrap;
 }
 
-.turn-report-table ul {
+.report-text ul {
   margin: 0 0 0 18px;
   padding: 0;
 }
 
-.turn-report-table li {
+.report-text li {
   margin: 0 0 8px;
+}
+
+.cleaning-notes {
+  margin: 12px 0 0 18px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .detail-cue-wrap {
@@ -1479,6 +1551,7 @@ input, select {
   .score-row.mini,
   .criteria-grid,
   .personalized-grid,
+  .turn-report-columns,
   .part-score-grid,
   .settings-grid {
     grid-template-columns: 1fr;

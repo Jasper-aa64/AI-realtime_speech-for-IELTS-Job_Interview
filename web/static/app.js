@@ -26,6 +26,7 @@ const state = {
   practiceLocked: false,
   navToastTimer: null,
   fontStyle: "default",
+  targetBand: 7,
 };
 
 const FONT_STORAGE_KEY = "ielts-font-style";
@@ -49,6 +50,16 @@ const $ = (selector) => {
 };
 const text = (id, value) => { document.getElementById(id).textContent = value; };
 const byId = (id) => document.getElementById(id);
+
+function currentTargetBand() {
+  const value = Number($("#targetBand")?.value || state.targetBand || 7);
+  const clamped = Math.max(5, Math.min(9, Number.isFinite(value) ? value : 7));
+  return Math.round(clamped * 2) / 2;
+}
+
+function targetBandLabel(value = currentTargetBand()) {
+  return Number(value).toFixed(1).replace(/\.0$/, "");
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -520,10 +531,11 @@ async function finalizeTurn(mimeType) {
 async function scoreAttempt() {
   if (!state.attempt) return;
   const attemptId = state.attempt.id;
+  state.targetBand = currentTargetBand();
   setRecordButton("scoring", "Analyzing", "Analyzing the full section and generating the report.");
   text("recordStatus", "Analyzing the full section and generating the report.");
   try {
-    const scored = await api(`/api/attempts/${attemptId}/score`, {});
+    const scored = await api(`/api/attempts/${attemptId}/score`, { target_band: state.targetBand });
     if (state.abortingAttemptId === attemptId || state.attempt?.id !== attemptId) return;
     state.attempt = scored;
     renderSummary(scored);
@@ -735,13 +747,14 @@ function renderDetail(attempt, updateView = true) {
   const turns = attempt.turns || [];
   const isP2 = attempt.mode === "p2" || (turns[0]?.part === "p2");
   const isMock = attempt.mode === "mock" || attempt.part === "mock";
+  const target = targetBandLabel(attempt.target_band || state.targetBand || 7);
 
   $("detailPanel").innerHTML = `
     <div class="detail-section">
       <div class="detail-header">
         <div>
           <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
-          <p class="muted">${escapeHtml(attempt.title || "")} - ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
+          <p class="muted">${escapeHtml(attempt.title || "")} - ${turns.length} question${turns.length === 1 ? "" : "s"} - Target Band ${escapeHtml(target)}</p>
         </div>
         <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
       </div>
@@ -786,11 +799,10 @@ function partScoreBlock(part, item = {}) {
 
 function turnTableSection(attempt, turns, isP2 = false) {
   return `
-    <div class="detail-section">
-      <table class="turn-report-table">
-        <thead><tr>${isP2 ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>" : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>"}</tr></thead>
-        <tbody>${turns.map((turn) => turnReportRow(attempt.id, turn, attempt, isP2)).join("")}</tbody>
-      </table>
+    <div class="detail-section turn-report-section">
+      <div class="turn-report-list">
+        ${turns.map((turn) => turnReportCard(attempt.id, turn, attempt, isP2)).join("")}
+      </div>
     </div>
   `;
 }
@@ -808,10 +820,9 @@ function mockTurnSections(attempt, turns) {
         <div class="part-detail-box">
           ${scoreBlock}
           ${cueCard}
-          <table class="turn-report-table">
-            <thead><tr>${part === "p2" ? "<th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>" : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th><th>AI guidance</th>"}</tr></thead>
-            <tbody>${partTurns.map((turn) => turnReportRow(attempt.id, turn, attempt, part === "p2")).join("")}</tbody>
-          </table>
+          <div class="turn-report-list">
+            ${partTurns.map((turn) => turnReportCard(attempt.id, turn, attempt, part === "p2")).join("")}
+          </div>
         </div>
       </div>
     `;
@@ -830,6 +841,12 @@ function transcriptText(turn) {
     return "Recording exists, but transcript was not captured.";
   }
   return "Recording exists, but transcript was not captured.";
+}
+
+function transcriptNotes(turn) {
+  const notes = turn.cleaning_notes || [];
+  if (!notes.length) return "";
+  return `<ul class="cleaning-notes">${notes.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
 }
 
 function aiCoachingHtml(turn, attempt) {
@@ -879,32 +896,51 @@ function personalizedCoachingSection(attempt) {
   `;
 }
 
-function turnReportRow(attemptId, turn, attempt, isP2 = false) {
+function turnReportCard(attemptId, turn, attempt, isP2 = false) {
   const modelAudio = turn.model_audio || {};
-  const band7 = turn.band7_version || attempt.band7_version || "";
-  const band7Markdown = turn.band7_markdown || attempt.band7_markdown || band7;
+  const targetBand = targetBandLabel(turn.target_band || attempt.target_band || state.targetBand || 7);
+  const targetVersion = turn.target_band_version || turn.band7_version || attempt.target_band_version || attempt.band7_version || "";
+  const targetMarkdown = turn.target_band_markdown || turn.band7_markdown || attempt.target_band_markdown || attempt.band7_markdown || targetVersion;
   const statusLabel = turn.transcript_status === "interim_fallback"
     ? "Interim transcript used"
     : (turn.transcript_status === "captured" ? "Transcript captured" : "Transcript missing");
   const isFollowUp = turn.prompt?.role === "follow_up";
-  const questionCell = isP2 ? "" : `<td><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong><p>${escapeHtml(turn.question)}</p></td>`;
+  const questionBlock = isP2 ? "" : `
+    <div class="turn-question">
+      <span>${escapeHtml((turn.part || "").toUpperCase())} ${Number(turn.index ?? 0) + 1}</span>
+      <p>${escapeHtml(turn.question || "")}</p>
+    </div>
+  `;
   return `
-    <tr>
-      ${questionCell}
-      <td>
-        ${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}
-        ${(turn.audio || {}).url
-          ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
-          : '<p class="audio-warning">Recording missing. This turn has no playable audio.</p>'}
-        <p class="transcript-status">${escapeHtml(statusLabel)}</p>
-        <p>${transcriptText(turn)}</p>
-      </td>
-      <td>
-        ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(band7)}">Play with browser voice</button>`}
-        <p>${renderMarkdown(band7Markdown)}</p>
-      </td>
-      <td>${aiCoachingHtml(turn, attempt)}</td>
-    </tr>
+    <article class="turn-report-card">
+      <header class="turn-report-head">
+        <div>
+          <strong>${escapeHtml((turn.part || "").toUpperCase())} ${Number(turn.index ?? 0) + 1}</strong>
+          ${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}
+        </div>
+        <span class="transcript-status">${escapeHtml(statusLabel)}</span>
+      </header>
+      ${questionBlock}
+      <div class="turn-report-columns">
+        <section class="turn-report-pane candidate-pane">
+          <h4>我的回答</h4>
+          ${(turn.audio || {}).url
+            ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
+            : '<p class="audio-warning">Recording missing. This turn has no playable audio.</p>'}
+          <div class="report-text">${transcriptText(turn)}</div>
+          ${transcriptNotes(turn)}
+        </section>
+        <section class="turn-report-pane target-pane">
+          <h4>目标 ${escapeHtml(targetBand)} 分回答</h4>
+          ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(targetVersion)}">Play with browser voice</button>`}
+          <div class="report-text">${renderMarkdown(targetMarkdown)}</div>
+        </section>
+        <section class="turn-report-pane coaching-pane">
+          <h4>AI 辅导</h4>
+          <div class="report-text">${aiCoachingHtml(turn, attempt)}</div>
+        </section>
+      </div>
+    </article>
   `;
 }
 
