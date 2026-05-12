@@ -83,6 +83,191 @@ def rounded_overall(scores: dict[str, float | None]) -> float:
     return clamp_band(math.floor(average * 2.0 + 0.5) / 2.0)
 
 
+def band_cap(scores: dict[str, Any], cap: float) -> None:
+    for key in ("fluency_coherence", "lexical_resource", "grammatical_range", "overall_band"):
+        if isinstance(scores.get(key), (int, float)):
+            scores[key] = min(float(scores[key]), cap)
+
+
+def development_markers(text: str) -> int:
+    lowered = text.lower()
+    markers = (
+        "because",
+        "for example",
+        "for instance",
+        "such as",
+        "when ",
+        "although",
+        "however",
+        "whereas",
+        "compared",
+        "rather than",
+        "in contrast",
+        "as a result",
+        "therefore",
+        "so ",
+    )
+    return sum(1 for marker in markers if marker in lowered)
+
+
+def generic_template_score(text: str) -> int:
+    lowered = text.lower()
+    patterns = (
+        "it is very important",
+        "it is very convenient",
+        "it is good for me",
+        "it can improve my",
+        "in modern society",
+        "with the development of",
+        "broaden my horizons",
+        "learn more knowledge",
+        "make me feel relaxed",
+        "leave a deep impression",
+        "from my perspective",
+        "as far as i am concerned",
+        "there are many advantages",
+    )
+    return sum(1 for pattern in patterns if pattern in lowered)
+
+
+def simple_grammar_ratio(sentences: list[str]) -> float:
+    if not sentences:
+        return 1.0
+    complex_markers = re.compile(
+        r"\b(because|although|though|while|whereas|which|who|that|when|if|unless|since|after|before|so that|even though)\b",
+        re.I,
+    )
+    simple_count = sum(1 for sentence in sentences if not complex_markers.search(sentence))
+    return simple_count / max(1, len(sentences))
+
+
+def is_template_like_answer(text: str) -> bool:
+    lowered = text.lower()
+    repeated_phrases = (
+        "from my perspective",
+        "as far as i am concerned",
+        "there are many advantages",
+        "it is very important",
+        "it is very convenient",
+        "in modern society",
+        "with the development of",
+        "broaden my horizons",
+        "learn more knowledge",
+        "make me feel relaxed",
+        "leave a deep impression",
+    )
+    if sum(1 for phrase in repeated_phrases if phrase in lowered) >= 2:
+        return True
+    if re.search(r"\b(there are many|it is very|it can)\b.{0,40}\b(there are many|it is very|it can)\b", lowered):
+        return True
+    return False
+
+
+def pronunciation_missing_text_only_cap(part: str, word_count: int, template_like: bool, generic_repeat: bool, development_count: int) -> float:
+    if part == "p2":
+        if word_count < 35:
+            return 4.5
+        if template_like or generic_repeat:
+            return 5.0
+        if word_count < 80 or development_count < 2:
+            return 5.5
+        return 6.0 if word_count < 130 else 6.5
+    if part == "p3":
+        if word_count < 25:
+            return 4.5
+        if template_like or generic_repeat:
+            return 5.0
+        if word_count < 55 or development_count < 2:
+            return 5.5
+        return 6.0 if word_count < 150 else 6.5
+    if part == "p1":
+        if word_count < 8:
+            return 4.5
+        if template_like or generic_repeat:
+            return 5.5
+        if word_count < 25:
+            return 6.0
+        if word_count < 60:
+            return 6.5
+        return 7.0
+    if word_count < 60:
+        return 5.5
+    return 6.5
+
+
+def append_calibration_note(scores: dict[str, Any], note: str) -> None:
+    feedback = clean_report_text(str(scores.get("feedback") or ""))
+    if note.lower() not in feedback.lower():
+        feedback = f"{feedback} {note}".strip()
+    scores["feedback"] = feedback[:500]
+
+
+def calibrate_realistic_score(scores: dict[str, Any], question: str, transcript: str, part: str = "") -> dict[str, Any]:
+    words = re.findall(r"[A-Za-z']+", transcript)
+    word_count = len(words)
+    sentences = [item.strip() for item in re.split(r"[.!?\n]+", transcript) if item.strip()]
+    unique_ratio = len(set(word.lower() for word in words)) / max(1, word_count)
+    marker_count = development_markers(transcript)
+    template_count = generic_template_score(transcript)
+    template_like = template_count >= 2 or is_template_like_answer(transcript)
+    grammar_simple = simple_grammar_ratio(sentences)
+    part = part.lower()
+
+    scores["word_count"] = word_count
+
+    if not words:
+        band_cap(scores, 0.0)
+        scores["overall_band"] = rounded_overall(scores)
+        return scores
+
+    if part == "p2":
+        if word_count < 35:
+            band_cap(scores, 5.0)
+            append_calibration_note(scores, "Calibration: Part 2 is too short for a sustained long-turn score.")
+        elif word_count < 80 or template_like:
+            band_cap(scores, 5.5)
+            append_calibration_note(scores, "Calibration: Part 2 needs fuller cue-card development and clear cue-card coverage.")
+        elif word_count < 120 and marker_count < 2:
+            band_cap(scores, 6.0)
+            append_calibration_note(scores, "Calibration: Part 2 lacks enough supported development for 6.5+.")
+    elif part == "p3":
+        if word_count < 25:
+            band_cap(scores, 5.0)
+            append_calibration_note(scores, "Calibration: Part 3 is too brief for abstract discussion.")
+        elif word_count < 55 or marker_count < 2 or template_like:
+            band_cap(scores, 6.0)
+            append_calibration_note(scores, "Calibration: Part 3 needs reasons, examples, comparison, or extension for 6.5+.")
+    elif part == "p1":
+        if word_count < 8:
+            band_cap(scores, 5.0)
+            append_calibration_note(scores, "Calibration: the answer is too short to show stable higher-band control.")
+    else:
+        if word_count < 60:
+            band_cap(scores, 5.5)
+            append_calibration_note(scores, "Calibration: the sample is too short for a high overall practice score.")
+
+    if template_like or (word_count >= 20 and unique_ratio < 0.48):
+        cap = 5.0 if part == "p2" else 5.5 if part == "p3" else 6.0
+        band_cap(scores, cap)
+        append_calibration_note(scores, "Calibration: generic or repetitive wording limits the score.")
+
+    if grammar_simple >= 0.80 and word_count >= 25 and max(float(scores.get("grammatical_range") or 0.0), 0.0) > 6.0:
+        scores["grammatical_range"] = 6.0
+        append_calibration_note(scores, "Calibration: mostly simple sentence forms limit grammatical range.")
+
+    if scores.get("pronunciation_estimate") is None and isinstance(scores.get("overall_band"), (int, float)):
+        text_only_cap = pronunciation_missing_text_only_cap(part, word_count, template_like, template_count >= 2, marker_count)
+        if float(scores["overall_band"]) > text_only_cap:
+            scores["overall_band"] = text_only_cap
+            append_calibration_note(scores, "Calibration: pronunciation was not assessed, so text-only scoring is capped conservatively.")
+
+    scores["overall_band"] = rounded_overall(scores)
+    if scores.get("pronunciation_estimate") is None and isinstance(scores.get("overall_band"), (int, float)):
+        text_only_cap = pronunciation_missing_text_only_cap(part, word_count, template_like, template_count >= 2, marker_count)
+        scores["overall_band"] = min(float(scores["overall_band"]), text_only_cap)
+    return scores
+
+
 def read_json(path: Path) -> dict[str, Any]:
     try:
         with path.open(encoding="utf-8") as handle:
@@ -1865,7 +2050,7 @@ def heuristic_score(transcript: str, reason: str, question: str = "", part: str 
     scores["overall_band"] = rounded_overall(scores)
     feedback = f"Content score uses fallback estimate: {reason}. Record clear, relevant English answers for a more useful assessment."
     result = {**scores, "feedback": feedback, "backend": "heuristic", "word_count": len(words)}
-    return cap_off_topic_score(result, question, transcript)
+    return cap_off_topic_score(calibrate_realistic_score(result, question, transcript, part), question, transcript)
 
 
 def score_prompt_for_part(part: str) -> str:
@@ -1878,12 +2063,14 @@ def score_prompt_for_part(part: str) -> str:
     if part == "p2":
         return (
             "Section type: IELTS Speaking Part 2. Score the long-turn response by cue-card coverage, sustained development, "
-            "coherence across the story, vocabulary range, and grammar control."
+            "coherence across the story, vocabulary range, and grammar control. Do not award 6.5+ for short, generic, "
+            "memorized, or thinly developed long-turn answers."
         )
     if part == "p3":
         return (
             "Section type: IELTS Speaking Part 3. Score abstract discussion quality: clear opinions, reasons, examples, "
-            "comparison, speculation, and ability to extend ideas."
+            "comparison, speculation, and ability to extend ideas. Do not award 6.5+ for brief opinions without reasons, "
+            "examples, comparison, or abstract development."
         )
     return "Section type: full/mock IELTS Speaking section. Score the completed section as a whole."
 
@@ -1931,7 +2118,7 @@ def score_with_codex(
     result_payload = {**scores, "feedback": str(payload.get("feedback", "")), "backend": "codex"}
     if usage:
         result_payload["billing_usage"] = billing.normalize_usage(usage) if billing else usage
-    return cap_off_topic_score(result_payload, question, transcript)
+    return cap_off_topic_score(calibrate_realistic_score(result_payload, question, transcript, part), question, transcript)
 
 
 def cap_off_topic_score(scores: dict[str, Any], question: str, transcript: str) -> dict[str, Any]:
@@ -2185,6 +2372,12 @@ def score_for_part(turns: list[dict[str, Any]], part: str, fallback_score: dict[
         pron_band = clamp_band(float(pron["pron_score"]) / 100.0 * 9.0)
     part_score["pronunciation_estimate"] = pron_band
     part_score["overall_band"] = rounded_overall(part_score)
+    part_score = calibrate_realistic_score(
+        part_score,
+        "\n".join(str(turn.get("question") or "") for turn in part_turns),
+        transcript,
+        part,
+    )
     return {
         "part": part,
         "turn_count": len(part_turns),
@@ -2218,6 +2411,7 @@ def build_detailed_report(
         pron_band = clamp_band(float(pronunciation["pron_score"]) / 100.0 * 9.0)
     score["pronunciation_estimate"] = pron_band
     score["overall_band"] = rounded_overall(score)
+    score = calibrate_realistic_score(score, questions_text(attempt), transcript, attempt_part(attempt))
     summary = clean_report_text(str(score.get("feedback") or "")) or "Score generated from the completed speaking section."
     band7 = clean_report_text(build_band7_version(state, attempt, transcript))
     final_band7 = band7 or build_band7_version(state, attempt, transcript)

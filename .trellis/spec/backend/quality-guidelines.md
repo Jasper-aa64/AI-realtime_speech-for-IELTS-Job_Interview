@@ -82,6 +82,14 @@ the boundary behavior instead of relying only on manual end-to-end runs.
   and score objects when that part was run.
 - Overall IELTS band is recomputed locally from the four scoring dimensions and
   rounded upward to the next 0.5. Do not trust a model-provided overall value.
+- Official IELTS Speaking band descriptors remain the only scoring standard.
+  Deterministic calibration may tighten model output, but it must not become a
+  separate regional score.
+- If pronunciation is not assessed from real audio, keep
+  `pronunciation_estimate` null and apply a conservative text-only ceiling
+  instead of inflating the overall score from text alone.
+- Apply stronger caps for short, generic, template-like, repetitive, or
+  underdeveloped Part 2 and Part 3 answers than for Part 1 short answers.
 - P1/P2 speech capture should use realtime STT when `RealtimeClient` is
   connected. If realtime is disconnected, send fails, or no transcript returns,
   the CLI must keep the exam usable through terminal transcript fallback.

@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "web"))
-from ielts_server import AppState, IELTSHandler, build_ai_coaching, clean_band7_output, score_with_codex  # noqa: E402
+from ielts_server import AppState, IELTSHandler, build_ai_coaching, calibrate_realistic_score, clean_band7_output, score_with_codex  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -134,6 +134,128 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(rounded_overall({"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.0, "pronunciation_estimate": 7.0}), 6.5)
         self.assertEqual(rounded_overall({"fluency_coherence": 6.5, "lexical_resource": 6.5, "grammatical_range": 6.5, "pronunciation_estimate": 6.75}), 6.5)
         self.assertEqual(rounded_overall({"fluency_coherence": 6.5, "lexical_resource": 6.5, "grammatical_range": 7.0, "pronunciation_estimate": 7.0}), 7.0)
+
+    def test_calibration_caps_short_generic_part2_and_keeps_pronunciation_null(self):
+        score = calibrate_realistic_score(
+            {
+                "fluency_coherence": 7.0,
+                "lexical_resource": 7.0,
+                "grammatical_range": 7.0,
+                "pronunciation_estimate": None,
+                "overall_band": 7.0,
+                "feedback": "Clear answer.",
+            },
+            "Describe a person who helped you.",
+            "This person is very important. He is very kind. He helped me a lot. It made me feel relaxed.",
+            "p2",
+        )
+        self.assertLessEqual(score["overall_band"], 5.0)
+        self.assertLessEqual(score["fluency_coherence"], 5.0)
+        self.assertIsNone(score["pronunciation_estimate"])
+        self.assertIn("Part 2 is too short", score["feedback"])
+
+    def test_calibration_caps_underdeveloped_part3_discussion(self):
+        score = calibrate_realistic_score(
+            {
+                "fluency_coherence": 7.0,
+                "lexical_resource": 7.0,
+                "grammatical_range": 7.0,
+                "pronunciation_estimate": None,
+                "overall_band": 7.0,
+                "feedback": "Clear opinion.",
+            },
+            "Why do people use technology at work?",
+            "I think people use technology at work. It is very convenient. It is very important in modern society.",
+            "p3",
+        )
+        self.assertLessEqual(score["overall_band"], 5.5)
+        self.assertLessEqual(score["lexical_resource"], 5.5)
+        self.assertIsNone(score["pronunciation_estimate"])
+        self.assertIn("Part 3", score["feedback"])
+
+    def test_calibration_caps_template_like_part2_more_strictly(self):
+        score = calibrate_realistic_score(
+            {
+                "fluency_coherence": 7.0,
+                "lexical_resource": 7.0,
+                "grammatical_range": 7.0,
+                "pronunciation_estimate": None,
+                "overall_band": 7.0,
+                "feedback": "Fluent but thin.",
+            },
+            "Describe a useful skill.",
+            (
+                "It is very important for me because it is very convenient. "
+                "It is very important in modern society and it is good for me. "
+                "It is very important for my future and it can improve my life."
+            ),
+            "p2",
+        )
+        self.assertLessEqual(score["overall_band"], 5.0)
+        self.assertLessEqual(score["fluency_coherence"], 5.0)
+        self.assertIsNone(score["pronunciation_estimate"])
+        self.assertIn("generic or repetitive wording", score["feedback"])
+
+    def test_calibration_keeps_text_only_overall_conservative_without_pronunciation(self):
+        previous_disable = os.environ.pop("IELTS_WEB_DISABLE_CODEX", None)
+        output = json.dumps(
+            {
+                "type": "message",
+                "content": json.dumps(
+                    {
+                        "fluency_coherence": 7,
+                        "lexical_resource": 7,
+                        "grammatical_range": 7,
+                        "overall_band": 7,
+                        "feedback": "Strong content.",
+                    }
+                ),
+            }
+        )
+        transcript = (
+            "I think people use technology at work because it saves time and reduces repeated tasks. "
+            "For example, a team can coordinate schedules more quickly, compare documents, and check progress in one place. "
+            "However, they still need to judge whether the tool actually improves communication, because not every system is useful. "
+            "In my view, the key point is that technology should support clear human decisions rather than replace them completely."
+        )
+        try:
+            with mock.patch("ielts_server.shutil.which", return_value="codex"), mock.patch("ielts_server.subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess(["codex", "exec", "--json"], 0, stdout=output, stderr="")
+                score = score_with_codex(
+                    transcript,
+                    ROOT / "data" / "ielts",
+                    "Why do people use technology at work?",
+                    None,
+                    "call_text_only_cap",
+                    "p3",
+                )
+            self.assertEqual(score["backend"], "codex")
+            self.assertIsNone(score["pronunciation_estimate"])
+            self.assertLessEqual(score["overall_band"], 6.0)
+            self.assertIn("pronunciation was not assessed", score["feedback"].lower())
+        finally:
+            if previous_disable is not None:
+                os.environ["IELTS_WEB_DISABLE_CODEX"] = previous_disable
+            else:
+                os.environ["IELTS_WEB_DISABLE_CODEX"] = "1"
+
+    def test_calibration_does_not_over_cap_valid_part1_answers(self):
+        score = calibrate_realistic_score(
+            {
+                "fluency_coherence": 7.0,
+                "lexical_resource": 7.0,
+                "grammatical_range": 7.0,
+                "pronunciation_estimate": None,
+                "overall_band": 7.0,
+                "feedback": "Strong answer.",
+            },
+            "Do you like reading?",
+            "Yes, I like reading because it helps me relax after a busy day and learn new ideas. Usually I read in the evening, and sometimes I share interesting books with my friends.",
+            "p1",
+        )
+        self.assertGreaterEqual(score["overall_band"], 6.5)
+        self.assertLessEqual(score["overall_band"], 7.0)
+        self.assertIsNone(score["pronunciation_estimate"])
 
     def test_p3_generation_falls_back_without_server_cli_env(self):
         payload = self.post_json("/api/p3/questions", {"theme": "technology_and_society"})
@@ -658,7 +780,11 @@ class IELTSWebServerTest(unittest.TestCase):
             with mock.patch("ielts_server.shutil.which", return_value="codex"), mock.patch("ielts_server.subprocess.run") as run:
                 run.return_value = subprocess.CompletedProcess(["codex", "exec", "--json"], 0, stdout=output, stderr="")
                 score = score_with_codex(
-                    "I usually answer with a clear reason and example.",
+                    (
+                        "I usually answer with a clear reason and example because it helps the examiner follow my ideas. "
+                        "For instance, when I describe a routine, I explain what I do, why it matters, and how it affects my day. "
+                        "This makes the answer more organised and less like a memorised sentence."
+                    ),
                     ROOT / "data" / "ielts",
                     "Do you like routines?",
                     state.billing,
@@ -672,6 +798,43 @@ class IELTSWebServerTest(unittest.TestCase):
             settle_entries = [entry for entry in wallet["entries"] if entry["entry_type"] == "settle" and entry["call_id"] == "call_json_usage"]
             self.assertEqual(len(settle_entries), 1)
             self.assertEqual(wallet["balance_u"], 5_000_000 - abs(settle_entries[0]["amount_u"]))
+        finally:
+            if previous_disable is not None:
+                os.environ["IELTS_WEB_DISABLE_CODEX"] = previous_disable
+            else:
+                os.environ["IELTS_WEB_DISABLE_CODEX"] = "1"
+
+    def test_codex_score_is_calibrated_after_json_parse(self):
+        previous_disable = os.environ.pop("IELTS_WEB_DISABLE_CODEX", None)
+        output = json.dumps(
+            {
+                "type": "message",
+                "content": json.dumps(
+                    {
+                        "fluency_coherence": 7,
+                        "lexical_resource": 7,
+                        "grammatical_range": 7,
+                        "overall_band": 7,
+                        "feedback": "Fluent answer.",
+                    }
+                ),
+            }
+        )
+        try:
+            with mock.patch("ielts_server.shutil.which", return_value="codex"), mock.patch("ielts_server.subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess(["codex", "exec", "--json"], 0, stdout=output, stderr="")
+                score = score_with_codex(
+                    "It is very convenient. It is very important in modern society.",
+                    ROOT / "data" / "ielts",
+                    "Why do people use technology at work?",
+                    None,
+                    "call_calibrated",
+                    "p3",
+                )
+            self.assertEqual(score["backend"], "codex")
+            self.assertLessEqual(score["overall_band"], 5.5)
+            self.assertIsNone(score["pronunciation_estimate"])
+            self.assertIn("Calibration", score["feedback"])
         finally:
             if previous_disable is not None:
                 os.environ["IELTS_WEB_DISABLE_CODEX"] = previous_disable
