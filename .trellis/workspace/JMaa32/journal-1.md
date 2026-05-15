@@ -175,3 +175,44 @@ Implemented IELTS China-facing scoring guidance, weak-question training persiste
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Django migration backend stabilization
+
+**Date**: 2026-05-15
+**Task**: Django migration backend stabilization
+**Branch**: `main`
+
+### Summary
+
+Built and stabilized the Django backend migration scaffold, AI task lifecycle, billing and provider runner boundaries, writing bridge contracts, and cleaned workspace blockers so the migration task could be archived.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e459018` | (see git log) |
+| `706b424` | (see git log) |
+| `1085b0e` | (see git log) |
+| `ad0cd5b` | (see git log) |
+| `f89bfb6` | (see git log) |
+| `6edb061` | (see git log) |
+| `d513ecc` | (see git log) |
+| `4f3cd7e` | (see git log) |
+| `c7aa533` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
