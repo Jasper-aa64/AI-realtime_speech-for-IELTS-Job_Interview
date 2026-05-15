@@ -412,3 +412,36 @@ Add DELETE /api/history/{attempt_id} to complete speaking history API parity. Ow
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: Add Django speaking question bank training read APIs
+
+**Date**: 2026-05-15
+**Task**: Add Django speaking question bank training read APIs
+**Branch**: `main`
+
+### Summary
+
+Migrate question bank and training observation read APIs. 4 endpoints with auth and owner scoping. Frontend paths unchanged.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fb4931a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 12
+- **Total Sessions**: 13
 - **Last Active**: 2026-05-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~414 | Active |
+| `journal-1.md` | ~447 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 13 | 2026-05-15 | Add Django speaking question bank training read APIs | `fb4931a` | `main` |
 | 12 | 2026-05-15 | Add Django speaking history DELETE API | `9abd7ed` | `main` |
 | 11 | 2026-05-15 | Optimize writing reports list hydration | `bd9bac5` | `main` |
 | 10 | 2026-05-15 | Django writing reports history API | `7f5f943` | `main` |
