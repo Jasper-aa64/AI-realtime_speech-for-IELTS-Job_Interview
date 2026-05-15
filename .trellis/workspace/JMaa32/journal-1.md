@@ -216,3 +216,34 @@ Built and stabilized the Django backend migration scaffold, AI task lifecycle, b
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Django writing frontend bridge milestone
+
+**Date**: 2026-05-15
+**Task**: Django writing frontend bridge milestone
+**Branch**: `main`
+
+### Summary
+
+Implemented logged-in writing score-task bridge in the old Web UI, added old-origin AI task proxy coverage, documented frontend task polling contract, and verified old Web/Django/browser smoke checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

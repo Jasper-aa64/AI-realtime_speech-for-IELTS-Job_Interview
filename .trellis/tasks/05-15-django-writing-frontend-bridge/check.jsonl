@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check that writing UI remains usable, errors are visible, and old speaking/report behavior is not broken."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check AI task lifecycle, billing reservation behavior, and refresh-safe polling contract."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Check pending/running/cancelled/fallback/succeeded task states and API error responses."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check required tests and non-cancellable running AI task product rule."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check full data round-trip from browser through proxy, Django, worker, and report rendering."}

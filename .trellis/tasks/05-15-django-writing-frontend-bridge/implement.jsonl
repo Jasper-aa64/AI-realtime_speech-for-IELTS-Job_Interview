@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend writing bridge touches the old Web UI and must preserve API error handling, async guards, and report readability."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Writing scoring must use the durable AI task, billing reservation, polling, and cancellation contracts."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Bridge work must map AI task and writing API error states consistently to frontend behavior."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "The task spans frontend, old web proxy, Django APIs, worker persistence, and report rendering."}
