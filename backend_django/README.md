@@ -148,9 +148,36 @@ Local worker boundary:
 ```text
 python backend_django/manage.py run_ai_tasks --limit 10
 python backend_django/manage.py run_ai_tasks --limit 10 --recover-stale-seconds 900
+python backend_django/manage.py run_ai_worker --limit 10 --recover-stale-seconds 900
 ```
 
-This command now runs claimed tasks through a small provider adapter boundary:
+`run_ai_tasks` processes one bounded batch and exits. It is useful for manual
+local verification and tests. `run_ai_worker` runs the same batch function in a
+continuous loop and prints one JSON log line per loop:
+
+```bash
+python backend_django/manage.py run_ai_worker \
+  --limit 10 \
+  --worker-id local-ai-worker \
+  --recover-stale-seconds 900 \
+  --interval-seconds 1 \
+  --idle-interval-seconds 2.5
+```
+
+For controlled checks or process-manager health probes:
+
+```bash
+python backend_django/manage.py run_ai_worker --max-loops 1 --interval-seconds 0 --idle-interval-seconds 0
+python backend_django/manage.py run_ai_worker --stop-file /tmp/ielts-ai-worker.stop
+```
+
+If `--stop-file` exists before a loop starts, the worker exits before claiming
+more work. SIGINT/SIGTERM also stop the loop between batches. A task already
+claimed as `running` is still expected to reach success, fallback, or final
+failure through the normal orchestration path; user cancellation is only for
+pending work.
+
+Both worker commands run claimed tasks through a small provider adapter boundary:
 
 - `writing_score` with `provider=mock_success` uses a deterministic mock
   success adapter only when `AI_ALLOW_MOCK_SUCCESS=1`; otherwise it safely

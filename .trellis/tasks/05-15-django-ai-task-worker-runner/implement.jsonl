@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Worker runner must preserve AI task query ordering, locking, stale recovery, and billing reservation contracts."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Worker loop must preserve per-item error behavior, terminal states, cancellation conflicts, and stale recovery semantics."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend worker command must respect non-cancellable running AI analysis and required tests."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Feature spans frontend-created tasks, Django DB state, management commands, worker logs, and report persistence."}

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check task lifecycle transitions, query bounds, reservation coupling, and stale recovery behavior."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Check worker loop errors are contained per item and terminal state semantics remain stable."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check required AI task lifecycle tests and command behavior remain covered."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check full path from frontend-created task to worker completion and polling persistence."}

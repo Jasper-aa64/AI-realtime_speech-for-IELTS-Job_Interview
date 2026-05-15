@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from io import StringIO
 from unittest.mock import patch
 
@@ -635,6 +636,37 @@ class AIProviderAdapterTests(TestCase):
 
 
 class AIWorkerCommandTests(TestCase):
+    def create_writing_score_task(
+        self,
+        *,
+        username: str,
+        prompt_id: str,
+        answer: str = "This answer gives a clear opinion and one supporting reason for the writing task.",
+        provider: str | None = None,
+    ) -> tuple[object, WritingEntry, dict]:
+        user = get_user_model().objects.create_user(username=username, password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id=prompt_id,
+            task_type=WritingPrompt.TaskType.TASK2,
+            title=f"{prompt_id} title",
+            prompt="Some people think public services should receive more funding. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer=answer,
+            word_count=len(answer.split()),
+        )
+        task_payload = {"reserved_u": 300_000}
+        if provider:
+            task_payload["provider"] = provider
+        created = create_score_task(user, entry.entry_id, task_payload)
+        return user, entry, created
+
     def test_run_ai_tasks_processes_pending_writing_score_with_fallback(self):
         user = get_user_model().objects.create_user(username="worker-writing-user", password="test-pass")
         prompt = WritingPrompt.objects.create(
@@ -1084,3 +1116,118 @@ class AIWorkerCommandTests(TestCase):
         self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
         reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
         self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+
+    def test_run_ai_worker_processes_one_pending_writing_score_loop(self):
+        user, entry, created = self.create_writing_score_task(
+            username="loop-worker-writing-user",
+            prompt_id="loop-worker-writing-prompt",
+        )
+        out = StringIO()
+
+        call_command(
+            "run_ai_worker",
+            "--max-loops",
+            "1",
+            "--interval-seconds",
+            "0",
+            "--idle-interval-seconds",
+            "0",
+            "--worker-id",
+            "loop-worker",
+            stdout=out,
+        )
+
+        payload = json.loads(out.getvalue())
+        self.assertEqual(payload["loop"], 1)
+        self.assertEqual(payload["worker_id"], "loop-worker")
+        summary = payload["summary"]
+        self.assertEqual(summary["claimed"], 1)
+        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}])
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertEqual(task.worker_id, "loop-worker")
+        self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertEqual(wallet.reserved_u, 0)
+
+    def test_run_ai_worker_idle_loop_emits_json_summary(self):
+        out = StringIO()
+
+        call_command(
+            "run_ai_worker",
+            "--max-loops",
+            "1",
+            "--interval-seconds",
+            "0",
+            "--idle-interval-seconds",
+            "0",
+            stdout=out,
+        )
+
+        payload = json.loads(out.getvalue())
+        self.assertEqual(payload["loop"], 1)
+        self.assertEqual(payload["summary"]["claimed"], 0)
+        self.assertEqual(payload["summary"]["completed"], 0)
+        self.assertEqual(payload["summary"]["failed"], 0)
+        self.assertEqual(payload["summary"]["items"], [])
+
+    def test_run_ai_worker_existing_stop_file_exits_before_batch(self):
+        _user, _entry, created = self.create_writing_score_task(
+            username="loop-worker-stop-file-user",
+            prompt_id="loop-worker-stop-file-prompt",
+        )
+        out = StringIO()
+        with tempfile.NamedTemporaryFile() as stop_file:
+            call_command(
+                "run_ai_worker",
+                "--max-loops",
+                "1",
+                "--interval-seconds",
+                "0",
+                "--idle-interval-seconds",
+                "0",
+                "--stop-file",
+                stop_file.name,
+                stdout=out,
+            )
+
+        self.assertEqual(out.getvalue(), "")
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.PENDING)
+        self.assertFalse(WritingScore.objects.filter(entry__entry_id=created["entry"]["id"]).exists())
+
+    def test_run_ai_worker_recovers_stale_task_before_claiming(self):
+        _user, _entry, created = self.create_writing_score_task(
+            username="loop-worker-recover-user",
+            prompt_id="loop-worker-recover-prompt",
+        )
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        claim_ai_task(task.task_id, worker_id="stale-loop-worker")
+        AITask.objects.filter(pk=task.pk).update(started_at=timezone.now() - timezone.timedelta(seconds=120), updated_at=timezone.now())
+        out = StringIO()
+
+        call_command(
+            "run_ai_worker",
+            "--max-loops",
+            "1",
+            "--interval-seconds",
+            "0",
+            "--idle-interval-seconds",
+            "0",
+            "--recover-stale-seconds",
+            "60",
+            "--worker-id",
+            "recovered-loop-worker",
+            stdout=out,
+        )
+
+        payload = json.loads(out.getvalue())
+        summary = payload["summary"]
+        self.assertEqual(summary["recovered"]["requeued"], 1)
+        self.assertEqual(summary["claimed"], 1)
+        self.assertEqual(summary["completed"], 1)
+        task.refresh_from_db()
+        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertEqual(task.worker_id, "recovered-loop-worker")

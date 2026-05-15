@@ -487,7 +487,7 @@ conn.execute("UPDATE users SET balance_u = balance_u + ? WHERE user_id = ?", (re
 ### 1. Scope / Trigger
 
 - Trigger: any change to AI task creation, polling, billing reservation, worker execution, stale recovery, cancellation, or terminal callbacks.
-- Applies to: `AITask`, `POST /api/ai/tasks/`, `GET /api/ai/tasks/{task_id}`, `POST /api/ai/tasks/{task_id}/cancel/`, writing entry polling, `run_ai_tasks`, and billable task orchestration.
+- Applies to: `AITask`, `POST /api/ai/tasks/`, `GET /api/ai/tasks/{task_id}`, `POST /api/ai/tasks/{task_id}/cancel/`, writing entry polling, `run_ai_tasks`, `run_ai_worker`, and billable task orchestration.
 - Goal: browser refreshes, duplicate submits, worker crashes, and late callbacks must not lose task state or double charge users.
 
 ### 2. Signatures
@@ -513,6 +513,12 @@ Command:
   - `--limit`: bounded pending claim count, minimum `1`.
   - `--worker-id`: stored on claimed tasks.
   - `--recover-stale-seconds`: when greater than `0`, recover stale `running` tasks before claiming.
+- `python backend_django/manage.py run_ai_worker --limit N --worker-id ID --recover-stale-seconds S --interval-seconds A --idle-interval-seconds B --max-loops M --stop-file PATH`
+  - Runs the same bounded batch function as `run_ai_tasks` in a loop.
+  - Emits one JSON object per completed loop with `loop`, `worker_id`, `timestamp`, and `summary`.
+  - `--max-loops`: `0` means keep running; positive values are for tests and controlled local runs.
+  - `--stop-file`: if the path exists before a loop starts, exit before claiming more tasks.
+  - SIGINT/SIGTERM should stop the loop between batches; they must not interrupt a claimed task mid-provider path.
 
 Service signatures:
 
@@ -577,6 +583,8 @@ Worker race contract:
 
 - If a cancel request arrives after claim, the cancel path must return `409` and leave the claimed task untouched.
 - `run_ai_tasks` must continue through the normal completion/fallback path, persist the result, and report the final terminal status instead of `cancelled`.
+- `run_ai_worker` must share the same per-batch lifecycle as `run_ai_tasks`; the loop may stop between batches, but claimed work must finish through success, fallback, or failure before the next stop check.
+- Idle `run_ai_worker --max-loops 1` should still emit a valid JSON loop summary with zero claimed items so logs and process-manager checks have a deterministic heartbeat.
 
 ### 4. Validation & Error Matrix
 
@@ -626,6 +634,10 @@ API/command tests:
 - `POST /api/ai/tasks/{task_id}/cancel/` auth, owner-scoped 404, pending billable release, running-task conflict, and terminal no-op payload.
 - `GET /api/writing/entries/{entry_id}` includes latest `ai_task`; cancelled writing score tasks leave `score=null` and do not create `WritingScore`.
 - `run_ai_tasks --recover-stale-seconds` summary counts and stale requeue/fail behavior.
+- `run_ai_worker --max-loops 1` processes due pending `writing_score` tasks and emits the loop wrapper JSON.
+- `run_ai_worker --max-loops 1` with no pending tasks emits an idle summary without failing.
+- `run_ai_worker --stop-file <existing path>` exits before claiming work.
+- `run_ai_worker --recover-stale-seconds` recovers stale `running` tasks before claiming the requeued task.
 - Management command processes due pending `writing_score` tasks without browser state and keeps normal fallback/completion behavior when a cancel attempt happens after claim.
 
 ### 7. Wrong vs Correct
@@ -660,6 +672,7 @@ task = fail_billable_ai_task(
 - In-memory browser state as the only source of AI scoring/report progress.
 - Charging on `fallback`, `failed`, or `cancelled` terminal states.
 - Unbounded worker commands or queries.
+- Worker loops that sleep or stop-check while a task is already claimed but before the lifecycle helper writes a terminal state.
 
 ## Required Patterns
 
