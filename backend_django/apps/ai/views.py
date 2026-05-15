@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .orchestration import AIOrchestrationError, create_billable_ai_task
+from .orchestration import AIOrchestrationError, cancel_owned_ai_task, create_billable_ai_task
 from .services import AITaskError, create_ai_task, get_ai_task, task_payload
 
 
@@ -77,3 +77,24 @@ def task_detail(request, task_id: str):
         return JsonResponse(task_payload(get_ai_task(request.user, task_id)))
     except AITaskError as exc:
         return JsonResponse({"error": str(exc)}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def task_cancel(request, task_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    payload = read_json_body(request)
+    try:
+        task = cancel_owned_ai_task(
+            request.user,
+            task_id,
+            reason=str(payload.get("reason") or ""),
+            error_code=str(payload.get("error_code") or "cancelled"),
+        )
+    except AITaskError as exc:
+        return JsonResponse({"error": str(exc)}, status=404)
+    except AIOrchestrationError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse(task_payload(task))

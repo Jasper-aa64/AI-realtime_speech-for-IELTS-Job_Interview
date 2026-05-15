@@ -45,6 +45,13 @@ Required patterns:
 
 Do not update `AITask.status`, wallet balances, reservation status, or usage links with ad hoc `.update()` calls in product flows. Tests may use direct updates only to simulate stale rows.
 
+Cancellation is a locked lifecycle transition:
+
+- `POST /api/ai/tasks/{task_id}/cancel/` must call `cancel_owned_ai_task(...)` after authenticated owner lookup.
+- Missing and wrong-owner task IDs are owner-scoped 404s; do not expose whether another user owns the task.
+- Pending or running billable tasks release a still-reserved wallet reservation through `cancel_billable_ai_task(...)`.
+- Terminal tasks are no-ops and return the existing task payload without another release or settlement.
+
 ---
 
 ## Billing Reservation Contract
@@ -81,6 +88,12 @@ Worker queries must be deterministic and bounded:
 - Pending work: filter `status=pending`, `available_at is null or <= now`, order by `created_at`, then apply `--limit`.
 - Stale work: filter `status=running`, `started_at <= now - stale_after_seconds`, order by `started_at`, `created_at`.
 - User-facing lookup: always filter by `user` and `task_id`; never expose a task by public ID without ownership.
+
+Writing polling bridge:
+
+- `GET /api/writing/entries/{entry_id}` returns the latest `ai_task` for the authenticated owner's entry by `task_type=writing_score`, `related_type=writing_entry`, and `related_id=entry_id`.
+- The bridge is read-only; it must not infer score state from frontend memory or create/complete tasks during polling.
+- A cancelled score task keeps the entry unscored. Late completion or fallback for a cancelled task must not create `WritingScore` or update the learner profile.
 
 ---
 

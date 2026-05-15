@@ -1,5 +1,6 @@
 import json
 from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -32,7 +33,7 @@ from apps.ai.orchestration import (
 from apps.billing.models import TokenWallet, WalletLedgerEntry, WalletReservation
 from apps.billing.services import DEFAULT_INITIAL_GRANT_U, ensure_wallet
 from apps.writing.models import WritingEntry, WritingPrompt, WritingScore
-from apps.writing.services import create_score_task
+from apps.writing.services import create_score_task, fallback_score_task
 
 
 class AITaskServiceTests(TestCase):
@@ -198,6 +199,14 @@ class AITaskApiTests(TestCase):
         response = self.client.post("/api/ai/tasks/", data={"task_type": "writing_score"}, content_type="application/json")
         self.assertEqual(response.status_code, 401)
 
+    def test_cancel_task_api_requires_login(self):
+        task, _created = create_ai_task(user=self.user, task_type="writing_score", idempotency_key="api-cancel-auth")
+        self.client.logout()
+
+        response = self.client.post(f"/api/ai/tasks/{task.task_id}/cancel/", content_type="application/json")
+
+        self.assertEqual(response.status_code, 401)
+
     def test_task_api_is_user_scoped(self):
         task, _created = create_ai_task(user=self.user, task_type="writing_score", idempotency_key="api-owned-task")
         other_client = Client()
@@ -205,6 +214,16 @@ class AITaskApiTests(TestCase):
         other_client.force_login(other)
 
         response = other_client.get(f"/api/ai/tasks/{task.task_id}")
+        self.assertEqual(response.status_code, 404)
+
+    def test_cancel_task_api_is_user_scoped(self):
+        task, _created = create_ai_task(user=self.user, task_type="writing_score", idempotency_key="api-cancel-owned-task")
+        other_client = Client()
+        other = get_user_model().objects.create_user(username="ai-api-cancel-other", password="test-pass")
+        other_client.force_login(other)
+
+        response = other_client.post(f"/api/ai/tasks/{task.task_id}/cancel/", content_type="application/json")
+
         self.assertEqual(response.status_code, 404)
 
     def test_create_billable_task_api_reserves_wallet(self):
@@ -224,6 +243,62 @@ class AITaskApiTests(TestCase):
         self.assertEqual(created.json()["task"]["billing"]["reservation_id"], WalletReservation.objects.get(user=self.user).reservation_id)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 250_000)
+
+    def test_owner_can_cancel_pending_billable_task_and_release_reservation(self):
+        task, _created = create_billable_ai_task(
+            user=self.user,
+            task_type="writing_score",
+            reserved_u=250_000,
+            idempotency_key="api-cancel-pending-billable",
+        )
+
+        response = self.client.post(
+            f"/api/ai/tasks/{task.task_id}/cancel/",
+            data={"reason": "user cancelled from UI"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], task.task_id)
+        self.assertEqual(response.json()["status"], AITask.Status.CANCELLED)
+        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
+        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        wallet = TokenWallet.objects.get(user=self.user)
+        self.assertEqual(wallet.reserved_u, 0)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+
+    def test_owner_can_cancel_running_billable_task_and_release_reservation(self):
+        task, _created = create_billable_ai_task(
+            user=self.user,
+            task_type="writing_score",
+            reserved_u=250_000,
+            idempotency_key="api-cancel-running-billable",
+        )
+        claim_ai_task(task.task_id, worker_id="api-running-worker")
+
+        response = self.client.post(
+            f"/api/ai/tasks/{task.task_id}/cancel/",
+            data={"reason": "user cancelled running task"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], AITask.Status.CANCELLED)
+        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
+        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        wallet = TokenWallet.objects.get(user=self.user)
+        self.assertEqual(wallet.reserved_u, 0)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+
+    def test_cancelling_terminal_task_api_is_noop(self):
+        task, _created = create_ai_task(user=self.user, task_type="writing_score", idempotency_key="api-terminal-cancel")
+        succeed_ai_task(task.task_id, {"overall_band": 6.5})
+
+        response = self.client.post(f"/api/ai/tasks/{task.task_id}/cancel/", content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], AITask.Status.SUCCEEDED)
+        self.assertEqual(response.json()["result_payload"]["overall_band"], 6.5)
 
 
 class AIBillableTaskOrchestrationTests(TestCase):
@@ -484,3 +559,71 @@ class AIWorkerCommandTests(TestCase):
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.FALLBACK)
         self.assertEqual(task.worker_id, "recovery-worker")
+
+    def test_run_ai_tasks_does_not_claim_cancelled_task(self):
+        user = get_user_model().objects.create_user(username="worker-cancelled-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-cancelled-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Worker cancelled prompt",
+            prompt="Some people think universities should focus only on job skills. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="Universities should teach job skills, but they should also develop wider thinking and research abilities.",
+            word_count=15,
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        cancel_billable_ai_task(created["task"]["id"], "user cancelled before worker claim")
+        out = StringIO()
+
+        call_command("run_ai_tasks", "--limit", "5", "--worker-id", "cancel-aware-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["claimed"], 0)
+        self.assertEqual(summary["completed"], 0)
+        self.assertEqual(summary["failed"], 0)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
+
+    def test_run_ai_tasks_marks_task_cancelled_after_claim_as_skipped(self):
+        user = get_user_model().objects.create_user(username="worker-cancel-race-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-cancel-race-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Worker cancel race prompt",
+            prompt="Some people think museums should be free to enter. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="Museums can become more accessible if they are free, but funding still needs support from public budgets or donations.",
+            word_count=19,
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        out = StringIO()
+
+        def cancel_before_fallback(task_id, reason):
+            cancel_billable_ai_task(task_id, "user cancelled after worker claim")
+            return fallback_score_task(task_id, reason)
+
+        with patch("apps.ai.management.commands.run_ai_tasks.fallback_score_task", side_effect=cancel_before_fallback):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "cancel-race-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["claimed"], 1)
+        self.assertEqual(summary["completed"], 0)
+        self.assertEqual(summary["skipped"], 1)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.CANCELLED}])
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.CANCELLED)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())

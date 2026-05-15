@@ -561,14 +561,26 @@ def normalize_score_payload(entry: WritingEntry, payload: dict[str, Any]) -> dic
     }
 
 
-@transaction.atomic
-def complete_score_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    task = AITask.objects.select_related("user").filter(task_id=str(task_id or "").strip(), task_type="writing_score", related_type="writing_entry").first()
+def get_writing_score_task_and_entry(task_id: str) -> tuple[AITask, WritingEntry]:
+    task = (
+        AITask.objects.select_for_update()
+        .select_related("user")
+        .filter(task_id=str(task_id or "").strip(), task_type="writing_score", related_type="writing_entry")
+        .first()
+    )
     if not task:
         raise WritingError("Writing score task not found")
     entry = WritingEntry.objects.select_related("user", "prompt", "score").filter(user=task.user, entry_id=task.related_id).first()
     if not entry:
         raise WritingError("Writing entry not found")
+    return task, entry
+
+
+@transaction.atomic
+def complete_score_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    task, entry = get_writing_score_task_and_entry(task_id)
+    if task.is_terminal:
+        return entry_payload(entry)
     score = normalize_score_payload(entry, payload)
     persist_score(entry, score)
     score["writing_profile"] = update_profile(entry, score)
@@ -582,12 +594,9 @@ def complete_score_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]
 
 @transaction.atomic
 def fallback_score_task(task_id: str, reason: str = "") -> dict[str, Any]:
-    task = AITask.objects.select_related("user").filter(task_id=str(task_id or "").strip(), task_type="writing_score", related_type="writing_entry").first()
-    if not task:
-        raise WritingError("Writing score task not found")
-    entry = WritingEntry.objects.select_related("user", "prompt", "score").filter(user=task.user, entry_id=task.related_id).first()
-    if not entry:
-        raise WritingError("Writing entry not found")
+    task, entry = get_writing_score_task_and_entry(task_id)
+    if task.is_terminal:
+        return entry_payload(entry)
     score = fallback_score(entry.task_type, entry.answer, reason=reason)
     persist_score(entry, score)
     score["writing_profile"] = update_profile(entry, score)

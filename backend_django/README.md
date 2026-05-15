@@ -50,11 +50,14 @@ AI tasks:
 ```text
 POST /api/ai/tasks/
 GET  /api/ai/tasks/{task_id}
+POST /api/ai/tasks/{task_id}/cancel/
 ```
 
 AI task records are the durable state boundary for slow report/scoring work.
 Workers can be added later; callers should create tasks with an idempotency key,
-then poll the task detail endpoint after refresh or reconnect.
+then poll the task detail endpoint after refresh or reconnect. Clients can
+cancel their own pending or running tasks through the generic cancel endpoint;
+wrong-owner and missing task IDs resolve as not found.
 
 When `POST /api/ai/tasks/` includes `reserved_u`, the API creates a billable
 task and reserves wallet balance up front. Later orchestration should settle
@@ -90,6 +93,9 @@ POST /api/writing/entries/{entry_id}/score-task
 `/score` keeps the current synchronous fallback-compatible behavior.
 `/score-task` creates a refresh-safe billable AI task for later worker
 execution and returns the same task on duplicate submits for the same answer.
+`GET /api/writing/entries/{entry_id}` includes the latest `ai_task` payload for
+that entry, so the UI can recover task state after refresh and keep showing a
+cancelled task without creating a `WritingScore`.
 
 Local worker boundary:
 

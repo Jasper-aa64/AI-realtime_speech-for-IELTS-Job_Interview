@@ -3,6 +3,7 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.ai.models import AITask
+from apps.ai.orchestration import cancel_billable_ai_task
 from apps.ai.services import claim_ai_task
 from apps.billing.models import TokenWallet, WalletReservation
 from apps.billing.services import DEFAULT_INITIAL_GRANT_U
@@ -186,6 +187,22 @@ class WritingApiTests(TestCase):
         detail = self.client.get(f"/api/writing/entries/{save['id']}")
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.json()["ai_task"]["id"], task["id"])
+        self.assertEqual(detail.json()["ai_task"]["status"], AITask.Status.PENDING)
+
+        cancelled = self.client.post(
+            f"/api/ai/tasks/{task['id']}/cancel/",
+            data={"reason": "user cancelled score request"},
+            content_type="application/json",
+        )
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertEqual(cancelled.json()["status"], AITask.Status.CANCELLED)
+
+        detail_after_cancel = self.client.get(f"/api/writing/entries/{save['id']}")
+        self.assertEqual(detail_after_cancel.status_code, 200)
+        self.assertEqual(detail_after_cancel.json()["ai_task"]["id"], task["id"])
+        self.assertEqual(detail_after_cancel.json()["ai_task"]["status"], AITask.Status.CANCELLED)
+        self.assertIsNone(detail_after_cancel.json()["score"])
+        self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
     def test_complete_score_task_persists_score_profile_and_settles_billing(self):
         prompt = WritingPrompt.objects.create(
@@ -274,6 +291,52 @@ class WritingApiTests(TestCase):
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+
+    def test_cancelled_score_task_ignores_late_completion_and_keeps_entry_unscored(self):
+        prompt = WritingPrompt.objects.create(
+            prompt_id="task2-cancelled-complete-score-task",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Cancelled completion prompt",
+            prompt="Some people think children should start learning a foreign language earlier. Discuss.",
+        )
+        save = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": "Starting earlier can improve fluency, but teaching methods still need to match children's age.",
+            },
+            content_type="application/json",
+        ).json()
+        task_payload = self.client.post(
+            f"/api/writing/entries/{save['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        claim_ai_task(task_payload["id"], worker_id="late-complete-worker")
+        cancel_billable_ai_task(task_payload["id"], "user cancelled during scoring")
+
+        completed = complete_score_task(
+            task_payload["id"],
+            {
+                "score": {
+                    "overall_band": 6.0,
+                    "task_response": 6.0,
+                    "coherence_cohesion": 6.0,
+                    "lexical_resource": 6.0,
+                    "grammatical_range_accuracy": 6.0,
+                    "feedback_markdown": "- This should be ignored after cancellation.",
+                    "grammar_corrections": [],
+                    "backend": "ai",
+                },
+                "usage": {"input_tokens": 900, "output_tokens": 100},
+            },
+        )
+
+        self.assertEqual(completed["ai_task"]["status"], AITask.Status.CANCELLED)
+        self.assertIsNone(completed["score"])
+        self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
     def test_invalid_writing_requests_return_json_errors(self):
         bad_prompt_type = self.client.get("/api/writing/prompts?task_type=unknown")

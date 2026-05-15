@@ -25,6 +25,7 @@ Current AI task endpoints use these response contracts:
 - Unauthenticated request: `401 {"error": "authentication required"}`.
 - `POST /api/ai/tasks/` validation/orchestration error: `400 {"error": "<message>"}`.
 - `GET /api/ai/tasks/{task_id}` missing or wrong-owner task: `404 {"error": "AI task not found"}`.
+- `POST /api/ai/tasks/{task_id}/cancel/` requires auth, uses owner-scoped lookup, returns `404 {"error": "AI task not found"}` for missing or wrong-owner tasks, and returns the task payload on success or terminal no-op.
 
 `read_json_body()` treats malformed or non-object JSON as `{}`. Required field validation must happen in the service layer so empty payloads become deterministic service errors such as `task_type is required`.
 
@@ -40,6 +41,9 @@ Current AI task endpoints use these response contracts:
 | Insufficient wallet balance | `BillingError` is wrapped as `AIOrchestrationError` | POST returns 400, no task created |
 | Same idempotency key, same user | Return existing task with `created=false` | POST returns 200 |
 | Same idempotency key, different user | Raise ownership error | POST returns 400 |
+| Cancel missing or wrong-owner task | `cancel_owned_ai_task` raises `AITaskError("AI task not found")` | POST cancel returns owner-scoped 404 |
+| Cancel pending/running billable task | Mark `cancelled` and release reserved wallet funds | POST cancel returns task payload |
+| Cancel terminal task | Return unchanged task | POST cancel returns existing task payload |
 | Task claim from non-`pending` status | `claim_ai_task` raises `AITaskError` | Worker records item error |
 | `available_at` is in the future | `claim_ai_task` raises `AITaskError` | Worker leaves task untouched |
 | Stale recovery timeout <= 0 | `stale_running_task_ids` raises `AITaskError` | Caller must reject/fix config |
@@ -57,6 +61,8 @@ All terminal callbacks must be idempotent:
 
 This protects against late provider callbacks, duplicate worker retries, and user cancellation racing with worker completion.
 
+Writing score callbacks must extend the same rule to product data: when a `writing_score` task is already `cancelled`, late completion or fallback returns the current entry payload, leaves the entry unscored, and must not create `WritingScore`.
+
 ---
 
 ## Worker Recovery Errors
@@ -70,6 +76,8 @@ Recovery behavior:
 - Terminal task discovered during recovery: return unchanged.
 
 The command emits a JSON summary. Worker errors should be recorded per item instead of crashing the whole batch where possible.
+
+If `run_ai_tasks` claims a task and the task is cancelled before fallback or completion persistence, the item is reported as skipped/cancelled, not completed or fallback. This preserves the user's cancellation intent and prevents misleading worker summaries.
 
 ---
 

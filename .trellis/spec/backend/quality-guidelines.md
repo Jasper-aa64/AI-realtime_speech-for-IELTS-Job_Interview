@@ -464,7 +464,7 @@ conn.execute("UPDATE users SET balance_u = balance_u + ? WHERE user_id = ?", (re
 ### 1. Scope / Trigger
 
 - Trigger: any change to AI task creation, polling, billing reservation, worker execution, stale recovery, cancellation, or terminal callbacks.
-- Applies to: `AITask`, `POST /api/ai/tasks/`, `GET /api/ai/tasks/{task_id}`, `run_ai_tasks`, and billable task orchestration.
+- Applies to: `AITask`, `POST /api/ai/tasks/`, `GET /api/ai/tasks/{task_id}`, `POST /api/ai/tasks/{task_id}/cancel/`, writing entry polling, `run_ai_tasks`, and billable task orchestration.
 - Goal: browser refreshes, duplicate submits, worker crashes, and late callbacks must not lose task state or double charge users.
 
 ### 2. Signatures
@@ -477,6 +477,12 @@ API:
   - Response: `201 {"created": true, "task": <task_payload>}` or `200 {"created": false, "task": <task_payload>}` for duplicate same-user idempotency.
 - `GET /api/ai/tasks/{task_id}`
   - Response: `<task_payload>` for the authenticated owner.
+- `POST /api/ai/tasks/{task_id}/cancel/`
+  - Body: optional `reason`, optional `error_code` defaulting to `cancelled`.
+  - Response: `<task_payload>` for the authenticated owner.
+  - Semantics: pending/running billable tasks release reserved funds; terminal tasks are no-ops.
+- `GET /api/writing/entries/{entry_id}`
+  - Response includes the current entry payload and latest related `ai_task` for score polling.
 
 Command:
 
@@ -525,6 +531,24 @@ Billing contract:
 - Release occurs on fallback, final failure, and cancellation.
 - Retryable failures and stale requeues keep the original reservation.
 
+Cancellation API contract:
+
+- `POST /api/ai/tasks/{task_id}/cancel/` requires authentication.
+- The lookup is owner-scoped: missing tasks and tasks owned by another user both return `404 AI task not found`.
+- Pending or running billable tasks release a still-reserved wallet reservation exactly once.
+- Terminal tasks return the existing task payload without changing status, settlement, or reservation state.
+
+Writing polling bridge:
+
+- `GET /api/writing/entries/{entry_id}` exposes the latest `ai_task` selected by entry owner, `task_type=writing_score`, `related_type=writing_entry`, and `related_id=entry_id`.
+- A cancelled score task keeps the writing entry unscored; cancelled tasks must not create `WritingScore` on late completion or fallback.
+- Polling must remain refresh-safe and database-backed. Do not depend on browser memory to know whether a score task exists or has been cancelled.
+
+Worker race contract:
+
+- If a task is cancelled after claim but before `run_ai_tasks` persists fallback or completion, the worker summary reports the item as skipped/cancelled.
+- The command must not count that race as completed, fallback, or failed work.
+
 ### 4. Validation & Error Matrix
 
 | Input/state | Required result |
@@ -536,6 +560,10 @@ Billing contract:
 | Duplicate same-user idempotency key | 200, `created=false`, existing task payload, no new reservation |
 | Duplicate cross-user idempotency key | 400 ownership error |
 | GET wrong owner or missing task | 404 `AI task not found` |
+| POST cancel without auth | 401 `authentication required` |
+| POST cancel wrong owner or missing task | 404 `AI task not found` |
+| POST cancel pending/running billable task | 200 task payload with `status=cancelled`, reservation released |
+| POST cancel terminal task | 200 existing task payload, no extra release/settlement |
 | Claim non-`pending` task | `AITaskError`, no mutation |
 | Stale `running`, attempts remain | requeue to `pending`, clear worker fields, preserve reservation |
 | Stale `running`, attempts exhausted | terminal `failed`, release billable reservation |
@@ -544,6 +572,7 @@ Billing contract:
 ### 5. Good/Base/Bad Cases
 
 - Good: user posts a billable `writing_score` task with `reserved_u` and `idempotency_key`, refreshes, polls `GET /api/ai/tasks/{id}`, worker completes or falls back, and wallet reservation is settled or released exactly once.
+- Good: writing UI polls `GET /api/writing/entries/{entry_id}`, sees the latest `ai_task`, cancels through `POST /api/ai/tasks/{task_id}/cancel/`, and the entry remains unscored until a new score task is created.
 - Base: user double-clicks submit; second POST returns the same task with `created=false`, same reservation ID, and unchanged wallet reserved total.
 - Bad: worker dies after claiming; stale recovery either requeues within retry budget or terminal-fails and releases reservation when exhausted.
 - Bad: user cancellation wins before provider callback; later success callback returns the `cancelled` task and must not settle usage.
@@ -564,8 +593,10 @@ API/command tests:
 
 - `POST /api/ai/tasks/` plain and billable payloads, status codes, and payload shape.
 - `GET /api/ai/tasks/{task_id}` owner isolation.
+- `POST /api/ai/tasks/{task_id}/cancel/` auth, owner-scoped 404, pending/running billable reservation release, and terminal no-op payload.
+- `GET /api/writing/entries/{entry_id}` includes latest `ai_task`; cancelled writing score tasks leave `score=null` and do not create `WritingScore`.
 - `run_ai_tasks --recover-stale-seconds` summary counts and stale requeue/fail behavior.
-- Management command processes due pending `writing_score` tasks without browser state.
+- Management command processes due pending `writing_score` tasks without browser state and reports after-claim cancellation as skipped/cancelled.
 
 ### 7. Wrong vs Correct
 

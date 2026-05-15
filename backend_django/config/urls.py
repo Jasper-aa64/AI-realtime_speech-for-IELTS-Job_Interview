@@ -17,6 +17,7 @@ urlpatterns = [
     path("api/accounts/me/", account_views.me, name="account-me"),
     path("api/ai/tasks/", ai_views.tasks, name="ai-tasks"),
     path("api/ai/tasks/<str:task_id>", ai_views.task_detail, name="ai-task-detail"),
+    path("api/ai/tasks/<str:task_id>/cancel/", ai_views.task_cancel, name="ai-task-cancel"),
     path("api/history", speaking_views.history_view, name="speaking-history"),
     path("api/history/<str:attempt_id>", speaking_views.detail_view, name="speaking-detail"),
     path("api/billing/wallet/", billing_views.wallet, name="billing-wallet"),

@@ -48,13 +48,26 @@ class Command(BaseCommand):
                 claimed = claim_ai_task(task.task_id, worker_id=worker_id)
                 summary["claimed"] += 1
                 if claimed.task_type == "writing_score":
-                    fallback_score_task(claimed.task_id, "local fallback worker: real AI provider is not connected yet")
-                    summary["completed"] += 1
-                    summary["items"].append({"task_id": claimed.task_id, "task_type": claimed.task_type, "status": AITask.Status.FALLBACK})
+                    result = fallback_score_task(claimed.task_id, "local fallback worker: real AI provider is not connected yet")
+                    final_status = (
+                        (result.get("ai_task") or {}).get("status")
+                        if isinstance(result, dict)
+                        else None
+                    ) or AITask.Status.FALLBACK
+                    if final_status == AITask.Status.CANCELLED:
+                        summary["skipped"] += 1
+                    else:
+                        summary["completed"] += 1
+                    summary["items"].append({"task_id": claimed.task_id, "task_type": claimed.task_type, "status": final_status})
                 else:
                     summary["skipped"] += 1
                     summary["items"].append({"task_id": claimed.task_id, "task_type": claimed.task_type, "status": "skipped"})
             except (AITaskError, WritingError, ValueError) as exc:
+                latest = AITask.objects.filter(pk=task.pk).only("status").first()
+                if latest and latest.status == AITask.Status.CANCELLED:
+                    summary["skipped"] += 1
+                    summary["items"].append({"task_id": task.task_id, "task_type": task.task_type, "status": AITask.Status.CANCELLED})
+                    continue
                 summary["failed"] += 1
                 summary["items"].append({"task_id": task.task_id, "task_type": task.task_type, "status": "error", "error": str(exc)})
         self.stdout.write(json.dumps(summary, ensure_ascii=False, sort_keys=True))

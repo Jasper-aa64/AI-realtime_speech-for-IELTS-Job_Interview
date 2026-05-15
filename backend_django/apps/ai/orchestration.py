@@ -161,6 +161,16 @@ def cancel_billable_ai_task(task_id: str, reason: str = "", *, error_code: str =
 
 
 @transaction.atomic
+def cancel_owned_ai_task(user, task_id: str, *, reason: str = "", error_code: str = "cancelled") -> AITask:
+    task = AITask.objects.select_for_update().filter(user=user, task_id=clean_text(task_id)).first()
+    if not task:
+        raise AITaskError("AI task not found")
+    if task.billing_reservation_id:
+        return cancel_billable_ai_task(task.task_id, reason=reason, error_code=error_code)
+    return cancel_ai_task(task.task_id, reason=reason, error_code=error_code)
+
+
+@transaction.atomic
 def recover_stale_ai_tasks(
     stale_after_seconds: int,
     *,
