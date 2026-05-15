@@ -68,7 +68,41 @@ class BillingServiceTests(TestCase):
         again = settle_usage(user, "call-1", {"input_tokens": 1000, "output_tokens": 100})
         self.assertEqual(again["status"], "already_settled")
         self.assertEqual(CodexUsageEvent.objects.count(), 1)
+        event = CodexUsageEvent.objects.get(call_id="call-1")
+        self.assertEqual(event.provider, "codex")
+        self.assertEqual(event.model, "codex-cli")
+        self.assertEqual(event.metadata, {})
         self.assertEqual(WalletLedgerEntry.objects.filter(entry_type=WalletLedgerEntry.EntryType.SETTLE).count(), 1)
+
+    def test_settle_usage_can_store_optional_audit_metadata(self):
+        user = get_user_model().objects.create_user(username="audit-usage-user", password="test-pass")
+        reserve_usage(user, "call-audit", 1_000_000)
+
+        metadata = {
+            "task_id": "aitask_audit",
+            "task_type": "writing_score",
+            "provider": "mock_success",
+            "model": "mock-writing-score-v1",
+            "prompt_version": "writing_score_v1",
+            "related_type": "writing_entry",
+            "related_id": "entry-audit",
+            "entry_id": "entry-audit",
+            "prompt_id": "prompt-audit",
+        }
+        result = settle_usage(
+            user,
+            "call-audit",
+            {"input_tokens": 1000, "output_tokens": 100},
+            provider="mock_success",
+            model="mock-writing-score-v1",
+            metadata=metadata,
+        )
+
+        self.assertEqual(result["status"], "settled")
+        event = CodexUsageEvent.objects.get(call_id="call-audit")
+        self.assertEqual(event.provider, "mock_success")
+        self.assertEqual(event.model, "mock-writing-score-v1")
+        self.assertEqual(event.metadata, metadata)
 
     def test_call_id_cannot_be_reused_by_another_user(self):
         owner = get_user_model().objects.create_user(username="reservation-owner", password="test-pass")

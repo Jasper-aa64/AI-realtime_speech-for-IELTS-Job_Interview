@@ -130,6 +130,19 @@ cancelled task without creating a `WritingScore`. If a task was cancelled while
 still `pending`, late completion or fallback callbacks are ignored and do not
 create score/profile rows.
 
+Writing bridge flow for the later frontend handoff:
+
+1. `GET /api/writing/prompts` or `POST /api/writing/prompts/random` to choose a prompt.
+2. `POST /api/writing/entries` to save the current draft and receive the durable `entry.id`, `prompt_id`, `task_type`, and `word_count`.
+3. `POST /api/writing/entries/{entry_id}/score-task` to create or reuse the billable `writing_score` task for the current answer hash.
+4. `GET /api/writing/entries/{entry_id}` to poll the bridge payload after refresh; it always returns the entry plus the latest related `ai_task`.
+5. `POST /api/ai/tasks/{task_id}/cancel/` only while the task is still `pending`; cancelled-pending entries keep `score=null` on the detail payload.
+6. `python backend_django/manage.py run_ai_tasks --limit N` claims the task, runs the provider adapter, and writes the terminal state.
+7. `GET /api/writing/entries/{entry_id}` is the final read surface:
+   - `ai_task.status=pending` or `cancelled` while no score exists yet;
+   - `ai_task.status=fallback` with `score.backend=fallback` after local fallback scoring;
+   - `ai_task.status=succeeded` with `score.backend=ai` after successful usage settlement.
+
 Local worker boundary:
 
 ```text
@@ -146,6 +159,9 @@ This command now runs claimed tasks through a small provider adapter boundary:
   and release the reservation through `fallback_score_task`.
 - Unknown or disabled writing providers also fall back deterministically; they
   do not crash the batch or settle usage unexpectedly.
+- Successful billable runs stamp `CodexUsageEvent` with durable provider/model
+  columns plus audit metadata such as `task_id`, `task_type`, `prompt_version`,
+  `related_id`, and writing prompt/entry identifiers when available.
 - Unsupported claimed task types are reported as `skipped` in the batch summary
   but are terminal-failed in the database so they do not remain stuck in
   `running`; billable unsupported tasks release their reservation through the

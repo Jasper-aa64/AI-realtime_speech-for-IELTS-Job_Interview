@@ -48,6 +48,7 @@ class CodexUsageEvent(TimeStampedModel):
     output_tokens = models.PositiveIntegerField(default=0)
     reasoning_output_tokens = models.PositiveIntegerField(default=0)
     raw_usage = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
     semantics_version = models.CharField(max_length=80, default="codex_cli_json_v1")
     captured_at = models.DateTimeField()
 

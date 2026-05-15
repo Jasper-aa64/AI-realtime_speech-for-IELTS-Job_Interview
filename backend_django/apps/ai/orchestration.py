@@ -3,7 +3,14 @@ from typing import Any
 from django.db import transaction
 
 from apps.billing.models import CodexUsageEvent, WalletReservation
-from apps.billing.services import BillingError, release_reservation, reserve_usage, settle_usage
+from apps.billing.services import (
+    BillingError,
+    DEFAULT_USAGE_MODEL,
+    DEFAULT_USAGE_PROVIDER,
+    release_reservation,
+    reserve_usage,
+    settle_usage,
+)
 
 from .models import AITask
 from .services import (
@@ -35,6 +42,24 @@ def _release_reserved_billable_task(task: AITask) -> AITask:
 def generated_call_id(user, idempotency_key: str, task_type: str, related_type: str = "", related_id: str = "") -> str:
     seed = idempotency_key or f"{task_type}:{related_type}:{related_id}"
     return f"ai_{task_hash(user.pk, seed)}"
+
+
+def usage_audit_metadata(task: AITask, *, provider: str, model: str) -> dict[str, Any]:
+    request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
+    metadata = {
+        "task_id": task.task_id,
+        "task_type": task.task_type,
+        "provider": provider,
+        "model": model,
+        "prompt_version": task.prompt_version,
+        "related_type": task.related_type,
+        "related_id": task.related_id,
+    }
+    for key in ("entry_id", "prompt_id"):
+        value = clean_text(request_payload.get(key))
+        if value:
+            metadata[key] = value
+    return metadata
 
 
 @transaction.atomic
@@ -103,8 +128,17 @@ def succeed_billable_ai_task(task_id: str, result_payload: dict[str, Any] | None
         raise AIOrchestrationError("AI task has no user")
     if task.is_terminal:
         return task
+    provider = clean_text(task.provider) or DEFAULT_USAGE_PROVIDER
+    model = clean_text(task.model) or DEFAULT_USAGE_MODEL
     try:
-        settlement = settle_usage(task.user, task.call_id, usage)
+        settlement = settle_usage(
+            task.user,
+            task.call_id,
+            usage,
+            provider=provider,
+            model=model,
+            metadata=usage_audit_metadata(task, provider=provider, model=model),
+        )
     except BillingError as exc:
         raise AIOrchestrationError(str(exc)) from exc
     task = succeed_ai_task(task.task_id, {**(result_payload or {}), "billing": settlement})

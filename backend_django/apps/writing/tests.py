@@ -58,6 +58,35 @@ class WritingApiTests(TestCase):
         self.user = get_user_model().objects.create_user(username="writing-api-user", password="test-pass")
         self.client.force_login(self.user)
 
+    def assert_entry_detail_contract(
+        self,
+        detail: dict,
+        *,
+        entry_id: str,
+        prompt_id: str,
+        task_type: str,
+        word_count: int,
+        ai_task_status: str,
+        score_backend: str | None = None,
+    ) -> None:
+        self.assertEqual(detail["id"], entry_id)
+        self.assertEqual(detail["prompt_id"], prompt_id)
+        self.assertEqual(detail["task_type"], task_type)
+        self.assertEqual(detail["word_count"], word_count)
+        self.assertIsNotNone(detail["ai_task"])
+        self.assertEqual(detail["ai_task"]["task_type"], "writing_score")
+        self.assertEqual(detail["ai_task"]["status"], ai_task_status)
+        self.assertEqual(detail["ai_task"]["related_type"], "writing_entry")
+        self.assertEqual(detail["ai_task"]["related_id"], entry_id)
+        self.assertEqual(detail["ai_task"]["request_payload"]["entry_id"], entry_id)
+        self.assertEqual(detail["ai_task"]["request_payload"]["prompt_id"], prompt_id)
+        self.assertEqual(detail["ai_task"]["request_payload"]["task_type"], task_type)
+        if score_backend is None:
+            self.assertIsNone(detail["score"])
+            return
+        self.assertIsNotNone(detail["score"])
+        self.assertEqual(detail["score"]["backend"], score_backend)
+
     def test_writing_api_requires_login(self):
         self.client.logout()
         response = self.client.get("/api/writing/summary")
@@ -187,7 +216,14 @@ class WritingApiTests(TestCase):
         detail = self.client.get(f"/api/writing/entries/{save['id']}")
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.json()["ai_task"]["id"], task["id"])
-        self.assertEqual(detail.json()["ai_task"]["status"], AITask.Status.PENDING)
+        self.assert_entry_detail_contract(
+            detail.json(),
+            entry_id=save["id"],
+            prompt_id=prompt.prompt_id,
+            task_type="task2",
+            word_count=save["word_count"],
+            ai_task_status=AITask.Status.PENDING,
+        )
 
         cancelled = self.client.post(
             f"/api/ai/tasks/{task['id']}/cancel/",
@@ -200,8 +236,14 @@ class WritingApiTests(TestCase):
         detail_after_cancel = self.client.get(f"/api/writing/entries/{save['id']}")
         self.assertEqual(detail_after_cancel.status_code, 200)
         self.assertEqual(detail_after_cancel.json()["ai_task"]["id"], task["id"])
-        self.assertEqual(detail_after_cancel.json()["ai_task"]["status"], AITask.Status.CANCELLED)
-        self.assertIsNone(detail_after_cancel.json()["score"])
+        self.assert_entry_detail_contract(
+            detail_after_cancel.json(),
+            entry_id=save["id"],
+            prompt_id=prompt.prompt_id,
+            task_type="task2",
+            word_count=save["word_count"],
+            ai_task_status=AITask.Status.CANCELLED,
+        )
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
     def test_complete_score_task_persists_score_profile_and_settles_billing(self):
@@ -253,6 +295,17 @@ class WritingApiTests(TestCase):
         self.assertIsNotNone(task.usage)
         score = WritingScore.objects.get(entry__entry_id=save["id"])
         self.assertEqual(score.billing_metadata, {"input_tokens": 1000, "output_tokens": 100})
+        detail_after_complete = self.client.get(f"/api/writing/entries/{save['id']}")
+        self.assertEqual(detail_after_complete.status_code, 200)
+        self.assert_entry_detail_contract(
+            detail_after_complete.json(),
+            entry_id=save["id"],
+            prompt_id=prompt.prompt_id,
+            task_type="task2",
+            word_count=save["word_count"],
+            ai_task_status=AITask.Status.SUCCEEDED,
+            score_backend="ai",
+        )
         reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
         self.assertEqual(reservation.status, WalletReservation.Status.SETTLED)
         wallet = TokenWallet.objects.get(user=self.user)
@@ -311,6 +364,17 @@ class WritingApiTests(TestCase):
         self.assertIn("AI 评分生成失败", fallback["score"]["feedback_markdown"])
         task = AITask.objects.get(task_id=task_payload["id"])
         self.assertEqual(task.status, AITask.Status.FALLBACK)
+        detail_after_fallback = self.client.get(f"/api/writing/entries/{save['id']}")
+        self.assertEqual(detail_after_fallback.status_code, 200)
+        self.assert_entry_detail_contract(
+            detail_after_fallback.json(),
+            entry_id=save["id"],
+            prompt_id=prompt.prompt_id,
+            task_type="task2",
+            word_count=save["word_count"],
+            ai_task_status=AITask.Status.FALLBACK,
+            score_backend="fallback",
+        )
         reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
         self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
         wallet = TokenWallet.objects.get(user=self.user)

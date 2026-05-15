@@ -12,9 +12,11 @@ from .models import CodexUsageEvent, MICRO_RMB_PER_RMB, PriceSnapshot, TokenWall
 
 
 DEFAULT_INITIAL_GRANT_U = 5 * MICRO_RMB_PER_RMB
+DEFAULT_USAGE_PROVIDER = "codex"
+DEFAULT_USAGE_MODEL = "codex-cli"
 DEFAULT_PRICE_SNAPSHOT = {
     "snapshot_id": "local_2026_05_default",
-    "model": "codex-cli",
+    "model": DEFAULT_USAGE_MODEL,
     "input_price_u_per_1m_tokens": 12_000_000,
     "cached_input_price_u_per_1m_tokens": 3_000_000,
     "output_price_u_per_1m_tokens": 48_000_000,
@@ -190,6 +192,12 @@ def normalize_usage(usage: dict[str, Any] | None) -> BillingUsage:
     )
 
 
+def normalize_usage_event_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(metadata, dict):
+        return {}
+    return dict(metadata)
+
+
 def latest_price_snapshot(snapshot_id: str | None = None) -> PriceSnapshot:
     if snapshot_id:
         snapshot = PriceSnapshot.objects.filter(snapshot_id=snapshot_id).first()
@@ -218,10 +226,20 @@ def calculate_charge(usage: dict[str, Any], snapshot_id: str | None = None) -> d
     }
 
 
-def capture_usage(call_id: str, usage: dict[str, Any], provider: str = "codex", model: str = "codex-cli", raw_jsonl_path: str = "") -> CodexUsageEvent:
+def capture_usage(
+    call_id: str,
+    usage: dict[str, Any],
+    provider: str = DEFAULT_USAGE_PROVIDER,
+    model: str = DEFAULT_USAGE_MODEL,
+    raw_jsonl_path: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> CodexUsageEvent:
     call_id = require_call_id(call_id)
     normalized = normalize_usage(usage)
-    event, _created = CodexUsageEvent.objects.get_or_create(
+    provider = str(provider or DEFAULT_USAGE_PROVIDER).strip() or DEFAULT_USAGE_PROVIDER
+    model = str(model or DEFAULT_USAGE_MODEL).strip() or DEFAULT_USAGE_MODEL
+    usage_metadata = normalize_usage_event_metadata(metadata)
+    event, created = CodexUsageEvent.objects.get_or_create(
         call_id=call_id,
         defaults={
             "usage_id": f"usage_{hashlib.sha1(call_id.encode('utf-8')).hexdigest()[:20]}",
@@ -233,9 +251,29 @@ def capture_usage(call_id: str, usage: dict[str, Any], provider: str = "codex", 
             "output_tokens": normalized.output_tokens,
             "reasoning_output_tokens": normalized.reasoning_output_tokens,
             "raw_usage": usage,
+            "metadata": usage_metadata,
             "captured_at": timezone.now(),
         },
     )
+    if created:
+        return event
+
+    update_fields = []
+    if event.provider != provider:
+        event.provider = provider
+        update_fields.append("provider")
+    if event.model != model:
+        event.model = model
+        update_fields.append("model")
+    if raw_jsonl_path and event.raw_jsonl_path != raw_jsonl_path:
+        event.raw_jsonl_path = raw_jsonl_path
+        update_fields.append("raw_jsonl_path")
+    merged_metadata = {**(event.metadata or {}), **usage_metadata}
+    if merged_metadata != (event.metadata or {}):
+        event.metadata = merged_metadata
+        update_fields.append("metadata")
+    if update_fields:
+        event.save(update_fields=[*update_fields, "updated_at"])
     return event
 
 
@@ -319,7 +357,17 @@ def release_reservation(user, call_id: str) -> dict[str, Any]:
 
 
 @transaction.atomic
-def settle_usage(user, call_id: str, usage: dict[str, Any] | None, snapshot_id: str | None = None) -> dict[str, Any]:
+def settle_usage(
+    user,
+    call_id: str,
+    usage: dict[str, Any] | None,
+    snapshot_id: str | None = None,
+    *,
+    provider: str = DEFAULT_USAGE_PROVIDER,
+    model: str = DEFAULT_USAGE_MODEL,
+    raw_jsonl_path: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     call_id = require_call_id(call_id)
     if not usage:
         return {"status": "pending_reconciliation", "charged_u": 0, "reason": "missing authoritative usage"}
@@ -336,7 +384,14 @@ def settle_usage(user, call_id: str, usage: dict[str, Any] | None, snapshot_id: 
     reservation = WalletReservation.objects.select_for_update().filter(call_id=call_id).first()
     if reservation and reservation.user_id != user.pk:
         raise BillingError("call_id already belongs to another user")
-    event = capture_usage(call_id, usage)
+    event = capture_usage(
+        call_id,
+        usage,
+        provider=provider,
+        model=model,
+        raw_jsonl_path=raw_jsonl_path,
+        metadata=metadata,
+    )
     charge = calculate_charge(usage, snapshot_id)
     snapshot = charge["snapshot"]
     wallet = TokenWallet.objects.select_for_update().get(user=ensure_wallet(user).user)

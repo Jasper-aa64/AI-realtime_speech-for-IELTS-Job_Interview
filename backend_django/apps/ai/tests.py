@@ -763,6 +763,21 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(task.model, "mock-writing-score-v1")
         self.assertIsNotNone(task.usage)
         self.assertGreater(task.usage.input_tokens, 0)
+        self.assertEqual(task.usage.provider, "mock_success")
+        self.assertEqual(task.usage.model, "mock-writing-score-v1")
+        expected_usage_metadata = {
+            "task_id": task.task_id,
+            "task_type": "writing_score",
+            "provider": "mock_success",
+            "model": "mock-writing-score-v1",
+            "prompt_version": "writing_score_v1",
+            "related_type": "writing_entry",
+            "related_id": task.related_id,
+            "prompt_id": prompt.prompt_id,
+        }
+        if task.related_id:
+            expected_usage_metadata["entry_id"] = task.related_id
+        self.assertEqual(task.usage.metadata, expected_usage_metadata)
         self.assertEqual(task.result_payload["billing"]["status"], "settled")
 
         score = WritingScore.objects.get(entry=entry)

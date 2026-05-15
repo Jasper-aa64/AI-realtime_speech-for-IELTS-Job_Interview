@@ -84,6 +84,18 @@ Billable AI tasks must keep reservation and task identity coupled:
 
 `settle_usage(...)` may return `pending_reconciliation` when authoritative usage is missing. The AI task can still succeed, but later reconciliation must use the same `call_id` idempotency.
 
+Usage event audit contract:
+
+- `CodexUsageEvent` keeps durable `provider` / `model` columns plus a JSON `metadata` field for settlement-time audit context.
+- Billable AI success settlement must stamp usage metadata with:
+  - `task_id`
+  - `task_type`
+  - effective `provider`
+  - effective `model`
+  - `prompt_version`
+- Writing score settlement should also record `related_type`, `related_id`, and request identifiers such as `entry_id` and `prompt_id` when they exist.
+- Backward-compatible callers outside the AI task flow may omit audit metadata; usage capture must still succeed with the historical defaults and an empty metadata object.
+
 ---
 
 ## Migrations

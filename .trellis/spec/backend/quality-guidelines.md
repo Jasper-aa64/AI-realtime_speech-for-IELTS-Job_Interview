@@ -27,10 +27,12 @@ the boundary behavior instead of relying only on manual end-to-end runs.
 - Default `writing_score` worker routing still uses the fallback adapter and releases the reservation.
 - `provider=mock_success` must not succeed unless `AI_ALLOW_MOCK_SUCCESS` is explicitly enabled in settings or a test override.
 - `provider=mock_success` goes through the success settlement path, writes `WritingScore`, updates the learner profile, and persists usage metadata once.
+- The settled `CodexUsageEvent` for a successful billable task must include audit metadata for `task_id`, `task_type`, `provider`, `model`, `prompt_version`, and writing identifiers when available.
 - Unknown or disabled writing providers fall back deterministically without crashing the batch or settling usage.
 - Retryable and terminal provider failures report the post-lifecycle task status in worker summaries (`pending` after requeue, `failed` after terminal fail), not the stale pre-refresh claimed status.
 - Unsupported claimed task types do not crash the batch and do not remain stuck in `running`.
 - Provider-config tests must prove that secret env values never appear in task payloads, fallback reasons, error fields, or worker summaries.
+- Writing entry detail contract tests must cover `pending`, `fallback`, `succeeded`, and cancelled-pending score-task states, including `ai_task`, `score`, `word_count`, `task_type`, `prompt_id`, and `entry_id`.
 
 ## Scenario: IELTS Speaking CLI Simulator
 
@@ -565,6 +567,11 @@ Writing polling bridge:
 - `GET /api/writing/entries/{entry_id}` exposes the latest `ai_task` selected by entry owner, `task_type=writing_score`, `related_type=writing_entry`, and `related_id=entry_id`.
 - A cancelled score task keeps the writing entry unscored; cancelled tasks must not create `WritingScore` on late completion or fallback.
 - Polling must remain refresh-safe and database-backed. Do not depend on browser memory to know whether a score task exists or has been cancelled.
+- The entry detail payload is the bridge contract for the old frontend handoff:
+  - top-level fields must include `id`, `prompt_id`, `task_type`, `word_count`, `score`, and `ai_task`;
+  - pending or cancelled-pending tasks keep `score=null`;
+  - fallback and success states keep the same entry identifiers while switching `ai_task.status` and `score.backend`;
+  - `ai_task.request_payload` must retain `entry_id`, `prompt_id`, and writing `task_type` so the client does not need to infer them.
 
 Worker race contract:
 
