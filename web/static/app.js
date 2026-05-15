@@ -44,6 +44,7 @@ const state = {
     recentEntries: [],
     reportEntries: [],
     activeReportId: null,
+    activeReportDetail: null,
     scorePollTimer: null,
     scorePollingEntryId: null,
   },
@@ -1347,6 +1348,7 @@ async function loadWritingReports() {
 async function renderWritingReports(items) {
   const target = $("writingReportDetail");
   if (!target) return;
+  state.writing.activeReportDetail = null;
   if (!items.length) {
     state.writing.reportEntries = [];
     const list = $("writingReportList");
@@ -1354,52 +1356,67 @@ async function renderWritingReports(items) {
     target.innerHTML = '<h2>写作报告</h2><p class="muted">还没有写作记录。保存一篇作文后会出现在这里。</p>';
     return;
   }
-  const entries = await Promise.all(items.map((item) => api(`/api/writing/entries/${item.id}`)));
-  state.writing.reportEntries = entries;
-  const activeId = entries.some((entry) => entry.id === state.writing.activeReportId) ? state.writing.activeReportId : entries[0].id;
+  // Store compact items from /api/writing/reports
+  state.writing.reportEntries = items;
+  // Determine active report id
+  const activeId = items.some((item) => item.id === state.writing.activeReportId) ? state.writing.activeReportId : items[0].id;
   state.writing.activeReportId = activeId;
-  renderWritingReportList(entries);
-  const activeEntry = entries.find((entry) => entry.id === activeId) || entries[0];
-  target.innerHTML = writingReportDetailHtml(activeEntry);
-  if (isWritingTaskActive(activeEntry?.ai_task)) startWritingScorePolling(activeEntry.id, { switchOnComplete: false });
+  // Render list from compact items
+  renderWritingReportList(items);
+  // Fetch detail only for the selected item
+  const activeItem = items.find((item) => item.id === activeId) || items[0];
+  try {
+    const entry = await api(`/api/writing/entries/${activeItem.id}`);
+    state.writing.activeReportDetail = entry;
+    target.innerHTML = writingReportDetailHtml(entry);
+    if (isWritingTaskActive(entry?.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
+  } catch (error) {
+    target.innerHTML = `<div class="detail-card"><p class="error">${escapeHtml(error.message || "Failed to load report detail.")}</p></div>`;
+  }
 }
 
-function renderWritingReportList(entries) {
+function renderWritingReportList(items) {
   const list = $("writingReportList");
   if (!list) return;
-  list.innerHTML = entries.map((entry) => writingReportTabHtml(entry, entry.id === state.writing.activeReportId)).join("");
+  list.innerHTML = items.map((item) => writingReportTabHtml(item, item.id === state.writing.activeReportId)).join("");
   list.querySelectorAll("[data-writing-report-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const entry = state.writing.reportEntries.find((item) => item.id === button.dataset.writingReportTab);
-      if (!entry) return;
-      state.writing.activeReportId = entry.id;
+    button.addEventListener("click", async () => {
+      const itemId = button.dataset.writingReportTab;
+      if (!itemId) return;
+      state.writing.activeReportId = itemId;
+      state.writing.activeReportDetail = null;
       renderWritingReportList(state.writing.reportEntries);
       const target = $("writingReportDetail");
-      if (target) {
+      if (!target) return;
+      // Fetch detail for the selected report
+      try {
+        const entry = await api(`/api/writing/entries/${itemId}`);
+        state.writing.activeReportDetail = entry;
         target.innerHTML = writingReportDetailHtml(entry);
         target.scrollTo({ top: 0, behavior: "smooth" });
+        if (isWritingTaskActive(entry.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
+        else clearWritingScorePolling();
+      } catch (error) {
+        target.innerHTML = `<div class="detail-card"><p class="error">${escapeHtml(error.message || "Failed to load report detail.")}</p></div>`;
       }
-      if (isWritingTaskActive(entry.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
-      else clearWritingScorePolling();
     });
   });
 }
 
-function writingReportTabHtml(entry, active = false) {
-  const score = entry?.score || null;
-  const task = entry?.ai_task || null;
-  const part = entry.task_type === "task1_academic" ? "T1" : "T2";
-  const band = score ? `Band ${score.overall_band ?? "—"}` : (isWritingTaskActive(task) ? "评分中" : "未评分");
-  const toneClass = entry.task_type === "task1_academic" ? "tone-p1" : "tone-p2";
-  const tagClass = entry.task_type === "task1_academic" ? "p1" : "p2";
+function writingReportTabHtml(item, active = false) {
+  const task = item?.ai_task || null;
+  const part = item.task_type === "task1_academic" ? "T1" : "T2";
+  const band = item.overall_band != null ? `Band ${item.overall_band}` : (isWritingTaskActive(task) ? "评分中" : "未评分");
+  const toneClass = item.task_type === "task1_academic" ? "tone-p1" : "tone-p2";
+  const tagClass = item.task_type === "task1_academic" ? "p1" : "p2";
   return `
-    <button class="history-item writing-report-tab ${toneClass} ${active ? "active" : ""}" data-writing-report-tab="${escapeHtml(entry.id || "")}">
+    <button class="history-item writing-report-tab ${toneClass} ${active ? "active" : ""}" data-writing-report-tab="${escapeHtml(item.id || "")}">
       <div class="history-item-top">
         <span class="history-item-tag ${tagClass}">${part}</span>
         <span class="history-item-band">${escapeHtml(band)}</span>
       </div>
-      <strong class="history-item-title">${escapeHtml(entry.title || writingTaskLabel(entry.task_type))}</strong>
-      <small class="history-item-time">${escapeHtml(entry.practice_date || entry.display_time || "")} · ${escapeHtml(entry.word_count ?? 0)} words</small>
+      <strong class="history-item-title">${escapeHtml(item.title || writingTaskLabel(item.task_type))}</strong>
+      <small class="history-item-time">${escapeHtml(item.display_time || item.practice_date || "")} · ${escapeHtml(item.word_count ?? 0)} words</small>
     </button>
   `;
 }
@@ -1607,10 +1624,19 @@ function isScoreTaskUnsupported(error) {
 
 function renderVisibleWritingReport(entry) {
   if (state.view !== "writingReports" || state.writing.activeReportId !== entry?.id) return;
+  // Update active report detail
+  state.writing.activeReportDetail = entry;
+  // Merge status/overall_band/ai_task into the corresponding compact item
   const reportEntries = Array.isArray(state.writing.reportEntries) ? [...state.writing.reportEntries] : [];
   const reportIndex = reportEntries.findIndex((item) => item.id === entry.id);
   if (reportIndex >= 0) {
-    reportEntries[reportIndex] = entry;
+    const existing = reportEntries[reportIndex] || {};
+    reportEntries[reportIndex] = {
+      ...existing,
+      status: entry.status ?? existing.status,
+      overall_band: entry.score?.overall_band ?? entry.overall_band ?? existing.overall_band,
+      ai_task: entry.ai_task ?? existing.ai_task,
+    };
     state.writing.reportEntries = reportEntries;
     renderWritingReportList(reportEntries);
   }

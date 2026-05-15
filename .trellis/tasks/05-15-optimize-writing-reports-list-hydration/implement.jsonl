@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend code quality standards for JS changes"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "State structure patterns for reportEntries and activeReportDetail"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component rendering patterns for list and detail views"}
