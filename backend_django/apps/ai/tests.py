@@ -8,6 +8,12 @@ from django.test import Client, TestCase
 from django.utils import timezone
 
 from apps.ai.models import AITask
+from apps.ai.provider_adapters import (
+    FallbackWritingScoreAdapter,
+    MockSuccessWritingScoreAdapter,
+    ProviderRunResult,
+    apply_provider_run_result,
+)
 from apps.ai.services import (
     AITaskConflictError,
     AITaskError,
@@ -34,8 +40,8 @@ from apps.ai.orchestration import (
 )
 from apps.billing.models import TokenWallet, WalletLedgerEntry, WalletReservation
 from apps.billing.services import DEFAULT_INITIAL_GRANT_U, ensure_wallet
-from apps.writing.models import WritingEntry, WritingPrompt, WritingScore
-from apps.writing.services import create_score_task, fallback_score_task
+from apps.writing.models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
+from apps.writing.services import complete_score_task, create_score_task, fallback_score_task
 
 
 class AITaskServiceTests(TestCase):
@@ -551,6 +557,82 @@ class AIBillableTaskOrchestrationTests(TestCase):
         )
 
 
+class AIProviderAdapterTests(TestCase):
+    def test_apply_provider_run_result_returns_pending_summary_for_retryable_failure(self):
+        user = get_user_model().objects.create_user(username="provider-retry-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="provider-retry-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Provider retry prompt",
+            prompt="Some people think universities should offer more practical courses. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="Practical courses can improve employability, but theory still supports long-term learning.",
+            word_count=12,
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        claimed = claim_ai_task(created["task"]["id"], worker_id="provider-retry-worker")
+
+        applied = apply_provider_run_result(
+            claimed,
+            ProviderRunResult.retryable_failure(
+                "provider timed out",
+                error_code="provider_timeout",
+                retry_delay_seconds=45,
+            ),
+        )
+
+        self.assertEqual(applied.summary_status, AITask.Status.PENDING)
+        self.assertEqual(applied.task.status, AITask.Status.PENDING)
+        self.assertEqual(applied.task.error_code, "provider_timeout")
+        self.assertIsNotNone(applied.task.available_at)
+        reservation = WalletReservation.objects.get(pk=applied.task.billing_reservation_id)
+        self.assertEqual(reservation.status, WalletReservation.Status.RESERVED)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
+
+    def test_apply_provider_run_result_returns_failed_summary_for_terminal_failure(self):
+        user = get_user_model().objects.create_user(username="provider-terminal-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="provider-terminal-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Provider terminal prompt",
+            prompt="Some people think young people should work before university. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="A gap before university can build maturity, but it may also delay academic momentum.",
+            word_count=14,
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        claimed = claim_ai_task(created["task"]["id"], worker_id="provider-terminal-worker")
+
+        applied = apply_provider_run_result(
+            claimed,
+            ProviderRunResult.terminal_failure(
+                "provider rejected the request",
+                error_code="provider_rejected",
+            ),
+        )
+
+        self.assertEqual(applied.summary_status, AITask.Status.FAILED)
+        self.assertEqual(applied.task.status, AITask.Status.FAILED)
+        self.assertEqual(applied.task.error_code, "provider_rejected")
+        reservation = WalletReservation.objects.get(pk=applied.task.billing_reservation_id)
+        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
+
+
 class AIWorkerCommandTests(TestCase):
     def test_run_ai_tasks_processes_pending_writing_score_with_fallback(self):
         user = get_user_model().objects.create_user(username="worker-writing-user", password="test-pass")
@@ -587,6 +669,68 @@ class AIWorkerCommandTests(TestCase):
         wallet = TokenWallet.objects.get(user=user)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
         self.assertEqual(wallet.reserved_u, 0)
+
+    def test_run_ai_tasks_processes_mock_success_provider_and_settles_usage(self):
+        user = get_user_model().objects.create_user(username="worker-mock-success-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-mock-success-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Worker mock success prompt",
+            prompt="Some people think governments should spend more money on public libraries. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="Public libraries can support equal access to learning, but investment should also consider digital services and local demand.",
+            word_count=18,
+        )
+        created = create_score_task(
+            user,
+            entry.entry_id,
+            {"reserved_u": 300_000, "provider": "mock_success", "model": "mock-writing-score-v1"},
+        )
+        out = StringIO()
+
+        call_command("run_ai_tasks", "--limit", "5", "--worker-id", "mock-success-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["claimed"], 1)
+        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["skipped"], 0)
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.SUCCEEDED}])
+
+        task = AITask.objects.select_related("usage").get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.SUCCEEDED)
+        self.assertEqual(task.provider, "mock_success")
+        self.assertEqual(task.model, "mock-writing-score-v1")
+        self.assertIsNotNone(task.usage)
+        self.assertGreater(task.usage.input_tokens, 0)
+        self.assertEqual(task.result_payload["billing"]["status"], "settled")
+
+        score = WritingScore.objects.get(entry=entry)
+        self.assertEqual(score.source, "ai")
+        self.assertEqual(score.billing_metadata, task.usage.raw_usage)
+        profile = WritingLearnerProfile.objects.get(user=user)
+        self.assertEqual(profile.total_scored, 1)
+
+        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
+        self.assertEqual(reservation.status, WalletReservation.Status.SETTLED)
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertEqual(wallet.reserved_u, 0)
+
+        repeated = complete_score_task(task.task_id, {"score": task.result_payload["score"], "usage": task.usage.raw_usage})
+        self.assertEqual(repeated["ai_task"]["status"], AITask.Status.SUCCEEDED)
+        profile.refresh_from_db()
+        self.assertEqual(profile.total_scored, 1)
+        self.assertEqual(
+            WalletLedgerEntry.objects.filter(user=user, call_id=task.call_id, entry_type=WalletLedgerEntry.EntryType.SETTLE).count(),
+            1,
+        )
 
     def test_run_ai_tasks_can_recover_stale_running_task_before_claiming(self):
         user = get_user_model().objects.create_user(username="worker-recover-user", password="test-pass")
@@ -662,7 +806,55 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(summary["failed"], 0)
         self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
 
-    def test_run_ai_tasks_completes_when_cancel_attempt_happens_after_claim(self):
+    def test_run_ai_tasks_skips_unsupported_task_without_crashing_batch(self):
+        user = get_user_model().objects.create_user(username="worker-unsupported-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-unsupported-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Worker unsupported prompt",
+            prompt="Some people think all city centres should be car free. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="Car-free centres can improve air quality, but delivery access and public transport still need careful planning.",
+            word_count=16,
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        unsupported, _created = create_billable_ai_task(
+            user=user,
+            task_type="speaking_report",
+            reserved_u=250_000,
+            idempotency_key="unsupported-billable-worker-task",
+        )
+        out = StringIO()
+
+        call_command("run_ai_tasks", "--limit", "5", "--worker-id", "unsupported-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["claimed"], 2)
+        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["skipped"], 1)
+        self.assertEqual(len(summary["items"]), 2)
+        self.assertIn({"task_id": unsupported.task_id, "task_type": "speaking_report", "status": "skipped"}, summary["items"])
+        self.assertIn({"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}, summary["items"])
+
+        unsupported.refresh_from_db()
+        self.assertEqual(unsupported.status, AITask.Status.FAILED)
+        self.assertEqual(unsupported.error_code, "unsupported_task_type")
+        unsupported_reservation = WalletReservation.objects.get(pk=unsupported.billing_reservation_id)
+        self.assertEqual(unsupported_reservation.status, WalletReservation.Status.RELEASED)
+
+        supported = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(supported.status, AITask.Status.FALLBACK)
+        self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
+
+    def test_run_ai_tasks_completes_mock_success_when_cancel_attempt_happens_after_claim(self):
         user = get_user_model().objects.create_user(username="worker-cancel-race-user", password="test-pass")
         prompt = WritingPrompt.objects.create(
             prompt_id="worker-cancel-race-prompt",
@@ -680,16 +872,59 @@ class AIWorkerCommandTests(TestCase):
             answer="Museums can become more accessible if they are free, but funding still needs support from public budgets or donations.",
             word_count=19,
         )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000, "provider": "mock_success"})
+        out = StringIO()
+        original_run = MockSuccessWritingScoreAdapter.run
+
+        def cancel_before_success(adapter, task):
+            with self.assertRaises(AITaskConflictError):
+                cancel_billable_ai_task(task.task_id, "user cancelled after worker claim")
+            return original_run(adapter, task)
+
+        with patch.object(MockSuccessWritingScoreAdapter, "run", autospec=True, side_effect=cancel_before_success):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "cancel-race-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["claimed"], 1)
+        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["skipped"], 0)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.SUCCEEDED}])
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.SUCCEEDED)
+        self.assertTrue(WritingScore.objects.filter(entry=entry, source="ai").exists())
+        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
+        self.assertEqual(reservation.status, WalletReservation.Status.SETTLED)
+
+    def test_run_ai_tasks_completes_fallback_when_cancel_attempt_happens_after_claim(self):
+        user = get_user_model().objects.create_user(username="worker-fallback-cancel-race-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-fallback-cancel-race-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Worker fallback cancel race prompt",
+            prompt="Some people think public parks should receive more funding. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="Public parks improve health and community life, but city budgets still need balanced priorities.",
+            word_count=15,
+        )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
         out = StringIO()
+        original_run = FallbackWritingScoreAdapter.run
 
-        def cancel_before_fallback(task_id, reason):
+        def cancel_before_fallback(adapter, task):
             with self.assertRaises(AITaskConflictError):
-                cancel_billable_ai_task(task_id, "user cancelled after worker claim")
-            return fallback_score_task(task_id, reason)
+                cancel_billable_ai_task(task.task_id, "user cancelled after worker claim")
+            return original_run(adapter, task)
 
-        with patch("apps.ai.management.commands.run_ai_tasks.fallback_score_task", side_effect=cancel_before_fallback):
-            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "cancel-race-worker", stdout=out)
+        with patch.object(FallbackWritingScoreAdapter, "run", autospec=True, side_effect=cancel_before_fallback):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "fallback-cancel-race-worker", stdout=out)
 
         summary = json.loads(out.getvalue())
         self.assertEqual(summary["claimed"], 1)

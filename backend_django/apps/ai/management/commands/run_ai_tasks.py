@@ -5,9 +5,10 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.ai.models import AITask
-from apps.ai.orchestration import recover_stale_ai_tasks
+from apps.ai.orchestration import AIOrchestrationError, recover_stale_ai_tasks
+from apps.ai.provider_adapters import SUMMARY_STATUS_SKIPPED, apply_provider_run_result, run_claimed_ai_task
 from apps.ai.services import AITaskError, claim_ai_task
-from apps.writing.services import WritingError, fallback_score_task
+from apps.writing.services import WritingError
 
 
 class Command(BaseCommand):
@@ -47,22 +48,21 @@ class Command(BaseCommand):
             try:
                 claimed = claim_ai_task(task.task_id, worker_id=worker_id)
                 summary["claimed"] += 1
-                if claimed.task_type == "writing_score":
-                    result = fallback_score_task(claimed.task_id, "local fallback worker: real AI provider is not connected yet")
-                    final_status = (
-                        (result.get("ai_task") or {}).get("status")
-                        if isinstance(result, dict)
-                        else None
-                    ) or AITask.Status.FALLBACK
-                    if final_status == AITask.Status.CANCELLED:
-                        summary["skipped"] += 1
-                    else:
-                        summary["completed"] += 1
-                    summary["items"].append({"task_id": claimed.task_id, "task_type": claimed.task_type, "status": final_status})
-                else:
+                run_result = run_claimed_ai_task(claimed)
+                applied = apply_provider_run_result(claimed, run_result)
+                item_status = applied.summary_status
+                if item_status in {AITask.Status.SUCCEEDED, AITask.Status.FALLBACK}:
+                    summary["completed"] += 1
+                elif item_status in {AITask.Status.CANCELLED, SUMMARY_STATUS_SKIPPED}:
                     summary["skipped"] += 1
-                    summary["items"].append({"task_id": claimed.task_id, "task_type": claimed.task_type, "status": "skipped"})
-            except (AITaskError, WritingError, ValueError) as exc:
+                else:
+                    summary["failed"] += 1
+                item = {"task_id": claimed.task_id, "task_type": claimed.task_type, "status": item_status}
+                if item_status not in {AITask.Status.SUCCEEDED, AITask.Status.FALLBACK, AITask.Status.CANCELLED, SUMMARY_STATUS_SKIPPED}:
+                    if applied.task.error_message:
+                        item["error"] = applied.task.error_message
+                summary["items"].append(item)
+            except (AIOrchestrationError, AITaskError, WritingError, ValueError) as exc:
                 latest = AITask.objects.filter(pk=task.pk).only("status").first()
                 if latest and latest.status == AITask.Status.CANCELLED:
                     summary["skipped"] += 1

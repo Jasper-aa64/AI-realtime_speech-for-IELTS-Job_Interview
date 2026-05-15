@@ -26,6 +26,7 @@ Required fields and meaning:
 - `attempt_count`, `max_attempts`, `available_at`, `started_at`, `finished_at`, `worker_id`: worker lease, retry, and recovery state.
 - `request_payload`, `result_payload`, `metadata`: JSON state needed to complete or inspect a task after browser refresh.
 - `billing_reservation`, `usage`: optional links to wallet reservation and settled usage.
+- `provider` and `model`: durable worker-routing hints. For the current local worker boundary, `writing_score` with `provider=mock_success` uses the deterministic success adapter; other `writing_score` values keep the explicit fallback adapter until a real provider integration exists.
 
 Terminal statuses are `succeeded`, `failed`, `fallback`, and `cancelled`. Terminal rows must not be mutated by late worker callbacks except for safe no-op reloads.
 
@@ -73,6 +74,7 @@ Billable AI tasks must keep reservation and task identity coupled:
 - Successful completion calls `settle_usage(...)` and links `AITask.usage` when a usage event exists.
 - `fallback`, terminal `failed`, and `cancelled` release the reservation when it is still `reserved`.
 - Retryable non-terminal failures keep the reservation.
+- Claimed unsupported tasks must not stay `running`. The worker may report them as batch-level `skipped`, but it must still terminal-fail the row and release any reservation through the same billing-aware failure helper.
 
 `settle_usage(...)` may return `pending_reconciliation` when authoritative usage is missing. The AI task can still succeed, but later reconciliation must use the same `call_id` idempotency.
 
@@ -95,6 +97,7 @@ Worker queries must be deterministic and bounded:
 - Pending work: filter `status=pending`, `available_at is null or <= now`, order by `created_at`, then apply `--limit`.
 - Stale work: filter `status=running`, `started_at <= now - stale_after_seconds`, order by `started_at`, `created_at`.
 - User-facing lookup: always filter by `user` and `task_id`; never expose a task by public ID without ownership.
+- Claimed work: choose the provider adapter from durable task fields (`task_type`, `provider`, `model`, `metadata`) instead of frontend memory or transient worker flags.
 
 Writing polling bridge:
 

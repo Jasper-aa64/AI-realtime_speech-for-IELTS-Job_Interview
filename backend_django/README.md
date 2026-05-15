@@ -98,6 +98,10 @@ POST /api/writing/entries/{entry_id}/score-task
 `/score` keeps the current synchronous fallback-compatible behavior.
 `/score-task` creates a refresh-safe billable AI task for later worker
 execution and returns the same task on duplicate submits for the same answer.
+It also accepts optional `provider` / `model` hints for local worker routing;
+`provider=mock_success` selects a deterministic success adapter for tests and
+local verification, while the default `provider=codex` still routes to the
+explicit fallback adapter until a real provider integration is wired.
 `GET /api/writing/entries/{entry_id}` includes the latest `ai_task` payload for
 that entry, so the UI can recover task state after refresh and keep showing a
 cancelled task without creating a `WritingScore`. If a task was cancelled while
@@ -111,15 +115,25 @@ python backend_django/manage.py run_ai_tasks --limit 10
 python backend_django/manage.py run_ai_tasks --limit 10 --recover-stale-seconds 900
 ```
 
-This command currently processes pending `writing_score` tasks with an explicit
-fallback adapter. `--recover-stale-seconds` first requeues or terminal-fails
-stale `running` tasks before claiming pending work, so a dead local worker does
-not leave wallet reservations stranded. Once a worker claims a task, user
-cancellation must not interrupt it; the command should finish and persist the
-fallback/result normally, including writing the `WritingScore` and learner
-profile update for the completed path. Pending billable cancellation and stale
-terminal recovery both release reservations idempotently through the same
-service/orchestration path.
+This command now runs claimed tasks through a small provider adapter boundary:
+
+- `writing_score` with `provider=mock_success` uses a deterministic mock
+  success adapter and settles billing through `complete_score_task`.
+- All other `writing_score` tasks use the explicit fallback adapter and release
+  the reservation through `fallback_score_task`.
+- Unsupported claimed task types are reported as `skipped` in the batch summary
+  but are terminal-failed in the database so they do not remain stuck in
+  `running`; billable unsupported tasks release their reservation through the
+  normal orchestration helper.
+
+`--recover-stale-seconds` first requeues or terminal-fails stale `running`
+tasks before claiming pending work, so a dead local worker does not leave
+wallet reservations stranded. Once a worker claims a task, user cancellation
+must not interrupt it; the command should finish and persist the fallback or
+result normally, including writing the `WritingScore` and learner profile
+update for the completed path. Pending billable cancellation, fallback,
+unsupported terminal failure, and stale terminal recovery all release
+reservations idempotently through the same service/orchestration path.
 
 ## Production Database Direction
 

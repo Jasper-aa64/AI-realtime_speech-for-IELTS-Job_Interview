@@ -24,6 +24,10 @@ the boundary behavior instead of relying only on manual end-to-end runs.
 - Running billable and non-billable cancellation attempts return a conflict and keep the task/lease intact.
 - Pending-cancelled `writing_score` tasks ignore late completion/fallback callbacks.
 - A post-claim cancel attempt does not stop `run_ai_tasks` or `fallback_score_task` from persisting the fallback result.
+- Default `writing_score` worker routing still uses the fallback adapter and releases the reservation.
+- `provider=mock_success` goes through the success settlement path, writes `WritingScore`, updates the learner profile, and persists usage metadata once.
+- Retryable and terminal provider failures report the post-lifecycle task status in worker summaries (`pending` after requeue, `failed` after terminal fail), not the stale pre-refresh claimed status.
+- Unsupported claimed task types do not crash the batch and do not remain stuck in `running`.
 
 ## Scenario: IELTS Speaking CLI Simulator
 

@@ -47,6 +47,9 @@ Current AI task endpoints use these response contracts:
 | Cancel terminal task | Return unchanged task | POST cancel returns existing task payload |
 | Task claim from non-`pending` status | `claim_ai_task` raises `AITaskError` | Worker records item error |
 | `available_at` is in the future | `claim_ai_task` raises `AITaskError` | Worker leaves task untouched |
+| Claimed task has no registered provider runner | Adapter returns `skipped`/unsupported | Worker records batch item `skipped`, terminal-fails the task with `error_code=unsupported_task_type`, and releases any billable reservation |
+| Claimed provider run returns retryable failure | Worker uses `fail_ai_task` / `fail_billable_ai_task` with `retryable=True` | Task returns to `pending`; reservation stays reserved |
+| Claimed provider run returns terminal failure | Worker uses `fail_ai_task` / `fail_billable_ai_task` with `retryable=False` | Task becomes `failed`; billable reservation releases |
 | Stale recovery timeout <= 0 | `stale_running_task_ids` raises `AITaskError` | Caller must reject/fix config |
 | Late success/fail/fallback/cancel after terminal state | Return task unchanged | No double settlement/release |
 
@@ -70,6 +73,14 @@ When a `writing_score` task is already `running`, user cancellation must fail fa
 ## Worker Recovery Errors
 
 `run_ai_tasks --recover-stale-seconds N` invokes billing-aware stale recovery before claiming pending work.
+
+After claim, the worker applies the adapter result through existing lifecycle helpers:
+
+- `success` for `writing_score` -> `complete_score_task(...)`
+- `fallback` for `writing_score` -> `fallback_score_task(...)`
+- `retryable_failure` -> requeue with the existing fail helper
+- `terminal_failure` -> terminal fail with the existing fail helper
+- `skipped` / unsupported -> batch item `skipped`, but the claimed task is still terminal-failed so no `running` row is stranded
 
 Recovery behavior:
 

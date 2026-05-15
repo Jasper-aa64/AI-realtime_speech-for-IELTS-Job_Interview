@@ -5,7 +5,7 @@ from django.utils import timezone
 from apps.ai.models import AITask
 from apps.ai.orchestration import cancel_billable_ai_task
 from apps.ai.services import claim_ai_task
-from apps.billing.models import TokenWallet, WalletReservation
+from apps.billing.models import TokenWallet, WalletLedgerEntry, WalletReservation
 from apps.billing.services import DEFAULT_INITIAL_GRANT_U
 from apps.writing.models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
 from apps.writing.services import WRITING_TASK_LABELS, complete_score_task, fallback_score_task
@@ -251,10 +251,35 @@ class WritingApiTests(TestCase):
         task = AITask.objects.get(task_id=task_payload["id"])
         self.assertEqual(task.status, AITask.Status.SUCCEEDED)
         self.assertIsNotNone(task.usage)
+        score = WritingScore.objects.get(entry__entry_id=save["id"])
+        self.assertEqual(score.billing_metadata, {"input_tokens": 1000, "output_tokens": 100})
         reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
         self.assertEqual(reservation.status, WalletReservation.Status.SETTLED)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
+        repeated = complete_score_task(
+            task_payload["id"],
+            {
+                "score": {
+                    "overall_band": 6.0,
+                    "task_response": 6.0,
+                    "coherence_cohesion": 6.0,
+                    "lexical_resource": 6.0,
+                    "grammatical_range_accuracy": 6.0,
+                    "feedback_markdown": "- Clear position with room for more examples.",
+                    "grammar_corrections": [],
+                    "backend": "ai",
+                },
+                "usage": {"input_tokens": 1000, "output_tokens": 100},
+            },
+        )
+        self.assertEqual(repeated["ai_task"]["status"], AITask.Status.SUCCEEDED)
+        profile = WritingLearnerProfile.objects.get(user=self.user)
+        self.assertEqual(profile.total_scored, 1)
+        self.assertEqual(
+            WalletLedgerEntry.objects.filter(user=self.user, call_id=task.call_id, entry_type=WalletLedgerEntry.EntryType.SETTLE).count(),
+            1,
+        )
 
     def test_fallback_score_task_persists_default_score_and_releases_billing(self):
         prompt = WritingPrompt.objects.create(
