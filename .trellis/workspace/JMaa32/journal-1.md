@@ -346,3 +346,36 @@ Add /api/writing/reports endpoint for writing reports page with owner-scoped ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: Optimize writing reports list hydration
+
+**Date**: 2026-05-15
+**Task**: Optimize writing reports list hydration
+**Branch**: `main`
+
+### Summary
+
+Eliminate N+1 detail fetch on reports page. Store compact items, fetch detail only on selection. No cache, no backend changes.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bd9bac5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
