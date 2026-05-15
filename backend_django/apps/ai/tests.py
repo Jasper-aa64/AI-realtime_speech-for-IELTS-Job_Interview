@@ -1,10 +1,11 @@
 import json
+import os
 from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.ai.models import AITask
@@ -661,6 +662,7 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(summary["claimed"], 1)
         self.assertEqual(summary["completed"], 1)
         task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.provider, "codex")
         self.assertEqual(task.status, AITask.Status.FALLBACK)
         self.assertEqual(task.worker_id, "test-worker")
         self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
@@ -670,6 +672,57 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
         self.assertEqual(wallet.reserved_u, 0)
 
+    def test_run_ai_tasks_falls_back_when_mock_success_is_disabled(self):
+        user = get_user_model().objects.create_user(username="worker-mock-disabled-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-mock-disabled-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Worker mock disabled prompt",
+            prompt="Some people think students should spend more time on art subjects. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="Art subjects can support creativity, but schools still need to balance them with other core skills.",
+            word_count=17,
+        )
+        created = create_score_task(
+            user,
+            entry.entry_id,
+            {"reserved_u": 300_000, "provider": "mock_success", "model": "mock-writing-score-v1"},
+        )
+        out = StringIO()
+
+        call_command("run_ai_tasks", "--limit", "5", "--worker-id", "mock-disabled-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["claimed"], 1)
+        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["skipped"], 0)
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}])
+
+        task = AITask.objects.select_related("usage").get(task_id=created["task"]["id"])
+        self.assertEqual(task.provider, "mock_success")
+        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertIsNone(task.usage)
+        self.assertEqual(task.fallback_reason, "mock success adapter is disabled by configuration; using local fallback")
+        self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
+        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
+        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertEqual(wallet.reserved_u, 0)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(
+            WalletLedgerEntry.objects.filter(user=user, call_id=task.call_id, entry_type=WalletLedgerEntry.EntryType.SETTLE).count(),
+            0,
+        )
+
+    @override_settings(AI_ALLOW_MOCK_SUCCESS=True)
     def test_run_ai_tasks_processes_mock_success_provider_and_settles_usage(self):
         user = get_user_model().objects.create_user(username="worker-mock-success-user", password="test-pass")
         prompt = WritingPrompt.objects.create(
@@ -854,6 +907,85 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(supported.status, AITask.Status.FALLBACK)
         self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
 
+    def test_run_ai_tasks_falls_back_for_unknown_requested_provider(self):
+        user = get_user_model().objects.create_user(username="worker-unknown-provider-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-unknown-provider-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Worker unknown provider prompt",
+            prompt="Some people think schools should give students more free time. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="More free time can reduce stress, but students still need enough structured practice to build discipline.",
+            word_count=17,
+        )
+        created = create_score_task(
+            user,
+            entry.entry_id,
+            {"reserved_u": 300_000, "provider": "mystery_vendor", "model": "test-model"},
+        )
+        out = StringIO()
+
+        call_command("run_ai_tasks", "--limit", "5", "--worker-id", "unknown-provider-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["claimed"], 1)
+        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["skipped"], 0)
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}])
+
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.provider, "mystery_vendor")
+        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertEqual(task.fallback_reason, "requested provider is not supported locally; using local fallback")
+        self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
+
+    def test_run_ai_tasks_does_not_leak_secret_env_values_for_provider_config(self):
+        user = get_user_model().objects.create_user(username="worker-secret-provider-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-secret-provider-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Worker secret provider prompt",
+            prompt="Some people think public transport should be free. Discuss.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer="Free public transport can support access and reduce traffic, but funding and service quality still matter.",
+            word_count=16,
+        )
+        created = create_score_task(
+            user,
+            entry.entry_id,
+            {"reserved_u": 300_000, "provider": "openai", "model": "gpt-test"},
+        )
+        out = StringIO()
+        secret_value = "super-secret-openai-token-value"
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": secret_value}, clear=False):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "secret-safety-worker", stdout=out)
+
+        summary_text = out.getvalue()
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertNotIn(secret_value, summary_text)
+        self.assertNotIn(secret_value, json.dumps(task.result_payload, ensure_ascii=False, sort_keys=True))
+        self.assertNotIn(secret_value, task.error_message or "")
+        self.assertNotIn(secret_value, task.fallback_reason or "")
+        self.assertEqual(task.fallback_reason, "openai provider is disabled by configuration; using local fallback")
+
+    @override_settings(AI_ALLOW_MOCK_SUCCESS=True)
     def test_run_ai_tasks_completes_mock_success_when_cancel_attempt_happens_after_claim(self):
         user = get_user_model().objects.create_user(username="worker-cancel-race-user", password="test-pass")
         prompt = WritingPrompt.objects.create(

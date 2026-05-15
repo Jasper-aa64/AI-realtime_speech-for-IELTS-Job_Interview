@@ -27,6 +27,26 @@ python backend_django/manage.py run_ai_tasks --limit 10
 python backend_django/manage.py runserver 127.0.0.1:8767
 ```
 
+Optional local AI worker flags:
+
+```bash
+AI_PROVIDER_MODE=local_safe
+AI_DEFAULT_PROVIDER=codex
+AI_ALLOW_MOCK_SUCCESS=0
+AI_PROVIDER_ENABLE_CODEX=1
+AI_PROVIDER_ENABLE_OPENAI=0
+AI_PROVIDER_ENABLE_CLAUDE=0
+```
+
+No-secret rule:
+
+- Do not store provider API keys in task payloads, milestone docs, logs, or test
+  fixtures.
+- The Django config keeps only placeholder secret env-var names such as
+  `CODEX_API_KEY`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY`.
+- Leave those unset for current local runs; this milestone does not integrate a
+  real SDK or require live credentials.
+
 Health check:
 
 ```bash
@@ -99,9 +119,11 @@ POST /api/writing/entries/{entry_id}/score-task
 `/score-task` creates a refresh-safe billable AI task for later worker
 execution and returns the same task on duplicate submits for the same answer.
 It also accepts optional `provider` / `model` hints for local worker routing;
-`provider=mock_success` selects a deterministic success adapter for tests and
-local verification, while the default `provider=codex` still routes to the
-explicit fallback adapter until a real provider integration is wired.
+`provider=mock_success` selects a deterministic success adapter only when
+`AI_ALLOW_MOCK_SUCCESS=1`. Otherwise it falls back safely and releases the
+reservation like any other local fallback path. The default requested provider
+comes from `AI_DEFAULT_PROVIDER` and still routes to the explicit fallback
+adapter until a real provider integration is wired.
 `GET /api/writing/entries/{entry_id}` includes the latest `ai_task` payload for
 that entry, so the UI can recover task state after refresh and keep showing a
 cancelled task without creating a `WritingScore`. If a task was cancelled while
@@ -118,9 +140,12 @@ python backend_django/manage.py run_ai_tasks --limit 10 --recover-stale-seconds 
 This command now runs claimed tasks through a small provider adapter boundary:
 
 - `writing_score` with `provider=mock_success` uses a deterministic mock
-  success adapter and settles billing through `complete_score_task`.
-- All other `writing_score` tasks use the explicit fallback adapter and release
-  the reservation through `fallback_score_task`.
+  success adapter only when `AI_ALLOW_MOCK_SUCCESS=1`; otherwise it safely
+  falls back through `fallback_score_task`.
+- All normal `writing_score` requests still use the explicit fallback adapter
+  and release the reservation through `fallback_score_task`.
+- Unknown or disabled writing providers also fall back deterministically; they
+  do not crash the batch or settle usage unexpectedly.
 - Unsupported claimed task types are reported as `skipped` in the batch summary
   but are terminal-failed in the database so they do not remain stuck in
   `running`; billable unsupported tasks release their reservation through the

@@ -5,13 +5,20 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from apps.ai.models import AITask
+from apps.ai.provider_config import (
+    ADAPTER_KEY_FALLBACK,
+    ADAPTER_KEY_MOCK_SUCCESS,
+    FALLBACK_PROVIDER,
+    MOCK_SUCCESS_PROVIDER,
+    ProviderRoute,
+    resolve_provider_route,
+)
 from apps.ai.orchestration import fail_billable_ai_task
 from apps.ai.services import fail_ai_task
 from apps.writing.services import complete_score_task, fallback_score_task
 
 
 DEFAULT_FALLBACK_REASON = "local fallback worker: real AI provider is not connected yet"
-MOCK_SUCCESS_PROVIDER = "mock_success"
 SUMMARY_STATUS_SKIPPED = "skipped"
 
 
@@ -121,6 +128,9 @@ class AppliedProviderRunResult:
 class BaseProviderAdapter:
     adapter_name = "base"
 
+    def __init__(self, route: ProviderRoute | None = None):
+        self.route = route
+
     def run(self, task: AITask) -> ProviderRunResult:
         raise NotImplementedError
 
@@ -130,8 +140,8 @@ class FallbackWritingScoreAdapter(BaseProviderAdapter):
 
     def run(self, task: AITask) -> ProviderRunResult:
         return ProviderRunResult.fallback(
-            DEFAULT_FALLBACK_REASON,
-            metadata={"adapter": self.adapter_name},
+            self.route.fallback_reason if self.route else DEFAULT_FALLBACK_REASON,
+            metadata=_route_metadata(self.adapter_name, self.route),
         )
 
 
@@ -158,7 +168,7 @@ class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
         return ProviderRunResult.success(
             {"score": score},
             usage=usage,
-            metadata={"adapter": self.adapter_name},
+            metadata=_route_metadata(self.adapter_name, self.route),
         )
 
     def _score_payload(self, *, task_key: str, word_count: int, digest: str) -> dict[str, Any]:
@@ -223,18 +233,23 @@ class UnsupportedTaskAdapter(BaseProviderAdapter):
 
     def run(self, task: AITask) -> ProviderRunResult:
         return ProviderRunResult.skipped(
-            f"no provider runner registered for task_type={task.task_type}",
-            error_code="unsupported_task_type",
-            metadata={"adapter": self.adapter_name},
+            self.route.fallback_reason if self.route else f"no provider runner registered for task_type={task.task_type}",
+            error_code=self.route.error_code if self.route and self.route.error_code else "unsupported_task_type",
+            metadata=_route_metadata(self.adapter_name, self.route),
         )
 
 
 def select_provider_adapter(task: AITask) -> BaseProviderAdapter:
-    if task.task_type == "writing_score":
-        if task.provider == MOCK_SUCCESS_PROVIDER:
-            return MockSuccessWritingScoreAdapter()
-        return FallbackWritingScoreAdapter()
-    return UnsupportedTaskAdapter()
+    route = resolve_provider_route(
+        task_type=task.task_type,
+        provider=task.provider,
+        model=task.model,
+    )
+    if route.adapter_key == ADAPTER_KEY_MOCK_SUCCESS:
+        return MockSuccessWritingScoreAdapter(route)
+    if route.adapter_key == ADAPTER_KEY_FALLBACK:
+        return FallbackWritingScoreAdapter(route)
+    return UnsupportedTaskAdapter(route)
 
 
 def run_claimed_ai_task(task: AITask) -> ProviderRunResult:
@@ -304,6 +319,18 @@ def _apply_failure_result(
 def _refreshed_task_result(task: AITask, summary_status: str) -> AppliedProviderRunResult:
     task.refresh_from_db()
     return AppliedProviderRunResult(task=task, summary_status=summary_status)
+
+
+def _route_metadata(adapter_name: str, route: ProviderRoute | None) -> dict[str, Any]:
+    metadata = {"adapter": adapter_name}
+    if not route:
+        return metadata
+    return {
+        **metadata,
+        "requested_provider": route.requested_provider or FALLBACK_PROVIDER,
+        "effective_provider": route.effective_provider or FALLBACK_PROVIDER,
+        "provider_mode": route.config_mode,
+    }
 
 
 __all__ = [

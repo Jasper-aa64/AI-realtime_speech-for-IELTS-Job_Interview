@@ -8,6 +8,11 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def env_flag(name: str, default: bool = False) -> bool:
+    value = str(os.environ.get(name, "1" if default else "0")).strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -136,4 +141,20 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
+}
+
+AI_PROVIDER_MODE = str(os.environ.get("AI_PROVIDER_MODE", "local_safe")).strip().lower() or "local_safe"
+AI_DEFAULT_PROVIDER = str(os.environ.get("AI_DEFAULT_PROVIDER", "codex")).strip().lower() or "codex"
+AI_ALLOW_MOCK_SUCCESS = env_flag("AI_ALLOW_MOCK_SUCCESS", default=False)
+AI_PROVIDER_ENABLE_CODEX = env_flag("AI_PROVIDER_ENABLE_CODEX", default=True)
+AI_PROVIDER_ENABLE_OPENAI = env_flag("AI_PROVIDER_ENABLE_OPENAI", default=False)
+AI_PROVIDER_ENABLE_CLAUDE = env_flag("AI_PROVIDER_ENABLE_CLAUDE", default=False)
+# Placeholder env-var names for future integrations. Keep only the names here,
+# never the secret values.
+AI_PROVIDER_SECRET_ENV_NAMES = {
+    "codex": ("CODEX_API_KEY",),
+    "openai": ("OPENAI_API_KEY",),
+    "claude": ("ANTHROPIC_API_KEY",),
+    "mock_success": (),
+    "fallback": (),
 }

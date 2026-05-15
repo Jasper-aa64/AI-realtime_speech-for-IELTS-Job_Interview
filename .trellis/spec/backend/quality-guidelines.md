@@ -25,9 +25,12 @@ the boundary behavior instead of relying only on manual end-to-end runs.
 - Pending-cancelled `writing_score` tasks ignore late completion/fallback callbacks.
 - A post-claim cancel attempt does not stop `run_ai_tasks` or `fallback_score_task` from persisting the fallback result.
 - Default `writing_score` worker routing still uses the fallback adapter and releases the reservation.
+- `provider=mock_success` must not succeed unless `AI_ALLOW_MOCK_SUCCESS` is explicitly enabled in settings or a test override.
 - `provider=mock_success` goes through the success settlement path, writes `WritingScore`, updates the learner profile, and persists usage metadata once.
+- Unknown or disabled writing providers fall back deterministically without crashing the batch or settling usage.
 - Retryable and terminal provider failures report the post-lifecycle task status in worker summaries (`pending` after requeue, `failed` after terminal fail), not the stale pre-refresh claimed status.
 - Unsupported claimed task types do not crash the batch and do not remain stuck in `running`.
+- Provider-config tests must prove that secret env values never appear in task payloads, fallback reasons, error fields, or worker summaries.
 
 ## Scenario: IELTS Speaking CLI Simulator
 

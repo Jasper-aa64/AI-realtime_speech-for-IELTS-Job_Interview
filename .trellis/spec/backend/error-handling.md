@@ -48,6 +48,8 @@ Current AI task endpoints use these response contracts:
 | Task claim from non-`pending` status | `claim_ai_task` raises `AITaskError` | Worker records item error |
 | `available_at` is in the future | `claim_ai_task` raises `AITaskError` | Worker leaves task untouched |
 | Claimed task has no registered provider runner | Adapter returns `skipped`/unsupported | Worker records batch item `skipped`, terminal-fails the task with `error_code=unsupported_task_type`, and releases any billable reservation |
+| `writing_score` requests `provider=mock_success` while `AI_ALLOW_MOCK_SUCCESS` is disabled | Provider config resolves to fallback | Worker records normal `fallback`, writes the deterministic fallback score, and releases any reserved wallet balance |
+| `writing_score` requests an unknown or disabled provider | Provider config resolves to fallback | Worker records normal `fallback`; do not crash or leak secret configuration values |
 | Claimed provider run returns retryable failure | Worker uses `fail_ai_task` / `fail_billable_ai_task` with `retryable=True` | Task returns to `pending`; reservation stays reserved |
 | Claimed provider run returns terminal failure | Worker uses `fail_ai_task` / `fail_billable_ai_task` with `retryable=False` | Task becomes `failed`; billable reservation releases |
 | Stale recovery timeout <= 0 | `stale_running_task_ids` raises `AITaskError` | Caller must reject/fix config |
@@ -78,6 +80,7 @@ After claim, the worker applies the adapter result through existing lifecycle he
 
 - `success` for `writing_score` -> `complete_score_task(...)`
 - `fallback` for `writing_score` -> `fallback_score_task(...)`
+- provider-config downgrade (`mock_success` disabled, disabled provider, unknown provider) -> same `fallback_score_task(...)` path as the normal local fallback adapter
 - `retryable_failure` -> requeue with the existing fail helper
 - `terminal_failure` -> terminal fail with the existing fail helper
 - `skipped` / unsupported -> batch item `skipped`, but the claimed task is still terminal-failed so no `running` row is stranded

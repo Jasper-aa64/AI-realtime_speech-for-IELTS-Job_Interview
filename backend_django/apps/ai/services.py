@@ -5,6 +5,7 @@ from typing import Any
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from .provider_config import default_provider_name, normalize_provider_name
 from .models import AITask
 
 
@@ -81,7 +82,7 @@ def create_ai_task(
     user,
     task_type: str,
     idempotency_key: str = "",
-    provider: str = "codex",
+    provider: str | None = None,
     model: str = "",
     related_type: str = "",
     related_id: str = "",
@@ -105,12 +106,13 @@ def create_ai_task(
             return existing, False
 
     try:
+        requested_provider = normalize_provider_name(provider) or default_provider_name()
         task = AITask.objects.create(
             user=user,
             task_id=generated_task_id(user, idempotency_key or None),
             idempotency_key=idempotency_key or None,
             task_type=task_type,
-            provider=clean_text(provider) or "codex",
+            provider=requested_provider,
             model=clean_text(model),
             related_type=clean_text(related_type),
             related_id=clean_text(related_id),

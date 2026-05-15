@@ -44,7 +44,7 @@ def create_billable_ai_task(
     task_type: str,
     reserved_u: int,
     idempotency_key: str,
-    provider: str = "codex",
+    provider: str | None = None,
     model: str = "",
     related_type: str = "",
     related_id: str = "",

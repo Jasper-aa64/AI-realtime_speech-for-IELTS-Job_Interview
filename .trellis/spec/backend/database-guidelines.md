@@ -28,6 +28,12 @@ Required fields and meaning:
 - `billing_reservation`, `usage`: optional links to wallet reservation and settled usage.
 - `provider` and `model`: durable worker-routing hints. For the current local worker boundary, `writing_score` with `provider=mock_success` uses the deterministic success adapter; other `writing_score` values keep the explicit fallback adapter until a real provider integration exists.
 
+Provider routing must go through `apps.ai.provider_config`:
+
+- `AI_DEFAULT_PROVIDER` chooses the durable default provider string stored on new tasks when the request omits `provider`.
+- `AI_ALLOW_MOCK_SUCCESS` gates `provider=mock_success`. When disabled, the worker must fall back safely instead of taking the success path.
+- Provider secret configuration stores only env-var names such as `OPENAI_API_KEY`; never persist or echo live secret values into `AITask.result_payload`, `error_message`, `fallback_reason`, or worker summaries.
+
 Terminal statuses are `succeeded`, `failed`, `fallback`, and `cancelled`. Terminal rows must not be mutated by late worker callbacks except for safe no-op reloads.
 
 ---
@@ -98,6 +104,7 @@ Worker queries must be deterministic and bounded:
 - Stale work: filter `status=running`, `started_at <= now - stale_after_seconds`, order by `started_at`, `created_at`.
 - User-facing lookup: always filter by `user` and `task_id`; never expose a task by public ID without ownership.
 - Claimed work: choose the provider adapter from durable task fields (`task_type`, `provider`, `model`, `metadata`) instead of frontend memory or transient worker flags.
+- Unknown or disabled writing providers should deterministically fall back through the same writing fallback path; unsupported task types still use the batch-level `skipped` summary plus terminal failure in the database.
 
 Writing polling bridge:
 
