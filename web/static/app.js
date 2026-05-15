@@ -1241,7 +1241,7 @@ function showDeleteConfirm(attemptId) {
   overlay.querySelector(".confirm-delete").addEventListener("click", async () => {
     overlay.remove();
     try {
-      await fetch(`/api/history/${attemptId}`, { method: "DELETE" });
+      await api(`/api/history/${attemptId}`, { method: "DELETE" });
       if (state.activeHistoryId === attemptId) state.activeHistoryId = null;
       await loadHistory(false);
     } catch (err) {

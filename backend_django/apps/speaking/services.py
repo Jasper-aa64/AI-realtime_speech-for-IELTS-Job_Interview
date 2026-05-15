@@ -102,3 +102,11 @@ def detail(user, attempt_id: str) -> dict[str, Any]:
     if not attempt or not report_is_valid(attempt):
         raise SpeakingError("Speaking report not found")
     return report_payload(attempt)
+
+
+def delete_attempt(user, attempt_id: str) -> dict[str, Any]:
+    attempt = SpeakingAttempt.objects.filter(user=user, attempt_id=str(attempt_id or "").strip()).first()
+    if not attempt:
+        raise SpeakingError("Speaking attempt not found")
+    attempt.delete()
+    return {"ok": True}

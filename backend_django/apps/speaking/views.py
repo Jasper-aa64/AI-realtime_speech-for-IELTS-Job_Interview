@@ -1,7 +1,7 @@
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_http_methods
 
-from .services import SpeakingError, detail, history
+from .services import SpeakingError, delete_attempt, detail, history
 
 
 def require_user(request):
@@ -18,11 +18,16 @@ def history_view(request):
     return JsonResponse(history(request.user))
 
 
-@require_GET
-def detail_view(request, attempt_id: str):
+@require_http_methods(["GET", "DELETE"])
+def attempt_view(request, attempt_id: str):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
+    if request.method == "DELETE":
+        try:
+            return JsonResponse(delete_attempt(request.user, attempt_id))
+        except SpeakingError as exc:
+            return JsonResponse({"error": str(exc)}, status=404)
     try:
         return JsonResponse(detail(request.user, attempt_id))
     except SpeakingError as exc:

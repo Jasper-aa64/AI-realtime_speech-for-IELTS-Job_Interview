@@ -117,3 +117,41 @@ class SpeakingHistoryApiTests(TestCase):
 
         invalid_detail = self.client.get("/api/history/attempt-incomplete")
         self.assertEqual(invalid_detail.status_code, 404)
+
+    def test_delete_requires_login(self):
+        self.client.logout()
+        attempt = self.create_scored_attempt("attempt-to-delete")
+        response = self.client.delete(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_owner_scoped(self):
+        attempt = self.create_scored_attempt("attempt-owner-test")
+        other_user = get_user_model().objects.create_user(username="other-speaker", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        response = self.client.delete(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(SpeakingAttempt.objects.filter(attempt_id="attempt-owner-test").exists())
+
+    def test_delete_removes_attempt_and_related_records(self):
+        attempt = self.create_scored_attempt("attempt-delete-test")
+        self.assertEqual(SpeakingTurn.objects.filter(attempt=attempt).count(), 1)
+        self.assertTrue(SpeakingReport.objects.filter(attempt=attempt).exists())
+
+        response = self.client.delete(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True})
+
+        self.assertFalse(SpeakingAttempt.objects.filter(attempt_id="attempt-delete-test").exists())
+        self.assertEqual(SpeakingTurn.objects.filter(attempt=attempt).count(), 0)
+        self.assertFalse(SpeakingReport.objects.filter(attempt=attempt).exists())
+
+    def test_delete_removes_from_history_list(self):
+        attempt = self.create_scored_attempt("attempt-list-test")
+        history_before = self.client.get("/api/history")
+        self.assertIn("attempt-list-test", [item["id"] for item in history_before.json()["items"]])
+
+        self.client.delete(f"/api/history/{attempt.attempt_id}")
+
+        history_after = self.client.get("/api/history")
+        self.assertNotIn("attempt-list-test", [item["id"] for item in history_after.json()["items"]])
