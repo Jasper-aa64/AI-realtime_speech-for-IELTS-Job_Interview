@@ -445,3 +445,36 @@ Migrate question bank and training observation read APIs. 4 endpoints with auth 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: Design speaking session scoring audio migration
+
+**Date**: 2026-05-15
+**Task**: Design speaking session scoring audio migration
+**Branch**: `main`
+
+### Summary
+
+Design document for migrating speaking practice flow from old server to Django. Phased plan with 6 phases. Risk matrix. No implementation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8ef60d4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
