@@ -456,3 +456,161 @@ conn.execute("UPDATE users SET balance_u = balance_u + ? WHERE user_id = ?", (re
 owner_user_id = reservation["user_id"]
 conn.execute("UPDATE users SET balance_u = balance_u + ? WHERE user_id = ?", (released_u, owner_user_id))
 ```
+
+---
+
+## Scenario: Refresh-Safe Billable AI Tasks With Worker Recovery
+
+### 1. Scope / Trigger
+
+- Trigger: any change to AI task creation, polling, billing reservation, worker execution, stale recovery, cancellation, or terminal callbacks.
+- Applies to: `AITask`, `POST /api/ai/tasks/`, `GET /api/ai/tasks/{task_id}`, `run_ai_tasks`, and billable task orchestration.
+- Goal: browser refreshes, duplicate submits, worker crashes, and late callbacks must not lose task state or double charge users.
+
+### 2. Signatures
+
+API:
+
+- `POST /api/ai/tasks/`
+  - Body: `task_type`, optional `idempotency_key`, `provider`, `model`, `related_type`, `related_id`, `call_id`, `prompt_version`, `request_payload`, `metadata`, `max_attempts`.
+  - Billable body adds `reserved_u`; when present, `idempotency_key` is required.
+  - Response: `201 {"created": true, "task": <task_payload>}` or `200 {"created": false, "task": <task_payload>}` for duplicate same-user idempotency.
+- `GET /api/ai/tasks/{task_id}`
+  - Response: `<task_payload>` for the authenticated owner.
+
+Command:
+
+- `python backend_django/manage.py run_ai_tasks --limit N --worker-id ID --recover-stale-seconds S`
+  - `--limit`: bounded pending claim count, minimum `1`.
+  - `--worker-id`: stored on claimed tasks.
+  - `--recover-stale-seconds`: when greater than `0`, recover stale `running` tasks before claiming.
+
+Service signatures:
+
+- `create_ai_task(...) -> tuple[AITask, bool]`
+- `create_billable_ai_task(..., reserved_u: int, idempotency_key: str, ...) -> tuple[AITask, bool]`
+- `claim_ai_task(task_id: str, worker_id: str = "") -> AITask`
+- `recover_stale_ai_tasks(stale_after_seconds: int, limit: int | None = None, ...) -> list[AITask]`
+- `succeed_billable_ai_task(task_id, result_payload, usage) -> AITask`
+- `fallback_billable_ai_task(task_id, fallback_reason, result_payload=None) -> AITask`
+- `fail_billable_ai_task(task_id, error_message, retryable=True, ...) -> AITask`
+- `cancel_billable_ai_task(task_id, reason="", error_code="cancelled") -> AITask`
+
+### 3. Contracts
+
+`task_payload` must include:
+
+- identity: `id`, `task_type`, `provider`, `model`, `call_id`, `idempotency_key`, `prompt_version`;
+- status: `status`, `progress_percent`, `attempt_count`, `max_attempts`;
+- relation: `related_type`, `related_id`;
+- data: `request_payload`, `result_payload`, `metadata`;
+- errors: `error_code`, `error_message`, `fallback_reason`;
+- timestamps: `available_at`, `started_at`, `finished_at`, `created_at`, `updated_at`;
+- billing: `billing.reservation_id`, `billing.usage_id`.
+
+Status contract:
+
+- `pending`: claimable when `available_at` is null or due.
+- `running`: claimed by a worker; can be stale-recovered when `started_at` is older than the configured timeout.
+- `succeeded`: terminal, settled when billable.
+- `failed`: terminal only after retry exhaustion or non-retryable failure; releases billable reservation.
+- `fallback`: terminal default-output path; releases billable reservation.
+- `cancelled`: terminal user/system cancellation; releases billable reservation.
+
+Billing contract:
+
+- `reserved_u` is micro RMB and must be positive.
+- Reservation happens before task creation and is idempotent by `call_id`.
+- Settlement occurs only on success.
+- Release occurs on fallback, final failure, and cancellation.
+- Retryable failures and stale requeues keep the original reservation.
+
+### 4. Validation & Error Matrix
+
+| Input/state | Required result |
+|---|---|
+| POST without auth | 401 `authentication required` |
+| POST without `task_type` | 400 `task_type is required` |
+| POST with `reserved_u` and no `idempotency_key` | 400 `idempotency_key is required for billable AI tasks` |
+| POST with invalid `reserved_u` | 400 `reserved_u must be a positive integer` |
+| Duplicate same-user idempotency key | 200, `created=false`, existing task payload, no new reservation |
+| Duplicate cross-user idempotency key | 400 ownership error |
+| GET wrong owner or missing task | 404 `AI task not found` |
+| Claim non-`pending` task | `AITaskError`, no mutation |
+| Stale `running`, attempts remain | requeue to `pending`, clear worker fields, preserve reservation |
+| Stale `running`, attempts exhausted | terminal `failed`, release billable reservation |
+| Late terminal callback | return unchanged task, no duplicate settle/release |
+
+### 5. Good/Base/Bad Cases
+
+- Good: user posts a billable `writing_score` task with `reserved_u` and `idempotency_key`, refreshes, polls `GET /api/ai/tasks/{id}`, worker completes or falls back, and wallet reservation is settled or released exactly once.
+- Base: user double-clicks submit; second POST returns the same task with `created=false`, same reservation ID, and unchanged wallet reserved total.
+- Bad: worker dies after claiming; stale recovery either requeues within retry budget or terminal-fails and releases reservation when exhausted.
+- Bad: user cancellation wins before provider callback; later success callback returns the `cancelled` task and must not settle usage.
+
+### 6. Tests Required
+
+Unit/service tests:
+
+- Same-user idempotency returns existing task and does not duplicate reservations.
+- Cross-user idempotency/call ID reuse is rejected.
+- Claim changes `pending -> running`, increments `attempt_count`, and stores `worker_id`.
+- Success settles billing and links `usage_id`.
+- Fallback, final failure, and cancellation release reservations.
+- Retryable failure and stale requeue keep reservations.
+- Late terminal callbacks are no-ops for succeeded, fallback, failed, and cancelled tasks.
+
+API/command tests:
+
+- `POST /api/ai/tasks/` plain and billable payloads, status codes, and payload shape.
+- `GET /api/ai/tasks/{task_id}` owner isolation.
+- `run_ai_tasks --recover-stale-seconds` summary counts and stale requeue/fail behavior.
+- Management command processes due pending `writing_score` tasks without browser state.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+# View-level mutation bypasses lifecycle locks and billing rules.
+task.status = AITask.Status.FAILED
+task.save()
+release_reservation(request.user, task.call_id)
+```
+
+#### Correct
+
+```python
+# Service-layer transition keeps task state and wallet state coupled.
+task = fail_billable_ai_task(
+    task.task_id,
+    "worker lease expired",
+    error_code="worker_lease_expired",
+    retryable=False,
+)
+```
+
+---
+
+## Forbidden Patterns
+
+- Direct lifecycle mutations outside `apps.ai.services` or `apps.ai.orchestration`.
+- Public worker endpoints before authentication and deployment boundaries are defined.
+- In-memory browser state as the only source of AI scoring/report progress.
+- Charging on `fallback`, `failed`, or `cancelled` terminal states.
+- Unbounded worker commands or queries.
+
+## Required Patterns
+
+- Keep product-specific work adapters thin; route status and billing transitions through AI services.
+- Use stable idempotency keys for billable product actions. For writing score tasks, include the entry and answer hash so changed answers can create a new task.
+- Return deterministic JSON payloads and preserve owner filtering on all task reads.
+- Prefer management-command worker boundaries until Celery/Redis and worker auth are explicitly introduced.
+
+## Code Review Checklist
+
+- Does every billable task path require `idempotency_key` and positive `reserved_u`?
+- Are terminal callbacks safe when called after another terminal state?
+- Does stale recovery preserve reservations for retryable requeues and release only terminal failures?
+- Are task reads scoped by authenticated user?
+- Are tests asserting wallet `balance_u`, `reserved_u`, reservation status, and task status together?

@@ -22,10 +22,16 @@ logs/
 *.log
 interview_report_*.json
 termi.txt
+**/__pycache__/
+**/*.pyc
 
 # IDE
 .vscode/
 .idea/
 .cache/
+.venv-django/
 *.swp
 *.swo
+
+# Django local runtime
+backend_django/db.sqlite3

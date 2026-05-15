@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for verification."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend test and review expectations."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index for compatibility checks."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend syntax and behavior preservation checks."}
+{"file": ".trellis/tasks/05-14-django-migration-architecture/research/architecture-decisions.md", "reason": "Accepted architecture boundaries that check agents must enforce."}

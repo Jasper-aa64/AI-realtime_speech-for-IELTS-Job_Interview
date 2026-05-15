@@ -11,6 +11,10 @@ points and feature modules under `src/` plus public headers under `include/`.
 New non-Qt backend features should be implemented as focused modules that can
 be linked into a dedicated executable target without pulling in Qt UI code.
 
+The repository is also gaining a Django backend scaffold under
+`backend_django/`. Keep that scaffold organized around explicit Django apps and
+thin API adapters so business rules remain testable outside request handling.
+
 ---
 
 ## Directory Layout
@@ -50,6 +54,41 @@ data/
   call a manager class.
 - Avoid linking Qt sources into terminal targets. Qt-only code stays under
   `src/ui/` and `include/ui/`.
+
+---
+
+## Django Backend Scaffold
+
+The Django backend lives under `backend_django/` and should keep project
+configuration, domain apps, and dependency lists separate:
+
+```
+backend_django/
+├── config/          # Django settings, URL routing, ASGI/WSGI entry points
+├── apps/
+│   ├── accounts/    # users, auth, profiles
+│   ├── speaking/    # IELTS speaking sessions, attempts, reports
+│   ├── writing/     # IELTS writing workflows
+│   ├── billing/     # wallet, recharge, balance, transactions
+│   ├── ai/          # model clients, prompts, scoring/coaching adapters
+│   └── common/      # shared models, permissions, pagination, utilities
+└── requirements/    # dependency groups such as base/dev/prod
+```
+
+- Put Django project settings, root URL routing, and deployment entry points in
+  `backend_django/config`.
+- Keep domain behavior inside the relevant app under `backend_django/apps/`.
+  For example, AI orchestration belongs in `backend_django/apps/ai`, while
+  speaking session state belongs in `backend_django/apps/speaking`.
+- Use each app's `services.py` for business logic and orchestration that should
+  be callable from views, background jobs, and tests.
+- Keep `views.py` focused on API adapter responsibilities: request parsing,
+  authentication/permission checks, serializer use, service calls, and response
+  shaping.
+- Store migrations in each app's `migrations/` directory. Do not centralize
+  migrations across domains.
+- Use `requirements/` for dependency groups rather than a single growing
+  requirements file when environments diverge.
 
 ---
 

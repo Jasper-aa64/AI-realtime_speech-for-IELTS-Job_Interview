@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for Django scaffold and API work."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Backend app/module boundary guidance, even though it is still partly template-like."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality and testing expectations for model/API changes."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index for old frontend compatibility boundaries."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend checks to preserve existing vanilla app behavior when bridging APIs."}
+{"file": ".trellis/tasks/05-14-django-migration-architecture/research/architecture-decisions.md", "reason": "Architecture decisions for Django, Redis/Celery, Channels, C++ service boundaries, and migration order."}

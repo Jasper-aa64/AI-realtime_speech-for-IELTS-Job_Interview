@@ -1,51 +1,81 @@
 # Error Handling
 
-> How errors are handled in this project.
+> Error and terminal-state contracts for Django backend services.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's error handling conventions here.
+Backend views should translate service errors into small JSON responses, while services own validation, locking, and lifecycle decisions.
 
-Questions to answer:
-- What error types do you define?
-- How are errors propagated?
-- How are errors logged?
-- How are errors returned to clients?
--->
+AI task errors use:
 
-(To be filled by the team)
+- `AITaskError`: generic lifecycle/service validation errors.
+- `AIOrchestrationError`: billing-aware AI task orchestration errors.
+- `BillingError`: wallet reservation, settlement, and usage validation errors.
 
----
-
-## Error Types
-
-<!-- Custom error classes/types -->
-
-(To be filled by the team)
-
----
-
-## Error Handling Patterns
-
-<!-- Try-catch patterns, error propagation -->
-
-(To be filled by the team)
+Do not leak tracebacks or provider internals to clients. Return the service message as `{"error": "<message>"}` with the appropriate status.
 
 ---
 
 ## API Error Responses
 
-<!-- Standard error response format -->
+Current AI task endpoints use these response contracts:
 
-(To be filled by the team)
+- Unauthenticated request: `401 {"error": "authentication required"}`.
+- `POST /api/ai/tasks/` validation/orchestration error: `400 {"error": "<message>"}`.
+- `GET /api/ai/tasks/{task_id}` missing or wrong-owner task: `404 {"error": "AI task not found"}`.
+
+`read_json_body()` treats malformed or non-object JSON as `{}`. Required field validation must happen in the service layer so empty payloads become deterministic service errors such as `task_type is required`.
+
+---
+
+## Lifecycle Error Matrix
+
+| Condition | Service behavior | Client/worker result |
+|---|---|---|
+| Missing `task_type` | `create_ai_task` raises `AITaskError("task_type is required")` | POST returns 400 |
+| Billable task missing `idempotency_key` | `create_billable_ai_task` raises `AIOrchestrationError` | POST returns 400 |
+| `reserved_u` missing, zero, negative, or non-integer for billable task | `AIOrchestrationError("reserved_u must be a positive integer")` | POST returns 400 |
+| Insufficient wallet balance | `BillingError` is wrapped as `AIOrchestrationError` | POST returns 400, no task created |
+| Same idempotency key, same user | Return existing task with `created=false` | POST returns 200 |
+| Same idempotency key, different user | Raise ownership error | POST returns 400 |
+| Task claim from non-`pending` status | `claim_ai_task` raises `AITaskError` | Worker records item error |
+| `available_at` is in the future | `claim_ai_task` raises `AITaskError` | Worker leaves task untouched |
+| Stale recovery timeout <= 0 | `stale_running_task_ids` raises `AITaskError` | Caller must reject/fix config |
+| Late success/fail/fallback/cancel after terminal state | Return task unchanged | No double settlement/release |
+
+---
+
+## Terminal Callback Safety
+
+All terminal callbacks must be idempotent:
+
+- `succeed_ai_task`, `fail_ai_task`, `fallback_ai_task`, and `cancel_ai_task` return immediately when `task.is_terminal`.
+- `succeed_billable_ai_task` checks terminal state before settlement.
+- Billing fallback/fail/cancel helpers call the generic transition first and only release if the resulting status is the intended terminal status.
+
+This protects against late provider callbacks, duplicate worker retries, and user cancellation racing with worker completion.
+
+---
+
+## Worker Recovery Errors
+
+`run_ai_tasks --recover-stale-seconds N` invokes billing-aware stale recovery before claiming pending work.
+
+Recovery behavior:
+
+- Stale `running` task with attempts remaining: set `pending`, reset progress to `0`, clear worker/timing fields, preserve reservation.
+- Stale `running` task with exhausted attempts: set `failed`, clear worker, set `finished_at`, release reservation if billable.
+- Terminal task discovered during recovery: return unchanged.
+
+The command emits a JSON summary. Worker errors should be recorded per item instead of crashing the whole batch where possible.
 
 ---
 
 ## Common Mistakes
 
-<!-- Error handling mistakes your team has made -->
-
-(To be filled by the team)
+- Returning `500` for expected validation failures; lifecycle and billing validation should map to 400.
+- Releasing a reservation on retryable failure; only final failure, fallback, and cancellation release.
+- Running terminal callbacks without first checking `task.is_terminal`; this can double charge or double release.
+- Treating wrong-owner task lookup as authorization detail; respond as not found.
