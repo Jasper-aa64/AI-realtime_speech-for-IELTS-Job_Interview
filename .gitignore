@@ -24,6 +24,12 @@ interview_report_*.json
 termi.txt
 **/__pycache__/
 **/*.pyc
+reports/
+.firecrawl/
+test_pa_read
+test_pa_read2
+test_pa_read*.cpp
+reprocess_report.py
 
 # IDE
 .vscode/
