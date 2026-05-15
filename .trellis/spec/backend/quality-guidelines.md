@@ -11,6 +11,20 @@ contracts testable through CMake/CTest. When a feature crosses data files,
 external command-line tools, reports, and runtime services, document and test
 the boundary behavior instead of relying only on manual end-to-end runs.
 
+## Project Conventions
+
+### Convention: Running AI analysis is not user-cancellable
+
+**What**: Durable AI tasks may be cancelled by the user only while `status=pending`. Once a worker claims the task and it becomes `running`, the cancel API must reject the request and the normal success/fallback/failure path must persist the result for the user record.
+
+**Why**: This prevents an abuse path where a user starts billable AI work, then interrupts the job to avoid cost or lose the persisted output after provider work has already started.
+
+**Required tests**:
+- Pending billable cancellation releases the reservation and marks the task `cancelled`.
+- Running billable and non-billable cancellation attempts return a conflict and keep the task/lease intact.
+- Pending-cancelled `writing_score` tasks ignore late completion/fallback callbacks.
+- A post-claim cancel attempt does not stop `run_ai_tasks` or `fallback_score_task` from persisting the fallback result.
+
 ## Scenario: IELTS Speaking CLI Simulator
 
 ### 1. Scope / Trigger
@@ -480,7 +494,7 @@ API:
 - `POST /api/ai/tasks/{task_id}/cancel/`
   - Body: optional `reason`, optional `error_code` defaulting to `cancelled`.
   - Response: `<task_payload>` for the authenticated owner.
-  - Semantics: pending/running billable tasks release reserved funds; terminal tasks are no-ops.
+  - Semantics: only pending tasks are cancellable; pending billable tasks release reserved funds, running tasks return `409`, and terminal tasks are no-ops.
 - `GET /api/writing/entries/{entry_id}`
   - Response includes the current entry payload and latest related `ai_task` for score polling.
 
@@ -535,7 +549,8 @@ Cancellation API contract:
 
 - `POST /api/ai/tasks/{task_id}/cancel/` requires authentication.
 - The lookup is owner-scoped: missing tasks and tasks owned by another user both return `404 AI task not found`.
-- Pending or running billable tasks release a still-reserved wallet reservation exactly once.
+- Only pending tasks are user-cancellable. Pending billable tasks release a still-reserved wallet reservation exactly once.
+- Running tasks must return `409` without changing the task lease or releasing any reservation.
 - Terminal tasks return the existing task payload without changing status, settlement, or reservation state.
 
 Writing polling bridge:
@@ -546,8 +561,8 @@ Writing polling bridge:
 
 Worker race contract:
 
-- If a task is cancelled after claim but before `run_ai_tasks` persists fallback or completion, the worker summary reports the item as skipped/cancelled.
-- The command must not count that race as completed, fallback, or failed work.
+- If a cancel request arrives after claim, the cancel path must return `409` and leave the claimed task untouched.
+- `run_ai_tasks` must continue through the normal completion/fallback path, persist the result, and report the final terminal status instead of `cancelled`.
 
 ### 4. Validation & Error Matrix
 
@@ -562,7 +577,8 @@ Worker race contract:
 | GET wrong owner or missing task | 404 `AI task not found` |
 | POST cancel without auth | 401 `authentication required` |
 | POST cancel wrong owner or missing task | 404 `AI task not found` |
-| POST cancel pending/running billable task | 200 task payload with `status=cancelled`, reservation released |
+| POST cancel pending billable task | 200 task payload with `status=cancelled`, reservation released |
+| POST cancel running billable task | 409 `AI task is already running and cannot be cancelled`; reservation stays reserved |
 | POST cancel terminal task | 200 existing task payload, no extra release/settlement |
 | Claim non-`pending` task | `AITaskError`, no mutation |
 | Stale `running`, attempts remain | requeue to `pending`, clear worker fields, preserve reservation |
@@ -575,7 +591,7 @@ Worker race contract:
 - Good: writing UI polls `GET /api/writing/entries/{entry_id}`, sees the latest `ai_task`, cancels through `POST /api/ai/tasks/{task_id}/cancel/`, and the entry remains unscored until a new score task is created.
 - Base: user double-clicks submit; second POST returns the same task with `created=false`, same reservation ID, and unchanged wallet reserved total.
 - Bad: worker dies after claiming; stale recovery either requeues within retry budget or terminal-fails and releases reservation when exhausted.
-- Bad: user cancellation wins before provider callback; later success callback returns the `cancelled` task and must not settle usage.
+- Bad: user cancellation after worker claim releases funds early or prevents result persistence; correct behavior is `409` plus normal worker completion/fallback.
 
 ### 6. Tests Required
 
@@ -593,10 +609,10 @@ API/command tests:
 
 - `POST /api/ai/tasks/` plain and billable payloads, status codes, and payload shape.
 - `GET /api/ai/tasks/{task_id}` owner isolation.
-- `POST /api/ai/tasks/{task_id}/cancel/` auth, owner-scoped 404, pending/running billable reservation release, and terminal no-op payload.
+- `POST /api/ai/tasks/{task_id}/cancel/` auth, owner-scoped 404, pending billable release, running-task conflict, and terminal no-op payload.
 - `GET /api/writing/entries/{entry_id}` includes latest `ai_task`; cancelled writing score tasks leave `score=null` and do not create `WritingScore`.
 - `run_ai_tasks --recover-stale-seconds` summary counts and stale requeue/fail behavior.
-- Management command processes due pending `writing_score` tasks without browser state and reports after-claim cancellation as skipped/cancelled.
+- Management command processes due pending `writing_score` tasks without browser state and keeps normal fallback/completion behavior when a cancel attempt happens after claim.
 
 ### 7. Wrong vs Correct
 

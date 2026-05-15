@@ -15,7 +15,7 @@ Included:
 * keep non-billable and terminal-task cancellation safe and payload-compatible;
 * keep `GET /api/writing/entries/{entry_id}` returning the latest `ai_task` state for score polling;
 * harden writing score completion/fallback services so cancelled tasks do not create `WritingScore` rows on late callbacks;
-* add focused tests for cancel auth/ownership, pending and running billable cancellation, writing entry polling after cancel, and worker skip behavior for cancelled tasks;
+* add focused tests for cancel auth/ownership, pending cancel success, running cancel conflict, writing entry polling after cancel, and worker completion after post-claim cancel attempts;
 * update backend API docs.
 
 Excluded:
@@ -43,7 +43,7 @@ Excluded:
 * Owner checks happen before task cancellation is dispatched. Wrong-owner and missing IDs both return `404 AI task not found`.
 * Billable and non-billable cancellation still use the existing service/orchestration helpers. The new API only exposes the already-tested lifecycle path.
 * Writing completion and fallback now lock the `AITask` row first and return the current entry payload immediately for terminal tasks. This preserves the milestone-07 late-success billing fix and extends it to writing data, preventing cancelled tasks from inventing `WritingScore` or learner-profile updates.
-* `run_ai_tasks` now treats a task that becomes cancelled before claim, or after claim but before fallback persistence, as cancelled/skipped in the worker summary instead of surfacing an execution error or a false fallback completion.
+* Pre-claim cancellation remains a normal skip path because the task never entered execution. After claim, the cancel API must fail with `409` so the worker can finish and persist the normal fallback/result path without releasing billing early.
 
 ## Verification
 

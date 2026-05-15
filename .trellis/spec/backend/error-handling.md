@@ -25,7 +25,7 @@ Current AI task endpoints use these response contracts:
 - Unauthenticated request: `401 {"error": "authentication required"}`.
 - `POST /api/ai/tasks/` validation/orchestration error: `400 {"error": "<message>"}`.
 - `GET /api/ai/tasks/{task_id}` missing or wrong-owner task: `404 {"error": "AI task not found"}`.
-- `POST /api/ai/tasks/{task_id}/cancel/` requires auth, uses owner-scoped lookup, returns `404 {"error": "AI task not found"}` for missing or wrong-owner tasks, and returns the task payload on success or terminal no-op.
+- `POST /api/ai/tasks/{task_id}/cancel/` requires auth, uses owner-scoped lookup, returns `404 {"error": "AI task not found"}` for missing or wrong-owner tasks, returns `409 {"error": "AI task is already running and cannot be cancelled"}` for `running` tasks, and returns the task payload on success or terminal no-op.
 
 `read_json_body()` treats malformed or non-object JSON as `{}`. Required field validation must happen in the service layer so empty payloads become deterministic service errors such as `task_type is required`.
 
@@ -42,7 +42,8 @@ Current AI task endpoints use these response contracts:
 | Same idempotency key, same user | Return existing task with `created=false` | POST returns 200 |
 | Same idempotency key, different user | Raise ownership error | POST returns 400 |
 | Cancel missing or wrong-owner task | `cancel_owned_ai_task` raises `AITaskError("AI task not found")` | POST cancel returns owner-scoped 404 |
-| Cancel pending/running billable task | Mark `cancelled` and release reserved wallet funds | POST cancel returns task payload |
+| Cancel pending task | Mark `cancelled`; release reserved wallet funds when billable | POST cancel returns task payload |
+| Cancel running task | `cancel_ai_task`, `cancel_billable_ai_task`, and `cancel_owned_ai_task` propagate `AITaskConflictError("AI task is already running and cannot be cancelled")` | POST cancel returns 409; worker keeps running and keeps any reservation |
 | Cancel terminal task | Return unchanged task | POST cancel returns existing task payload |
 | Task claim from non-`pending` status | `claim_ai_task` raises `AITaskError` | Worker records item error |
 | `available_at` is in the future | `claim_ai_task` raises `AITaskError` | Worker leaves task untouched |
@@ -62,6 +63,7 @@ All terminal callbacks must be idempotent:
 This protects against late provider callbacks, duplicate worker retries, and user cancellation racing with worker completion.
 
 Writing score callbacks must extend the same rule to product data: when a `writing_score` task is already `cancelled`, late completion or fallback returns the current entry payload, leaves the entry unscored, and must not create `WritingScore`.
+When a `writing_score` task is already `running`, user cancellation must fail fast instead of changing task state; later completion/fallback must continue to persist the score/profile output against that same task.
 
 ---
 
@@ -77,7 +79,7 @@ Recovery behavior:
 
 The command emits a JSON summary. Worker errors should be recorded per item instead of crashing the whole batch where possible.
 
-If `run_ai_tasks` claims a task and the task is cancelled before fallback or completion persistence, the item is reported as skipped/cancelled, not completed or fallback. This preserves the user's cancellation intent and prevents misleading worker summaries.
+If `run_ai_tasks` sees a task cancelled before claim, it should skip the item and avoid creating product rows. If a cancel request arrives after claim, that request must fail with a conflict so the worker can finish and persist the normal fallback/result path.
 
 ---
 

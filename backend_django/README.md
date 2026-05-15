@@ -56,13 +56,18 @@ POST /api/ai/tasks/{task_id}/cancel/
 AI task records are the durable state boundary for slow report/scoring work.
 Workers can be added later; callers should create tasks with an idempotency key,
 then poll the task detail endpoint after refresh or reconnect. Clients can
-cancel their own pending or running tasks through the generic cancel endpoint;
-wrong-owner and missing task IDs resolve as not found.
+cancel only their own pending tasks through the generic cancel endpoint.
+Once a task is `running`, the cancel route returns `409` and the worker must
+finish through the normal success/fallback/failure path so billing and result
+persistence stay consistent. This is an anti-abuse and cost-integrity
+boundary: once billable or provider work has started, the system must keep the
+task and reservation coupled until the final result is written back to the
+user-owned record. Wrong-owner and missing task IDs resolve as not found.
 
 When `POST /api/ai/tasks/` includes `reserved_u`, the API creates a billable
 task and reserves wallet balance up front. Later orchestration should settle
-the reservation on success or release it on fallback, cancellation, or final
-worker-lease failure.
+the reservation on success or release it on fallback, pending-task
+cancellation, or final worker-lease failure.
 
 Billing:
 
@@ -95,7 +100,9 @@ POST /api/writing/entries/{entry_id}/score-task
 execution and returns the same task on duplicate submits for the same answer.
 `GET /api/writing/entries/{entry_id}` includes the latest `ai_task` payload for
 that entry, so the UI can recover task state after refresh and keep showing a
-cancelled task without creating a `WritingScore`.
+cancelled task without creating a `WritingScore`. If a task was cancelled while
+still `pending`, late completion or fallback callbacks are ignored and do not
+create score/profile rows.
 
 Local worker boundary:
 
@@ -107,7 +114,10 @@ python backend_django/manage.py run_ai_tasks --limit 10 --recover-stale-seconds 
 This command currently processes pending `writing_score` tasks with an explicit
 fallback adapter. `--recover-stale-seconds` first requeues or terminal-fails
 stale `running` tasks before claiming pending work, so a dead local worker does
-not leave wallet reservations stranded. Billable task cancellation and stale
+not leave wallet reservations stranded. Once a worker claims a task, user
+cancellation must not interrupt it; the command should finish and persist the
+fallback/result normally, including writing the `WritingScore` and learner
+profile update for the completed path. Pending billable cancellation and stale
 terminal recovery both release reservations idempotently through the same
 service/orchestration path.
 

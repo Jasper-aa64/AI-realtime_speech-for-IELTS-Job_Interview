@@ -314,8 +314,7 @@ class WritingApiTests(TestCase):
             data={"reserved_u": 300_000},
             content_type="application/json",
         ).json()["task"]
-        claim_ai_task(task_payload["id"], worker_id="late-complete-worker")
-        cancel_billable_ai_task(task_payload["id"], "user cancelled during scoring")
+        cancel_billable_ai_task(task_payload["id"], "user cancelled before scoring started")
 
         completed = complete_score_task(
             task_payload["id"],
@@ -336,6 +335,36 @@ class WritingApiTests(TestCase):
 
         self.assertEqual(completed["ai_task"]["status"], AITask.Status.CANCELLED)
         self.assertIsNone(completed["score"])
+        self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
+
+    def test_cancelled_pending_score_task_ignores_late_fallback_and_keeps_entry_unscored(self):
+        prompt = WritingPrompt.objects.create(
+            prompt_id="task2-cancelled-fallback-score-task",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Cancelled fallback prompt",
+            prompt="Some people think school holidays should be longer. Discuss.",
+        )
+        save = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": "Longer holidays can reduce pressure, but students may forget routines if the break is too long.",
+            },
+            content_type="application/json",
+        ).json()
+        task_payload = self.client.post(
+            f"/api/writing/entries/{save['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        cancel_billable_ai_task(task_payload["id"], "user cancelled before scoring started")
+
+        fallback = fallback_score_task(task_payload["id"], "provider unavailable")
+
+        self.assertEqual(fallback["ai_task"]["status"], AITask.Status.CANCELLED)
+        self.assertIsNone(fallback["score"])
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
     def test_invalid_writing_requests_return_json_errors(self):

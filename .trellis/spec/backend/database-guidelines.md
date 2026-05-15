@@ -49,8 +49,15 @@ Cancellation is a locked lifecycle transition:
 
 - `POST /api/ai/tasks/{task_id}/cancel/` must call `cancel_owned_ai_task(...)` after authenticated owner lookup.
 - Missing and wrong-owner task IDs are owner-scoped 404s; do not expose whether another user owns the task.
-- Pending or running billable tasks release a still-reserved wallet reservation through `cancel_billable_ai_task(...)`.
+- Only `pending` tasks are user-cancellable. `running` tasks must keep their reservation and continue through the normal worker terminal path.
+- Pending billable tasks release a still-reserved wallet reservation through `cancel_billable_ai_task(...)`.
 - Terminal tasks are no-ops and return the existing task payload without another release or settlement.
+
+Anti-abuse boundary:
+
+- Once an AI task becomes `running`, provider work or billable fallback work may already have started. Do not let user cancellation convert that task to `cancelled`, clear its lease, or release funds early.
+- A claimed `running` task must run to its terminal worker path and persist the resulting user-owned data row(s), such as a `WritingScore`, report payload, or learner-profile update.
+- Product data writers such as `writing_score` must still ignore late completion/fallback for a legitimately cancelled `pending` task, because that task never entered billable execution.
 
 ---
 

@@ -15,6 +15,10 @@ class AITaskError(ValueError):
     pass
 
 
+class AITaskConflictError(AITaskError):
+    pass
+
+
 def clean_text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -341,6 +345,8 @@ def cancel_ai_task(task_id: str, *, reason: str = "", error_code: str = "cancell
         raise AITaskError("AI task not found")
     if task.is_terminal:
         return task
+    if task.status != AITask.Status.PENDING:
+        raise AITaskConflictError("AI task is already running and cannot be cancelled")
 
     task.status = AITask.Status.CANCELLED
     task.available_at = None

@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .orchestration import AIOrchestrationError, cancel_owned_ai_task, create_billable_ai_task
-from .services import AITaskError, create_ai_task, get_ai_task, task_payload
+from .services import AITaskConflictError, AITaskError, create_ai_task, get_ai_task, task_payload
 
 
 def read_json_body(request) -> dict:
@@ -93,6 +93,8 @@ def task_cancel(request, task_id: str):
             reason=str(payload.get("reason") or ""),
             error_code=str(payload.get("error_code") or "cancelled"),
         )
+    except AITaskConflictError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
     except AITaskError as exc:
         return JsonResponse({"error": str(exc)}, status=404)
     except AIOrchestrationError as exc:
