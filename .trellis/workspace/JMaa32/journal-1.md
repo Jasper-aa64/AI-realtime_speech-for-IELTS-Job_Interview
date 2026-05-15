@@ -478,3 +478,36 @@ Design document for migrating speaking practice flow from old server to Django. 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: Add Django attempts start endpoint
+
+**Date**: 2026-05-16
+**Task**: Add Django attempts start endpoint
+**Branch**: `main`
+
+### Summary
+
+Implement POST /api/attempts/start for speaking practice sessions with all modes (mock, p1, p2, p3), creating SpeakingAttempt + SpeakingTurn records with response matching old server.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bbfa834` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

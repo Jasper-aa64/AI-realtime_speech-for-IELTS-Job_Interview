@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 14
-- **Last Active**: 2026-05-15
+- **Total Sessions**: 15
+- **Last Active**: 2026-05-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~480 | Active |
+| `journal-1.md` | ~513 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 15 | 2026-05-16 | Add Django attempts start endpoint | `bbfa834` | `main` |
 | 14 | 2026-05-15 | Design speaking session scoring audio migration | `8ef60d4` | `main` |
 | 13 | 2026-05-15 | Add Django speaking question bank training read APIs | `fb4931a` | `main` |
 | 12 | 2026-05-15 | Add Django speaking history DELETE API | `9abd7ed` | `main` |
