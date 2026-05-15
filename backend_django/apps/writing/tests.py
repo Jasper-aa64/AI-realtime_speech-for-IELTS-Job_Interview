@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.utils import timezone
@@ -58,6 +60,57 @@ class WritingApiTests(TestCase):
         self.user = get_user_model().objects.create_user(username="writing-api-user", password="test-pass")
         self.client.force_login(self.user)
 
+    def create_prompt(self, *, prompt_id: str, task_type: str, title: str, prompt: str) -> WritingPrompt:
+        return WritingPrompt.objects.create(
+            prompt_id=prompt_id,
+            task_type=task_type,
+            title=title,
+            prompt=prompt,
+        )
+
+    def create_entry(
+        self,
+        *,
+        user=None,
+        prompt: WritingPrompt,
+        answer: str,
+        status: str = WritingEntry.Status.SAVED,
+        practice_date=None,
+        title: str | None = None,
+        overall_band: float | None = None,
+        updated_at=None,
+    ) -> WritingEntry:
+        entry = WritingEntry.objects.create(
+            user=user or self.user,
+            entry_id=uuid.uuid4().hex,
+            prompt=prompt,
+            task_type=prompt.task_type,
+            practice_date=practice_date or timezone.localdate(),
+            title=title or prompt.title,
+            prompt_text=prompt.prompt,
+            answer=answer,
+            word_count=len(answer.split()),
+            status=status,
+            saved_at=timezone.now(),
+            metadata={"category": prompt.category},
+        )
+        if overall_band is not None:
+            WritingScore.objects.create(
+                user=entry.user,
+                entry=entry,
+                overall_band=overall_band,
+                task_response=overall_band,
+                coherence_cohesion=overall_band,
+                lexical_resource=overall_band,
+                grammar_range_accuracy=overall_band,
+                feedback_markdown="- Stored score.",
+                source="ai",
+            )
+        if updated_at is not None:
+            WritingEntry.objects.filter(pk=entry.pk).update(updated_at=updated_at)
+            entry.refresh_from_db()
+        return entry
+
     def assert_entry_detail_contract(
         self,
         detail: dict,
@@ -90,6 +143,11 @@ class WritingApiTests(TestCase):
     def test_writing_api_requires_login(self):
         self.client.logout()
         response = self.client.get("/api/writing/summary")
+        self.assertEqual(response.status_code, 401)
+
+    def test_writing_reports_requires_login(self):
+        self.client.logout()
+        response = self.client.get("/api/writing/reports")
         self.assertEqual(response.status_code, 401)
 
     def test_prompts_random_save_summary_detail_and_score_flow(self):
@@ -143,6 +201,180 @@ class WritingApiTests(TestCase):
         summary_after_score = self.client.get("/api/writing/summary?month=2026-05").json()
         self.assertEqual(summary_after_score["stats"]["scored_entries"], 1)
         self.assertEqual(next(day for day in summary_after_score["days"] if day["date"] == "2026-05-14")["status"], "scored")
+
+    def test_writing_reports_are_owner_scoped_ordered_and_include_latest_ai_task(self):
+        older_prompt = self.create_prompt(
+            prompt_id="task1-reports-owner-scope",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Older owned report",
+            prompt="Summarise the chart below.",
+        )
+        older_entry = self.create_entry(
+            prompt=older_prompt,
+            answer="The chart shows a steady increase in the use of trains.",
+            updated_at=timezone.now() - timezone.timedelta(days=2),
+        )
+
+        latest_prompt = self.create_prompt(
+            prompt_id="task2-reports-latest-task",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Latest owned report",
+            prompt="Some people think public libraries are no longer necessary. Discuss both views and give your opinion.",
+        )
+        saved = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": latest_prompt.task_type,
+                "prompt_id": latest_prompt.prompt_id,
+                "prompt": latest_prompt.prompt,
+                "title": latest_prompt.title,
+                "answer": "Public libraries still matter because they provide quiet study space and trusted information for people who cannot afford many books.",
+            },
+            content_type="application/json",
+        ).json()
+        task = self.client.post(
+            f"/api/writing/entries/{saved['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+
+        other_user = get_user_model().objects.create_user(username="other-writing-user", password="test-pass")
+        self.create_entry(
+            user=other_user,
+            prompt=latest_prompt,
+            answer="Another user's essay should not appear in this list.",
+            updated_at=timezone.now() + timezone.timedelta(minutes=1),
+        )
+
+        response = self.client.get("/api/writing/reports")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual([item["id"] for item in payload["items"]], [saved["id"], older_entry.entry_id])
+        latest_item = payload["items"][0]
+        self.assertEqual(latest_item["status"], WritingEntry.Status.SAVED)
+        self.assertEqual(latest_item["task_type"], WritingPrompt.TaskType.TASK2)
+        self.assertEqual(latest_item["task_label"], WRITING_TASK_LABELS[WritingPrompt.TaskType.TASK2])
+        self.assertEqual(latest_item["title"], latest_prompt.title)
+        self.assertIsNotNone(latest_item["display_time"])
+        self.assertEqual(latest_item["ai_task"]["id"], task["id"])
+        self.assertEqual(latest_item["ai_task"]["task_type"], "writing_score")
+        self.assertEqual(latest_item["ai_task"]["status"], AITask.Status.PENDING)
+        self.assertEqual(latest_item["ai_task"]["related_type"], "writing_entry")
+        self.assertEqual(latest_item["ai_task"]["related_id"], saved["id"])
+        self.assertNotIn("request_payload", latest_item["ai_task"])
+        self.assertNotIn("result_payload", latest_item["ai_task"])
+        self.assertNotIn("billing", latest_item["ai_task"])
+        self.assertNotIn("metadata", latest_item["ai_task"])
+        self.assertNotIn("idempotency_key", latest_item["ai_task"])
+        self.assertIsNone(payload["items"][1]["ai_task"])
+
+    def test_writing_reports_order_by_latest_task_update_time(self):
+        now = timezone.now()
+        report_prompt = self.create_prompt(
+            prompt_id="task2-reports-latest-activity",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Latest activity prompt",
+            prompt="Some people believe online learning will replace classrooms. Discuss both views.",
+        )
+        older_entry = self.create_entry(
+            prompt=report_prompt,
+            answer="Older entry answer with enough detail to create a report item.",
+            updated_at=now - timezone.timedelta(days=3),
+        )
+        newer_entry = self.create_entry(
+            prompt=report_prompt,
+            answer="Newer saved entry that should sort after the task-updated item.",
+            updated_at=now - timezone.timedelta(hours=1),
+        )
+
+        task_payload = self.client.post(
+            f"/api/writing/entries/{older_entry.entry_id}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        task = AITask.objects.get(task_id=task_payload["id"])
+        older_created_at = now - timezone.timedelta(hours=2)
+        latest_task_update = now
+        AITask.objects.filter(pk=task.pk).update(created_at=older_created_at, updated_at=latest_task_update)
+
+        response = self.client.get("/api/writing/reports")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual([item["id"] for item in payload["items"][:2]], [older_entry.entry_id, newer_entry.entry_id])
+        self.assertEqual(
+            payload["items"][0]["display_time"],
+            latest_task_update.astimezone(timezone.get_current_timezone()).strftime("%Y-%m-%d %H:%M"),
+        )
+
+    def test_writing_reports_limit_and_filters(self):
+        task2_prompt = self.create_prompt(
+            prompt_id="task2-reports-filter",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Task 2 filter prompt",
+            prompt="Some people think schools should spend more money on sports. Discuss both views.",
+        )
+        task1_prompt = self.create_prompt(
+            prompt_id="task1-reports-filter",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Task 1 filter prompt",
+            prompt="Summarise the table below.",
+        )
+
+        for index in range(105):
+            self.create_entry(
+                prompt=task2_prompt,
+                answer=f"Saved task 2 answer number {index} with enough words for the reports filter test.",
+                title=f"Task 2 saved {index}",
+            )
+
+        scored_entry = self.create_entry(
+            prompt=task2_prompt,
+            answer="A scored task 2 answer with feedback metadata.",
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.5,
+            title="Task 2 scored",
+        )
+        task1_entry = self.create_entry(
+            prompt=task1_prompt,
+            answer="A task 1 answer used to verify task type filtering.",
+            title="Task 1 saved",
+        )
+
+        invalid_limit = self.client.get("/api/writing/reports?limit=not-a-number")
+        self.assertEqual(invalid_limit.status_code, 200)
+        invalid_limit_payload = invalid_limit.json()
+        self.assertEqual(invalid_limit_payload["count"], 107)
+        self.assertEqual(len(invalid_limit_payload["items"]), 50)
+
+        max_limit = self.client.get("/api/writing/reports?limit=999")
+        self.assertEqual(max_limit.status_code, 200)
+        max_limit_payload = max_limit.json()
+        self.assertEqual(max_limit_payload["count"], 107)
+        self.assertEqual(len(max_limit_payload["items"]), 100)
+
+        scored_only = self.client.get("/api/writing/reports?status=scored")
+        self.assertEqual(scored_only.status_code, 200)
+        scored_payload = scored_only.json()
+        self.assertEqual(scored_payload["count"], 1)
+        self.assertEqual([item["id"] for item in scored_payload["items"]], [scored_entry.entry_id])
+        self.assertEqual(scored_payload["items"][0]["status"], WritingEntry.Status.SCORED)
+        self.assertEqual(scored_payload["items"][0]["overall_band"], 6.5)
+
+        task1_only = self.client.get("/api/writing/reports?task_type=task1_academic")
+        self.assertEqual(task1_only.status_code, 200)
+        task1_payload = task1_only.json()
+        self.assertEqual(task1_payload["count"], 1)
+        self.assertEqual([item["id"] for item in task1_payload["items"]], [task1_entry.entry_id])
+        self.assertEqual(task1_payload["items"][0]["task_type"], WritingPrompt.TaskType.TASK1_ACADEMIC)
+
+        saved_task2 = self.client.get("/api/writing/reports?status=saved&task_type=task2&limit=5")
+        self.assertEqual(saved_task2.status_code, 200)
+        saved_task2_payload = saved_task2.json()
+        self.assertEqual(saved_task2_payload["count"], 105)
+        self.assertEqual(len(saved_task2_payload["items"]), 5)
+        self.assertTrue(all(item["status"] == WritingEntry.Status.SAVED for item in saved_task2_payload["items"]))
+        self.assertTrue(all(item["task_type"] == WritingPrompt.TaskType.TASK2 for item in saved_task2_payload["items"]))
 
     def test_saving_changed_answer_resets_existing_score(self):
         prompt = WritingPrompt.objects.create(

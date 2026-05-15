@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Writing report list must stay owner-scoped, bounded, deterministic, and avoid browser-only state."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Writing reports depend on refresh-safe AI task and polling contracts."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "New writing report endpoint must map auth and service errors consistently."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Old frontend writing report page should stay consistent with existing report layout."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Feature crosses Django service/API and old frontend report rendering."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend report bridge must keep JS syntax, state, and polling behavior stable."}

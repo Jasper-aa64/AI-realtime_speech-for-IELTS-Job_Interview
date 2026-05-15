@@ -26,6 +26,7 @@ urlpatterns = [
     path("api/billing/reservations/release/", billing_views.release, name="billing-release"),
     path("api/billing/settle/", billing_views.settle, name="billing-settle"),
     path("api/writing/summary", writing_views.summary, name="writing-summary"),
+    path("api/writing/reports", writing_views.reports, name="writing-reports"),
     path("api/writing/prompts", writing_views.prompts, name="writing-prompts"),
     path("api/writing/prompts/random", writing_views.random_prompt_view, name="writing-random-prompt"),
     path("api/writing/entries", writing_views.entries, name="writing-entries"),

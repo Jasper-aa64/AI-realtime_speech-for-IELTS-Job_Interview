@@ -1337,8 +1337,8 @@ function renderWritingSummary(payload) {
 
 async function loadWritingReports() {
   try {
-    const payload = await withBusy("Loading writing reports...", () => loadWritingSummary(false));
-    await renderWritingReports(payload.recent_entries || []);
+    const payload = await withBusy("Loading writing reports...", () => api("/api/writing/reports"));
+    await renderWritingReports(payload.items || []);
   } catch (error) {
     showWritingReportError(error);
   }

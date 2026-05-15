@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check owner scoping, bounded queries, and latest AI task data."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Check auth/error mapping for new endpoint."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check refresh-safe writing report and AI task polling contracts."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check frontend bridge syntax/state/polling behavior."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Check writing report UI remains consistent with current report layout."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check service/API/frontend data flow."}

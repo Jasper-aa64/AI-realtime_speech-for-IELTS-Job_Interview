@@ -107,6 +107,7 @@ Writing:
 
 ```text
 GET  /api/writing/summary
+GET  /api/writing/reports
 GET  /api/writing/prompts
 POST /api/writing/prompts/random
 POST /api/writing/entries
@@ -115,6 +116,10 @@ POST /api/writing/entries/{entry_id}/score
 POST /api/writing/entries/{entry_id}/score-task
 ```
 
+`/summary` remains the calendar/check-in API for `每日写作`.
+`/reports` is the dedicated writing history list API for `写作报告`; it returns
+owner-scoped compact report items plus the latest related `writing_score`
+`ai_task` summary, with optional `limit`, `status`, and `task_type` filters.
 `/score` keeps the current synchronous fallback-compatible behavior.
 `/score-task` creates a refresh-safe billable AI task for later worker
 execution and returns the same task on duplicate submits for the same answer.
@@ -134,11 +139,12 @@ Writing bridge flow for the later frontend handoff:
 
 1. `GET /api/writing/prompts` or `POST /api/writing/prompts/random` to choose a prompt.
 2. `POST /api/writing/entries` to save the current draft and receive the durable `entry.id`, `prompt_id`, `task_type`, and `word_count`.
-3. `POST /api/writing/entries/{entry_id}/score-task` to create or reuse the billable `writing_score` task for the current answer hash.
-4. `GET /api/writing/entries/{entry_id}` to poll the bridge payload after refresh; it always returns the entry plus the latest related `ai_task`.
-5. `POST /api/ai/tasks/{task_id}/cancel/` only while the task is still `pending`; cancelled-pending entries keep `score=null` on the detail payload.
-6. `python backend_django/manage.py run_ai_tasks --limit N` claims the task, runs the provider adapter, and writes the terminal state.
-7. `GET /api/writing/entries/{entry_id}` is the final read surface:
+3. `GET /api/writing/reports` to list compact report history for the report rail without reusing calendar summary data.
+4. `POST /api/writing/entries/{entry_id}/score-task` to create or reuse the billable `writing_score` task for the current answer hash.
+5. `GET /api/writing/entries/{entry_id}` to poll the bridge payload after refresh; it always returns the entry plus the latest related `ai_task`.
+6. `POST /api/ai/tasks/{task_id}/cancel/` only while the task is still `pending`; cancelled-pending entries keep `score=null` on the detail payload.
+7. `python backend_django/manage.py run_ai_tasks --limit N` claims the task, runs the provider adapter, and writes the terminal state.
+8. `GET /api/writing/entries/{entry_id}` is the final read surface:
    - `ai_task.status=pending` or `cancelled` while no score exists yet;
    - `ai_task.status=fallback` with `score.backend=fallback` after local fallback scoring;
    - `ai_task.status=succeeded` with `score.backend=ai` after successful usage settlement.

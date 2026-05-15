@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .services import WritingError, create_score_task, get_entry, list_prompts, random_prompt, save_entry, score_entry, writing_summary
+from .services import WritingError, create_score_task, get_entry, list_prompts, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
 def read_json_body(request) -> dict:
@@ -34,6 +34,17 @@ def summary(request):
         return auth_error
     try:
         return JsonResponse(writing_summary(request.user, request.GET.get("month")))
+    except WritingError as exc:
+        return writing_error(exc)
+
+
+@require_GET
+def reports(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(writing_reports(request.user, request.GET))
     except WritingError as exc:
         return writing_error(exc)
 

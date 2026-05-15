@@ -10,6 +10,8 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import DateTimeField, F, OuterRef, Subquery
+from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 
 from apps.ai.models import AITask
@@ -20,6 +22,8 @@ from .models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingS
 
 
 DEFAULT_WRITING_SCORE_RESERVATION_U = 1_000_000
+DEFAULT_WRITING_REPORT_LIMIT = 50
+MAX_WRITING_REPORT_LIMIT = 100
 WRITING_TASK_LABELS = {
     WritingPrompt.TaskType.TASK1_ACADEMIC: "Task 1 Academic",
     WritingPrompt.TaskType.TASK2: "Task 2",
@@ -144,6 +148,25 @@ def month_bounds(month_value: str | None):
     return timezone.datetime(year, month, 1).date(), timezone.datetime(year, month, day_count).date()
 
 
+def report_limit(value: Any) -> int:
+    try:
+        limit = int(str(value or "").strip() or DEFAULT_WRITING_REPORT_LIMIT)
+    except (TypeError, ValueError):
+        return DEFAULT_WRITING_REPORT_LIMIT
+    if limit <= 0:
+        return DEFAULT_WRITING_REPORT_LIMIT
+    return min(limit, MAX_WRITING_REPORT_LIMIT)
+
+
+def report_status(value: Any) -> str:
+    status = str(value or "").strip().lower()
+    if not status:
+        return ""
+    if status not in {WritingEntry.Status.SAVED, WritingEntry.Status.SCORED}:
+        raise WritingError("Unknown writing status")
+    return status
+
+
 def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
     if not score:
         return None
@@ -159,6 +182,31 @@ def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
         "backend": score.source,
         "billing_usage": score.billing_metadata,
         "scored_at": score.scored_at.isoformat() if score.scored_at else None,
+    }
+
+
+def task_summary_payload(task: AITask | None) -> dict[str, Any] | None:
+    if not task:
+        return None
+    return {
+        "id": task.task_id,
+        "task_type": task.task_type,
+        "provider": task.provider,
+        "model": task.model,
+        "status": task.status,
+        "progress_percent": task.progress_percent,
+        "attempt_count": task.attempt_count,
+        "max_attempts": task.max_attempts,
+        "related_type": task.related_type,
+        "related_id": task.related_id,
+        "error_code": task.error_code,
+        "error_message": task.error_message,
+        "fallback_reason": task.fallback_reason,
+        "available_at": task.available_at.isoformat() if task.available_at else None,
+        "started_at": task.started_at.isoformat() if task.started_at else None,
+        "finished_at": task.finished_at.isoformat() if task.finished_at else None,
+        "created_at": task.created_at.isoformat(),
+        "updated_at": task.updated_at.isoformat(),
     }
 
 
@@ -220,10 +268,11 @@ def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str,
 
 def compact_entry_payload(entry: WritingEntry) -> dict[str, Any]:
     score = getattr(entry, "score", None)
+    display_at = getattr(entry, "latest_activity_at", None) or entry.updated_at
     return {
         "id": entry.entry_id,
         "practice_date": entry.practice_date.isoformat(),
-        "display_time": entry.updated_at.astimezone(timezone.get_current_timezone()).strftime("%Y-%m-%d %H:%M"),
+        "display_time": display_at.astimezone(timezone.get_current_timezone()).strftime("%Y-%m-%d %H:%M"),
         "task_type": entry.task_type,
         "task_label": WRITING_TASK_LABELS.get(entry.task_type, "Writing"),
         "title": entry.title or (entry.prompt.title if entry.prompt_id else "Writing"),
@@ -231,6 +280,32 @@ def compact_entry_payload(entry: WritingEntry) -> dict[str, Any]:
         "status": entry.status,
         "overall_band": float(score.overall_band) if score and score.overall_band is not None else None,
     }
+
+
+def report_entry_payload(entry: WritingEntry, ai_task: AITask | None = None) -> dict[str, Any]:
+    return {
+        **compact_entry_payload(entry),
+        "ai_task": task_summary_payload(ai_task),
+    }
+
+
+def latest_writing_tasks_for_entries(user, entry_ids: list[str]) -> dict[str, AITask]:
+    if not entry_ids:
+        return {}
+    tasks = (
+        AITask.objects.select_related("billing_reservation", "usage")
+        .filter(
+            user=user,
+            task_type="writing_score",
+            related_type="writing_entry",
+            related_id__in=entry_ids,
+        )
+        .order_by("related_id", "-created_at", "-updated_at")
+    )
+    latest: dict[str, AITask] = {}
+    for task in tasks:
+        latest.setdefault(task.related_id, task)
+    return latest
 
 
 def writing_summary(user, month_value: str | None = None) -> dict[str, Any]:
@@ -279,6 +354,50 @@ def writing_summary(user, month_value: str | None = None) -> dict[str, Any]:
         },
         "recent_entries": [compact_entry_payload(entry) for entry in entries[:20]],
         "today_entry": today_entry,
+    }
+
+
+def writing_reports(user, query: dict[str, Any] | None = None) -> dict[str, Any]:
+    query = query or {}
+    limit = report_limit(query.get("limit"))
+    status = report_status(query.get("status"))
+    task_type_value = str(query.get("task_type") or "").strip()
+    task_type = normalize_task_type(task_type_value) if task_type_value else ""
+
+    latest_task_updated_at = Subquery(
+        AITask.objects.filter(
+            user=user,
+            task_type="writing_score",
+            related_type="writing_entry",
+            related_id=OuterRef("entry_id"),
+        )
+        .order_by("-created_at", "-updated_at")
+        .values("updated_at")[:1],
+        output_field=DateTimeField(),
+    )
+    queryset = (
+        WritingEntry.objects.filter(user=user)
+        .select_related("prompt", "score")
+        .annotate(latest_task_updated_at=latest_task_updated_at)
+        .annotate(
+            latest_activity_at=Greatest(
+                F("updated_at"),
+                Coalesce("latest_task_updated_at", F("updated_at")),
+            )
+        )
+    )
+    if status:
+        queryset = queryset.filter(status=status)
+    if task_type:
+        queryset = queryset.filter(task_type=task_type)
+    queryset = queryset.order_by("-latest_activity_at", "-updated_at", "-created_at")
+
+    count = queryset.count()
+    entries = list(queryset[:limit])
+    task_map = latest_writing_tasks_for_entries(user, [entry.entry_id for entry in entries])
+    return {
+        "items": [report_entry_payload(entry, task_map.get(entry.entry_id)) for entry in entries],
+        "count": count,
     }
 
 
