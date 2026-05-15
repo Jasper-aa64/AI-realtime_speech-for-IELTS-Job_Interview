@@ -280,3 +280,36 @@ Archived the Django writing frontend bridge after committing the old Web score-t
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Django AI worker loop
+
+**Date**: 2026-05-15
+**Task**: Django AI worker loop
+**Branch**: `main`
+
+### Summary
+
+Added a reusable Django AI task batch runner and continuous run_ai_worker command, covered writing-score loop, idle, stop-file, and stale-recovery behavior with tests, and documented the worker boundary.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `41f1e0e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
