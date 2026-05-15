@@ -511,3 +511,36 @@ Implement POST /api/attempts/start for speaking practice sessions with all modes
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: Add Django speaking audio upload endpoint
+
+**Date**: 2026-05-16
+**Task**: Add Django speaking audio upload endpoint
+**Branch**: `main`
+
+### Summary
+
+Design and implement Django POST /api/attempts/{id}/turns/{id}/audio and GET /api/audio/{id}/{id}/candidate with owner-scoped upload, validation, and retrieval.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d984b0c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
