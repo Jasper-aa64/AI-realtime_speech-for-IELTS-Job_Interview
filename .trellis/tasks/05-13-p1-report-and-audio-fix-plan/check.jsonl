@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify backend behavior against API and fallback contracts."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify report rendering and browser-side behavior against UI contracts."}

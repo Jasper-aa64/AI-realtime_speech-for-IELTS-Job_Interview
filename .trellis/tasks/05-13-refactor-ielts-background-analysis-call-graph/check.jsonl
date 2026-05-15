@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Check report payload conventions."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check backend fallback and API boundary behavior."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Check report rendering conventions."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check frontend syntax and Markdown rendering requirements."}

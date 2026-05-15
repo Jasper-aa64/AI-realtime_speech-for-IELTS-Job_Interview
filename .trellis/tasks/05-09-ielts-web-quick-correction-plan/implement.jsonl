@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "IELTS Web UI contracts, practice states, history rail, and required checks"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Plain JS/CSS/HTML structure and stable practice DOM/layout guidance"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "IELTS Web API attempt/history/scoring contracts and required backend behavior"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "API error response guidance"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Feature spans backend attempt data, API responses, frontend rendering, and tests"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Search-before-change and shared helper guidance"}

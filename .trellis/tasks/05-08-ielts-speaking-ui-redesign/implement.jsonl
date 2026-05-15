@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend/UI conventions for the dedicated IELTS Qt interface."}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Guide placement of new UI files and target-specific widgets."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "UI composition guidance for IELTS practice panes and controls."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Needed for UI state across P1/P2/P3/full exam flows."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality expectations for desktop UI behavior and visual polish."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "IELTS backend contracts, realtime fallback, reports, and CMake test requirements."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "The UI spans Qt controls, IELTS session state, realtime/audio services, reports, and scoring."}
+{"file": ".trellis/tasks/05-08-ielts-speaking-ui-redesign/prd.md", "reason": "Product requirements and acceptance criteria for the IELTS UI redesign."}

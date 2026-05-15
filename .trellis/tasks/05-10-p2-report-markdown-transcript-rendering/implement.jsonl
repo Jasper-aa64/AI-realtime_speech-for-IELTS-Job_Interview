@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend scope touches web/ielts_server.py report generation."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend scope touches web/static/app.js report rendering."}

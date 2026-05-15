@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "IELTS report payload conventions and backend scoring boundaries."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend deterministic fallback and IELTS Web API boundary requirements."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Report rendering conventions for per-turn Band 7 and AI guidance."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend report Markdown and compatibility requirements."}

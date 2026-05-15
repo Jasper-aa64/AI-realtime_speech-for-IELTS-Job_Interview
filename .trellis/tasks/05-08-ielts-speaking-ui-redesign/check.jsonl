@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend/UI conventions for checking the IELTS Qt interface."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Review visual quality, usability, and UI regression risk."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Review state transitions across P1/P2/P3/full exam UI modes."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify UI does not violate IELTS backend contracts or break CLI/realtime/report behavior."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check cross-layer behavior from UI controls through backend session/report/scoring flow."}
+{"file": ".trellis/tasks/05-08-ielts-speaking-ui-redesign/prd.md", "reason": "Acceptance criteria for final review."}
