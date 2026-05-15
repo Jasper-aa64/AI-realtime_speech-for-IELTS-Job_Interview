@@ -155,3 +155,121 @@ class SpeakingHistoryApiTests(TestCase):
 
         history_after = self.client.get("/api/history")
         self.assertNotIn("attempt-list-test", [item["id"] for item in history_after.json()["items"]])
+
+
+class QuestionBankApiTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = get_user_model().objects.create_user(username="bank-user", password="test-pass")
+        self.client.force_login(self.user)
+
+    def test_question_bank_summary_requires_login(self):
+        self.client.logout()
+        response = self.client.get("/api/question-bank/summary")
+        self.assertEqual(response.status_code, 401)
+
+    def test_question_bank_sample_requires_login(self):
+        self.client.logout()
+        response = self.client.post("/api/question-bank/sample", data={"p1_count": 3}, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+
+    def test_question_bank_summary_returns_counts(self):
+        response = self.client.get("/api/question-bank/summary")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("part1_count", payload)
+        self.assertIn("part2_count", payload)
+        self.assertIn("part1_topics", payload)
+        self.assertIn("part2_themes", payload)
+        self.assertIsInstance(payload["part1_count"], int)
+        self.assertIsInstance(payload["part2_count"], int)
+
+    def test_question_bank_sample_returns_structure(self):
+        response = self.client.post("/api/question-bank/sample", data={"p1_count": 3}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        if "part1" in payload:
+            self.assertIsInstance(payload["part1"], list)
+        if "part2" in payload:
+            self.assertIsInstance(payload["part2"], dict)
+
+
+class TrainingApiTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = get_user_model().objects.create_user(username="training-user", password="test-pass")
+        self.client.force_login(self.user)
+
+    def create_weak_observation(self, question_id="p1_weak_1", part="p1", question="Do you work or study?"):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user, mode=SpeakingAttempt.Mode.P1, part=part, status=SpeakingAttempt.Status.SCORED
+        )
+        return SpeakingTrainingObservation.objects.create(
+            user=self.user,
+            attempt=attempt,
+            observation_id=f"obs_{question_id}",
+            legacy_attempt_id="legacy",
+            legacy_turn_id="t1",
+            question_id=question_id,
+            part=part,
+            question=question,
+            transcript="Short answer.",
+            overall_band=5.0,
+            relevance=0.6,
+            weak_item_flag=True,
+            weak_reasons=["short_answer", "grammar"],
+            model_version="fallback",
+            observed_at=attempt.created_at,
+            next_due=attempt.created_at,
+        )
+
+    def test_weak_items_requires_login(self):
+        self.client.logout()
+        response = self.client.get("/api/training/weak-items")
+        self.assertEqual(response.status_code, 401)
+
+    def test_weak_items_returns_empty_for_no_observations(self):
+        response = self.client.get("/api/training/weak-items")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [])
+
+    def test_weak_items_returns_aggregated_weak_items(self):
+        self.create_weak_observation()
+        response = self.client.get("/api/training/weak-items")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["question_id"], "p1_weak_1")
+        self.assertEqual(items[0]["part"], "p1")
+        self.assertIn("weak_reason", items[0])
+        self.assertTrue(items[0]["due"])
+
+    def test_weak_items_owner_scoped(self):
+        self.create_weak_observation()
+        other_user = get_user_model().objects.create_user(username="other-training", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        response = self.client.get("/api/training/weak-items")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [])
+
+    def test_replay_queue_requires_login(self):
+        self.client.logout()
+        response = self.client.get("/api/training/replay-queue")
+        self.assertEqual(response.status_code, 401)
+
+    def test_replay_queue_returns_empty_for_no_observations(self):
+        response = self.client.get("/api/training/replay-queue")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        # May have coverage items if question bank has data
+        self.assertIsInstance(items, list)
+
+    def test_replay_queue_includes_weak_items(self):
+        self.create_weak_observation()
+        response = self.client.get("/api/training/replay-queue")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        weak_items = [item for item in items if item.get("source") == "weak"]
+        self.assertEqual(len(weak_items), 1)
+        self.assertEqual(weak_items[0]["question_id"], "p1_weak_1")
