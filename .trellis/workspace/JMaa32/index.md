@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
+- **Total Sessions**: 8
 - **Last Active**: 2026-05-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~249 | Active |
+| `journal-1.md` | ~282 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-05-15 | Finish Django writing frontend bridge | `07a1acc` | `main` |
 | 7 | 2026-05-15 | Django writing frontend bridge milestone | - | `main` |
 | 6 | 2026-05-15 | Django migration backend stabilization | `e459018`, `706b424`, `1085b0e`, `ad0cd5b`, `f89bfb6`, `6edb061`, `d513ecc`, `4f3cd7e`, `c7aa533` | `main` |
 | 5 | 2026-05-10 | Implement IELTS docs 1.1-1.4 | `e1ab8ad`, `028eafc`, `d98b17e` | `main` |

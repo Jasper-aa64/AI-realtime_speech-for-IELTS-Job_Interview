@@ -247,3 +247,36 @@ Implemented logged-in writing score-task bridge in the old Web UI, added old-ori
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Finish Django writing frontend bridge
+
+**Date**: 2026-05-15
+**Task**: Finish Django writing frontend bridge
+**Branch**: `main`
+
+### Summary
+
+Archived the Django writing frontend bridge after committing the old Web score-task bridge, proxy coverage, frontend spec update, tests, and browser verification.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `07a1acc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
