@@ -41,3 +41,6 @@ reprocess_report.py
 
 # Django local runtime
 backend_django/db.sqlite3
+
+# Django media files
+media/

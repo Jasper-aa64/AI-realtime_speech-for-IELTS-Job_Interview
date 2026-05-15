@@ -379,3 +379,160 @@ class TrainingApiTests(TestCase):
         weak_items = [item for item in items if item.get("source") == "weak"]
         self.assertEqual(len(weak_items), 1)
         self.assertEqual(weak_items[0]["question_id"], "p1_weak_1")
+
+
+class TurnAudioUploadApiTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = get_user_model().objects.create_user(username="audio-user", password="test-pass")
+        self.client.force_login(self.user)
+
+    def create_attempt_with_turn(self, attempt_id="audio-attempt-1"):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id=attempt_id,
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=1,
+            part="p1",
+            question="What is your full name?",
+        )
+        return attempt.attempt_id, turn.turn_id
+
+    def test_audio_upload_requires_login(self):
+        self.client.logout()
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="test-attempt",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        audio_file = SimpleUploadedFile("audio.webm", b"fake audio", content_type="audio/webm")
+        response = self.client.post(
+            f"/api/attempts/{attempt.attempt_id}/turns/t1/audio",
+            {"audio": audio_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_audio_upload_creates_file(self):
+        attempt_id, turn_id = self.create_attempt_with_turn()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        audio_data = b"fake audio webm content for testing"
+        audio_file = SimpleUploadedFile("audio.webm", audio_data, content_type="audio/webm")
+        response = self.client.post(
+            f"/api/attempts/{attempt_id}/turns/{turn_id}/audio",
+            {"audio": audio_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload.get("ok"))
+        self.assertIn("audio", payload)
+        audio = payload["audio"]
+        self.assertIn("path", audio)
+        self.assertEqual(audio["content_type"], "audio/webm")
+        self.assertEqual(audio["bytes"], len(audio_data))
+        self.assertEqual(audio["url"], f"/api/audio/{attempt_id}/{turn_id}/candidate")
+
+        turn = SpeakingTurn.objects.filter(attempt__attempt_id=attempt_id, turn_id=turn_id).first()
+        self.assertIsNotNone(turn)
+        self.assertTrue(turn.audio_path)
+        self.assertEqual(turn.metadata.get("audio_content_type"), "audio/webm")
+
+    def test_audio_upload_owner_scoped(self):
+        attempt_id, turn_id = self.create_attempt_with_turn()
+        other_user = get_user_model().objects.create_user(username="other-audio", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        audio_file = SimpleUploadedFile("audio.webm", b"other user audio", content_type="audio/webm")
+        response = self.client.post(
+            f"/api/attempts/{attempt_id}/turns/{turn_id}/audio",
+            {"audio": audio_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_audio_upload_invalid_attempt_returns_404(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        audio_file = SimpleUploadedFile("audio.webm", b"fake audio", content_type="audio/webm")
+        response = self.client.post(
+            "/api/attempts/nonexistent/turns/t1/audio",
+            {"audio": audio_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_audio_upload_invalid_turn_returns_404(self):
+        attempt_id, _turn_id = self.create_attempt_with_turn()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        audio_file = SimpleUploadedFile("audio.webm", b"fake audio", content_type="audio/webm")
+        response = self.client.post(
+            f"/api/attempts/{attempt_id}/turns/nonexistent/audio",
+            {"audio": audio_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_audio_upload_invalid_content_type_returns_400(self):
+        attempt_id, turn_id = self.create_attempt_with_turn()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        audio_file = SimpleUploadedFile("audio.txt", b"fake audio", content_type="text/plain")
+        response = self.client.post(
+            f"/api/attempts/{attempt_id}/turns/{turn_id}/audio",
+            {"audio": audio_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unsupported audio content type", response.json().get("error", ""))
+
+    def test_audio_retrieval_requires_login(self):
+        self.client.logout()
+        response = self.client.get("/api/audio/test-id/t1/candidate")
+        self.assertEqual(response.status_code, 401)
+
+    def test_audio_retrieval_returns_file(self):
+        attempt_id, turn_id = self.create_attempt_with_turn()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        audio_data = b"fake audio webm content for retrieval test"
+        audio_file = SimpleUploadedFile("audio.webm", audio_data, content_type="audio/webm")
+        upload_response = self.client.post(
+            f"/api/attempts/{attempt_id}/turns/{turn_id}/audio",
+            {"audio": audio_file},
+            format="multipart",
+        )
+        self.assertEqual(upload_response.status_code, 200)
+
+        response = self.client.get(f"/api/audio/{attempt_id}/{turn_id}/candidate")
+        self.assertEqual(response.status_code, 200)
+        retrieved_data = b"".join(chunk for chunk in response.streaming_content)
+        self.assertEqual(retrieved_data, audio_data)
+
+    def test_audio_retrieval_owner_scoped(self):
+        attempt_id, turn_id = self.create_attempt_with_turn()
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        audio_file = SimpleUploadedFile("audio.webm", b"fake audio", content_type="audio/webm")
+        self.client.post(
+            f"/api/attempts/{attempt_id}/turns/{turn_id}/audio",
+            {"audio": audio_file},
+            format="multipart",
+        )
+        other_user = get_user_model().objects.create_user(username="other-retrieve", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        response = self.client.get(f"/api/audio/{attempt_id}/{turn_id}/candidate")
+        self.assertEqual(response.status_code, 404)
+
+    def test_audio_retrieval_nonexistent_returns_404(self):
+        response = self.client.get("/api/audio/nonexistent/t1/candidate")
+        self.assertEqual(response.status_code, 404)

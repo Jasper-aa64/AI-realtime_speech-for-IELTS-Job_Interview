@@ -1,15 +1,17 @@
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .services import (
     SpeakingError,
     delete_attempt,
     detail,
+    get_turn_audio_path,
     history,
     question_bank_sample,
     question_bank_summary,
     replay_queue,
     start_attempt,
+    upload_turn_audio,
     weak_items,
 )
 
@@ -109,3 +111,35 @@ def attempt_start_view(request):
         return JsonResponse(attempt)
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["POST"])
+def turn_audio_upload_view(request, attempt_id: str, turn_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    if not request.FILES.get('audio'):
+        audio_file = request.FILES.get('file')
+    else:
+        audio_file = request.FILES.get('audio')
+    if not audio_file:
+        return JsonResponse({"error": "No audio file provided"}, status=400)
+    try:
+        result = upload_turn_audio(request.user, attempt_id, turn_id, audio_file)
+        return JsonResponse(result)
+    except SpeakingError as exc:
+        msg = str(exc)
+        if "not found" in msg.lower():
+            return JsonResponse({"error": msg}, status=404)
+        return JsonResponse({"error": msg}, status=400)
+
+
+@require_GET
+def turn_audio_candidate_view(request, attempt_id: str, turn_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    audio_path = get_turn_audio_path(request.user, attempt_id, turn_id)
+    if not audio_path or not audio_path.exists():
+        return JsonResponse({"error": "Audio not found"}, status=404)
+    return FileResponse(open(audio_path, 'rb'), content_type='application/octet-stream')

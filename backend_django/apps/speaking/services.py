@@ -431,6 +431,19 @@ def _build_p1_turns(total: int = P1_TURN_COUNT, display_total: int | None = None
     ]
     if len(ordinary_pool) < remaining_count:
         ordinary_pool = bank.p1
+    if not ordinary_pool:
+        ordinary_pool = [
+            {"topic": "general", "question": "What do you like to do in your free time?"},
+            {"topic": "general", "question": "Do you prefer mornings or evenings?"},
+            {"topic": "general", "question": "Tell me about your hometown."},
+            {"topic": "general", "question": "What kind of music do you enjoy?"},
+            {"topic": "general", "question": "Do you like traveling?"},
+            {"topic": "general", "question": "What is your favorite food?"},
+            {"topic": "general", "question": "How do you usually spend your weekends?"},
+            {"topic": "general", "question": "Do you prefer reading or watching movies?"},
+            {"topic": "general", "question": "What is the weather like in your country?"},
+            {"topic": "general", "question": "Do you have any hobbies?"},
+        ]
     ordinary_questions = random.sample(ordinary_pool, min(remaining_count, len(ordinary_pool)))
     turn_items = uncounted_intro_items + countable_intro_items + ordinary_questions
     turns: list[dict[str, Any]] = []
@@ -607,4 +620,104 @@ def start_attempt(user, payload: dict[str, Any]) -> dict[str, Any]:
         "ai_coaching": "",
         **metadata,
     }
+    return response
+
+
+# --- Audio Upload ---
+
+MAX_AUDIO_BYTES = 25 * 1024 * 1024
+
+
+def upload_turn_audio(user, attempt_id: str, turn_id: str, audio_file) -> dict[str, Any]:
+    """Upload audio for a speaking turn.
+
+    Args:
+        user: The authenticated user
+        attempt_id: The attempt ID
+        turn_id: The turn ID
+        audio_file: Django UploadedFile object
+
+    Returns:
+        dict with 'ok' and 'audio' keys
+
+    Raises:
+        SpeakingError: If validation fails or attempt/turn not found
+    """
+    attempt = SpeakingAttempt.objects.filter(user=user, attempt_id=attempt_id).first()
+    if not attempt:
+        raise SpeakingError("Attempt not found")
+    if attempt.status == SpeakingAttempt.Status.ABORTED:
+        raise SpeakingError("Aborted attempts cannot accept audio")
+
+    turn = SpeakingTurn.objects.filter(attempt=attempt, turn_id=turn_id).first()
+    if not turn:
+        raise SpeakingError("Turn not found")
+
+    content_type = getattr(audio_file, 'content_type', '') or ''
+    if not (content_type.startswith('audio/') or content_type == 'application/octet-stream'):
+        raise SpeakingError(f"Unsupported audio content type: {content_type}")
+
+    audio_file.seek(0, 2)
+    size = audio_file.tell()
+    audio_file.seek(0)
+
+    if size <= 0:
+        raise SpeakingError("Audio upload is empty")
+    if size > MAX_AUDIO_BYTES:
+        raise SpeakingError("Audio upload exceeds 25 MB")
+
+    import mimetypes
+    extension = mimetypes.guess_extension(content_type) or '.webm'
+    if extension == '.weba':
+        extension = '.webm'
+
+    media_root = Path(settings.MEDIA_ROOT)
+    audio_dir = media_root / 'audio'
+    audio_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{attempt_id}_{turn_id}{extension}"
+    relative_path = f"audio/{filename}"
+    full_path = media_root / relative_path
+
+    with open(full_path, 'wb') as dest:
+        for chunk in audio_file.chunks():
+            dest.write(chunk)
+
+    turn.audio_path = relative_path
+    turn.metadata['audio_content_type'] = content_type
+    turn.metadata['audio_bytes'] = size
+    turn.metadata['audio_uploaded_at'] = timezone.now().isoformat()
+    turn.save(update_fields=['audio_path', 'metadata'])
+
+    return {
+        "ok": True,
+        "audio": {
+            "path": str(full_path),
+            "content_type": content_type,
+            "bytes": size,
+            "duration_seconds": None,
+            "url": f"/api/audio/{attempt_id}/{turn_id}/candidate",
+        },
+    }
+
+
+def get_turn_audio_path(user, attempt_id: str, turn_id: str) -> Path | None:
+    """Get the audio file path for a turn.
+
+    Args:
+        user: The authenticated user
+        attempt_id: The attempt ID
+        turn_id: The turn ID
+
+    Returns:
+        Path to audio file or None if not found
+    """
+    turn = (
+        SpeakingTurn.objects
+        .filter(attempt__user=user, attempt__attempt_id=attempt_id, turn_id=turn_id)
+        .first()
+    )
+    if not turn or not turn.audio_path:
+        return None
+    return Path(settings.MEDIA_ROOT) / turn.audio_path
     return response
