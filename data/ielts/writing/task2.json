@@ -1,0 +1,41 @@
+{
+  "task_type": "task2",
+  "prompts": [
+    {
+      "id": "task2_technology_learning_001",
+      "title": "Technology And Learning",
+      "category": "opinion",
+      "prompt": "Some people think that technology has made learning easier and more effective, while others believe it has created more distractions.\n\nDiscuss both views and give your own opinion."
+    },
+    {
+      "id": "task2_city_transport_002",
+      "title": "Public Transport",
+      "category": "problem_solution",
+      "prompt": "Many large cities suffer from traffic congestion and air pollution.\n\nWhat are the main causes of these problems, and what measures could be taken to solve them?"
+    },
+    {
+      "id": "task2_work_life_balance_003",
+      "title": "Work-Life Balance",
+      "category": "advantages_disadvantages",
+      "prompt": "In many countries, more people are working from home instead of travelling to an office every day.\n\nDo the advantages of this development outweigh the disadvantages?"
+    },
+    {
+      "id": "task2_education_practical_skills_004",
+      "title": "Practical Skills In Education",
+      "category": "opinion",
+      "prompt": "Schools should spend more time teaching practical skills, such as financial management and communication, and less time teaching traditional academic subjects.\n\nTo what extent do you agree or disagree?"
+    },
+    {
+      "id": "task2_environment_responsibility_005",
+      "title": "Environmental Responsibility",
+      "category": "discussion",
+      "prompt": "Some people believe that individuals should take responsibility for protecting the environment, while others think governments and large companies should be mainly responsible.\n\nDiscuss both views and give your own opinion."
+    },
+    {
+      "id": "task2_travel_culture_006",
+      "title": "International Travel",
+      "category": "two_part",
+      "prompt": "International travel is becoming cheaper and more common.\n\nWhy is this happening, and do you think it is a positive or negative development?"
+    }
+  ]
+}

@@ -7,13 +7,15 @@ import unittest
 from unittest import mock
 import urllib.error
 import urllib.request
+from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "web"))
-from ielts_server import AppState, IELTSHandler, build_ai_coaching, build_learning_profile, calibrate_realistic_score, clean_band7_output, score_with_codex  # noqa: E402
+import ielts_server  # noqa: E402
+from ielts_server import AppState, IELTSHandler, build_ai_coaching, build_learning_profile, build_overall_review, build_turn_band7_fallback, calibrate_realistic_score, clean_band7_output, score_with_codex, valid_turn_band7, writing_word_count  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,6 +55,12 @@ class IELTSWebServerTest(unittest.TestCase):
             return error.code, json.loads(error.read().decode("utf-8"))
         self.fail("Expected HTTPError")
 
+    def get_response(self, path, headers=None):
+        request = urllib.request.Request(self.base_url + path, headers=headers or {})
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=5) as response:
+            return response.status, dict(response.headers), response.read()
+
     def post_json(self, path, payload):
         request = urllib.request.Request(
             self.base_url + path,
@@ -77,6 +85,17 @@ class IELTSWebServerTest(unittest.TestCase):
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read().decode("utf-8"))
         self.fail("Expected HTTPError")
+
+    def post_response(self, path, payload, headers=None):
+        request = urllib.request.Request(
+            self.base_url + path,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", **(headers or {})},
+            method="POST",
+        )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=5) as response:
+            return response.status, dict(response.headers), json.loads(response.read().decode("utf-8"))
 
     def start_isolated_server(self, name):
         previous_state = IELTSHandler.state
@@ -114,6 +133,188 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("question", sample["part1"][0])
         self.assertIn("title", sample["part2"])
 
+    def test_account_requests_proxy_to_django_and_forward_cookie(self):
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_POST(self):
+                size = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(size).decode("utf-8") if size else "{}"
+                payload = json.loads(raw)
+                if self.path != "/api/accounts/login/":
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body = json.dumps({"user": {"username": payload["username"], "profile": {"full_name": "LiHua", "english_name": "Jasper"}}}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Set-Cookie", "sessionid=fake-session; Path=/; HttpOnly")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        try:
+            with mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url):
+                status, headers, payload = self.post_response(
+                    "/api/accounts/login/",
+                    {"username": "18728445038", "password": "test-pass-123"},
+                )
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["user"]["username"], "18728445038")
+        self.assertIn("sessionid=fake-session", headers.get("Set-Cookie", ""))
+
+    def test_writing_prompt_save_summary_and_fallback_score(self):
+        prompts = self.get_json("/api/writing/prompts?task_type=task1_academic")
+        self.assertGreaterEqual(len(prompts["items"]), 3)
+        self.assertEqual(prompts["items"][0]["task_type"], "task1_academic")
+
+        random_prompt = self.post_json("/api/writing/prompts/random", {"task_type": "task2"})
+        self.assertEqual(random_prompt["task_type"], "task2")
+        answer = (
+            "Technology can make learning easier because students can review lessons at any time. "
+            "However, it can also distract them if they use social media during study. "
+            "In my view, schools should teach students how to use digital tools with clear limits."
+        )
+        saved = self.post_json(
+            "/api/writing/entries",
+            {
+                "task_type": random_prompt["task_type"],
+                "prompt_id": random_prompt["id"],
+                "prompt": random_prompt["prompt"],
+                "title": random_prompt["title"],
+                "answer": answer,
+                "practice_date": "2026-05-14",
+            },
+        )
+        self.assertEqual(saved["status"], "saved")
+        self.assertEqual(saved["word_count"], 41)
+
+        summary = self.get_json("/api/writing/summary?month=2026-05")
+        day = next(item for item in summary["days"] if item["date"] == "2026-05-14")
+        self.assertEqual(day["status"], "saved")
+        self.assertEqual(day["entry_id"], saved["id"])
+        self.assertTrue(any(item["id"] == saved["id"] for item in summary["recent_entries"]))
+
+        scored = self.post_json(f"/api/writing/entries/{saved['id']}/score", {})
+        self.assertEqual(scored["status"], "scored")
+        self.assertEqual(scored["score"]["backend"], "fallback")
+        self.assertIn("AI 评分生成失败", scored["score"]["feedback_markdown"])
+        self.assertIn("语法错误纠正", scored["score"]["feedback_markdown"])
+        self.assertIn("writing_profile", scored)
+        self.assertEqual(scored["writing_profile"]["total_scored"], 1)
+        self.assertIn("profile_tags", scored["score"])
+
+        detail = self.get_json(f"/api/writing/entries/{saved['id']}")
+        self.assertEqual(detail["id"], saved["id"])
+        self.assertEqual(detail["status"], "scored")
+        profile_path = IELTSHandler.state.writing_profile_path(saved["user_id"])
+        self.assertTrue(profile_path.exists())
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        self.assertEqual(profile["total_scored"], 1)
+
+        summary_after = self.get_json("/api/writing/summary?month=2026-05")
+        day_after = next(item for item in summary_after["days"] if item["date"] == "2026-05-14")
+        self.assertEqual(day_after["status"], "scored")
+
+    def test_writing_score_uses_codex_and_billing_usage_when_available(self):
+        previous_disable = os.environ.pop("IELTS_WEB_DISABLE_CODEX", None)
+        base_url, server, thread, previous_state = self.start_isolated_server("writing-codex-score")
+        output = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "message",
+                        "content": json.dumps(
+                            {
+                                "overall_band": 6,
+                                "task_response": 6,
+                                "coherence_cohesion": 6,
+                                "lexical_resource": 6,
+                                "grammatical_range_accuracy": 6,
+                                "feedback_markdown": "- 观点清楚，但主体段还需要更具体的例子。\n- 语法错误纠正：\n  1. 无",
+                                "grammar_corrections": [],
+                            }
+                        ),
+                    }
+                ),
+                json.dumps({"type": "turn.completed", "usage": {"input_tokens": 1000, "cached_input_tokens": 0, "output_tokens": 100, "reasoning_output_tokens": 0}}),
+            ]
+        )
+        try:
+            random_prompt = self.post_json_to(base_url, "/api/writing/prompts/random", {"task_type": "task2"})
+            saved = self.post_json_to(
+                base_url,
+                "/api/writing/entries",
+                {
+                    "task_type": "task2",
+                    "prompt_id": random_prompt["id"],
+                    "prompt": random_prompt["prompt"],
+                    "answer": "I think technology helps students learn because it gives them flexible access to lessons and examples.",
+                    "practice_date": "2026-05-14",
+                },
+            )
+            with mock.patch("ielts_server.shutil.which", return_value="codex"), mock.patch("ielts_server.subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess(["codex", "exec", "--json"], 0, stdout=output, stderr="")
+                scored = self.post_json_to(base_url, f"/api/writing/entries/{saved['id']}/score", {})
+            self.assertEqual(scored["score"]["backend"], "codex")
+            self.assertEqual(scored["score"]["overall_band"], 6.0)
+            self.assertIn("billing_usage", scored["score"])
+            prompt_text = run.call_args.kwargs["input"]
+            self.assertIn("Learner writing profile", prompt_text)
+            self.assertIn("own real writing", prompt_text)
+            wallet = self.get_json_from(base_url, "/api/billing/wallet")
+            self.assertTrue(any(entry["entry_type"] == "settle" and entry["call_id"] == f"writing_score_{saved['id']}" for entry in wallet["entries"]))
+        finally:
+            if previous_disable is not None:
+                os.environ["IELTS_WEB_DISABLE_CODEX"] = previous_disable
+            else:
+                os.environ["IELTS_WEB_DISABLE_CODEX"] = "1"
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            IELTSHandler.state = previous_state
+
+    def test_writing_profile_accumulates_scored_entries(self):
+        prompt = self.post_json("/api/writing/prompts/random", {"task_type": "task2"})
+        first = self.post_json(
+            "/api/writing/entries",
+            {
+                "task_type": "task2",
+                "prompt_id": prompt["id"],
+                "prompt": prompt["prompt"],
+                "answer": "I agree because online tools can help students study after school.",
+                "practice_date": "2026-05-15",
+                "user_id": "writing-profile-test",
+            },
+        )
+        first_scored = self.post_json(f"/api/writing/entries/{first['id']}/score", {})
+        self.assertEqual(first_scored["writing_profile"]["total_scored"], 1)
+        self.assertIn("under_length", first_scored["score"]["profile_tags"])
+
+        second = self.post_json(
+            "/api/writing/entries",
+            {
+                "task_type": "task2",
+                "prompt_id": prompt["id"],
+                "prompt": prompt["prompt"],
+                "answer": " ".join(["This essay explains one clear reason for practice"] * 45),
+                "practice_date": "2026-05-16",
+                "user_id": "writing-profile-test",
+            },
+        )
+        self.assertGreaterEqual(writing_word_count(second["answer"]), 250)
+        second_scored = self.post_json(f"/api/writing/entries/{second['id']}/score", {})
+        self.assertEqual(second_scored["writing_profile"]["total_scored"], 2)
+        self.assertGreaterEqual(second_scored["writing_profile"]["average_overall_band"], 4.0)
+
     def test_score_uses_deterministic_fallback_without_server_cli_env(self):
         payload = self.post_json(
             "/api/score",
@@ -130,10 +331,10 @@ class IELTSWebServerTest(unittest.TestCase):
     def test_overall_band_rounds_to_nearest_half(self):
         from ielts_server import rounded_overall  # noqa: E402
 
-        self.assertEqual(rounded_overall({"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.0, "pronunciation_estimate": 6.24}), 6.0)
-        self.assertEqual(rounded_overall({"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.0, "pronunciation_estimate": 7.0}), 6.5)
-        self.assertEqual(rounded_overall({"fluency_coherence": 6.5, "lexical_resource": 6.5, "grammatical_range": 6.5, "pronunciation_estimate": 6.75}), 6.5)
-        self.assertEqual(rounded_overall({"fluency_coherence": 6.5, "lexical_resource": 6.5, "grammatical_range": 7.0, "pronunciation_estimate": 7.0}), 7.0)
+        self.assertEqual(rounded_overall({"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.0}), 6.0)
+        self.assertEqual(rounded_overall({"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.5}), 6.0)
+        self.assertEqual(rounded_overall({"fluency_coherence": 6.5, "lexical_resource": 6.5, "grammatical_range": 6.5}), 6.5)
+        self.assertEqual(rounded_overall({"fluency_coherence": 6.5, "lexical_resource": 6.5, "grammatical_range": 7.0}), 6.5)
 
     def test_calibration_caps_short_generic_part2_and_keeps_pronunciation_null(self):
         score = calibrate_realistic_score(
@@ -141,7 +342,6 @@ class IELTSWebServerTest(unittest.TestCase):
                 "fluency_coherence": 7.0,
                 "lexical_resource": 7.0,
                 "grammatical_range": 7.0,
-                "pronunciation_estimate": None,
                 "overall_band": 7.0,
                 "feedback": "Clear answer.",
             },
@@ -151,7 +351,6 @@ class IELTSWebServerTest(unittest.TestCase):
         )
         self.assertLessEqual(score["overall_band"], 5.0)
         self.assertLessEqual(score["fluency_coherence"], 5.0)
-        self.assertIsNone(score["pronunciation_estimate"])
         self.assertIn("Part 2 is too short", score["feedback"])
 
     def test_calibration_caps_underdeveloped_part3_discussion(self):
@@ -160,7 +359,6 @@ class IELTSWebServerTest(unittest.TestCase):
                 "fluency_coherence": 7.0,
                 "lexical_resource": 7.0,
                 "grammatical_range": 7.0,
-                "pronunciation_estimate": None,
                 "overall_band": 7.0,
                 "feedback": "Clear opinion.",
             },
@@ -170,7 +368,6 @@ class IELTSWebServerTest(unittest.TestCase):
         )
         self.assertLessEqual(score["overall_band"], 5.5)
         self.assertLessEqual(score["lexical_resource"], 5.5)
-        self.assertIsNone(score["pronunciation_estimate"])
         self.assertIn("Part 3", score["feedback"])
 
     def test_calibration_caps_template_like_part2_more_strictly(self):
@@ -179,7 +376,6 @@ class IELTSWebServerTest(unittest.TestCase):
                 "fluency_coherence": 7.0,
                 "lexical_resource": 7.0,
                 "grammatical_range": 7.0,
-                "pronunciation_estimate": None,
                 "overall_band": 7.0,
                 "feedback": "Fluent but thin.",
             },
@@ -193,10 +389,9 @@ class IELTSWebServerTest(unittest.TestCase):
         )
         self.assertLessEqual(score["overall_band"], 5.0)
         self.assertLessEqual(score["fluency_coherence"], 5.0)
-        self.assertIsNone(score["pronunciation_estimate"])
         self.assertIn("generic or repetitive wording", score["feedback"])
 
-    def test_calibration_keeps_text_only_overall_conservative_without_pronunciation(self):
+    def test_calibration_no_longer_caps_overall_for_missing_pronunciation(self):
         previous_disable = os.environ.pop("IELTS_WEB_DISABLE_CODEX", None)
         output = json.dumps(
             {
@@ -230,9 +425,7 @@ class IELTSWebServerTest(unittest.TestCase):
                     "p3",
                 )
             self.assertEqual(score["backend"], "codex")
-            self.assertIsNone(score["pronunciation_estimate"])
-            self.assertLessEqual(score["overall_band"], 6.0)
-            self.assertIn("pronunciation was not assessed", score["feedback"].lower())
+            self.assertEqual(score["overall_band"], 7.0)
         finally:
             if previous_disable is not None:
                 os.environ["IELTS_WEB_DISABLE_CODEX"] = previous_disable
@@ -245,7 +438,6 @@ class IELTSWebServerTest(unittest.TestCase):
                 "fluency_coherence": 7.0,
                 "lexical_resource": 7.0,
                 "grammatical_range": 7.0,
-                "pronunciation_estimate": None,
                 "overall_band": 7.0,
                 "feedback": "Strong answer.",
             },
@@ -255,7 +447,6 @@ class IELTSWebServerTest(unittest.TestCase):
         )
         self.assertGreaterEqual(score["overall_band"], 6.5)
         self.assertLessEqual(score["overall_band"], 7.0)
-        self.assertIsNone(score["pronunciation_estimate"])
 
     def test_p3_generation_falls_back_without_server_cli_env(self):
         payload = self.post_json("/api/p3/questions", {"theme": "technology_and_society"})
@@ -266,14 +457,19 @@ class IELTSWebServerTest(unittest.TestCase):
     def test_p1_attempt_uses_ten_turns_and_scores_after_completion(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"})
         self.assertEqual(attempt["part"], "p1")
-        self.assertEqual(attempt["candidate"], "jasper")
-        self.assertEqual(len(attempt["turns"]), 10)
+        self.assertEqual(attempt["candidate"], "Jasper")
+        self.assertEqual(len(attempt["turns"]), 11)
+        self.assertEqual(len([turn for turn in attempt["turns"] if turn.get("counts_toward_total")]), 10)
         self.assertEqual(attempt["turns"][0]["question"], "What is your full name?")
         self.assertEqual(attempt["turns"][0]["prompt"]["flow"], "intro")
         self.assertEqual(attempt["turns"][0]["prompt"]["role"], "name")
-        self.assertEqual(attempt["turns"][1]["question"], "Do you work, study at university, or go to school?")
+        self.assertFalse(attempt["turns"][0]["counts_toward_total"])
+        self.assertEqual(attempt["turns"][0]["display_index"], 0)
+        self.assertEqual(attempt["turns"][1]["question"], "Do you work or do you study?")
         self.assertEqual(attempt["turns"][1]["prompt"]["flow"], "intro")
         self.assertEqual(attempt["turns"][1]["prompt"]["role"], "work_study")
+        self.assertTrue(attempt["turns"][1]["counts_toward_total"])
+        self.assertEqual(attempt["turns"][1]["display_index"], 1)
         ordinary_questions = [turn["question"].lower() for turn in attempt["turns"][2:]]
         scattered_work_study = [
             "do you work or are you a full-time student?",
@@ -325,34 +521,35 @@ class IELTSWebServerTest(unittest.TestCase):
                 self.assertFalse(follow_up["prompt"]["counts_toward_total"])
                 self.assertEqual(follow_up["total"], 10)
                 self.assertIn("major", follow_up["question"].lower())
-                self.assertEqual(len(completed["attempt"]["turns"]), 11)
+                self.assertEqual(len(completed["attempt"]["turns"]), 12)
             turn = completed["next_turn"]
         self.assertIsNone(completed["next_turn"])
-        self.assertEqual(len(completed_ids), 11)
+        self.assertEqual(len(completed_ids), 12)
 
         scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {})
         self.assertEqual(scored["status"], "scored")
-        self.assertEqual(scored["pronunciation"]["provider"], "azure")
-        self.assertEqual(scored["pronunciation"]["status"], "not_configured")
-        self.assertIsNone(scored["ielts_score"]["pronunciation_estimate"])
         self.assertIn("criteria_feedback", scored)
         self.assertIn("band7_version", scored)
+        self.assertEqual(scored["band7_version"], "")
         self.assertIn("part_scores", scored)
         self.assertIn("learning_profile", scored)
         self.assertIn("personalized_coaching", scored)
+        self.assertIn("overall_review", scored)
         self.assertIn("habit_tags", scored["learning_profile"])
         self.assertIn("primary_focus", scored["learning_profile"])
         self.assertIn("focus", scored["personalized_coaching"])
         self.assertIn("next_practice", scored["personalized_coaching"])
+        self.assertIn("comment", scored["overall_review"])
+        self.assertIn("review_points", scored["overall_review"])
+        self.assertIn("### 总体点评", scored["overall_review"]["markdown"])
         self.assertIn("p1", scored["part_scores"])
         self.assertEqual(scored["part_scores"]["p1"]["part"], "p1")
         self.assertIn("model_audio", scored)
+        self.assertIsNone(scored["model_audio"])
         self.assertTrue(scored["turns"][0]["band7_version"])
         self.assertTrue(scored["turns"][0]["ai_coaching"])
         self.assertTrue(scored["turns"][0]["upgrade_notes"])
         self.assertIn("model_audio", scored["turns"][0])
-        self.assertIn("estimate", scored["criteria_feedback"]["pronunciation"]["focus"].lower())
-        self.assertIn("estimate", scored["criteria_feedback"]["pronunciation"]["problems"][0].lower())
         self.assertNotIn("china_explanation", scored)
 
         history = self.get_json("/api/history")
@@ -360,6 +557,53 @@ class IELTSWebServerTest(unittest.TestCase):
 
         detail = self.get_json(f"/api/history/{attempt['id']}")
         self.assertEqual(detail["id"], attempt["id"])
+
+    def test_p1_name_intro_uses_settings_names_and_corrects_transcript(self):
+        attempt = self.post_json(
+            "/api/attempts/start",
+            {"part": "p1", "mode": "p1", "full_name": "LiHua", "english_name": "Jasper"},
+        )
+        turn = attempt["turns"][0]
+        self.assertFalse(turn["counts_toward_total"])
+        completed = self.post_json(
+            f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+            {"transcript_raw": "my full name is Foundry you can come in Jasper"},
+        )
+        completed_turn = completed["turn"]
+        self.assertEqual(completed_turn["transcript_cleaned"], "My full name is LiHua, but you can call me Jasper.")
+        self.assertTrue(completed_turn["identity_corrected"])
+        scored = self.complete_remaining_and_score(completed["attempt"], completed["next_turn"])
+        scored_name_turn = scored["turns"][0]
+        self.assertEqual(scored_name_turn["band7_version"], "My full name is LiHua, but you can call me Jasper.")
+
+    def test_p1_work_study_completion_uses_deterministic_followup_without_codex(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p1", "mode": "p1"})
+        turn = attempt["turns"][1]
+        self.assertEqual(turn["prompt"]["role"], "work_study")
+
+        tts_payload = {"provider": "volcengine", "status": "ready", "audio_url": "/api/tts-audio/examiner/follow.mp3"}
+        with (
+            mock.patch("ielts_server.generate_p1_identity_follow_up") as generate_followup,
+            mock.patch("ielts_server.run_codex") as run_codex,
+            mock.patch("ielts_server.volcengine_tts", return_value=tts_payload) as tts,
+            mock.patch("ielts_server.schedule_turn_feedback_generation"),
+        ):
+            completed = self.post_json(
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                {"transcript_raw": "I study computer science at university because I enjoy practical problem solving."},
+            )
+
+        generate_followup.assert_not_called()
+        run_codex.assert_not_called()
+        tts.assert_called_once()
+        followup = completed["next_turn"]
+        self.assertIsNotNone(followup)
+        self.assertEqual(followup["prompt"]["role"], "follow_up")
+        self.assertEqual(followup["prompt"]["backend"], "fallback")
+        self.assertEqual(followup["prompt"]["generation_status"], "skipped_sync_ai")
+        self.assertIn("major", followup["question"].lower())
+        self.assertEqual(followup["examiner_tts"]["provider"], "volcengine")
+        self.assertEqual(followup["examiner_tts"]["status"], "ready")
 
     def test_learning_profile_uses_current_attempt_and_weak_history(self):
         base_url, server, thread, previous_state = self.start_isolated_server("learning-profile")
@@ -375,12 +619,15 @@ class IELTSWebServerTest(unittest.TestCase):
             scored = self.post_json_to(base_url, f"/api/attempts/{attempt['id']}/score", {})
             profile = scored["learning_profile"]
             coaching = scored["personalized_coaching"]
+            review = scored["overall_review"]
             self.assertIn("habit_tags", profile)
             self.assertIn("template_language", profile["habit_tags"])
             self.assertIn("evidence", profile)
             self.assertTrue(profile["evidence"])
             self.assertIn("headline", coaching)
             self.assertIn("next_practice", coaching)
+            self.assertEqual(review["source"], "learning_profile")
+            self.assertTrue(review["review_points"])
         finally:
             server.shutdown()
             server.server_close()
@@ -423,7 +670,6 @@ class IELTSWebServerTest(unittest.TestCase):
                 "fluency_coherence": 4.5,
                 "lexical_resource": 4.5,
                 "grammatical_range": 4.5,
-                "pronunciation_estimate": None,
                 "relevance": 0.9,
                 "weak_item_flag": True,
                 "weak_reason": ["short_answer", "template_language"],
@@ -507,10 +753,23 @@ class IELTSWebServerTest(unittest.TestCase):
             },
         )
 
-        scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {"target_band": 7.5})
+        with mock.patch("ielts_server.turn_feedback_with_codex") as feedback:
+            feedback.return_value = {
+                "band7_version": (
+                    "I would like to describe a neighbour who helped me after I moved house. "
+                    "She showed me where to buy food and how to use the local bus, which made the new area feel much easier to manage. "
+                    "What I appreciated most was that she did not just give me quick directions; she patiently explained the routines in the neighbourhood. "
+                    "Because of that, I felt more confident and settled in much faster than I expected."
+                ),
+                "ai_coaching": "- 这题已经有基本故事线，下一步要把帮助前后的变化说清楚。\n- 语法错误纠正：无",
+            }
+            scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {"target_band": 7.5})
+        feedback.assert_called_once()
         scored_turn = scored["turns"][0]
         self.assertTrue(scored_turn["transcript_cleaned"])
         self.assertTrue(scored_turn["band7_version"])
+        self.assertEqual(scored["band7_version"], "")
+        self.assertIsNone(scored["model_audio"])
         self.assertEqual(scored["target_band"], 7.5)
         self.assertEqual(scored_turn["target_band"], "7.5")
         self.assertTrue(scored_turn["target_band_version"])
@@ -518,16 +777,172 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("\n\n", scored_turn["transcript_markdown"])
         self.assertIn("\n\n", scored_turn["band7_markdown"])
         self.assertIn("neighbour who helped me", scored_turn["transcript_markdown"])
-        self.assertIn("\u8bc1\u636e", scored_turn["ai_coaching"])
-        self.assertIn("\u95ee\u9898\u539f\u56e0", scored_turn["ai_coaching"])
-        self.assertIn("\u66ff\u4ee3\u8868\u8fbe", scored_turn["ai_coaching"])
-        self.assertEqual(scored["pronunciation"]["status"], "not_configured")
-        self.assertIsNone(scored["ielts_score"]["pronunciation_estimate"])
+        self.assertIn("- ", scored_turn["ai_coaching"])
+        self.assertNotIn("AI 辅导生成失败，以下是系统默认建议。", scored_turn["ai_coaching"])
+        self.assertEqual(scored_turn["feedback_generation_backend"], "codex")
+        self.assertIn("语法错误纠正", scored_turn["ai_coaching"])
+        self.assertIn("overall_review", scored)
+
+    def test_p2_score_falls_back_to_default_coaching_when_turn_feedback_codex_fails(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        turn = attempt["turns"][0]
+        self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+        self.post_json(
+            f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+            {
+                "transcript_raw": (
+                    "I want to describe a neighbour who helped me after I moved house. "
+                    "She explained where to buy food and how to use the local bus."
+                )
+            },
+        )
+
+        with mock.patch("ielts_server.turn_feedback_with_codex", side_effect=RuntimeError("codex unavailable")):
+            scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {"target_band": 7.5})
+        scored_turn = scored["turns"][0]
+        self.assertIn("AI 辅导生成失败，以下是系统默认建议。", scored_turn["ai_coaching"])
+        self.assertEqual(scored_turn["feedback_generation_backend"], "fallback")
+        self.assertIn("codex unavailable", scored_turn["feedback_generation_error"])
+
+    def test_fallback_turn_feedback_can_be_regenerated_from_report(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        turn = attempt["turns"][0]
+        self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+        self.post_json(
+            f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+            {
+                "transcript_raw": (
+                    "I want to describe a neighbour who helped me after I moved house. "
+                    "She explained where to buy food and how to use the local bus."
+                )
+            },
+        )
+        with mock.patch("ielts_server.turn_feedback_with_codex", side_effect=RuntimeError("codex unavailable")):
+            scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {"target_band": 7.5})
+        scored_turn = scored["turns"][0]
+        self.assertEqual(scored_turn["feedback_generation_backend"], "fallback")
+
+        with mock.patch("ielts_server.turn_feedback_with_codex") as feedback:
+            feedback.return_value = {
+                "band7_version": (
+                    "I would like to describe a neighbour who helped me after I moved house. "
+                    "She explained the local bus routes and showed me where to buy groceries, so I settled in much faster. "
+                    "Her help made the new area feel friendlier and much less stressful."
+                ),
+                "ai_coaching": "- 这次重新生成后，重点是把故事背景和结果连接起来。\n- 语法错误纠正：无",
+            }
+            regenerated = self.post_json(
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/feedback/regenerate",
+                {},
+            )
+        regenerated_turn = regenerated["turn"]
+        self.assertEqual(regenerated_turn["feedback_generation_backend"], "codex")
+        self.assertNotIn("AI 辅导生成失败，以下是系统默认建议。", regenerated_turn["ai_coaching"])
+        self.assertNotIn("feedback_generation_error", regenerated_turn)
+        saved = self.get_json(f"/api/history/{attempt['id']}")
+        self.assertEqual(saved["turns"][0]["feedback_generation_backend"], "codex")
+
+    def test_missing_transcript_turn_can_be_retranscribed_from_audio(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        turn = attempt["turns"][0]
+        self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+        self.post_json(
+            f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+            {"transcript_raw": "", "transcript_status": "missing"},
+        )
+        scored = self.post_json(f"/api/attempts/{attempt['id']}/score", {"target_band": 7.5})
+        self.assertEqual(scored["turns"][0]["transcript_status"], "missing")
+
+        azure_payload = {
+            "transcript": "I want to describe a helpful neighbour who made my daily life easier.",
+            "pronunciation": {
+                "provider": "azure",
+                "status": "assessed",
+                "pron_score": 72,
+                "accuracy": 70,
+                "fluency": 73,
+                "prosody": 71,
+                "issues": [],
+                "message": "Transcription and pronunciation assessed with Azure Speech.",
+            },
+        }
+        with (
+            mock.patch("ielts_server.transcribe_and_assess_azure", return_value=azure_payload),
+            mock.patch("ielts_server.turn_feedback_with_codex", side_effect=RuntimeError("codex unavailable")),
+        ):
+            regenerated = self.post_json(
+                f"/api/attempts/{attempt['id']}/turns/{turn['id']}/transcript/regenerate",
+                {},
+            )
+
+        regenerated_turn = regenerated["turn"]
+        self.assertEqual(regenerated_turn["transcript_status"], "captured")
+        self.assertEqual(regenerated_turn["transcript_source"], "azure_retranscribe")
+        self.assertIn("helpful neighbour", regenerated_turn["transcript_cleaned"].lower())
+        self.assertEqual(regenerated_turn["pronunciation"]["status"], "assessed")
+
+    def test_missing_transcript_retranscribe_reports_azure_configuration_error(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        turn = attempt["turns"][0]
+        self.upload_audio(attempt["id"], turn["id"], b"fake-webm-audio")
+        self.post_json(
+            f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+            {"transcript_raw": "", "transcript_status": "missing"},
+        )
+        self.post_json(f"/api/attempts/{attempt['id']}/score", {"target_band": 7.5})
+
+        status, payload = self.post_raw(
+            f"/api/attempts/{attempt['id']}/turns/{turn['id']}/transcript/regenerate",
+            "{}",
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("Azure Speech key/region is not configured", payload["error"])
+
+    def test_turn_feedback_regenerate_requires_scored_report(self):
+        attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+        status, payload = self.post_raw(
+            f"/api/attempts/{attempt['id']}/turns/{attempt['turns'][0]['id']}/feedback/regenerate",
+            "{}",
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("not available until scoring", payload["error"])
+
+    def test_turn_complete_does_not_run_feedback_generation_codex(self):
+        base_url, server, thread, previous_state = self.start_isolated_server("complete-no-feedback-generation")
+        transcript = (
+            "I want to describe a neighbour who helped me after I moved house. "
+            "She explained where to buy food and how to use the local bus. "
+            "That made me feel less nervous because the area was new to me."
+        )
+
+        try:
+            with (
+                mock.patch("ielts_server.clean_transcript_with_codex") as clean_ai,
+                mock.patch("ielts_server.run_codex") as run,
+                mock.patch("ielts_server.schedule_turn_feedback_generation") as schedule_feedback,
+            ):
+                attempt = self.post_json_to(base_url, "/api/attempts/start", {"part": "p2", "mode": "p2"})
+                turn = attempt["turns"][0]
+                completed = self.post_json_to(
+                    base_url,
+                    f"/api/attempts/{attempt['id']}/turns/{turn['id']}/complete",
+                    {"transcript_raw": transcript},
+                )
+                clean_ai.assert_not_called()
+                self.assertEqual(completed["turn"]["feedback_generation_status"], "pending")
+                schedule_feedback.assert_not_called()
+                run.assert_not_called()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+            IELTSHandler.state = previous_state
 
     def test_mock_p3_is_generated_after_p2_answer(self):
         attempt = self.post_json("/api/attempts/start", {"part": "mock", "mode": "mock"})
         self.assertEqual(attempt["part"], "mock")
-        self.assertEqual(len(attempt["turns"]), 11)
+        self.assertEqual(len(attempt["turns"]), 12)
+        self.assertEqual(len([turn for turn in attempt["turns"] if turn.get("part") == "p1" and turn.get("counts_toward_total")]), 10)
         self.assertEqual(attempt["p3_generation_status"], "pending_after_p2")
         self.assertFalse(any(turn["part"] == "p3" for turn in attempt["turns"]))
 
@@ -555,8 +970,8 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIsNotNone(completed)
         updated = completed["attempt"]
         self.assertEqual(updated["p3_generation_source"], "p2_answer")
-        self.assertEqual(len(updated["turns"]), 22)
-        self.assertEqual(len([turn for turn in updated["turns"] if turn["part"] == "p1"]), 11)
+        self.assertEqual(len(updated["turns"]), 23)
+        self.assertEqual(len([turn for turn in updated["turns"] if turn["part"] == "p1"]), 12)
         self.assertEqual(len([turn for turn in updated["turns"] if turn["part"] == "p3"]), 10)
         self.assertEqual(completed["next_turn"]["part"], "p3")
 
@@ -568,7 +983,6 @@ class IELTSWebServerTest(unittest.TestCase):
             self.assertIn("fluency_coherence", scored["part_scores"][part])
             self.assertIn("lexical_resource", scored["part_scores"][part])
             self.assertIn("grammatical_range", scored["part_scores"][part])
-            self.assertIn("pronunciation_estimate", scored["part_scores"][part])
         self.assertEqual(scored["part_scores"]["p1"]["part"], "p1")
 
         detail = self.get_json(f"/api/history/{attempt['id']}")
@@ -926,7 +1340,6 @@ class IELTSWebServerTest(unittest.TestCase):
                 )
             self.assertEqual(score["backend"], "codex")
             self.assertLessEqual(score["overall_band"], 5.5)
-            self.assertIsNone(score["pronunciation_estimate"])
             self.assertIn("Calibration", score["feedback"])
         finally:
             if previous_disable is not None:
@@ -963,6 +1376,32 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertNotIn("SYSTEM", cleaned)
         self.assertIn("I usually prefer studying", cleaned)
 
+    def test_p1_band7_fallback_is_question_aware_and_not_generic(self):
+        answer = build_turn_band7_fallback(
+            {"part": "p1", "question": "Do you work or do you study?"},
+            "I study computer science at university because I enjoy practical problem solving.",
+        )
+        self.assertNotIn("quite easy for me to answer", answer.lower())
+        self.assertNotIn("closer to a band", answer.lower())
+        self.assertTrue("study" in answer.lower() or "student" in answer.lower())
+        self.assertIn("computer science", answer.lower())
+
+        preference = build_turn_band7_fallback(
+            {"part": "p1", "question": "Do you prefer studying in the morning or evening?"},
+            "I prefer the morning because my mind is clearer.",
+        )
+        self.assertIn("prefer", preference.lower())
+
+    def test_p1_work_study_followup_band7_can_pass_question_awareness(self):
+        self.assertTrue(valid_turn_band7(
+            "Could you tell me a little more about what you do now?",
+            (
+                "I'm currently doing a software engineering internship, so most of my work is about solving practical coding problems. "
+                "I enjoy it because I can apply what I learn at university to real projects."
+            ),
+            "p1",
+        ))
+
     def test_ai_coaching_fallback_compares_question_transcript_and_band7(self):
         turn = {"question": "What do you enjoy most about your internship?"}
         coaching = build_ai_coaching(
@@ -970,10 +1409,13 @@ class IELTSWebServerTest(unittest.TestCase):
             "It provide me a platform.",
             "I enjoy my internship because it gives me a practical platform to do research and apply what I learn.",
         )
-        self.assertIn("证据", coaching)
-        self.assertIn("问题原因", coaching)
-        self.assertIn("替代表达", coaching)
-        self.assertIn("下一步", coaching)
+        self.assertIn("internship", coaching)
+        self.assertIn("- ", coaching)
+        self.assertIn("AI 辅导生成失败，以下是系统默认建议。", coaching)
+        self.assertNotIn("**证据**", coaching)
+        self.assertNotIn("**问题原因**", coaching)
+        self.assertIn("语法错误纠正", coaching)
+        self.assertLessEqual(len(coaching.splitlines()), 10)
         self.assertIn("internship", coaching)
         self.assertNotIn("Band 7 version", coaching)
 
@@ -990,11 +1432,37 @@ class IELTSWebServerTest(unittest.TestCase):
             "",
             profile,
         )
-        self.assertIn("证据", coaching)
-        self.assertIn("问题原因", coaching)
-        self.assertIn("替代表达", coaching)
-        self.assertIn("下一步", coaching)
+        self.assertIn("- ", coaching)
+        self.assertIn("AI 辅导生成失败，以下是系统默认建议。", coaching)
+        self.assertNotIn("**证据**", coaching)
+        self.assertNotIn("**替代表达**", coaching)
+        self.assertIn("语法错误纠正", coaching)
+        self.assertLessEqual(len(coaching.splitlines()), 10)
         self.assertNotIn("Band 7 version", coaching)
+
+    def test_overall_review_payload_uses_learning_profile_markdown(self):
+        profile = {
+            "primary_focus_text": "这次主要卡在回答展开不够。",
+            "evidence": ["P2 回答约 18 词，需要继续拉长展开。"],
+        }
+        coaching = {
+            "headline": "先补答案展开，不要只停在一句点到为止",
+            "next_practice": ["每题都按“直接回答 + 原因 + 例子 + 一句收尾”练 2 轮。"],
+        }
+        review = build_overall_review(profile, coaching, {"mode": "p2"}, {"overall_band": 5.0})
+        self.assertEqual(review["source"], "learning_profile")
+        self.assertIn("Band 5.0", review["comment"])
+        self.assertIn("review_points", review)
+        self.assertIn("### 总体点评", review["markdown"])
+        self.assertIn("- 每题都按", review["markdown"])
+
+    def test_frontend_overall_review_uses_structured_fields_not_markdown_card(self):
+        app_js = (ROOT / "web" / "static" / "app.js").read_text(encoding="utf-8")
+        section = app_js.split("function overallReviewSection", 1)[1].split("function partScoreBlock", 1)[0]
+        self.assertIn("总体点评", section)
+        self.assertIn("复盘重点", section)
+        self.assertIn("review.markdown", section)
+        self.assertIn("renderMarkdown(markdown)", section)
 
     def test_history_compatibility_with_old_report_payload(self):
         legacy_id = "legacy_scored_attempt"
@@ -1021,7 +1489,6 @@ class IELTSWebServerTest(unittest.TestCase):
                 "fluency_coherence": 6.0,
                 "lexical_resource": 6.0,
                 "grammatical_range": 6.0,
-                "pronunciation_estimate": None,
             },
             "feedback_summary": "Legacy report still works.",
         }
@@ -1036,6 +1503,25 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(payload["provider"], "browser")
         self.assertEqual(payload["status"], "fallback")
         self.assertIsNone(payload["audio_url"])
+
+    def test_tts_audio_endpoint_supports_cache_and_range_requests(self):
+        audio_path = IELTSHandler.state.examiner_audio_dir / "range_test.mp3"
+        audio_path.write_bytes(b"0123456789")
+
+        status, headers, body = self.get_response("/api/tts-audio/examiner/range_test.mp3")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, b"0123456789")
+        self.assertEqual(headers.get("Accept-Ranges"), "bytes")
+        self.assertIn("max-age", headers.get("Cache-Control", ""))
+
+        status, headers, body = self.get_response(
+            "/api/tts-audio/examiner/range_test.mp3",
+            headers={"Range": "bytes=2-5"},
+        )
+        self.assertEqual(status, 206)
+        self.assertEqual(body, b"2345")
+        self.assertEqual(headers.get("Content-Range"), "bytes 2-5/10")
+        self.assertEqual(headers.get("Content-Length"), "4")
 
     def test_audio_upload_rejects_empty_and_non_audio(self):
         attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})

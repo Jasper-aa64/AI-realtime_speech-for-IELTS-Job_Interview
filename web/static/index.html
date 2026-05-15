@@ -15,12 +15,8 @@
       <div class="global-topbar">
         <div class="global-topbar-spacer"></div>
         <div class="global-topbar-actions">
-          <div class="nav-user-global">
-            <div class="user-avatar" id="userAvatarDesktop">J</div>
-            <input id="candidateName" value="Jasper" title="Candidate name">
-          </div>
-          <button class="settings-icon-button" data-view="settings" title="Settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <button class="avatar-settings-button" data-view="settings" title="Settings">
+            <span class="user-avatar" id="userAvatarDesktop">J</span>
           </button>
         </div>
       </div>
@@ -33,21 +29,9 @@
           </div>
           <div class="nav-top-right">
             <div class="nav-user-mobile">
-              <div class="user-avatar" id="userAvatar" title="点击修改名字">J</div>
-            </div>
-            <button class="settings-icon-button-mobile" data-view="settings" title="Settings">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-            </button>
-          </div>
-          <!-- User dropdown panel for mobile -->
-          <div id="userDropdown" class="user-dropdown hidden">
-            <div class="user-dropdown-header">
-              <div class="user-avatar-large" id="userAvatarLarge">J</div>
-              <input id="candidateNameMobileInput" class="user-name-input" value="Jasper" placeholder="输入名字">
-            </div>
-            <div class="user-dropdown-balance">
-              <span class="balance-label">余额</span>
-              <span class="balance-value" id="userBalanceMobile">--</span>
+              <button class="avatar-settings-button" data-view="settings" title="Settings">
+                <span class="user-avatar" id="userAvatar">J</span>
+              </button>
             </div>
           </div>
           <div id="navLockHint" class="nav-lock-hint hidden">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
@@ -56,21 +40,24 @@
             <button class="nav-button" data-view="p1">P1</button>
             <button class="nav-button" data-view="p2">P2</button>
             <button class="nav-button" data-view="p3">P3</button>
-            <button class="nav-button" data-view="history">History</button>
+            <button class="nav-button" data-view="history">口语报告</button>
+            <div class="nav-divider" aria-hidden="true"></div>
+            <button class="nav-button" data-view="writing">每日写作</button>
+            <button class="nav-button" data-view="writingReports">写作报告</button>
           </nav>
         </div>
         <div class="nav-bottom">
           <div class="font-tool" aria-label="Font style">
             <div class="font-tool-label">Typeface</div>
             <div class="font-options" role="group" aria-label="Typeface options">
-              <button type="button" class="font-option active" data-font-style="default" title="Default">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+              <button type="button" class="font-option active" data-font-style="default" title="Helpful & efficient">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
               </button>
-              <button type="button" class="font-option" data-font-style="academic" title="Academic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+              <button type="button" class="font-option" data-font-style="academic" title="Thoughtful & precise">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
               </button>
-              <button type="button" class="font-option" data-font-style="popular" title="Popular">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              <button type="button" class="font-option" data-font-style="popular" title="Creative & vibrant">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
               </button>
             </div>
           </div>
@@ -82,6 +69,16 @@
           <div id="viewTitleBlock">
             <h1 id="viewTitle">Mock</h1>
             <p id="viewSubtitle">Practice flow: P1, P2, then P3 generated from your P2 answer.</p>
+          </div>
+          <div id="settingsNameFields" class="settings-name-fields topbar-name-fields hidden" aria-label="Candidate names">
+            <label>
+              <span>Full name</span>
+              <input id="fullNameInput" value="LiHua" autocomplete="name">
+            </label>
+            <label>
+              <span>English name</span>
+              <input id="englishNameInput" value="Jasper" autocomplete="nickname">
+            </label>
           </div>
         </header>
 
@@ -98,14 +95,14 @@
             </div>
             <div class="exam-actions">
               <div class="font-options mobile-font-options" role="group" aria-label="Typeface options">
-                <button type="button" class="font-option active" data-font-style="default" title="Default">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+                <button type="button" class="font-option active" data-font-style="default" title="Helpful & efficient">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
                 </button>
-                <button type="button" class="font-option" data-font-style="academic" title="Academic">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+                <button type="button" class="font-option" data-font-style="academic" title="Thoughtful & precise">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
                 </button>
-                <button type="button" class="font-option" data-font-style="popular" title="Popular">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                <button type="button" class="font-option" data-font-style="popular" title="Creative & vibrant">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                 </button>
               </div>
             </div>
@@ -120,12 +117,14 @@
                 <label>Choose a topic for Part 3</label>
                 <p>Pick a topic and practice mode before the prompts appear.</p>
               </div>
-              <div class="p3-mode-switch" role="group" aria-label="Part 3 mode">
-                <button type="button" class="p3-mode-option active" data-p3-intensity="normal">Normal</button>
-                <button type="button" class="p3-mode-option" data-p3-intensity="high">High intensity</button>
-              </div>
-              <div class="p3-mode-help" aria-live="polite">
-                Normal keeps one main question per turn. High intensity adds follow-up pressure and faster topic shifts for practice.
+              <div class="p3-mode-row">
+                <div class="p3-mode-switch" role="group" aria-label="Part 3 mode">
+                  <button type="button" class="p3-mode-option active" data-p3-intensity="normal">Normal</button>
+                  <button type="button" class="p3-mode-option" data-p3-intensity="high">High intensity</button>
+                </div>
+                <div class="p3-mode-help" id="p3ModeHelp" aria-live="polite">
+                  每轮一个主问题，适合稳定练习节奏
+                </div>
               </div>
             </div>
             <div class="p3-topic-body">
@@ -153,6 +152,9 @@
                   <span id="recordIcon"></span>
                   <strong id="recordTitle">Start</strong>
                   <small id="recordHint">No typing. Record your answer aloud.</small>
+                  <div id="analyzingDots" class="analyzing-dots hidden">
+                    <span></span><span></span><span></span>
+                  </div>
                 </button>
                 <button id="exitPractice" class="icon-exit-button hidden" type="button" aria-label="Exit practice" title="Exit practice">
                   <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -161,6 +163,7 @@
                 </button>
               </div>
               <div id="recordStatus" class="record-status">Microphone will be requested when recording starts.</div>
+              <div id="dictationStatus" class="dictation-status hidden" aria-live="polite"></div>
               <audio id="candidateAudio" controls class="hidden"></audio>
             </article>
           </div>
@@ -170,24 +173,128 @@
         </section>
 
         <section id="historyPanel" class="panel hidden">
-          <div id="historyTopRail" class="history-top-rail hidden">
-            <span class="history-hint">选择历史练习报告</span>
-            <button type="button" class="history-toggle-btn" title="展开历史列表">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"></path></svg>
-            </button>
-            <button type="button" class="history-close-btn">收起</button>
-            <div id="historyList" class="history-list">No attempts yet.</div>
-          </div>
-          <div class="history-layout">
-            <article id="detailPanel" class="detail-panel">
-              <h2>Attempt Details</h2>
-              <p class="muted">Select a history item to review the full report.</p>
+          <div id="historyList" class="history-list">No attempts yet.</div>
+          <article id="detailPanel" class="detail-panel">
+            <h2>Attempt Details</h2>
+            <p class="muted">Select a history item to review the full report.</p>
+          </article>
+        </section>
+
+        <section id="writingPanel" class="panel writing-panel hidden">
+          <div class="writing-shell">
+            <article class="writing-editor-card">
+              <div class="writing-task-bar">
+                <div class="writing-task-switch" role="group" aria-label="Writing task type">
+                  <button type="button" class="writing-task-option active" data-writing-task="task1_academic">Task 1</button>
+                  <button type="button" class="writing-task-option" data-writing-task="task2">Task 2</button>
+                </div>
+                <div class="writing-actions-row">
+                  <select id="writingPromptSelect" aria-label="选择写作题目"></select>
+                  <button id="writingRandomBtn" class="ghost" type="button">换一道随机题</button>
+                </div>
+              </div>
+              <div class="writing-prompt-card">
+                <div>
+                  <span id="writingPromptType" class="writing-pill">Task 1 Academic</span>
+                  <h2 id="writingPromptTitle">选择一道题开始</h2>
+                </div>
+                <p id="writingPromptText">正在加载写作题库...</p>
+              </div>
+              <label class="writing-answer-label" for="writingAnswer">Your answer</label>
+              <textarea id="writingAnswer" class="writing-answer" spellcheck="true" placeholder="Write your IELTS answer here. 保存免费，AI 评分与辅导会消耗 token。"></textarea>
             </article>
+
+            <aside class="writing-result-card">
+              <div class="writing-card-head">
+                <div>
+                  <span class="section-label">Check-in</span>
+                  <h2 id="writingMonthLabel">本月签到</h2>
+                </div>
+                <button id="writingRefreshBtn" class="writing-icon-button ghost" type="button" title="刷新写作数据" aria-label="刷新写作数据">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M21 12a9 9 0 0 1-9 9 8.6 8.6 0 0 1-6-2.4"></path>
+                    <path d="M3 12a9 9 0 0 1 9-9 8.6 8.6 0 0 1 6 2.4"></path>
+                    <path d="M3 20v-5h5"></path>
+                    <path d="M21 4v5h-5"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="writing-stats-grid">
+                <div><span>本月练习</span><strong id="writingPracticedDays">0</strong></div>
+                <div><span>连续天数</span><strong id="writingStreakDays">0</strong></div>
+                <div><span>已评分</span><strong id="writingScoredCount">0</strong></div>
+              </div>
+              <div id="writingCalendar" class="writing-calendar" aria-label="Writing check-in calendar"></div>
+              <div class="writing-legend">
+                <span><i class="empty"></i>未练习</span>
+                <span><i class="saved"></i>已保存</span>
+                <span><i class="scored"></i>已评分</span>
+              </div>
+              <div id="writingInlineWait" class="writing-inline-wait hidden" role="status" aria-live="polite">
+                <span class="spinner"></span>
+                <div>
+                  <strong id="writingInlineWaitTitle">AI 正在评分与生成辅导</strong>
+                  <p id="writingInlineWaitText">正在分析题目、你的作文和 IELTS 写作评分标准。</p>
+                </div>
+              </div>
+              <div class="writing-footer-row">
+                <div class="writing-status-line">
+                  <strong id="writingWordCount">0 words</strong>
+                  <span id="writingSaveStatus">未保存</span>
+                </div>
+                <div class="writing-submit-row">
+                  <button id="writingSaveBtn" class="ghost" type="button">保存</button>
+                  <button id="writingScoreBtn" type="button">AI 评分与辅导</button>
+                </div>
+              </div>
+              <p class="writing-profile-note">每次 AI 评分与辅导都会记录你的写作表现，用于后续提供更个性化的辅导。请尽量提交自己的真实作文，不要使用 AI 范文或他人文章，这样画像和建议才更准确。</p>
+            </aside>
           </div>
         </section>
 
+        <section id="writingReportsPanel" class="panel writing-reports-panel hidden">
+          <div id="writingReportList" class="history-list writing-report-list">还没有写作记录。</div>
+          <article id="writingReportDetail" class="detail-panel">
+            <h2>写作报告</h2>
+            <p class="muted">选择一条写作记录查看评分与 AI 辅导。</p>
+          </article>
+        </section>
+
         <section id="settingsPanel" class="panel hidden">
+          <div class="settings-page-head">
+            <button id="settingsBackButton" class="settings-back-button hidden" type="button" aria-label="Back to practice">
+              <span aria-hidden="true">←</span>
+              <strong>返回练习</strong>
+            </button>
+          </div>
           <div class="settings-status-grid">
+            <article class="settings-card account-settings-card">
+              <div class="settings-card-head">
+                <div>
+                  <h2>账号</h2>
+                  <p id="accountDetails" class="muted">登录后，Full name / English name 会写入 Django 用户资料。</p>
+                </div>
+                <button type="button" id="accountLogoutBtn" class="ghost">退出</button>
+              </div>
+              <div id="accountStatus" class="settings-metric">检查登录状态...</div>
+              <div id="accountLoginForm" class="account-login-form">
+                <label>
+                  <span>Username / phone</span>
+                  <input id="accountUsername" autocomplete="username" inputmode="text" placeholder="18728445038">
+                </label>
+                <label>
+                  <span>Password</span>
+                  <input id="accountPassword" type="password" autocomplete="current-password" placeholder="test-pass-123">
+                </label>
+                <div class="account-action-row">
+                  <button type="button" id="accountLoginBtn">登录</button>
+                  <button type="button" id="accountRegisterBtn" class="ghost">注册测试账号</button>
+                </div>
+              </div>
+              <div id="accountProfileActions" class="account-profile-actions hidden">
+                <button type="button" id="accountSaveProfileBtn" class="ghost">保存姓名到账号</button>
+              </div>
+            </article>
             <article class="settings-card">
               <h2>钱包</h2>
               <div class="wallet-header">

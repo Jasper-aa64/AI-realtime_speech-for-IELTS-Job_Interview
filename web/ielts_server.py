@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import calendar
 import datetime as dt
 from collections import Counter
 import hashlib
@@ -23,6 +24,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 import uuid
@@ -32,7 +34,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,21 +47,34 @@ P1_INTRO_QUESTIONS = [
         "question": "What is your full name?",
         "flow": "intro",
         "role": "name",
+        "counts_toward_total": False,
     },
     {
         "topic": "intro",
-        "question": "Do you work, study at university, or go to school?",
+        "question": "Do you work or do you study?",
         "flow": "intro",
         "role": "work_study",
+        "counts_toward_total": True,
     },
 ]
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
 DEFAULT_CANDIDATE = "jasper"
 DEFAULT_USER_ID = "local-default"
+DEFAULT_FULL_NAME = "LiHua"
+DEFAULT_ENGLISH_NAME = "Jasper"
 CODEX_REASONING_EFFORT = "low"
 MICRO_RMB_PER_RMB = 1_000_000
 DEFAULT_INITIAL_GRANT_U = 5 * MICRO_RMB_PER_RMB
+DJANGO_BACKEND_URL = os.environ.get("IELTS_DJANGO_BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
+DJANGO_PROXY_TIMEOUT_SECONDS = float(os.environ.get("IELTS_DJANGO_PROXY_TIMEOUT", "2"))
+DJANGO_PROXY_WRITE_FIRST = os.environ.get("IELTS_DJANGO_PROXY_WRITE_FIRST", "1") != "0"
+DJANGO_FORCE_WRITING_PROXY = os.environ.get("IELTS_DJANGO_FORCE_WRITING_PROXY", "0") == "1"
+WRITING_TASK_TYPES = {"task1_academic", "task2"}
+WRITING_TASK_LABELS = {
+    "task1_academic": "Task 1 Academic",
+    "task2": "Task 2",
+}
 
 
 def clamp_band(value: float | int | None) -> float:
@@ -75,7 +90,6 @@ def rounded_overall(scores: dict[str, float | None]) -> float:
         scores.get("fluency_coherence"),
         scores.get("lexical_resource"),
         scores.get("grammatical_range"),
-        scores.get("pronunciation_estimate"),
     ]
     numeric = [float(value) for value in values if isinstance(value, (int, float))]
     if not numeric:
@@ -164,38 +178,6 @@ def is_template_like_answer(text: str) -> bool:
     return False
 
 
-def pronunciation_missing_text_only_cap(part: str, word_count: int, template_like: bool, generic_repeat: bool, development_count: int) -> float:
-    if part == "p2":
-        if word_count < 35:
-            return 4.5
-        if template_like or generic_repeat:
-            return 5.0
-        if word_count < 80 or development_count < 2:
-            return 5.5
-        return 6.0 if word_count < 130 else 6.5
-    if part == "p3":
-        if word_count < 25:
-            return 4.5
-        if template_like or generic_repeat:
-            return 5.0
-        if word_count < 55 or development_count < 2:
-            return 5.5
-        return 6.0 if word_count < 150 else 6.5
-    if part == "p1":
-        if word_count < 8:
-            return 4.5
-        if template_like or generic_repeat:
-            return 5.5
-        if word_count < 25:
-            return 6.0
-        if word_count < 60:
-            return 6.5
-        return 7.0
-    if word_count < 60:
-        return 5.5
-    return 6.5
-
-
 def append_calibration_note(scores: dict[str, Any], note: str) -> None:
     feedback = clean_report_text(str(scores.get("feedback") or ""))
     if note.lower() not in feedback.lower():
@@ -256,16 +238,7 @@ def calibrate_realistic_score(scores: dict[str, Any], question: str, transcript:
         scores["grammatical_range"] = 6.0
         append_calibration_note(scores, "Calibration: mostly simple sentence forms limit grammatical range.")
 
-    if scores.get("pronunciation_estimate") is None and isinstance(scores.get("overall_band"), (int, float)):
-        text_only_cap = pronunciation_missing_text_only_cap(part, word_count, template_like, template_count >= 2, marker_count)
-        if float(scores["overall_band"]) > text_only_cap:
-            scores["overall_band"] = text_only_cap
-            append_calibration_note(scores, "Calibration: pronunciation was not assessed, so text-only scoring is capped conservatively.")
-
     scores["overall_band"] = rounded_overall(scores)
-    if scores.get("pronunciation_estimate") is None and isinstance(scores.get("overall_band"), (int, float)):
-        text_only_cap = pronunciation_missing_text_only_cap(part, word_count, template_like, template_count >= 2, marker_count)
-        scores["overall_band"] = min(float(scores["overall_band"]), text_only_cap)
     return scores
 
 
@@ -308,6 +281,11 @@ def short_question(value: str, limit: int = 92) -> str:
 def stable_question_id(part: str, question: str) -> str:
     digest = hashlib.sha1(f"{part}:{question}".encode("utf-8")).hexdigest()[:16]
     return f"{part}_{digest}"
+
+
+def stable_writing_prompt_id(task_type: str, prompt: str) -> str:
+    digest = hashlib.sha1(f"writing:{task_type}:{prompt}".encode("utf-8")).hexdigest()[:16]
+    return f"{task_type}_{digest}"
 
 
 def json_dumps(value: Any) -> str:
@@ -478,8 +456,6 @@ class TrainingStore:
                 reasons.append("off_topic")
             if word_count < 25:
                 reasons.append("short_answer")
-            if (turn.get("pronunciation") or {}).get("status") not in {"assessed"}:
-                reasons.append("pronunciation_unreliable")
             weak = bool(reasons)
             due_days = 1 if weak else 14
             next_due = (utcnow() + dt.timedelta(days=due_days)).isoformat()
@@ -496,7 +472,7 @@ class TrainingStore:
                 "fluency_coherence": score.get("fluency_coherence"),
                 "lexical_resource": score.get("lexical_resource"),
                 "grammatical_range": score.get("grammatical_range"),
-                "pronunciation_estimate": score.get("pronunciation_estimate"),
+                "pronunciation_estimate": None,
                 "relevance": round(relevance, 3),
                 "weak_item_flag": weak,
                 "weak_reason": reasons,
@@ -1130,14 +1106,19 @@ class AppState:
     data_dir: Path
     reports_dir: Path
     bank: QuestionBank = field(init=False)
+    writing_bank: WritingPromptBank = field(init=False)
     training: TrainingStore = field(init=False)
     billing: BillingStore = field(init=False)
+    lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     latest_report: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         self.bank = QuestionBank(self.data_dir)
+        self.writing_bank = WritingPromptBank(self.data_dir)
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         self.attempts_dir.mkdir(parents=True, exist_ok=True)
+        self.writing_dir.mkdir(parents=True, exist_ok=True)
+        self.writing_profiles_dir.mkdir(parents=True, exist_ok=True)
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.model_audio_dir.mkdir(parents=True, exist_ok=True)
         self.examiner_audio_dir.mkdir(parents=True, exist_ok=True)
@@ -1160,35 +1141,54 @@ class AppState:
     def examiner_audio_dir(self) -> Path:
         return self.reports_dir / "examiner_audio"
 
+    @property
+    def writing_dir(self) -> Path:
+        return self.reports_dir / "writing"
+
+    @property
+    def writing_profiles_dir(self) -> Path:
+        return self.reports_dir / "writing_profiles"
+
     def attempt_path(self, attempt_id: str) -> Path:
         return self.attempts_dir / f"{safe_slug(attempt_id)}.json"
 
+    def writing_entry_path(self, entry_id: str) -> Path:
+        return self.writing_dir / f"{safe_slug(entry_id)}.json"
+
+    def writing_profile_path(self, user_id: str | None = None) -> Path:
+        return self.writing_profiles_dir / f"{safe_slug(user_id or DEFAULT_USER_ID)}.json"
+
     def save_attempt(self, attempt: dict[str, Any]) -> None:
         path = self.attempt_path(str(attempt["id"]))
-        with path.open("w", encoding="utf-8") as handle:
-            json.dump(attempt, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
-        if is_scored_report(attempt):
-            self.latest_report = attempt | {"path": str(path)}
-            if attempt.get("part") == "p1" or attempt.get("mode") == "p1":
-                self.delete_older_p1_reports(str(attempt["id"]))
+        with self.lock:
+            tmp_path = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                json.dump(attempt, handle, indent=2, ensure_ascii=False)
+                handle.write("\n")
+            tmp_path.replace(path)
+            if is_scored_report(attempt):
+                self.latest_report = attempt | {"path": str(path)}
+                if attempt.get("part") == "p1" or attempt.get("mode") == "p1":
+                    self.delete_older_p1_reports(str(attempt["id"]))
 
     def delete_older_p1_reports(self, keep_attempt_id: str) -> None:
-        for path in self.attempts_dir.glob("*.json"):
-            if path == self.attempt_path(keep_attempt_id):
-                continue
-            try:
-                attempt = read_json(path)
-            except ValueError:
-                continue
-            if is_scored_report(attempt) and (attempt.get("part") == "p1" or attempt.get("mode") == "p1"):
-                path.unlink(missing_ok=True)
+        with self.lock:
+            for path in self.attempts_dir.glob("*.json"):
+                if path == self.attempt_path(keep_attempt_id):
+                    continue
+                try:
+                    attempt = read_json(path)
+                except ValueError:
+                    continue
+                if is_scored_report(attempt) and (attempt.get("part") == "p1" or attempt.get("mode") == "p1"):
+                    path.unlink(missing_ok=True)
 
     def load_attempt(self, attempt_id: str) -> dict[str, Any]:
         path = self.attempt_path(attempt_id)
-        if not path.exists():
-            raise FileNotFoundError(f"Attempt not found: {attempt_id}")
-        return read_json(path)
+        with self.lock:
+            if not path.exists():
+                raise FileNotFoundError(f"Attempt not found: {attempt_id}")
+            return read_json(path)
 
     def load_report_attempt(self, attempt_id: str) -> dict[str, Any]:
         attempt = self.load_attempt(attempt_id)
@@ -1196,32 +1196,159 @@ class AppState:
             raise ValueError("Attempt report is not available until scoring is complete.")
         return attempt
 
-    def history(self) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        for path in sorted(self.attempts_dir.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+    def save_writing_entry(self, entry: dict[str, Any]) -> None:
+        path = self.writing_entry_path(str(entry["id"]))
+        with self.lock:
+            tmp_path = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                json.dump(entry, handle, indent=2, ensure_ascii=False)
+                handle.write("\n")
+            tmp_path.replace(path)
+
+    def load_writing_entry(self, entry_id: str) -> dict[str, Any]:
+        path = self.writing_entry_path(entry_id)
+        with self.lock:
+            if not path.exists():
+                raise FileNotFoundError(f"Writing entry not found: {entry_id}")
+            return read_json(path)
+
+    def load_writing_profile(self, user_id: str | None = None) -> dict[str, Any]:
+        path = self.writing_profile_path(user_id)
+        with self.lock:
+            if not path.exists():
+                return default_writing_profile(user_id or DEFAULT_USER_ID)
             try:
-                attempt = read_json(path)
+                profile = read_json(path)
+            except ValueError:
+                return default_writing_profile(user_id or DEFAULT_USER_ID)
+        return normalize_writing_profile(profile, user_id or DEFAULT_USER_ID)
+
+    def save_writing_profile(self, profile: dict[str, Any]) -> None:
+        user_id = str(profile.get("user_id") or DEFAULT_USER_ID)
+        path = self.writing_profile_path(user_id)
+        with self.lock:
+            tmp_path = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                json.dump(profile, handle, indent=2, ensure_ascii=False)
+                handle.write("\n")
+            tmp_path.replace(path)
+
+    def writing_entries(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        with self.lock:
+            for path in sorted(self.writing_dir.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+                try:
+                    entry = read_json(path)
+                except ValueError:
+                    continue
+                rows.append(entry)
+        return rows
+
+    def writing_summary(self, month_value: str | None = None) -> dict[str, Any]:
+        start, end = month_bounds(month_value)
+        month = start.strftime("%Y-%m")
+        today = local_date_string()
+        day_map: dict[str, dict[str, Any]] = {}
+        recent: list[dict[str, Any]] = []
+        for entry in self.writing_entries():
+            practice_date = str(entry.get("practice_date") or local_date_string(str(entry.get("saved_at") or entry.get("created_at") or "")))
+            score = entry.get("score") if isinstance(entry.get("score"), dict) else {}
+            compact = {
+                "id": entry.get("id"),
+                "practice_date": practice_date,
+                "display_time": local_timestamp(str(entry.get("updated_at") or entry.get("created_at") or "")),
+                "task_type": entry.get("task_type"),
+                "task_label": WRITING_TASK_LABELS.get(str(entry.get("task_type")), "Writing"),
+                "title": entry.get("title") or entry.get("prompt_title") or short_question(str(entry.get("prompt") or "")),
+                "word_count": entry.get("word_count"),
+                "status": entry.get("status"),
+                "overall_band": score.get("overall_band"),
+            }
+            recent.append(compact)
+            try:
+                entry_date = dt.date.fromisoformat(practice_date)
             except ValueError:
                 continue
-            if not is_scored_report(attempt):
-                continue
-            score = attempt.get("ielts_score") or {}
-            pron = attempt.get("pronunciation") or {}
-            rows.append(
-                {
-                    "id": attempt.get("id"),
-                    "timestamp": attempt.get("timestamp"),
-                    "display_time": local_timestamp(str(attempt.get("timestamp") or "")),
-                    "part": attempt.get("part"),
-                    "mode": attempt.get("mode"),
-                    "title": attempt.get("title") or short_question(str(attempt.get("question") or "")),
-                    "question": short_question(str(attempt.get("question") or "")),
-                    "overall_band": score.get("overall_band"),
-                    "pronunciation_status": pron.get("status", "unknown"),
-                    "turn_count": len(attempt.get("turns") or []),
-                    "completed_turns": len([t for t in attempt.get("turns") or [] if t.get("status") == "completed"]),
-                }
-            )
+            if start <= entry_date <= end:
+                current = day_map.get(practice_date)
+                entry_status = "scored" if entry.get("status") == "scored" else "saved"
+                if not current or (entry_status == "scored" and current.get("status") != "scored"):
+                    day_map[practice_date] = {**compact, "date": practice_date, "status": entry_status, "entry_id": entry.get("id")}
+        days = []
+        current_day = start
+        while current_day <= end:
+            key = current_day.isoformat()
+            days.append(day_map.get(key) or {"date": key, "status": "empty"})
+            current_day += dt.timedelta(days=1)
+        practiced_dates = {item["date"] for item in day_map.values() if item.get("status") in {"saved", "scored"}}
+        scored_count = sum(1 for item in day_map.values() if item.get("status") == "scored")
+        streak = 0
+        cursor = dt.date.fromisoformat(today)
+        all_practiced_dates = {
+            str(entry.get("practice_date") or "")
+            for entry in self.writing_entries()
+            if entry.get("status") in {"saved", "scored"}
+        }
+        while cursor.isoformat() in all_practiced_dates:
+            streak += 1
+            cursor -= dt.timedelta(days=1)
+        today_entry = next((entry for entry in self.writing_entries() if str(entry.get("practice_date")) == today), None)
+        return {
+            "month": month,
+            "today": today,
+            "days": days,
+            "stats": {
+                "practiced_days": len(practiced_dates),
+                "scored_entries": scored_count,
+                "streak_days": streak,
+                "total_entries": len(recent),
+            },
+            "recent_entries": recent[:20],
+            "today_entry": today_entry,
+        }
+
+    def random_writing_prompt(self, task_type: str | None = None) -> dict[str, Any]:
+        selected_type = normalize_writing_task_type(task_type) if task_type else next_default_writing_task_type()
+        prompts = self.writing_bank.list(selected_type)
+        if not prompts:
+            raise ValueError(f"No writing prompts available for {selected_type}")
+        used_prompt_ids = {
+            str(entry.get("prompt_id"))
+            for entry in self.writing_entries()
+            if entry.get("status") in {"saved", "scored"} and entry.get("prompt_id")
+        }
+        unused = [prompt for prompt in prompts if prompt.get("id") not in used_prompt_ids]
+        prompt = random.choice(unused or prompts)
+        return {**prompt, "selection": "random", "unwritten": bool(unused)}
+
+    def history(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        with self.lock:
+            paths = sorted(self.attempts_dir.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+            for path in paths:
+                try:
+                    attempt = read_json(path)
+                except ValueError:
+                    continue
+                if not is_scored_report(attempt):
+                    continue
+                score = attempt.get("ielts_score") or {}
+                pron = attempt.get("pronunciation") or {}
+                rows.append(
+                    {
+                        "id": attempt.get("id"),
+                        "timestamp": attempt.get("timestamp"),
+                        "display_time": local_timestamp(str(attempt.get("timestamp") or "")),
+                        "part": attempt.get("part"),
+                        "mode": attempt.get("mode"),
+                        "title": attempt.get("title") or short_question(str(attempt.get("question") or "")),
+                        "question": short_question(str(attempt.get("question") or "")),
+                        "overall_band": score.get("overall_band"),
+                        "pronunciation_status": pron.get("status", "unknown"),
+                        "turn_count": len(attempt.get("turns") or []),
+                        "completed_turns": len([t for t in attempt.get("turns") or [] if t.get("status") == "completed"]),
+                    }
+                )
         return rows
 
 
@@ -1236,6 +1363,355 @@ def is_scored_report(attempt: dict[str, Any]) -> bool:
         return False
     turns = attempt.get("turns")
     return isinstance(turns, list) and bool(turns) and all(turn.get("status") == "completed" for turn in turns)
+
+
+def normalize_writing_task_type(value: str | None) -> str:
+    task_type = str(value or "").strip().lower()
+    aliases = {
+        "task1": "task1_academic",
+        "task_1": "task1_academic",
+        "task1academic": "task1_academic",
+        "task 1 academic": "task1_academic",
+        "task2": "task2",
+        "task_2": "task2",
+        "task 2": "task2",
+    }
+    task_type = aliases.get(task_type, task_type)
+    if task_type not in WRITING_TASK_TYPES:
+        raise ValueError("Unknown writing task type")
+    return task_type
+
+
+def local_date_string(value: str | None = None) -> str:
+    if value:
+        parsed = parse_iso_datetime(value)
+        if parsed:
+            return parsed.astimezone().strftime("%Y-%m-%d")
+    return dt.datetime.now().strftime("%Y-%m-%d")
+
+
+def month_bounds(month_value: str | None) -> tuple[dt.date, dt.date]:
+    value = (month_value or local_date_string()[:7]).strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", value):
+        value = local_date_string()[:7]
+    year, month = [int(part) for part in value.split("-")]
+    _, day_count = calendar.monthrange(year, month)
+    start = dt.date(year, month, 1)
+    return start, dt.date(year, month, day_count)
+
+
+class WritingPromptBank:
+    def __init__(self, data_dir: Path) -> None:
+        self.data_dir = data_dir
+        self.prompts = self.load()
+
+    def load(self) -> dict[str, list[dict[str, Any]]]:
+        base_dir = self.data_dir / "writing"
+        loaded: dict[str, list[dict[str, Any]]] = {}
+        for task_type in sorted(WRITING_TASK_TYPES):
+            path = base_dir / f"{task_type}.json"
+            if not path.exists():
+                loaded[task_type] = []
+                continue
+            payload = read_json(path)
+            raw_items = payload.get("prompts") if isinstance(payload, dict) else payload
+            if not isinstance(raw_items, list):
+                raise ValueError(f"Writing prompt file must contain a prompts array: {path}")
+            items: list[dict[str, Any]] = []
+            for index, raw_item in enumerate(raw_items):
+                if not isinstance(raw_item, dict):
+                    raise ValueError(f"Writing prompt must be an object in {path}")
+                prompt = clean_markdown_text(str(raw_item.get("prompt") or raw_item.get("question") or ""))
+                if not prompt:
+                    continue
+                prompt_id = clean_report_text(str(raw_item.get("id") or "")) or stable_writing_prompt_id(task_type, prompt)
+                items.append(
+                    {
+                        "id": safe_slug(prompt_id),
+                        "task_type": task_type,
+                        "task_label": WRITING_TASK_LABELS[task_type],
+                        "title": clean_report_text(str(raw_item.get("title") or "")) or f"{WRITING_TASK_LABELS[task_type]} {index + 1}",
+                        "prompt": prompt,
+                        "category": clean_report_text(str(raw_item.get("category") or "")),
+                        "source": clean_report_text(str(raw_item.get("source") or "")) or "local",
+                    }
+                )
+            loaded[task_type] = items
+        return loaded
+
+    def list(self, task_type: str | None = None) -> list[dict[str, Any]]:
+        if task_type:
+            return list(self.prompts.get(normalize_writing_task_type(task_type), []))
+        items: list[dict[str, Any]] = []
+        for value in self.prompts.values():
+            items.extend(value)
+        return items
+
+    def get(self, prompt_id: str, task_type: str | None = None) -> dict[str, Any] | None:
+        pools = [self.prompts.get(normalize_writing_task_type(task_type), [])] if task_type else self.prompts.values()
+        for pool in pools:
+            for prompt in pool:
+                if prompt.get("id") == prompt_id:
+                    return dict(prompt)
+        return None
+
+
+def writing_word_count(answer: str) -> int:
+    return len(re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)?|\d+(?:\.\d+)?", answer or ""))
+
+
+def default_writing_profile(user_id: str | None = None) -> dict[str, Any]:
+    return {
+        "user_id": str(user_id or DEFAULT_USER_ID),
+        "updated_at": "",
+        "total_scored": 0,
+        "task_counts": {"task1_academic": 0, "task2": 0},
+        "average_overall_band": None,
+        "criterion_averages": {
+            "task_achievement": None,
+            "task_response": None,
+            "coherence_cohesion": None,
+            "lexical_resource": None,
+            "grammatical_range_accuracy": None,
+        },
+        "tag_counts": {},
+        "primary_focus": "insufficient_data",
+        "primary_focus_text": "还需要更多已评分作文来形成稳定画像。",
+        "recent_evidence": [],
+    }
+
+
+def normalize_writing_profile(profile: dict[str, Any], user_id: str | None = None) -> dict[str, Any]:
+    base = default_writing_profile(user_id or str(profile.get("user_id") or DEFAULT_USER_ID))
+    merged = {**base, **profile}
+    task_counts = merged.get("task_counts") if isinstance(merged.get("task_counts"), dict) else {}
+    merged["task_counts"] = {
+        "task1_academic": int(task_counts.get("task1_academic") or 0),
+        "task2": int(task_counts.get("task2") or 0),
+    }
+    tag_counts = merged.get("tag_counts") if isinstance(merged.get("tag_counts"), dict) else {}
+    merged["tag_counts"] = {str(key): int(value or 0) for key, value in tag_counts.items() if str(key).strip()}
+    averages = merged.get("criterion_averages") if isinstance(merged.get("criterion_averages"), dict) else {}
+    merged["criterion_averages"] = {**base["criterion_averages"], **averages}
+    evidence = merged.get("recent_evidence") if isinstance(merged.get("recent_evidence"), list) else []
+    merged["recent_evidence"] = [str(item) for item in evidence if str(item).strip()][:8]
+    try:
+        merged["total_scored"] = int(merged.get("total_scored") or 0)
+    except (TypeError, ValueError):
+        merged["total_scored"] = 0
+    return merged
+
+
+def writing_profile_tags(entry: dict[str, Any], score: dict[str, Any]) -> list[str]:
+    task_type = normalize_writing_task_type(str(entry.get("task_type") or "task2"))
+    word_count = int(entry.get("word_count") or writing_word_count(str(entry.get("answer") or "")))
+    task_key = "task_achievement" if task_type == "task1_academic" else "task_response"
+    tags: list[str] = []
+    if (task_type == "task1_academic" and word_count < 150) or (task_type == "task2" and word_count < 250):
+        tags.append("under_length")
+    if isinstance(score.get(task_key), (int, float)) and float(score[task_key]) <= 5.0:
+        tags.append("weak_task_achievement" if task_type == "task1_academic" else "weak_task_response")
+    if isinstance(score.get("coherence_cohesion"), (int, float)) and float(score["coherence_cohesion"]) <= 5.0:
+        tags.append("coherence_issue")
+    if isinstance(score.get("lexical_resource"), (int, float)) and float(score["lexical_resource"]) <= 5.0:
+        tags.append("weak_lexical_resource")
+    corrections = score.get("grammar_corrections") if isinstance(score.get("grammar_corrections"), list) else []
+    if (isinstance(score.get("grammatical_range_accuracy"), (int, float)) and float(score["grammatical_range_accuracy"]) <= 5.0) or corrections:
+        tags.append("grammar_accuracy")
+    if score.get("backend") == "fallback":
+        tags.append("fallback_scoring")
+    return sorted(dict.fromkeys(tags))
+
+
+def writing_tag_text(tag: str) -> str:
+    return {
+        "under_length": "字数偏短，展开和论证材料还不够。",
+        "weak_task_achievement": "Task 1 对题目/图表信息覆盖不够稳定。",
+        "weak_task_response": "Task 2 观点回应和论证深度需要加强。",
+        "coherence_issue": "段落衔接和中心句组织需要更清楚。",
+        "weak_lexical_resource": "词汇变化和准确度还可以继续提升。",
+        "grammar_accuracy": "句子结构和语法准确度是当前重点。",
+        "fallback_scoring": "本次使用系统默认评分，画像证据权重较低。",
+    }.get(tag, tag.replace("_", " "))
+
+
+def infer_writing_primary_focus(tag_counts: dict[str, int]) -> str:
+    priority = [
+        "weak_task_response",
+        "weak_task_achievement",
+        "under_length",
+        "coherence_issue",
+        "grammar_accuracy",
+        "weak_lexical_resource",
+    ]
+    ranked = sorted(tag_counts.items(), key=lambda item: (-item[1], priority.index(item[0]) if item[0] in priority else 99))
+    return ranked[0][0] if ranked else "insufficient_data"
+
+
+def writing_profile_snapshot(profile: dict[str, Any]) -> dict[str, Any]:
+    tag_counts = profile.get("tag_counts") if isinstance(profile.get("tag_counts"), dict) else {}
+    top_tags = sorted(tag_counts.items(), key=lambda item: (-int(item[1] or 0), str(item[0])))[:5]
+    return {
+        "total_scored": profile.get("total_scored", 0),
+        "average_overall_band": profile.get("average_overall_band"),
+        "primary_focus": profile.get("primary_focus"),
+        "primary_focus_text": profile.get("primary_focus_text"),
+        "top_issues": [{"tag": tag, "label": writing_tag_text(tag), "count": count} for tag, count in top_tags],
+        "recent_evidence": list(profile.get("recent_evidence") or [])[:4],
+        "updated_at": profile.get("updated_at"),
+    }
+
+
+def summarize_writing_profile_for_prompt(profile: dict[str, Any]) -> str:
+    snapshot = writing_profile_snapshot(profile)
+    if not snapshot.get("total_scored"):
+        return "No scored writing profile yet. Use this answer as the first data point."
+    return json_dumps(snapshot)
+
+
+def update_writing_profile(state: AppState, entry: dict[str, Any], score: dict[str, Any]) -> dict[str, Any]:
+    user_id = str(entry.get("user_id") or DEFAULT_USER_ID)
+    profile = state.load_writing_profile(user_id)
+    previous_total = int(profile.get("total_scored") or 0)
+    new_total = previous_total + 1
+    task_type = normalize_writing_task_type(str(entry.get("task_type") or "task2"))
+    task_counts = dict(profile.get("task_counts") or {})
+    task_counts[task_type] = int(task_counts.get(task_type) or 0) + 1
+    profile["task_counts"] = task_counts
+    profile["total_scored"] = new_total
+    band = score.get("overall_band")
+    if isinstance(band, (int, float)) and not isinstance(band, bool):
+        previous_average = profile.get("average_overall_band")
+        previous_value = float(previous_average) if isinstance(previous_average, (int, float)) else float(band)
+        profile["average_overall_band"] = round(((previous_value * previous_total) + float(band)) / new_total, 2)
+    averages = dict(profile.get("criterion_averages") or {})
+    for key in ("task_achievement", "task_response", "coherence_cohesion", "lexical_resource", "grammatical_range_accuracy"):
+        value = score.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            previous_average = averages.get(key)
+            previous_value = float(previous_average) if isinstance(previous_average, (int, float)) else float(value)
+            averages[key] = round(((previous_value * previous_total) + float(value)) / new_total, 2)
+    profile["criterion_averages"] = averages
+    tags = writing_profile_tags(entry, score)
+    tag_counts = dict(profile.get("tag_counts") or {})
+    for tag in tags:
+        tag_counts[tag] = int(tag_counts.get(tag) or 0) + 1
+    profile["tag_counts"] = tag_counts
+    primary_focus = infer_writing_primary_focus({tag: count for tag, count in tag_counts.items() if tag != "fallback_scoring"})
+    profile["primary_focus"] = primary_focus
+    profile["primary_focus_text"] = writing_tag_text(primary_focus) if primary_focus != "insufficient_data" else default_writing_profile(user_id)["primary_focus_text"]
+    evidence_item = (
+        f"{WRITING_TASK_LABELS[task_type]} · Band {score.get('overall_band', '—')} · "
+        f"{int(entry.get('word_count') or 0)} words · {', '.join(writing_tag_text(tag) for tag in tags[:3]) or '暂无明显弱项'}"
+    )
+    recent = [evidence_item] + [str(item) for item in profile.get("recent_evidence") or [] if str(item) != evidence_item]
+    profile["recent_evidence"] = recent[:8]
+    profile["updated_at"] = now_iso()
+    state.save_writing_profile(profile)
+    score["profile_tags"] = tags
+    score["personalization_note"] = "本次 AI 评分与辅导已用于更新你的写作画像。"
+    return writing_profile_snapshot(profile)
+
+
+def writing_fallback_score(task_type: str, answer: str, reason: str = "") -> dict[str, Any]:
+    word_count = writing_word_count(answer)
+    if word_count >= 250:
+        base = 5.5
+    elif word_count >= 150:
+        base = 5.0
+    elif word_count >= 80:
+        base = 4.5
+    else:
+        base = 4.0
+    task_key = "task_achievement" if task_type == "task1_academic" else "task_response"
+    task_label = "Task Achievement" if task_type == "task1_academic" else "Task Response"
+    feedback = clean_markdown_text(
+        "\n".join(
+            [
+                "AI 评分生成失败，以下是系统默认建议。",
+                "",
+                f"- 先按 {task_label} 检查是否完整回应题目要求。",
+                "- 每个主体段保留一个清楚中心句，再用具体细节或数据支持。",
+                "- 写完后优先检查句子结构、连接词和重复用词。",
+                "- 语法错误纠正：",
+                "  1. 无",
+            ]
+        )
+    )
+    return {
+        "overall_band": base,
+        task_key: base,
+        "coherence_cohesion": base,
+        "lexical_resource": base,
+        "grammatical_range_accuracy": base,
+        "feedback_markdown": feedback,
+        "grammar_corrections": [],
+        "backend": "fallback",
+        "error": clean_report_text(reason)[:240],
+    }
+
+
+def normalize_writing_score(payload: dict[str, Any], task_type: str, usage: dict[str, Any] | None, billing: BillingStore | None) -> dict[str, Any]:
+    task_key = "task_achievement" if task_type == "task1_academic" else "task_response"
+    alternate_task_key = "task_response" if task_key == "task_achievement" else "task_achievement"
+    feedback = clean_markdown_text(str(payload.get("feedback_markdown") or payload.get("feedback") or ""))
+    corrections = payload.get("grammar_corrections")
+    if not isinstance(corrections, list):
+        corrections = []
+    cleaned_corrections = [clean_report_text(str(item)) for item in corrections]
+    cleaned_corrections = [item for item in cleaned_corrections if item and item.lower() not in {"none", "无"}][:8]
+    if "语法错误纠正" not in feedback:
+        feedback = clean_markdown_text(
+            feedback
+            + "\n\n- 语法错误纠正：\n"
+            + ("\n".join(f"  {index}. {item}" for index, item in enumerate(cleaned_corrections, start=1)) if cleaned_corrections else "  1. 无")
+        )
+    result: dict[str, Any] = {
+        "overall_band": clamp_band(payload.get("overall_band")),
+        task_key: clamp_band(payload.get(task_key, payload.get(alternate_task_key))),
+        "coherence_cohesion": clamp_band(payload.get("coherence_cohesion")),
+        "lexical_resource": clamp_band(payload.get("lexical_resource")),
+        "grammatical_range_accuracy": clamp_band(payload.get("grammatical_range_accuracy")),
+        "feedback_markdown": feedback,
+        "grammar_corrections": cleaned_corrections,
+        "backend": "codex",
+    }
+    if usage:
+        result["billing_usage"] = billing.normalize_usage(usage) if billing else usage
+    return result
+
+
+def score_writing_with_codex(
+    entry: dict[str, Any],
+    data_dir: Path,
+    billing: BillingStore | None = None,
+    profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    task_type = normalize_writing_task_type(str(entry.get("task_type") or "task2"))
+    task_key = "task_achievement" if task_type == "task1_academic" else "task_response"
+    task_label = "Task Achievement" if task_type == "task1_academic" else "Task Response"
+    answer = str(entry.get("answer") or "")
+    prompt = (
+        "You are an IELTS Writing examiner for a Chinese learner. Return JSON only. "
+        "Score this IELTS Writing answer using official IELTS Writing criteria. "
+        f"The task-specific criterion is {task_label}; return it as numeric key {task_key}. "
+        "Also return numeric keys overall_band, coherence_cohesion, lexical_resource, grammatical_range_accuracy, "
+        "string key feedback_markdown, and array key grammar_corrections. "
+        "feedback_markdown should be natural Chinese Markdown with useful bullets; do not force a fixed template. "
+        "Use the learner profile to personalize advice when it is available, but do not mention private storage details. "
+        "Do not reward or assume copied AI sample essays; encourage feedback based on the learner's own real writing. "
+        "For grammar_corrections, include only meaningful grammar issues for spoken/written learner improvement; "
+        "do not include punctuation-only fixes. If none, return an empty array. "
+        f"\n\nLearner writing profile:\n{summarize_writing_profile_for_prompt(profile or default_writing_profile(str(entry.get('user_id') or DEFAULT_USER_ID)))}"
+        f"\n\nTask type: {WRITING_TASK_LABELS[task_type]}\nPrompt:\n{entry.get('prompt', '')}\n\nAnswer:\n{answer}\n"
+    )
+    output, usage = run_codex(prompt, f"writing_score_{entry['id']}", billing)
+    return normalize_writing_score(extract_json_object(output), task_type, usage, billing)
+
+
+def next_default_writing_task_type(date_value: str | None = None) -> str:
+    current = dt.date.fromisoformat(date_value or local_date_string())
+    return "task1_academic" if current.toordinal() % 2 == 0 else "task2"
 
 
 def timers_for_part(part: str) -> dict[str, int]:
@@ -1439,6 +1915,51 @@ def create_turn(
     }
 
 
+def candidate_names_from_payload(payload: dict[str, Any]) -> tuple[str, str]:
+    full_name = clean_report_text(str(payload.get("full_name") or payload.get("fullname") or DEFAULT_FULL_NAME)) or DEFAULT_FULL_NAME
+    english_name = clean_report_text(str(payload.get("english_name") or payload.get("englishName") or payload.get("candidate") or DEFAULT_ENGLISH_NAME)) or DEFAULT_ENGLISH_NAME
+    return full_name, english_name
+
+
+def display_question_number(turn: dict[str, Any]) -> int:
+    value = turn.get("display_index")
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(turn.get("index") or 0) + 1
+
+
+def is_p1_name_intro_turn(turn: dict[str, Any]) -> bool:
+    prompt = turn.get("prompt") or {}
+    return turn.get("part") == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "name"
+
+
+def p1_name_answer(attempt: dict[str, Any]) -> str:
+    full_name = clean_report_text(str(attempt.get("full_name") or DEFAULT_FULL_NAME)) or DEFAULT_FULL_NAME
+    english_name = clean_report_text(str(attempt.get("english_name") or DEFAULT_ENGLISH_NAME)) or DEFAULT_ENGLISH_NAME
+    if full_name.lower() == english_name.lower():
+        return f"My full name is {full_name}."
+    return f"My full name is {full_name}, but you can call me {english_name}."
+
+
+def apply_p1_name_identity(attempt: dict[str, Any], turn: dict[str, Any]) -> None:
+    if not is_p1_name_intro_turn(turn):
+        return
+    answer = p1_name_answer(attempt)
+    turn["transcript_raw"] = answer
+    turn["transcript_cleaned"] = answer
+    turn["transcript_markdown"] = spoken_markdown(answer)
+    turn["transcript_status"] = "captured"
+    turn["identity_corrected"] = True
+    notes = list(turn.get("cleaning_notes") or [])
+    note = "Name intro corrected from Settings full name and English name."
+    if note not in notes:
+        notes.append(note)
+    turn["cleaning_notes"] = notes
+
+
 def is_p1_work_study_identity_question(question: str) -> bool:
     normalized = re.sub(r"[^a-z0-9]+", " ", question.lower()).strip()
     return any(
@@ -1459,8 +1980,9 @@ def build_p1_turns(
     total: int = P1_TURN_COUNT,
     display_total: int | None = None,
 ) -> list[dict[str, Any]]:
-    intro_count = min(len(P1_INTRO_QUESTIONS), total)
-    remaining_count = max(0, total - intro_count)
+    countable_intro_items = [item for item in P1_INTRO_QUESTIONS if item.get("counts_toward_total", True)]
+    uncounted_intro_items = [item for item in P1_INTRO_QUESTIONS if not item.get("counts_toward_total", True)]
+    remaining_count = max(0, total - len(countable_intro_items))
     ordinary_pool = [
         item
         for item in state.bank.p1
@@ -1469,23 +1991,31 @@ def build_p1_turns(
     if len(ordinary_pool) < remaining_count:
         raise ValueError("Not enough ordinary IELTS Part 1 questions after reserving intro identity turns.")
     ordinary_questions = random.sample(ordinary_pool, remaining_count)
-    turn_items = P1_INTRO_QUESTIONS[:intro_count] + ordinary_questions
-    return [
-        create_turn(
+    turn_items = uncounted_intro_items + countable_intro_items + ordinary_questions
+    turns: list[dict[str, Any]] = []
+    display_index = 0
+    for index, item in enumerate(turn_items):
+        counts_toward_total = bool(item.get("counts_toward_total", True))
+        if counts_toward_total:
+            display_index += 1
+        turn = create_turn(
             state,
             attempt_id,
             "p1",
             index,
-            display_total or len(turn_items),
+            display_total or total,
             item["question"],
             {
                 "topic": item["topic"],
                 "question": item["question"],
+                "counts_toward_total": counts_toward_total,
                 **({"flow": item["flow"], "role": item["role"]} if item.get("flow") else {}),
             },
         )
-        for index, item in enumerate(turn_items)
-    ]
+        turn["counts_toward_total"] = counts_toward_total
+        turn["display_index"] = display_index if counts_toward_total else 0
+        turns.append(turn)
+    return turns
 
 
 def ensure_examiner_tts(state: AppState, attempt_id: str, turn: dict[str, Any]) -> None:
@@ -1507,8 +2037,20 @@ def append_p3_turns(
     prior_answer: str,
     source: str,
     intensity: str = "high",
+    allow_codex: bool = True,
 ) -> None:
-    plan = generate_p3_plan(theme, prior_answer, source, state.billing)
+    if allow_codex:
+        plan = generate_p3_plan(theme, prior_answer, source, state.billing)
+    else:
+        fallback = fallback_p3(theme, prior_answer, P3_MAIN_COUNT)
+        plan = {
+            "questions": fallback["questions"],
+            "follow_up": fallback["follow_up"],
+            "backend": "fallback",
+            "status": "skipped_sync_ai",
+            "source": source,
+            "theme": theme,
+        }
     start_index = len(attempt.get("turns") or [])
     use_follow_ups = intensity == "high"
     new_turns: list[dict[str, Any]] = []
@@ -1554,7 +2096,12 @@ def adapt_p3_follow_up(state: AppState, attempt: dict[str, Any], completed_turn:
         return
     theme = str(completed_turn.get("prompt", {}).get("theme") or attempt.get("p3_theme") or "general speaking")
     prior_answer = str(completed_turn.get("transcript_cleaned") or completed_turn.get("transcript_raw") or "")
-    plan = generate_p3_plan(theme, prior_answer, "adaptive_answer", state.billing)
+    plan = {
+        **fallback_p3(theme, prior_answer, P3_MAIN_COUNT),
+        "status": "skipped_sync_ai",
+        "source": "adaptive_answer",
+        "theme": theme,
+    }
     follow_up = clean_report_text(str(plan.get("follow_up") or ""))
     if not follow_up:
         return
@@ -1582,11 +2129,8 @@ def insert_p1_identity_follow_up(state: AppState, attempt: dict[str, Any], compl
         next_prompt = turns[completed_position + 1].get("prompt") or {}
         if next_prompt.get("flow") == "intro" and next_prompt.get("role") == "follow_up":
             return
-    plan = generate_p1_identity_follow_up(
-        str(completed_turn.get("transcript_cleaned") or completed_turn.get("transcript_raw") or ""),
-        state.billing,
-    )
-    question = clean_report_text(plan.get("question") or "") or fallback_p1_identity_follow_up("")
+    answer = str(completed_turn.get("transcript_cleaned") or completed_turn.get("transcript_raw") or "")
+    question = clean_report_text(fallback_p1_identity_follow_up(answer)) or fallback_p1_identity_follow_up("")
     follow_turn = create_turn(
         state,
         str(attempt["id"]),
@@ -1602,13 +2146,19 @@ def insert_p1_identity_follow_up(state: AppState, attempt: dict[str, Any], compl
             "after_role": "work_study",
             "after_turn": completed_turn.get("id"),
             "source": "identity_answer",
-            "backend": plan.get("backend", "fallback"),
-            "generation_status": plan.get("status", "fallback"),
+            "backend": "fallback",
+            "generation_status": "skipped_sync_ai",
             "counts_toward_total": False,
         },
     )
     follow_turn["id"] = f"{completed_turn.get('id', 't2')}_followup"
     follow_turn["counts_toward_total"] = False
+    follow_turn["examiner_tts"] = {
+        "provider": "volcengine",
+        "status": "pending",
+        "audio_url": None,
+        "message": "Identity follow-up uses deterministic fallback; examiner audio uses the normal TTS path.",
+    }
     turns.insert(completed_position + 1, follow_turn)
 
 
@@ -1774,7 +2324,36 @@ def clean_report_text(value: str) -> str:
     return text
 
 
-def spoken_markdown(value: str) -> str:
+def clean_markdown_text(value: str) -> str:
+    text = clean_band7_output(value)
+    text = re.sub(r"[ \t]+", " ", text).replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    blocked = (
+        "trellis sessionstart",
+        "workflow-state",
+        "session context",
+        "current task",
+        "active tasks",
+        "git status",
+    )
+    lowered = text.lower()
+    if not text or any(marker in lowered for marker in blocked):
+        return ""
+    return text
+
+
+def normalize_coaching_markdown(value: str) -> str:
+    text = clean_markdown_text(value)
+    if not text:
+        return ""
+    text = re.sub(r"(可以直接替换成：)\s*`([^`\n]+)`", r"\1\n\2", text)
+    text = re.sub(r"(可以说：)\s*`([^`\n]+)`", r"\1\"\2\"", text)
+    text = text.replace("\n\n- ", "\n- ")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def spoken_markdown(value: str, part: str = "") -> str:
     text = clean_band7_output(value)
     text = re.sub(r"[ \t]+", " ", text).strip()
     if not text:
@@ -1786,6 +2365,8 @@ def spoken_markdown(value: str) -> str:
     sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
     if not sentences:
         return text
+    if part == "p1":
+        return "\n\n".join(sentences)
     paragraphs = [" ".join(sentences[index:index + 2]) for index in range(0, len(sentences), 2)]
     return "\n\n".join(paragraphs)
 
@@ -1872,56 +2453,302 @@ def plausible_spoken_answer(value: str) -> bool:
     return not any(marker in lowered[:220] for marker in bad_markers)
 
 
-def pronunciation_from_azure(audio_path: Path, transcript: str) -> dict[str, Any]:
-    key = os.environ.get("AZURE_SPEECH_KEY")
-    region = os.environ.get("AZURE_SPEECH_REGION")
-    if not key or not region:
-        return {
+def generic_band7_answer(value: str) -> bool:
+    lowered = clean_band7_output(value).lower()
+    generic_markers = (
+        "quite easy for me to answer",
+        "connects with my daily life",
+        "give one simple detail",
+        "closer to a band",
+        "i can talk about from my own experience",
+        "this topic is very important",
+        "i would answer it directly first",
+        "i would answer this directly from my own experience",
+        "i would answer this by keeping the main idea",
+        "my favourite choice is the one connected with my own routine",
+        "a complete transcript was not captured",
+        "add one simple reason and a small detail",
+        "that gives me a clear reason to support my answer",
+        "then i would develop it with one concrete situation",
+        "explain why it mattered, and finish with the result",
+    )
+    return any(marker in lowered for marker in generic_markers)
+
+
+def band7_addresses_question(question: str, answer: str, part: str) -> bool:
+    if part != "p1":
+        return True
+    relevance = prompt_relevance(question, answer)
+    if relevance >= 0.20:
+        return True
+    lowered_question = question.lower()
+    lowered_answer = answer.lower()
+    if "tell me a little more" in lowered_question or "what you do now" in lowered_question:
+        work_study_terms = (
+            "student", "study", "studying", "university", "school", "major",
+            "work", "working", "job", "internship", "engineer", "software",
+            "developer", "company", "project",
+        )
+        return any(term in lowered_answer for term in work_study_terms)
+    if lowered_question.startswith(("do you", "are you", "is there", "can you", "have you")):
+        return any(marker in lowered_answer for marker in ("yes", "no", "i do", "i don't", "i am", "i'm", "not really", "sometimes"))
+    return False
+
+
+def valid_turn_band7(question: str, answer: str, part: str) -> bool:
+    return plausible_spoken_answer(answer) and not generic_band7_answer(answer) and band7_addresses_question(question, answer, part)
+
+
+def concise_coaching_markdown(value: str) -> bool:
+    text = clean_markdown_text(value)
+    if not text:
+        return False
+    lines = [line for line in text.splitlines() if line.strip()]
+    if len(lines) > 12:
+        return False
+    has_markdown_point = any(line.lstrip().startswith(("- ", "* ")) for line in lines)
+    grammar_index = next((index for index, line in enumerate(lines) if "语法错误纠正" in line), None)
+    if grammar_index is None:
+        return False
+    top_level_lines = [line for line in lines if not re.match(r"^\s{2,}\d+\.\s+", line)]
+    grammar_line = lines[grammar_index].strip()
+    if top_level_lines and "语法错误纠正" not in top_level_lines[-1]:
+        return False
+    has_valid_grammar_detail = "无" in grammar_line or any(
+        re.match(r"^\s{2,}\d+\.\s+", line) for line in lines[grammar_index + 1 :]
+    )
+    return has_markdown_point and has_valid_grammar_detail and len(text) <= 1100
+
+
+def infer_grammar_corrections(transcript: str) -> list[str]:
+    lowered = clean_report_text(transcript).lower()
+    corrections: list[str] = []
+    patterns = [
+        ("i prefer study", "`I prefer study` -> `I prefer studying ...`"),
+        ("that's efficiency", "`that's efficiency` -> `It is more efficient.`"),
+        ("as an introverted people", "`as an introverted people` -> `as an introverted person`"),
+        ("going internship", "`going internship` -> `I am doing an internship.`"),
+        ("going all an internship", "`going all an internship` -> `I am doing an internship.`"),
+        ("i live on my own current", "`I live on my own current` -> `I live on my own at the moment.`"),
+        ("temporary temporary live", "`temporary temporary live` -> `I am living here temporarily.`"),
+        ("just temporary", "`just temporary` -> `It is just temporary.`"),
+        ("major in my computer science", "`major in my computer science` -> `I study computer science.`"),
+        ("most of time", "`most of time` -> `most of my time`"),
+        ("near to the company", "`near to the company` -> `near the company` / `close to the company`"),
+        ("what i enjoyed most", "`What I enjoyed most` -> `What I enjoy most`"),
+        ("problems of the aspect", "`problems of the aspect` -> `the problem-solving aspect`"),
+    ]
+    for needle, correction in patterns:
+        if needle in lowered and correction not in corrections:
+            corrections.append(correction)
+    return corrections[:3]
+
+
+def ensure_grammar_correction_bullet(coaching: str, transcript: str) -> str:
+    text = clean_markdown_text(coaching)
+    if not text:
+        return ""
+    lines: list[str] = []
+    skip_grammar_items = False
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if "语法错误纠正" in stripped:
+            skip_grammar_items = True
+            continue
+        if skip_grammar_items and re.match(r"^\d+\.\s+", stripped):
+            continue
+        skip_grammar_items = False
+        if re.match(r"^\d+\.\s+`.+?`\s*->", stripped):
+            continue
+        lines.append(line)
+    corrections = infer_grammar_corrections(transcript)
+    if not corrections:
+        lines.append("- 语法错误纠正：无")
+    else:
+        lines.append("- 语法错误纠正：")
+        lines.extend(f"  {index}. {correction}" for index, correction in enumerate(corrections, start=1))
+    return "\n".join(lines).strip()
+
+
+def _azure_prepare_audio(audio_path: Path) -> tuple[Path | None, Path, dict[str, Any] | None]:
+    """Convert audio to WAV if needed. Returns (temp_wav, assessment_path, error_dict_or_None)."""
+    if audio_path.suffix.lower() in {".wav"}:
+        return None, audio_path, None
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return None, audio_path, {
             "provider": "azure",
-            "status": "not_configured",
+            "status": "audio_conversion_missing",
             "pron_score": None,
             "accuracy": None,
             "fluency": None,
             "prosody": None,
             "issues": [],
-            "message": "Azure Speech key/region is not configured; pronunciation is estimate only and not assessed.",
+            "message": "Azure is configured, but ffmpeg is required to convert browser WebM audio to WAV.",
         }
-    assessment_path = audio_path
-    temp_wav: Path | None = None
-    if audio_path.suffix.lower() not in {".wav"}:
-        ffmpeg = shutil.which("ffmpeg")
-        if not ffmpeg:
-            return {
-                "provider": "azure",
-                "status": "audio_conversion_missing",
-                "pron_score": None,
-                "accuracy": None,
-                "fluency": None,
-                "prosody": None,
-                "issues": [],
-                "message": "Azure is configured, but ffmpeg is required to convert browser WebM audio to WAV.",
-            }
-        temp_wav = audio_path.with_suffix(".azure.wav")
-        try:
-            subprocess.run(
-                [ffmpeg, "-y", "-i", str(audio_path), "-ac", "1", "-ar", "16000", str(temp_wav)],
-                text=True,
-                capture_output=True,
-                timeout=20,
-                check=True,
-            )
-            assessment_path = temp_wav
-        except Exception as exc:  # noqa: BLE001
-            return {
-                "provider": "azure",
-                "status": "audio_conversion_failed",
-                "pron_score": None,
-                "accuracy": None,
-                "fluency": None,
-                "prosody": None,
-                "issues": [],
-                "message": f"Could not convert browser audio for Azure pronunciation assessment: {exc}",
-            }
+    temp_wav = audio_path.with_suffix(".azure.wav")
+    try:
+        subprocess.run(
+            [ffmpeg, "-y", "-i", str(audio_path), "-ac", "1", "-ar", "16000", str(temp_wav)],
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=True,
+        )
+        return temp_wav, temp_wav, None
+    except Exception as exc:  # noqa: BLE001
+        return None, audio_path, {
+            "provider": "azure",
+            "status": "audio_conversion_failed",
+            "pron_score": None,
+            "accuracy": None,
+            "fluency": None,
+            "prosody": None,
+            "issues": [],
+            "message": f"Could not convert browser audio for Azure pronunciation assessment: {exc}",
+        }
+
+
+def _azure_not_configured_result() -> dict[str, Any]:
+    return {
+        "provider": "azure",
+        "status": "not_configured",
+        "pron_score": None,
+        "accuracy": None,
+        "fluency": None,
+        "prosody": None,
+        "issues": [],
+        "message": "Azure Speech key/region is not configured; pronunciation is estimate only and not assessed.",
+    }
+
+
+def transcribe_and_assess_azure(audio_path: Path) -> dict[str, Any]:
+    """Unified Azure call: transcribes audio AND scores pronunciation without needing a reference transcript.
+    Returns dict with keys: transcript, pronunciation (same shape as pronunciation_from_azure output).
+    """
+    key = os.environ.get("AZURE_SPEECH_KEY")
+    region = os.environ.get("AZURE_SPEECH_REGION")
+    if not key or not region:
+        return {"transcript": "", "pronunciation": _azure_not_configured_result()}
+    temp_wav, assessment_path, err = _azure_prepare_audio(audio_path)
+    if err:
+        return {"transcript": "", "pronunciation": err}
+    try:
+        import azure.cognitiveservices.speech as speechsdk  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        return {"transcript": "", "pronunciation": {
+            "provider": "azure", "status": "sdk_missing",
+            "pron_score": None, "accuracy": None, "fluency": None, "prosody": None, "issues": [],
+            "message": f"Azure Speech SDK is not installed: {exc}",
+        }}
+    try:
+        speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
+        speech_config.speech_recognition_language = "en-US"
+        audio_config = speechsdk.audio.AudioConfig(filename=str(assessment_path))
+        recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+        pron_config = speechsdk.PronunciationAssessmentConfig(
+            reference_text="",
+            grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
+            granularity=speechsdk.PronunciationAssessmentGranularity.Word,
+            enable_miscue=False,
+        )
+        pron_config.enable_prosody_assessment()
+        pron_config.apply_to(recognizer)
+
+        done_event = threading.Event()
+        all_results: list[dict[str, Any]] = []
+        recognized_texts: list[str] = []
+
+        def on_recognized(evt: Any) -> None:
+            if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech and evt.result.text:
+                recognized_texts.append(evt.result.text)
+                raw = evt.result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
+                if raw:
+                    all_results.append(json.loads(raw))
+
+        def on_stopped(evt: Any) -> None:
+            done_event.set()
+
+        def on_canceled(evt: Any) -> None:
+            done_event.set()
+
+        recognizer.recognized.connect(on_recognized)
+        recognizer.session_stopped.connect(on_stopped)
+        recognizer.canceled.connect(on_canceled)
+        recognizer.start_continuous_recognition()
+        done_event.wait(timeout=60)
+        recognizer.stop_continuous_recognition()
+
+        full_transcript = " ".join(recognized_texts).strip()
+        if not all_results:
+            return {"transcript": full_transcript, "pronunciation": {
+                "provider": "azure", "status": "no_speech",
+                "pron_score": None, "accuracy": None, "fluency": None, "prosody": None, "issues": [],
+                "message": "Azure did not detect any speech in the audio.",
+            }}
+
+        scores: list[dict[str, float]] = []
+        all_issues: list[dict[str, Any]] = []
+        for payload in all_results:
+            nbest = payload.get("NBest", [{}])[0]
+            assessment = nbest.get("PronunciationAssessment", {})
+            if assessment.get("PronScore") is not None:
+                scores.append({
+                    "pron_score": float(assessment["PronScore"]),
+                    "accuracy": float(assessment.get("AccuracyScore") or 0),
+                    "fluency": float(assessment.get("FluencyScore") or 0),
+                    "prosody": float(assessment.get("ProsodyScore") or 0),
+                })
+            for word_item in nbest.get("Words", []):
+                word_assessment = word_item.get("PronunciationAssessment", {})
+                if word_assessment.get("ErrorType") not in (None, "None"):
+                    all_issues.append({
+                        "word": word_item.get("Word"),
+                        "accuracy": word_assessment.get("AccuracyScore"),
+                        "error_type": word_assessment.get("ErrorType"),
+                    })
+
+        if not scores:
+            return {"transcript": full_transcript, "pronunciation": {
+                "provider": "azure", "status": "assessed",
+                "pron_score": None, "accuracy": None, "fluency": None, "prosody": None,
+                "issues": all_issues[:12],
+                "message": "Azure recognized speech but pronunciation scores were not returned.",
+            }}
+
+        avg = lambda key: round(sum(s[key] for s in scores) / len(scores), 1)
+        return {"transcript": full_transcript, "pronunciation": {
+            "provider": "azure",
+            "status": "assessed",
+            "pron_score": avg("pron_score"),
+            "accuracy": avg("accuracy"),
+            "fluency": avg("fluency"),
+            "prosody": avg("prosody"),
+            "issues": all_issues[:12],
+            "message": "Transcription and pronunciation assessed with Azure Speech (unreferenced).",
+        }}
+    except Exception as exc:  # noqa: BLE001
+        return {"transcript": "", "pronunciation": {
+            "provider": "azure", "status": "failed",
+            "pron_score": None, "accuracy": None, "fluency": None, "prosody": None, "issues": [],
+            "message": f"Azure transcription+pronunciation failed: {exc}",
+        }}
+    finally:
+        if temp_wav:
+            temp_wav.unlink(missing_ok=True)
+
+
+def pronunciation_from_azure(audio_path: Path, transcript: str) -> dict[str, Any]:
+    key = os.environ.get("AZURE_SPEECH_KEY")
+    region = os.environ.get("AZURE_SPEECH_REGION")
+    if not key or not region:
+        return _azure_not_configured_result()
+    temp_wav, assessment_path, err = _azure_prepare_audio(audio_path)
+    if err:
+        return err
     try:
         import azure.cognitiveservices.speech as speechsdk  # type: ignore
     except Exception as exc:  # noqa: BLE001
@@ -2108,7 +2935,6 @@ def heuristic_score(transcript: str, reason: str, question: str = "", part: str 
         "fluency_coherence": clamp_band(base),
         "lexical_resource": clamp_band(lexical),
         "grammatical_range": clamp_band(base),
-        "pronunciation_estimate": None,
     }
     scores["overall_band"] = rounded_overall(scores)
     feedback = f"Content score uses fallback estimate: {reason}. Record clear, relevant English answers for a more useful assessment."
@@ -2160,8 +2986,8 @@ def score_with_codex(
     prompt = (
         prompt_path.read_text(encoding="utf-8")
         + "\n\nReturn JSON only with numeric keys fluency_coherence, lexical_resource, "
-        "grammatical_range, overall_band, and string key feedback. Do not invent a "
-        "pronunciation score from text. "
+        "grammatical_range, overall_band, string key feedback, and optional overall_review object "
+        "with string key comment and array key review_points. Do not score pronunciation or reference pronunciation. "
         + score_prompt_for_part(part)
         + "\n\nPrompt(s):\n"
         + (question.strip() or "(not provided)")
@@ -2175,10 +3001,16 @@ def score_with_codex(
         "fluency_coherence": clamp_band(payload.get("fluency_coherence")),
         "lexical_resource": clamp_band(payload.get("lexical_resource")),
         "grammatical_range": clamp_band(payload.get("grammatical_range")),
-        "pronunciation_estimate": None,
     }
     scores["overall_band"] = rounded_overall(scores)
     result_payload = {**scores, "feedback": str(payload.get("feedback", "")), "backend": "codex"}
+    overall_review = payload.get("overall_review")
+    if isinstance(overall_review, dict):
+        comment = clean_report_text(str(overall_review.get("comment") or ""))
+        points = [clean_report_text(str(item)) for item in overall_review.get("review_points") or []]
+        points = [item for item in points if item][:4]
+        if comment or points:
+            result_payload["overall_review"] = {"comment": comment, "review_points": points, "source": "codex_score"}
     if usage:
         result_payload["billing_usage"] = billing.normalize_usage(usage) if billing else usage
     return cap_off_topic_score(calibrate_realistic_score(result_payload, question, transcript, part), question, transcript)
@@ -2206,7 +3038,7 @@ def cap_off_topic_score(scores: dict[str, Any], question: str, transcript: str) 
 def model_answer_constraints(part: str) -> str:
     if part == "p1":
         return (
-            "This is IELTS Speaking Part 1. Write a short natural answer, normally 3 sentences, maximum 5 sentences. "
+            "This is IELTS Speaking Part 1. Write a short natural answer, normally 1-3 sentences, maximum 3 sentences. "
             "Do not turn it into a long Part 2-style speech. One concise Markdown paragraph is preferred."
         )
     if part == "p2":
@@ -2256,7 +3088,11 @@ def model_answer_with_codex(attempt: dict[str, Any], transcript: str, billing: B
 
 
 def questions_text(attempt: dict[str, Any]) -> str:
-    return "\n".join(f"{turn['index'] + 1}. {turn['question']}" for turn in attempt.get("turns", []))
+    lines: list[str] = []
+    for turn in attempt.get("turns", []):
+        prefix = "Intro" if not turn.get("counts_toward_total", True) else str(display_question_number(turn))
+        lines.append(f"{prefix}. {turn['question']}")
+    return "\n".join(lines)
 
 
 def build_band7_version(state: AppState, attempt: dict[str, Any], transcript: str) -> str:
@@ -2282,58 +3118,279 @@ def build_band7_version(state: AppState, attempt: dict[str, Any], transcript: st
     )
 
 
+def _transcript_usable_for_band7(question: str, transcript: str) -> bool:
+    """Check if a transcript is coherent enough to quote in a Band 7 model answer."""
+    if not transcript or len(transcript.split()) < 4:
+        return False
+    relevance = prompt_relevance(question, transcript)
+    if relevance >= 0.25:
+        return True
+    words = re.findall(r"[A-Za-z']+", transcript)
+    if len(words) < 5:
+        return False
+    common_english = {
+        "i", "my", "me", "we", "the", "a", "an", "is", "am", "are", "was", "were",
+        "it", "its", "this", "that", "and", "but", "or", "so", "because", "if",
+        "to", "for", "of", "in", "on", "at", "with", "from", "by", "not", "no",
+        "yes", "do", "don't", "have", "has", "had", "can", "will", "would", "could",
+        "think", "like", "want", "know", "go", "get", "make", "see", "say", "tell",
+        "very", "really", "just", "also", "still", "already", "always", "never",
+        "usually", "sometimes", "often", "actually", "probably", "maybe",
+    }
+    recognized = sum(1 for w in words if w.lower() in common_english)
+    if recognized / len(words) < 0.35:
+        return False
+    return True
+
+
+def _p1_question_only_answer(question: str, answer_lower: str = "") -> str:
+    """Generate a clean Band 7 P1 answer based on the question type. Uses answer_lower only for intent direction (yes/no, study/work)."""
+    lowered = question.lower()
+    if "name" in lowered:
+        return "My full name is Jasper Chen, but most people just call me Jasper."
+    if lowered.startswith(("do you prefer", "would you prefer")) or ("prefer" in lowered and ("or" in lowered)):
+        return "I would prefer the option that fits my daily routine better, because convenience matters a lot when you have a busy schedule."
+    if ("work" in lowered or "study" in lowered or "student" in lowered) and "prefer" not in lowered:
+        if any(w in answer_lower for w in ("work", "job", "company", "office", "engineer", "business")):
+            return "I work as a software engineer at the moment. I enjoy it because the work is practical and I get to solve real problems every day."
+        return "I'm a university student at the moment, majoring in computer science. I chose it because I enjoy building things and solving practical problems."
+    if ("who" in lowered and "live" in lowered) or ("family" in lowered and "own" in lowered) or ("live with" in lowered):
+        if any(w in answer_lower for w in ("own", "alone", "myself")):
+            return "I live on my own at the moment. It is convenient because my place is close to my university and I can manage my own schedule."
+        if any(w in answer_lower for w in ("family", "parent", "mother", "father", "roommate")):
+            return "I live with my family right now. It is comfortable because we share the housework and I can save money on rent."
+        return "I live on my own at the moment, in a small apartment near my university. It gives me the independence I need for my studies."
+    if "plan" in lowered and ("live" in lowered or "living" in lowered):
+        if any(w in answer_lower for w in ("no", "not", "temporary", "move")):
+            return "No, I don't plan to stay there long-term. It is just a temporary arrangement while I finish my studies, and after that I will probably move somewhere else."
+        return "Yes, I think I will stay there for a while. The area is convenient and I have gotten used to the routine, so there is no strong reason to move."
+    if "neighbourhood" in lowered or "neighbor" in lowered:
+        return "Yes, I think it is a good place to live. It is quiet, safe, and close to public transport, which makes my daily commute quite easy."
+    if "continue" in lowered and ("live" in lowered or "living" in lowered):
+        if any(w in answer_lower for w in ("no", "not", "temporary", "move")):
+            return "No, I don't plan to stay there long-term. It is just a temporary arrangement while I finish my studies, and after that I will probably move somewhere else."
+        return "Yes, I think I will stay there for a while. The area is convenient and I have gotten used to the routine, so there is no strong reason to move."
+    if any(word in lowered for word in ("live", "living", "hometown", "house", "apartment", "flat", "city")):
+        return "I live in a fairly convenient area close to my university. I like it because transport and daily shopping are easy, and the neighbourhood is quiet enough to study."
+    if any(word in lowered for word in ("favourite", "favorite", "like most", "enjoy most")):
+        if "room" in lowered:
+            return "My favourite room is my bedroom. It is cozy and quiet, and I spend most of my free time there reading or relaxing after a long day."
+        if "food" in lowered:
+            return "My favourite food is probably noodles. I grew up eating them and they remind me of home, plus they are quick and easy to prepare."
+        return "My favourite would be the one that connects with my personal routine. It feels natural because I do it regularly and it always puts me in a good mood."
+    if "fast food" in lowered or ("food" in lowered and "think" in lowered):
+        return "I think fast food is convenient when you are busy and don't have much time to cook. But I try not to eat it too often because it is not very healthy."
+    if any(word in lowered for word in ("think", "opinion", "important")):
+        if any(w in answer_lower for w in ("yes", "yeah", "important", "of course")):
+            return "Yes, I think it is quite important. It plays a meaningful role in people's daily lives and helps them maintain a sense of balance."
+        if any(w in answer_lower for w in ("no", "not")):
+            return "Not necessarily. I think it depends on the individual and their circumstances. For some people it matters a lot, but others might not feel the same way."
+        return "I think it depends on the situation. For most people it probably matters, but personally I would say it is useful rather than essential."
+    if "easy" in lowered or "difficult" in lowered or "hard" in lowered:
+        if any(w in answer_lower for w in ("easy", "simple", "not hard", "fast")):
+            return "I find it fairly easy, mainly because I have been doing it for a while now. Practice makes a big difference, and once you get used to it, it feels natural."
+        if any(w in answer_lower for w in ("difficult", "hard", "struggle", "not easy")):
+            return "I find it a bit difficult sometimes, especially when I am tired or in a hurry. But with practice it has gotten easier over time."
+        return "I find it fairly easy, mainly because I have been doing it for a while now. Practice makes a big difference, and once you get used to it, it feels natural."
+    if any(word in lowered for word in ("how often", "how much", "how long", "how many")):
+        return "For me, it happens fairly regularly, maybe a few times a week. It has become part of my routine without me really noticing."
+    if any(word in lowered for word in ("when", "last time", "recently")):
+        return "The last time was not long ago, probably within the past week. I remember it quite clearly because it was a pleasant experience."
+    if lowered.startswith(("do you", "are you", "is there", "can you", "have you")):
+        if any(w in answer_lower for w in ("no", "not", "rarely", "hardly", "don't")):
+            return "No, not really. It is not something I do very often, mainly because my schedule does not leave much time for it."
+        return "Yes, I would say so. It is something I do fairly often, and I find it quite enjoyable because it fits naturally into my daily life."
+    if "why" in lowered:
+        return "The main reason is that it connects with my daily routine and gives me a sense of satisfaction. I think that is what makes it worth doing."
+    if "what" in lowered and "enjoy" in lowered:
+        return "What I enjoy most is the problem-solving aspect. Every day brings something different, and I like the feeling of figuring things out step by step."
+    return "I would say it is something I experience quite often in my daily life. The main reason is that it connects with my routine and gives me a practical benefit."
+
+
 def build_turn_band7_fallback(turn: dict[str, Any], transcript: str, target: str = "7") -> str:
-    if not transcript:
-        return "A complete transcript was not captured, so this model answer is a general spoken example for the same question."
-    question = str(turn.get("question") or "this topic")
+    """Generate a rule-based Band 7 answer. Never quotes raw transcript — only uses it to detect intent direction."""
+    question = clean_report_text(str(turn.get("question") or "this question")) or "this question"
     part = str(turn.get("part") or "").lower()
-    words = [
-        word.lower()
-        for word in re.findall(r"[A-Za-z']+", question)
-        if len(word) > 3 and word.lower() not in {"describe", "should", "would", "could", "about", "your"}
-    ]
-    topic_hint = " ".join(words[:5]) or "this topic"
+    answer_lower = clean_report_text(transcript).lower() if transcript else ""
     if part == "p1":
+        attempt = turn.get("attempt") if isinstance(turn.get("attempt"), dict) else {}
+        if is_p1_name_intro_turn(turn) and attempt:
+            return p1_name_answer(attempt)
+        return _p1_question_only_answer(question, answer_lower)
+    if part == "p2":
         return (
-            f"I'd say {topic_hint} is quite easy for me to answer because it connects with my daily life. "
-            "For example, I can give one simple detail from my own experience instead of only saying yes or no. "
-            f"That makes the answer sound clearer and closer to a Band {target} response."
+            "I would like to talk about something that happened to me recently. "
+            "It was memorable because it changed the way I think about this topic. "
+            "What made it stand out was the combination of timing and the people involved, "
+            "and looking back, I feel it was a valuable experience that taught me something new."
         )
     return (
-        f"I'd say {topic_hint} is something I can talk about from my own experience. "
-        "The main reason is that it connects with my daily life, so I can explain it quite naturally. "
-        "For example, I would give one specific situation, describe what happened, and then say why it mattered to me. "
-        f"Overall, I think a clear answer with one concrete example sounds more fluent and closer to Band {target}."
+        "I think this is an interesting question because people can look at it from different angles. "
+        "From my perspective, the most important factor is practicality, because in everyday life "
+        "we often have to balance convenience with long-term value. "
+        "I would also add that personal experience plays a big role in shaping people's views on this."
     )
 
 
-def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, Any]) -> None:
-    transcript = str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
-    band7 = ""
+def turn_feedback_with_codex(
+    attempt: dict[str, Any],
+    turn: dict[str, Any],
+    transcript: str,
+    profile: dict[str, Any],
+    billing: BillingStore | None = None,
+    call_id: str | None = None,
+) -> dict[str, str]:
+    part = str(turn.get("part") or attempt_part(attempt)).lower()
     target = target_band_label(attempt)
-    if transcript:
+    prompt = f"""Return JSON only with keys band7_version and ai_coaching.
+
+Task:
+- Write one natural IELTS Speaking Band {target} spoken version for this single turn.
+- Then write concise Chinese Markdown coaching for this same turn.
+- Answer the exact examiner question directly and preserve the candidate's likely intent.
+- Reuse the candidate's concrete idea when it is relevant; improve cohesion, vocabulary, and grammar.
+- Do not include the original question, cue-card bullets, titles, labels, code fences, or logs.
+
+Band 7 version constraints:
+{model_answer_constraints(part)}
+- For Part 1, write only 1-3 natural spoken sentences.
+- Do not use generic template lines such as "this is quite easy for me to answer", "connects with my daily life", or "closer to Band 7".
+- If the transcript is weak, infer a sensible direct answer from the question type instead of writing a vague template.
+
+Coaching constraints:
+- Use natural concise Chinese Markdown bullets.
+- Write 2-4 short bullets, choosing the bullet focus freely based on the learner's real issue.
+- Do not force a replacement sentence, fixed labels, fixed order, or fixed section names.
+- If a sample sentence genuinely helps, include it naturally inside a bullet; otherwise give structure, direction, or practice advice.
+- End with exactly one grammar-correction bullet:
+  - If there is no meaningful spoken grammar/collocation issue, write "- 语法错误纠正：无".
+  - If there are issues, write "- 语法错误纠正：" and put the corrections under it as indented numbered sub-items, for example "  1. `going internship` -> `I am doing an internship.`".
+- Only include spoken-English grammar/collocation problems that affect meaning or fluency; do not treat punctuation, periods, full stops, capitalization, or written formatting as grammar errors.
+
+Question:
+{turn.get("question") or ""}
+
+Candidate transcript:
+{transcript or "(missing)"}
+
+Learning profile:
+{json_dumps(profile)}
+"""
+    output, _usage = run_codex(prompt, call_id or f"turn_feedback_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
+    payload = extract_json_object(output)
+    band7 = clean_band7_output(str(payload.get("band7_version") or ""))
+    coaching = clean_markdown_text(str(payload.get("ai_coaching") or ""))
+    if not valid_turn_band7(str(turn.get("question") or ""), band7, part):
+        raise RuntimeError("codex turn feedback did not include a question-aware Band 7 answer")
+    coaching = ensure_grammar_correction_bullet(coaching, transcript)
+    if not concise_coaching_markdown(coaching):
+        raise RuntimeError("codex turn feedback did not include concise Markdown coaching")
+    return {"band7_version": band7, "ai_coaching": coaching}
+
+
+def build_turn_feedback(
+    state: AppState,
+    attempt: dict[str, Any],
+    turn: dict[str, Any],
+    allow_codex: bool = True,
+    include_tts: bool = True,
+) -> None:
+    transcript = str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
+    target = target_band_label(attempt)
+    profile = build_learning_profile(state, attempt)
+    turn_context = {**turn, "attempt": attempt}
+    generated: dict[str, str] = {}
+    if allow_codex and transcript:
         try:
-            band7 = model_answer_with_codex({**attempt, "turns": [turn]}, transcript, state.billing, f"band7_turn_{attempt['id']}_{turn['id']}")
-        except Exception:
-            band7 = ""
-    if not plausible_spoken_answer(band7):
-        band7 = build_turn_band7_fallback(turn, transcript, target)
-    turn["band7_version"] = clean_report_text(band7) or build_turn_band7_fallback(turn, transcript, target)
-    turn["band7_markdown"] = spoken_markdown(band7) or spoken_markdown(turn["band7_version"])
+            generated = turn_feedback_with_codex(
+                {**attempt, "turns": [turn]},
+                turn,
+                transcript,
+                profile,
+                state.billing,
+                f"turn_feedback_{attempt['id']}_{turn['id']}",
+            )
+        except Exception as exc:  # noqa: BLE001 - report feedback must degrade cleanly
+            turn["feedback_generation_error"] = str(exc)
+    band7 = generated.get("band7_version") or str(turn.get("band7_version") or "")
+    if not valid_turn_band7(str(turn.get("question") or ""), band7, str(turn.get("part") or "").lower()):
+        band7 = build_turn_band7_fallback(turn_context, transcript, target)
+    turn["band7_version"] = clean_report_text(band7) or build_turn_band7_fallback(turn_context, transcript, target)
+    turn_part = str(turn.get("part") or "").lower()
+    turn["band7_markdown"] = spoken_markdown(band7, turn_part) or spoken_markdown(turn["band7_version"], turn_part)
     turn["target_band_version"] = turn["band7_version"]
     turn["target_band_markdown"] = turn["band7_markdown"]
     turn["target_band"] = target
-    turn["model_audio"] = volcengine_tts(state, turn["band7_version"], role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
+    if include_tts:
+        current_audio = turn.get("model_audio") or {}
+        if not current_audio.get("audio_url") and current_audio.get("status") not in {"ready", "cached"}:
+            turn["model_audio"] = volcengine_tts(state, turn["band7_version"], role="model", cache_key=f"{attempt['id']}_{turn['id']}_band7")
     turn["upgrade_notes"] = build_upgrade_notes(transcript)
-    profile = build_learning_profile(state, {**attempt, "turns": [*attempt.get("turns", []), turn]})
-    turn["ai_coaching"] = build_ai_coaching(
-        turn,
-        transcript,
-        turn["band7_version"],
-        billing=state.billing,
-        call_id=f"coach_turn_{attempt['id']}_{turn['id']}",
-        profile=profile,
-    )
+    coaching = generated.get("ai_coaching") or str(turn.get("ai_coaching") or "")
+    if not concise_coaching_markdown(coaching):
+        coaching = build_ai_coaching(turn, transcript, turn["band7_version"], profile=profile, allow_codex=False)
+    turn["ai_coaching"] = clean_markdown_text(coaching)
+    turn["feedback_generation_status"] = "ready"
+    turn["feedback_generation_backend"] = "codex" if generated else "fallback"
+
+
+def build_turn_band7(state: AppState, attempt: dict[str, Any], turn: dict[str, Any], include_coaching: bool = True) -> None:
+    build_turn_feedback(state, attempt, turn, allow_codex=include_coaching, include_tts=True)
+
+
+def schedule_turn_feedback_generation(state: AppState, attempt_id: str, turn_id: str) -> None:
+    def worker() -> None:
+        try:
+            attempt = state.load_attempt(attempt_id)
+            if attempt.get("status") in {"aborted", "scored"}:
+                return
+            turn = next((item for item in attempt.get("turns", []) if item.get("id") == turn_id), None)
+            if not turn or turn.get("status") != "completed":
+                return
+            if turn.get("feedback_generation_status") == "ready" and turn.get("band7_version") and turn.get("ai_coaching"):
+                return
+            turn["feedback_generation_status"] = "generating"
+            build_turn_feedback(state, attempt, turn, allow_codex=True, include_tts=True)
+            feedback_fields = {
+                key: turn.get(key)
+                for key in (
+                    "band7_version",
+                    "band7_markdown",
+                    "target_band_version",
+                    "target_band_markdown",
+                    "target_band",
+                    "model_audio",
+                    "upgrade_notes",
+                    "ai_coaching",
+                    "feedback_generation_status",
+                    "feedback_generation_backend",
+                    "feedback_generation_error",
+                )
+                if key in turn
+            }
+            latest = state.load_attempt(attempt_id)
+            if latest.get("status") in {"aborted", "scored"}:
+                return
+            latest_turn = next((item for item in latest.get("turns", []) if item.get("id") == turn_id), None)
+            if not latest_turn or latest_turn.get("status") != "completed":
+                return
+            latest_turn.update(feedback_fields)
+            state.save_attempt(latest)
+        except Exception as exc:  # noqa: BLE001 - background feedback must never break the speaking flow
+            try:
+                attempt = state.load_attempt(attempt_id)
+                if attempt.get("status") in {"aborted", "scored"}:
+                    return
+                turn = next((item for item in attempt.get("turns", []) if item.get("id") == turn_id), None)
+                if not turn:
+                    return
+                turn["feedback_generation_status"] = "failed"
+                turn["feedback_generation_error"] = str(exc)
+                state.save_attempt(attempt)
+            except Exception:
+                return
+
+    threading.Thread(target=worker, name=f"ielts-turn-feedback-{safe_slug(attempt_id)}-{safe_slug(turn_id)}", daemon=True).start()
 
 
 def build_upgrade_notes(transcript: str) -> list[dict[str, str]]:
@@ -2423,9 +3480,6 @@ def turn_habit_tags(turn: dict[str, Any], score: dict[str, Any] | None = None) -
         tags.add("repeated_phrases")
     if score and isinstance(score.get("overall_band"), (int, float)) and float(score["overall_band"]) < 5.5:
         tags.add("low_band")
-    pronunciation = turn.get("pronunciation") or {}
-    if pronunciation.get("status") not in {"assessed"}:
-        tags.add("pronunciation_unreliable")
     if transcript and prompt_relevance(str(turn.get("question") or ""), transcript) < 0.20:
         tags.add("off_topic")
     if part == "p1" and word_count < 15:
@@ -2477,8 +3531,6 @@ def infer_primary_focus(tags: list[str]) -> str:
         return "answer_development"
     if "template_language" in tags or "repeated_phrases" in tags:
         return "lexical_variety"
-    if "pronunciation_unreliable" in tags:
-        return "pronunciation_clarity"
     if "low_band" in tags:
         return "answer_development"
     return "answer_development"
@@ -2532,7 +3584,6 @@ def build_learning_profile(state: AppState, attempt: dict[str, Any], score: dict
         "task_relevance": "这次主要问题是没有完全扣住题目，先把回答方向答准。",
         "answer_development": "这次主要卡在回答展开不够，不是题目完全不会。",
         "lexical_variety": "这次主要问题是表达重复或模板感重，需要换成更自然的说法。",
-        "pronunciation_clarity": "这次主要受录音或发音清晰度影响，需要先保证可听清。",
     }.get(primary_focus, "先处理最影响分数的一个说话习惯。")
     recurring_weak_reasons = sorted({str(reason) for reason in weak_summary["reasons"].keys()} | set(tags))
     return {
@@ -2555,17 +3606,14 @@ def build_personalized_coaching(profile: dict[str, Any], attempt: dict[str, Any]
         "task_relevance": "先把题目答准，再去追求更高阶表达",
         "answer_development": "先补答案展开，不要只停在一句点到为止",
         "lexical_variety": "先把模板化表达换掉，改成更自然的说法",
-        "pronunciation_clarity": "先保证录音完整清晰，再谈更高分细节",
     }.get(str(profile.get("primary_focus") or ""), "先处理最影响分数的说话习惯")
     next_practice: list[str] = []
     if "short_answer" in tags or "limited_development" in tags:
-        next_practice.append("每题都按“直接回答 + 原因 + 例子 + 一句收尾”练 2 轮。")
+        next_practice.append('每题都按"直接回答 + 原因 + 例子 + 一句收尾"练 2 轮。')
     if "template_language" in tags or repeated:
         next_practice.append("把高频模板词替换成你自己的经历说法，先录 1 次再回听。")
     if "off_topic" in tags:
         next_practice.append("每次开口前先复述题目里的关键词，确认回答没有跑题。")
-    if "pronunciation_unreliable" in tags:
-        next_practice.append("保证录音完整，先把语速放慢，句末不要吞音。")
     if not next_practice:
         next_practice.extend([
             "先挑一题慢速录音，再对照 Band 7 版本改一遍。",
@@ -2577,6 +3625,120 @@ def build_personalized_coaching(profile: dict[str, Any], attempt: dict[str, Any]
         "evidence": evidence[:5],
         "next_practice": next_practice[:3],
         "habit_tags": tags[:8],
+    }
+
+
+def overall_review_with_codex(
+    profile: dict[str, Any],
+    attempt: dict[str, Any],
+    score: dict[str, Any],
+    billing: BillingStore | None = None,
+    call_id: str | None = None,
+) -> str:
+    """Generate AI-powered personalized overall review based on learning profile and performance."""
+    band = score.get("overall_band")
+    band_text = f"Band {band}" if isinstance(band, (int, float)) and not isinstance(band, bool) else "本次练习"
+    part = attempt_part(attempt)
+    turns_summary = "\n".join(
+        f"Q{i+1}: {turn.get('question', '')[:60]}... → {turn.get('transcript_cleaned', turn.get('transcript_raw', ''))[:80]}..."
+        for i, turn in enumerate(attempt.get("turns", [])[:5])
+    )
+    prompt = f"""请为这次 IELTS Speaking 练习生成中文总体点评与复盘重点。输出格式为 Markdown，包含两个部分。
+
+要求：
+- 第一部分「总体点评」：2-3 句话概括本次表现的核心问题和突破方向，结合用户画像给出针对性建议
+-第二部分「复盘重点」：3-5 个具体可执行的改进建议，用 bullet list 呈现
+- 语气要具体、实用、有针对性，避免空泛评价
+- 可以稍长，不要限制 AI 内容，让建议充分展开
+- 必须结合学习画像进行个性化点评
+
+本次成绩：{band_text}
+练习部分：{part}
+评分详情：
+- Fluency & Coherence: {score.get('fluency_coherence', '—')}
+- Lexical Resource: {score.get('lexical_resource', '—')}
+- Grammatical Range: {score.get('grammatical_range', '—')}
+
+部分转写样本：
+{turns_summary}
+
+学习画像：
+{json_dumps(profile)}
+
+请输出 Markdown 格式的总体点评与复盘重点。"""
+    output, _usage = run_codex(prompt, call_id or f"overall_review_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
+    return clean_markdown_text(output)
+
+
+def build_overall_review(
+    profile: dict[str, Any],
+    coaching: dict[str, Any],
+    attempt: dict[str, Any],
+    score: dict[str, Any],
+    billing: BillingStore | None = None,
+    allow_codex: bool = True,
+) -> dict[str, Any]:
+    if allow_codex:
+        try:
+            markdown = overall_review_with_codex(profile, attempt, score, billing, f"overall_review_{attempt.get('id')}")
+            if markdown and len(markdown) > 50:
+                return {
+                    "comment": "",
+                    "review_points": [],
+                    "markdown": markdown,
+                    "source": "codex_personalized",
+                }
+        except Exception:
+            pass
+    score_review = score.get("overall_review")
+    if isinstance(score_review, dict):
+        band = score.get("overall_band")
+        band_text = f"Band {band}" if isinstance(band, (int, float)) and not isinstance(band, bool) else "本次练习"
+        comment = clean_report_text(str(score_review.get("comment") or ""))
+        points = [clean_report_text(str(item)) for item in score_review.get("review_points") or []]
+        points = [item for item in points if item][:4]
+        if comment or points:
+            if not comment:
+                comment = f"{band_text} 的主要突破口：先处理最影响分数的说话习惯。"
+            markdown_lines = [
+                "### 总体点评",
+                "",
+                comment,
+                "",
+                "### 复盘重点",
+                "",
+                *[f"- {point}" for point in points],
+            ]
+            return {
+                "comment": comment,
+                "review_points": points or ["先选一题重录，确认答案有直接回答、原因和一个具体例子。"],
+                "markdown": clean_markdown_text("\n".join(markdown_lines)),
+                "source": "codex_score",
+            }
+    band = score.get("overall_band")
+    band_text = f"Band {band}" if isinstance(band, (int, float)) and not isinstance(band, bool) else "本次练习"
+    headline = str(coaching.get("headline") or "先处理最影响分数的说话习惯")
+    focus = str(coaching.get("focus") or profile.get("primary_focus_text") or "先把答案说完整、说具体。")
+    evidence = [str(item) for item in coaching.get("evidence") or profile.get("evidence") or [] if str(item).strip()]
+    next_practice = [str(item) for item in coaching.get("next_practice") or [] if str(item).strip()]
+    comment = f"{band_text} 的主要突破口：{headline}。{focus}"
+    review_points = (next_practice + evidence)[:5]
+    if not review_points:
+        review_points = ["先选一题重录，确认答案有直接回答、原因和一个具体例子。"]
+    markdown_lines = [
+        "### 总体点评",
+        "",
+        comment,
+        "",
+        "### 复盘重点",
+        "",
+        *[f"- {point}" for point in review_points[:4]],
+    ]
+    return {
+        "comment": clean_report_text(comment),
+        "review_points": review_points[:4],
+        "markdown": clean_markdown_text("\n".join(markdown_lines)),
+        "source": "learning_profile",
     }
 
 
@@ -2595,10 +3757,19 @@ def ai_coaching_with_codex(
         "p2": "Part 2 要覆盖 cue card，并把答案说满。重点提醒：开头点题 + 展开细节 + 例子/经历 + 收尾。",
         "p3": "Part 3 要做抽象讨论。重点提醒：观点 + 原因 + 对比/例子 + 简短总结。",
     }.get(part, "按对应的 IELTS Speaking 部分给出实用中文 coaching。")
-    prompt = f"""请为这一段 IELTS Speaking 回答生成中文 coaching。只输出 Markdown，不要标题。
+    prompt = f"""请为这一段 IELTS Speaking 回答生成中文 coaching。只输出简短 Markdown，不要标题。
 请结合学习画像、当前转写和 Band 7 版本，写得具体、实用、适合大陆 IELTS 学习者。
-必须包含：1) 你看到的 transcript 证据；2) 问题原因；3) 可直接替换的表达或句型；4) 下一步怎么练。
-不要空泛评价，也不要只复述分数。
+输出限制：
+- 写 2-4 个自然分点的 Markdown bullet。
+- 分点内容由 AI 自己决定，不要套固定格式；可以写问题、原因、结构、练法或示范句。
+- 不要强制给“可以直接替换成”的英文句子；只有在确实有帮助时才自然给例句。
+- 不要强制使用"证据/问题原因/替代表达/下一步"这四个固定标签。
+- 最后一条必须是语法错误纠正：
+  - 没有明显口语语法/搭配问题时，写 "- 语法错误纠正：无"。
+  - 有问题时，写 "- 语法错误纠正："，并把具体纠正放在它下面的二级编号列表里，例如 "  1. `going internship` -> `I am doing an internship.`"。
+- 语法错误纠正只管影响口语表达的语法或搭配问题；不要把句末标点、句号、大小写、书面格式当成语法错误。
+- 必须有清晰换行，不要写成长段落。
+- 不要空泛评价，不要只复述分数。
 
 {part_hint}
 
@@ -2615,10 +3786,51 @@ Learning profile:
 {json_dumps(profile or {})}
 """
     output, _usage = run_codex(prompt, call_id or f"coach_{hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:20]}", billing)
-    coaching = clean_report_text(output)
-    if not coaching:
+    coaching = normalize_coaching_markdown(output)
+    coaching = ensure_grammar_correction_bullet(coaching, transcript)
+    if not concise_coaching_markdown(coaching):
         raise RuntimeError("codex coaching was too short")
     return coaching
+
+
+def _coaching_reason_for_question(question_lower: str, part: str, transcript_words: int, transcript_usable: bool, tags: list[str]) -> str:
+    if not transcript_usable:
+        if "name" in question_lower:
+            return "名字部分转写不清楚，先确保发音清晰、语速适中。"
+        if "work" in question_lower or "study" in question_lower:
+            return "这题需要直接说明身份（学生/工作），再加一个原因。"
+        if any(w in question_lower for w in ("live", "living", "neighbourhood", "neighbor")):
+            return "住所类问题先说地点，再加一个你喜欢/不喜欢的原因。"
+        if any(w in question_lower for w in ("favourite", "favorite", "enjoy", "like most")):
+            return "喜好类问题先说选择，再说为什么喜欢。"
+        if any(w in question_lower for w in ("think", "opinion", "important")):
+            return "观点类问题先表态（yes/no/depends），再给一个理由。"
+        if "easy" in question_lower or "difficult" in question_lower:
+            return "难易类问题先说你的感受，再解释为什么。"
+        return "转写不太清楚，先把答案说完整、说慢一点，确保每个词都能被识别。"
+    if transcript_words < 15:
+        return "回答太短了，Part 1 至少需要 2-3 句话。"
+    if transcript_words < 35:
+        return "回答偏短，试着加一个原因或一个小细节。"
+    if "template_language" in tags:
+        return "模板感比较明显，试着用自己的真实经历来回答。"
+    return "回答已经成形，可以把表达再自然一些。"
+
+
+def _coaching_next_action(question_lower: str, part: str, transcript_usable: bool, tags: list[str]) -> str:
+    if not transcript_usable:
+        return "下一次练这题时，先把 Band 7 版本读出声 3 遍，熟悉句型后再脱稿说。"
+    if "short_answer" in tags or "limited_development" in tags:
+        return "下一次先用 20 秒把答案补完整，确保有直接回答 + 原因 + 细节。"
+    if "template_language" in tags:
+        return "下一次试着不用模板句，直接从自己的经历开始说。"
+    if "off_topic" in tags:
+        return "下一次先在心里复述题目关键词，确认每句话都在回答问题。"
+    if any(w in question_lower for w in ("favourite", "favorite", "enjoy", "like")):
+        return "下一次试着加一个具体的例子或场景，让答案更生动。"
+    if any(w in question_lower for w in ("think", "opinion", "important")):
+        return "下一次试着先表态再解释，避免绕圈子。"
+    return "下一次对照 Band 7 版本，挑一句最想改的句型反复练 3 次。"
 
 
 def build_ai_coaching(
@@ -2628,6 +3840,7 @@ def build_ai_coaching(
     billing: BillingStore | None = None,
     call_id: str | None = None,
     profile: dict[str, Any] | None = None,
+    allow_codex: bool = True,
 ) -> str:
     if profile is None and isinstance(billing, dict):
         profile = billing
@@ -2635,58 +3848,63 @@ def build_ai_coaching(
     if profile is None and isinstance(call_id, dict):
         profile = call_id
         call_id = None
-    if transcript.strip() and band7.strip():
+    if allow_codex and transcript.strip() and band7.strip():
         try:
             return ai_coaching_with_codex(turn, transcript, band7, profile, billing, call_id)
         except Exception:
             pass
     profile = profile or {}
     tags = [str(tag) for tag in profile.get("habit_tags") or []]
-    focus = str(profile.get("primary_focus_text") or "")
     repeated_phrases = [str(item) for item in profile.get("repeated_phrases") or []]
     part = str(turn.get("part") or "").lower()
     transcript_text = transcript.strip()
     transcript_words = transcript_word_count(transcript_text)
     question_text = short_question(str(turn.get("question") or "this question"), 120)
-    evidence = short_question(transcript_text, 120) if transcript_text else "这次没有抓到完整转写。"
-    if transcript_text:
-        evidence = f"题目：{question_text}。这次回答大约 {transcript_words} 词：{evidence}"
-    reason = "当前回答偏短，先补完整再修饰。" if transcript_words < 35 else "当前回答可以再补一层展开。"
-    if "off_topic" in tags:
-        reason = "你的回答有一点跑题，先把题目关键词扣住。"
-    elif "template_language" in tags or repeated_phrases:
-        reason = "你有明显模板化表达，先换掉高频空话。"
-    elif "pronunciation_unreliable" in tags:
-        reason = "这次录音或转写不稳定，先把回答录完整。"
-    elif part == "p2" and ("short_answer" in tags or "limited_development" in tags):
-        reason = "Part 2 还没说满，先把 cue card 说完整。"
-    elif part == "p3" and ("short_answer" in tags or "limited_development" in tags):
-        reason = "Part 3 还缺抽象讨论，先补原因和对比。"
-    replacement = {
-        "p1": "可以用“直接回答 + 一个原因 + 一个小细节”来改。",
-        "p2": "可以改成“开头点题 + 经过/细节 + 结果/感受 + 收尾”。",
-        "p3": "可以改成“观点 + 原因 + 对比/例子 + 简短结论”。",
-    }.get(part, "可以改成更完整的“观点 + 原因 + 例子 + 收尾”句型。")
-    practice = {
-        "short_answer": "下一次先用 20 秒把答案补完整，再回听删掉重复句。",
-        "limited_development": "下一次把同一题说到 40-60 词，再去加更自然的词。",
-        "template_language": "下一次把“it is very important”这类句子换成你自己的经历说法。",
-        "off_topic": "下一次先复述题目关键词，确认每句话都在回答问题。",
-        "pronunciation_unreliable": "下一次把语速放慢一点，确保录音完整清晰。",
-    }
-    matched_tag = next((tag for tag in ("off_topic", "template_language", "limited_development", "short_answer", "pronunciation_unreliable") if tag in tags), "")
-    next_action = practice.get(matched_tag, "下一次先对照 Band 7 版本，挑一句最想改的句型反复练 3 次。")
-    coaching = (
-        f"**证据**：{evidence}\n\n"
-        f"**问题原因**：{reason}\n\n"
-        f"**替代表达**：{replacement}\n\n"
-        f"**下一步**：{next_action}\n\n"
-        f"**学习重点**：{focus or '先把答案说完整，再去修饰表达。'}"
-    )
+    question_lower = question_text.lower()
+    transcript_usable = _transcript_usable_for_band7(question_text, transcript_text)
+    evidence = short_question(transcript_text, 72) if transcript_text else "这次没有抓到完整转写。"
+    reason = _coaching_reason_for_question(question_lower, part, transcript_words, transcript_usable, tags)
+    next_action = _coaching_next_action(question_lower, part, transcript_usable, tags)
+    no_transcript_hint = "转写不太清楚，先看 Band 7 版本学句型。"
+    evidence_text = evidence if transcript_usable else no_transcript_hint
+
+    seed = int(hashlib.sha1(f"{question_text}|{transcript_text}|{part}".encode("utf-8")).hexdigest()[:8], 16)
+    opener_variants = [
+        "这题先把回答方向钉住，再补一句原因。",
+        "先别追求复杂词，先把主句说清楚。",
+        "这一题重点是先直答，再补一个具体细节。",
+        "先把身份/观点说明确，流畅度自然会上来。",
+    ]
+    action_variants = [
+        "下次练习时，先完整说 2 句，再加 1 个生活化细节。",
+        "先照着 Band 7 句型读 2-3 遍，再脱稿复述。",
+        "这题先按“直接回答 + 原因”练熟，再加例子。",
+        "先把语速放慢一点，保证每句都完整落地。",
+    ]
+
+    opener = opener_variants[seed % len(opener_variants)]
+    action = action_variants[(seed // 7) % len(action_variants)]
+    if not transcript_usable:
+        opener = no_transcript_hint
+    elif transcript_words < 16:
+        opener = "这次回答偏短，建议至少说到 2 句完整句。"
+
+    lines: list[str] = []
+    lines.append("- AI 辅导生成失败，以下是系统默认建议。")
+    lines.append(f"- 本题关键词：{question_text}")
+    lines.append(f"- {opener}")
+    lines.append(f"- {reason}")
+    if transcript_usable and evidence_text:
+        lines.append(f"- 这次转写里最需要处理的是：{evidence_text}")
     if repeated_phrases:
-        coaching += f"\n\n**重复表达**：{', '.join(repeated_phrases[:3])}"
-    return clean_report_text(coaching)
-def score_for_part(turns: list[dict[str, Any]], part: str, fallback_score: dict[str, Any], pronunciation: dict[str, Any]) -> dict[str, Any]:
+        lines.append(f"- 少重复这些表达：{', '.join(repeated_phrases[:2])}")
+
+    concise_action = action if part in {"p1", "p3"} else next_action
+    lines.append(f"- {concise_action}")
+    return ensure_grammar_correction_bullet("\n".join(lines), transcript)
+
+
+def score_for_part(turns: list[dict[str, Any]], part: str, fallback_score: dict[str, Any]) -> dict[str, Any]:
     part_turns = [turn for turn in turns if turn.get("part") == part]
     transcript = "\n".join(str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "") for turn in part_turns)
     if not part_turns:
@@ -2697,11 +3915,6 @@ def score_for_part(turns: list[dict[str, Any]], part: str, fallback_score: dict[
         "\n".join(str(turn.get("question") or "") for turn in part_turns),
         part,
     )
-    pron = aggregate_pronunciation(part_turns)
-    pron_band = None
-    if pron.get("status") == "assessed" and pron.get("pron_score") is not None:
-        pron_band = clamp_band(float(pron["pron_score"]) / 100.0 * 9.0)
-    part_score["pronunciation_estimate"] = pron_band
     part_score["overall_band"] = rounded_overall(part_score)
     part_score = calibrate_realistic_score(
         part_score,
@@ -2716,15 +3929,13 @@ def score_for_part(turns: list[dict[str, Any]], part: str, fallback_score: dict[
         "fluency_coherence": part_score.get("fluency_coherence", fallback_score.get("fluency_coherence")),
         "lexical_resource": part_score.get("lexical_resource", fallback_score.get("lexical_resource")),
         "grammatical_range": part_score.get("grammatical_range", fallback_score.get("grammatical_range")),
-        "pronunciation_estimate": part_score.get("pronunciation_estimate"),
-        "pronunciation_status": pron.get("status") or pronunciation.get("status"),
     }
 
 
-def build_part_scores(attempt: dict[str, Any], score: dict[str, Any], pronunciation: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def build_part_scores(attempt: dict[str, Any], score: dict[str, Any]) -> dict[str, dict[str, Any]]:
     turns = attempt.get("turns") or []
     return {
-        part: score_for_part(turns, part, score, pronunciation)
+        part: score_for_part(turns, part, score)
         for part in ("p1", "p2", "p3")
         if any(turn.get("part") == part for turn in turns)
     }
@@ -2737,60 +3948,39 @@ def build_detailed_report(
     pronunciation: dict[str, Any],
     transcript: str,
 ) -> dict[str, Any]:
-    pron_band = None
-    if pronunciation.get("status") == "assessed" and pronunciation.get("pron_score") is not None:
-        pron_band = clamp_band(float(pronunciation["pron_score"]) / 100.0 * 9.0)
-    score["pronunciation_estimate"] = pron_band
     score["overall_band"] = rounded_overall(score)
     score = calibrate_realistic_score(score, questions_text(attempt), transcript, attempt_part(attempt))
     summary = clean_report_text(str(score.get("feedback") or "")) or "Score generated from the completed speaking section."
-    band7 = clean_report_text(build_band7_version(state, attempt, transcript))
-    final_band7 = band7 or build_band7_version(state, attempt, transcript)
-    model_tts = volcengine_tts(state, final_band7, role="model", cache_key=f"{attempt['id']}_band7")
     learning_profile = build_learning_profile(state, attempt, score)
     personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
+    overall_review = build_overall_review(learning_profile, personalized_coaching, attempt, score, state.billing, allow_codex=True)
     for turn in attempt.get("turns", []):
         transcript_turn = str(turn.get("transcript_cleaned") or turn.get("transcript_raw") or "").strip()
         if not transcript_turn:
             continue
-        turn["ai_coaching"] = build_ai_coaching(
-            turn,
-            transcript_turn,
-            turn.get("band7_version") or final_band7,
-            billing=state.billing,
-            call_id=f"coach_turn_{attempt['id']}_{turn['id']}_final",
-            profile=learning_profile,
-        )
+        if not turn.get("band7_version") or not turn.get("ai_coaching"):
+            build_turn_feedback(state, attempt, turn, allow_codex=False, include_tts=True)
     return {
         "feedback_summary": summary,
         "ielts_score": score,
-        "pronunciation": pronunciation,
         "criteria_feedback": {
             "fluency_coherence": base_criteria(score["fluency_coherence"], "fluency and coherence", transcript),
             "lexical_resource": base_criteria(score["lexical_resource"], "lexical resource", transcript),
             "grammatical_range_accuracy": base_criteria(score["grammatical_range"], "grammar", transcript),
-            "pronunciation": {
-                "band": pron_band,
-                "standard": "Assesses intelligibility, individual sound control, word stress, rhythm, and how naturally speech can be followed.",
-                "focus": "Pronunciation estimate only / Azure Speech is not configured." if pron_band is None else "Pronunciation was estimated from uploaded turn audio.",
-                "advice": "Configure Azure Speech for real pronunciation scoring." if pron_band is None else "Review low-accuracy words and repeat the model answer aloud.",
-                "strengths": [] if pron_band is None else ["Pronunciation was estimated from uploaded turn audio."],
-                "problems": pronunciation.get("issues", []) or [pronunciation.get("message", "Pronunciation estimate only / Azure Speech is not configured.")],
-                "suggestion": "Configure Azure Speech for real pronunciation scoring." if pron_band is None else "Review low-accuracy words and repeat the model answer aloud.",
-            },
         },
-        "part_scores": build_part_scores(attempt, score, pronunciation),
+        "part_scores": build_part_scores(attempt, score),
         "target_band": target_band(attempt),
-        "band7_version": final_band7,
-        "band7_markdown": spoken_markdown(final_band7),
-        "target_band_version": final_band7,
-        "target_band_markdown": spoken_markdown(final_band7),
-        "model_audio": model_tts,
+        "band7_version": "",
+        "band7_markdown": "",
+        "target_band_version": "",
+        "target_band_markdown": "",
+        "model_audio": None,
         "upgrade_notes": build_upgrade_notes(transcript),
         "ai_coaching": clean_report_text(personalized_coaching.get("focus") or "先把答案说完整、说具体，再根据 Band 7 示例调整表达。"),
         "coaching_focus": personalized_coaching.get("focus") or "",
         "learning_profile": learning_profile,
         "personalized_coaching": personalized_coaching,
+        "overall_review": overall_review,
         "report": {
             "candidate": str(attempt.get("candidate") or DEFAULT_CANDIDATE),
             "timestamp": attempt.get("timestamp") or now_iso(),
@@ -2801,6 +3991,11 @@ def build_detailed_report(
 class IELTSHandler(SimpleHTTPRequestHandler):
     state: AppState
 
+    def end_headers(self) -> None:
+        if self.path.endswith(("/app.js", "/styles.css", "/index.html")) or urlparse(self.path).path == "/":
+            self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def translate_path(self, path: str) -> str:
         path = urlparse(path).path
         if path == "/":
@@ -2810,15 +4005,77 @@ class IELTSHandler(SimpleHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         sys.stderr.write("[ielts-web] " + fmt % args + "\n")
 
+    def should_proxy_django_path(self, path: str) -> bool:
+        if path.startswith("/api/accounts/"):
+            return True
+        if path.startswith("/api/writing/"):
+            cookie = self.headers.get("Cookie", "")
+            return DJANGO_PROXY_WRITE_FIRST and (DJANGO_FORCE_WRITING_PROXY or "sessionid=" in cookie)
+        return False
+
+    def try_proxy_django(self, method: str, path_with_query: str, payload: dict[str, Any] | None = None) -> bool:
+        path = urlparse(path_with_query).path
+        if not self.should_proxy_django_path(path):
+            return False
+        body = None
+        headers = {"Accept": "application/json"}
+        if payload is not None:
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        cookie = self.headers.get("Cookie")
+        if cookie:
+            headers["Cookie"] = cookie
+        request = urllib.request.Request(
+            f"{DJANGO_BACKEND_URL}{path_with_query}",
+            data=body,
+            headers=headers,
+            method=method,
+        )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            with opener.open(request, timeout=DJANGO_PROXY_TIMEOUT_SECONDS) as response:
+                self.forward_django_response(response.status, response.headers, response.read())
+                return True
+        except urllib.error.HTTPError as error:
+            self.forward_django_response(error.code, error.headers, error.read())
+            return True
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            if path.startswith("/api/accounts/"):
+                self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Django backend unavailable: {error}")
+                return True
+            return False
+
+    def forward_django_response(self, status: int, headers: Any, body: bytes) -> None:
+        self.send_response(status)
+        content_type = headers.get("Content-Type") or "application/json; charset=utf-8"
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for cookie in headers.get_all("Set-Cookie", []):
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:
         try:
             parsed_url = urlparse(self.path)
             path = parsed_url.path
+            if self.try_proxy_django("GET", self.path):
+                return
             if path == "/api/question-bank/summary":
                 self.send_json(self.state.bank.summary())
                 return
             if path == "/api/history":
                 self.send_json({"items": self.state.history()})
+                return
+            if path == "/api/writing/summary":
+                params = parse_qs(parsed_url.query)
+                self.send_json(self.state.writing_summary((params.get("month") or [""])[0]))
+                return
+            if path == "/api/writing/prompts":
+                params = parse_qs(parsed_url.query)
+                task_type = (params.get("task_type") or [""])[0] or None
+                self.send_json({"items": self.state.writing_bank.list(task_type)})
                 return
             if path == "/api/training/weak-items":
                 self.send_json({"items": self.state.training.weak_items(DEFAULT_USER_ID)})
@@ -2843,6 +4100,10 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             if match:
                 self.send_json(self.state.load_report_attempt(match.group(1)))
                 return
+            match = re.fullmatch(r"/api/writing/entries/([^/]+)", path)
+            if match:
+                self.send_json(self.state.load_writing_entry(match.group(1)))
+                return
             match = re.fullmatch(r"/api/audio/([^/]+)/([^/]+)/(candidate|examiner)", path)
             if match:
                 self.send_turn_audio(match.group(1), match.group(2), match.group(3))
@@ -2865,6 +4126,26 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
+    def do_DELETE(self) -> None:
+        try:
+            path = urlparse(self.path).path
+            match = re.fullmatch(r"/api/history/([^/]+)", path)
+            if match:
+                attempt_id = match.group(1)
+                file_path = self.state.attempt_path(attempt_id)
+                with self.state.lock:
+                    if not file_path.exists():
+                        self.send_error_json(HTTPStatus.NOT_FOUND, "Attempt not found")
+                        return
+                    file_path.unlink()
+                    if self.state.latest_report and self.state.latest_report.get("id") == attempt_id:
+                        self.state.latest_report = None
+                self.send_json({"ok": True})
+                return
+            self.send_error_json(HTTPStatus.NOT_FOUND, "Unknown API endpoint")
+        except Exception as exc:  # noqa: BLE001
+            self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+
     def do_POST(self) -> None:
         try:
             path = urlparse(self.path).path
@@ -2878,6 +4159,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 self.handle_turn_audio_upload(legacy_audio.group(1), attempt["turns"][0]["id"])
                 return
             payload = self.read_json_body()
+            if self.try_proxy_django("POST", self.path, payload):
+                return
             if path == "/api/question-bank/sample":
                 self.send_json(self.state.bank.sample(int(payload.get("p1_count", 5))))
             elif path == "/api/session/start":
@@ -2889,6 +4172,10 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 self.handle_tts(payload)
             elif path == "/api/attempts/start":
                 self.handle_attempt_start(payload)
+            elif path == "/api/writing/prompts/random":
+                self.handle_writing_random_prompt(payload)
+            elif path == "/api/writing/entries":
+                self.handle_writing_entry_save(payload)
             elif path == "/api/billing/reserve":
                 call_id = str(payload.get("call_id") or "").strip()
                 if not call_id:
@@ -2917,18 +4204,36 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 self.send_json(self.state.billing.recharge(str(payload.get("user_id") or DEFAULT_USER_ID), amount_rmb))
             else:
                 turn_complete = re.fullmatch(r"/api/attempts/([^/]+)/turns/([^/]+)/complete", path)
+                turn_feedback_regenerate = re.fullmatch(r"/api/attempts/([^/]+)/turns/([^/]+)/feedback/regenerate", path)
+                turn_transcript_regenerate = re.fullmatch(r"/api/attempts/([^/]+)/turns/([^/]+)/transcript/regenerate", path)
                 score_match = re.fullmatch(r"/api/attempts/([^/]+)/score", path)
                 abort_match = re.fullmatch(r"/api/attempts/([^/]+)/abort", path)
+                writing_score_match = re.fullmatch(r"/api/writing/entries/([^/]+)/score", path)
                 if turn_complete:
                     self.handle_turn_complete(turn_complete.group(1), turn_complete.group(2), payload)
+                elif turn_feedback_regenerate:
+                    self.handle_turn_feedback_regenerate(turn_feedback_regenerate.group(1), turn_feedback_regenerate.group(2))
+                elif turn_transcript_regenerate:
+                    self.handle_turn_transcript_regenerate(turn_transcript_regenerate.group(1), turn_transcript_regenerate.group(2))
                 elif score_match:
                     self.handle_attempt_score(score_match.group(1), payload)
                 elif abort_match:
                     self.handle_attempt_abort(abort_match.group(1))
+                elif writing_score_match:
+                    self.handle_writing_entry_score(writing_score_match.group(1), payload)
                 elif path == "/api/p3/questions" or path == "/api/p3/follow-up":
                     self.handle_p3(payload)
                 else:
                     self.send_error_json(HTTPStatus.NOT_FOUND, "Unknown API endpoint")
+        except Exception as exc:  # noqa: BLE001
+            self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+
+    def do_PATCH(self) -> None:
+        try:
+            payload = self.read_json_body()
+            if self.try_proxy_django("PATCH", self.path, payload):
+                return
+            self.send_error_json(HTTPStatus.NOT_FOUND, "Unknown API endpoint")
         except Exception as exc:  # noqa: BLE001
             self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -2947,6 +4252,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if mode == "full":
             mode = "mock"
         attempt_id = uuid.uuid4().hex
+        full_name, english_name = candidate_names_from_payload(payload)
         part, title, turns, cue_card, metadata = build_turns(self.state, attempt_id, mode, payload)
         attempt = {
             "id": attempt_id,
@@ -2960,7 +4266,9 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             "cue_card": cue_card,
             "turns": turns,
             "current_turn": turns[0]["id"] if turns else None,
-            "candidate": str(payload.get("candidate") or DEFAULT_CANDIDATE),
+            "candidate": english_name,
+            "full_name": full_name,
+            "english_name": english_name,
             "pronunciation": {"provider": "azure", "status": "pending"},
             "ielts_score": None,
             "feedback_summary": "",
@@ -2975,6 +4283,77 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             ensure_examiner_tts(self.state, attempt_id, attempt["turns"][0])
         self.state.save_attempt(attempt)
         self.send_json(attempt)
+
+    def handle_writing_random_prompt(self, payload: dict[str, Any]) -> None:
+        task_type = str(payload.get("task_type") or "").strip() or None
+        self.send_json(self.state.random_writing_prompt(task_type))
+
+    def handle_writing_entry_save(self, payload: dict[str, Any]) -> None:
+        answer = str(payload.get("answer") or "")
+        task_type = normalize_writing_task_type(str(payload.get("task_type") or ""))
+        raw_prompt_id = str(payload.get("prompt_id") or "").strip()
+        prompt_id = safe_slug(raw_prompt_id) if raw_prompt_id else ""
+        prompt = self.state.writing_bank.get(prompt_id, task_type) if prompt_id else None
+        prompt_text = clean_markdown_text(str(payload.get("prompt") or (prompt or {}).get("prompt") or ""))
+        if not prompt_text:
+            raise ValueError("Missing writing prompt")
+        now = now_iso()
+        raw_entry_id = str(payload.get("id") or "").strip()
+        entry_id = safe_slug(raw_entry_id) if raw_entry_id else uuid.uuid4().hex
+        existing: dict[str, Any] | None = None
+        if payload.get("id"):
+            try:
+                existing = self.state.load_writing_entry(entry_id)
+            except FileNotFoundError:
+                existing = None
+        created_at = str((existing or {}).get("created_at") or now)
+        saved_at = now
+        entry = {
+            **(existing or {}),
+            "id": entry_id,
+            "user_id": str(payload.get("user_id") or (existing or {}).get("user_id") or DEFAULT_USER_ID),
+            "created_at": created_at,
+            "updated_at": now,
+            "saved_at": saved_at,
+            "practice_date": str(payload.get("practice_date") or (existing or {}).get("practice_date") or local_date_string(saved_at)),
+            "status": "scored" if (existing or {}).get("status") == "scored" and (existing or {}).get("answer") == answer else "saved",
+            "task_type": task_type,
+            "task_label": WRITING_TASK_LABELS[task_type],
+            "prompt_id": prompt_id or stable_writing_prompt_id(task_type, prompt_text),
+            "title": clean_report_text(str(payload.get("title") or (prompt or {}).get("title") or "")) or WRITING_TASK_LABELS[task_type],
+            "category": clean_report_text(str(payload.get("category") or (prompt or {}).get("category") or "")),
+            "prompt": prompt_text,
+            "answer": answer,
+            "word_count": writing_word_count(answer),
+        }
+        if (existing or {}).get("answer") != answer:
+            entry.pop("score", None)
+            entry.pop("scored_at", None)
+        self.state.save_writing_entry(entry)
+        self.send_json(entry)
+
+    def handle_writing_entry_score(self, entry_id: str, payload: dict[str, Any]) -> None:
+        entry = self.state.load_writing_entry(entry_id)
+        if payload.get("answer") is not None:
+            entry["answer"] = str(payload.get("answer") or "")
+            entry["word_count"] = writing_word_count(entry["answer"])
+        if not str(entry.get("answer") or "").strip():
+            raise ValueError("Write an answer before requesting AI scoring.")
+        entry["updated_at"] = now_iso()
+        entry["saved_at"] = entry.get("saved_at") or entry["updated_at"]
+        entry["practice_date"] = entry.get("practice_date") or local_date_string(str(entry.get("saved_at") or ""))
+        profile_before = self.state.load_writing_profile(str(entry.get("user_id") or DEFAULT_USER_ID))
+        try:
+            score = score_writing_with_codex(entry, self.state.data_dir, self.state.billing, profile_before)
+        except Exception as exc:  # noqa: BLE001
+            score = writing_fallback_score(str(entry.get("task_type") or "task2"), str(entry.get("answer") or ""), str(exc))
+        entry["writing_profile"] = update_writing_profile(self.state, entry, score)
+        entry["score"] = score
+        entry["status"] = "scored"
+        entry["scored_at"] = now_iso()
+        entry["updated_at"] = entry["scored_at"]
+        self.state.save_writing_entry(entry)
+        self.send_json(entry)
 
     def handle_turn_audio_upload(self, attempt_id: str, turn_id: str) -> None:
         content_type = self.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip()
@@ -3011,38 +4390,38 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if attempt.get("status") == "aborted":
             raise ValueError("Aborted attempts cannot be completed.")
         turn = self.find_turn(attempt, turn_id)
-        transcript = str(payload.get("transcript_raw") or payload.get("transcript") or "").strip()
-        requested_status = str(payload.get("transcript_status") or "").strip()
-        transcript_status = requested_status if requested_status in {"captured", "interim_fallback", "missing"} else ""
-        if not transcript_status:
-            transcript_status = "captured" if transcript else "missing"
-        if not transcript:
-            transcript_status = "missing"
-        cleaned = clean_transcript_with_codex(
-            transcript,
-            str(turn.get("question") or ""),
-            str(turn.get("part") or ""),
-            self.state.billing,
-            f"asr_clean_{attempt_id}_{turn_id}",
-        )
+        browser_transcript = str(payload.get("transcript_raw") or payload.get("transcript") or "").strip()
+        turn["duration_seconds"] = payload.get("duration_seconds")
+        audio_path = Path((turn.get("audio") or {}).get("path", ""))
+        if audio_path.exists():
+            azure_result = transcribe_and_assess_azure(audio_path)
+            azure_transcript = azure_result.get("transcript", "").strip()
+            turn["pronunciation"] = azure_result["pronunciation"]
+            transcript = azure_transcript or browser_transcript
+            turn["transcript_source"] = "azure" if azure_transcript else "browser_dictation"
+        else:
+            transcript = browser_transcript
+            turn["transcript_source"] = "browser_dictation"
+            turn["pronunciation"] = {
+                "provider": "azure",
+                "status": "missing_audio",
+                "pron_score": None,
+                "accuracy": None,
+                "fluency": None,
+                "prosody": None,
+                "issues": [],
+                "message": "No candidate audio was uploaded; pronunciation is estimate only and not assessed.",
+            }
+        transcript_status = "captured" if transcript else "missing"
+        cleaned = clean_transcript(transcript)
         turn["transcript_raw"] = transcript
         turn["transcript_cleaned"] = cleaned["text"]
         turn["transcript_markdown"] = spoken_markdown(cleaned["text"])
         turn["transcript_status"] = transcript_status
         turn["cleaning_notes"] = cleaned["notes"]
-        turn["duration_seconds"] = payload.get("duration_seconds")
-        audio_path = Path((turn.get("audio") or {}).get("path", ""))
-        turn["pronunciation"] = pronunciation_from_azure(audio_path, transcript) if audio_path.exists() else {
-            "provider": "azure",
-            "status": "missing_audio",
-            "pron_score": None,
-            "accuracy": None,
-            "fluency": None,
-            "prosody": None,
-            "issues": [],
-            "message": "No candidate audio was uploaded; pronunciation is estimate only and not assessed.",
-        }
+        apply_p1_name_identity(attempt, turn)
         turn["status"] = "completed"
+        turn["feedback_generation_status"] = "pending"
         if (
             attempt.get("mode") == "mock"
             and turn.get("part") == "p2"
@@ -3051,7 +4430,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             cue = attempt.get("cue_card") or {}
             theme = str(cue.get("p3_theme") or cue.get("title") or attempt.get("p3_theme") or "general speaking")
             prior_answer = turn.get("transcript_cleaned") or turn.get("transcript_raw") or ""
-            append_p3_turns(self.state, attempt, theme, str(prior_answer), "p2_answer")
+            append_p3_turns(self.state, attempt, theme, str(prior_answer), "p2_answer", allow_codex=False)
         insert_p1_identity_follow_up(self.state, attempt, turn)
         next_turn = self.next_turn(attempt, turn_id)
         adapt_p3_follow_up(self.state, attempt, turn, next_turn)
@@ -3082,7 +4461,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if len(completed) != len(attempt.get("turns", [])):
             raise ValueError("Complete all speaking turns before generating the section report.")
         transcript = "\n".join(
-            f"Q{turn['index'] + 1}: {turn['question']}\nA: {turn.get('transcript_cleaned') or turn.get('transcript_raw') or ''}"
+            f"Q{display_question_number(turn) if turn.get('counts_toward_total', True) else 'Intro'}: {turn['question']}\nA: {turn.get('transcript_cleaned') or turn.get('transcript_raw') or ''}"
             for turn in completed
         )
         prompt_text = questions_text(attempt)
@@ -3093,15 +4472,58 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             score = score_with_codex(transcript, self.state.data_dir, prompt_text, self.state.billing, f"score_attempt_{attempt_id}", part)
         except Exception as exc:  # noqa: BLE001
             score = heuristic_score(transcript, str(exc), prompt_text, part)
+        for turn in completed:
+            build_turn_band7(self.state, attempt, turn, include_coaching=True)
         detailed = build_detailed_report(self.state, attempt, score, pronunciation, transcript)
         attempt.update(detailed)
-        for turn in completed:
-            build_turn_band7(self.state, attempt, turn)
         attempt["transcript_cleaned"] = transcript
         attempt["training_observations"] = self.state.training.record_attempt(attempt)
         attempt["status"] = "scored"
         self.state.save_attempt(attempt)
         self.send_json(attempt)
+
+    def handle_turn_feedback_regenerate(self, attempt_id: str, turn_id: str) -> None:
+        attempt = self.state.load_report_attempt(attempt_id)
+        turn = self.find_turn(attempt, turn_id)
+        if turn.get("status") != "completed":
+            raise ValueError("Only completed turns can regenerate AI feedback.")
+        turn["feedback_generation_status"] = "generating"
+        turn.pop("feedback_generation_error", None)
+        build_turn_feedback(self.state, attempt, turn, allow_codex=True, include_tts=True)
+        attempt["updated_at"] = now_iso()
+        self.state.save_attempt(attempt)
+        self.send_json({"ok": True, "attempt": attempt, "turn": turn})
+
+    def handle_turn_transcript_regenerate(self, attempt_id: str, turn_id: str) -> None:
+        attempt = self.state.load_report_attempt(attempt_id)
+        turn = self.find_turn(attempt, turn_id)
+        if turn.get("status") != "completed":
+            raise ValueError("Only completed turns can regenerate transcript.")
+        audio_path = Path((turn.get("audio") or {}).get("path", ""))
+        if not audio_path.exists():
+            raise ValueError("重新转写失败：这题没有可用录音文件。")
+
+        result = transcribe_and_assess_azure(audio_path)
+        transcript = str(result.get("transcript") or "").strip()
+        pronunciation = result.get("pronunciation") or {}
+        turn["pronunciation"] = pronunciation
+        if not transcript:
+            message = str(pronunciation.get("message") or "Azure did not return a transcript.")
+            raise ValueError(f"重新转写失败：{message}")
+
+        cleaned = clean_transcript(transcript)
+        turn["transcript_raw"] = transcript
+        turn["transcript_cleaned"] = cleaned["text"]
+        turn["transcript_markdown"] = spoken_markdown(cleaned["text"])
+        turn["transcript_status"] = "captured"
+        turn["transcript_source"] = "azure_retranscribe"
+        turn["cleaning_notes"] = cleaned["notes"]
+        turn["feedback_generation_status"] = "generating"
+        turn.pop("feedback_generation_error", None)
+        build_turn_feedback(self.state, attempt, turn, allow_codex=True, include_tts=True)
+        attempt["updated_at"] = now_iso()
+        self.state.save_attempt(attempt)
+        self.send_json({"ok": True, "attempt": attempt, "turn": turn})
 
     def handle_billing_settle(self, payload: dict[str, Any]) -> None:
         call_id = str(payload.get("call_id") or "").strip()
@@ -3179,7 +4601,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         audio = turn.get("examiner_tts") or {}
         path = Path(str(audio.get("path") or ""))
         if path.exists():
-            self.send_file_audio(path, str(audio.get("content_type") or "audio/mpeg"))
+            self.send_file_audio(path, str(audio.get("content_type") or "audio/mpeg"), cacheable=True)
             return
         self.send_error_json(HTTPStatus.NOT_FOUND, "Examiner audio not available")
 
@@ -3187,7 +4609,7 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         attempt = self.state.load_attempt(attempt_id)
         if kind == "model":
             audio = attempt.get("model_audio") or {}
-            self.send_file_audio(Path(str(audio.get("path") or "")), str(audio.get("content_type") or "audio/mpeg"))
+            self.send_file_audio(Path(str(audio.get("path") or "")), str(audio.get("content_type") or "audio/mpeg"), cacheable=True)
             return
         first = next((turn for turn in attempt.get("turns", []) if (turn.get("audio") or {}).get("path")), None)
         if not first:
@@ -3198,20 +4620,59 @@ class IELTSHandler(SimpleHTTPRequestHandler):
 
     def send_tts_audio(self, role: str, filename: str) -> None:
         folder = self.state.examiner_audio_dir if role == "examiner" else self.state.model_audio_dir
-        self.send_file_audio(folder / safe_slug(filename), "audio/mpeg")
+        self.send_file_audio(folder / safe_slug(filename), "audio/mpeg", cacheable=True)
 
-    def send_file_audio(self, path: Path, content_type: str = "") -> None:
+    def send_file_audio(self, path: Path, content_type: str = "", cacheable: bool = False) -> None:
         if not path.exists():
             self.send_error_json(HTTPStatus.NOT_FOUND, "Audio not available")
             return
         resolved_type = content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        body = path.read_bytes()
-        self.send_response(HTTPStatus.OK)
+        file_size = path.stat().st_size
+        start = 0
+        end = file_size - 1
+        status = HTTPStatus.OK
+        range_header = self.headers.get("Range", "").strip()
+        if range_header:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header)
+            if not match:
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.end_headers()
+                return
+            start_text, end_text = match.groups()
+            if start_text:
+                start = int(start_text)
+                end = int(end_text) if end_text else end
+            elif end_text:
+                suffix_length = int(end_text)
+                start = max(file_size - suffix_length, 0)
+            if file_size <= 0 or start >= file_size or start > end:
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.end_headers()
+                return
+            end = min(end, file_size - 1)
+            status = HTTPStatus.PARTIAL_CONTENT
+
+        content_length = max(0, end - start + 1)
+        self.send_response(status)
         self.send_header("Content-Type", resolved_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(content_length))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Last-Modified", self.date_time_string(path.stat().st_mtime))
+        if status == HTTPStatus.PARTIAL_CONTENT:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+        self.send_header("Cache-Control", "public, max-age=86400, immutable" if cacheable else "no-store")
         self.end_headers()
-        self.wfile.write(body)
+        with path.open("rb") as handle:
+            handle.seek(start)
+            remaining = content_length
+            while remaining > 0:
+                chunk = handle.read(min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
 
     def read_json_body(self) -> dict[str, Any]:
         size = int(self.headers.get("Content-Length", "0"))
