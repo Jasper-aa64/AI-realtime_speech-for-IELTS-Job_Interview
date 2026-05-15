@@ -9,6 +9,7 @@ from .services import (
     question_bank_sample,
     question_bank_summary,
     replay_queue,
+    start_attempt,
     weak_items,
 )
 
@@ -91,3 +92,20 @@ def training_replay_queue_view(request):
     except (ValueError, TypeError):
         limit = 10
     return JsonResponse({"items": replay_queue(request.user, limit)})
+
+
+@require_http_methods(["POST"])
+def attempt_start_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    import json as json_module
+    try:
+        payload = json_module.loads(request.body or "{}")
+    except json_module.JSONDecodeError:
+        payload = {}
+    try:
+        attempt = start_attempt(request.user, payload)
+        return JsonResponse(attempt)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)

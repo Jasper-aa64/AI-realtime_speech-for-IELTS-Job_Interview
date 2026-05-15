@@ -4,6 +4,112 @@ from django.test import Client, TestCase
 from apps.speaking.models import SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
 
 
+class AttemptStartApiTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = get_user_model().objects.create_user(username="attempt-user", password="test-pass")
+        self.client.force_login(self.user)
+
+    def test_start_requires_login(self):
+        self.client.logout()
+        response = self.client.post("/api/attempts/start", data={"mode": "p1"}, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+
+    def test_start_creates_p1_attempt(self):
+        response = self.client.post("/api/attempts/start", data={"mode": "p1"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["mode"], "p1")
+        self.assertEqual(payload["part"], "p1")
+        self.assertEqual(payload["status"], "started")
+        self.assertIn("id", payload)
+        self.assertIn("turns", payload)
+        self.assertTrue(len(payload["turns"]) >= 2)
+        self.assertEqual(payload["turns"][0]["question"], "What is your full name?")
+        self.assertEqual(payload["turns"][0]["status"], "pending")
+        self.assertEqual(payload["current_turn"], "t1")
+        attempt = SpeakingAttempt.objects.filter(attempt_id=payload["id"]).first()
+        self.assertIsNotNone(attempt)
+        self.assertEqual(attempt.turns.count(), len(payload["turns"]))
+
+    def test_start_creates_p2_attempt(self):
+        response = self.client.post("/api/attempts/start", data={"mode": "p2"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["mode"], "p2")
+        self.assertEqual(payload["part"], "p2")
+        self.assertEqual(len(payload["turns"]), 1)
+        self.assertIn("cue_card", payload)
+        self.assertTrue(payload["cue_card"] is None or isinstance(payload["cue_card"], dict))
+
+    def test_start_creates_p3_attempt(self):
+        response = self.client.post(
+            "/api/attempts/start",
+            data={"mode": "p3", "theme": "technology", "p3_intensity": "normal"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["mode"], "p3")
+        self.assertEqual(payload["part"], "p3")
+        self.assertIn("p3_theme", payload)
+        self.assertEqual(payload["p3_theme"], "technology")
+
+    def test_start_creates_mock_attempt(self):
+        response = self.client.post("/api/attempts/start", data={"mode": "mock"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["mode"], "mock")
+        self.assertEqual(payload["part"], "mock")
+        self.assertEqual(payload["title"], "Full mock exam")
+        p1_turns = [t for t in payload["turns"] if t["part"] == "p1"]
+        p2_turns = [t for t in payload["turns"] if t["part"] == "p2"]
+        countable_p1 = sum(1 for t in p1_turns if t.get("counts_toward_total", True))
+        self.assertEqual(countable_p1, 10)
+        self.assertEqual(len(p2_turns), 1)
+        self.assertEqual(payload["p3_generation_status"], "pending_after_p2")
+
+    def test_start_uses_candidate_names(self):
+        response = self.client.post(
+            "/api/attempts/start",
+            data={"mode": "p1", "full_name": "Zhang San", "english_name": "Sam"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["full_name"], "Zhang San")
+        self.assertEqual(payload["english_name"], "Sam")
+        self.assertEqual(payload["candidate"], "Sam")
+
+    def test_invalid_mode_returns_400(self):
+        response = self.client.post("/api/attempts/start", data={"mode": "invalid"}, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.json())
+
+    def test_response_shape_matches_old_server(self):
+        response = self.client.post("/api/attempts/start", data={"mode": "mock"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        required_keys = [
+            "id", "timestamp", "status", "mode", "part", "title", "question",
+            "turns", "current_turn", "candidate", "full_name", "english_name",
+            "pronunciation", "ielts_score", "feedback_summary", "criteria_feedback",
+            "band7_version", "model_audio", "upgrade_notes", "ai_coaching",
+        ]
+        for key in required_keys:
+            self.assertIn(key, payload, f"Missing key: {key}")
+        turn = payload["turns"][0]
+        turn_keys = [
+            "id", "part", "index", "total", "status", "question", "prompt",
+            "cue_card", "timers", "examiner_text", "examiner_behavior",
+            "examiner_tts", "audio", "transcript_raw", "transcript_cleaned",
+            "transcript_markdown", "transcript_status", "duration_seconds",
+            "band7_version", "band7_markdown", "model_audio", "upgrade_notes", "ai_coaching",
+        ]
+        for key in turn_keys:
+            self.assertIn(key, turn, f"Missing turn key: {key}")
+
+
 class SpeakingModelTests(TestCase):
     def test_attempt_and_turn_can_be_created(self):
         user = get_user_model().objects.create_user(username="speaker", password="test-pass")

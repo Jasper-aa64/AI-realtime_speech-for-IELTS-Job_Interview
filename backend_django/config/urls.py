@@ -20,6 +20,7 @@ urlpatterns = [
     path("api/ai/tasks/<str:task_id>/cancel/", ai_views.task_cancel, name="ai-task-cancel"),
     path("api/history", speaking_views.history_view, name="speaking-history"),
     path("api/history/<str:attempt_id>", speaking_views.attempt_view, name="speaking-attempt"),
+    path("api/attempts/start", speaking_views.attempt_start_view, name="attempts-start"),
     path("api/question-bank/summary", speaking_views.question_bank_summary_view, name="question-bank-summary"),
     path("api/question-bank/sample", speaking_views.question_bank_sample_view, name="question-bank-sample"),
     path("api/training/weak-items", speaking_views.training_weak_items_view, name="training-weak-items"),
