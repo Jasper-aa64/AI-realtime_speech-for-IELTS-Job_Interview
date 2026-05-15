@@ -1002,7 +1002,8 @@ h1 {
 
 .writing-submit-row button:disabled,
 .writing-actions-row button:disabled,
-.writing-actions-row select:disabled {
+.writing-actions-row select:disabled,
+.writing-answer:disabled {
   cursor: wait;
   opacity: 0.58;
 }

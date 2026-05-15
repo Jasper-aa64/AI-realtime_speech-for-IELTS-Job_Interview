@@ -4011,6 +4011,9 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if path.startswith("/api/writing/"):
             cookie = self.headers.get("Cookie", "")
             return DJANGO_PROXY_WRITE_FIRST and (DJANGO_FORCE_WRITING_PROXY or "sessionid=" in cookie)
+        if path.startswith("/api/ai/tasks/"):
+            cookie = self.headers.get("Cookie", "")
+            return "sessionid=" in cookie
         return False
 
     def try_proxy_django(self, method: str, path_with_query: str, payload: dict[str, Any] | None = None) -> bool:

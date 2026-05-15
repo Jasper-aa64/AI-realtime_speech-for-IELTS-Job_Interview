@@ -180,3 +180,111 @@ await api("/api/score", {
 - Can the learner exit without further automatic sound playback?
 - Do P1/P3/P2 reports show per-turn recording, transcript status, Band 7
   version, and upgrade notes?
+
+## Scenario: Django Writing Score Task Bridge
+
+### 1. Scope / Trigger
+
+- Trigger: The vanilla Web writing UI submits AI writing scoring through the
+  Django durable `writing_score` task flow while the old web server still owns
+  the browser origin.
+- Scope: `web/static/app.js`, `web/static/styles.css`, old-server proxy routes
+  in `web/ielts_server.py`, Django writing/AI task APIs, and writing report UI.
+
+### 2. Signatures
+
+- Save entry:
+  ```text
+  POST /api/writing/entries
+  ```
+- Create or reuse durable score task:
+  ```text
+  POST /api/writing/entries/{entry_id}/score-task
+  ```
+- Poll refresh-safe entry detail:
+  ```text
+  GET /api/writing/entries/{entry_id}
+  ```
+- Optional pending cancellation:
+  ```text
+  POST /api/ai/tasks/{task_id}/cancel/
+  ```
+- Local worker boundary:
+  ```text
+  python backend_django/manage.py run_ai_tasks --limit N
+  ```
+
+### 3. Contracts
+
+- The frontend saves the entry before scoring and treats `entry.id` as the
+  durable polling key.
+- `score-task` returns `{created, task, entry}`; duplicate submissions for the
+  same answer hash should reuse the existing task.
+- Entry detail is the UI recovery surface and must include `score` plus the
+  latest `ai_task` when one exists.
+- Active task statuses are `pending` and `running`; terminal statuses are
+  `succeeded`, `fallback`, `failed`, and `cancelled`.
+- The old web server may proxy `/api/writing/*` and `/api/ai/tasks/*` to
+  Django when a Django `sessionid` cookie is present. Without Django proxy
+  support, the frontend may fall back to the old synchronous `/score` endpoint.
+
+### 4. Validation & Error Matrix
+
+- `score-task` returns legacy `404 Unknown API endpoint` -> frontend may fall
+  back to `POST /api/writing/entries/{entry_id}/score`.
+- `score-task` returns any other 4xx/5xx -> show the backend error; do not hide
+  billing, auth, or validation failures behind synchronous fallback.
+- Entry detail has `ai_task.status=pending|running` -> show a visible waiting
+  state and keep polling by entry id.
+- Entry detail has `score` or `ai_task.status=fallback|succeeded` -> render the
+  writing report from persisted entry detail.
+- Entry detail has `ai_task.status=cancelled` with no score -> keep the entry
+  saved and unscored; do not invent AI feedback.
+- Entry detail has `ai_task.status=failed` with no score -> show failure status
+  and allow the user to retry later.
+
+### 5. Good/Base/Bad Cases
+
+- Good: A logged-in user submits scoring, refreshes during `pending`, and the
+  UI recovers by polling `GET /api/writing/entries/{entry_id}` until the
+  worker persists fallback or success.
+- Base: Django is unavailable for writing, the old JSON writing endpoint still
+  saves and scores through the synchronous fallback path.
+- Bad: The browser keeps only an in-memory promise for scoring and loses the
+  report after refresh or navigation.
+- Bad: A non-legacy API error from `score-task` silently falls back to sync
+  scoring and masks billing/auth problems.
+
+### 6. Tests Required
+
+- `node --check web/static/app.js`.
+- `python3 -m py_compile web/ielts_server.py tests/test_ielts_web_server.py`.
+- Old Web tests proving `/api/writing/entries/{id}/score-task` and
+  `/api/ai/tasks/{task_id}/cancel/` proxy to Django with a `sessionid` cookie.
+- Django tests covering writing score task creation, polling payload, pending
+  cancellation, running cancellation conflict, fallback/success persistence,
+  and learner profile updates.
+- Browser smoke check for logged-in save -> score-task pending wait -> worker
+  fallback/success -> writing report render.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```js
+const scored = await api(`/api/writing/entries/${entry.id}/score`, {});
+state.writing.entry = scored;
+```
+
+This blocks the browser flow on synchronous scoring and loses the durable task
+boundary needed for refresh recovery.
+
+#### Correct
+
+```js
+const result = await api(`/api/writing/entries/${entry.id}/score-task`, {});
+startWritingScorePolling(result.entry.id);
+```
+
+Polling entry detail keeps Django as the source of truth and lets worker
+completion append the result to the user's writing record.

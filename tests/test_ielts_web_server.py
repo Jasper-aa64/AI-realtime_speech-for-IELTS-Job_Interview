@@ -171,6 +171,77 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(payload["user"]["username"], "18728445038")
         self.assertIn("sessionid=fake-session", headers.get("Set-Cookie", ""))
 
+    def test_writing_score_task_and_ai_cancel_proxy_to_django_with_session(self):
+        seen_paths = []
+
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_POST(self):
+                seen_paths.append(self.path)
+                size = int(self.headers.get("Content-Length", "0"))
+                if size:
+                    self.rfile.read(size)
+                body = json.dumps({"path": self.path, "cookie": self.headers.get("Cookie", "")}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        try:
+            with mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url):
+                writing_status, _headers, writing_payload = self.post_response(
+                    "/api/writing/entries/entry-1/score-task",
+                    {},
+                    headers={"Cookie": "sessionid=fake-session"},
+                )
+                cancel_status, _headers, cancel_payload = self.post_response(
+                    "/api/ai/tasks/aitask-1/cancel/",
+                    {"reason": "user_request"},
+                    headers={"Cookie": "sessionid=fake-session"},
+                )
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+        self.assertEqual(writing_status, 200)
+        self.assertEqual(cancel_status, 200)
+        self.assertEqual(writing_payload["path"], "/api/writing/entries/entry-1/score-task")
+        self.assertEqual(cancel_payload["path"], "/api/ai/tasks/aitask-1/cancel/")
+        self.assertIn("sessionid=fake-session", writing_payload["cookie"])
+        self.assertEqual(seen_paths, ["/api/writing/entries/entry-1/score-task", "/api/ai/tasks/aitask-1/cancel/"])
+
+    def test_ai_cancel_without_session_stays_on_old_server(self):
+        seen_paths = []
+
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_POST(self):
+                seen_paths.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        try:
+            with mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url):
+                status, payload = self.post_raw("/api/ai/tasks/aitask-1/cancel/", "{}")
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+        self.assertEqual(status, 404)
+        self.assertEqual(payload["error"], "Unknown API endpoint")
+        self.assertEqual(seen_paths, [])
+
     def test_writing_prompt_save_summary_and_fallback_score(self):
         prompts = self.get_json("/api/writing/prompts?task_type=task1_academic")
         self.assertGreaterEqual(len(prompts["items"]), 3)

@@ -42,7 +42,10 @@ const state = {
     dirty: false,
     month: "",
     recentEntries: [],
+    reportEntries: [],
     activeReportId: null,
+    scorePollTimer: null,
+    scorePollingEntryId: null,
   },
   account: {
     authenticated: false,
@@ -345,6 +348,10 @@ function switchView(view, options = {}) {
     return;
   }
   stopAllRuntime("Ready");
+  if (!["writing", "writingReports"].includes(view)) {
+    clearWritingScorePolling();
+    setWritingPending(false);
+  }
   state.view = view;
   state.practiceViewBeforeSettings = null;
   // Save view to localStorage
@@ -1258,7 +1265,7 @@ function setWritingPending(isPending, title = "", detail = "") {
   wait?.classList.toggle("hidden", !isPending);
   if (title) text("writingInlineWaitTitle", title);
   if (detail) text("writingInlineWaitText", detail);
-  ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptSelect"].forEach((id) => {
+  ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptSelect", "writingAnswer"].forEach((id) => {
     const element = $(id);
     if (element) element.disabled = isPending;
   });
@@ -1273,7 +1280,11 @@ function writingTaskLabel(taskType) {
 
 async function loadWriting() {
   try {
-    await Promise.all([loadWritingPrompts(state.writing.taskType), loadWritingSummary(false)]);
+    const [, summary] = await Promise.all([loadWritingPrompts(state.writing.taskType), loadWritingSummary(false)]);
+    if (!state.writing.entry && summary?.today_entry?.ai_task && isWritingTaskActive(summary.today_entry.ai_task)) {
+      await recoverWritingEntry(summary.today_entry);
+      startWritingScorePolling(summary.today_entry.id, { switchOnComplete: false });
+    }
     if (!state.writing.prompt) {
       const prompts = state.writing.prompts[state.writing.taskType] || [];
       if (prompts.length) setWritingPrompt(prompts[0], false);
@@ -1335,36 +1346,50 @@ async function loadWritingReports() {
 
 async function renderWritingReports(items) {
   const target = $("writingReportDetail");
-  const list = $("writingReportList");
   if (!target) return;
   if (!items.length) {
+    state.writing.reportEntries = [];
+    const list = $("writingReportList");
     if (list) list.textContent = "还没有写作记录。";
     target.innerHTML = '<h2>写作报告</h2><p class="muted">还没有写作记录。保存一篇作文后会出现在这里。</p>';
     return;
   }
   const entries = await Promise.all(items.map((item) => api(`/api/writing/entries/${item.id}`)));
+  state.writing.reportEntries = entries;
   const activeId = entries.some((entry) => entry.id === state.writing.activeReportId) ? state.writing.activeReportId : entries[0].id;
   state.writing.activeReportId = activeId;
-  if (list) {
-    list.innerHTML = entries.map((entry) => writingReportTabHtml(entry, entry.id === activeId)).join("");
-    list.querySelectorAll("[data-writing-report-tab]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const entry = entries.find((item) => item.id === button.dataset.writingReportTab);
-        if (!entry) return;
-        state.writing.activeReportId = entry.id;
-        list.querySelectorAll("[data-writing-report-tab]").forEach((item) => item.classList.toggle("active", item.dataset.writingReportTab === entry.id));
+  renderWritingReportList(entries);
+  const activeEntry = entries.find((entry) => entry.id === activeId) || entries[0];
+  target.innerHTML = writingReportDetailHtml(activeEntry);
+  if (isWritingTaskActive(activeEntry?.ai_task)) startWritingScorePolling(activeEntry.id, { switchOnComplete: false });
+}
+
+function renderWritingReportList(entries) {
+  const list = $("writingReportList");
+  if (!list) return;
+  list.innerHTML = entries.map((entry) => writingReportTabHtml(entry, entry.id === state.writing.activeReportId)).join("");
+  list.querySelectorAll("[data-writing-report-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const entry = state.writing.reportEntries.find((item) => item.id === button.dataset.writingReportTab);
+      if (!entry) return;
+      state.writing.activeReportId = entry.id;
+      renderWritingReportList(state.writing.reportEntries);
+      const target = $("writingReportDetail");
+      if (target) {
         target.innerHTML = writingReportDetailHtml(entry);
         target.scrollTo({ top: 0, behavior: "smooth" });
-      });
+      }
+      if (isWritingTaskActive(entry.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
+      else clearWritingScorePolling();
     });
-  }
-  target.innerHTML = writingReportDetailHtml(entries.find((entry) => entry.id === activeId) || entries[0]);
+  });
 }
 
 function writingReportTabHtml(entry, active = false) {
   const score = entry?.score || null;
+  const task = entry?.ai_task || null;
   const part = entry.task_type === "task1_academic" ? "T1" : "T2";
-  const band = score ? `Band ${score.overall_band ?? "—"}` : "未评分";
+  const band = score ? `Band ${score.overall_band ?? "—"}` : (isWritingTaskActive(task) ? "评分中" : "未评分");
   const toneClass = entry.task_type === "task1_academic" ? "tone-p1" : "tone-p2";
   const tagClass = entry.task_type === "task1_academic" ? "p1" : "p2";
   return `
@@ -1381,6 +1406,7 @@ function writingReportTabHtml(entry, active = false) {
 
 function writingReportDetailHtml(entry) {
   const score = entry?.score || null;
+  const task = entry?.ai_task || null;
   const taskKey = entry.task_type === "task1_academic" ? "task_achievement" : "task_response";
   const taskLabel = entry.task_type === "task1_academic" ? "TA" : "TR";
   const profile = entry?.writing_profile || null;
@@ -1398,6 +1424,17 @@ function writingReportDetailHtml(entry) {
       <p>${escapeHtml(profile.primary_focus_text || "画像会随着更多真实作文评分逐步稳定。")}</p>
       ${profileIssues.length ? `<div class="writing-profile-tags">${profileIssues.map((item) => `<span>${escapeHtml(item.label || item.tag)} · ${escapeHtml(item.count ?? 0)}</span>`).join("")}</div>` : ""}
       ${profileEvidence.length ? `<ul class="writing-profile-evidence">${profileEvidence.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+    </div>
+  ` : "";
+  const taskBlock = !score && task ? `
+    <div class="detail-card writing-task-state-card">
+      <div class="detail-header">
+        <div>
+          <h2>${escapeHtml(writingTaskStatusTitle(task))}</h2>
+          <p class="muted">${escapeHtml(writingTaskStatusText(task))}</p>
+        </div>
+        <strong class="overall-badge muted-badge">${escapeHtml(task.status || "pending")}</strong>
+      </div>
     </div>
   ` : "";
   const scoreBlock = score ? `
@@ -1434,6 +1471,7 @@ function writingReportDetailHtml(entry) {
     </div>
   `;
   return `
+    ${taskBlock}
     ${scoreBlock}
     <div class="detail-card writing-report-prompt">
       <h3>题目</h3>
@@ -1475,7 +1513,9 @@ function renderWritingSurface() {
   const entry = state.writing.entry;
   renderWritingScore(entry);
   updateWritingWordCount();
-  if (!entry?.id) {
+  if (entry?.ai_task && isWritingTaskActive(entry.ai_task)) {
+    text("writingSaveStatus", writingTaskStatusTitle(entry.ai_task));
+  } else if (!entry?.id) {
     text("writingSaveStatus", "未保存");
   } else if (entry.status === "scored") {
     text("writingSaveStatus", `已评分 · ${entry.practice_date || ""} · 可在写作报告查看`);
@@ -1524,6 +1564,114 @@ async function saveWritingEntry(keepPending = false) {
   }
 }
 
+function isWritingTaskActive(task) {
+  return Boolean(task && ["pending", "running"].includes(String(task.status || "")));
+}
+
+function isWritingTaskTerminal(task) {
+  return Boolean(task && ["succeeded", "fallback", "failed", "cancelled"].includes(String(task.status || "")));
+}
+
+function writingTaskStatusTitle(task) {
+  const status = String(task?.status || "pending");
+  if (status === "running") return "AI 正在评分与生成辅导";
+  if (status === "pending") return "AI 评分已排队";
+  if (status === "fallback") return "AI 评分使用了系统默认建议";
+  if (status === "succeeded") return "AI 评分已完成";
+  if (status === "cancelled") return "AI 评分已取消";
+  if (status === "failed") return "AI 评分失败";
+  return "AI 评分状态更新中";
+}
+
+function writingTaskStatusText(task) {
+  const status = String(task?.status || "pending");
+  if (status === "running") return "任务已经开始，刷新或切换页面不会丢失结果；完成后会写入写作报告。";
+  if (status === "pending") return "任务正在等待后台 worker 处理。刷新页面后仍可从写作记录中恢复。";
+  if (status === "cancelled") return "这次评分尚未开始时被取消，作文仍然已保存并计入签到。";
+  if (status === "failed") return task?.error_message || "这次评分没有生成可用结果，可以稍后重新评分。";
+  return "结果已写入这篇作文的记录。";
+}
+
+function clearWritingScorePolling() {
+  if (state.writing.scorePollTimer) {
+    clearTimeout(state.writing.scorePollTimer);
+    state.writing.scorePollTimer = null;
+  }
+  state.writing.scorePollingEntryId = null;
+}
+
+function isScoreTaskUnsupported(error) {
+  const message = String(error?.message || "");
+  return error?.status === 404 && /Unknown API endpoint/i.test(message);
+}
+
+function renderVisibleWritingReport(entry) {
+  if (state.view !== "writingReports" || state.writing.activeReportId !== entry?.id) return;
+  const reportEntries = Array.isArray(state.writing.reportEntries) ? [...state.writing.reportEntries] : [];
+  const reportIndex = reportEntries.findIndex((item) => item.id === entry.id);
+  if (reportIndex >= 0) {
+    reportEntries[reportIndex] = entry;
+    state.writing.reportEntries = reportEntries;
+    renderWritingReportList(reportEntries);
+  }
+  const target = $("writingReportDetail");
+  if (target) target.innerHTML = writingReportDetailHtml(entry);
+}
+
+async function recoverWritingEntry(entry) {
+  state.writing.entry = entry;
+  state.writing.taskType = entry.task_type || state.writing.taskType || "task2";
+  await loadWritingPrompts(state.writing.taskType);
+  state.writing.prompt = {
+    id: entry.prompt_id,
+    task_type: entry.task_type,
+    task_label: entry.task_label,
+    title: entry.title,
+    prompt: entry.prompt,
+    category: entry.category,
+  };
+  if ($("writingAnswer")) $("writingAnswer").value = entry.answer || "";
+  state.writing.dirty = false;
+  renderWritingSurface();
+}
+
+function startWritingScorePolling(entryId, options = {}) {
+  if (!entryId) return;
+  clearWritingScorePolling();
+  const switchOnComplete = options.switchOnComplete !== false;
+  state.writing.scorePollingEntryId = entryId;
+  const poll = async () => {
+    try {
+      const entry = await api(`/api/writing/entries/${entryId}`);
+      if (state.writing.scorePollingEntryId !== entryId) return;
+      await recoverWritingEntry(entry);
+      renderVisibleWritingReport(entry);
+      await loadWritingSummary();
+      const task = entry.ai_task || null;
+      if (entry.score || (task && ["fallback", "succeeded"].includes(String(task.status || "")))) {
+        clearWritingScorePolling();
+        setWritingPending(false);
+        state.writing.activeReportId = entry.id;
+        if (switchOnComplete) switchView("writingReports");
+        return;
+      }
+      if (task && isWritingTaskTerminal(task)) {
+        clearWritingScorePolling();
+        setWritingPending(false);
+        text("writingSaveStatus", writingTaskStatusTitle(task));
+        return;
+      }
+      setWritingPending(true, writingTaskStatusTitle(task), writingTaskStatusText(task));
+      state.writing.scorePollTimer = setTimeout(poll, 2500);
+    } catch (error) {
+      clearWritingScorePolling();
+      setWritingPending(false);
+      showWritingError(error);
+    }
+  };
+  poll();
+}
+
 async function scoreWritingEntry() {
   setWritingPending(true, "AI 正在评分与生成辅导", "正在分析题目、你的作文和 IELTS 写作评分标准。");
   try {
@@ -1542,6 +1690,19 @@ async function scoreWritingEntry() {
     } catch (_error) {
       // Backend scoring still handles billing/fallback; keep the writing flow usable.
     }
+    try {
+      const result = await withBusy("AI 评分任务已提交...", () => api(`/api/writing/entries/${entry.id}/score-task`, {}));
+      const savedEntry = result.entry || entry;
+      state.writing.entry = savedEntry;
+      state.writing.activeReportId = savedEntry.id;
+      state.writing.dirty = false;
+      renderWritingSurface();
+      await loadWritingSummary();
+      startWritingScorePolling(savedEntry.id, { switchOnComplete: true });
+      return;
+    } catch (error) {
+      if (!isScoreTaskUnsupported(error)) throw error;
+    }
     const scored = await withBusy("AI 正在评分与生成辅导...", () => api(`/api/writing/entries/${entry.id}/score`, { answer: $("writingAnswer")?.value || "" }));
     state.writing.entry = scored;
     state.writing.activeReportId = scored.id;
@@ -1550,7 +1711,7 @@ async function scoreWritingEntry() {
     await loadWritingSummary();
     switchView("writingReports");
   } finally {
-    setWritingPending(false);
+    if (!state.writing.scorePollingEntryId) setWritingPending(false);
   }
 }
 
@@ -1558,21 +1719,8 @@ async function openWritingEntry(entryId) {
   if (!entryId) return;
   if (state.writing.dirty && !window.confirm("当前作文还没有保存，确定要打开历史记录吗？")) return;
   const entry = await withBusy("Loading writing entry...", () => api(`/api/writing/entries/${entryId}`));
-  state.writing.entry = entry;
-  state.writing.taskType = entry.task_type || "task2";
-  await loadWritingPrompts(state.writing.taskType);
-  const prompt = {
-    id: entry.prompt_id,
-    task_type: entry.task_type,
-    task_label: entry.task_label,
-    title: entry.title,
-    prompt: entry.prompt,
-    category: entry.category,
-  };
-  state.writing.prompt = prompt;
-  if ($("writingAnswer")) $("writingAnswer").value = entry.answer || "";
-  state.writing.dirty = false;
-  renderWritingSurface();
+  await recoverWritingEntry(entry);
+  if (isWritingTaskActive(entry.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
   await loadWritingSummary();
 }
 
