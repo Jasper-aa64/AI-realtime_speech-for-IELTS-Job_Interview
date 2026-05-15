@@ -379,3 +379,36 @@ Eliminate N+1 detail fetch on reports page. Store compact items, fetch detail on
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Add Django speaking history DELETE API
+
+**Date**: 2026-05-15
+**Task**: Add Django speaking history DELETE API
+**Branch**: `main`
+
+### Summary
+
+Add DELETE /api/history/{attempt_id} to complete speaking history API parity. Owner-scoped deletion with cascade. Frontend uses Django API.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9abd7ed` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
