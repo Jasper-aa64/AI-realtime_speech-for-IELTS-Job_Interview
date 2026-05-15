@@ -313,3 +313,36 @@ Added a reusable Django AI task batch runner and continuous run_ai_worker comman
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Django writing reports history API
+
+**Date**: 2026-05-15
+**Task**: Django writing reports history API
+**Branch**: `main`
+
+### Summary
+
+Add /api/writing/reports endpoint for writing reports page with owner-scoped entries, filters, and ai_task polling support. Decouple reports from monthly summary API.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7f5f943` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
