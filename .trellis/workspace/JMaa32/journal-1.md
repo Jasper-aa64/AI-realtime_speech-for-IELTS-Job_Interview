@@ -841,3 +841,34 @@ Removed standalone Settings UI, moved wallet, weak training, and replay queue in
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: Fix speaking audio upload CSRF
+
+**Date**: 2026-05-16
+**Task**: Fix speaking audio upload CSRF
+**Branch**: `main`
+
+### Summary
+
+Diagnosed speaking practice Try Again failure as Django rejecting raw audio upload with missing CSRF token. Updated web/static/app.js finalizeTurn audio upload fetch to call ensureCsrfToken(), send X-CSRFToken when available, and keep same-origin credentials. Verified node syntax, speaking tests, full Django tests, system check, and migration dry-run.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
