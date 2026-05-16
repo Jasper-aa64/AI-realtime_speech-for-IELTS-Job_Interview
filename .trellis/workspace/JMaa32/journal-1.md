@@ -676,3 +676,36 @@ Closed remaining Django-only runtime gaps: static frontend serving, fallback P3/
 ### Next Steps
 
 - None - task complete
+
+
+## Session 21: Django runtime smoke verification
+
+**Date**: 2026-05-16
+**Task**: Django runtime smoke verification
+**Branch**: `main`
+
+### Summary
+
+Add smoke tests for Django runtime verification covering auth, speaking, training, billing, writing. All 141 tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `83fddcc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
