@@ -1,0 +1,3 @@
+{"type":"file","path":"backend_django/apps/speaking/services.py","reason":"Added volcengine_tts() and ensure_examiner_tts() functions, modified start_attempt() to generate TTS for all turns"}
+{"type":"file","path":"backend_django/apps/speaking/views.py","reason":"Verified tts_audio_view exists and serves audio files"}
+{"type":"file","path":"backend_django/config/urls.py","reason":"Verified TTS audio route exists at /api/tts-audio/<role>/<filename>"}

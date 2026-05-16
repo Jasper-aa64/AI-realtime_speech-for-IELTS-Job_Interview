@@ -1,0 +1,4 @@
+{"type":"test","command":"node --check web/static/app.js","reason":"Verify JavaScript syntax"}
+{"type":"test","command":"cd backend_django && python manage.py test apps.speaking.tests","reason":"Verify speaking tests pass"}
+{"type":"test","command":"cd backend_django && python manage.py test","reason":"Verify full test suite passes"}
+{"type":"check","command":"cd backend_django && python manage.py check","reason":"Verify Django system check"}
