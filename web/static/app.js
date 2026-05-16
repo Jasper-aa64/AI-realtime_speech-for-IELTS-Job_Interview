@@ -954,9 +954,13 @@ async function finalizeTurn(mimeType) {
   const blob = new Blob(state.audioChunks, { type: mimeType });
   setRecordButton("processing", "Saving", "Uploading answer audio...");
   try {
+    const token = await ensureCsrfToken();
+    const uploadHeaders = { "Content-Type": mimeType.split(";")[0] };
+    if (token) uploadHeaders["X-CSRFToken"] = token;
     const upload = await fetch(`/api/attempts/${attempt.id}/turns/${turn.id}/audio`, {
       method: "POST",
-      headers: { "Content-Type": mimeType.split(";")[0] },
+      credentials: "same-origin",
+      headers: uploadHeaders,
       body: blob,
     });
     const body = await upload.text();
