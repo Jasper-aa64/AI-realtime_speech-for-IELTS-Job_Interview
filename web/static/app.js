@@ -71,7 +71,8 @@ const viewCopy = {
   history: ["口语报告", ""],
   writing: ["每日写作", ""],
   writingReports: ["写作报告", ""],
-  settings: ["Settings", "Server-side AI, TTS, and speech configuration."],
+  account: ["账号", "登录、注册和同步姓名。"],
+  settings: ["Settings", "钱包和弱题训练记录。"],
 };
 
 const $ = (selector) => {
@@ -344,8 +345,8 @@ async function withBusy(message, action) {
 function switchView(view, options = {}) {
   if (!viewCopy[view]) view = "mock";
   if (view === state.view && !options.force) return;
-  if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && view === "settings" && options.preservePractice) {
-    showSettingsOverlay();
+  if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && ["account", "settings"].includes(view) && options.preservePractice) {
+    showPracticeOverlay(view);
     return;
   }
   stopAllRuntime("Ready");
@@ -372,9 +373,10 @@ function switchView(view, options = {}) {
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
   $("#writingReportsPanel")?.classList.toggle("hidden", view !== "writingReports");
+  $("#accountPanel")?.classList.toggle("hidden", view !== "account");
   $("#settingsPanel").classList.toggle("hidden", view !== "settings");
-  $("#settingsNameFields")?.classList.toggle("hidden", view !== "settings");
   $("#settingsBackButton")?.classList.toggle("hidden", true);
+  $("#accountBackButton")?.classList.toggle("hidden", true);
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
   $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports");
@@ -384,15 +386,16 @@ function switchView(view, options = {}) {
   if (view === "history") loadHistory();
   if (view === "writing") loadWriting();
   if (view === "writingReports") loadWritingReports();
+  if (view === "account") loadAccount();
   if (view === "settings") loadSettings();
   if (["mock", "p1", "p2", "p3"].includes(view)) resetPracticeSurface();
   updateSidebarLock();
 }
 
-function showSettingsOverlay() {
+function showPracticeOverlay(view = "settings") {
   const practiceView = ["mock", "p1", "p2", "p3"].includes(state.view) ? state.view : (state.practiceViewBeforeSettings || "mock");
   state.practiceViewBeforeSettings = practiceView;
-  state.view = "settings";
+  state.view = view;
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.classList.remove("active");
     button.classList.toggle("tone-mock", button.dataset.view === "mock");
@@ -404,15 +407,17 @@ function showSettingsOverlay() {
   $("#historyPanel").classList.add("hidden");
   $("#writingPanel")?.classList.add("hidden");
   $("#writingReportsPanel")?.classList.add("hidden");
-  $("#settingsPanel").classList.remove("hidden");
-  $("#settingsNameFields")?.classList.remove("hidden");
+  $("#accountPanel")?.classList.toggle("hidden", view !== "account");
+  $("#settingsPanel").classList.toggle("hidden", view !== "settings");
   $(".workspace").classList.remove("history-workspace", "writing-workspace");
   $(".topbar").classList.remove("hidden");
   $("#viewTitleBlock").classList.remove("hidden");
-  text("viewTitle", viewCopy.settings[0]);
-  text("viewSubtitle", "Settings are open. Your speaking flow is still running in the background.");
-  $("#settingsBackButton")?.classList.remove("hidden");
-  loadSettings();
+  text("viewTitle", viewCopy[view][0]);
+  text("viewSubtitle", `${viewCopy[view][0]} 已打开，当前练习仍在后台保留。`);
+  $("#settingsBackButton")?.classList.toggle("hidden", view !== "settings");
+  $("#accountBackButton")?.classList.toggle("hidden", view !== "account");
+  if (view === "account") loadAccount();
+  if (view === "settings") loadSettings();
   updateSidebarLock();
 }
 
@@ -427,9 +432,10 @@ function returnFromSettings() {
     button.classList.toggle("tone-p2", button.dataset.view === "p2");
     button.classList.toggle("tone-p3", button.dataset.view === "p3");
   });
+  $("#accountPanel")?.classList.add("hidden");
   $("#settingsPanel").classList.add("hidden");
-  $("#settingsNameFields")?.classList.add("hidden");
   $("#settingsBackButton")?.classList.add("hidden");
+  $("#accountBackButton")?.classList.add("hidden");
   $("#practicePanel").classList.remove("hidden");
   text("viewTitle", viewCopy[practiceView][0]);
   text("viewSubtitle", viewCopy[practiceView][1]);
@@ -2250,7 +2256,7 @@ async function submitAccountAuth(mode) {
     state.account.authenticated = true;
     state.account.user = result.user || null;
     applyCandidateNames(accountProfileNames(state.account.user), true);
-    renderAccountStatus(mode === "register" ? "账号已创建并登录。" : "已登录，Settings 已同步账号资料。");
+    renderAccountStatus(mode === "register" ? "账号已创建并登录。" : "已登录，账号资料已同步。");
     await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
   } catch (error) {
     state.account.backendAvailable = Boolean(error.status && error.status < 500);
@@ -2292,10 +2298,11 @@ function bindEvents() {
   });
   document.querySelectorAll(".avatar-settings-button").forEach((button) => {
     button.addEventListener("click", () => {
-      switchView("settings", { preservePractice: true });
+      switchView(button.dataset.view || "account", { preservePractice: true });
     });
   });
   $("settingsBackButton")?.addEventListener("click", returnFromSettings);
+  $("accountBackButton")?.addEventListener("click", returnFromSettings);
   $("fullNameInput")?.addEventListener("input", scheduleCandidateNameSave);
   $("englishNameInput")?.addEventListener("input", scheduleCandidateNameSave);
   $("fullNameInput")?.addEventListener("blur", flushCandidateNameSave);
@@ -2428,7 +2435,7 @@ function renderP3TopicChips(topics) {
 }
 
 async function loadSettings() {
-  await Promise.all([loadAccount(), loadWallet(), loadWeakTraining(), loadReplayQueue()]);
+  await Promise.all([loadWallet(), loadWeakTraining(), loadReplayQueue()]);
 }
 
 function formatLocalTime(value) {

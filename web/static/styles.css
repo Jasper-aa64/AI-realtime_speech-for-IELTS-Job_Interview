@@ -674,7 +674,7 @@ h1 {
   grid-template-areas:
     "editor result";
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
   min-height: 0;
   height: 100%;
 }
@@ -713,11 +713,23 @@ h1 {
   grid-area: result;
   position: sticky;
   top: calc(64px + var(--safe-top));
-  align-self: start;
-  max-height: none;
-  overflow: visible;
+  align-self: stretch;
+  height: 100%;
+  max-height: calc(100vh - 96px - var(--safe-top) - var(--safe-bottom));
+  overflow: hidden;
   padding: 12px;
+  gap: 12px;
+}
+
+.writing-checkin-top,
+.writing-checkin-bottom {
+  display: flex;
+  flex-direction: column;
   gap: 9px;
+}
+
+.writing-checkin-bottom {
+  margin-top: auto;
 }
 
 .writing-card-head {
@@ -3069,12 +3081,21 @@ body.font-popular .record-control.recording {
   min-width: min(420px, 46vw);
 }
 
+.account-name-fields {
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
 .settings-page-head {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   margin-bottom: 14px;
   min-height: 40px;
+}
+
+.settings-page-head:has(.settings-back-button.hidden) {
+  display: none;
 }
 
 .settings-back-button {
@@ -3131,6 +3152,12 @@ body.font-popular .record-control.recording {
   gap: 14px;
   margin-bottom: 18px;
   height: calc(100vh - 250px);
+}
+
+.account-page-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 560px);
+  align-items: start;
 }
 
 .settings-card {

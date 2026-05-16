@@ -15,7 +15,7 @@
       <div class="global-topbar">
         <div class="global-topbar-spacer"></div>
         <div class="global-topbar-actions">
-          <button class="avatar-settings-button" data-view="settings" title="Settings">
+          <button class="avatar-settings-button" data-view="account" title="Account">
             <span class="user-avatar" id="userAvatarDesktop">J</span>
           </button>
         </div>
@@ -29,7 +29,7 @@
           </div>
           <div class="nav-top-right">
             <div class="nav-user-mobile">
-              <button class="avatar-settings-button" data-view="settings" title="Settings">
+              <button class="avatar-settings-button" data-view="account" title="Account">
                 <span class="user-avatar" id="userAvatar">J</span>
               </button>
             </div>
@@ -44,6 +44,7 @@
             <div class="nav-divider" aria-hidden="true"></div>
             <button class="nav-button" data-view="writing">每日写作</button>
             <button class="nav-button" data-view="writingReports">写作报告</button>
+            <button class="nav-button" data-view="settings">设置</button>
           </nav>
         </div>
         <div class="nav-bottom">
@@ -69,16 +70,6 @@
           <div id="viewTitleBlock">
             <h1 id="viewTitle">Mock</h1>
             <p id="viewSubtitle">Practice flow: P1, P2, then P3 generated from your P2 answer.</p>
-          </div>
-          <div id="settingsNameFields" class="settings-name-fields topbar-name-fields hidden" aria-label="Candidate names">
-            <label>
-              <span>Full name</span>
-              <input id="fullNameInput" value="LiHua" autocomplete="name">
-            </label>
-            <label>
-              <span>English name</span>
-              <input id="englishNameInput" value="Jasper" autocomplete="nickname">
-            </label>
           </div>
         </header>
 
@@ -219,35 +210,39 @@
                   </svg>
                 </button>
               </div>
-              <div class="writing-stats-grid">
-                <div><span>本月练习</span><strong id="writingPracticedDays">0</strong></div>
-                <div><span>连续天数</span><strong id="writingStreakDays">0</strong></div>
-                <div><span>已评分</span><strong id="writingScoredCount">0</strong></div>
-              </div>
-              <div id="writingCalendar" class="writing-calendar" aria-label="Writing check-in calendar"></div>
-              <div class="writing-legend">
-                <span><i class="empty"></i>未练习</span>
-                <span><i class="saved"></i>已保存</span>
-                <span><i class="scored"></i>已评分</span>
-              </div>
-              <div id="writingInlineWait" class="writing-inline-wait hidden" role="status" aria-live="polite">
-                <span class="spinner"></span>
-                <div>
-                  <strong id="writingInlineWaitTitle">AI 正在评分与生成辅导</strong>
-                  <p id="writingInlineWaitText">正在分析题目、你的作文和 IELTS 写作评分标准。</p>
+              <div class="writing-checkin-top">
+                <div class="writing-stats-grid">
+                  <div><span>本月练习</span><strong id="writingPracticedDays">0</strong></div>
+                  <div><span>连续天数</span><strong id="writingStreakDays">0</strong></div>
+                  <div><span>已评分</span><strong id="writingScoredCount">0</strong></div>
+                </div>
+                <div id="writingCalendar" class="writing-calendar" aria-label="Writing check-in calendar"></div>
+                <div class="writing-legend">
+                  <span><i class="empty"></i>未练习</span>
+                  <span><i class="saved"></i>已保存</span>
+                  <span><i class="scored"></i>已评分</span>
                 </div>
               </div>
-              <div class="writing-footer-row">
-                <div class="writing-status-line">
-                  <strong id="writingWordCount">0 words</strong>
-                  <span id="writingSaveStatus">未保存</span>
+              <div class="writing-checkin-bottom">
+                <div id="writingInlineWait" class="writing-inline-wait hidden" role="status" aria-live="polite">
+                  <span class="spinner"></span>
+                  <div>
+                    <strong id="writingInlineWaitTitle">AI 正在评分与生成辅导</strong>
+                    <p id="writingInlineWaitText">正在分析题目、你的作文和 IELTS 写作评分标准。</p>
+                  </div>
                 </div>
-                <div class="writing-submit-row">
-                  <button id="writingSaveBtn" class="ghost" type="button">保存</button>
-                  <button id="writingScoreBtn" type="button">AI 评分与辅导</button>
+                <div class="writing-footer-row">
+                  <div class="writing-status-line">
+                    <strong id="writingWordCount">0 words</strong>
+                    <span id="writingSaveStatus">未保存</span>
+                  </div>
+                  <div class="writing-submit-row">
+                    <button id="writingSaveBtn" class="ghost" type="button">保存</button>
+                    <button id="writingScoreBtn" type="button">AI 评分与辅导</button>
+                  </div>
                 </div>
+                <p class="writing-profile-note">每次 AI 评分与辅导都会记录你的写作表现，用于后续提供更个性化的辅导。请尽量提交自己的真实作文，不要使用 AI 范文或他人文章，这样画像和建议才更准确。</p>
               </div>
-              <p class="writing-profile-note">每次 AI 评分与辅导都会记录你的写作表现，用于后续提供更个性化的辅导。请尽量提交自己的真实作文，不要使用 AI 范文或他人文章，这样画像和建议才更准确。</p>
             </aside>
           </div>
         </section>
@@ -260,14 +255,14 @@
           </article>
         </section>
 
-        <section id="settingsPanel" class="panel hidden">
+        <section id="accountPanel" class="panel hidden">
           <div class="settings-page-head">
-            <button id="settingsBackButton" class="settings-back-button hidden" type="button" aria-label="Back to practice">
+            <button id="accountBackButton" class="settings-back-button hidden" type="button" aria-label="Back to practice">
               <span aria-hidden="true">←</span>
               <strong>返回练习</strong>
             </button>
           </div>
-          <div class="settings-status-grid">
+          <div class="account-page-layout">
             <article class="settings-card account-settings-card">
               <div class="settings-card-head">
                 <div>
@@ -277,6 +272,16 @@
                 <button type="button" id="accountLogoutBtn" class="ghost">退出</button>
               </div>
               <div id="accountStatus" class="settings-metric">检查登录状态...</div>
+              <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
+                <label>
+                  <span>Full name</span>
+                  <input id="fullNameInput" value="LiHua" autocomplete="name">
+                </label>
+                <label>
+                  <span>English name</span>
+                  <input id="englishNameInput" value="Jasper" autocomplete="nickname">
+                </label>
+              </div>
               <div id="accountLoginForm" class="account-login-form">
                 <label>
                   <span>Username / phone</span>
@@ -295,6 +300,17 @@
                 <button type="button" id="accountSaveProfileBtn" class="ghost">保存姓名到账号</button>
               </div>
             </article>
+          </div>
+        </section>
+
+        <section id="settingsPanel" class="panel hidden">
+          <div class="settings-page-head">
+            <button id="settingsBackButton" class="settings-back-button hidden" type="button" aria-label="Back to practice">
+              <span aria-hidden="true">←</span>
+              <strong>返回练习</strong>
+            </button>
+          </div>
+          <div class="settings-status-grid">
             <article class="settings-card">
               <h2>钱包</h2>
               <div class="wallet-header">
