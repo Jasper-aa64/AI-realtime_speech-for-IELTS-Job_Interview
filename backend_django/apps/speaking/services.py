@@ -2241,24 +2241,90 @@ def _fallback_score(transcript: str, part: str) -> dict[str, Any]:
 
 
 def _criteria_feedback(score: dict[str, Any], transcript: str) -> dict[str, Any]:
+    """Build criteria feedback based on score and transcript.
+
+    This is the complete version from old server with band-based advice.
+    """
+    def band_advice(band: float | None, low: str, mid: str, high: str) -> str:
+        if band is None:
+            return low
+        if band < 5.5:
+            return low
+        if band < 7.0:
+            return mid
+        return high
+
+    standards = {
+        "fluency and coherence": (
+            "Assesses whether answers are developed, logically connected, and spoken without excessive hesitation or repetition."
+        ),
+        "lexical resource": (
+            "Assesses range and precision of vocabulary, including natural collocations and the ability to paraphrase."
+        ),
+        "grammar": (
+            "Assesses sentence control, tense accuracy, clause variety, and whether errors reduce clarity."
+        ),
+    }
+
+    fc_band = score.get("fluency_coherence", 5.0)
+    lr_band = score.get("lexical_resource", 5.0)
+    gr_band = score.get("grammatical_range", 5.0)
+
+    advice = {
+        "fluency and coherence": band_advice(
+            fc_band,
+            "Build each answer with a direct point, one reason, and one concrete example before closing.",
+            "Add contrast, consequence, and smoother linking so ideas feel connected rather than listed.",
+            "Refine pacing and use clearer signposting when moving from reason to example to conclusion.",
+        ),
+        "lexical resource": band_advice(
+            lr_band,
+            "Replace repeated basic words with topic-specific phrases copied from your Band 7 version.",
+            "Paraphrase the question and add two or three natural collocations for the topic.",
+            "Use more precise topic vocabulary while keeping the answer conversational.",
+        ),
+        "grammar": band_advice(
+            gr_band,
+            "Prioritise complete simple sentences first, then add one because/when/although clause.",
+            "Vary sentence openings and check tense consistency when giving examples.",
+            "Reduce small accuracy slips in longer complex sentences.",
+        ),
+    }
+
+    words = len(re.findall(r"[A-Za-z']+", transcript))
+    sample_note = (
+        "The sample is short or incomplete, so the advice focuses on building enough answer content."
+        if words < 20
+        else "The advice is a static IELTS reference for the current band range, not live AI-generated feedback."
+    )
+
     return {
         "fluency_coherence": {
-            "band": score["fluency_coherence"],
-            "standard": "Answers should be extended, coherent, and easy to follow.",
-            "focus": "Add clearer reasons and examples for each answer.",
-            "advice": "Use a short point-reason-example structure.",
+            "band": fc_band,
+            "standard": standards["fluency and coherence"],
+            "focus": sample_note,
+            "advice": advice["fluency and coherence"],
+            "strengths": [standards["fluency and coherence"]],
+            "problems": [sample_note],
+            "suggestion": advice["fluency and coherence"],
         },
         "lexical_resource": {
-            "band": score["lexical_resource"],
-            "standard": "Use precise topic vocabulary instead of repeated simple words.",
-            "focus": "Replace vague words with topic-specific expressions.",
-            "advice": "Prepare two or three flexible phrases for this topic.",
+            "band": lr_band,
+            "standard": standards["lexical resource"],
+            "focus": sample_note,
+            "advice": advice["lexical resource"],
+            "strengths": [standards["lexical resource"]],
+            "problems": [sample_note],
+            "suggestion": advice["lexical resource"],
         },
         "grammatical_range_accuracy": {
-            "band": score["grammatical_range"],
-            "standard": "Use accurate simple sentences plus some longer complex clauses.",
-            "focus": "Control tense and agreement before adding complexity.",
-            "advice": "Repeat the answer once using because, although, or which.",
+            "band": gr_band,
+            "standard": standards["grammar"],
+            "focus": sample_note,
+            "advice": advice["grammar"],
+            "strengths": [standards["grammar"]],
+            "problems": [sample_note],
+            "suggestion": advice["grammar"],
         },
     }
 
