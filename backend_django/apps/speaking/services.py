@@ -3,9 +3,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import os
 import random
 import re
+import shutil
+import subprocess
 import urllib.error
 import urllib.request
 import uuid
@@ -19,6 +22,242 @@ from django.db.models import Avg, Count, Max, Min, Sum
 from django.utils import timezone
 
 from .models import SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
+
+
+# --- Codex Integration ---
+
+CODEX_REASONING_EFFORT = "low"
+
+
+def extract_json_object(text: str) -> dict[str, Any]:
+    """Extract first JSON object from text."""
+    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    if not match:
+        raise ValueError("model output did not contain a JSON object")
+    return json.loads(match.group(0))
+
+
+def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
+    """Parse codex CLI JSON events from stdout."""
+    events: list[dict[str, Any]] = []
+    for line in str(stdout or "").splitlines():
+        stripped = line.strip()
+        if not stripped or not stripped.startswith("{"):
+            continue
+        try:
+            event = json.loads(stripped)
+        except ValueError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+
+    usage = None
+    final_text = ""
+    for event in events:
+        event_usage = event.get("usage")
+        if isinstance(event_usage, dict):
+            usage = event_usage
+        if event.get("type") == "turn.completed" and isinstance(event.get("usage"), dict):
+            usage = event["usage"]
+        message = event.get("message") or event.get("item") or event.get("response")
+        if isinstance(message, dict):
+            content = message.get("content") or message.get("text")
+            if isinstance(content, str):
+                final_text = content
+            elif isinstance(content, list):
+                parts = []
+                for part in content:
+                    if isinstance(part, dict):
+                        value = part.get("text") or part.get("content")
+                        if isinstance(value, str):
+                            parts.append(value)
+                    elif isinstance(part, str):
+                        parts.append(part)
+                if parts:
+                    final_text = "\n".join(parts)
+        elif isinstance(event.get("content"), str):
+            final_text = event["content"]
+
+    if not events:
+        return str(stdout or ""), None
+    return final_text or str(stdout or ""), usage
+
+
+def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
+    """Call codex CLI and return output and usage."""
+    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
+        raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
+
+    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
+    if not shutil.which(codex) and not Path(codex).exists():
+        raise RuntimeError("codex CLI not found")
+
+    config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
+    try:
+        result = subprocess.run(
+            [codex, "exec", "--json", *config_args],
+            input=prompt,
+            text=True,
+            capture_output=True,
+            timeout=45,
+            check=True,
+        )
+        output, usage = extract_codex_json_events(result.stdout)
+    except Exception:
+        result = subprocess.run(
+            [codex, "exec", *config_args],
+            input=prompt,
+            text=True,
+            capture_output=True,
+            timeout=45,
+            check=True,
+        )
+        output, usage = result.stdout, None
+
+    return output, usage
+
+
+def clamp_band(value: float | int | None) -> float:
+    """Clamp band score to 0.0-9.0 in 0.5 increments."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        numeric = 0.0
+    return max(0.0, min(9.0, round(numeric * 2.0) / 2.0))
+
+
+def rounded_overall(scores: dict[str, float | None]) -> float:
+    """Calculate overall band from component scores."""
+    values = [
+        scores.get("fluency_coherence"),
+        scores.get("lexical_resource"),
+        scores.get("grammatical_range"),
+    ]
+    numeric = [float(value) for value in values if isinstance(value, (int, float))]
+    if not numeric:
+        return 0.0
+    average = sum(numeric) / len(numeric)
+    return clamp_band(math.floor(average * 2.0 + 0.5) / 2.0)
+
+
+def clean_band7_output(value: str) -> str:
+    """Clean Band 7 model answer output."""
+    text = str(value or "").replace("\r\n", "\n").strip()
+    text = re.sub(r"```(?:[a-zA-Z0-9_-]+)?", "", text)
+    text = text.replace("```", "")
+
+    blocked = (
+        "trellis sessionstart",
+        "workflow",
+        "active tasks",
+        "spec index",
+        "git status",
+        "current task",
+        "session context",
+        "developer",
+        "system:",
+        "assistant:",
+        "user:",
+        "codex",
+    )
+
+    kept: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if kept and kept[-1]:
+                kept.append("")
+            continue
+        lowered = stripped.lower()
+        if any(marker in lowered for marker in blocked):
+            continue
+        if re.fullmatch(r"[-=*#_` ]{3,}", stripped):
+            continue
+        if stripped.startswith(("{", "}", "[", "]")):
+            continue
+        stripped = re.sub(
+            r"^\s*(?:band\s*7\s*(?:spoken\s*)?(?:version|answer)?|answer|model answer)\s*:\s*",
+            "",
+            stripped,
+            flags=re.I,
+        )
+        if stripped:
+            kept.append(stripped)
+
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+
+
+def plausible_spoken_answer(value: str) -> bool:
+    """Check if Band 7 output looks like a real spoken answer."""
+    text = clean_band7_output(value)
+    words = re.findall(r"[A-Za-z']+", text)
+    if len(words) < 12:
+        return False
+    lowered = text.lower()
+    bad_markers = ("json", "requirements", "acceptance criteria", "here is", "i cannot", "as an ai")
+    return not any(marker in lowered[:220] for marker in bad_markers)
+
+
+def generic_band7_answer(value: str) -> bool:
+    """Check if Band 7 output is generic template text."""
+    lowered = clean_band7_output(value).lower()
+    generic_markers = (
+        "quite easy for me to answer",
+        "connects with my daily life",
+        "give one simple detail",
+        "closer to a band",
+        "i can talk about from my own experience",
+        "this topic is very important",
+        "i would answer it directly first",
+        "i would answer this directly from my own experience",
+        "i would answer this by keeping the main idea",
+        "my favourite choice is the one connected with my own routine",
+        "a complete transcript was not captured",
+        "add one simple reason and a small detail",
+        "that gives me a clear reason to support my answer",
+        "then i would develop it with one concrete situation",
+        "explain why it mattered, and finish with the result",
+    )
+    return any(marker in lowered for marker in generic_markers)
+
+
+def band7_addresses_question(question: str, answer: str, part: str) -> bool:
+    """Check if Band 7 answer actually addresses the question."""
+    if part != "p1":
+        return True
+
+    # Use existing relevance check
+    relevance = _training_relevance(question, answer)
+    if relevance >= Decimal("0.20"):
+        return True
+
+    lowered_question = question.lower()
+    lowered_answer = answer.lower()
+
+    if "tell me a little more" in lowered_question or "what you do now" in lowered_question:
+        work_study_terms = (
+            "student", "study", "studying", "university", "school", "major",
+            "work", "working", "job", "internship", "engineer", "software",
+            "developer", "company", "project",
+        )
+        return any(term in lowered_answer for term in work_study_terms)
+
+    if lowered_question.startswith(("do you", "are you", "is there", "can you", "have you")):
+        return any(
+            marker in lowered_answer
+            for marker in ("yes", "no", "i do", "i don't", "i am", "i'm", "not really", "sometimes")
+        )
+
+    return False
+
+
+def valid_turn_band7(question: str, answer: str, part: str) -> bool:
+    """Validate that Band 7 answer is plausible, not generic, and addresses question."""
+    return (
+        plausible_spoken_answer(answer)
+        and not generic_band7_answer(answer)
+        and band7_addresses_question(question, answer, part)
+    )
 
 
 class QuestionBank:
@@ -936,6 +1175,157 @@ def _word_count(text: str) -> int:
     return len([word for word in text.replace("\n", " ").split(" ") if word.strip()])
 
 
+def score_with_codex(transcript: str, question: str, part: str, call_id: str) -> dict[str, Any]:
+    """Score transcript using Codex CLI."""
+    data_dir = Path(settings.BASE_DIR).parent / "data" / "ielts"
+    prompt_path = data_dir / "prompts" / "scorer_system.md"
+
+    if prompt_path.exists():
+        system_prompt = prompt_path.read_text(encoding="utf-8")
+    else:
+        system_prompt = (
+            "You are an IELTS Speaking examiner. Score the transcript using the official IELTS band descriptors. "
+            "Consider fluency and coherence, lexical resource, and grammatical range and accuracy."
+        )
+
+    part_guidance = ""
+    if part == "p1":
+        part_guidance = "\n\nThis is Part 1. Answers should be direct and concise, typically 1-3 sentences."
+    elif part == "p2":
+        part_guidance = "\n\nThis is Part 2. The candidate should speak for 1-2 minutes covering the cue card points."
+    elif part == "p3":
+        part_guidance = "\n\nThis is Part 3. Answers should be developed with reasoning and examples, about 4-6 sentences."
+
+    prompt = (
+        system_prompt
+        + "\n\nReturn JSON only with numeric keys fluency_coherence, lexical_resource, "
+        "grammatical_range, overall_band, string key feedback, and optional overall_review object "
+        "with string key comment and array key review_points. Do not score pronunciation or reference pronunciation."
+        + part_guidance
+        + "\n\nPrompt(s):\n"
+        + (question.strip() or "(not provided)")
+        + "\n\nTranscript:\n"
+        + transcript
+        + "\n"
+    )
+
+    output, usage = run_codex(prompt, call_id)
+    payload = extract_json_object(output)
+
+    scores: dict[str, Any] = {
+        "fluency_coherence": clamp_band(payload.get("fluency_coherence")),
+        "lexical_resource": clamp_band(payload.get("lexical_resource")),
+        "grammatical_range": clamp_band(payload.get("grammatical_range")),
+    }
+    scores["overall_band"] = rounded_overall(scores)
+
+    result_payload = {
+        **scores,
+        "feedback": str(payload.get("feedback", "")),
+        "backend": "codex",
+    }
+
+    overall_review = payload.get("overall_review")
+    if isinstance(overall_review, dict):
+        comment = str(overall_review.get("comment") or "").strip()
+        points = [str(item).strip() for item in overall_review.get("review_points") or []]
+        points = [item for item in points if item][:4]
+        if comment or points:
+            result_payload["overall_review"] = {
+                "comment": comment,
+                "review_points": points,
+                "source": "codex_score",
+            }
+
+    if usage:
+        result_payload["billing_usage"] = usage
+
+    return result_payload
+
+
+def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_id: str) -> str:
+    """Generate Band 7 model answer using Codex CLI."""
+    part_constraints = ""
+    if part == "p1":
+        part_constraints = (
+            "This is IELTS Speaking Part 1. Write a short natural answer, normally 1-3 sentences, maximum 3 sentences. "
+            "Do not turn it into a long Part 2-style speech. One concise Markdown paragraph is preferred."
+        )
+    elif part == "p2":
+        part_constraints = (
+            "This is IELTS Speaking Part 2. Write a natural long-turn answer in Markdown paragraphs. "
+            "Cover the cue-card points without copying the bullet list."
+        )
+    elif part == "p3":
+        part_constraints = (
+            "This is IELTS Speaking Part 3. Write a developed discussion answer, about 4-6 sentences, "
+            "with an opinion, reasoning, and one concrete example or contrast."
+        )
+    else:
+        part_constraints = "Write an answer appropriate to the IELTS Speaking part shown by the questions."
+
+    prompt = (
+        f"Write a natural IELTS Speaking Band 7 spoken version. Preserve the candidate's core ideas, "
+        "but improve cohesion, vocabulary, and grammar. Do not include the original question or cue-card bullets. "
+        "Format the answer as concise Markdown paragraphs with blank lines between paragraphs. "
+        + part_constraints
+        + "\n\nQuestion:\n"
+        + question
+        + "\n\nCandidate transcript:\n"
+        + transcript
+        + "\n\nBand 7 spoken version:"
+    )
+
+    output, _ = run_codex(prompt, call_id)
+    return clean_band7_output(output)
+
+
+def build_ai_coaching_with_codex(question: str, transcript: str, band7: str, part: str, call_id: str) -> str:
+    """Generate AI coaching using Codex CLI."""
+    prompt = (
+        "You are an IELTS Speaking coach. Compare the candidate's answer with the Band 7 version. "
+        "Give 2-3 specific, actionable coaching points in Chinese. Focus on what to change and how. "
+        "Be encouraging but direct. Use bullet points.\n\n"
+        f"Question: {question}\n\n"
+        f"Candidate answer:\n{transcript}\n\n"
+        f"Band 7 version:\n{band7}\n\n"
+        "Coaching (in Chinese, 2-3 bullet points):"
+    )
+
+    output, _ = run_codex(prompt, call_id)
+    return output.strip()
+
+
+def build_upgrade_notes(transcript: str) -> list[str]:
+    """Extract upgrade notes from transcript."""
+    notes = []
+
+    # Check for very short answers
+    words = _word_count(transcript)
+    if words < 30:
+        notes.append("Give a direct answer, add a reason, then add one concrete example.")
+
+    # Check for repeated words
+    word_list = re.findall(r"\b[a-z]{4,}\b", transcript.lower())
+    if word_list:
+        from collections import Counter
+        counts = Counter(word_list)
+        repeated = [word for word, count in counts.most_common(5) if count >= 3]
+        if repeated:
+            notes.append(f"Avoid repeating: {', '.join(repeated[:3])}")
+
+    # Check for filler words
+    fillers = ["um", "uh", "like", "you know", "i mean", "actually", "basically"]
+    filler_count = sum(transcript.lower().count(f" {filler} ") for filler in fillers)
+    if filler_count >= 3:
+        notes.append("Reduce filler words (um, uh, like, you know)")
+
+    if not notes:
+        notes.append("Extend answers with specific reasons and examples")
+
+    return notes[:3]
+
+
 def _fallback_score(transcript: str, part: str) -> dict[str, Any]:
     words = _word_count(transcript)
     if words >= 220:
@@ -1019,14 +1409,72 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
     if not transcript.strip():
         raise SpeakingError("Missing transcript")
 
-    score = _fallback_score(transcript, attempt.mode)
+    # Try Codex scoring first, fallback to heuristic on error
+    questions_text = "\n".join(f"Q{i+1}: {t.question}" for i, t in enumerate(turns))
+    call_id = f"score_attempt_{attempt_id}"
+    try:
+        score = score_with_codex(transcript, questions_text, attempt.mode, call_id)
+    except Exception as exc:
+        score = _fallback_score(transcript, attempt.mode)
+        score["codex_error"] = str(exc)
+
     criteria = _criteria_feedback(score, transcript)
+
+    # Generate real AI feedback for each turn
     for turn in turns:
+        turn_transcript = turn.transcript_cleaned or turn.transcript_raw
+        if not turn_transcript.strip():
+            continue
+
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-        metadata.setdefault("band7_version", _band7_fallback(turn))
-        metadata.setdefault("band7_markdown", metadata["band7_version"])
-        metadata.setdefault("upgrade_notes", ["Give a direct answer, add a reason, then add one concrete example."])
-        metadata.setdefault("ai_coaching", "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。")
+        turn_call_id = f"{attempt_id}_{turn.turn_id}"
+
+        # Try to generate Band 7 version with Codex
+        try:
+            band7_version = build_turn_band7_with_codex(
+                turn.question,
+                turn_transcript,
+                turn.part,
+                f"band7_{turn_call_id}",
+            )
+            # Validate the Band 7 output
+            if valid_turn_band7(turn.question, band7_version, turn.part):
+                metadata["band7_version"] = band7_version
+                metadata["band7_markdown"] = band7_version
+                metadata["band7_source"] = "codex"
+            else:
+                # Invalid Band 7, use fallback
+                metadata["band7_version"] = _band7_fallback(turn)
+                metadata["band7_markdown"] = metadata["band7_version"]
+                metadata["band7_source"] = "fallback_invalid"
+        except Exception:
+            # Codex failed, use fallback
+            metadata["band7_version"] = _band7_fallback(turn)
+            metadata["band7_markdown"] = metadata["band7_version"]
+            metadata["band7_source"] = "fallback_error"
+
+        # Generate upgrade notes
+        metadata["upgrade_notes"] = build_upgrade_notes(turn_transcript)
+
+        # Try to generate AI coaching with Codex
+        try:
+            ai_coaching = build_ai_coaching_with_codex(
+                turn.question,
+                turn_transcript,
+                metadata["band7_version"],
+                turn.part,
+                f"coaching_{turn_call_id}",
+            )
+            if ai_coaching and len(ai_coaching) > 10:
+                metadata["ai_coaching"] = ai_coaching
+                metadata["ai_coaching_source"] = "codex"
+            else:
+                metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
+                metadata["ai_coaching_source"] = "fallback_empty"
+        except Exception:
+            metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
+            metadata["ai_coaching_source"] = "fallback_error"
+
         turn.metadata = metadata
         turn.save()
 
@@ -1040,6 +1488,16 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
     attempt.refresh_from_db()
 
     runtime = _runtime_attempt_payload(attempt)
+
+    # Use overall_review from Codex if available, otherwise use fallback
+    overall_review = score.get("overall_review")
+    if not overall_review or overall_review.get("source") != "codex_score":
+        overall_review = {
+            "comment": "Fallback report generated locally. Use the full AI pipeline for personalized scoring later.",
+            "review_points": ["Complete every answer", "Add reasons and examples", "Review weak short answers first"],
+            "source": "django_fallback",
+        }
+
     runtime.update(
         {
             "status": "scored",
@@ -1057,11 +1515,7 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
                     "grammatical_range": score["grammatical_range"],
                 }
             },
-            "overall_review": {
-                "comment": "Fallback report generated locally. Use the full AI pipeline for personalized scoring later.",
-                "review_points": ["Complete every answer", "Add reasons and examples", "Review weak short answers first"],
-                "source": "django_fallback",
-            },
+            "overall_review": overall_review,
             "personalized_coaching": {
                 "focus": "先确保每题都有完整回答，再逐步提高词汇和语法复杂度。",
                 "next_practice": ["重练最短的一题", "每题至少补一个例子"],
@@ -1159,11 +1613,59 @@ def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, A
     if _turn_status(turn) != "completed":
         raise SpeakingError("Only completed turns can regenerate AI feedback.")
 
+    turn_transcript = turn.transcript_cleaned or turn.transcript_raw
+    if not turn_transcript.strip():
+        raise SpeakingError("Cannot regenerate feedback for empty transcript.")
+
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-    metadata["band7_version"] = _band7_fallback(turn)
-    metadata["band7_markdown"] = metadata["band7_version"]
-    metadata["upgrade_notes"] = ["Give a direct answer, add a reason, then add one concrete example."]
-    metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
+    turn_call_id = f"{attempt_id}_{turn_id}_regen"
+
+    # Try to generate Band 7 version with Codex
+    try:
+        band7_version = build_turn_band7_with_codex(
+            turn.question,
+            turn_transcript,
+            turn.part,
+            f"band7_{turn_call_id}",
+        )
+        # Validate the Band 7 output
+        if valid_turn_band7(turn.question, band7_version, turn.part):
+            metadata["band7_version"] = band7_version
+            metadata["band7_markdown"] = band7_version
+            metadata["band7_source"] = "codex_regenerated"
+        else:
+            metadata["band7_version"] = _band7_fallback(turn)
+            metadata["band7_markdown"] = metadata["band7_version"]
+            metadata["band7_source"] = "fallback_invalid_regenerated"
+    except Exception as exc:
+        metadata["band7_version"] = _band7_fallback(turn)
+        metadata["band7_markdown"] = metadata["band7_version"]
+        metadata["band7_source"] = "fallback_error_regenerated"
+        metadata["band7_error"] = str(exc)
+
+    # Generate upgrade notes
+    metadata["upgrade_notes"] = build_upgrade_notes(turn_transcript)
+
+    # Try to generate AI coaching with Codex
+    try:
+        ai_coaching = build_ai_coaching_with_codex(
+            turn.question,
+            turn_transcript,
+            metadata["band7_version"],
+            turn.part,
+            f"coaching_{turn_call_id}",
+        )
+        if ai_coaching and len(ai_coaching) > 10:
+            metadata["ai_coaching"] = ai_coaching
+            metadata["ai_coaching_source"] = "codex_regenerated"
+        else:
+            metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
+            metadata["ai_coaching_source"] = "fallback_empty_regenerated"
+    except Exception as exc:
+        metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
+        metadata["ai_coaching_source"] = "fallback_error_regenerated"
+        metadata["ai_coaching_error"] = str(exc)
+
     metadata["feedback_regenerated_at"] = timezone.now().isoformat()
     turn.metadata = metadata
     turn.save(update_fields=["metadata"])
