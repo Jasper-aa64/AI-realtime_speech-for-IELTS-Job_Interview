@@ -30,15 +30,68 @@ CODEX_REASONING_EFFORT = "low"
 
 
 def extract_json_object(text: str) -> dict[str, Any]:
-    """Extract first JSON object from text."""
-    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-    if not match:
+    """Extract first valid JSON object from text using balanced bracket scanning.
+
+    Handles cases where:
+    - Text contains multiple JSON objects
+    - Text has Trellis/other content before/after JSON
+    - JSON spans multiple lines
+
+    Returns the first complete, parseable JSON object.
+    """
+    text = str(text or "")
+
+    # Find the first '{' that starts a JSON object
+    start = text.find("{")
+    if start == -1:
         raise ValueError("model output did not contain a JSON object")
-    return json.loads(match.group(0))
+
+    # Use balanced bracket scanning to find the matching '}'
+    depth = 0
+    in_string = False
+    escape_next = False
+
+    for i, char in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\":
+            escape_next = True
+            continue
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                # Found the closing brace
+                json_str = text[start:i + 1]
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    # Try finding next JSON object
+                    remaining = text[i + 1:]
+                    if "{" in remaining:
+                        return extract_json_object(remaining)
+                    raise ValueError(f"Invalid JSON object: {json_str[:100]}...")
+
+    raise ValueError("model output contained unbalanced JSON braces")
 
 
 def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
-    """Parse codex CLI JSON events from stdout."""
+    """Parse codex CLI JSON events from stdout.
+
+    Extracts the final model output text from:
+    1. agent_message events (item.completed with type=agent_message)
+    2. message.item events with text content
+    3. Raw text events
+
+    Skips Trellis injection text and other non-JSON prefixes.
+    """
     events: list[dict[str, Any]] = []
     for line in str(stdout or "").splitlines():
         stripped = line.strip()
@@ -53,12 +106,28 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
 
     usage = None
     final_text = ""
+
     for event in events:
+        # Track usage
         event_usage = event.get("usage")
         if isinstance(event_usage, dict):
             usage = event_usage
         if event.get("type") == "turn.completed" and isinstance(event.get("usage"), dict):
             usage = event["usage"]
+
+        # Extract text from various event formats
+        # Format 1: item.completed with agent_message
+        if event.get("type") == "item.completed":
+            item = event.get("item", {})
+            if item.get("type") == "agent_message":
+                content_list = item.get("content", [])
+                for content_item in content_list:
+                    if isinstance(content_item, dict) and content_item.get("type") == "text":
+                        text_value = content_item.get("text", "")
+                        if text_value:
+                            final_text = text_value
+
+        # Format 2: message/item/response dict
         message = event.get("message") or event.get("item") or event.get("response")
         if isinstance(message, dict):
             content = message.get("content") or message.get("text")
@@ -75,6 +144,8 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
                         parts.append(part)
                 if parts:
                     final_text = "\n".join(parts)
+
+        # Format 3: direct content field
         elif isinstance(event.get("content"), str):
             final_text = event["content"]
 
