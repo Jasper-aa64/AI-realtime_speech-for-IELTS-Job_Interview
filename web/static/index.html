@@ -44,7 +44,6 @@
             <div class="nav-divider" aria-hidden="true"></div>
             <button class="nav-button" data-view="writing">每日写作</button>
             <button class="nav-button" data-view="writingReports">写作报告</button>
-            <button class="nav-button" data-view="settings">设置</button>
           </nav>
         </div>
         <div class="nav-bottom">
@@ -372,30 +371,59 @@
         </section>
 
         <section id="accountProfilePanel" class="panel hidden auth-panel">
-          <article class="settings-card auth-card">
-            <div class="settings-card-head">
-              <div>
-                <h2>Account profile</h2>
-                <p id="accountProfileDetails" class="muted">Sign in to sync profile and security settings.</p>
-              </div>
-              <button type="button" id="profileLogoutBtn" class="ghost">Sign out</button>
-            </div>
-            <div id="accountProfileStatus" class="settings-metric"></div>
-            <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
-              <label>
-                <span>Full name</span>
-                <input id="fullNameInput" value="LiHua" autocomplete="name">
-              </label>
-              <label>
-                <span>English name</span>
-                <input id="englishNameInput" value="Jasper" autocomplete="nickname">
-              </label>
-            </div>
-            <div class="account-action-row">
-              <button type="button" id="profileSaveBtn" class="ghost">Save profile</button>
-              <button type="button" id="profileSecurityBtn" class="ghost" onclick="window.switchView && window.switchView('accountSecurity')">Security</button>
-            </div>
-          </article>
+          <div class="account-dashboard">
+            <section class="account-primary-column">
+              <article class="settings-card account-profile-card">
+                <div class="settings-card-head">
+                  <div>
+                    <h2>Account profile</h2>
+                    <p id="accountProfileDetails" class="muted">Sign in to sync profile and security settings.</p>
+                  </div>
+                  <button type="button" id="profileLogoutBtn" class="ghost">Sign out</button>
+                </div>
+                <div id="accountProfileStatus" class="settings-metric"></div>
+                <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
+                  <label>
+                    <span>Full name</span>
+                    <input id="fullNameInput" value="LiHua" autocomplete="name">
+                  </label>
+                  <label>
+                    <span>English name</span>
+                    <input id="englishNameInput" value="Jasper" autocomplete="nickname">
+                  </label>
+                </div>
+                <div class="account-action-row">
+                  <button type="button" id="profileSaveBtn" class="ghost">Save profile</button>
+                  <button type="button" id="profileSecurityBtn" class="ghost" onclick="window.switchView && window.switchView('accountSecurity')">Security</button>
+                </div>
+              </article>
+              <article class="settings-card account-security-summary">
+                <h2>Security</h2>
+                <p class="muted">Change your password and keep account access under your control.</p>
+                <button type="button" class="ghost" onclick="window.switchView && window.switchView('accountSecurity')">Open security</button>
+              </article>
+            </section>
+            <aside class="account-side-column">
+              <article class="settings-card">
+                <h2>钱包</h2>
+                <div class="wallet-header">
+                  <div id="walletStatus" class="settings-metric">加载中...</div>
+                  <button type="button" id="openRechargeBtn" class="confirm-recharge-btn">充值</button>
+                </div>
+                <div id="ledgerList" class="settings-list"></div>
+              </article>
+              <article class="settings-card">
+                <h2>弱题训练</h2>
+                <div id="weakTrainingStatus" class="settings-metric">加载中...</div>
+                <div id="weakTrainingList" class="settings-list"></div>
+              </article>
+              <article class="settings-card">
+                <h2>复习队列</h2>
+                <div id="replayQueueStatus" class="settings-metric">加载中...</div>
+                <div id="replayQueueList" class="settings-list"></div>
+              </article>
+            </aside>
+          </div>
         </section>
 
         <section id="accountSecurityPanel" class="panel hidden auth-panel">
@@ -424,30 +452,6 @@
               <button type="button" id="securityChangePasswordBtn">Change password</button>
             </div>
           </article>
-        </section>
-
-        <section id="settingsPanel" class="panel hidden">
-          <div class="settings-page-head">
-            <button id="settingsBackButton" class="settings-back-button hidden" type="button" aria-label="Back to practice">
-              <span aria-hidden="true">←</span>
-              <strong>返回练习</strong>
-            </button>
-          </div>
-          <div class="settings-status-grid">
-            <article class="settings-card">
-              <h2>钱包</h2>
-              <div class="wallet-header">
-                <div id="walletStatus" class="settings-metric">加载中...</div>
-                <button type="button" id="openRechargeBtn" class="confirm-recharge-btn">充值</button>
-              </div>
-              <div id="ledgerList" class="settings-list"></div>
-            </article>
-            <article class="settings-card">
-              <h2>弱题训练</h2>
-              <div id="weakTrainingStatus" class="settings-metric">加载中...</div>
-              <div id="weakTrainingList" class="settings-list"></div>
-            </article>
-          </div>
         </section>
         <!-- Recharge Dialog -->
         <div id="rechargeDialog" class="recharge-dialog-overlay hidden">

@@ -77,11 +77,10 @@ const viewCopy = {
   forgotPassword: ["Reset password", "Reset your password via email if configured."],
   accountProfile: ["Account", "Manage your profile and account settings."],
   accountSecurity: ["Security", "Change your password and manage security settings."],
-  settings: ["Settings", "钱包和弱题训练记录。"],
 };
 
 const authViews = new Set(["login", "register", "forgotPassword"]);
-const protectedViews = new Set(["history", "writing", "writingReports", "settings", "accountProfile", "accountSecurity"]);
+const protectedViews = new Set(["history", "writing", "writingReports", "accountProfile", "accountSecurity"]);
 
 const $ = (selector) => {
   if (typeof selector !== "string") return null;
@@ -382,7 +381,7 @@ function switchView(view, options = {}) {
     return;
   }
   if (view === state.view && !options.force) return;
-  if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && ["accountProfile", "accountSecurity", "settings"].includes(view) && options.preservePractice) {
+  if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && ["accountProfile", "accountSecurity"].includes(view) && options.preservePractice) {
     showPracticeOverlay(view);
     return;
   }
@@ -406,6 +405,7 @@ function switchView(view, options = {}) {
     button.classList.toggle("tone-p3", button.dataset.view === "p3");
   });
   $(".shell")?.classList.toggle("auth-shell", authViews.has(view));
+  $(".shell")?.classList.toggle("account-shell", view === "accountProfile");
   $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
@@ -416,8 +416,6 @@ function switchView(view, options = {}) {
   $("#forgotPasswordPanel")?.classList.toggle("hidden", view !== "forgotPassword");
   $("#accountProfilePanel")?.classList.toggle("hidden", view !== "accountProfile");
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
-  $("#settingsPanel").classList.toggle("hidden", view !== "settings");
-  $("#settingsBackButton")?.classList.toggle("hidden", true);
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
   $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || authViews.has(view));
@@ -427,8 +425,8 @@ function switchView(view, options = {}) {
   if (view === "history") loadHistory();
   if (view === "writing") loadWriting();
   if (view === "writingReports") loadWritingReports();
-  if (view === "accountProfile" || view === "accountSecurity") loadAccount();
-  if (view === "settings") loadSettings();
+  if (view === "accountProfile") loadAccountProfile();
+  if (view === "accountSecurity") loadAccount();
   if (view === "login") prepareLoginView(options.authMessage || "");
   if (view === "forgotPassword") loadPasswordResetAvailability();
   if (["mock", "p1", "p2", "p3"].includes(view)) resetPracticeSurface();
@@ -440,7 +438,6 @@ function loginReasonForView(view) {
     history: "登录后才能查看你的口语报告和历史记录。",
     writing: "登录后才能保存每日写作、签到和 AI 评分记录。",
     writingReports: "登录后才能查看你的写作报告。",
-    settings: "登录后才能查看钱包和弱题训练记录。",
     accountProfile: "请先登录后管理账号资料。",
     accountSecurity: "请先登录后修改账号安全设置。",
   };
@@ -460,7 +457,7 @@ function prepareLoginView(message = "") {
   }
 }
 
-function showPracticeOverlay(view = "settings") {
+function showPracticeOverlay(view = "accountProfile") {
   const practiceView = ["mock", "p1", "p2", "p3"].includes(state.view) ? state.view : (state.practiceViewBeforeSettings || "mock");
   state.practiceViewBeforeSettings = practiceView;
   state.view = view;
@@ -481,15 +478,13 @@ function showPracticeOverlay(view = "settings") {
   $("#forgotPasswordPanel")?.classList.add("hidden");
   $("#accountProfilePanel")?.classList.toggle("hidden", view !== "accountProfile");
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
-  $("#settingsPanel").classList.toggle("hidden", view !== "settings");
   $(".workspace").classList.remove("history-workspace", "writing-workspace");
   $(".topbar").classList.remove("hidden");
   $("#viewTitleBlock").classList.remove("hidden");
   text("viewTitle", viewCopy[view][0]);
   text("viewSubtitle", `${viewCopy[view][0]} 已打开，当前练习仍在后台保留。`);
-  $("#settingsBackButton")?.classList.toggle("hidden", view !== "settings");
-  if (view === "accountProfile" || view === "accountSecurity") loadAccount();
-  if (view === "settings") loadSettings();
+  if (view === "accountProfile") loadAccountProfile();
+  if (view === "accountSecurity") loadAccount();
   updateSidebarLock();
 }
 
@@ -510,9 +505,8 @@ function returnFromSettings() {
   $("#forgotPasswordPanel")?.classList.add("hidden");
   $("#accountProfilePanel")?.classList.add("hidden");
   $("#accountSecurityPanel")?.classList.add("hidden");
-  $("#settingsPanel").classList.add("hidden");
-  $("#settingsBackButton")?.classList.add("hidden");
   $("#practicePanel").classList.remove("hidden");
+  $(".shell")?.classList.remove("auth-shell", "account-shell");
   text("viewTitle", viewCopy[practiceView][0]);
   text("viewSubtitle", viewCopy[practiceView][1]);
   updateSidebarLock();
@@ -606,7 +600,7 @@ async function startPractice() {
     const balance = Number(wallet.balance_rmb || 0);
     if (balance <= 0) {
       alert("余额不足，请先充值后再开始练习。");
-      switchView("settings");
+      switchView("accountProfile");
       return;
     }
   } catch (e) {
@@ -1801,7 +1795,7 @@ async function scoreWritingEntry() {
       const wallet = await api("/api/billing/wallet");
       if (Number(wallet.balance_rmb || 0) <= 0) {
         alert("余额不足，请先充值后再使用 AI 评分与辅导。");
-        switchView("settings");
+        switchView("accountProfile");
         return;
       }
     } catch (_error) {
@@ -2513,7 +2507,6 @@ function bindEvents() {
       }
     });
   });
-  $("settingsBackButton")?.addEventListener("click", returnFromSettings);
   $("fullNameInput")?.addEventListener("input", scheduleCandidateNameSave);
   $("englishNameInput")?.addEventListener("input", scheduleCandidateNameSave);
   $("fullNameInput")?.addEventListener("blur", flushCandidateNameSave);
@@ -2653,7 +2646,8 @@ function renderP3TopicChips(topics) {
   }
 }
 
-async function loadSettings() {
+async function loadAccountProfile() {
+  await loadAccount();
   await Promise.all([loadWallet(), loadWeakTraining(), loadReplayQueue()]);
 }
 

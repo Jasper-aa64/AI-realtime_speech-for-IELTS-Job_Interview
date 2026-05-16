@@ -606,6 +606,10 @@ button:active {
   grid-template-columns: 1fr;
 }
 
+.shell.account-shell .workspace {
+  overflow-y: auto;
+}
+
 .shell.auth-shell .global-topbar,
 .shell.auth-shell .nav,
 .shell.auth-shell .topbar,
@@ -3187,6 +3191,40 @@ body.font-popular .record-control.recording {
   align-items: start;
 }
 
+.account-dashboard {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.92fr) minmax(360px, 1.08fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.account-primary-column,
+.account-side-column {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.account-profile-card,
+.account-security-summary {
+  background: #fff;
+}
+
+.account-side-column .settings-card {
+  min-height: 0;
+}
+
+.account-side-column .settings-list {
+  max-height: 230px;
+}
+
+.account-profile-card .settings-name-fields {
+  grid-template-columns: 1fr;
+  min-width: 0;
+}
+
 .auth-panel {
   min-height: 100vh;
   min-height: 100dvh;
@@ -3194,6 +3232,10 @@ body.font-popular .record-control.recording {
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.auth-panel:not(.hidden) {
+  display: block;
 }
 
 .auth-stage {
@@ -3358,6 +3400,9 @@ body.font-popular .record-control.recording {
     min-height: auto;
     grid-template-columns: 1fr;
     gap: 22px;
+  }
+  .account-dashboard {
+    grid-template-columns: 1fr;
   }
   .auth-copy h1 {
     max-width: none;
