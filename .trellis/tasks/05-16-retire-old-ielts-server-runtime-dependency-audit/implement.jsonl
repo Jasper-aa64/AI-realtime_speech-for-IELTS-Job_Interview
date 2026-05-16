@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Owner-scoped Django ORM state transitions and training/report writes."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Expected JSON error mapping for auth, validation, missing, and conflicts."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "IELTS web attempt contract and deterministic fallback requirements."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Runtime API responses must stay compatible with frontend expectations."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse existing Django speaking start/audio/history payload patterns."}

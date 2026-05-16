@@ -4,10 +4,12 @@ import hashlib
 import json
 import random
 import uuid
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Avg, Count, Max, Min, Sum
 from django.utils import timezone
 
@@ -373,13 +375,13 @@ def _fallback_p3(theme: str, count: int = P3_MAIN_COUNT) -> dict[str, Any]:
 
 
 def _timers_for_part(part: str) -> dict[str, Any]:
-    defaults = {"prepare": 0, "speak": 0}
+    defaults = {"prep_seconds": 3, "speak_seconds": 60}
     if part == "p1":
-        return {"prepare": 5, "speak": 30}
+        return {"prep_seconds": 3, "speak_seconds": 35}
     if part == "p2":
-        return {"prepare": 60, "speak": 120}
+        return {"prep_seconds": 60, "speak_seconds": 120}
     if part == "p3":
-        return {"prepare": 5, "speak": 45}
+        return {"prep_seconds": 7, "speak_seconds": 75}
     return defaults
 
 
@@ -720,4 +722,396 @@ def get_turn_audio_path(user, attempt_id: str, turn_id: str) -> Path | None:
     if not turn or not turn.audio_path:
         return None
     return Path(settings.MEDIA_ROOT) / turn.audio_path
-    return response
+
+
+# --- Runtime completion and scoring ---
+
+def _turn_status(turn: SpeakingTurn) -> str:
+    status = str(turn.metadata.get("status") or "").strip()
+    if status:
+        return status
+    if turn.transcript_cleaned or turn.transcript_raw:
+        return "completed"
+    if turn.audio_path:
+        return "audio_uploaded"
+    return "pending"
+
+
+def _spoken_markdown(text: str) -> str:
+    cleaned = _clean_report_text(text)
+    return cleaned
+
+
+def _turn_payload(turn: SpeakingTurn, total: int | None = None) -> dict[str, Any]:
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {"question": turn.question}
+    cue_card = metadata.get("cue_card") if isinstance(metadata.get("cue_card"), dict) else None
+    timers = metadata.get("timers") if isinstance(metadata.get("timers"), dict) else _timers_for_part(turn.part)
+    audio = None
+    if turn.audio_path:
+        audio = {
+            "path": str(Path(settings.MEDIA_ROOT) / turn.audio_path),
+            "content_type": metadata.get("audio_content_type", "application/octet-stream"),
+            "bytes": metadata.get("audio_bytes"),
+            "duration_seconds": float(turn.duration_seconds) if turn.duration_seconds is not None else None,
+            "url": f"/api/audio/{turn.attempt.attempt_id}/{turn.turn_id}/candidate",
+        }
+    return {
+        "id": turn.turn_id,
+        "part": turn.part,
+        "index": max(0, int(turn.sequence or 0)),
+        "total": total if total is not None else turn.attempt.turns.count(),
+        "status": _turn_status(turn),
+        "question": turn.question,
+        "prompt": prompt,
+        "cue_card": cue_card,
+        "timers": timers,
+        "examiner_text": metadata.get("examiner_text") or turn.question,
+        "examiner_behavior": metadata.get("examiner_behavior") or "auto_play_question",
+        "examiner_tts": metadata.get("examiner_tts") or {"provider": "volcengine", "status": "pending", "audio_url": None},
+        "audio": audio,
+        "transcript_raw": turn.transcript_raw,
+        "transcript_cleaned": turn.transcript_cleaned,
+        "transcript_markdown": metadata.get("transcript_markdown") or _spoken_markdown(turn.transcript_cleaned or turn.transcript_raw),
+        "transcript_status": metadata.get("transcript_status") or ("captured" if (turn.transcript_cleaned or turn.transcript_raw) else "missing"),
+        "duration_seconds": float(turn.duration_seconds) if turn.duration_seconds is not None else None,
+        "band7_version": metadata.get("band7_version", ""),
+        "band7_markdown": metadata.get("band7_markdown", metadata.get("band7_version", "")),
+        "model_audio": metadata.get("model_audio"),
+        "upgrade_notes": metadata.get("upgrade_notes", []),
+        "ai_coaching": metadata.get("ai_coaching", ""),
+        "counts_toward_total": turn.counts_toward_total,
+        "display_index": metadata.get("display_index"),
+    }
+
+
+def _runtime_attempt_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
+    turns = list(attempt.turns.all().order_by("sequence"))
+    total = len(turns)
+    turn_payloads = [_turn_payload(turn, total) for turn in turns]
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    current_turn = metadata.get("current_turn")
+    if attempt.status == SpeakingAttempt.Status.STARTED and not current_turn:
+        next_turn = next((turn for turn in turn_payloads if turn.get("status") != "completed"), None)
+        current_turn = next_turn.get("id") if next_turn else None
+    return {
+        "id": attempt.attempt_id,
+        "timestamp": attempt.created_at.isoformat(),
+        "status": attempt.status,
+        "user_id": str(attempt.user_id),
+        "mode": attempt.mode,
+        "part": attempt.part,
+        "title": attempt.title,
+        "question": turn_payloads[0]["question"] if turn_payloads else "",
+        "cue_card": metadata.get("cue_card"),
+        "turns": turn_payloads,
+        "current_turn": current_turn,
+        "candidate": attempt.english_name,
+        "full_name": attempt.full_name,
+        "english_name": attempt.english_name,
+        "pronunciation": {"provider": "azure", "status": "pending"},
+        "ielts_score": None,
+        "feedback_summary": "",
+        "criteria_feedback": {},
+        "band7_version": "",
+        "model_audio": None,
+        "upgrade_notes": [],
+        "ai_coaching": "",
+        **{key: value for key, value in metadata.items() if key.startswith("p3_")},
+    }
+
+
+def _load_attempt_for_user(user, attempt_id: str) -> SpeakingAttempt:
+    attempt = (
+        SpeakingAttempt.objects.filter(user=user, attempt_id=str(attempt_id or "").strip())
+        .prefetch_related("turns")
+        .first()
+    )
+    if not attempt:
+        raise SpeakingError("Attempt not found")
+    return attempt
+
+
+def _find_turn(attempt: SpeakingAttempt, turn_id: str) -> SpeakingTurn:
+    turn = next((item for item in attempt.turns.all() if item.turn_id == str(turn_id or "").strip()), None)
+    if not turn:
+        raise SpeakingError("Turn not found")
+    return turn
+
+
+def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    attempt = _load_attempt_for_user(user, attempt_id)
+    if attempt.status == SpeakingAttempt.Status.ABORTED:
+        raise SpeakingError("Aborted attempts cannot be completed.")
+    if attempt.status == SpeakingAttempt.Status.SCORED:
+        raise SpeakingError("Scored attempts cannot be completed.")
+    turn = _find_turn(attempt, turn_id)
+
+    transcript = str(payload.get("transcript_raw") or payload.get("transcript") or "").strip()
+    transcript_status = str(payload.get("transcript_status") or ("captured" if transcript else "missing")).strip()
+    if transcript_status not in {"captured", "interim_fallback", "missing"}:
+        transcript_status = "captured" if transcript else "missing"
+    source = str(payload.get("transcript_source") or "browser_dictation").strip() or "browser_dictation"
+    cleaned = _clean_report_text(transcript)
+    duration = payload.get("duration_seconds")
+
+    turn.transcript_raw = transcript
+    turn.transcript_cleaned = cleaned
+    turn.transcript_source = source
+    if duration not in (None, ""):
+        try:
+            turn.duration_seconds = Decimal(str(duration))
+        except Exception:
+            turn.duration_seconds = None
+    turn.pronunciation = turn.pronunciation or {
+        "provider": "azure",
+        "status": "fallback_browser_dictation" if transcript else "missing_audio",
+        "pron_score": None,
+        "accuracy": None,
+        "fluency": None,
+        "prosody": None,
+        "issues": [],
+        "message": "Pronunciation is not assessed by Django fallback turn completion.",
+    }
+    turn.metadata = {
+        **(turn.metadata if isinstance(turn.metadata, dict) else {}),
+        "status": "completed",
+        "transcript_status": transcript_status,
+        "transcript_markdown": _spoken_markdown(cleaned),
+        "cleaning_notes": [],
+        "feedback_generation_status": "fallback",
+    }
+    turn.save()
+
+    turns = list(attempt.turns.all().order_by("sequence"))
+    next_turn = next((item for item in turns if item.sequence > turn.sequence and _turn_status(item) != "completed"), None)
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    metadata["current_turn"] = next_turn.turn_id if next_turn else None
+    attempt.metadata = metadata
+    if next_turn is None:
+        attempt.status = SpeakingAttempt.Status.READY_TO_SCORE
+    attempt.save()
+    attempt.refresh_from_db()
+
+    return {
+        "attempt": _runtime_attempt_payload(attempt),
+        "turn": _turn_payload(turn, len(turns)),
+        "next_turn": _turn_payload(next_turn, len(turns)) if next_turn else None,
+    }
+
+
+def abort_attempt(user, attempt_id: str) -> dict[str, Any]:
+    attempt = _load_attempt_for_user(user, attempt_id)
+    if attempt.status == SpeakingAttempt.Status.SCORED:
+        raise SpeakingError("Scored attempts cannot be aborted.")
+    if attempt.status != SpeakingAttempt.Status.ABORTED:
+        metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+        metadata["aborted_at"] = timezone.now().isoformat()
+        metadata["current_turn"] = None
+        attempt.metadata = metadata
+        attempt.status = SpeakingAttempt.Status.ABORTED
+        attempt.save()
+    return _runtime_attempt_payload(attempt)
+
+
+def _word_count(text: str) -> int:
+    return len([word for word in text.replace("\n", " ").split(" ") if word.strip()])
+
+
+def _fallback_score(transcript: str, part: str) -> dict[str, Any]:
+    words = _word_count(transcript)
+    if words >= 220:
+        base = 6.0
+    elif words >= 120:
+        base = 5.5
+    elif words >= 60:
+        base = 5.0
+    elif words >= 25:
+        base = 4.5
+    else:
+        base = 4.0
+    if part == "p2" and words < 80:
+        base = min(base, 5.0)
+    if part == "p3" and words < 100:
+        base = min(base, 5.0)
+    return {
+        "overall_band": base,
+        "fluency_coherence": base,
+        "lexical_resource": max(4.0, base - 0.5),
+        "grammatical_range": max(4.0, base - 0.5),
+        "pronunciation_estimate": None,
+        "feedback": "Fallback score generated from completed browser transcripts. Configure the full AI scorer for richer feedback.",
+        "backend": "fallback",
+        "word_count": words,
+    }
+
+
+def _criteria_feedback(score: dict[str, Any], transcript: str) -> dict[str, Any]:
+    return {
+        "fluency_coherence": {
+            "band": score["fluency_coherence"],
+            "standard": "Answers should be extended, coherent, and easy to follow.",
+            "focus": "Add clearer reasons and examples for each answer.",
+            "advice": "Use a short point-reason-example structure.",
+        },
+        "lexical_resource": {
+            "band": score["lexical_resource"],
+            "standard": "Use precise topic vocabulary instead of repeated simple words.",
+            "focus": "Replace vague words with topic-specific expressions.",
+            "advice": "Prepare two or three flexible phrases for this topic.",
+        },
+        "grammatical_range_accuracy": {
+            "band": score["grammatical_range"],
+            "standard": "Use accurate simple sentences plus some longer complex clauses.",
+            "focus": "Control tense and agreement before adding complexity.",
+            "advice": "Repeat the answer once using because, although, or which.",
+        },
+    }
+
+
+def _band7_fallback(turn: SpeakingTurn) -> str:
+    question = turn.question.rstrip("?")
+    return (
+        f"Well, regarding {question.lower()}, I would give a clear answer with a specific reason and a brief example. "
+        "That would make the response sound more natural and developed."
+    )
+
+
+def _training_relevance(question: str, transcript: str) -> Decimal:
+    q_words = {word.strip(".,?!:;").lower() for word in question.split() if len(word.strip(".,?!:;")) > 3}
+    t_words = {word.strip(".,?!:;").lower() for word in transcript.split() if len(word.strip(".,?!:;")) > 3}
+    if not q_words or not t_words:
+        return Decimal("0.000")
+    return Decimal(str(round(len(q_words & t_words) / max(1, len(q_words)), 3)))
+
+
+@transaction.atomic
+def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    attempt = _load_attempt_for_user(user, attempt_id)
+    if attempt.status == SpeakingAttempt.Status.ABORTED:
+        raise SpeakingError("Aborted attempts cannot be scored.")
+    turns = list(attempt.turns.all().order_by("sequence"))
+    incomplete = [turn for turn in turns if _turn_status(turn) != "completed"]
+    if incomplete:
+        raise SpeakingError("Complete all speaking turns before generating the section report.")
+    transcript = "\n".join(
+        f"Q{index + 1}: {turn.question}\nA: {turn.transcript_cleaned or turn.transcript_raw}"
+        for index, turn in enumerate(turns)
+    )
+    if not transcript.strip():
+        raise SpeakingError("Missing transcript")
+
+    score = _fallback_score(transcript, attempt.mode)
+    criteria = _criteria_feedback(score, transcript)
+    for turn in turns:
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        metadata.setdefault("band7_version", _band7_fallback(turn))
+        metadata.setdefault("band7_markdown", metadata["band7_version"])
+        metadata.setdefault("upgrade_notes", ["Give a direct answer, add a reason, then add one concrete example."])
+        metadata.setdefault("ai_coaching", "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。")
+        turn.metadata = metadata
+        turn.save()
+
+    attempt.status = SpeakingAttempt.Status.SCORED
+    attempt.metadata = {
+        **(attempt.metadata if isinstance(attempt.metadata, dict) else {}),
+        "current_turn": None,
+        "scored_at": timezone.now().isoformat(),
+    }
+    attempt.save()
+    attempt.refresh_from_db()
+
+    runtime = _runtime_attempt_payload(attempt)
+    runtime.update(
+        {
+            "status": "scored",
+            "transcript_cleaned": transcript,
+            "ielts_score": score,
+            "feedback_summary": score["feedback"],
+            "criteria_feedback": criteria,
+            "part_scores": {
+                attempt.part or attempt.mode: {
+                    "part": attempt.part or attempt.mode,
+                    "turn_count": len(turns),
+                    "band": score["overall_band"],
+                    "fluency_coherence": score["fluency_coherence"],
+                    "lexical_resource": score["lexical_resource"],
+                    "grammatical_range": score["grammatical_range"],
+                }
+            },
+            "overall_review": {
+                "comment": "Fallback report generated locally. Use the full AI pipeline for personalized scoring later.",
+                "review_points": ["Complete every answer", "Add reasons and examples", "Review weak short answers first"],
+                "source": "django_fallback",
+            },
+            "personalized_coaching": {
+                "focus": "先确保每题都有完整回答，再逐步提高词汇和语法复杂度。",
+                "next_practice": ["重练最短的一题", "每题至少补一个例子"],
+            },
+        }
+    )
+
+    report, _created = SpeakingReport.objects.update_or_create(
+        user=user,
+        attempt=attempt,
+        defaults={
+            "overall_band": Decimal(str(score["overall_band"])),
+            "fluency_coherence": Decimal(str(score["fluency_coherence"])),
+            "lexical_resource": Decimal(str(score["lexical_resource"])),
+            "grammar_range_accuracy": Decimal(str(score["grammatical_range"])),
+            "pronunciation": None,
+            "feedback_summary": score["feedback"],
+            "report_payload": runtime,
+        },
+    )
+
+    observations = []
+    for turn in turns:
+        turn_text = turn.transcript_cleaned or turn.transcript_raw
+        word_count = _word_count(turn_text)
+        reasons = []
+        if score["overall_band"] < 5.5:
+            reasons.append("low_band")
+        if word_count < 25:
+            reasons.append("short_answer")
+        relevance = _training_relevance(turn.question, turn_text)
+        if relevance < Decimal("0.200"):
+            reasons.append("off_topic")
+        observation, _ = SpeakingTrainingObservation.objects.update_or_create(
+            user=user,
+            observation_id=f"{attempt.attempt_id}_{turn.turn_id}",
+            defaults={
+                "attempt": attempt,
+                "turn": turn,
+                "legacy_attempt_id": attempt.attempt_id,
+                "legacy_turn_id": turn.turn_id,
+                "question_id": f"{turn.part}:{hashlib.md5(turn.question.encode()).hexdigest()[:12]}",
+                "part": turn.part,
+                "question": turn.question,
+                "transcript": turn_text,
+                "overall_band": Decimal(str(score["overall_band"])),
+                "fluency_coherence": Decimal(str(score["fluency_coherence"])),
+                "lexical_resource": Decimal(str(score["lexical_resource"])),
+                "grammar_range_accuracy": Decimal(str(score["grammatical_range"])),
+                "pronunciation": None,
+                "relevance": relevance,
+                "weak_item_flag": bool(reasons),
+                "weak_reasons": reasons,
+                "model_version": "django_fallback",
+                "observed_at": timezone.now(),
+                "next_due": timezone.now() + timezone.timedelta(days=1 if reasons else 14),
+            },
+        )
+        observations.append(
+            {
+                "observation_id": observation.observation_id,
+                "question_id": observation.question_id,
+                "part": observation.part,
+                "weak_item_flag": observation.weak_item_flag,
+                "weak_reasons": observation.weak_reasons,
+            }
+        )
+    runtime["training_observations"] = observations
+    report.report_payload = runtime
+    report.save(update_fields=["report_payload", "updated_at"])
+    return runtime

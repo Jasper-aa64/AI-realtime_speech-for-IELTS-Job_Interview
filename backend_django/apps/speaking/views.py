@@ -1,8 +1,11 @@
 from django.http import FileResponse, JsonResponse
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .services import (
     SpeakingError,
+    abort_attempt,
+    complete_turn,
     delete_attempt,
     detail,
     get_turn_audio_path,
@@ -10,6 +13,7 @@ from .services import (
     question_bank_sample,
     question_bank_summary,
     replay_queue,
+    score_attempt,
     start_attempt,
     upload_turn_audio,
     weak_items,
@@ -118,10 +122,10 @@ def turn_audio_upload_view(request, attempt_id: str, turn_id: str):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
-    if not request.FILES.get('audio'):
-        audio_file = request.FILES.get('file')
-    else:
-        audio_file = request.FILES.get('audio')
+    audio_file = request.FILES.get('audio') or request.FILES.get('file')
+    if not audio_file and request.body:
+        content_type = request.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip()
+        audio_file = SimpleUploadedFile("audio.webm", request.body, content_type=content_type)
     if not audio_file:
         return JsonResponse({"error": "No audio file provided"}, status=400)
     try:
@@ -143,3 +147,52 @@ def turn_audio_candidate_view(request, attempt_id: str, turn_id: str):
     if not audio_path or not audio_path.exists():
         return JsonResponse({"error": "Audio not found"}, status=404)
     return FileResponse(open(audio_path, 'rb'), content_type='application/octet-stream')
+
+
+@require_http_methods(["POST"])
+def turn_complete_view(request, attempt_id: str, turn_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    import json as json_module
+    try:
+        payload = json_module.loads(request.body or "{}")
+    except json_module.JSONDecodeError:
+        payload = {}
+    try:
+        return JsonResponse(complete_turn(request.user, attempt_id, turn_id, payload))
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)
+
+
+@require_http_methods(["POST"])
+def attempt_abort_view(request, attempt_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(abort_attempt(request.user, attempt_id))
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)
+
+
+@require_http_methods(["POST"])
+def attempt_score_view(request, attempt_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    import json as json_module
+    try:
+        payload = json_module.loads(request.body or "{}")
+    except json_module.JSONDecodeError:
+        payload = {}
+    try:
+        return JsonResponse(score_attempt(request.user, attempt_id, payload))
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)

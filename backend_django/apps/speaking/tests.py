@@ -449,6 +449,20 @@ class TurnAudioUploadApiTests(TestCase):
         self.assertTrue(turn.audio_path)
         self.assertEqual(turn.metadata.get("audio_content_type"), "audio/webm")
 
+    def test_audio_upload_accepts_raw_browser_blob(self):
+        attempt_id, turn_id = self.create_attempt_with_turn()
+        audio_data = b"raw browser webm content"
+        response = self.client.post(
+            f"/api/attempts/{attempt_id}/turns/{turn_id}/audio",
+            data=audio_data,
+            content_type="audio/webm",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["audio"]["bytes"], len(audio_data))
+        self.assertEqual(payload["audio"]["content_type"], "audio/webm")
+
     def test_audio_upload_owner_scoped(self):
         attempt_id, turn_id = self.create_attempt_with_turn()
         other_user = get_user_model().objects.create_user(username="other-audio", password="test-pass")
@@ -536,3 +550,164 @@ class TurnAudioUploadApiTests(TestCase):
     def test_audio_retrieval_nonexistent_returns_404(self):
         response = self.client.get("/api/audio/nonexistent/t1/candidate")
         self.assertEqual(response.status_code, 404)
+
+
+class SpeakingRuntimeApiTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = get_user_model().objects.create_user(username="runtime-user", password="test-pass")
+        self.client.force_login(self.user)
+
+    def create_attempt(self, *, status=SpeakingAttempt.Status.STARTED, attempt_id="runtime-attempt"):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id=attempt_id,
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=status,
+            full_name="Zhang San",
+            english_name="Sam",
+        )
+        turn1 = SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="What is your full name?",
+            metadata={"timers": {"prep_seconds": 3, "speak_seconds": 35}},
+        )
+        turn2 = SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=1,
+            part="p1",
+            question="Do you work or study?",
+            metadata={"timers": {"prep_seconds": 3, "speak_seconds": 35}},
+        )
+        return attempt, turn1, turn2
+
+    def complete_turn(self, attempt_id="runtime-attempt", turn_id="t1", transcript="My full name is Sam."):
+        return self.client.post(
+            f"/api/attempts/{attempt_id}/turns/{turn_id}/complete",
+            data={"transcript_raw": transcript, "transcript_status": "captured", "transcript_source": "browser_dictation"},
+            content_type="application/json",
+        )
+
+    def test_turn_complete_requires_login(self):
+        self.client.logout()
+        response = self.client.post(
+            "/api/attempts/runtime-attempt/turns/t1/complete",
+            data={"transcript_raw": "Hello."},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_turn_complete_owner_scoped(self):
+        attempt, _turn1, _turn2 = self.create_attempt()
+        other_user = get_user_model().objects.create_user(username="other-runtime", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        response = self.client.post(
+            f"/api/attempts/{attempt.attempt_id}/turns/t1/complete",
+            data={"transcript_raw": "Hello."},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_turn_complete_advances_to_next_turn(self):
+        self.create_attempt()
+        response = self.complete_turn()
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["turn"]["status"], "completed")
+        self.assertEqual(payload["turn"]["transcript_cleaned"], "My full name is Sam.")
+        self.assertEqual(payload["next_turn"]["id"], "t2")
+        self.assertEqual(payload["attempt"]["current_turn"], "t2")
+
+        turn = SpeakingTurn.objects.get(turn_id="t1")
+        self.assertEqual(turn.metadata["status"], "completed")
+        self.assertEqual(turn.transcript_source, "browser_dictation")
+
+    def test_turn_complete_final_turn_marks_ready_to_score(self):
+        attempt, turn1, turn2 = self.create_attempt()
+        turn1.transcript_raw = "My full name is Sam."
+        turn1.transcript_cleaned = "My full name is Sam."
+        turn1.metadata = {**turn1.metadata, "status": "completed"}
+        turn1.save()
+
+        response = self.complete_turn(turn_id=turn2.turn_id, transcript="I study English every day and practise speaking with examples.")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIsNone(payload["next_turn"])
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
+
+    def test_abort_requires_login(self):
+        self.client.logout()
+        response = self.client.post("/api/attempts/runtime-attempt/abort", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+
+    def test_abort_marks_attempt_aborted(self):
+        attempt, _turn1, _turn2 = self.create_attempt()
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/abort", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], SpeakingAttempt.Status.ABORTED)
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.ABORTED)
+        self.assertIn("aborted_at", attempt.metadata)
+
+    def test_abort_rejects_scored_attempt(self):
+        attempt, _turn1, _turn2 = self.create_attempt(status=SpeakingAttempt.Status.SCORED)
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/abort", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_score_requires_login(self):
+        self.client.logout()
+        response = self.client.post("/api/attempts/runtime-attempt/score", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+
+    def test_score_rejects_incomplete_attempt(self):
+        attempt, _turn1, _turn2 = self.create_attempt()
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Complete all speaking turns", response.json()["error"])
+
+    def test_score_rejects_aborted_attempt(self):
+        attempt, turn1, turn2 = self.create_attempt(status=SpeakingAttempt.Status.ABORTED)
+        for turn in (turn1, turn2):
+            turn.transcript_raw = "I answer with enough words to be completed."
+            turn.transcript_cleaned = turn.transcript_raw
+            turn.metadata = {**turn.metadata, "status": "completed"}
+            turn.save()
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_score_creates_report_visible_in_history(self):
+        attempt, turn1, turn2 = self.create_attempt()
+        for turn, transcript in (
+            (turn1, "My full name is Sam and I am preparing for IELTS speaking."),
+            (turn2, "I study English every day because I want to communicate clearly with international classmates."),
+        ):
+            turn.transcript_raw = transcript
+            turn.transcript_cleaned = transcript
+            turn.metadata = {**turn.metadata, "status": "completed"}
+            turn.save()
+        attempt.status = SpeakingAttempt.Status.READY_TO_SCORE
+        attempt.save()
+
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], SpeakingAttempt.Status.SCORED)
+        self.assertEqual(payload["ielts_score"]["backend"], "fallback")
+        self.assertTrue(SpeakingReport.objects.filter(attempt=attempt).exists())
+        self.assertEqual(SpeakingTrainingObservation.objects.filter(attempt=attempt).count(), 2)
+
+        history = self.client.get("/api/history")
+        self.assertIn(attempt.attempt_id, [item["id"] for item in history.json()["items"]])
+        detail = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["id"], attempt.attempt_id)
