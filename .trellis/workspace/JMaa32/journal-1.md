@@ -544,3 +544,36 @@ Design and implement Django POST /api/attempts/{id}/turns/{id}/audio and GET /ap
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: Add Django speaking runtime fallback endpoints
+
+**Date**: 2026-05-16
+**Task**: Add Django speaking runtime fallback endpoints
+**Branch**: `main`
+
+### Summary
+
+Added Django fallback-only speaking runtime endpoints for turn completion, abort, and scoring; preserved old server for provider-heavy flows.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0fdfd7a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
