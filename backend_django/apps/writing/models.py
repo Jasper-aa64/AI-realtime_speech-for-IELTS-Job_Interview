@@ -13,6 +13,7 @@ class WritingPrompt(models.Model):
     title = models.CharField(max_length=200)
     category = models.CharField(max_length=120, blank=True)
     prompt = models.TextField()
+    image_url = models.CharField(max_length=500, blank=True, default="")
     source = models.CharField(max_length=120, default="local_seed")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

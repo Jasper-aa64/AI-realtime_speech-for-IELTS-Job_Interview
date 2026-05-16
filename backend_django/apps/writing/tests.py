@@ -60,12 +60,13 @@ class WritingApiTests(TestCase):
         self.user = get_user_model().objects.create_user(username="writing-api-user", password="test-pass")
         self.client.force_login(self.user)
 
-    def create_prompt(self, *, prompt_id: str, task_type: str, title: str, prompt: str) -> WritingPrompt:
+    def create_prompt(self, *, prompt_id: str, task_type: str, title: str, prompt: str, image_url: str = "") -> WritingPrompt:
         return WritingPrompt.objects.create(
             prompt_id=prompt_id,
             task_type=task_type,
             title=title,
             prompt=prompt,
+            image_url=image_url,
         )
 
     def create_entry(

@@ -703,11 +703,24 @@ function renderCueTop(cue) {
 function renderExaminerAudio(turn) {
   const tts = turn.examiner_tts || {};
   const audio = $("examinerAudio");
+  const fallbackBtn = $("browserTtsFallback");
   audio.classList.add("hidden");
-  $("browserTtsFallback").classList.add("hidden");
+  fallbackBtn.classList.add("hidden");
   if (tts.audio_url) {
     prepareExaminerAudioElement(audio, tts.audio_url);
     primeExaminerAudio(tts.audio_url);
+  } else if (turn.question || turn.examiner_prompt) {
+    // Show browser TTS fallback when server TTS unavailable
+    fallbackBtn.classList.remove("hidden");
+    fallbackBtn.onclick = () => {
+      const text = turn.question || turn.examiner_prompt || "";
+      if (!text) return;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-GB";
+      utterance.rate = 0.9;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    };
   }
 }
 
@@ -1345,9 +1358,17 @@ function currentWritingWordCount() {
   return matches ? matches.length : 0;
 }
 
+function autoResizeWritingAnswer() {
+  const answer = $("writingAnswer");
+  if (!answer) return;
+  answer.style.height = "auto";
+  answer.style.height = `${Math.max(answer.scrollHeight, 500)}px`;
+}
+
 function updateWritingWordCount() {
   const count = currentWritingWordCount();
   text("writingWordCount", `${count} word${count === 1 ? "" : "s"}`);
+  autoResizeWritingAnswer();
 }
 
 function setWritingPending(isPending, title = "", detail = "") {
@@ -1616,6 +1637,19 @@ function renderWritingSurface() {
   text("writingPromptType", writingTaskLabel(taskType));
   text("writingPromptTitle", prompt?.title || "选择一道题开始");
   $("writingPromptText").innerHTML = renderMarkdown(prompt?.prompt || "请选择一道题，或点击随机题开始。");
+
+  // Render Task 1 image if available
+  const imageContainer = $("writingPromptImage");
+  if (imageContainer) {
+    if (taskType === "task1_academic" && prompt?.image_url) {
+      imageContainer.innerHTML = `<img src="${escapeHtml(prompt.image_url)}" alt="Task 1 chart" onerror="this.parentElement.classList.add('hidden')">`;
+      imageContainer.classList.remove("hidden");
+    } else {
+      imageContainer.innerHTML = "";
+      imageContainer.classList.add("hidden");
+    }
+  }
+
   const entry = state.writing.entry;
   renderWritingScore(entry);
   updateWritingWordCount();

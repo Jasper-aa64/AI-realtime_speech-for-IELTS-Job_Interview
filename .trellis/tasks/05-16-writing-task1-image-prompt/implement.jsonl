@@ -1,1 +1,2 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/tasks/05-16-writing-task1-image-prompt/prd.md","reason":"Task requirements and acceptance criteria for Task1 image + TTS fallback fix"}
+{"file":".trellis/tasks/archive/2026-05/05-16-research-production-account-auth-redesign/prd.md","reason":"Reuse auth refactor patterns for frontend/backend coordination and validation discipline"}

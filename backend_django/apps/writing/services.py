@@ -73,6 +73,7 @@ def prompt_payload(prompt: WritingPrompt) -> dict[str, Any]:
         "title": prompt.title,
         "category": prompt.category,
         "prompt": prompt.prompt,
+        "image_url": prompt.image_url,
         "source": prompt.source,
     }
 
