@@ -1,0 +1,4 @@
+{"type":"spec","path":".trellis/spec/frontend/index.md","note":"Frontend settings/account placement conventions and UI quality expectations."}
+{"type":"spec","path":".trellis/spec/backend/index.md","note":"Backend conventions for Django account API changes."}
+{"type":"research","path":".trellis/tasks/05-16-research-production-account-auth-redesign/research/current-account-surface.md","note":"Current account backend/frontend audit."}
+{"type":"research","path":".trellis/tasks/05-16-research-production-account-auth-redesign/research/auth-product-patterns.md","note":"External auth UX and Django auth research."}

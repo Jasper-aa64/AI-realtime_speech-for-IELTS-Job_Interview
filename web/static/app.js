@@ -71,7 +71,11 @@ const viewCopy = {
   history: ["口语报告", ""],
   writing: ["每日写作", ""],
   writingReports: ["写作报告", ""],
-  account: ["账号", "登录、注册和同步姓名。"],
+  login: ["Sign in", "Sign in to access your reports, wallet, and personalized training."],
+  register: ["Create account", "Create an account to save your practice history and access personalized features."],
+  forgotPassword: ["Reset password", "Reset your password via email if configured."],
+  accountProfile: ["Account", "Manage your profile and account settings."],
+  accountSecurity: ["Security", "Change your password and manage security settings."],
   settings: ["Settings", "钱包和弱题训练记录。"],
 };
 
@@ -171,6 +175,20 @@ function renderMarkdown(value) {
   return chunks.join("");
 }
 
+let csrfToken = null;
+
+async function ensureCsrfToken() {
+  if (csrfToken) return csrfToken;
+  try {
+    const response = await fetch("/api/accounts/csrf/", { credentials: "same-origin" });
+    const data = await response.json();
+    csrfToken = data.csrfToken || null;
+  } catch (_error) {
+    csrfToken = null;
+  }
+  return csrfToken;
+}
+
 async function api(path, body = null, requestOptions = {}) {
   const method = requestOptions.method || (body !== null ? "POST" : "GET");
   const options = {
@@ -181,6 +199,10 @@ async function api(path, body = null, requestOptions = {}) {
   if (body !== null) {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(body);
+  }
+  if (method !== "GET") {
+    const token = await ensureCsrfToken();
+    if (token) options.headers["X-CSRFToken"] = token;
   }
   const response = await fetch(path, options);
   const raw = await response.text();
@@ -194,9 +216,11 @@ async function api(path, body = null, requestOptions = {}) {
     }
   }
   if (!response.ok) {
-    const error = new Error(payload?.error || `Request failed: ${response.status} ${response.statusText}`);
+    const message = payload?.message || payload?.error || `Request failed: ${response.status} ${response.statusText}`;
+    const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
+    error.errors = payload?.errors || null;
     throw error;
   }
   return payload;
@@ -345,7 +369,7 @@ async function withBusy(message, action) {
 function switchView(view, options = {}) {
   if (!viewCopy[view]) view = "mock";
   if (view === state.view && !options.force) return;
-  if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && ["account", "settings"].includes(view) && options.preservePractice) {
+  if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && ["accountProfile", "accountSecurity", "settings"].includes(view) && options.preservePractice) {
     showPracticeOverlay(view);
     return;
   }
@@ -356,7 +380,6 @@ function switchView(view, options = {}) {
   }
   state.view = view;
   state.practiceViewBeforeSettings = null;
-  // Save view to localStorage
   try {
     localStorage.setItem(VIEW_STORAGE_KEY, view);
   } catch (e) {
@@ -373,10 +396,13 @@ function switchView(view, options = {}) {
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
   $("#writingReportsPanel")?.classList.toggle("hidden", view !== "writingReports");
-  $("#accountPanel")?.classList.toggle("hidden", view !== "account");
+  $("#loginPanel")?.classList.toggle("hidden", view !== "login");
+  $("#registerPanel")?.classList.toggle("hidden", view !== "register");
+  $("#forgotPasswordPanel")?.classList.toggle("hidden", view !== "forgotPassword");
+  $("#accountProfilePanel")?.classList.toggle("hidden", view !== "accountProfile");
+  $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $("#settingsPanel").classList.toggle("hidden", view !== "settings");
   $("#settingsBackButton")?.classList.toggle("hidden", true);
-  $("#accountBackButton")?.classList.toggle("hidden", true);
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
   $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports");
@@ -386,7 +412,7 @@ function switchView(view, options = {}) {
   if (view === "history") loadHistory();
   if (view === "writing") loadWriting();
   if (view === "writingReports") loadWritingReports();
-  if (view === "account") loadAccount();
+  if (view === "accountProfile" || view === "accountSecurity") loadAccount();
   if (view === "settings") loadSettings();
   if (["mock", "p1", "p2", "p3"].includes(view)) resetPracticeSurface();
   updateSidebarLock();
@@ -407,7 +433,11 @@ function showPracticeOverlay(view = "settings") {
   $("#historyPanel").classList.add("hidden");
   $("#writingPanel")?.classList.add("hidden");
   $("#writingReportsPanel")?.classList.add("hidden");
-  $("#accountPanel")?.classList.toggle("hidden", view !== "account");
+  $("#loginPanel")?.classList.add("hidden");
+  $("#registerPanel")?.classList.add("hidden");
+  $("#forgotPasswordPanel")?.classList.add("hidden");
+  $("#accountProfilePanel")?.classList.toggle("hidden", view !== "accountProfile");
+  $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $("#settingsPanel").classList.toggle("hidden", view !== "settings");
   $(".workspace").classList.remove("history-workspace", "writing-workspace");
   $(".topbar").classList.remove("hidden");
@@ -415,8 +445,7 @@ function showPracticeOverlay(view = "settings") {
   text("viewTitle", viewCopy[view][0]);
   text("viewSubtitle", `${viewCopy[view][0]} 已打开，当前练习仍在后台保留。`);
   $("#settingsBackButton")?.classList.toggle("hidden", view !== "settings");
-  $("#accountBackButton")?.classList.toggle("hidden", view !== "account");
-  if (view === "account") loadAccount();
+  if (view === "accountProfile" || view === "accountSecurity") loadAccount();
   if (view === "settings") loadSettings();
   updateSidebarLock();
 }
@@ -432,10 +461,13 @@ function returnFromSettings() {
     button.classList.toggle("tone-p2", button.dataset.view === "p2");
     button.classList.toggle("tone-p3", button.dataset.view === "p3");
   });
-  $("#accountPanel")?.classList.add("hidden");
+  $("#loginPanel")?.classList.add("hidden");
+  $("#registerPanel")?.classList.add("hidden");
+  $("#forgotPasswordPanel")?.classList.add("hidden");
+  $("#accountProfilePanel")?.classList.add("hidden");
+  $("#accountSecurityPanel")?.classList.add("hidden");
   $("#settingsPanel").classList.add("hidden");
   $("#settingsBackButton")?.classList.add("hidden");
-  $("#accountBackButton")?.classList.add("hidden");
   $("#practicePanel").classList.remove("hidden");
   text("viewTitle", viewCopy[practiceView][0]);
   text("viewSubtitle", viewCopy[practiceView][1]);
@@ -2188,16 +2220,14 @@ function accountProfileNames(user) {
 }
 
 function renderAccountStatus(message = "", isError = false) {
-  const status = $("accountStatus");
-  const details = $("accountDetails");
-  const loginForm = $("accountLoginForm");
-  const profileActions = $("accountProfileActions");
-  const logoutBtn = $("accountLogoutBtn");
-  const saveBtn = $("accountSaveProfileBtn");
+  const status = $("accountProfileStatus");
+  const details = $("accountProfileDetails");
+  const securityStatus = $("securityStatus");
+  const fallback = state.account.authenticated
+    ? `Signed in as ${state.account.user?.username || ""}`
+    : (state.account.backendAvailable ? "Not signed in. Local names are still available." : "Backend unavailable. Local names are still available.");
+
   if (status) {
-    const fallback = state.account.authenticated
-      ? `已登录：${state.account.user?.username || ""}`
-      : (state.account.backendAvailable ? "未登录，当前使用本机姓名。" : "Django 后端未连接，当前使用本机姓名。");
     status.textContent = message || fallback;
     status.classList.toggle("error", Boolean(isError));
   }
@@ -2205,15 +2235,15 @@ function renderAccountStatus(message = "", isError = false) {
     if (state.account.authenticated) {
       const user = state.account.user || {};
       const phone = user.phone_number ? ` · ${user.phone_number}` : "";
-      details.textContent = `${user.username || "当前用户"}${phone}`;
+      details.textContent = `${user.username || "Current user"}${phone}`;
     } else {
-      details.textContent = "登录后，Full name / English name 会写入 Django 用户资料。";
+      details.textContent = "Sign in to sync profile and security settings.";
     }
   }
-  loginForm?.classList.toggle("hidden", state.account.authenticated);
-  profileActions?.classList.toggle("hidden", !state.account.authenticated);
-  if (logoutBtn) logoutBtn.disabled = !state.account.backendAvailable;
-  if (saveBtn) saveBtn.disabled = !state.account.backendAvailable;
+  if (!message && securityStatus && !securityStatus.textContent.trim()) {
+    securityStatus.textContent = state.account.authenticated ? "Use a strong password and rotate it regularly." : "Sign in to update password.";
+    securityStatus.classList.remove("error");
+  }
 }
 
 async function loadAccount() {
@@ -2225,42 +2255,130 @@ async function loadAccount() {
     if (state.account.authenticated) {
       applyCandidateNames(accountProfileNames(state.account.user));
     }
-    renderAccountStatus();
   } catch (error) {
     state.account.backendAvailable = error.status === 401;
     state.account.authenticated = false;
     state.account.user = null;
-    renderAccountStatus(error.status === 401 ? "未登录，当前使用本机姓名。" : "Django 后端未连接，当前使用本机姓名。", false);
   }
 }
 
-async function submitAccountAuth(mode) {
-  const username = ($("accountUsername")?.value || "").trim();
-  const password = $("accountPassword")?.value || "";
+async function submitLogin() {
+  const username = ($("loginUsername")?.value || "").trim();
+  const password = $("loginPassword")?.value || "";
+  const statusEl = $("loginStatus");
   if (!username || !password) {
-    renderAccountStatus("请输入用户名和密码。", true);
+    if (statusEl) {
+      statusEl.textContent = "Please enter username and password.";
+      statusEl.classList.add("error");
+    }
     return;
   }
-  const names = candidateNames();
-  const endpoint = mode === "register" ? "/api/accounts/register/" : "/api/accounts/login/";
-  const payload = {
-    username,
-    password,
-    full_name: names.fullName,
-    english_name: names.englishName,
-    display_name: names.englishName,
-  };
   try {
-    const result = await withBusy(mode === "register" ? "Creating account..." : "Signing in...", () => api(endpoint, payload));
+    const result = await withBusy("Signing in...", () => api("/api/accounts/login/", { username, password }));
     state.account.backendAvailable = true;
     state.account.authenticated = true;
     state.account.user = result.user || null;
+    csrfToken = null;
+    await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
-    renderAccountStatus(mode === "register" ? "账号已创建并登录。" : "已登录，账号资料已同步。");
     await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
+    switchView("accountProfile");
   } catch (error) {
     state.account.backendAvailable = Boolean(error.status && error.status < 500);
-    renderAccountStatus(error.message, true);
+    if (statusEl) {
+      statusEl.textContent = error.message || "Login failed";
+      statusEl.classList.add("error");
+    }
+  }
+}
+
+async function submitRegister() {
+  const username = ($("registerUsername")?.value || "").trim();
+  const password = $("registerPassword")?.value || "";
+  const passwordConfirm = $("registerPasswordConfirm")?.value || "";
+  const statusEl = $("registerStatus");
+  if (!username || !password) {
+    if (statusEl) {
+      statusEl.textContent = "Please enter username and password.";
+      statusEl.classList.add("error");
+    }
+    return;
+  }
+  if (password !== passwordConfirm) {
+    if (statusEl) {
+      statusEl.textContent = "Passwords do not match.";
+      statusEl.classList.add("error");
+    }
+    return;
+  }
+  const names = candidateNames();
+  try {
+    const result = await withBusy("Creating account...", () => api("/api/accounts/register/", {
+      username,
+      password,
+      password_confirm: passwordConfirm,
+      full_name: names.fullName,
+      english_name: names.englishName,
+      display_name: names.englishName,
+    }));
+    state.account.backendAvailable = true;
+    state.account.authenticated = true;
+    state.account.user = result.user || null;
+    csrfToken = null;
+    await ensureCsrfToken();
+    applyCandidateNames(accountProfileNames(state.account.user), true);
+    await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
+    switchView("accountProfile");
+  } catch (error) {
+    state.account.backendAvailable = Boolean(error.status && error.status < 500);
+    if (statusEl) {
+      const errors = error.errors || {};
+      const fieldErrors = Object.entries(errors).map(([field, messages]) => `${field}: ${messages.join(", ")}`).join("; ");
+      statusEl.textContent = fieldErrors || error.message || "Registration failed";
+      statusEl.classList.add("error");
+    }
+  }
+}
+
+async function submitPasswordChange() {
+  const currentPassword = $("securityCurrentPassword")?.value || "";
+  const newPassword = $("securityNewPassword")?.value || "";
+  const newPasswordConfirm = $("securityNewPasswordConfirm")?.value || "";
+  const statusEl = $("securityStatus");
+  if (!currentPassword || !newPassword) {
+    if (statusEl) {
+      statusEl.textContent = "Please enter current and new password.";
+      statusEl.classList.add("error");
+    }
+    return;
+  }
+  if (newPassword !== newPasswordConfirm) {
+    if (statusEl) {
+      statusEl.textContent = "New passwords do not match.";
+      statusEl.classList.add("error");
+    }
+    return;
+  }
+  try {
+    await withBusy("Changing password...", () => api("/api/accounts/password/change/", {
+      current_password: currentPassword,
+      new_password: newPassword,
+      new_password_confirm: newPasswordConfirm,
+    }));
+    if (statusEl) {
+      statusEl.textContent = "Password changed successfully.";
+      statusEl.classList.remove("error");
+    }
+    $("securityCurrentPassword").value = "";
+    $("securityNewPassword").value = "";
+    $("securityNewPasswordConfirm").value = "";
+  } catch (error) {
+    if (statusEl) {
+      const errors = error.errors || {};
+      const fieldErrors = Object.entries(errors).map(([field, messages]) => `${field}: ${messages.join(", ")}`).join("; ");
+      statusEl.textContent = fieldErrors || error.message || "Password change failed";
+      statusEl.classList.add("error");
+    }
   }
 }
 
@@ -2268,12 +2386,13 @@ async function logoutAccount() {
   try {
     await withBusy("Signing out...", () => api("/api/accounts/logout/", {}));
   } catch (_error) {
-    // Keep the UI usable even if the backend session has already expired.
+    // Keep UI usable even if backend session expired
   }
   state.account.authenticated = false;
   state.account.user = null;
+  csrfToken = null;
   loadCandidateNames();
-  renderAccountStatus("已退出登录，姓名改为本机保存。");
+  switchView("login");
 }
 
 function bindEvents() {
@@ -2298,19 +2417,26 @@ function bindEvents() {
   });
   document.querySelectorAll(".avatar-settings-button").forEach((button) => {
     button.addEventListener("click", () => {
-      switchView(button.dataset.view || "account", { preservePractice: true });
+      if (state.account.authenticated) {
+        switchView("accountProfile", { preservePractice: true });
+      } else {
+        switchView("login");
+      }
     });
   });
   $("settingsBackButton")?.addEventListener("click", returnFromSettings);
-  $("accountBackButton")?.addEventListener("click", returnFromSettings);
   $("fullNameInput")?.addEventListener("input", scheduleCandidateNameSave);
   $("englishNameInput")?.addEventListener("input", scheduleCandidateNameSave);
   $("fullNameInput")?.addEventListener("blur", flushCandidateNameSave);
   $("englishNameInput")?.addEventListener("blur", flushCandidateNameSave);
-  $("accountLoginBtn")?.addEventListener("click", () => submitAccountAuth("login"));
-  $("accountRegisterBtn")?.addEventListener("click", () => submitAccountAuth("register"));
-  $("accountLogoutBtn")?.addEventListener("click", logoutAccount);
-  $("accountSaveProfileBtn")?.addEventListener("click", () => saveCandidateNames(true).catch((error) => renderAccountStatus(error.message, true)));
+  $("loginSubmitBtn")?.addEventListener("click", submitLogin);
+  $("registerSubmitBtn")?.addEventListener("click", submitRegister);
+  $("loginToRegisterLink")?.addEventListener("click", () => switchView("register"));
+  $("registerToLoginLink")?.addEventListener("click", () => switchView("login"));
+  $("profileLogoutBtn")?.addEventListener("click", logoutAccount);
+  $("profileSaveBtn")?.addEventListener("click", () => saveCandidateNames(true).catch((error) => renderAccountStatus(error.message, true)));
+  $("securityChangePasswordBtn")?.addEventListener("click", submitPasswordChange);
+  $("securityLogoutBtn")?.addEventListener("click", logoutAccount);
   $("recordControl")?.addEventListener("click", () => {
     if (state.status === "recording") {
       stopRecording();

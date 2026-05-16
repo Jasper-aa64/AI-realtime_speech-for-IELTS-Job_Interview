@@ -1,0 +1,4 @@
+{"type":"spec","path":".trellis/spec/frontend/index.md","note":"Verify account/settings separation and frontend UX quality."}
+{"type":"spec","path":".trellis/spec/backend/index.md","note":"Verify account API hardening, tests, and Django conventions."}
+{"type":"research","path":".trellis/tasks/05-16-research-production-account-auth-redesign/research/current-account-surface.md","note":"Check implementation addresses current surface weaknesses."}
+{"type":"research","path":".trellis/tasks/05-16-research-production-account-auth-redesign/research/auth-product-patterns.md","note":"Check implementation follows researched production auth patterns."}

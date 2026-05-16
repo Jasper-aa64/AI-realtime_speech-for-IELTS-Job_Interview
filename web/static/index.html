@@ -255,52 +255,110 @@
           </article>
         </section>
 
-        <section id="accountPanel" class="panel hidden">
-          <div class="settings-page-head">
-            <button id="accountBackButton" class="settings-back-button hidden" type="button" aria-label="Back to practice">
-              <span aria-hidden="true">←</span>
-              <strong>返回练习</strong>
-            </button>
-          </div>
-          <div class="account-page-layout">
-            <article class="settings-card account-settings-card">
-              <div class="settings-card-head">
-                <div>
-                  <h2>账号</h2>
-                  <p id="accountDetails" class="muted">登录后，Full name / English name 会写入 Django 用户资料。</p>
-                </div>
-                <button type="button" id="accountLogoutBtn" class="ghost">退出</button>
+        <section id="loginPanel" class="panel hidden auth-panel">
+          <article class="settings-card auth-card">
+            <h2>Sign in</h2>
+            <p class="muted">Access your reports, wallet, and personalized training.</p>
+            <label>
+              <span>Username / email / phone</span>
+              <input id="loginUsername" autocomplete="username" inputmode="text" placeholder="your account">
+            </label>
+            <label>
+              <span>Password</span>
+              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Enter password">
+            </label>
+            <div id="loginStatus" class="settings-metric"></div>
+            <div class="account-action-row">
+              <button type="button" id="loginSubmitBtn">Sign in</button>
+              <button type="button" id="loginToRegisterLink" class="ghost">Create account</button>
+            </div>
+          </article>
+        </section>
+
+        <section id="registerPanel" class="panel hidden auth-panel">
+          <article class="settings-card auth-card">
+            <h2>Create account</h2>
+            <p class="muted">Save reports, wallet balance, and personalized IELTS progress.</p>
+            <label>
+              <span>Username / email / phone</span>
+              <input id="registerUsername" autocomplete="username" inputmode="text" placeholder="your account">
+            </label>
+            <label>
+              <span>Password</span>
+              <input id="registerPassword" type="password" autocomplete="new-password" placeholder="Create password">
+            </label>
+            <label>
+              <span>Confirm password</span>
+              <input id="registerPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirm password">
+            </label>
+            <div id="registerStatus" class="settings-metric"></div>
+            <div class="account-action-row">
+              <button type="button" id="registerSubmitBtn">Create account</button>
+              <button type="button" id="registerToLoginLink" class="ghost">Back to sign in</button>
+            </div>
+          </article>
+        </section>
+
+        <section id="forgotPasswordPanel" class="panel hidden auth-panel">
+          <article class="settings-card auth-card">
+            <h2>Reset password</h2>
+            <p id="forgotPasswordStatus" class="settings-metric">Password reset availability will be checked automatically.</p>
+          </article>
+        </section>
+
+        <section id="accountProfilePanel" class="panel hidden auth-panel">
+          <article class="settings-card auth-card">
+            <div class="settings-card-head">
+              <div>
+                <h2>Account profile</h2>
+                <p id="accountProfileDetails" class="muted">Sign in to sync profile and security settings.</p>
               </div>
-              <div id="accountStatus" class="settings-metric">检查登录状态...</div>
-              <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
-                <label>
-                  <span>Full name</span>
-                  <input id="fullNameInput" value="LiHua" autocomplete="name">
-                </label>
-                <label>
-                  <span>English name</span>
-                  <input id="englishNameInput" value="Jasper" autocomplete="nickname">
-                </label>
+              <button type="button" id="profileLogoutBtn" class="ghost">Sign out</button>
+            </div>
+            <div id="accountProfileStatus" class="settings-metric"></div>
+            <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
+              <label>
+                <span>Full name</span>
+                <input id="fullNameInput" value="LiHua" autocomplete="name">
+              </label>
+              <label>
+                <span>English name</span>
+                <input id="englishNameInput" value="Jasper" autocomplete="nickname">
+              </label>
+            </div>
+            <div class="account-action-row">
+              <button type="button" id="profileSaveBtn" class="ghost">Save profile</button>
+              <button type="button" id="profileSecurityBtn" class="ghost" onclick="window.switchView && window.switchView('accountSecurity')">Security</button>
+            </div>
+          </article>
+        </section>
+
+        <section id="accountSecurityPanel" class="panel hidden auth-panel">
+          <article class="settings-card auth-card">
+            <div class="settings-card-head">
+              <div>
+                <h2>Security</h2>
+                <p class="muted">Change your password and keep your account secure.</p>
               </div>
-              <div id="accountLoginForm" class="account-login-form">
-                <label>
-                  <span>Username / phone</span>
-                  <input id="accountUsername" autocomplete="username" inputmode="text" placeholder="18728445038">
-                </label>
-                <label>
-                  <span>Password</span>
-                  <input id="accountPassword" type="password" autocomplete="current-password" placeholder="test-pass-123">
-                </label>
-                <div class="account-action-row">
-                  <button type="button" id="accountLoginBtn">登录</button>
-                  <button type="button" id="accountRegisterBtn" class="ghost">注册测试账号</button>
-                </div>
-              </div>
-              <div id="accountProfileActions" class="account-profile-actions hidden">
-                <button type="button" id="accountSaveProfileBtn" class="ghost">保存姓名到账号</button>
-              </div>
-            </article>
-          </div>
+              <button type="button" id="securityLogoutBtn" class="ghost">Sign out</button>
+            </div>
+            <label>
+              <span>Current password</span>
+              <input id="securityCurrentPassword" type="password" autocomplete="current-password">
+            </label>
+            <label>
+              <span>New password</span>
+              <input id="securityNewPassword" type="password" autocomplete="new-password">
+            </label>
+            <label>
+              <span>Confirm new password</span>
+              <input id="securityNewPasswordConfirm" type="password" autocomplete="new-password">
+            </label>
+            <div id="securityStatus" class="settings-metric"></div>
+            <div class="account-action-row">
+              <button type="button" id="securityChangePasswordBtn">Change password</button>
+            </div>
+          </article>
         </section>
 
         <section id="settingsPanel" class="panel hidden">

@@ -955,9 +955,10 @@ h1 {
 
 .writing-answer-label {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+  margin-bottom: -8px;
 }
 
 .writing-answer {
@@ -966,11 +967,12 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 10px;
   resize: vertical;
-  padding: 20px;
+  padding: 14px 16px;
   color: var(--ink);
   background: #fff;
-  line-height: 1.7;
-  font-size: 17px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  font-size: 16px;
 }
 
 .writing-answer:focus,
@@ -3158,6 +3160,42 @@ body.font-popular .record-control.recording {
   display: grid;
   grid-template-columns: minmax(320px, 560px);
   align-items: start;
+}
+
+.auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 180px);
+  padding: 20px;
+}
+
+.auth-card {
+  max-width: 420px;
+  width: 100%;
+}
+
+.auth-card label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.auth-card input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.auth-card .settings-metric {
+  margin: 10px 0;
+  min-height: 20px;
+}
+
+.auth-card .settings-metric.error {
+  color: #ef4444;
 }
 
 .settings-card {
