@@ -1923,7 +1923,7 @@ def _word_count(text: str) -> int:
 
 
 def score_with_codex(transcript: str, question: str, part: str, call_id: str) -> dict[str, Any]:
-    """Score transcript using Codex CLI."""
+    """Score transcript using Codex CLI with full part-specific guidance."""
     data_dir = Path(settings.BASE_DIR).parent / "data" / "ielts"
     prompt_path = data_dir / "prompts" / "scorer_system.md"
 
@@ -1935,20 +1935,12 @@ def score_with_codex(transcript: str, question: str, part: str, call_id: str) ->
             "Consider fluency and coherence, lexical resource, and grammatical range and accuracy."
         )
 
-    part_guidance = ""
-    if part == "p1":
-        part_guidance = "\n\nThis is Part 1. Answers should be direct and concise, typically 1-3 sentences."
-    elif part == "p2":
-        part_guidance = "\n\nThis is Part 2. The candidate should speak for 1-2 minutes covering the cue card points."
-    elif part == "p3":
-        part_guidance = "\n\nThis is Part 3. Answers should be developed with reasoning and examples, about 4-6 sentences."
-
     prompt = (
         system_prompt
         + "\n\nReturn JSON only with numeric keys fluency_coherence, lexical_resource, "
         "grammatical_range, overall_band, string key feedback, and optional overall_review object "
-        "with string key comment and array key review_points. Do not score pronunciation or reference pronunciation."
-        + part_guidance
+        "with string key comment and array key review_points. Do not score pronunciation or reference pronunciation. "
+        + score_prompt_for_part(part)
         + "\n\nPrompt(s):\n"
         + (question.strip() or "(not provided)")
         + "\n\nTranscript:\n"
@@ -1974,8 +1966,8 @@ def score_with_codex(transcript: str, question: str, part: str, call_id: str) ->
 
     overall_review = payload.get("overall_review")
     if isinstance(overall_review, dict):
-        comment = str(overall_review.get("comment") or "").strip()
-        points = [str(item).strip() for item in overall_review.get("review_points") or []]
+        comment = clean_report_text(str(overall_review.get("comment") or ""))
+        points = [clean_report_text(str(item)) for item in overall_review.get("review_points") or []]
         points = [item for item in points if item][:4]
         if comment or points:
             result_payload["overall_review"] = {
@@ -1987,7 +1979,72 @@ def score_with_codex(transcript: str, question: str, part: str, call_id: str) ->
     if usage:
         result_payload["billing_usage"] = usage
 
-    return result_payload
+    # Apply calibration and off-topic detection
+    return cap_off_topic_score(calibrate_realistic_score(result_payload, question, transcript, part), question, transcript)
+
+
+# --- Additional Missing Functions ---
+
+
+def attempt_part(attempt: SpeakingAttempt) -> str:
+    """Get the part/mode of an attempt."""
+    mode = str(attempt.mode or attempt.part or "").lower()
+    if mode in {"p1", "p2", "p3", "mock"}:
+        return mode
+    turns = list(attempt.turns.all())
+    parts = {str(t.part or "").lower() for t in turns if t.part}
+    if len(parts) == 1:
+        return next(iter(parts))
+    return ""
+
+
+def target_band(attempt: SpeakingAttempt) -> float:
+    """Get target band from attempt metadata."""
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    try:
+        value = float(metadata.get("target_band", 7.0))
+    except (TypeError, ValueError):
+        value = 7.0
+    return max(5.0, min(9.0, round(value * 2) / 2))
+
+
+def score_for_part(turns: list[SpeakingTurn], part: str, fallback_score: dict[str, Any]) -> dict[str, Any]:
+    """Calculate score for a specific part."""
+    part_turns = [turn for turn in turns if turn.part == part]
+    transcript = "\n".join(turn.transcript_cleaned or turn.transcript_raw or "" for turn in part_turns)
+    if not part_turns:
+        return {}
+    part_score = heuristic_score(
+        transcript,
+        f"{part.upper()} section estimate",
+        "\n".join(turn.question for turn in part_turns),
+        part,
+    )
+    part_score["overall_band"] = rounded_overall(part_score)
+    part_score = calibrate_realistic_score(
+        part_score,
+        "\n".join(turn.question for turn in part_turns),
+        transcript,
+        part,
+    )
+    return {
+        "part": part,
+        "turn_count": len(part_turns),
+        "band": part_score.get("overall_band", fallback_score.get("overall_band")),
+        "fluency_coherence": part_score.get("fluency_coherence", fallback_score.get("fluency_coherence")),
+        "lexical_resource": part_score.get("lexical_resource", fallback_score.get("lexical_resource")),
+        "grammatical_range": part_score.get("grammatical_range", fallback_score.get("grammatical_range")),
+    }
+
+
+def build_part_scores(attempt: SpeakingAttempt, score: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Build scores for each part in the attempt."""
+    turns = list(attempt.turns.all())
+    return {
+        part: score_for_part(turns, part, score)
+        for part in ("p1", "p2", "p3")
+        if any(turn.part == part for turn in turns)
+    }
 
 
 def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_id: str) -> str:
