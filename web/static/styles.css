@@ -3210,13 +3210,11 @@ body.font-popular .record-control.recording {
   background: #fff;
 }
 
-.account-lower-grid .settings-card,
-.account-replay-card {
+.account-lower-grid .settings-card {
   min-height: 0;
 }
 
-.account-lower-grid .settings-list,
-.account-replay-card .settings-list {
+.account-lower-grid .settings-list {
   max-height: 230px;
 }
 

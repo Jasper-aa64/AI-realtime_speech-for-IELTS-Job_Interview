@@ -2648,7 +2648,7 @@ function renderP3TopicChips(topics) {
 
 async function loadAccountProfile() {
   await loadAccount();
-  await Promise.all([loadWallet(), loadWeakTraining(), loadReplayQueue()]);
+  await Promise.all([loadWallet(), loadWeakTraining()]);
 }
 
 function formatLocalTime(value) {
@@ -2734,23 +2734,6 @@ async function loadWeakTraining() {
       : '<p class="muted">暂无弱题记录。</p>';
   } catch (error) {
     text("weakTrainingStatus", error.message);
-  }
-}
-
-async function loadReplayQueue() {
-  try {
-    const payload = await api("/api/training/replay-queue");
-    const items = payload.items || [];
-    text("replayQueueStatus", `${items.length} 个复习项`);
-    $("replayQueueList").innerHTML = items.length
-      ? items.slice(0, 8).map((item) => {
-          const sourceLabel = item.source === "weak" ? "弱项" : "补位";
-          const detail = item.source === "weak" ? (item.weak_reason || []).join("、") || "未命中明显弱项" : "用于补足当前复习覆盖";
-          return `<div class="settings-list-row"><strong>${escapeHtml(sourceLabel)}</strong><span>${escapeHtml((item.part || "").toUpperCase())}</span><small>${escapeHtml(item.question || "")}</small><small>${escapeHtml(detail)}</small></div>`;
-        }).join("")
-      : '<p class="muted">暂无复习队列。</p>';
-  } catch (error) {
-    text("replayQueueStatus", error.message);
   }
 }
 
