@@ -256,54 +256,119 @@
         </section>
 
         <section id="loginPanel" class="panel hidden auth-panel">
-          <article class="settings-card auth-card">
-            <h2>Sign in</h2>
-            <p class="muted">Access your reports, wallet, and personalized training.</p>
-            <label>
-              <span>Username / email / phone</span>
-              <input id="loginUsername" autocomplete="username" inputmode="text" placeholder="your account">
-            </label>
-            <label>
-              <span>Password</span>
-              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Enter password">
-            </label>
-            <div id="loginStatus" class="settings-metric"></div>
-            <div class="account-action-row">
-              <button type="button" id="loginSubmitBtn">Sign in</button>
-              <button type="button" id="loginToRegisterLink" class="ghost">Create account</button>
-            </div>
-          </article>
+          <div class="auth-stage">
+            <aside class="auth-copy">
+              <span class="auth-kicker">IELTS Studio Account</span>
+              <h1>登录后继续练习</h1>
+              <p>保存口语报告、写作签到、钱包余额和个性化弱题训练。未登录时不会静默显示空数据。</p>
+              <div class="auth-benefits" aria-label="Account benefits">
+                <span>报告历史</span>
+                <span>写作签到</span>
+                <span>钱包余额</span>
+                <span>弱题训练</span>
+              </div>
+            </aside>
+            <article class="auth-card">
+              <div class="auth-card-head">
+                <h2>Sign in</h2>
+                <p id="loginNotice">登录后继续使用报告、钱包和个性化训练。</p>
+              </div>
+              <label>
+                <span>Email / phone / username</span>
+                <input id="loginUsername" autocomplete="username" inputmode="text" placeholder="18728445039">
+              </label>
+              <label>
+                <span>Password</span>
+                <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Enter password">
+              </label>
+              <div class="auth-row auth-row-between">
+                <button type="button" id="loginForgotLink" class="text-link">Forgot password?</button>
+              </div>
+              <div id="loginStatus" class="settings-metric"></div>
+              <div class="auth-action-stack">
+                <button type="button" id="loginSubmitBtn">Sign in</button>
+                <button type="button" id="loginToRegisterLink" class="ghost">Create account</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="authRequiredPanel" class="panel hidden auth-panel">
+          <div class="auth-stage">
+            <aside class="auth-copy">
+              <span class="auth-kicker">Sign in required</span>
+              <h1>这里需要登录</h1>
+              <p>这不是网站卡住了。这个模块包含你的个人数据，需要登录后才能读取。</p>
+            </aside>
+            <article class="auth-card">
+              <h2 id="authRequiredTitle">请先登录</h2>
+              <p id="authRequiredText" class="muted">登录后会自动回到刚才打开的页面。</p>
+              <div class="auth-action-stack">
+                <button type="button" id="authRequiredLoginBtn">Go to sign in</button>
+                <button type="button" id="authRequiredBackBtn" class="ghost">Back to practice</button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section id="registerPanel" class="panel hidden auth-panel">
-          <article class="settings-card auth-card">
-            <h2>Create account</h2>
-            <p class="muted">Save reports, wallet balance, and personalized IELTS progress.</p>
-            <label>
-              <span>Username / email / phone</span>
-              <input id="registerUsername" autocomplete="username" inputmode="text" placeholder="your account">
-            </label>
-            <label>
-              <span>Password</span>
-              <input id="registerPassword" type="password" autocomplete="new-password" placeholder="Create password">
-            </label>
-            <label>
-              <span>Confirm password</span>
-              <input id="registerPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirm password">
-            </label>
-            <div id="registerStatus" class="settings-metric"></div>
-            <div class="account-action-row">
-              <button type="button" id="registerSubmitBtn">Create account</button>
-              <button type="button" id="registerToLoginLink" class="ghost">Back to sign in</button>
-            </div>
-          </article>
+          <div class="auth-stage">
+            <aside class="auth-copy">
+              <span class="auth-kicker">Create your account</span>
+              <h1>把练习记录真正保存下来</h1>
+              <p>账号用于保存报告、写作表现、钱包余额和后续的个性化训练，不会假装提供未配置的短信或社交登录。</p>
+            </aside>
+            <article class="auth-card">
+              <div class="auth-card-head">
+                <h2>Create account</h2>
+                <p>Use a password that meets Django security rules.</p>
+              </div>
+              <label>
+                <span>Email / phone / username</span>
+                <input id="registerUsername" autocomplete="username" inputmode="text" placeholder="your account">
+              </label>
+              <div class="auth-two-col">
+                <label>
+                  <span>Full name</span>
+                  <input id="registerFullName" autocomplete="name" placeholder="LiHua">
+                </label>
+                <label>
+                  <span>English name</span>
+                  <input id="registerEnglishName" autocomplete="nickname" placeholder="Jasper">
+                </label>
+              </div>
+              <label>
+                <span>Password</span>
+                <input id="registerPassword" type="password" autocomplete="new-password" placeholder="Create password">
+              </label>
+              <label>
+                <span>Confirm password</span>
+                <input id="registerPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirm password">
+              </label>
+              <div id="registerStatus" class="settings-metric"></div>
+              <div class="auth-action-stack">
+                <button type="button" id="registerSubmitBtn">Create account</button>
+                <button type="button" id="registerToLoginLink" class="ghost">Back to sign in</button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section id="forgotPasswordPanel" class="panel hidden auth-panel">
-          <article class="settings-card auth-card">
-            <h2>Reset password</h2>
-            <p id="forgotPasswordStatus" class="settings-metric">Password reset availability will be checked automatically.</p>
-          </article>
+          <div class="auth-stage">
+            <aside class="auth-copy">
+              <span class="auth-kicker">Account recovery</span>
+              <h1>重置密码</h1>
+              <p>如果当前部署没有配置邮件服务，这里会明确告诉你不可用，不会假装发出邮件。</p>
+            </aside>
+            <article class="auth-card">
+              <h2>Reset password</h2>
+              <p id="forgotPasswordStatus" class="settings-metric">Password reset availability will be checked automatically.</p>
+              <div class="auth-action-stack">
+                <button type="button" id="forgotBackToLoginBtn" class="ghost">Back to sign in</button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section id="accountProfilePanel" class="panel hidden auth-panel">

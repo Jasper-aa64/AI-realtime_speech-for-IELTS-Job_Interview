@@ -3,7 +3,7 @@ import time
 from collections import defaultdict
 from typing import Optional
 
-from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth import authenticate, get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -240,6 +240,7 @@ def password_change(request):
 
     request.user.set_password(new_password)
     request.user.save()
+    update_session_auth_hash(request, request.user)
     return JsonResponse({"ok": True, "message": "Password changed successfully"})
 
 

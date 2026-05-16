@@ -52,6 +52,7 @@ const state = {
     authenticated: false,
     backendAvailable: false,
     user: null,
+    returnView: null,
   },
 };
 
@@ -78,6 +79,9 @@ const viewCopy = {
   accountSecurity: ["Security", "Change your password and manage security settings."],
   settings: ["Settings", "钱包和弱题训练记录。"],
 };
+
+const authViews = new Set(["login", "register", "forgotPassword"]);
+const protectedViews = new Set(["history", "writing", "writingReports", "settings", "accountProfile", "accountSecurity"]);
 
 const $ = (selector) => {
   if (typeof selector !== "string") return null;
@@ -368,6 +372,15 @@ async function withBusy(message, action) {
 
 function switchView(view, options = {}) {
   if (!viewCopy[view]) view = "mock";
+  if (protectedViews.has(view) && !state.account.authenticated && !options.skipAuthGate) {
+    state.account.returnView = view;
+    switchView("login", {
+      force: true,
+      skipAuthGate: true,
+      authMessage: options.authMessage || loginReasonForView(view),
+    });
+    return;
+  }
   if (view === state.view && !options.force) return;
   if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && ["accountProfile", "accountSecurity", "settings"].includes(view) && options.preservePractice) {
     showPracticeOverlay(view);
@@ -392,11 +405,13 @@ function switchView(view, options = {}) {
     button.classList.toggle("tone-p2", button.dataset.view === "p2");
     button.classList.toggle("tone-p3", button.dataset.view === "p3");
   });
+  $(".shell")?.classList.toggle("auth-shell", authViews.has(view));
   $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
   $("#writingReportsPanel")?.classList.toggle("hidden", view !== "writingReports");
   $("#loginPanel")?.classList.toggle("hidden", view !== "login");
+  $("#authRequiredPanel")?.classList.toggle("hidden", true);
   $("#registerPanel")?.classList.toggle("hidden", view !== "register");
   $("#forgotPasswordPanel")?.classList.toggle("hidden", view !== "forgotPassword");
   $("#accountProfilePanel")?.classList.toggle("hidden", view !== "accountProfile");
@@ -405,8 +420,8 @@ function switchView(view, options = {}) {
   $("#settingsBackButton")?.classList.toggle("hidden", true);
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
-  $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports");
-  $("#viewTitleBlock").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports");
+  $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || authViews.has(view));
+  $("#viewTitleBlock").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || authViews.has(view));
   text("viewTitle", viewCopy[view][0]);
   text("viewSubtitle", viewCopy[view][1]);
   if (view === "history") loadHistory();
@@ -414,8 +429,35 @@ function switchView(view, options = {}) {
   if (view === "writingReports") loadWritingReports();
   if (view === "accountProfile" || view === "accountSecurity") loadAccount();
   if (view === "settings") loadSettings();
+  if (view === "login") prepareLoginView(options.authMessage || "");
+  if (view === "forgotPassword") loadPasswordResetAvailability();
   if (["mock", "p1", "p2", "p3"].includes(view)) resetPracticeSurface();
   updateSidebarLock();
+}
+
+function loginReasonForView(view) {
+  const reasons = {
+    history: "登录后才能查看你的口语报告和历史记录。",
+    writing: "登录后才能保存每日写作、签到和 AI 评分记录。",
+    writingReports: "登录后才能查看你的写作报告。",
+    settings: "登录后才能查看钱包和弱题训练记录。",
+    accountProfile: "请先登录后管理账号资料。",
+    accountSecurity: "请先登录后修改账号安全设置。",
+  };
+  return reasons[view] || "请先登录后继续。";
+}
+
+function prepareLoginView(message = "") {
+  const notice = $("loginNotice");
+  if (notice) {
+    notice.textContent = message || "登录后继续使用报告、钱包和个性化训练。";
+    notice.classList.toggle("auth-notice-emphasis", Boolean(message));
+  }
+  const status = $("loginStatus");
+  if (status) {
+    status.textContent = "";
+    status.classList.remove("error");
+  }
 }
 
 function showPracticeOverlay(view = "settings") {
@@ -434,6 +476,7 @@ function showPracticeOverlay(view = "settings") {
   $("#writingPanel")?.classList.add("hidden");
   $("#writingReportsPanel")?.classList.add("hidden");
   $("#loginPanel")?.classList.add("hidden");
+  $("#authRequiredPanel")?.classList.add("hidden");
   $("#registerPanel")?.classList.add("hidden");
   $("#forgotPasswordPanel")?.classList.add("hidden");
   $("#accountProfilePanel")?.classList.toggle("hidden", view !== "accountProfile");
@@ -462,6 +505,7 @@ function returnFromSettings() {
     button.classList.toggle("tone-p3", button.dataset.view === "p3");
   });
   $("#loginPanel")?.classList.add("hidden");
+  $("#authRequiredPanel")?.classList.add("hidden");
   $("#registerPanel")?.classList.add("hidden");
   $("#forgotPasswordPanel")?.classList.add("hidden");
   $("#accountProfilePanel")?.classList.add("hidden");
@@ -547,6 +591,15 @@ function promptSize(question) {
 }
 
 async function startPractice() {
+  if (!state.account.authenticated) {
+    state.account.returnView = state.view;
+    switchView("login", {
+      force: true,
+      skipAuthGate: true,
+      authMessage: "登录后才能开始练习并保存完整报告。",
+    });
+    return;
+  }
   // Check balance before starting
   try {
     const wallet = await api("/api/billing/wallet");
@@ -2203,6 +2256,17 @@ async function exitPractice() {
 }
 
 function showError(error) {
+  if (error?.status === 401) {
+    state.account.authenticated = false;
+    state.account.user = null;
+    state.account.returnView = state.view;
+    switchView("login", {
+      force: true,
+      skipAuthGate: true,
+      authMessage: "登录状态已失效，请重新登录后继续。",
+    });
+    return;
+  }
   const message = error instanceof Error ? error.message : String(error);
   setBusy("");
   setRecordButton("ready", "Try Again", "The last attempt failed. Start again when ready.");
@@ -2282,7 +2346,9 @@ async function submitLogin() {
     await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
     await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
-    switchView("accountProfile");
+    const returnView = state.account.returnView || "accountProfile";
+    state.account.returnView = null;
+    switchView(returnView, { force: true, skipAuthGate: true });
   } catch (error) {
     state.account.backendAvailable = Boolean(error.status && error.status < 500);
     if (statusEl) {
@@ -2311,7 +2377,10 @@ async function submitRegister() {
     }
     return;
   }
-  const names = candidateNames();
+  const names = {
+    fullName: ($("registerFullName")?.value || DEFAULT_FULL_NAME).trim() || DEFAULT_FULL_NAME,
+    englishName: ($("registerEnglishName")?.value || DEFAULT_ENGLISH_NAME).trim() || DEFAULT_ENGLISH_NAME,
+  };
   try {
     const result = await withBusy("Creating account...", () => api("/api/accounts/register/", {
       username,
@@ -2328,7 +2397,9 @@ async function submitRegister() {
     await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
     await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
-    switchView("accountProfile");
+    const returnView = state.account.returnView || "accountProfile";
+    state.account.returnView = null;
+    switchView(returnView, { force: true, skipAuthGate: true });
   } catch (error) {
     state.account.backendAvailable = Boolean(error.status && error.status < 500);
     if (statusEl) {
@@ -2390,9 +2461,27 @@ async function logoutAccount() {
   }
   state.account.authenticated = false;
   state.account.user = null;
+  state.account.returnView = null;
   csrfToken = null;
   loadCandidateNames();
-  switchView("login");
+  switchView("login", { force: true, skipAuthGate: true, authMessage: "你已退出登录。" });
+}
+
+async function loadPasswordResetAvailability() {
+  const status = $("forgotPasswordStatus");
+  if (!status) return;
+  status.textContent = "Checking password reset availability...";
+  status.classList.remove("error");
+  try {
+    const payload = await api("/api/accounts/password/reset/availability/");
+    status.textContent = payload.available
+      ? "Password reset email is configured for this deployment."
+      : (payload.message || "Password reset email is not configured on this deployment.");
+    status.classList.toggle("error", !payload.available);
+  } catch (error) {
+    status.textContent = error.message || "Could not check password reset availability.";
+    status.classList.add("error");
+  }
 }
 
 function bindEvents() {
@@ -2432,7 +2521,11 @@ function bindEvents() {
   $("loginSubmitBtn")?.addEventListener("click", submitLogin);
   $("registerSubmitBtn")?.addEventListener("click", submitRegister);
   $("loginToRegisterLink")?.addEventListener("click", () => switchView("register"));
+  $("loginForgotLink")?.addEventListener("click", () => switchView("forgotPassword"));
   $("registerToLoginLink")?.addEventListener("click", () => switchView("login"));
+  $("forgotBackToLoginBtn")?.addEventListener("click", () => switchView("login"));
+  $("authRequiredLoginBtn")?.addEventListener("click", () => switchView("login", { force: true, skipAuthGate: true }));
+  $("authRequiredBackBtn")?.addEventListener("click", () => switchView("mock"));
   $("profileLogoutBtn")?.addEventListener("click", logoutAccount);
   $("profileSaveBtn")?.addEventListener("click", () => saveCandidateNames(true).catch((error) => renderAccountStatus(error.message, true)));
   $("securityChangePasswordBtn")?.addEventListener("click", submitPasswordChange);
