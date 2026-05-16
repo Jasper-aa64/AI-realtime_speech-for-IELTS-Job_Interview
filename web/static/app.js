@@ -703,24 +703,11 @@ function renderCueTop(cue) {
 function renderExaminerAudio(turn) {
   const tts = turn.examiner_tts || {};
   const audio = $("examinerAudio");
-  const fallbackBtn = $("browserTtsFallback");
   audio.classList.add("hidden");
-  fallbackBtn.classList.add("hidden");
+  $("browserTtsFallback").classList.add("hidden");
   if (tts.audio_url) {
     prepareExaminerAudioElement(audio, tts.audio_url);
     primeExaminerAudio(tts.audio_url);
-  } else if (turn.question || turn.examiner_prompt) {
-    // Show browser TTS fallback when server TTS unavailable
-    fallbackBtn.classList.remove("hidden");
-    fallbackBtn.onclick = () => {
-      const text = turn.question || turn.examiner_prompt || "";
-      if (!text) return;
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "en-GB";
-      utterance.rate = 0.9;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-    };
   }
 }
 
