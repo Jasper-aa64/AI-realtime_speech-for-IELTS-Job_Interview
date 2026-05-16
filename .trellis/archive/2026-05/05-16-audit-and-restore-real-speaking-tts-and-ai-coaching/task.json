@@ -1,0 +1,8 @@
+{
+  "id": "05-16-audit-and-restore-real-speaking-tts-and-ai-coaching",
+  "title": "Audit and Restore Real Speaking TTS and AI Coaching",
+  "status": "in_progress",
+  "created_at": "2026-05-16T00:00:00Z",
+  "started_at": "2026-05-16T00:00:00Z",
+  "description": "Complete audit of old server vs Django speaking module, restore all real AI functionality (turn feedback, band7 generation, AI coaching, scoring, regeneration) using Codex CLI instead of fixed fallback templates."
+}
