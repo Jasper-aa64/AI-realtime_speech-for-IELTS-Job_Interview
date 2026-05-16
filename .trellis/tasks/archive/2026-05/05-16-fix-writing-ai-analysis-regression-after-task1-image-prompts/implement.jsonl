@@ -1,0 +1,2 @@
+{"file": "web/static/app.js", "reason": "Fix autoResizeWritingAnswer to cap max height, prevent squeezing AI panel"}
+{"file": "web/static/styles.css", "reason": "Adjust .writing-answer max-height and layout to ensure AI controls visible"}

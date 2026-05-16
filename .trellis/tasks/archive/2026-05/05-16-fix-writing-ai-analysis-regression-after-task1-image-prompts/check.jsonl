@@ -1,0 +1,3 @@
+{"file": "web/static/app.js", "reason": "Verify score/save event handlers intact"}
+{"file": "web/static/index.html", "reason": "Verify writingSaveBtn/writingScoreBtn/writingInlineWait present"}
+{"file": "web/static/styles.css", "reason": "Verify writing-result-card not hidden"}
