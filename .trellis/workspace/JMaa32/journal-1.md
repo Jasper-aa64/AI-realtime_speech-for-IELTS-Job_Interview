@@ -1048,3 +1048,36 @@ Migrated volcengine_tts() and ensure_examiner_tts() from legacy server to Django
 ### Next Steps
 
 - None - server-side TTS fully restored
+
+
+## Session 28: Fix Django speaking Codex prompt delivery
+
+**Date**: 2026-05-16
+**Task**: Fix Django speaking Codex prompt delivery
+**Branch**: `main`
+
+### Summary
+
+Fixed root cause: run_codex missing stdin flag, migrated 16 helper functions from old server, updated coaching prompt to full 50-line version
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `87a27bb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 27
+- **Total Sessions**: 28
 - **Last Active**: 2026-05-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~907 | Active |
+| `journal-1.md` | ~1083 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 28 | 2026-05-16 | Fix Django speaking Codex prompt delivery | `87a27bb` | `main` |
 | 27 | 2026-05-16 | Add Writing Task1 image prompts and fix examiner TTS fallback | `6ef8976` | `main` |
 | 26 | 2026-05-16 | Fix speaking audio upload CSRF | - | `main` |
 | 25 | 2026-05-16 | Merge settings into account profile layout | `cbd2764` | `main` |
