@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 19
+- **Total Sessions**: 20
 - **Last Active**: 2026-05-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~645 | Active |
+| `journal-1.md` | ~678 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 20 | 2026-05-16 | Finalize Django-only IELTS runtime cutover | `eee6725` | `main` |
 | 19 | 2026-05-16 | Complete Django runtime migration | `b380a16` | `main` |
 | 18 | 2026-05-16 | Add feature-flagged Django speaking runtime proxy | `32b7c2c` | `main` |
 | 17 | 2026-05-16 | Add Django speaking runtime fallback endpoints | `0fdfd7a` | `main` |

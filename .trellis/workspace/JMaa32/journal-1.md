@@ -643,3 +643,36 @@ Complete Django runtime migration: add regenerate endpoints, mark old server dep
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: Finalize Django-only IELTS runtime cutover
+
+**Date**: 2026-05-16
+**Task**: Finalize Django-only IELTS runtime cutover
+**Branch**: `main`
+
+### Summary
+
+Closed remaining Django-only runtime gaps: static frontend serving, fallback P3/TTS/latest-report contracts, frontend-compatible billing routes, tests, and cutover documentation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eee6725` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
