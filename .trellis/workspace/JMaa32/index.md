@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 30
+- **Total Sessions**: 31
 - **Last Active**: 2026-05-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1151 | Active |
+| `journal-1.md` | ~1184 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 31 | 2026-05-16 | Fix Codex JSON parsing with Trellis injection | `742bd62` | `main` |
 | 30 | 2026-05-16 | Complete Django speaking migration from old server | `4cad49d`, `ea7b415`, `acf05da` | `main` |
 | 29 | 2026-05-16 | Migrate complete build_turn_feedback logic | `a4ec4a2` | `main` |
 | 28 | 2026-05-16 | Fix Django speaking Codex prompt delivery | `87a27bb` | `main` |

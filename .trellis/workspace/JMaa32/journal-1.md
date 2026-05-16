@@ -1149,3 +1149,36 @@ Migrated all missing scoring/calibration functions: calibrate_realistic_score, h
 ### Next Steps
 
 - None - task complete
+
+
+## Session 31: Fix Codex JSON parsing with Trellis injection
+
+**Date**: 2026-05-16
+**Task**: Fix Codex JSON parsing with Trellis injection
+**Branch**: `main`
+
+### Summary
+
+Fixed root cause: extract_json_object() greedy regex failed when Trellis injection text appeared before JSON. Implemented balanced bracket scanning and proper agent_message extraction from Codex events.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `742bd62` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
