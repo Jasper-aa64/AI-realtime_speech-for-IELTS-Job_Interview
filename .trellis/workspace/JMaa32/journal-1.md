@@ -808,3 +808,36 @@ Migrated from toy account card to dedicated auth surfaces (login/register/forgot
 ### Next Steps
 
 - None - task complete
+
+
+## Session 25: Merge settings into account profile layout
+
+**Date**: 2026-05-16
+**Task**: Merge settings into account profile layout
+**Branch**: `main`
+
+### Summary
+
+Removed standalone Settings UI, moved wallet, weak training, and replay queue into a two-column Account profile layout, and preserved account auth gating.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cbd2764` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
