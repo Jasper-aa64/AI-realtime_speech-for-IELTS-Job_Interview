@@ -872,3 +872,36 @@ Diagnosed speaking practice Try Again failure as Django rejecting raw audio uplo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: Add Writing Task1 image prompts and fix examiner TTS fallback
+
+**Date**: 2026-05-16
+**Task**: Add Writing Task1 image prompts and fix examiner TTS fallback
+**Branch**: `main`
+
+### Summary
+
+Extended WritingPrompt with image_url and migration; rendered Task1 prompt images in writing surface with responsive fallback; made writing textarea auto-expand without inner scroll; fixed speaking examiner prompt fallback to browser TTS only when server audio_url is missing; full validation suite passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6ef8976` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
