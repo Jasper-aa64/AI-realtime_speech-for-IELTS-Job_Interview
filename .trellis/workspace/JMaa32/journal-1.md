@@ -577,3 +577,36 @@ Added Django fallback-only speaking runtime endpoints for turn completion, abort
 ### Next Steps
 
 - None - task complete
+
+
+## Session 18: Add feature-flagged Django speaking runtime proxy
+
+**Date**: 2026-05-16
+**Task**: Add feature-flagged Django speaking runtime proxy
+**Branch**: `main`
+
+### Summary
+
+Added old-server feature flag and raw-body proxy support so migrated speaking runtime endpoints can route to Django while preserving fallback behavior.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32b7c2c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
