@@ -610,3 +610,36 @@ Added old-server feature flag and raw-body proxy support so migrated speaking ru
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: Complete Django runtime migration
+
+**Date**: 2026-05-16
+**Task**: Complete Django runtime migration
+**Branch**: `main`
+
+### Summary
+
+Complete Django runtime migration: add regenerate endpoints, mark old server deprecated, all 134 tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b380a16` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
