@@ -1716,11 +1716,277 @@ def _criteria_feedback(score: dict[str, Any], transcript: str) -> dict[str, Any]
 
 
 def _band7_fallback(turn: SpeakingTurn) -> str:
+    """Simple fallback for Django turn model."""
     question = turn.question.rstrip("?")
     return (
         f"Well, regarding {question.lower()}, I would give a clear answer with a specific reason and a brief example. "
         "That would make the response sound more natural and developed."
     )
+
+
+# --- P1 Name/Identity Helpers ---
+
+
+DEFAULT_FULL_NAME = "Li Hua"
+DEFAULT_ENGLISH_NAME = "Jasper"
+
+
+def is_p1_name_intro_turn(turn: dict[str, Any] | SpeakingTurn) -> bool:
+    """Check if turn is a P1 name introduction."""
+    if isinstance(turn, SpeakingTurn):
+        prompt = turn.metadata.get("prompt", {}) if isinstance(turn.metadata, dict) else {}
+        return turn.part == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "name"
+    prompt = turn.get("prompt") or {}
+    return turn.get("part") == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "name"
+
+
+def p1_name_answer(full_name: str | None, english_name: str | None) -> str:
+    """Generate P1 name answer from profile."""
+    full = clean_report_text(str(full_name or DEFAULT_FULL_NAME)) or DEFAULT_FULL_NAME
+    english = clean_report_text(str(english_name or DEFAULT_ENGLISH_NAME)) or DEFAULT_ENGLISH_NAME
+    if full.lower() == english.lower():
+        return f"My full name is {full}."
+    return f"My full name is {full}, but you can call me {english}."
+
+
+def _p1_question_only_answer(question: str, answer_lower: str = "") -> str:
+    """Generate a clean Band 7 P1 answer based on the question type."""
+    lowered = question.lower()
+    if "name" in lowered:
+        return "My full name is Jasper Chen, but most people just call me Jasper."
+    if lowered.startswith(("do you prefer", "would you prefer")) or ("prefer" in lowered and "or" in lowered):
+        return "I would prefer the option that fits my daily routine better, because convenience matters a lot when you have a busy schedule."
+    if ("work" in lowered or "study" in lowered or "student" in lowered) and "prefer" not in lowered:
+        if any(w in answer_lower for w in ("work", "job", "company", "office", "engineer", "business")):
+            return "I work as a software engineer at the moment. I enjoy it because the work is practical and I get to solve real problems every day."
+        return "I'm a university student at the moment, majoring in computer science. I chose it because I enjoy building things and solving practical problems."
+    if ("who" in lowered and "live" in lowered) or ("family" in lowered and "own" in lowered) or ("live with" in lowered):
+        if any(w in answer_lower for w in ("own", "alone", "myself")):
+            return "I live on my own at the moment. It is convenient because my place is close to my university and I can manage my own schedule."
+        if any(w in answer_lower for w in ("family", "parent", "mother", "father", "roommate")):
+            return "I live with my family right now. It is comfortable because we share the housework and I can save money on rent."
+        return "I live on my own at the moment, in a small apartment near my university. It gives me the independence I need for my studies."
+    if any(word in lowered for word in ("live", "living", "hometown", "house", "apartment", "flat", "city")):
+        return "I live in a fairly convenient area close to my university. I like it because transport and daily shopping are easy, and the neighbourhood is quiet enough to study."
+    if any(word in lowered for word in ("favourite", "favorite", "like most", "enjoy most")):
+        return "My favourite would be the one that connects with my personal routine. It feels natural because I do it regularly and it always puts me in a good mood."
+    if any(word in lowered for word in ("think", "opinion", "important")):
+        return "I think it depends on the situation. For most people it probably matters, but personally I would say it is useful rather than essential."
+    if "easy" in lowered or "difficult" in lowered or "hard" in lowered:
+        return "I find it fairly easy, mainly because I have been doing it for a while now. Practice makes a big difference, and once you get used to it, it feels natural."
+    if any(word in lowered for word in ("how often", "how much", "how long", "how many")):
+        return "For me, it happens fairly regularly, maybe a few times a week. It has become part of my routine without me really noticing."
+    if any(word in lowered for word in ("when", "last time", "recently")):
+        return "The last time was not long ago, probably within the past week. I remember it quite clearly because it was a pleasant experience."
+    if lowered.startswith(("do you", "are you", "is there", "can you", "have you")):
+        if any(w in answer_lower for w in ("no", "not", "rarely", "hardly", "don't")):
+            return "No, not really. It is not something I do very often, mainly because my schedule does not leave much time for it."
+        return "Yes, I would say so. It is something I do fairly often, and I find it quite enjoyable because it fits naturally into my daily life."
+    return "I would say it is something I experience quite often in my daily life. The main reason is that it connects with my routine and gives me a practical benefit."
+
+
+def build_turn_band7_fallback(
+    question: str,
+    part: str,
+    transcript: str = "",
+    full_name: str | None = None,
+    english_name: str | None = None,
+    turn_metadata: dict[str, Any] | None = None,
+) -> str:
+    """Generate a rule-based Band 7 answer. Never quotes raw transcript — only uses it to detect intent direction."""
+    question_clean = clean_report_text(question) or "this question"
+    answer_lower = clean_report_text(transcript).lower() if transcript else ""
+    turn_metadata = turn_metadata or {}
+
+    if part == "p1":
+        # Check if it's a name intro turn
+        if turn_metadata.get("prompt", {}).get("flow") == "intro" and turn_metadata.get("prompt", {}).get("role") == "name":
+            return p1_name_answer(full_name, english_name)
+        return _p1_question_only_answer(question_clean, answer_lower)
+
+    if part == "p2":
+        return (
+            "I would like to talk about something that happened to me recently. "
+            "It was memorable because it changed the way I think about this topic. "
+            "What made it stand out was the combination of timing and the people involved, "
+            "and looking back, I feel it was a valuable experience that taught me something new."
+        )
+
+    return (
+        "I think this is an interesting question because people can look at it from different angles. "
+        "From my perspective, the most important factor is practicality, because in everyday life "
+        "we often have to balance convenience with long-term value. "
+        "I would also add that personal experience plays a big role in shaping people's views on this."
+    )
+
+
+# --- Learning Profile ---
+
+
+def build_learning_profile(user, attempt: SpeakingAttempt) -> dict[str, Any]:
+    """Build learning profile from user's attempt history."""
+    turns = list(attempt.turns.all().order_by("sequence"))
+    completed_turns = [t for t in turns if _turn_status(t) == "completed"]
+
+    evidence: list[str] = []
+    tags: list[str] = []
+    repeated_phrases: list[str] = []
+
+    for turn in completed_turns:
+        transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+        if not transcript:
+            continue
+        word_count = _word_count(transcript)
+        part = turn.part or ""
+        if part == "p2":
+            evidence.append(f"P2 回答约 {word_count} 词，需要继续拉长展开。")
+        elif part == "p3":
+            evidence.append(f"P3 回答约 {word_count} 词，需要补上原因、对比或例子。")
+        elif part == "p1":
+            evidence.append(f"P1 回答约 {word_count} 词，需要更直接、更自然。")
+
+        # Check for short answers
+        if word_count < 20:
+            tags.append("short_answer")
+        if word_count < 35:
+            tags.append("limited_development")
+
+    # Get weak items from training
+    weak_obs = SpeakingTrainingObservation.objects.filter(user=user, weak_item_flag=True).order_by("-observed_at")[:10]
+    for obs in weak_obs:
+        if obs.weak_reasons:
+            tags.extend(obs.weak_reasons)
+
+    tags = sorted(set(tags))[:8]
+
+    return {
+        "primary_focus": "answer_development" if "short_answer" in tags or "limited_development" in tags else "task_relevance",
+        "primary_focus_text": "这次主要卡在回答展开不够，不是题目完全不会。" if "limited_development" in tags else "这次主要问题是没有完全扣住题目，先把回答方向答准。",
+        "habit_tags": tags,
+        "repeated_phrases": repeated_phrases[:6],
+        "evidence": evidence[:8],
+    }
+
+
+# --- Build Turn Feedback (Complete) ---
+
+
+def build_turn_feedback(
+    turn: SpeakingTurn,
+    attempt: SpeakingAttempt,
+    user_profile: dict[str, Any] | None = None,
+    allow_codex: bool = True,
+) -> dict[str, Any]:
+    """Build complete turn feedback with Band 7 and AI coaching.
+
+    This is the complete migration from old server's build_turn_feedback.
+    Returns a dict of fields to update in turn.metadata.
+    """
+    transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+    target = target_band_label(attempt)
+    part = turn.part or "p1"
+
+    # Get user profile for personalization
+    profile = user_profile or {}
+    full_name = profile.get("full_name")
+    english_name = profile.get("english_name")
+
+    # Result dict
+    result: dict[str, Any] = {}
+
+    # Try Codex generation first
+    generated: dict[str, str] = {}
+    if allow_codex and transcript:
+        try:
+            generated = turn_feedback_with_codex(
+                turn.question,
+                transcript,
+                part,
+                target,
+                profile,
+                f"turn_feedback_{attempt.attempt_id}_{turn.turn_id}",
+            )
+        except Exception as exc:
+            result["feedback_generation_error"] = str(exc)
+
+    # Build Band 7 version
+    band7 = generated.get("band7_version") or ""
+    if not valid_turn_band7(turn.question, band7, part):
+        band7 = build_turn_band7_fallback(
+            turn.question,
+            part,
+            transcript,
+            full_name,
+            english_name,
+            turn.metadata if isinstance(turn.metadata, dict) else None,
+        )
+
+    result["band7_version"] = clean_report_text(band7)
+    result["band7_markdown"] = spoken_markdown(band7, part)
+    result["target_band_version"] = result["band7_version"]
+    result["target_band_markdown"] = result["band7_markdown"]
+    result["target_band"] = target
+
+    # Model audio placeholder (no real TTS in Django fallback)
+    result["model_audio"] = {"status": "fallback", "audio_url": None}
+
+    # Upgrade notes
+    result["upgrade_notes"] = build_upgrade_notes(transcript)
+
+    # Build AI coaching
+    coaching = generated.get("ai_coaching") or ""
+    if not concise_coaching_markdown(coaching):
+        # Fallback coaching
+        coaching = build_ai_coaching_fallback(
+            turn.question,
+            transcript,
+            result["band7_version"],
+            part,
+            profile,
+        )
+    result["ai_coaching"] = clean_markdown_text(coaching)
+
+    # Status fields
+    result["feedback_generation_status"] = "ready"
+    result["feedback_generation_backend"] = "codex" if generated else "fallback"
+
+    return result
+
+
+def build_ai_coaching_fallback(
+    question: str,
+    transcript: str,
+    band7: str,
+    part: str,
+    profile: dict[str, Any] | None = None,
+) -> str:
+    """Build fallback AI coaching when Codex fails."""
+    profile = profile or {}
+    tags = profile.get("habit_tags", [])
+    repeated_phrases = profile.get("repeated_phrases", [])
+
+    question_clean = clean_report_text(question) or "this question"
+    question_lower = question_clean.lower()
+    transcript_words = _word_count(transcript)
+    transcript_usable = transcript_words >= 10
+
+    reason = _coaching_reason_for_question(question_lower, part, transcript_words, transcript_usable, tags)
+    next_action = _coaching_next_action(question_lower, part, transcript_usable, tags)
+
+    lines: list[str] = []
+    lines.append("- AI 辅导生成失败，以下是系统默认建议。")
+    lines.append(f"- 本题关键词：{question_clean[:60]}")
+    lines.append(f"- {reason}")
+
+    if transcript_usable:
+        lines.append(f"- 这次回答约 {transcript_words} 词，建议再补充细节。")
+
+    if repeated_phrases:
+        lines.append(f"- 少重复这些表达：{', '.join(repeated_phrases[:2])}")
+
+    lines.append(f"- {next_action}")
+
+    return ensure_grammar_correction_bullet("\n".join(lines), transcript)
 
 
 def _training_relevance(question: str, transcript: str) -> Decimal:
@@ -1758,60 +2024,34 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
 
     criteria = _criteria_feedback(score, transcript)
 
-    # Generate real AI feedback for each turn
+    # Get user profile for personalization
+    from apps.accounts.models import UserProfile
+    profile_obj, _ = UserProfile.objects.get_or_create(user=user)
+    user_profile = {
+        "full_name": profile_obj.full_name,
+        "english_name": profile_obj.english_name,
+    }
+
+    # Generate AI feedback for each turn using complete build_turn_feedback
     for turn in turns:
         turn_transcript = turn.transcript_cleaned or turn.transcript_raw
         if not turn_transcript.strip():
             continue
 
+        # Use the complete build_turn_feedback logic
+        feedback = build_turn_feedback(turn, attempt, user_profile, allow_codex=True)
+
+        # Update turn metadata
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-        turn_call_id = f"{attempt_id}_{turn.turn_id}"
+        metadata.update(feedback)
 
-        # Try to generate Band 7 version with Codex
-        try:
-            band7_version = build_turn_band7_with_codex(
-                turn.question,
-                turn_transcript,
-                turn.part,
-                f"band7_{turn_call_id}",
-            )
-            # Validate the Band 7 output
-            if valid_turn_band7(turn.question, band7_version, turn.part):
-                metadata["band7_version"] = band7_version
-                metadata["band7_markdown"] = band7_version
-                metadata["band7_source"] = "codex"
-            else:
-                # Invalid Band 7, use fallback
-                metadata["band7_version"] = _band7_fallback(turn)
-                metadata["band7_markdown"] = metadata["band7_version"]
-                metadata["band7_source"] = "fallback_invalid"
-        except Exception:
-            # Codex failed, use fallback
-            metadata["band7_version"] = _band7_fallback(turn)
-            metadata["band7_markdown"] = metadata["band7_version"]
-            metadata["band7_source"] = "fallback_error"
-
-        # Generate upgrade notes
-        metadata["upgrade_notes"] = build_upgrade_notes(turn_transcript)
-
-        # Try to generate AI coaching with Codex
-        try:
-            ai_coaching = build_ai_coaching_with_codex(
-                turn.question,
-                turn_transcript,
-                metadata["band7_version"],
-                turn.part,
-                f"coaching_{turn_call_id}",
-            )
-            if ai_coaching and len(ai_coaching) > 10:
-                metadata["ai_coaching"] = ai_coaching
-                metadata["ai_coaching_source"] = "codex"
-            else:
-                metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
-                metadata["ai_coaching_source"] = "fallback_empty"
-        except Exception:
-            metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
-            metadata["ai_coaching_source"] = "fallback_error"
+        # Track source for scoring context
+        if feedback.get("feedback_generation_backend") == "codex":
+            metadata["band7_source"] = "codex"
+            metadata["ai_coaching_source"] = "codex"
+        else:
+            metadata["band7_source"] = "fallback"
+            metadata["ai_coaching_source"] = "fallback"
 
         turn.metadata = metadata
         turn.save()
@@ -1933,6 +2173,9 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
 def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
     """Regenerate AI feedback for a completed turn.
 
+    This is the complete migration from old server's handle_turn_feedback_regenerate.
+    Uses build_turn_feedback for consistent logic.
+
     Args:
         user: The authenticated user
         attempt_id: The attempt ID
@@ -1955,72 +2198,56 @@ def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, A
     if not turn_transcript.strip():
         raise SpeakingError("Cannot regenerate feedback for empty transcript.")
 
+    # Get user profile for personalization
+    from apps.accounts.models import UserProfile
+    profile_obj, _ = UserProfile.objects.get_or_create(user=user)
+    user_profile = {
+        "full_name": profile_obj.full_name,
+        "english_name": profile_obj.english_name,
+    }
+
+    # Build learning profile
+    learning_profile = build_learning_profile(user, attempt)
+
+    # Use the complete build_turn_feedback logic
+    feedback = build_turn_feedback(turn, attempt, user_profile, allow_codex=True)
+
+    # Update turn metadata
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-    turn_call_id = f"{attempt_id}_{turn_id}_regen"
-
-    # Try to generate Band 7 version with Codex
-    try:
-        band7_version = build_turn_band7_with_codex(
-            turn.question,
-            turn_transcript,
-            turn.part,
-            f"band7_{turn_call_id}",
-        )
-        # Validate the Band 7 output
-        if valid_turn_band7(turn.question, band7_version, turn.part):
-            metadata["band7_version"] = band7_version
-            metadata["band7_markdown"] = band7_version
-            metadata["band7_source"] = "codex_regenerated"
-        else:
-            metadata["band7_version"] = _band7_fallback(turn)
-            metadata["band7_markdown"] = metadata["band7_version"]
-            metadata["band7_source"] = "fallback_invalid_regenerated"
-    except Exception as exc:
-        metadata["band7_version"] = _band7_fallback(turn)
-        metadata["band7_markdown"] = metadata["band7_version"]
-        metadata["band7_source"] = "fallback_error_regenerated"
-        metadata["band7_error"] = str(exc)
-
-    # Generate upgrade notes
-    metadata["upgrade_notes"] = build_upgrade_notes(turn_transcript)
-
-    # Try to generate AI coaching with Codex
-    try:
-        ai_coaching = build_ai_coaching_with_codex(
-            turn.question,
-            turn_transcript,
-            metadata["band7_version"],
-            turn.part,
-            f"coaching_{turn_call_id}",
-        )
-        if ai_coaching and len(ai_coaching) > 10:
-            metadata["ai_coaching"] = ai_coaching
-            metadata["ai_coaching_source"] = "codex_regenerated"
-        else:
-            metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
-            metadata["ai_coaching_source"] = "fallback_empty_regenerated"
-    except Exception as exc:
-        metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
-        metadata["ai_coaching_source"] = "fallback_error_regenerated"
-        metadata["ai_coaching_error"] = str(exc)
-
+    metadata.update(feedback)
     metadata["feedback_regenerated_at"] = timezone.now().isoformat()
+
+    # Track regeneration source
+    if feedback.get("feedback_generation_backend") == "codex":
+        metadata["band7_source"] = "codex_regenerated"
+        metadata["ai_coaching_source"] = "codex_regenerated"
+    else:
+        metadata["band7_source"] = "fallback_regenerated"
+        metadata["ai_coaching_source"] = "fallback_regenerated"
+
     turn.metadata = metadata
     turn.save(update_fields=["metadata"])
 
     attempt.updated_at = timezone.now()
     attempt.save(update_fields=["updated_at"])
 
+    # Update report payload if exists
     if hasattr(attempt, "report") and attempt.report:
         report = attempt.report
         payload = report.report_payload if isinstance(report.report_payload, dict) else {}
         turns_payload = payload.get("turns", [])
         for i, t in enumerate(turns_payload):
             if t.get("id") == turn_id:
-                turns_payload[i]["band7_version"] = metadata["band7_version"]
-                turns_payload[i]["band7_markdown"] = metadata["band7_markdown"]
-                turns_payload[i]["upgrade_notes"] = metadata["upgrade_notes"]
-                turns_payload[i]["ai_coaching"] = metadata["ai_coaching"]
+                turns_payload[i]["band7_version"] = metadata.get("band7_version", "")
+                turns_payload[i]["band7_markdown"] = metadata.get("band7_markdown", "")
+                turns_payload[i]["target_band_version"] = metadata.get("target_band_version", "")
+                turns_payload[i]["target_band_markdown"] = metadata.get("target_band_markdown", "")
+                turns_payload[i]["target_band"] = metadata.get("target_band", "7")
+                turns_payload[i]["upgrade_notes"] = metadata.get("upgrade_notes", [])
+                turns_payload[i]["ai_coaching"] = metadata.get("ai_coaching", "")
+                turns_payload[i]["model_audio"] = metadata.get("model_audio", {})
+                turns_payload[i]["feedback_generation_status"] = metadata.get("feedback_generation_status", "ready")
+                turns_payload[i]["feedback_generation_backend"] = metadata.get("feedback_generation_backend", "fallback")
         report.report_payload = payload
         report.save(update_fields=["report_payload", "updated_at"])
 
