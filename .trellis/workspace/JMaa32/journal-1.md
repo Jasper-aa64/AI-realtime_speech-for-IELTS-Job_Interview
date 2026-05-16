@@ -1114,3 +1114,38 @@ Fixed Django feedback generation: added feedback_generation_status/backend/error
 ### Next Steps
 
 - None - task complete
+
+
+## Session 30: Complete Django speaking migration from old server
+
+**Date**: 2026-05-16
+**Task**: Complete Django speaking migration from old server
+**Branch**: `main`
+
+### Summary
+
+Migrated all missing scoring/calibration functions: calibrate_realistic_score, heuristic_score, band_cap, development_markers, generic_template_score, simple_grammar_ratio, is_template_like_answer, append_calibration_note, prompt_relevance, cap_off_topic_score, score_prompt_for_part, turn_habit_tags, part_focus_text, infer_primary_focus, overall_review_with_codex, build_overall_review, build_personalized_coaching, attempt_part, target_band, score_for_part, build_part_scores, band_advice-based _criteria_feedback. All 147 tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4cad49d` | (see git log) |
+| `ea7b415` | (see git log) |
+| `acf05da` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
