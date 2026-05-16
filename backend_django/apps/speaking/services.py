@@ -1242,3 +1242,55 @@ def regenerate_turn_transcript(user, attempt_id: str, turn_id: str) -> dict[str,
         "attempt": _runtime_attempt_payload(attempt),
         "turn": _turn_payload(turn),
     }
+
+
+def p3_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    theme = str(payload.get("theme") or "general speaking").replace("_", " ").strip() or "general speaking"
+    prior_answer = str(payload.get("prior_answer") or "")
+    questions = [
+        f"Why do people have different opinions about {theme}?",
+        f"How has {theme} changed in your country in recent years?",
+        f"Do you think {theme} will become more important in the future?",
+        f"What problems can {theme} create for ordinary people?",
+        f"How should governments or schools respond to changes in {theme}?",
+    ]
+    follow_up = "Could you give a specific example to support that view?"
+    if len(prior_answer.split()) > 40:
+        follow_up = "What might be the opposite argument, and why might some people agree with it?"
+    return {"questions": questions, "follow_up": follow_up, "backend": "fallback"}
+
+
+def tts_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        return {"provider": "none", "status": "empty_text", "audio_url": None, "message": "No text to synthesize."}
+    return {
+        "provider": "browser",
+        "status": "fallback",
+        "audio_url": None,
+        "message": "Server TTS provider is not configured; use browser fallback.",
+    }
+
+
+def latest_report(user) -> dict[str, Any]:
+    attempts = (
+        SpeakingAttempt.objects.filter(user=user, status=SpeakingAttempt.Status.SCORED)
+        .select_related("report")
+        .prefetch_related("turns")
+        .order_by("-updated_at")
+    )
+    for attempt in attempts:
+        if report_is_valid(attempt):
+            return report_payload(attempt)
+    return {"report": None}
+
+
+def tts_audio_path(role: str, filename: str) -> Path | None:
+    safe_role = "examiner" if role == "examiner" else "model"
+    safe_name = Path(str(filename or "")).name
+    if not safe_name:
+        return None
+    path = Path(settings.MEDIA_ROOT) / "tts" / safe_role / safe_name
+    return path if path.exists() else None

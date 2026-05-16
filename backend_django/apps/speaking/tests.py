@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
+from django.conf import settings
 
 from apps.speaking.models import SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
 
@@ -817,3 +818,121 @@ class RegenerateApiTests(TestCase):
         response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/{turn.turn_id}/transcript/regenerate")
         self.assertEqual(response.status_code, 400)
         self.assertIn("没有可用录音文件", response.json().get("error", ""))
+
+
+class DjangoOnlyRuntimeSurfaceTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = get_user_model().objects.create_user(username="surface-user", password="test-pass")
+        self.client.force_login(self.user)
+
+    def create_scored_attempt(self):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="surface-scored",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.SCORED,
+            english_name="Sam",
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=1,
+            part="p1",
+            question="What is your full name?",
+            transcript_raw="My full name is Sam.",
+            transcript_cleaned="My full name is Sam.",
+            metadata={"status": "completed", "transcript_status": "captured"},
+        )
+        SpeakingReport.objects.create(
+            user=self.user,
+            attempt=attempt,
+            overall_band=5.5,
+            fluency_coherence=5.5,
+            lexical_resource=5.0,
+            grammar_range_accuracy=5.0,
+            feedback_summary="Fallback report.",
+            report_payload={
+                "id": attempt.attempt_id,
+                "status": "scored",
+                "mode": "p1",
+                "ielts_score": {"overall_band": 5.5},
+                "turns": [{"id": "t1", "status": "completed", "transcript_cleaned": "My full name is Sam."}],
+            },
+        )
+        return attempt
+
+    def test_django_serves_frontend_static_entrypoints(self):
+        root = self.client.get("/")
+        self.assertEqual(root.status_code, 200)
+        self.assertIn(b"IELTS Speaking Studio", b"".join(root.streaming_content))
+
+        app_js = self.client.get("/app.js")
+        self.assertEqual(app_js.status_code, 200)
+        self.assertIn("javascript", app_js["Content-Type"])
+
+        styles = self.client.get("/styles.css")
+        self.assertEqual(styles.status_code, 200)
+        self.assertIn("text/css", styles["Content-Type"])
+
+    def test_p3_fallback_requires_login_and_returns_questions(self):
+        self.client.logout()
+        unauthorized = self.client.post("/api/p3/questions", data={"theme": "technology"}, content_type="application/json")
+        self.assertEqual(unauthorized.status_code, 401)
+
+        self.client.force_login(self.user)
+        response = self.client.post("/api/p3/questions", data={"theme": "technology"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["backend"], "fallback")
+        self.assertEqual(len(payload["questions"]), 5)
+        self.assertIn("follow_up", payload)
+
+    def test_p3_follow_up_uses_same_fallback_contract(self):
+        response = self.client.post(
+            "/api/p3/follow-up",
+            data={"theme": "technology", "prior_answer": " ".join(["answer"] * 45)},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["backend"], "fallback")
+        self.assertIn("opposite argument", response.json()["follow_up"])
+
+    def test_tts_fallback_requires_login_and_returns_browser_contract(self):
+        self.client.logout()
+        unauthorized = self.client.post("/api/tts", data={"text": "Hello"}, content_type="application/json")
+        self.assertEqual(unauthorized.status_code, 401)
+
+        self.client.force_login(self.user)
+        response = self.client.post("/api/tts", data={"text": "Hello", "role": "examiner"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["provider"], "browser")
+        self.assertEqual(payload["status"], "fallback")
+        self.assertIsNone(payload["audio_url"])
+
+    def test_tts_audio_returns_404_or_existing_file(self):
+        missing = self.client.get("/api/tts-audio/examiner/missing.mp3")
+        self.assertEqual(missing.status_code, 404)
+
+        from pathlib import Path
+        audio_dir = Path(settings.MEDIA_ROOT) / "tts" / "examiner"
+        audio_dir.mkdir(parents=True, exist_ok=True)
+        (audio_dir / "sample.mp3").write_bytes(b"mp3-data")
+
+        response = self.client.get("/api/tts-audio/examiner/sample.mp3")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"mp3-data")
+
+    def test_latest_report_returns_latest_valid_report(self):
+        no_report = self.client.get("/api/reports/latest")
+        self.assertEqual(no_report.status_code, 200)
+        self.assertEqual(no_report.json(), {"report": None})
+
+        attempt = self.create_scored_attempt()
+        response = self.client.get("/api/reports/latest")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], attempt.attempt_id)

@@ -4,11 +4,15 @@ from django.urls import path
 from apps.accounts import views as account_views
 from apps.ai import views as ai_views
 from apps.billing import views as billing_views
-from apps.common.views import health
+from apps.common.views import frontend_asset, health
 from apps.speaking import views as speaking_views
 from apps.writing import views as writing_views
 
 urlpatterns = [
+    path("", frontend_asset, name="frontend-index"),
+    path("index.html", frontend_asset, name="frontend-index-html"),
+    path("app.js", frontend_asset, {"asset_path": "app.js"}, name="frontend-app-js"),
+    path("styles.css", frontend_asset, {"asset_path": "styles.css"}, name="frontend-styles-css"),
     path("admin/", admin.site.urls),
     path("api/health/", health, name="health"),
     path("api/accounts/register/", account_views.register, name="account-register"),
@@ -28,14 +32,24 @@ urlpatterns = [
     path("api/attempts/<str:attempt_id>/abort", speaking_views.attempt_abort_view, name="attempt-abort"),
     path("api/attempts/<str:attempt_id>/score", speaking_views.attempt_score_view, name="attempt-score"),
     path("api/audio/<str:attempt_id>/<str:turn_id>/candidate", speaking_views.turn_audio_candidate_view, name="turn-audio-candidate"),
+    path("api/tts", speaking_views.tts_view, name="speaking-tts"),
+    path("api/tts-audio/<str:role>/<str:filename>", speaking_views.tts_audio_view, name="speaking-tts-audio"),
+    path("api/p3/questions", speaking_views.p3_view, name="speaking-p3-questions"),
+    path("api/p3/follow-up", speaking_views.p3_view, name="speaking-p3-follow-up"),
+    path("api/reports/latest", speaking_views.latest_report_view, name="speaking-latest-report"),
     path("api/question-bank/summary", speaking_views.question_bank_summary_view, name="question-bank-summary"),
     path("api/question-bank/sample", speaking_views.question_bank_sample_view, name="question-bank-sample"),
     path("api/training/weak-items", speaking_views.training_weak_items_view, name="training-weak-items"),
     path("api/training/replay-queue", speaking_views.training_replay_queue_view, name="training-replay-queue"),
+    path("api/billing/wallet", billing_views.wallet, name="billing-wallet-noslash"),
     path("api/billing/wallet/", billing_views.wallet, name="billing-wallet"),
+    path("api/billing/recharge", billing_views.recharge, name="billing-recharge-noslash"),
     path("api/billing/recharge/", billing_views.recharge, name="billing-recharge"),
+    path("api/billing/reservations", billing_views.reserve, name="billing-reserve-noslash"),
     path("api/billing/reservations/", billing_views.reserve, name="billing-reserve"),
+    path("api/billing/reservations/release", billing_views.release, name="billing-release-noslash"),
     path("api/billing/reservations/release/", billing_views.release, name="billing-release"),
+    path("api/billing/settle", billing_views.settle, name="billing-settle-noslash"),
     path("api/billing/settle/", billing_views.settle, name="billing-settle"),
     path("api/writing/summary", writing_views.summary, name="writing-summary"),
     path("api/writing/reports", writing_views.reports, name="writing-reports"),

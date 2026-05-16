@@ -10,6 +10,8 @@ from .services import (
     detail,
     get_turn_audio_path,
     history,
+    latest_report,
+    p3_fallback,
     question_bank_sample,
     question_bank_summary,
     regenerate_turn_feedback,
@@ -17,6 +19,8 @@ from .services import (
     replay_queue,
     score_attempt,
     start_attempt,
+    tts_audio_path,
+    tts_fallback,
     upload_turn_audio,
     weak_items,
 )
@@ -226,3 +230,47 @@ def turn_transcript_regenerate_view(request, attempt_id: str, turn_id: str):
         msg = str(exc)
         status = 404 if "not found" in msg.lower() else 400
         return JsonResponse({"error": msg}, status=status)
+
+
+def _json_payload(request) -> dict:
+    import json as json_module
+    try:
+        payload = json_module.loads(request.body or "{}")
+    except json_module.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+@require_http_methods(["POST"])
+def p3_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    return JsonResponse(p3_fallback(_json_payload(request)))
+
+
+@require_http_methods(["POST"])
+def tts_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    return JsonResponse(tts_fallback(_json_payload(request)))
+
+
+@require_GET
+def tts_audio_view(request, role: str, filename: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    path = tts_audio_path(role, filename)
+    if not path:
+        return JsonResponse({"error": "Audio not available"}, status=404)
+    return FileResponse(open(path, "rb"), content_type="audio/mpeg")
+
+
+@require_GET
+def latest_report_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    return JsonResponse(latest_report(request.user))

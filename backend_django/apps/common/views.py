@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import connection
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.views.decorators.http import require_GET
 
 
@@ -24,3 +24,18 @@ def health(request):
             },
         }
     )
+
+
+def frontend_asset(request, asset_path: str = "index.html"):
+    normalized = (asset_path or "index.html").lstrip("/")
+    if normalized in {"", "."}:
+        normalized = "index.html"
+    allowed = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "styles.css": "text/css; charset=utf-8"}
+    if normalized not in allowed:
+        raise Http404("Static asset not found")
+    path = settings.BASE_DIR.parent / "web" / "static" / normalized
+    if not path.exists():
+        raise Http404("Static asset not found")
+    response = FileResponse(open(path, "rb"), content_type=allowed[normalized])
+    response["Cache-Control"] = "no-store"
+    return response

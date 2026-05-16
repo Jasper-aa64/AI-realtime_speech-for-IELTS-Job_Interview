@@ -170,6 +170,31 @@ class BillingApiTests(TestCase):
         self.assertEqual(settle.status_code, 200)
         self.assertEqual(settle.json()["status"], "settled")
 
+    def test_billing_api_supports_frontend_slashless_paths(self):
+        wallet = self.client.get("/api/billing/wallet")
+        self.assertEqual(wallet.status_code, 200)
+        self.assertEqual(wallet.json()["balance_u"], DEFAULT_INITIAL_GRANT_U)
+
+        recharge = self.client.post("/api/billing/recharge", data={"amount_rmb": 1}, content_type="application/json")
+        self.assertEqual(recharge.status_code, 200)
+        self.assertEqual(recharge.json()["amount_u"], 1_000_000)
+
+        reserve = self.client.post("/api/billing/reservations", data={"call_id": "slashless-release", "reserved_u": 500_000}, content_type="application/json")
+        self.assertEqual(reserve.status_code, 200)
+        self.assertEqual(reserve.json()["status"], WalletReservation.Status.RESERVED)
+
+        release = self.client.post("/api/billing/reservations/release", data={"call_id": "slashless-release"}, content_type="application/json")
+        self.assertEqual(release.status_code, 200)
+        self.assertEqual(release.json()["status"], WalletReservation.Status.RELEASED)
+
+        settle = self.client.post(
+            "/api/billing/settle",
+            data={"call_id": "slashless-settle", "usage": {"input_tokens": 1000, "output_tokens": 100}},
+            content_type="application/json",
+        )
+        self.assertEqual(settle.status_code, 200)
+        self.assertEqual(settle.json()["status"], "settled")
+
     def test_billing_api_requires_login(self):
         self.client.logout()
         response = self.client.get("/api/billing/wallet/")
