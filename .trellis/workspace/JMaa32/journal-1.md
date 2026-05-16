@@ -1081,3 +1081,36 @@ Fixed root cause: run_codex missing stdin flag, migrated 16 helper functions fro
 ### Next Steps
 
 - None - task complete
+
+
+## Session 29: Migrate complete build_turn_feedback logic
+
+**Date**: 2026-05-16
+**Task**: Migrate complete build_turn_feedback logic
+**Branch**: `main`
+
+### Summary
+
+Fixed Django feedback generation: added feedback_generation_status/backend/error fields, target_band fields, complete P1 answer generator, build_turn_feedback unified function, proper report payload sync
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a4ec4a2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
