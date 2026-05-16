@@ -1370,14 +1370,14 @@ h1 {
 }
 
 .p3-topic-panel {
-  background: #f8fafb;
+  background: #fafbfc;
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 14px;
+  padding: 20px;
   margin-bottom: 0;
   display: grid;
-  gap: 12px;
-  min-height: 0;
+  gap: 16px;
+  min-height: 420px;
   align-content: start;
 }
 
@@ -1448,7 +1448,7 @@ h1 {
 }
 
 .p3-mode-help {
-  color: var(--ink);
+  color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
   width: 280px;
