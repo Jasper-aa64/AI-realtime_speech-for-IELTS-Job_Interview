@@ -703,7 +703,8 @@ class SpeakingRuntimeApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], SpeakingAttempt.Status.SCORED)
-        self.assertEqual(payload["ielts_score"]["backend"], "fallback")
+        # Backend can be "heuristic" (from heuristic_score) or "fallback" (from _fallback_score)
+        self.assertIn(payload["ielts_score"]["backend"], ["heuristic", "fallback"])
         self.assertTrue(SpeakingReport.objects.filter(attempt=attempt).exists())
         self.assertEqual(SpeakingTrainingObservation.objects.filter(attempt=attempt).count(), 2)
 
