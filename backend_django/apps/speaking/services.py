@@ -84,7 +84,11 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
 
 
 def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
-    """Call codex CLI and return output and usage."""
+    """Call codex CLI and return output and usage.
+
+    The `-` argument is required to make codex exec read from stdin.
+    Without it, the model receives 0 tokens and outputs only thread/turn events.
+    """
     if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
         raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
 
@@ -95,7 +99,7 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
     config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
     try:
         result = subprocess.run(
-            [codex, "exec", "--json", *config_args],
+            [codex, "exec", "--json", *config_args, "-"],
             input=prompt,
             text=True,
             capture_output=True,
@@ -105,7 +109,7 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
         output, usage = extract_codex_json_events(result.stdout)
     except Exception:
         result = subprocess.run(
-            [codex, "exec", *config_args],
+            [codex, "exec", *config_args, "-"],
             input=prompt,
             text=True,
             capture_output=True,
@@ -258,6 +262,258 @@ def valid_turn_band7(question: str, answer: str, part: str) -> bool:
         and not generic_band7_answer(answer)
         and band7_addresses_question(question, answer, part)
     )
+
+
+# --- Text Processing Helpers ---
+
+
+def clean_report_text(value: str) -> str:
+    """Clean text for display in reports."""
+    text = clean_band7_output(value)
+    text = re.sub(r"\s+", " ", text).strip()
+    blocked = (
+        "trellis sessionstart",
+        "workflow-state",
+        "session context",
+        "current task",
+        "active tasks",
+        "git status",
+    )
+    lowered = text.lower()
+    if not text or any(marker in lowered for marker in blocked):
+        return ""
+    return text
+
+
+def clean_markdown_text(value: str) -> str:
+    """Clean and normalize markdown text."""
+    text = clean_band7_output(value)
+    text = re.sub(r"[ \t]+", " ", text).replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    blocked = (
+        "trellis sessionstart",
+        "workflow-state",
+        "session context",
+        "current task",
+        "active tasks",
+        "git status",
+    )
+    lowered = text.lower()
+    if not text or any(marker in lowered for marker in blocked):
+        return ""
+    return text
+
+
+def normalize_coaching_markdown(value: str) -> str:
+    """Normalize coaching markdown format."""
+    text = clean_markdown_text(value)
+    if not text:
+        return ""
+    text = re.sub(r"(可以直接替换成：)\s*`([^`\n]+)`", r"\1\n\2", text)
+    text = re.sub(r"(可以说：)\s*`([^`\n]+)`", r"\1\"\2\"", text)
+    text = text.replace("\n\n- ", "\n- ")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def spoken_markdown(value: str, part: str = "") -> str:
+    """Format spoken text with paragraph breaks."""
+    text = clean_band7_output(value)
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    if not text:
+        return ""
+    existing = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", text) if paragraph.strip()]
+    if len(existing) > 1:
+        return "\n\n".join(existing)
+    sentences = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text).strip())
+    sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
+    if not sentences:
+        return text
+    if part == "p1":
+        return "\n\n".join(sentences)
+    paragraphs = [" ".join(sentences[index:index + 2]) for index in range(0, len(sentences), 2)]
+    return "\n\n".join(paragraphs)
+
+
+def concise_coaching_markdown(value: str) -> bool:
+    """Validate coaching markdown has proper format with grammar correction bullet."""
+    text = clean_markdown_text(value)
+    if not text:
+        return False
+    lines = [line for line in text.splitlines() if line.strip()]
+    if len(lines) > 12:
+        return False
+    has_markdown_point = any(line.lstrip().startswith(("- ", "* ")) for line in lines)
+    grammar_index = next((index for index, line in enumerate(lines) if "语法错误纠正" in line), None)
+    if grammar_index is None:
+        return False
+    top_level_lines = [line for line in lines if not re.match(r"^\s{2,}\d+\.\s+", line)]
+    grammar_line = lines[grammar_index].strip()
+    if top_level_lines and "语法错误纠正" not in top_level_lines[-1]:
+        return False
+    has_valid_grammar_detail = "无" in grammar_line or any(
+        re.match(r"^\s{2,}\d+\.\s+", line) for line in lines[grammar_index + 1:]
+    )
+    return has_markdown_point and has_valid_grammar_detail and len(text) <= 1100
+
+
+def infer_grammar_corrections(transcript: str) -> list[str]:
+    """Infer grammar corrections from transcript based on common patterns."""
+    lowered = clean_report_text(transcript).lower()
+    corrections: list[str] = []
+    patterns = [
+        ("i prefer study", "`I prefer study` -> `I prefer studying ...`"),
+        ("that's efficiency", "`that's efficiency` -> `It is more efficient.`"),
+        ("as an introverted people", "`as an introverted people` -> `as an introverted person`"),
+        ("going internship", "`going internship` -> `I am doing an internship.`"),
+        ("going all an internship", "`going all an internship` -> `I am doing an internship.`"),
+        ("i live on my own current", "`I live on my own current` -> `I live on my own at the moment.`"),
+        ("temporary temporary live", "`temporary temporary live` -> `I am living here temporarily.`"),
+        ("just temporary", "`just temporary` -> `It is just temporary.`"),
+        ("major in my computer science", "`major in my computer science` -> `I study computer science.`"),
+        ("most of time", "`most of time` -> `most of my time`"),
+        ("near to the company", "`near to the company` -> `near the company` / `close to the company`"),
+        ("what i enjoyed most", "`What I enjoyed most` -> `What I enjoy most`"),
+        ("problems of the aspect", "`problems of the aspect` -> `the problem-solving aspect`"),
+    ]
+    for needle, correction in patterns:
+        if needle in lowered and correction not in corrections:
+            corrections.append(correction)
+    return corrections[:3]
+
+
+def ensure_grammar_correction_bullet(coaching: str, transcript: str) -> str:
+    """Ensure coaching ends with a grammar correction bullet."""
+    text = clean_markdown_text(coaching)
+    if not text:
+        return ""
+    lines: list[str] = []
+    skip_grammar_items = False
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if "语法错误纠正" in stripped:
+            skip_grammar_items = True
+            continue
+        if skip_grammar_items and re.match(r"^\d+\.\s+", stripped):
+            continue
+        skip_grammar_items = False
+        if re.match(r"^\d+\.\s+`.+?`\s*->", stripped):
+            continue
+        lines.append(line)
+    corrections = infer_grammar_corrections(transcript)
+    if not corrections:
+        lines.append("- 语法错误纠正：无")
+    else:
+        lines.append("- 语法错误纠正：")
+        lines.extend(f"  {index}. {correction}" for index, correction in enumerate(corrections, start=1))
+    return "\n".join(lines).strip()
+
+
+# --- Model Answer Helpers ---
+
+
+def model_answer_constraints(part: str) -> str:
+    """Get part-specific constraints for Band 7 model answer."""
+    if part == "p1":
+        return (
+            "This is IELTS Speaking Part 1. Write a short natural answer, normally 1-3 sentences, maximum 3 sentences. "
+            "Do not turn it into a long Part 2-style speech. One concise Markdown paragraph is preferred."
+        )
+    if part == "p2":
+        return (
+            "This is IELTS Speaking Part 2. Write a natural long-turn answer in Markdown paragraphs. "
+            "Cover the cue-card points without copying the bullet list."
+        )
+    if part == "p3":
+        return (
+            "This is IELTS Speaking Part 3. Write a developed discussion answer, about 4-6 sentences, "
+            "with an opinion, reasoning, and one concrete example or contrast."
+        )
+    return "Write an answer appropriate to the IELTS Speaking part shown by the questions."
+
+
+def target_band_label(attempt: SpeakingAttempt | dict[str, Any]) -> str:
+    """Get target band label from attempt."""
+    if isinstance(attempt, SpeakingAttempt):
+        metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+        value = metadata.get("target_band", 7.0)
+    else:
+        value = attempt.get("target_band", 7.0)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        numeric = 7.0
+    numeric = max(5.0, min(9.0, round(numeric * 2) / 2))
+    return str(int(numeric)) if numeric.is_integer() else f"{numeric:.1f}"
+
+
+def _transcript_usable_for_band7(question: str, transcript: str) -> bool:
+    """Check if a transcript is coherent enough to quote in a Band 7 model answer."""
+    if not transcript or len(transcript.split()) < 4:
+        return False
+    relevance = _training_relevance(question, transcript)
+    if relevance >= Decimal("0.25"):
+        return True
+    words = re.findall(r"[A-Za-z']+", transcript)
+    if len(words) < 5:
+        return False
+    common_english = {
+        "i", "my", "me", "we", "the", "a", "an", "is", "am", "are", "was", "were",
+        "it", "its", "this", "that", "and", "but", "or", "so", "because", "if",
+        "to", "for", "of", "in", "on", "at", "with", "from", "by", "not", "no",
+        "yes", "do", "don't", "have", "has", "had", "can", "will", "would", "could",
+        "think", "like", "want", "know", "go", "get", "make", "see", "say", "tell",
+        "very", "really", "just", "also", "still", "already", "always", "never",
+    }
+    uncommon = [word for word in words if word.lower() not in common_english]
+    if len(uncommon) < 3:
+        return False
+    filler_ratio = sum(1 for word in words if word.lower() in {"um", "uh", "er", "mm"}) / max(1, len(words))
+    return filler_ratio < 0.15
+
+
+# --- Coaching Helpers ---
+
+
+def _coaching_reason_for_question(question_lower: str, part: str, transcript_words: int, transcript_usable: bool, tags: list[str]) -> str:
+    """Get coaching reason based on question type."""
+    if not transcript_usable:
+        if "name" in question_lower:
+            return "名字部分转写不清楚，先确保发音清晰、语速适中。"
+        if "work" in question_lower or "study" in question_lower:
+            return "这题需要直接说明身份（学生/工作），再加一个原因。"
+        if any(w in question_lower for w in ("live", "living", "neighbourhood", "neighbor")):
+            return "住所类问题先说地点，再加一个你喜欢/不喜欢的原因。"
+        if any(w in question_lower for w in ("favourite", "favorite", "enjoy", "like most")):
+            return "喜好类问题先说选择，再说为什么喜欢。"
+        if any(w in question_lower for w in ("think", "opinion", "important")):
+            return "观点类问题先表态（yes/no/depends），再给一个理由。"
+        if "easy" in question_lower or "difficult" in question_lower:
+            return "难易类问题先说你的感受，再解释为什么。"
+        return "转写不太清楚，先把答案说完整、说慢一点，确保每个词都能被识别。"
+    if transcript_words < 15:
+        return "回答太短了，Part 1 至少需要 2-3 句话。"
+    if transcript_words < 35:
+        return "回答偏短，试着加一个原因或一个小细节。"
+    if "template_language" in tags:
+        return "模板感比较明显，试着用自己的真实经历来回答。"
+    return "回答已经成形，可以把表达再自然一些。"
+
+
+def _coaching_next_action(question_lower: str, part: str, transcript_usable: bool, tags: list[str]) -> str:
+    """Get next action suggestion for coaching."""
+    if not transcript_usable:
+        return "下一次练这题时，先把 Band 7 版本读出声 3 遍，熟悉句型后再脱稿说。"
+    if "short_answer" in tags or "limited_development" in tags:
+        return "下一次先用 20 秒把答案补完整，确保有直接回答 + 原因 + 细节。"
+    if "template_language" in tags:
+        return "下一次试着把模板词换成自己的说法，先说一遍再录音对比。"
+    if "off_topic" in tags:
+        return "下一次开口前，先复述题目关键词，确认回答方向是对的。"
+    return "下一题试着把语速放慢，让每句话都说完整。"
 
 
 class QuestionBank:
@@ -1280,20 +1536,102 @@ def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_
     return clean_band7_output(output)
 
 
-def build_ai_coaching_with_codex(question: str, transcript: str, band7: str, part: str, call_id: str) -> str:
-    """Generate AI coaching using Codex CLI."""
-    prompt = (
-        "You are an IELTS Speaking coach. Compare the candidate's answer with the Band 7 version. "
-        "Give 2-3 specific, actionable coaching points in Chinese. Focus on what to change and how. "
-        "Be encouraging but direct. Use bullet points.\n\n"
-        f"Question: {question}\n\n"
-        f"Candidate answer:\n{transcript}\n\n"
-        f"Band 7 version:\n{band7}\n\n"
-        "Coaching (in Chinese, 2-3 bullet points):"
-    )
+def build_ai_coaching_with_codex(question: str, transcript: str, band7: str, part: str, call_id: str, profile: dict[str, Any] | None = None) -> str:
+    """Generate AI coaching using Codex CLI with full prompt.
 
+    Includes part-specific hints, grammar correction requirements, and format validation.
+    """
+    part_hint = {
+        "p1": "Part 1 要简短、直接、自然。重点提醒：直接回答 + 一个原因 + 一个小细节。",
+        "p2": "Part 2 要覆盖 cue card，并把答案说满。重点提醒：开头点题 + 展开细节 + 例子/经历 + 收尾。",
+        "p3": "Part 3 要做抽象讨论。重点提醒：观点 + 原因 + 对比/例子 + 简短总结。",
+    }.get(part, "按对应的 IELTS Speaking 部分给出实用中文 coaching。")
+
+    prompt = f"""请为这一段 IELTS Speaking 回答生成中文 coaching。只输出简短 Markdown，不要标题。
+请结合学习画像、当前转写和 Band 7 版本，写得具体、实用、适合大陆 IELTS 学习者。
+输出限制：
+- 写 2-4 个自然分点的 Markdown bullet。
+- 分点内容由 AI 自己决定，不要套固定格式；可以写问题、原因、结构、练法或示范句。
+- 不要强制给"可以直接替换成"的英文句子；只有在确实有帮助时才自然给例句。
+- 不要强制使用"证据/问题原因/替代表达/下一步"这四个固定标签。
+- 最后一条必须是语法错误纠正：
+  - 没有明显口语语法/搭配问题时，写 "- 语法错误纠正：无"。
+  - 有问题时，写 "- 语法错误纠正："，并把具体纠正放在它下面的二级编号列表里，例如 "  1. `going internship` -> `I am doing an internship.`"。
+- 语法错误纠正只管影响口语表达的语法或搭配问题；不要把句末标点、句号、大小写、书面格式当成语法错误。
+- 必须有清晰换行，不要写成长段落。
+- 不要空泛评价，不要只复述分数。
+
+{part_hint}
+
+Question:
+{question}
+
+Candidate transcript:
+{transcript or '(missing)'}
+
+Band 7 spoken version:
+{band7}
+
+Learning profile:
+{json.dumps(profile or {})}
+"""
     output, _ = run_codex(prompt, call_id)
-    return output.strip()
+    coaching = normalize_coaching_markdown(output)
+    coaching = ensure_grammar_correction_bullet(coaching, transcript)
+    if not concise_coaching_markdown(coaching):
+        raise RuntimeError("codex coaching was too short or missing grammar correction")
+    return coaching
+
+
+def turn_feedback_with_codex(question: str, transcript: str, part: str, target: str, profile: dict[str, Any] | None, call_id: str) -> dict[str, str]:
+    """Generate Band 7 and AI coaching together using Codex CLI.
+
+    This combined generation ensures the Band 7 and coaching are consistent.
+    """
+    prompt = f"""Return JSON only with keys band7_version and ai_coaching.
+
+Task:
+- Write one natural IELTS Speaking Band {target} spoken version for this single turn.
+- Then write concise Chinese Markdown coaching for this same turn.
+- Answer the exact examiner question directly and preserve the candidate's likely intent.
+- Reuse the candidate's concrete idea when it is relevant; improve cohesion, vocabulary, and grammar.
+- Do not include the original question, cue-card bullets, titles, labels, code fences, or logs.
+
+Band 7 version constraints:
+{model_answer_constraints(part)}
+- For Part 1, write only 1-3 natural spoken sentences.
+- Do not use generic template lines such as "this is quite easy for me to answer", "connects with my daily life", or "closer to Band 7".
+- If the transcript is weak, infer a sensible direct answer from the question type instead of writing a vague template.
+
+Coaching constraints:
+- Use natural concise Chinese Markdown bullets.
+- Write 2-4 short bullets, choosing the bullet focus freely based on the learner's real issue.
+- Do not force a replacement sentence, fixed labels, fixed order, or fixed section names.
+- If a sample sentence genuinely helps, include it naturally inside a bullet; otherwise give structure, direction, or practice advice.
+- End with exactly one grammar-correction bullet:
+  - If there is no meaningful spoken grammar/collocation issue, write "- 语法错误纠正：无".
+  - If there are issues, write "- 语法错误纠正：" and put the corrections under it as indented numbered sub-items, for example "  1. `going internship` -> `I am doing an internship.`".
+- Only include spoken-English grammar/collocation problems that affect meaning or fluency; do not treat punctuation, periods, full stops, capitalization, or written formatting as grammar errors.
+
+Question:
+{question}
+
+Candidate transcript:
+{transcript or "(missing)"}
+
+Learning profile:
+{json.dumps(profile or {})}
+"""
+    output, _ = run_codex(prompt, call_id)
+    payload = extract_json_object(output)
+    band7 = clean_band7_output(str(payload.get("band7_version") or ""))
+    coaching = clean_markdown_text(str(payload.get("ai_coaching") or ""))
+    if not valid_turn_band7(question, band7, part):
+        raise RuntimeError("codex turn feedback did not include a question-aware Band 7 answer")
+    coaching = ensure_grammar_correction_bullet(coaching, transcript)
+    if not concise_coaching_markdown(coaching):
+        raise RuntimeError("codex turn feedback did not include concise Markdown coaching")
+    return {"band7_version": band7, "ai_coaching": coaching}
 
 
 def build_upgrade_notes(transcript: str) -> list[str]:

@@ -20,7 +20,7 @@ class SmokeAuthenticationTests(TestCase):
         # Register (returns 201 Created)
         response = client.post(
             "/api/accounts/register/",
-            {"username": "smoke_user", "password": "test_password_123", "email": "smoke@test.com"},
+            {"username": "smoke_user", "password": "test_password_123", "password_confirm": "test_password_123", "email": "smoke@test.com"},
             content_type="application/json",
         )
         self.assertIn(response.status_code, [200, 201])
