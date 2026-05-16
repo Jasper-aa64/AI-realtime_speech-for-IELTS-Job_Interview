@@ -973,3 +973,37 @@ Fixed writing textarea infinite expansion that was squeezing AI score panel belo
 ### Next Steps
 
 - None - regression fixed
+
+
+## Session 29: Remove incorrect browser TTS fallback from speaking turns
+
+**Date**: 2026-05-16
+**Task**: Remove incorrect browser TTS fallback from speaking turns
+**Branch**: `main`
+
+### Summary
+
+Removed browser speechSynthesis fallback mistakenly added in 6ef8976. Backend audio_url: None is normal pending state, not failure - AI worker generates audio asynchronously. Restored original behavior: only show server audio when audio_url exists.
+
+### Main Changes
+
+- `web/static/app.js`: Restored renderExaminerAudio() to 6ef8976^ logic, removed browser TTS else-if branch
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `529cb0a` | fix: remove incorrect browser TTS fallback from speaking turns |
+
+### Testing
+
+- [OK] JS syntax check: passed
+- [OK] Full test suite: 147/147 passed (28.359s)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - TTS logic restored to original
