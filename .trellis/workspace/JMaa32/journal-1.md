@@ -709,3 +709,36 @@ Add smoke tests for Django runtime verification covering auth, speaking, trainin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 22: Refine account settings and writing check-in layout
+
+**Date**: 2026-05-16
+**Task**: Refine account settings and writing check-in layout
+**Branch**: `main`
+
+### Summary
+
+Separated account login/profile controls into a dedicated account page, restored Settings to wallet and weak training records, and stretched the writing check-in card with top calendar and bottom save/score controls.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a33dc10` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

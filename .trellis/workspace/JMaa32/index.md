@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
+- **Total Sessions**: 22
 - **Last Active**: 2026-05-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~711 | Active |
+| `journal-1.md` | ~744 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 22 | 2026-05-16 | Refine account settings and writing check-in layout | `a33dc10` | `main` |
 | 21 | 2026-05-16 | Django runtime smoke verification | `83fddcc` | `main` |
 | 20 | 2026-05-16 | Finalize Django-only IELTS runtime cutover | `eee6725` | `main` |
 | 19 | 2026-05-16 | Complete Django runtime migration | `b380a16` | `main` |
