@@ -12,6 +12,8 @@ from .services import (
     history,
     question_bank_sample,
     question_bank_summary,
+    regenerate_turn_feedback,
+    regenerate_turn_transcript,
     replay_queue,
     score_attempt,
     start_attempt,
@@ -192,6 +194,34 @@ def attempt_score_view(request, attempt_id: str):
         payload = {}
     try:
         return JsonResponse(score_attempt(request.user, attempt_id, payload))
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)
+
+
+@require_http_methods(["POST"])
+def turn_feedback_regenerate_view(request, attempt_id: str, turn_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        result = regenerate_turn_feedback(request.user, attempt_id, turn_id)
+        return JsonResponse(result)
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)
+
+
+@require_http_methods(["POST"])
+def turn_transcript_regenerate_view(request, attempt_id: str, turn_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        result = regenerate_turn_transcript(request.user, attempt_id, turn_id)
+        return JsonResponse(result)
     except SpeakingError as exc:
         msg = str(exc)
         status = 404 if "not found" in msg.lower() else 400

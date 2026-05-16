@@ -711,3 +711,109 @@ class SpeakingRuntimeApiTests(TestCase):
         detail = self.client.get(f"/api/history/{attempt.attempt_id}")
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.json()["id"], attempt.attempt_id)
+
+
+class RegenerateApiTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = get_user_model().objects.create_user(username="regen-user", password="test-pass")
+        self.client.force_login(self.user)
+
+    def create_scored_attempt(self):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="regen-attempt-1",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.SCORED,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=1,
+            part="p1",
+            question="What is your full name?",
+            transcript_raw="My name is Sam.",
+            transcript_cleaned="My name is Sam.",
+            audio_path="audio/test.webm",
+            metadata={"status": "completed"},
+        )
+        SpeakingReport.objects.create(
+            user=self.user,
+            attempt=attempt,
+            overall_band=6.0,
+            fluency_coherence=6.0,
+            lexical_resource=6.0,
+            grammar_range_accuracy=6.0,
+            report_payload={
+                "id": attempt.attempt_id,
+                "status": "scored",
+                "turns": [{"id": "t1", "status": "completed"}],
+            },
+        )
+        return attempt, turn
+
+    def test_feedback_regenerate_requires_login(self):
+        self.client.logout()
+        attempt, turn = self.create_scored_attempt()
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/{turn.turn_id}/feedback/regenerate")
+        self.assertEqual(response.status_code, 401)
+
+    def test_feedback_regenerate_returns_ok(self):
+        attempt, turn = self.create_scored_attempt()
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/{turn.turn_id}/feedback/regenerate")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload.get("ok"))
+        self.assertIn("turn", payload)
+        self.assertIn("band7_version", payload["turn"])
+
+    def test_feedback_regenerate_invalid_turn_returns_404(self):
+        attempt, _turn = self.create_scored_attempt()
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/nonexistent/feedback/regenerate")
+        self.assertEqual(response.status_code, 404)
+
+    def test_transcript_regenerate_requires_login(self):
+        self.client.logout()
+        attempt, turn = self.create_scored_attempt()
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/{turn.turn_id}/transcript/regenerate")
+        self.assertEqual(response.status_code, 401)
+
+    def test_transcript_regenerate_returns_ok(self):
+        attempt, turn = self.create_scored_attempt()
+        from pathlib import Path
+        from django.conf import settings
+        media_root = Path(settings.MEDIA_ROOT)
+        audio_dir = media_root / "audio"
+        audio_dir.mkdir(parents=True, exist_ok=True)
+        audio_path = audio_dir / "test.webm"
+        audio_path.write_bytes(b"fake audio content")
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/{turn.turn_id}/transcript/regenerate")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload.get("ok"))
+        self.assertIn("turn", payload)
+
+    def test_transcript_regenerate_no_audio_returns_400(self):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="regen-no-audio",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            status=SpeakingAttempt.Status.SCORED,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=1,
+            part="p1",
+            question="Test question",
+            transcript_raw="Test transcript",
+            metadata={"status": "completed"},
+        )
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/{turn.turn_id}/transcript/regenerate")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("没有可用录音文件", response.json().get("error", ""))

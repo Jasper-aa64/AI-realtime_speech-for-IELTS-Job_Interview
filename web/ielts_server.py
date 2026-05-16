@@ -3,6 +3,11 @@
 
 The browser receives only JSON contracts. Audio, reports, CLI integrations, and
 TTS/scoring credentials stay on the server side.
+
+DEPRECATED: This server is no longer the primary runtime backend.
+All API endpoints have been migrated to Django (backend_django/).
+This file is retained for reference and fallback purposes only.
+See backend_django/README.md for the current runtime setup.
 """
 
 from __future__ import annotations

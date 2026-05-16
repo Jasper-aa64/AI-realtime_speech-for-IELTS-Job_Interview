@@ -1115,3 +1115,130 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
     report.report_payload = runtime
     report.save(update_fields=["report_payload", "updated_at"])
     return runtime
+
+
+# --- Regenerate ---
+
+
+def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
+    """Regenerate AI feedback for a completed turn.
+
+    Args:
+        user: The authenticated user
+        attempt_id: The attempt ID
+        turn_id: The turn ID
+
+    Returns:
+        dict with 'ok', 'attempt', 'turn' keys
+
+    Raises:
+        SpeakingError: If validation fails or turn not found
+    """
+    attempt = _load_attempt_for_user(user, attempt_id)
+    turn = SpeakingTurn.objects.filter(attempt=attempt, turn_id=turn_id).first()
+    if not turn:
+        raise SpeakingError("Turn not found")
+    if _turn_status(turn) != "completed":
+        raise SpeakingError("Only completed turns can regenerate AI feedback.")
+
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    metadata["band7_version"] = _band7_fallback(turn)
+    metadata["band7_markdown"] = metadata["band7_version"]
+    metadata["upgrade_notes"] = ["Give a direct answer, add a reason, then add one concrete example."]
+    metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
+    metadata["feedback_regenerated_at"] = timezone.now().isoformat()
+    turn.metadata = metadata
+    turn.save(update_fields=["metadata"])
+
+    attempt.updated_at = timezone.now()
+    attempt.save(update_fields=["updated_at"])
+
+    if hasattr(attempt, "report") and attempt.report:
+        report = attempt.report
+        payload = report.report_payload if isinstance(report.report_payload, dict) else {}
+        turns_payload = payload.get("turns", [])
+        for i, t in enumerate(turns_payload):
+            if t.get("id") == turn_id:
+                turns_payload[i]["band7_version"] = metadata["band7_version"]
+                turns_payload[i]["band7_markdown"] = metadata["band7_markdown"]
+                turns_payload[i]["upgrade_notes"] = metadata["upgrade_notes"]
+                turns_payload[i]["ai_coaching"] = metadata["ai_coaching"]
+        report.report_payload = payload
+        report.save(update_fields=["report_payload", "updated_at"])
+
+    return {
+        "ok": True,
+        "attempt": _runtime_attempt_payload(attempt),
+        "turn": _turn_payload(turn),
+    }
+
+
+def regenerate_turn_transcript(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
+    """Re-transcribe audio and regenerate feedback for a turn.
+
+    Since we don't have real Azure Speech integration, this fallback
+    reuses existing transcript and regenerates feedback.
+
+    Args:
+        user: The authenticated user
+        attempt_id: The attempt ID
+        turn_id: The turn ID
+
+    Returns:
+        dict with 'ok', 'attempt', 'turn' keys
+
+    Raises:
+        SpeakingError: If validation fails or turn/audio not found
+    """
+    attempt = _load_attempt_for_user(user, attempt_id)
+    turn = SpeakingTurn.objects.filter(attempt=attempt, turn_id=turn_id).first()
+    if not turn:
+        raise SpeakingError("Turn not found")
+    if _turn_status(turn) != "completed":
+        raise SpeakingError("Only completed turns can regenerate transcript.")
+
+    if not turn.audio_path:
+        raise SpeakingError("重新转写失败：这题没有可用录音文件。")
+
+    audio_path = Path(settings.MEDIA_ROOT) / turn.audio_path
+    if not audio_path.exists():
+        raise SpeakingError("重新转写失败：这题没有可用录音文件。")
+
+    transcript = turn.transcript_cleaned or turn.transcript_raw
+    if not transcript:
+        transcript = "Fallback transcript: audio file exists but no transcript captured."
+
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    metadata["transcript_status"] = "captured"
+    metadata["transcript_source"] = "fallback_retranscribe"
+    metadata["band7_version"] = _band7_fallback(turn)
+    metadata["band7_markdown"] = metadata["band7_version"]
+    metadata["upgrade_notes"] = ["Give a direct answer, add a reason, then add one concrete example."]
+    metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
+    metadata["transcript_regenerated_at"] = timezone.now().isoformat()
+    turn.metadata = metadata
+    turn.save(update_fields=["metadata"])
+
+    attempt.updated_at = timezone.now()
+    attempt.save(update_fields=["updated_at"])
+
+    if hasattr(attempt, "report") and attempt.report:
+        report = attempt.report
+        payload = report.report_payload if isinstance(report.report_payload, dict) else {}
+        turns_payload = payload.get("turns", [])
+        for i, t in enumerate(turns_payload):
+            if t.get("id") == turn_id:
+                turns_payload[i]["transcript_status"] = "captured"
+                turns_payload[i]["transcript_source"] = "fallback_retranscribe"
+                turns_payload[i]["band7_version"] = metadata["band7_version"]
+                turns_payload[i]["band7_markdown"] = metadata["band7_markdown"]
+                turns_payload[i]["upgrade_notes"] = metadata["upgrade_notes"]
+                turns_payload[i]["ai_coaching"] = metadata["ai_coaching"]
+        report.report_payload = payload
+        report.save(update_fields=["report_payload", "updated_at"])
+
+    return {
+        "ok": True,
+        "attempt": _runtime_attempt_payload(attempt),
+        "turn": _turn_payload(turn),
+    }
