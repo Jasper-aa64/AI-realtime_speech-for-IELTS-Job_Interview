@@ -1362,7 +1362,8 @@ function autoResizeWritingAnswer() {
   const answer = $("writingAnswer");
   if (!answer) return;
   answer.style.height = "auto";
-  answer.style.height = `${Math.max(answer.scrollHeight, 500)}px`;
+  const targetHeight = Math.min(Math.max(answer.scrollHeight, 500), 800);
+  answer.style.height = `${targetHeight}px`;
 }
 
 function updateWritingWordCount() {
