@@ -1007,3 +1007,44 @@ Removed browser speechSynthesis fallback mistakenly added in 6ef8976. Backend au
 ### Next Steps
 
 - None - TTS logic restored to original
+
+
+## Session 30: Restore server-side examiner TTS in Django runtime
+
+**Date**: 2026-05-16
+**Task**: Restore server-side examiner TTS in Django runtime
+**Branch**: `main`
+
+### Summary
+
+Migrated volcengine_tts() and ensure_examiner_tts() from legacy server to Django. Modified start_attempt() to generate examiner TTS for all turns after creation and store in turn metadata. TTS audio files cached in media/tts/examiner/ with deterministic cache keys. Environment variable IELTS_WEB_DISABLE_VOLCENGINE_TTS=1 disables generation for testing.
+
+### Main Changes
+
+- `backend_django/apps/speaking/services.py`: 
+  * Added volcengine_tts() function with VolcEngine API call, caching, and fallback logic
+  * Added ensure_examiner_tts() to generate TTS for turn examiner text
+  * Modified start_attempt() to call ensure_examiner_tts() for all turns and save to metadata
+  * Added _safe_slug() helper for filename sanitization
+  * Added imports: base64, os, re, urllib.error, urllib.request
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e93a181` | feat: restore server-side examiner TTS in Django runtime |
+
+### Testing
+
+- [OK] JS syntax check: passed
+- [OK] Speaking tests: 61/61 passed (59.552s)
+- [OK] Full test suite: 147/147 passed (61.104s)
+- [OK] Django system check: no issues
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - server-side TTS fully restored
