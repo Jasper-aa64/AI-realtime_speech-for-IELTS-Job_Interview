@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 23
+- **Total Sessions**: 24
 - **Last Active**: 2026-05-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~777 | Active |
+| `journal-1.md` | ~810 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 24 | 2026-05-16 | Rebuild account auth experience | `7c797ee` | `main` |
 | 23 | 2026-05-16 | UI: Part 3 practice box spacing | `f482a85` | `main` |
 | 22 | 2026-05-16 | Refine account settings and writing check-in layout | `a33dc10` | `main` |
 | 21 | 2026-05-16 | Django runtime smoke verification | `83fddcc` | `main` |

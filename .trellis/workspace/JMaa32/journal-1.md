@@ -775,3 +775,36 @@ Reduced padding and gap in p3-topic-panel, smaller font for mode help text
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: Rebuild account auth experience
+
+**Date**: 2026-05-16
+**Task**: Rebuild account auth experience
+**Branch**: `main`
+
+### Summary
+
+Migrated from toy account card to dedicated auth surfaces (login/register/forgot/profile/security). Hardened backend APIs: removed csrf_exempt, added CSRF endpoint, unified error structure, password validation, throttling. All tests pass (147/147).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7c797ee` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
