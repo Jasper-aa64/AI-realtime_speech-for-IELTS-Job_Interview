@@ -905,3 +905,71 @@ Extended WritingPrompt with image_url and migration; rendered Task1 prompt image
 ### Next Steps
 
 - None - task complete
+
+
+## Session 28: Fix writing AI analysis regression after task1 image prompts
+
+**Date**: 2026-05-16
+**Task**: Add Writing Task1 image prompts and fix examiner TTS fallback
+**Branch**: `main`
+
+### Summary
+
+Extended WritingPrompt with image_url and migration; rendered Task1 prompt images in writing surface with responsive fallback; made writing textarea auto-expand without inner scroll; fixed speaking examiner prompt fallback to browser TTS only when server audio_url is missing; full validation suite passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6ef8976` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+**Date**: 2026-05-16
+**Task**: Fix writing AI analysis regression after task1 image prompts
+**Branch**: `main`
+
+### Summary
+
+Fixed writing textarea infinite expansion that was squeezing AI score panel below viewport. Capped autoResizeWritingAnswer() at 800px max height and restored overflow-y auto. Preserved Task1 image rendering and all AI analysis/scoring functionality.
+
+### Main Changes
+
+- `web/static/styles.css`: Added max-height 800px to .writing-answer, changed overflow-y from hidden to auto
+- `web/static/app.js`: Capped autoResizeWritingAnswer() target height at min(max(scrollHeight, 500), 800)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9200651` | fix: cap writing textarea max height to prevent squeezing AI panel |
+
+### Testing
+
+- [OK] JS syntax check: passed
+- [OK] Writing tests: 15/15 passed (3.493s)
+- [OK] Full test suite: 147/147 passed (34.504s)
+- [OK] Django system check: no issues
+- [OK] Migrations check: no changes detected
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - regression fixed
