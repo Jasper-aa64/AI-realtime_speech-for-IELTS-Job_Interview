@@ -70,6 +70,7 @@ DJANGO_BACKEND_URL = os.environ.get("IELTS_DJANGO_BACKEND_URL", "http://127.0.0.
 DJANGO_PROXY_TIMEOUT_SECONDS = float(os.environ.get("IELTS_DJANGO_PROXY_TIMEOUT", "2"))
 DJANGO_PROXY_WRITE_FIRST = os.environ.get("IELTS_DJANGO_PROXY_WRITE_FIRST", "1") != "0"
 DJANGO_FORCE_WRITING_PROXY = os.environ.get("IELTS_DJANGO_FORCE_WRITING_PROXY", "0") == "1"
+DJANGO_PROXY_SPEAKING_RUNTIME = os.environ.get("IELTS_DJANGO_PROXY_SPEAKING_RUNTIME", "0") == "1"
 WRITING_TASK_TYPES = {"task1_academic", "task2"}
 WRITING_TASK_LABELS = {
     "task1_academic": "Task 1 Academic",
@@ -4014,6 +4015,20 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if path.startswith("/api/ai/tasks/"):
             cookie = self.headers.get("Cookie", "")
             return "sessionid=" in cookie
+        if DJANGO_PROXY_SPEAKING_RUNTIME and self.is_django_speaking_runtime_path(path):
+            cookie = self.headers.get("Cookie", "")
+            return "sessionid=" in cookie
+        return False
+
+    def is_django_speaking_runtime_path(self, path: str) -> bool:
+        if path == "/api/attempts/start":
+            return True
+        if re.fullmatch(r"/api/attempts/[^/]+/turns/[^/]+/(audio|complete)", path):
+            return True
+        if re.fullmatch(r"/api/attempts/[^/]+/(score|abort)", path):
+            return True
+        if re.fullmatch(r"/api/audio/[^/]+/[^/]+/candidate", path):
+            return True
         return False
 
     def try_proxy_django(self, method: str, path_with_query: str, payload: dict[str, Any] | None = None) -> bool:
@@ -4046,6 +4061,33 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             if path.startswith("/api/accounts/"):
                 self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Django backend unavailable: {error}")
                 return True
+            return False
+
+    def try_proxy_django_raw(self, method: str, path_with_query: str, body: bytes, content_type: str | None = None) -> bool:
+        path = urlparse(path_with_query).path
+        if not self.should_proxy_django_path(path):
+            return False
+        headers = {"Accept": "application/json"}
+        if content_type:
+            headers["Content-Type"] = content_type
+        cookie = self.headers.get("Cookie")
+        if cookie:
+            headers["Cookie"] = cookie
+        request = urllib.request.Request(
+            f"{DJANGO_BACKEND_URL}{path_with_query}",
+            data=body,
+            headers=headers,
+            method=method,
+        )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            with opener.open(request, timeout=DJANGO_PROXY_TIMEOUT_SECONDS) as response:
+                self.forward_django_response(response.status, response.headers, response.read())
+                return True
+        except urllib.error.HTTPError as error:
+            self.forward_django_response(error.code, error.headers, error.read())
+            return True
+        except (urllib.error.URLError, TimeoutError, OSError):
             return False
 
     def forward_django_response(self, status: int, headers: Any, body: bytes) -> None:
@@ -4154,6 +4196,16 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             path = urlparse(self.path).path
             turn_audio = re.fullmatch(r"/api/attempts/([^/]+)/turns/([^/]+)/audio", path)
             if turn_audio:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                raw_body = self.rfile.read(content_length) if content_length > 0 else b""
+                if self.try_proxy_django_raw(
+                    "POST",
+                    self.path,
+                    raw_body,
+                    self.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip(),
+                ):
+                    return
+                self._raw_body_override = raw_body
                 self.handle_turn_audio_upload(turn_audio.group(1), turn_audio.group(2))
                 return
             legacy_audio = re.fullmatch(r"/api/attempts/([^/]+)/audio", path)
@@ -4375,8 +4427,11 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if extension == ".weba":
             extension = ".webm"
         audio_path = self.state.audio_dir / f"{safe_slug(attempt_id)}_{safe_slug(turn_id)}{extension}"
+        raw_body = getattr(self, "_raw_body_override", None)
+        if raw_body is not None:
+            delattr(self, "_raw_body_override")
         with audio_path.open("wb") as handle:
-            handle.write(self.rfile.read(content_length))
+            handle.write(raw_body if raw_body is not None else self.rfile.read(content_length))
         turn["audio"] = {
             "path": str(audio_path),
             "content_type": content_type,

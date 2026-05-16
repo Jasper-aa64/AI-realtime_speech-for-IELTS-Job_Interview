@@ -216,6 +216,158 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("sessionid=fake-session", writing_payload["cookie"])
         self.assertEqual(seen_paths, ["/api/writing/entries/entry-1/score-task", "/api/ai/tasks/aitask-1/cancel/"])
 
+    def test_speaking_runtime_proxy_to_django_with_flag_and_session(self):
+        seen = []
+
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_POST(self):
+                size = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(size) if size else b"{}"
+                seen.append((self.path, self.headers.get("Cookie", ""), self.headers.get("Content-Type", ""), raw))
+                body = json.dumps({"path": self.path, "cookie": self.headers.get("Cookie", "")}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        try:
+            with (
+                mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url),
+                mock.patch.object(ielts_server, "DJANGO_PROXY_SPEAKING_RUNTIME", True),
+            ):
+                status, _headers, payload = self.post_response(
+                    "/api/attempts/start",
+                    {"mode": "p1"},
+                    headers={"Cookie": "sessionid=fake-session"},
+                )
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["path"], "/api/attempts/start")
+        self.assertIn("sessionid=fake-session", payload["cookie"])
+        self.assertEqual(seen[0][0], "/api/attempts/start")
+
+    def test_speaking_runtime_raw_audio_proxy_preserves_body_and_content_type(self):
+        seen = []
+
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_POST(self):
+                size = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(size)
+                seen.append({"path": self.path, "content_type": self.headers.get("Content-Type", ""), "raw": raw})
+                body = json.dumps({"ok": True, "bytes": len(raw)}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        audio = b"browser audio bytes"
+        try:
+            with (
+                mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url),
+                mock.patch.object(ielts_server, "DJANGO_PROXY_SPEAKING_RUNTIME", True),
+            ):
+                request = urllib.request.Request(
+                    self.base_url + "/api/attempts/a1/turns/t1/audio",
+                    data=audio,
+                    headers={"Content-Type": "audio/webm", "Cookie": "sessionid=fake-session"},
+                    method="POST",
+                )
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                with opener.open(request, timeout=5) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+        self.assertEqual(payload["bytes"], len(audio))
+        self.assertEqual(seen, [{"path": "/api/attempts/a1/turns/t1/audio", "content_type": "audio/webm", "raw": audio}])
+
+    def test_speaking_runtime_without_session_stays_on_old_server(self):
+        seen_paths = []
+
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_POST(self):
+                seen_paths.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        try:
+            with (
+                mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url),
+                mock.patch.object(ielts_server, "DJANGO_PROXY_SPEAKING_RUNTIME", True),
+            ):
+                attempt = self.post_json("/api/attempts/start", {"mode": "p1"})
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+        self.assertEqual(attempt["status"], "started")
+        self.assertEqual(seen_paths, [])
+
+    def test_speaking_runtime_falls_back_when_django_unavailable(self):
+        with (
+            mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", "http://127.0.0.1:1"),
+            mock.patch.object(ielts_server, "DJANGO_PROXY_SPEAKING_RUNTIME", True),
+        ):
+            attempt = self.post_response(
+                "/api/attempts/start",
+                {"mode": "p1"},
+                headers={"Cookie": "sessionid=fake-session"},
+            )[2]
+        self.assertEqual(attempt["status"], "started")
+        self.assertIn("turns", attempt)
+
+    def test_provider_heavy_paths_do_not_proxy_with_speaking_runtime_flag(self):
+        seen_paths = []
+
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_POST(self):
+                seen_paths.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        try:
+            with (
+                mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url),
+                mock.patch.object(ielts_server, "DJANGO_PROXY_SPEAKING_RUNTIME", True),
+            ):
+                result = self.post_json("/api/p3/questions", {"theme": "technology"})
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+        self.assertIn("questions", result)
+        self.assertEqual(seen_paths, [])
+
     def test_ai_cancel_without_session_stays_on_old_server(self):
         seen_paths = []
 
