@@ -3192,36 +3192,36 @@ body.font-popular .record-control.recording {
 }
 
 .account-dashboard {
-  width: min(1120px, 100%);
+  width: min(760px, 100%);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(320px, 0.92fr) minmax(360px, 1.08fr);
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 14px;
   align-items: start;
 }
 
-.account-primary-column,
-.account-side-column {
+.account-lower-grid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  min-width: 0;
 }
 
-.account-profile-card,
-.account-security-summary {
+.account-profile-card {
   background: #fff;
 }
 
-.account-side-column .settings-card {
+.account-lower-grid .settings-card,
+.account-replay-card {
   min-height: 0;
 }
 
-.account-side-column .settings-list {
+.account-lower-grid .settings-list,
+.account-replay-card .settings-list {
   max-height: 230px;
 }
 
 .account-profile-card .settings-name-fields {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
 }
 
@@ -3402,6 +3402,10 @@ body.font-popular .record-control.recording {
     gap: 22px;
   }
   .account-dashboard {
+    grid-template-columns: 1fr;
+  }
+  .account-lower-grid,
+  .account-profile-card .settings-name-fields {
     grid-template-columns: 1fr;
   }
   .auth-copy h1 {

@@ -372,38 +372,31 @@
 
         <section id="accountProfilePanel" class="panel hidden auth-panel">
           <div class="account-dashboard">
-            <section class="account-primary-column">
-              <article class="settings-card account-profile-card">
-                <div class="settings-card-head">
-                  <div>
-                    <h2>Account profile</h2>
-                    <p id="accountProfileDetails" class="muted">Sign in to sync profile and security settings.</p>
-                  </div>
-                  <button type="button" id="profileLogoutBtn" class="ghost">Sign out</button>
+            <article class="settings-card auth-card account-profile-card">
+              <div class="settings-card-head">
+                <div>
+                  <h2>Account profile</h2>
+                  <p id="accountProfileDetails" class="muted">Sign in to sync profile and security settings.</p>
                 </div>
-                <div id="accountProfileStatus" class="settings-metric"></div>
-                <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
-                  <label>
-                    <span>Full name</span>
-                    <input id="fullNameInput" value="LiHua" autocomplete="name">
-                  </label>
-                  <label>
-                    <span>English name</span>
-                    <input id="englishNameInput" value="Jasper" autocomplete="nickname">
-                  </label>
-                </div>
-                <div class="account-action-row">
-                  <button type="button" id="profileSaveBtn" class="ghost">Save profile</button>
-                  <button type="button" id="profileSecurityBtn" class="ghost" onclick="window.switchView && window.switchView('accountSecurity')">Security</button>
-                </div>
-              </article>
-              <article class="settings-card account-security-summary">
-                <h2>Security</h2>
-                <p class="muted">Change your password and keep account access under your control.</p>
-                <button type="button" class="ghost" onclick="window.switchView && window.switchView('accountSecurity')">Open security</button>
-              </article>
-            </section>
-            <aside class="account-side-column">
+                <button type="button" id="profileLogoutBtn" class="ghost">Sign out</button>
+              </div>
+              <div id="accountProfileStatus" class="settings-metric"></div>
+              <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
+                <label>
+                  <span>Full name</span>
+                  <input id="fullNameInput" value="LiHua" autocomplete="name">
+                </label>
+                <label>
+                  <span>English name</span>
+                  <input id="englishNameInput" value="Jasper" autocomplete="nickname">
+                </label>
+              </div>
+              <div class="account-action-row">
+                <button type="button" id="profileSaveBtn" class="ghost">Save profile</button>
+                <button type="button" id="profileSecurityBtn" class="ghost" onclick="window.switchView && window.switchView('accountSecurity')">Security</button>
+              </div>
+            </article>
+            <div class="account-lower-grid">
               <article class="settings-card">
                 <h2>钱包</h2>
                 <div class="wallet-header">
@@ -417,12 +410,12 @@
                 <div id="weakTrainingStatus" class="settings-metric">加载中...</div>
                 <div id="weakTrainingList" class="settings-list"></div>
               </article>
-              <article class="settings-card">
-                <h2>复习队列</h2>
-                <div id="replayQueueStatus" class="settings-metric">加载中...</div>
-                <div id="replayQueueList" class="settings-list"></div>
-              </article>
-            </aside>
+            </div>
+            <article class="settings-card account-replay-card">
+              <h2>复习队列</h2>
+              <div id="replayQueueStatus" class="settings-metric">加载中...</div>
+              <div id="replayQueueList" class="settings-list"></div>
+            </article>
           </div>
         </section>
 
