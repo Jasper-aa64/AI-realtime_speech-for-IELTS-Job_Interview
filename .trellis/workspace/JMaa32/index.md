@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 31
-- **Last Active**: 2026-05-16
+- **Total Sessions**: 32
+- **Last Active**: 2026-05-17
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1184 | Active |
+| `journal-1.md` | ~1215 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 32 | 2026-05-17 | Fix speaking AI feedback fallback policy | - | `main` |
 | 31 | 2026-05-16 | Fix Codex JSON parsing with Trellis injection | `742bd62` | `main` |
 | 30 | 2026-05-16 | Complete Django speaking migration from old server | `4cad49d`, `ea7b415`, `acf05da` | `main` |
 | 29 | 2026-05-16 | Migrate complete build_turn_feedback logic | `a4ec4a2` | `main` |

@@ -1182,3 +1182,34 @@ Fixed root cause: extract_json_object() greedy regex failed when Trellis injecti
 ### Next Steps
 
 - None - task complete
+
+
+## Session 32: Fix speaking AI feedback fallback policy
+
+**Date**: 2026-05-17
+**Task**: Fix speaking AI feedback fallback policy
+**Branch**: `main`
+
+### Summary
+
+Relaxed Speaking AI feedback validation so Codex owns Band 7 rewrites and coaching structure, removed brittle question-aware/vocabulary heuristics and hardcoded Band 7 fallbacks, added Codex-backed P1 work-study follow-up generation, documented the policy, regenerated bad attempt 0ed733ee0e6e46a2931796c3fdb422af, and verified tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
