@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Verify AI coaching behavior follows product convention"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify tests and fallback contracts"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify expected AI failures do not leak or masquerade as success"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Verify repeated rule fallback patterns were reduced"}

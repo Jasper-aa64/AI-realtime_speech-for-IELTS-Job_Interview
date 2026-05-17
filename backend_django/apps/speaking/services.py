@@ -783,79 +783,6 @@ def clean_band7_output(value: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
-def plausible_spoken_answer(value: str) -> bool:
-    """Check if Band 7 output looks like a real spoken answer."""
-    text = clean_band7_output(value)
-    words = re.findall(r"[A-Za-z']+", text)
-    if len(words) < 12:
-        return False
-    lowered = text.lower()
-    bad_markers = ("json", "requirements", "acceptance criteria", "here is", "i cannot", "as an ai")
-    return not any(marker in lowered[:220] for marker in bad_markers)
-
-
-def generic_band7_answer(value: str) -> bool:
-    """Check if Band 7 output is generic template text."""
-    lowered = clean_band7_output(value).lower()
-    generic_markers = (
-        "quite easy for me to answer",
-        "connects with my daily life",
-        "give one simple detail",
-        "closer to a band",
-        "i can talk about from my own experience",
-        "this topic is very important",
-        "i would answer it directly first",
-        "i would answer this directly from my own experience",
-        "i would answer this by keeping the main idea",
-        "my favourite choice is the one connected with my own routine",
-        "a complete transcript was not captured",
-        "add one simple reason and a small detail",
-        "that gives me a clear reason to support my answer",
-        "then i would develop it with one concrete situation",
-        "explain why it mattered, and finish with the result",
-    )
-    return any(marker in lowered for marker in generic_markers)
-
-
-def band7_addresses_question(question: str, answer: str, part: str) -> bool:
-    """Check if Band 7 answer actually addresses the question."""
-    if part != "p1":
-        return True
-
-    # Use existing relevance check
-    relevance = _training_relevance(question, answer)
-    if relevance >= Decimal("0.20"):
-        return True
-
-    lowered_question = question.lower()
-    lowered_answer = answer.lower()
-
-    if "tell me a little more" in lowered_question or "what you do now" in lowered_question:
-        work_study_terms = (
-            "student", "study", "studying", "university", "school", "major",
-            "work", "working", "job", "internship", "engineer", "software",
-            "developer", "company", "project",
-        )
-        return any(term in lowered_answer for term in work_study_terms)
-
-    if lowered_question.startswith(("do you", "are you", "is there", "can you", "have you")):
-        return any(
-            marker in lowered_answer
-            for marker in ("yes", "no", "i do", "i don't", "i am", "i'm", "not really", "sometimes")
-        )
-
-    return False
-
-
-def valid_turn_band7(question: str, answer: str, part: str) -> bool:
-    """Validate that Band 7 answer is plausible, not generic, and addresses question."""
-    return (
-        plausible_spoken_answer(answer)
-        and not generic_band7_answer(answer)
-        and band7_addresses_question(question, answer, part)
-    )
-
-
 # --- Text Processing Helpers ---
 
 
@@ -927,26 +854,24 @@ def spoken_markdown(value: str, part: str = "") -> str:
     return "\n\n".join(paragraphs)
 
 
-def concise_coaching_markdown(value: str) -> bool:
-    """Validate coaching markdown has proper format with grammar correction bullet."""
+def acceptable_coaching_markdown(value: str) -> bool:
+    """Validate only the product-critical coaching contract.
+
+    The AI owns the coaching structure. We only require meaningful text and a
+    grammar-correction section so the report remains predictable for learners.
+    """
     text = clean_markdown_text(value)
     if not text:
         return False
-    lines = [line for line in text.splitlines() if line.strip()]
-    if len(lines) > 12:
+    if "语法错误纠正" not in text:
         return False
-    has_markdown_point = any(line.lstrip().startswith(("- ", "* ")) for line in lines)
-    grammar_index = next((index for index, line in enumerate(lines) if "语法错误纠正" in line), None)
-    if grammar_index is None:
-        return False
-    top_level_lines = [line for line in lines if not re.match(r"^\s{2,}\d+\.\s+", line)]
-    grammar_line = lines[grammar_index].strip()
-    if top_level_lines and "语法错误纠正" not in top_level_lines[-1]:
-        return False
-    has_valid_grammar_detail = "无" in grammar_line or any(
-        re.match(r"^\s{2,}\d+\.\s+", line) for line in lines[grammar_index + 1:]
-    )
-    return has_markdown_point and has_valid_grammar_detail and len(text) <= 1100
+    blocked = ("as an ai", "json", "requirements", "acceptance criteria", "workflow-state", "trellis sessionstart")
+    return not any(marker in text.lower() for marker in blocked)
+
+
+def concise_coaching_markdown(value: str) -> bool:
+    """Backward-compatible alias for tests and older callers."""
+    return acceptable_coaching_markdown(value)
 
 
 def infer_grammar_corrections(transcript: str) -> list[str]:
@@ -975,7 +900,7 @@ def infer_grammar_corrections(transcript: str) -> list[str]:
 
 
 def ensure_grammar_correction_bullet(coaching: str, transcript: str) -> str:
-    """Ensure coaching ends with a grammar correction bullet."""
+    """Ensure coaching ends with a grammar correction section."""
     text = clean_markdown_text(coaching)
     if not text:
         return ""
@@ -996,11 +921,13 @@ def ensure_grammar_correction_bullet(coaching: str, transcript: str) -> str:
             continue
         lines.append(line)
     corrections = infer_grammar_corrections(transcript)
+    if lines:
+        lines.append("")
     if not corrections:
-        lines.append("- 语法错误纠正：无")
+        lines.append("语法错误纠正：无")
     else:
-        lines.append("- 语法错误纠正：")
-        lines.extend(f"  {index}. {correction}" for index, correction in enumerate(corrections, start=1))
+        lines.append("语法错误纠正：")
+        lines.extend(f"{index}. {correction}" for index, correction in enumerate(corrections, start=1))
     return "\n".join(lines).strip()
 
 
@@ -1040,72 +967,6 @@ def target_band_label(attempt: SpeakingAttempt | dict[str, Any]) -> str:
         numeric = 7.0
     numeric = max(5.0, min(9.0, round(numeric * 2) / 2))
     return str(int(numeric)) if numeric.is_integer() else f"{numeric:.1f}"
-
-
-def _transcript_usable_for_band7(question: str, transcript: str) -> bool:
-    """Check if a transcript is coherent enough to quote in a Band 7 model answer."""
-    if not transcript or len(transcript.split()) < 4:
-        return False
-    relevance = _training_relevance(question, transcript)
-    if relevance >= Decimal("0.25"):
-        return True
-    words = re.findall(r"[A-Za-z']+", transcript)
-    if len(words) < 5:
-        return False
-    common_english = {
-        "i", "my", "me", "we", "the", "a", "an", "is", "am", "are", "was", "were",
-        "it", "its", "this", "that", "and", "but", "or", "so", "because", "if",
-        "to", "for", "of", "in", "on", "at", "with", "from", "by", "not", "no",
-        "yes", "do", "don't", "have", "has", "had", "can", "will", "would", "could",
-        "think", "like", "want", "know", "go", "get", "make", "see", "say", "tell",
-        "very", "really", "just", "also", "still", "already", "always", "never",
-    }
-    uncommon = [word for word in words if word.lower() not in common_english]
-    if len(uncommon) < 3:
-        return False
-    filler_ratio = sum(1 for word in words if word.lower() in {"um", "uh", "er", "mm"}) / max(1, len(words))
-    return filler_ratio < 0.15
-
-
-# --- Coaching Helpers ---
-
-
-def _coaching_reason_for_question(question_lower: str, part: str, transcript_words: int, transcript_usable: bool, tags: list[str]) -> str:
-    """Get coaching reason based on question type."""
-    if not transcript_usable:
-        if "name" in question_lower:
-            return "名字部分转写不清楚，先确保发音清晰、语速适中。"
-        if "work" in question_lower or "study" in question_lower:
-            return "这题需要直接说明身份（学生/工作），再加一个原因。"
-        if any(w in question_lower for w in ("live", "living", "neighbourhood", "neighbor")):
-            return "住所类问题先说地点，再加一个你喜欢/不喜欢的原因。"
-        if any(w in question_lower for w in ("favourite", "favorite", "enjoy", "like most")):
-            return "喜好类问题先说选择，再说为什么喜欢。"
-        if any(w in question_lower for w in ("think", "opinion", "important")):
-            return "观点类问题先表态（yes/no/depends），再给一个理由。"
-        if "easy" in question_lower or "difficult" in question_lower:
-            return "难易类问题先说你的感受，再解释为什么。"
-        return "转写不太清楚，先把答案说完整、说慢一点，确保每个词都能被识别。"
-    if transcript_words < 15:
-        return "回答太短了，Part 1 至少需要 2-3 句话。"
-    if transcript_words < 35:
-        return "回答偏短，试着加一个原因或一个小细节。"
-    if "template_language" in tags:
-        return "模板感比较明显，试着用自己的真实经历来回答。"
-    return "回答已经成形，可以把表达再自然一些。"
-
-
-def _coaching_next_action(question_lower: str, part: str, transcript_usable: bool, tags: list[str]) -> str:
-    """Get next action suggestion for coaching."""
-    if not transcript_usable:
-        return "下一次练这题时，先把 Band 7 版本读出声 3 遍，熟悉句型后再脱稿说。"
-    if "short_answer" in tags or "limited_development" in tags:
-        return "下一次先用 20 秒把答案补完整，确保有直接回答 + 原因 + 细节。"
-    if "template_language" in tags:
-        return "下一次试着把模板词换成自己的说法，先说一遍再录音对比。"
-    if "off_topic" in tags:
-        return "下一次开口前，先复述题目关键词，确认回答方向是对的。"
-    return "下一题试着把语速放慢，让每句话都说完整。"
 
 
 class QuestionBank:
@@ -1885,6 +1746,14 @@ def _turn_payload(turn: SpeakingTurn, total: int | None = None) -> dict[str, Any
         "model_audio": metadata.get("model_audio"),
         "upgrade_notes": metadata.get("upgrade_notes", []),
         "ai_coaching": metadata.get("ai_coaching", ""),
+        "target_band_version": metadata.get("target_band_version", metadata.get("band7_version", "")),
+        "target_band_markdown": metadata.get("target_band_markdown", metadata.get("band7_markdown", metadata.get("band7_version", ""))),
+        "target_band": metadata.get("target_band"),
+        "feedback_generation_status": metadata.get("feedback_generation_status"),
+        "feedback_generation_backend": metadata.get("feedback_generation_backend"),
+        "feedback_generation_error": metadata.get("feedback_generation_error"),
+        "band7_source": metadata.get("band7_source"),
+        "ai_coaching_source": metadata.get("ai_coaching_source"),
         "counts_toward_total": turn.counts_toward_total,
         "display_index": metadata.get("display_index"),
     }
@@ -1944,6 +1813,104 @@ def _find_turn(attempt: SpeakingAttempt, turn_id: str) -> SpeakingTurn:
     return turn
 
 
+def _is_p1_work_study_turn(turn: SpeakingTurn) -> bool:
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
+    return turn.part == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "work_study"
+
+
+def _fallback_p1_identity_follow_up(answer: str) -> str:
+    lowered = answer.lower()
+    if any(word in lowered for word in ("intern", "internship", "company")):
+        return "How does your internship connect with what you study?"
+    if any(word in lowered for word in ("student", "study", "university", "major", "school")):
+        return "What do you enjoy most about your studies?"
+    if any(word in lowered for word in ("work", "job", "office", "engineer", "business")):
+        return "What do you enjoy most about your work?"
+    return "Can you tell me a little more about what you do now?"
+
+
+def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]:
+    fallback = _fallback_p1_identity_follow_up(answer)
+    prompt = f"""Return JSON only with key follow_up.
+
+You are an IELTS Speaking Part 1 examiner. Write one natural follow-up question based on the candidate's previous answer.
+Use the candidate's real identity details. Do not invent facts.
+Keep it short, conversational, and suitable for Part 1.
+
+Candidate answer:
+{answer}
+"""
+    try:
+        output, _usage = run_codex(prompt, call_id)
+        payload = extract_json_object(output)
+        follow_up = clean_report_text(str(payload.get("follow_up") or ""))
+        if not follow_up or len(follow_up) > 160 or "?" not in follow_up:
+            raise RuntimeError("codex p1 follow-up did not return a usable question")
+        return {"follow_up": follow_up, "backend": "codex", "status": "ready"}
+    except Exception as exc:
+        return {"follow_up": fallback, "backend": "fallback", "status": "fallback", "error": str(exc)}
+
+
+def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: SpeakingTurn) -> SpeakingTurn | None:
+    if not _is_p1_work_study_turn(completed_turn):
+        return None
+    transcript = (completed_turn.transcript_cleaned or completed_turn.transcript_raw or "").strip()
+    if not transcript:
+        return None
+    existing = attempt.turns.filter(metadata__prompt__after_turn=completed_turn.turn_id).first()
+    if existing:
+        return existing
+
+    result = _generate_p1_identity_follow_up(transcript, f"p1_follow_up_{attempt.attempt_id}_{completed_turn.turn_id}")
+    follow_up = result["follow_up"]
+    for item in attempt.turns.filter(sequence__gt=completed_turn.sequence).order_by("-sequence"):
+        item.sequence += 1
+        item.save(update_fields=["sequence"])
+
+    turn_id = f"{completed_turn.turn_id}_followup"
+    turn_data = _create_turn(
+        "p1",
+        completed_turn.sequence + 1,
+        attempt.turns.count() + 1,
+        follow_up,
+        {
+            "topic": "intro",
+            "question": follow_up,
+            "flow": "intro",
+            "role": "follow_up",
+            "after_role": "work_study",
+            "after_turn": completed_turn.turn_id,
+            "source": "identity_answer",
+            "backend": result["backend"],
+            "generation_status": result["status"],
+            **({"generation_error": result["error"]} if result.get("error") else {}),
+            "counts_toward_total": False,
+        },
+    )
+    turn_data["id"] = turn_id
+    turn_data["counts_toward_total"] = False
+    ensure_examiner_tts(attempt.attempt_id, turn_data)
+    return SpeakingTurn.objects.create(
+        user=attempt.user,
+        attempt=attempt,
+        turn_id=turn_id,
+        sequence=completed_turn.sequence + 1,
+        part="p1",
+        question=follow_up,
+        counts_toward_total=False,
+        metadata={
+            "prompt": turn_data.get("prompt"),
+            "cue_card": None,
+            "timers": turn_data.get("timers"),
+            "examiner_text": follow_up,
+            "examiner_behavior": "auto_play_question",
+            "display_index": completed_turn.metadata.get("display_index") if isinstance(completed_turn.metadata, dict) else None,
+            "examiner_tts": turn_data.get("examiner_tts"),
+        },
+    )
+
+
 def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     attempt = _load_attempt_for_user(user, attempt_id)
     if attempt.status == SpeakingAttempt.Status.ABORTED:
@@ -1988,8 +1955,11 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
     }
     turn.save()
 
+    inserted_follow_up = _insert_p1_identity_follow_up(attempt, turn)
     turns = list(attempt.turns.all().order_by("sequence"))
     next_turn = next((item for item in turns if item.sequence > turn.sequence and _turn_status(item) != "completed"), None)
+    if inserted_follow_up is not None:
+        next_turn = inserted_follow_up
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
     metadata["current_turn"] = next_turn.turn_id if next_turn else None
     attempt.metadata = metadata
@@ -2205,31 +2175,18 @@ def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_
 
 
 def build_ai_coaching_with_codex(question: str, transcript: str, band7: str, part: str, call_id: str, profile: dict[str, Any] | None = None) -> str:
-    """Generate AI coaching using Codex CLI with full prompt.
+    """Generate natural AI coaching using Codex CLI."""
+    prompt = f"""请为这一段 IELTS Speaking 回答生成中文 coaching。只输出 Markdown，不要标题。
+请结合当前题目、用户转写、Band 7 参考答案和学习画像，自主判断该怎么评价。
+不要套固定模板，不要强制写成固定几条，也不要按“问题/原因/替代表达/下一步”这种固定栏目组织。
+你可以自由决定分点数量、分点顺序、是否给示范句，以及每一点的详略。重点是像真人老师一样评价这一次回答。
+最后必须保留一个独立的语法纠错部分，格式为：
+语法错误纠正：无
+或：
+语法错误纠正：
+1. `原表达` -> `更自然的表达`
 
-    Includes part-specific hints, grammar correction requirements, and format validation.
-    """
-    part_hint = {
-        "p1": "Part 1 要简短、直接、自然。重点提醒：直接回答 + 一个原因 + 一个小细节。",
-        "p2": "Part 2 要覆盖 cue card，并把答案说满。重点提醒：开头点题 + 展开细节 + 例子/经历 + 收尾。",
-        "p3": "Part 3 要做抽象讨论。重点提醒：观点 + 原因 + 对比/例子 + 简短总结。",
-    }.get(part, "按对应的 IELTS Speaking 部分给出实用中文 coaching。")
-
-    prompt = f"""请为这一段 IELTS Speaking 回答生成中文 coaching。只输出简短 Markdown，不要标题。
-请结合学习画像、当前转写和 Band 7 版本，写得具体、实用、适合大陆 IELTS 学习者。
-输出限制：
-- 写 2-4 个自然分点的 Markdown bullet。
-- 分点内容由 AI 自己决定，不要套固定格式；可以写问题、原因、结构、练法或示范句。
-- 不要强制给"可以直接替换成"的英文句子；只有在确实有帮助时才自然给例句。
-- 不要强制使用"证据/问题原因/替代表达/下一步"这四个固定标签。
-- 最后一条必须是语法错误纠正：
-  - 没有明显口语语法/搭配问题时，写 "- 语法错误纠正：无"。
-  - 有问题时，写 "- 语法错误纠正："，并把具体纠正放在它下面的二级编号列表里，例如 "  1. `going internship` -> `I am doing an internship.`"。
-- 语法错误纠正只管影响口语表达的语法或搭配问题；不要把句末标点、句号、大小写、书面格式当成语法错误。
-- 必须有清晰换行，不要写成长段落。
-- 不要空泛评价，不要只复述分数。
-
-{part_hint}
+语法纠错只处理影响口语表达的语法或搭配问题；不要纠结句末标点、大小写或书面格式。
 
 Question:
 {question}
@@ -2246,10 +2203,9 @@ Learning profile:
     output, _ = run_codex(prompt, call_id)
     coaching = normalize_coaching_markdown(output)
     coaching = ensure_grammar_correction_bullet(coaching, transcript)
-    if not concise_coaching_markdown(coaching):
-        raise RuntimeError("codex coaching was too short or missing grammar correction")
+    if not acceptable_coaching_markdown(coaching):
+        raise RuntimeError("codex coaching was missing meaningful feedback or grammar correction")
     return coaching
-
 
 def turn_feedback_with_codex(question: str, transcript: str, part: str, target: str, profile: dict[str, Any] | None, call_id: str) -> dict[str, str]:
     """Generate Band 7 and AI coaching together using Codex CLI.
@@ -2262,7 +2218,7 @@ def turn_feedback_with_codex(question: str, transcript: str, part: str, target: 
 
 Task:
 - Write one natural IELTS Speaking Band {target} spoken version for this single turn.
-- Then write concise Chinese Markdown coaching for this same turn.
+- Then write Chinese Markdown coaching for this same turn.
 - Answer the exact examiner question directly and preserve the candidate's likely intent.
 - Reuse the candidate's concrete idea when it is relevant; improve cohesion, vocabulary, and grammar.
 - Do not include the original question, cue-card bullets, titles, labels, code fences, or logs.
@@ -2274,13 +2230,12 @@ Band 7 version constraints:
 - If the transcript is weak, infer a sensible direct answer from the question type instead of writing a vague template.
 
 Coaching constraints:
-- Use natural concise Chinese Markdown bullets.
-- Write 2-4 short bullets, choosing the bullet focus freely based on the learner's real issue.
-- Do not force a replacement sentence, fixed labels, fixed order, or fixed section names.
-- If a sample sentence genuinely helps, include it naturally inside a bullet; otherwise give structure, direction, or practice advice.
-- End with exactly one grammar-correction bullet:
-  - If there is no meaningful spoken grammar/collocation issue, write "- 语法错误纠正：无".
-  - If there are issues, write "- 语法错误纠正：" and put the corrections under it as indented numbered sub-items, for example "  1. `going internship` -> `I am doing an internship.`".
+- Use natural Chinese for a mainland IELTS learner.
+- Decide the number of points, order, and level of detail yourself based on the real answer.
+- Do not use a fixed coaching template or fixed labels.
+- If a sample sentence helps, include it naturally; if not, focus on evaluation.
+- Finish with a grammar correction section exactly named "语法错误纠正：".
+- If there is no meaningful spoken grammar/collocation issue, write "语法错误纠正：无".
 - Only include spoken-English grammar/collocation problems that affect meaning or fluency; do not treat punctuation, periods, full stops, capitalization, or written formatting as grammar errors.
 
 Question:
@@ -2307,45 +2262,19 @@ Learning profile:
 
     band7 = clean_band7_output(str(band7_raw))
     coaching = clean_markdown_text(str(coaching_raw))
-
-    if not valid_turn_band7(question, band7, part):
-        raise RuntimeError("codex turn feedback did not include a question-aware Band 7 answer")
+    if not clean_report_text(band7):
+        raise RuntimeError(f"codex turn feedback returned empty band7_version for {call_id}")
 
     coaching = ensure_grammar_correction_bullet(coaching, transcript)
-    if not concise_coaching_markdown(coaching):
-        raise RuntimeError("codex turn feedback did not include concise Markdown coaching")
+    if not acceptable_coaching_markdown(coaching):
+        raise RuntimeError("codex turn feedback did not include usable coaching with grammar correction")
 
     return {"band7_version": band7, "ai_coaching": coaching, "usage": usage}
 
 
 def build_upgrade_notes(transcript: str) -> list[str]:
-    """Extract upgrade notes from transcript."""
-    notes = []
-
-    # Check for very short answers
-    words = _word_count(transcript)
-    if words < 30:
-        notes.append("Give a direct answer, add a reason, then add one concrete example.")
-
-    # Check for repeated words
-    word_list = re.findall(r"\b[a-z]{4,}\b", transcript.lower())
-    if word_list:
-        from collections import Counter
-        counts = Counter(word_list)
-        repeated = [word for word, count in counts.most_common(5) if count >= 3]
-        if repeated:
-            notes.append(f"Avoid repeating: {', '.join(repeated[:3])}")
-
-    # Check for filler words
-    fillers = ["um", "uh", "like", "you know", "i mean", "actually", "basically"]
-    filler_count = sum(transcript.lower().count(f" {filler} ") for filler in fillers)
-    if filler_count >= 3:
-        notes.append("Reduce filler words (um, uh, like, you know)")
-
-    if not notes:
-        notes.append("Extend answers with specific reasons and examples")
-
-    return notes[:3]
+    """Keep legacy table shape without rule-heavy vocabulary diagnostics."""
+    return []
 
 
 def _fallback_score(transcript: str, part: str) -> dict[str, Any]:
@@ -2465,15 +2394,6 @@ def _criteria_feedback(score: dict[str, Any], transcript: str) -> dict[str, Any]
     }
 
 
-def _band7_fallback(turn: SpeakingTurn) -> str:
-    """Simple fallback for Django turn model."""
-    question = turn.question.rstrip("?")
-    return (
-        f"Well, regarding {question.lower()}, I would give a clear answer with a specific reason and a brief example. "
-        "That would make the response sound more natural and developed."
-    )
-
-
 # --- P1 Name/Identity Helpers ---
 
 
@@ -2500,39 +2420,30 @@ def p1_name_answer(full_name: str | None, english_name: str | None) -> str:
 
 
 def _p1_question_only_answer(question: str, answer_lower: str = "") -> str:
-    """Generate a clean Band 7 P1 answer based on the question type."""
+    """Minimal P1 identity fallback for work/study only.
+
+    General Band 7 answers should come from Codex. This helper exists only to
+    avoid inventing the wrong identity if a work/study fallback is explicitly
+    requested by older paths or tests.
+    """
     lowered = question.lower()
-    if "name" in lowered:
-        return "My full name is Jasper Chen, but most people just call me Jasper."
-    if lowered.startswith(("do you prefer", "would you prefer")) or ("prefer" in lowered and "or" in lowered):
-        return "I would prefer the option that fits my daily routine better, because convenience matters a lot when you have a busy schedule."
     if ("work" in lowered or "study" in lowered or "student" in lowered) and "prefer" not in lowered:
-        if any(w in answer_lower for w in ("work", "job", "company", "office", "engineer", "business")):
-            return "I work as a software engineer at the moment. I enjoy it because the work is practical and I get to solve real problems every day."
+        has_student = any(w in answer_lower for w in ("student", "study", "studying", "university", "school", "major"))
+        has_internship = any(w in answer_lower for w in ("intern", "internship", "company"))
+        has_software = any(w in answer_lower for w in ("software", "computer", "code", "coding", "engineering"))
+        if has_student and has_internship:
+            major = "software engineering" if has_software else "my major"
+            return (
+                f"I'm a university student majoring in {major}, and I'm also doing an internship at a company. "
+                "I enjoy it because I can connect what I learn in class with real practical work."
+            )
+        if has_student:
+            major = "software engineering" if has_software else "my major"
+            return f"I'm a university student majoring in {major}. I enjoy it because I can learn practical skills and solve real problems."
+        if any(w in answer_lower for w in ("work", "job", "office", "engineer", "business")):
+            return "I work at the moment. I enjoy it because the work is practical and I get to solve real problems every day."
         return "I'm a university student at the moment, majoring in computer science. I chose it because I enjoy building things and solving practical problems."
-    if ("who" in lowered and "live" in lowered) or ("family" in lowered and "own" in lowered) or ("live with" in lowered):
-        if any(w in answer_lower for w in ("own", "alone", "myself")):
-            return "I live on my own at the moment. It is convenient because my place is close to my university and I can manage my own schedule."
-        if any(w in answer_lower for w in ("family", "parent", "mother", "father", "roommate")):
-            return "I live with my family right now. It is comfortable because we share the housework and I can save money on rent."
-        return "I live on my own at the moment, in a small apartment near my university. It gives me the independence I need for my studies."
-    if any(word in lowered for word in ("live", "living", "hometown", "house", "apartment", "flat", "city")):
-        return "I live in a fairly convenient area close to my university. I like it because transport and daily shopping are easy, and the neighbourhood is quiet enough to study."
-    if any(word in lowered for word in ("favourite", "favorite", "like most", "enjoy most")):
-        return "My favourite would be the one that connects with my personal routine. It feels natural because I do it regularly and it always puts me in a good mood."
-    if any(word in lowered for word in ("think", "opinion", "important")):
-        return "I think it depends on the situation. For most people it probably matters, but personally I would say it is useful rather than essential."
-    if "easy" in lowered or "difficult" in lowered or "hard" in lowered:
-        return "I find it fairly easy, mainly because I have been doing it for a while now. Practice makes a big difference, and once you get used to it, it feels natural."
-    if any(word in lowered for word in ("how often", "how much", "how long", "how many")):
-        return "For me, it happens fairly regularly, maybe a few times a week. It has become part of my routine without me really noticing."
-    if any(word in lowered for word in ("when", "last time", "recently")):
-        return "The last time was not long ago, probably within the past week. I remember it quite clearly because it was a pleasant experience."
-    if lowered.startswith(("do you", "are you", "is there", "can you", "have you")):
-        if any(w in answer_lower for w in ("no", "not", "rarely", "hardly", "don't")):
-            return "No, not really. It is not something I do very often, mainly because my schedule does not leave much time for it."
-        return "Yes, I would say so. It is something I do fairly often, and I find it quite enjoyable because it fits naturally into my daily life."
-    return "I would say it is something I experience quite often in my daily life. The main reason is that it connects with my routine and gives me a practical benefit."
+    return ""
 
 
 def build_turn_band7_fallback(
@@ -2554,20 +2465,7 @@ def build_turn_band7_fallback(
             return p1_name_answer(full_name, english_name)
         return _p1_question_only_answer(question_clean, answer_lower)
 
-    if part == "p2":
-        return (
-            "I would like to talk about something that happened to me recently. "
-            "It was memorable because it changed the way I think about this topic. "
-            "What made it stand out was the combination of timing and the people involved, "
-            "and looking back, I feel it was a valuable experience that taught me something new."
-        )
-
-    return (
-        "I think this is an interesting question because people can look at it from different angles. "
-        "From my perspective, the most important factor is practicality, because in everyday life "
-        "we often have to balance convenience with long-term value. "
-        "I would also add that personal experience plays a big role in shaping people's views on this."
-    )
+    return ""
 
 
 # --- Learning Profile ---
@@ -2659,9 +2557,12 @@ def build_turn_feedback(
         except Exception as exc:
             result["feedback_generation_error"] = str(exc)
 
-    # Build Band 7 version
+    # Build Band 7 version. Do not replace a failed AI answer with hardcoded
+    # personal content unless this is the deterministic name-intro turn.
     band7 = generated.get("band7_version") or ""
-    if not valid_turn_band7(turn.question, band7, part):
+    prompt = turn.metadata.get("prompt") if isinstance(turn.metadata, dict) else {}
+    is_name_intro = part == "p1" and isinstance(prompt, dict) and prompt.get("flow") == "intro" and prompt.get("role") == "name"
+    if not band7 and is_name_intro:
         band7 = build_turn_band7_fallback(
             turn.question,
             part,
@@ -2670,6 +2571,8 @@ def build_turn_feedback(
             english_name,
             turn.metadata if isinstance(turn.metadata, dict) else None,
         )
+    elif not band7:
+        result["feedback_generation_status"] = "failed"
 
     result["band7_version"] = clean_report_text(band7)
     result["band7_markdown"] = spoken_markdown(band7, part)
@@ -2685,7 +2588,7 @@ def build_turn_feedback(
 
     # Build AI coaching
     coaching = generated.get("ai_coaching") or ""
-    if not concise_coaching_markdown(coaching):
+    if not acceptable_coaching_markdown(coaching):
         # Fallback coaching
         coaching = build_ai_coaching_fallback(
             turn.question,
@@ -2697,7 +2600,7 @@ def build_turn_feedback(
     result["ai_coaching"] = clean_markdown_text(coaching)
 
     # Status fields
-    result["feedback_generation_status"] = "ready"
+    result["feedback_generation_status"] = result.get("feedback_generation_status", "ready")
     result["feedback_generation_backend"] = "codex" if generated else "fallback"
 
     return result
@@ -2710,32 +2613,10 @@ def build_ai_coaching_fallback(
     part: str,
     profile: dict[str, Any] | None = None,
 ) -> str:
-    """Build fallback AI coaching when Codex fails."""
-    profile = profile or {}
-    tags = profile.get("habit_tags", [])
-    repeated_phrases = profile.get("repeated_phrases", [])
-
-    question_clean = clean_report_text(question) or "this question"
-    question_lower = question_clean.lower()
-    transcript_words = _word_count(transcript)
-    transcript_usable = transcript_words >= 10
-
-    reason = _coaching_reason_for_question(question_lower, part, transcript_words, transcript_usable, tags)
-    next_action = _coaching_next_action(question_lower, part, transcript_usable, tags)
-
+    """Build transparent fallback coaching when Codex fails."""
     lines: list[str] = []
-    lines.append("- AI 辅导生成失败，以下是系统默认建议。")
-    lines.append(f"- 本题关键词：{question_clean[:60]}")
-    lines.append(f"- {reason}")
-
-    if transcript_usable:
-        lines.append(f"- 这次回答约 {transcript_words} 词，建议再补充细节。")
-
-    if repeated_phrases:
-        lines.append(f"- 少重复这些表达：{', '.join(repeated_phrases[:2])}")
-
-    lines.append(f"- {next_action}")
-
+    lines.append("AI 辅导生成失败，当前没有展示伪 AI 建议。请点击重新生成，让系统重新调用 AI 分析这一次回答。")
+    lines.append("")
     return ensure_grammar_correction_bullet("\n".join(lines), transcript)
 
 
@@ -3216,10 +3097,8 @@ def regenerate_turn_transcript(user, attempt_id: str, turn_id: str) -> dict[str,
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
     metadata["transcript_status"] = "captured"
     metadata["transcript_source"] = "fallback_retranscribe"
-    metadata["band7_version"] = _band7_fallback(turn)
-    metadata["band7_markdown"] = metadata["band7_version"]
-    metadata["upgrade_notes"] = ["Give a direct answer, add a reason, then add one concrete example."]
-    metadata["ai_coaching"] = "先把答案说完整，再补一个具体例子；这是当前 fallback 报告的练习重点。"
+    feedback = build_turn_feedback(turn, attempt, {}, allow_codex=True)
+    metadata.update(feedback)
     metadata["transcript_regenerated_at"] = timezone.now().isoformat()
     turn.metadata = metadata
     turn.save(update_fields=["metadata"])

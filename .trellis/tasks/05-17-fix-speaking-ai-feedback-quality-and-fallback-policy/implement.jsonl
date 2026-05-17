@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Speaking report and AI coaching conventions"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend AI fallback and validation expectations"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Service error behavior for expected AI failures"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer and reuse thinking reminders"}

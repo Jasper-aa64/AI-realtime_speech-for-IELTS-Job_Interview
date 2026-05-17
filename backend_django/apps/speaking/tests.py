@@ -1072,18 +1072,17 @@ class TurnFeedbackValidationTests(TestCase):
             mock_run.return_value = ('{"band7_version": "My name is John."}', {"input_tokens": 100})
             with patch("apps.speaking.services.extract_json_object") as mock_extract:
                 mock_extract.return_value = {"band7_version": "My name is John."}
-                with patch("apps.speaking.services.valid_turn_band7", return_value=True):
-                    with patch("apps.speaking.services.clean_band7_output", return_value="My name is John."):
-                        with self.assertRaises(RuntimeError) as ctx:
-                            turn_feedback_with_codex(
-                                "What is your name?",
-                                "My name is John.",
-                                "p1",
-                                "7",
-                                None,
-                                "test_call",
-                            )
-                        self.assertIn("missing ai_coaching", str(ctx.exception))
+                with patch("apps.speaking.services.clean_band7_output", return_value="My name is John."):
+                    with self.assertRaises(RuntimeError) as ctx:
+                        turn_feedback_with_codex(
+                            "What is your name?",
+                            "My name is John.",
+                            "p1",
+                            "7",
+                            None,
+                            "test_call",
+                        )
+                    self.assertIn("missing ai_coaching", str(ctx.exception))
 
     def test_turn_feedback_accepts_valid_output(self):
         """turn_feedback_with_codex should accept valid band7 and coaching."""
@@ -1098,20 +1097,18 @@ class TurnFeedbackValidationTests(TestCase):
         with patch("apps.speaking.services.run_codex") as mock_run:
             mock_run.return_value = (json.dumps(valid_output), {"input_tokens": 100})
             with patch("apps.speaking.services.extract_json_object", return_value=valid_output):
-                with patch("apps.speaking.services.valid_turn_band7", return_value=True):
-                    with patch("apps.speaking.services.clean_band7_output", return_value=valid_output["band7_version"]):
-                        with patch("apps.speaking.services.clean_markdown_text", return_value=valid_output["ai_coaching"]):
-                            with patch("apps.speaking.services.concise_coaching_markdown", return_value=True):
-                                result = turn_feedback_with_codex(
-                                    "What is your name?",
-                                    "My name is John.",
-                                    "p1",
-                                    "7",
-                                    None,
-                                    "test_call",
-                                )
-                                self.assertIn("band7_version", result)
-                                self.assertIn("ai_coaching", result)
+                with patch("apps.speaking.services.clean_band7_output", return_value=valid_output["band7_version"]):
+                    with patch("apps.speaking.services.clean_markdown_text", return_value=valid_output["ai_coaching"]):
+                        result = turn_feedback_with_codex(
+                            "What is your name?",
+                            "My name is John.",
+                            "p1",
+                            "7",
+                            None,
+                            "test_call",
+                        )
+                        self.assertIn("band7_version", result)
+                        self.assertIn("ai_coaching", result)
 
     def test_complete_turn_sets_pending_not_fallback(self):
         """complete_turn should set feedback_generation_status to pending, not fallback."""
@@ -1197,16 +1194,123 @@ class TurnFeedbackValidationTests(TestCase):
             self.assertIn(result["attempt"]["ielts_score"]["backend"], ["codex", "heuristic"])
 
     def test_coaching_must_include_grammar_correction(self):
-        """AI coaching must include a grammar correction bullet."""
+        """AI coaching must include a grammar correction section."""
         from apps.speaking.services import concise_coaching_markdown
 
-        # Valid coaching with grammar bullet
-        valid_coaching = """- Your answer is clear.
-- Consider adding more details.
-- 语法错误纠正：无"""
+        valid_coaching = """这次回答的核心信息是清楚的，但身份信息可以更准确地说出来。
+
+你提到了 software engineering 和 internship，这两个信息应该放在同一句里，听起来会更自然。
+
+语法错误纠正：无"""
         self.assertTrue(concise_coaching_markdown(valid_coaching))
 
-        # Invalid coaching without grammar bullet
         invalid_coaching = """- Your answer is clear.
 - Consider adding more details."""
         self.assertFalse(concise_coaching_markdown(invalid_coaching))
+
+    def test_coaching_allows_ai_chosen_structure(self):
+        """Coaching should not force bullet count or fixed labels."""
+        from apps.speaking.services import concise_coaching_markdown
+
+        coaching = "\n".join(
+            [
+                "这次回答最好的地方是你没有跑题，软件工程、实习和公司都是真实信息。",
+                "",
+                "不过表达上不需要被压成固定句型。AI 可以自己判断重点：这里更值得强调的是你既是学生，也在实习。",
+                "",
+                "如果要更自然，可以把身份先说清楚，再解释为什么这个方向有趣。",
+                "",
+                "语法错误纠正：",
+                "1. `I'm a unit student` -> `I'm a university student.`",
+            ]
+        )
+
+        self.assertTrue(concise_coaching_markdown(coaching))
+
+    def test_p1_work_study_fallback_preserves_student_internship_identity(self):
+        """Fallback must not turn a student with an internship into only a worker."""
+        from apps.speaking.services import build_turn_band7_fallback
+
+        answer = "I'm a university student specializing in software engineering and doing an internship at a tech company."
+        result = build_turn_band7_fallback("Do you work or do you study?", "p1", answer)
+
+        self.assertIn("university student", result)
+        self.assertIn("internship", result)
+        self.assertNotIn("I work as a software engineer", result)
+
+    def test_p1_work_study_followup_uses_codex_when_available(self):
+        """Completing work/study identity turn should insert an AI-generated follow-up."""
+        from unittest.mock import patch
+        from apps.speaking.services import complete_turn
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="test-p1-followup-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-p1-followup-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t2"},
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="What is your full name?",
+            counts_toward_total=False,
+            metadata={"status": "completed", "prompt": {"flow": "intro", "role": "name"}},
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=1,
+            part="p1",
+            question="Do you work or do you study?",
+            metadata={
+                "prompt": {
+                    "topic": "intro",
+                    "question": "Do you work or do you study?",
+                    "flow": "intro",
+                    "role": "work_study",
+                    "counts_toward_total": True,
+                },
+                "display_index": 1,
+            },
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t3",
+            sequence=2,
+            part="p1",
+            question="Do you like your hometown?",
+            metadata={"prompt": {"topic": "home", "question": "Do you like your hometown?"}},
+        )
+
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = (
+                '{"follow_up": "How does your internship help you with your software engineering studies?"}',
+                {"input_tokens": 100},
+            )
+            result = complete_turn(
+                user,
+                "test-p1-followup-attempt",
+                "t2",
+                {
+                    "transcript_raw": (
+                        "I'm a university student specializing in software engineering, "
+                        "and I'm doing an internship at a tech company."
+                    )
+                },
+            )
+
+        follow_up = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
+        prompt = follow_up.metadata["prompt"]
+        self.assertEqual(prompt["backend"], "codex")
+        self.assertEqual(prompt["generation_status"], "ready")
+        self.assertIn("internship", follow_up.question.lower())
+        self.assertEqual(result["next_turn"]["id"], "t2_followup")
