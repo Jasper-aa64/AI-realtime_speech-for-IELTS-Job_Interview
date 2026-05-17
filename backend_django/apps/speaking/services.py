@@ -82,7 +82,7 @@ def extract_json_object(text: str) -> dict[str, Any]:
     raise ValueError("model output contained unbalanced JSON braces")
 
 
-def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
+def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None, bool]:
     """Parse codex CLI JSON events from stdout.
 
     Extracts the final model output text from:
@@ -91,6 +91,13 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
     3. Raw text events
 
     Skips Trellis injection text and other non-JSON prefixes.
+
+    Returns:
+        tuple of (text, usage, has_real_content)
+        - text: extracted model output
+        - usage: token usage dict or None
+        - has_real_content: True if we found actual agent_message content,
+          False if only event stream without model output
     """
     events: list[dict[str, Any]] = []
     for line in str(stdout or "").splitlines():
@@ -106,6 +113,7 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
 
     usage = None
     final_text = ""
+    has_real_content = False
 
     for event in events:
         # Track usage
@@ -116,7 +124,7 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
             usage = event["usage"]
 
         # Extract text from various event formats
-        # Format 1: item.completed with agent_message
+        # Format 1: item.completed with agent_message (preferred)
         if event.get("type") == "item.completed":
             item = event.get("item", {})
             if item.get("type") == "agent_message":
@@ -126,13 +134,15 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
                         text_value = content_item.get("text", "")
                         if text_value:
                             final_text = text_value
+                            has_real_content = True
 
         # Format 2: message/item/response dict
         message = event.get("message") or event.get("item") or event.get("response")
         if isinstance(message, dict):
             content = message.get("content") or message.get("text")
-            if isinstance(content, str):
+            if isinstance(content, str) and content.strip():
                 final_text = content
+                has_real_content = True
             elif isinstance(content, list):
                 parts = []
                 for part in content:
@@ -144,14 +154,16 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None]:
                         parts.append(part)
                 if parts:
                     final_text = "\n".join(parts)
+                    has_real_content = True
 
         # Format 3: direct content field
-        elif isinstance(event.get("content"), str):
+        elif isinstance(event.get("content"), str) and event["content"].strip():
             final_text = event["content"]
+            has_real_content = True
 
     if not events:
-        return str(stdout or ""), None
-    return final_text or str(stdout or ""), usage
+        return str(stdout or ""), None, False
+    return final_text or str(stdout or ""), usage, has_real_content
 
 
 def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
@@ -161,7 +173,7 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
     Without it, the model receives 0 tokens and outputs only thread/turn events.
 
     Raises RuntimeError if the model did not actually process the prompt
-    (detected by 0 input tokens or empty output).
+    (detected by 0 input tokens, empty output, or event stream without real content).
     """
     if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
         raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
@@ -180,7 +192,7 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
             timeout=45,
             check=True,
         )
-        output, usage = extract_codex_json_events(result.stdout)
+        output, usage, has_real_content = extract_codex_json_events(result.stdout)
     except Exception:
         result = subprocess.run(
             [codex, "exec", *config_args, "-"],
@@ -190,7 +202,7 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
             timeout=45,
             check=True,
         )
-        output, usage = result.stdout, None
+        output, usage, has_real_content = result.stdout, None, bool(result.stdout.strip())
 
     # Validate that the model actually processed the prompt
     # If usage shows 0 input tokens, the model didn't receive the prompt
@@ -202,6 +214,10 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
     # Validate output is non-empty
     if not output or not output.strip():
         raise RuntimeError(f"codex returned empty output for {call_id}")
+
+    # Validate we got real agent_message content, not just event stream
+    if not has_real_content:
+        raise RuntimeError(f"codex returned only event stream without model output for {call_id}")
 
     return output, usage
 
@@ -1968,7 +1984,7 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         "transcript_status": transcript_status,
         "transcript_markdown": _spoken_markdown(cleaned),
         "cleaning_notes": [],
-        "feedback_generation_status": "fallback",
+        "feedback_generation_status": "pending",
     }
     turn.save()
 
@@ -2239,6 +2255,8 @@ def turn_feedback_with_codex(question: str, transcript: str, part: str, target: 
     """Generate Band 7 and AI coaching together using Codex CLI.
 
     This combined generation ensures the Band 7 and coaching are consistent.
+
+    Raises RuntimeError if the output is invalid or missing required fields.
     """
     prompt = f"""Return JSON only with keys band7_version and ai_coaching.
 
@@ -2274,16 +2292,30 @@ Candidate transcript:
 Learning profile:
 {json.dumps(profile or {})}
 """
-    output, _ = run_codex(prompt, call_id)
+    output, usage = run_codex(prompt, call_id)
     payload = extract_json_object(output)
-    band7 = clean_band7_output(str(payload.get("band7_version") or ""))
-    coaching = clean_markdown_text(str(payload.get("ai_coaching") or ""))
+
+    # Validate required fields exist
+    band7_raw = payload.get("band7_version")
+    coaching_raw = payload.get("ai_coaching")
+
+    if not band7_raw or not str(band7_raw).strip():
+        raise RuntimeError(f"codex turn feedback missing band7_version for {call_id}")
+
+    if not coaching_raw or not str(coaching_raw).strip():
+        raise RuntimeError(f"codex turn feedback missing ai_coaching for {call_id}")
+
+    band7 = clean_band7_output(str(band7_raw))
+    coaching = clean_markdown_text(str(coaching_raw))
+
     if not valid_turn_band7(question, band7, part):
         raise RuntimeError("codex turn feedback did not include a question-aware Band 7 answer")
+
     coaching = ensure_grammar_correction_bullet(coaching, transcript)
     if not concise_coaching_markdown(coaching):
         raise RuntimeError("codex turn feedback did not include concise Markdown coaching")
-    return {"band7_version": band7, "ai_coaching": coaching}
+
+    return {"band7_version": band7, "ai_coaching": coaching, "usage": usage}
 
 
 def build_upgrade_notes(transcript: str) -> list[str]:
@@ -2976,6 +3008,174 @@ def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, A
         "attempt": _runtime_attempt_payload(attempt),
         "turn": _turn_payload(turn),
     }
+
+
+def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
+    """Regenerate the entire report for an already-scored attempt.
+
+    This is used to fix reports that were incorrectly generated
+    (e.g., due to codex returning 0 tokens or missing fields).
+
+    Args:
+        user: The authenticated user
+        attempt_id: The attempt ID
+
+    Returns:
+        dict with 'ok', 'attempt' keys
+
+    Raises:
+        SpeakingError: If attempt not found or not in scored status
+    """
+    attempt = _load_attempt_for_user(user, attempt_id)
+    if attempt.status != SpeakingAttempt.Status.SCORED:
+        raise SpeakingError("Only scored attempts can be regenerated.")
+
+    turns = list(attempt.turns.all().order_by("sequence"))
+    incomplete = [turn for turn in turns if _turn_status(turn) != "completed"]
+    if incomplete:
+        raise SpeakingError("Cannot regenerate: attempt has incomplete turns.")
+
+    transcript = "\n".join(
+        f"Q{index + 1}: {turn.question}\nA: {turn.transcript_cleaned or turn.transcript_raw}"
+        for index, turn in enumerate(turns)
+    )
+    if not transcript.strip():
+        raise SpeakingError("Missing transcript")
+
+    # Try Codex scoring first, fallback to heuristic on error
+    questions_text = "\n".join(f"Q{i+1}: {t.question}" for i, t in enumerate(turns))
+    call_id = f"regenerate_{attempt_id}"
+    part = attempt.part or attempt.mode or ""
+
+    try:
+        score = score_with_codex(transcript, questions_text, part, call_id)
+        score = calibrate_realistic_score(score, questions_text, transcript, part)
+    except Exception as exc:
+        score = heuristic_score(transcript, str(exc), questions_text, part)
+        score["codex_error"] = str(exc)
+
+    criteria = _criteria_feedback(score, transcript)
+
+    # Get user profile for personalization
+    from apps.accounts.models import UserProfile
+    profile_obj, _ = UserProfile.objects.get_or_create(user=user)
+    user_profile = {
+        "full_name": profile_obj.full_name,
+        "english_name": profile_obj.english_name,
+    }
+
+    # Build learning profile for personalized feedback
+    learning_profile = build_learning_profile(user, attempt)
+
+    # Regenerate AI feedback for each turn
+    for turn in turns:
+        turn_transcript = turn.transcript_cleaned or turn.transcript_raw
+        if not turn_transcript.strip():
+            continue
+
+        feedback = build_turn_feedback(turn, attempt, user_profile, allow_codex=True)
+
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        metadata.update(feedback)
+
+        if feedback.get("feedback_generation_backend") == "codex":
+            metadata["band7_source"] = "codex_regenerated"
+            metadata["ai_coaching_source"] = "codex_regenerated"
+        else:
+            metadata["band7_source"] = "fallback_regenerated"
+            metadata["ai_coaching_source"] = "fallback_regenerated"
+
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata"])
+
+    attempt.updated_at = timezone.now()
+    attempt.save(update_fields=["updated_at"])
+    attempt.refresh_from_db()
+
+    runtime = _runtime_attempt_payload(attempt)
+
+    # Build overall review with Codex or fallback
+    overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=True)
+
+    # Build personalized coaching
+    personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
+
+    runtime.update(
+        {
+            "status": "scored",
+            "transcript_cleaned": transcript,
+            "ielts_score": score,
+            "feedback_summary": score["feedback"],
+            "criteria_feedback": criteria,
+            "part_scores": {
+                attempt.part or attempt.mode: {
+                    "part": attempt.part or attempt.mode,
+                    "turn_count": len(turns),
+                    "band": score["overall_band"],
+                    "fluency_coherence": score["fluency_coherence"],
+                    "lexical_resource": score["lexical_resource"],
+                    "grammatical_range": score["grammatical_range"],
+                }
+            },
+            "overall_review": overall_review,
+            "personalized_coaching": personalized_coaching,
+            "regenerated_at": timezone.now().isoformat(),
+        }
+    )
+
+    report, _created = SpeakingReport.objects.update_or_create(
+        user=user,
+        attempt=attempt,
+        defaults={
+            "overall_band": Decimal(str(score["overall_band"])),
+            "fluency_coherence": Decimal(str(score["fluency_coherence"])),
+            "lexical_resource": Decimal(str(score["lexical_resource"])),
+            "grammar_range_accuracy": Decimal(str(score["grammatical_range"])),
+            "pronunciation": None,
+            "feedback_summary": score["feedback"],
+            "report_payload": runtime,
+        },
+    )
+
+    # Update training observations
+    for turn in turns:
+        turn_text = turn.transcript_cleaned or turn.transcript_raw
+        word_count = _word_count(turn_text)
+        reasons = []
+        if score["overall_band"] < 5.5:
+            reasons.append("low_band")
+        if word_count < 25:
+            reasons.append("short_answer")
+        relevance = _training_relevance(turn.question, turn_text)
+        if relevance < Decimal("0.200"):
+            reasons.append("off_topic")
+        SpeakingTrainingObservation.objects.update_or_create(
+            user=user,
+            observation_id=f"{attempt.attempt_id}_{turn.turn_id}",
+            defaults={
+                "attempt": attempt,
+                "turn": turn,
+                "legacy_attempt_id": attempt.attempt_id,
+                "legacy_turn_id": turn.turn_id,
+                "question_id": f"{turn.part}:{hashlib.md5(turn.question.encode()).hexdigest()[:12]}",
+                "part": turn.part,
+                "question": turn.question,
+                "transcript": turn_text,
+                "overall_band": Decimal(str(score["overall_band"])),
+                "fluency_coherence": Decimal(str(score["fluency_coherence"])),
+                "lexical_resource": Decimal(str(score["lexical_resource"])),
+                "grammar_range_accuracy": Decimal(str(score["grammatical_range"])),
+                "pronunciation": None,
+                "relevance": relevance,
+                "weak_item_flag": bool(reasons),
+                "weak_reasons": reasons,
+                "model_version": f"django_{score.get('backend', 'unknown')}",
+                "observed_at": timezone.now(),
+                "next_due": timezone.now() + timezone.timedelta(days=1 if reasons else 14),
+            },
+        )
+
+    return {"ok": True, "attempt": runtime, "report": report_payload(attempt)}
 
 
 def regenerate_turn_transcript(user, attempt_id: str, turn_id: str) -> dict[str, Any]:

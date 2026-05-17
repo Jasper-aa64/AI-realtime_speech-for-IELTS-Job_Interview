@@ -1,3 +1,6 @@
+import json
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.conf import settings
@@ -993,7 +996,7 @@ class CodexValidationTests(TestCase):
                 stdout='{"type": "turn.completed", "usage": {"input_tokens": 0, "output_tokens": 0}}'
             )
             with patch("apps.speaking.services.extract_codex_json_events") as mock_extract:
-                mock_extract.return_value = ("", {"input_tokens": 0})
+                mock_extract.return_value = ("", {"input_tokens": 0}, False)
                 with self.assertRaises(RuntimeError) as ctx:
                     run_codex("test prompt", "test_call")
                 self.assertIn("0 input tokens", str(ctx.exception))
@@ -1035,3 +1038,175 @@ class CodexValidationTests(TestCase):
             self.assertEqual(result["ielts_score"]["backend"], "heuristic")
             # Should have recorded the error
             self.assertIn("codex_error", result["ielts_score"])
+
+
+class TurnFeedbackValidationTests(TestCase):
+    """Test validation logic for turn feedback and AI coaching generation."""
+
+    def test_turn_feedback_rejects_missing_band7(self):
+        """turn_feedback_with_codex should reject output missing band7_version."""
+        from unittest.mock import patch
+        from apps.speaking.services import turn_feedback_with_codex
+
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = ('{"ai_coaching": "- some coaching"}', {"input_tokens": 100})
+            with patch("apps.speaking.services.extract_json_object") as mock_extract:
+                mock_extract.return_value = {"ai_coaching": "- some coaching"}
+                with self.assertRaises(RuntimeError) as ctx:
+                    turn_feedback_with_codex(
+                        "What is your name?",
+                        "My name is John.",
+                        "p1",
+                        "7",
+                        None,
+                        "test_call",
+                    )
+                self.assertIn("missing band7_version", str(ctx.exception))
+
+    def test_turn_feedback_rejects_missing_coaching(self):
+        """turn_feedback_with_codex should reject output missing ai_coaching."""
+        from unittest.mock import patch
+        from apps.speaking.services import turn_feedback_with_codex
+
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = ('{"band7_version": "My name is John."}', {"input_tokens": 100})
+            with patch("apps.speaking.services.extract_json_object") as mock_extract:
+                mock_extract.return_value = {"band7_version": "My name is John."}
+                with patch("apps.speaking.services.valid_turn_band7", return_value=True):
+                    with patch("apps.speaking.services.clean_band7_output", return_value="My name is John."):
+                        with self.assertRaises(RuntimeError) as ctx:
+                            turn_feedback_with_codex(
+                                "What is your name?",
+                                "My name is John.",
+                                "p1",
+                                "7",
+                                None,
+                                "test_call",
+                            )
+                        self.assertIn("missing ai_coaching", str(ctx.exception))
+
+    def test_turn_feedback_accepts_valid_output(self):
+        """turn_feedback_with_codex should accept valid band7 and coaching."""
+        from unittest.mock import patch
+        from apps.speaking.services import turn_feedback_with_codex
+
+        valid_output = {
+            "band7_version": "My name is John and I am a student at the local university.",
+            "ai_coaching": "- Your answer is clear and direct.\n- 语法错误纠正：无",
+        }
+
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = (json.dumps(valid_output), {"input_tokens": 100})
+            with patch("apps.speaking.services.extract_json_object", return_value=valid_output):
+                with patch("apps.speaking.services.valid_turn_band7", return_value=True):
+                    with patch("apps.speaking.services.clean_band7_output", return_value=valid_output["band7_version"]):
+                        with patch("apps.speaking.services.clean_markdown_text", return_value=valid_output["ai_coaching"]):
+                            with patch("apps.speaking.services.concise_coaching_markdown", return_value=True):
+                                result = turn_feedback_with_codex(
+                                    "What is your name?",
+                                    "My name is John.",
+                                    "p1",
+                                    "7",
+                                    None,
+                                    "test_call",
+                                )
+                                self.assertIn("band7_version", result)
+                                self.assertIn("ai_coaching", result)
+
+    def test_complete_turn_sets_pending_not_fallback(self):
+        """complete_turn should set feedback_generation_status to pending, not fallback."""
+        from apps.speaking.services import complete_turn
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="test-complete-turn", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-complete-turn-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="What is your name?",
+        )
+
+        complete_turn(user, "test-complete-turn-attempt", "t1", {"transcript_raw": "My name is John."})
+
+        # Refresh from DB and check metadata
+        turn.refresh_from_db()
+        self.assertEqual(turn.metadata.get("feedback_generation_status"), "pending")
+
+    def test_regenerate_attempt_report_fixes_bad_report(self):
+        """regenerate_attempt_report should fix a report with all-zero scores."""
+        from unittest.mock import patch
+        from apps.speaking.services import regenerate_attempt_report
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="test-regen-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-regen-attempt",
+            mode="p2",
+            part="p2",
+            status=SpeakingAttempt.Status.SCORED,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p2",
+            question="Describe a person you admire.",
+            transcript_raw="I admire my mother because she is very kind and helpful to everyone in our family.",
+            metadata={"status": "completed"},
+        )
+
+        # Create a bad report with all zeros
+        from apps.speaking.models import SpeakingReport
+        SpeakingReport.objects.create(
+            user=user,
+            attempt=attempt,
+            overall_band=Decimal("0"),
+            fluency_coherence=Decimal("0"),
+            lexical_resource=Decimal("0"),
+            grammar_range_accuracy=Decimal("0"),
+            feedback_summary="",
+            report_payload={
+                "id": "test-regen-attempt",
+                "ielts_score": {"overall_band": 0.0, "backend": "codex"},
+            },
+        )
+
+        # Mock codex to return valid scores
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = (
+                '{"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.0, "feedback": "Good work"}',
+                {"input_tokens": 100},
+            )
+            result = regenerate_attempt_report(user, "test-regen-attempt")
+
+            self.assertTrue(result["ok"])
+            # Should have real scores now
+            self.assertGreater(result["attempt"]["ielts_score"]["overall_band"], 0)
+            # Should have used codex or heuristic, not the old broken score
+            self.assertIn(result["attempt"]["ielts_score"]["backend"], ["codex", "heuristic"])
+
+    def test_coaching_must_include_grammar_correction(self):
+        """AI coaching must include a grammar correction bullet."""
+        from apps.speaking.services import concise_coaching_markdown
+
+        # Valid coaching with grammar bullet
+        valid_coaching = """- Your answer is clear.
+- Consider adding more details.
+- 语法错误纠正：无"""
+        self.assertTrue(concise_coaching_markdown(valid_coaching))
+
+        # Invalid coaching without grammar bullet
+        invalid_coaching = """- Your answer is clear.
+- Consider adding more details."""
+        self.assertFalse(concise_coaching_markdown(invalid_coaching))
