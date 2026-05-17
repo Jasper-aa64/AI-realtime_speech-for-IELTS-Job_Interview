@@ -937,3 +937,101 @@ class DjangoOnlyRuntimeSurfaceTests(TestCase):
         response = self.client.get("/api/reports/latest")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], attempt.attempt_id)
+
+
+class CodexValidationTests(TestCase):
+    """Test validation logic for Codex AI scoring and feedback."""
+
+    def test_score_with_codex_rejects_missing_scores(self):
+        """score_with_codex should reject outputs with missing FC/LR/GRA fields."""
+        from unittest.mock import patch
+        from apps.speaking.services import score_with_codex
+
+        # Mock run_codex to return output with missing scores
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = ('{"feedback": "test"}', {"input_tokens": 100})
+            with self.assertRaises(RuntimeError) as ctx:
+                score_with_codex("test transcript", "test question", "p1", "test_call")
+            self.assertIn("missing or invalid fields", str(ctx.exception))
+
+    def test_score_with_codex_rejects_zero_scores(self):
+        """score_with_codex should reject outputs with all-zero scores."""
+        from unittest.mock import patch
+        from apps.speaking.services import score_with_codex
+
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = (
+                '{"fluency_coherence": 0, "lexical_resource": 0, "grammatical_range": 0, "feedback": "test"}',
+                {"input_tokens": 100},
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                score_with_codex("test transcript", "test question", "p1", "test_call")
+            self.assertIn("missing or invalid fields", str(ctx.exception))
+
+    def test_score_with_codex_accepts_valid_scores(self):
+        """score_with_codex should accept valid outputs with proper scores."""
+        from unittest.mock import patch
+        from apps.speaking.services import score_with_codex
+
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = (
+                '{"fluency_coherence": 6.5, "lexical_resource": 6.0, "grammatical_range": 6.0, "feedback": "Good work"}',
+                {"input_tokens": 100},
+            )
+            result = score_with_codex("test transcript", "test question", "p1", "test_call")
+            self.assertEqual(result["backend"], "codex")
+            self.assertIn("fluency_coherence", result)
+            self.assertGreater(result["fluency_coherence"], 0)
+
+    def test_run_codex_rejects_zero_input_tokens(self):
+        """run_codex should raise error if model received 0 tokens."""
+        from unittest.mock import patch, MagicMock
+        from apps.speaking.services import run_codex
+
+        with patch("apps.speaking.services.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout='{"type": "turn.completed", "usage": {"input_tokens": 0, "output_tokens": 0}}'
+            )
+            with patch("apps.speaking.services.extract_codex_json_events") as mock_extract:
+                mock_extract.return_value = ("", {"input_tokens": 0})
+                with self.assertRaises(RuntimeError) as ctx:
+                    run_codex("test prompt", "test_call")
+                self.assertIn("0 input tokens", str(ctx.exception))
+
+    def test_heuristic_score_used_on_codex_failure(self):
+        """When codex fails, score_attempt should fall back to heuristic scoring."""
+        from unittest.mock import patch
+        from apps.speaking.services import score_attempt
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="test-heuristic-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-heuristic-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="What is your name?",
+            transcript_raw="My name is John and I am a student at the university.",
+            metadata={"status": "completed"},
+        )
+
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            # Simulate codex returning invalid output
+            mock_run.side_effect = RuntimeError("codex returned 0 input tokens")
+            result = score_attempt(user, "test-heuristic-attempt")
+
+            # Should fall back to heuristic scoring
+            self.assertEqual(result["status"], "scored")
+            self.assertIn("ielts_score", result)
+            # Backend should be heuristic, not codex
+            self.assertEqual(result["ielts_score"]["backend"], "heuristic")
+            # Should have recorded the error
+            self.assertIn("codex_error", result["ielts_score"])

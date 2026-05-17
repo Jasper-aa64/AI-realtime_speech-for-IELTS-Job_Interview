@@ -159,6 +159,9 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
 
     The `-` argument is required to make codex exec read from stdin.
     Without it, the model receives 0 tokens and outputs only thread/turn events.
+
+    Raises RuntimeError if the model did not actually process the prompt
+    (detected by 0 input tokens or empty output).
     """
     if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
         raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
@@ -188,6 +191,17 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
             check=True,
         )
         output, usage = result.stdout, None
+
+    # Validate that the model actually processed the prompt
+    # If usage shows 0 input tokens, the model didn't receive the prompt
+    if usage:
+        input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+        if input_tokens == 0:
+            raise RuntimeError(f"codex returned 0 input tokens for {call_id}: model did not process the prompt")
+
+    # Validate output is non-empty
+    if not output or not output.strip():
+        raise RuntimeError(f"codex returned empty output for {call_id}")
 
     return output, usage
 
@@ -1994,7 +2008,11 @@ def _word_count(text: str) -> int:
 
 
 def score_with_codex(transcript: str, question: str, part: str, call_id: str) -> dict[str, Any]:
-    """Score transcript using Codex CLI with full part-specific guidance."""
+    """Score transcript using Codex CLI with full part-specific guidance.
+
+    Raises RuntimeError if the model output is invalid or missing required fields.
+    The caller should fall back to heuristic scoring on error.
+    """
     data_dir = Path(settings.BASE_DIR).parent / "data" / "ielts"
     prompt_path = data_dir / "prompts" / "scorer_system.md"
 
@@ -2022,10 +2040,25 @@ def score_with_codex(transcript: str, question: str, part: str, call_id: str) ->
     output, usage = run_codex(prompt, call_id)
     payload = extract_json_object(output)
 
+    # Validate required fields are present and numeric
+    fc_raw = payload.get("fluency_coherence")
+    lr_raw = payload.get("lexical_resource")
+    gra_raw = payload.get("grammatical_range")
+
+    # Check if all required fields are missing or invalid
+    fc_valid = isinstance(fc_raw, (int, float)) and fc_raw > 0
+    lr_valid = isinstance(lr_raw, (int, float)) and lr_raw > 0
+    gra_valid = isinstance(gra_raw, (int, float)) and gra_raw > 0
+
+    if not (fc_valid and lr_valid and gra_valid):
+        raise RuntimeError(
+            f"codex score missing or invalid fields: FC={fc_raw}, LR={lr_raw}, GRA={gra_raw}"
+        )
+
     scores: dict[str, Any] = {
-        "fluency_coherence": clamp_band(payload.get("fluency_coherence")),
-        "lexical_resource": clamp_band(payload.get("lexical_resource")),
-        "grammatical_range": clamp_band(payload.get("grammatical_range")),
+        "fluency_coherence": clamp_band(fc_raw),
+        "lexical_resource": clamp_band(lr_raw),
+        "grammatical_range": clamp_band(gra_raw),
     }
     scores["overall_band"] = rounded_overall(scores)
 
