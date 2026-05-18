@@ -24,6 +24,8 @@ const state = {
   dictationFinalWait: null,
   browserTtsUtterance: null,
   activeHistoryId: null,
+  historyItems: [],
+  historyDetailCache: new Map(),
   abortingAttemptId: null,
   practiceViewBeforeSettings: null,
   p3Topics: [],
@@ -44,6 +46,7 @@ const state = {
   },
   languageTakeaway: {
     items: [],
+    loaded: false,
     selectedText: "",
     rangeRect: null,
     dragging: false,
@@ -72,6 +75,7 @@ const state = {
     reportEntries: [],
     activeReportId: null,
     activeReportDetail: null,
+    reportDetailCache: new Map(),
     scorePollTimer: null,
     scorePollingEntryId: null,
     pickerTaskType: "task1_academic",
@@ -1541,14 +1545,17 @@ function scoreCell(label, value) {
 
 async function loadHistory(showBusy = true) {
   const action = async () => {
+    if (state.historyItems.length) renderHistoryList(state.historyItems, { refreshActive: false });
     const payload = await api("/api/history");
-    renderHistoryList(payload.items || []);
+    state.historyItems = payload.items || [];
+    renderHistoryList(state.historyItems);
   };
-  if (showBusy) return withBusy("Loading history...", action).catch(showError);
+  if (showBusy && !state.historyItems.length) return withBusy("Loading history...", action).catch(showError);
   return action().catch(showError);
 }
 
-function renderHistoryList(items) {
+function renderHistoryList(items, options = {}) {
+  const refreshActive = options.refreshActive !== false;
   if (!items.length) {
     $("historyList").textContent = "No attempts yet.";
     $("detailPanel").innerHTML = '<h2>Attempt Details</h2><p class="muted">No attempts to display.</p>';
@@ -1580,8 +1587,14 @@ function renderHistoryList(items) {
       document.querySelectorAll(".history-item").forEach((item) => {
         item.classList.toggle("active", item.dataset.attemptId === state.activeHistoryId);
       });
-      const detail = await api(`/api/history/${button.dataset.attemptId}`);
-      renderDetail(detail, false);
+      const cached = state.historyDetailCache.get(button.dataset.attemptId);
+      if (cached) renderDetail(cached, false);
+      api(`/api/history/${button.dataset.attemptId}`)
+        .then((detail) => {
+          state.historyDetailCache.set(button.dataset.attemptId, detail);
+          if (state.activeHistoryId === button.dataset.attemptId) renderDetail(detail, false, { preserveScroll: Boolean(cached) });
+        })
+        .catch(showError);
     });
   });
   document.querySelectorAll(".history-item-menu-btn").forEach((btn) => {
@@ -1590,10 +1603,22 @@ function renderHistoryList(items) {
       showHistoryItemMenu(btn, btn.dataset.attemptId);
     });
   });
+  if (state.activeHistoryId && !items.some((item) => item.id === state.activeHistoryId)) {
+    state.activeHistoryId = null;
+  }
   if (!state.activeHistoryId && items.length) {
     state.activeHistoryId = items[0].id;
     document.querySelector(".history-item")?.classList.add("active");
-    api(`/api/history/${items[0].id}`).then((detail) => renderDetail(detail, false)).catch(showError);
+  }
+  if (refreshActive && state.activeHistoryId) {
+    const cached = state.historyDetailCache.get(state.activeHistoryId);
+    if (cached) renderDetail(cached, false, { preserveScroll: true });
+    api(`/api/history/${state.activeHistoryId}`)
+      .then((detail) => {
+        state.historyDetailCache.set(state.activeHistoryId, detail);
+        if (state.activeHistoryId === detail.id) renderDetail(detail, false, { preserveScroll: Boolean(cached) });
+      })
+      .catch(showError);
   }
 }
 
@@ -1634,6 +1659,7 @@ function showDeleteConfirm(attemptId) {
     try {
       await api(`/api/history/${attemptId}`, null, { method: "DELETE" });
       if (state.activeHistoryId === attemptId) state.activeHistoryId = null;
+      state.historyDetailCache.delete(attemptId);
       await loadHistory(false);
     } catch (err) {
       showError(err);
@@ -1810,17 +1836,21 @@ function renderWritingSummary(payload) {
 
 async function loadWritingReports() {
   try {
-    const payload = await withBusy("Loading writing reports...", () => api("/api/writing/reports"));
+    if (state.writing.reportEntries.length) renderWritingReports(state.writing.reportEntries, { refreshActive: false });
+    const loader = () => api("/api/writing/reports");
+    const payload = state.writing.reportEntries.length
+      ? await loader()
+      : await withBusy("Loading writing reports...", loader);
     await renderWritingReports(payload.items || []);
   } catch (error) {
     showWritingReportError(error);
   }
 }
 
-async function renderWritingReports(items) {
+async function renderWritingReports(items, options = {}) {
+  const refreshActive = options.refreshActive !== false;
   const target = $("writingReportDetail");
   if (!target) return;
-  state.writing.activeReportDetail = null;
   if (!items.length) {
     state.writing.reportEntries = [];
     const list = $("writingReportList");
@@ -1837,8 +1867,18 @@ async function renderWritingReports(items) {
   renderWritingReportList(items);
   // Fetch detail only for the selected item
   const activeItem = items.find((item) => item.id === activeId) || items[0];
+  const cached = state.writing.reportDetailCache.get(activeItem.id);
+  if (cached) {
+    state.writing.activeReportDetail = cached;
+    target.innerHTML = writingReportDetailHtml(cached);
+  } else {
+    state.writing.activeReportDetail = null;
+    target.innerHTML = '<div class="detail-card"><p class="muted">正在加载报告详情...</p></div>';
+  }
+  if (!refreshActive) return;
   try {
     const entry = await api(`/api/writing/entries/${activeItem.id}`);
+    state.writing.reportDetailCache.set(activeItem.id, entry);
     state.writing.activeReportDetail = entry;
     target.innerHTML = writingReportDetailHtml(entry);
     if (isWritingTaskActive(entry?.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
@@ -1856,16 +1896,25 @@ function renderWritingReportList(items) {
       const itemId = button.dataset.writingReportTab;
       if (!itemId) return;
       state.writing.activeReportId = itemId;
-      state.writing.activeReportDetail = null;
       renderWritingReportList(state.writing.reportEntries);
       const target = $("writingReportDetail");
       if (!target) return;
+      const cached = state.writing.reportDetailCache.get(itemId);
+      if (cached) {
+        state.writing.activeReportDetail = cached;
+        target.innerHTML = writingReportDetailHtml(cached);
+        target.scrollTo({ top: 0, behavior: "auto" });
+      } else {
+        state.writing.activeReportDetail = null;
+        target.innerHTML = '<div class="detail-card"><p class="muted">正在加载报告详情...</p></div>';
+      }
       // Fetch detail for the selected report
       try {
         const entry = await api(`/api/writing/entries/${itemId}`);
+        state.writing.reportDetailCache.set(itemId, entry);
         state.writing.activeReportDetail = entry;
         target.innerHTML = writingReportDetailHtml(entry);
-        target.scrollTo({ top: 0, behavior: "smooth" });
+        target.scrollTo({ top: 0, behavior: cached ? "auto" : "smooth" });
         if (isWritingTaskActive(entry.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
         else clearWritingScorePolling();
       } catch (error) {
@@ -2978,11 +3027,18 @@ async function loadCorpusHome() {}
 async function loadLanguageTakeaways() {
   const stats = $("languageTakeawayStats");
   const list = $("languageTakeawayList");
-  if (stats) stats.textContent = "Loading...";
-  if (list) list.innerHTML = '<p class="muted">正在加载生词本...</p>';
+  if (state.languageTakeaway.loaded) {
+    renderLanguageTakeawayToggle();
+    renderLanguageTakeaways();
+    if (stats) stats.textContent = `${state.languageTakeaway.items.length} 条 · 刷新中`;
+  } else {
+    if (stats) stats.textContent = "Loading...";
+    if (list) list.innerHTML = '<p class="muted">正在加载生词本...</p>';
+  }
   try {
     const payload = await api("/api/language-takeaways");
     state.languageTakeaway.items = payload.items || [];
+    state.languageTakeaway.loaded = true;
     if (stats) stats.textContent = `${payload.count || 0} 条`;
     renderLanguageTakeawayToggle();
     renderLanguageTakeaways();
