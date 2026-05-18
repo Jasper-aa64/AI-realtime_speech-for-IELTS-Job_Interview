@@ -537,16 +537,11 @@ function openCorpusWindow(view) {
 }
 
 function closeCorpusWindowOrReturn() {
-  if (state.view === "takeawayBook") {
-    switchView("corpus");
-    return;
-  }
-  const fallback = state.view === "p2Corpus" ? (state.p2Corpus.previousPracticeView || "p2") : (state.p1Corpus.previousPracticeView || "p1");
   if (requestedStandaloneView() && window.opener) {
     window.close();
     return;
   }
-  switchView(fallback);
+  switchView("corpus");
 }
 
 function loginReasonForView(view) {
