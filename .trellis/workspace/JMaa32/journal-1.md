@@ -1352,3 +1352,34 @@ Added DJANGO_CSRF_TRUSTED_ORIGINS support, restarted the local Django server wit
 ### Next Steps
 
 - None - task complete
+
+
+## Session 37: Enlarge Language Takeaway popup typography
+
+**Date**: 2026-05-18
+**Task**: Enlarge Language Takeaway popup typography
+**Branch**: `main`
+
+### Summary
+
+Increased the Language Takeaway popup source/Chinese label and textarea font sizes, with larger padding and textarea height for readability.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
