@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#fff"/>
+  <text x="32" y="38" font-size="22" font-weight="700" fill="#111827">Time spent on subjects</text>
+  <text x="32" y="64" font-size="14" fill="#64748b">Hours per week, two schools</text>
+  <line x1="80" y1="290" x2="585" y2="290" stroke="#334155" stroke-width="2"/>
+  <line x1="80" y1="90" x2="80" y2="290" stroke="#334155" stroke-width="2"/>
+  <line x1="80" y1="130" x2="585" y2="130" stroke="#e2e8f0"/><line x1="80" y1="170" x2="585" y2="170" stroke="#e2e8f0"/><line x1="80" y1="210" x2="585" y2="210" stroke="#e2e8f0"/><line x1="80" y1="250" x2="585" y2="250" stroke="#e2e8f0"/>
+  <rect x="110" y="120" width="34" height="170" fill="#2563eb"/><rect x="152" y="145" width="34" height="145" fill="#0f766e"/><text x="122" y="315" font-size="12" fill="#475569">Math</text><rect x="210" y="155" width="34" height="135" fill="#2563eb"/><rect x="252" y="135" width="34" height="155" fill="#0f766e"/><text x="222" y="315" font-size="12" fill="#475569">Sci</text><rect x="310" y="170" width="34" height="120" fill="#2563eb"/><rect x="352" y="152" width="34" height="138" fill="#0f766e"/><text x="322" y="315" font-size="12" fill="#475569">Lang</text><rect x="410" y="218" width="34" height="72" fill="#2563eb"/><rect x="452" y="195" width="34" height="95" fill="#0f766e"/><text x="422" y="315" font-size="12" fill="#475569">Art</text><rect x="510" y="232" width="34" height="58" fill="#2563eb"/><rect x="552" y="208" width="34" height="82" fill="#0f766e"/><text x="522" y="315" font-size="12" fill="#475569">PE</text>
+</svg>

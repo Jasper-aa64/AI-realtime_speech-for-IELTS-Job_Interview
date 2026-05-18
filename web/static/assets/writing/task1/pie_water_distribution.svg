@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#fff"/>
+  <text x="32" y="38" font-size="22" font-weight="700" fill="#111827">Water distribution</text>
+  <text x="32" y="64" font-size="14" fill="#64748b">Use by sector</text>
+  <circle cx="190" cy="190" r="96" fill="#2563eb"/>
+  <path d="M190 190 L190 94 A96 96 0 0 1 276 232 Z" fill="#0f766e"/>
+  <path d="M190 190 L276 232 A96 96 0 0 1 138 272 Z" fill="#7c3aed"/>
+  <path d="M190 190 L138 272 A96 96 0 0 1 112 134 Z" fill="#f59e0b"/>
+  <path d="M190 190 L112 134 A96 96 0 0 1 190 94 Z" fill="#dc2626"/>
+  <rect x="390" y="110" width="18" height="18" fill="#2563eb"/><text x="418" y="124" font-size="14" fill="#334155">Homes</text><rect x="390" y="142" width="18" height="18" fill="#0f766e"/><text x="418" y="156" font-size="14" fill="#334155">Farms</text><rect x="390" y="174" width="18" height="18" fill="#7c3aed"/><text x="418" y="188" font-size="14" fill="#334155">Industry</text><rect x="390" y="206" width="18" height="18" fill="#f59e0b"/><text x="418" y="220" font-size="14" fill="#334155">Public</text><rect x="390" y="238" width="18" height="18" fill="#dc2626"/><text x="418" y="252" font-size="14" fill="#334155">Other</text>
+</svg>

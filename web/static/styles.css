@@ -1983,7 +1983,9 @@ h1 {
 
 .writing-prompt-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 360px));
+  align-items: stretch;
+  justify-content: start;
   gap: 14px;
   padding: 18px 22px 22px;
 }
@@ -1998,7 +2000,7 @@ h1 {
   overflow: hidden;
   text-align: left;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 132px 1fr;
 }
 
 .writing-prompt-choice:hover,
@@ -2009,11 +2011,12 @@ h1 {
 }
 
 .writing-prompt-choice-image {
-  height: 156px;
+  height: 132px;
   display: grid;
   place-items: center;
   background: #f7fafb;
   border-bottom: 1px solid var(--line);
+  overflow: hidden;
 }
 
 .writing-prompt-choice-image img {
@@ -2043,6 +2046,10 @@ h1 {
   color: var(--muted);
   line-height: 1.45;
   font-size: 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .writing-pill {
@@ -5306,6 +5313,7 @@ input, select {
   }
   .writing-prompt-grid {
     grid-template-columns: 1fr;
+    justify-content: stretch;
     padding: 14px;
   }
   .writing-footer-row {

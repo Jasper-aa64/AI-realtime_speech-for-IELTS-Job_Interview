@@ -36,6 +36,114 @@
       "title": "International Travel",
       "category": "two_part",
       "prompt": "International travel is becoming cheaper and more common.\n\nWhy is this happening, and do you think it is a positive or negative development?"
+    },
+    {
+      "id": "task2_online_education_007",
+      "title": "Online Education",
+      "category": "advantages_disadvantages",
+      "prompt": "More universities are offering courses online instead of teaching students mainly on campus.\n\nDo the advantages of this development outweigh the disadvantages?"
+    },
+    {
+      "id": "task2_public_health_008",
+      "title": "Public Health",
+      "category": "problem_solution",
+      "prompt": "Many people do not get enough physical exercise in their daily lives.\n\nWhat are the reasons for this, and how can this problem be solved?"
+    },
+    {
+      "id": "task2_children_screens_009",
+      "title": "Children And Screens",
+      "category": "opinion",
+      "prompt": "Some people think children should not be allowed to use smartphones at school.\n\nTo what extent do you agree or disagree?"
+    },
+    {
+      "id": "task2_working_hours_010",
+      "title": "Working Hours",
+      "category": "discussion",
+      "prompt": "Some people believe employees should work fewer hours each week, while others think long working hours are necessary for economic success.\n\nDiscuss both views and give your own opinion."
+    },
+    {
+      "id": "task2_city_life_011",
+      "title": "City Life",
+      "category": "two_part",
+      "prompt": "More people are moving from small towns to big cities.\n\nWhy is this happening, and what problems can it cause?"
+    },
+    {
+      "id": "task2_public_money_012",
+      "title": "Public Money",
+      "category": "opinion",
+      "prompt": "Governments should spend more money on public services than on arts and cultural events.\n\nTo what extent do you agree or disagree?"
+    },
+    {
+      "id": "task2_ageing_population_013",
+      "title": "Ageing Population",
+      "category": "advantages_disadvantages",
+      "prompt": "In many countries, the proportion of older people is increasing.\n\nDo the advantages of this trend outweigh the disadvantages?"
+    },
+    {
+      "id": "task2_plastic_waste_014",
+      "title": "Plastic Waste",
+      "category": "problem_solution",
+      "prompt": "Plastic waste is causing serious environmental problems in many parts of the world.\n\nWhat are the causes of this problem, and what solutions can you suggest?"
+    },
+    {
+      "id": "task2_family_meals_015",
+      "title": "Family Meals",
+      "category": "discussion",
+      "prompt": "Some people think families should eat meals together every day, while others believe this is no longer realistic.\n\nDiscuss both views and give your own opinion."
+    },
+    {
+      "id": "task2_exam_pressure_016",
+      "title": "Exam Pressure",
+      "category": "opinion",
+      "prompt": "Students today face too much pressure from examinations.\n\nTo what extent do you agree or disagree?"
+    },
+    {
+      "id": "task2_tourism_local_017",
+      "title": "Tourism And Local Culture",
+      "category": "advantages_disadvantages",
+      "prompt": "Tourism brings money to local communities but can also damage local culture and the environment.\n\nDo the advantages of tourism outweigh the disadvantages?"
+    },
+    {
+      "id": "task2_job_changes_018",
+      "title": "Changing Jobs",
+      "category": "two_part",
+      "prompt": "Many people change jobs several times during their working lives.\n\nWhy does this happen, and do you think it is a positive or negative development?"
+    },
+    {
+      "id": "task2_food_imports_019",
+      "title": "Food Imports",
+      "category": "discussion",
+      "prompt": "Some people believe countries should produce all the food they need locally, while others think importing food is beneficial.\n\nDiscuss both views and give your own opinion."
+    },
+    {
+      "id": "task2_museums_020",
+      "title": "Museums",
+      "category": "opinion",
+      "prompt": "Museums should be free for everyone to visit.\n\nTo what extent do you agree or disagree?"
+    },
+    {
+      "id": "task2_parenting_classes_021",
+      "title": "Parenting Classes",
+      "category": "opinion",
+      "prompt": "All parents should be required to attend parenting classes before having a child.\n\nTo what extent do you agree or disagree?"
+    },
+    {
+      "id": "task2_noise_pollution_022",
+      "title": "Noise Pollution",
+      "category": "problem_solution",
+      "prompt": "Noise pollution is becoming a serious problem in many cities.\n\nWhat are the causes, and what can be done to reduce it?"
+    },
+    {
+      "id": "task2_sports_role_023",
+      "title": "Sports In Society",
+      "category": "discussion",
+      "prompt": "Some people think professional athletes are good role models, while others disagree.\n\nDiscuss both views and give your own opinion."
+    },
+    {
+      "id": "task2_remote_work_024",
+      "title": "Remote Work",
+      "category": "two_part",
+      "prompt": "Working from home has become common in many industries.\n\nWhy has this happened, and how might it affect workers and employers?"
     }
   ]
 }

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#fff"/>
+  <text x="32" y="38" font-size="22" font-weight="700" fill="#111827">Public transport use</text>
+  <text x="32" y="64" font-size="14" fill="#64748b">Trips per person, 2005-2025</text>
+  <line x1="80" y1="290" x2="580" y2="290" stroke="#334155" stroke-width="2"/>
+  <line x1="80" y1="82" x2="80" y2="290" stroke="#334155" stroke-width="2"/>
+  <line x1="80" y1="110" x2="580" y2="110" stroke="#e2e8f0"/><line x1="80" y1="155" x2="580" y2="155" stroke="#e2e8f0"/><line x1="80" y1="200" x2="580" y2="200" stroke="#e2e8f0"/><line x1="80" y1="245" x2="580" y2="245" stroke="#e2e8f0"/>
+  <polyline points="90,156.7 200,165.3 310,171.8 420,173.9 530,167.4" fill="none" stroke="#2563eb" stroke-width="4"/><polyline points="90,214.8 200,204.0 310,186.8 420,176.1 530,163.2" fill="none" stroke="#0f766e" stroke-width="4"/><polyline points="90,251.3 200,242.7 310,234.1 420,221.2 530,206.2" fill="none" stroke="#7c3aed" stroke-width="4"/>
+</svg>

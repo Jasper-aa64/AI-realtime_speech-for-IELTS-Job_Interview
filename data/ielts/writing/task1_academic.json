@@ -42,6 +42,174 @@
       "category": "table",
       "image_url": "/assets/writing/task1/table_exports.svg",
       "prompt": "The table gives information about the export value of four products in three countries in 2024.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_line_students_007",
+      "title": "Line Graph: International Students",
+      "category": "line_graph",
+      "image_url": "/assets/writing/task1/line_international_students.svg",
+      "prompt": "The line graph compares the number of international students from three regions studying in one country between 2000 and 2020.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_line_water_008",
+      "title": "Line Graph: Water Consumption",
+      "category": "line_graph",
+      "image_url": "/assets/writing/task1/line_water_use.svg",
+      "prompt": "The line graph shows changes in water consumption by households, industry, and agriculture from 1990 to 2020.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_line_online_009",
+      "title": "Line Graph: Online Shopping",
+      "category": "line_graph",
+      "image_url": "/assets/writing/task1/line_online_shopping.svg",
+      "prompt": "The line graph shows the proportion of adults using online shopping for three product categories from 2010 to 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_line_transport_010",
+      "title": "Line Graph: Public Transport Use",
+      "category": "line_graph",
+      "image_url": "/assets/writing/task1/line_public_transport.svg",
+      "prompt": "The line graph compares public transport use by bus, metro, and bicycle-sharing in a city from 2005 to 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_bar_recycling_011",
+      "title": "Bar Chart: Recycling Rates",
+      "category": "bar_chart",
+      "image_url": "/assets/writing/task1/bar_recycling_rates.svg",
+      "prompt": "The bar chart compares recycling rates for five materials in one city in 2010 and 2020.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_bar_subjects_012",
+      "title": "Bar Chart: School Subjects",
+      "category": "bar_chart",
+      "image_url": "/assets/writing/task1/bar_school_subjects.svg",
+      "prompt": "The bar chart shows weekly hours spent on different subjects in two secondary schools.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_bar_city_transport_013",
+      "title": "Bar Chart: City Transport",
+      "category": "bar_chart",
+      "image_url": "/assets/writing/task1/bar_city_transport.svg",
+      "prompt": "The bar chart compares the number of daily commuters using public transport in five cities in 2015 and 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_bar_spending_014",
+      "title": "Bar Chart: Household Spending",
+      "category": "bar_chart",
+      "image_url": "/assets/writing/task1/bar_household_spending.svg",
+      "prompt": "The bar chart shows average monthly household spending on five categories in 2015 and 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_pie_energy_015",
+      "title": "Pie Charts: Energy Sources",
+      "category": "pie_chart",
+      "image_url": "/assets/writing/task1/pie_energy_sources.svg",
+      "prompt": "The pie charts compare the sources of electricity generation in one country in two different years.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_pie_tourists_016",
+      "title": "Pie Chart: Tourist Activities",
+      "category": "pie_chart",
+      "image_url": "/assets/writing/task1/pie_tourist_activities.svg",
+      "prompt": "The pie chart shows how overseas tourists spent their time during visits to a coastal city.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_pie_apps_017",
+      "title": "Pie Charts: Mobile App Usage",
+      "category": "pie_chart",
+      "image_url": "/assets/writing/task1/pie_app_usage.svg",
+      "prompt": "The pie charts show how adults and teenagers used mobile phone apps in 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_pie_water_018",
+      "title": "Pie Chart: Water Distribution",
+      "category": "pie_chart",
+      "image_url": "/assets/writing/task1/pie_water_distribution.svg",
+      "prompt": "The pie chart shows how water was distributed among different sectors in one region.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_table_library_019",
+      "title": "Table: Library Visits",
+      "category": "table",
+      "image_url": "/assets/writing/task1/table_library_visits.svg",
+      "prompt": "The table gives information about visits to public libraries by different age groups in three selected years.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_table_population_020",
+      "title": "Table: Population Age Groups",
+      "category": "table",
+      "image_url": "/assets/writing/task1/table_population_age.svg",
+      "prompt": "The table shows the population of three towns by age group in 2010, 2020, and 2030.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_table_hotels_021",
+      "title": "Table: Hotel Occupancy",
+      "category": "table",
+      "image_url": "/assets/writing/task1/table_hotel_occupancy.svg",
+      "prompt": "The table compares hotel occupancy rates in four seasons in three cities.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_table_internet_022",
+      "title": "Table: Internet Access",
+      "category": "table",
+      "image_url": "/assets/writing/task1/table_internet_access.svg",
+      "prompt": "The table gives information about household Internet access in five regions over three years.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_process_coffee_023",
+      "title": "Process: Coffee Production",
+      "category": "process",
+      "image_url": "/assets/writing/task1/process_coffee.svg",
+      "prompt": "The diagram shows the process of producing packaged coffee from harvested beans.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_process_rainwater_024",
+      "title": "Process: Rainwater Collection",
+      "category": "process",
+      "image_url": "/assets/writing/task1/process_rainwater.svg",
+      "prompt": "The diagram illustrates how rainwater is collected, treated, and reused in a residential area.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_process_paper_025",
+      "title": "Process: Paper Recycling",
+      "category": "process",
+      "image_url": "/assets/writing/task1/process_paper.svg",
+      "prompt": "The diagram shows the stages involved in recycling used paper into new paper products.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_process_bricks_026",
+      "title": "Process: Brick Manufacturing",
+      "category": "process",
+      "image_url": "/assets/writing/task1/process_brick.svg",
+      "prompt": "The diagram illustrates the process used to manufacture bricks for the building industry.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_map_museum_027",
+      "title": "Map: Museum Redevelopment",
+      "category": "map",
+      "image_url": "/assets/writing/task1/map_museum.svg",
+      "prompt": "The maps show changes to a museum before and after redevelopment.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_map_park_028",
+      "title": "Map: City Park Changes",
+      "category": "map",
+      "image_url": "/assets/writing/task1/map_park.svg",
+      "prompt": "The maps compare the layout of a city park in 2010 and after improvements in 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_map_school_029",
+      "title": "Map: School Campus Plan",
+      "category": "map",
+      "image_url": "/assets/writing/task1/map_school.svg",
+      "prompt": "The maps show the current layout of a school campus and a proposed plan for redevelopment.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
+    },
+    {
+      "id": "task1_academic_map_town_030",
+      "title": "Map: Seaside Town Development",
+      "category": "map",
+      "image_url": "/assets/writing/task1/map_seaside_town.svg",
+      "prompt": "The maps show how a seaside town changed after tourism development.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
     }
   ]
 }

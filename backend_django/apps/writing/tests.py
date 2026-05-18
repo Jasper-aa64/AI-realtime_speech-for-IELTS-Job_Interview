@@ -759,6 +759,10 @@ class WritingApiTests(TestCase):
         self.assertEqual(task1_payload["items"][0]["source_book"], 20)
         self.assertTrue(task1_payload["items"][0]["image_url"])
         self.assertIn("line_graph", {item["category"] for item in task1_payload["categories"]})
+        self.assertGreaterEqual(
+            next(item["count"] for item in task1_payload["categories"] if item["category"] == "line_graph"),
+            5,
+        )
 
         task2 = self.client.get("/api/writing/prompts?task_type=task2&category=opinion")
         self.assertEqual(task2.status_code, 200)
