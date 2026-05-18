@@ -126,6 +126,7 @@ const viewCopy = {
 
 const authViews = new Set(["login", "register", "forgotPassword"]);
 const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "accountProfile", "accountSecurity"]);
+const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook"]);
 
 const $ = (selector) => {
   if (typeof selector !== "string") return null;
@@ -542,6 +543,11 @@ function closeCorpusWindowOrReturn() {
     return;
   }
   switchView("corpus");
+}
+
+async function exitPracticeAndSwitch(view) {
+  await exitPractice();
+  switchView(view, { force: true });
 }
 
 function loginReasonForView(view) {
@@ -3687,6 +3693,10 @@ function bindEvents() {
       }
       if (state.practiceLocked && button.dataset.view !== state.view) {
         event.preventDefault();
+        if (corpusViews.has(button.dataset.view)) {
+          exitPracticeAndSwitch(button.dataset.view).catch(showError);
+          return;
+        }
         showNavLockHint(button);
         return;
       }
