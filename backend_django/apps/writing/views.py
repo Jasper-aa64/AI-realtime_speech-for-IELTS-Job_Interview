@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .services import WritingError, create_score_task, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
+from .services import WritingError, cambridge_catalog, create_score_task, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
 def read_json_body(request) -> dict:
@@ -59,6 +59,7 @@ def prompts(request):
         return JsonResponse({
             "items": list_prompts(task_type, request.GET.get("category")),
             "categories": prompt_categories(task_type),
+            "catalog": cambridge_catalog(task_type),
         })
     except WritingError as exc:
         return writing_error(exc)

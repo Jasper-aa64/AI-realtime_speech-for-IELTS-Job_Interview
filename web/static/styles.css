@@ -2010,6 +2010,18 @@ h1 {
   background: #fff;
 }
 
+.writing-prompt-choice.missing {
+  cursor: not-allowed;
+  opacity: 0.68;
+  background: #f5f7f8;
+  border-style: dashed;
+}
+
+.writing-prompt-choice.missing:hover {
+  border-color: var(--line);
+  box-shadow: none;
+}
+
 .writing-prompt-choice-image {
   height: 132px;
   display: grid;
@@ -2024,6 +2036,14 @@ h1 {
   height: 100%;
   object-fit: contain;
   display: block;
+}
+
+.writing-prompt-choice-image.placeholder {
+  color: #6b7c85;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .writing-prompt-choice-body {

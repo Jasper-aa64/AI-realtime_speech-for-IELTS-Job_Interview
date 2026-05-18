@@ -1,0 +1,1527 @@
+{
+  "version": 1,
+  "description": "Complete Cambridge IELTS Writing catalog slots for books 20 down to 1. Fill these slots with authorized prompt text and Task 1 chart assets before distributing original materials.",
+  "copyright_note": "This manifest stores identifiers and expected asset locations only. It intentionally does not include Cambridge copyrighted prompt text or chart images.",
+  "slots": [
+    {
+      "id": "cambridge-20-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅20-1 Task 1",
+      "source_book": 20,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/20/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-20-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅20-1 Task 2",
+      "source_book": 20,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-20-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅20-2 Task 1",
+      "source_book": 20,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/20/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-20-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅20-2 Task 2",
+      "source_book": 20,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-20-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅20-3 Task 1",
+      "source_book": 20,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/20/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-20-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅20-3 Task 2",
+      "source_book": 20,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-20-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅20-4 Task 1",
+      "source_book": 20,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/20/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-20-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅20-4 Task 2",
+      "source_book": 20,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-19-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅19-1 Task 1",
+      "source_book": 19,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/19/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-19-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅19-1 Task 2",
+      "source_book": 19,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-19-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅19-2 Task 1",
+      "source_book": 19,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/19/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-19-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅19-2 Task 2",
+      "source_book": 19,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-19-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅19-3 Task 1",
+      "source_book": 19,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/19/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-19-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅19-3 Task 2",
+      "source_book": 19,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-19-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅19-4 Task 1",
+      "source_book": 19,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/19/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-19-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅19-4 Task 2",
+      "source_book": 19,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-18-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅18-1 Task 1",
+      "source_book": 18,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/18/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-18-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅18-1 Task 2",
+      "source_book": 18,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-18-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅18-2 Task 1",
+      "source_book": 18,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/18/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-18-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅18-2 Task 2",
+      "source_book": 18,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-18-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅18-3 Task 1",
+      "source_book": 18,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/18/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-18-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅18-3 Task 2",
+      "source_book": 18,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-18-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅18-4 Task 1",
+      "source_book": 18,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/18/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-18-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅18-4 Task 2",
+      "source_book": 18,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-17-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅17-1 Task 1",
+      "source_book": 17,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/17/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-17-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅17-1 Task 2",
+      "source_book": 17,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-17-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅17-2 Task 1",
+      "source_book": 17,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/17/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-17-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅17-2 Task 2",
+      "source_book": 17,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-17-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅17-3 Task 1",
+      "source_book": 17,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/17/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-17-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅17-3 Task 2",
+      "source_book": 17,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-17-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅17-4 Task 1",
+      "source_book": 17,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/17/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-17-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅17-4 Task 2",
+      "source_book": 17,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-16-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅16-1 Task 1",
+      "source_book": 16,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/16/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-16-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅16-1 Task 2",
+      "source_book": 16,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-16-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅16-2 Task 1",
+      "source_book": 16,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/16/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-16-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅16-2 Task 2",
+      "source_book": 16,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-16-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅16-3 Task 1",
+      "source_book": 16,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/16/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-16-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅16-3 Task 2",
+      "source_book": 16,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-16-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅16-4 Task 1",
+      "source_book": 16,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/16/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-16-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅16-4 Task 2",
+      "source_book": 16,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-15-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅15-1 Task 1",
+      "source_book": 15,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/15/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-15-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅15-1 Task 2",
+      "source_book": 15,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-15-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅15-2 Task 1",
+      "source_book": 15,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/15/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-15-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅15-2 Task 2",
+      "source_book": 15,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-15-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅15-3 Task 1",
+      "source_book": 15,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/15/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-15-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅15-3 Task 2",
+      "source_book": 15,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-15-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅15-4 Task 1",
+      "source_book": 15,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/15/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-15-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅15-4 Task 2",
+      "source_book": 15,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-14-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅14-1 Task 1",
+      "source_book": 14,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/14/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-14-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅14-1 Task 2",
+      "source_book": 14,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-14-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅14-2 Task 1",
+      "source_book": 14,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/14/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-14-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅14-2 Task 2",
+      "source_book": 14,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-14-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅14-3 Task 1",
+      "source_book": 14,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/14/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-14-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅14-3 Task 2",
+      "source_book": 14,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-14-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅14-4 Task 1",
+      "source_book": 14,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/14/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-14-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅14-4 Task 2",
+      "source_book": 14,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-13-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅13-1 Task 1",
+      "source_book": 13,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/13/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-13-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅13-1 Task 2",
+      "source_book": 13,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-13-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅13-2 Task 1",
+      "source_book": 13,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/13/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-13-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅13-2 Task 2",
+      "source_book": 13,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-13-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅13-3 Task 1",
+      "source_book": 13,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/13/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-13-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅13-3 Task 2",
+      "source_book": 13,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-13-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅13-4 Task 1",
+      "source_book": 13,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/13/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-13-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅13-4 Task 2",
+      "source_book": 13,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-12-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅12-1 Task 1",
+      "source_book": 12,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/12/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-12-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅12-1 Task 2",
+      "source_book": 12,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-12-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅12-2 Task 1",
+      "source_book": 12,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/12/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-12-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅12-2 Task 2",
+      "source_book": 12,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-12-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅12-3 Task 1",
+      "source_book": 12,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/12/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-12-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅12-3 Task 2",
+      "source_book": 12,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-12-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅12-4 Task 1",
+      "source_book": 12,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/12/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-12-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅12-4 Task 2",
+      "source_book": 12,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-11-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅11-1 Task 1",
+      "source_book": 11,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/11/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-11-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅11-1 Task 2",
+      "source_book": 11,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-11-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅11-2 Task 1",
+      "source_book": 11,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/11/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-11-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅11-2 Task 2",
+      "source_book": 11,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-11-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅11-3 Task 1",
+      "source_book": 11,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/11/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-11-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅11-3 Task 2",
+      "source_book": 11,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-11-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅11-4 Task 1",
+      "source_book": 11,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/11/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-11-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅11-4 Task 2",
+      "source_book": 11,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-10-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅10-1 Task 1",
+      "source_book": 10,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/10/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-10-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅10-1 Task 2",
+      "source_book": 10,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-10-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅10-2 Task 1",
+      "source_book": 10,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/10/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-10-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅10-2 Task 2",
+      "source_book": 10,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-10-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅10-3 Task 1",
+      "source_book": 10,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/10/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-10-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅10-3 Task 2",
+      "source_book": 10,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-10-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅10-4 Task 1",
+      "source_book": 10,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/10/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-10-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅10-4 Task 2",
+      "source_book": 10,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-9-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅9-1 Task 1",
+      "source_book": 9,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/9/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-9-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅9-1 Task 2",
+      "source_book": 9,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-9-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅9-2 Task 1",
+      "source_book": 9,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/9/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-9-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅9-2 Task 2",
+      "source_book": 9,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-9-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅9-3 Task 1",
+      "source_book": 9,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/9/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-9-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅9-3 Task 2",
+      "source_book": 9,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-9-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅9-4 Task 1",
+      "source_book": 9,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/9/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-9-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅9-4 Task 2",
+      "source_book": 9,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-8-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅8-1 Task 1",
+      "source_book": 8,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/8/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-8-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅8-1 Task 2",
+      "source_book": 8,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-8-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅8-2 Task 1",
+      "source_book": 8,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/8/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-8-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅8-2 Task 2",
+      "source_book": 8,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-8-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅8-3 Task 1",
+      "source_book": 8,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/8/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-8-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅8-3 Task 2",
+      "source_book": 8,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-8-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅8-4 Task 1",
+      "source_book": 8,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/8/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-8-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅8-4 Task 2",
+      "source_book": 8,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-7-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅7-1 Task 1",
+      "source_book": 7,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/7/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-7-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅7-1 Task 2",
+      "source_book": 7,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-7-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅7-2 Task 1",
+      "source_book": 7,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/7/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-7-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅7-2 Task 2",
+      "source_book": 7,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-7-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅7-3 Task 1",
+      "source_book": 7,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/7/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-7-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅7-3 Task 2",
+      "source_book": 7,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-7-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅7-4 Task 1",
+      "source_book": 7,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/7/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-7-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅7-4 Task 2",
+      "source_book": 7,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-6-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅6-1 Task 1",
+      "source_book": 6,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/6/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-6-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅6-1 Task 2",
+      "source_book": 6,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-6-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅6-2 Task 1",
+      "source_book": 6,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/6/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-6-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅6-2 Task 2",
+      "source_book": 6,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-6-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅6-3 Task 1",
+      "source_book": 6,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/6/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-6-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅6-3 Task 2",
+      "source_book": 6,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-6-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅6-4 Task 1",
+      "source_book": 6,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/6/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-6-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅6-4 Task 2",
+      "source_book": 6,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-5-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅5-1 Task 1",
+      "source_book": 5,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/5/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-5-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅5-1 Task 2",
+      "source_book": 5,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-5-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅5-2 Task 1",
+      "source_book": 5,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/5/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-5-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅5-2 Task 2",
+      "source_book": 5,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-5-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅5-3 Task 1",
+      "source_book": 5,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/5/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-5-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅5-3 Task 2",
+      "source_book": 5,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-5-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅5-4 Task 1",
+      "source_book": 5,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/5/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-5-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅5-4 Task 2",
+      "source_book": 5,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-4-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅4-1 Task 1",
+      "source_book": 4,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/4/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-4-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅4-1 Task 2",
+      "source_book": 4,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-4-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅4-2 Task 1",
+      "source_book": 4,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/4/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-4-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅4-2 Task 2",
+      "source_book": 4,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-4-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅4-3 Task 1",
+      "source_book": 4,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/4/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-4-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅4-3 Task 2",
+      "source_book": 4,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-4-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅4-4 Task 1",
+      "source_book": 4,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/4/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-4-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅4-4 Task 2",
+      "source_book": 4,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-3-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅3-1 Task 1",
+      "source_book": 3,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/3/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-3-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅3-1 Task 2",
+      "source_book": 3,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-3-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅3-2 Task 1",
+      "source_book": 3,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/3/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-3-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅3-2 Task 2",
+      "source_book": 3,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-3-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅3-3 Task 1",
+      "source_book": 3,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/3/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-3-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅3-3 Task 2",
+      "source_book": 3,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-3-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅3-4 Task 1",
+      "source_book": 3,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/3/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-3-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅3-4 Task 2",
+      "source_book": 3,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-2-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅2-1 Task 1",
+      "source_book": 2,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/2/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-2-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅2-1 Task 2",
+      "source_book": 2,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-2-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅2-2 Task 1",
+      "source_book": 2,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/2/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-2-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅2-2 Task 2",
+      "source_book": 2,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-2-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅2-3 Task 1",
+      "source_book": 2,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/2/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-2-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅2-3 Task 2",
+      "source_book": 2,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-2-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅2-4 Task 1",
+      "source_book": 2,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/2/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-2-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅2-4 Task 2",
+      "source_book": 2,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-1-test-1-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅1-1 Task 1",
+      "source_book": 1,
+      "source_test": 1,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/1/test_1_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-1-test-1-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅1-1 Task 2",
+      "source_book": 1,
+      "source_test": 1,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-1-test-2-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅1-2 Task 1",
+      "source_book": 1,
+      "source_test": 2,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/1/test_2_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-1-test-2-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅1-2 Task 2",
+      "source_book": 1,
+      "source_test": 2,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-1-test-3-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅1-3 Task 1",
+      "source_book": 1,
+      "source_test": 3,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/1/test_3_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-1-test-3-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅1-3 Task 2",
+      "source_book": 1,
+      "source_test": 3,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-1-test-4-task-1",
+      "task_type": "task1_academic",
+      "source_label": "剑雅1-4 Task 1",
+      "source_book": 1,
+      "source_test": 4,
+      "source_question": 1,
+      "expected_image_url": "/assets/writing/task1/cambridge/1/test_4_task_1.png",
+      "material_status": "missing_authorized_material"
+    },
+    {
+      "id": "cambridge-1-test-4-task-2",
+      "task_type": "task2",
+      "source_label": "剑雅1-4 Task 2",
+      "source_book": 1,
+      "source_test": 4,
+      "source_question": 2,
+      "material_status": "missing_authorized_material"
+    }
+  ]
+}

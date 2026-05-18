@@ -1313,9 +1313,12 @@ class AppState:
             "today_entry": today_entry,
         }
 
-    def random_writing_prompt(self, task_type: str | None = None) -> dict[str, Any]:
+    def random_writing_prompt(self, task_type: str | None = None, category: str | None = None) -> dict[str, Any]:
         selected_type = normalize_writing_task_type(task_type) if task_type else next_default_writing_task_type()
         prompts = self.writing_bank.list(selected_type)
+        selected_category = str(category or "").strip()
+        if selected_category:
+            prompts = [prompt for prompt in prompts if prompt.get("category") == selected_category]
         if not prompts:
             raise ValueError(f"No writing prompts available for {selected_type}")
         used_prompt_ids = {
@@ -1388,6 +1391,21 @@ def normalize_writing_task_type(value: str | None) -> str:
     return task_type
 
 
+def positive_int(value: Any) -> int | None:
+    try:
+        number = int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def cambridge_source_label(task_type: str, source_book: int | None, source_test: int | None, source_question: int | None) -> str:
+    if not source_book or not source_test:
+        return ""
+    task_number = source_question or (1 if task_type == "task1_academic" else 2)
+    return f"\u5251\u96c5{source_book}-{source_test} Task {task_number}"
+
+
 def local_date_string(value: str | None = None) -> str:
     if value:
         parsed = parse_iso_datetime(value)
@@ -1409,39 +1427,108 @@ def month_bounds(month_value: str | None) -> tuple[dt.date, dt.date]:
 class WritingPromptBank:
     def __init__(self, data_dir: Path) -> None:
         self.data_dir = data_dir
+        self.catalog = self.load_catalog()
         self.prompts = self.load()
 
-    def load(self) -> dict[str, list[dict[str, Any]]]:
+    def prompt_files(self, task_type: str) -> list[Path]:
         base_dir = self.data_dir / "writing"
+        files: list[Path] = []
+        main_file = base_dir / f"{task_type}.json"
+        if main_file.exists():
+            files.append(main_file)
+        cambridge_dir = base_dir / "cambridge" / task_type
+        if cambridge_dir.exists():
+            files.extend(sorted(path for path in cambridge_dir.rglob("*.json") if path.is_file()))
+        return files
+
+    def load_catalog(self) -> list[dict[str, Any]]:
+        path = self.data_dir / "writing" / "cambridge" / "cambridge_1_20_manifest.json"
+        if not path.exists():
+            return []
+        payload = read_json(path)
+        raw_slots = payload.get("slots") if isinstance(payload, dict) else []
+        if not isinstance(raw_slots, list):
+            raise ValueError(f"Cambridge writing catalog must contain a slots array: {path}")
+        slots: list[dict[str, Any]] = []
+        for raw_item in raw_slots:
+            if not isinstance(raw_item, dict):
+                continue
+            task_type = normalize_writing_task_type(str(raw_item.get("task_type") or ""))
+            source_book = positive_int(raw_item.get("source_book"))
+            source_test = positive_int(raw_item.get("source_test"))
+            source_question = positive_int(raw_item.get("source_question"))
+            slots.append(
+                {
+                    "id": clean_report_text(str(raw_item.get("id") or "")),
+                    "task_type": task_type,
+                    "task_label": WRITING_TASK_LABELS[task_type],
+                    "source_label": clean_report_text(str(raw_item.get("source_label") or "")) or cambridge_source_label(task_type, source_book, source_test, source_question),
+                    "source_book": source_book,
+                    "source_test": source_test,
+                    "source_question": source_question,
+                    "expected_image_url": clean_report_text(str(raw_item.get("expected_image_url") or "")),
+                    "material_status": clean_report_text(str(raw_item.get("material_status") or "missing_authorized_material")),
+                }
+            )
+        return sorted(
+            slots,
+            key=lambda item: (
+                0 if item["task_type"] == "task1_academic" else 1,
+                -(item.get("source_book") or 0),
+                item.get("source_test") or 999,
+                item.get("source_question") or 999,
+            ),
+        )
+
+    def load(self) -> dict[str, list[dict[str, Any]]]:
         loaded: dict[str, list[dict[str, Any]]] = {}
         for task_type in sorted(WRITING_TASK_TYPES):
-            path = base_dir / f"{task_type}.json"
-            if not path.exists():
-                loaded[task_type] = []
-                continue
-            payload = read_json(path)
-            raw_items = payload.get("prompts") if isinstance(payload, dict) else payload
-            if not isinstance(raw_items, list):
-                raise ValueError(f"Writing prompt file must contain a prompts array: {path}")
             items: list[dict[str, Any]] = []
-            for index, raw_item in enumerate(raw_items):
-                if not isinstance(raw_item, dict):
-                    raise ValueError(f"Writing prompt must be an object in {path}")
-                prompt = clean_markdown_text(str(raw_item.get("prompt") or raw_item.get("question") or ""))
-                if not prompt:
-                    continue
-                prompt_id = clean_report_text(str(raw_item.get("id") or "")) or stable_writing_prompt_id(task_type, prompt)
-                items.append(
-                    {
-                        "id": safe_slug(prompt_id),
-                        "task_type": task_type,
-                        "task_label": WRITING_TASK_LABELS[task_type],
-                        "title": clean_report_text(str(raw_item.get("title") or "")) or f"{WRITING_TASK_LABELS[task_type]} {index + 1}",
-                        "prompt": prompt,
-                        "category": clean_report_text(str(raw_item.get("category") or "")),
-                        "source": clean_report_text(str(raw_item.get("source") or "")) or "local",
-                    }
-                )
+            for path in self.prompt_files(task_type):
+                payload = read_json(path)
+                raw_items = payload.get("prompts") if isinstance(payload, dict) else payload
+                if not isinstance(raw_items, list):
+                    raise ValueError(f"Writing prompt file must contain a prompts array: {path}")
+                file_book = positive_int(payload.get("book") if isinstance(payload, dict) else None)
+                file_test = positive_int(payload.get("test") if isinstance(payload, dict) else None)
+                file_source = clean_report_text(str(payload.get("source") or "")) if isinstance(payload, dict) else ""
+                for index, raw_item in enumerate(raw_items):
+                    if not isinstance(raw_item, dict):
+                        raise ValueError(f"Writing prompt must be an object in {path}")
+                    prompt = clean_markdown_text(str(raw_item.get("prompt") or raw_item.get("question") or ""))
+                    if not prompt:
+                        continue
+                    item_task_type = normalize_writing_task_type(str(raw_item.get("task_type") or task_type))
+                    prompt_id = clean_report_text(str(raw_item.get("id") or "")) or stable_writing_prompt_id(item_task_type, prompt)
+                    source_book = positive_int(raw_item.get("source_book") or raw_item.get("book")) or file_book
+                    source_test = positive_int(raw_item.get("source_test") or raw_item.get("test")) or file_test
+                    source_question = positive_int(raw_item.get("source_question") or raw_item.get("question_number"))
+                    items.append(
+                        {
+                            "id": safe_slug(prompt_id),
+                            "task_type": item_task_type,
+                            "task_label": WRITING_TASK_LABELS[item_task_type],
+                            "title": clean_report_text(str(raw_item.get("title") or "")) or f"{WRITING_TASK_LABELS[item_task_type]} {index + 1}",
+                            "prompt": prompt,
+                            "category": clean_report_text(str(raw_item.get("category") or "")),
+                            "image_url": clean_report_text(str(raw_item.get("image_url") or raw_item.get("image") or "")),
+                            "source": clean_report_text(str(raw_item.get("source") or file_source or "")) or "local",
+                            "source_book": source_book,
+                            "source_test": source_test,
+                            "source_question": source_question,
+                            "source_label": cambridge_source_label(item_task_type, source_book, source_test, source_question),
+                            "sort_order": positive_int(raw_item.get("sort_order")) or index + 1,
+                        }
+                    )
+            items.sort(key=lambda item: (
+                0 if item["task_type"] == "task1_academic" else 1,
+                item.get("source_book") is None,
+                -(item.get("source_book") or 0),
+                item.get("source_test") or 999,
+                item.get("source_question") or 999,
+                item.get("sort_order") or 999_999,
+                item.get("id") or "",
+            ))
             loaded[task_type] = items
         return loaded
 
@@ -1460,6 +1547,19 @@ class WritingPromptBank:
                 if prompt.get("id") == prompt_id:
                     return dict(prompt)
         return None
+
+    def categories(self, task_type: str | None = None) -> list[dict[str, Any]]:
+        counts: dict[str, int] = {}
+        for prompt in self.list(task_type):
+            category = str(prompt.get("category") or "").strip()
+            if not category:
+                continue
+            counts[category] = counts.get(category, 0) + 1
+        return [{"category": key, "label": key.replace("_", " ").title(), "count": counts[key]} for key in sorted(counts)]
+
+    def catalog_slots(self, task_type: str | None = None) -> list[dict[str, Any]]:
+        selected = normalize_writing_task_type(task_type) if task_type else ""
+        return [dict(item) for item in self.catalog if not selected or item.get("task_type") == selected]
 
 
 def writing_word_count(answer: str) -> int:
@@ -4142,7 +4242,15 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             if path == "/api/writing/prompts":
                 params = parse_qs(parsed_url.query)
                 task_type = (params.get("task_type") or [""])[0] or None
-                self.send_json({"items": self.state.writing_bank.list(task_type)})
+                category = (params.get("category") or [""])[0].strip()
+                items = self.state.writing_bank.list(task_type)
+                if category:
+                    items = [item for item in items if item.get("category") == category]
+                self.send_json({
+                    "items": items,
+                    "categories": self.state.writing_bank.categories(task_type),
+                    "catalog": self.state.writing_bank.catalog_slots(task_type),
+                })
                 return
             if path == "/api/training/weak-items":
                 self.send_json({"items": self.state.training.weak_items(DEFAULT_USER_ID)})
@@ -4363,7 +4471,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
 
     def handle_writing_random_prompt(self, payload: dict[str, Any]) -> None:
         task_type = str(payload.get("task_type") or "").strip() or None
-        self.send_json(self.state.random_writing_prompt(task_type))
+        category = str(payload.get("category") or "").strip() or None
+        self.send_json(self.state.random_writing_prompt(task_type, category))
 
     def handle_writing_entry_save(self, payload: dict[str, Any]) -> None:
         answer = str(payload.get("answer") or "")
@@ -4400,6 +4509,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             "title": clean_report_text(str(payload.get("title") or (prompt or {}).get("title") or "")) or WRITING_TASK_LABELS[task_type],
             "category": clean_report_text(str(payload.get("category") or (prompt or {}).get("category") or "")),
             "prompt": prompt_text,
+            "image_url": clean_report_text(str(payload.get("image_url") or (prompt or {}).get("image_url") or "")),
+            "source_label": clean_report_text(str((prompt or {}).get("source_label") or "")),
             "answer": answer,
             "word_count": writing_word_count(answer),
         }

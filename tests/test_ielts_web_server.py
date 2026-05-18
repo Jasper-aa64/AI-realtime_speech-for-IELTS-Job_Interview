@@ -495,6 +495,9 @@ class IELTSWebServerTest(unittest.TestCase):
         prompts = self.get_json("/api/writing/prompts?task_type=task1_academic")
         self.assertGreaterEqual(len(prompts["items"]), 3)
         self.assertEqual(prompts["items"][0]["task_type"], "task1_academic")
+        self.assertEqual(len(prompts["catalog"]), 80)
+        self.assertEqual(prompts["catalog"][0]["id"], "cambridge-20-test-1-task-1")
+        self.assertEqual(prompts["catalog"][0]["source_label"], "剑雅20-1 Task 1")
 
         random_prompt = self.post_json("/api/writing/prompts/random", {"task_type": "task2"})
         self.assertEqual(random_prompt["task_type"], "task2")

@@ -757,7 +757,11 @@ class WritingApiTests(TestCase):
         task1_ids = [item["id"] for item in task1_payload["items"]]
         self.assertLess(task1_ids.index("cambridge-20-test-1-task-1"), task1_ids.index("cambridge-19-test-1-task-1"))
         self.assertEqual(task1_payload["items"][0]["source_book"], 20)
+        self.assertEqual(task1_payload["items"][0]["source_label"], "剑雅20-1 Task 1")
         self.assertTrue(task1_payload["items"][0]["image_url"])
+        self.assertEqual(len(task1_payload["catalog"]), 80)
+        self.assertEqual(task1_payload["catalog"][0]["id"], "cambridge-20-test-1-task-1")
+        self.assertEqual(task1_payload["catalog"][0]["source_label"], "剑雅20-1 Task 1")
         self.assertIn("line_graph", {item["category"] for item in task1_payload["categories"]})
         self.assertGreaterEqual(
             next(item["count"] for item in task1_payload["categories"] if item["category"] == "line_graph"),
@@ -766,9 +770,14 @@ class WritingApiTests(TestCase):
 
         task2 = self.client.get("/api/writing/prompts?task_type=task2&category=opinion")
         self.assertEqual(task2.status_code, 200)
-        self.assertTrue(task2.json()["items"])
-        self.assertTrue(all(item["task_type"] == WritingPrompt.TaskType.TASK2 for item in task2.json()["items"]))
-        self.assertTrue(all(item["category"] == "opinion" for item in task2.json()["items"]))
+        task2_payload = task2.json()
+        self.assertTrue(task2_payload["items"])
+        self.assertEqual(task2_payload["items"][0]["source_label"], "剑雅20-2 Task 2")
+        self.assertEqual(len(task2_payload["catalog"]), 80)
+        self.assertEqual(task2_payload["catalog"][0]["id"], "cambridge-20-test-1-task-2")
+        self.assertEqual(task2_payload["catalog"][0]["source_label"], "剑雅20-1 Task 2")
+        self.assertTrue(all(item["task_type"] == WritingPrompt.TaskType.TASK2 for item in task2_payload["items"]))
+        self.assertTrue(all(item["category"] == "opinion" for item in task2_payload["items"]))
 
     def test_invalid_writing_requests_return_json_errors(self):
         bad_prompt_type = self.client.get("/api/writing/prompts?task_type=unknown")

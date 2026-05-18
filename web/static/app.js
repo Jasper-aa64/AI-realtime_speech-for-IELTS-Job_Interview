@@ -76,6 +76,7 @@ const state = {
     scorePollingEntryId: null,
     pickerTaskType: "task1_academic",
     promptCategories: {},
+    promptCatalog: {},
     pickerCategoryFilters: {
       task1_academic: "",
       task2: "",
@@ -1666,21 +1667,41 @@ function writingTaskLabel(taskType) {
 
 function writingCategoryLabel(category = "") {
   const labels = {
-    line_graph: "折线图",
-    bar_chart: "柱状图",
-    pie_chart: "饼图",
-    table: "表格",
-    map: "地图",
-    process: "流程图",
-    mixed: "混合图",
-    opinion: "观点类",
-    discussion: "讨论类",
-    problem_solution: "问题解决类",
-    advantages_disadvantages: "利弊类",
-    two_part: "双问题类",
+    line_graph: "\u6298\u7ebf\u56fe",
+    bar_chart: "\u67f1\u72b6\u56fe",
+    pie_chart: "\u997c\u56fe",
+    table: "\u8868\u683c",
+    map: "\u5730\u56fe",
+    process: "\u6d41\u7a0b\u56fe",
+    mixed: "\u6df7\u5408\u56fe",
+    opinion: "\u89c2\u70b9\u7c7b",
+    discussion: "\u8ba8\u8bba\u7c7b",
+    problem_solution: "\u95ee\u9898\u89e3\u51b3\u7c7b",
+    advantages_disadvantages: "\u5229\u5f0a\u7c7b",
+    two_part: "\u53cc\u95ee\u9898\u7c7b",
   };
   const key = String(category || "").trim();
   return labels[key] || key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Writing";
+}
+
+function writingPromptDisplayTitle(prompt) {
+  const sourceLabel = String(prompt?.source_label || "").trim();
+  const title = String(prompt?.title || writingTaskLabel(prompt?.task_type)).trim();
+  return sourceLabel || title;
+}
+
+function writingPromptMeta(prompt) {
+  if (!prompt) return writingTaskLabel(state.writing.taskType || "task1_academic");
+  const parts = prompt.source_label
+    ? [prompt.title || "", writingTaskLabel(prompt.task_type), writingCategoryLabel(prompt.category)]
+    : [writingTaskLabel(prompt.task_type), writingCategoryLabel(prompt.category)];
+  return parts.filter(Boolean).join(" \u00b7 ");
+}
+
+function writingCatalogMissingSlots(taskType, selectedCategory = "") {
+  if (selectedCategory) return [];
+  const availableIds = new Set((state.writing.prompts[taskType] || []).map((prompt) => prompt.id));
+  return (state.writing.promptCatalog[taskType] || []).filter((slot) => slot?.id && !availableIds.has(slot.id));
 }
 
 async function loadWriting() {
@@ -1712,6 +1733,7 @@ async function loadWritingPrompts(taskType) {
   const payload = await api(`/api/writing/prompts?task_type=${encodeURIComponent(normalized)}`);
   state.writing.prompts[normalized] = payload.items || [];
   state.writing.promptCategories[normalized] = payload.categories || inferWritingCategories(state.writing.prompts[normalized]);
+  state.writing.promptCatalog[normalized] = payload.catalog || [];
   return state.writing.prompts[normalized];
 }
 
@@ -1942,10 +1964,10 @@ function renderWritingSurface() {
   });
   const prompt = state.writing.prompt;
   text("writingPromptType", writingTaskLabel(taskType));
-  text("writingPromptTitle", prompt?.title || "选择一道题开始");
-  text("writingPromptPickerTitle", prompt?.title || "选择写作题目");
-  text("writingPromptPickerMeta", prompt ? `${writingTaskLabel(taskType)} · ${writingCategoryLabel(prompt.category)}` : writingTaskLabel(taskType));
-  $("writingPromptText").innerHTML = renderMarkdown(prompt?.prompt || "请选择一道题，或点击随机题开始。");
+  text("writingPromptTitle", prompt ? writingPromptDisplayTitle(prompt) : "\u9009\u62e9\u4e00\u9053\u9898\u5f00\u59cb");
+  text("writingPromptPickerTitle", prompt ? writingPromptDisplayTitle(prompt) : "\u9009\u62e9\u5199\u4f5c\u9898\u76ee");
+  text("writingPromptPickerMeta", prompt ? writingPromptMeta(prompt) : writingTaskLabel(taskType));
+  $("writingPromptText").innerHTML = renderMarkdown(prompt?.prompt || "\u8bf7\u9009\u62e9\u4e00\u9053\u9898\uff0c\u6216\u70b9\u51fb\u968f\u673a\u9898\u5f00\u59cb\u3002");
 
   // Render Task 1 image if available
   const imageContainer = $("writingPromptImage");
@@ -1965,11 +1987,11 @@ function renderWritingSurface() {
   if (entry?.ai_task && isWritingTaskActive(entry.ai_task)) {
     text("writingSaveStatus", writingTaskStatusTitle(entry.ai_task));
   } else if (!entry?.id) {
-    text("writingSaveStatus", "未保存");
+    text("writingSaveStatus", "\u672a\u4fdd\u5b58");
   } else if (entry.status === "scored") {
-    text("writingSaveStatus", `已评分 · ${entry.practice_date || ""} · 可在写作报告查看`);
+    text("writingSaveStatus", `\u5df2\u8bc4\u5206 \u00b7 ${entry.practice_date || ""} \u00b7 \u53ef\u5728\u5199\u4f5c\u62a5\u544a\u67e5\u770b`);
   } else {
-    text("writingSaveStatus", `已保存 · ${entry.practice_date || ""}`);
+    text("writingSaveStatus", `\u5df2\u4fdd\u5b58 \u00b7 ${entry.practice_date || ""}`);
   }
 }
 
@@ -1978,7 +2000,7 @@ function renderWritingScore(entry) {
   if (!score) {
     return;
   }
-  text("writingSaveStatus", `已评分 · Band ${score.overall_band ?? "—"} · 可在写作报告查看`);
+  text("writingSaveStatus", `\u5df2\u8bc4\u5206 \u00b7 Band ${score.overall_band ?? "\u2014"} \u00b7 \u53ef\u5728\u5199\u4f5c\u62a5\u544a\u67e5\u770b`);
 }
 
 function openWritingPromptPicker(taskType = state.writing.taskType || "task1_academic") {
@@ -1995,40 +2017,60 @@ function closeWritingPromptPicker() {
   document.body.classList.remove("modal-open");
 }
 
+function writingPromptChoiceHtml(prompt, active = false) {
+  const isTask1 = prompt.task_type === "task1_academic";
+  return `
+    <button type="button" class="writing-prompt-choice ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
+      ${isTask1 && prompt.image_url ? `<span class="writing-prompt-choice-image"><img src="${escapeHtml(prompt.image_url)}" alt=""></span>` : ""}
+      <span class="writing-prompt-choice-body">
+        <strong>${escapeHtml(writingPromptDisplayTitle(prompt))}</strong>
+        <small>${escapeHtml(writingPromptMeta(prompt))}</small>
+        <span>${escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "")}</span>
+      </span>
+    </button>
+  `;
+}
+
+function writingCatalogSlotHtml(slot) {
+  const isTask1 = slot.task_type === "task1_academic";
+  const statusText = isTask1 ? "\u5f85\u5bfc\u5165\u6388\u6743\u9898\u5e72/\u914d\u56fe" : "\u5f85\u5bfc\u5165\u6388\u6743\u9898\u5e72";
+  return `
+    <button type="button" class="writing-prompt-choice missing" disabled aria-disabled="true">
+      ${isTask1 ? `<span class="writing-prompt-choice-image placeholder">Task 1 chart</span>` : ""}
+      <span class="writing-prompt-choice-body">
+        <strong>${escapeHtml(slot.source_label || slot.id || "Cambridge IELTS")}</strong>
+        <small>${escapeHtml(statusText)}</small>
+        <span>${escapeHtml(isTask1 && slot.expected_image_url ? slot.expected_image_url : "Add an authorized prompt JSON file with this id to enable the slot.")}</span>
+      </span>
+    </button>
+  `;
+}
+
 function renderWritingPromptPicker() {
   const taskType = state.writing.pickerTaskType || state.writing.taskType || "task1_academic";
   document.querySelectorAll("[data-writing-picker-task]").forEach((button) => {
     button.classList.toggle("active", button.dataset.writingPickerTask === taskType);
   });
   text("writingPromptModalHint", taskType === "task1_academic"
-    ? "Task 1 题目会显示对应图表；可以先按图表类型筛选。"
-    : "Task 2 可以按题型筛选；选择后再开始写作。");
+    ? "Task 1 \u6709\u56fe\u8868\uff1b\u5251\u96c5\u76ee\u5f55\u6309 20 \u5230 1 \u6392\u5217\uff0c\u5f85\u5bfc\u5165\u7684\u539f\u9898\u4f1a\u7070\u663e\u3002"
+    : "Task 2 \u53ef\u6309\u9898\u578b\u7b5b\u9009\uff1b\u5251\u96c5\u76ee\u5f55\u6309 20 \u5230 1 \u6392\u5217\uff0c\u5f85\u5bfc\u5165\u7684\u539f\u9898\u4f1a\u7070\u663e\u3002");
   renderWritingPromptTypeFilters(taskType);
   const selectedCategory = state.writing.pickerCategoryFilters[taskType] || "";
   const prompts = (state.writing.prompts[taskType] || []).filter((prompt) => !selectedCategory || prompt.category === selectedCategory);
+  const missingSlots = writingCatalogMissingSlots(taskType, selectedCategory);
   const grid = $("writingPromptGrid");
   if (!grid) return;
-  if (!prompts.length) {
-    grid.innerHTML = '<p class="muted">当前筛选下没有可用题目。</p>';
+  if (!prompts.length && !missingSlots.length) {
+    grid.innerHTML = '<p class="muted">\u5f53\u524d\u7b5b\u9009\u4e0b\u6ca1\u6709\u53ef\u7528\u9898\u76ee\u3002</p>';
     return;
   }
-  grid.innerHTML = prompts.map((prompt) => {
-    const active = prompt.id === state.writing.prompt?.id;
-    const isTask1 = prompt.task_type === "task1_academic";
-    return `
-      <button type="button" class="writing-prompt-choice ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
-        ${isTask1 && prompt.image_url ? `<span class="writing-prompt-choice-image"><img src="${escapeHtml(prompt.image_url)}" alt=""></span>` : ""}
-        <span class="writing-prompt-choice-body">
-          <strong>${escapeHtml(prompt.title || writingTaskLabel(prompt.task_type))}</strong>
-          <small>${escapeHtml(writingCategoryLabel(prompt.category))}</small>
-          <span>${escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "")}</span>
-        </span>
-      </button>
-    `;
-  }).join("");
+  grid.innerHTML = [
+    ...prompts.map((prompt) => writingPromptChoiceHtml(prompt, prompt.id === state.writing.prompt?.id)),
+    ...missingSlots.map((slot) => writingCatalogSlotHtml(slot)),
+  ].join("");
   grid.querySelectorAll("[data-writing-prompt-choice]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) return;
+      if (state.writing.dirty && !window.confirm("\u5f53\u524d\u4f5c\u6587\u8fd8\u6ca1\u6709\u4fdd\u5b58\uff0c\u786e\u5b9a\u8981\u6362\u9898\u5417\uff1f")) return;
       const prompt = prompts.find((item) => item.id === button.dataset.writingPromptChoice);
       if (!prompt) return;
       state.writing.taskType = prompt.task_type || taskType;
@@ -2046,7 +2088,7 @@ function renderWritingPromptTypeFilters(taskType) {
     : inferWritingCategories(state.writing.prompts[taskType] || []);
   const selected = state.writing.pickerCategoryFilters[taskType] || "";
   target.innerHTML = [
-    `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category="">全部</button>`,
+    `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category="">\u5168\u90e8</button>`,
     ...categories.map((item) => `
       <button type="button" class="writing-type-filter ${selected === item.category ? "active" : ""}" data-writing-prompt-category="${escapeHtml(item.category)}">
         ${escapeHtml(writingCategoryLabel(item.category) || item.label)}

@@ -60,6 +60,10 @@ def data_writing_dir() -> Path:
     return Path(settings.BASE_DIR).parent / "data" / "ielts" / "writing"
 
 
+def cambridge_manifest_path() -> Path:
+    return data_writing_dir() / "cambridge" / "cambridge_1_20_manifest.json"
+
+
 def stable_prompt_id(task_type: str, prompt: str) -> str:
     digest = hashlib.sha1(f"{task_type}:{prompt}".encode("utf-8")).hexdigest()[:16]
     return f"{task_type}_{digest}"
@@ -106,7 +110,62 @@ def normalize_category(value: str | None) -> str:
     return category
 
 
+def cambridge_source_label(task_type: str, source_book: int | None, source_test: int | None, source_question: int | None) -> str:
+    if not source_book or not source_test:
+        return ""
+    task_number = source_question or (1 if task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else 2)
+    return f"\u5251\u96c5{source_book}-{source_test} Task {task_number}"
+
+
+def cambridge_catalog(task_type: str | None = None) -> list[dict[str, Any]]:
+    selected_task_type = normalize_task_type(task_type) if task_type else ""
+    path = cambridge_manifest_path()
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise WritingError(f"Unable to load Cambridge writing catalog: {path}") from exc
+    raw_slots = payload.get("slots") if isinstance(payload, dict) else []
+    if not isinstance(raw_slots, list):
+        raise WritingError(f"Cambridge writing catalog must contain a slots array: {path}")
+    slots: list[dict[str, Any]] = []
+    for raw_item in raw_slots:
+        if not isinstance(raw_item, dict):
+            continue
+        slot_task_type = normalize_task_type(str(raw_item.get("task_type") or ""))
+        if selected_task_type and slot_task_type != selected_task_type:
+            continue
+        source_book = positive_int(raw_item.get("source_book"))
+        source_test = positive_int(raw_item.get("source_test"))
+        source_question = positive_int(raw_item.get("source_question"))
+        source_label = str(raw_item.get("source_label") or "").strip() or cambridge_source_label(slot_task_type, source_book, source_test, source_question)
+        slots.append(
+            {
+                "id": str(raw_item.get("id") or "").strip(),
+                "task_type": slot_task_type,
+                "task_label": WRITING_TASK_LABELS.get(slot_task_type, "Writing"),
+                "source_label": source_label,
+                "source_book": source_book,
+                "source_test": source_test,
+                "source_question": source_question,
+                "expected_image_url": str(raw_item.get("expected_image_url") or "").strip(),
+                "material_status": str(raw_item.get("material_status") or "missing_authorized_material").strip(),
+            }
+        )
+    return sorted(
+        slots,
+        key=lambda item: (
+            0 if item["task_type"] == WritingPrompt.TaskType.TASK1_ACADEMIC else 1,
+            -(item.get("source_book") or 0),
+            item.get("source_test") or 999,
+            item.get("source_question") or 999,
+        ),
+    )
+
+
 def prompt_payload(prompt: WritingPrompt) -> dict[str, Any]:
+    source_label = cambridge_source_label(prompt.task_type, prompt.source_book, prompt.source_test, prompt.source_question)
     return {
         "id": prompt.prompt_id,
         "task_type": prompt.task_type,
@@ -119,6 +178,7 @@ def prompt_payload(prompt: WritingPrompt) -> dict[str, Any]:
         "source_book": prompt.source_book,
         "source_test": prompt.source_test,
         "source_question": prompt.source_question,
+        "source_label": source_label,
         "sort_order": prompt.sort_order,
     }
 

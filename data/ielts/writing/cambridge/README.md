@@ -7,6 +7,8 @@ Do not commit copyrighted Cambridge prompt text or chart images here unless the 
 - `data/ielts/writing/cambridge/task1_academic/**/*.json`
 - `data/ielts/writing/cambridge/task2/**/*.json`
 
+`cambridge_1_20_manifest.json` contains the complete Cambridge IELTS Writing slot catalog for books 20 down to 1, tests 1-4, Task 1 and Task 2. The UI uses it to show IDs such as `剑雅20-1 Task 1` and `剑雅20-1 Task 2` even before authorized prompt text/images have been imported.
+
 Task 1 records should include an `image_url` that points to a served asset, for example `/assets/writing/task1/cambridge/20/test_1_task_1.png`.
 
 Example file:
