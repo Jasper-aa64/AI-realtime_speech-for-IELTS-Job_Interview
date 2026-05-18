@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260518-hide-english-takeaway">
+    <link rel="stylesheet" href="/styles.css?v=20260518-takeaway-label">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -58,7 +58,7 @@
         <div class="nav-bottom">
           <nav class="nav-secondary" aria-label="Libraries">
             <button class="nav-button" data-view="corpus">语料库</button>
-            <button class="nav-button" data-view="takeawayBook">生词本</button>
+            <button class="nav-button" data-view="takeawayBook">Takeaway</button>
           </nav>
           <div class="nav-divider" aria-hidden="true"></div>
           <div class="font-tool" aria-label="Font style">
@@ -280,18 +280,18 @@
               </button>
               <button type="button" class="corpus-home-card language-card" data-corpus-home-target="takeawayBook">
                 <span class="corpus-card-mark">LT</span>
-                <strong>生词本</strong>
+                <strong>Takeaway</strong>
                 <small>复习平时摘录的单词和短语，需要自测时再遮住英文。</small>
               </button>
             </div>
           </div>
         </section>
 
-        <section id="takeawayBookPanel" class="language-takeaway-panel hidden" aria-label="生词本">
+        <section id="takeawayBookPanel" class="language-takeaway-panel hidden" aria-label="Takeaway">
           <div class="language-book-shell">
             <header class="language-book-head">
               <div>
-                <h2>生词本</h2>
+                <h2>Takeaway</h2>
                 <p>点击卡片播放英文；需要自测时可以遮住英文。</p>
               </div>
               <div class="language-book-actions">
@@ -380,7 +380,7 @@
           </label>
           <div class="language-takeaway-actions">
             <span id="languageTakeawayStatus"></span>
-            <button id="languageTakeawaySaveBtn" type="button">加入生词本</button>
+            <button id="languageTakeawaySaveBtn" type="button">加入 Takeaway</button>
           </div>
         </div>
 
@@ -710,6 +710,6 @@
       </main>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
-    <script src="/app.js?v=20260518-hide-english-takeaway"></script>
+    <script src="/app.js?v=20260518-takeaway-label"></script>
   </body>
 </html>

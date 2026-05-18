@@ -122,7 +122,7 @@ const viewCopy = {
   corpus: ["语料库", "Manage prepared speaking material and language takeaways."],
   p1Corpus: ["我的 P1语料库", "Prepare grouped Part 1 answers and reuse them in AI feedback."],
   p2Corpus: ["我准备的P2串题素材库", "Prepare reusable Part 2 story materials and link them during preparation."],
-  takeawayBook: ["生词本", "Review saved words and phrases with hidden Chinese recall."],
+  takeawayBook: ["Takeaway", "Review saved language takeaways with hidden English recall."],
   history: ["口语报告", ""],
   writing: ["每日写作", ""],
   writingReports: ["写作报告", ""],
@@ -661,7 +661,7 @@ function loginReasonForView(view) {
     corpus: "登录后才能保存和管理你的语料库。",
     p1Corpus: "登录后才能保存和复用你的 P1 语料库。",
     p2Corpus: "登录后才能保存和复用你的 P2 串题素材库。",
-    takeawayBook: "登录后才能查看和复习你的生词本。",
+    takeawayBook: "登录后才能查看和复习你的 Takeaway。",
     writing: "登录后才能保存每日写作、签到和 AI 评分记录。",
     writingReports: "登录后才能查看你的写作报告。",
     accountProfile: "请先登录后管理账号资料。",
@@ -3129,7 +3129,7 @@ async function loadLanguageTakeaways() {
     if (stats) stats.textContent = `${state.languageTakeaway.items.length} 条 · 刷新中`;
   } else {
     if (stats) stats.textContent = "Loading...";
-    if (list) list.innerHTML = '<p class="muted">正在加载生词本...</p>';
+    if (list) list.innerHTML = '<p class="muted">正在加载 Takeaway...</p>';
   }
   try {
     const payload = await api("/api/language-takeaways");
