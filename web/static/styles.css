@@ -5314,6 +5314,101 @@ input, select {
   .language-takeaway-card strong {
     font-size: 15px;
   }
+
+  .topbar {
+    gap: 14px;
+  }
+
+  h1 {
+    font-size: 30px;
+  }
+
+  .topbar p {
+    margin-top: 6px;
+    font-size: 14px;
+  }
+
+  .exam-status {
+    height: 56px;
+    min-height: 56px;
+    gap: 14px;
+    padding-bottom: 6px;
+  }
+
+  .exam-status strong {
+    font-size: 15px;
+  }
+
+  .exam-status span {
+    margin-top: 3px;
+    font-size: 14px;
+  }
+
+  .practice-grid,
+  .practice-grid.p2-mode {
+    grid-template-columns: minmax(320px, 1fr) minmax(300px, 0.86fr);
+    gap: 16px;
+  }
+
+  .prompt-pane,
+  .recorder-pane {
+    min-height: 340px;
+    padding: 16px;
+  }
+
+  .prompt-card {
+    padding: 20px;
+    border-left-width: 4px;
+  }
+
+  .prompt-card.short-prompt {
+    min-height: 220px;
+    font-size: clamp(26px, 2.5vw, 34px);
+    line-height: 1.22;
+  }
+
+  .prompt-card.medium-prompt {
+    font-size: 23px;
+  }
+
+  .prompt-card.long-prompt {
+    font-size: 17px;
+  }
+
+  .prompt-card.cue-prompt {
+    min-height: 300px;
+    font-size: 17px;
+  }
+
+  .recorder-pane .inline-timer {
+    top: 14px;
+    right: 14px;
+    font-size: 30px;
+  }
+
+  .record-control {
+    width: min(250px, 44vw);
+    padding: 24px;
+    gap: 7px;
+  }
+
+  #recordIcon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .record-control strong {
+    font-size: 30px;
+  }
+
+  .record-control small {
+    max-width: 170px;
+    font-size: 13px;
+  }
+
+  .record-status {
+    font-size: 14px;
+  }
 }
 
 @media (max-width: 980px) {
