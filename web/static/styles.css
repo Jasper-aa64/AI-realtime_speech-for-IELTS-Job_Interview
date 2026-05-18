@@ -368,6 +368,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+body.app-booting .workspace {
+  visibility: hidden;
+}
+
 button, input, select { font: inherit; }
 button {
   cursor: pointer;

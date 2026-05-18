@@ -4058,6 +4058,7 @@ async function init() {
   let savedView = urlView || "home";
   if (!viewCopy[savedView]) savedView = "home";
   switchView(savedView, { skipPersist: Boolean(urlView), skipUrl: true });
+  document.body.classList.remove("app-booting");
   try {
     const summary = await api("/api/question-bank/summary");
     text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);
