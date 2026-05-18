@@ -1685,23 +1685,37 @@ function writingCategoryLabel(category = "") {
 }
 
 function writingPromptDisplayTitle(prompt) {
-  const sourceLabel = String(prompt?.source_label || "").trim();
+  const sourceLabel = String(prompt?.source_label || prompt?.display_source_label || "").trim();
   const title = String(prompt?.title || writingTaskLabel(prompt?.task_type)).trim();
   return sourceLabel || title;
 }
 
 function writingPromptMeta(prompt) {
   if (!prompt) return writingTaskLabel(state.writing.taskType || "task1_academic");
-  const parts = prompt.source_label
+  const sourceLabel = String(prompt.source_label || prompt.display_source_label || "").trim();
+  const parts = sourceLabel
     ? [prompt.title || "", writingTaskLabel(prompt.task_type), writingCategoryLabel(prompt.category)]
     : [writingTaskLabel(prompt.task_type), writingCategoryLabel(prompt.category)];
   return parts.filter(Boolean).join(" \u00b7 ");
 }
 
+function attachWritingDisplayLabels(taskType, prompts = [], catalog = []) {
+  return prompts.map((prompt, index) => {
+    if (prompt.source_label || prompt.display_source_label) return prompt;
+    const slot = catalog[index];
+    if (!slot?.source_label) return prompt;
+    return { ...prompt, display_source_label: slot.source_label, display_catalog_id: slot.id || "" };
+  });
+}
+
 function writingCatalogMissingSlots(taskType, selectedCategory = "") {
   if (selectedCategory) return [];
+  const promptCount = (state.writing.prompts[taskType] || []).length;
+  const assignedCatalogIds = new Set((state.writing.prompts[taskType] || []).map((prompt) => prompt.display_catalog_id).filter(Boolean));
   const availableIds = new Set((state.writing.prompts[taskType] || []).map((prompt) => prompt.id));
-  return (state.writing.promptCatalog[taskType] || []).filter((slot) => slot?.id && !availableIds.has(slot.id));
+  return (state.writing.promptCatalog[taskType] || [])
+    .filter((slot) => slot?.id && !availableIds.has(slot.id))
+    .filter((slot, index) => index >= promptCount && !assignedCatalogIds.has(slot.id));
 }
 
 async function loadWriting() {
@@ -1731,9 +1745,9 @@ async function loadWritingPrompts(taskType) {
     return state.writing.prompts[normalized];
   }
   const payload = await api(`/api/writing/prompts?task_type=${encodeURIComponent(normalized)}`);
-  state.writing.prompts[normalized] = payload.items || [];
-  state.writing.promptCategories[normalized] = payload.categories || inferWritingCategories(state.writing.prompts[normalized]);
   state.writing.promptCatalog[normalized] = payload.catalog || [];
+  state.writing.prompts[normalized] = attachWritingDisplayLabels(normalized, payload.items || [], state.writing.promptCatalog[normalized]);
+  state.writing.promptCategories[normalized] = payload.categories || inferWritingCategories(state.writing.prompts[normalized]);
   return state.writing.prompts[normalized];
 }
 

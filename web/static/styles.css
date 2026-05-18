@@ -1983,9 +1983,9 @@ h1 {
 
 .writing-prompt-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 360px));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
-  justify-content: start;
+  justify-content: stretch;
   gap: 14px;
   padding: 18px 22px 22px;
 }
