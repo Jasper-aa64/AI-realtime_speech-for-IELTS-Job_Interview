@@ -1213,3 +1213,49 @@ Relaxed Speaking AI feedback validation so Codex owns Band 7 rewrites and coachi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 33: Add corpus and language takeaway flow
+
+**Date**: 2026-05-18
+**Task**: Add corpus and language takeaway flow
+**Branch**: `main`
+
+### Summary
+
+Implemented corpus management, Language Takeaway translation and vocabulary book UI.
+
+### Main Changes
+
+Implemented P1/P2 corpus management and Language Takeaway flow.
+
+Key changes:
+- Added P1 corpus, P2 corpus, and Language Takeaway persistence in Django.
+- Added Caiyun-compatible translation with local offline dictionary fallback.
+- Added dedicated vocabulary book UI with compact two-column cards, optional hidden-Chinese study mode, and click-to-speak interaction.
+- Added old web server proxy coverage for corpus and takeaway APIs.
+- Added migrations, admin registration, API tests, and old server proxy regression tests.
+
+Validation:
+- node --check web/static/app.js
+- python3 -m py_compile web/ielts_server.py tests/test_ielts_web_server.py
+- backend_django/manage.py check
+- backend_django/manage.py makemigrations --check --dry-run
+- backend_django/manage.py test apps.speaking.tests -v 1
+
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
