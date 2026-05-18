@@ -1571,3 +1571,36 @@ Added idle authenticated prefetch for language takeaways, speaking history, and 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 44: Fix language takeaway popup sizing and viewport bounds
+
+**Date**: 2026-05-18
+**Task**: Fix language takeaway popup sizing and viewport bounds
+**Branch**: `main`
+
+### Summary
+
+Reduced Language Takeaway popup textarea type size, added viewport-clamped popup placement for opening and dragging, and bumped static asset version so browsers load the fix.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e91684f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

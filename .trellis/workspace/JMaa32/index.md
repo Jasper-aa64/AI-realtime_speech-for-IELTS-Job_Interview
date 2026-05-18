@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 43
+- **Total Sessions**: 44
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1573 | Active |
+| `journal-1.md` | ~1606 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 44 | 2026-05-18 | Fix language takeaway popup sizing and viewport bounds | `e91684f` | `main` |
 | 43 | 2026-05-18 | Prefetch reports and takeaways after login | `4d8a86a` | `main` |
 | 42 | 2026-05-18 | Improve perceived latency for reports and takeaways | - | `main` |
 | 41 | 2026-05-18 | Prevent sidebar and theme boot jitter | - | `main` |
