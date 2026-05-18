@@ -54,6 +54,7 @@ const state = {
     dragOffsetY: 0,
     hideChinese: false,
     revealedEntryIds: new Set(),
+    selectionTimer: null,
   },
   practiceLocked: false,
   startRequestId: 0,
@@ -3234,15 +3235,35 @@ function hideLanguageTakeawayPopup() {
   text("languageTakeawayStatus", "");
 }
 
+function placeLanguageTakeawayTrigger(left, top) {
+  const trigger = $("languageTakeawayTrigger");
+  if (!trigger) return;
+  const margin = 12;
+  const rect = trigger.getBoundingClientRect();
+  const width = rect.width || 34;
+  const height = rect.height || 34;
+  const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+  const maxTop = Math.max(margin, window.innerHeight - height - margin);
+  trigger.style.left = `${Math.min(maxLeft, Math.max(margin, left))}px`;
+  trigger.style.top = `${Math.min(maxTop, Math.max(margin, top))}px`;
+}
+
 function showLanguageTakeawayTrigger(selectionInfo) {
   const trigger = $("languageTakeawayTrigger");
   if (!trigger || !selectionInfo) return;
   state.languageTakeaway.selectedText = selectionInfo.text;
-  const x = Math.min(window.innerWidth - 44, Math.max(12, selectionInfo.rect.right + 8));
-  const y = Math.min(window.innerHeight - 44, Math.max(12, selectionInfo.rect.top - 4));
-  trigger.style.left = `${x}px`;
-  trigger.style.top = `${y}px`;
+  placeLanguageTakeawayTrigger(selectionInfo.rect.right + 8, selectionInfo.rect.top - 4);
   trigger.classList.remove("hidden");
+}
+
+function scheduleLanguageTakeawayTriggerFromSelection() {
+  window.clearTimeout(state.languageTakeaway.selectionTimer);
+  state.languageTakeaway.selectionTimer = window.setTimeout(() => {
+    if (!$("languageTakeawayPopup")?.classList.contains("hidden")) return;
+    const info = selectionText();
+    if (info) showLanguageTakeawayTrigger(info);
+    else hideLanguageTakeawayTrigger();
+  }, 80);
 }
 
 function placeLanguageTakeawayPopup(left, top) {
@@ -3929,12 +3950,17 @@ function bindEvents() {
   });
   document.addEventListener("selectionchange", () => {
     window.clearTimeout(state.languageTakeaway.selectionTimer);
-    state.languageTakeaway.selectionTimer = window.setTimeout(() => {
-      if (!$("languageTakeawayPopup")?.classList.contains("hidden")) return;
-      const info = selectionText();
-      if (info) showLanguageTakeawayTrigger(info);
-      else hideLanguageTakeawayTrigger();
-    }, 80);
+    if (!selectionText()) hideLanguageTakeawayTrigger();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    const popup = $("languageTakeawayPopup");
+    const trigger = $("languageTakeawayTrigger");
+    if (popup?.contains(event.target) || trigger?.contains(event.target)) return;
+    hideLanguageTakeawayTrigger();
+  });
+  document.addEventListener("pointerup", scheduleLanguageTakeawayTriggerFromSelection);
+  document.addEventListener("keyup", (event) => {
+    if (["Shift", "Meta", "Control", "Alt"].includes(event.key)) scheduleLanguageTakeawayTriggerFromSelection();
   });
   $("languageTakeawayTrigger")?.addEventListener("click", (event) => {
     event.preventDefault();
