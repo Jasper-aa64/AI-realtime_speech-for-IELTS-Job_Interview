@@ -179,6 +179,7 @@ class WritingApiTests(TestCase):
         self.assertEqual(saved["status"], WritingEntry.Status.SAVED)
         self.assertEqual(saved["task_label"], WRITING_TASK_LABELS[WritingPrompt.TaskType.TASK1_ACADEMIC])
         self.assertGreater(saved["word_count"], 0)
+        self.assertTrue(saved["image_url"])
 
         summary = self.client.get("/api/writing/summary?month=2026-05")
         self.assertEqual(summary.status_code, 200)
@@ -190,6 +191,7 @@ class WritingApiTests(TestCase):
         detail = self.client.get(f"/api/writing/entries/{saved['id']}")
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.json()["answer"], saved["answer"])
+        self.assertEqual(detail.json()["image_url"], saved["image_url"])
 
         score = self.client.post(f"/api/writing/entries/{saved['id']}/score", content_type="application/json")
         self.assertEqual(score.status_code, 200)

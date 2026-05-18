@@ -4,7 +4,7 @@ from django.urls import path
 from apps.accounts import views as account_views
 from apps.ai import views as ai_views
 from apps.billing import views as billing_views
-from apps.common.views import frontend_asset, health
+from apps.common.views import frontend_asset, frontend_static_asset, health
 from apps.speaking import views as speaking_views
 from apps.writing import views as writing_views
 
@@ -13,6 +13,7 @@ urlpatterns = [
     path("index.html", frontend_asset, name="frontend-index-html"),
     path("app.js", frontend_asset, {"asset_path": "app.js"}, name="frontend-app-js"),
     path("styles.css", frontend_asset, {"asset_path": "styles.css"}, name="frontend-styles-css"),
+    path("assets/<path:asset_path>", frontend_static_asset, name="frontend-static-asset"),
     path("admin/", admin.site.urls),
     path("api/health/", health, name="health"),
     path("api/accounts/csrf/", account_views.csrf_token, name="account-csrf"),

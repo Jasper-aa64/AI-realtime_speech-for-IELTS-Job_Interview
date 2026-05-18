@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="title desc">
+  <title id="title">Export values table</title>
+  <desc id="desc">A sample IELTS Academic Task 1 table showing export values for four products in three countries.</desc>
+  <rect width="760" height="430" fill="#ffffff"/>
+  <text x="42" y="40" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#152027">Export value by product and country, 2024</text>
+  <text x="42" y="66" font-family="Arial, sans-serif" font-size="13" fill="#62717a">US$ millions</text>
+  <g transform="translate(80 104)" font-family="Arial, sans-serif" font-size="16">
+    <rect width="600" height="250" fill="#fff" stroke="#152027" stroke-width="1.5"/>
+    <g fill="#f3f7f8"><rect width="600" height="50"/><rect y="100" width="600" height="50"/><rect y="200" width="600" height="50"/></g>
+    <g stroke="#d8e0e4"><line x1="150" y1="0" x2="150" y2="250"/><line x1="300" y1="0" x2="300" y2="250"/><line x1="450" y1="0" x2="450" y2="250"/><line x1="0" y1="50" x2="600" y2="50"/><line x1="0" y1="100" x2="600" y2="100"/><line x1="0" y1="150" x2="600" y2="150"/><line x1="0" y1="200" x2="600" y2="200"/></g>
+    <g font-weight="700" fill="#152027"><text x="75" y="32" text-anchor="middle">Product</text><text x="225" y="32" text-anchor="middle">Country A</text><text x="375" y="32" text-anchor="middle">Country B</text><text x="525" y="32" text-anchor="middle">Country C</text></g>
+    <g fill="#27363d"><text x="20" y="82">Food</text><text x="225" y="82" text-anchor="middle">420</text><text x="375" y="82" text-anchor="middle">380</text><text x="525" y="82" text-anchor="middle">510</text><text x="20" y="132">Clothing</text><text x="225" y="132" text-anchor="middle">260</text><text x="375" y="132" text-anchor="middle">340</text><text x="525" y="132" text-anchor="middle">295</text><text x="20" y="182">Machinery</text><text x="225" y="182" text-anchor="middle">690</text><text x="375" y="182" text-anchor="middle">720</text><text x="525" y="182" text-anchor="middle">610</text><text x="20" y="232">Furniture</text><text x="225" y="232" text-anchor="middle">180</text><text x="375" y="232" text-anchor="middle">225</text><text x="525" y="232" text-anchor="middle">240</text></g>
+  </g>
+</svg>

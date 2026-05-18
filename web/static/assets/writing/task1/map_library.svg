@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="title desc">
+  <title id="title">Public library maps</title>
+  <desc id="desc">A sample IELTS Academic Task 1 map comparing a public library before and after renovation.</desc>
+  <rect width="760" height="430" fill="#ffffff"/>
+  <text x="42" y="40" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#152027">Public library layout changes</text>
+  <g font-family="Arial, sans-serif" font-size="13" fill="#152027">
+    <text x="210" y="80" text-anchor="middle" font-size="17" font-weight="700">2005</text>
+    <text x="550" y="80" text-anchor="middle" font-size="17" font-weight="700">After renovation</text>
+    <g transform="translate(70 100)">
+      <rect width="280" height="240" fill="#f8faf9" stroke="#152027" stroke-width="2"/>
+      <rect x="15" y="15" width="110" height="80" fill="#dbeafe" stroke="#2563eb"/><text x="70" y="60" text-anchor="middle">Fiction</text>
+      <rect x="155" y="15" width="110" height="80" fill="#e6f7f4" stroke="#0f766e"/><text x="210" y="60" text-anchor="middle">Non-fiction</text>
+      <rect x="15" y="125" width="110" height="85" fill="#fff7ed" stroke="#f59e0b"/><text x="70" y="172" text-anchor="middle">Newspapers</text>
+      <rect x="155" y="125" width="110" height="85" fill="#f3f4f6" stroke="#111827"/><text x="210" y="172" text-anchor="middle">Desks</text>
+      <text x="140" y="232" text-anchor="middle">Entrance</text>
+    </g>
+    <g transform="translate(410 100)">
+      <rect width="280" height="240" fill="#f8faf9" stroke="#152027" stroke-width="2"/>
+      <rect x="15" y="15" width="110" height="80" fill="#dbeafe" stroke="#2563eb"/><text x="70" y="60" text-anchor="middle">Children</text>
+      <rect x="155" y="15" width="110" height="80" fill="#f0eaff" stroke="#7c3aed"/><text x="210" y="60" text-anchor="middle">Computers</text>
+      <rect x="15" y="125" width="110" height="85" fill="#e6f7f4" stroke="#0f766e"/><text x="70" y="164" text-anchor="middle">Cafe</text><text x="70" y="184" text-anchor="middle">area</text>
+      <rect x="155" y="125" width="110" height="85" fill="#fff7ed" stroke="#f59e0b"/><text x="210" y="164" text-anchor="middle">Study</text><text x="210" y="184" text-anchor="middle">rooms</text>
+      <text x="140" y="232" text-anchor="middle">Entrance</text>
+    </g>
+  </g>
+</svg>

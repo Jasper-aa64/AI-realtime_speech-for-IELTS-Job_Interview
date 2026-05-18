@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="title desc">
+  <title id="title">Student spending pie charts</title>
+  <desc id="desc">A sample IELTS Academic Task 1 pair of pie charts comparing student monthly spending in 2015 and 2025.</desc>
+  <rect width="760" height="430" fill="#ffffff"/>
+  <text x="42" y="40" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#152027">University student monthly spending</text>
+  <g font-family="Arial, sans-serif" fill="#152027">
+    <text x="205" y="92" text-anchor="middle" font-size="17" font-weight="700">2015</text>
+    <text x="555" y="92" text-anchor="middle" font-size="17" font-weight="700">2025</text>
+  </g>
+  <g transform="translate(205 225)">
+    <circle r="118" fill="#dbeafe"/>
+    <path d="M0 0 L0 -118 A118 118 0 0 1 112 36 Z" fill="#2563eb"/>
+    <path d="M0 0 L112 36 A118 118 0 0 1 -26 115 Z" fill="#059669"/>
+    <path d="M0 0 L-26 115 A118 118 0 0 1 -112 -36 Z" fill="#f59e0b"/>
+    <path d="M0 0 L-112 -36 A118 118 0 0 1 0 -118 Z" fill="#7c3aed"/>
+  </g>
+  <g transform="translate(555 225)">
+    <circle r="118" fill="#dbeafe"/>
+    <path d="M0 0 L0 -118 A118 118 0 0 1 116 20 Z" fill="#2563eb"/>
+    <path d="M0 0 L116 20 A118 118 0 0 1 20 116 Z" fill="#059669"/>
+    <path d="M0 0 L20 116 A118 118 0 0 1 -116 20 Z" fill="#f59e0b"/>
+    <path d="M0 0 L-116 20 A118 118 0 0 1 0 -118 Z" fill="#7c3aed"/>
+  </g>
+  <g transform="translate(96 372)" font-family="Arial, sans-serif" font-size="13" fill="#62717a">
+    <rect width="14" height="14" fill="#2563eb"/><text x="22" y="12">Rent</text>
+    <rect x="120" width="14" height="14" fill="#059669"/><text x="142" y="12">Food</text>
+    <rect x="230" width="14" height="14" fill="#f59e0b"/><text x="252" y="12">Transport</text>
+    <rect x="380" width="14" height="14" fill="#7c3aed"/><text x="402" y="12">Study & leisure</text>
+  </g>
+</svg>

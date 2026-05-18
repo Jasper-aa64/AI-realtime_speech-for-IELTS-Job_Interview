@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="title desc">
+  <title id="title">Household energy use bar chart</title>
+  <desc id="desc">A sample IELTS Academic Task 1 bar chart comparing household energy categories in 2010 and 2025.</desc>
+  <rect width="760" height="430" fill="#ffffff"/>
+  <text x="42" y="40" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#152027">Average household energy use</text>
+  <text x="42" y="66" font-family="Arial, sans-serif" font-size="13" fill="#62717a">Kilowatt-hours per month, 2010 and 2025</text>
+  <g transform="translate(78 92)" font-family="Arial, sans-serif" font-size="12" fill="#62717a">
+    <line x1="0" y1="270" x2="610" y2="270" stroke="#24323a" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="270" stroke="#24323a" stroke-width="1.5"/>
+    <g stroke="#e5eaed"><line x1="0" y1="216" x2="610" y2="216"/><line x1="0" y1="162" x2="610" y2="162"/><line x1="0" y1="108" x2="610" y2="108"/><line x1="0" y1="54" x2="610" y2="54"/></g>
+    <g text-anchor="end"><text x="-10" y="274">0</text><text x="-10" y="220">100</text><text x="-10" y="166">200</text><text x="-10" y="112">300</text><text x="-10" y="58">400</text></g>
+    <g>
+      <rect x="38" y="54" width="28" height="216" fill="#2563eb"/><rect x="70" y="76" width="28" height="194" fill="#0f766e"/>
+      <rect x="158" y="162" width="28" height="108" fill="#2563eb"/><rect x="190" y="130" width="28" height="140" fill="#0f766e"/>
+      <rect x="278" y="108" width="28" height="162" fill="#2563eb"/><rect x="310" y="98" width="28" height="172" fill="#0f766e"/>
+      <rect x="398" y="184" width="28" height="86" fill="#2563eb"/><rect x="430" y="152" width="28" height="118" fill="#0f766e"/>
+      <rect x="518" y="216" width="28" height="54" fill="#2563eb"/><rect x="550" y="194" width="28" height="76" fill="#0f766e"/>
+    </g>
+    <g text-anchor="middle" font-size="12">
+      <text x="68" y="303">Heating</text><text x="188" y="303">Cooling</text><text x="308" y="303">Kitchen</text><text x="428" y="303">Lighting</text><text x="548" y="303">Devices</text>
+    </g>
+    <g transform="translate(0 338)" font-size="13"><rect width="14" height="14" fill="#2563eb"/><text x="22" y="12">2010</text><rect x="90" width="14" height="14" fill="#0f766e"/><text x="112" y="12">2025</text></g>
+  </g>
+</svg>

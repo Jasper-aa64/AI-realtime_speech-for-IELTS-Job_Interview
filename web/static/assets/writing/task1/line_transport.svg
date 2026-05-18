@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="title desc">
+  <title id="title">Commuting methods line graph</title>
+  <desc id="desc">A sample IELTS Academic Task 1 line graph comparing car, bus, train, and bicycle commuting from 2000 to 2025.</desc>
+  <rect width="760" height="430" fill="#ffffff"/>
+  <text x="42" y="40" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#152027">Percentage of commuters by transport method</text>
+  <text x="42" y="66" font-family="Arial, sans-serif" font-size="13" fill="#62717a">One city, 2000-2025</text>
+  <g transform="translate(72 86)" font-family="Arial, sans-serif" font-size="12" fill="#62717a">
+    <line x1="0" y1="280" x2="610" y2="280" stroke="#24323a" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="280" stroke="#24323a" stroke-width="1.5"/>
+    <g stroke="#e5eaed">
+      <line x1="0" y1="224" x2="610" y2="224"/><line x1="0" y1="168" x2="610" y2="168"/>
+      <line x1="0" y1="112" x2="610" y2="112"/><line x1="0" y1="56" x2="610" y2="56"/><line x1="0" y1="0" x2="610" y2="0"/>
+    </g>
+    <g text-anchor="end">
+      <text x="-12" y="284">0</text><text x="-12" y="228">20</text><text x="-12" y="172">40</text>
+      <text x="-12" y="116">60</text><text x="-12" y="60">80</text><text x="-12" y="4">100%</text>
+    </g>
+    <g text-anchor="middle">
+      <text x="0" y="308">2000</text><text x="122" y="308">2005</text><text x="244" y="308">2010</text>
+      <text x="366" y="308">2015</text><text x="488" y="308">2020</text><text x="610" y="308">2025</text>
+    </g>
+    <polyline points="0,98 122,86 244,76 366,70 488,62 610,56" fill="none" stroke="#2563eb" stroke-width="4"/>
+    <polyline points="0,154 122,166 244,176 366,188 488,202 610,213" fill="none" stroke="#dc2626" stroke-width="4"/>
+    <polyline points="0,196 122,188 244,174 366,158 488,143 610,126" fill="none" stroke="#059669" stroke-width="4"/>
+    <polyline points="0,238 122,230 244,216 366,202 488,188 610,174" fill="none" stroke="#7c3aed" stroke-width="4"/>
+    <g transform="translate(0 340)" font-size="13">
+      <rect x="0" y="-11" width="14" height="4" fill="#2563eb"/><text x="22" y="-6">Cars</text>
+      <rect x="110" y="-11" width="14" height="4" fill="#dc2626"/><text x="132" y="-6">Buses</text>
+      <rect x="220" y="-11" width="14" height="4" fill="#059669"/><text x="242" y="-6">Trains</text>
+      <rect x="330" y="-11" width="14" height="4" fill="#7c3aed"/><text x="352" y="-6">Bicycles</text>
+    </g>
+  </g>
+</svg>

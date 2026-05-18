@@ -386,7 +386,10 @@
                   <button type="button" class="writing-task-option" data-writing-task="task2">Task 2</button>
                 </div>
                 <div class="writing-actions-row">
-                  <select id="writingPromptSelect" aria-label="选择写作题目"></select>
+                  <button id="writingPromptPickerBtn" class="writing-picker-button" type="button">
+                    <span id="writingPromptPickerTitle">选择写作题目</span>
+                    <small id="writingPromptPickerMeta">Task 1 Academic</small>
+                  </button>
                   <button id="writingRandomBtn" class="ghost" type="button">换一道随机题</button>
                 </div>
               </div>
@@ -453,6 +456,27 @@
             </aside>
           </div>
         </section>
+
+        <div id="writingPromptModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="writingPromptModalTitle">
+          <div class="modal-backdrop" data-writing-prompt-close></div>
+          <article class="modal-card writing-prompt-modal-card">
+            <header class="modal-head">
+              <div>
+                <span class="section-label">Writing prompt bank</span>
+                <h2 id="writingPromptModalTitle">选择写作题目</h2>
+              </div>
+              <button id="writingPromptCloseBtn" class="icon-button" type="button" aria-label="关闭题目选择窗口" data-writing-prompt-close>×</button>
+            </header>
+            <div class="writing-prompt-modal-toolbar">
+              <div class="writing-task-switch" role="group" aria-label="Writing prompt modal task type">
+                <button type="button" class="writing-task-option active" data-writing-picker-task="task1_academic">Task 1</button>
+                <button type="button" class="writing-task-option" data-writing-picker-task="task2">Task 2</button>
+              </div>
+              <p id="writingPromptModalHint">Task 1 题目会显示对应图表；选择后再开始写作。</p>
+            </div>
+            <div id="writingPromptGrid" class="writing-prompt-grid"></div>
+          </article>
+        </div>
 
         <section id="writingReportsPanel" class="panel writing-reports-panel hidden">
           <div id="writingReportList" class="history-list writing-report-list">还没有写作记录。</div>

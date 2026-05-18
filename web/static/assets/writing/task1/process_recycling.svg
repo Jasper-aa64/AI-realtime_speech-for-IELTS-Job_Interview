@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="title desc">
+  <title id="title">Plastic bottle recycling process</title>
+  <desc id="desc">A sample IELTS Academic Task 1 process diagram showing stages in plastic bottle recycling.</desc>
+  <rect width="760" height="430" fill="#ffffff"/>
+  <text x="42" y="42" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#152027">Plastic bottle recycling process</text>
+  <defs><marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M2,2 L10,6 L2,10 Z" fill="#0f766e"/></marker></defs>
+  <g font-family="Arial, sans-serif" font-size="14" fill="#152027">
+    <g transform="translate(56 108)"><rect width="130" height="70" rx="10" fill="#e6f7f4" stroke="#0f766e"/><text x="65" y="32" text-anchor="middle" font-weight="700">Collection</text><text x="65" y="52" text-anchor="middle">bins</text></g>
+    <g transform="translate(236 108)"><rect width="130" height="70" rx="10" fill="#e8efff" stroke="#2563eb"/><text x="65" y="32" text-anchor="middle" font-weight="700">Sorting</text><text x="65" y="52" text-anchor="middle">by material</text></g>
+    <g transform="translate(416 108)"><rect width="130" height="70" rx="10" fill="#fff7ed" stroke="#f59e0b"/><text x="65" y="32" text-anchor="middle" font-weight="700">Cleaning</text><text x="65" y="52" text-anchor="middle">and shredding</text></g>
+    <g transform="translate(596 108)"><rect width="110" height="70" rx="10" fill="#f0eaff" stroke="#7c3aed"/><text x="55" y="32" text-anchor="middle" font-weight="700">Pellets</text><text x="55" y="52" text-anchor="middle">formed</text></g>
+    <g transform="translate(236 270)"><rect width="130" height="70" rx="10" fill="#f3f4f6" stroke="#111827"/><text x="65" y="32" text-anchor="middle" font-weight="700">New</text><text x="65" y="52" text-anchor="middle">products</text></g>
+    <g transform="translate(416 270)"><rect width="130" height="70" rx="10" fill="#dbeafe" stroke="#2563eb"/><text x="65" y="32" text-anchor="middle" font-weight="700">Moulding</text><text x="65" y="52" text-anchor="middle">and packing</text></g>
+  </g>
+  <g fill="none" stroke="#0f766e" stroke-width="3" marker-end="url(#arrow)">
+    <path d="M190 143 H228"/><path d="M370 143 H408"/><path d="M550 143 H588"/>
+    <path d="M651 182 V305 H554"/><path d="M414 305 H374"/>
+  </g>
+</svg>

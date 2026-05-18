@@ -5,36 +5,42 @@
       "id": "task1_academic_line_transport_001",
       "title": "Line Graph: Commuting Methods",
       "category": "line_graph",
+      "image_url": "/assets/writing/task1/line_transport.svg",
       "prompt": "The line graph shows the percentage of commuters using cars, buses, trains, and bicycles in one city from 2000 to 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
     },
     {
       "id": "task1_academic_bar_energy_002",
       "title": "Bar Chart: Household Energy Use",
       "category": "bar_chart",
+      "image_url": "/assets/writing/task1/bar_energy.svg",
       "prompt": "The bar chart compares average household energy use in five different categories in 2010 and 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
     },
     {
       "id": "task1_academic_pie_spending_003",
       "title": "Pie Charts: Student Spending",
       "category": "pie_chart",
+      "image_url": "/assets/writing/task1/pie_spending.svg",
       "prompt": "The pie charts show how university students in one country spent their monthly budget in 2015 and 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
     },
     {
       "id": "task1_academic_process_recycling_004",
       "title": "Process: Plastic Bottle Recycling",
       "category": "process",
+      "image_url": "/assets/writing/task1/process_recycling.svg",
       "prompt": "The diagram illustrates the process of recycling plastic bottles.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
     },
     {
       "id": "task1_academic_map_library_005",
       "title": "Map: Public Library Changes",
       "category": "map",
+      "image_url": "/assets/writing/task1/map_library.svg",
       "prompt": "The maps show the layout of a public library in 2005 and after renovation in 2025.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
     },
     {
       "id": "task1_academic_table_exports_006",
       "title": "Table: Export Values",
       "category": "table",
+      "image_url": "/assets/writing/task1/table_exports.svg",
       "prompt": "The table gives information about the export value of four products in three countries in 2024.\n\nSummarise the information by selecting and reporting the main features, and make comparisons where relevant."
     }
   ]

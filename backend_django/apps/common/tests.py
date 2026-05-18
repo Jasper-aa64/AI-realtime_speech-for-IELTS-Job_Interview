@@ -12,6 +12,17 @@ class HealthEndpointTests(TestCase):
         self.assertEqual(payload["service"], "ielts-django-backend")
         self.assertIn("database", payload)
 
+    def test_frontend_asset_route_serves_task1_chart_images(self):
+        response = Client().get("/assets/writing/task1/line_transport.svg")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "image/svg+xml")
+
+    def test_frontend_asset_route_rejects_path_traversal(self):
+        response = Client().get("/assets/../app.js")
+
+        self.assertEqual(response.status_code, 404)
+
 
 class UserModelTests(TestCase):
     def test_custom_user_model_is_active(self):

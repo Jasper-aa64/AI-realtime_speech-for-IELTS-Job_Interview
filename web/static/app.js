@@ -74,6 +74,7 @@ const state = {
     activeReportDetail: null,
     scorePollTimer: null,
     scorePollingEntryId: null,
+    pickerTaskType: "task1_academic",
   },
   account: {
     authenticated: false,
@@ -1645,7 +1646,7 @@ function setWritingPending(isPending, title = "", detail = "") {
   wait?.classList.toggle("hidden", !isPending);
   if (title) text("writingInlineWaitTitle", title);
   if (detail) text("writingInlineWaitText", detail);
-  ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptSelect", "writingAnswer"].forEach((id) => {
+  ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptPickerBtn", "writingAnswer"].forEach((id) => {
     const element = $(id);
     if (element) element.disabled = isPending;
   });
@@ -1656,6 +1657,12 @@ function setWritingPending(isPending, title = "", detail = "") {
 
 function writingTaskLabel(taskType) {
   return taskType === "task1_academic" ? "Task 1 Academic" : "Task 2";
+}
+
+function writingCategoryLabel(category = "") {
+  return String(category || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Writing";
 }
 
 async function loadWriting() {
@@ -1871,6 +1878,7 @@ function writingReportDetailHtml(entry) {
     ${scoreBlock}
     <div class="detail-card writing-report-prompt">
       <h3>题目</h3>
+      ${entry.image_url ? `<div class="writing-report-image"><img src="${escapeHtml(entry.image_url)}" alt="Task 1 chart"></div>` : ""}
       <div class="coaching-content">${renderMarkdown(entry.prompt || "")}</div>
     </div>
     <div class="detail-card writing-report-answer">
@@ -1896,15 +1904,11 @@ function renderWritingSurface() {
   document.querySelectorAll("[data-writing-task]").forEach((button) => {
     button.classList.toggle("active", button.dataset.writingTask === taskType);
   });
-  const prompts = state.writing.prompts[taskType] || [];
-  const select = $("writingPromptSelect");
-  if (select) {
-    select.innerHTML = prompts.map((prompt) => `<option value="${escapeHtml(prompt.id)}">${escapeHtml(prompt.title)}</option>`).join("");
-    if (state.writing.prompt?.id) select.value = state.writing.prompt.id;
-  }
   const prompt = state.writing.prompt;
   text("writingPromptType", writingTaskLabel(taskType));
   text("writingPromptTitle", prompt?.title || "选择一道题开始");
+  text("writingPromptPickerTitle", prompt?.title || "选择写作题目");
+  text("writingPromptPickerMeta", prompt ? `${writingTaskLabel(taskType)} · ${writingCategoryLabel(prompt.category)}` : writingTaskLabel(taskType));
   $("writingPromptText").innerHTML = renderMarkdown(prompt?.prompt || "请选择一道题，或点击随机题开始。");
 
   // Render Task 1 image if available
@@ -1941,6 +1945,61 @@ function renderWritingScore(entry) {
   text("writingSaveStatus", `已评分 · Band ${score.overall_band ?? "—"} · 可在写作报告查看`);
 }
 
+function openWritingPromptPicker(taskType = state.writing.taskType || "task1_academic") {
+  state.writing.pickerTaskType = taskType;
+  $("writingPromptModal")?.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  loadWritingPrompts(taskType)
+    .then(() => renderWritingPromptPicker())
+    .catch(showWritingError);
+}
+
+function closeWritingPromptPicker() {
+  $("writingPromptModal")?.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+function renderWritingPromptPicker() {
+  const taskType = state.writing.pickerTaskType || state.writing.taskType || "task1_academic";
+  document.querySelectorAll("[data-writing-picker-task]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.writingPickerTask === taskType);
+  });
+  text("writingPromptModalHint", taskType === "task1_academic"
+    ? "Task 1 题目会显示对应图表；选择后再开始写作。"
+    : "Task 2 题目按主题浏览；选择后再开始写作。");
+  const prompts = state.writing.prompts[taskType] || [];
+  const grid = $("writingPromptGrid");
+  if (!grid) return;
+  if (!prompts.length) {
+    grid.innerHTML = '<p class="muted">当前没有可用题目。</p>';
+    return;
+  }
+  grid.innerHTML = prompts.map((prompt) => {
+    const active = prompt.id === state.writing.prompt?.id;
+    const isTask1 = prompt.task_type === "task1_academic";
+    return `
+      <button type="button" class="writing-prompt-choice ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
+        ${isTask1 && prompt.image_url ? `<span class="writing-prompt-choice-image"><img src="${escapeHtml(prompt.image_url)}" alt=""></span>` : ""}
+        <span class="writing-prompt-choice-body">
+          <strong>${escapeHtml(prompt.title || writingTaskLabel(prompt.task_type))}</strong>
+          <small>${escapeHtml(writingCategoryLabel(prompt.category))}</small>
+          <span>${escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "")}</span>
+        </span>
+      </button>
+    `;
+  }).join("");
+  grid.querySelectorAll("[data-writing-prompt-choice]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) return;
+      const prompt = prompts.find((item) => item.id === button.dataset.writingPromptChoice);
+      if (!prompt) return;
+      state.writing.taskType = prompt.task_type || taskType;
+      setWritingPrompt(prompt, true);
+      closeWritingPromptPicker();
+    });
+  });
+}
+
 async function chooseRandomWritingPrompt(confirmDirty = true) {
   if (confirmDirty && state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) return;
   const prompt = await withBusy("Loading writing prompt...", () => api("/api/writing/prompts/random", { task_type: state.writing.taskType }));
@@ -1958,6 +2017,7 @@ async function saveWritingEntry(keepPending = false) {
     prompt: prompt.prompt,
     title: prompt.title,
     category: prompt.category,
+    image_url: prompt.image_url || "",
     answer,
   };
   setWritingPending(true, "正在保存作文", "保存免费，完成后会直接计入今天的签到。");
@@ -2047,6 +2107,7 @@ async function recoverWritingEntry(entry) {
     title: entry.title,
     prompt: entry.prompt,
     category: entry.category,
+    image_url: entry.image_url || "",
   };
   if ($("writingAnswer")) $("writingAnswer").value = entry.answer || "";
   state.writing.dirty = false;
@@ -3652,13 +3713,18 @@ function bindEvents() {
       renderWritingSurface();
     });
   });
-  $("writingPromptSelect")?.addEventListener("change", (event) => {
-    if (state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) {
-      event.target.value = state.writing.prompt?.id || "";
-      return;
-    }
-    const prompt = (state.writing.prompts[state.writing.taskType] || []).find((item) => item.id === event.target.value);
-    if (prompt) setWritingPrompt(prompt, true);
+  $("writingPromptPickerBtn")?.addEventListener("click", () => openWritingPromptPicker());
+  $("writingPromptCloseBtn")?.addEventListener("click", closeWritingPromptPicker);
+  document.querySelectorAll("[data-writing-prompt-close]").forEach((button) => {
+    button.addEventListener("click", closeWritingPromptPicker);
+  });
+  document.querySelectorAll("[data-writing-picker-task]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const taskType = button.dataset.writingPickerTask || "task1_academic";
+      state.writing.pickerTaskType = taskType;
+      await loadWritingPrompts(taskType).catch(showWritingError);
+      renderWritingPromptPicker();
+    });
   });
   $("writingRandomBtn")?.addEventListener("click", () => chooseRandomWritingPrompt(true).catch(showWritingError));
   $("writingSaveBtn")?.addEventListener("click", () => saveWritingEntry().catch(showWritingError));

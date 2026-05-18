@@ -105,6 +105,7 @@ def sync_seed_prompts() -> None:
                     "title": str(raw_item.get("title") or f"{WRITING_TASK_LABELS[task_type]} {index + 1}")[:200],
                     "category": str(raw_item.get("category") or "")[:120],
                     "prompt": prompt_text,
+                    "image_url": str(raw_item.get("image_url") or raw_item.get("image") or "")[:500],
                     "source": str(raw_item.get("source") or "local_seed")[:120],
                     "is_active": True,
                 },
@@ -257,6 +258,7 @@ def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str,
         "title": entry.title,
         "category": entry.prompt.category if entry.prompt_id else entry.metadata.get("category", ""),
         "prompt": entry.prompt_text,
+        "image_url": entry.prompt.image_url if entry.prompt_id else entry.metadata.get("image_url", ""),
         "word_count": entry.word_count,
         "score": score_payload(score),
         "ai_task": writing_score_task_payload(entry),
@@ -437,7 +439,11 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     entry.word_count = word_count(answer)
     entry.status = WritingEntry.Status.SAVED if answer_changed or not existing else entry.status
     entry.saved_at = now
-    entry.metadata = {**(entry.metadata or {}), "category": str(payload.get("category") or (prompt.category if prompt else ""))}
+    entry.metadata = {
+        **(entry.metadata or {}),
+        "category": str(payload.get("category") or (prompt.category if prompt else "")),
+        "image_url": str(payload.get("image_url") or (prompt.image_url if prompt else "")),
+    }
     entry.save()
     if answer_changed:
         WritingScore.objects.filter(entry=entry).delete()

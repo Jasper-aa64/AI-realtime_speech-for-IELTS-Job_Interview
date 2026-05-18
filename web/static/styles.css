@@ -1780,6 +1780,32 @@ h1 {
   gap: 12px;
 }
 
+.writing-picker-button {
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  padding: 8px 12px;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.writing-picker-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.writing-picker-button small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .writing-actions-row select {
   min-width: 0;
   min-height: 42px;
@@ -1820,6 +1846,162 @@ h1 {
   display: block;
   border-radius: 6px;
   border: 1px solid #e5e7eb;
+}
+
+.writing-report-image {
+  margin: 0 0 14px;
+}
+
+.writing-report-image img {
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(1040px, 100%);
+  max-height: min(820px, calc(100vh - 56px));
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-head h2 {
+  margin-top: 4px;
+  font-size: 22px;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.writing-prompt-modal-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.writing-prompt-modal-toolbar .writing-task-switch {
+  width: min(280px, 100%);
+  flex: 0 0 auto;
+}
+
+.writing-prompt-modal-toolbar p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.writing-prompt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  padding: 18px 22px 22px;
+}
+
+.writing-prompt-choice {
+  min-width: 0;
+  min-height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcfd;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.writing-prompt-choice:hover,
+.writing-prompt-choice.active {
+  border-color: var(--accent);
+  box-shadow: 0 8px 24px rgba(15, 118, 110, 0.12);
+  background: #fff;
+}
+
+.writing-prompt-choice-image {
+  height: 156px;
+  display: grid;
+  place-items: center;
+  background: #f7fafb;
+  border-bottom: 1px solid var(--line);
+}
+
+.writing-prompt-choice-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.writing-prompt-choice-body {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.writing-prompt-choice-body strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.writing-prompt-choice-body small {
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+
+.writing-prompt-choice-body span {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 13px;
 }
 
 .writing-pill {
@@ -5058,6 +5240,23 @@ input, select {
   .writing-task-bar,
   .writing-actions-row {
     grid-template-columns: 1fr;
+  }
+  .modal {
+    padding: 10px;
+  }
+  .modal-card {
+    max-height: calc(100vh - 20px);
+  }
+  .writing-prompt-modal-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .writing-prompt-modal-toolbar .writing-task-switch {
+    width: 100%;
+  }
+  .writing-prompt-grid {
+    grid-template-columns: 1fr;
+    padding: 14px;
   }
   .writing-footer-row {
     align-items: stretch;

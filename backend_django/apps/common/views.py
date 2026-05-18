@@ -39,3 +39,14 @@ def frontend_asset(request, asset_path: str = "index.html"):
     response = FileResponse(open(path, "rb"), content_type=allowed[normalized])
     response["Cache-Control"] = "no-store"
     return response
+
+
+@require_GET
+def frontend_static_asset(request, asset_path: str):
+    normalized = (asset_path or "").lstrip("/")
+    if not normalized or ".." in normalized.split("/"):
+        raise Http404("Static asset not found")
+    path = settings.BASE_DIR.parent / "web" / "static" / "assets" / normalized
+    if not path.exists() or not path.is_file():
+        raise Http404("Static asset not found")
+    return FileResponse(open(path, "rb"))
