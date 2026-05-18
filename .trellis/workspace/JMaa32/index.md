@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 47
+- **Total Sessions**: 48
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1705 | Active |
+| `journal-1.md` | ~1738 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 48 | 2026-05-18 | Compact practice layout for Windows Edge | `7c4be25` | `main` |
 | 47 | 2026-05-18 | Rename Takeaway book label | `d8d5507` | `main` |
 | 46 | 2026-05-18 | Conceal English in takeaway review mode | `15457d2` | `main` |
 | 45 | 2026-05-18 | Responsive density and bounded selection trigger | `9b1744a` | `main` |

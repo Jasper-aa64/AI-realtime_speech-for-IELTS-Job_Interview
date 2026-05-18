@@ -1703,3 +1703,36 @@ Renamed learner-facing 生词本 labels to Takeaway across sidebar, corpus card,
 ### Next Steps
 
 - None - task complete
+
+
+## Session 48: Compact practice layout for Windows Edge
+
+**Date**: 2026-05-18
+**Task**: Compact practice layout for Windows Edge
+**Branch**: `main`
+
+### Summary
+
+Added compact desktop practice sizing for laptop browsers: smaller practice title/subtitle, status area, prompt cards, recorder panes, timer, recording control, icon, and labels; bumped static asset version.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7c4be25` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
