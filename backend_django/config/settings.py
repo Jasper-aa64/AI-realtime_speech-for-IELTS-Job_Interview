@@ -22,6 +22,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-local-ielts-mi
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = [host for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if host]
+CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin]
 
 
 # Application definition
