@@ -368,7 +368,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-body.app-booting .workspace {
+body.app-booting .shell {
   visibility: hidden;
 }
 

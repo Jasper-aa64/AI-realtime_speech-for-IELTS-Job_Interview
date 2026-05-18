@@ -284,7 +284,7 @@ function setBusy(message) {
 let fontStyleTransitionTimer = null;
 let candidateNameSaveTimer = null;
 
-function applyFontStyle(value) {
+function applyFontStyle(value, options = {}) {
   const style = fontStyles.has(value) ? value : "default";
   state.fontStyle = style;
 
@@ -304,12 +304,17 @@ function applyFontStyle(value) {
     button.classList.toggle("active", button.dataset.fontStyle === style);
   });
 
-  // Delay body class change to wait for slider animation (250ms)
-  fontStyleTransitionTimer = setTimeout(() => {
+  const updateBodyClass = () => {
     document.body.classList.toggle("font-academic", style === "academic");
     document.body.classList.toggle("font-popular", style === "popular");
     fontStyleTransitionTimer = null;
-  }, 250);
+  };
+  if (options.immediate) {
+    updateBodyClass();
+  } else {
+    // Delay body class change to wait for slider animation (250ms) on user-initiated changes.
+    fontStyleTransitionTimer = setTimeout(updateBodyClass, 250);
+  }
 
   try {
     localStorage.setItem(FONT_STORAGE_KEY, style);
@@ -325,7 +330,7 @@ function loadFontStyle() {
   } catch (_error) {
     stored = "default";
   }
-  applyFontStyle(stored);
+  applyFontStyle(stored, { immediate: true });
 }
 
 function candidateNames() {
