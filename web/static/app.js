@@ -3102,9 +3102,19 @@ async function openLanguageTakeawayPopup() {
   popup.style.top = `${Math.min(window.innerHeight - 300, Math.max(12, triggerRect.bottom + 8))}px`;
   popup.classList.remove("hidden");
   hideLanguageTakeawayTrigger();
+  await translateLanguageTakeawaySource(textValue);
+}
+
+async function translateLanguageTakeawaySource(sourceValue = null) {
+  const sourceText = String(sourceValue ?? $("languageTakeawaySource")?.value ?? "").trim();
+  if (!sourceText) {
+    text("languageTakeawayStatus", "原文为空。");
+    return;
+  }
+  text("languageTakeawayStatus", "翻译中...");
   try {
-    const result = await api("/api/language-takeaways/translate", { text: textValue });
-    $("languageTakeawaySource").value = result.source_text || textValue;
+    const result = await api("/api/language-takeaways/translate", { text: sourceText });
+    $("languageTakeawaySource").value = result.source_text || sourceText;
     $("languageTakeawayChinese").value = result.chinese_text || "";
     text("languageTakeawayStatus", languageTakeawayTranslationStatus(result));
   } catch (error) {
@@ -3756,6 +3766,11 @@ function bindEvents() {
   });
   $("languageTakeawaySaveBtn")?.addEventListener("click", saveLanguageTakeaway);
   $("languageTakeawayCloseBtn")?.addEventListener("click", hideLanguageTakeawayPopup);
+  $("languageTakeawaySource")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    translateLanguageTakeawaySource();
+  });
   document.addEventListener("pointerdown", (event) => {
     const popup = $("languageTakeawayPopup");
     const trigger = $("languageTakeawayTrigger");
