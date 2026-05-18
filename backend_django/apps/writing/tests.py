@@ -60,13 +60,29 @@ class WritingApiTests(TestCase):
         self.user = get_user_model().objects.create_user(username="writing-api-user", password="test-pass")
         self.client.force_login(self.user)
 
-    def create_prompt(self, *, prompt_id: str, task_type: str, title: str, prompt: str, image_url: str = "") -> WritingPrompt:
+    def create_prompt(
+        self,
+        *,
+        prompt_id: str,
+        task_type: str,
+        title: str,
+        prompt: str,
+        image_url: str = "",
+        category: str = "",
+        source_book: int | None = None,
+        source_test: int | None = None,
+        source_question: int | None = None,
+    ) -> WritingPrompt:
         return WritingPrompt.objects.create(
             prompt_id=prompt_id,
             task_type=task_type,
             title=title,
             prompt=prompt,
             image_url=image_url,
+            category=category,
+            source_book=source_book,
+            source_test=source_test,
+            source_question=source_question,
         )
 
     def create_entry(
@@ -690,6 +706,65 @@ class WritingApiTests(TestCase):
         self.assertEqual(fallback["ai_task"]["status"], AITask.Status.CANCELLED)
         self.assertIsNone(fallback["score"])
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
+
+    def test_prompt_bank_filters_categories_and_sorts_cambridge_descending(self):
+        self.create_prompt(
+            prompt_id="cambridge-19-test-1-task-1",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Cambridge IELTS 19 Test 1 Task 1",
+            prompt="Authorized Task 1 prompt text.",
+            image_url="/assets/writing/task1/cambridge/19/test_1_task_1.png",
+            category="line_graph",
+            source_book=19,
+            source_test=1,
+            source_question=1,
+        )
+        self.create_prompt(
+            prompt_id="cambridge-20-test-1-task-1",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Cambridge IELTS 20 Test 1 Task 1",
+            prompt="Authorized Task 1 prompt text.",
+            image_url="/assets/writing/task1/cambridge/20/test_1_task_1.png",
+            category="line_graph",
+            source_book=20,
+            source_test=1,
+            source_question=1,
+        )
+        self.create_prompt(
+            prompt_id="cambridge-20-test-2-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Cambridge IELTS 20 Test 2 Task 2",
+            prompt="Authorized Task 2 prompt text.",
+            category="opinion",
+            source_book=20,
+            source_test=2,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="cambridge-20-test-3-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Cambridge IELTS 20 Test 3 Task 2",
+            prompt="Authorized Task 2 prompt text.",
+            category="discussion",
+            source_book=20,
+            source_test=3,
+            source_question=2,
+        )
+
+        task1 = self.client.get("/api/writing/prompts?task_type=task1_academic&category=line_graph")
+        self.assertEqual(task1.status_code, 200)
+        task1_payload = task1.json()
+        task1_ids = [item["id"] for item in task1_payload["items"]]
+        self.assertLess(task1_ids.index("cambridge-20-test-1-task-1"), task1_ids.index("cambridge-19-test-1-task-1"))
+        self.assertEqual(task1_payload["items"][0]["source_book"], 20)
+        self.assertTrue(task1_payload["items"][0]["image_url"])
+        self.assertIn("line_graph", {item["category"] for item in task1_payload["categories"]})
+
+        task2 = self.client.get("/api/writing/prompts?task_type=task2&category=opinion")
+        self.assertEqual(task2.status_code, 200)
+        self.assertTrue(task2.json()["items"])
+        self.assertTrue(all(item["task_type"] == WritingPrompt.TaskType.TASK2 for item in task2.json()["items"]))
+        self.assertTrue(all(item["category"] == "opinion" for item in task2.json()["items"]))
 
     def test_invalid_writing_requests_return_json_errors(self):
         bad_prompt_type = self.client.get("/api/writing/prompts?task_type=unknown")

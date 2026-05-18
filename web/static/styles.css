@@ -1934,10 +1934,51 @@ h1 {
   flex: 0 0 auto;
 }
 
+.writing-prompt-filter-wrap {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.writing-prompt-type-filters {
+  max-width: 680px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.writing-type-filter {
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d8e2e8;
+  background: #f8fafc;
+  color: #31424b;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.writing-type-filter span {
+  margin-left: 5px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.writing-type-filter:hover,
+.writing-type-filter.active {
+  border-color: var(--accent);
+  background: #e7f5f3;
+  color: var(--accent-dark);
+}
+
 .writing-prompt-modal-toolbar p {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+  margin: 0;
 }
 
 .writing-prompt-grid {
@@ -5253,6 +5294,15 @@ input, select {
   }
   .writing-prompt-modal-toolbar .writing-task-switch {
     width: 100%;
+  }
+  .writing-prompt-filter-wrap {
+    justify-items: stretch;
+  }
+  .writing-prompt-type-filters {
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
   }
   .writing-prompt-grid {
     grid-template-columns: 1fr;

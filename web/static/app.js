@@ -75,6 +75,11 @@ const state = {
     scorePollTimer: null,
     scorePollingEntryId: null,
     pickerTaskType: "task1_academic",
+    promptCategories: {},
+    pickerCategoryFilters: {
+      task1_academic: "",
+      task2: "",
+    },
   },
   account: {
     authenticated: false,
@@ -1660,9 +1665,22 @@ function writingTaskLabel(taskType) {
 }
 
 function writingCategoryLabel(category = "") {
-  return String(category || "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Writing";
+  const labels = {
+    line_graph: "折线图",
+    bar_chart: "柱状图",
+    pie_chart: "饼图",
+    table: "表格",
+    map: "地图",
+    process: "流程图",
+    mixed: "混合图",
+    opinion: "观点类",
+    discussion: "讨论类",
+    problem_solution: "问题解决类",
+    advantages_disadvantages: "利弊类",
+    two_part: "双问题类",
+  };
+  const key = String(category || "").trim();
+  return labels[key] || key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Writing";
 }
 
 async function loadWriting() {
@@ -1685,10 +1703,28 @@ async function loadWriting() {
 
 async function loadWritingPrompts(taskType) {
   const normalized = taskType || "task1_academic";
-  if (state.writing.prompts[normalized]?.length) return state.writing.prompts[normalized];
+  if (state.writing.prompts[normalized]?.length) {
+    if (!state.writing.promptCategories[normalized]?.length) {
+      state.writing.promptCategories[normalized] = inferWritingCategories(state.writing.prompts[normalized]);
+    }
+    return state.writing.prompts[normalized];
+  }
   const payload = await api(`/api/writing/prompts?task_type=${encodeURIComponent(normalized)}`);
   state.writing.prompts[normalized] = payload.items || [];
+  state.writing.promptCategories[normalized] = payload.categories || inferWritingCategories(state.writing.prompts[normalized]);
   return state.writing.prompts[normalized];
+}
+
+function inferWritingCategories(prompts = []) {
+  const counts = new Map();
+  for (const prompt of prompts) {
+    const category = String(prompt.category || "").trim();
+    if (!category) continue;
+    counts.set(category, (counts.get(category) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([category, count]) => ({ category, label: writingCategoryLabel(category), count }));
 }
 
 async function loadWritingSummary(render = true) {
@@ -1965,13 +2001,15 @@ function renderWritingPromptPicker() {
     button.classList.toggle("active", button.dataset.writingPickerTask === taskType);
   });
   text("writingPromptModalHint", taskType === "task1_academic"
-    ? "Task 1 题目会显示对应图表；选择后再开始写作。"
-    : "Task 2 题目按主题浏览；选择后再开始写作。");
-  const prompts = state.writing.prompts[taskType] || [];
+    ? "Task 1 题目会显示对应图表；可以先按图表类型筛选。"
+    : "Task 2 可以按题型筛选；选择后再开始写作。");
+  renderWritingPromptTypeFilters(taskType);
+  const selectedCategory = state.writing.pickerCategoryFilters[taskType] || "";
+  const prompts = (state.writing.prompts[taskType] || []).filter((prompt) => !selectedCategory || prompt.category === selectedCategory);
   const grid = $("writingPromptGrid");
   if (!grid) return;
   if (!prompts.length) {
-    grid.innerHTML = '<p class="muted">当前没有可用题目。</p>';
+    grid.innerHTML = '<p class="muted">当前筛选下没有可用题目。</p>';
     return;
   }
   grid.innerHTML = prompts.map((prompt) => {
@@ -2000,9 +2038,37 @@ function renderWritingPromptPicker() {
   });
 }
 
+function renderWritingPromptTypeFilters(taskType) {
+  const target = $("writingPromptTypeFilters");
+  if (!target) return;
+  const categories = state.writing.promptCategories[taskType]?.length
+    ? state.writing.promptCategories[taskType]
+    : inferWritingCategories(state.writing.prompts[taskType] || []);
+  const selected = state.writing.pickerCategoryFilters[taskType] || "";
+  target.innerHTML = [
+    `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category="">全部</button>`,
+    ...categories.map((item) => `
+      <button type="button" class="writing-type-filter ${selected === item.category ? "active" : ""}" data-writing-prompt-category="${escapeHtml(item.category)}">
+        ${escapeHtml(writingCategoryLabel(item.category) || item.label)}
+        <span>${escapeHtml(item.count ?? "")}</span>
+      </button>
+    `),
+  ].join("");
+  target.querySelectorAll("[data-writing-prompt-category]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.writing.pickerCategoryFilters[taskType] = button.dataset.writingPromptCategory || "";
+      renderWritingPromptPicker();
+    });
+  });
+}
+
 async function chooseRandomWritingPrompt(confirmDirty = true) {
   if (confirmDirty && state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) return;
-  const prompt = await api("/api/writing/prompts/random", { task_type: state.writing.taskType });
+  const taskType = state.writing.taskType || "task1_academic";
+  const prompt = await api("/api/writing/prompts/random", {
+    task_type: taskType,
+    category: state.writing.pickerCategoryFilters[taskType] || "",
+  });
   setWritingPrompt(prompt, true);
 }
 

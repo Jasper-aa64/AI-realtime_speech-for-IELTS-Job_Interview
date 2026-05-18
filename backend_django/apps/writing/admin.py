@@ -5,8 +5,8 @@ from .models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingS
 
 @admin.register(WritingPrompt)
 class WritingPromptAdmin(admin.ModelAdmin):
-    list_display = ("prompt_id", "task_type", "title", "category", "is_active")
-    list_filter = ("task_type", "is_active", "category")
+    list_display = ("prompt_id", "task_type", "title", "category", "source_book", "source_test", "source_question", "is_active")
+    list_filter = ("task_type", "is_active", "category", "source_book")
     search_fields = ("prompt_id", "title", "prompt")
 
 

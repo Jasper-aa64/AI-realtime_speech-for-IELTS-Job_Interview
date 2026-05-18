@@ -15,6 +15,10 @@ class WritingPrompt(models.Model):
     prompt = models.TextField()
     image_url = models.CharField(max_length=500, blank=True, default="")
     source = models.CharField(max_length=120, default="local_seed")
+    source_book = models.PositiveSmallIntegerField(null=True, blank=True)
+    source_test = models.PositiveSmallIntegerField(null=True, blank=True)
+    source_question = models.PositiveSmallIntegerField(null=True, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -22,6 +26,8 @@ class WritingPrompt(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["task_type", "is_active"]),
+            models.Index(fields=["task_type", "category", "is_active"]),
+            models.Index(fields=["task_type", "source_book", "source_test", "source_question"]),
         ]
 
     def __str__(self) -> str:

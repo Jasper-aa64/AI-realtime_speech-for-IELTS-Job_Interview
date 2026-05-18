@@ -65,6 +65,47 @@ def stable_prompt_id(task_type: str, prompt: str) -> str:
     return f"{task_type}_{digest}"
 
 
+def positive_int(value: Any) -> int | None:
+    try:
+        number = int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def seed_prompt_files(task_type: str) -> list[Path]:
+    base_dir = data_writing_dir()
+    files: list[Path] = []
+    main_file = base_dir / f"{task_type}.json"
+    if main_file.exists():
+        files.append(main_file)
+    cambridge_dir = base_dir / "cambridge" / task_type
+    if cambridge_dir.exists():
+        files.extend(sorted(path for path in cambridge_dir.rglob("*.json") if path.is_file()))
+    return files
+
+
+def writing_prompt_sort_key(prompt: WritingPrompt) -> tuple:
+    task_rank = 0 if prompt.task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else 1
+    has_no_book = prompt.source_book is None
+    return (
+        task_rank,
+        has_no_book,
+        -(prompt.source_book or 0),
+        prompt.source_test or 999,
+        prompt.source_question or 999,
+        prompt.sort_order or 999_999,
+        prompt.prompt_id,
+    )
+
+
+def normalize_category(value: str | None) -> str:
+    category = str(value or "").strip().lower()
+    if category in {"", "all", "*"}:
+        return ""
+    return category
+
+
 def prompt_payload(prompt: WritingPrompt) -> dict[str, Any]:
     return {
         "id": prompt.prompt_id,
@@ -75,49 +116,75 @@ def prompt_payload(prompt: WritingPrompt) -> dict[str, Any]:
         "prompt": prompt.prompt,
         "image_url": prompt.image_url,
         "source": prompt.source,
+        "source_book": prompt.source_book,
+        "source_test": prompt.source_test,
+        "source_question": prompt.source_question,
+        "sort_order": prompt.sort_order,
     }
 
 
 def sync_seed_prompts() -> None:
-    base_dir = data_writing_dir()
     for task_type in sorted(WRITING_TASK_TYPES):
-        path = base_dir / f"{task_type}.json"
-        if not path.exists():
-            continue
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise WritingError(f"Unable to load writing prompts: {path}") from exc
-        raw_items = payload.get("prompts") if isinstance(payload, dict) else payload
-        if not isinstance(raw_items, list):
-            raise WritingError(f"Writing prompt file must contain a prompts array: {path}")
-        for index, raw_item in enumerate(raw_items):
-            if not isinstance(raw_item, dict):
-                raise WritingError(f"Writing prompt must be an object in {path}")
-            prompt_text = str(raw_item.get("prompt") or raw_item.get("question") or "").strip()
-            if not prompt_text:
-                continue
-            prompt_id = str(raw_item.get("id") or "").strip() or stable_prompt_id(task_type, prompt_text)
-            WritingPrompt.objects.update_or_create(
-                prompt_id=prompt_id[:120],
-                defaults={
-                    "task_type": task_type,
-                    "title": str(raw_item.get("title") or f"{WRITING_TASK_LABELS[task_type]} {index + 1}")[:200],
-                    "category": str(raw_item.get("category") or "")[:120],
-                    "prompt": prompt_text,
-                    "image_url": str(raw_item.get("image_url") or raw_item.get("image") or "")[:500],
-                    "source": str(raw_item.get("source") or "local_seed")[:120],
-                    "is_active": True,
-                },
-            )
+        for path in seed_prompt_files(task_type):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise WritingError(f"Unable to load writing prompts: {path}") from exc
+            raw_items = payload.get("prompts") if isinstance(payload, dict) else payload
+            if not isinstance(raw_items, list):
+                raise WritingError(f"Writing prompt file must contain a prompts array: {path}")
+            file_book = positive_int(payload.get("book") if isinstance(payload, dict) else None)
+            file_test = positive_int(payload.get("test") if isinstance(payload, dict) else None)
+            file_source = str(payload.get("source") or "").strip() if isinstance(payload, dict) else ""
+            for index, raw_item in enumerate(raw_items):
+                if not isinstance(raw_item, dict):
+                    raise WritingError(f"Writing prompt must be an object in {path}")
+                prompt_text = str(raw_item.get("prompt") or raw_item.get("question") or "").strip()
+                if not prompt_text:
+                    continue
+                prompt_task_type = normalize_task_type(str(raw_item.get("task_type") or task_type))
+                prompt_id = str(raw_item.get("id") or "").strip() or stable_prompt_id(prompt_task_type, prompt_text)
+                source_book = positive_int(raw_item.get("source_book") or raw_item.get("book")) or file_book
+                source_test = positive_int(raw_item.get("source_test") or raw_item.get("test")) or file_test
+                source_question = positive_int(raw_item.get("source_question") or raw_item.get("question_number"))
+                WritingPrompt.objects.update_or_create(
+                    prompt_id=prompt_id[:120],
+                    defaults={
+                        "task_type": prompt_task_type,
+                        "title": str(raw_item.get("title") or f"{WRITING_TASK_LABELS[prompt_task_type]} {index + 1}")[:200],
+                        "category": normalize_category(str(raw_item.get("category") or ""))[:120],
+                        "prompt": prompt_text,
+                        "image_url": str(raw_item.get("image_url") or raw_item.get("image") or "")[:500],
+                        "source": str(raw_item.get("source") or file_source or "local_seed")[:120],
+                        "source_book": source_book,
+                        "source_test": source_test,
+                        "source_question": source_question,
+                        "sort_order": positive_int(raw_item.get("sort_order")) or index + 1,
+                        "is_active": True,
+                    },
+                )
 
 
-def list_prompts(task_type: str | None = None) -> list[dict[str, Any]]:
+def prompt_categories(task_type: str | None = None) -> list[dict[str, Any]]:
     sync_seed_prompts()
     queryset = WritingPrompt.objects.filter(is_active=True)
     if task_type:
         queryset = queryset.filter(task_type=normalize_task_type(task_type))
-    return [prompt_payload(prompt) for prompt in queryset.order_by("task_type", "prompt_id")]
+    counts: dict[str, int] = {}
+    for category in queryset.exclude(category="").values_list("category", flat=True):
+        counts[category] = counts.get(category, 0) + 1
+    return [{"category": key, "label": key.replace("_", " ").title(), "count": counts[key]} for key in sorted(counts)]
+
+
+def list_prompts(task_type: str | None = None, category: str | None = None) -> list[dict[str, Any]]:
+    sync_seed_prompts()
+    queryset = WritingPrompt.objects.filter(is_active=True)
+    if task_type:
+        queryset = queryset.filter(task_type=normalize_task_type(task_type))
+    normalized_category = normalize_category(category)
+    if normalized_category:
+        queryset = queryset.filter(category=normalized_category)
+    return [prompt_payload(prompt) for prompt in sorted(queryset, key=writing_prompt_sort_key)]
 
 
 def next_default_task_type(date_value=None) -> str:
@@ -125,10 +192,14 @@ def next_default_task_type(date_value=None) -> str:
     return WritingPrompt.TaskType.TASK1_ACADEMIC if today.toordinal() % 2 == 0 else WritingPrompt.TaskType.TASK2
 
 
-def random_prompt(user, task_type: str | None = None) -> dict[str, Any]:
+def random_prompt(user, task_type: str | None = None, category: str | None = None) -> dict[str, Any]:
     selected_type = normalize_task_type(task_type) if task_type else next_default_task_type()
     sync_seed_prompts()
-    prompts = list(WritingPrompt.objects.filter(task_type=selected_type, is_active=True).order_by("prompt_id"))
+    queryset = WritingPrompt.objects.filter(task_type=selected_type, is_active=True)
+    normalized_category = normalize_category(category)
+    if normalized_category:
+        queryset = queryset.filter(category=normalized_category)
+    prompts = sorted(queryset, key=writing_prompt_sort_key)
     if not prompts:
         raise WritingError(f"No writing prompts available for {selected_type}")
     used_ids = set(

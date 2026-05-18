@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .services import WritingError, create_score_task, get_entry, list_prompts, random_prompt, save_entry, score_entry, writing_reports, writing_summary
+from .services import WritingError, create_score_task, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
 def read_json_body(request) -> dict:
@@ -55,7 +55,11 @@ def prompts(request):
     if auth_error:
         return auth_error
     try:
-        return JsonResponse({"items": list_prompts(request.GET.get("task_type"))})
+        task_type = request.GET.get("task_type")
+        return JsonResponse({
+            "items": list_prompts(task_type, request.GET.get("category")),
+            "categories": prompt_categories(task_type),
+        })
     except WritingError as exc:
         return writing_error(exc)
 
@@ -68,7 +72,11 @@ def random_prompt_view(request):
         return auth_error
     payload = read_json_body(request)
     try:
-        return JsonResponse(random_prompt(request.user, str(payload.get("task_type") or "").strip() or None))
+        return JsonResponse(random_prompt(
+            request.user,
+            str(payload.get("task_type") or "").strip() or None,
+            str(payload.get("category") or "").strip() or None,
+        ))
     except WritingError as exc:
         return writing_error(exc)
 
