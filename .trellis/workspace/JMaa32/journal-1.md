@@ -1637,3 +1637,36 @@ Added compact desktop density rules for laptop-sized viewports, made the Languag
 ### Next Steps
 
 - None - task complete
+
+
+## Session 46: Conceal English in takeaway review mode
+
+**Date**: 2026-05-18
+**Task**: Conceal English in takeaway review mode
+**Branch**: `main`
+
+### Summary
+
+Changed Language Takeaway self-test mode to conceal English source text while keeping Chinese visible, updated toggle copy, preserved card dimensions, and bumped static asset version.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `15457d2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
