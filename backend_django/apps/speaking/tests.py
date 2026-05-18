@@ -330,6 +330,12 @@ class QuestionBankApiTests(TestCase):
         self.assertGreater(payload["part1_status_counts"]["retained"], 0)
         self.assertGreater(payload["part2_status_counts"]["new"], 0)
         self.assertGreater(payload["part2_status_counts"]["retained"], 0)
+        self.assertGreaterEqual(payload["part1_count"], 100)
+        self.assertGreaterEqual(payload["part2_count"], 40)
+        for topic in ("social_media", "study_or_work", "public_gardens_and_parks"):
+            self.assertIn(topic, payload["part1_topics"])
+        for theme in ("medical_work_and_public_health", "traditional_customs_and_modern_life", "repairing_things_and_practical_skills"):
+            self.assertIn(theme, payload["part2_themes"])
 
     def test_question_bank_sample_returns_structure(self):
         response = self.client.post("/api/question-bank/sample", data={"p1_count": 3}, content_type="application/json")
