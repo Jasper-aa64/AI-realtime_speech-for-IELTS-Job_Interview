@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 34
+- **Total Sessions**: 35
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1292 | Active |
+| `journal-1.md` | ~1323 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 35 | 2026-05-18 | Fix Language Takeaway source enter behavior | - | `main` |
 | 34 | 2026-05-18 | Redesign home and corpus library views | - | `main` |
 | 33 | 2026-05-18 | Add corpus and language takeaway flow | - | `main` |
 | 32 | 2026-05-17 | Fix speaking AI feedback fallback policy | - | `main` |

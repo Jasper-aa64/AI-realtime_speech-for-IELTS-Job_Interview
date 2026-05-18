@@ -1290,3 +1290,34 @@ Added a real Home view as the default entry point, moved practice runtime out of
 ### Next Steps
 
 - None - task complete
+
+
+## Session 35: Fix Language Takeaway source enter behavior
+
+**Date**: 2026-05-18
+**Task**: Fix Language Takeaway source enter behavior
+**Branch**: `main`
+
+### Summary
+
+Changed the Language Takeaway popup so Enter in the source field re-runs translation, while Shift+Enter preserves multiline editing. Shared initial popup translation and manual retranslation through one helper.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
