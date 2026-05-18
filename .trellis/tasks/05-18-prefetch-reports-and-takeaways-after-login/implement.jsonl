@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Frontend state/rendering conventions for the vanilla Web UI."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Frontend API, loading, and validation expectations for the IELTS web runtime."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared thinking guide entry point for cache and cross-view behavior."}

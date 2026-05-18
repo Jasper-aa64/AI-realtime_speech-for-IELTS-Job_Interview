@@ -92,6 +92,10 @@ const state = {
     user: null,
     returnView: null,
   },
+  prefetch: {
+    started: false,
+    token: 0,
+  },
 };
 
 const FONT_STORAGE_KEY = "ielts-font-style";
@@ -422,6 +426,97 @@ async function withBusy(message, action) {
     return await action();
   } finally {
     setBusy("");
+  }
+}
+
+function scheduleIdleTask(action, timeout = 1200) {
+  const run = () => {
+    Promise.resolve()
+      .then(action)
+      .catch(() => {
+        // Background prefetch should never interrupt the active learner flow.
+      });
+  };
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout });
+  } else {
+    window.setTimeout(run, Math.min(timeout, 400));
+  }
+}
+
+function prefetchCanApply(token) {
+  return state.account.authenticated && state.prefetch.token === token;
+}
+
+function clearUserScopedCaches() {
+  state.historyItems = [];
+  state.historyDetailCache.clear();
+  state.activeHistoryId = null;
+  state.languageTakeaway.items = [];
+  state.languageTakeaway.loaded = false;
+  state.languageTakeaway.revealedEntryIds.clear();
+  state.writing.reportEntries = [];
+  state.writing.activeReportId = null;
+  state.writing.activeReportDetail = null;
+  state.writing.reportDetailCache.clear();
+  state.prefetch.started = false;
+  state.prefetch.token += 1;
+}
+
+function scheduleAuthenticatedPrefetch() {
+  if (!state.account.authenticated || state.prefetch.started) return;
+  state.prefetch.started = true;
+  state.prefetch.token += 1;
+  const token = state.prefetch.token;
+  scheduleIdleTask(() => prefetchLanguageTakeaways(token), 600);
+  scheduleIdleTask(() => prefetchSpeakingHistory(token), 1000);
+  scheduleIdleTask(() => prefetchWritingReports(token), 1400);
+}
+
+async function prefetchLanguageTakeaways(token) {
+  const payload = await api("/api/language-takeaways");
+  if (!prefetchCanApply(token)) return;
+  state.languageTakeaway.items = payload.items || [];
+  state.languageTakeaway.loaded = true;
+  if (state.view === "takeawayBook") {
+    const stats = $("languageTakeawayStats");
+    if (stats) stats.textContent = `${payload.count || 0} 条`;
+    renderLanguageTakeawayToggle();
+    renderLanguageTakeaways();
+  }
+}
+
+async function prefetchSpeakingHistory(token) {
+  const payload = await api("/api/history");
+  if (!prefetchCanApply(token)) return;
+  const items = payload.items || [];
+  state.historyItems = items;
+  const activeId = state.activeHistoryId && items.some((item) => item.id === state.activeHistoryId)
+    ? state.activeHistoryId
+    : items[0]?.id;
+  if (activeId && !state.historyDetailCache.has(activeId)) {
+    const detail = await api(`/api/history/${activeId}`);
+    if (prefetchCanApply(token)) state.historyDetailCache.set(activeId, detail);
+  }
+  if (prefetchCanApply(token) && state.view === "history") {
+    renderHistoryList(state.historyItems, { refreshActive: false });
+  }
+}
+
+async function prefetchWritingReports(token) {
+  const payload = await api("/api/writing/reports");
+  if (!prefetchCanApply(token)) return;
+  const items = payload.items || [];
+  state.writing.reportEntries = items;
+  const activeId = state.writing.activeReportId && items.some((item) => item.id === state.writing.activeReportId)
+    ? state.writing.activeReportId
+    : items[0]?.id;
+  if (activeId && !state.writing.reportDetailCache.has(activeId)) {
+    const detail = await api(`/api/writing/entries/${activeId}`);
+    if (prefetchCanApply(token)) state.writing.reportDetailCache.set(activeId, detail);
+  }
+  if (prefetchCanApply(token) && state.view === "writingReports") {
+    await renderWritingReports(state.writing.reportEntries, { refreshActive: false });
   }
 }
 
@@ -3595,6 +3690,7 @@ async function submitLogin() {
     const returnView = state.account.returnView || "accountProfile";
     state.account.returnView = null;
     switchView(returnView, { force: true, skipAuthGate: true });
+    scheduleAuthenticatedPrefetch();
   } catch (error) {
     state.account.backendAvailable = Boolean(error.status && error.status < 500);
     if (statusEl) {
@@ -3646,6 +3742,7 @@ async function submitRegister() {
     const returnView = state.account.returnView || "accountProfile";
     state.account.returnView = null;
     switchView(returnView, { force: true, skipAuthGate: true });
+    scheduleAuthenticatedPrefetch();
   } catch (error) {
     state.account.backendAvailable = Boolean(error.status && error.status < 500);
     if (statusEl) {
@@ -3708,6 +3805,7 @@ async function logoutAccount() {
   state.account.authenticated = false;
   state.account.user = null;
   state.account.returnView = null;
+  clearUserScopedCaches();
   csrfToken = null;
   loadCandidateNames();
   switchView("login", { force: true, skipAuthGate: true, authMessage: "你已退出登录。" });
@@ -4120,6 +4218,7 @@ async function init() {
   if (!viewCopy[savedView]) savedView = "home";
   switchView(savedView, { skipPersist: Boolean(urlView), skipUrl: true });
   document.body.classList.remove("app-booting");
+  scheduleAuthenticatedPrefetch();
   try {
     const summary = await api("/api/question-bank/summary");
     text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);
