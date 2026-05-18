@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260518-takeaway-book">
+    <link rel="stylesheet" href="/styles.css?v=20260518-home-corpus-redesign">
   </head>
   <body>
     <div class="shell">
@@ -44,7 +44,8 @@
           </div>
           <div id="navLockHint" class="nav-lock-hint hidden">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
           <nav class="nav-primary" aria-label="Practice modes">
-            <button class="nav-button active" data-view="mock">Mock</button>
+            <button class="nav-button active" data-view="home">首页</button>
+            <button class="nav-button" data-view="mock">Mock</button>
             <button class="nav-button" data-view="p1">P1</button>
             <button class="nav-button" data-view="p2">P2</button>
             <button class="nav-button" data-view="p3">P3</button>
@@ -80,8 +81,8 @@
       <main class="workspace">
         <header class="topbar">
           <div id="viewTitleBlock">
-            <h1 id="viewTitle">Mock</h1>
-            <p id="viewSubtitle">Practice flow: P1, P2, then P3 generated from your P2 answer.</p>
+            <h1 id="viewTitle">首页</h1>
+            <p id="viewSubtitle">选择今天要练的口语模式。</p>
           </div>
         </header>
 
@@ -90,40 +91,40 @@
           <span id="busyText"></span>
         </div>
 
-        <section id="practicePanel" class="panel practice-panel">
-          <section id="mockHomePanel" class="mock-home-panel">
-            <div class="mock-home-hero">
-              <div class="mock-home-copy">
-                <div class="section-label">IELTS Speaking Mock</div>
-                <h2>先分块练稳，再进入完整 Mock。</h2>
-                <p>完整 Mock 会按真实口语流程串起 Part 1、Part 2 和 Part 3。建议先从左侧 Part 1 / Part 2 / Part 3 分块练习，把短答、串题素材和追问节奏分别打磨好。</p>
-              </div>
-              <button id="startFullMockBtn" class="mock-home-start" type="button">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z"></path>
-                </svg>
-                <span>开始完整 Mock</span>
-              </button>
+        <section id="homePanel" class="panel home-panel" aria-label="首页">
+          <div class="home-hero">
+            <div class="home-copy">
+              <div class="section-label">IELTS Speaking Studio</div>
+              <h2>选择一个入口，直接开始练习。</h2>
+              <p>首页只负责进入练习。P1、P2、P3 可以单独训练，Mock 会按完整考试流程串起来。</p>
             </div>
+          </div>
 
-            <div class="mock-home-grid" aria-label="Recommended practice path">
-              <article class="mock-home-card">
-                <span>01</span>
-                <h3>Part 1 分块练习</h3>
-                <p>先稳定短问题的直接回答、原因和具体细节。</p>
-              </article>
-              <article class="mock-home-card">
-                <span>02</span>
-                <h3>Part 2 串题素材</h3>
-                <p>准备人物、地点、事件、物品素材，再链接到本次回答。</p>
-              </article>
-              <article class="mock-home-card">
-                <span>03</span>
-                <h3>Part 3 追问讨论</h3>
-                <p>练习从 P2 内容自然延伸到观点、原因和对比。</p>
-              </article>
-            </div>
-          </section>
+          <div class="home-practice-grid" aria-label="Speaking practice entries">
+            <button class="home-practice-card tone-p1" type="button" data-home-mode="p1">
+              <span class="home-card-kicker">Part 1</span>
+              <strong>P1 短问短答</strong>
+              <small>练直答、原因和具体细节。</small>
+            </button>
+            <button class="home-practice-card tone-p2" type="button" data-home-mode="p2">
+              <span class="home-card-kicker">Part 2</span>
+              <strong>P2 Cue Card</strong>
+              <small>准备 1 分钟后完成长回答。</small>
+            </button>
+            <button class="home-practice-card tone-p3" type="button" data-home-mode="p3">
+              <span class="home-card-kicker">Part 3</span>
+              <strong>P3 深入讨论</strong>
+              <small>围绕话题练观点、原因和对比。</small>
+            </button>
+            <button id="startFullMockBtn" class="home-practice-card tone-mock" type="button" data-home-mode="mock">
+              <span class="home-card-kicker">Full Mock</span>
+              <strong>完整 Mock</strong>
+              <small>P1、P2、P3 串联模拟。</small>
+            </button>
+          </div>
+        </section>
+
+        <section id="practicePanel" class="panel practice-panel hidden">
 
           <div class="exam-status">
             <div id="examStatusText">
@@ -267,18 +268,18 @@
               </div>
             </header>
             <div class="corpus-home-grid">
-              <button type="button" class="corpus-home-card" data-corpus-home-target="p1Corpus">
-                <span>P1</span>
+              <button type="button" class="corpus-home-card corpus-card-p1" data-corpus-home-target="p1Corpus">
+                <span class="corpus-card-mark">P1</span>
                 <strong>我的 P1语料库</strong>
                 <small>按题组整理每道短问题准备的语料。</small>
               </button>
-              <button type="button" class="corpus-home-card" data-corpus-home-target="p2Corpus">
-                <span>P2</span>
+              <button type="button" class="corpus-home-card corpus-card-p2" data-corpus-home-target="p2Corpus">
+                <span class="corpus-card-mark">P2</span>
                 <strong>我准备的P2串题素材库</strong>
                 <small>人物、地点、事件、物品和特殊题素材。</small>
               </button>
               <button type="button" class="corpus-home-card language-card" data-corpus-home-target="takeawayBook">
-                <span>LT</span>
+                <span class="corpus-card-mark">LT</span>
                 <strong>生词本</strong>
                 <small>复习平时摘录的单词和短语，需要自测时再隐藏中文。</small>
               </button>
@@ -295,7 +296,13 @@
               </div>
               <div class="language-book-actions">
                 <span id="languageTakeawayStats">Loading...</span>
-                <button id="languageTakeawayHideToggle" class="ghost" type="button" aria-pressed="false">隐藏中文</button>
+                <button id="languageTakeawayHideToggle" class="language-hide-toggle" type="button" aria-pressed="false">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <span>隐藏中文</span>
+                </button>
               </div>
             </header>
             <div id="languageTakeawayList" class="language-takeaway-list"></div>
@@ -703,6 +710,6 @@
       </main>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
-    <script src="/app.js?v=20260518-takeaway-book"></script>
+    <script src="/app.js?v=20260518-home-corpus-redesign"></script>
   </body>
 </html>

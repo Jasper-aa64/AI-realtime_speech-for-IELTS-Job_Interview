@@ -1,5 +1,5 @@
 const state = {
-  view: "mock",
+  view: "home",
   status: "idle",
   attempt: null,
   currentTurn: null,
@@ -105,7 +105,8 @@ const FIXED_EXAMINER_AUDIO_URLS = new Set([
 ]);
 
 const viewCopy = {
-  mock: ["Mock", "Practice flow: P1, P2, then P3 generated from your P2 answer."],
+  home: ["首页", "选择今天要练的口语模式。"],
+  mock: ["Mock", "完整模拟 P1、P2 和 P3 的口语考试流程。"],
   p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
   p2: ["Part 2", "Cue card, one-minute preparation, then a long turn."],
   p3: ["Part 3", "Discussion generated from your P2 answer with normal or high-intensity practice."],
@@ -415,7 +416,7 @@ async function withBusy(message, action) {
 }
 
 function switchView(view, options = {}) {
-  if (!viewCopy[view]) view = "mock";
+  if (!viewCopy[view]) view = "home";
   if (protectedViews.has(view) && !state.account.authenticated && !options.skipAuthGate) {
     state.account.returnView = view;
     switchView("login", {
@@ -462,6 +463,7 @@ function switchView(view, options = {}) {
   $(".shell")?.classList.toggle("account-shell", view === "accountProfile");
   $(".workspace")?.classList.toggle("corpus-workspace", ["corpus", "p1Corpus", "p2Corpus", "takeawayBook"].includes(view));
   $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !["p1Corpus", "p2Corpus", "takeawayBook"].includes(view));
+  $("#homePanel")?.classList.toggle("hidden", view !== "home");
   $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
   $("#corpusPanel")?.classList.toggle("hidden", view !== "corpus");
   $("#p1CorpusPanel")?.classList.toggle("hidden", view !== "p1Corpus");
@@ -518,7 +520,7 @@ function requestedStandaloneView() {
 function updateViewUrl(view) {
   if (!window.history?.replaceState || !viewCopy[view]) return;
   const url = new URL(window.location.href);
-  if (view === "mock") {
+  if (view === "home") {
     url.searchParams.delete("view");
   } else {
     url.searchParams.set("view", view);
@@ -639,9 +641,8 @@ function resetPracticeSurface() {
   state.transcript = "";
   clearExaminerAudioPreloads();
   const summaryPanel = $("#summaryPanel");
-  const showMockHome = state.view === "mock";
-  $("#mockHomePanel")?.classList.toggle("hidden", !showMockHome);
-  $(".exam-status")?.classList.toggle("hidden", showMockHome);
+  const isPracticeMode = ["mock", "p1", "p2", "p3"].includes(state.view);
+  $(".exam-status")?.classList.toggle("hidden", !isPracticeMode);
   $("#examStatusText")?.classList.toggle("hidden", state.view === "p2");
   $("#candidateAudio")?.classList.add("hidden");
   $("#examinerAudio")?.classList.add("hidden");
@@ -652,9 +653,9 @@ function resetPracticeSurface() {
   if (state.view !== "p2") state.p2Corpus.selectedEntryId = "";
   $("#cueTop")?.classList.add("hidden");
   $("#promptPane")?.classList.remove("hidden");
-  $("#p3TopicPanel")?.classList.toggle("hidden", showMockHome || state.view !== "p3");
+  $("#p3TopicPanel")?.classList.toggle("hidden", !isPracticeMode || state.view !== "p3");
   $("#practiceGrid")?.classList.remove("p2-mode", "practice-enter");
-  $("#practiceGrid")?.classList.toggle("hidden", showMockHome || state.view === "p3");
+  $("#practiceGrid")?.classList.toggle("hidden", !isPracticeMode || state.view === "p3");
   summaryPanel?.classList.add("hidden");
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("#exitPractice")?.classList.add("hidden");
@@ -669,6 +670,15 @@ function resetPracticeSurface() {
   setRecordButton("ready", "Start", "Record the full section. No typing.");
   text("recordStatus", "Click Start. The examiner will load the questions automatically.");
   $("#examStatusText")?.classList.toggle("hidden", state.view === "p2");
+}
+
+function startPracticeMode(mode) {
+  if (!["mock", "p1", "p2", "p3"].includes(mode)) return;
+  switchView(mode, { force: true });
+  window.requestAnimationFrame(() => {
+    if (mode === "p3") return;
+    startPractice();
+  });
 }
 
 function setRecordButton(status, title, hint) {
@@ -733,7 +743,6 @@ async function startPractice() {
   const mode = state.view === "mock" ? "mock" : state.view;
   state.abortingAttemptId = null;
   state.practiceLocked = true;
-  $("#mockHomePanel")?.classList.add("hidden");
   $(".exam-status")?.classList.remove("hidden");
   $("#examStatusText")?.classList.toggle("hidden", mode === "p2");
   $("#practiceGrid")?.classList.remove("hidden");
@@ -759,7 +768,6 @@ async function startPractice() {
   }
 
   if (state.startRequestId !== requestId || state.practiceSessionId !== sessionId || state.abortingAttemptId === "__loading__") return;
-  $("#mockHomePanel")?.classList.add("hidden");
   $(".exam-status")?.classList.remove("hidden");
   $("#examStatusText")?.classList.toggle("hidden", mode === "p2");
   $("#practiceGrid")?.classList.remove("hidden");
@@ -2970,6 +2978,7 @@ async function loadLanguageTakeaways() {
     const payload = await api("/api/language-takeaways");
     state.languageTakeaway.items = payload.items || [];
     if (stats) stats.textContent = `${payload.count || 0} 条`;
+    renderLanguageTakeawayToggle();
     renderLanguageTakeaways();
   } catch (error) {
     if (stats) stats.textContent = "加载失败";
@@ -2997,14 +3006,28 @@ function renderLanguageTakeaways() {
   `).join("");
 }
 
+function renderLanguageTakeawayToggle() {
+  const button = $("languageTakeawayHideToggle");
+  if (!button) return;
+  const hidden = state.languageTakeaway.hideChinese;
+  button.setAttribute("aria-pressed", hidden ? "true" : "false");
+  button.innerHTML = hidden
+    ? `<svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M3 3l18 18"></path>
+        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+        <path d="M9.9 4.2A10.3 10.3 0 0 1 12 4c6.5 0 10 8 10 8a17.9 17.9 0 0 1-4.2 5.1"></path>
+        <path d="M6.6 6.6C3.6 8.6 2 12 2 12s3.5 8 10 8a9.5 9.5 0 0 0 4.8-1.3"></path>
+      </svg><span>显示中文</span>`
+    : `<svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg><span>隐藏中文</span>`;
+}
+
 function toggleLanguageTakeawayHiddenMode() {
   state.languageTakeaway.hideChinese = !state.languageTakeaway.hideChinese;
   if (state.languageTakeaway.hideChinese) state.languageTakeaway.revealedEntryIds.clear();
-  const button = $("languageTakeawayHideToggle");
-  if (button) {
-    button.setAttribute("aria-pressed", state.languageTakeaway.hideChinese ? "true" : "false");
-    button.textContent = state.languageTakeaway.hideChinese ? "显示中文" : "隐藏中文";
-  }
+  renderLanguageTakeawayToggle();
   renderLanguageTakeaways();
 }
 
@@ -3788,7 +3811,9 @@ function bindEvents() {
       }
     }
   });
-  $("startFullMockBtn")?.addEventListener("click", () => startPractice());
+  document.querySelectorAll("[data-home-mode]").forEach((button) => {
+    button.addEventListener("click", () => startPracticeMode(button.dataset.homeMode || "mock"));
+  });
   $("exitPractice")?.addEventListener("click", () => exitPractice());
   $("p3StartButton")?.addEventListener("click", () => startPractice());
   document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
@@ -4010,8 +4035,8 @@ async function init() {
     }
   }, true);
   const urlView = requestedUrlView();
-  let savedView = urlView || "mock";
-  if (!viewCopy[savedView]) savedView = "mock";
+  let savedView = urlView || "home";
+  if (!viewCopy[savedView]) savedView = "home";
   switchView(savedView, { skipPersist: Boolean(urlView), skipUrl: true });
   try {
     const summary = await api("/api/question-bank/summary");
