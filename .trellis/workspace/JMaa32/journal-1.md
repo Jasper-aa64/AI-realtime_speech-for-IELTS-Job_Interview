@@ -1670,3 +1670,36 @@ Changed Language Takeaway self-test mode to conceal English source text while ke
 ### Next Steps
 
 - None - task complete
+
+
+## Session 47: Rename Takeaway book label
+
+**Date**: 2026-05-18
+**Task**: Rename Takeaway book label
+**Branch**: `main`
+
+### Summary
+
+Renamed learner-facing 生词本 labels to Takeaway across sidebar, corpus card, page heading, popup action, auth copy, and loading copy while preserving existing route/API names.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8d5507` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

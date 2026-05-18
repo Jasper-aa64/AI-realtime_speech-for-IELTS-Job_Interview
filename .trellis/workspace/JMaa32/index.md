@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 46
+- **Total Sessions**: 47
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1672 | Active |
+| `journal-1.md` | ~1705 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 47 | 2026-05-18 | Rename Takeaway book label | `d8d5507` | `main` |
 | 46 | 2026-05-18 | Conceal English in takeaway review mode | `15457d2` | `main` |
 | 45 | 2026-05-18 | Responsive density and bounded selection trigger | `9b1744a` | `main` |
 | 44 | 2026-05-18 | Fix language takeaway popup sizing and viewport bounds | `e91684f` | `main` |
