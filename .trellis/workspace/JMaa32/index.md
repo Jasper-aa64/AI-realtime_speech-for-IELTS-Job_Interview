@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 40
+- **Total Sessions**: 41
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1478 | Active |
+| `journal-1.md` | ~1509 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 41 | 2026-05-18 | Prevent sidebar and theme boot jitter | - | `main` |
 | 40 | 2026-05-18 | Prevent initial home flash for direct corpus views | - | `main` |
 | 39 | 2026-05-18 | Fix corpus navigation from locked practice | - | `main` |
 | 38 | 2026-05-18 | Fix corpus subpage back navigation | - | `main` |

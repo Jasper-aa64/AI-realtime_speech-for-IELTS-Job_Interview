@@ -1476,3 +1476,34 @@ Added an app booting state so the workspace stays hidden until URL-driven initia
 ### Next Steps
 
 - None - task complete
+
+
+## Session 41: Prevent sidebar and theme boot jitter
+
+**Date**: 2026-05-18
+**Task**: Prevent sidebar and theme boot jitter
+**Branch**: `main`
+
+### Summary
+
+Hid the entire shell during app boot and applied stored typeface immediately during initialization so refresh/direct URL loads no longer flash 首页/default theme before the requested view and theme settle.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
