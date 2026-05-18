@@ -324,6 +324,11 @@ class QuestionBankApiTests(TestCase):
         self.assertIn("part2_themes", payload)
         self.assertIsInstance(payload["part1_count"], int)
         self.assertIsInstance(payload["part2_count"], int)
+        self.assertIn("2026-may-august", payload["seasons"])
+        self.assertGreater(payload["part1_status_counts"]["new"], 0)
+        self.assertGreater(payload["part1_status_counts"]["retained"], 0)
+        self.assertGreater(payload["part2_status_counts"]["new"], 0)
+        self.assertGreater(payload["part2_status_counts"]["retained"], 0)
 
     def test_question_bank_sample_returns_structure(self):
         response = self.client.post("/api/question-bank/sample", data={"p1_count": 3}, content_type="application/json")
@@ -333,6 +338,7 @@ class QuestionBankApiTests(TestCase):
             self.assertIsInstance(payload["part1"], list)
         if "part2" in payload:
             self.assertIsInstance(payload["part2"], dict)
+            self.assertIn("season", payload["part2"])
 
     def test_p1_corpus_library_and_save(self):
         library = self.client.get("/api/p1-corpus")

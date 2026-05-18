@@ -1045,11 +1045,32 @@ class QuestionBank:
             items = payload.get("questions")
             if not isinstance(items, list):
                 continue
-            topic = str(payload.get("topic") or path.stem)
+            file_topic = str(payload.get("topic") or path.stem)
+            file_meta = {
+                "season": str(payload.get("season") or ""),
+                "status": str(payload.get("status") or ""),
+                "source": str(payload.get("source") or ""),
+                "source_url": str(payload.get("source_url") or ""),
+            }
             for item in items:
-                if isinstance(item, str) and item.strip():
+                topic = file_topic
+                meta = dict(file_meta)
+                question = ""
+                if isinstance(item, str):
                     question = item.strip()
-                    questions.append({"topic": topic, "question": question, "question_id": p1_question_id(topic, question)})
+                elif isinstance(item, dict):
+                    question = str(item.get("question") or item.get("text") or "").strip()
+                    topic = str(item.get("topic") or topic)
+                    for key in ("season", "status", "source", "source_url"):
+                        if item.get(key):
+                            meta[key] = str(item[key])
+                if question:
+                    questions.append({
+                        "topic": topic,
+                        "question": question,
+                        "question_id": p1_question_id(topic, question),
+                        **{key: value for key, value in meta.items() if value},
+                    })
         return questions
 
     def _load_p2(self) -> list[dict[str, Any]]:
@@ -1064,9 +1085,18 @@ class QuestionBank:
             items = payload.get("topics")
             if not isinstance(items, list):
                 continue
+            file_meta = {
+                "season": str(payload.get("season") or ""),
+                "status": str(payload.get("status") or ""),
+                "source": str(payload.get("source") or ""),
+                "source_url": str(payload.get("source_url") or ""),
+            }
             for item in items:
                 if isinstance(item, dict) and item.get("title"):
-                    topics.append(item)
+                    topic = dict(item)
+                    for key, value in file_meta.items():
+                        topic.setdefault(key, value)
+                    topics.append(topic)
         return topics
 
     def _read_json(self, path: Path) -> dict[str, Any]:
@@ -1078,11 +1108,22 @@ class QuestionBank:
             return {}
 
     def summary(self) -> dict[str, Any]:
+        p1_status_counts: dict[str, int] = {}
+        for item in self.p1:
+            status = str(item.get("status") or "seed")
+            p1_status_counts[status] = p1_status_counts.get(status, 0) + 1
+        p2_status_counts: dict[str, int] = {}
+        for item in self.p2:
+            status = str(item.get("status") or "seed")
+            p2_status_counts[status] = p2_status_counts.get(status, 0) + 1
         return {
             "part1_count": len(self.p1),
             "part2_count": len(self.p2),
             "part1_topics": sorted({item["topic"] for item in self.p1}),
             "part2_themes": sorted({item.get("p3_theme", "") for item in self.p2 if item.get("p3_theme")}),
+            "part1_status_counts": p1_status_counts,
+            "part2_status_counts": p2_status_counts,
+            "seasons": sorted({str(item.get("season") or "") for item in [*self.p1, *self.p2] if item.get("season")}),
         }
 
     def sample(self, p1_count: int = 5) -> dict[str, Any]:
@@ -1131,7 +1172,8 @@ def p1_corpus_library(user) -> dict[str, Any]:
     }
     grouped: dict[str, dict[str, Any]] = {}
 
-    def add_question(topic: str, question: str) -> None:
+    def add_question(topic: str, question: str, meta: dict[str, Any] | None = None) -> None:
+        meta = meta or {}
         question_id = p1_question_id(topic, question)
         entry = entries.get(question_id)
         group = grouped.setdefault(
@@ -1150,13 +1192,14 @@ def p1_corpus_library(user) -> dict[str, Any]:
                 "corpus_text": entry.corpus_text if entry else "",
                 "last_ai_answer": entry.last_ai_answer if entry else "",
                 "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M") if entry else "",
+                **{key: meta[key] for key in ("season", "status", "source", "source_url") if meta.get(key)},
             }
         )
 
     for item in P1_INTRO_QUESTIONS:
         add_question(str(item.get("topic") or "intro"), str(item.get("question") or ""))
     for item in bank.p1:
-        add_question(str(item.get("topic") or "general"), str(item.get("question") or ""))
+        add_question(str(item.get("topic") or "general"), str(item.get("question") or ""), item)
 
     topics = sorted(grouped.values(), key=lambda item: (item["topic"] != "intro", item["label"]))
     total_questions = sum(len(topic["questions"]) for topic in topics)

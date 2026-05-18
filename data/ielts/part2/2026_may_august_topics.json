@@ -1,0 +1,191 @@
+{
+  "season": "2026-may-august",
+  "part": 2,
+  "status": "mixed_new_and_retained",
+  "source": "compiled_from_ieltsjp_readingielts_xhd_public_lists",
+  "source_url": "https://ielts.jp/articles/speaking/speaking-topics-2026-may-august/",
+  "topics": [
+    {
+      "title": "Describe a crowded place you have been to",
+      "status": "new",
+      "bullets": ["Where it was", "When you went there", "What you did there"],
+      "rounding": "And explain how you felt about being in this crowded place.",
+      "p3_theme": "crowded_places_and_public_order"
+    },
+    {
+      "title": "Describe a place where you read and write, apart from your home",
+      "status": "new",
+      "bullets": ["Where it is", "How often you go there", "What you read or write there"],
+      "rounding": "And explain why this place is suitable for reading and writing.",
+      "p3_theme": "study_places_and_concentration"
+    },
+    {
+      "title": "Describe a long-term goal you would like to achieve",
+      "status": "new",
+      "bullets": ["What the goal is", "How long you have had this goal", "What you need to do to achieve it"],
+      "rounding": "And explain why this goal is important to you.",
+      "p3_theme": "goals_and_self_development"
+    },
+    {
+      "title": "Describe an interesting old person you know",
+      "status": "new",
+      "bullets": ["Who this person is", "How you know this person", "What you usually talk about"],
+      "rounding": "And explain why you think this person is interesting.",
+      "p3_theme": "older_people_and_generation_gap"
+    },
+    {
+      "title": "Describe a person who likes to make things by hand",
+      "status": "new",
+      "bullets": ["Who this person is", "What he or she makes", "How you know about this skill"],
+      "rounding": "And explain why making things by hand is valuable.",
+      "p3_theme": "handmade_skills_and_creativity"
+    },
+    {
+      "title": "Describe a person who encouraged you to achieve a goal",
+      "status": "new",
+      "bullets": ["Who this person is", "What goal he or she encouraged you to achieve", "What this person said or did"],
+      "rounding": "And explain how this encouragement helped you.",
+      "p3_theme": "encouragement_and_motivation"
+    },
+    {
+      "title": "Describe a person who likes to read a lot",
+      "status": "new",
+      "bullets": ["Who this person is", "What this person likes to read", "How often this person reads"],
+      "rounding": "And explain what you can learn from this person.",
+      "p3_theme": "reading_habits_and_learning"
+    },
+    {
+      "title": "Describe a person who has strong opinions",
+      "status": "new",
+      "bullets": ["Who this person is", "What opinions this person has", "How this person expresses opinions"],
+      "rounding": "And explain how you feel about this person.",
+      "p3_theme": "opinions_and_communication"
+    },
+    {
+      "title": "Describe a small business you would like to start",
+      "status": "new",
+      "bullets": ["What business it would be", "Where it would be", "Who your customers would be"],
+      "rounding": "And explain why you would like to start this business.",
+      "p3_theme": "small_business_and_work"
+    },
+    {
+      "title": "Describe a time when you were late",
+      "status": "new",
+      "bullets": ["When it happened", "Where you were going", "Why you were late"],
+      "rounding": "And explain what happened afterwards.",
+      "p3_theme": "punctuality_and_time_management"
+    },
+    {
+      "title": "Describe an activity you enjoyed in your free time when you were young",
+      "status": "new",
+      "bullets": ["What the activity was", "Where you did it", "Who you did it with"],
+      "rounding": "And explain why you enjoyed it.",
+      "p3_theme": "childhood_free_time_and_play"
+    },
+    {
+      "title": "Describe a time when you had a problem using a computer",
+      "status": "new",
+      "bullets": ["What the problem was", "When it happened", "How you tried to solve it"],
+      "rounding": "And explain how you felt about this problem.",
+      "p3_theme": "computer_problems_and_digital_skills"
+    },
+    {
+      "title": "Describe a website you often visit",
+      "status": "new",
+      "bullets": ["What the website is", "How often you visit it", "What you use it for"],
+      "rounding": "And explain why this website is useful to you.",
+      "p3_theme": "websites_and_online_services"
+    },
+    {
+      "title": "Describe a difficult decision you made",
+      "status": "new",
+      "bullets": ["What the decision was", "When you made it", "Who helped you make it"],
+      "rounding": "And explain why it was difficult.",
+      "p3_theme": "decision_making_and_responsibility"
+    },
+    {
+      "title": "Describe a piece of good advice you received",
+      "status": "retained",
+      "bullets": ["What the advice was", "Who gave it to you", "When you received it"],
+      "rounding": "And explain why this advice was helpful.",
+      "p3_theme": "advice_and_life_choices"
+    },
+    {
+      "title": "Describe an important rule at your school or workplace",
+      "status": "retained",
+      "bullets": ["What the rule is", "Who has to follow it", "Why the rule exists"],
+      "rounding": "And explain how you feel about this rule.",
+      "p3_theme": "rules_and_social_order"
+    },
+    {
+      "title": "Describe a time when someone gave you something you really wanted",
+      "status": "retained",
+      "bullets": ["What it was", "Who gave it to you", "Why you wanted it"],
+      "rounding": "And explain how you felt when you received it.",
+      "p3_theme": "gifts_and_appreciation"
+    },
+    {
+      "title": "Describe a time when you showed something new to another person",
+      "status": "retained",
+      "bullets": ["What you showed", "Who you showed it to", "How you showed it"],
+      "rounding": "And explain how this person reacted.",
+      "p3_theme": "teaching_others_and_sharing_knowledge"
+    },
+    {
+      "title": "Describe a time when you saw a lot of people smiling",
+      "status": "retained",
+      "bullets": ["Where it was", "Who the people were", "Why they were smiling"],
+      "rounding": "And explain how you felt at that moment.",
+      "p3_theme": "happiness_and_public_events"
+    },
+    {
+      "title": "Describe a time when you made a promise to someone",
+      "status": "retained",
+      "bullets": ["Who you made the promise to", "What the promise was", "Why you made it"],
+      "rounding": "And explain whether it was easy to keep this promise.",
+      "p3_theme": "promises_and_trust"
+    },
+    {
+      "title": "Describe a time when you helped a family member",
+      "status": "retained",
+      "bullets": ["Who you helped", "What problem this person had", "What you did"],
+      "rounding": "And explain how you felt after helping this family member.",
+      "p3_theme": "family_help_and_responsibility"
+    },
+    {
+      "title": "Describe a movie you watched and enjoyed",
+      "status": "retained",
+      "bullets": ["What the movie was", "When and where you watched it", "Who you watched it with"],
+      "rounding": "And explain why you enjoyed this movie.",
+      "p3_theme": "movies_and_cinema_culture"
+    },
+    {
+      "title": "Describe a place you visited that was affected by pollution",
+      "status": "retained",
+      "bullets": ["Where it was", "What kind of pollution you saw", "Why you went there"],
+      "rounding": "And explain how you felt about this place.",
+      "p3_theme": "pollution_and_environmental_protection"
+    },
+    {
+      "title": "Describe a sport you enjoyed watching",
+      "status": "retained",
+      "bullets": ["What sport it was", "Where you watched it", "Who you watched it with"],
+      "rounding": "And explain why you enjoyed watching it.",
+      "p3_theme": "sports_and_spectators"
+    },
+    {
+      "title": "Describe an important traditional festival in your country",
+      "status": "retained",
+      "bullets": ["What the festival is", "When people celebrate it", "What people usually do"],
+      "rounding": "And explain why this festival is important.",
+      "p3_theme": "festivals_and_cultural_traditions"
+    },
+    {
+      "title": "Describe a quiet place you like to spend time in",
+      "status": "retained",
+      "bullets": ["Where it is", "How often you go there", "What you do there"],
+      "rounding": "And explain why you like this quiet place.",
+      "p3_theme": "quiet_places_and_mental_rest"
+    }
+  ]
+}
