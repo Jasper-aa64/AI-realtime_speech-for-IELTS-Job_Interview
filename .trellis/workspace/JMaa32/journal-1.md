@@ -1445,3 +1445,34 @@ Allowed corpus navigation while a practice session is locked by exiting/aborting
 ### Next Steps
 
 - None - task complete
+
+
+## Session 40: Prevent initial home flash for direct corpus views
+
+**Date**: 2026-05-18
+**Task**: Prevent initial home flash for direct corpus views
+**Branch**: `main`
+
+### Summary
+
+Added an app booting state so the workspace stays hidden until URL-driven initial view selection applies, preventing direct corpus views from flashing the default home page first.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
