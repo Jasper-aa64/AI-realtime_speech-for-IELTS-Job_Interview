@@ -2002,7 +2002,7 @@ function renderWritingPromptPicker() {
 
 async function chooseRandomWritingPrompt(confirmDirty = true) {
   if (confirmDirty && state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) return;
-  const prompt = await withBusy("Loading writing prompt...", () => api("/api/writing/prompts/random", { task_type: state.writing.taskType }));
+  const prompt = await api("/api/writing/prompts/random", { task_type: state.writing.taskType });
   setWritingPrompt(prompt, true);
 }
 
