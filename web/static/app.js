@@ -52,7 +52,7 @@ const state = {
     dragging: false,
     dragOffsetX: 0,
     dragOffsetY: 0,
-    hideChinese: false,
+    hideEnglish: false,
     revealedEntryIds: new Set(),
     selectionTimer: null,
   },
@@ -3148,7 +3148,7 @@ function renderLanguageTakeaways() {
   const list = $("languageTakeawayList");
   if (!list) return;
   const items = state.languageTakeaway.items || [];
-  const hiddenMode = state.languageTakeaway.hideChinese;
+  const hiddenMode = state.languageTakeaway.hideEnglish;
   const revealed = state.languageTakeaway.revealedEntryIds;
   if (!items.length) {
     list.innerHTML = '<p class="muted language-book-empty">还没有摘录。平时选中单词或短语，点击“译”就可以加入这里。</p>';
@@ -3158,7 +3158,7 @@ function renderLanguageTakeaways() {
     <button type="button"
       class="language-takeaway-card ${hiddenMode && !revealed.has(item.entry_id) ? "is-concealed" : "is-revealed"}"
       data-takeaway-entry="${escapeHtml(item.entry_id)}">
-      <strong>${escapeHtml(item.source_text)}</strong>
+      <strong class="takeaway-source">${escapeHtml(item.source_text)}</strong>
       <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
     </button>
   `).join("");
@@ -3167,7 +3167,7 @@ function renderLanguageTakeaways() {
 function renderLanguageTakeawayToggle() {
   const button = $("languageTakeawayHideToggle");
   if (!button) return;
-  const hidden = state.languageTakeaway.hideChinese;
+  const hidden = state.languageTakeaway.hideEnglish;
   button.setAttribute("aria-pressed", hidden ? "true" : "false");
   button.innerHTML = hidden
     ? `<svg aria-hidden="true" viewBox="0 0 24 24">
@@ -3175,16 +3175,16 @@ function renderLanguageTakeawayToggle() {
         <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
         <path d="M9.9 4.2A10.3 10.3 0 0 1 12 4c6.5 0 10 8 10 8a17.9 17.9 0 0 1-4.2 5.1"></path>
         <path d="M6.6 6.6C3.6 8.6 2 12 2 12s3.5 8 10 8a9.5 9.5 0 0 0 4.8-1.3"></path>
-      </svg><span>显示中文</span>`
+      </svg><span>显示英文</span>`
     : `<svg aria-hidden="true" viewBox="0 0 24 24">
         <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
         <circle cx="12" cy="12" r="3"></circle>
-      </svg><span>隐藏中文</span>`;
+      </svg><span>遮住英文</span>`;
 }
 
 function toggleLanguageTakeawayHiddenMode() {
-  state.languageTakeaway.hideChinese = !state.languageTakeaway.hideChinese;
-  if (state.languageTakeaway.hideChinese) state.languageTakeaway.revealedEntryIds.clear();
+  state.languageTakeaway.hideEnglish = !state.languageTakeaway.hideEnglish;
+  if (state.languageTakeaway.hideEnglish) state.languageTakeaway.revealedEntryIds.clear();
   renderLanguageTakeawayToggle();
   renderLanguageTakeaways();
 }

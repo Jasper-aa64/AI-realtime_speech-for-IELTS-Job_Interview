@@ -1058,7 +1058,8 @@ h1 {
   transform: translateY(-1px);
 }
 
-.language-takeaway-card strong {
+.language-takeaway-card strong,
+.takeaway-source {
   font-size: 17px;
   line-height: 1.22;
   overflow-wrap: anywhere;
@@ -1072,9 +1073,10 @@ h1 {
   overflow-wrap: anywhere;
 }
 
-.language-takeaway-card.is-concealed .takeaway-chinese {
+.language-takeaway-card.is-concealed .takeaway-source {
   color: var(--muted);
   border-radius: 9px;
+  min-height: 34px;
   background: repeating-linear-gradient(
     135deg,
     color-mix(in srgb, var(--muted) 13%, transparent),
