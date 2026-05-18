@@ -163,3 +163,14 @@ AI_PROVIDER_SECRET_ENV_NAMES = {
     "mock_success": (),
     "fallback": (),
 }
+
+VOLCENGINE_ASR_ENABLED = env_flag("VOLCENGINE_ASR_ENABLED", default=False)
+VOLCENGINE_ASR_CONFIG_PATH = os.environ.get("VOLCENGINE_ASR_CONFIG_PATH", str(BASE_DIR.parent / "config" / "default_config.json"))
+VOLCENGINE_ASR_WS_URL = os.environ.get("VOLCENGINE_ASR_WS_URL", "wss://openspeech.bytedance.com/api/v3/realtime/dialogue")
+VOLCENGINE_ASR_APP_ID = os.environ.get("VOLCENGINE_ASR_APP_ID", "")
+VOLCENGINE_ASR_ACCESS_KEY = os.environ.get("VOLCENGINE_ASR_ACCESS_KEY", "")
+VOLCENGINE_ASR_APP_KEY = os.environ.get("VOLCENGINE_ASR_APP_KEY", "")
+VOLCENGINE_ASR_RESOURCE_ID = os.environ.get("VOLCENGINE_ASR_RESOURCE_ID", "volc.speech.dialog")
+VOLCENGINE_ASR_CONNECT_ID = os.environ.get("VOLCENGINE_ASR_CONNECT_ID", "")
+VOLCENGINE_ASR_TIMEOUT_SECONDS = int(os.environ.get("VOLCENGINE_ASR_TIMEOUT_SECONDS", "30"))
+VOLCENGINE_ASR_FFMPEG = os.environ.get("VOLCENGINE_ASR_FFMPEG", "ffmpeg")

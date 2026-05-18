@@ -29,11 +29,38 @@ const state = {
   p3Topics: [],
   p3SelectedTopic: "",
   p3Intensity: "normal",
+  p1Corpus: {
+    topics: [],
+    activeEntry: null,
+    previousPracticeView: "p1",
+    saving: false,
+  },
+  p2Corpus: {
+    categories: [],
+    activeEntry: null,
+    previousPracticeView: "p2",
+    selectedEntryId: "",
+    saving: false,
+  },
+  languageTakeaway: {
+    items: [],
+    selectedText: "",
+    rangeRect: null,
+    dragging: false,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    hideChinese: false,
+    revealedEntryIds: new Set(),
+  },
   practiceLocked: false,
+  startRequestId: 0,
+  practiceSessionId: 0,
+  startAbortController: null,
   navToastTimer: null,
   fontStyle: "default",
   pendingRecharge: 0,
   examinerAudioPreloads: new Map(),
+  activeExaminerAudio: null,
   writing: {
     taskType: "task1_academic",
     prompts: {},
@@ -63,12 +90,22 @@ const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
 const fontStyles = new Set(["default", "academic", "popular"]);
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
+const corpusMarkdownEditors = {};
+const FIXED_EXAMINER_AUDIO_URLS = new Set([
+  "/api/tts-audio/examiner/fixed_examiner_what_is_your_full_name.mp3",
+  "/api/tts-audio/examiner/fixed_examiner_do_you_work_or_do_you_study.mp3",
+  "/api/tts-audio/examiner/fixed_examiner_p2_cue_card_instruction.mp3",
+]);
 
 const viewCopy = {
   mock: ["Mock", "Practice flow: P1, P2, then P3 generated from your P2 answer."],
   p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
   p2: ["Part 2", "Cue card, one-minute preparation, then a long turn."],
   p3: ["Part 3", "Discussion generated from your P2 answer with normal or high-intensity practice."],
+  corpus: ["语料库", "Manage prepared speaking material and language takeaways."],
+  p1Corpus: ["我的 P1语料库", "Prepare grouped Part 1 answers and reuse them in AI feedback."],
+  p2Corpus: ["我准备的P2串题素材库", "Prepare reusable Part 2 story materials and link them during preparation."],
+  takeawayBook: ["生词本", "Review saved words and phrases with hidden Chinese recall."],
   history: ["口语报告", ""],
   writing: ["每日写作", ""],
   writingReports: ["写作报告", ""],
@@ -80,7 +117,7 @@ const viewCopy = {
 };
 
 const authViews = new Set(["login", "register", "forgotPassword"]);
-const protectedViews = new Set(["history", "writing", "writingReports", "accountProfile", "accountSecurity"]);
+const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "accountProfile", "accountSecurity"]);
 
 const $ = (selector) => {
   if (typeof selector !== "string") return null;
@@ -199,6 +236,7 @@ async function api(path, body = null, requestOptions = {}) {
     credentials: "same-origin",
     headers: { ...(requestOptions.headers || {}) },
   };
+  if (requestOptions.signal) options.signal = requestOptions.signal;
   if (body !== null) {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(body);
@@ -380,6 +418,12 @@ function switchView(view, options = {}) {
     });
     return;
   }
+  if (view === "p1Corpus") {
+    state.p1Corpus.previousPracticeView = ["mock", "p1", "p2", "p3"].includes(state.view) ? state.view : "p1";
+  }
+  if (view === "p2Corpus") {
+    state.p2Corpus.previousPracticeView = ["mock", "p1", "p2", "p3"].includes(state.view) ? state.view : "p2";
+  }
   if (view === state.view && !options.force) return;
   if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && ["accountProfile", "accountSecurity"].includes(view) && options.preservePractice) {
     showPracticeOverlay(view);
@@ -392,10 +436,13 @@ function switchView(view, options = {}) {
   }
   state.view = view;
   state.practiceViewBeforeSettings = null;
-  try {
-    localStorage.setItem(VIEW_STORAGE_KEY, view);
-  } catch (e) {
-    // Ignore storage errors
+  if (!options.skipUrl) updateViewUrl(view);
+  if (!options.skipPersist) {
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, view);
+    } catch (e) {
+      // Ignore storage errors
+    }
   }
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
@@ -406,7 +453,13 @@ function switchView(view, options = {}) {
   });
   $(".shell")?.classList.toggle("auth-shell", authViews.has(view));
   $(".shell")?.classList.toggle("account-shell", view === "accountProfile");
+  $(".workspace")?.classList.toggle("corpus-workspace", ["corpus", "p1Corpus", "p2Corpus", "takeawayBook"].includes(view));
+  $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !["p1Corpus", "p2Corpus", "takeawayBook"].includes(view));
   $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
+  $("#corpusPanel")?.classList.toggle("hidden", view !== "corpus");
+  $("#p1CorpusPanel")?.classList.toggle("hidden", view !== "p1Corpus");
+  $("#p2CorpusPanel")?.classList.toggle("hidden", view !== "p2Corpus");
+  $("#takeawayBookPanel")?.classList.toggle("hidden", view !== "takeawayBook");
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
   $("#writingReportsPanel")?.classList.toggle("hidden", view !== "writingReports");
@@ -418,24 +471,82 @@ function switchView(view, options = {}) {
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
-  $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || authViews.has(view));
-  $("#viewTitleBlock").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || authViews.has(view));
+  $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
+  $("#viewTitleBlock").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
   text("viewTitle", viewCopy[view][0]);
   text("viewSubtitle", viewCopy[view][1]);
   if (view === "history") loadHistory();
+  if (view === "corpus") loadCorpusHome();
+  if (view === "takeawayBook") loadLanguageTakeaways();
   if (view === "writing") loadWriting();
   if (view === "writingReports") loadWritingReports();
+  if (view === "p1Corpus") loadP1Corpus();
+  if (view === "p2Corpus") loadP2Corpus();
   if (view === "accountProfile") loadAccountProfile();
   if (view === "accountSecurity") loadAccount();
   if (view === "login") prepareLoginView(options.authMessage || "");
   if (view === "forgotPassword") loadPasswordResetAvailability();
+  $("#openP1CorpusBtn")?.classList.toggle("hidden", view !== "p1");
+  $("#openP2CorpusBtn")?.classList.toggle("hidden", view !== "p2");
+  $("#examStatusText")?.classList.remove("hidden");
+  $("#exitPractice")?.classList.toggle("hidden", !state.practiceLocked || !["mock", "p1", "p2", "p3"].includes(view));
   if (["mock", "p1", "p2", "p3"].includes(view)) resetPracticeSurface();
   updateSidebarLock();
+}
+
+function requestedUrlView() {
+  try {
+    const view = new URLSearchParams(window.location.search).get("view");
+    return viewCopy[view] ? view : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function requestedStandaloneView() {
+  const view = requestedUrlView();
+  return ["p1Corpus", "p2Corpus"].includes(view) ? view : "";
+}
+
+function updateViewUrl(view) {
+  if (!window.history?.replaceState || !viewCopy[view]) return;
+  const url = new URL(window.location.href);
+  if (view === "mock") {
+    url.searchParams.delete("view");
+  } else {
+    url.searchParams.set("view", view);
+  }
+  window.history.replaceState({}, "", url.toString());
+}
+
+function openCorpusWindow(view) {
+  if (!["p1Corpus", "p2Corpus"].includes(view)) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("view", view);
+  const opened = window.open(url.toString(), "_blank");
+  if (opened) opened.opener = null;
+}
+
+function closeCorpusWindowOrReturn() {
+  if (state.view === "takeawayBook") {
+    switchView("corpus");
+    return;
+  }
+  const fallback = state.view === "p2Corpus" ? (state.p2Corpus.previousPracticeView || "p2") : (state.p1Corpus.previousPracticeView || "p1");
+  if (requestedStandaloneView() && window.opener) {
+    window.close();
+    return;
+  }
+  switchView(fallback);
 }
 
 function loginReasonForView(view) {
   const reasons = {
     history: "登录后才能查看你的口语报告和历史记录。",
+    corpus: "登录后才能保存和管理你的语料库。",
+    p1Corpus: "登录后才能保存和复用你的 P1 语料库。",
+    p2Corpus: "登录后才能保存和复用你的 P2 串题素材库。",
+    takeawayBook: "登录后才能查看和复习你的生词本。",
     writing: "登录后才能保存每日写作、签到和 AI 评分记录。",
     writingReports: "登录后才能查看你的写作报告。",
     accountProfile: "请先登录后管理账号资料。",
@@ -513,6 +624,7 @@ function returnFromSettings() {
 }
 
 function resetPracticeSurface() {
+  stopExaminerPlayback();
   state.practiceLocked = false;
   state.status = "idle";
   state.attempt = null;
@@ -520,14 +632,22 @@ function resetPracticeSurface() {
   state.transcript = "";
   clearExaminerAudioPreloads();
   const summaryPanel = $("#summaryPanel");
+  const showMockHome = state.view === "mock";
+  $("#mockHomePanel")?.classList.toggle("hidden", !showMockHome);
+  $(".exam-status")?.classList.toggle("hidden", showMockHome);
+  $("#examStatusText")?.classList.toggle("hidden", state.view === "p2");
   $("#candidateAudio")?.classList.add("hidden");
   $("#examinerAudio")?.classList.add("hidden");
   $("#browserTtsFallback")?.classList.add("hidden");
+  const p2PrepPanel = $("#p2CorpusPrepPanel");
+  p2PrepPanel?.classList.add("hidden");
+  if (p2PrepPanel) p2PrepPanel.innerHTML = "";
+  if (state.view !== "p2") state.p2Corpus.selectedEntryId = "";
   $("#cueTop")?.classList.add("hidden");
   $("#promptPane")?.classList.remove("hidden");
-  $("#p3TopicPanel")?.classList.toggle("hidden", state.view !== "p3");
+  $("#p3TopicPanel")?.classList.toggle("hidden", showMockHome || state.view !== "p3");
   $("#practiceGrid")?.classList.remove("p2-mode", "practice-enter");
-  $("#practiceGrid")?.classList.toggle("hidden", state.view === "p3");
+  $("#practiceGrid")?.classList.toggle("hidden", showMockHome || state.view === "p3");
   summaryPanel?.classList.add("hidden");
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("#exitPractice")?.classList.add("hidden");
@@ -541,6 +661,7 @@ function resetPracticeSurface() {
   text("followUp", "");
   setRecordButton("ready", "Start", "Record the full section. No typing.");
   text("recordStatus", "Click Start. The examiner will load the questions automatically.");
+  $("#examStatusText")?.classList.toggle("hidden", state.view === "p2");
 }
 
 function setRecordButton(status, title, hint) {
@@ -585,6 +706,14 @@ function promptSize(question) {
 }
 
 async function startPractice() {
+  if (state.status === "loading" || state.practiceLocked) return;
+  stopExaminerPlayback();
+  const requestId = state.startRequestId + 1;
+  state.startRequestId = requestId;
+  const sessionId = state.practiceSessionId + 1;
+  state.practiceSessionId = sessionId;
+  state.startAbortController?.abort();
+  state.startAbortController = new AbortController();
   if (!state.account.authenticated) {
     state.account.returnView = state.view;
     switchView("login", {
@@ -594,22 +723,39 @@ async function startPractice() {
     });
     return;
   }
+  const mode = state.view === "mock" ? "mock" : state.view;
+  state.abortingAttemptId = null;
+  state.practiceLocked = true;
+  $("#mockHomePanel")?.classList.add("hidden");
+  $(".exam-status")?.classList.remove("hidden");
+  $("#examStatusText")?.classList.toggle("hidden", mode === "p2");
+  $("#practiceGrid")?.classList.remove("hidden");
+  $("#exitPractice").classList.remove("hidden");
+  updateSidebarLock();
+  setRecordButton("loading", "Loading...", "Checking account balance.");
   // Check balance before starting
   try {
-    const wallet = await api("/api/billing/wallet");
+    const wallet = await api("/api/billing/wallet", null, { signal: state.startAbortController.signal });
+    if (state.startRequestId !== requestId || state.practiceSessionId !== sessionId) return;
     const balance = Number(wallet.balance_rmb || 0);
     if (balance <= 0) {
+      state.practiceLocked = false;
+      $("#exitPractice")?.classList.add("hidden");
+      updateSidebarLock();
       alert("余额不足，请先充值后再开始练习。");
       switchView("accountProfile");
       return;
     }
   } catch (e) {
+    if (e?.name === "AbortError" || state.startRequestId !== requestId || state.practiceSessionId !== sessionId || state.abortingAttemptId === "__loading__") return;
     // If wallet check fails, continue anyway
   }
 
-  const mode = state.view === "mock" ? "mock" : state.view;
-  state.abortingAttemptId = null;
-  state.practiceLocked = true;
+  if (state.startRequestId !== requestId || state.practiceSessionId !== sessionId || state.abortingAttemptId === "__loading__") return;
+  $("#mockHomePanel")?.classList.add("hidden");
+  $(".exam-status")?.classList.remove("hidden");
+  $("#examStatusText")?.classList.toggle("hidden", mode === "p2");
+  $("#practiceGrid")?.classList.remove("hidden");
   $("#exitPractice").classList.remove("hidden");
   updateSidebarLock();
   if (mode === "p3") revealP3PracticeGrid();
@@ -624,14 +770,20 @@ async function startPractice() {
       english_name: names.englishName,
       ...(mode === "p3" ? { p3_intensity: state.p3Intensity } : {}),
       ...(mode === "p3" && theme ? { theme } : {}),
-    });
+    }, { signal: state.startAbortController.signal });
+    if (state.startRequestId !== requestId || state.practiceSessionId !== sessionId || state.abortingAttemptId === "__loading__") {
+      if (attempt?.id) api(`/api/attempts/${attempt.id}/abort`, {}).catch(() => null);
+      return;
+    }
     state.attempt = attempt;
     state.currentTurn = attempt.turns[0];
     $("#summaryPanel").classList.add("hidden");
     renderTurn(state.currentTurn);
-    beginExaminerPhase();
+    beginExaminerPhase(sessionId);
   } catch (error) {
+    if (error?.name === "AbortError" || state.startRequestId !== requestId || state.practiceSessionId !== sessionId) return;
     state.practiceLocked = false;
+    $("#exitPractice")?.classList.add("hidden");
     updateSidebarLock();
     showError(error);
   }
@@ -661,8 +813,10 @@ function renderTurn(turn) {
   renderExaminerAudio(turn);
   if (isP2 && turn.cue_card) {
     renderCueCardInPrompt(turn.cue_card);
+    renderP2CorpusPrepPanel();
     return;
   }
+  $("p2CorpusPrepPanel")?.classList.add("hidden");
   setPromptHtml(`<p>${escapeHtml(turn.question)}</p>`, promptSize(turn.question));
 }
 
@@ -687,6 +841,44 @@ function cueCardHtml(cue) {
 
 function renderCueCardInPrompt(cue) {
   setPromptHtml(cueCardHtml(cue), "cue");
+}
+
+async function renderP2CorpusPrepPanel(renderOptions = {}) {
+  const panel = $("p2CorpusPrepPanel");
+  const shouldShow = state.currentTurn?.part === "p2";
+  if (!panel || !shouldShow) {
+    panel?.classList.add("hidden");
+    if (panel) panel.innerHTML = "";
+    return;
+  }
+  if (!(state.p2Corpus.categories || []).length) {
+    try {
+      const payload = await api("/api/p2-corpus");
+      state.p2Corpus.categories = payload.categories || [];
+    } catch (_error) {
+      state.p2Corpus.categories = [];
+    }
+  }
+  const options = [];
+  for (const category of state.p2Corpus.categories || []) {
+    for (const item of category.items || []) {
+      options.push({ ...item, label: category.label || item.label || item.category });
+    }
+  }
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div>
+      <strong>本次 P2 回答链接到哪里</strong>
+      <span>选择一个素材，AI 生成 7 分回答和辅导时会参考。</span>
+    </div>
+    <select id="p2CorpusPrepSelect">
+      <option value="">不链接素材</option>
+      ${options.map((item) => `<option value="${escapeHtml(item.entry_id)}"${item.entry_id === state.p2Corpus.selectedEntryId ? " selected" : ""}>${escapeHtml(item.label)} •「${escapeHtml(item.title)}」</option>`).join("")}
+    </select>
+  `;
+  $("p2CorpusPrepSelect")?.addEventListener("change", (event) => {
+    state.p2Corpus.selectedEntryId = event.target.value || "";
+  });
 }
 
 function renderCueTop(cue) {
@@ -735,11 +927,59 @@ function primeExaminerAudio(url) {
 }
 
 function clearExaminerAudioPreloads() {
+  for (const [url, audio] of state.examinerAudioPreloads.entries()) {
+    audio.pause();
+    audio.onended = null;
+    audio.onerror = null;
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Some browsers reject seeking before metadata is loaded.
+    }
+    if (FIXED_EXAMINER_AUDIO_URLS.has(url)) continue;
+    audio.removeAttribute("src");
+    state.examinerAudioPreloads.delete(url);
+  }
+}
+
+function stopExaminerPlayback() {
+  const activeAudio = state.activeExaminerAudio;
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.onended = null;
+    activeAudio.onerror = null;
+    try {
+      activeAudio.currentTime = 0;
+    } catch {
+      // Ignore seek errors for partially loaded audio.
+    }
+  }
+  state.activeExaminerAudio = null;
+  const examinerAudio = $("examinerAudio");
+  if (examinerAudio) {
+    examinerAudio.pause();
+    examinerAudio.onended = null;
+    examinerAudio.onerror = null;
+    examinerAudio.removeAttribute("src");
+    examinerAudio.removeAttribute("data-src");
+    try {
+      examinerAudio.currentTime = 0;
+    } catch {
+      // Ignore seek errors for unloaded audio.
+    }
+  }
   for (const audio of state.examinerAudioPreloads.values()) {
     audio.pause();
-    audio.removeAttribute("src");
+    audio.onended = null;
+    audio.onerror = null;
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Ignore seek errors for unloaded audio.
+    }
   }
-  state.examinerAudioPreloads.clear();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  state.browserTtsUtterance = null;
 }
 
 function preloadNextExaminerAudio(turn) {
@@ -773,9 +1013,16 @@ function waitForAudioReady(audio) {
   });
 }
 
-async function beginExaminerPhase() {
+function isActivePracticeSession(sessionId) {
+  return !!sessionId && state.practiceSessionId === sessionId && state.practiceLocked;
+}
+
+async function beginExaminerPhase(sessionId = state.practiceSessionId) {
+  if (!isActivePracticeSession(sessionId)) return;
   if (!state.currentTurn) return;
   clearTimer();
+  stopExaminerPlayback();
+  if (!isActivePracticeSession(sessionId)) return;
   const turn = state.currentTurn;
   const turnId = turn.id;
   const isP2 = turn.part === "p2";
@@ -799,60 +1046,81 @@ async function beginExaminerPhase() {
   if (tts.audio_url) {
     const preloaded = state.examinerAudioPreloads.get(tts.audio_url);
     if (preloaded && preloaded.readyState >= 3) {
-      preloaded.onended = () => beginPreparation();
-      preloaded.onerror = () => beginBrowserExaminerPlayback(turn.examiner_text || turn.question);
+      state.activeExaminerAudio = preloaded;
+      preloaded.onended = () => {
+        if (state.activeExaminerAudio === preloaded) state.activeExaminerAudio = null;
+        if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
+      };
+      preloaded.onerror = () => {
+        if (state.activeExaminerAudio === preloaded) state.activeExaminerAudio = null;
+        if (isActivePracticeSession(sessionId)) beginBrowserExaminerPlayback(turn.examiner_text || turn.question, sessionId);
+      };
       preloaded.currentTime = 0;
-      preloaded.play().catch(() => beginBrowserExaminerPlayback(turn.examiner_text || turn.question));
+      preloaded.play().catch(() => isActivePracticeSession(sessionId) && beginBrowserExaminerPlayback(turn.examiner_text || turn.question, sessionId));
     } else {
       const audio = $("examinerAudio");
-      audio.onended = () => beginPreparation();
-      audio.onerror = () => beginBrowserExaminerPlayback(turn.examiner_text || turn.question);
+      state.activeExaminerAudio = audio;
+      audio.onended = () => {
+        if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
+        if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
+      };
+      audio.onerror = () => {
+        if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
+        if (isActivePracticeSession(sessionId)) beginBrowserExaminerPlayback(turn.examiner_text || turn.question, sessionId);
+      };
       prepareExaminerAudioElement(audio, tts.audio_url);
       await waitForAudioReady(audio);
-      if (state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
+      if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
       audio.currentTime = 0;
-      audio.play().catch(() => beginBrowserExaminerPlayback(turn.examiner_text || turn.question));
+      audio.play().catch(() => isActivePracticeSession(sessionId) && beginBrowserExaminerPlayback(turn.examiner_text || turn.question, sessionId));
     }
     return;
   }
-  beginBrowserExaminerPlayback(turn.examiner_text || turn.question);
+  beginBrowserExaminerPlayback(turn.examiner_text || turn.question, sessionId);
 }
 
-function beginBrowserExaminerPlayback(value) {
+function beginBrowserExaminerPlayback(value, sessionId = state.practiceSessionId) {
+  if (!isActivePracticeSession(sessionId)) return;
   if (!value || !window.speechSynthesis) {
-    beginPreparation();
+    beginPreparation(sessionId);
     return;
   }
-  window.speechSynthesis.cancel();
+  stopExaminerPlayback();
+  if (!isActivePracticeSession(sessionId)) return;
   const utterance = new SpeechSynthesisUtterance(value);
   state.browserTtsUtterance = utterance;
   utterance.lang = "en-US";
   utterance.rate = 0.92;
   utterance.onend = () => {
-    if (state.browserTtsUtterance === utterance) beginPreparation();
+    if (state.browserTtsUtterance === utterance && isActivePracticeSession(sessionId)) beginPreparation(sessionId);
   };
   utterance.onerror = () => {
-    if (state.browserTtsUtterance === utterance) beginPreparation();
+    if (state.browserTtsUtterance === utterance && isActivePracticeSession(sessionId)) beginPreparation(sessionId);
   };
   window.speechSynthesis.speak(utterance);
 }
 
-function beginPreparation() {
+function beginPreparation(sessionId = state.practiceSessionId) {
+  if (!isActivePracticeSession(sessionId)) return;
   const seconds = state.currentTurn?.timers?.prep_seconds || 3;
   const isP2 = state.currentTurn?.part === "p2";
   preloadNextExaminerAudio(state.currentTurn);
   setRecordButton("preparing", isP2 ? "Skip" : "Prepare", isP2 ? "Click to start recording now." : "Recording starts automatically.");
   text("phaseLabel", `Preparing -> ${turnProgressLabel(state.currentTurn)}`);
   text("recordStatus", isP2 ? "Prepare your answer. Click to start recording early." : `Prepare your answer. Recording starts in ${seconds} seconds.`);
-  startCountdown(seconds, "Preparing", () => startRecording().catch(showError));
+  startCountdown(seconds, "Preparing", () => startRecording(sessionId).catch(showError), sessionId);
 }
 
-function startCountdown(seconds, label, onDone) {
+function startCountdown(seconds, label, onDone, sessionId = state.practiceSessionId) {
   clearTimer();
   state.timerRemaining = Number(seconds || 0);
   state.timerTotal = Math.max(1, state.timerRemaining);
   updateTimer(label);
   state.timer = setInterval(() => {
+    if (!isActivePracticeSession(sessionId)) {
+      clearTimer();
+      return;
+    }
     state.timerRemaining -= 1;
     updateTimer(label);
     if (state.timerRemaining <= 0) {
@@ -862,12 +1130,16 @@ function startCountdown(seconds, label, onDone) {
   }, 1000);
 }
 
-function startRecordingTimer(seconds) {
+function startRecordingTimer(seconds, sessionId = state.practiceSessionId) {
   clearTimer();
   state.timerRemaining = Number(seconds || 0);
   state.timerTotal = Math.max(1, state.timerRemaining);
   updateTimer("Recording");
   state.timer = setInterval(() => {
+    if (!isActivePracticeSession(sessionId)) {
+      clearTimer();
+      return;
+    }
     state.timerRemaining -= 1;
     updateTimer("Recording");
     if (state.timerRemaining <= 0) stopRecording();
@@ -894,10 +1166,15 @@ function clearAutoNextTimeout() {
   state.autoNextTimeout = null;
 }
 
-async function startRecording() {
+async function startRecording(sessionId = state.practiceSessionId) {
+  if (!isActivePracticeSession(sessionId)) return;
   if (!state.currentTurn) return;
   state.status = "recording";
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  if (!isActivePracticeSession(sessionId)) {
+    stream.getTracks().forEach((track) => track.stop());
+    return;
+  }
   state.mediaStream = stream;
   state.audioChunks = [];
   state.transcript = "";
@@ -926,7 +1203,7 @@ async function startRecording() {
   startDictation();
   setRecordButton("recording", "Stop", "Recording. Press to finish early.");
   text("recordStatus", "Recording in progress...");
-  startRecordingTimer(state.currentTurn.timers.speak_seconds);
+  startRecordingTimer(state.currentTurn.timers.speak_seconds, sessionId);
 }
 
 function stopRecording() {
@@ -971,16 +1248,18 @@ async function finalizeTurn(mimeType) {
       transcript_raw: state.transcript,
       transcript_status: state.transcriptStatus,
       transcript_source: "browser_dictation",
+      ...(turn.part === "p2" && state.p2Corpus.selectedEntryId ? { p2_corpus_link: { entry_id: state.p2Corpus.selectedEntryId } } : {}),
     });
     if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
     state.attempt = completePayload.attempt;
     if (completePayload.next_turn) {
+      const sessionId = state.practiceSessionId;
       state.currentTurn = completePayload.next_turn;
       renderTurn(completePayload.next_turn);
       setRecordButton("turn_saved", "Next", "Moving to the next question.");
       text("recordStatus", "Question saved. The next examiner prompt will start automatically.");
       clearAutoNextTimeout();
-      state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(), 650);
+      state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 650);
     } else {
       state.currentTurn = null;
       await scoreAttempt();
@@ -993,6 +1272,8 @@ async function finalizeTurn(mimeType) {
 async function scoreAttempt() {
   if (!state.attempt) return;
   const attemptId = state.attempt.id;
+  const selector = $("p2CorpusPrepSelect");
+  if (selector) selector.disabled = true;
   setRecordButton("scoring", "Analyzing", "Analyzing the full section and generating the report.");
   text("recordStatus", "Analyzing the full section and generating the report.");
   try {
@@ -1264,7 +1545,7 @@ function renderHistoryList(items) {
           <span class="history-item-band">Band ${escapeHtml(item.overall_band ?? "—")}</span>
         </div>
         <strong class="history-item-title">${escapeHtml(item.title || item.question || "Untitled")}</strong>
-        <small class="history-item-time">${escapeHtml(item.display_time || "")}</small>
+        <small class="history-item-time">${escapeHtml(formatReportTime(item.display_time || item.timestamp || ""))}</small>
       </button>
       <button class="history-item-menu-btn" data-attempt-id="${escapeHtml(item.id)}" aria-label="More options" title="More options">
         <span aria-hidden="true"></span>
@@ -1330,7 +1611,7 @@ function showDeleteConfirm(attemptId) {
   overlay.querySelector(".confirm-delete").addEventListener("click", async () => {
     overlay.remove();
     try {
-      await api(`/api/history/${attemptId}`, { method: "DELETE" });
+      await api(`/api/history/${attemptId}`, null, { method: "DELETE" });
       if (state.activeHistoryId === attemptId) state.activeHistoryId = null;
       await loadHistory(false);
     } catch (err) {
@@ -1880,8 +2161,8 @@ function renderDetail(attempt, updateView = true, options = {}) {
   const previousScrollTop = detailPanel?.scrollTop || 0;
   state.activeHistoryId = attempt.id;
   const score = attempt.ielts_score || {};
-  const criteria = attempt.criteria_feedback || {};
   const turns = attempt.turns || [];
+  const visibleTurns = turns.filter(shouldRenderReportTurn);
   const isP2 = attempt.mode === "p2" || (turns[0]?.part === "p2");
   const isMock = attempt.mode === "mock" || attempt.part === "mock";
   const p2CueCard = isP2 && !isMock && attempt.cue_card
@@ -1894,7 +2175,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
       <div class="detail-header">
         <div>
           <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
-          <p class="muted">${escapeHtml(attempt.title || "")} - ${turns.length} question${turns.length === 1 ? "" : "s"}</p>
+          <p class="muted">${escapeHtml(attempt.title || "")} - ${visibleTurns.length} question${visibleTurns.length === 1 ? "" : "s"}</p>
         </div>
         <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
       </div>
@@ -1908,23 +2189,22 @@ function renderDetail(attempt, updateView = true, options = {}) {
     ${overallReview}
     ${p2CueCard}
     ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
-    <div class="detail-card">
-      <h3>Scoring criteria and upgrade guidance</h3>
-      <div class="criteria-grid">
-        ${criterionBlock("Fluency & Coherence", criteria.fluency_coherence)}
-        ${criterionBlock("Lexical Resource", criteria.lexical_resource)}
-        ${criterionBlock("Grammatical Range & Accuracy", criteria.grammatical_range_accuracy)}
-      </div>
-    </div>
   `;
-  document.querySelectorAll("[data-speak-band7]").forEach((button) => {
-    button.addEventListener("click", () => speakWithBrowser(button.dataset.speakBand7 || ""));
-  });
   document.querySelectorAll("[data-regenerate-turn]").forEach((button) => {
     button.addEventListener("click", () => regenerateTurnFeedback(button));
   });
   document.querySelectorAll("[data-regenerate-transcript]").forEach((button) => {
     button.addEventListener("click", () => regenerateTurnTranscript(button));
+  });
+  document.querySelectorAll("[data-edit-p1-corpus]").forEach((button) => {
+    button.addEventListener("click", () => openP1CorpusEditor({
+      question_id: button.dataset.questionId || "",
+      topic: button.dataset.topic || "general",
+      question: button.dataset.question || "",
+      display_question: button.dataset.displayQuestion || button.dataset.question || "",
+      corpus_text: "",
+      last_ai_answer: button.dataset.aiAnswer || "",
+    }));
   });
   if (preserveScroll) {
     detailPanel.scrollTop = previousScrollTop;
@@ -1972,8 +2252,7 @@ function overallReviewSection(review = {}) {
   const comment = review.comment || review.focus || "";
   const points = review.review_points || review.next_practice || [];
   if (!markdown && !comment && !points.length) return "";
-  const markdownFallback = markdown && !comment && !points.length ? renderMarkdown(markdown) : "";
-  const body = markdownFallback || `
+  const body = markdown ? renderMarkdown(markdown) : `
     ${comment ? `<h4>总体点评</h4><p>${escapeHtml(comment)}</p>` : ""}
     ${points.length ? `<h4>复盘重点</h4><ul>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>` : ""}
   `;
@@ -1999,11 +2278,12 @@ function partScoreBlock(part, item = {}) {
 }
 
 function turnTableSection(attempt, turns, isP2 = false) {
+  const reportTurns = turns.filter(shouldRenderReportTurn);
   const tableClass = isP2 ? "turn-report-table p2-report-table" : "turn-report-table p1-p3-report-table";
   const headers = isP2
     ? "<th>我的原文</th><th>7 分回答</th>"
     : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th>";
-  const bodyHtml = turns.map((turn) => turnReportGroup(attempt.id, turn, attempt, isP2)).join("");
+  const bodyHtml = reportTurns.map((turn) => turnReportGroup(attempt.id, turn, attempt, isP2)).join("");
   return `
     <div class="detail-card turn-report-card${isP2 ? " p2-report-card" : ""}">
       <div class="turn-report-wrap">
@@ -2016,10 +2296,22 @@ function turnTableSection(attempt, turns, isP2 = false) {
   `;
 }
 
+function reportPromptRole(turn) {
+  return turn?.prompt?.role || "";
+}
+
+function shouldRenderReportTurn(turn) {
+  return !(turn?.part === "p1" && turn?.prompt?.flow === "intro" && reportPromptRole(turn) === "name");
+}
+
+function shouldRenderTurnCoaching(turn) {
+  return !(turn?.part === "p1" && turn?.prompt?.flow === "intro" && reportPromptRole(turn) === "work_study");
+}
+
 function mockTurnSections(attempt, turns) {
   const partScores = attempt.part_scores || {};
   return ["p1", "p2", "p3"].map((part) => {
-    const partTurns = turns.filter((turn) => turn.part === part);
+    const partTurns = turns.filter((turn) => turn.part === part).filter(shouldRenderReportTurn);
     if (!partTurns.length) return "";
     const scoreBlock = partScores[part] ? partScoreBlock(part, partScores[part]) : "";
     const cueCard = part === "p2" && attempt.cue_card ? `<div class="detail-cue-wrap">${cueDetail(attempt.cue_card)}</div>` : "";
@@ -2050,9 +2342,21 @@ function cueDetail(cue) {
 }
 
 function transcriptText(turn) {
+  if (turn.display_transcript_markdown) return renderMarkdown(turn.display_transcript_markdown);
+  if (turn.display_transcript) return renderMarkdown(turn.display_transcript);
   if (turn.transcript_markdown) return renderMarkdown(turn.transcript_markdown);
   if (turn.transcript_cleaned) return renderMarkdown(turn.transcript_cleaned);
   return missingTranscriptHtml(turn);
+}
+
+function formatReportTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(raw)) return raw;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function missingTranscriptHtml(turn) {
@@ -2103,6 +2407,631 @@ function fallbackCoachingNotice(turn) {
   `;
 }
 
+async function loadP1Corpus() {
+  const stats = $("p1CorpusStats");
+  const container = $("p1CorpusTopics");
+  if (stats) stats.textContent = "Loading...";
+  if (container) container.innerHTML = '<p class="muted">正在加载 P1 题库...</p>';
+  try {
+    const payload = await api("/api/p1-corpus");
+    state.p1Corpus.topics = payload.topics || [];
+    if (stats) {
+      stats.textContent = `${payload.topic_count || state.p1Corpus.topics.length} 个话题 · ${payload.question_count || 0} 道题 · 已保存 ${payload.saved_count || 0}`;
+    }
+    renderP1CorpusTopics();
+  } catch (error) {
+    if (container) container.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
+    if (stats) stats.textContent = "加载失败";
+  }
+}
+
+function renderP1CorpusTopics() {
+  const container = $("p1CorpusTopics");
+  if (!container) return;
+  const topics = state.p1Corpus.topics || [];
+  if (!topics.length) {
+    container.innerHTML = '<p class="muted">还没有 P1 题目。</p>';
+    return;
+  }
+  container.innerHTML = topics.map((topic) => {
+    const questions = topic.questions || [];
+    const saved = questions.filter((item) => item.corpus_text).length;
+    return `
+      <article class="p1-topic-card">
+        <header>
+          <h3>${escapeHtml(topic.label || topic.topic)}</h3>
+          <span>${saved}/${questions.length}</span>
+        </header>
+        <div class="p1-topic-question-list">
+          ${questions.map((item, index) => `
+            <button type="button" class="${item.corpus_text ? "has-corpus" : ""}" data-p1-corpus-question="${escapeHtml(item.question_id)}">
+              <strong>Q${index + 1}.</strong>
+              <span>${escapeHtml(item.question)}</span>
+            </button>
+          `).join("")}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function findP1CorpusEntry(questionId) {
+  for (const topic of state.p1Corpus.topics || []) {
+    const found = (topic.questions || []).find((item) => item.question_id === questionId);
+    if (found) return found;
+  }
+  return null;
+}
+
+function p1CorpusStorageEntry(entry) {
+  const prompt = entry?.prompt || {};
+  return {
+    question_id: entry?.storage_question_id || entry?.question_id || "",
+    topic: entry?.storage_topic || entry?.topic || prompt.topic || "general",
+    question: entry?.storage_question || entry?.question || prompt.question || "",
+  };
+}
+
+function upsertP1CorpusEntry(saved) {
+  if (!saved?.question_id) return null;
+  const existing = findP1CorpusEntry(saved.question_id);
+  if (existing) {
+    existing.corpus_text = saved.corpus_text || "";
+    existing.last_ai_answer = saved.last_ai_answer || "";
+    existing.updated_at = saved.updated_at || "";
+    existing.question = saved.question || existing.question || "";
+    existing.topic = saved.topic || existing.topic || "general";
+    return existing;
+  }
+  return saved;
+}
+
+function getCorpusMarkdownValue(textareaId) {
+  const editor = corpusMarkdownEditors[textareaId];
+  if (editor?._corpusReady) return editor.getValue();
+  return $(textareaId)?.value || "";
+}
+
+function isCorpusEditorReady(textareaId) {
+  const editor = corpusMarkdownEditors[textareaId];
+  return !editor || !!editor._corpusReady;
+}
+
+function setCorpusMarkdownValue(textareaId, value) {
+  const textarea = $(textareaId);
+  if (textarea) textarea.value = value || "";
+  const editor = ensureCorpusMarkdownEditor(textareaId);
+  if (editor) {
+    if (editor._corpusReady) {
+      editor.setValue(value || "", true);
+    } else {
+      editor._pendingCorpusValue = value || "";
+    }
+  }
+}
+
+function sendKeepaliveJson(path, payload) {
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (csrfToken) headers["X-CSRFToken"] = csrfToken;
+    navigator.sendBeacon?.(
+      path,
+      new Blob([JSON.stringify(payload)], { type: "application/json" }),
+    ) || fetch(path, {
+      method: "POST",
+      credentials: "same-origin",
+      headers,
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => null);
+  } catch (_error) {
+    // Best-effort autosave during unload.
+  }
+}
+
+function autosaveOpenCorpusEditors() {
+  const p1Entry = state.p1Corpus.activeEntry;
+  if (p1Entry && !$("#p1CorpusDialog")?.classList.contains("hidden")) {
+    if (!isCorpusEditorReady("p1CorpusText")) return;
+    const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
+    if (!corpusText) return;
+    const storage = p1CorpusStorageEntry(p1Entry);
+    sendKeepaliveJson("/api/p1-corpus", {
+      question_id: storage.question_id,
+      topic: storage.topic,
+      question: storage.question,
+      corpus_text: corpusText,
+      last_ai_answer: p1Entry.last_ai_answer || p1Entry.band7_version || p1Entry.aiAnswer || "",
+      source: "report_or_library",
+    });
+  }
+  const p2Entry = state.p2Corpus.activeEntry;
+  if (p2Entry && !$("#p2CorpusDialog")?.classList.contains("hidden")) {
+    if (!isCorpusEditorReady("p2CorpusText")) return;
+    const materialText = getCorpusMarkdownValue("p2CorpusText").trim();
+    if (!materialText) return;
+    sendKeepaliveJson("/api/p2-corpus", {
+      entry_id: p2Entry.entry_id || "",
+      category: $("p2CorpusCategory")?.value || p2Entry.category || "person",
+      title: $("p2CorpusTitle")?.value || "",
+      material_text: materialText,
+      linked_question: $("p2CorpusLinkedQuestion")?.value || "",
+      source: "p2_corpus_editor",
+    });
+  }
+}
+
+function ensureCorpusMarkdownEditor(textareaId) {
+  if (corpusMarkdownEditors[textareaId]) return corpusMarkdownEditors[textareaId];
+  const textarea = $(textareaId);
+  if (!textarea || !window.Vditor) return null;
+  const mount = document.createElement("div");
+  mount.className = "corpus-live-editor";
+  textarea.classList.add("hidden");
+  textarea.insertAdjacentElement("afterend", mount);
+  let editor;
+  editor = new Vditor(mount, {
+    value: textarea.value || "",
+    mode: "ir",
+    height: "100%",
+    cache: { enable: false },
+    counter: { enable: false },
+    typewriterMode: false,
+    toolbarConfig: { pin: true },
+    toolbar: [
+      "headings",
+      "bold",
+      "italic",
+      "strike",
+      "|",
+      "quote",
+      "list",
+      "ordered-list",
+      "|",
+      "link",
+    ],
+    input(value) {
+      textarea.value = value || "";
+    },
+    after() {
+      editor._corpusReady = true;
+      if (editor._pendingCorpusValue !== undefined) {
+        editor.setValue(editor._pendingCorpusValue || "", true);
+        textarea.value = editor._pendingCorpusValue || "";
+        delete editor._pendingCorpusValue;
+      }
+    },
+  });
+  editor._corpusReady = false;
+  corpusMarkdownEditors[textareaId] = editor;
+  return editor;
+}
+
+async function openP1CorpusLibrary() {
+  if (!state.account.authenticated) {
+    state.account.returnView = "p1Corpus";
+    switchView("login", { force: true, skipAuthGate: true, authMessage: "登录后才能保存和复用你的 P1 语料库。" });
+    return;
+  }
+  openCorpusWindow("p1Corpus");
+}
+
+async function openP1CorpusEditor(entry) {
+  if (!entry) return;
+  const storage = p1CorpusStorageEntry(entry);
+  let preparedEntry = { ...entry, ...storage };
+  if (storage.question_id && !preparedEntry.corpus_text) {
+    if (!(state.p1Corpus.topics || []).length) {
+      try {
+        const payload = await api("/api/p1-corpus");
+        state.p1Corpus.topics = payload.topics || [];
+      } catch (_error) {
+        // The editor can still open with the current report answer.
+      }
+    }
+    const existing = findP1CorpusEntry(storage.question_id);
+    if (existing) {
+      preparedEntry = {
+        ...preparedEntry,
+        corpus_text: existing.corpus_text || "",
+        last_ai_answer: preparedEntry.last_ai_answer || existing.last_ai_answer || "",
+      };
+    }
+  }
+  state.p1Corpus.activeEntry = preparedEntry;
+  entry = preparedEntry;
+  const topic = entry.topic || entry.prompt?.topic || "";
+  const question = entry.display_question || entry.question || "";
+  const aiAnswer = entry.last_ai_answer || entry.band7_version || entry.aiAnswer || "";
+  text("p1CorpusDialogTopic", topic ? topic.replaceAll("_", " ").toUpperCase() : "PART 1");
+  text("p1CorpusDialogTitle", question);
+  setCorpusMarkdownValue("p1CorpusText", entry.corpus_text || "");
+  const aiBox = $("p1CorpusAiAnswer");
+  const aiWrap = aiBox?.closest(".p1-corpus-ai-box");
+  aiWrap?.classList.toggle("hidden", !aiAnswer);
+  if (aiBox) aiBox.innerHTML = aiAnswer ? renderMarkdown(aiAnswer) : "";
+  text("p1CorpusSaveStatus", "");
+  $("p1CorpusDialog")?.classList.remove("hidden");
+  setTimeout(() => corpusMarkdownEditors.p1CorpusText?.focus?.() || $("p1CorpusText")?.focus(), 0);
+}
+
+function closeP1CorpusEditor() {
+  $("p1CorpusDialog")?.classList.add("hidden");
+  state.p1Corpus.activeEntry = null;
+}
+
+async function saveAndCloseP1CorpusEditor() {
+  if (!$("p1CorpusDialog") || $("p1CorpusDialog").classList.contains("hidden")) return;
+  const entry = state.p1Corpus.activeEntry;
+  const editorReady = isCorpusEditorReady("p1CorpusText");
+  const corpusText = editorReady ? getCorpusMarkdownValue("p1CorpusText").trim() : "";
+  closeP1CorpusEditor();
+  if (entry && corpusText) saveP1CorpusEntry({ entry, corpusText, silent: true }).catch(() => null);
+}
+
+async function saveP1CorpusEntry(options = {}) {
+  const entry = options.entry || state.p1Corpus.activeEntry;
+  if (!entry) return;
+  if (state.p1Corpus.saving) return;
+  if (!options.corpusText && !isCorpusEditorReady("p1CorpusText")) {
+    text("p1CorpusSaveStatus", "编辑器还没加载完成，请等一秒再保存。");
+    if (options.closeOnError) closeP1CorpusEditor();
+    return;
+  }
+  state.p1Corpus.saving = true;
+  const button = $("saveP1CorpusBtn");
+  const original = button?.textContent || "保存语料";
+  const nextCorpusText = (options.corpusText ?? getCorpusMarkdownValue("p1CorpusText")).trim();
+  if (!nextCorpusText) {
+    if (!options.silent) text("p1CorpusSaveStatus", "内容为空，未保存。");
+    state.p1Corpus.saving = false;
+    if (options.closeOnEmpty) closeP1CorpusEditor();
+    return;
+  }
+  if (button && !options.silent) {
+    button.disabled = true;
+    button.textContent = "保存中...";
+  }
+  if (!options.silent) text("p1CorpusSaveStatus", "");
+  try {
+    const storage = p1CorpusStorageEntry(entry);
+    const saved = await api("/api/p1-corpus", {
+      question_id: storage.question_id,
+      topic: storage.topic,
+      question: storage.question,
+      corpus_text: nextCorpusText,
+      last_ai_answer: entry.last_ai_answer || entry.band7_version || entry.aiAnswer || "",
+      source: "report_or_library",
+    });
+    if (!options.silent) text("p1CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
+    const updated = upsertP1CorpusEntry(saved);
+    if (state.p1Corpus.activeEntry) {
+      state.p1Corpus.activeEntry = {
+        ...(state.p1Corpus.activeEntry || {}),
+        ...(updated || saved),
+        display_question: state.p1Corpus.activeEntry?.display_question || saved.question || "",
+      };
+    }
+    renderP1CorpusTopics();
+    if (options.closeOnSuccess) closeP1CorpusEditor();
+  } catch (error) {
+    if (!options.silent) text("p1CorpusSaveStatus", error.message || String(error));
+    if (options.closeOnError) closeP1CorpusEditor();
+  } finally {
+    state.p1Corpus.saving = false;
+    if (button && !options.silent) {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+}
+
+async function loadP2Corpus() {
+  const stats = $("p2CorpusStats");
+  const container = $("p2CorpusTopics");
+  if (stats) stats.textContent = "Loading...";
+  if (container) container.innerHTML = '<p class="muted">正在加载 P2 素材库...</p>';
+  try {
+    const payload = await api("/api/p2-corpus");
+    state.p2Corpus.categories = payload.categories || [];
+    if (stats) stats.textContent = `${payload.category_count || 5} 个分类 · 已保存 ${payload.material_count || 0}`;
+    renderP2CorpusTopics();
+    renderP2CorpusPrepPanel();
+  } catch (error) {
+    if (container) container.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
+    if (stats) stats.textContent = "加载失败";
+  }
+}
+
+function renderP2CorpusTopics() {
+  const container = $("p2CorpusTopics");
+  if (!container) return;
+  const categories = state.p2Corpus.categories || [];
+  if (!categories.length) {
+    container.innerHTML = '<p class="muted">还没有 P2 素材分类。</p>';
+    return;
+  }
+  container.innerHTML = categories.map((category) => {
+    const items = category.items || [];
+    return `
+      <article class="p2-topic-card">
+        <header>
+          <h3>${escapeHtml(category.label || category.category)}</h3>
+          <span>${items.length}</span>
+        </header>
+        <div class="p2-topic-material-list">
+          ${items.map((item, index) => `
+            <button type="button" class="has-corpus" data-p2-corpus-entry="${escapeHtml(item.entry_id)}">
+              <strong>${index + 1}.</strong>
+              <span>${escapeHtml(item.title)}</span>
+            </button>
+          `).join("")}
+          <button type="button" class="p2-add-material-button" data-p2-corpus-new="${escapeHtml(category.category)}">
+            <strong>+</strong>
+            <span>新增${escapeHtml(category.label || "素材")}</span>
+          </button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+async function loadCorpusHome() {}
+
+async function loadLanguageTakeaways() {
+  const stats = $("languageTakeawayStats");
+  const list = $("languageTakeawayList");
+  if (stats) stats.textContent = "Loading...";
+  if (list) list.innerHTML = '<p class="muted">正在加载生词本...</p>';
+  try {
+    const payload = await api("/api/language-takeaways");
+    state.languageTakeaway.items = payload.items || [];
+    if (stats) stats.textContent = `${payload.count || 0} 条`;
+    renderLanguageTakeaways();
+  } catch (error) {
+    if (stats) stats.textContent = "加载失败";
+    if (list) list.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
+  }
+}
+
+function renderLanguageTakeaways() {
+  const list = $("languageTakeawayList");
+  if (!list) return;
+  const items = state.languageTakeaway.items || [];
+  const hiddenMode = state.languageTakeaway.hideChinese;
+  const revealed = state.languageTakeaway.revealedEntryIds;
+  if (!items.length) {
+    list.innerHTML = '<p class="muted language-book-empty">还没有摘录。平时选中单词或短语，点击“译”就可以加入这里。</p>';
+    return;
+  }
+  list.innerHTML = items.map((item) => `
+    <button type="button"
+      class="language-takeaway-card ${hiddenMode && !revealed.has(item.entry_id) ? "is-concealed" : "is-revealed"}"
+      data-takeaway-entry="${escapeHtml(item.entry_id)}">
+      <strong>${escapeHtml(item.source_text)}</strong>
+      <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
+    </button>
+  `).join("");
+}
+
+function toggleLanguageTakeawayHiddenMode() {
+  state.languageTakeaway.hideChinese = !state.languageTakeaway.hideChinese;
+  if (state.languageTakeaway.hideChinese) state.languageTakeaway.revealedEntryIds.clear();
+  const button = $("languageTakeawayHideToggle");
+  if (button) {
+    button.setAttribute("aria-pressed", state.languageTakeaway.hideChinese ? "true" : "false");
+    button.textContent = state.languageTakeaway.hideChinese ? "显示中文" : "隐藏中文";
+  }
+  renderLanguageTakeaways();
+}
+
+function speakLanguageTakeaway(textValue) {
+  const value = String(textValue || "").trim();
+  if (!value || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(value);
+  utterance.lang = "en-US";
+  utterance.rate = 0.86;
+  window.speechSynthesis.speak(utterance);
+}
+
+function revealAndSpeakLanguageTakeaway(entryId) {
+  const item = (state.languageTakeaway.items || []).find((entry) => entry.entry_id === entryId);
+  if (!item) return;
+  state.languageTakeaway.revealedEntryIds.add(entryId);
+  speakLanguageTakeaway(item.source_text);
+  renderLanguageTakeaways();
+}
+
+function languageTakeawayTranslationStatus(result) {
+  if (result?.status === "ready" && result?.provider === "local") return "本地词典已填充，可继续编辑";
+  if (result?.status === "ready") return "已翻译";
+  if (result?.status === "needs_edit") return "本地词典未命中，可手动填写中文";
+  if (result?.status === "missing_token") return "未配置翻译服务，可手动填写中文";
+  if (result?.status === "unavailable") return "翻译服务暂不可用，可手动填写中文";
+  return "可手动填写中文";
+}
+
+function selectionText() {
+  const selection = window.getSelection?.();
+  const textValue = String(selection?.toString() || "").trim();
+  if (!selection || selection.rangeCount === 0 || textValue.length < 1 || textValue.length > 160) return null;
+  const range = selection.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  if (!rect || (rect.width === 0 && rect.height === 0)) return null;
+  return { text: textValue, rect };
+}
+
+function hideLanguageTakeawayTrigger() {
+  $("languageTakeawayTrigger")?.classList.add("hidden");
+}
+
+function hideLanguageTakeawayPopup() {
+  $("languageTakeawayPopup")?.classList.add("hidden");
+  text("languageTakeawayStatus", "");
+}
+
+function showLanguageTakeawayTrigger(selectionInfo) {
+  const trigger = $("languageTakeawayTrigger");
+  if (!trigger || !selectionInfo) return;
+  state.languageTakeaway.selectedText = selectionInfo.text;
+  const x = Math.min(window.innerWidth - 44, Math.max(12, selectionInfo.rect.right + 8));
+  const y = Math.min(window.innerHeight - 44, Math.max(12, selectionInfo.rect.top - 4));
+  trigger.style.left = `${x}px`;
+  trigger.style.top = `${y}px`;
+  trigger.classList.remove("hidden");
+}
+
+async function openLanguageTakeawayPopup() {
+  const textValue = state.languageTakeaway.selectedText;
+  if (!textValue) return;
+  const popup = $("languageTakeawayPopup");
+  const trigger = $("languageTakeawayTrigger");
+  if (!popup || !trigger) return;
+  $("languageTakeawaySource").value = textValue;
+  $("languageTakeawayChinese").value = "";
+  text("languageTakeawayStatus", "翻译中...");
+  const triggerRect = trigger.getBoundingClientRect();
+  popup.style.left = `${Math.min(window.innerWidth - 340, Math.max(12, triggerRect.left))}px`;
+  popup.style.top = `${Math.min(window.innerHeight - 300, Math.max(12, triggerRect.bottom + 8))}px`;
+  popup.classList.remove("hidden");
+  hideLanguageTakeawayTrigger();
+  try {
+    const result = await api("/api/language-takeaways/translate", { text: textValue });
+    $("languageTakeawaySource").value = result.source_text || textValue;
+    $("languageTakeawayChinese").value = result.chinese_text || "";
+    text("languageTakeawayStatus", languageTakeawayTranslationStatus(result));
+  } catch (error) {
+    text("languageTakeawayStatus", error.message || "翻译失败，可手动填写中文");
+  }
+}
+
+async function saveLanguageTakeaway() {
+  const sourceText = ($("languageTakeawaySource")?.value || "").trim();
+  const chineseText = ($("languageTakeawayChinese")?.value || "").trim();
+  if (!sourceText) {
+    text("languageTakeawayStatus", "原文为空。");
+    return;
+  }
+  text("languageTakeawayStatus", "保存中...");
+  try {
+    const saved = await api("/api/language-takeaways", {
+      source_text: sourceText,
+      chinese_text: chineseText,
+      context_url: window.location.href,
+      context_label: viewCopy[state.view]?.[0] || "",
+      source: "selection_popup",
+    });
+    const existingIndex = state.languageTakeaway.items.findIndex((item) => item.entry_id === saved.entry_id);
+    if (existingIndex >= 0) state.languageTakeaway.items.splice(existingIndex, 1);
+    state.languageTakeaway.items.unshift(saved);
+    state.languageTakeaway.revealedEntryIds.add(saved.entry_id);
+    renderLanguageTakeaways();
+    text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+    hideLanguageTakeawayPopup();
+  } catch (error) {
+    text("languageTakeawayStatus", error.message || "保存失败");
+  }
+}
+
+function findP2CorpusEntry(entryId) {
+  for (const category of state.p2Corpus.categories || []) {
+    const found = (category.items || []).find((item) => item.entry_id === entryId);
+    if (found) return { ...found, label: category.label || found.label };
+  }
+  return null;
+}
+
+async function openP2CorpusLibrary() {
+  if (!state.account.authenticated) {
+    state.account.returnView = "p2Corpus";
+    switchView("login", { force: true, skipAuthGate: true, authMessage: "登录后才能保存和复用你的 P2 串题素材库。" });
+    return;
+  }
+  openCorpusWindow("p2Corpus");
+}
+
+function openP2CorpusEditor(entry = {}) {
+  const category = entry.category || "person";
+  state.p2Corpus.activeEntry = { ...entry, category };
+  text("p2CorpusDialogCategory", (entry.label || category).toString());
+  text("p2CorpusDialogTitle", entry.entry_id ? "编辑 P2 素材" : "新增 P2 素材");
+  if ($("p2CorpusCategory")) $("p2CorpusCategory").value = category;
+  if ($("p2CorpusTitle")) $("p2CorpusTitle").value = entry.title || "";
+  setCorpusMarkdownValue("p2CorpusText", entry.material_text || "");
+  if ($("p2CorpusLinkedQuestion")) $("p2CorpusLinkedQuestion").value = entry.linked_question || "";
+  text("p2CorpusSaveStatus", "");
+  $("p2CorpusDialog")?.classList.remove("hidden");
+  setTimeout(() => $("p2CorpusTitle")?.focus(), 0);
+}
+
+function closeP2CorpusEditor() {
+  $("p2CorpusDialog")?.classList.add("hidden");
+  state.p2Corpus.activeEntry = null;
+}
+
+async function saveAndCloseP2CorpusEditor() {
+  if (!$("p2CorpusDialog") || $("p2CorpusDialog").classList.contains("hidden")) return;
+  const entry = state.p2Corpus.activeEntry || {};
+  const editorReady = isCorpusEditorReady("p2CorpusText");
+  const materialText = editorReady ? getCorpusMarkdownValue("p2CorpusText").trim() : "";
+  const title = $("p2CorpusTitle")?.value || "";
+  const category = $("p2CorpusCategory")?.value || entry.category || "person";
+  const linkedQuestion = $("p2CorpusLinkedQuestion")?.value || "";
+  closeP2CorpusEditor();
+  if (materialText) {
+    saveP2CorpusEntry({ entry: { ...entry, category, title, linked_question: linkedQuestion }, materialText, silent: true }).catch(() => null);
+  }
+}
+
+async function saveP2CorpusEntry(options = {}) {
+  const entry = options.entry || state.p2Corpus.activeEntry || {};
+  if (state.p2Corpus.saving) return;
+  if (!options.materialText && !isCorpusEditorReady("p2CorpusText")) {
+    text("p2CorpusSaveStatus", "编辑器还没加载完成，请等一秒再保存。");
+    if (options.closeOnError) closeP2CorpusEditor();
+    return;
+  }
+  state.p2Corpus.saving = true;
+  const button = $("saveP2CorpusBtn");
+  const original = button?.textContent || "保存素材";
+  const nextMaterialText = (options.materialText ?? getCorpusMarkdownValue("p2CorpusText")).trim();
+  if (!nextMaterialText) {
+    if (!options.silent) text("p2CorpusSaveStatus", "内容为空，未保存。");
+    state.p2Corpus.saving = false;
+    if (options.closeOnEmpty) closeP2CorpusEditor();
+    return;
+  }
+  if (button && !options.silent) {
+    button.disabled = true;
+    button.textContent = "保存中...";
+  }
+  if (!options.silent) text("p2CorpusSaveStatus", "");
+  try {
+    const saved = await api("/api/p2-corpus", {
+      entry_id: entry.entry_id || "",
+      category: $("p2CorpusCategory")?.value || entry.category || "person",
+      title: $("p2CorpusTitle")?.value || entry.title || "",
+      material_text: nextMaterialText,
+      linked_question: $("p2CorpusLinkedQuestion")?.value || entry.linked_question || "",
+      source: "p2_corpus_editor",
+    });
+    if (!options.silent) text("p2CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
+    await loadP2Corpus();
+    state.p2Corpus.selectedEntryId ||= saved.entry_id;
+    if (options.closeOnSuccess) closeP2CorpusEditor();
+  } catch (error) {
+    if (!options.silent) text("p2CorpusSaveStatus", error.message || String(error));
+    if (options.closeOnError) closeP2CorpusEditor();
+  } finally {
+    state.p2Corpus.saving = false;
+    if (button && !options.silent) {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+}
+
 function friendlyFeedbackError(error) {
   const value = String(error || "").trim();
   const lowered = value.toLowerCase();
@@ -2144,6 +3073,22 @@ function friendlyTranscriptionError(error) {
   return value.startsWith("重新转写失败") ? value : `重新转写失败：${value}`;
 }
 
+function p1CorpusTargetForTurn(turn, attempt) {
+  if (turn?.part !== "p1") return null;
+  const prompt = turn.prompt || {};
+  let topicTarget = turn;
+  if (prompt.role === "follow_up" && prompt.after_turn) {
+    topicTarget = (attempt.turns || []).find((item) => item.id === prompt.after_turn) || turn;
+  }
+  const topicPrompt = topicTarget.prompt || {};
+  return {
+    questionId: turn.parent_question_id || topicTarget.question_id || topicPrompt.question_id || turn.question_id || prompt.question_id || "",
+    topic: turn.parent_topic || topicTarget.topic || topicPrompt.topic || turn.topic || prompt.topic || "general",
+    question: turn.parent_question || topicTarget.question || topicPrompt.question || turn.question || "",
+    displayQuestion: turn.question || topicTarget.question || "",
+  };
+}
+
 function turnReportGroup(attemptId, turn, attempt, isP2 = false) {
   const groupClass = isP2 ? "turn-report-group p2-turn-group" : "turn-report-group p1-p3-turn-group";
   return `<tbody class="${groupClass}">${turnReportRow(attemptId, turn, attempt, isP2)}</tbody>`;
@@ -2154,6 +3099,27 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const band7 = turn.band7_version || attempt.band7_version || "";
   const band7Markdown = turn.band7_markdown || attempt.band7_markdown || band7;
   const isFollowUp = turn.prompt?.role === "follow_up";
+  const modelAudioControl = modelAudio.audio_url
+    ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>`
+    : '<p class="audio-warning">Server model-answer audio unavailable.</p>';
+  const corpusTarget = p1CorpusTargetForTurn(turn, attempt);
+  const corpusButton = corpusTarget
+    ? `<button type="button" class="ghost corpus-edit-button"
+        data-edit-p1-corpus="1"
+        data-question-id="${escapeHtml(corpusTarget.questionId)}"
+        data-topic="${escapeHtml(corpusTarget.topic)}"
+        data-question="${escapeHtml(corpusTarget.question)}"
+        data-display-question="${escapeHtml(corpusTarget.displayQuestion || corpusTarget.question)}"
+        data-ai-answer="${escapeHtml(band7Markdown || band7 || "")}">编辑语料库</button>`
+    : "";
+  const coachingRow = shouldRenderTurnCoaching(turn)
+    ? `<tr class="p1-p3-coaching-row">
+      <td colspan="3" class="ai-coaching-cell">
+        <h4 class="coaching-title">AI 辅导</h4>
+        ${aiCoachingHtml(turn, attempt)}
+      </td>
+    </tr>`
+    : "";
 
   // P2 layout: two rows - first row for content, second row for AI coaching
   if (isP2) {
@@ -2167,7 +3133,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
           <p>${transcriptText(turn)}</p>
         </td>
         <td>
-          ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(band7)}">Play with browser voice</button>`}
+          ${modelAudioControl}
           <p>${renderMarkdown(band7Markdown)}</p>
         </td>
       </tr>
@@ -2181,7 +3147,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   }
 
   // Non-P2 layout: two rows - content row + AI coaching row
-  const questionCell = `<td><div class="question-header"><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong>${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}</div><p>${escapeHtml(turn.question)}</p></td>`;
+  const questionCell = `<td><div class="question-header"><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong>${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}</div><p>${escapeHtml(turn.question)}</p>${corpusButton ? `<div class="question-cell-actions">${corpusButton}</div>` : ""}</td>`;
   return `
     <tr class="p1-p3-content-row">
       ${questionCell}
@@ -2192,48 +3158,24 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
         <p>${transcriptText(turn)}</p>
       </td>
       <td>
-        ${modelAudio.audio_url ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>` : `<button class="ghost" data-speak-band7="${escapeHtml(band7)}">Play with browser voice</button>`}
+        ${modelAudioControl}
         <p>${renderMarkdown(band7Markdown)}</p>
       </td>
     </tr>
-    <tr class="p1-p3-coaching-row">
-      <td colspan="3" class="ai-coaching-cell">
-        <h4 class="coaching-title">AI 辅导</h4>
-        ${aiCoachingHtml(turn, attempt)}
-      </td>
-    </tr>
+    ${coachingRow}
   `;
-}
-
-function criterionBlock(title, item = {}) {
-  const standard = item.standard || (item.strengths || [])[0] || "";
-  const focus = item.focus || (item.problems || [])[0] || "";
-  const advice = item.advice || item.suggestion || "";
-  return `
-    <article class="criterion">
-      <h4>${escapeHtml(title)} - Band ${escapeHtml(item.band ?? "—")}</h4>
-      <strong>Standard</strong><p>${renderMarkdown(standard)}</p>
-      <strong>Focus</strong><p>${renderMarkdown(focus)}</p>
-      <strong>Advice</strong><p>${renderMarkdown(advice)}</p>
-    </article>
-  `;
-}
-
-function speakWithBrowser(value) {
-  if (!value || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(value);
-  utterance.lang = "en-US";
-  utterance.rate = 0.92;
-  window.speechSynthesis.speak(utterance);
 }
 
 function stopAllRuntime(label = "Ready") {
+  state.startRequestId += 1;
+  state.practiceSessionId += 1;
+  state.startAbortController?.abort();
+  state.startAbortController = null;
+  stopExaminerPlayback();
   clearTimer();
   clearAutoNextTimeout();
   stopDictation();
   setDictationStatus("", "");
-  state.browserTtsUtterance = null;
   state.currentTurn = null;
   state.transcript = "";
   state.transcriptFinal = "";
@@ -2241,9 +3183,6 @@ function stopAllRuntime(label = "Ready") {
   state.transcriptStatus = "missing";
   state.practiceLocked = false;
   const summaryPanel = $("#summaryPanel");
-  $("examinerAudio")?.pause();
-  $("examinerAudio")?.removeAttribute("src");
-  $("examinerAudio")?.removeAttribute("data-src");
   clearExaminerAudioPreloads();
   $("browserTtsFallback")?.classList.add("hidden");
   $("cueTop")?.classList.add("hidden");
@@ -2260,18 +3199,27 @@ function stopAllRuntime(label = "Ready") {
 
 async function exitPractice() {
   const attemptId = state.attempt?.id;
-  state.abortingAttemptId = attemptId;
+  state.startRequestId += 1;
+  state.practiceSessionId += 1;
+  state.startAbortController?.abort();
+  state.startAbortController = null;
+  stopExaminerPlayback();
+  let exitSessionId = state.practiceSessionId;
   if (state.status === "recording") {
+    state.abortingAttemptId = attemptId || "__loading__";
     state.cancelRecording = true;
     stopRecording();
   } else {
     stopAllRuntime("Ready");
+    state.abortingAttemptId = attemptId || "__loading__";
+    exitSessionId = state.practiceSessionId;
   }
   state.practiceLocked = false;
   updateSidebarLock();
   if (attemptId) {
     await api(`/api/attempts/${attemptId}/abort`, {}).catch(() => null);
   }
+  if (state.practiceSessionId !== exitSessionId) return;
   resetPracticeSurface();
 }
 
@@ -2505,6 +3453,16 @@ async function loadPasswordResetAvailability() {
 }
 
 function bindEvents() {
+  const bindCorpusOverlayClose = (dialogId, closeEditor) => {
+    const dialog = $(dialogId);
+    if (!dialog) return;
+    dialog.addEventListener("pointerdown", (event) => {
+      if (event.target === dialog) {
+        event.preventDefault();
+        closeEditor();
+      }
+    });
+  };
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.addEventListener("click", (event) => {
       if (state.practiceLocked && button.dataset.view === state.practiceViewBeforeSettings) {
@@ -2549,20 +3507,105 @@ function bindEvents() {
   $("profileSaveBtn")?.addEventListener("click", () => saveCandidateNames(true).catch((error) => renderAccountStatus(error.message, true)));
   $("securityChangePasswordBtn")?.addEventListener("click", submitPasswordChange);
   $("securityLogoutBtn")?.addEventListener("click", logoutAccount);
+  $("openP1CorpusBtn")?.addEventListener("click", openP1CorpusLibrary);
+  $("openP2CorpusBtn")?.addEventListener("click", openP2CorpusLibrary);
+  $("topbarBackCorpusBtn")?.addEventListener("click", closeCorpusWindowOrReturn);
+  bindCorpusOverlayClose("p1CorpusDialog", saveAndCloseP1CorpusEditor);
+  bindCorpusOverlayClose("p2CorpusDialog", saveAndCloseP2CorpusEditor);
+  $("p1CorpusTopics")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-p1-corpus-question]");
+    if (!button) return;
+    openP1CorpusEditor(findP1CorpusEntry(button.dataset.p1CorpusQuestion || ""));
+  });
+  $("p2CorpusTopics")?.addEventListener("click", (event) => {
+    const existing = event.target.closest("[data-p2-corpus-entry]");
+    if (existing) {
+      openP2CorpusEditor(findP2CorpusEntry(existing.dataset.p2CorpusEntry || ""));
+      return;
+    }
+    const created = event.target.closest("[data-p2-corpus-new]");
+    if (created) openP2CorpusEditor({ category: created.dataset.p2CorpusNew || "person" });
+  });
+  document.querySelectorAll("[data-corpus-home-target]").forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.corpusHomeTarget || "corpus"));
+  });
+  $("languageTakeawayHideToggle")?.addEventListener("click", toggleLanguageTakeawayHiddenMode);
+  $("languageTakeawayList")?.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-takeaway-entry]");
+    if (!card) return;
+    revealAndSpeakLanguageTakeaway(card.dataset.takeawayEntry || "");
+  });
+  document.addEventListener("selectionchange", () => {
+    window.clearTimeout(state.languageTakeaway.selectionTimer);
+    state.languageTakeaway.selectionTimer = window.setTimeout(() => {
+      if (!$("languageTakeawayPopup")?.classList.contains("hidden")) return;
+      const info = selectionText();
+      if (info) showLanguageTakeawayTrigger(info);
+      else hideLanguageTakeawayTrigger();
+    }, 80);
+  });
+  $("languageTakeawayTrigger")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    openLanguageTakeawayPopup();
+  });
+  $("languageTakeawaySaveBtn")?.addEventListener("click", saveLanguageTakeaway);
+  $("languageTakeawayCloseBtn")?.addEventListener("click", hideLanguageTakeawayPopup);
+  document.addEventListener("pointerdown", (event) => {
+    const popup = $("languageTakeawayPopup");
+    const trigger = $("languageTakeawayTrigger");
+    if (popup?.classList.contains("hidden")) return;
+    if (popup.contains(event.target) || trigger?.contains(event.target)) return;
+    hideLanguageTakeawayPopup();
+  });
+  $("languageTakeawayPopupHandle")?.addEventListener("pointerdown", (event) => {
+    const popup = $("languageTakeawayPopup");
+    if (!popup || event.target.closest("button")) return;
+    const rect = popup.getBoundingClientRect();
+    state.languageTakeaway.dragging = true;
+    state.languageTakeaway.dragOffsetX = event.clientX - rect.left;
+    state.languageTakeaway.dragOffsetY = event.clientY - rect.top;
+    popup.setPointerCapture?.(event.pointerId);
+  });
+  $("languageTakeawayPopup")?.addEventListener("pointermove", (event) => {
+    if (!state.languageTakeaway.dragging) return;
+    const popup = $("languageTakeawayPopup");
+    if (!popup) return;
+    popup.style.left = `${Math.min(window.innerWidth - 320, Math.max(8, event.clientX - state.languageTakeaway.dragOffsetX))}px`;
+    popup.style.top = `${Math.min(window.innerHeight - 260, Math.max(8, event.clientY - state.languageTakeaway.dragOffsetY))}px`;
+  });
+  $("languageTakeawayPopup")?.addEventListener("pointerup", () => {
+    state.languageTakeaway.dragging = false;
+  });
+  $("saveP1CorpusBtn")?.addEventListener("click", () => saveP1CorpusEntry({ closeOnSuccess: true }));
+  $("saveP2CorpusBtn")?.addEventListener("click", () => saveP2CorpusEntry({ closeOnSuccess: true }));
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!$("p1CorpusDialog")?.classList.contains("hidden")) {
+      event.preventDefault();
+      saveAndCloseP1CorpusEditor();
+    } else if (!$("p2CorpusDialog")?.classList.contains("hidden")) {
+      event.preventDefault();
+      saveAndCloseP2CorpusEditor();
+    }
+  });
+  window.addEventListener("beforeunload", autosaveOpenCorpusEditors);
   $("recordControl")?.addEventListener("click", () => {
     if (state.status === "recording") {
       stopRecording();
     } else if (state.status === "preparing") {
+      const sessionId = state.practiceSessionId;
+      if (!isActivePracticeSession(sessionId)) return;
       clearTimer();
-      startRecording().catch(showError);
+      startRecording(sessionId).catch(showError);
     } else if (state.status === "idle" || state.status === "ready" || state.status === "summary") {
       if (state.currentTurn && state.status === "ready") {
-        beginExaminerPhase();
+        beginExaminerPhase(state.practiceSessionId);
       } else {
         startPractice();
       }
     }
   });
+  $("startFullMockBtn")?.addEventListener("click", () => startPractice());
   $("exitPractice")?.addEventListener("click", () => exitPractice());
   $("p3StartButton")?.addEventListener("click", () => startPractice());
   document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
@@ -2778,15 +3821,10 @@ async function init() {
       });
     }
   }, true);
-  // Load saved view from localStorage
-  let savedView = "mock";
-  try {
-    savedView = localStorage.getItem(VIEW_STORAGE_KEY) || "mock";
-    if (!viewCopy[savedView]) savedView = "mock";
-  } catch (e) {
-    // Ignore storage errors
-  }
-  switchView(savedView);
+  const urlView = requestedUrlView();
+  let savedView = urlView || "mock";
+  if (!viewCopy[savedView]) savedView = "mock";
+  switchView(savedView, { skipPersist: Boolean(urlView), skipUrl: true });
   try {
     const summary = await api("/api/question-bank/summary");
     text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);

@@ -10,13 +10,20 @@ from .services import (
     detail,
     get_turn_audio_path,
     history,
+    caiyun_translate_text,
+    language_takeaway_library,
     latest_report,
     p3_fallback,
+    p1_corpus_library,
+    p2_corpus_library,
     question_bank_sample,
     question_bank_summary,
     regenerate_turn_feedback,
     regenerate_turn_transcript,
     replay_queue,
+    save_p1_corpus,
+    save_p2_corpus,
+    save_language_takeaway,
     score_attempt,
     start_attempt,
     tts_audio_path,
@@ -78,6 +85,56 @@ def question_bank_sample_view(request):
     if isinstance(p1_count, str):
         p1_count = int(p1_count) if p1_count.isdigit() else 5
     return JsonResponse(question_bank_sample(int(p1_count)))
+
+
+@require_http_methods(["GET", "POST"])
+def p1_corpus_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    if request.method == "GET":
+        return JsonResponse(p1_corpus_library(request.user))
+    try:
+        return JsonResponse(save_p1_corpus(request.user, _json_payload(request)))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["GET", "POST"])
+def p2_corpus_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    if request.method == "GET":
+        return JsonResponse(p2_corpus_library(request.user))
+    try:
+        return JsonResponse(save_p2_corpus(request.user, _json_payload(request)))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["GET", "POST"])
+def language_takeaway_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    if request.method == "GET":
+        return JsonResponse(language_takeaway_library(request.user))
+    try:
+        return JsonResponse(save_language_takeaway(request.user, _json_payload(request)))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["POST"])
+def language_takeaway_translate_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(caiyun_translate_text(str(_json_payload(request).get("text") or "")))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
 
 
 @require_GET

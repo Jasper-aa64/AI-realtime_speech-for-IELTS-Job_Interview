@@ -216,6 +216,103 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertIn("sessionid=fake-session", writing_payload["cookie"])
         self.assertEqual(seen_paths, ["/api/writing/entries/entry-1/score-task", "/api/ai/tasks/aitask-1/cancel/"])
 
+    def test_corpus_and_language_takeaway_proxy_to_django_with_session(self):
+        seen = []
+
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_GET(self):
+                seen.append({
+                    "method": "GET",
+                    "path": self.path,
+                    "cookie": self.headers.get("Cookie", ""),
+                    "csrf": self.headers.get("X-CSRFToken", ""),
+                    "body": b"",
+                })
+                body = json.dumps({"path": self.path, "items": []}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_POST(self):
+                size = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(size) if size else b"{}"
+                seen.append({
+                    "method": "POST",
+                    "path": self.path,
+                    "cookie": self.headers.get("Cookie", ""),
+                    "csrf": self.headers.get("X-CSRFToken", ""),
+                    "body": raw,
+                })
+                body = json.dumps({"path": self.path, "ok": True}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        try:
+            with mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url):
+                get_status, _headers, get_body = self.get_response(
+                    "/api/language-takeaways",
+                    headers={"Cookie": "sessionid=fake-session"},
+                )
+                translate_status, _headers, translate_payload = self.post_response(
+                    "/api/language-takeaways/translate",
+                    {"text": "strike a balance"},
+                    headers={"Cookie": "sessionid=fake-session", "X-CSRFToken": "csrf-1"},
+                )
+                save_status, _headers, save_payload = self.post_response(
+                    "/api/language-takeaways",
+                    {"source_text": "strike a balance", "chinese_text": "取得平衡"},
+                    headers={"Cookie": "sessionid=fake-session", "X-CSRFToken": "csrf-1"},
+                )
+                p1_status, _headers, p1_payload = self.post_response(
+                    "/api/p1-corpus",
+                    {"question_id": "q1", "corpus_text": "Prepared answer."},
+                    headers={"Cookie": "sessionid=fake-session", "X-CSRFToken": "csrf-1"},
+                )
+                p2_status, _headers, p2_payload = self.post_response(
+                    "/api/p2-corpus",
+                    {"title": "Book", "material_text": "Prepared material."},
+                    headers={"Cookie": "sessionid=fake-session", "X-CSRFToken": "csrf-1"},
+                )
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+
+        self.assertEqual(get_status, 200)
+        self.assertEqual(json.loads(get_body.decode("utf-8"))["path"], "/api/language-takeaways")
+        self.assertEqual(translate_status, 200)
+        self.assertEqual(save_status, 200)
+        self.assertEqual(p1_status, 200)
+        self.assertEqual(p2_status, 200)
+        self.assertEqual(translate_payload["path"], "/api/language-takeaways/translate")
+        self.assertEqual(save_payload["path"], "/api/language-takeaways")
+        self.assertEqual(p1_payload["path"], "/api/p1-corpus")
+        self.assertEqual(p2_payload["path"], "/api/p2-corpus")
+        self.assertEqual(
+            [(item["method"], item["path"]) for item in seen],
+            [
+                ("GET", "/api/language-takeaways"),
+                ("POST", "/api/language-takeaways/translate"),
+                ("POST", "/api/language-takeaways"),
+                ("POST", "/api/p1-corpus"),
+                ("POST", "/api/p2-corpus"),
+            ],
+        )
+        self.assertTrue(all("sessionid=fake-session" in item["cookie"] for item in seen))
+        self.assertEqual(seen[1]["csrf"], "csrf-1")
+        self.assertIn(b"strike a balance", seen[1]["body"])
+
     def test_speaking_runtime_proxy_to_django_with_flag_and_session(self):
         seen = []
 

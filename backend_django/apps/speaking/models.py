@@ -122,3 +122,77 @@ class SpeakingTrainingObservation(UserOwnedModel):
 
     def __str__(self) -> str:
         return self.observation_id
+
+
+class P1CorpusEntry(UserOwnedModel):
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="p1_corpus_entries")
+    question_id = models.CharField(max_length=160)
+    topic = models.CharField(max_length=120, blank=True)
+    question = models.TextField()
+    corpus_text = models.TextField(blank=True)
+    last_ai_answer = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "question_id"], name="unique_p1_corpus_question_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "topic"], name="speaking_p1_user_topic_idx"),
+            models.Index(fields=["user", "updated_at"], name="speaking_p1_user_updated_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.question_id}"
+
+
+class P2CorpusEntry(UserOwnedModel):
+    class Category(models.TextChoices):
+        PERSON = "person", "人物"
+        PLACE = "place", "地点"
+        EVENT = "event", "事件"
+        OBJECT = "object", "物品"
+        SPECIAL = "special", "特殊题目"
+
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="p2_corpus_entries")
+    entry_id = models.CharField(max_length=160)
+    category = models.CharField(max_length=32, choices=Category.choices)
+    title = models.CharField(max_length=200)
+    material_text = models.TextField(blank=True)
+    linked_question = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "entry_id"], name="unique_p2_corpus_entry_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "category"], name="speaking_p2_user_category_idx"),
+            models.Index(fields=["user", "updated_at"], name="speaking_p2_user_updated_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.category}:{self.title}"
+
+
+class LanguageTakeawayEntry(UserOwnedModel):
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="language_takeaway_entries")
+    entry_id = models.CharField(max_length=160)
+    source_text = models.TextField()
+    chinese_text = models.TextField(blank=True)
+    source_language = models.CharField(max_length=32, blank=True)
+    target_language = models.CharField(max_length=32, default="zh")
+    context_url = models.TextField(blank=True)
+    context_label = models.CharField(max_length=200, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "entry_id"], name="unique_language_takeaway_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "updated_at"], name="speaking_lt_user_updated_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.source_text[:40]}"

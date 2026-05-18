@@ -4020,10 +4020,21 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         if path.startswith("/api/ai/tasks/"):
             cookie = self.headers.get("Cookie", "")
             return "sessionid=" in cookie
+        if self.is_django_corpus_path(path):
+            cookie = self.headers.get("Cookie", "")
+            return "sessionid=" in cookie
         if DJANGO_PROXY_SPEAKING_RUNTIME and self.is_django_speaking_runtime_path(path):
             cookie = self.headers.get("Cookie", "")
             return "sessionid=" in cookie
         return False
+
+    def is_django_corpus_path(self, path: str) -> bool:
+        return path in {
+            "/api/p1-corpus",
+            "/api/p2-corpus",
+            "/api/language-takeaways",
+            "/api/language-takeaways/translate",
+        }
 
     def is_django_speaking_runtime_path(self, path: str) -> bool:
         if path == "/api/attempts/start":
@@ -4048,6 +4059,9 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         cookie = self.headers.get("Cookie")
         if cookie:
             headers["Cookie"] = cookie
+        csrf_token = self.headers.get("X-CSRFToken")
+        if csrf_token:
+            headers["X-CSRFToken"] = csrf_token
         request = urllib.request.Request(
             f"{DJANGO_BACKEND_URL}{path_with_query}",
             data=body,
@@ -4078,6 +4092,9 @@ class IELTSHandler(SimpleHTTPRequestHandler):
         cookie = self.headers.get("Cookie")
         if cookie:
             headers["Cookie"] = cookie
+        csrf_token = self.headers.get("X-CSRFToken")
+        if csrf_token:
+            headers["X-CSRFToken"] = csrf_token
         request = urllib.request.Request(
             f"{DJANGO_BACKEND_URL}{path_with_query}",
             data=body,

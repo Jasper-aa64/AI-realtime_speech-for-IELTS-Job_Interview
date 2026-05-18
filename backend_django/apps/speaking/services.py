@@ -9,6 +9,7 @@ import random
 import re
 import shutil
 import subprocess
+import threading
 import urllib.error
 import urllib.request
 import uuid
@@ -21,7 +22,8 @@ from django.db import transaction
 from django.db.models import Avg, Count, Max, Min, Sum
 from django.utils import timezone
 
-from .models import SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
+from .models import LanguageTakeawayEntry, P1CorpusEntry, P2CorpusEntry, SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
+from .volcengine_asr import transcribe_audio as volcengine_transcribe_audio
 
 
 # --- Codex Integration ---
@@ -80,6 +82,51 @@ def extract_json_object(text: str) -> dict[str, Any]:
                     raise ValueError(f"Invalid JSON object: {json_str[:100]}...")
 
     raise ValueError("model output contained unbalanced JSON braces")
+
+
+def extract_json_object_with_keys(text: str, required_keys: set[str]) -> dict[str, Any]:
+    """Extract the first JSON object containing all required top-level keys."""
+    remaining = str(text or "")
+    last_error: Exception | None = None
+    while "{" in remaining:
+        try:
+            payload = extract_json_object(remaining)
+        except ValueError as exc:
+            last_error = exc
+            break
+        if required_keys.issubset(set(payload.keys())):
+            return payload
+        start = remaining.find("{")
+        if start == -1:
+            break
+        depth = 0
+        in_string = False
+        escape_next = False
+        end = -1
+        for index, char in enumerate(remaining[start:], start):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == "\\":
+                escape_next = True
+                continue
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    end = index
+                    break
+        if end == -1:
+            break
+        remaining = remaining[end + 1:]
+    keys = ", ".join(sorted(required_keys))
+    raise ValueError(f"model output did not contain a JSON object with required keys: {keys}") from last_error
 
 
 def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None, bool]:
@@ -166,7 +213,7 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None, 
     return final_text or str(stdout or ""), usage, has_real_content
 
 
-def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
+def run_codex(prompt: str, call_id: str, timeout: int = 45) -> tuple[str, dict[str, Any] | None]:
     """Call codex CLI and return output and usage.
 
     The `-` argument is required to make codex exec read from stdin.
@@ -183,43 +230,52 @@ def run_codex(prompt: str, call_id: str) -> tuple[str, dict[str, Any] | None]:
         raise RuntimeError("codex CLI not found")
 
     config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
-    try:
-        result = subprocess.run(
-            [codex, "exec", "--json", *config_args, "-"],
-            input=prompt,
-            text=True,
-            capture_output=True,
-            timeout=45,
-            check=True,
-        )
-        output, usage, has_real_content = extract_codex_json_events(result.stdout)
-    except Exception:
-        result = subprocess.run(
-            [codex, "exec", *config_args, "-"],
-            input=prompt,
-            text=True,
-            capture_output=True,
-            timeout=45,
-            check=True,
-        )
-        output, usage, has_real_content = result.stdout, None, bool(result.stdout.strip())
+    codex_cwd = str(Path(settings.BASE_DIR).parent)
+    last_error: RuntimeError | None = None
+    for _attempt in range(2):
+        try:
+            result = subprocess.run(
+                [codex, "exec", "--json", *config_args, "-"],
+                input=prompt,
+                text=True,
+                capture_output=True,
+                timeout=timeout,
+                check=True,
+                cwd=codex_cwd,
+            )
+            output, usage, has_real_content = extract_codex_json_events(result.stdout)
+        except subprocess.TimeoutExpired as exc:
+            last_error = RuntimeError(f"codex timed out after {timeout}s for {call_id}")
+            continue
+        except Exception:
+            result = subprocess.run(
+                [codex, "exec", *config_args, "-"],
+                input=prompt,
+                text=True,
+                capture_output=True,
+                timeout=timeout,
+                check=True,
+                cwd=codex_cwd,
+            )
+            output, usage, has_real_content = result.stdout, None, bool(result.stdout.strip())
 
-    # Validate that the model actually processed the prompt
-    # If usage shows 0 input tokens, the model didn't receive the prompt
-    if usage:
-        input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
-        if input_tokens == 0:
-            raise RuntimeError(f"codex returned 0 input tokens for {call_id}: model did not process the prompt")
+        if usage:
+            input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+            if input_tokens == 0:
+                last_error = RuntimeError(f"codex returned 0 input tokens for {call_id}: model did not process the prompt")
+                continue
 
-    # Validate output is non-empty
-    if not output or not output.strip():
-        raise RuntimeError(f"codex returned empty output for {call_id}")
+        if not output or not output.strip():
+            last_error = RuntimeError(f"codex returned empty output for {call_id}")
+            continue
 
-    # Validate we got real agent_message content, not just event stream
-    if not has_real_content:
-        raise RuntimeError(f"codex returned only event stream without model output for {call_id}")
+        if not has_real_content:
+            last_error = RuntimeError(f"codex returned only event stream without model output for {call_id}")
+            continue
 
-    return output, usage
+        return output, usage
+
+    raise last_error or RuntimeError(f"codex returned no usable output for {call_id}")
 
 
 def clamp_band(value: float | int | None) -> float:
@@ -667,9 +723,17 @@ def build_overall_review(
     if isinstance(score_review, dict):
         band = score.get("overall_band")
         band_text = f"Band {band}" if isinstance(band, (int, float)) and not isinstance(band, bool) else "本次练习"
+        markdown = clean_markdown_text(str(score_review.get("markdown") or ""))
         comment = clean_report_text(str(score_review.get("comment") or ""))
         points = [clean_report_text(str(item)) for item in score_review.get("review_points") or []]
-        points = [item for item in points if item][:4]
+        points = [item for item in points if item]
+        if markdown:
+            return {
+                "comment": comment,
+                "review_points": points,
+                "markdown": markdown,
+                "source": score_review.get("source") or "codex_score",
+            }
         if comment or points:
             if not comment:
                 comment = f"{band_text} 的主要突破口：先处理最影响分数的说话习惯。"
@@ -863,7 +927,7 @@ def acceptable_coaching_markdown(value: str) -> bool:
     text = clean_markdown_text(value)
     if not text:
         return False
-    if "语法错误纠正" not in text:
+    if "语法错误纠正" not in text and "语法 & 表达纠正" not in text:
         return False
     blocked = ("as an ai", "json", "requirements", "acceptance criteria", "workflow-state", "trellis sessionstart")
     return not any(marker in text.lower() for marker in blocked)
@@ -904,22 +968,9 @@ def ensure_grammar_correction_bullet(coaching: str, transcript: str) -> str:
     text = clean_markdown_text(coaching)
     if not text:
         return ""
-    lines: list[str] = []
-    skip_grammar_items = False
-    for raw_line in text.splitlines():
-        line = raw_line.rstrip()
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if "语法错误纠正" in stripped:
-            skip_grammar_items = True
-            continue
-        if skip_grammar_items and re.match(r"^\d+\.\s+", stripped):
-            continue
-        skip_grammar_items = False
-        if re.match(r"^\d+\.\s+`.+?`\s*->", stripped):
-            continue
-        lines.append(line)
+    if "语法错误纠正" in text or "语法 & 表达纠正" in text:
+        return text
+    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
     corrections = infer_grammar_corrections(transcript)
     if lines:
         lines.append("")
@@ -997,7 +1048,8 @@ class QuestionBank:
             topic = str(payload.get("topic") or path.stem)
             for item in items:
                 if isinstance(item, str) and item.strip():
-                    questions.append({"topic": topic, "question": item.strip()})
+                    question = item.strip()
+                    questions.append({"topic": topic, "question": question, "question_id": p1_question_id(topic, question)})
         return questions
 
     def _load_p2(self) -> list[dict[str, Any]]:
@@ -1061,6 +1113,460 @@ def question_bank_sample(p1_count: int = 5) -> dict[str, Any]:
     return get_question_bank().sample(p1_count)
 
 
+def p1_question_id(topic: str, question: str) -> str:
+    topic_key = re.sub(r"[^a-z0-9]+", "_", str(topic or "general").lower()).strip("_") or "general"
+    digest = hashlib.md5(f"{topic_key}\n{str(question or '').strip()}".encode("utf-8")).hexdigest()[:12]
+    return f"p1:{topic_key}:{digest}"
+
+
+def p1_topic_label(topic: str) -> str:
+    return str(topic or "general").replace("_", " ").strip().title()
+
+
+def p1_corpus_library(user) -> dict[str, Any]:
+    bank = get_question_bank()
+    entries = {
+        entry.question_id: entry
+        for entry in P1CorpusEntry.objects.filter(user=user)
+    }
+    grouped: dict[str, dict[str, Any]] = {}
+
+    def add_question(topic: str, question: str) -> None:
+        question_id = p1_question_id(topic, question)
+        entry = entries.get(question_id)
+        group = grouped.setdefault(
+            topic,
+            {
+                "topic": topic,
+                "label": p1_topic_label(topic),
+                "questions": [],
+            },
+        )
+        group["questions"].append(
+            {
+                "question_id": question_id,
+                "topic": topic,
+                "question": question,
+                "corpus_text": entry.corpus_text if entry else "",
+                "last_ai_answer": entry.last_ai_answer if entry else "",
+                "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M") if entry else "",
+            }
+        )
+
+    for item in P1_INTRO_QUESTIONS:
+        add_question(str(item.get("topic") or "intro"), str(item.get("question") or ""))
+    for item in bank.p1:
+        add_question(str(item.get("topic") or "general"), str(item.get("question") or ""))
+
+    topics = sorted(grouped.values(), key=lambda item: (item["topic"] != "intro", item["label"]))
+    total_questions = sum(len(topic["questions"]) for topic in topics)
+    saved_count = sum(1 for topic in topics for question in topic["questions"] if question.get("corpus_text"))
+    return {
+        "topics": topics,
+        "topic_count": len(topics),
+        "question_count": total_questions,
+        "saved_count": saved_count,
+    }
+
+
+def save_p1_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
+    topic = clean_report_text(str(payload.get("topic") or "general")) or "general"
+    question = clean_report_text(str(payload.get("question") or ""))
+    if not question:
+        raise SpeakingError("Missing P1 question.")
+    question_id = clean_report_text(str(payload.get("question_id") or "")) or p1_question_id(topic, question)
+    corpus_text = clean_markdown_text(str(payload.get("corpus_text") or ""))[:8000]
+    if not corpus_text.strip():
+        raise SpeakingError("Corpus text is empty.")
+    last_ai_answer = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:8000]
+    entry, _ = P1CorpusEntry.objects.update_or_create(
+        user=user,
+        question_id=question_id,
+        defaults={
+            "topic": topic,
+            "question": question,
+            "corpus_text": corpus_text,
+            "last_ai_answer": last_ai_answer,
+            "metadata": {"saved_from": clean_report_text(str(payload.get("source") or "p1_corpus"))},
+        },
+    )
+    return {
+        "question_id": entry.question_id,
+        "topic": entry.topic,
+        "question": entry.question,
+        "corpus_text": entry.corpus_text,
+        "last_ai_answer": entry.last_ai_answer,
+        "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+P2_CORPUS_CATEGORIES = [
+    {"category": P2CorpusEntry.Category.PERSON, "label": "人物"},
+    {"category": P2CorpusEntry.Category.PLACE, "label": "地点"},
+    {"category": P2CorpusEntry.Category.EVENT, "label": "事件"},
+    {"category": P2CorpusEntry.Category.OBJECT, "label": "物品"},
+    {"category": P2CorpusEntry.Category.SPECIAL, "label": "特殊题目素材"},
+]
+
+
+def p2_entry_id(category: str, title: str) -> str:
+    category_key = re.sub(r"[^a-z0-9]+", "_", str(category or "special").lower()).strip("_") or "special"
+    digest = hashlib.md5(f"{category_key}\n{str(title or '').strip()}".encode("utf-8")).hexdigest()[:12]
+    return f"p2:{category_key}:{digest}"
+
+
+def p2_corpus_library(user) -> dict[str, Any]:
+    grouped = {
+        item["category"]: {
+            "category": item["category"],
+            "label": item["label"],
+            "items": [],
+        }
+        for item in P2_CORPUS_CATEGORIES
+    }
+    for entry in P2CorpusEntry.objects.filter(user=user).order_by("category", "-updated_at", "title"):
+        group = grouped.setdefault(
+            entry.category,
+            {"category": entry.category, "label": entry.get_category_display(), "items": []},
+        )
+        group["items"].append(
+            {
+                "entry_id": entry.entry_id,
+                "category": entry.category,
+                "label": entry.get_category_display(),
+                "title": entry.title,
+                "material_text": entry.material_text,
+                "linked_question": entry.linked_question,
+                "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M"),
+            }
+        )
+    categories = list(grouped.values())
+    return {
+        "categories": categories,
+        "category_count": len(categories),
+        "material_count": sum(len(group["items"]) for group in categories),
+    }
+
+
+def save_p2_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
+    category = clean_report_text(str(payload.get("category") or P2CorpusEntry.Category.SPECIAL))
+    valid_categories = {item["category"] for item in P2_CORPUS_CATEGORIES}
+    if category not in valid_categories:
+        category = P2CorpusEntry.Category.SPECIAL
+    title = clean_report_text(str(payload.get("title") or "未命名素材"))[:200] or "未命名素材"
+    entry_id = clean_report_text(str(payload.get("entry_id") or "")) or p2_entry_id(category, title)
+    material_text = clean_markdown_text(str(payload.get("material_text") or ""))[:12000]
+    if not material_text.strip():
+        raise SpeakingError("P2 material text is empty.")
+    linked_question = clean_report_text(str(payload.get("linked_question") or ""))[:1000]
+    entry, _ = P2CorpusEntry.objects.update_or_create(
+        user=user,
+        entry_id=entry_id,
+        defaults={
+            "category": category,
+            "title": title,
+            "material_text": material_text,
+            "linked_question": linked_question,
+            "metadata": {"saved_from": clean_report_text(str(payload.get("source") or "p2_corpus"))},
+        },
+    )
+    return {
+        "entry_id": entry.entry_id,
+        "category": entry.category,
+        "label": entry.get_category_display(),
+        "title": entry.title,
+        "material_text": entry.material_text,
+        "linked_question": entry.linked_question,
+        "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def takeaway_entry_id(source_text: str) -> str:
+    digest = hashlib.md5(str(source_text or "").strip().lower().encode("utf-8")).hexdigest()[:14]
+    return f"lt:{digest}"
+
+
+def language_takeaway_payload(entry: LanguageTakeawayEntry) -> dict[str, Any]:
+    return {
+        "entry_id": entry.entry_id,
+        "source_text": entry.source_text,
+        "chinese_text": entry.chinese_text,
+        "source_language": entry.source_language,
+        "target_language": entry.target_language,
+        "context_url": entry.context_url,
+        "context_label": entry.context_label,
+        "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def language_takeaway_library(user) -> dict[str, Any]:
+    entries = [
+        language_takeaway_payload(entry)
+        for entry in LanguageTakeawayEntry.objects.filter(user=user).order_by("-updated_at")[:300]
+    ]
+    return {"items": entries, "count": len(entries)}
+
+
+LOCAL_TAKEAWAY_PHRASE_TRANSLATIONS = {
+    "a big fan of": "非常喜欢",
+    "a good fit for": "很适合",
+    "a wide range of": "各种各样的",
+    "as far as i know": "据我所知",
+    "at the moment": "目前",
+    "broaden my horizons": "开阔我的眼界",
+    "come across": "偶然遇到；偶然发现",
+    "deal with": "处理；应对",
+    "depend on": "取决于；依靠",
+    "from my perspective": "从我的角度来看",
+    "get along with": "与……相处",
+    "get used to": "习惯于",
+    "go by": "流逝；经过",
+    "have a positive impact on": "对……有积极影响",
+    "in my view": "在我看来",
+    "in terms of": "就……而言",
+    "keep in touch with": "与……保持联系",
+    "look forward to": "期待",
+    "make a difference": "产生影响；带来改变",
+    "on a regular basis": "定期地；经常",
+    "play an important role": "发挥重要作用",
+    "put a lot of effort into": "投入很多努力",
+    "relieve stress": "缓解压力",
+    "spend time doing": "花时间做……",
+    "stand out": "突出；显眼",
+    "strike a balance": "取得平衡",
+    "take advantage of": "利用",
+    "take part in": "参加",
+    "the majority of": "大多数",
+    "to some extent": "在某种程度上",
+    "used to": "过去常常",
+}
+
+
+LOCAL_TAKEAWAY_WORD_TRANSLATIONS = {
+    "academic": "学术的",
+    "advantage": "优势",
+    "balance": "平衡",
+    "challenge": "挑战",
+    "comfortable": "舒服的",
+    "convenient": "方便的",
+    "creative": "有创造力的",
+    "culture": "文化",
+    "develop": "发展",
+    "efficient": "高效的",
+    "enjoy": "享受；喜欢",
+    "especially": "尤其",
+    "experience": "经历；体验",
+    "important": "重要的",
+    "improve": "提高",
+    "interesting": "有趣的",
+    "knowledge": "知识",
+    "memorable": "难忘的",
+    "opportunity": "机会",
+    "practical": "实用的",
+    "pressure": "压力",
+    "relaxing": "放松的",
+    "repetitive": "重复的",
+    "responsibility": "责任",
+    "routine": "日常安排",
+    "solution": "解决方案",
+    "specific": "具体的",
+    "traditional": "传统的",
+    "useful": "有用的",
+    "valuable": "有价值的",
+    "work": "工作",
+}
+
+
+CAIYUN_COMPAT_TOKEN = "ssdj273ksdiwi923bsd9"
+CAIYUN_COMPAT_DEVICE_ID = "F1F902F7-1780-4C88-848D-71F35D88A602"
+
+
+def local_takeaway_translate_text(text: str, target: str = "zh") -> dict[str, Any]:
+    source = clean_report_text(str(text or ""))[:1000]
+    if not source:
+        raise SpeakingError("Missing text to translate.")
+    if (target or "zh") != "zh":
+        return {
+            "source_text": source,
+            "chinese_text": "",
+            "provider": "local",
+            "status": "unsupported_target",
+            "message": "Local offline translation currently supports Chinese only.",
+        }
+    if re.search(r"[\u4e00-\u9fff]", source):
+        return {
+            "source_text": source,
+            "chinese_text": source,
+            "provider": "local",
+            "status": "ready",
+        }
+    normalized = re.sub(r"\s+", " ", source.strip().lower())
+    direct = LOCAL_TAKEAWAY_PHRASE_TRANSLATIONS.get(normalized) or LOCAL_TAKEAWAY_WORD_TRANSLATIONS.get(normalized)
+    if direct:
+        return {
+            "source_text": source,
+            "chinese_text": direct,
+            "provider": "local",
+            "status": "ready",
+        }
+    translated_parts = []
+    for token in re.findall(r"[A-Za-z][A-Za-z'-]*", normalized):
+        lemma = token.strip("'")
+        singular = lemma[:-1] if lemma.endswith("s") else lemma
+        translated = LOCAL_TAKEAWAY_WORD_TRANSLATIONS.get(lemma) or LOCAL_TAKEAWAY_WORD_TRANSLATIONS.get(singular)
+        if translated and translated not in translated_parts:
+            translated_parts.append(translated)
+    return {
+        "source_text": source,
+        "chinese_text": "；".join(translated_parts),
+        "provider": "local",
+        "status": "ready" if translated_parts else "needs_edit",
+        "message": "" if translated_parts else "No local dictionary match. Edit the Chinese field before saving.",
+    }
+
+
+def caiyun_translate_text(text: str, target: str = "zh") -> dict[str, Any]:
+    source = clean_report_text(str(text or ""))[:1000]
+    if not source:
+        raise SpeakingError("Missing text to translate.")
+    token = os.environ.get("CAIYUN_TOKEN") or os.environ.get("CAIYUN_TRANSLATE_TOKEN") or CAIYUN_COMPAT_TOKEN
+    target_language = target or "zh"
+    payload = {
+        "source": source,
+        "trans_type": f"auto2{target_language}",
+        "detect": True,
+        "os_type": "ios",
+        "device_id": CAIYUN_COMPAT_DEVICE_ID,
+        "media": "text",
+        "request_id": uuid.uuid4().int % 1_000_000_000,
+        "user_id": "",
+        "dict": True,
+    }
+    request = urllib.request.Request(
+        "https://interpreter.cyapi.cn/v1/translator",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",
+            "X-Authorization": f"token {token}",
+            "User-Agent": "caiyunInterpreter/5 CFNetwork/1404.0.5 Darwin/22.3.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=6) as response:  # noqa: S310
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        fallback = local_takeaway_translate_text(source, target_language)
+        fallback["caiyun_status"] = "unavailable"
+        fallback["caiyun_error"] = str(exc)
+        return fallback
+    target_values = data.get("target") or ""
+    if isinstance(target_values, list):
+        translated = target_values[0] if target_values else ""
+    else:
+        translated = target_values
+    if not translated:
+        fallback = local_takeaway_translate_text(source, target_language)
+        fallback["caiyun_status"] = "empty"
+        return fallback
+    return {
+        "source_text": source,
+        "chinese_text": clean_report_text(str(translated or ""))[:1000],
+        "provider": "caiyun",
+        "status": "ready",
+        "raw": data,
+    }
+
+
+def save_language_takeaway(user, payload: dict[str, Any]) -> dict[str, Any]:
+    source_text = clean_report_text(str(payload.get("source_text") or ""))[:1000]
+    if not source_text:
+        raise SpeakingError("Source text is empty.")
+    chinese_text = clean_report_text(str(payload.get("chinese_text") or ""))[:1000]
+    entry_id = clean_report_text(str(payload.get("entry_id") or "")) or takeaway_entry_id(source_text)
+    entry, _ = LanguageTakeawayEntry.objects.update_or_create(
+        user=user,
+        entry_id=entry_id,
+        defaults={
+            "source_text": source_text,
+            "chinese_text": chinese_text,
+            "source_language": clean_report_text(str(payload.get("source_language") or ""))[:32],
+            "target_language": clean_report_text(str(payload.get("target_language") or "zh"))[:32] or "zh",
+            "context_url": clean_report_text(str(payload.get("context_url") or ""))[:1000],
+            "context_label": clean_report_text(str(payload.get("context_label") or ""))[:200],
+            "metadata": {"saved_from": clean_report_text(str(payload.get("source") or "language_takeaway"))},
+        },
+    )
+    return language_takeaway_payload(entry)
+
+
+def p2_corpus_for_selection(user, entry_id: str) -> dict[str, Any] | None:
+    if not entry_id:
+        return None
+    entry = P2CorpusEntry.objects.filter(user=user, entry_id=entry_id).first()
+    if not entry:
+        return None
+    return {
+        "entry_id": entry.entry_id,
+        "category": entry.category,
+        "label": entry.get_category_display(),
+        "title": entry.title,
+        "material_text": entry.material_text,
+        "linked_question": entry.linked_question,
+    }
+
+
+def p1_corpus_for_turns(user, turns: list[SpeakingTurn]) -> dict[str, str]:
+    ids: list[str] = []
+    id_by_turn: dict[str, str] = {}
+    by_turn_id = {turn.turn_id: turn for turn in turns}
+    for turn in turns:
+        if turn.part != "p1":
+            continue
+        ref_turn = turn
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
+        if prompt.get("role") == "follow_up" and prompt.get("after_turn"):
+            ref_turn = by_turn_id.get(str(prompt.get("after_turn"))) or turn
+        ref_metadata = ref_turn.metadata if isinstance(ref_turn.metadata, dict) else {}
+        ref_prompt = ref_metadata.get("prompt") if isinstance(ref_metadata.get("prompt"), dict) else {}
+        topic = str(ref_prompt.get("topic") or "general")
+        question_id = str(ref_prompt.get("question_id") or p1_question_id(topic, ref_turn.question))
+        ids.append(question_id)
+        id_by_turn[turn.turn_id] = question_id
+    if not ids:
+        return {}
+    entries = {
+        entry.question_id: entry.corpus_text
+        for entry in P1CorpusEntry.objects.filter(user=user, question_id__in=ids)
+        if entry.corpus_text.strip()
+    }
+    return {
+        turn_id: entries[question_id]
+        for turn_id, question_id in id_by_turn.items()
+        if question_id in entries
+    }
+
+
+def prepared_corpus_for_turns(user, turns: list[SpeakingTurn]) -> dict[str, str]:
+    prepared: dict[str, str] = {}
+    for turn in turns:
+        if turn.part != "p2":
+            continue
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        link = metadata.get("p2_corpus_link") if isinstance(metadata.get("p2_corpus_link"), dict) else {}
+        entry_id = str(link.get("entry_id") or "")
+        entry = p2_corpus_for_selection(user, entry_id)
+        if entry and entry.get("material_text"):
+            prepared[turn.turn_id] = (
+                f"P2素材库分类：{entry.get('label')}\n"
+                f"素材标题：{entry.get('title')}\n"
+                f"素材内容：\n{entry.get('material_text')}"
+            ).strip()
+    return prepared
+
+
 class SpeakingError(ValueError):
     pass
 
@@ -1087,6 +1593,7 @@ def report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
     payload.setdefault("part", attempt.part)
     payload.setdefault("title", attempt.title)
     payload.setdefault("status", attempt.status)
+    payload.setdefault("display_time", timezone.localtime(attempt.updated_at).strftime("%Y-%m-%d %H:%M"))
     payload.setdefault("candidate", attempt.english_name)
     payload.setdefault("full_name", attempt.full_name)
     payload.setdefault("english_name", attempt.english_name)
@@ -1110,6 +1617,8 @@ def report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
                 "question": turn.question,
                 "transcript_raw": turn.transcript_raw,
                 "transcript_cleaned": turn.transcript_cleaned,
+                "display_transcript": turn.metadata.get("display_transcript", ""),
+                "display_transcript_markdown": turn.metadata.get("display_transcript_markdown", ""),
                 "transcript_status": turn.metadata.get("transcript_status", "captured" if (turn.transcript_cleaned or turn.transcript_raw) else "missing"),
                 "pronunciation": turn.pronunciation,
                 "status": "completed",
@@ -1120,7 +1629,53 @@ def report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
             for turn in attempt.turns.all().order_by("sequence")
         ],
     )
+    normalize_p1_report_turn_corpus_keys(payload)
     return payload
+
+
+def normalize_p1_report_turn_corpus_keys(payload: dict[str, Any]) -> None:
+    """Backfill stable P1 corpus keys for old saved report payloads.
+
+    Older reports did not persist top-level `question_id` / `topic` on P1 turns.
+    The corpus editor uses those keys to load saved answers. Without this
+    normalization, old work/study turns open an empty editor even when the
+    canonical intro corpus entry exists.
+    """
+    turns = payload.get("turns")
+    if not isinstance(turns, list):
+        return
+    by_turn_id = {str(turn.get("id") or ""): turn for turn in turns if isinstance(turn, dict)}
+    for turn in turns:
+        if not isinstance(turn, dict) or str(turn.get("part") or "").lower() != "p1":
+            continue
+        prompt = turn.get("prompt") if isinstance(turn.get("prompt"), dict) else {}
+        topic = str(turn.get("topic") or prompt.get("topic") or "general")
+        question = str(turn.get("question") or prompt.get("question") or "")
+        question_id = str(turn.get("question_id") or prompt.get("question_id") or "")
+        if not question_id and question:
+            question_id = p1_question_id(topic, question)
+        if not turn.get("topic"):
+            turn["topic"] = topic
+        if not turn.get("question_id") and question_id:
+            turn["question_id"] = question_id
+        if prompt and not prompt.get("question_id") and question_id:
+            prompt["question_id"] = question_id
+            turn["prompt"] = prompt
+
+        if prompt.get("role") == "follow_up" and prompt.get("after_turn"):
+            parent = by_turn_id.get(str(prompt.get("after_turn")))
+            if not isinstance(parent, dict):
+                continue
+            parent_prompt = parent.get("prompt") if isinstance(parent.get("prompt"), dict) else {}
+            parent_topic = str(parent.get("topic") or parent_prompt.get("topic") or topic or "general")
+            parent_question = str(parent.get("question") or parent_prompt.get("question") or "")
+            parent_question_id = str(parent.get("question_id") or parent_prompt.get("question_id") or "")
+            if not parent_question_id and parent_question:
+                parent_question_id = p1_question_id(parent_topic, parent_question)
+            if parent_question_id:
+                turn["parent_question_id"] = parent_question_id
+                turn["parent_topic"] = parent_topic
+                turn["parent_question"] = parent_question
 
 
 def history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
@@ -1129,7 +1684,7 @@ def history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
     return {
         "id": attempt.attempt_id,
         "timestamp": attempt.created_at.isoformat(),
-        "display_time": attempt.updated_at.isoformat(),
+        "display_time": timezone.localtime(attempt.updated_at).strftime("%Y-%m-%d %H:%M"),
         "mode": attempt.mode,
         "part": attempt.part,
         "title": attempt.title or payload.get("title") or payload.get("question") or attempt.mode.upper(),
@@ -1399,7 +1954,19 @@ def _build_p1_turns(total: int = P1_TURN_COUNT, display_total: int | None = None
             {"topic": "general", "question": "What is the weather like in your country?"},
             {"topic": "general", "question": "Do you have any hobbies?"},
         ]
-    ordinary_questions = random.sample(ordinary_pool, min(remaining_count, len(ordinary_pool)))
+    topics: dict[str, list[dict[str, Any]]] = {}
+    for item in ordinary_pool:
+        topics.setdefault(str(item.get("topic") or "general"), []).append(item)
+    ordinary_questions: list[dict[str, Any]] = []
+    topic_names = list(topics)
+    random.shuffle(topic_names)
+    for topic in topic_names:
+        if len(ordinary_questions) >= remaining_count:
+            break
+        topic_items = topics[topic][:]
+        random.shuffle(topic_items)
+        take = min(len(topic_items), remaining_count - len(ordinary_questions))
+        ordinary_questions.extend(topic_items[:take])
     turn_items = uncounted_intro_items + countable_intro_items + ordinary_questions
     turns: list[dict[str, Any]] = []
     display_index = 0
@@ -1415,6 +1982,7 @@ def _build_p1_turns(total: int = P1_TURN_COUNT, display_total: int | None = None
             {
                 "topic": item["topic"],
                 "question": item["question"],
+                "question_id": str(item.get("question_id") or p1_question_id(str(item["topic"]), str(item["question"]))),
                 "counts_toward_total": counts_toward_total,
                 **({"flow": item["flow"], "role": item["role"]} if item.get("flow") else {}),
             },
@@ -1466,11 +2034,17 @@ def _build_p3_turns(theme: str, intensity: str = "high") -> tuple[list[dict[str,
     return turns, metadata
 
 
-def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], dict[str, Any] | None, dict[str, Any]]:
+def _sample_p2_cue() -> dict[str, Any]:
     bank = get_question_bank()
+    if bank.p2:
+        return random.choice(bank.p2)
+    return {"title": "Describe a person you admire", "bullets": [], "rounding": ""}
+
+
+def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], dict[str, Any] | None, dict[str, Any]]:
     metadata: dict[str, Any] = {}
     if mode == "mock":
-        cue = bank.p2[0] if bank.p2 else {"title": "Describe a person you admire", "bullets": [], "rounding": ""}
+        cue = _sample_p2_cue()
         p1_turns = _build_p1_turns(P1_TURN_COUNT, P1_TURN_COUNT + 1)
         p2_turn = _create_turn("p2", len(p1_turns), P1_TURN_COUNT + 1, _cue_to_text(cue), cue, cue)
         turns = p1_turns + [p2_turn]
@@ -1484,7 +2058,7 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
         turns = _build_p1_turns(P1_TURN_COUNT)
         return "p1", "Part 1 practice", turns, None, metadata
     if mode == "p2":
-        cue = bank.p2[0] if bank.p2 else {"title": "Describe a person you admire", "bullets": [], "rounding": ""}
+        cue = _sample_p2_cue()
         turns = [_create_turn("p2", 0, 1, _cue_to_text(cue), cue, cue)]
         return "p2", str(cue.get("title", "Part 2 practice")), turns, cue, metadata
     if mode == "p3":
@@ -1551,17 +2125,19 @@ def start_attempt(user, payload: dict[str, Any]) -> dict[str, Any]:
             },
         )
 
-    # Generate examiner TTS for all turns
-    for turn_data in turns:
-        ensure_examiner_tts(attempt_id, turn_data)
-
-    # Update database with generated TTS
-    for turn_data in turns:
-        db_turn = SpeakingTurn.objects.get(attempt=attempt, turn_id=turn_data["id"])
+    if turns:
+        ensure_examiner_tts(attempt_id, turns[0])
+        db_turn = SpeakingTurn.objects.get(attempt=attempt, turn_id=turns[0]["id"])
         turn_metadata = db_turn.metadata if isinstance(db_turn.metadata, dict) else {}
-        turn_metadata["examiner_tts"] = turn_data.get("examiner_tts")
+        turn_metadata["examiner_tts"] = turns[0].get("examiner_tts")
         db_turn.metadata = turn_metadata
-        db_turn.save()
+        db_turn.save(update_fields=["metadata"])
+        if len(turns) > 1:
+            threading.Thread(
+                target=_generate_remaining_examiner_tts,
+                args=(attempt_id, [turn["id"] for turn in turns[1:]]),
+                daemon=True,
+            ).start()
 
     response = {
         "id": attempt_id,
@@ -1669,6 +2245,15 @@ def upload_turn_audio(user, attempt_id: str, turn_id: str, audio_file) -> dict[s
     }
 
 
+def transcribe_turn_audio_with_server_asr(turn: SpeakingTurn) -> dict[str, Any]:
+    if not turn.audio_path:
+        return {"ok": False, "status": "missing_audio", "transcript": "", "error": "No uploaded audio."}
+    audio_path = Path(settings.MEDIA_ROOT) / turn.audio_path
+    if not audio_path.exists():
+        return {"ok": False, "status": "missing_audio", "transcript": "", "error": "Uploaded audio file not found."}
+    return volcengine_transcribe_audio(audio_path)
+
+
 def get_turn_audio_path(user, attempt_id: str, turn_id: str) -> Path | None:
     """Get the audio file path for a turn.
 
@@ -1738,6 +2323,8 @@ def _turn_payload(turn: SpeakingTurn, total: int | None = None) -> dict[str, Any
         "audio": audio,
         "transcript_raw": turn.transcript_raw,
         "transcript_cleaned": turn.transcript_cleaned,
+        "display_transcript": metadata.get("display_transcript", ""),
+        "display_transcript_markdown": metadata.get("display_transcript_markdown", ""),
         "transcript_markdown": metadata.get("transcript_markdown") or _spoken_markdown(turn.transcript_cleaned or turn.transcript_raw),
         "transcript_status": metadata.get("transcript_status") or ("captured" if (turn.transcript_cleaned or turn.transcript_raw) else "missing"),
         "duration_seconds": float(turn.duration_seconds) if turn.duration_seconds is not None else None,
@@ -1756,6 +2343,9 @@ def _turn_payload(turn: SpeakingTurn, total: int | None = None) -> dict[str, Any
         "ai_coaching_source": metadata.get("ai_coaching_source"),
         "counts_toward_total": turn.counts_toward_total,
         "display_index": metadata.get("display_index"),
+        "question_id": prompt.get("question_id") or p1_question_id(str(prompt.get("topic") or "general"), turn.question) if turn.part == "p1" else "",
+        "topic": prompt.get("topic", ""),
+        "p2_corpus_link": metadata.get("p2_corpus_link") if isinstance(metadata.get("p2_corpus_link"), dict) else None,
     }
 
 
@@ -1771,6 +2361,7 @@ def _runtime_attempt_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
     return {
         "id": attempt.attempt_id,
         "timestamp": attempt.created_at.isoformat(),
+        "display_time": timezone.localtime(attempt.updated_at).strftime("%Y-%m-%d %H:%M"),
         "status": attempt.status,
         "user_id": str(attempt.user_id),
         "mode": attempt.mode,
@@ -1832,7 +2423,8 @@ def _fallback_p1_identity_follow_up(answer: str) -> str:
 
 def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]:
     fallback = _fallback_p1_identity_follow_up(answer)
-    prompt = f"""Return JSON only with key follow_up.
+    prompt = f"""Return JSON only with top-level key follow_up.
+Do not repeat the input. Do not include Markdown, explanation, or code fences.
 
 You are an IELTS Speaking Part 1 examiner. Write one natural follow-up question based on the candidate's previous answer.
 Use the candidate's real identity details. Do not invent facts.
@@ -1843,7 +2435,7 @@ Candidate answer:
 """
     try:
         output, _usage = run_codex(prompt, call_id)
-        payload = extract_json_object(output)
+        payload = extract_json_object_with_keys(output, {"follow_up"})
         follow_up = clean_report_text(str(payload.get("follow_up") or ""))
         if not follow_up or len(follow_up) > 160 or "?" not in follow_up:
             raise RuntimeError("codex p1 follow-up did not return a usable question")
@@ -1919,11 +2511,30 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         raise SpeakingError("Scored attempts cannot be completed.")
     turn = _find_turn(attempt, turn_id)
 
-    transcript = str(payload.get("transcript_raw") or payload.get("transcript") or "").strip()
+    browser_transcript = str(payload.get("transcript_raw") or payload.get("transcript") or "").strip()
+    transcript = browser_transcript
     transcript_status = str(payload.get("transcript_status") or ("captured" if transcript else "missing")).strip()
     if transcript_status not in {"captured", "interim_fallback", "missing"}:
         transcript_status = "captured" if transcript else "missing"
     source = str(payload.get("transcript_source") or "browser_dictation").strip() or "browser_dictation"
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    p2_link = payload.get("p2_corpus_link") if isinstance(payload.get("p2_corpus_link"), dict) else None
+    if turn.part == "p2" and p2_link:
+        selected_entry = p2_corpus_for_selection(user, str(p2_link.get("entry_id") or ""))
+        if selected_entry:
+            metadata["p2_corpus_link"] = {
+                "entry_id": selected_entry["entry_id"],
+                "category": selected_entry["category"],
+                "label": selected_entry["label"],
+                "title": selected_entry["title"],
+                "linked_at": timezone.now().isoformat(),
+            }
+    server_asr = transcribe_turn_audio_with_server_asr(turn)
+    metadata["server_asr"] = {key: value for key, value in server_asr.items() if key != "transcript"}
+    if server_asr.get("ok") and str(server_asr.get("transcript") or "").strip():
+        transcript = str(server_asr["transcript"]).strip()
+        transcript_status = "captured"
+        source = str(server_asr.get("provider") or "volcengine_realtime_asr")
     cleaned = _clean_report_text(transcript)
     duration = payload.get("duration_seconds")
 
@@ -1946,12 +2557,13 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         "message": "Pronunciation is not assessed by Django fallback turn completion.",
     }
     turn.metadata = {
-        **(turn.metadata if isinstance(turn.metadata, dict) else {}),
+        **metadata,
         "status": "completed",
         "transcript_status": transcript_status,
         "transcript_markdown": _spoken_markdown(cleaned),
         "cleaning_notes": [],
         "feedback_generation_status": "pending",
+        "browser_transcript_raw": browser_transcript,
     }
     turn.save()
 
@@ -2010,21 +2622,70 @@ def score_with_codex(transcript: str, question: str, part: str, call_id: str) ->
             "Consider fluency and coherence, lexical resource, and grammatical range and accuracy."
         )
 
-    prompt = (
+    profile = build_scoring_learning_profile(transcript, part)
+    overall_review_prompt = f"""
+
+同时生成 Overall Review & Practice Focus。
+overall_review 必须是 object，包含：
+- markdown: 中文 Markdown，包含两个部分「总体点评」和「复盘重点」
+- comment: 简短中文概括
+- review_points: 中文字符串数组
+
+Overall Review 写法要求：
+- markdown 必须直接写成旧版报告风格：以「### 总体点评」开头，然后写 2-3 段中文长点评；再写「### 复盘重点」，下面列出多条具体建议。
+- 第一部分「总体点评」：不要只写一句短总结，要像真人老师复盘整场练习，概括核心问题、突破方向，并结合学习画像给出针对性建议。
+- 第二部分「复盘重点」：不要限制为固定 3 条；根据本次表现列出足够具体、可执行的建议，每条可以包含解释和示范句。
+- 语气要具体、实用、有针对性，避免空泛评价
+- 可以稍长，不要限制内容，让建议充分展开
+- 必须结合学习画像进行个性化点评
+- 不要输出类似“回答基本相关，但展开偏短”这种过短 fallback 文案
+
+本次成绩会由你在同一个 JSON 中给出。
+练习部分：{part}
+学习画像：
+{json.dumps(profile, ensure_ascii=False)}
+"""
+
+    full_prompt = (
         system_prompt
-        + "\n\nReturn JSON only with numeric keys fluency_coherence, lexical_resource, "
-        "grammatical_range, overall_band, string key feedback, and optional overall_review object "
-        "with string key comment and array key review_points. Do not score pronunciation or reference pronunciation. "
+        + "\n\nReturn JSON only. The top-level object must contain numeric keys fluency_coherence, lexical_resource, "
+        "grammatical_range, overall_band, string key feedback, and overall_review object "
+        "with string keys markdown and comment plus array key review_points. Do not score pronunciation or reference pronunciation. "
         + score_prompt_for_part(part)
+        + overall_review_prompt
         + "\n\nPrompt(s):\n"
         + (question.strip() or "(not provided)")
         + "\n\nTranscript:\n"
         + transcript
         + "\n"
     )
+    compact_prompt = (
+        "Return JSON only. The top-level object must contain numeric keys fluency_coherence, lexical_resource, grammatical_range, "
+        "overall_band, string key feedback, and overall_review object with string key comment and array "
+        "key review_points and optional string key markdown. Score this IELTS Speaking response using the official IELTS Speaking criteria. "
+        "Write a detailed Simplified Chinese overall_review.markdown in the old report style: ### 总体点评 with 2-3 substantial paragraphs, then ### 复盘重点 with concrete review points. "
+        "Do not repeat the input. Do not include Markdown, explanation, or code fences. Do not score pronunciation from text. "
+        + score_prompt_for_part(part)
+        + "\n\nQuestion or cue card:\n"
+        + (question.strip() or "(not provided)")
+        + "\n\nTranscript:\n"
+        + transcript
+        + "\n"
+    )
 
-    output, usage = run_codex(prompt, call_id)
-    payload = extract_json_object(output)
+    last_error: Exception | None = None
+    for index, prompt in enumerate((full_prompt, compact_prompt), start=1):
+        try:
+            output, usage = run_codex(prompt, f"{call_id}_p{index}", timeout=90)
+            payload = extract_json_object_with_keys(
+                output,
+                {"fluency_coherence", "lexical_resource", "grammatical_range"},
+            )
+            break
+        except Exception as exc:
+            last_error = exc
+    else:
+        raise RuntimeError(str(last_error or "codex scoring failed"))
 
     # Validate required fields are present and numeric
     fc_raw = payload.get("fluency_coherence")
@@ -2056,13 +2717,15 @@ def score_with_codex(transcript: str, question: str, part: str, call_id: str) ->
 
     overall_review = payload.get("overall_review")
     if isinstance(overall_review, dict):
+        markdown = clean_markdown_text(str(overall_review.get("markdown") or ""))
         comment = clean_report_text(str(overall_review.get("comment") or ""))
         points = [clean_report_text(str(item)) for item in overall_review.get("review_points") or []]
         points = [item for item in points if item][:4]
-        if comment or points:
+        if markdown or comment or points:
             result_payload["overall_review"] = {
                 "comment": comment,
                 "review_points": points,
+                "markdown": markdown,
                 "source": "codex_score",
             }
 
@@ -2207,21 +2870,49 @@ Learning profile:
         raise RuntimeError("codex coaching was missing meaningful feedback or grammar correction")
     return coaching
 
-def turn_feedback_with_codex(question: str, transcript: str, part: str, target: str, profile: dict[str, Any] | None, call_id: str) -> dict[str, str]:
+def coaching_prompt_constraints(part: str) -> str:
+    if part == "p1":
+        return """你是 IELTS Speaking 真人教练。
+请用中文给这一次回答做简短口语反馈，只输出正文，不要标题。
+
+正文要求：
+- 先用 1-2 句话说清楚这次回答最大的问题。
+- 然后用分点方式给出立即改进点；每一点内部直接说明问题和改法，不要套用固定模板。
+- 不要使用“→ 改法：”这类固定结构。
+- 立即改进点可以包含逻辑连贯、连接词、内容展开、表达自然度等问题，由你根据回答自行决定数量和顺序。
+
+**语法 & 表达纠正：**
+分点列出；每点按内容自然表达，不限制固定格式。
+如无错误，写：无。
+
+**亮点**（如有）：简短肯定 1 句用得好的地方
+
+不要输出【】占位符；不要为了凑格式拆成“问题/改法”两行；根据这次回答决定立即改进点和语法表达纠正的数量。"""
+    return """请用中文给这一次回答做简短 IELTS Speaking 口语反馈，只输出正文，不要标题。
+先判断真实考试里最影响分数的问题，只讲最值得改的 1-2 点，具体、短、能马上照着改。
+最后保留「语法 & 表达纠正」部分；如无错误，写：无。"""
+
+
+def turn_feedback_with_codex(question: str, transcript: str, part: str, target: str, profile: dict[str, Any] | None, call_id: str, requires_ai_coaching: bool = True) -> dict[str, str]:
     """Generate Band 7 and AI coaching together using Codex CLI.
 
     This combined generation ensures the Band 7 and coaching are consistent.
 
     Raises RuntimeError if the output is invalid or missing required fields.
     """
-    prompt = f"""Return JSON only with keys band7_version and ai_coaching.
+    prompt = f"""Return JSON only. The top-level object must contain keys display_transcript, band7_version and ai_coaching.
+Do not repeat the input. Do not include Markdown outside string values, explanation, or code fences.
 
 Task:
-- Write one natural IELTS Speaking Band {target} spoken version for this single turn.
-- Then write Chinese Markdown coaching for this same turn.
+- First produce display_transcript: lightly format the ASR transcript for display only.
+- Then write one natural IELTS Speaking Band {target} spoken version based on display_transcript.
+- Write Chinese Markdown coaching for this same turn only if requires_ai_coaching is true.
 - Answer the exact examiner question directly and preserve the candidate's likely intent.
 - Reuse the candidate's concrete idea when it is relevant; improve cohesion, vocabulary, and grammar.
 - Do not include the original question, cue-card bullets, titles, labels, code fences, or logs.
+- Base band7_version and ai_coaching on display_transcript, not noisy candidate transcript.
+- Do not mention or correct words that are absent from display_transcript.
+- If requires_ai_coaching is false, set ai_coaching to an empty string.
 
 Band 7 version constraints:
 {model_answer_constraints(part)}
@@ -2230,13 +2921,9 @@ Band 7 version constraints:
 - If the transcript is weak, infer a sensible direct answer from the question type instead of writing a vague template.
 
 Coaching constraints:
-- Use natural Chinese for a mainland IELTS learner.
-- Decide the number of points, order, and level of detail yourself based on the real answer.
-- Do not use a fixed coaching template or fixed labels.
-- If a sample sentence helps, include it naturally; if not, focus on evaluation.
-- Finish with a grammar correction section exactly named "语法错误纠正：".
-- If there is no meaningful spoken grammar/collocation issue, write "语法错误纠正：无".
-- Only include spoken-English grammar/collocation problems that affect meaning or fluency; do not treat punctuation, periods, full stops, capitalization, or written formatting as grammar errors.
+{coaching_prompt_constraints(part)}
+- Do not explain how the Band 7 version was rewritten.
+- Do not create a long line-by-line correction list outside the grammar/expression correction section.
 
 Question:
 {question}
@@ -2244,11 +2931,41 @@ Question:
 Candidate transcript:
 {transcript or "(missing)"}
 
+requires_ai_coaching:
+{json.dumps(bool(requires_ai_coaching))}
+
 Learning profile:
 {json.dumps(profile or {})}
 """
-    output, usage = run_codex(prompt, call_id)
-    payload = extract_json_object(output)
+    compact_prompt = f"""Return JSON only. The top-level object must contain keys display_transcript, band7_version and ai_coaching.
+Do not repeat the input. Do not include Markdown outside string values, explanation, or code fences.
+
+First lightly format the ASR transcript as display_transcript, then write a natural IELTS Speaking Band {target} answer for the question.
+If requires_ai_coaching is true, write Chinese coaching based only on display_transcript.
+If requires_ai_coaching is false, set ai_coaching to an empty string.
+The coaching format is up to you, but when coaching is required it must include a final section named "语法错误纠正：".
+Do not use fixed labels or templates. Use the candidate's real meaning and do not invent facts.
+Do not mention or correct words that are absent from display_transcript.
+
+Question:
+{question}
+
+Candidate transcript:
+{transcript or "(missing)"}
+
+requires_ai_coaching:
+{json.dumps(bool(requires_ai_coaching))}
+"""
+    last_error: Exception | None = None
+    for index, candidate_prompt in enumerate((prompt, compact_prompt), start=1):
+        try:
+            output, usage = run_codex(candidate_prompt, f"{call_id}_p{index}")
+            payload = extract_json_object_with_keys(output, {"display_transcript", "band7_version", "ai_coaching"})
+            break
+        except Exception as exc:
+            last_error = exc
+    else:
+        raise RuntimeError(str(last_error or "codex turn feedback failed"))
 
     # Validate required fields exist
     band7_raw = payload.get("band7_version")
@@ -2257,19 +2974,136 @@ Learning profile:
     if not band7_raw or not str(band7_raw).strip():
         raise RuntimeError(f"codex turn feedback missing band7_version for {call_id}")
 
-    if not coaching_raw or not str(coaching_raw).strip():
+    if requires_ai_coaching and (not coaching_raw or not str(coaching_raw).strip()):
         raise RuntimeError(f"codex turn feedback missing ai_coaching for {call_id}")
 
+    display_transcript = clean_report_text(str(payload.get("display_transcript") or ""))
     band7 = clean_band7_output(str(band7_raw))
     coaching = clean_markdown_text(str(coaching_raw))
     if not clean_report_text(band7):
         raise RuntimeError(f"codex turn feedback returned empty band7_version for {call_id}")
 
-    coaching = ensure_grammar_correction_bullet(coaching, transcript)
-    if not acceptable_coaching_markdown(coaching):
+    if requires_ai_coaching:
+        coaching = ensure_grammar_correction_bullet(coaching, display_transcript or transcript)
+    if requires_ai_coaching and not acceptable_coaching_markdown(coaching):
         raise RuntimeError("codex turn feedback did not include usable coaching with grammar correction")
 
-    return {"band7_version": band7, "ai_coaching": coaching, "usage": usage}
+    return {"display_transcript": display_transcript, "band7_version": band7, "ai_coaching": coaching if requires_ai_coaching else "", "usage": usage}
+
+
+def turn_feedback_batch_with_codex(
+    turns: list[SpeakingTurn],
+    attempt: SpeakingAttempt,
+    target: str,
+    profile: dict[str, Any] | None,
+    call_id: str,
+    prepared_corpus_by_turn: dict[str, str] | None = None,
+) -> dict[str, dict[str, str]]:
+    """Generate Band 7 answers and coaching for all completed turns in one Codex call."""
+    items: list[dict[str, str]] = []
+    for turn in turns:
+        if is_p1_name_intro_turn(turn):
+            continue
+        transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+        if not transcript:
+            continue
+        items.append(
+            {
+                "turn_id": turn.turn_id,
+                "part": turn.part or "p1",
+                "question": turn.question,
+                "candidate_transcript": transcript,
+                "prepared_corpus": (prepared_corpus_by_turn or {}).get(turn.turn_id, ""),
+                "requires_ai_coaching": "yes" if turn_needs_ai_coaching(turn) else "no",
+            }
+        )
+    if not items:
+        return {}
+
+    parts = sorted({item["part"] for item in items})
+    coaching_constraints = "\n\n".join(
+        f"For {part.upper()} coaching:\n{coaching_prompt_constraints(part)}"
+        for part in parts
+    )
+    prompt = f"""Return JSON only. The top-level object must contain key turns.
+Do not repeat the input JSON. Do not include Markdown outside string values, explanation, or code fences.
+turns must be an array with one item for every input turn.
+Each item must contain string keys turn_id, display_transcript, band7_version, and ai_coaching.
+
+Task:
+- For each turn, first produce display_transcript: lightly format the ASR transcript for display only.
+- Then write one natural IELTS Speaking Band {target} spoken version based on that display_transcript.
+- Preserve the candidate's likely meaning and answer the exact examiner question directly.
+- Write Chinese coaching only when requires_ai_coaching is "yes".
+- Do not include the original question, cue-card bullets, titles, labels, code fences, or logs.
+- If requires_ai_coaching is "no", set ai_coaching to an empty string.
+
+prepared_corpus usage:
+- Some P2 turns include prepared_corpus from the learner's P2 串题素材库 only when the learner explicitly linked a material during preparation.
+- P1 语料库 content is not passed into this prompt.
+- If prepared_corpus is present and relevant to the cue card, use it as preferred personal material for the Band 7 version and coaching.
+- If prepared_corpus is present, ai_coaching must include concrete guidance on how to use that material as a reusable 串题素材: which parts fit this cue card, what to keep, what to adjust, and how to adapt it for nearby P2 topics.
+- Do not copy it blindly, do not invent facts beyond it, and do not let it override the candidate_transcript when they clearly answered differently this time.
+
+display_transcript constraints:
+- Keep the candidate's original wording and expression. Do not upgrade vocabulary, grammar, ideas, or logic.
+- Only fix obvious ASR formatting problems: spacing, capitalization, repeated filler fragments, and sentence breaks.
+- If a word is uncertain, keep the ASR word instead of guessing a better answer.
+- Do not turn it into a Band 7 answer.
+
+Use display_transcript as the source of truth:
+- band7_version and ai_coaching must be based on display_transcript, not noisy candidate_transcript.
+- Do not mention or correct words that are absent from display_transcript.
+- If display_transcript removes an ASR noise word, do not bring that removed word back in coaching.
+
+Band 7 version constraints:
+- For Part 1, write only 1-3 natural spoken sentences.
+- For Part 2, write a natural long-turn answer in Markdown paragraphs and cover the cue-card points.
+- For Part 3, write a developed discussion answer with an opinion, reasoning, and one concrete example or contrast.
+- Do not use generic template lines such as "this is quite easy for me to answer", "connects with my daily life", or "closer to Band 7".
+- If the transcript is weak, infer a sensible direct answer from the question type instead of writing a vague template.
+
+Coaching constraints:
+{coaching_constraints}
+- Do not explain how the Band 7 version was rewritten.
+- Do not create a long line-by-line correction list outside the grammar/expression correction section.
+
+Learning profile:
+{json.dumps(profile or {})}
+
+Input turns:
+{json.dumps(items, ensure_ascii=False)}
+"""
+    output, usage = run_codex(prompt, call_id, timeout=180)
+    payload = extract_json_object_with_keys(output, {"turns"})
+    raw_turns = payload.get("turns")
+    if not isinstance(raw_turns, list):
+        raise RuntimeError(f"codex batch turn feedback missing turns for {call_id}")
+
+    by_id: dict[str, dict[str, str]] = {}
+    for item in raw_turns:
+        if not isinstance(item, dict):
+            continue
+        turn_id = clean_report_text(str(item.get("turn_id") or ""))
+        display_transcript = clean_report_text(str(item.get("display_transcript") or ""))
+        band7 = clean_band7_output(str(item.get("band7_version") or ""))
+        coaching = clean_markdown_text(str(item.get("ai_coaching") or ""))
+        source_item = next((source for source in items if source["turn_id"] == turn_id), {})
+        requires_ai_coaching = source_item.get("requires_ai_coaching") != "no"
+        if not turn_id or not clean_report_text(band7):
+            continue
+        if requires_ai_coaching and not acceptable_coaching_markdown(coaching):
+            continue
+        by_id[turn_id] = {
+            "display_transcript": display_transcript,
+            "band7_version": band7,
+            "ai_coaching": coaching if requires_ai_coaching else "",
+            "usage": usage or {},
+        }
+    if len(by_id) != len(items):
+        missing = [item["turn_id"] for item in items if item["turn_id"] not in by_id]
+        raise RuntimeError(f"codex batch turn feedback missing usable output for turns: {', '.join(missing)}")
+    return by_id
 
 
 def build_upgrade_notes(transcript: str) -> list[str]:
@@ -2410,6 +3244,28 @@ def is_p1_name_intro_turn(turn: dict[str, Any] | SpeakingTurn) -> bool:
     return turn.get("part") == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "name"
 
 
+def is_p1_work_study_intro_turn(turn: dict[str, Any] | SpeakingTurn) -> bool:
+    """Check if turn is the fixed P1 work/study identity question."""
+    if isinstance(turn, SpeakingTurn):
+        prompt = turn.metadata.get("prompt", {}) if isinstance(turn.metadata, dict) else {}
+        return turn.part == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "work_study"
+    prompt = turn.get("prompt") or {}
+    return turn.get("part") == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "work_study"
+
+
+def turn_needs_ai_coaching(turn: SpeakingTurn) -> bool:
+    return not (is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn))
+
+
+def turn_counts_for_scoring(turn: SpeakingTurn) -> bool:
+    return not is_p1_name_intro_turn(turn)
+
+
+def turn_display_transcript(turn: SpeakingTurn) -> str:
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    return (metadata.get("display_transcript") or turn.transcript_cleaned or turn.transcript_raw or "").strip()
+
+
 def p1_name_answer(full_name: str | None, english_name: str | None) -> str:
     """Generate P1 name answer from profile."""
     full = clean_report_text(str(full_name or DEFAULT_FULL_NAME)) or DEFAULT_FULL_NAME
@@ -2474,14 +3330,14 @@ def build_turn_band7_fallback(
 def build_learning_profile(user, attempt: SpeakingAttempt) -> dict[str, Any]:
     """Build learning profile from user's attempt history."""
     turns = list(attempt.turns.all().order_by("sequence"))
-    completed_turns = [t for t in turns if _turn_status(t) == "completed"]
+    completed_turns = [t for t in turns if _turn_status(t) == "completed" and turn_counts_for_scoring(t)]
 
     evidence: list[str] = []
     tags: list[str] = []
     repeated_phrases: list[str] = []
 
     for turn in completed_turns:
-        transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+        transcript = turn_display_transcript(turn)
         if not transcript:
             continue
         word_count = _word_count(transcript)
@@ -2516,6 +3372,34 @@ def build_learning_profile(user, attempt: SpeakingAttempt) -> dict[str, Any]:
     }
 
 
+def build_scoring_learning_profile(transcript: str, part: str) -> dict[str, Any]:
+    answers = [line[2:].strip() for line in transcript.splitlines() if line.startswith("A:")]
+    word_counts = [_word_count(answer) for answer in answers if answer]
+    tags: list[str] = []
+    evidence: list[str] = []
+    if word_counts:
+        short_count = sum(1 for count in word_counts if count < 25)
+        if short_count:
+            tags.append("short_answer")
+            evidence.append(f"{short_count} 个回答少于 25 词，需要展开。")
+        if part == "p1" and sum(word_counts) / max(1, len(word_counts)) < 30:
+            tags.append("limited_development")
+            evidence.append("P1 平均回答偏短，需要稳定扩展到 2-3 句。")
+        if part == "p2" and max(word_counts) < 90:
+            tags.append("limited_development")
+            evidence.append("P2 长回答长度不足，需要覆盖 cue card 并展开细节。")
+        if part == "p3" and sum(word_counts) / max(1, len(word_counts)) < 55:
+            tags.append("limited_development")
+            evidence.append("P3 回答需要补充原因、对比和例子。")
+    focus = "answer_development" if any(tag in tags for tag in ("short_answer", "limited_development")) else "task_relevance"
+    return {
+        "primary_focus": focus,
+        "primary_focus_text": "这次主要卡在回答展开不够，不是题目完全不会。" if focus == "answer_development" else "这次主要问题是先把回答方向答准。",
+        "habit_tags": sorted(set(tags)),
+        "evidence": evidence[:8],
+    }
+
+
 # --- Build Turn Feedback (Complete) ---
 
 
@@ -2524,6 +3408,7 @@ def build_turn_feedback(
     attempt: SpeakingAttempt,
     user_profile: dict[str, Any] | None = None,
     allow_codex: bool = True,
+    generated_feedback: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build complete turn feedback with Band 7 and AI coaching.
 
@@ -2543,8 +3428,8 @@ def build_turn_feedback(
     result: dict[str, Any] = {}
 
     # Try Codex generation first
-    generated: dict[str, str] = {}
-    if allow_codex and transcript:
+    generated: dict[str, str] = dict(generated_feedback or {})
+    if allow_codex and transcript and not generated:
         try:
             generated = turn_feedback_with_codex(
                 turn.question,
@@ -2553,6 +3438,7 @@ def build_turn_feedback(
                 target,
                 profile,
                 f"turn_feedback_{attempt.attempt_id}_{turn.turn_id}",
+                turn_needs_ai_coaching(turn),
             )
         except Exception as exc:
             result["feedback_generation_error"] = str(exc)
@@ -2579,25 +3465,36 @@ def build_turn_feedback(
     result["target_band_version"] = result["band7_version"]
     result["target_band_markdown"] = result["band7_markdown"]
     result["target_band"] = target
+    display_transcript = clean_report_text(generated.get("display_transcript") or "")
+    if display_transcript:
+        result["display_transcript"] = display_transcript
+        result["display_transcript_markdown"] = _spoken_markdown(display_transcript)
 
-    # Model audio placeholder (no real TTS in Django fallback)
-    result["model_audio"] = {"status": "fallback", "audio_url": None}
+    result["model_audio"] = volcengine_tts(
+        result["band7_version"],
+        role="model",
+        cache_key=f"{attempt.attempt_id}_{turn.turn_id}_band7",
+    )
 
     # Upgrade notes
-    result["upgrade_notes"] = build_upgrade_notes(transcript)
+    feedback_transcript = result.get("display_transcript") or transcript
+    result["upgrade_notes"] = build_upgrade_notes(feedback_transcript)
 
     # Build AI coaching
-    coaching = generated.get("ai_coaching") or ""
-    if not acceptable_coaching_markdown(coaching):
-        # Fallback coaching
-        coaching = build_ai_coaching_fallback(
-            turn.question,
-            transcript,
-            result["band7_version"],
-            part,
-            profile,
-        )
-    result["ai_coaching"] = clean_markdown_text(coaching)
+    if turn_needs_ai_coaching(turn):
+        coaching = generated.get("ai_coaching") or ""
+        if not acceptable_coaching_markdown(coaching):
+            # Fallback coaching
+            coaching = build_ai_coaching_fallback(
+                turn.question,
+                feedback_transcript,
+                result["band7_version"],
+                part,
+                profile,
+            )
+        result["ai_coaching"] = clean_markdown_text(coaching)
+    else:
+        result["ai_coaching"] = ""
 
     # Status fields
     result["feedback_generation_status"] = result.get("feedback_generation_status", "ready")
@@ -2637,28 +3534,8 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
     incomplete = [turn for turn in turns if _turn_status(turn) != "completed"]
     if incomplete:
         raise SpeakingError("Complete all speaking turns before generating the section report.")
-    transcript = "\n".join(
-        f"Q{index + 1}: {turn.question}\nA: {turn.transcript_cleaned or turn.transcript_raw}"
-        for index, turn in enumerate(turns)
-    )
-    if not transcript.strip():
-        raise SpeakingError("Missing transcript")
-
-    # Try Codex scoring first, fallback to heuristic on error
-    questions_text = "\n".join(f"Q{i+1}: {t.question}" for i, t in enumerate(turns))
     call_id = f"score_attempt_{attempt_id}"
     part = attempt.part or attempt.mode or ""
-
-    try:
-        score = score_with_codex(transcript, questions_text, part, call_id)
-        # Calibrate the Codex score for realistic assessment
-        score = calibrate_realistic_score(score, questions_text, transcript, part)
-    except Exception as exc:
-        # Use heuristic scoring as fallback
-        score = heuristic_score(transcript, str(exc), questions_text, part)
-        score["codex_error"] = str(exc)
-
-    criteria = _criteria_feedback(score, transcript)
 
     # Get user profile for personalization
     from apps.accounts.models import UserProfile
@@ -2668,17 +3545,36 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
         "english_name": profile_obj.english_name,
     }
 
-    # Build learning profile for personalized feedback
-    learning_profile = build_learning_profile(user, attempt)
+    try:
+        generated_turn_feedback = turn_feedback_batch_with_codex(
+            turns,
+            attempt,
+            target_band_label(attempt),
+            user_profile,
+            f"turn_feedback_batch_{attempt.attempt_id}",
+            prepared_corpus_for_turns(user, turns),
+        )
+    except Exception as exc:
+        generated_turn_feedback = {}
+        batch_feedback_error = str(exc)
+    else:
+        batch_feedback_error = ""
 
-    # Generate AI feedback for each turn using complete build_turn_feedback
+    # Apply AI feedback for each turn without additional per-turn Codex calls.
     for turn in turns:
         turn_transcript = turn.transcript_cleaned or turn.transcript_raw
         if not turn_transcript.strip():
             continue
 
-        # Use the complete build_turn_feedback logic
-        feedback = build_turn_feedback(turn, attempt, user_profile, allow_codex=True)
+        feedback = build_turn_feedback(
+            turn,
+            attempt,
+            user_profile,
+            allow_codex=False,
+            generated_feedback=generated_turn_feedback.get(turn.turn_id),
+        )
+        if batch_feedback_error and feedback.get("feedback_generation_backend") != "codex":
+            feedback["feedback_generation_error"] = batch_feedback_error
 
         # Update turn metadata
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
@@ -2695,6 +3591,25 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
         turn.metadata = metadata
         turn.save()
 
+    attempt.refresh_from_db()
+    turns = list(attempt.turns.all().order_by("sequence"))
+    scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
+    questions_text = "\n".join(f"Q{i + 1}: {turn.question}" for i, turn in enumerate(scoring_turns))
+    transcript = "\n".join(
+        f"Q{index + 1}: {turn.question}\nA: {turn_display_transcript(turn)}"
+        for index, turn in enumerate(scoring_turns)
+    )
+    if not transcript.strip():
+        raise SpeakingError("Missing transcript")
+
+    try:
+        score = score_with_codex(transcript, questions_text, part, call_id)
+        score = calibrate_realistic_score(score, questions_text, transcript, part)
+    except Exception as exc:
+        raise SpeakingError(f"AI scoring failed; no report was generated. Please retry scoring. Detail: {exc}") from exc
+
+    criteria = _criteria_feedback(score, transcript)
+
     attempt.status = SpeakingAttempt.Status.SCORED
     attempt.metadata = {
         **(attempt.metadata if isinstance(attempt.metadata, dict) else {}),
@@ -2706,7 +3621,10 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
 
     runtime = _runtime_attempt_payload(attempt)
 
-    # Build overall review with Codex or fallback
+    learning_profile = build_learning_profile(user, attempt)
+
+    # Overall review uses the old dedicated Codex prompt so the report keeps
+    # the long Chinese recap style instead of a short scorer-side summary.
     overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=True)
 
     # Build personalized coaching
@@ -2722,7 +3640,7 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
             "part_scores": {
                 attempt.part or attempt.mode: {
                     "part": attempt.part or attempt.mode,
-                    "turn_count": len(turns),
+                "turn_count": len(scoring_turns),
                     "band": score["overall_band"],
                     "fluency_coherence": score["fluency_coherence"],
                     "lexical_resource": score["lexical_resource"],
@@ -2749,8 +3667,8 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
     )
 
     observations = []
-    for turn in turns:
-        turn_text = turn.transcript_cleaned or turn.transcript_raw
+    for turn in scoring_turns:
+        turn_text = turn_display_transcript(turn)
         word_count = _word_count(turn_text)
         reasons = []
         if score["overall_band"] < 5.5:
@@ -2876,6 +3794,8 @@ def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, A
                 turns_payload[i]["target_band_version"] = metadata.get("target_band_version", "")
                 turns_payload[i]["target_band_markdown"] = metadata.get("target_band_markdown", "")
                 turns_payload[i]["target_band"] = metadata.get("target_band", "7")
+                turns_payload[i]["display_transcript"] = metadata.get("display_transcript", "")
+                turns_payload[i]["display_transcript_markdown"] = metadata.get("display_transcript_markdown", "")
                 turns_payload[i]["upgrade_notes"] = metadata.get("upgrade_notes", [])
                 turns_payload[i]["ai_coaching"] = metadata.get("ai_coaching", "")
                 turns_payload[i]["model_audio"] = metadata.get("model_audio", {})
@@ -2916,26 +3836,8 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     if incomplete:
         raise SpeakingError("Cannot regenerate: attempt has incomplete turns.")
 
-    transcript = "\n".join(
-        f"Q{index + 1}: {turn.question}\nA: {turn.transcript_cleaned or turn.transcript_raw}"
-        for index, turn in enumerate(turns)
-    )
-    if not transcript.strip():
-        raise SpeakingError("Missing transcript")
-
-    # Try Codex scoring first, fallback to heuristic on error
-    questions_text = "\n".join(f"Q{i+1}: {t.question}" for i, t in enumerate(turns))
     call_id = f"regenerate_{attempt_id}"
     part = attempt.part or attempt.mode or ""
-
-    try:
-        score = score_with_codex(transcript, questions_text, part, call_id)
-        score = calibrate_realistic_score(score, questions_text, transcript, part)
-    except Exception as exc:
-        score = heuristic_score(transcript, str(exc), questions_text, part)
-        score["codex_error"] = str(exc)
-
-    criteria = _criteria_feedback(score, transcript)
 
     # Get user profile for personalization
     from apps.accounts.models import UserProfile
@@ -2945,16 +3847,36 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
         "english_name": profile_obj.english_name,
     }
 
-    # Build learning profile for personalized feedback
-    learning_profile = build_learning_profile(user, attempt)
+    try:
+        generated_turn_feedback = turn_feedback_batch_with_codex(
+            turns,
+            attempt,
+            target_band_label(attempt),
+            user_profile,
+            f"turn_feedback_batch_regenerate_{attempt.attempt_id}",
+            prepared_corpus_for_turns(user, turns),
+        )
+    except Exception as exc:
+        generated_turn_feedback = {}
+        batch_feedback_error = str(exc)
+    else:
+        batch_feedback_error = ""
 
-    # Regenerate AI feedback for each turn
+    # Regenerate AI feedback for each turn without additional per-turn Codex calls.
     for turn in turns:
         turn_transcript = turn.transcript_cleaned or turn.transcript_raw
         if not turn_transcript.strip():
             continue
 
-        feedback = build_turn_feedback(turn, attempt, user_profile, allow_codex=True)
+        feedback = build_turn_feedback(
+            turn,
+            attempt,
+            user_profile,
+            allow_codex=False,
+            generated_feedback=generated_turn_feedback.get(turn.turn_id),
+        )
+        if batch_feedback_error and feedback.get("feedback_generation_backend") != "codex":
+            feedback["feedback_generation_error"] = batch_feedback_error
 
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
         metadata.update(feedback)
@@ -2969,13 +3891,34 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
         turn.metadata = metadata
         turn.save(update_fields=["metadata"])
 
+    attempt.refresh_from_db()
+    turns = list(attempt.turns.all().order_by("sequence"))
+    scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
+    questions_text = "\n".join(f"Q{i + 1}: {turn.question}" for i, turn in enumerate(scoring_turns))
+    transcript = "\n".join(
+        f"Q{index + 1}: {turn.question}\nA: {turn_display_transcript(turn)}"
+        for index, turn in enumerate(scoring_turns)
+    )
+    if not transcript.strip():
+        raise SpeakingError("Missing transcript")
+
+    try:
+        score = score_with_codex(transcript, questions_text, part, call_id)
+        score = calibrate_realistic_score(score, questions_text, transcript, part)
+    except Exception as exc:
+        raise SpeakingError(f"AI scoring failed; existing report was not replaced. Please retry regeneration. Detail: {exc}") from exc
+
+    criteria = _criteria_feedback(score, transcript)
+
     attempt.updated_at = timezone.now()
     attempt.save(update_fields=["updated_at"])
     attempt.refresh_from_db()
 
     runtime = _runtime_attempt_payload(attempt)
+    learning_profile = build_learning_profile(user, attempt)
 
-    # Build overall review with Codex or fallback
+    # Overall review uses the old dedicated Codex prompt so regenerated reports
+    # keep the long Chinese recap style.
     overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=True)
 
     # Build personalized coaching
@@ -2991,7 +3934,7 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
             "part_scores": {
                 attempt.part or attempt.mode: {
                     "part": attempt.part or attempt.mode,
-                    "turn_count": len(turns),
+                    "turn_count": len(scoring_turns),
                     "band": score["overall_band"],
                     "fluency_coherence": score["fluency_coherence"],
                     "lexical_resource": score["lexical_resource"],
@@ -3019,8 +3962,8 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     )
 
     # Update training observations
-    for turn in turns:
-        turn_text = turn.transcript_cleaned or turn.transcript_raw
+    for turn in scoring_turns:
+        turn_text = turn_display_transcript(turn)
         word_count = _word_count(turn_text)
         reasons = []
         if score["overall_band"] < 5.5:
@@ -3090,18 +4033,26 @@ def regenerate_turn_transcript(user, attempt_id: str, turn_id: str) -> dict[str,
     if not audio_path.exists():
         raise SpeakingError("重新转写失败：这题没有可用录音文件。")
 
-    transcript = turn.transcript_cleaned or turn.transcript_raw
-    if not transcript:
-        transcript = "Fallback transcript: audio file exists but no transcript captured."
+    server_asr = transcribe_turn_audio_with_server_asr(turn)
+    if not server_asr.get("ok") or not str(server_asr.get("transcript") or "").strip():
+        detail = str(server_asr.get("error") or server_asr.get("status") or "unknown error")
+        raise SpeakingError(f"重新转写失败：服务端 ASR 没有返回可用文本。{detail}")
+
+    transcript = str(server_asr["transcript"]).strip()
 
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    metadata["server_asr"] = {key: value for key, value in server_asr.items() if key != "transcript"}
     metadata["transcript_status"] = "captured"
-    metadata["transcript_source"] = "fallback_retranscribe"
+    metadata["transcript_source"] = str(server_asr.get("provider") or "volcengine_realtime_asr")
+    metadata["transcript_markdown"] = _spoken_markdown(_clean_report_text(transcript))
+    turn.transcript_raw = transcript
+    turn.transcript_cleaned = _clean_report_text(transcript)
+    turn.transcript_source = metadata["transcript_source"]
     feedback = build_turn_feedback(turn, attempt, {}, allow_codex=True)
     metadata.update(feedback)
     metadata["transcript_regenerated_at"] = timezone.now().isoformat()
     turn.metadata = metadata
-    turn.save(update_fields=["metadata"])
+    turn.save(update_fields=["transcript_raw", "transcript_cleaned", "transcript_source", "metadata"])
 
     attempt.updated_at = timezone.now()
     attempt.save(update_fields=["updated_at"])
@@ -3230,11 +4181,41 @@ def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
     current = turn.get("examiner_tts") or {}
     if current.get("audio_url") or current.get("status") not in (None, "pending"):
         return
+    examiner_text = str(turn.get("examiner_text") or turn.get("question") or "")
+    cache_key = f"{attempt_id}_{turn['id']}_examiner"
+    normalized_examiner_text = " ".join(examiner_text.strip().lower().split())
+    if normalized_examiner_text == "what is your full name?":
+        cache_key = "fixed_examiner_what_is_your_full_name"
+    elif normalized_examiner_text == "do you work or do you study?":
+        cache_key = "fixed_examiner_do_you_work_or_do_you_study"
+    elif normalized_examiner_text == " ".join(_cue_examiner_text().lower().split()):
+        cache_key = "fixed_examiner_p2_cue_card_instruction"
     turn["examiner_tts"] = volcengine_tts(
-        str(turn.get("examiner_text") or turn.get("question") or ""),
+        examiner_text,
         role="examiner",
-        cache_key=f"{attempt_id}_{turn['id']}_examiner",
+        cache_key=cache_key,
     )
+
+
+def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> None:
+    attempt = SpeakingAttempt.objects.filter(attempt_id=attempt_id).first()
+    if not attempt:
+        return
+    for db_turn in attempt.turns.filter(turn_id__in=turn_ids).order_by("sequence"):
+        metadata = db_turn.metadata if isinstance(db_turn.metadata, dict) else {}
+        current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
+        if current.get("audio_url") or current.get("status") not in (None, "pending"):
+            continue
+        turn_data = {
+            "id": db_turn.turn_id,
+            "question": db_turn.question,
+            "examiner_text": metadata.get("examiner_text") or db_turn.question,
+            "examiner_tts": current or {"provider": "volcengine", "status": "pending", "audio_url": None},
+        }
+        ensure_examiner_tts(attempt_id, turn_data)
+        metadata["examiner_tts"] = turn_data.get("examiner_tts")
+        db_turn.metadata = metadata
+        db_turn.save(update_fields=["metadata"])
 
 
 def latest_report(user) -> dict[str, Any]:

@@ -7,12 +7,20 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
+    <link rel="stylesheet" href="/styles.css?v=20260518-takeaway-book">
   </head>
   <body>
     <div class="shell">
       <!-- Global top bar for user and settings -->
       <div class="global-topbar">
+        <button id="topbarBackCorpusBtn" class="topbar-back-button hidden" type="button" title="返回练习" aria-label="返回练习">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6"></path>
+            <path d="M9 12h11"></path>
+          </svg>
+          <span>返回练习</span>
+        </button>
         <div class="global-topbar-spacer"></div>
         <div class="global-topbar-actions">
           <button class="avatar-settings-button" data-view="account" title="Account">
@@ -47,6 +55,11 @@
           </nav>
         </div>
         <div class="nav-bottom">
+          <nav class="nav-secondary" aria-label="Libraries">
+            <button class="nav-button" data-view="corpus">语料库</button>
+            <button class="nav-button" data-view="takeawayBook">生词本</button>
+          </nav>
+          <div class="nav-divider" aria-hidden="true"></div>
           <div class="font-tool" aria-label="Font style">
             <div class="font-tool-label">Typeface</div>
             <div class="font-options" role="group" aria-label="Typeface options">
@@ -78,12 +91,62 @@
         </div>
 
         <section id="practicePanel" class="panel practice-panel">
+          <section id="mockHomePanel" class="mock-home-panel">
+            <div class="mock-home-hero">
+              <div class="mock-home-copy">
+                <div class="section-label">IELTS Speaking Mock</div>
+                <h2>先分块练稳，再进入完整 Mock。</h2>
+                <p>完整 Mock 会按真实口语流程串起 Part 1、Part 2 和 Part 3。建议先从左侧 Part 1 / Part 2 / Part 3 分块练习，把短答、串题素材和追问节奏分别打磨好。</p>
+              </div>
+              <button id="startFullMockBtn" class="mock-home-start" type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"></path>
+                </svg>
+                <span>开始完整 Mock</span>
+              </button>
+            </div>
+
+            <div class="mock-home-grid" aria-label="Recommended practice path">
+              <article class="mock-home-card">
+                <span>01</span>
+                <h3>Part 1 分块练习</h3>
+                <p>先稳定短问题的直接回答、原因和具体细节。</p>
+              </article>
+              <article class="mock-home-card">
+                <span>02</span>
+                <h3>Part 2 串题素材</h3>
+                <p>准备人物、地点、事件、物品素材，再链接到本次回答。</p>
+              </article>
+              <article class="mock-home-card">
+                <span>03</span>
+                <h3>Part 3 追问讨论</h3>
+                <p>练习从 P2 内容自然延伸到观点、原因和对比。</p>
+              </article>
+            </div>
+          </section>
+
           <div class="exam-status">
-            <div>
+            <div id="examStatusText">
               <strong id="progressTrack">Choose a mode to begin.</strong>
               <span id="phaseLabel">Ready</span>
             </div>
+            <section id="p2CorpusPrepPanel" class="p2-corpus-prep hidden"></section>
             <div class="exam-actions">
+              <button id="openP1CorpusBtn" class="p1-corpus-entry hidden" type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                <span>我的 P1语料库</span>
+              </button>
+              <button id="openP2CorpusBtn" class="corpus-entry-button p2-corpus-entry hidden" type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M9 18h6"></path>
+                  <path d="M10 22h4"></path>
+                  <path d="M12 2a7 7 0 0 0-4 12.7c.7.5 1 1.1 1 1.8V17h6v-.5c0-.7.3-1.3 1-1.8A7 7 0 0 0 12 2z"></path>
+                </svg>
+                <span>我准备的P2串题素材库</span>
+              </button>
               <div class="font-options mobile-font-options" role="group" aria-label="Typeface options">
                 <button type="button" class="font-option active" data-font-style="default" title="Helpful & efficient">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
@@ -97,9 +160,9 @@
               </div>
             </div>
           </div>
-          <div class="phase-meter"><span id="phaseMeter"></span></div>
 
           <article id="cueTop" class="cue-top hidden"></article>
+          <div class="phase-meter"><span id="phaseMeter"></span></div>
 
           <div id="p3TopicPanel" class="p3-topic-panel hidden">
             <div class="p3-topic-head">
@@ -162,6 +225,130 @@
           <div id="summaryOverlay" class="summary-panel-overlay hidden"></div>
         </section>
 
+        <section id="p1CorpusPanel" class="p1-corpus-panel hidden" aria-label="我的 P1语料库">
+          <div class="p1-corpus-shell">
+            <header class="p1-corpus-head">
+              <div>
+                <h2>我的 P1语料库</h2>
+              </div>
+              <span id="p1CorpusStats">Loading...</span>
+            </header>
+            <div id="p1CorpusTopics" class="p1-corpus-topics"></div>
+          </div>
+        </section>
+
+        <div id="p1CorpusDialog" class="p1-corpus-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="p1CorpusDialogTitle">
+          <div class="p1-corpus-dialog-card" data-corpus-dialog-card>
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="p1CorpusDialogTopic"></span>
+                <h3 id="p1CorpusDialogTitle">编辑语料</h3>
+              </div>
+              <button id="saveP1CorpusBtn" type="button">保存语料</button>
+            </header>
+            <label class="p1-corpus-label" for="p1CorpusText">我的语料</label>
+            <textarea id="p1CorpusText" class="p1-corpus-textarea" spellcheck="true"></textarea>
+            <div class="p1-corpus-ai-box">
+              <strong>7分回答参考</strong>
+              <div id="p1CorpusAiAnswer"></div>
+            </div>
+            <div class="p1-corpus-dialog-actions">
+              <span id="p1CorpusSaveStatus"></span>
+            </div>
+          </div>
+        </div>
+
+        <section id="corpusPanel" class="panel corpus-home-panel hidden" aria-label="语料库">
+          <div class="corpus-home-shell">
+            <header class="corpus-home-head">
+              <div>
+                <h2>语料库</h2>
+                <p>集中管理 P1 短答、P2 串题素材和日常摘录的表达。</p>
+              </div>
+            </header>
+            <div class="corpus-home-grid">
+              <button type="button" class="corpus-home-card" data-corpus-home-target="p1Corpus">
+                <span>P1</span>
+                <strong>我的 P1语料库</strong>
+                <small>按题组整理每道短问题准备的语料。</small>
+              </button>
+              <button type="button" class="corpus-home-card" data-corpus-home-target="p2Corpus">
+                <span>P2</span>
+                <strong>我准备的P2串题素材库</strong>
+                <small>人物、地点、事件、物品和特殊题素材。</small>
+              </button>
+              <button type="button" class="corpus-home-card language-card" data-corpus-home-target="takeawayBook">
+                <span>LT</span>
+                <strong>生词本</strong>
+                <small>复习平时摘录的单词和短语，需要自测时再隐藏中文。</small>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section id="takeawayBookPanel" class="language-takeaway-panel hidden" aria-label="生词本">
+          <div class="language-book-shell">
+            <header class="language-book-head">
+              <div>
+                <h2>生词本</h2>
+                <p>点击卡片播放英文；需要自测时可以隐藏中文。</p>
+              </div>
+              <div class="language-book-actions">
+                <span id="languageTakeawayStats">Loading...</span>
+                <button id="languageTakeawayHideToggle" class="ghost" type="button" aria-pressed="false">隐藏中文</button>
+              </div>
+            </header>
+            <div id="languageTakeawayList" class="language-takeaway-list"></div>
+          </div>
+        </section>
+
+        <section id="p2CorpusPanel" class="p2-corpus-panel hidden" aria-label="我准备的P2串题素材库">
+          <div class="p2-corpus-shell">
+            <header class="p2-corpus-head">
+              <div>
+                <h2>我准备的P2串题素材库</h2>
+              </div>
+              <span id="p2CorpusStats">Loading...</span>
+            </header>
+            <div id="p2CorpusTopics" class="p2-corpus-topics"></div>
+          </div>
+        </section>
+
+        <div id="p2CorpusDialog" class="p1-corpus-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="p2CorpusDialogTitle">
+          <div class="p1-corpus-dialog-card p2-corpus-dialog-card" data-corpus-dialog-card>
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="p2CorpusDialogCategory"></span>
+                <h3 id="p2CorpusDialogTitle">编辑 P2 素材</h3>
+              </div>
+              <button id="saveP2CorpusBtn" type="button">保存素材</button>
+            </header>
+            <div class="p2-corpus-form-grid">
+              <label>
+                <span class="p1-corpus-label">分类</span>
+                <select id="p2CorpusCategory">
+                  <option value="person">人物</option>
+                  <option value="place">地点</option>
+                  <option value="event">事件</option>
+                  <option value="object">物品</option>
+                  <option value="special">特殊题目素材</option>
+                </select>
+              </label>
+              <label>
+                <span class="p1-corpus-label">标题</span>
+                <input id="p2CorpusTitle" type="text" placeholder="例如：热心的大学老师 / 一次失败后重来的项目">
+              </label>
+            </div>
+            <label class="p1-corpus-label" for="p2CorpusText">串题素材</label>
+            <textarea id="p2CorpusText" class="p1-corpus-textarea" spellcheck="true"></textarea>
+            <label class="p1-corpus-label" for="p2CorpusLinkedQuestion">特殊题目对应题干（可选）</label>
+            <textarea id="p2CorpusLinkedQuestion" class="p1-corpus-textarea p2-linked-question" spellcheck="true"></textarea>
+            <div class="p1-corpus-dialog-actions">
+              <span id="p2CorpusSaveStatus"></span>
+            </div>
+          </div>
+        </div>
+
         <section id="historyPanel" class="panel hidden">
           <div id="historyList" class="history-list">No attempts yet.</div>
           <article id="detailPanel" class="detail-panel">
@@ -169,6 +356,26 @@
             <p class="muted">Select a history item to review the full report.</p>
           </article>
         </section>
+
+        <button id="languageTakeawayTrigger" class="language-takeaway-trigger hidden" type="button" title="Language Takeaway" aria-label="Language Takeaway">译</button>
+        <div id="languageTakeawayPopup" class="language-takeaway-popup hidden" role="dialog" aria-label="Language Takeaway">
+          <header id="languageTakeawayPopupHandle">
+            <strong>Language Takeaway</strong>
+            <button id="languageTakeawayCloseBtn" type="button" aria-label="关闭">×</button>
+          </header>
+          <label>
+            <span>原文</span>
+            <textarea id="languageTakeawaySource" spellcheck="true"></textarea>
+          </label>
+          <label>
+            <span>中文</span>
+            <textarea id="languageTakeawayChinese" spellcheck="true"></textarea>
+          </label>
+          <div class="language-takeaway-actions">
+            <span id="languageTakeawayStatus"></span>
+            <button id="languageTakeawaySaveBtn" type="button">加入生词本</button>
+          </div>
+        </div>
 
         <section id="writingPanel" class="panel writing-panel hidden">
           <div class="writing-shell">
@@ -468,6 +675,7 @@
         </div>
       </main>
     </div>
-    <script src="/app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
+    <script src="/app.js?v=20260518-takeaway-book"></script>
   </body>
 </html>

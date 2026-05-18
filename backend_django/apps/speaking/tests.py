@@ -1,11 +1,12 @@
 import json
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.conf import settings
 
-from apps.speaking.models import SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
+from apps.speaking.models import LanguageTakeawayEntry, P1CorpusEntry, P2CorpusEntry, SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
 
 
 class AttemptStartApiTests(TestCase):
@@ -46,6 +47,21 @@ class AttemptStartApiTests(TestCase):
         self.assertIn("cue_card", payload)
         self.assertTrue(payload["cue_card"] is None or isinstance(payload["cue_card"], dict))
 
+    def test_start_p2_samples_random_cue(self):
+        selected = {
+            "title": "Describe a custom random cue",
+            "bullets": ["What it is"],
+            "rounding": "And explain why it matters.",
+            "p3_theme": "custom_theme",
+        }
+        with patch("apps.speaking.services.random.choice", return_value=selected) as choice:
+            response = self.client.post("/api/attempts/start", data={"mode": "p2"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        choice.assert_called_once()
+        self.assertEqual(payload["cue_card"]["title"], selected["title"])
+        self.assertEqual(payload["title"], selected["title"])
+
     def test_start_creates_p3_attempt(self):
         response = self.client.post(
             "/api/attempts/start",
@@ -72,6 +88,21 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(countable_p1, 10)
         self.assertEqual(len(p2_turns), 1)
         self.assertEqual(payload["p3_generation_status"], "pending_after_p2")
+
+    def test_start_mock_samples_random_p2_cue(self):
+        selected = {
+            "title": "Describe a random mock cue",
+            "bullets": ["What happened"],
+            "rounding": "And explain how you felt.",
+            "p3_theme": "mock_theme",
+        }
+        with patch("apps.speaking.services.random.choice", return_value=selected) as choice:
+            response = self.client.post("/api/attempts/start", data={"mode": "mock"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        choice.assert_called_once()
+        self.assertEqual(payload["cue_card"]["title"], selected["title"])
+        self.assertEqual(payload["p3_theme"], selected["p3_theme"])
 
     def test_start_uses_candidate_names(self):
         response = self.client.post(
@@ -302,6 +333,169 @@ class QuestionBankApiTests(TestCase):
             self.assertIsInstance(payload["part1"], list)
         if "part2" in payload:
             self.assertIsInstance(payload["part2"], dict)
+
+    def test_p1_corpus_library_and_save(self):
+        library = self.client.get("/api/p1-corpus")
+        self.assertEqual(library.status_code, 200)
+        payload = library.json()
+        self.assertIn("topics", payload)
+        self.assertGreater(payload["question_count"], 0)
+
+        first_question = payload["topics"][0]["questions"][0]
+        response = self.client.post(
+            "/api/p1-corpus",
+            data={
+                "question_id": first_question["question_id"],
+                "topic": first_question["topic"],
+                "question": first_question["question"],
+                "corpus_text": "My prepared answer.",
+                "last_ai_answer": "My Band 7 answer.",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()
+        self.assertEqual(saved["corpus_text"], "My prepared answer.")
+        self.assertTrue(P1CorpusEntry.objects.filter(user=self.user, question_id=first_question["question_id"]).exists())
+
+    def test_p1_corpus_library_does_not_append_dynamic_follow_ups(self):
+        library = self.client.get("/api/p1-corpus")
+        self.assertEqual(library.status_code, 200)
+        before = library.json()
+        intro_before = next(topic for topic in before["topics"] if topic["topic"] == "intro")
+        parent_question = next(item for item in intro_before["questions"] if item["question"] == "Do you work or do you study?")
+
+        response = self.client.post(
+            "/api/p1-corpus",
+            data={
+                "question_id": parent_question["question_id"],
+                "topic": "intro",
+                "question": parent_question["question"],
+                "corpus_text": "I am a university student and I am doing an internship.",
+                "last_ai_answer": "How does your internship connect with what you study?",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        after = self.client.get("/api/p1-corpus").json()
+        intro_after = next(topic for topic in after["topics"] if topic["topic"] == "intro")
+        self.assertEqual(len(intro_after["questions"]), len(intro_before["questions"]))
+        self.assertNotIn(
+            "How does your internship connect with what you study?",
+            [item["question"] for item in intro_after["questions"]],
+        )
+
+    def test_p2_corpus_library_and_save(self):
+        library = self.client.get("/api/p2-corpus")
+        self.assertEqual(library.status_code, 200)
+        payload = library.json()
+        self.assertEqual(payload["category_count"], 5)
+        self.assertIn("categories", payload)
+
+        response = self.client.post(
+            "/api/p2-corpus",
+            data={
+                "category": "person",
+                "title": "A helpful teacher",
+                "material_text": "This person helped me with a coding project.",
+                "linked_question": "",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()
+        self.assertEqual(saved["category"], "person")
+        self.assertEqual(saved["title"], "A helpful teacher")
+        self.assertTrue(P2CorpusEntry.objects.filter(user=self.user, entry_id=saved["entry_id"]).exists())
+
+    def test_language_takeaway_save_and_list(self):
+        response = self.client.post(
+            "/api/language-takeaways",
+            data={
+                "source_text": "strike a balance",
+                "chinese_text": "取得平衡",
+                "context_label": "P1",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()
+        self.assertEqual(saved["source_text"], "strike a balance")
+        self.assertEqual(saved["chinese_text"], "取得平衡")
+        self.assertTrue(LanguageTakeawayEntry.objects.filter(user=self.user, entry_id=saved["entry_id"]).exists())
+
+        library = self.client.get("/api/language-takeaways")
+        self.assertEqual(library.status_code, 200)
+        payload = library.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["items"][0]["source_text"], "strike a balance")
+
+    def test_language_takeaway_translate_without_token_uses_local_offline_dictionary(self):
+        with (
+            patch.dict("os.environ", {"CAIYUN_TOKEN": "", "CAIYUN_TRANSLATE_TOKEN": ""}, clear=False),
+            patch("urllib.request.urlopen", side_effect=OSError("offline")),
+        ):
+            response = self.client.post(
+                "/api/language-takeaways/translate",
+                data={"text": "repetitive work"},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["source_text"], "repetitive work")
+        self.assertEqual(payload["chinese_text"], "重复的；工作")
+        self.assertEqual(payload["provider"], "local")
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(payload["caiyun_status"], "unavailable")
+
+    def test_language_takeaway_translate_chinese_text_locally(self):
+        with (
+            patch.dict("os.environ", {"CAIYUN_TOKEN": "", "CAIYUN_TRANSLATE_TOKEN": ""}, clear=False),
+            patch("urllib.request.urlopen", side_effect=OSError("offline")),
+        ):
+            response = self.client.post(
+                "/api/language-takeaways/translate",
+                data={"text": "直接给一个答案"},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["chinese_text"], "直接给一个答案")
+        self.assertEqual(payload["provider"], "local")
+        self.assertEqual(payload["status"], "ready")
+
+    def test_language_takeaway_translate_uses_caiyun_compat_protocol_without_config(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return json.dumps({"target": "取得平衡"}).encode("utf-8")
+
+        with (
+            patch.dict("os.environ", {"CAIYUN_TOKEN": "", "CAIYUN_TRANSLATE_TOKEN": ""}, clear=False),
+            patch("urllib.request.urlopen", return_value=FakeResponse()) as urlopen,
+        ):
+            response = self.client.post(
+                "/api/language-takeaways/translate",
+                data={"text": "strike a balance"},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["source_text"], "strike a balance")
+        self.assertEqual(payload["chinese_text"], "取得平衡")
+        self.assertEqual(payload["provider"], "caiyun")
+        self.assertEqual(payload["status"], "ready")
+        request = urlopen.call_args.args[0]
+        request_payload = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(request_payload["source"], "strike a balance")
+        self.assertEqual(request_payload["trans_type"], "auto2zh")
+        self.assertEqual(request_payload["media"], "text")
 
 
 class TrainingApiTests(TestCase):
@@ -634,6 +828,40 @@ class SpeakingRuntimeApiTests(TestCase):
         turn = SpeakingTurn.objects.get(turn_id="t1")
         self.assertEqual(turn.metadata["status"], "completed")
         self.assertEqual(turn.transcript_source, "browser_dictation")
+        self.assertEqual(turn.metadata["server_asr"]["status"], "missing_audio")
+
+    def test_turn_complete_prefers_server_asr_when_available(self):
+        _attempt, turn1, _turn2 = self.create_attempt()
+        turn1.audio_path = "audio/runtime-asr.webm"
+        turn1.save(update_fields=["audio_path"])
+        with patch(
+            "apps.speaking.services.transcribe_turn_audio_with_server_asr",
+            return_value={
+                "ok": True,
+                "status": "ready",
+                "provider": "volcengine_realtime_asr",
+                "transcript": "My full name is Sam from server ASR.",
+            },
+        ):
+            response = self.complete_turn(transcript="bad browser text")
+        self.assertEqual(response.status_code, 200)
+        turn1.refresh_from_db()
+        self.assertEqual(turn1.transcript_raw, "My full name is Sam from server ASR.")
+        self.assertEqual(turn1.transcript_source, "volcengine_realtime_asr")
+        self.assertEqual(turn1.metadata["browser_transcript_raw"], "bad browser text")
+
+    def test_turn_complete_falls_back_to_browser_transcript_when_server_asr_fails(self):
+        self.create_attempt()
+        with patch(
+            "apps.speaking.services.transcribe_turn_audio_with_server_asr",
+            return_value={"ok": False, "status": "error", "transcript": "", "error": "service unavailable"},
+        ):
+            response = self.complete_turn(transcript="Browser transcript stays.")
+        self.assertEqual(response.status_code, 200)
+        turn = SpeakingTurn.objects.get(turn_id="t1")
+        self.assertEqual(turn.transcript_raw, "Browser transcript stays.")
+        self.assertEqual(turn.transcript_source, "browser_dictation")
+        self.assertEqual(turn.metadata["server_asr"]["error"], "service unavailable")
 
     def test_turn_complete_final_turn_marks_ready_to_score(self):
         attempt, turn1, turn2 = self.create_attempt()
@@ -702,12 +930,38 @@ class SpeakingRuntimeApiTests(TestCase):
         attempt.status = SpeakingAttempt.Status.READY_TO_SCORE
         attempt.save()
 
-        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
+        score_payload = {
+            "fluency_coherence": 6.0,
+            "lexical_resource": 6.0,
+            "grammatical_range": 6.0,
+            "feedback": "Clear and relevant answers with enough support.",
+        }
+        feedback_payload = {
+            "band7_version": "My full name is Sam. I study English because I want to communicate clearly.",
+            "ai_coaching": "回答方向清楚，可以再加一个具体例子。\n\n语法错误纠正：无",
+        }
+        batch_feedback_payload = {
+            "turns": [
+                {
+                    "turn_id": turn2.turn_id,
+                    "display_transcript": turn2.transcript_cleaned,
+                    **feedback_payload,
+                }
+            ]
+        }
+        tts_payload = {"provider": "volcengine", "status": "ready", "audio_url": "/api/tts-audio/model/test.mp3"}
+        with patch("apps.speaking.services.run_codex") as run_codex, patch("apps.speaking.services.volcengine_tts", return_value=tts_payload):
+            run_codex.side_effect = [
+                (json.dumps(batch_feedback_payload), {"input_tokens": 100}),
+                (json.dumps(score_payload), {"input_tokens": 100}),
+                ("整体回答清楚，继续补充具体例子。", {"input_tokens": 100}),
+            ]
+            response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], SpeakingAttempt.Status.SCORED)
-        # Backend can be "codex" (from score_with_codex), "heuristic" (from heuristic_score), or "fallback"
-        self.assertIn(payload["ielts_score"]["backend"], ["codex", "heuristic", "fallback"])
+        self.assertEqual(payload["ielts_score"]["backend"], "codex")
+        self.assertTrue(all(turn["model_audio"]["audio_url"] for turn in payload["turns"]))
         self.assertTrue(SpeakingReport.objects.filter(attempt=attempt).exists())
         self.assertEqual(SpeakingTrainingObservation.objects.filter(attempt=attempt).count(), 2)
 
@@ -795,11 +1049,22 @@ class RegenerateApiTests(TestCase):
         audio_dir.mkdir(parents=True, exist_ok=True)
         audio_path = audio_dir / "test.webm"
         audio_path.write_bytes(b"fake audio content")
-        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/{turn.turn_id}/transcript/regenerate")
+        with patch(
+            "apps.speaking.services.transcribe_turn_audio_with_server_asr",
+            return_value={
+                "ok": True,
+                "status": "ready",
+                "provider": "volcengine_realtime_asr",
+                "transcript": "Regenerated transcript from server ASR.",
+            },
+        ):
+            response = self.client.post(f"/api/attempts/{attempt.attempt_id}/turns/{turn.turn_id}/transcript/regenerate")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload.get("ok"))
         self.assertIn("turn", payload)
+        turn.refresh_from_db()
+        self.assertEqual(turn.transcript_raw, "Regenerated transcript from server ASR.")
 
     def test_transcript_regenerate_no_audio_returns_400(self):
         attempt = SpeakingAttempt.objects.create(
@@ -955,7 +1220,10 @@ class CodexValidationTests(TestCase):
             mock_run.return_value = ('{"feedback": "test"}', {"input_tokens": 100})
             with self.assertRaises(RuntimeError) as ctx:
                 score_with_codex("test transcript", "test question", "p1", "test_call")
-            self.assertIn("missing or invalid fields", str(ctx.exception))
+            self.assertTrue(
+                "missing or invalid fields" in str(ctx.exception)
+                or "required keys" in str(ctx.exception)
+            )
 
     def test_score_with_codex_rejects_zero_scores(self):
         """score_with_codex should reject outputs with all-zero scores."""
@@ -1000,11 +1268,12 @@ class CodexValidationTests(TestCase):
                 with self.assertRaises(RuntimeError) as ctx:
                     run_codex("test prompt", "test_call")
                 self.assertIn("0 input tokens", str(ctx.exception))
+                self.assertEqual(mock_run.call_count, 2)
 
-    def test_heuristic_score_used_on_codex_failure(self):
-        """When codex fails, score_attempt should fall back to heuristic scoring."""
+    def test_score_attempt_does_not_save_report_on_codex_failure(self):
+        """When Codex fails, score_attempt should not create a heuristic report."""
         from unittest.mock import patch
-        from apps.speaking.services import score_attempt
+        from apps.speaking.services import SpeakingError, score_attempt
         from apps.accounts.models import CustomUser
 
         user = CustomUser.objects.create_user(username="test-heuristic-user", password="test-pass")
@@ -1027,17 +1296,14 @@ class CodexValidationTests(TestCase):
         )
 
         with patch("apps.speaking.services.run_codex") as mock_run:
-            # Simulate codex returning invalid output
             mock_run.side_effect = RuntimeError("codex returned 0 input tokens")
-            result = score_attempt(user, "test-heuristic-attempt")
+            with self.assertRaises(SpeakingError) as ctx:
+                score_attempt(user, "test-heuristic-attempt")
 
-            # Should fall back to heuristic scoring
-            self.assertEqual(result["status"], "scored")
-            self.assertIn("ielts_score", result)
-            # Backend should be heuristic, not codex
-            self.assertEqual(result["ielts_score"]["backend"], "heuristic")
-            # Should have recorded the error
-            self.assertIn("codex_error", result["ielts_score"])
+        self.assertIn("AI scoring failed", str(ctx.exception))
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
+        self.assertFalse(SpeakingReport.objects.filter(attempt=attempt).exists())
 
 
 class TurnFeedbackValidationTests(TestCase):
@@ -1049,9 +1315,26 @@ class TurnFeedbackValidationTests(TestCase):
         from apps.speaking.services import turn_feedback_with_codex
 
         with patch("apps.speaking.services.run_codex") as mock_run:
-            mock_run.return_value = ('{"ai_coaching": "- some coaching"}', {"input_tokens": 100})
-            with patch("apps.speaking.services.extract_json_object") as mock_extract:
-                mock_extract.return_value = {"ai_coaching": "- some coaching"}
+            mock_run.return_value = ('{"display_transcript": "My name is John.", "ai_coaching": "- some coaching"}', {"input_tokens": 100})
+            with self.assertRaises(RuntimeError) as ctx:
+                turn_feedback_with_codex(
+                    "What is your name?",
+                    "My name is John.",
+                    "p1",
+                    "7",
+                    None,
+                    "test_call",
+                )
+            self.assertIn("required keys", str(ctx.exception))
+
+    def test_turn_feedback_rejects_missing_coaching(self):
+        """turn_feedback_with_codex should reject output missing ai_coaching."""
+        from unittest.mock import patch
+        from apps.speaking.services import turn_feedback_with_codex
+
+        with patch("apps.speaking.services.run_codex") as mock_run:
+            mock_run.return_value = ('{"display_transcript": "My name is John.", "band7_version": "My name is John."}', {"input_tokens": 100})
+            with patch("apps.speaking.services.clean_band7_output", return_value="My name is John."):
                 with self.assertRaises(RuntimeError) as ctx:
                     turn_feedback_with_codex(
                         "What is your name?",
@@ -1061,28 +1344,7 @@ class TurnFeedbackValidationTests(TestCase):
                         None,
                         "test_call",
                     )
-                self.assertIn("missing band7_version", str(ctx.exception))
-
-    def test_turn_feedback_rejects_missing_coaching(self):
-        """turn_feedback_with_codex should reject output missing ai_coaching."""
-        from unittest.mock import patch
-        from apps.speaking.services import turn_feedback_with_codex
-
-        with patch("apps.speaking.services.run_codex") as mock_run:
-            mock_run.return_value = ('{"band7_version": "My name is John."}', {"input_tokens": 100})
-            with patch("apps.speaking.services.extract_json_object") as mock_extract:
-                mock_extract.return_value = {"band7_version": "My name is John."}
-                with patch("apps.speaking.services.clean_band7_output", return_value="My name is John."):
-                    with self.assertRaises(RuntimeError) as ctx:
-                        turn_feedback_with_codex(
-                            "What is your name?",
-                            "My name is John.",
-                            "p1",
-                            "7",
-                            None,
-                            "test_call",
-                        )
-                    self.assertIn("missing ai_coaching", str(ctx.exception))
+                self.assertIn("required keys", str(ctx.exception))
 
     def test_turn_feedback_accepts_valid_output(self):
         """turn_feedback_with_codex should accept valid band7 and coaching."""
@@ -1090,25 +1352,26 @@ class TurnFeedbackValidationTests(TestCase):
         from apps.speaking.services import turn_feedback_with_codex
 
         valid_output = {
+            "display_transcript": "My name is John.",
             "band7_version": "My name is John and I am a student at the local university.",
             "ai_coaching": "- Your answer is clear and direct.\n- 语法错误纠正：无",
         }
 
         with patch("apps.speaking.services.run_codex") as mock_run:
             mock_run.return_value = (json.dumps(valid_output), {"input_tokens": 100})
-            with patch("apps.speaking.services.extract_json_object", return_value=valid_output):
-                with patch("apps.speaking.services.clean_band7_output", return_value=valid_output["band7_version"]):
-                    with patch("apps.speaking.services.clean_markdown_text", return_value=valid_output["ai_coaching"]):
-                        result = turn_feedback_with_codex(
-                            "What is your name?",
-                            "My name is John.",
-                            "p1",
-                            "7",
-                            None,
-                            "test_call",
-                        )
-                        self.assertIn("band7_version", result)
-                        self.assertIn("ai_coaching", result)
+            with patch("apps.speaking.services.clean_band7_output", return_value=valid_output["band7_version"]):
+                with patch("apps.speaking.services.clean_markdown_text", return_value=valid_output["ai_coaching"]):
+                    result = turn_feedback_with_codex(
+                        "What is your name?",
+                        "My name is John.",
+                        "p1",
+                        "7",
+                        None,
+                        "test_call",
+                    )
+                    self.assertIn("display_transcript", result)
+                    self.assertIn("band7_version", result)
+                    self.assertIn("ai_coaching", result)
 
     def test_complete_turn_sets_pending_not_fallback(self):
         """complete_turn should set feedback_generation_status to pending, not fallback."""
@@ -1190,8 +1453,7 @@ class TurnFeedbackValidationTests(TestCase):
             self.assertTrue(result["ok"])
             # Should have real scores now
             self.assertGreater(result["attempt"]["ielts_score"]["overall_band"], 0)
-            # Should have used codex or heuristic, not the old broken score
-            self.assertIn(result["attempt"]["ielts_score"]["backend"], ["codex", "heuristic"])
+            self.assertEqual(result["attempt"]["ielts_score"]["backend"], "codex")
 
     def test_coaching_must_include_grammar_correction(self):
         """AI coaching must include a grammar correction section."""
@@ -1237,6 +1499,54 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertIn("university student", result)
         self.assertIn("internship", result)
         self.assertNotIn("I work as a software engineer", result)
+
+    def test_p1_identity_report_rules(self):
+        """Name intro is hidden from scoring, while work/study keeps Band 7 but no coaching."""
+        from apps.speaking.services import build_turn_feedback, is_p1_name_intro_turn, turn_counts_for_scoring, turn_needs_ai_coaching
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="test-p1-identity-rules", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(user=user, attempt_id="test-p1-identity-rules", mode="p1", part="p1")
+        name_turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="What is your full name?",
+            transcript_raw="My full name is Li Hua, but you can call me Jasper.",
+            counts_toward_total=False,
+            metadata={"status": "completed", "prompt": {"flow": "intro", "role": "name"}},
+        )
+        work_turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=1,
+            part="p1",
+            question="Do you work or do you study?",
+            transcript_raw="I'm a university student majoring in software engineering, and I'm also doing an internship.",
+            metadata={"status": "completed", "prompt": {"flow": "intro", "role": "work_study"}},
+        )
+
+        self.assertTrue(is_p1_name_intro_turn(name_turn))
+        self.assertFalse(turn_counts_for_scoring(name_turn))
+        self.assertFalse(turn_needs_ai_coaching(name_turn))
+        self.assertTrue(turn_counts_for_scoring(work_turn))
+        self.assertFalse(turn_needs_ai_coaching(work_turn))
+
+        feedback = build_turn_feedback(
+            work_turn,
+            attempt,
+            allow_codex=False,
+            generated_feedback={
+                "display_transcript": "I'm a university student majoring in software engineering, and I'm also doing an internship.",
+                "band7_version": "I'm a university student majoring in software engineering, and I'm also doing an internship at a tech company at the moment.",
+                "ai_coaching": "",
+            },
+        )
+        self.assertEqual(feedback["ai_coaching"], "")
+        self.assertIn("university student", feedback["display_transcript"])
 
     def test_p1_work_study_followup_uses_codex_when_available(self):
         """Completing work/study identity turn should insert an AI-generated follow-up."""
