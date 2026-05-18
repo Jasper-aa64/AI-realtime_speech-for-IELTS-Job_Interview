@@ -2,8 +2,9 @@
   "season": "2026-may-august",
   "part": 1,
   "status": "new",
-  "source": "compiled_from_ieltsjp_readingielts_xhd_public_lists",
-  "source_url": "https://ielts.jp/articles/speaking/speaking-topics-2026-may-august/",
+  "region": "china_mainland",
+  "source": "compiled_from_mainland_china_public_speaking_season_lists",
+  "source_url": "https://www.xhd.cn/ielts/kouyu/",
   "topic": "2026_may_august_new",
   "questions": [
     {"topic": "collecting_things", "question": "Did you collect anything when you were a child?"},

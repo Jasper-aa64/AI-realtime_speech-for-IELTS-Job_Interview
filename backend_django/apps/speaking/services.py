@@ -1049,6 +1049,7 @@ class QuestionBank:
             file_meta = {
                 "season": str(payload.get("season") or ""),
                 "status": str(payload.get("status") or ""),
+                "region": str(payload.get("region") or ""),
                 "source": str(payload.get("source") or ""),
                 "source_url": str(payload.get("source_url") or ""),
             }
@@ -1061,7 +1062,7 @@ class QuestionBank:
                 elif isinstance(item, dict):
                     question = str(item.get("question") or item.get("text") or "").strip()
                     topic = str(item.get("topic") or topic)
-                    for key in ("season", "status", "source", "source_url"):
+                    for key in ("season", "status", "region", "source", "source_url"):
                         if item.get(key):
                             meta[key] = str(item[key])
                 if question:
@@ -1088,6 +1089,7 @@ class QuestionBank:
             file_meta = {
                 "season": str(payload.get("season") or ""),
                 "status": str(payload.get("status") or ""),
+                "region": str(payload.get("region") or ""),
                 "source": str(payload.get("source") or ""),
                 "source_url": str(payload.get("source_url") or ""),
             }
@@ -1124,6 +1126,7 @@ class QuestionBank:
             "part1_status_counts": p1_status_counts,
             "part2_status_counts": p2_status_counts,
             "seasons": sorted({str(item.get("season") or "") for item in [*self.p1, *self.p2] if item.get("season")}),
+            "regions": sorted({str(item.get("region") or "") for item in [*self.p1, *self.p2] if item.get("region")}),
         }
 
     def sample(self, p1_count: int = 5) -> dict[str, Any]:
@@ -1192,7 +1195,7 @@ def p1_corpus_library(user) -> dict[str, Any]:
                 "corpus_text": entry.corpus_text if entry else "",
                 "last_ai_answer": entry.last_ai_answer if entry else "",
                 "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M") if entry else "",
-                **{key: meta[key] for key in ("season", "status", "source", "source_url") if meta.get(key)},
+                **{key: meta[key] for key in ("season", "status", "region", "source", "source_url") if meta.get(key)},
             }
         )
 
