@@ -3245,6 +3245,19 @@ function showLanguageTakeawayTrigger(selectionInfo) {
   trigger.classList.remove("hidden");
 }
 
+function placeLanguageTakeawayPopup(left, top) {
+  const popup = $("languageTakeawayPopup");
+  if (!popup) return;
+  const margin = 12;
+  const rect = popup.getBoundingClientRect();
+  const width = rect.width || 360;
+  const height = rect.height || 360;
+  const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+  const maxTop = Math.max(margin, window.innerHeight - height - margin);
+  popup.style.left = `${Math.min(maxLeft, Math.max(margin, left))}px`;
+  popup.style.top = `${Math.min(maxTop, Math.max(margin, top))}px`;
+}
+
 async function openLanguageTakeawayPopup() {
   const textValue = state.languageTakeaway.selectedText;
   if (!textValue) return;
@@ -3255,9 +3268,8 @@ async function openLanguageTakeawayPopup() {
   $("languageTakeawayChinese").value = "";
   text("languageTakeawayStatus", "翻译中...");
   const triggerRect = trigger.getBoundingClientRect();
-  popup.style.left = `${Math.min(window.innerWidth - 340, Math.max(12, triggerRect.left))}px`;
-  popup.style.top = `${Math.min(window.innerHeight - 300, Math.max(12, triggerRect.bottom + 8))}px`;
   popup.classList.remove("hidden");
+  placeLanguageTakeawayPopup(triggerRect.left, triggerRect.bottom + 8);
   hideLanguageTakeawayTrigger();
   await translateLanguageTakeawaySource(textValue);
 }
@@ -3955,8 +3967,10 @@ function bindEvents() {
     if (!state.languageTakeaway.dragging) return;
     const popup = $("languageTakeawayPopup");
     if (!popup) return;
-    popup.style.left = `${Math.min(window.innerWidth - 320, Math.max(8, event.clientX - state.languageTakeaway.dragOffsetX))}px`;
-    popup.style.top = `${Math.min(window.innerHeight - 260, Math.max(8, event.clientY - state.languageTakeaway.dragOffsetY))}px`;
+    placeLanguageTakeawayPopup(
+      event.clientX - state.languageTakeaway.dragOffsetX,
+      event.clientY - state.languageTakeaway.dragOffsetY
+    );
   });
   $("languageTakeawayPopup")?.addEventListener("pointerup", () => {
     state.languageTakeaway.dragging = false;
