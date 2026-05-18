@@ -1507,3 +1507,34 @@ Hid the entire shell during app boot and applied stored typeface immediately dur
 ### Next Steps
 
 - None - task complete
+
+
+## Session 42: Improve perceived latency for reports and takeaways
+
+**Date**: 2026-05-18
+**Task**: Improve perceived latency for reports and takeaways
+**Branch**: `main`
+
+### Summary
+
+Added session-level stale-then-refresh caches for language takeaways, speaking history list/detail, and writing report list/detail so revisits and repeated report switching render immediately while background refresh preserves freshness.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
