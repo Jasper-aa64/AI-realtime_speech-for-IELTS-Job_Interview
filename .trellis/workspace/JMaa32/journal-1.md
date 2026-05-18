@@ -1383,3 +1383,34 @@ Increased the Language Takeaway popup source/Chinese label and textarea font siz
 ### Next Steps
 
 - None - task complete
+
+
+## Session 38: Fix corpus subpage back navigation
+
+**Date**: 2026-05-18
+**Task**: Fix corpus subpage back navigation
+**Branch**: `main`
+
+### Summary
+
+Changed the corpus subpage top-left back button label from 返回练习 to 返回 and made P1 corpus, P2 corpus, and takeaway book return to the corpus landing page.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
