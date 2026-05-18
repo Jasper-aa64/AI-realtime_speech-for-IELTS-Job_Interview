@@ -1414,3 +1414,34 @@ Changed the corpus subpage top-left back button label from 返回练习 to 返�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 39: Fix corpus navigation from locked practice
+
+**Date**: 2026-05-18
+**Task**: Fix corpus navigation from locked practice
+**Branch**: `main`
+
+### Summary
+
+Allowed corpus navigation while a practice session is locked by exiting/aborting through the existing cleanup path before switching to corpus, while keeping practice-mode switching locked.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
