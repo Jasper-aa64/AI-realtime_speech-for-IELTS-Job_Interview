@@ -1538,3 +1538,36 @@ Added session-level stale-then-refresh caches for language takeaways, speaking h
 ### Next Steps
 
 - None - task complete
+
+
+## Session 43: Prefetch reports and takeaways after login
+
+**Date**: 2026-05-18
+**Task**: Prefetch reports and takeaways after login
+**Branch**: `main`
+
+### Summary
+
+Added idle authenticated prefetch for language takeaways, speaking history, and writing reports so first report/book clicks can use warmed frontend caches; updated static asset version and cleared user-scoped caches on logout.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4d8a86a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
