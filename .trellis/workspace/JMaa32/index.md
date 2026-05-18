@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 33
+- **Total Sessions**: 34
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1261 | Active |
+| `journal-1.md` | ~1292 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 34 | 2026-05-18 | Redesign home and corpus library views | - | `main` |
 | 33 | 2026-05-18 | Add corpus and language takeaway flow | - | `main` |
 | 32 | 2026-05-17 | Fix speaking AI feedback fallback policy | - | `main` |
 | 31 | 2026-05-16 | Fix Codex JSON parsing with Trellis injection | `742bd62` | `main` |

@@ -1259,3 +1259,34 @@ Validation:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 34: Redesign home and corpus library views
+
+**Date**: 2026-05-18
+**Task**: Redesign home and corpus library views
+**Branch**: `main`
+
+### Summary
+
+Added a real Home view as the default entry point, moved practice runtime out of the landing screen, redesigned Home/Corpus/Language Takeaway views with consistent card styling, and added an icon-based hide/show Chinese control.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
