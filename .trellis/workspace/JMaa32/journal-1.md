@@ -1321,3 +1321,34 @@ Changed the Language Takeaway popup so Enter in the source field re-runs transla
 ### Next Steps
 
 - None - task complete
+
+
+## Session 36: Allow public tunnel CSRF trusted origins
+
+**Date**: 2026-05-18
+**Task**: Allow public tunnel CSRF trusted origins
+**Branch**: `main`
+
+### Summary
+
+Added DJANGO_CSRF_TRUSTED_ORIGINS support, restarted the local Django server with the active trycloudflare origin, and verified public login POST now reaches the login view instead of failing CSRF origin checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
