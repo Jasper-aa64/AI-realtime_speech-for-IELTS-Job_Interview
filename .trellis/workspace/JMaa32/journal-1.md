@@ -1802,3 +1802,36 @@ Corrected writing report analysis so successful AI scores must provide their own
 ### Next Steps
 
 - None - task complete
+
+
+## Session 51: Wire Codex writing report generation
+
+**Date**: 2026-05-19
+**Task**: Wire Codex writing report generation
+**Branch**: `main`
+
+### Summary
+
+Connected writing score worker to a real Codex adapter, requiring JSON output with IELTS scores, overall review, practice focus, model answer, and paragraph reviews. Invalid Codex output now falls back explicitly instead of displaying fake AI report content.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `205f698` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
