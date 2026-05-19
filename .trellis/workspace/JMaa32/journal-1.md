@@ -1736,3 +1736,36 @@ Added compact desktop practice sizing for laptop browsers: smaller practice titl
 ### Next Steps
 
 - None - task complete
+
+
+## Session 49: Restructure writing reports and enforce paragraphs
+
+**Date**: 2026-05-19
+**Task**: Restructure writing reports and enforce paragraphs
+**Branch**: `main`
+
+### Summary
+
+Added paragraph validation before writing AI scoring, reworked writing report detail into prompt/overall/paragraph review groups, added structure-advice-only handling for messy essays, and added frontend modal guidance plus tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f039938` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
