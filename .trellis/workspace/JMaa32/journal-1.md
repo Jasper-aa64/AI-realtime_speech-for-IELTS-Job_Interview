@@ -1769,3 +1769,36 @@ Added paragraph validation before writing AI scoring, reworked writing report de
 ### Next Steps
 
 - None - task complete
+
+
+## Session 50: Require AI-supplied writing paragraph analysis
+
+**Date**: 2026-05-19
+**Task**: Require AI-supplied writing paragraph analysis
+**Branch**: `main`
+
+### Summary
+
+Corrected writing report analysis so successful AI scores must provide their own structured overall review, practice focus, paragraph reviews, or structure-advice-only payload. Removed local hard-coded paragraph/model-answer generation from the AI path and kept fallback explicitly marked.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `079e7d8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
