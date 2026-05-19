@@ -12,6 +12,7 @@ MOCK_SUCCESS_PROVIDER = "mock_success"
 
 ADAPTER_KEY_FALLBACK = "fallback"
 ADAPTER_KEY_MOCK_SUCCESS = "mock_success"
+ADAPTER_KEY_CODEX_WRITING_SCORE = "codex_writing_score"
 ADAPTER_KEY_UNSUPPORTED_TASK = "unsupported_task"
 
 DEFAULT_PROVIDER_SECRET_ENV_NAMES = {
@@ -180,10 +181,17 @@ def resolve_provider_route(
             config_mode=active_config.mode,
         )
 
-    if requested_provider == active_config.default_provider:
-        reason = "local fallback worker: real AI provider is not connected yet"
-    else:
-        reason = f"{requested_provider} provider adapter is not wired in {active_config.mode} mode; using local fallback"
+    if requested_provider == DEFAULT_REQUESTED_PROVIDER:
+        return ProviderRoute(
+            task_type=normalized_task_type,
+            requested_provider=requested_provider,
+            requested_model=requested_model,
+            adapter_key=ADAPTER_KEY_CODEX_WRITING_SCORE,
+            effective_provider=requested_provider,
+            config_mode=active_config.mode,
+        )
+
+    reason = f"{requested_provider} provider adapter is not wired in {active_config.mode} mode; using local fallback"
 
     return ProviderRoute(
         task_type=normalized_task_type,
@@ -198,6 +206,7 @@ def resolve_provider_route(
 
 __all__ = [
     "ADAPTER_KEY_FALLBACK",
+    "ADAPTER_KEY_CODEX_WRITING_SCORE",
     "ADAPTER_KEY_MOCK_SUCCESS",
     "ADAPTER_KEY_UNSUPPORTED_TASK",
     "AIProviderConfig",

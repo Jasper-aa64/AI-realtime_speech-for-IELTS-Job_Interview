@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.ai.models import AITask
 from apps.ai.provider_adapters import (
+    CodexWritingScoreAdapter,
     FallbackWritingScoreAdapter,
     MockSuccessWritingScoreAdapter,
     ProviderRunResult,
@@ -704,7 +705,8 @@ class AIWorkerCommandTests(TestCase):
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
         out = StringIO()
 
-        call_command("run_ai_tasks", "--limit", "5", "--worker-id", "test-worker", stdout=out)
+        with patch("apps.ai.provider_adapters.run_codex", side_effect=RuntimeError("codex unavailable in fallback test")):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "test-worker", stdout=out)
 
         summary = json.loads(out.getvalue())
         self.assertEqual(summary["claimed"], 1)
@@ -719,6 +721,110 @@ class AIWorkerCommandTests(TestCase):
         wallet = TokenWallet.objects.get(user=user)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
         self.assertEqual(wallet.reserved_u, 0)
+
+    def test_run_ai_tasks_processes_codex_writing_score_with_structured_report(self):
+        user = get_user_model().objects.create_user(username="worker-codex-success-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-codex-success-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Technology and learning",
+            prompt="Some people think technology has made learning easier while others believe it has created distractions. Discuss.",
+        )
+        answer = paragraph_answer(
+            "Technology gives students more flexible access to lessons and reference materials.",
+            "However, phones and social media can interrupt concentration during study time.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer=answer,
+            word_count=len(answer.split()),
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        codex_payload = {
+            "overall_band": 6.5,
+            "task_response": 6.5,
+            "coherence_cohesion": 6.0,
+            "lexical_resource": 6.5,
+            "grammatical_range_accuracy": 6.0,
+            "feedback_markdown": "AI generated feedback for this exact essay.",
+            "grammar_corrections": [{"original": "more flexible access", "suggestion": "more flexible access to learning resources"}],
+            "overall_review": "这篇文章能清楚讨论科技学习的两面，但第二段反方还可以更具体。",
+            "practice_focus": "下一次重点练习：每个主体段补一个更具体的例子。",
+            "model_answer": "AI rewrite paragraph one.\n\nAI rewrite paragraph two.",
+            "paragraph_reviews": [
+                {
+                    "index": 1,
+                    "learner": "Technology gives students more flexible access to lessons and reference materials.",
+                    "model": "Technology gives learners more flexible access to lessons, reference materials, and revision tools.",
+                    "coaching": "这一段方向清楚，但需要解释为什么 access 会带来 learning efficiency。",
+                },
+                {
+                    "index": 2,
+                    "learner": "However, phones and social media can interrupt concentration during study time.",
+                    "model": "However, the same devices can interrupt concentration when students move from study apps to social media.",
+                    "coaching": "这一段需要把 distraction 和 learning quality 的关系说完整。",
+                },
+            ],
+            "structure_advice_only": False,
+            "structure_advice": "",
+            "backend": "ai",
+        }
+        out = StringIO()
+
+        with patch("apps.ai.provider_adapters.run_codex", return_value=(json.dumps(codex_payload), {"input_tokens": 1200, "output_tokens": 500})):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "codex-success-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.SUCCEEDED}])
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.provider, "codex")
+        self.assertEqual(task.status, AITask.Status.SUCCEEDED)
+        score = WritingScore.objects.get(entry=entry)
+        self.assertEqual(score.source, "ai")
+        self.assertEqual(score.analysis_payload["overall_review"], codex_payload["overall_review"])
+        self.assertEqual(score.analysis_payload["paragraph_reviews"][0]["model"], codex_payload["paragraph_reviews"][0]["model"])
+
+    def test_run_ai_tasks_falls_back_when_codex_output_is_invalid(self):
+        user = get_user_model().objects.create_user(username="worker-codex-invalid-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-codex-invalid-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Invalid Codex prompt",
+            prompt="Some people think exams should be replaced by projects. Discuss.",
+        )
+        answer = paragraph_answer(
+            "Projects can test practical skills and reduce pressure from one final exam.",
+            "However, exams still provide a standard way to compare student performance.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer=answer,
+            word_count=len(answer.split()),
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        out = StringIO()
+
+        with patch("apps.ai.provider_adapters.run_codex", return_value=("not json", {"input_tokens": 1000, "output_tokens": 50})):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "codex-invalid-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}])
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertIn("Codex writing report generation failed", task.fallback_reason)
+        score = WritingScore.objects.get(entry=entry)
+        self.assertEqual(score.source, "fallback")
+        self.assertEqual(score.analysis_payload["analysis_backend"], "fallback")
 
     def test_run_ai_tasks_falls_back_when_mock_success_is_disabled(self):
         user = get_user_model().objects.create_user(username="worker-mock-disabled-user", password="test-pass")
@@ -881,16 +987,17 @@ class AIWorkerCommandTests(TestCase):
         AITask.objects.filter(pk=task.pk).update(started_at=timezone.now() - timezone.timedelta(seconds=120), updated_at=timezone.now())
         out = StringIO()
 
-        call_command(
-            "run_ai_tasks",
-            "--limit",
-            "5",
-            "--worker-id",
-            "recovery-worker",
-            "--recover-stale-seconds",
-            "60",
-            stdout=out,
-        )
+        with patch("apps.ai.provider_adapters.run_codex", side_effect=RuntimeError("codex unavailable in recovery test")):
+            call_command(
+                "run_ai_tasks",
+                "--limit",
+                "5",
+                "--worker-id",
+                "recovery-worker",
+                "--recover-stale-seconds",
+                "60",
+                stdout=out,
+            )
 
         summary = json.loads(out.getvalue())
         self.assertEqual(summary["recovered"]["requeued"], 1)
@@ -964,7 +1071,8 @@ class AIWorkerCommandTests(TestCase):
         )
         out = StringIO()
 
-        call_command("run_ai_tasks", "--limit", "5", "--worker-id", "unsupported-worker", stdout=out)
+        with patch("apps.ai.provider_adapters.run_codex", side_effect=RuntimeError("codex unavailable in unsupported batch test")):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "unsupported-worker", stdout=out)
 
         summary = json.loads(out.getvalue())
         self.assertEqual(summary["claimed"], 2)
@@ -1138,14 +1246,16 @@ class AIWorkerCommandTests(TestCase):
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
         out = StringIO()
-        original_run = FallbackWritingScoreAdapter.run
+        original_run = CodexWritingScoreAdapter.run
 
         def cancel_before_fallback(adapter, task):
             with self.assertRaises(AITaskConflictError):
                 cancel_billable_ai_task(task.task_id, "user cancelled after worker claim")
             return original_run(adapter, task)
 
-        with patch.object(FallbackWritingScoreAdapter, "run", autospec=True, side_effect=cancel_before_fallback):
+        with patch.object(CodexWritingScoreAdapter, "run", autospec=True, side_effect=cancel_before_fallback), patch(
+            "apps.ai.provider_adapters.run_codex", side_effect=RuntimeError("codex unavailable after cancel attempt")
+        ):
             call_command("run_ai_tasks", "--limit", "5", "--worker-id", "fallback-cancel-race-worker", stdout=out)
 
         summary = json.loads(out.getvalue())
@@ -1167,18 +1277,19 @@ class AIWorkerCommandTests(TestCase):
         )
         out = StringIO()
 
-        call_command(
-            "run_ai_worker",
-            "--max-loops",
-            "1",
-            "--interval-seconds",
-            "0",
-            "--idle-interval-seconds",
-            "0",
-            "--worker-id",
-            "loop-worker",
-            stdout=out,
-        )
+        with patch("apps.ai.provider_adapters.run_codex", side_effect=RuntimeError("codex unavailable in worker loop test")):
+            call_command(
+                "run_ai_worker",
+                "--max-loops",
+                "1",
+                "--interval-seconds",
+                "0",
+                "--idle-interval-seconds",
+                "0",
+                "--worker-id",
+                "loop-worker",
+                stdout=out,
+            )
 
         payload = json.loads(out.getvalue())
         self.assertEqual(payload["loop"], 1)
@@ -1251,20 +1362,21 @@ class AIWorkerCommandTests(TestCase):
         AITask.objects.filter(pk=task.pk).update(started_at=timezone.now() - timezone.timedelta(seconds=120), updated_at=timezone.now())
         out = StringIO()
 
-        call_command(
-            "run_ai_worker",
-            "--max-loops",
-            "1",
-            "--interval-seconds",
-            "0",
-            "--idle-interval-seconds",
-            "0",
-            "--recover-stale-seconds",
-            "60",
-            "--worker-id",
-            "recovered-loop-worker",
-            stdout=out,
-        )
+        with patch("apps.ai.provider_adapters.run_codex", side_effect=RuntimeError("codex unavailable in worker recovery test")):
+            call_command(
+                "run_ai_worker",
+                "--max-loops",
+                "1",
+                "--interval-seconds",
+                "0",
+                "--idle-interval-seconds",
+                "0",
+                "--recover-stale-seconds",
+                "60",
+                "--worker-id",
+                "recovered-loop-worker",
+                stdout=out,
+            )
 
         payload = json.loads(out.getvalue())
         summary = payload["summary"]

@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import shutil
+import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+from django.conf import settings
 
 from apps.ai.models import AITask
 from apps.ai.provider_config import (
+    ADAPTER_KEY_CODEX_WRITING_SCORE,
     ADAPTER_KEY_FALLBACK,
     ADAPTER_KEY_MOCK_SUCCESS,
     FALLBACK_PROVIDER,
@@ -20,6 +28,7 @@ from apps.writing.services import complete_score_task, fallback_score_task
 
 DEFAULT_FALLBACK_REASON = "local fallback worker: real AI provider is not connected yet"
 SUMMARY_STATUS_SKIPPED = "skipped"
+CODEX_REASONING_EFFORT = "medium"
 
 
 class ProviderRunOutcome:
@@ -145,6 +154,222 @@ class FallbackWritingScoreAdapter(BaseProviderAdapter):
         )
 
 
+def extract_json_object(text: str) -> dict[str, Any]:
+    decoder = json.JSONDecoder()
+    raw = str(text or "")
+    for index, char in enumerate(raw):
+        if char != "{":
+            continue
+        try:
+            payload, _end = decoder.raw_decode(raw[index:])
+        except ValueError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    raise ValueError("model output did not contain a JSON object")
+
+
+def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None, bool]:
+    events: list[dict[str, Any]] = []
+    for line in str(stdout or "").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            continue
+        try:
+            event = json.loads(stripped)
+        except ValueError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+
+    usage = None
+    final_text = ""
+    has_real_content = False
+    for event in events:
+        if isinstance(event.get("usage"), dict):
+            usage = event["usage"]
+        if event.get("type") == "turn.completed" and isinstance(event.get("usage"), dict):
+            usage = event["usage"]
+
+        if event.get("type") == "item.completed":
+            item = event.get("item") if isinstance(event.get("item"), dict) else {}
+            if item.get("type") == "agent_message":
+                for content_item in item.get("content") or []:
+                    if isinstance(content_item, dict) and content_item.get("type") == "text" and str(content_item.get("text") or "").strip():
+                        final_text = str(content_item["text"])
+                        has_real_content = True
+
+        message = event.get("message") or event.get("item") or event.get("response")
+        if isinstance(message, dict):
+            content = message.get("content") or message.get("text")
+            if isinstance(content, str) and content.strip():
+                final_text = content
+                has_real_content = True
+            elif isinstance(content, list):
+                parts = []
+                for part in content:
+                    if isinstance(part, dict):
+                        value = part.get("text") or part.get("content")
+                        if isinstance(value, str) and value.strip():
+                            parts.append(value)
+                    elif isinstance(part, str) and part.strip():
+                        parts.append(part)
+                if parts:
+                    final_text = "\n".join(parts)
+                    has_real_content = True
+        elif isinstance(event.get("content"), str) and event["content"].strip():
+            final_text = event["content"]
+            has_real_content = True
+
+    if not events:
+        return str(stdout or ""), None, False
+    return final_text or str(stdout or ""), usage, has_real_content
+
+
+def run_codex(prompt: str, call_id: str, timeout: int = 120) -> tuple[str, dict[str, Any] | None]:
+    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
+        raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
+
+    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
+    if not shutil.which(codex) and not Path(codex).exists():
+        raise RuntimeError("codex CLI not found")
+
+    config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
+    cwd = str(Path(settings.BASE_DIR).parent)
+    last_error: RuntimeError | None = None
+    for _attempt in range(2):
+        try:
+            result = subprocess.run(
+                [codex, "exec", "--json", *config_args, "-"],
+                input=prompt,
+                text=True,
+                capture_output=True,
+                timeout=timeout,
+                check=True,
+                cwd=cwd,
+            )
+            output, usage, has_real_content = extract_codex_json_events(result.stdout)
+        except subprocess.TimeoutExpired:
+            last_error = RuntimeError(f"codex timed out after {timeout}s for {call_id}")
+            continue
+        except Exception:
+            result = subprocess.run(
+                [codex, "exec", *config_args, "-"],
+                input=prompt,
+                text=True,
+                capture_output=True,
+                timeout=timeout,
+                check=True,
+                cwd=cwd,
+            )
+            output, usage, has_real_content = result.stdout, None, bool(result.stdout.strip())
+
+        if usage:
+            input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+            if input_tokens == 0:
+                last_error = RuntimeError(f"codex returned 0 input tokens for {call_id}")
+                continue
+        if not output or not output.strip():
+            last_error = RuntimeError(f"codex returned empty output for {call_id}")
+            continue
+        if not has_real_content:
+            last_error = RuntimeError(f"codex returned only event stream for {call_id}")
+            continue
+        return output, usage
+    raise last_error or RuntimeError(f"codex returned no usable output for {call_id}")
+
+
+class CodexWritingScoreAdapter(BaseProviderAdapter):
+    adapter_name = "writing_score_codex"
+
+    def run(self, task: AITask) -> ProviderRunResult:
+        request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
+        prompt = self._prompt(request_payload)
+        try:
+            output, usage = run_codex(prompt, f"writing_score_{task.task_id}", timeout=180)
+            score = self._score_payload(extract_json_object(output), request_payload)
+        except Exception as exc:
+            return ProviderRunResult.fallback(
+                f"Codex writing report generation failed: {exc}",
+                metadata=_route_metadata(self.adapter_name, self.route),
+            )
+        return ProviderRunResult.success(
+            {"score": score},
+            usage=usage or {},
+            metadata=_route_metadata(self.adapter_name, self.route),
+        )
+
+    def _prompt(self, request_payload: dict[str, Any]) -> str:
+        task_type = str(request_payload.get("task_type") or "task2")
+        task_label = "IELTS Writing Task 1 Academic" if task_type == "task1_academic" else "IELTS Writing Task 2"
+        return f"""Return JSON only. Do not include Markdown outside JSON.
+
+You are an IELTS writing examiner and coach. Analyze this submission like the speaking report: specific, based on the user's text, not generic.
+
+Required JSON keys:
+- overall_band: number
+- task_response or task_achievement: number, choose task_achievement for Task 1 Academic and task_response for Task 2
+- coherence_cohesion: number
+- lexical_resource: number
+- grammatical_range_accuracy: number
+- feedback_markdown: string
+- grammar_corrections: array of objects with original and suggestion
+- overall_review: Chinese string, concrete overall review of this exact essay
+- practice_focus: Chinese string, the next focused practice target
+- model_answer: English string, improved version with paragraph breaks, unless structure_advice_only is true
+- paragraph_reviews: array. If structure_advice_only is false, include one object per logical paragraph with index, learner, model, coaching. learner must quote the relevant user paragraph. model must be a better English paragraph. coaching must be Chinese and specific.
+- structure_advice_only: boolean. Set true if the user's paragraphing is too messy to map paragraph-by-paragraph.
+- structure_advice: Chinese string. Required when structure_advice_only is true; otherwise empty string.
+- backend: string, must be "ai"
+
+Do not use placeholder text. Do not say “暂无 AI 改写”. Do not use fixed generic advice. The paragraph split must follow the essay logic.
+
+Task:
+{task_label}
+
+Title:
+{request_payload.get("title") or ""}
+
+Prompt:
+{request_payload.get("prompt") or ""}
+
+Answer:
+{request_payload.get("answer") or ""}
+
+Word count:
+{request_payload.get("word_count") or ""}
+"""
+
+    def _score_payload(self, payload: dict[str, Any], request_payload: dict[str, Any]) -> dict[str, Any]:
+        task_type = str(request_payload.get("task_type") or "").strip().lower()
+        task_key = "task_achievement" if task_type == "task1_academic" else "task_response"
+        required = ["overall_band", task_key, "coherence_cohesion", "lexical_resource", "grammatical_range_accuracy", "feedback_markdown", "overall_review", "practice_focus"]
+        missing = [key for key in required if payload.get(key) in (None, "")]
+        if missing:
+            raise RuntimeError(f"Codex writing score missing fields: {', '.join(missing)}")
+        if bool(payload.get("structure_advice_only")):
+            if not str(payload.get("structure_advice") or "").strip():
+                raise RuntimeError("Codex writing score missing structure_advice")
+        elif not isinstance(payload.get("paragraph_reviews"), list) or not payload.get("paragraph_reviews"):
+            raise RuntimeError("Codex writing score missing paragraph_reviews")
+        return {
+            "overall_band": float(payload["overall_band"]),
+            task_key: float(payload[task_key]),
+            "coherence_cohesion": float(payload["coherence_cohesion"]),
+            "lexical_resource": float(payload["lexical_resource"]),
+            "grammatical_range_accuracy": float(payload["grammatical_range_accuracy"]),
+            "feedback_markdown": str(payload.get("feedback_markdown") or ""),
+            "grammar_corrections": payload.get("grammar_corrections") if isinstance(payload.get("grammar_corrections"), list) else [],
+            "overall_review": str(payload.get("overall_review") or ""),
+            "practice_focus": str(payload.get("practice_focus") or ""),
+            "model_answer": str(payload.get("model_answer") or ""),
+            "paragraph_reviews": payload.get("paragraph_reviews") if isinstance(payload.get("paragraph_reviews"), list) else [],
+            "structure_advice_only": bool(payload.get("structure_advice_only")),
+            "structure_advice": str(payload.get("structure_advice") or ""),
+            "backend": "ai",
+        }
+
+
 class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
     adapter_name = "writing_score_mock_success"
 
@@ -263,6 +488,8 @@ def select_provider_adapter(task: AITask) -> BaseProviderAdapter:
     )
     if route.adapter_key == ADAPTER_KEY_MOCK_SUCCESS:
         return MockSuccessWritingScoreAdapter(route)
+    if route.adapter_key == ADAPTER_KEY_CODEX_WRITING_SCORE:
+        return CodexWritingScoreAdapter(route)
     if route.adapter_key == ADAPTER_KEY_FALLBACK:
         return FallbackWritingScoreAdapter(route)
     return UnsupportedTaskAdapter(route)
@@ -352,6 +579,7 @@ def _route_metadata(adapter_name: str, route: ProviderRoute | None) -> dict[str,
 __all__ = [
     "AppliedProviderRunResult",
     "DEFAULT_FALLBACK_REASON",
+    "CodexWritingScoreAdapter",
     "FallbackWritingScoreAdapter",
     "MOCK_SUCCESS_PROVIDER",
     "MockSuccessWritingScoreAdapter",
