@@ -690,86 +690,89 @@ def task_score_key(task_type: str) -> str:
     return "task_achievement" if task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else "task_response"
 
 
-def split_model_answer(model_answer: str, fallback_paragraphs: list[str]) -> list[str]:
-    parts = writing_paragraphs(model_answer)
-    return parts if parts else fallback_paragraphs
-
-
-def build_default_model_answer(task_type: str, answer: str) -> str:
-    paragraphs = writing_paragraphs(answer)
-    if not paragraphs:
-        return ""
-    if task_type == WritingPrompt.TaskType.TASK1_ACADEMIC:
-        rewrites = [
-            "The chart illustrates the main information in the task, and the key features can be grouped clearly before the details are compared.",
-            "Overall, the most noticeable pattern should be summarised first, with the biggest changes, highest figures, or clearest contrasts highlighted without listing every number.",
-        ]
-        detail_template = "A clearer detail paragraph would group related information together and compare the most important figures in a controlled way."
-    else:
-        rewrites = [
-            "This essay presents a clear position on the issue and organises the response around a small number of developed ideas.",
-            "One main argument can be explained in more depth by adding a reason, a concrete example, and a sentence showing why the point matters.",
-        ]
-        detail_template = "Another body paragraph should develop a separate idea rather than repeat the same point, using a clear topic sentence and specific support."
-    while len(rewrites) < len(paragraphs):
-        rewrites.append(detail_template)
-    return "\n\n".join(rewrites[: len(paragraphs)])
-
-
-def structure_advice_only(task_type: str, paragraphs: list[str]) -> bool:
-    if not paragraphs:
-        return True
-    paragraph_word_counts = [word_count(paragraph) for paragraph in paragraphs]
-    if any(count < 12 for count in paragraph_word_counts):
-        return True
-    if task_type == WritingPrompt.TaskType.TASK2 and len(paragraphs) < 3:
-        return True
-    if task_type == WritingPrompt.TaskType.TASK1_ACADEMIC and len(paragraphs) < 3:
-        return True
-    return False
-
-
-def paragraph_structure_advice(task_type: str) -> str:
-    guidance = paragraph_guidance(task_type)
-    return "\n".join(guidance["tips"])
-
-
-def build_default_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> dict[str, Any]:
+def fallback_analysis_payload(entry: WritingEntry, reason: str = "") -> dict[str, Any]:
     paragraphs = writing_paragraphs(entry.answer)
-    model_answer = str(score.get("model_answer") or "").strip() or build_default_model_answer(entry.task_type, entry.answer)
-    model_paragraphs = split_model_answer(model_answer, [""] * len(paragraphs))
-    if entry.task_type == WritingPrompt.TaskType.TASK1_ACADEMIC:
-        overall_review = "这篇 Task 1 已经可以进入评分，但报告重点会放在图表信息是否分组清楚、Overview 是否突出、细节段是否有比较。"
-        practice_focus = "下一次重点练：先写 Overview，再把细节按趋势、类别或对比关系分段。"
-        default_coaching = "这一段需要服务于图表信息组织：避免一句话里堆太多信息，优先明确它属于 overview、主体细节还是结尾式补充。"
-    else:
-        overall_review = "这篇 Task 2 已经可以进入评分，报告重点会放在观点是否直接回应题目、主体段是否各自有中心句和充分展开。"
-        practice_focus = "下一次重点练：每个主体段只讲一个观点，并用解释和例子把它展开。"
-        default_coaching = "这一段需要有明确中心句，并继续补充原因、例子或影响，避免只停留在泛泛表态。"
-    paragraph_reviews = []
-    advice_only = bool(score.get("structure_advice_only")) or structure_advice_only(entry.task_type, paragraphs)
-    for index, paragraph in enumerate(paragraphs):
-        paragraph_reviews.append(
+    message = reason or "AI writing report analysis is unavailable."
+    return {
+        "overall_review": "AI 写作报告暂不可用，当前结果是本地兜底评分。",
+        "practice_focus": "请稍后重新生成 AI 报告；本地兜底不会判断你的逻辑分段。",
+        "model_answer": "",
+        "paragraph_reviews": [
             {
                 "index": index + 1,
                 "learner": paragraph,
-                "model": "" if advice_only else (model_paragraphs[index] if index < len(model_paragraphs) else ""),
-                "coaching": paragraph_structure_advice(entry.task_type) if advice_only else default_coaching,
+                "model": "",
+                "coaching": "本段尚未经过 AI 逻辑分析。",
+            }
+            for index, paragraph in enumerate(paragraphs)
+        ],
+        "structure_advice_only": True,
+        "structure_advice": message,
+        "analysis_backend": "fallback",
+    }
+
+
+def normalize_paragraph_reviews(value: Any, *, require_model: bool) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise WritingError("AI structured analysis must include paragraph_reviews")
+    reviews: list[dict[str, Any]] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise WritingError("AI paragraph review rows must be objects")
+        learner = str(item.get("learner") or "").strip()
+        model = str(item.get("model") or "").strip()
+        coaching = str(item.get("coaching") or "").strip()
+        if not learner or not coaching or (require_model and not model):
+            raise WritingError("AI paragraph review rows must include learner, model, and coaching")
+        reviews.append(
+            {
+                "index": int(item.get("index") or index),
+                "learner": learner,
+                "model": model,
+                "coaching": coaching,
             }
         )
+    return reviews
+
+
+def normalize_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> dict[str, Any]:
+    backend = str(score.get("backend") or "ai")
+    if backend == "fallback":
+        supplied = score.get("analysis_payload")
+        if isinstance(supplied, dict):
+            return {**supplied, "analysis_backend": "fallback"}
+        return fallback_analysis_payload(entry, str(score.get("fallback_reason") or ""))
+
+    overall_review = str(score.get("overall_review") or "").strip()
+    practice_focus = str(score.get("practice_focus") or "").strip()
+    if not overall_review or not practice_focus:
+        raise WritingError("AI structured analysis must include overall_review and practice_focus")
+
+    advice_only = bool(score.get("structure_advice_only"))
+    structure_advice = str(score.get("structure_advice") or "").strip()
+    if advice_only:
+        if not structure_advice:
+            raise WritingError("AI structure-advice-only reports must include structure_advice")
+        paragraph_reviews = normalize_paragraph_reviews(score.get("paragraph_reviews"), require_model=False) if isinstance(score.get("paragraph_reviews"), list) else []
+        model_answer = ""
+    else:
+        paragraph_reviews = normalize_paragraph_reviews(score.get("paragraph_reviews"), require_model=True)
+        model_answer = str(score.get("model_answer") or "").strip()
+
     return {
-        "overall_review": str(score.get("overall_review") or overall_review),
-        "practice_focus": str(score.get("practice_focus") or (paragraph_structure_advice(entry.task_type) if advice_only else practice_focus)),
-        "model_answer": "" if advice_only else model_answer,
-        "paragraph_reviews": score.get("paragraph_reviews") if isinstance(score.get("paragraph_reviews"), list) else paragraph_reviews,
+        "overall_review": overall_review,
+        "practice_focus": practice_focus,
+        "model_answer": model_answer,
+        "paragraph_reviews": paragraph_reviews,
         "structure_advice_only": advice_only,
-        "structure_advice": paragraph_structure_advice(entry.task_type) if advice_only else "",
+        "structure_advice": structure_advice,
+        "analysis_backend": "ai",
     }
 
 
 def persist_score(entry: WritingEntry, score: dict[str, Any]) -> None:
     task_response_value = score.get(task_score_key(entry.task_type))
-    analysis_payload = build_default_analysis_payload(entry, score)
+    analysis_payload = normalize_analysis_payload(entry, score)
     WritingScore.objects.update_or_create(
         entry=entry,
         defaults={
@@ -944,6 +947,8 @@ def normalize_score_payload(entry: WritingEntry, payload: dict[str, Any]) -> dic
         "practice_focus": str(score.get("practice_focus") or payload.get("practice_focus") or ""),
         "model_answer": str(score.get("model_answer") or payload.get("model_answer") or ""),
         "paragraph_reviews": score.get("paragraph_reviews") if isinstance(score.get("paragraph_reviews"), list) else payload.get("paragraph_reviews"),
+        "structure_advice_only": bool(score.get("structure_advice_only") or payload.get("structure_advice_only")),
+        "structure_advice": str(score.get("structure_advice") or payload.get("structure_advice") or ""),
         "backend": str(score.get("backend") or "ai"),
         "billing_usage": payload.get("usage") if isinstance(payload.get("usage"), dict) else {},
     }

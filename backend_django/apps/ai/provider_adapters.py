@@ -163,7 +163,7 @@ class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
         digest = hashlib.sha1(
             f"{task.task_id}:{request_payload.get('answer_hash') or answer}:{word_count}".encode("utf-8")
         ).hexdigest()
-        score = self._score_payload(task_key=task_key, word_count=word_count, digest=digest)
+        score = self._score_payload(task_key=task_key, word_count=word_count, digest=digest, answer=answer)
         usage = self._usage_payload(word_count=word_count, digest=digest)
         return ProviderRunResult.success(
             {"score": score},
@@ -171,7 +171,7 @@ class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
             metadata=_route_metadata(self.adapter_name, self.route),
         )
 
-    def _score_payload(self, *, task_key: str, word_count: int, digest: str) -> dict[str, Any]:
+    def _score_payload(self, *, task_key: str, word_count: int, digest: str, answer: str) -> dict[str, Any]:
         if word_count >= 260:
             base = 6.5
         elif word_count >= 180:
@@ -204,6 +204,16 @@ class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
                 "- Language: vary sentence openings and keep checking article / plural agreement.",
             ]
         )
+        paragraphs = [part.strip() for part in answer.split("\n\n") if part.strip()]
+        paragraph_reviews = [
+            {
+                "index": index + 1,
+                "learner": paragraph,
+                "model": f"Mock AI rewrite for paragraph {index + 1}: {paragraph}",
+                "coaching": f"Mock AI paragraph {index + 1} advice: clarify the main idea and support it with a concrete detail.",
+            }
+            for index, paragraph in enumerate(paragraphs)
+        ]
         return {
             "overall_band": overall_band,
             task_key: task_score,
@@ -212,6 +222,12 @@ class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
             "grammatical_range_accuracy": grammar,
             "feedback_markdown": feedback_markdown,
             "grammar_corrections": grammar_corrections,
+            "overall_review": "Mock AI overall review based on the submitted paragraph structure.",
+            "practice_focus": "Mock AI practice focus: improve paragraph-level development and transitions.",
+            "model_answer": "\n\n".join(item["model"] for item in paragraph_reviews),
+            "paragraph_reviews": paragraph_reviews,
+            "structure_advice_only": False,
+            "structure_advice": "",
             "backend": "ai",
         }
 

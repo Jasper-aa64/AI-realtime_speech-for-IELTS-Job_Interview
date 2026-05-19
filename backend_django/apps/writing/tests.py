@@ -10,11 +10,46 @@ from apps.ai.services import claim_ai_task
 from apps.billing.models import TokenWallet, WalletLedgerEntry, WalletReservation
 from apps.billing.services import DEFAULT_INITIAL_GRANT_U
 from apps.writing.models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
-from apps.writing.services import WRITING_TASK_LABELS, complete_score_task, fallback_score_task
+from apps.writing.services import WRITING_TASK_LABELS, WritingError, complete_score_task, fallback_score_task
 
 
 def paragraph_answer(*parts: str) -> str:
     return "\n\n".join(parts)
+
+
+def ai_score_payload(*, paragraph_reviews: list[dict] | None = None, **overrides):
+    payload = {
+        "overall_band": 6.0,
+        "task_response": 6.0,
+        "coherence_cohesion": 6.0,
+        "lexical_resource": 6.0,
+        "grammatical_range_accuracy": 6.0,
+        "feedback_markdown": "- Clear position with room for more examples.",
+        "grammar_corrections": [],
+        "overall_review": "AI overall review generated from the essay logic.",
+        "practice_focus": "AI practice focus generated from the weakest paragraph-level issue.",
+        "model_answer": "AI rewrite paragraph one.\n\nAI rewrite paragraph two.",
+        "paragraph_reviews": paragraph_reviews
+        or [
+            {
+                "index": 1,
+                "learner": "Online learning can be useful because students can review lessons at any time.",
+                "model": "AI rewrite paragraph one.",
+                "coaching": "AI explains how this paragraph works logically.",
+            },
+            {
+                "index": 2,
+                "learner": "However, classrooms still provide direct support and immediate interaction.",
+                "model": "AI rewrite paragraph two.",
+                "coaching": "AI explains how this paragraph should develop the contrast.",
+            },
+        ],
+        "structure_advice_only": False,
+        "structure_advice": "",
+        "backend": "ai",
+    }
+    payload.update(overrides)
+    return payload
 
 
 class WritingModelTests(TestCase):
@@ -599,16 +634,7 @@ class WritingApiTests(TestCase):
         completed = complete_score_task(
             task_payload["id"],
             {
-                "score": {
-                    "overall_band": 6.0,
-                    "task_response": 6.0,
-                    "coherence_cohesion": 6.0,
-                    "lexical_resource": 6.0,
-                    "grammatical_range_accuracy": 6.0,
-                    "feedback_markdown": "- Clear position with room for more examples.",
-                    "grammar_corrections": [],
-                    "backend": "ai",
-                },
+                "score": ai_score_payload(),
                 "usage": {"input_tokens": 1000, "output_tokens": 100},
             },
         )
@@ -621,6 +647,8 @@ class WritingApiTests(TestCase):
         self.assertIsNotNone(task.usage)
         score = WritingScore.objects.get(entry__entry_id=save["id"])
         self.assertEqual(score.billing_metadata, {"input_tokens": 1000, "output_tokens": 100})
+        self.assertEqual(score.analysis_payload["analysis_backend"], "ai")
+        self.assertEqual(score.analysis_payload["paragraph_reviews"][0]["coaching"], "AI explains how this paragraph works logically.")
         detail_after_complete = self.client.get(f"/api/writing/entries/{save['id']}")
         self.assertEqual(detail_after_complete.status_code, 200)
         self.assert_entry_detail_contract(
@@ -639,16 +667,7 @@ class WritingApiTests(TestCase):
         repeated = complete_score_task(
             task_payload["id"],
             {
-                "score": {
-                    "overall_band": 6.0,
-                    "task_response": 6.0,
-                    "coherence_cohesion": 6.0,
-                    "lexical_resource": 6.0,
-                    "grammatical_range_accuracy": 6.0,
-                    "feedback_markdown": "- Clear position with room for more examples.",
-                    "grammar_corrections": [],
-                    "backend": "ai",
-                },
+                "score": ai_score_payload(),
                 "usage": {"input_tokens": 1000, "output_tokens": 100},
             },
         )
@@ -659,6 +678,53 @@ class WritingApiTests(TestCase):
             WalletLedgerEntry.objects.filter(user=self.user, call_id=task.call_id, entry_type=WalletLedgerEntry.EntryType.SETTLE).count(),
             1,
         )
+
+    def test_complete_score_task_rejects_ai_score_without_structured_analysis(self):
+        prompt = WritingPrompt.objects.create(
+            prompt_id="task2-complete-score-task-missing-analysis",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Missing analysis prompt",
+            prompt="Some people think online learning is better than classroom learning. Discuss.",
+        )
+        save = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer(
+                    "Online learning can be useful because students can review lessons at any time.",
+                    "However, classrooms still provide direct support and immediate interaction.",
+                ),
+            },
+            content_type="application/json",
+        ).json()
+        task_payload = self.client.post(
+            f"/api/writing/entries/{save['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        claim_ai_task(task_payload["id"], worker_id="test-worker")
+
+        with self.assertRaises(WritingError):
+            complete_score_task(
+                task_payload["id"],
+                {
+                    "score": {
+                        "overall_band": 6.0,
+                        "task_response": 6.0,
+                        "coherence_cohesion": 6.0,
+                        "lexical_resource": 6.0,
+                        "grammatical_range_accuracy": 6.0,
+                        "feedback_markdown": "- Score without AI paragraph analysis.",
+                        "grammar_corrections": [],
+                        "backend": "ai",
+                    },
+                    "usage": {"input_tokens": 1000, "output_tokens": 100},
+                },
+            )
+
+        self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
     def test_fallback_score_task_persists_default_score_and_releases_billing(self):
         prompt = WritingPrompt.objects.create(
@@ -740,16 +806,7 @@ class WritingApiTests(TestCase):
         completed = complete_score_task(
             task_payload["id"],
             {
-                "score": {
-                    "overall_band": 6.0,
-                    "task_response": 6.0,
-                    "coherence_cohesion": 6.0,
-                    "lexical_resource": 6.0,
-                    "grammatical_range_accuracy": 6.0,
-                    "feedback_markdown": "- This should be ignored after cancellation.",
-                    "grammar_corrections": [],
-                    "backend": "ai",
-                },
+                "score": ai_score_payload(feedback_markdown="- This should be ignored after cancellation."),
                 "usage": {"input_tokens": 900, "output_tokens": 100},
             },
         )
