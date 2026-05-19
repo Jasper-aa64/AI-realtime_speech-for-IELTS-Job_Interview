@@ -1961,6 +1961,132 @@ h1 {
   background: #fff;
 }
 
+.writing-paragraph-modal-card {
+  width: min(620px, 100%);
+}
+
+.writing-paragraph-modal-body {
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px 22px;
+}
+
+.writing-paragraph-modal-body p {
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.writing-paragraph-modal-body ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.writing-paragraph-modal-body button {
+  justify-self: end;
+}
+
+.writing-report-prompt-card {
+  border-left-color: var(--blue);
+}
+
+.writing-report-prompt-card > h2 {
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.writing-overall-copy {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.writing-overall-copy section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.writing-overall-copy h3,
+.writing-paragraph-review h3,
+.writing-paragraph-stack h4 {
+  margin: 0 0 8px;
+}
+
+.writing-overall-copy p,
+.writing-paragraph-stack p {
+  color: var(--ink);
+  line-height: 1.62;
+  white-space: pre-wrap;
+}
+
+.writing-paragraph-review-list {
+  display: grid;
+  gap: 14px;
+}
+
+.writing-paragraph-review {
+  display: grid;
+  gap: 14px;
+}
+
+.writing-paragraph-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.writing-paragraph-stack article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.writing-raw-feedback summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.writing-raw-feedback .coaching-content {
+  margin-top: 14px;
+}
+
+.writing-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.writing-structure-advice-card {
+  display: grid;
+  gap: 12px;
+}
+
+.writing-structure-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.writing-structure-preview article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px 14px;
+}
+
+.writing-structure-preview h4 {
+  margin: 0 0 8px;
+}
+
+.writing-structure-preview p {
+  color: var(--ink);
+  line-height: 1.6;
+}
+
 .modal {
   position: fixed;
   inset: 0;

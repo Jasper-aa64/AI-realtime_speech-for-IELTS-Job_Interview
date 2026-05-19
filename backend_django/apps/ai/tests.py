@@ -46,6 +46,10 @@ from apps.writing.models import WritingEntry, WritingLearnerProfile, WritingProm
 from apps.writing.services import complete_score_task, create_score_task, fallback_score_task
 
 
+def paragraph_answer(*parts: str) -> str:
+    return "\n\n".join(parts)
+
+
 class AITaskServiceTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="ai-user", password="test-pass")
@@ -575,7 +579,10 @@ class AIProviderAdapterTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Practical courses can improve employability, but theory still supports long-term learning.",
+            answer=paragraph_answer(
+                "Practical courses can improve employability because students learn skills they can use at work.",
+                "However, theory still supports long-term learning and helps graduates adapt to new situations.",
+            ),
             word_count=12,
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
@@ -613,7 +620,10 @@ class AIProviderAdapterTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="A gap before university can build maturity, but it may also delay academic momentum.",
+            answer=paragraph_answer(
+                "A gap before university can build maturity because young people experience work and responsibility.",
+                "At the same time, it may delay academic momentum if students lose their study habits.",
+            ),
             word_count=14,
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
@@ -641,7 +651,10 @@ class AIWorkerCommandTests(TestCase):
         *,
         username: str,
         prompt_id: str,
-        answer: str = "This answer gives a clear opinion and one supporting reason for the writing task.",
+        answer: str = paragraph_answer(
+            "Public services should receive more funding when they improve daily life for most residents.",
+            "However, governments still need to compare costs carefully and avoid wasting limited budgets.",
+        ),
         provider: str | None = None,
     ) -> tuple[object, WritingEntry, dict]:
         user = get_user_model().objects.create_user(username=username, password="test-pass")
@@ -682,7 +695,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Coding can help children think logically, but schools should balance it with reading and communication.",
+            answer=paragraph_answer(
+                "Coding can help children think logically because it teaches them to break problems into steps.",
+                "Even so, schools should balance it with reading and communication so students develop wider skills.",
+            ),
             word_count=15,
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
@@ -719,7 +735,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Art subjects can support creativity, but schools still need to balance them with other core skills.",
+            answer=paragraph_answer(
+                "Art subjects can support creativity because students learn to express ideas in different ways.",
+                "Schools still need to balance them with other core skills so the timetable remains practical.",
+            ),
             word_count=17,
         )
         created = create_score_task(
@@ -770,7 +789,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Public libraries can support equal access to learning, but investment should also consider digital services and local demand.",
+            answer=paragraph_answer(
+                "Public libraries can support equal access to learning because they serve people who cannot buy many books.",
+                "Investment should also consider digital services and local demand so libraries remain useful today.",
+            ),
             word_count=18,
         )
         created = create_score_task(
@@ -847,7 +869,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Free university can widen access, but governments still need a sustainable way to fund quality teaching.",
+            answer=paragraph_answer(
+                "Free university can widen access because students from poorer families would face fewer barriers.",
+                "Governments still need a sustainable way to fund quality teaching and protect academic standards.",
+            ),
             word_count=16,
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
@@ -891,7 +916,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Universities should teach job skills, but they should also develop wider thinking and research abilities.",
+            answer=paragraph_answer(
+                "Universities should teach job skills because graduates need to compete in a changing labour market.",
+                "They should also develop wider thinking and research abilities because higher education has broader aims.",
+            ),
             word_count=15,
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
@@ -921,7 +949,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Car-free centres can improve air quality, but delivery access and public transport still need careful planning.",
+            answer=paragraph_answer(
+                "Car-free centres can improve air quality and make streets safer for pedestrians.",
+                "Delivery access and public transport still need careful planning so the policy does not hurt local businesses.",
+            ),
             word_count=16,
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
@@ -969,7 +1000,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="More free time can reduce stress, but students still need enough structured practice to build discipline.",
+            answer=paragraph_answer(
+                "More free time can reduce stress because students need time to rest and manage their own interests.",
+                "Students still need enough structured practice to build discipline and make steady progress.",
+            ),
             word_count=17,
         )
         created = create_score_task(
@@ -1009,7 +1043,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Free public transport can support access and reduce traffic, but funding and service quality still matter.",
+            answer=paragraph_answer(
+                "Free public transport can support access and reduce traffic by encouraging more people to use buses and trains.",
+                "Funding and service quality still matter because unreliable transport would not solve the problem.",
+            ),
             word_count=16,
         )
         created = create_score_task(
@@ -1048,7 +1085,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Museums can become more accessible if they are free, but funding still needs support from public budgets or donations.",
+            answer=paragraph_answer(
+                "Museums can become more accessible if they are free because families and students can visit more often.",
+                "Funding still needs support from public budgets or donations so museums can maintain exhibitions.",
+            ),
             word_count=19,
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000, "provider": "mock_success"})
@@ -1090,7 +1130,10 @@ class AIWorkerCommandTests(TestCase):
             practice_date=timezone.localdate(),
             title=prompt.title,
             prompt_text=prompt.prompt,
-            answer="Public parks improve health and community life, but city budgets still need balanced priorities.",
+            answer=paragraph_answer(
+                "Public parks improve health and community life because residents have a free place to exercise and meet.",
+                "City budgets still need balanced priorities because transport, housing, and safety also require funding.",
+            ),
             word_count=15,
         )
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})

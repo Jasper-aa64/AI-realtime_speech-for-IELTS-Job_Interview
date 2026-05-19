@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check report layout and modal UI behavior."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check JS syntax and visible API error behavior."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check backend/frontend contract consistency."}

@@ -56,6 +56,44 @@ def word_count(answer: str) -> int:
     return len(re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)?|\d+(?:\.\d+)?", answer or ""))
 
 
+def writing_paragraphs(answer: str) -> list[str]:
+    return [part.strip() for part in re.split(r"\n\s*\n+", answer or "") if part.strip()]
+
+
+def paragraph_guidance(task_type: str) -> dict[str, Any]:
+    normalized = normalize_task_type(task_type)
+    if normalized == WritingPrompt.TaskType.TASK1_ACADEMIC:
+        return {
+            "task_type": normalized,
+            "title": "Task 1 需要先分段，再进行 AI 评分",
+            "message": "你的作文现在还没有清楚分段。Task 1 评分会看信息组织和概述位置，所以请先把答案分成 3-4 段。",
+            "tips": [
+                "第 1 段：改写题目，说明图表/地图/流程图展示什么。",
+                "第 2 段：Overview，总结最明显的总体趋势或关键特征，不要堆细节。",
+                "第 3-4 段：按类别、时间段或对比关系展开主要数据和细节。",
+            ],
+        }
+    return {
+        "task_type": normalized,
+        "title": "Task 2 需要先分段，再进行 AI 评分",
+        "message": "你的作文现在还没有清楚分段。Task 2 评分会看观点展开和段落组织，所以请先把答案分成清楚的 4 段左右。",
+        "tips": [
+            "第 1 段：引入题目并给出你的立场或回应方向。",
+            "第 2-3 段：每段只讲一个中心观点，用解释和例子展开。",
+            "第 4 段：总结立场，不要加入新的大观点。",
+        ],
+    }
+
+
+def validate_answer_paragraphs(task_type: str, answer: str) -> None:
+    if len(writing_paragraphs(answer)) >= 2:
+        return
+    guidance = paragraph_guidance(task_type)
+    error = WritingError(guidance["message"])
+    error.payload = {"code": "paragraphs_required", "paragraph_guidance": guidance}
+    raise error
+
+
 def data_writing_dir() -> Path:
     return Path(settings.BASE_DIR).parent / "data" / "ielts" / "writing"
 
@@ -312,6 +350,12 @@ def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
         "grammatical_range_accuracy": float(score.grammar_range_accuracy) if score.grammar_range_accuracy is not None else None,
         "feedback_markdown": score.feedback_markdown,
         "grammar_corrections": score.grammar_corrections,
+        "overall_review": (score.analysis_payload or {}).get("overall_review", ""),
+        "practice_focus": (score.analysis_payload or {}).get("practice_focus", ""),
+        "model_answer": (score.analysis_payload or {}).get("model_answer", ""),
+        "paragraph_reviews": (score.analysis_payload or {}).get("paragraph_reviews", []),
+        "structure_advice_only": bool((score.analysis_payload or {}).get("structure_advice_only")),
+        "structure_advice": (score.analysis_payload or {}).get("structure_advice", ""),
         "backend": score.source,
         "billing_usage": score.billing_metadata,
         "scored_at": score.scored_at.isoformat() if score.scored_at else None,
@@ -604,6 +648,7 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
         raise WritingError("Writing entry not found")
     if not entry.answer.strip():
         raise WritingError("Write an answer before requesting AI scoring.")
+    validate_answer_paragraphs(entry.task_type, entry.answer)
     try:
         reserved_u = int(payload.get("reserved_u") or DEFAULT_WRITING_SCORE_RESERVATION_U)
     except (TypeError, ValueError) as exc:
@@ -645,8 +690,86 @@ def task_score_key(task_type: str) -> str:
     return "task_achievement" if task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else "task_response"
 
 
+def split_model_answer(model_answer: str, fallback_paragraphs: list[str]) -> list[str]:
+    parts = writing_paragraphs(model_answer)
+    return parts if parts else fallback_paragraphs
+
+
+def build_default_model_answer(task_type: str, answer: str) -> str:
+    paragraphs = writing_paragraphs(answer)
+    if not paragraphs:
+        return ""
+    if task_type == WritingPrompt.TaskType.TASK1_ACADEMIC:
+        rewrites = [
+            "The chart illustrates the main information in the task, and the key features can be grouped clearly before the details are compared.",
+            "Overall, the most noticeable pattern should be summarised first, with the biggest changes, highest figures, or clearest contrasts highlighted without listing every number.",
+        ]
+        detail_template = "A clearer detail paragraph would group related information together and compare the most important figures in a controlled way."
+    else:
+        rewrites = [
+            "This essay presents a clear position on the issue and organises the response around a small number of developed ideas.",
+            "One main argument can be explained in more depth by adding a reason, a concrete example, and a sentence showing why the point matters.",
+        ]
+        detail_template = "Another body paragraph should develop a separate idea rather than repeat the same point, using a clear topic sentence and specific support."
+    while len(rewrites) < len(paragraphs):
+        rewrites.append(detail_template)
+    return "\n\n".join(rewrites[: len(paragraphs)])
+
+
+def structure_advice_only(task_type: str, paragraphs: list[str]) -> bool:
+    if not paragraphs:
+        return True
+    paragraph_word_counts = [word_count(paragraph) for paragraph in paragraphs]
+    if any(count < 12 for count in paragraph_word_counts):
+        return True
+    if task_type == WritingPrompt.TaskType.TASK2 and len(paragraphs) < 3:
+        return True
+    if task_type == WritingPrompt.TaskType.TASK1_ACADEMIC and len(paragraphs) < 3:
+        return True
+    return False
+
+
+def paragraph_structure_advice(task_type: str) -> str:
+    guidance = paragraph_guidance(task_type)
+    return "\n".join(guidance["tips"])
+
+
+def build_default_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> dict[str, Any]:
+    paragraphs = writing_paragraphs(entry.answer)
+    model_answer = str(score.get("model_answer") or "").strip() or build_default_model_answer(entry.task_type, entry.answer)
+    model_paragraphs = split_model_answer(model_answer, [""] * len(paragraphs))
+    if entry.task_type == WritingPrompt.TaskType.TASK1_ACADEMIC:
+        overall_review = "这篇 Task 1 已经可以进入评分，但报告重点会放在图表信息是否分组清楚、Overview 是否突出、细节段是否有比较。"
+        practice_focus = "下一次重点练：先写 Overview，再把细节按趋势、类别或对比关系分段。"
+        default_coaching = "这一段需要服务于图表信息组织：避免一句话里堆太多信息，优先明确它属于 overview、主体细节还是结尾式补充。"
+    else:
+        overall_review = "这篇 Task 2 已经可以进入评分，报告重点会放在观点是否直接回应题目、主体段是否各自有中心句和充分展开。"
+        practice_focus = "下一次重点练：每个主体段只讲一个观点，并用解释和例子把它展开。"
+        default_coaching = "这一段需要有明确中心句，并继续补充原因、例子或影响，避免只停留在泛泛表态。"
+    paragraph_reviews = []
+    advice_only = bool(score.get("structure_advice_only")) or structure_advice_only(entry.task_type, paragraphs)
+    for index, paragraph in enumerate(paragraphs):
+        paragraph_reviews.append(
+            {
+                "index": index + 1,
+                "learner": paragraph,
+                "model": "" if advice_only else (model_paragraphs[index] if index < len(model_paragraphs) else ""),
+                "coaching": paragraph_structure_advice(entry.task_type) if advice_only else default_coaching,
+            }
+        )
+    return {
+        "overall_review": str(score.get("overall_review") or overall_review),
+        "practice_focus": str(score.get("practice_focus") or (paragraph_structure_advice(entry.task_type) if advice_only else practice_focus)),
+        "model_answer": "" if advice_only else model_answer,
+        "paragraph_reviews": score.get("paragraph_reviews") if isinstance(score.get("paragraph_reviews"), list) else paragraph_reviews,
+        "structure_advice_only": advice_only,
+        "structure_advice": paragraph_structure_advice(entry.task_type) if advice_only else "",
+    }
+
+
 def persist_score(entry: WritingEntry, score: dict[str, Any]) -> None:
     task_response_value = score.get(task_score_key(entry.task_type))
+    analysis_payload = build_default_analysis_payload(entry, score)
     WritingScore.objects.update_or_create(
         entry=entry,
         defaults={
@@ -658,6 +781,7 @@ def persist_score(entry: WritingEntry, score: dict[str, Any]) -> None:
             "grammar_range_accuracy": decimal_band(score["grammatical_range_accuracy"]),
             "feedback_markdown": score["feedback_markdown"],
             "grammar_corrections": score.get("grammar_corrections") or [],
+            "analysis_payload": analysis_payload,
             "source": str(score.get("backend") or "ai"),
             "billing_metadata": score.get("billing_usage") or {},
             "scored_at": timezone.now(),
@@ -788,6 +912,7 @@ def score_entry(user, entry_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         entry.word_count = word_count(entry.answer)
     if not entry.answer.strip():
         raise WritingError("Write an answer before requesting AI scoring.")
+    validate_answer_paragraphs(entry.task_type, entry.answer)
     entry.saved_at = entry.saved_at or timezone.now()
     entry.practice_date = entry.practice_date or timezone.localdate()
     score = fallback_score(entry.task_type, entry.answer)
@@ -815,6 +940,10 @@ def normalize_score_payload(entry: WritingEntry, payload: dict[str, Any]) -> dic
         "grammatical_range_accuracy": float(score["grammatical_range_accuracy"]),
         "feedback_markdown": str(score.get("feedback_markdown") or ""),
         "grammar_corrections": score.get("grammar_corrections") if isinstance(score.get("grammar_corrections"), list) else [],
+        "overall_review": str(score.get("overall_review") or payload.get("overall_review") or ""),
+        "practice_focus": str(score.get("practice_focus") or payload.get("practice_focus") or ""),
+        "model_answer": str(score.get("model_answer") or payload.get("model_answer") or ""),
+        "paragraph_reviews": score.get("paragraph_reviews") if isinstance(score.get("paragraph_reviews"), list) else payload.get("paragraph_reviews"),
         "backend": str(score.get("backend") or "ai"),
         "billing_usage": payload.get("usage") if isinstance(payload.get("usage"), dict) else {},
     }

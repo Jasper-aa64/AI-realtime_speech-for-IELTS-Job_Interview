@@ -74,6 +74,7 @@ class WritingScore(UserOwnedModel):
     grammar_range_accuracy = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     feedback_markdown = models.TextField(blank=True)
     grammar_corrections = models.JSONField(default=list, blank=True)
+    analysis_payload = models.JSONField(default=dict, blank=True)
     source = models.CharField(max_length=32, default="ai")
     billing_metadata = models.JSONField(default=dict, blank=True)
     scored_at = models.DateTimeField(null=True, blank=True)

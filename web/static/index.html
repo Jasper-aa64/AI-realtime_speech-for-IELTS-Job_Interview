@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260518-compact-practice">
+    <link rel="stylesheet" href="/styles.css?v=20260519-writing-report-structure">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -488,6 +488,24 @@
           </article>
         </div>
 
+        <div id="writingParagraphModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="writingParagraphModalTitle">
+          <div class="modal-backdrop" data-writing-paragraph-close></div>
+          <article class="modal-card writing-paragraph-modal-card">
+            <header class="modal-head">
+              <div>
+                <span class="section-label">Before AI scoring</span>
+                <h2 id="writingParagraphModalTitle">先把作文分段</h2>
+              </div>
+              <button id="writingParagraphCloseBtn" class="icon-button" type="button" aria-label="关闭分段提示" data-writing-paragraph-close>×</button>
+            </header>
+            <div class="writing-paragraph-modal-body">
+              <p id="writingParagraphModalMessage">AI 评分前需要先分段。</p>
+              <ul id="writingParagraphTips"></ul>
+              <button id="writingParagraphOkBtn" type="button" data-writing-paragraph-close>回去分段</button>
+            </div>
+          </article>
+        </div>
+
         <section id="writingReportsPanel" class="panel writing-reports-panel hidden">
           <div id="writingReportList" class="history-list writing-report-list">还没有写作记录。</div>
           <article id="writingReportDetail" class="detail-panel">
@@ -710,6 +728,6 @@
       </main>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
-    <script src="/app.js?v=20260518-compact-practice"></script>
+    <script src="/app.js?v=20260519-writing-report-structure"></script>
   </body>
 </html>

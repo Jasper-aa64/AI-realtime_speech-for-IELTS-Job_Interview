@@ -13,6 +13,10 @@ from apps.writing.models import WritingEntry, WritingLearnerProfile, WritingProm
 from apps.writing.services import WRITING_TASK_LABELS, complete_score_task, fallback_score_task
 
 
+def paragraph_answer(*parts: str) -> str:
+    return "\n\n".join(parts)
+
+
 class WritingModelTests(TestCase):
     def test_entry_and_score_can_be_created(self):
         user = get_user_model().objects.create_user(username="writer", password="test-pass")
@@ -185,7 +189,10 @@ class WritingApiTests(TestCase):
                 "prompt_id": prompt["id"],
                 "title": prompt["title"],
                 "prompt": prompt["prompt"],
-                "answer": "The chart shows a clear change in transport habits over time.",
+                "answer": paragraph_answer(
+                    "The chart shows a clear change in transport habits over time.",
+                    "Overall, the main trend is easy to compare across the period.",
+                ),
                 "practice_date": "2026-05-14",
             },
             content_type="application/json",
@@ -247,7 +254,10 @@ class WritingApiTests(TestCase):
                 "prompt_id": latest_prompt.prompt_id,
                 "prompt": latest_prompt.prompt,
                 "title": latest_prompt.title,
-                "answer": "Public libraries still matter because they provide quiet study space and trusted information for people who cannot afford many books.",
+                "answer": paragraph_answer(
+                    "Public libraries still matter because they provide quiet study space and trusted information.",
+                    "They are especially useful for people who cannot afford many books or a quiet place to study.",
+                ),
             },
             content_type="application/json",
         ).json()
@@ -298,7 +308,10 @@ class WritingApiTests(TestCase):
         )
         older_entry = self.create_entry(
             prompt=report_prompt,
-            answer="Older entry answer with enough detail to create a report item.",
+            answer=paragraph_answer(
+                "Older entry answer with enough detail to create a report item.",
+                "This second paragraph makes the answer eligible for scoring.",
+            ),
             updated_at=now - timezone.timedelta(days=3),
         )
         newer_entry = self.create_entry(
@@ -404,7 +417,7 @@ class WritingApiTests(TestCase):
         )
         save = self.client.post(
             "/api/writing/entries",
-            data={"task_type": "task2", "prompt_id": prompt.prompt_id, "prompt": prompt.prompt, "answer": "First answer."},
+            data={"task_type": "task2", "prompt_id": prompt.prompt_id, "prompt": prompt.prompt, "answer": paragraph_answer("First answer with a clear position.", "Second paragraph adds a basic supporting reason.")},
             content_type="application/json",
         ).json()
         self.client.post(f"/api/writing/entries/{save['id']}/score", content_type="application/json")
@@ -412,7 +425,7 @@ class WritingApiTests(TestCase):
 
         changed = self.client.post(
             "/api/writing/entries",
-            data={"id": save["id"], "task_type": "task2", "prompt_id": prompt.prompt_id, "prompt": prompt.prompt, "answer": "A changed answer with new wording."},
+            data={"id": save["id"], "task_type": "task2", "prompt_id": prompt.prompt_id, "prompt": prompt.prompt, "answer": paragraph_answer("A changed answer with new wording.", "The second paragraph gives a new reason.")},
             content_type="application/json",
         )
         self.assertEqual(changed.status_code, 200)
@@ -433,7 +446,10 @@ class WritingApiTests(TestCase):
                 "task_type": "task2",
                 "prompt_id": prompt.prompt_id,
                 "prompt": prompt.prompt,
-                "answer": "Technology can help students learn independently because they can review lessons and practise at their own pace.",
+                "answer": paragraph_answer(
+                    "Technology can help students learn independently because they can review lessons.",
+                    "It also lets them practise at their own pace with flexible resources.",
+                ),
             },
             content_type="application/json",
         ).json()
@@ -497,6 +513,62 @@ class WritingApiTests(TestCase):
         )
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
+    def test_score_task_rejects_unsegmented_task2_answer_with_guidance(self):
+        prompt = WritingPrompt.objects.create(
+            prompt_id="task2-paragraph-required",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Paragraph required prompt",
+            prompt="Some people think technology improves education. Discuss.",
+        )
+        save = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": "Technology can improve education because students can review lessons and practise more flexibly.",
+            },
+            content_type="application/json",
+        ).json()
+
+        response = self.client.post(
+            f"/api/writing/entries/{save['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["code"], "paragraphs_required")
+        self.assertEqual(payload["paragraph_guidance"]["task_type"], WritingPrompt.TaskType.TASK2)
+        self.assertIn("第 2-3 段", payload["paragraph_guidance"]["tips"][1])
+
+    def test_sync_score_rejects_unsegmented_task1_answer_with_guidance(self):
+        prompt = WritingPrompt.objects.create(
+            prompt_id="task1-paragraph-required",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Task 1 paragraph required prompt",
+            prompt="Summarise the chart below.",
+        )
+        save = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task1_academic",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": "The chart shows a clear increase in public transport use over time.",
+            },
+            content_type="application/json",
+        ).json()
+
+        response = self.client.post(f"/api/writing/entries/{save['id']}/score", content_type="application/json")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["code"], "paragraphs_required")
+        self.assertEqual(payload["paragraph_guidance"]["task_type"], WritingPrompt.TaskType.TASK1_ACADEMIC)
+        self.assertIn("Overview", " ".join(payload["paragraph_guidance"]["tips"]))
+
     def test_complete_score_task_persists_score_profile_and_settles_billing(self):
         prompt = WritingPrompt.objects.create(
             prompt_id="task2-complete-score-task",
@@ -510,7 +582,10 @@ class WritingApiTests(TestCase):
                 "task_type": "task2",
                 "prompt_id": prompt.prompt_id,
                 "prompt": prompt.prompt,
-                "answer": "Online learning can be useful because students can review lessons, but classrooms still provide direct support.",
+                "answer": paragraph_answer(
+                    "Online learning can be useful because students can review lessons at any time.",
+                    "However, classrooms still provide direct support and immediate interaction.",
+                ),
             },
             content_type="application/json",
         ).json()
@@ -598,7 +673,10 @@ class WritingApiTests(TestCase):
                 "task_type": "task2",
                 "prompt_id": prompt.prompt_id,
                 "prompt": prompt.prompt,
-                "answer": "Homework can help students review lessons, but too much homework may reduce rest time.",
+                "answer": paragraph_answer(
+                    "Homework can help students review lessons and remember important content.",
+                    "However, too much homework may reduce rest time and lower motivation.",
+                ),
             },
             content_type="application/json",
         ).json()
@@ -645,7 +723,10 @@ class WritingApiTests(TestCase):
                 "task_type": "task2",
                 "prompt_id": prompt.prompt_id,
                 "prompt": prompt.prompt,
-                "answer": "Starting earlier can improve fluency, but teaching methods still need to match children's age.",
+                "answer": paragraph_answer(
+                    "Starting earlier can improve fluency because children have more time to practise.",
+                    "However, teaching methods still need to match children's age and attention span.",
+                ),
             },
             content_type="application/json",
         ).json()
@@ -690,7 +771,10 @@ class WritingApiTests(TestCase):
                 "task_type": "task2",
                 "prompt_id": prompt.prompt_id,
                 "prompt": prompt.prompt,
-                "answer": "Longer holidays can reduce pressure, but students may forget routines if the break is too long.",
+                "answer": paragraph_answer(
+                    "Longer holidays can reduce pressure and give students time to recover.",
+                    "However, students may forget routines if the break is too long.",
+                ),
             },
             content_type="application/json",
         ).json()

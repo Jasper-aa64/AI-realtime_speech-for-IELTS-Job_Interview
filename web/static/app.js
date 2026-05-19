@@ -1769,6 +1769,54 @@ function currentWritingWordCount() {
   return matches ? matches.length : 0;
 }
 
+function writingParagraphs(value) {
+  return String(value || "").split(/\n\s*\n+/).map((item) => item.trim()).filter(Boolean);
+}
+
+function writingParagraphGuidance(taskType = state.writing.taskType || "task1_academic") {
+  if (taskType === "task1_academic") {
+    return {
+      title: "Task 1 需要先分段",
+      message: "Task 1 评分会看 Overview 和细节组织。请先把作文分成 3-4 段，再让 AI 分析。",
+      tips: [
+        "第 1 段：改写题目，说明图表展示什么。",
+        "第 2 段：Overview，总结最明显的趋势、对比或关键特征。",
+        "第 3-4 段：按类别、时间段或对比关系写主要细节。",
+      ],
+    };
+  }
+  return {
+    title: "Task 2 需要先分段",
+    message: "Task 2 评分会看观点组织和主体段展开。请先把作文分成清楚段落，再让 AI 分析。",
+    tips: [
+      "第 1 段：引入题目，并给出你的立场或回应方向。",
+      "第 2-3 段：每段只讲一个中心观点，用解释和例子展开。",
+      "第 4 段：总结立场，不要加入新的大观点。",
+    ],
+  };
+}
+
+function showWritingParagraphModal(guidance = null) {
+  const data = guidance || writingParagraphGuidance();
+  text("writingParagraphModalTitle", data.title || "先把作文分段");
+  text("writingParagraphModalMessage", data.message || "AI 评分前需要先分段。");
+  const list = $("writingParagraphTips");
+  if (list) list.innerHTML = (data.tips || []).map((tip) => `<li>${escapeHtml(tip)}</li>`).join("");
+  $("writingParagraphModal")?.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeWritingParagraphModal() {
+  $("writingParagraphModal")?.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+function ensureWritingParagraphsBeforeScore(answer, taskType) {
+  if (writingParagraphs(answer).length >= 2) return true;
+  showWritingParagraphModal(writingParagraphGuidance(taskType));
+  return false;
+}
+
 function autoResizeWritingAnswer() {
   const answer = $("writingAnswer");
   if (!answer) return;
@@ -2043,6 +2091,8 @@ function writingReportDetailHtml(entry) {
   const task = entry?.ai_task || null;
   const taskKey = entry.task_type === "task1_academic" ? "task_achievement" : "task_response";
   const taskLabel = entry.task_type === "task1_academic" ? "TA" : "TR";
+  const paragraphReviews = Array.isArray(score?.paragraph_reviews) ? score.paragraph_reviews : [];
+  const editAction = `<button type="button" class="ghost writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}">修改作文并重新生成报告</button>`;
   const profile = entry?.writing_profile || null;
   const profileIssues = Array.isArray(profile?.top_issues) ? profile.top_issues : [];
   const profileEvidence = Array.isArray(profile?.recent_evidence) ? profile.recent_evidence : [];
@@ -2072,10 +2122,11 @@ function writingReportDetailHtml(entry) {
     </div>
   ` : "";
   const scoreBlock = score ? `
-    <div class="detail-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
+    <div class="detail-card writing-overall-review-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
       <div class="detail-header">
         <div>
-          <h2>${escapeHtml(entry.task_label || writingTaskLabel(entry.task_type))} report</h2>
+          <span class="section-label">Overall Review & Practice Focus</span>
+          <h2>总体点评</h2>
           <p class="muted">${escapeHtml(entry.title || "")} - ${escapeHtml(entry.word_count ?? 0)} words</p>
         </div>
         <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
@@ -2086,11 +2137,23 @@ function writingReportDetailHtml(entry) {
         ${scoreCell("LR", score.lexical_resource)}
         ${scoreCell("GRA", score.grammatical_range_accuracy)}
       </div>
+      <div class="writing-overall-copy">
+        <section>
+          <h3>总体点评</h3>
+          <p>${escapeHtml(score.overall_review || "这篇作文已经完成评分。下面按段落查看你的原文、AI 写法和具体辅导。")}</p>
+        </section>
+        <section>
+          <h3>复盘重点</h3>
+          <p>${escapeHtml(score.practice_focus || "复盘时优先看段落组织、中心句和具体展开。")}</p>
+        </section>
+      </div>
+      <div class="writing-report-actions">${editAction}</div>
     </div>
-    <div class="detail-card">
-      <h3>AI 评分与辅导</h3>
+    ${score.structure_advice_only ? writingStructureAdviceHtml(score, entry) : writingParagraphReviewHtml(entry, paragraphReviews)}
+    <details class="detail-card writing-raw-feedback">
+      <summary>完整 AI 评分与辅导</summary>
       <div class="coaching-content">${renderMarkdown(score.feedback_markdown || "暂无反馈。")}</div>
-    </div>
+    </details>
     ${profileBlock}
   ` : `
     <div class="detail-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
@@ -2102,21 +2165,76 @@ function writingReportDetailHtml(entry) {
         <strong class="overall-badge muted-badge">未评分</strong>
       </div>
       <p class="muted">这篇作文已保存并计入签到。需要反馈时，回到每日写作打开后点击 AI 评分与辅导。</p>
+      <div class="writing-report-actions">${editAction}</div>
     </div>
   `;
   return `
-    ${taskBlock}
-    ${scoreBlock}
-    <div class="detail-card writing-report-prompt">
-      <h3>题目</h3>
+    <div class="detail-card writing-report-prompt writing-report-prompt-card">
+      <span class="section-label">${escapeHtml(entry.task_label || writingTaskLabel(entry.task_type))}</span>
+      <h2>${escapeHtml(entry.title || entry.task_label || writingTaskLabel(entry.task_type))}</h2>
       ${entry.image_url ? `<div class="writing-report-image"><img src="${escapeHtml(entry.image_url)}" alt="Task 1 chart"></div>` : ""}
       <div class="coaching-content">${renderMarkdown(entry.prompt || "")}</div>
     </div>
-    <div class="detail-card writing-report-answer">
+    ${taskBlock}
+    ${scoreBlock}
+    ${score ? "" : `<div class="detail-card writing-report-answer">
       <h3>Your answer</h3>
       <p>${escapeHtml(entry.answer || "").replace(/\n/g, "<br>")}</p>
-    </div>
+    </div>`}
   `;
+}
+
+function writingStructureAdviceHtml(score, entry) {
+  const answerParagraphs = writingParagraphs(entry.answer || "");
+  return `
+    <section class="detail-card writing-structure-advice-card">
+      <span class="section-label">Paragraph structure first</span>
+      <h3>分段修改意见</h3>
+      <p class="muted">这篇作文的结构还不适合逐段对应生成“我的原文 / AI 写法 / AI 辅导”。建议先按下面方向重排段落，再重新生成报告。</p>
+      <div class="coaching-content">${renderMarkdown(score.structure_advice || score.practice_focus || "先把作文拆成清楚段落，再重新生成报告。")}</div>
+      ${answerParagraphs.length ? `<div class="writing-structure-preview">${answerParagraphs.map((paragraph, index) => `
+        <article>
+          <h4>当前段落 ${index + 1}</h4>
+          <p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>
+        </article>
+      `).join("")}</div>` : ""}
+    </section>
+  `;
+}
+
+function writingParagraphReviewHtml(entry, reviews) {
+  const answerParagraphs = writingParagraphs(entry.answer || "");
+  const items = reviews.length ? reviews : answerParagraphs.map((paragraph, index) => ({
+    index: index + 1,
+    learner: paragraph,
+    model: "",
+    coaching: "这一段可以继续优化中心句、展开和连接方式。",
+  }));
+  if (!items.length) return "";
+  return `<div class="writing-paragraph-review-list">
+    ${items.map((item, index) => `
+      <section class="detail-card writing-paragraph-review">
+        <div class="writing-paragraph-review-head">
+          <span class="section-label">Paragraph ${escapeHtml(item.index || index + 1)}</span>
+          <h3>分段复盘</h3>
+        </div>
+        <div class="writing-paragraph-stack">
+          <article>
+            <h4>我的原文</h4>
+            <p>${escapeHtml(item.learner || answerParagraphs[index] || "").replace(/\n/g, "<br>")}</p>
+          </article>
+          <article>
+            <h4>AI 写法</h4>
+            <p>${escapeHtml(item.model || "暂无 AI 改写。").replace(/\n/g, "<br>")}</p>
+          </article>
+          <article>
+            <h4>AI 辅导</h4>
+            <p>${escapeHtml(item.coaching || "暂无段落辅导。").replace(/\n/g, "<br>")}</p>
+          </article>
+        </div>
+      </section>
+    `).join("")}
+  </div>`;
 }
 
 function setWritingPrompt(prompt, clearAnswer = true) {
@@ -2433,6 +2551,8 @@ function startWritingScorePolling(entryId, options = {}) {
 }
 
 async function scoreWritingEntry() {
+  const currentAnswer = $("writingAnswer")?.value || "";
+  if (!ensureWritingParagraphsBeforeScore(currentAnswer, state.writing.taskType || "task1_academic")) return;
   setWritingPending(true, "AI 正在评分与生成辅导", "正在分析题目、你的作文和 IELTS 写作评分标准。");
   try {
     let entry = state.writing.entry;
@@ -2461,6 +2581,10 @@ async function scoreWritingEntry() {
       startWritingScorePolling(savedEntry.id, { switchOnComplete: true });
       return;
     } catch (error) {
+      if (error?.payload?.paragraph_guidance) {
+        showWritingParagraphModal(error.payload.paragraph_guidance);
+        return;
+      }
       if (!isScoreTaskUnsupported(error)) throw error;
     }
     const scored = await withBusy("AI 正在评分与生成辅导...", () => api(`/api/writing/entries/${entry.id}/score`, { answer: $("writingAnswer")?.value || "" }));
@@ -2482,6 +2606,14 @@ async function openWritingEntry(entryId) {
   await recoverWritingEntry(entry);
   if (isWritingTaskActive(entry.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
   await loadWritingSummary();
+}
+
+async function editWritingReportEntry(entryId) {
+  await openWritingEntry(entryId);
+  state.writing.activeReportId = entryId;
+  switchView("writing", { force: true });
+  text("writingSaveStatus", "已打开这篇作文。修改分段后，再点击 AI 评分与辅导重新生成报告。");
+  $("writingAnswer")?.focus();
 }
 
 function showWritingError(error) {
@@ -4084,6 +4216,9 @@ function bindEvents() {
   document.querySelectorAll("[data-writing-prompt-close]").forEach((button) => {
     button.addEventListener("click", closeWritingPromptPicker);
   });
+  document.querySelectorAll("[data-writing-paragraph-close]").forEach((button) => {
+    button.addEventListener("click", closeWritingParagraphModal);
+  });
   document.querySelectorAll("[data-writing-picker-task]").forEach((button) => {
     button.addEventListener("click", async () => {
       const taskType = button.dataset.writingPickerTask || "task1_academic";
@@ -4096,6 +4231,11 @@ function bindEvents() {
   $("writingSaveBtn")?.addEventListener("click", () => saveWritingEntry().catch(showWritingError));
   $("writingScoreBtn")?.addEventListener("click", () => scoreWritingEntry().catch(showWritingError));
   $("writingRefreshBtn")?.addEventListener("click", () => loadWriting().catch(showWritingError));
+  $("writingReportDetail")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-writing-report-edit]");
+    if (!button) return;
+    editWritingReportEntry(button.dataset.writingReportEdit || "").catch(showWritingError);
+  });
   $("writingAnswer")?.addEventListener("input", () => {
     state.writing.dirty = true;
     updateWritingWordCount();

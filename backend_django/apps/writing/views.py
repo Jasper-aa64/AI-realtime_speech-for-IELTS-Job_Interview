@@ -24,7 +24,11 @@ def require_user(request):
 
 
 def writing_error(exc: WritingError, status: int = 400) -> JsonResponse:
-    return JsonResponse({"error": str(exc)}, status=status)
+    payload = {"error": str(exc), "message": str(exc)}
+    extra = getattr(exc, "payload", None)
+    if isinstance(extra, dict):
+        payload.update(extra)
+    return JsonResponse(payload, status=status)
 
 
 @require_GET
