@@ -186,6 +186,32 @@ class AccountsApiTests(TestCase):
         self.assertEqual(phone_login.status_code, 200)
         self.assertEqual(phone_login.json()["user"]["username"], user.username)
 
+    def test_login_prefers_exact_username_over_other_user_phone(self):
+        user_model = get_user_model()
+        username_owner = user_model.objects.create_user(
+            username="18728445039",
+            display_name="Data Owner",
+            password="username-pass-12345",
+        )
+        phone_owner = user_model.objects.create_user(
+            username="empty-phone-owner",
+            phone_number="18728445039",
+            password="phone-pass-12345",
+        )
+        client = Client(enforce_csrf_checks=True)
+        csrf = client.get("/api/accounts/csrf/").json()["csrfToken"]
+
+        response = client.post(
+            "/api/accounts/login/",
+            data={"username": "18728445039", "password": "username-pass-12345"},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["user"]["username"], username_owner.username)
+        self.assertNotEqual(response.json()["user"]["username"], phone_owner.username)
+
     def test_password_change_requires_authentication(self):
         client = Client(enforce_csrf_checks=True)
         csrf = client.get("/api/accounts/csrf/").json()["csrfToken"]

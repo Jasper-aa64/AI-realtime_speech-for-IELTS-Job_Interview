@@ -4196,18 +4196,39 @@ class IELTSHandler(SimpleHTTPRequestHandler):
     def should_proxy_django_path(self, path: str) -> bool:
         if path.startswith("/api/accounts/"):
             return True
+        cookie = self.headers.get("Cookie", "")
         if path.startswith("/api/writing/"):
-            cookie = self.headers.get("Cookie", "")
             return DJANGO_PROXY_WRITE_FIRST and (DJANGO_FORCE_WRITING_PROXY or "sessionid=" in cookie)
         if path.startswith("/api/ai/tasks/"):
-            cookie = self.headers.get("Cookie", "")
+            return "sessionid=" in cookie
+        if self.is_django_user_data_path(path):
             return "sessionid=" in cookie
         if self.is_django_corpus_path(path):
-            cookie = self.headers.get("Cookie", "")
             return "sessionid=" in cookie
         if DJANGO_PROXY_SPEAKING_RUNTIME and self.is_django_speaking_runtime_path(path):
-            cookie = self.headers.get("Cookie", "")
             return "sessionid=" in cookie
+        return False
+
+    def is_django_user_data_path(self, path: str) -> bool:
+        if path in {
+            "/api/history",
+            "/api/reports/latest",
+            "/api/training/weak-items",
+            "/api/training/replay-queue",
+            "/api/billing/wallet",
+            "/api/billing/wallet/",
+            "/api/billing/recharge",
+            "/api/billing/recharge/",
+            "/api/billing/reservations",
+            "/api/billing/reservations/",
+            "/api/billing/reservations/release",
+            "/api/billing/reservations/release/",
+            "/api/billing/settle",
+            "/api/billing/settle/",
+        }:
+            return True
+        if re.fullmatch(r"/api/history/[^/]+", path):
+            return True
         return False
 
     def is_django_corpus_path(self, path: str) -> bool:

@@ -313,6 +313,47 @@ class IELTSWebServerTest(unittest.TestCase):
         self.assertEqual(seen[1]["csrf"], "csrf-1")
         self.assertIn(b"strike a balance", seen[1]["body"])
 
+    def test_user_history_and_billing_proxy_to_django_with_session(self):
+        seen = []
+
+        class FakeDjangoHandler(BaseHTTPRequestHandler):
+            def log_message(self, _fmt, *_args):
+                return
+
+            def do_GET(self):
+                seen.append({"path": self.path, "cookie": self.headers.get("Cookie", "")})
+                body = json.dumps({"path": self.path, "items": []}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        fake_server = ThreadingHTTPServer(("127.0.0.1", 0), FakeDjangoHandler)
+        thread = threading.Thread(target=fake_server.serve_forever, daemon=True)
+        thread.start()
+        fake_url = f"http://127.0.0.1:{fake_server.server_port}"
+        try:
+            with mock.patch.object(ielts_server, "DJANGO_BACKEND_URL", fake_url):
+                history_status, _headers, history_body = self.get_response(
+                    "/api/history",
+                    headers={"Cookie": "sessionid=fake-session"},
+                )
+                wallet_status, _headers, wallet_body = self.get_response(
+                    "/api/billing/wallet",
+                    headers={"Cookie": "sessionid=fake-session"},
+                )
+        finally:
+            fake_server.shutdown()
+            fake_server.server_close()
+
+        self.assertEqual(history_status, 200)
+        self.assertEqual(wallet_status, 200)
+        self.assertEqual(json.loads(history_body.decode("utf-8"))["path"], "/api/history")
+        self.assertEqual(json.loads(wallet_body.decode("utf-8"))["path"], "/api/billing/wallet")
+        self.assertEqual([item["path"] for item in seen], ["/api/history", "/api/billing/wallet"])
+        self.assertTrue(all("sessionid=fake-session" in item["cookie"] for item in seen))
+
     def test_speaking_runtime_proxy_to_django_with_flag_and_session(self):
         seen = []
 
