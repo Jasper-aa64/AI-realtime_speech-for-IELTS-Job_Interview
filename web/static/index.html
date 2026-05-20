@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260519-writing-report-structure">
+    <link rel="stylesheet" href="/styles.css?v=20260519-takeaway-compact">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -21,6 +21,22 @@
           </svg>
           <span>返回</span>
         </button>
+        <div id="writingTopbarActions" class="topbar-actions writing-topbar-actions hidden" aria-label="Writing controls">
+          <div class="writing-task-switch" role="group" aria-label="Writing task type">
+            <button type="button" class="writing-task-option active" data-writing-task="task1_academic">Task 1</button>
+            <button type="button" class="writing-task-option" data-writing-task="task2">Task 2</button>
+          </div>
+          <button id="writingPromptPickerBtn" class="writing-picker-button" type="button">
+            <span class="writing-picker-copy">
+              <strong id="writingPromptPickerTitle">选择写作题目</strong>
+            </span>
+            <span id="writingPromptPickerMeta" class="writing-picker-chip">打开题库</span>
+            <svg class="writing-picker-chevron" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M9 6l6 6-6 6"></path>
+            </svg>
+          </button>
+          <button id="writingRandomBtn" class="ghost topbar-random-button" type="button">换一道随机题</button>
+        </div>
         <div class="global-topbar-spacer"></div>
         <div class="global-topbar-actions">
           <button class="avatar-settings-button" data-view="account" title="Account">
@@ -83,22 +99,6 @@
           <div id="viewTitleBlock">
             <h1 id="viewTitle">首页</h1>
             <p id="viewSubtitle">选择今天要练的口语模式。</p>
-          </div>
-          <div id="writingTopbarActions" class="topbar-actions writing-topbar-actions hidden" aria-label="Writing controls">
-            <div class="writing-task-switch" role="group" aria-label="Writing task type">
-              <button type="button" class="writing-task-option active" data-writing-task="task1_academic">Task 1</button>
-              <button type="button" class="writing-task-option" data-writing-task="task2">Task 2</button>
-            </div>
-            <button id="writingPromptPickerBtn" class="writing-picker-button" type="button">
-              <span class="writing-picker-copy">
-                <strong id="writingPromptPickerTitle">选择写作题目</strong>
-              </span>
-              <span id="writingPromptPickerMeta" class="writing-picker-chip">打开题库</span>
-              <svg class="writing-picker-chevron" aria-hidden="true" viewBox="0 0 24 24">
-                <path d="M9 6l6 6-6 6"></path>
-              </svg>
-            </button>
-            <button id="writingRandomBtn" class="ghost topbar-random-button" type="button">换一道随机题</button>
           </div>
         </header>
 
@@ -386,13 +386,11 @@
             <strong>Language Takeaway</strong>
             <button id="languageTakeawayCloseBtn" type="button" aria-label="关闭">×</button>
           </header>
-          <label>
-            <span>原文</span>
-            <textarea id="languageTakeawaySource" spellcheck="true"></textarea>
+          <label aria-label="原文">
+            <textarea id="languageTakeawaySource" spellcheck="true" aria-label="原文"></textarea>
           </label>
-          <label>
-            <span>中文</span>
-            <textarea id="languageTakeawayChinese" spellcheck="true"></textarea>
+          <label aria-label="中文">
+            <textarea id="languageTakeawayChinese" spellcheck="true" aria-label="中文"></textarea>
           </label>
           <div class="language-takeaway-actions">
             <span id="languageTakeawayStatus"></span>
@@ -475,10 +473,15 @@
                 <span class="section-label">Writing prompt bank</span>
                 <h2 id="writingPromptModalTitle">选择写作题目</h2>
               </div>
-              <button id="writingPromptCloseBtn" class="icon-button" type="button" aria-label="关闭题目选择窗口" data-writing-prompt-close>×</button>
+              <button id="writingPromptCloseBtn" class="icon-button" type="button" aria-label="关闭题目选择窗口" data-writing-prompt-close>
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
             </header>
             <div class="writing-prompt-modal-toolbar">
-              <div class="writing-task-switch" role="group" aria-label="Writing prompt modal task type">
+              <div class="writing-task-switch" data-active-task="task1" role="group" aria-label="Writing prompt modal task type">
                 <button type="button" class="writing-task-option active" data-writing-picker-task="task1_academic">Task 1</button>
                 <button type="button" class="writing-task-option" data-writing-picker-task="task2">Task 2</button>
               </div>
@@ -499,7 +502,12 @@
                 <span class="section-label">Before AI scoring</span>
                 <h2 id="writingParagraphModalTitle">先把作文分段</h2>
               </div>
-              <button id="writingParagraphCloseBtn" class="icon-button" type="button" aria-label="关闭分段提示" data-writing-paragraph-close>×</button>
+              <button id="writingParagraphCloseBtn" class="icon-button" type="button" aria-label="关闭分段提示" data-writing-paragraph-close>
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
             </header>
             <div class="writing-paragraph-modal-body">
               <p id="writingParagraphModalMessage">AI 评分前需要先分段。</p>
@@ -731,6 +739,6 @@
       </main>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
-    <script src="/app.js?v=20260519-writing-report-structure"></script>
+    <script src="/app.js?v=20260519-takeaway-compact"></script>
   </body>
 </html>

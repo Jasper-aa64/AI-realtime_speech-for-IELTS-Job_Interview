@@ -7,6 +7,8 @@ from .services import (
     abort_attempt,
     complete_turn,
     delete_attempt,
+    delete_language_takeaway,
+    delete_p2_corpus,
     detail,
     get_turn_audio_path,
     history,
@@ -29,6 +31,7 @@ from .services import (
     tts_audio_path,
     tts_fallback,
     upload_turn_audio,
+    warm_fixed_examiner_tts,
     weak_items,
 )
 
@@ -113,6 +116,17 @@ def p2_corpus_view(request):
         return JsonResponse({"error": str(exc)}, status=400)
 
 
+@require_http_methods(["DELETE"])
+def p2_corpus_detail_view(request, entry_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(delete_p2_corpus(request.user, entry_id))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=404)
+
+
 @require_http_methods(["GET", "POST"])
 def language_takeaway_view(request):
     auth_error = require_user(request)
@@ -124,6 +138,17 @@ def language_takeaway_view(request):
         return JsonResponse(save_language_takeaway(request.user, _json_payload(request)))
     except SpeakingError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["DELETE"])
+def language_takeaway_detail_view(request, entry_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(delete_language_takeaway(request.user, entry_id))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=404)
 
 
 @require_http_methods(["POST"])
@@ -312,6 +337,14 @@ def tts_view(request):
     if auth_error:
         return auth_error
     return JsonResponse(tts_fallback(_json_payload(request)))
+
+
+@require_http_methods(["POST"])
+def tts_warmup_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    return JsonResponse(warm_fixed_examiner_tts())
 
 
 @require_GET

@@ -62,6 +62,24 @@ P1_INTRO_QUESTIONS = [
         "counts_toward_total": True,
     },
 ]
+FIXED_EXAMINER_TTS_ITEMS = [
+    {
+        "key": "fixed_examiner_what_is_your_full_name",
+        "text": "What is your full name?",
+    },
+    {
+        "key": "fixed_examiner_do_you_work_or_do_you_study",
+        "text": "Do you work or do you study?",
+    },
+    {
+        "key": "fixed_examiner_p2_cue_card_instruction",
+        "text": (
+            "I'm going to give you a topic and I would like you to talk about it for one to two minutes. "
+            "You have one minute to think about what you are going to say. "
+            "You can make some notes if you wish."
+        ),
+    },
+]
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
 DEFAULT_CANDIDATE = "jasper"
@@ -277,6 +295,14 @@ def local_timestamp(value: str) -> str:
 
 def safe_slug(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]+", "_", value).strip("_")[:96] or "attempt"
+
+
+def cached_tts_url(state: AppState, role: str, cache_key: str) -> str | None:
+    folder = state.examiner_audio_dir if role == "examiner" else state.model_audio_dir
+    audio_path = folder / f"{safe_slug(cache_key)}.mp3"
+    if not audio_path.exists():
+        return None
+    return f"/api/tts-audio/{role}/{audio_path.name}"
 
 
 def short_question(value: str, limit: int = 92) -> str:
@@ -1836,11 +1862,7 @@ def cue_to_text(topic: dict[str, Any]) -> str:
 
 
 def cue_examiner_text(topic: dict[str, Any]) -> str:
-    return (
-        "I'm going to give you a topic and I would like you to talk about it for one to two minutes. "
-        "You have one minute to think about what you are going to say. "
-        "You can make some notes if you wish."
-    )
+    return FIXED_EXAMINER_TTS_ITEMS[2]["text"]
 
 
 def fallback_p3(theme: str, prior_answer: str = "", count: int = P3_MAIN_COUNT) -> dict[str, Any]:
@@ -1979,6 +2001,51 @@ def volcengine_tts(state: AppState, text: str, voice: str = "en_male_adam", role
             "audio_url": None,
             "message": f"VolcEngine TTS unavailable; use browser fallback: {exc}",
         }
+
+
+def fixed_examiner_item_for_text(text: str) -> dict[str, str] | None:
+    normalized = " ".join(str(text or "").strip().lower().split())
+    for item in FIXED_EXAMINER_TTS_ITEMS:
+        if normalized == " ".join(item["text"].lower().split()):
+            return item
+    return None
+
+
+def fixed_examiner_fallback(cache_key: str) -> dict[str, Any]:
+    return {
+        "provider": "browser",
+        "status": "warming",
+        "audio_url": None,
+        "message": f"Fixed examiner audio is warming in the background: {cache_key}",
+    }
+
+
+def warm_fixed_examiner_tts_item(state: AppState, item: dict[str, str]) -> dict[str, Any]:
+    return volcengine_tts(state, item["text"], role="examiner", cache_key=item["key"])
+
+
+def warm_fixed_examiner_tts_item_background(state: AppState, item: dict[str, str]) -> None:
+    if cached_tts_url(state, "examiner", item["key"]):
+        return
+    threading.Thread(target=warm_fixed_examiner_tts_item, args=(state, item), daemon=True).start()
+
+
+def warm_fixed_examiner_tts(state: AppState) -> dict[str, Any]:
+    items = []
+    for item in FIXED_EXAMINER_TTS_ITEMS:
+        tts = warm_fixed_examiner_tts_item(state, item)
+        items.append({
+            "key": item["key"],
+            "status": tts.get("status"),
+            "audio_url": tts.get("audio_url"),
+            "provider": tts.get("provider"),
+        })
+    ready_urls = [item["audio_url"] for item in items if item.get("audio_url")]
+    return {
+        "items": items,
+        "audio_urls": ready_urls,
+        "ready_count": len(ready_urls),
+    }
 
 
 def create_turn(
@@ -2128,9 +2195,24 @@ def ensure_examiner_tts(state: AppState, attempt_id: str, turn: dict[str, Any]) 
     current = turn.get("examiner_tts") or {}
     if current.get("audio_url") or current.get("status") not in (None, "pending"):
         return
+    examiner_text = str(turn.get("examiner_text") or turn.get("question") or "")
+    fixed_item = fixed_examiner_item_for_text(examiner_text)
+    if fixed_item:
+        cached_url = cached_tts_url(state, "examiner", fixed_item["key"])
+        if cached_url:
+            turn["examiner_tts"] = {
+                "provider": "volcengine",
+                "status": "cached",
+                "audio_url": cached_url,
+                "content_type": "audio/mpeg",
+            }
+            return
+        warm_fixed_examiner_tts_item_background(state, fixed_item)
+        turn["examiner_tts"] = fixed_examiner_fallback(fixed_item["key"])
+        return
     turn["examiner_tts"] = volcengine_tts(
         state,
-        str(turn.get("examiner_text") or turn.get("question") or ""),
+        examiner_text,
         role="examiner",
         cache_key=f"{attempt_id}_{turn['id']}_examiner",
     )
@@ -4139,6 +4221,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
     def is_django_speaking_runtime_path(self, path: str) -> bool:
         if path == "/api/attempts/start":
             return True
+        if path == "/api/tts/warmup":
+            return True
         if re.fullmatch(r"/api/attempts/[^/]+/turns/[^/]+/(audio|complete)", path):
             return True
         if re.fullmatch(r"/api/attempts/[^/]+/(score|abort)", path):
@@ -4291,6 +4375,9 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             if match:
                 self.send_tts_audio(match.group(1), match.group(2))
                 return
+            if path == "/api/tts/warmup":
+                self.send_json(warm_fixed_examiner_tts(self.state))
+                return
             if path == "/api/reports/latest":
                 self.send_json(self.state.latest_report or {"report": None})
                 return
@@ -4355,6 +4442,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 self.handle_legacy_score(payload)
             elif path == "/api/tts":
                 self.handle_tts(payload)
+            elif path == "/api/tts/warmup":
+                self.send_json(warm_fixed_examiner_tts(self.state))
             elif path == "/api/attempts/start":
                 self.handle_attempt_start(payload)
             elif path == "/api/writing/prompts/random":

@@ -206,6 +206,108 @@ class WritingApiTests(TestCase):
         response = self.client.get("/api/writing/reports")
         self.assertEqual(response.status_code, 401)
 
+    def test_delete_writing_entry_requires_login(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-delete-login",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Delete login prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(prompt=prompt, answer="Paragraph one.\n\nParagraph two.")
+        self.client.logout()
+        response = self.client.delete(f"/api/writing/entries/{entry.entry_id}")
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(WritingEntry.objects.filter(entry_id=entry.entry_id).exists())
+
+    def test_delete_writing_entry_is_owner_scoped(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-delete-owner",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Delete owner prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(prompt=prompt, answer="Paragraph one.\n\nParagraph two.")
+        other_user = get_user_model().objects.create_user(username="other-writing-delete", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        response = self.client.delete(f"/api/writing/entries/{entry.entry_id}")
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(WritingEntry.objects.filter(entry_id=entry.entry_id).exists())
+
+    def test_delete_writing_entry_removes_score_and_report_item(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-delete-scored",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Delete scored prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer="Paragraph one.\n\nParagraph two.",
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        self.assertTrue(WritingScore.objects.filter(entry=entry).exists())
+        before = self.client.get("/api/writing/reports").json()
+        self.assertIn(entry.entry_id, [item["id"] for item in before["items"]])
+
+        response = self.client.delete(f"/api/writing/entries/{entry.entry_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True})
+        self.assertFalse(WritingEntry.objects.filter(entry_id=entry.entry_id).exists())
+        self.assertFalse(WritingScore.objects.filter(entry_id=entry.pk).exists())
+        after = self.client.get("/api/writing/reports").json()
+        self.assertNotIn(entry.entry_id, [item["id"] for item in after["items"]])
+
+    def test_delete_writing_entry_cancels_pending_score_task(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-delete-pending-task",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Delete pending task prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(prompt=prompt, answer="Paragraph one.\n\nParagraph two.")
+        created = self.client.post(
+            f"/api/writing/entries/{entry.entry_id}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+
+        response = self.client.delete(f"/api/writing/entries/{entry.entry_id}")
+        self.assertEqual(response.status_code, 200)
+        task = AITask.objects.get(task_id=created["id"])
+        self.assertEqual(task.status, AITask.Status.CANCELLED)
+        self.assertEqual(task.error_code, "writing_entry_deleted")
+        self.assertFalse(WritingEntry.objects.filter(entry_id=entry.entry_id).exists())
+
+    def test_deleted_writing_entry_terminalizes_running_score_task_on_apply(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-delete-running-task",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Delete running task prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(prompt=prompt, answer="Paragraph one.\n\nParagraph two.")
+        created = self.client.post(
+            f"/api/writing/entries/{entry.entry_id}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        claimed = AITask.objects.get(task_id=created["id"])
+        claimed.status = AITask.Status.RUNNING
+        claimed.worker_id = "test-worker"
+        claimed.started_at = timezone.now()
+        claimed.save(update_fields=["status", "worker_id", "started_at", "updated_at"])
+        entry.delete()
+
+        from apps.ai.provider_adapters import ProviderRunResult, apply_provider_run_result
+
+        applied = apply_provider_run_result(claimed, ProviderRunResult.fallback("provider unavailable"))
+        self.assertEqual(applied.summary_status, AITask.Status.FALLBACK)
+        task = AITask.objects.get(task_id=created["id"])
+        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertEqual(task.fallback_reason, "Writing entry was deleted before scoring completed.")
+
     def test_prompts_random_save_summary_detail_and_score_flow(self):
         prompts = self.client.get("/api/writing/prompts?task_type=task1_academic")
         self.assertEqual(prompts.status_code, 200)

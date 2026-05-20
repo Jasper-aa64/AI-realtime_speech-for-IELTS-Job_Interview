@@ -47,6 +47,20 @@ class AttemptStartApiTests(TestCase):
         self.assertIn("cue_card", payload)
         self.assertTrue(payload["cue_card"] is None or isinstance(payload["cue_card"], dict))
 
+    def test_start_fixed_examiner_tts_does_not_block_on_remote_tts(self):
+        with (
+            patch("apps.speaking.services._cached_tts_url", return_value=None),
+            patch("apps.speaking.services._warm_fixed_examiner_tts_item_background") as warm_background,
+            patch("apps.speaking.services.volcengine_tts") as tts,
+        ):
+            response = self.client.post("/api/attempts/start", data={"mode": "p2"}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["turns"][0]["examiner_tts"]["status"], "warming")
+        warm_background.assert_called_once()
+        tts.assert_not_called()
+
     def test_start_p2_samples_random_cue(self):
         selected = {
             "title": "Describe a custom random cue",
@@ -423,6 +437,44 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(saved["title"], "A helpful teacher")
         self.assertTrue(P2CorpusEntry.objects.filter(user=self.user, entry_id=saved["entry_id"]).exists())
 
+    def test_p2_corpus_delete_requires_login(self):
+        entry = P2CorpusEntry.objects.create(
+            user=self.user,
+            entry_id="p2-delete-login",
+            category=P2CorpusEntry.Category.PERSON,
+            title="A helpful teacher",
+            material_text="Prepared material.",
+        )
+        self.client.logout()
+        response = self.client.delete(f"/api/p2-corpus/{entry.entry_id}")
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(P2CorpusEntry.objects.filter(entry_id=entry.entry_id).exists())
+
+    def test_p2_corpus_delete_is_owner_scoped_and_removes_from_library(self):
+        entry = P2CorpusEntry.objects.create(
+            user=self.user,
+            entry_id="p2-delete-owned",
+            category=P2CorpusEntry.Category.PERSON,
+            title="A helpful teacher",
+            material_text="Prepared material.",
+        )
+        other_user = get_user_model().objects.create_user(username="other-p2-corpus", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        other_response = self.client.delete(f"/api/p2-corpus/{entry.entry_id}")
+        self.assertEqual(other_response.status_code, 404)
+        self.assertTrue(P2CorpusEntry.objects.filter(entry_id=entry.entry_id).exists())
+
+        self.client.logout()
+        self.client.force_login(self.user)
+        response = self.client.delete(f"/api/p2-corpus/{entry.entry_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True})
+        self.assertFalse(P2CorpusEntry.objects.filter(entry_id=entry.entry_id).exists())
+        library = self.client.get("/api/p2-corpus").json()
+        saved_ids = [item["entry_id"] for group in library["categories"] for item in group["items"]]
+        self.assertNotIn(entry.entry_id, saved_ids)
+
     def test_language_takeaway_save_and_list(self):
         response = self.client.post(
             "/api/language-takeaways",
@@ -444,6 +496,42 @@ class QuestionBankApiTests(TestCase):
         payload = library.json()
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["items"][0]["source_text"], "strike a balance")
+
+    def test_language_takeaway_delete_requires_login(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-delete-login",
+            source_text="strike a balance",
+            chinese_text="取得平衡",
+        )
+        self.client.logout()
+        response = self.client.delete(f"/api/language-takeaways/{entry.entry_id}")
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(LanguageTakeawayEntry.objects.filter(entry_id=entry.entry_id).exists())
+
+    def test_language_takeaway_delete_is_owner_scoped_and_removes_from_list(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-delete-owned",
+            source_text="strike a balance",
+            chinese_text="取得平衡",
+        )
+        other_user = get_user_model().objects.create_user(username="other-takeaway", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        other_response = self.client.delete(f"/api/language-takeaways/{entry.entry_id}")
+        self.assertEqual(other_response.status_code, 404)
+        self.assertTrue(LanguageTakeawayEntry.objects.filter(entry_id=entry.entry_id).exists())
+
+        self.client.logout()
+        self.client.force_login(self.user)
+        response = self.client.delete(f"/api/language-takeaways/{entry.entry_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True})
+        self.assertFalse(LanguageTakeawayEntry.objects.filter(entry_id=entry.entry_id).exists())
+        library = self.client.get("/api/language-takeaways").json()
+        self.assertEqual(library["count"], 0)
+        self.assertEqual(library["items"], [])
 
     def test_language_takeaway_translate_without_token_uses_local_offline_dictionary(self):
         with (
@@ -1196,6 +1284,32 @@ class DjangoOnlyRuntimeSurfaceTests(TestCase):
         self.assertEqual(payload["provider"], "browser")
         self.assertEqual(payload["status"], "fallback")
         self.assertIsNone(payload["audio_url"])
+
+    def test_tts_warmup_requires_login_and_caches_fixed_examiner_audio(self):
+        self.client.logout()
+        unauthorized = self.client.post("/api/tts/warmup", data={}, content_type="application/json")
+        self.assertEqual(unauthorized.status_code, 401)
+
+        self.client.force_login(self.user)
+        tts_payload = {
+            "provider": "volcengine",
+            "status": "cached",
+            "audio_url": "/api/tts-audio/examiner/fixed.mp3",
+        }
+        with patch("apps.speaking.services.volcengine_tts", return_value=tts_payload) as tts:
+            response = self.client.post("/api/tts/warmup", data={}, content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["ready_count"], 3)
+        self.assertEqual(len(payload["items"]), 3)
+        self.assertEqual(tts.call_count, 3)
+        cache_keys = [call.kwargs["cache_key"] for call in tts.call_args_list]
+        self.assertEqual(cache_keys, [
+            "fixed_examiner_what_is_your_full_name",
+            "fixed_examiner_do_you_work_or_do_you_study",
+            "fixed_examiner_p2_cue_card_instruction",
+        ])
 
     def test_tts_audio_returns_404_or_existing_file(self):
         missing = self.client.get("/api/tts-audio/examiner/missing.mp3")

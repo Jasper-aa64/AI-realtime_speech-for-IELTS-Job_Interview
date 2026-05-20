@@ -15,7 +15,7 @@ from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 
 from apps.ai.models import AITask
-from apps.ai.orchestration import AIOrchestrationError, create_billable_ai_task, fallback_billable_ai_task, succeed_billable_ai_task
+from apps.ai.orchestration import AIOrchestrationError, cancel_billable_ai_task, create_billable_ai_task, fallback_billable_ai_task, succeed_billable_ai_task
 from apps.ai.services import task_payload
 
 from .models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
@@ -32,6 +32,10 @@ WRITING_TASK_TYPES = set(WRITING_TASK_LABELS)
 
 
 class WritingError(ValueError):
+    pass
+
+
+class WritingEntryDeleted(WritingError):
     pass
 
 
@@ -637,6 +641,32 @@ def get_entry(user, entry_id: str) -> dict[str, Any]:
 
 
 @transaction.atomic
+def delete_entry(user, entry_id: str) -> dict[str, Any]:
+    entry = WritingEntry.objects.filter(user=user, entry_id=str(entry_id or "").strip()).first()
+    if not entry:
+        raise WritingError("Writing entry not found")
+    pending_tasks = AITask.objects.filter(
+        user=user,
+        task_type="writing_score",
+        related_type="writing_entry",
+        related_id=entry.entry_id,
+        status=AITask.Status.PENDING,
+    )
+    for task in pending_tasks:
+        if task.billing_reservation_id:
+            cancel_billable_ai_task(task.task_id, reason="Writing entry deleted", error_code="writing_entry_deleted")
+        else:
+            task.status = AITask.Status.CANCELLED
+            task.error_code = "writing_entry_deleted"
+            task.error_message = "Writing entry deleted"
+            task.available_at = None
+            task.finished_at = timezone.now()
+            task.save(update_fields=["status", "error_code", "error_message", "available_at", "finished_at", "updated_at"])
+    entry.delete()
+    return {"ok": True}
+
+
+@transaction.atomic
 def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     entry = (
@@ -965,7 +995,7 @@ def get_writing_score_task_and_entry(task_id: str) -> tuple[AITask, WritingEntry
         raise WritingError("Writing score task not found")
     entry = WritingEntry.objects.select_related("user", "prompt", "score").filter(user=task.user, entry_id=task.related_id).first()
     if not entry:
-        raise WritingError("Writing entry not found")
+        raise WritingEntryDeleted("Writing entry was deleted")
     return task, entry
 
 

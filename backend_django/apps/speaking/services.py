@@ -1327,6 +1327,14 @@ def save_p2_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def delete_p2_corpus(user, entry_id: str) -> dict[str, Any]:
+    entry = P2CorpusEntry.objects.filter(user=user, entry_id=str(entry_id or "").strip()).first()
+    if not entry:
+        raise SpeakingError("P2 corpus entry not found")
+    entry.delete()
+    return {"ok": True}
+
+
 def takeaway_entry_id(source_text: str) -> str:
     digest = hashlib.md5(str(source_text or "").strip().lower().encode("utf-8")).hexdigest()[:14]
     return f"lt:{digest}"
@@ -1545,6 +1553,14 @@ def save_language_takeaway(user, payload: dict[str, Any]) -> dict[str, Any]:
         },
     )
     return language_takeaway_payload(entry)
+
+
+def delete_language_takeaway(user, entry_id: str) -> dict[str, Any]:
+    entry = LanguageTakeawayEntry.objects.filter(user=user, entry_id=str(entry_id or "").strip()).first()
+    if not entry:
+        raise SpeakingError("Language takeaway entry not found")
+    entry.delete()
+    return {"ok": True}
 
 
 def p2_corpus_for_selection(user, entry_id: str) -> dict[str, Any] | None:
@@ -1891,6 +1907,26 @@ P1_INTRO_QUESTIONS: list[dict[str, Any]] = [
 ]
 
 
+FIXED_EXAMINER_TTS_ITEMS = [
+    {
+        "key": "fixed_examiner_what_is_your_full_name",
+        "text": "What is your full name?",
+    },
+    {
+        "key": "fixed_examiner_do_you_work_or_do_you_study",
+        "text": "Do you work or do you study?",
+    },
+    {
+        "key": "fixed_examiner_p2_cue_card_instruction",
+        "text": (
+            "I'm going to give you a topic and I would like you to talk about it for one to two minutes. "
+            "You have one minute to think about what you are going to say. "
+            "You can make some notes if you wish."
+        ),
+    },
+]
+
+
 def _is_p1_work_study_identity_question(question: str) -> bool:
     normalized = "".join(c if c.isalnum() else " " for c in question.lower()).strip()
     phrases = [
@@ -1908,11 +1944,7 @@ def _cue_to_text(topic: dict[str, Any]) -> str:
 
 
 def _cue_examiner_text() -> str:
-    return (
-        "I'm going to give you a topic and I would like you to talk about it for one to two minutes. "
-        "You have one minute to think about what you are going to say. "
-        "You can make some notes if you wish."
-    )
+    return FIXED_EXAMINER_TTS_ITEMS[2]["text"]
 
 
 def _fallback_p3(theme: str, count: int = P3_MAIN_COUNT) -> dict[str, Any]:
@@ -4160,6 +4192,14 @@ def _safe_slug(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]+", "_", value).strip("_")[:96] or "audio"
 
 
+def _cached_tts_url(role: str, cache_key: str) -> str | None:
+    safe_role = "examiner" if role == "examiner" else "model"
+    audio_path = Path(settings.MEDIA_ROOT) / "tts" / safe_role / f"{_safe_slug(cache_key)}.mp3"
+    if not audio_path.exists():
+        return None
+    return f"/api/tts-audio/{safe_role}/{audio_path.name}"
+
+
 def volcengine_tts(text: str, voice: str = "en_male_adam", role: str = "model", cache_key: str | None = None) -> dict[str, Any]:
     """Generate TTS audio using VolcEngine API, with caching."""
     text = text.strip()
@@ -4222,6 +4262,33 @@ def volcengine_tts(text: str, voice: str = "en_male_adam", role: str = "model", 
         }
 
 
+def _fixed_examiner_item_for_text(text: str) -> dict[str, str] | None:
+    normalized = " ".join(str(text or "").strip().lower().split())
+    for item in FIXED_EXAMINER_TTS_ITEMS:
+        if normalized == " ".join(item["text"].lower().split()):
+            return item
+    return None
+
+
+def _fixed_examiner_fallback(cache_key: str) -> dict[str, Any]:
+    return {
+        "provider": "browser",
+        "status": "warming",
+        "audio_url": None,
+        "message": f"Fixed examiner audio is warming in the background: {cache_key}",
+    }
+
+
+def _warm_fixed_examiner_tts_item(item: dict[str, str]) -> dict[str, Any]:
+    return volcengine_tts(item["text"], role="examiner", cache_key=item["key"])
+
+
+def _warm_fixed_examiner_tts_item_background(item: dict[str, str]) -> None:
+    if _cached_tts_url("examiner", item["key"]):
+        return
+    threading.Thread(target=_warm_fixed_examiner_tts_item, args=(item,), daemon=True).start()
+
+
 def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
     """Ensure turn has examiner TTS audio_url generated."""
     current = turn.get("examiner_tts") or {}
@@ -4229,18 +4296,44 @@ def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
         return
     examiner_text = str(turn.get("examiner_text") or turn.get("question") or "")
     cache_key = f"{attempt_id}_{turn['id']}_examiner"
-    normalized_examiner_text = " ".join(examiner_text.strip().lower().split())
-    if normalized_examiner_text == "what is your full name?":
-        cache_key = "fixed_examiner_what_is_your_full_name"
-    elif normalized_examiner_text == "do you work or do you study?":
-        cache_key = "fixed_examiner_do_you_work_or_do_you_study"
-    elif normalized_examiner_text == " ".join(_cue_examiner_text().lower().split()):
-        cache_key = "fixed_examiner_p2_cue_card_instruction"
+    fixed_item = _fixed_examiner_item_for_text(examiner_text)
+    if fixed_item:
+        cached_url = _cached_tts_url("examiner", fixed_item["key"])
+        if cached_url:
+            turn["examiner_tts"] = {
+                "provider": "volcengine",
+                "status": "cached",
+                "audio_url": cached_url,
+                "content_type": "audio/mpeg",
+            }
+            return
+        _warm_fixed_examiner_tts_item_background(fixed_item)
+        turn["examiner_tts"] = _fixed_examiner_fallback(fixed_item["key"])
+        return
     turn["examiner_tts"] = volcengine_tts(
         examiner_text,
         role="examiner",
         cache_key=cache_key,
     )
+
+
+def warm_fixed_examiner_tts() -> dict[str, Any]:
+    """Ensure fixed examiner prompts are cached before the learner starts."""
+    items = []
+    for item in FIXED_EXAMINER_TTS_ITEMS:
+        tts = _warm_fixed_examiner_tts_item(item)
+        items.append({
+            "key": item["key"],
+            "status": tts.get("status"),
+            "audio_url": tts.get("audio_url"),
+            "provider": tts.get("provider"),
+        })
+    ready_urls = [item["audio_url"] for item in items if item.get("audio_url")]
+    return {
+        "items": items,
+        "audio_urls": ready_urls,
+        "ready_count": len(ready_urls),
+    }
 
 
 def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> None:

@@ -345,13 +345,21 @@ class IELTSWebServerTest(unittest.TestCase):
                     {"mode": "p1"},
                     headers={"Cookie": "sessionid=fake-session"},
                 )
+                warm_status, _warm_headers, warm_payload = self.post_response(
+                    "/api/tts/warmup",
+                    {},
+                    headers={"Cookie": "sessionid=fake-session"},
+                )
         finally:
             fake_server.shutdown()
             fake_server.server_close()
         self.assertEqual(status, 200)
+        self.assertEqual(warm_status, 200)
         self.assertEqual(payload["path"], "/api/attempts/start")
+        self.assertEqual(warm_payload["path"], "/api/tts/warmup")
         self.assertIn("sessionid=fake-session", payload["cookie"])
-        self.assertEqual(seen[0][0], "/api/attempts/start")
+        self.assertIn("sessionid=fake-session", warm_payload["cookie"])
+        self.assertEqual([item[0] for item in seen], ["/api/attempts/start", "/api/tts/warmup"])
 
     def test_speaking_runtime_raw_audio_proxy_preserves_body_and_content_type(self):
         seen = []
@@ -880,6 +888,19 @@ class IELTSWebServerTest(unittest.TestCase):
 
         detail = self.get_json(f"/api/history/{attempt['id']}")
         self.assertEqual(detail["id"], attempt["id"])
+
+    def test_fixed_examiner_tts_does_not_block_attempt_start(self):
+        with (
+            mock.patch("ielts_server.cached_tts_url", return_value=None),
+            mock.patch("ielts_server.warm_fixed_examiner_tts_item_background") as warm_background,
+            mock.patch("ielts_server.volcengine_tts") as tts,
+        ):
+            attempt = self.post_json("/api/attempts/start", {"part": "p2", "mode": "p2"})
+
+        self.assertEqual(attempt["part"], "p2")
+        self.assertEqual(attempt["turns"][0]["examiner_tts"]["status"], "warming")
+        warm_background.assert_called_once()
+        tts.assert_not_called()
 
     def test_p1_name_intro_uses_settings_names_and_corrects_transcript(self):
         attempt = self.post_json(

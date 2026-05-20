@@ -33,12 +33,16 @@ const state = {
   p3Intensity: "normal",
   p1Corpus: {
     topics: [],
+    loaded: false,
+    loadingPromise: null,
     activeEntry: null,
     previousPracticeView: "p1",
     saving: false,
   },
   p2Corpus: {
     categories: [],
+    loaded: false,
+    loadingPromise: null,
     activeEntry: null,
     previousPracticeView: "p2",
     selectedEntryId: "",
@@ -96,6 +100,8 @@ const state = {
   prefetch: {
     started: false,
     token: 0,
+    fixedExaminerTtsWarmed: false,
+    fixedExaminerTtsPromise: null,
   },
 };
 
@@ -124,7 +130,7 @@ const viewCopy = {
   p2Corpus: ["我准备的P2串题素材库", "Prepare reusable Part 2 story materials and link them during preparation."],
   takeawayBook: ["Takeaway", "Review saved language takeaways with hidden English recall."],
   history: ["口语报告", ""],
-  writing: ["每日写作", ""],
+  writing: ["", ""],
   writingReports: ["写作报告", ""],
   login: ["Sign in", "Sign in to access your reports, wallet, and personalized training."],
   register: ["Create account", "Create an account to save your practice history and access personalized features."],
@@ -456,12 +462,20 @@ function clearUserScopedCaches() {
   state.languageTakeaway.items = [];
   state.languageTakeaway.loaded = false;
   state.languageTakeaway.revealedEntryIds.clear();
+  state.p1Corpus.topics = [];
+  state.p1Corpus.loaded = false;
+  state.p1Corpus.loadingPromise = null;
+  state.p2Corpus.categories = [];
+  state.p2Corpus.loaded = false;
+  state.p2Corpus.loadingPromise = null;
   state.writing.reportEntries = [];
   state.writing.activeReportId = null;
   state.writing.activeReportDetail = null;
   state.writing.reportDetailCache.clear();
   state.prefetch.started = false;
   state.prefetch.token += 1;
+  state.prefetch.fixedExaminerTtsWarmed = false;
+  state.prefetch.fixedExaminerTtsPromise = null;
 }
 
 function scheduleAuthenticatedPrefetch() {
@@ -469,9 +483,80 @@ function scheduleAuthenticatedPrefetch() {
   state.prefetch.started = true;
   state.prefetch.token += 1;
   const token = state.prefetch.token;
-  scheduleIdleTask(() => prefetchLanguageTakeaways(token), 600);
-  scheduleIdleTask(() => prefetchSpeakingHistory(token), 1000);
-  scheduleIdleTask(() => prefetchWritingReports(token), 1400);
+  scheduleIdleTask(() => prefetchFixedExaminerTts(token), 150);
+  scheduleIdleTask(() => prefetchP1Corpus(token), 350);
+  scheduleIdleTask(() => prefetchP2Corpus(token), 650);
+  scheduleIdleTask(() => prefetchLanguageTakeaways(token), 950);
+  scheduleIdleTask(() => prefetchSpeakingHistory(token), 1250);
+  scheduleIdleTask(() => prefetchWritingReports(token), 1600);
+}
+
+async function fetchFixedExaminerTtsWarmup() {
+  if (!state.prefetch.fixedExaminerTtsPromise) {
+    state.prefetch.fixedExaminerTtsPromise = api("/api/tts/warmup", {}).finally(() => {
+      state.prefetch.fixedExaminerTtsPromise = null;
+    });
+  }
+  return state.prefetch.fixedExaminerTtsPromise;
+}
+
+async function prefetchFixedExaminerTts(token) {
+  if (state.prefetch.fixedExaminerTtsWarmed) return;
+  const payload = await fetchFixedExaminerTtsWarmup();
+  if (!prefetchCanApply(token)) return;
+  for (const url of payload.audio_urls || []) {
+    primeExaminerAudio(url);
+  }
+  state.prefetch.fixedExaminerTtsWarmed = true;
+}
+
+async function fetchP1CorpusPayload() {
+  if (!state.p1Corpus.loadingPromise) {
+    state.p1Corpus.loadingPromise = api("/api/p1-corpus").finally(() => {
+      state.p1Corpus.loadingPromise = null;
+    });
+  }
+  return state.p1Corpus.loadingPromise;
+}
+
+async function fetchP2CorpusPayload() {
+  if (!state.p2Corpus.loadingPromise) {
+    state.p2Corpus.loadingPromise = api("/api/p2-corpus").finally(() => {
+      state.p2Corpus.loadingPromise = null;
+    });
+  }
+  return state.p2Corpus.loadingPromise;
+}
+
+function applyP1CorpusPayload(payload) {
+  state.p1Corpus.topics = payload.topics || [];
+  state.p1Corpus.loaded = true;
+  const stats = $("p1CorpusStats");
+  if (stats) {
+    stats.textContent = `${payload.topic_count || state.p1Corpus.topics.length} 个话题 · ${payload.question_count || 0} 道题 · 已保存 ${payload.saved_count || 0}`;
+  }
+  if (state.view === "p1Corpus") renderP1CorpusTopics();
+}
+
+function applyP2CorpusPayload(payload) {
+  state.p2Corpus.categories = payload.categories || [];
+  state.p2Corpus.loaded = true;
+  const stats = $("p2CorpusStats");
+  if (stats) stats.textContent = `${payload.category_count || 5} 个分类 · 已保存 ${payload.material_count || 0}`;
+  if (state.view === "p2Corpus") renderP2CorpusTopics();
+  renderP2CorpusPrepPanel();
+}
+
+async function prefetchP1Corpus(token) {
+  const payload = await fetchP1CorpusPayload();
+  if (!prefetchCanApply(token)) return;
+  applyP1CorpusPayload(payload);
+}
+
+async function prefetchP2Corpus(token) {
+  const payload = await fetchP2CorpusPayload();
+  if (!prefetchCanApply(token)) return;
+  applyP2CorpusPayload(payload);
 }
 
 async function prefetchLanguageTakeaways(token) {
@@ -586,8 +671,8 @@ function switchView(view, options = {}) {
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
-  $(".topbar").classList.toggle("hidden", view === "history" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
-  $("#viewTitleBlock").classList.toggle("hidden", view === "history" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
+  $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
+  $("#viewTitleBlock").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
   $("#writingTopbarActions")?.classList.toggle("hidden", view !== "writing");
   text("viewTitle", viewCopy[view][0]);
   text("viewSubtitle", viewCopy[view][1]);
@@ -935,7 +1020,10 @@ function renderTurn(turn) {
   renderExaminerAudio(turn);
   if (isP2 && turn.cue_card) {
     renderCueCardInPrompt(turn.cue_card);
-    renderP2CorpusPrepPanel();
+    renderP2CorpusPrepPanel({
+      sessionId: state.practiceSessionId,
+      turnId: turn.id,
+    });
     return;
   }
   $("p2CorpusPrepPanel")?.classList.add("hidden");
@@ -967,8 +1055,15 @@ function renderCueCardInPrompt(cue) {
 
 async function renderP2CorpusPrepPanel(renderOptions = {}) {
   const panel = $("p2CorpusPrepPanel");
-  const shouldShow = state.currentTurn?.part === "p2";
-  if (!panel || !shouldShow) {
+  const expectedSessionId = renderOptions.sessionId ?? state.practiceSessionId;
+  const expectedTurnId = renderOptions.turnId ?? state.currentTurn?.id ?? "";
+  const isCurrentP2Prep = () => {
+    if (!panel || !state.practiceLocked || state.currentTurn?.part !== "p2") return false;
+    if (expectedSessionId && state.practiceSessionId !== expectedSessionId) return false;
+    if (expectedTurnId && state.currentTurn?.id !== expectedTurnId) return false;
+    return true;
+  };
+  if (!isCurrentP2Prep()) {
     panel?.classList.add("hidden");
     if (panel) panel.innerHTML = "";
     return;
@@ -981,6 +1076,7 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
       state.p2Corpus.categories = [];
     }
   }
+  if (!isCurrentP2Prep()) return;
   const options = [];
   for (const category of state.p2Corpus.categories || []) {
     for (const item of category.items || []) {
@@ -1640,6 +1736,43 @@ function scoreCell(label, value) {
   return `<div class="score-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "—")}</strong></div>`;
 }
 
+function centeredLoadingHtml(title = "正在加载", detail = "请稍等。") {
+  return `
+    <div class="page-center-loading" role="status" aria-live="polite">
+      <div>
+        <span class="spinner"></span>
+        <div>
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(detail)}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function setWritingSwitchState(selector, taskType) {
+  const activeTask = taskType === "task2" ? "task2" : "task1";
+  document.querySelectorAll(selector).forEach((switchEl) => {
+    switchEl.dataset.activeTask = activeTask;
+  });
+}
+
+function setWritingPageLoading(isLoading, title = "正在加载每日写作", detail = "正在读取题库、签到和草稿。") {
+  const panel = $("writingPanel");
+  if (!panel) return;
+  panel.classList.toggle("is-loading", Boolean(isLoading));
+  let loading = panel.querySelector(":scope > .page-center-loading");
+  if (isLoading) {
+    if (!loading) {
+      loading = document.createElement("div");
+      panel.appendChild(loading);
+    }
+    loading.outerHTML = centeredLoadingHtml(title, detail);
+  } else {
+    loading?.remove();
+  }
+}
+
 async function loadHistory(showBusy = true) {
   const action = async () => {
     if (state.historyItems.length) renderHistoryList(state.historyItems, { refreshActive: false });
@@ -1686,6 +1819,7 @@ function renderHistoryList(items, options = {}) {
       });
       const cached = state.historyDetailCache.get(button.dataset.attemptId);
       if (cached) renderDetail(cached, false);
+      else $("detailPanel").innerHTML = centeredLoadingHtml("正在加载口语报告", "报告内容首次打开需要从服务端读取。");
       api(`/api/history/${button.dataset.attemptId}`)
         .then((detail) => {
           state.historyDetailCache.set(button.dataset.attemptId, detail);
@@ -1710,6 +1844,7 @@ function renderHistoryList(items, options = {}) {
   if (refreshActive && state.activeHistoryId) {
     const cached = state.historyDetailCache.get(state.activeHistoryId);
     if (cached) renderDetail(cached, false, { preserveScroll: true });
+    else $("detailPanel").innerHTML = centeredLoadingHtml("正在加载口语报告", "报告内容首次打开需要从服务端读取。");
     api(`/api/history/${state.activeHistoryId}`)
       .then((detail) => {
         state.historyDetailCache.set(state.activeHistoryId, detail);
@@ -1738,14 +1873,27 @@ function closeHistoryItemMenu() {
 }
 
 function showDeleteConfirm(attemptId) {
+  showConfirmDelete("确定要删除这条练习记录吗？", async () => {
+    try {
+      await api(`/api/history/${attemptId}`, null, { method: "DELETE" });
+      if (state.activeHistoryId === attemptId) state.activeHistoryId = null;
+      state.historyDetailCache.delete(attemptId);
+      await loadHistory(false);
+    } catch (err) {
+      showError(err);
+    }
+  });
+}
+
+function showConfirmDelete(message, onConfirm) {
   const overlay = document.createElement("div");
   overlay.className = "confirm-overlay";
   overlay.innerHTML = `
     <div class="confirm-dialog">
-      <p>确定要删除这条练习记录吗？</p>
+      <p>${escapeHtml(message)}</p>
       <div class="confirm-actions">
-        <button class="confirm-cancel">取消</button>
-        <button class="confirm-delete">删除</button>
+        <button class="confirm-cancel" type="button">取消</button>
+        <button class="confirm-delete" type="button">删除</button>
       </div>
     </div>
   `;
@@ -1754,12 +1902,9 @@ function showDeleteConfirm(attemptId) {
   overlay.querySelector(".confirm-delete").addEventListener("click", async () => {
     overlay.remove();
     try {
-      await api(`/api/history/${attemptId}`, null, { method: "DELETE" });
-      if (state.activeHistoryId === attemptId) state.activeHistoryId = null;
-      state.historyDetailCache.delete(attemptId);
-      await loadHistory(false);
-    } catch (err) {
-      showError(err);
+      await onConfirm();
+    } catch (error) {
+      showError(error);
     }
   });
 }
@@ -1904,6 +2049,8 @@ function writingCatalogMissingSlots(taskType, selectedCategory = "") {
 }
 
 async function loadWriting() {
+  const firstLoad = !state.writing.prompt && !state.writing.entry;
+  if (firstLoad) setWritingPageLoading(true);
   try {
     const [, summary] = await Promise.all([loadWritingPrompts(state.writing.taskType), loadWritingSummary(false)]);
     if (!state.writing.entry && summary?.today_entry?.ai_task && isWritingTaskActive(summary.today_entry.ai_task)) {
@@ -1918,6 +2065,8 @@ async function loadWriting() {
     renderWritingSurface();
   } catch (error) {
     showWritingError(error);
+  } finally {
+    setWritingPageLoading(false);
   }
 }
 
@@ -1979,11 +2128,11 @@ function renderWritingSummary(payload) {
   `;
 }
 
-async function loadWritingReports() {
+async function loadWritingReports(showBusy = true) {
   try {
     if (state.writing.reportEntries.length) renderWritingReports(state.writing.reportEntries, { refreshActive: false });
     const loader = () => api("/api/writing/reports");
-    const payload = state.writing.reportEntries.length
+    const payload = state.writing.reportEntries.length || !showBusy
       ? await loader()
       : await withBusy("Loading writing reports...", loader);
     await renderWritingReports(payload.items || []);
@@ -2018,7 +2167,7 @@ async function renderWritingReports(items, options = {}) {
     target.innerHTML = writingReportDetailHtml(cached);
   } else {
     state.writing.activeReportDetail = null;
-    target.innerHTML = '<div class="detail-card"><p class="muted">正在加载报告详情...</p></div>';
+    target.innerHTML = centeredLoadingHtml("正在加载写作报告", "首次打开报告需要读取详情和图表信息。");
   }
   if (!refreshActive) return;
   try {
@@ -2035,7 +2184,14 @@ async function renderWritingReports(items, options = {}) {
 function renderWritingReportList(items) {
   const list = $("writingReportList");
   if (!list) return;
-  list.innerHTML = items.map((item) => writingReportTabHtml(item, item.id === state.writing.activeReportId)).join("");
+  list.innerHTML = items.map((item) => `
+    <div class="history-item-wrap writing-report-item-wrap">
+      ${writingReportTabHtml(item, item.id === state.writing.activeReportId)}
+      <button class="history-item-menu-btn writing-report-menu-btn" data-writing-entry-id="${escapeHtml(item.id || "")}" aria-label="More options" title="More options">
+        <span aria-hidden="true"></span>
+      </button>
+    </div>
+  `).join("");
   list.querySelectorAll("[data-writing-report-tab]").forEach((button) => {
     button.addEventListener("click", async () => {
       const itemId = button.dataset.writingReportTab;
@@ -2051,7 +2207,7 @@ function renderWritingReportList(items) {
         target.scrollTo({ top: 0, behavior: "auto" });
       } else {
         state.writing.activeReportDetail = null;
-        target.innerHTML = '<div class="detail-card"><p class="muted">正在加载报告详情...</p></div>';
+        target.innerHTML = centeredLoadingHtml("正在加载写作报告", "首次打开报告需要读取详情和图表信息。");
       }
       // Fetch detail for the selected report
       try {
@@ -2065,6 +2221,12 @@ function renderWritingReportList(items) {
       } catch (error) {
         target.innerHTML = `<div class="detail-card"><p class="error">${escapeHtml(error.message || "Failed to load report detail.")}</p></div>`;
       }
+    });
+  });
+  list.querySelectorAll("[data-writing-entry-id]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      showWritingReportItemMenu(button, button.dataset.writingEntryId || "");
     });
   });
 }
@@ -2082,9 +2244,49 @@ function writingReportTabHtml(item, active = false) {
         <span class="history-item-band">${escapeHtml(band)}</span>
       </div>
       <strong class="history-item-title">${escapeHtml(item.title || writingTaskLabel(item.task_type))}</strong>
-      <small class="history-item-time">${escapeHtml(item.display_time || item.practice_date || "")} · ${escapeHtml(item.word_count ?? 0)} words</small>
+      <small class="history-item-time">${escapeHtml(item.display_time || item.practice_date || "")} · ${escapeHtml(item.word_count ?? 0)}</small>
     </button>
   `;
+}
+
+function showWritingReportItemMenu(anchor, entryId) {
+  closeHistoryItemMenu();
+  const menu = document.createElement("div");
+  menu.className = "history-item-menu";
+  menu.innerHTML = `<button class="history-menu-delete" data-writing-entry-delete="${escapeHtml(entryId)}">删除</button>`;
+  anchor.parentElement.appendChild(menu);
+  menu.querySelector(".history-menu-delete").addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeHistoryItemMenu();
+    showConfirmDelete("确定要删除这篇写作报告吗？", () => deleteWritingReport(entryId));
+  });
+  setTimeout(() => document.addEventListener("click", closeHistoryItemMenu, { once: true }), 0);
+}
+
+async function deleteWritingReport(entryId) {
+  if (!entryId) return;
+  try {
+    await api(`/api/writing/entries/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
+    state.writing.reportDetailCache.delete(entryId);
+    state.writing.reportEntries = state.writing.reportEntries.filter((item) => item.id !== entryId);
+    if (state.writing.activeReportId === entryId) {
+      state.writing.activeReportId = state.writing.reportEntries[0]?.id || null;
+      state.writing.activeReportDetail = null;
+    }
+    if (state.writing.entry?.id === entryId) {
+      state.writing.entry = null;
+      state.writing.dirty = false;
+      loadWritingSummary(false).catch(() => null);
+      renderWritingSurface();
+    }
+    if (!state.writing.reportEntries.length) {
+      await loadWritingReports(false);
+      return;
+    }
+    await renderWritingReports(state.writing.reportEntries);
+  } catch (error) {
+    showError(error);
+  }
 }
 
 function writingReportDetailHtml(entry) {
@@ -2132,7 +2334,7 @@ function writingReportDetailHtml(entry) {
         </div>
         <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
       </div>
-      <div class="score-row compact">
+      <div class="score-row compact writing-criteria-score-row">
         ${scoreCell(taskLabel, score[taskKey])}
         ${scoreCell("CC", score.coherence_cohesion)}
         ${scoreCell("LR", score.lexical_resource)}
@@ -2251,6 +2453,7 @@ function setWritingPrompt(prompt, clearAnswer = true) {
 
 function renderWritingSurface() {
   const taskType = state.writing.taskType || "task1_academic";
+  setWritingSwitchState(".writing-topbar-actions .writing-task-switch", taskType);
   document.querySelectorAll("[data-writing-task]").forEach((button) => {
     button.classList.toggle("active", button.dataset.writingTask === taskType);
   });
@@ -2309,9 +2512,15 @@ function openWritingPromptPicker(taskType = state.writing.taskType || "task1_aca
   state.writing.pickerTaskType = taskType;
   $("writingPromptModal")?.classList.remove("hidden");
   document.body.classList.add("modal-open");
+  const grid = $("writingPromptGrid");
+  if (grid) {
+    grid.classList.add("is-loading");
+    grid.innerHTML = centeredLoadingHtml("正在加载写作题库", "题目和 Task 1 图表正在准备。");
+  }
+  renderWritingPromptPickerShell(taskType);
   loadWritingPrompts(taskType)
     .then(() => renderWritingPromptPicker())
-    .catch(showWritingError);
+    .catch(renderWritingPromptPickerError);
 }
 
 function closeWritingPromptPicker() {
@@ -2321,9 +2530,12 @@ function closeWritingPromptPicker() {
 
 function writingPromptChoiceHtml(prompt, active = false) {
   const isTask1 = prompt.task_type === "task1_academic";
+  const imageHtml = isTask1
+    ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${prompt.image_url ? `<img src="${escapeHtml(prompt.image_url)}" alt="" loading="lazy" onerror="this.closest('.writing-prompt-choice-image').classList.add('placeholder'); this.remove();">` : "Task 1 chart"}</span>`
+    : "";
   return `
-    <button type="button" class="writing-prompt-choice ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
-      ${isTask1 && prompt.image_url ? `<span class="writing-prompt-choice-image"><img src="${escapeHtml(prompt.image_url)}" alt=""></span>` : ""}
+    <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
+      ${imageHtml}
       <span class="writing-prompt-choice-body">
         <strong>${escapeHtml(writingPromptDisplayTitle(prompt))}</strong>
         <small>${escapeHtml(writingPromptMeta(prompt))}</small>
@@ -2337,7 +2549,7 @@ function writingCatalogSlotHtml(slot) {
   const isTask1 = slot.task_type === "task1_academic";
   const statusText = isTask1 ? "\u5f85\u5bfc\u5165\u6388\u6743\u9898\u5e72/\u914d\u56fe" : "\u5f85\u5bfc\u5165\u6388\u6743\u9898\u5e72";
   return `
-    <button type="button" class="writing-prompt-choice missing" disabled aria-disabled="true">
+    <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} missing" disabled aria-disabled="true">
       ${isTask1 ? `<span class="writing-prompt-choice-image placeholder">Task 1 chart</span>` : ""}
       <span class="writing-prompt-choice-body">
         <strong>${escapeHtml(slot.source_label || slot.id || "Cambridge IELTS")}</strong>
@@ -2350,20 +2562,16 @@ function writingCatalogSlotHtml(slot) {
 
 function renderWritingPromptPicker() {
   const taskType = state.writing.pickerTaskType || state.writing.taskType || "task1_academic";
-  document.querySelectorAll("[data-writing-picker-task]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.writingPickerTask === taskType);
-  });
-  text("writingPromptModalHint", taskType === "task1_academic"
-    ? "Task 1 \u6709\u56fe\u8868\uff1b\u5251\u96c5\u76ee\u5f55\u6309 20 \u5230 1 \u6392\u5217\uff0c\u5f85\u5bfc\u5165\u7684\u539f\u9898\u4f1a\u7070\u663e\u3002"
-    : "Task 2 \u53ef\u6309\u9898\u578b\u7b5b\u9009\uff1b\u5251\u96c5\u76ee\u5f55\u6309 20 \u5230 1 \u6392\u5217\uff0c\u5f85\u5bfc\u5165\u7684\u539f\u9898\u4f1a\u7070\u663e\u3002");
+  renderWritingPromptPickerShell(taskType);
   renderWritingPromptTypeFilters(taskType);
   const selectedCategory = state.writing.pickerCategoryFilters[taskType] || "";
   const prompts = (state.writing.prompts[taskType] || []).filter((prompt) => !selectedCategory || prompt.category === selectedCategory);
   const missingSlots = writingCatalogMissingSlots(taskType, selectedCategory);
   const grid = $("writingPromptGrid");
   if (!grid) return;
+  grid.classList.remove("is-loading");
   if (!prompts.length && !missingSlots.length) {
-    grid.innerHTML = '<p class="muted">\u5f53\u524d\u7b5b\u9009\u4e0b\u6ca1\u6709\u53ef\u7528\u9898\u76ee\u3002</p>';
+    grid.innerHTML = '<p class="muted writing-prompt-empty">\u5f53\u524d\u7b5b\u9009\u4e0b\u6ca1\u6709\u53ef\u7528\u9898\u76ee\u3002</p>';
     return;
   }
   grid.innerHTML = [
@@ -2380,6 +2588,30 @@ function renderWritingPromptPicker() {
       closeWritingPromptPicker();
     });
   });
+}
+
+function renderWritingPromptPickerError(error) {
+  const grid = $("writingPromptGrid");
+  if (grid) {
+    grid.classList.remove("is-loading");
+    grid.innerHTML = `
+      <div class="writing-prompt-load-error">
+        <strong>写作题库加载失败</strong>
+        <span>${escapeHtml(error?.message || String(error || "请稍后重试。"))}</span>
+      </div>
+    `;
+  }
+  showWritingError(error);
+}
+
+function renderWritingPromptPickerShell(taskType) {
+  setWritingSwitchState(".writing-prompt-modal-toolbar .writing-task-switch", taskType);
+  document.querySelectorAll("[data-writing-picker-task]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.writingPickerTask === taskType);
+  });
+  text("writingPromptModalHint", taskType === "task1_academic"
+    ? "Task 1 \u6709\u56fe\u8868\uff1b\u5251\u96c5\u76ee\u5f55\u6309 20 \u5230 1 \u6392\u5217\uff0c\u5f85\u5bfc\u5165\u7684\u539f\u9898\u4f1a\u7070\u663e\u3002"
+    : "Task 2 \u53ef\u6309\u9898\u578b\u7b5b\u9009\uff1b\u5251\u96c5\u76ee\u5f55\u6309 20 \u5230 1 \u6392\u5217\uff0c\u5f85\u5bfc\u5165\u7684\u539f\u9898\u4f1a\u7070\u663e\u3002");
 }
 
 function renderWritingPromptTypeFilters(taskType) {
@@ -2895,15 +3127,16 @@ function fallbackCoachingNotice(turn) {
 async function loadP1Corpus() {
   const stats = $("p1CorpusStats");
   const container = $("p1CorpusTopics");
-  if (stats) stats.textContent = "Loading...";
-  if (container) container.innerHTML = '<p class="muted">正在加载 P1 题库...</p>';
-  try {
-    const payload = await api("/api/p1-corpus");
-    state.p1Corpus.topics = payload.topics || [];
-    if (stats) {
-      stats.textContent = `${payload.topic_count || state.p1Corpus.topics.length} 个话题 · ${payload.question_count || 0} 道题 · 已保存 ${payload.saved_count || 0}`;
-    }
+  if (state.p1Corpus.loaded) {
     renderP1CorpusTopics();
+    if (stats) stats.textContent = `${state.p1Corpus.topics.length} 个话题 · 刷新中`;
+  } else {
+    if (stats) stats.textContent = "Loading...";
+    if (container) container.innerHTML = '<p class="muted">正在加载 P1 题库...</p>';
+  }
+  try {
+    const payload = await fetchP1CorpusPayload();
+    applyP1CorpusPayload(payload);
   } catch (error) {
     if (container) container.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
     if (stats) stats.textContent = "加载失败";
@@ -2980,6 +3213,29 @@ function getCorpusMarkdownValue(textareaId) {
 function isCorpusEditorReady(textareaId) {
   const editor = corpusMarkdownEditors[textareaId];
   return !editor || !!editor._corpusReady;
+}
+
+function setCorpusEditorLoading(textareaId, isLoading) {
+  const textarea = $(textareaId);
+  if (!textarea) return;
+  const loadingId = `${textareaId}Loading`;
+  let loading = document.getElementById(loadingId);
+  if (isLoading && !loading) {
+    loading = document.createElement("div");
+    loading.id = loadingId;
+    loading.className = "corpus-editor-loading";
+    loading.innerHTML = `
+      <div>
+        <span class="spinner"></span>
+        <div>
+          <strong>正在打开编辑器</strong>
+          <span>首次加载 Markdown 编辑器需要几秒。</span>
+        </div>
+      </div>
+    `;
+    textarea.insertAdjacentElement("afterend", loading);
+  }
+  loading?.classList.toggle("hidden", !isLoading);
 }
 
 function setCorpusMarkdownValue(textareaId, value) {
@@ -3080,6 +3336,7 @@ function ensureCorpusMarkdownEditor(textareaId) {
     },
     after() {
       editor._corpusReady = true;
+      setCorpusEditorLoading(textareaId, false);
       if (editor._pendingCorpusValue !== undefined) {
         editor.setValue(editor._pendingCorpusValue || "", true);
         textarea.value = editor._pendingCorpusValue || "";
@@ -3108,8 +3365,8 @@ async function openP1CorpusEditor(entry) {
   if (storage.question_id && !preparedEntry.corpus_text) {
     if (!(state.p1Corpus.topics || []).length) {
       try {
-        const payload = await api("/api/p1-corpus");
-        state.p1Corpus.topics = payload.topics || [];
+        const payload = await fetchP1CorpusPayload();
+        applyP1CorpusPayload(payload);
       } catch (_error) {
         // The editor can still open with the current report answer.
       }
@@ -3137,6 +3394,7 @@ async function openP1CorpusEditor(entry) {
   if (aiBox) aiBox.innerHTML = aiAnswer ? renderMarkdown(aiAnswer) : "";
   text("p1CorpusSaveStatus", "");
   $("p1CorpusDialog")?.classList.remove("hidden");
+  if (!isCorpusEditorReady("p1CorpusText")) setCorpusEditorLoading("p1CorpusText", true);
   setTimeout(() => corpusMarkdownEditors.p1CorpusText?.focus?.() || $("p1CorpusText")?.focus(), 0);
 }
 
@@ -3214,14 +3472,16 @@ async function saveP1CorpusEntry(options = {}) {
 async function loadP2Corpus() {
   const stats = $("p2CorpusStats");
   const container = $("p2CorpusTopics");
-  if (stats) stats.textContent = "Loading...";
-  if (container) container.innerHTML = '<p class="muted">正在加载 P2 素材库...</p>';
-  try {
-    const payload = await api("/api/p2-corpus");
-    state.p2Corpus.categories = payload.categories || [];
-    if (stats) stats.textContent = `${payload.category_count || 5} 个分类 · 已保存 ${payload.material_count || 0}`;
+  if (state.p2Corpus.loaded) {
     renderP2CorpusTopics();
-    renderP2CorpusPrepPanel();
+    if (stats) stats.textContent = `${state.p2Corpus.categories.length} 个分类 · 刷新中`;
+  } else {
+    if (stats) stats.textContent = "Loading...";
+    if (container) container.innerHTML = '<p class="muted">正在加载 P2 素材库...</p>';
+  }
+  try {
+    const payload = await fetchP2CorpusPayload();
+    applyP2CorpusPayload(payload);
   } catch (error) {
     if (container) container.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
     if (stats) stats.textContent = "加载失败";
@@ -3246,10 +3506,21 @@ function renderP2CorpusTopics() {
         </header>
         <div class="p2-topic-material-list">
           ${items.map((item, index) => `
-            <button type="button" class="has-corpus" data-p2-corpus-entry="${escapeHtml(item.entry_id)}">
-              <strong>${index + 1}.</strong>
-              <span>${escapeHtml(item.title)}</span>
-            </button>
+            <div class="p2-material-row">
+              <button type="button" class="has-corpus" data-p2-corpus-entry="${escapeHtml(item.entry_id)}">
+                <strong>${index + 1}.</strong>
+                <span>${escapeHtml(item.title)}</span>
+              </button>
+              <button type="button" class="corpus-delete-button" data-p2-corpus-delete="${escapeHtml(item.entry_id)}" aria-label="删除素材" title="删除素材">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M3 6h18"></path>
+                  <path d="M8 6V4h8v2"></path>
+                  <path d="M19 6l-1 14H6L5 6"></path>
+                  <path d="M10 11v5"></path>
+                  <path d="M14 11v5"></path>
+                </svg>
+              </button>
+            </div>
           `).join("")}
           <button type="button" class="p2-add-material-button" data-p2-corpus-new="${escapeHtml(category.category)}">
             <strong>+</strong>
@@ -3298,12 +3569,21 @@ function renderLanguageTakeaways() {
     return;
   }
   list.innerHTML = items.map((item) => `
-    <button type="button"
-      class="language-takeaway-card ${hiddenMode && !revealed.has(item.entry_id) ? "is-concealed" : "is-revealed"}"
-      data-takeaway-entry="${escapeHtml(item.entry_id)}">
-      <strong class="takeaway-source">${escapeHtml(item.source_text)}</strong>
-      <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
-    </button>
+    <div class="language-takeaway-card-wrap ${hiddenMode && !revealed.has(item.entry_id) ? "is-concealed" : "is-revealed"}">
+      <button type="button" class="language-takeaway-card" data-takeaway-entry="${escapeHtml(item.entry_id)}">
+        <strong class="takeaway-source">${escapeHtml(item.source_text)}</strong>
+        <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
+      </button>
+      <button type="button" class="takeaway-delete-button" data-takeaway-delete="${escapeHtml(item.entry_id)}" aria-label="删除生词" title="删除生词">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M3 6h18"></path>
+          <path d="M8 6V4h8v2"></path>
+          <path d="M19 6l-1 14H6L5 6"></path>
+          <path d="M10 11v5"></path>
+          <path d="M14 11v5"></path>
+        </svg>
+      </button>
+    </div>
   `).join("");
 }
 
@@ -3350,6 +3630,17 @@ function revealAndSpeakLanguageTakeaway(entryId) {
   renderLanguageTakeaways();
 }
 
+async function deleteLanguageTakeawayEntry(entryId) {
+  if (!entryId) return;
+  showConfirmDelete("确定要删除这条生词吗？", async () => {
+    await api(`/api/language-takeaways/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
+    state.languageTakeaway.items = (state.languageTakeaway.items || []).filter((item) => item.entry_id !== entryId);
+    state.languageTakeaway.revealedEntryIds.delete(entryId);
+    renderLanguageTakeaways();
+    text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+  });
+}
+
 function languageTakeawayTranslationStatus(result) {
   if (result?.status === "ready" && result?.provider === "local") return "本地词典已填充，可继续编辑";
   if (result?.status === "ready") return "已翻译";
@@ -3357,6 +3648,15 @@ function languageTakeawayTranslationStatus(result) {
   if (result?.status === "missing_token") return "未配置翻译服务，可手动填写中文";
   if (result?.status === "unavailable") return "翻译服务暂不可用，可手动填写中文";
   return "可手动填写中文";
+}
+
+function setLanguageTakeawayStatus(message = "", options = {}) {
+  const status = $("languageTakeawayStatus");
+  if (!status) return;
+  status.classList.toggle("is-loading", Boolean(options.loading));
+  status.innerHTML = options.loading
+    ? `<span class="language-status-spinner" aria-hidden="true"></span><span>${escapeHtml(message)}</span>`
+    : escapeHtml(message);
 }
 
 function selectionText() {
@@ -3375,7 +3675,7 @@ function hideLanguageTakeawayTrigger() {
 
 function hideLanguageTakeawayPopup() {
   $("languageTakeawayPopup")?.classList.add("hidden");
-  text("languageTakeawayStatus", "");
+  setLanguageTakeawayStatus("");
 }
 
 function placeLanguageTakeawayTrigger(left, top) {
@@ -3430,7 +3730,7 @@ async function openLanguageTakeawayPopup() {
   if (!popup || !trigger) return;
   $("languageTakeawaySource").value = textValue;
   $("languageTakeawayChinese").value = "";
-  text("languageTakeawayStatus", "翻译中...");
+  setLanguageTakeawayStatus("翻译中...", { loading: true });
   const triggerRect = trigger.getBoundingClientRect();
   popup.classList.remove("hidden");
   placeLanguageTakeawayPopup(triggerRect.left, triggerRect.bottom + 8);
@@ -3441,17 +3741,17 @@ async function openLanguageTakeawayPopup() {
 async function translateLanguageTakeawaySource(sourceValue = null) {
   const sourceText = String(sourceValue ?? $("languageTakeawaySource")?.value ?? "").trim();
   if (!sourceText) {
-    text("languageTakeawayStatus", "原文为空。");
+    setLanguageTakeawayStatus("原文为空。");
     return;
   }
-  text("languageTakeawayStatus", "翻译中...");
+  setLanguageTakeawayStatus("翻译中...", { loading: true });
   try {
     const result = await api("/api/language-takeaways/translate", { text: sourceText });
     $("languageTakeawaySource").value = result.source_text || sourceText;
     $("languageTakeawayChinese").value = result.chinese_text || "";
-    text("languageTakeawayStatus", languageTakeawayTranslationStatus(result));
+    setLanguageTakeawayStatus(languageTakeawayTranslationStatus(result));
   } catch (error) {
-    text("languageTakeawayStatus", error.message || "翻译失败，可手动填写中文");
+    setLanguageTakeawayStatus(error.message || "翻译失败，可手动填写中文");
   }
 }
 
@@ -3459,10 +3759,10 @@ async function saveLanguageTakeaway() {
   const sourceText = ($("languageTakeawaySource")?.value || "").trim();
   const chineseText = ($("languageTakeawayChinese")?.value || "").trim();
   if (!sourceText) {
-    text("languageTakeawayStatus", "原文为空。");
+    setLanguageTakeawayStatus("原文为空。");
     return;
   }
-  text("languageTakeawayStatus", "保存中...");
+  setLanguageTakeawayStatus("保存中...");
   try {
     const saved = await api("/api/language-takeaways", {
       source_text: sourceText,
@@ -3479,7 +3779,7 @@ async function saveLanguageTakeaway() {
     text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
     hideLanguageTakeawayPopup();
   } catch (error) {
-    text("languageTakeawayStatus", error.message || "保存失败");
+    setLanguageTakeawayStatus(error.message || "保存失败");
   }
 }
 
@@ -3511,6 +3811,7 @@ function openP2CorpusEditor(entry = {}) {
   if ($("p2CorpusLinkedQuestion")) $("p2CorpusLinkedQuestion").value = entry.linked_question || "";
   text("p2CorpusSaveStatus", "");
   $("p2CorpusDialog")?.classList.remove("hidden");
+  if (!isCorpusEditorReady("p2CorpusText")) setCorpusEditorLoading("p2CorpusText", true);
   setTimeout(() => $("p2CorpusTitle")?.focus(), 0);
 }
 
@@ -3579,6 +3880,27 @@ async function saveP2CorpusEntry(options = {}) {
       button.textContent = original;
     }
   }
+}
+
+async function deleteP2CorpusEntry(entryId) {
+  if (!entryId) return;
+  showConfirmDelete("确定要删除这条 P2 素材吗？", async () => {
+    await api(`/api/p2-corpus/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
+    state.p2Corpus.categories = (state.p2Corpus.categories || []).map((category) => ({
+      ...category,
+      items: (category.items || []).filter((item) => item.entry_id !== entryId),
+    }));
+    if (state.p2Corpus.selectedEntryId === entryId) state.p2Corpus.selectedEntryId = "";
+    if (state.p2Corpus.activeEntry?.entry_id === entryId) closeP2CorpusEditor();
+    renderP2CorpusTopics();
+    renderP2CorpusPrepPanel();
+    const stats = $("p2CorpusStats");
+    if (stats) {
+      const count = (state.p2Corpus.categories || []).reduce((total, category) => total + (category.items || []).length, 0);
+      stats.textContent = `${state.p2Corpus.categories.length || 5} 个分类 · 已保存 ${count}`;
+    }
+    fetchP2CorpusPayload().then(applyP2CorpusPayload).catch(() => null);
+  });
 }
 
 function friendlyFeedbackError(error) {
@@ -3735,12 +4057,18 @@ function stopAllRuntime(label = "Ready") {
   clearExaminerAudioPreloads();
   $("browserTtsFallback")?.classList.add("hidden");
   $("cueTop")?.classList.add("hidden");
+  const p2PrepPanel = $("p2CorpusPrepPanel");
+  p2PrepPanel?.classList.add("hidden");
+  if (p2PrepPanel) p2PrepPanel.innerHTML = "";
   $("promptPane")?.classList.remove("cue");
-  $("promptPane")?.classList.add("hidden");
+  $("promptPane")?.classList.remove("hidden");
   $("practiceGrid")?.classList.remove("p2-mode", "practice-enter");
   summaryPanel?.classList.add("hidden");
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("exitPractice")?.classList.add("hidden");
+  text("promptKicker", "Prompt");
+  setPromptHtml("Start a voice practice session to load a question.", "short");
+  text("followUp", "");
   setRecordButton("ready", label, "Record the full section. No typing.");
   text("recordStatus", "Click Start. The examiner will load the questions automatically.");
   updateSidebarLock();
@@ -4074,6 +4402,13 @@ function bindEvents() {
     openP1CorpusEditor(findP1CorpusEntry(button.dataset.p1CorpusQuestion || ""));
   });
   $("p2CorpusTopics")?.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest("[data-p2-corpus-delete]");
+    if (deleteButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteP2CorpusEntry(deleteButton.dataset.p2CorpusDelete || "");
+      return;
+    }
     const existing = event.target.closest("[data-p2-corpus-entry]");
     if (existing) {
       openP2CorpusEditor(findP2CorpusEntry(existing.dataset.p2CorpusEntry || ""));
@@ -4087,6 +4422,13 @@ function bindEvents() {
   });
   $("languageTakeawayHideToggle")?.addEventListener("click", toggleLanguageTakeawayHiddenMode);
   $("languageTakeawayList")?.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest("[data-takeaway-delete]");
+    if (deleteButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteLanguageTakeawayEntry(deleteButton.dataset.takeawayDelete || "");
+      return;
+    }
     const card = event.target.closest("[data-takeaway-entry]");
     if (!card) return;
     revealAndSpeakLanguageTakeaway(card.dataset.takeawayEntry || "");
@@ -4212,6 +4554,10 @@ function bindEvents() {
       if (taskType === state.writing.taskType) return;
       if (state.writing.dirty && !window.confirm("当前作文还没有保存，确定要切换 Task 吗？")) return;
       state.writing.taskType = taskType;
+      setWritingSwitchState(".writing-topbar-actions .writing-task-switch", taskType);
+      document.querySelectorAll("[data-writing-task]").forEach((item) => {
+        item.classList.toggle("active", item.dataset.writingTask === taskType);
+      });
       state.writing.entry = null;
       state.writing.prompt = null;
       state.writing.dirty = false;
@@ -4234,7 +4580,13 @@ function bindEvents() {
     button.addEventListener("click", async () => {
       const taskType = button.dataset.writingPickerTask || "task1_academic";
       state.writing.pickerTaskType = taskType;
-      await loadWritingPrompts(taskType).catch(showWritingError);
+      renderWritingPromptPickerShell(taskType);
+      const grid = $("writingPromptGrid");
+      if (grid) {
+        grid.classList.add("is-loading");
+        grid.innerHTML = centeredLoadingHtml("正在加载写作题库", "题目和 Task 1 图表正在准备。");
+      }
+      await loadWritingPrompts(taskType).catch(renderWritingPromptPickerError);
       renderWritingPromptPicker();
     });
   });

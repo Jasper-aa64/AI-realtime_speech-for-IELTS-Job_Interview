@@ -21,9 +21,9 @@ from apps.ai.provider_config import (
     ProviderRoute,
     resolve_provider_route,
 )
-from apps.ai.orchestration import fail_billable_ai_task
+from apps.ai.orchestration import fail_billable_ai_task, fallback_billable_ai_task
 from apps.ai.services import fail_ai_task
-from apps.writing.services import complete_score_task, fallback_score_task
+from apps.writing.services import WritingEntryDeleted, complete_score_task, fallback_score_task
 
 
 DEFAULT_FALLBACK_REASON = "local fallback worker: real AI provider is not connected yet"
@@ -510,10 +510,20 @@ def _apply_writing_score_result(task: AITask, result: ProviderRunResult) -> Appl
         payload = dict(result.result_payload or {})
         if result.usage:
             payload["usage"] = result.usage
-        complete_score_task(task.task_id, payload)
+        try:
+            complete_score_task(task.task_id, payload)
+        except WritingEntryDeleted:
+            if task.billing_reservation_id:
+                fallback_billable_ai_task(task.task_id, "Writing entry was deleted before scoring completed.", {"entry_id": task.related_id})
+            return _refreshed_task_result(task, AITask.Status.FALLBACK)
         return _refreshed_task_result(task, AITask.Status.SUCCEEDED)
     if result.outcome == ProviderRunOutcome.FALLBACK:
-        fallback_score_task(task.task_id, result.reason or DEFAULT_FALLBACK_REASON)
+        try:
+            fallback_score_task(task.task_id, result.reason or DEFAULT_FALLBACK_REASON)
+        except WritingEntryDeleted:
+            if task.billing_reservation_id:
+                fallback_billable_ai_task(task.task_id, "Writing entry was deleted before scoring completed.", {"entry_id": task.related_id})
+            return _refreshed_task_result(task, AITask.Status.FALLBACK)
         return _refreshed_task_result(task, AITask.Status.FALLBACK)
     if result.outcome == ProviderRunOutcome.SKIPPED:
         return _apply_terminal_failure_for_claimed_task(task, result, summary_status=SUMMARY_STATUS_SKIPPED)
