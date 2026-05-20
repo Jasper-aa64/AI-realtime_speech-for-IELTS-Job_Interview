@@ -586,8 +586,9 @@ function switchView(view, options = {}) {
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
-  $(".topbar").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
-  $("#viewTitleBlock").classList.toggle("hidden", view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
+  $(".topbar").classList.toggle("hidden", view === "history" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
+  $("#viewTitleBlock").classList.toggle("hidden", view === "history" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view));
+  $("#writingTopbarActions")?.classList.toggle("hidden", view !== "writing");
   text("viewTitle", viewCopy[view][0]);
   text("viewSubtitle", viewCopy[view][1]);
   if (view === "history") loadHistory();
@@ -2254,10 +2255,20 @@ function renderWritingSurface() {
     button.classList.toggle("active", button.dataset.writingTask === taskType);
   });
   const prompt = state.writing.prompt;
+  const pickerButton = $("writingPromptPickerBtn");
+  const pickerHint = $("writingPromptPickerMeta");
   text("writingPromptType", writingTaskLabel(taskType));
   text("writingPromptTitle", prompt ? writingPromptDisplayTitle(prompt) : "\u9009\u62e9\u4e00\u9053\u9898\u5f00\u59cb");
   text("writingPromptPickerTitle", prompt ? writingPromptDisplayTitle(prompt) : "\u9009\u62e9\u5199\u4f5c\u9898\u76ee");
-  text("writingPromptPickerMeta", prompt ? writingPromptMeta(prompt) : writingTaskLabel(taskType));
+  if (pickerButton) {
+    pickerButton.title = prompt
+      ? `点击更换题目：${writingPromptDisplayTitle(prompt)}`
+      : "点击进入选题界面";
+    pickerButton.setAttribute("aria-label", pickerButton.title);
+  }
+  if (pickerHint) {
+    pickerHint.textContent = prompt ? "点击更换" : "打开题库";
+  }
   $("writingPromptText").innerHTML = renderMarkdown(prompt?.prompt || "\u8bf7\u9009\u62e9\u4e00\u9053\u9898\uff0c\u6216\u70b9\u51fb\u968f\u673a\u9898\u5f00\u59cb\u3002");
 
   // Render Task 1 image if available

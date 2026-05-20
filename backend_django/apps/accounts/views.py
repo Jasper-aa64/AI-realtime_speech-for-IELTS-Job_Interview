@@ -75,6 +75,20 @@ def read_json_body(request) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
+def resolve_login_username(identifier: str) -> str:
+    identifier = str(identifier or "").strip()
+    if not identifier:
+        return ""
+    user_model = get_user_model()
+    matches = user_model.objects.filter(username__iexact=identifier)
+    if not matches.exists():
+        matches = user_model.objects.filter(email__iexact=identifier)
+    if not matches.exists():
+        matches = user_model.objects.filter(phone_number=identifier)
+    user = matches.order_by("id").first()
+    return user.get_username() if user else identifier
+
+
 @require_http_methods(["GET"])
 def csrf_token(request):
     """Return CSRF token for client-side requests."""
@@ -147,13 +161,14 @@ def login_view(request):
         return error_response(throttle_error, status=429)
 
     payload = read_json_body(request)
-    username = str(payload.get("username") or "")
+    username = str(payload.get("username") or "").strip()
     password = str(payload.get("password") or "")
 
     if not username or not password:
         return error_response("Login failed", errors={"username": ["Username and password are required"]}, status=400)
 
-    user = authenticate(request, username=username, password=password)
+    auth_username = resolve_login_username(username)
+    user = authenticate(request, username=auth_username, password=password)
     if user is None:
         return error_response("Login failed", errors={"username": ["Invalid username or password"]}, status=401)
 

@@ -718,7 +718,7 @@ body.font-popular .nav-divider {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(280px, auto) auto minmax(0, 1fr);
+  grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
   align-items: start;
   gap: 18px;
 }
@@ -728,6 +728,54 @@ body.font-popular .nav-divider {
   align-items: center;
   gap: 10px;
   margin-left: auto;
+  min-width: 0;
+  justify-self: end;
+}
+
+.workspace.writing-workspace .topbar {
+  align-items: center;
+}
+
+.writing-topbar-actions {
+  width: min(760px, 100%);
+  justify-content: flex-end;
+}
+
+.writing-topbar-actions .writing-task-switch {
+  flex: 0 0 auto;
+  min-height: 40px;
+  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  align-self: center;
+}
+
+.writing-topbar-actions .writing-task-option {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.writing-topbar-actions .writing-picker-button {
+  width: min(380px, 42vw);
+  min-height: 40px;
+  height: 40px;
+  border-radius: 9px;
+  padding: 0 10px 0 12px;
+  box-shadow: none;
+}
+
+.writing-topbar-actions .writing-picker-button strong {
+  font-size: 14px;
+}
+
+.writing-topbar-actions .writing-picker-chip {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.topbar-random-button {
+  min-height: 40px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .user-avatar {
@@ -1667,9 +1715,9 @@ h1 {
 .writing-editor-card {
   grid-area: editor;
   display: grid;
-  grid-template-rows: auto auto auto minmax(500px, 1fr);
+  grid-template-rows: auto auto minmax(500px, 1fr);
   gap: 16px;
-  padding: 20px 20px 24px;
+  padding: 18px 20px 24px;
   max-height: calc(100vh - 96px - var(--safe-top) - var(--safe-bottom));
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -1846,7 +1894,7 @@ h1 {
   display: grid;
   grid-template-columns: minmax(190px, auto) minmax(0, 1fr);
   gap: 14px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .writing-task-switch {
@@ -1857,6 +1905,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fbfcfd;
+  align-self: stretch;
 }
 
 .writing-task-option {
@@ -1877,32 +1926,80 @@ h1 {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto;
   gap: 12px;
+  align-items: stretch;
 }
 
 .writing-picker-button {
   min-width: 0;
-  min-height: 42px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
+  min-height: 64px;
+  border: 1px solid #d8e7e2;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbfa 100%);
   color: var(--ink);
-  padding: 8px 12px;
+  padding: 10px 14px;
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
   text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(19, 32, 38, 0.05);
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.writing-picker-button span {
+.writing-picker-button:hover {
+  border-color: var(--accent);
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.12);
+  transform: translateY(-1px);
+}
+
+.writing-picker-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.writing-picker-kicker {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.writing-picker-button strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 850;
 }
 
-.writing-picker-button small {
-  color: var(--muted);
+.writing-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #e6f4f1;
+  color: var(--accent-dark);
   font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.writing-picker-chevron {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--muted);
 }
 
 .writing-actions-row select {
@@ -5270,7 +5367,7 @@ input, select {
     gap: 14px;
   }
   .writing-editor-card {
-    grid-template-rows: auto auto auto minmax(460px, 1fr);
+    grid-template-rows: auto auto minmax(460px, 1fr);
     padding: 18px;
   }
   .writing-task-bar {
@@ -5443,6 +5540,24 @@ input, select {
 
   .topbar {
     gap: 14px;
+  }
+
+  .workspace.writing-workspace .topbar {
+    align-items: stretch;
+  }
+
+  .writing-topbar-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    justify-self: stretch;
+    margin-left: 0;
+  }
+
+  .writing-topbar-actions .writing-picker-button {
+    width: 100%;
+    max-width: none;
   }
 
   h1 {
@@ -5677,6 +5792,22 @@ input, select {
   .topbar-actions {
     display: none !important;
   }
+  .workspace.writing-workspace .topbar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .workspace.writing-workspace .topbar-actions.writing-topbar-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    justify-self: stretch;
+    margin-left: 0;
+  }
+  .workspace.writing-workspace .writing-topbar-actions .writing-task-switch,
+  .workspace.writing-workspace .writing-topbar-actions .writing-picker-button,
+  .workspace.writing-workspace .writing-topbar-actions .topbar-random-button {
+    width: 100%;
+  }
   .history-layout {
     grid-template-columns: 1fr;
     display: grid;
@@ -5790,6 +5921,21 @@ input, select {
   .writing-task-bar,
   .writing-actions-row {
     grid-template-columns: 1fr;
+  }
+  .writing-picker-button {
+    min-height: 56px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .writing-picker-chip {
+    display: none;
+  }
+  .workspace.writing-workspace .writing-topbar-actions .writing-picker-button {
+    min-height: 42px;
+    height: auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .workspace.writing-workspace .writing-topbar-actions .writing-picker-button strong {
+    font-size: 14px;
   }
   .modal {
     padding: 10px;

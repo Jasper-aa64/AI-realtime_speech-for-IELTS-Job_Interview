@@ -156,6 +156,36 @@ class AccountsApiTests(TestCase):
         )
         self.assertEqual(new_login.status_code, 200)
 
+    def test_login_accepts_email_and_phone_identifier(self):
+        user = get_user_model().objects.create_user(
+            username="identifier-owner",
+            email="identifier@example.com",
+            phone_number="18728445039",
+            password="test-pass-12345",
+        )
+        client = Client(enforce_csrf_checks=True)
+
+        csrf = client.get("/api/accounts/csrf/").json()["csrfToken"]
+        email_login = client.post(
+            "/api/accounts/login/",
+            data={"username": user.email, "password": "test-pass-12345"},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf,
+        )
+        self.assertEqual(email_login.status_code, 200)
+        self.assertEqual(email_login.json()["user"]["username"], user.username)
+
+        client.post("/api/accounts/logout/", content_type="application/json", HTTP_X_CSRFTOKEN=csrf)
+        csrf = client.get("/api/accounts/csrf/").json()["csrfToken"]
+        phone_login = client.post(
+            "/api/accounts/login/",
+            data={"username": user.phone_number, "password": "test-pass-12345"},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf,
+        )
+        self.assertEqual(phone_login.status_code, 200)
+        self.assertEqual(phone_login.json()["user"]["username"], user.username)
+
     def test_password_change_requires_authentication(self):
         client = Client(enforce_csrf_checks=True)
         csrf = client.get("/api/accounts/csrf/").json()["csrfToken"]

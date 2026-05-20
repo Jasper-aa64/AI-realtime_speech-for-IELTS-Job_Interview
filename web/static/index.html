@@ -84,6 +84,22 @@
             <h1 id="viewTitle">首页</h1>
             <p id="viewSubtitle">选择今天要练的口语模式。</p>
           </div>
+          <div id="writingTopbarActions" class="topbar-actions writing-topbar-actions hidden" aria-label="Writing controls">
+            <div class="writing-task-switch" role="group" aria-label="Writing task type">
+              <button type="button" class="writing-task-option active" data-writing-task="task1_academic">Task 1</button>
+              <button type="button" class="writing-task-option" data-writing-task="task2">Task 2</button>
+            </div>
+            <button id="writingPromptPickerBtn" class="writing-picker-button" type="button">
+              <span class="writing-picker-copy">
+                <strong id="writingPromptPickerTitle">选择写作题目</strong>
+              </span>
+              <span id="writingPromptPickerMeta" class="writing-picker-chip">打开题库</span>
+              <svg class="writing-picker-chevron" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M9 6l6 6-6 6"></path>
+              </svg>
+            </button>
+            <button id="writingRandomBtn" class="ghost topbar-random-button" type="button">换一道随机题</button>
+          </div>
         </header>
 
         <div id="busyBar" class="busy-bar hidden" role="status" aria-live="polite">
@@ -387,19 +403,6 @@
         <section id="writingPanel" class="panel writing-panel hidden">
           <div class="writing-shell">
             <article class="writing-editor-card">
-              <div class="writing-task-bar">
-                <div class="writing-task-switch" role="group" aria-label="Writing task type">
-                  <button type="button" class="writing-task-option active" data-writing-task="task1_academic">Task 1</button>
-                  <button type="button" class="writing-task-option" data-writing-task="task2">Task 2</button>
-                </div>
-                <div class="writing-actions-row">
-                  <button id="writingPromptPickerBtn" class="writing-picker-button" type="button">
-                    <span id="writingPromptPickerTitle">选择写作题目</span>
-                    <small id="writingPromptPickerMeta">Task 1 Academic</small>
-                  </button>
-                  <button id="writingRandomBtn" class="ghost" type="button">换一道随机题</button>
-                </div>
-              </div>
               <div class="writing-prompt-card">
                 <div>
                   <span id="writingPromptType" class="writing-pill">Task 1 Academic</span>
