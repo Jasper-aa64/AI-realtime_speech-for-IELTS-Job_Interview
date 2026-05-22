@@ -111,6 +111,7 @@ class WritingApiTests(TestCase):
         source_book: int | None = None,
         source_test: int | None = None,
         source_question: int | None = None,
+        source: str = "local_seed",
     ) -> WritingPrompt:
         return WritingPrompt.objects.create(
             prompt_id=prompt_id,
@@ -122,6 +123,7 @@ class WritingApiTests(TestCase):
             source_book=source_book,
             source_test=source_test,
             source_question=source_question,
+            source=source,
         )
 
     def create_entry(
@@ -358,12 +360,110 @@ class WritingApiTests(TestCase):
         scored = score.json()
         self.assertEqual(scored["status"], WritingEntry.Status.SCORED)
         self.assertEqual(scored["score"]["backend"], "fallback")
-        self.assertIn("AI 评分生成失败", scored["score"]["feedback_markdown"])
+        self.assertIn("AI \u8bc4\u5206\u751f\u6210\u5931\u8d25", scored["score"]["feedback_markdown"])
         self.assertEqual(scored["writing_profile"]["total_scored"], 1)
 
         summary_after_score = self.client.get("/api/writing/summary?month=2026-05").json()
         self.assertEqual(summary_after_score["stats"]["scored_entries"], 1)
         self.assertEqual(next(day for day in summary_after_score["days"] if day["date"] == "2026-05-14")["status"], "scored")
+
+    def test_prompt_list_returns_user_practice_statuses(self):
+        unpracticed_prompt = self.create_prompt(
+            prompt_id="task2-status-unpracticed",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Unpracticed prompt",
+            prompt="Some people believe public transport should be free. Discuss.",
+        )
+        saved_prompt = self.create_prompt(
+            prompt_id="task2-status-saved",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Saved prompt",
+            prompt="Some people think cities should limit private cars. Discuss.",
+        )
+        scored_prompt = self.create_prompt(
+            prompt_id="task2-status-scored",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Scored prompt",
+            prompt="Some people think museums should be free. Discuss.",
+        )
+        self.create_entry(prompt=saved_prompt, answer=paragraph_answer("Saved answer.", "Second paragraph."))
+        self.create_entry(
+            prompt=scored_prompt,
+            answer=paragraph_answer("Scored answer.", "Second paragraph."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+
+        response = self.client.get("/api/writing/prompts?task_type=task2")
+        self.assertEqual(response.status_code, 200)
+        by_id = {item["id"]: item for item in response.json()["items"]}
+        self.assertEqual(by_id[unpracticed_prompt.prompt_id]["practice_status"], "unpracticed")
+        self.assertEqual(by_id[unpracticed_prompt.prompt_id]["practice_status_label"], "\u672a\u7ec3\u4e60")
+        self.assertEqual(by_id[saved_prompt.prompt_id]["practice_status"], "saved")
+        self.assertEqual(by_id[saved_prompt.prompt_id]["practice_status_label"], "\u5df2\u4fdd\u5b58")
+        self.assertEqual(by_id[scored_prompt.prompt_id]["practice_status"], "scored")
+        self.assertEqual(by_id[scored_prompt.prompt_id]["practice_status_label"], "\u5df2\u8bc4\u5206")
+
+    def test_public_task1_samples_are_labeled_and_have_images(self):
+        response = self.client.get("/api/writing/prompts?task_type=task1_academic")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+
+        self.assertGreaterEqual(len(items), 2)
+        by_id = {item["id"]: item for item in items}
+        self.assertEqual(by_id["public_sample_task1_bc_001"]["source_label"], "\u5b98\u65b9\u516c\u5f00\u6837\u9898 1")
+        self.assertTrue(by_id["public_sample_task1_bc_001"]["image_url"])
+        self.assertEqual(by_id["public_sample_task1_bc_002"]["source_label"], "\u5b98\u65b9\u516c\u5f00\u6837\u9898 2")
+        self.assertTrue(by_id["public_sample_task1_bc_002"]["image_url"])
+
+    def test_random_prompt_excludes_scored_but_not_saved_until_all_scored(self):
+        saved_prompt = self.create_prompt(
+            prompt_id="task2-random-saved-still-eligible",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Saved still eligible",
+            prompt="Some people think online shopping is replacing local shops. Discuss.",
+            category="random_status",
+        )
+        scored_prompt = self.create_prompt(
+            prompt_id="task2-random-scored-excluded",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Scored excluded",
+            prompt="Some people think art classes are less important than science. Discuss.",
+            category="random_status",
+        )
+        self.create_entry(prompt=saved_prompt, answer=paragraph_answer("Saved answer.", "Second paragraph."))
+        self.create_entry(
+            prompt=scored_prompt,
+            answer=paragraph_answer("Scored answer.", "Second paragraph."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+
+        response = self.client.post(
+            "/api/writing/prompts/random",
+            data={"task_type": "task2", "category": "random_status"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], saved_prompt.prompt_id)
+        self.assertEqual(response.json()["practice_status"], "saved")
+        self.assertTrue(response.json()["unwritten"])
+
+        self.create_entry(
+            prompt=saved_prompt,
+            answer=paragraph_answer("Second scored answer.", "Second paragraph."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        fallback_response = self.client.post(
+            "/api/writing/prompts/random",
+            data={"task_type": "task2", "category": "random_status"},
+            content_type="application/json",
+        )
+        self.assertEqual(fallback_response.status_code, 200)
+        self.assertIn(fallback_response.json()["id"], {saved_prompt.prompt_id, scored_prompt.prompt_id})
+        self.assertFalse(fallback_response.json()["unwritten"])
+
 
     def test_writing_reports_are_owner_scoped_ordered_and_include_latest_ai_task(self):
         older_prompt = self.create_prompt(
@@ -858,7 +958,7 @@ class WritingApiTests(TestCase):
 
         self.assertEqual(fallback["status"], WritingEntry.Status.SCORED)
         self.assertEqual(fallback["score"]["backend"], "fallback")
-        self.assertIn("AI 评分生成失败", fallback["score"]["feedback_markdown"])
+        self.assertIn("AI \u8bc4\u5206\u751f\u6210\u5931\u8d25", fallback["score"]["feedback_markdown"])
         task = AITask.objects.get(task_id=task_payload["id"])
         self.assertEqual(task.status, AITask.Status.FALLBACK)
         detail_after_fallback = self.client.get(f"/api/writing/entries/{save['id']}")
@@ -951,34 +1051,38 @@ class WritingApiTests(TestCase):
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
     def test_prompt_bank_filters_categories_and_sorts_cambridge_descending(self):
+        image_path = "/assets/writing/task1/cambridge/20/test_1_task_1.png"
         self.create_prompt(
-            prompt_id="cambridge-19-test-1-task-1",
+            prompt_id="cambridge-20-test-1-task-1",
             task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
-            title="Cambridge IELTS 19 Test 1 Task 1",
-            prompt="Authorized Task 1 prompt text.",
-            image_url="/assets/writing/task1/cambridge/19/test_1_task_1.png",
-            category="line_graph",
-            source_book=19,
+            title="Cambridge 20 Test 1 Task 1",
+            prompt="The first table below shows a Cambridge test prompt.",
+            category="table",
+            image_url=image_path,
+            source="cambridge_ielts_authorized_import",
+            source_book=20,
             source_test=1,
             source_question=1,
         )
         self.create_prompt(
-            prompt_id="cambridge-20-test-1-task-1",
+            prompt_id="cambridge-19-test-1-task-1",
             task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
-            title="Cambridge IELTS 20 Test 1 Task 1",
-            prompt="Authorized Task 1 prompt text.",
-            image_url="/assets/writing/task1/cambridge/20/test_1_task_1.png",
+            title="Cambridge 19 Test 1 Task 1",
+            prompt="The line graph below shows another Cambridge test prompt.",
             category="line_graph",
-            source_book=20,
+            image_url="/assets/writing/task1/cambridge/19/test_1_task_1.png",
+            source="cambridge_ielts_authorized_import",
+            source_book=19,
             source_test=1,
             source_question=1,
         )
         self.create_prompt(
             prompt_id="cambridge-20-test-2-task-2",
             task_type=WritingPrompt.TaskType.TASK2,
-            title="Cambridge IELTS 20 Test 2 Task 2",
-            prompt="Authorized Task 2 prompt text.",
+            title="Cambridge 20 Test 2 Task 2",
+            prompt="Some people think a Cambridge test prompt should be practised. To what extent do you agree?",
             category="opinion",
+            source="cambridge_ielts_authorized_import",
             source_book=20,
             source_test=2,
             source_question=2,
@@ -986,39 +1090,46 @@ class WritingApiTests(TestCase):
         self.create_prompt(
             prompt_id="cambridge-20-test-3-task-2",
             task_type=WritingPrompt.TaskType.TASK2,
-            title="Cambridge IELTS 20 Test 3 Task 2",
-            prompt="Authorized Task 2 prompt text.",
+            title="Cambridge 20 Test 3 Task 2",
+            prompt="Some people think another Cambridge prompt should be practised. Discuss both views.",
             category="discussion",
+            source="cambridge_ielts_authorized_import",
             source_book=20,
             source_test=3,
             source_question=2,
         )
 
-        task1 = self.client.get("/api/writing/prompts?task_type=task1_academic&category=line_graph")
+        task1 = self.client.get("/api/writing/prompts?task_type=task1_academic&category=table")
         self.assertEqual(task1.status_code, 200)
         task1_payload = task1.json()
         task1_ids = [item["id"] for item in task1_payload["items"]]
-        self.assertLess(task1_ids.index("cambridge-20-test-1-task-1"), task1_ids.index("cambridge-19-test-1-task-1"))
-        self.assertEqual(task1_payload["items"][0]["source_book"], 20)
-        self.assertEqual(task1_payload["items"][0]["source_label"], "剑雅20-1 Task 1")
-        self.assertTrue(task1_payload["items"][0]["image_url"])
+        self.assertIn("cambridge-20-test-1-task-1", task1_ids)
+        all_task1 = self.client.get("/api/writing/prompts?task_type=task1_academic")
+        self.assertEqual(all_task1.status_code, 200)
+        all_task1_ids = [item["id"] for item in all_task1.json()["items"]]
+        self.assertLess(all_task1_ids.index("cambridge-20-test-1-task-1"), all_task1_ids.index("cambridge-19-test-1-task-1"))
+        cambridge_task1_items = [item for item in task1_payload["items"] if item["source_book"]]
+        self.assertEqual(cambridge_task1_items[0]["source_book"], 20)
+        self.assertEqual(cambridge_task1_items[0]["source_label"], "\u5251\u96c520-1 Task 1")
+        self.assertTrue(cambridge_task1_items[0]["image_url"])
         self.assertEqual(len(task1_payload["catalog"]), 80)
         self.assertEqual(task1_payload["catalog"][0]["id"], "cambridge-20-test-1-task-1")
-        self.assertEqual(task1_payload["catalog"][0]["source_label"], "剑雅20-1 Task 1")
-        self.assertIn("line_graph", {item["category"] for item in task1_payload["categories"]})
+        self.assertEqual(task1_payload["catalog"][0]["source_label"], "\u5251\u96c520-1 Task 1")
+        self.assertIn("table", {item["category"] for item in task1_payload["categories"]})
         self.assertGreaterEqual(
-            next(item["count"] for item in task1_payload["categories"] if item["category"] == "line_graph"),
-            5,
+            next(item["count"] for item in task1_payload["categories"] if item["category"] == "table"),
+            1,
         )
 
         task2 = self.client.get("/api/writing/prompts?task_type=task2&category=opinion")
         self.assertEqual(task2.status_code, 200)
         task2_payload = task2.json()
         self.assertTrue(task2_payload["items"])
-        self.assertEqual(task2_payload["items"][0]["source_label"], "剑雅20-2 Task 2")
+        cambridge_task2_items = [item for item in task2_payload["items"] if item["source_book"]]
+        self.assertTrue(cambridge_task2_items[0]["source_label"].startswith("\u5251\u96c520-"))
         self.assertEqual(len(task2_payload["catalog"]), 80)
         self.assertEqual(task2_payload["catalog"][0]["id"], "cambridge-20-test-1-task-2")
-        self.assertEqual(task2_payload["catalog"][0]["source_label"], "剑雅20-1 Task 2")
+        self.assertEqual(task2_payload["catalog"][0]["source_label"], "\u5251\u96c520-1 Task 2")
         self.assertTrue(all(item["task_type"] == WritingPrompt.TaskType.TASK2 for item in task2_payload["items"]))
         self.assertTrue(all(item["category"] == "opinion" for item in task2_payload["items"]))
 

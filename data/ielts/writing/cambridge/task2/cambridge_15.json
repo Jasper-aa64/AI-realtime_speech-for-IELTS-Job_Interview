@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 15,
+  "prompts": [
+    {
+      "id": "cambridge-15-test-1-task-2",
+      "title": "Cambridge IELTS 15 Test 1 Task 2",
+      "category": "two_part",
+      "source_book": 15,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅15-1 Task 2",
+      "prompt": "In some countries, owning a home rather than renting one is very important for people. Why might this be the case? Do you think this is a positive or negative situation? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-15-academic-writing-test-1-task-2/",
+      "sort_order": 61
+    },
+    {
+      "id": "cambridge-15-test-2-task-2",
+      "title": "Cambridge IELTS 15 Test 2 Task 2",
+      "category": "opinion",
+      "source_book": 15,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅15-2 Task 2",
+      "prompt": "In the future, nobody will buy printed books or newspapers because they will be able to read everything they want online without paying? To what extent, do you agree or disagree with this statement? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-15-academic-writing-test-2-task-2/",
+      "sort_order": 62
+    },
+    {
+      "id": "cambridge-15-test-3-task-2",
+      "title": "Cambridge IELTS 15 Test 3 Task 2",
+      "category": "discussion",
+      "source_book": 15,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅15-3 Task 2",
+      "prompt": "Some people say that advertising is extremely successful at persuading us to buy things. Other people think that advertising is so common that we no longer pay attention to it. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-15-academic-writing-test-3-task-2/",
+      "sort_order": 63
+    },
+    {
+      "id": "cambridge-15-test-4-task-2",
+      "title": "Cambridge IELTS 15 Test 4 Task 2",
+      "category": "advantages_disadvantages",
+      "source_book": 15,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅15-4 Task 2",
+      "prompt": "In some cultures, children are often told that they can achieve anything if they try hard enough. What are the advantages and disadvantages of giving children this message. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-15-academic-writing-test-4-task-2/",
+      "sort_order": 64
+    }
+  ]
+}

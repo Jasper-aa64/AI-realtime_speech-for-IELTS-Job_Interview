@@ -1,0 +1,69 @@
+{
+  "task_type": "task1_academic",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 14,
+  "prompts": [
+    {
+      "id": "cambridge-14-test-1-task-1",
+      "title": "Cambridge IELTS 14 Test 1 Task 1",
+      "category": "bar_chart",
+      "source_book": 14,
+      "source_test": 1,
+      "source_question": 1,
+      "source_label": "剑雅14-1 Task 1",
+      "prompt": "The chart below show the average percentages in typical meals of three types of nutrients, all of which may be unhealthy if eaten too much. Summarise the information by selecting and reporting the main features and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-14-academic-writing-test-1-task-1/",
+      "sort_order": 71,
+      "image_url": "/assets/writing/task1/cambridge/14/test_1_task_1.jpg",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-14-academic-writing-test-1-1.jpg"
+    },
+    {
+      "id": "cambridge-14-test-2-task-1",
+      "title": "Cambridge IELTS 14 Test 2 Task 1",
+      "category": "table",
+      "source_book": 14,
+      "source_test": 2,
+      "source_question": 1,
+      "source_label": "剑雅14-2 Task 1",
+      "prompt": "The chart below shows the value of one country’s exports in various categories during 2015 and 2016. The table shows the percentage change in each category of exports in 2016 compared with 2015. Summarise the information by selecting and reporting the main features and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-14-academic-writing-test-2-task-1/",
+      "sort_order": 72,
+      "image_url": "/assets/writing/task1/cambridge/14/test_2_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-14-academic-writing-test-2-1.png"
+    },
+    {
+      "id": "cambridge-14-test-3-task-1",
+      "title": "Cambridge IELTS 14 Test 3 Task 1",
+      "category": "process",
+      "source_book": 14,
+      "source_test": 3,
+      "source_question": 1,
+      "source_label": "剑雅14-3 Task 1",
+      "prompt": "The diagram below shows how electricity is generated in a hydroelectric power station. Summarise the information by selecting and reporting the main features and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-14-academic-writing-test-3-task-1/",
+      "sort_order": 73,
+      "image_url": "/assets/writing/task1/cambridge/14/test_3_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-14-academic-writing-test-3-1.png"
+    },
+    {
+      "id": "cambridge-14-test-4-task-1",
+      "title": "Cambridge IELTS 14 Test 4 Task 1",
+      "category": "map",
+      "source_book": 14,
+      "source_test": 4,
+      "source_question": 1,
+      "source_label": "剑雅14-4 Task 1",
+      "prompt": "The plans below show a public park when it first opened in 1920 and the same park today. Summarise the information by selecting and reporting the main features and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-14-academic-writing-test-4-task-1/",
+      "sort_order": 74,
+      "image_url": "/assets/writing/task1/cambridge/14/test_4_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-14-academic-writing-test-4-1.png"
+    }
+  ]
+}

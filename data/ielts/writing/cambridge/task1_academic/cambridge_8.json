@@ -1,0 +1,39 @@
+{
+  "task_type": "task1_academic",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://msslearning.com/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 8,
+  "prompts": [
+    {
+      "id": "cambridge-8-test-2-task-1",
+      "title": "Cambridge IELTS 8 Test 2 Task 1",
+      "category": "pie_chart",
+      "source_book": 8,
+      "source_test": 2,
+      "source_question": 1,
+      "source_label": "??8-2 Task 1",
+      "prompt": "The three pie charts below show the changes in annual spending by a particular UK school in 1981, 1991 and 2001. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://msslearning.com/cambridge-ielts-8-academic-writing-test-2/",
+      "sort_order": 132,
+      "image_url": "/assets/writing/task1/cambridge/8/test_2_task_1.png",
+      "source_image_url": "https://msslearning.com/wp-content/uploads/2023/12/Cambridge-IELTS-8-Academic-Writing-Test-1-The-three-pie-charts-below-show-the-changes-in-annual-spending-by-a-particular-UK-school-in-1981-1991-and-2001.png"
+    },
+    {
+      "id": "cambridge-8-test-4-task-1",
+      "title": "Cambridge IELTS 8 Test 4 Task 1",
+      "category": "line_graph",
+      "source_book": 8,
+      "source_test": 4,
+      "source_question": 1,
+      "source_label": "??8-4 Task 1",
+      "prompt": "The graph below shows the quantities of goods transported in the UK between 1974 and 2002 by four different modes of transport. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://msslearning.com/cambridge-ielts-8-academic-writing-test-4/",
+      "sort_order": 134,
+      "image_url": "/assets/writing/task1/cambridge/8/test_4_task_1.png",
+      "source_image_url": "https://msslearning.com/wp-content/uploads/2023/12/Cambridge-IELTS-8-Academic-Writing-Test-4-The-graph-below-shows-the-quantities-of-goods-transported-in-the-UK-between-1974-and-2002-by-four-different-modes-of-transport.png"
+    }
+  ]
+}

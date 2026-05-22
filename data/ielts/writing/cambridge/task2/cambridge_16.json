@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 16,
+  "prompts": [
+    {
+      "id": "cambridge-16-test-1-task-2",
+      "title": "Cambridge IELTS 16 Test 1 Task 2",
+      "category": "two_part",
+      "source_book": 16,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅16-1 Task 2",
+      "prompt": "In some countries, more and more people are becoming interested in finding out about the history of the house or building they live in. What are the reasons for this? How can people research this? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-16-academic-writing-test-1-task-2/",
+      "sort_order": 51
+    },
+    {
+      "id": "cambridge-16-test-2-task-2",
+      "title": "Cambridge IELTS 16 Test 2 Task 2",
+      "category": "two_part",
+      "source_book": 16,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅16-2 Task 2",
+      "prompt": "In their advertising, businesses nowadays usually emphasise that their products are new in some way. Why is this? Do you think it is a positive or negative development? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-16-academic-writing-test-2-task-2/",
+      "sort_order": 52
+    },
+    {
+      "id": "cambridge-16-test-3-task-2",
+      "title": "Cambridge IELTS 16 Test 3 Task 2",
+      "category": "problem_solution",
+      "source_book": 16,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅16-3 Task 2",
+      "prompt": "Many manufactured food and drink products contain high levels of sugar, which causes many health problems. Sugary products should be made more expensive to encourage people to consume less sugar. Do you agree or disagree? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-16-academic-writing-test-3-task-2/",
+      "sort_order": 53
+    },
+    {
+      "id": "cambridge-16-test-4-task-2",
+      "title": "Cambridge IELTS 16 Test 4 Task 2",
+      "category": "advantages_disadvantages",
+      "source_book": 16,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅16-4 Task 2",
+      "prompt": "In the future all cars, buses and trucks will be driverless. The only people travelling inside these vehicles will be passengers. Do you think the advantages of driverless vehicles outweigh the disadvantages? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-16-academic-writing-test-4-task-2/",
+      "sort_order": 54
+    }
+  ]
+}

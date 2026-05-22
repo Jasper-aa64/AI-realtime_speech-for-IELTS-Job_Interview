@@ -7,8 +7,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260519-takeaway-compact">
+    <link rel="stylesheet" href="/styles.css?v=20260522-cambridge-real-prompts-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -21,6 +24,7 @@
           </svg>
           <span>返回</span>
         </button>
+        <button type="button" id="accountBackBtn" class="account-back-button hidden">Back</button>
         <div id="writingTopbarActions" class="topbar-actions writing-topbar-actions hidden" aria-label="Writing controls">
           <div class="writing-task-switch" role="group" aria-label="Writing task type">
             <button type="button" class="writing-task-option active" data-writing-task="task1_academic">Task 1</button>
@@ -35,7 +39,15 @@
               <path d="M9 6l6 6-6 6"></path>
             </svg>
           </button>
-          <button id="writingRandomBtn" class="ghost topbar-random-button" type="button">换一道随机题</button>
+          <button id="writingRandomBtn" class="topbar-random-button" type="button" title="换一道随机题">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M20 11a8 8 0 0 0-14.4-4.8L4 8"></path>
+              <path d="M4 4v4h4"></path>
+              <path d="M4 13a8 8 0 0 0 14.4 4.8L20 16"></path>
+              <path d="M20 20v-4h-4"></path>
+            </svg>
+                <span>随机换题</span>
+          </button>
         </div>
         <div class="global-topbar-spacer"></div>
         <div class="global-topbar-actions">
@@ -149,6 +161,13 @@
             </div>
             <section id="p2CorpusPrepPanel" class="p2-corpus-prep hidden"></section>
             <div class="exam-actions">
+              <button id="peekP1CorpusBtn" class="p1-corpus-peek-button hidden" type="button" aria-label="查看这道 P1 题的语料">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
+                  <path d="M9.6 20h4.8"></path>
+                  <path d="M10.7 21.75h2.6"></path>
+                </svg>
+              </button>
               <button id="openP1CorpusBtn" class="p1-corpus-entry hidden" type="button">
                 <svg aria-hidden="true" viewBox="0 0 24 24">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
@@ -266,12 +285,33 @@
             <label class="p1-corpus-label" for="p1CorpusText">我的语料</label>
             <textarea id="p1CorpusText" class="p1-corpus-textarea" spellcheck="true"></textarea>
             <div class="p1-corpus-ai-box">
-              <strong>7分回答参考</strong>
+              <div class="p1-corpus-ai-head">
+                <strong>7分回答参考</strong>
+                <button id="copyP1AiAnswerBtn" type="button" aria-label="复制7分回答参考" title="复制">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
               <div id="p1CorpusAiAnswer"></div>
             </div>
             <div class="p1-corpus-dialog-actions">
               <span id="p1CorpusSaveStatus"></span>
             </div>
+          </div>
+        </div>
+
+        <div id="p1CorpusPeekDialog" class="p1-corpus-dialog p1-corpus-peek-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="p1CorpusPeekTitle">
+          <div class="p1-corpus-dialog-card p1-corpus-peek-card">
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="p1CorpusPeekTopic">PART 1</span>
+                <h3 id="p1CorpusPeekTitle">语料提示</h3>
+              </div>
+              <button id="closeP1CorpusPeekBtn" type="button">关闭</button>
+            </header>
+            <div id="p1CorpusPeekBody" class="p1-corpus-peek-body"></div>
           </div>
         </div>
 
@@ -373,7 +413,21 @@
         </div>
 
         <section id="historyPanel" class="panel hidden">
-          <div id="historyList" class="history-list">No attempts yet.</div>
+          <div class="history-rail-shell">
+            <div class="history-rail-head">
+              <div>
+                <strong>Reports</strong>
+                <span>横向滑动</span>
+              </div>
+              <div class="history-rail-actions" aria-label="Report rail controls">
+                <button type="button" id="historyRailPrev" class="history-rail-nav" aria-label="Previous report">‹</button>
+                <button type="button" id="historyRailNext" class="history-rail-nav" aria-label="Next report">›</button>
+              </div>
+            </div>
+            <div class="history-rail-window">
+              <div id="historyList" class="history-list">No attempts yet.</div>
+            </div>
+          </div>
           <article id="detailPanel" class="detail-panel">
             <h2>Attempt Details</h2>
             <p class="muted">Select a history item to review the full report.</p>
@@ -416,7 +470,6 @@
             <aside class="writing-result-card">
               <div class="writing-card-head">
                 <div>
-                  <span class="section-label">Check-in</span>
                   <h2 id="writingMonthLabel">本月签到</h2>
                 </div>
                 <button id="writingRefreshBtn" class="writing-icon-button ghost" type="button" title="刷新写作数据" aria-label="刷新写作数据">
@@ -486,6 +539,7 @@
                 <button type="button" class="writing-task-option" data-writing-picker-task="task2">Task 2</button>
               </div>
               <div class="writing-prompt-filter-wrap">
+                <div id="writingPromptSourceFilters" class="writing-prompt-source-filters" role="group" aria-label="Writing prompt source filter"></div>
                 <div id="writingPromptTypeFilters" class="writing-prompt-type-filters" role="group" aria-label="Writing question type filter"></div>
                 <p id="writingPromptModalHint">Task 1 题目会显示对应图表；选择后再开始写作。</p>
               </div>
@@ -518,7 +572,21 @@
         </div>
 
         <section id="writingReportsPanel" class="panel writing-reports-panel hidden">
-          <div id="writingReportList" class="history-list writing-report-list">还没有写作记录。</div>
+          <div class="history-rail-shell writing-report-rail-shell">
+            <div class="history-rail-head">
+              <div>
+                <strong>Reports</strong>
+                <span>横向滑动</span>
+              </div>
+              <div class="history-rail-actions" aria-label="Writing report rail controls">
+                <button type="button" id="writingReportRailPrev" class="history-rail-nav" aria-label="Previous writing report">‹</button>
+                <button type="button" id="writingReportRailNext" class="history-rail-nav" aria-label="Next writing report">›</button>
+              </div>
+            </div>
+            <div class="history-rail-window">
+              <div id="writingReportList" class="history-list writing-report-list">还没有写作记录。</div>
+            </div>
+          </div>
           <article id="writingReportDetail" class="detail-panel">
             <h2>写作报告</h2>
             <p class="muted">选择一条写作记录查看评分与 AI 辅导。</p>
@@ -526,6 +594,7 @@
         </section>
 
         <section id="loginPanel" class="panel hidden auth-panel">
+          <button type="button" id="loginBackBtn" class="auth-back-button">← 返回</button>
           <div class="auth-stage">
             <aside class="auth-copy">
               <span class="auth-kicker">IELTS Studio Account</span>
@@ -738,7 +807,6 @@
         </div>
       </main>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
-    <script src="/app.js?v=20260519-takeaway-compact"></script>
+    <script src="/app.js?v=20260522-cambridge-real-prompts-4"></script>
   </body>
 </html>

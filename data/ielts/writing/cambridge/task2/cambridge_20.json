@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 20,
+  "prompts": [
+    {
+      "id": "cambridge-20-test-1-task-2",
+      "title": "Cambridge IELTS 20 Test 1 Task 2",
+      "category": "opinion",
+      "source_book": 20,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅20-1 Task 2",
+      "prompt": "Access to clean water is a basic human right. Therefore, every home should have a water supply that is provided free of charge. Do you agree or disagree? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-1-task-2/",
+      "sort_order": 11
+    },
+    {
+      "id": "cambridge-20-test-2-task-2",
+      "title": "Cambridge IELTS 20 Test 2 Task 2",
+      "category": "two_part",
+      "source_book": 20,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅20-2 Task 2",
+      "prompt": "In many countries, primary and secondary schools close for two months or more in the summer holidays. What is the value of long school holidays? What are the arguments in favour of shorter school holidays? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-2-task-2/",
+      "sort_order": 12
+    },
+    {
+      "id": "cambridge-20-test-3-task-2",
+      "title": "Cambridge IELTS 20 Test 3 Task 2",
+      "category": "advantages_disadvantages",
+      "source_book": 20,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅20-3 Task 2",
+      "prompt": "Some people have decided to reduce the number of times they fly every year or to stop flying altogether. Do you think the environmental benefits of this development outweigh the disadvantages for individuals and businesses? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-3-task-2/",
+      "sort_order": 13
+    },
+    {
+      "id": "cambridge-20-test-4-task-2",
+      "title": "Cambridge IELTS 20 Test 4 Task 2",
+      "category": "opinion",
+      "source_book": 20,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅20-4 Task 2",
+      "prompt": "Many aspects of the way people dress today are influenced by global fashion trends. How has global fashion become such a strong influence on people's lives? Do you think this is a positive or negative development? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-4-task-2/",
+      "sort_order": 14
+    }
+  ]
+}

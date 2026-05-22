@@ -3,6 +3,7 @@ import hashlib
 import json
 import random
 import re
+import threading
 import uuid
 from decimal import Decimal
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import DateTimeField, F, OuterRef, Subquery
+from django.db.models import DateTimeField, Exists, F, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 
@@ -29,6 +30,26 @@ WRITING_TASK_LABELS = {
     WritingPrompt.TaskType.TASK2: "Task 2",
 }
 WRITING_TASK_TYPES = set(WRITING_TASK_LABELS)
+WRITING_CATEGORY_LABELS = {
+    "line_graph": "\u6298\u7ebf\u56fe",
+    "bar_chart": "\u67f1\u72b6\u56fe",
+    "pie_chart": "\u997c\u56fe",
+    "table": "\u8868\u683c",
+    "map": "\u5730\u56fe",
+    "process": "\u6d41\u7a0b\u56fe",
+    "mixed": "\u6df7\u5408\u56fe",
+    "opinion": "\u89c2\u70b9\u7c7b",
+    "discussion": "\u8ba8\u8bba\u7c7b",
+    "problem_solution": "\u95ee\u9898\u89e3\u51b3\u7c7b",
+    "causes_solutions": "\u539f\u56e0\u89e3\u51b3\u7c7b",
+    "causes_effects": "\u539f\u56e0\u5f71\u54cd\u7c7b",
+    "advantages_disadvantages": "\u5229\u5f0a\u7c7b",
+    "two_part": "\u53cc\u95ee\u9898\u7c7b",
+}
+
+_seed_prompt_sync_lock = threading.Lock()
+_seed_prompt_sync_done = False
+_seed_prompt_min_loaded_count = 50
 
 
 class WritingError(ValueError):
@@ -72,17 +93,17 @@ def paragraph_guidance(task_type: str) -> dict[str, Any]:
             "title": "Task 1 需要先分段，再进行 AI 评分",
             "message": "你的作文现在还没有清楚分段。Task 1 评分会看信息组织和概述位置，所以请先把答案分成 3-4 段。",
             "tips": [
-                "第 1 段：改写题目，说明图表/地图/流程图展示什么。",
-                "第 2 段：Overview，总结最明显的总体趋势或关键特征，不要堆细节。",
+                "第 1 段：改写题目，说明图表、地图或流程图展示的内容。",
+                "第 2 段：写 Overview，总结最明显的总体趋势或关键特征，不要堆细节。",
                 "第 3-4 段：按类别、时间段或对比关系展开主要数据和细节。",
             ],
         }
     return {
         "task_type": normalized,
         "title": "Task 2 需要先分段，再进行 AI 评分",
-        "message": "你的作文现在还没有清楚分段。Task 2 评分会看观点展开和段落组织，所以请先把答案分成清楚的 4 段左右。",
+        "message": "你的作文现在还没有清楚分段。Task 2 评分会看观点展开和段落组织，所以请先把答案分成清晰的 4 段左右。",
         "tips": [
-            "第 1 段：引入题目并给出你的立场或回应方向。",
+            "第 1 段：引入题目，并给出你的立场或回应方向。",
             "第 2-3 段：每段只讲一个中心观点，用解释和例子展开。",
             "第 4 段：总结立场，不要加入新的大观点。",
         ],
@@ -125,6 +146,12 @@ def seed_prompt_files(task_type: str) -> list[Path]:
     main_file = base_dir / f"{task_type}.json"
     if main_file.exists():
         files.append(main_file)
+    public_file = base_dir / "public_samples" / f"{task_type}.json"
+    if public_file.exists():
+        files.append(public_file)
+    reported_file = base_dir / "reported_actual" / f"{task_type}.json"
+    if reported_file.exists():
+        files.append(reported_file)
     cambridge_dir = base_dir / "cambridge" / task_type
     if cambridge_dir.exists():
         files.extend(sorted(path for path in cambridge_dir.rglob("*.json") if path.is_file()))
@@ -134,13 +161,26 @@ def seed_prompt_files(task_type: str) -> list[Path]:
 def writing_prompt_sort_key(prompt: WritingPrompt) -> tuple:
     task_rank = 0 if prompt.task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else 1
     has_no_book = prompt.source_book is None
+    if prompt.source_book:
+        source_rank = 0
+        sort_order = prompt.sort_order or 999_999
+    elif prompt.source.startswith("reported_actual_"):
+        source_rank = 1
+        sort_order = -(prompt.sort_order or 0)
+    elif prompt.source == "public_official_sample":
+        source_rank = 2
+        sort_order = prompt.sort_order or 999_999
+    else:
+        source_rank = 3
+        sort_order = prompt.sort_order or 999_999
     return (
         task_rank,
+        source_rank,
         has_no_book,
         -(prompt.source_book or 0),
         prompt.source_test or 999,
         prompt.source_question or 999,
-        prompt.sort_order or 999_999,
+        sort_order,
         prompt.prompt_id,
     )
 
@@ -149,7 +189,14 @@ def normalize_category(value: str | None) -> str:
     category = str(value or "").strip().lower()
     if category in {"", "all", "*"}:
         return ""
-    return category
+    aliases = {
+        "flowchart": "process",
+        "flow_chart": "process",
+        "maps": "map",
+        "mixed_graph": "mixed",
+        "mixed-graph": "mixed",
+    }
+    return aliases.get(category, category)
 
 
 def cambridge_source_label(task_type: str, source_book: int | None, source_test: int | None, source_question: int | None) -> str:
@@ -157,6 +204,19 @@ def cambridge_source_label(task_type: str, source_book: int | None, source_test:
         return ""
     task_number = source_question or (1 if task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else 2)
     return f"\u5251\u96c5{source_book}-{source_test} Task {task_number}"
+
+
+def prompt_source_label(prompt: WritingPrompt) -> str:
+    cambridge_label = cambridge_source_label(prompt.task_type, prompt.source_book, prompt.source_test, prompt.source_question)
+    if cambridge_label:
+        return cambridge_label
+    if prompt.source == "public_official_sample":
+        return f"\u5b98\u65b9\u516c\u5f00\u6837\u9898 {prompt.sort_order or ''}".strip()
+    if prompt.source == "local_sample_bank":
+        return f"\u672c\u5730\u6837\u9898 {prompt.sort_order or ''}".strip()
+    if prompt.source.startswith("reported_actual_"):
+        return prompt.title or "\u4e2d\u56fd\u8003\u533a\u771f\u9898"
+    return prompt.title or ""
 
 
 def cambridge_catalog(task_type: str | None = None) -> list[dict[str, Any]]:
@@ -206,8 +266,43 @@ def cambridge_catalog(task_type: str | None = None) -> list[dict[str, Any]]:
     )
 
 
-def prompt_payload(prompt: WritingPrompt) -> dict[str, Any]:
-    source_label = cambridge_source_label(prompt.task_type, prompt.source_book, prompt.source_test, prompt.source_question)
+WRITING_PROMPT_STATUS_LABELS = {
+    "unpracticed": "\u672a\u7ec3\u4e60",
+    "saved": "\u5df2\u4fdd\u5b58",
+    "scored": "\u5df2\u8bc4\u5206",
+}
+
+
+def prompt_status_payload(status: str | None = None) -> dict[str, str]:
+    normalized = status if status in WRITING_PROMPT_STATUS_LABELS else "unpracticed"
+    return {
+        "practice_status": normalized,
+        "practice_status_label": WRITING_PROMPT_STATUS_LABELS[normalized],
+    }
+
+
+def prompt_practice_statuses(user, prompts: list[WritingPrompt]) -> dict[str, str]:
+    if not prompts or not user or not getattr(user, "is_authenticated", False):
+        return {}
+    prompt_ids = [prompt.prompt_id for prompt in prompts]
+    entries = (
+        WritingEntry.objects.filter(user=user, prompt__prompt_id__in=prompt_ids)
+        .annotate(has_score=Exists(WritingScore.objects.filter(entry=OuterRef("pk"))))
+        .values("prompt__prompt_id", "status", "has_score")
+    )
+    statuses: dict[str, str] = {}
+    for entry in entries:
+        prompt_id = entry["prompt__prompt_id"]
+        current = statuses.get(prompt_id, "unpracticed")
+        if entry["status"] == WritingEntry.Status.SCORED or entry["has_score"]:
+            statuses[prompt_id] = "scored"
+        elif current != "scored" and entry["status"] == WritingEntry.Status.SAVED:
+            statuses[prompt_id] = "saved"
+    return statuses
+
+
+def prompt_payload(prompt: WritingPrompt, practice_status: str | None = None) -> dict[str, Any]:
+    source_label = prompt_source_label(prompt)
     return {
         "id": prompt.prompt_id,
         "task_type": prompt.task_type,
@@ -222,49 +317,67 @@ def prompt_payload(prompt: WritingPrompt) -> dict[str, Any]:
         "source_question": prompt.source_question,
         "source_label": source_label,
         "sort_order": prompt.sort_order,
-    }
+    } | prompt_status_payload(practice_status)
 
 
 def sync_seed_prompts() -> None:
-    for task_type in sorted(WRITING_TASK_TYPES):
-        for path in seed_prompt_files(task_type):
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                raise WritingError(f"Unable to load writing prompts: {path}") from exc
-            raw_items = payload.get("prompts") if isinstance(payload, dict) else payload
-            if not isinstance(raw_items, list):
-                raise WritingError(f"Writing prompt file must contain a prompts array: {path}")
-            file_book = positive_int(payload.get("book") if isinstance(payload, dict) else None)
-            file_test = positive_int(payload.get("test") if isinstance(payload, dict) else None)
-            file_source = str(payload.get("source") or "").strip() if isinstance(payload, dict) else ""
-            for index, raw_item in enumerate(raw_items):
-                if not isinstance(raw_item, dict):
-                    raise WritingError(f"Writing prompt must be an object in {path}")
-                prompt_text = str(raw_item.get("prompt") or raw_item.get("question") or "").strip()
-                if not prompt_text:
-                    continue
-                prompt_task_type = normalize_task_type(str(raw_item.get("task_type") or task_type))
-                prompt_id = str(raw_item.get("id") or "").strip() or stable_prompt_id(prompt_task_type, prompt_text)
-                source_book = positive_int(raw_item.get("source_book") or raw_item.get("book")) or file_book
-                source_test = positive_int(raw_item.get("source_test") or raw_item.get("test")) or file_test
-                source_question = positive_int(raw_item.get("source_question") or raw_item.get("question_number"))
-                WritingPrompt.objects.update_or_create(
-                    prompt_id=prompt_id[:120],
-                    defaults={
-                        "task_type": prompt_task_type,
-                        "title": str(raw_item.get("title") or f"{WRITING_TASK_LABELS[prompt_task_type]} {index + 1}")[:200],
-                        "category": normalize_category(str(raw_item.get("category") or ""))[:120],
-                        "prompt": prompt_text,
-                        "image_url": str(raw_item.get("image_url") or raw_item.get("image") or "")[:500],
-                        "source": str(raw_item.get("source") or file_source or "local_seed")[:120],
-                        "source_book": source_book,
-                        "source_test": source_test,
-                        "source_question": source_question,
-                        "sort_order": positive_int(raw_item.get("sort_order")) or index + 1,
-                        "is_active": True,
-                    },
-                )
+    global _seed_prompt_sync_done
+    if _seed_prompt_sync_done and WritingPrompt.objects.filter(is_active=True).count() >= _seed_prompt_min_loaded_count:
+        return
+    with _seed_prompt_sync_lock:
+        if _seed_prompt_sync_done and WritingPrompt.objects.filter(is_active=True).count() >= _seed_prompt_min_loaded_count:
+            return
+        _sync_seed_prompts_locked()
+        _seed_prompt_sync_done = True
+
+
+def _sync_seed_prompts_locked() -> None:
+    active_reported_prompt_ids: set[str] = set()
+    with transaction.atomic():
+        for task_type in sorted(WRITING_TASK_TYPES):
+            for path in seed_prompt_files(task_type):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise WritingError(f"Unable to load writing prompts: {path}") from exc
+                raw_items = payload.get("prompts") if isinstance(payload, dict) else payload
+                if not isinstance(raw_items, list):
+                    raise WritingError(f"Writing prompt file must contain a prompts array: {path}")
+                file_book = positive_int(payload.get("book") if isinstance(payload, dict) else None)
+                file_test = positive_int(payload.get("test") if isinstance(payload, dict) else None)
+                file_source = str(payload.get("source") or "").strip() if isinstance(payload, dict) else ""
+                for index, raw_item in enumerate(raw_items):
+                    if not isinstance(raw_item, dict):
+                        raise WritingError(f"Writing prompt must be an object in {path}")
+                    prompt_text = str(raw_item.get("prompt") or raw_item.get("question") or "").strip()
+                    if not prompt_text:
+                        continue
+                    prompt_task_type = normalize_task_type(str(raw_item.get("task_type") or task_type))
+                    prompt_id = str(raw_item.get("id") or "").strip() or stable_prompt_id(prompt_task_type, prompt_text)
+                    source_book = positive_int(raw_item.get("source_book") or raw_item.get("book")) or file_book
+                    source_test = positive_int(raw_item.get("source_test") or raw_item.get("test")) or file_test
+                    source_question = positive_int(raw_item.get("source_question") or raw_item.get("question_number"))
+                    source = str(raw_item.get("source") or file_source or "local_seed")[:120]
+                    if source.startswith("reported_actual_"):
+                        active_reported_prompt_ids.add(prompt_id[:120])
+                    WritingPrompt.objects.update_or_create(
+                        prompt_id=prompt_id[:120],
+                        defaults={
+                            "task_type": prompt_task_type,
+                            "title": str(raw_item.get("title") or f"{WRITING_TASK_LABELS[prompt_task_type]} {index + 1}")[:200],
+                            "category": normalize_category(str(raw_item.get("category") or ""))[:120],
+                            "prompt": prompt_text,
+                            "image_url": str(raw_item.get("image_url") or raw_item.get("image") or "")[:500],
+                            "source": source,
+                            "source_book": source_book,
+                            "source_test": source_test,
+                            "source_question": source_question,
+                            "sort_order": positive_int(raw_item.get("sort_order")) or index + 1,
+                            "is_active": True,
+                        },
+                    )
+        if active_reported_prompt_ids:
+            WritingPrompt.objects.filter(source__startswith="reported_actual_").exclude(prompt_id__in=active_reported_prompt_ids).update(is_active=False)
 
 
 def prompt_categories(task_type: str | None = None) -> list[dict[str, Any]]:
@@ -275,10 +388,10 @@ def prompt_categories(task_type: str | None = None) -> list[dict[str, Any]]:
     counts: dict[str, int] = {}
     for category in queryset.exclude(category="").values_list("category", flat=True):
         counts[category] = counts.get(category, 0) + 1
-    return [{"category": key, "label": key.replace("_", " ").title(), "count": counts[key]} for key in sorted(counts)]
+    return [{"category": key, "label": WRITING_CATEGORY_LABELS.get(key, key.replace("_", " ").title()), "count": counts[key]} for key in sorted(counts)]
 
 
-def list_prompts(task_type: str | None = None, category: str | None = None) -> list[dict[str, Any]]:
+def list_prompts(task_type: str | None = None, category: str | None = None, user=None) -> list[dict[str, Any]]:
     sync_seed_prompts()
     queryset = WritingPrompt.objects.filter(is_active=True)
     if task_type:
@@ -286,7 +399,9 @@ def list_prompts(task_type: str | None = None, category: str | None = None) -> l
     normalized_category = normalize_category(category)
     if normalized_category:
         queryset = queryset.filter(category=normalized_category)
-    return [prompt_payload(prompt) for prompt in sorted(queryset, key=writing_prompt_sort_key)]
+    prompts = sorted(queryset, key=writing_prompt_sort_key)
+    statuses = prompt_practice_statuses(user, prompts)
+    return [prompt_payload(prompt, statuses.get(prompt.prompt_id)) for prompt in prompts]
 
 
 def next_default_task_type(date_value=None) -> str:
@@ -304,14 +419,36 @@ def random_prompt(user, task_type: str | None = None, category: str | None = Non
     prompts = sorted(queryset, key=writing_prompt_sort_key)
     if not prompts:
         raise WritingError(f"No writing prompts available for {selected_type}")
-    used_ids = set(
-        WritingEntry.objects.filter(user=user, status__in=[WritingEntry.Status.SAVED, WritingEntry.Status.SCORED])
+    cambridge_prompts = [prompt for prompt in prompts if prompt.source_book and prompt.source_test]
+    if cambridge_prompts:
+        prompts = cambridge_prompts
+    catalog_slots = cambridge_catalog(selected_type)
+    scored_ids = set(
+        WritingEntry.objects.filter(user=user)
+        .filter(Q(status=WritingEntry.Status.SCORED) | Q(score__isnull=False))
         .exclude(prompt__isnull=True)
         .values_list("prompt__prompt_id", flat=True)
     )
-    unused = [prompt for prompt in prompts if prompt.prompt_id not in used_ids]
-    selected = random.choice(unused or prompts)
-    return {**prompt_payload(selected), "selection": "random", "unwritten": bool(unused)}
+    unused = [prompt for prompt in prompts if prompt.prompt_id not in scored_ids]
+    pool = unused or prompts
+    selected = random.choice(pool)
+    statuses = prompt_practice_statuses(user, prompts)
+    payload = prompt_payload(selected, statuses.get(selected.prompt_id))
+    if not payload.get("source_label") and catalog_slots:
+        try:
+            selected_index = prompts.index(selected)
+        except ValueError:
+            selected_index = 0
+        slot = catalog_slots[selected_index % len(catalog_slots)]
+        payload["display_catalog_id"] = slot.get("id") or ""
+        payload["display_source_label"] = slot.get("source_label") or ""
+        payload["source_label"] = slot.get("source_label") or ""
+        payload["source_book"] = slot.get("source_book")
+        payload["source_test"] = slot.get("source_test")
+        payload["source_question"] = slot.get("source_question")
+        if not payload.get("image_url") and slot.get("expected_image_url"):
+            payload["image_url"] = slot.get("expected_image_url") or ""
+    return {**payload, "selection": "random", "unwritten": bool(unused)}
 
 
 def month_bounds(month_value: str | None):

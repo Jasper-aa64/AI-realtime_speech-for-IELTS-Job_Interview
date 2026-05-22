@@ -61,7 +61,7 @@ def prompts(request):
     try:
         task_type = request.GET.get("task_type")
         return JsonResponse({
-            "items": list_prompts(task_type, request.GET.get("category")),
+            "items": list_prompts(task_type, request.GET.get("category"), request.user),
             "categories": prompt_categories(task_type),
             "catalog": cambridge_catalog(task_type),
         })

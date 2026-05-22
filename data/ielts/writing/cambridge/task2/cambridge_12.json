@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 12,
+  "prompts": [
+    {
+      "id": "cambridge-12-test-1-task-2",
+      "title": "Cambridge IELTS 12 Test 1 Task 2",
+      "category": "opinion",
+      "source_book": 12,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅12-1 Task 2",
+      "prompt": "Some people believe that it is good to share as much information as possible in scientific research, business and the academic world. Others believe that some information is too important or too valuable to be shared freely. Discuss both these view and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-12-academic-writing-test-1-task-2/",
+      "sort_order": 91
+    },
+    {
+      "id": "cambridge-12-test-2-task-2",
+      "title": "Cambridge IELTS 12 Test 2 Task 2",
+      "category": "advantages_disadvantages",
+      "source_book": 12,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅12-2 Task 2",
+      "prompt": "At the present time, the population of some countries includes a relatively large number of young adults, compared with the number of older people. Do the advantages of this situation outweigh the disadvantages? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-12-academic-writing-test-2-task-2/",
+      "sort_order": 92
+    },
+    {
+      "id": "cambridge-12-test-3-task-2",
+      "title": "Cambridge IELTS 12 Test 3 Task 2",
+      "category": "discussion",
+      "source_book": 12,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅12-3 Task 2",
+      "prompt": "In a number of countries, some people think it is necessary to spend large sums of money on constructing new railway lines for very fast trains between cities. Others believe the money should be spent on improving existing public transport. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-12-academic-writing-test-3-task-2/",
+      "sort_order": 93
+    },
+    {
+      "id": "cambridge-12-test-4-task-2",
+      "title": "Cambridge IELTS 12 Test 4 Task 2",
+      "category": "opinion",
+      "source_book": 12,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅12-4 Task 2",
+      "prompt": "Some people believe that allowing children to make their own choices on everyday matters (such as food, clothes and entertainment) is likely to result in a society of individuals who only think about their own wishes. Other people believe that it is important for children to make decisions about matters that affect them. Discuss both these view and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-12-academic-writing-test-4-task-2/",
+      "sort_order": 94
+    }
+  ]
+}

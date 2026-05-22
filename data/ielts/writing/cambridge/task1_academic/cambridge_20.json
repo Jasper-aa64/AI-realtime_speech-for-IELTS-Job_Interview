@@ -1,0 +1,69 @@
+{
+  "task_type": "task1_academic",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 20,
+  "prompts": [
+    {
+      "id": "cambridge-20-test-1-task-1",
+      "title": "Cambridge IELTS 20 Test 1 Task 1",
+      "category": "table",
+      "source_book": 20,
+      "source_test": 1,
+      "source_question": 1,
+      "source_label": "剑雅20-1 Task 1",
+      "prompt": "The first table below shows changes in the total population of New York City from 1800 to 2000. The second and third tables show changes in the population of the five districts of the city (Manhattan, Brooklyn, Bronx, Queens, Staten Island) over the same period. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-1-task-1/",
+      "sort_order": 11,
+      "image_url": "/assets/writing/task1/cambridge/20/test_1_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2025/07/Cambridge-IELTS-20-Academic-Writing-Test-1-1.png"
+    },
+    {
+      "id": "cambridge-20-test-2-task-1",
+      "title": "Cambridge IELTS 20 Test 2 Task 1",
+      "category": "map",
+      "source_book": 20,
+      "source_test": 2,
+      "source_question": 1,
+      "source_label": "剑雅20-2 Task 1",
+      "prompt": "The plans below show the site of a farm in 1950 and the same site today. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-2-task-1/",
+      "sort_order": 12,
+      "image_url": "/assets/writing/task1/cambridge/20/test_2_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2025/07/Cambridge-IELTS-20-Academic-Writing-Test-2-1.png"
+    },
+    {
+      "id": "cambridge-20-test-3-task-1",
+      "title": "Cambridge IELTS 20 Test 3 Task 1",
+      "category": "bar_chart",
+      "source_book": 20,
+      "source_test": 3,
+      "source_question": 1,
+      "source_label": "剑雅20-3 Task 1",
+      "prompt": "The charts below give information about a public library in a town called Little Chalfont. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-3-task-1/",
+      "sort_order": 13,
+      "image_url": "/assets/writing/task1/cambridge/20/test_3_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2025/07/Cambridge-IELTS-20-Academic-Writing-Test-3-1.png"
+    },
+    {
+      "id": "cambridge-20-test-4-task-1",
+      "title": "Cambridge IELTS 20 Test 4 Task 1",
+      "category": "process",
+      "source_book": 20,
+      "source_test": 4,
+      "source_question": 1,
+      "source_label": "剑雅20-4 Task 1",
+      "prompt": "The diagram below shows how fabric is manufactured from bamboo. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-4-task-1/",
+      "sort_order": 14,
+      "image_url": "/assets/writing/task1/cambridge/20/test_4_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2025/07/Cambridge-IELTS-20-Academic-Writing-Test-4-1.png"
+    }
+  ]
+}

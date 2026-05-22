@@ -1,0 +1,35 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://msslearning.com/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 7,
+  "prompts": [
+    {
+      "id": "cambridge-7-test-1-task-2",
+      "title": "Cambridge IELTS 7 Test 1 Task 2",
+      "category": "discussion",
+      "source_book": 7,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "??7-1 Task 2",
+      "prompt": "It is generally believed that some people are born with certain talents, for instance for sport or music, and others are not. However, it is sometimes claimed that any child can be taught to become a good sports person or musician. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://msslearning.com/cambridge-ielts-7-academic-writing-test-1/",
+      "sort_order": 141
+    },
+    {
+      "id": "cambridge-7-test-3-task-2",
+      "title": "Cambridge IELTS 7 Test 3 Task 2",
+      "category": "opinion",
+      "source_book": 7,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "??7-3 Task 2",
+      "prompt": "As most people spend a major part of their adult life at work, job satisfaction is an important element of individual wellbeing. What factors contribute to job satisfaction? How realistic is the expectation of job satisfaction for all workers? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://msslearning.com/cambridge-ielts-7-academic-writing-test-3/",
+      "sort_order": 143
+    }
+  ]
+}

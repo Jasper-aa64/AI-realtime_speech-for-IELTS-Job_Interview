@@ -19,6 +19,7 @@ vcpkg_installed/
 
 # 日志文件
 logs/
+.runlogs/
 *.log
 interview_report_*.json
 termi.txt

@@ -1,0 +1,54 @@
+{
+  "task_type": "task1_academic",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 11,
+  "prompts": [
+    {
+      "id": "cambridge-11-test-1-task-1",
+      "title": "Cambridge IELTS 11 Test 1 Task 1",
+      "category": "bar_chart",
+      "source_book": 11,
+      "source_test": 1,
+      "source_question": 1,
+      "source_label": "剑雅11-1 Task 1",
+      "prompt": "The charts below show the percentage of water used for different purposes in six areas of the world. Summarise the information by selecting and reporting the main features and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-11-academic-writing-test-1-task-1/",
+      "sort_order": 101,
+      "image_url": "/assets/writing/task1/cambridge/11/test_1_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-11-academic-writing-test-1-1.png"
+    },
+    {
+      "id": "cambridge-11-test-2-task-1",
+      "title": "Cambridge IELTS 11 Test 2 Task 1",
+      "category": "bar_chart",
+      "source_book": 11,
+      "source_test": 2,
+      "source_question": 1,
+      "source_label": "剑雅11-2 Task 1",
+      "prompt": "The charts below show the proportions of British students at one university in England who were able to speak other languages in addition to English, in 2000 and 2010. Summarise the information by selecting and reporting the main features and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-11-academic-writing-test-2-task-1/",
+      "sort_order": 102,
+      "image_url": "/assets/writing/task1/cambridge/11/test_2_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-11-academic-writing-test-2-1.png"
+    },
+    {
+      "id": "cambridge-11-test-3-task-1",
+      "title": "Cambridge IELTS 11 Test 3 Task 1",
+      "category": "line_graph",
+      "source_book": 11,
+      "source_test": 3,
+      "source_question": 1,
+      "source_label": "剑雅11-3 Task 1",
+      "prompt": "The graph below shows the average carbon dioxide (CO2) emissions per person in the United Kingdom, Sweden, Italy and Portugal between 1967 and 2007. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-11-academic-writing-test-3-task-1/",
+      "sort_order": 103,
+      "image_url": "/assets/writing/task1/cambridge/11/test_3_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-11-academic-writing-test-3-1.png"
+    }
+  ]
+}

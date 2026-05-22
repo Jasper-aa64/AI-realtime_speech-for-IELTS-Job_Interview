@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 18,
+  "prompts": [
+    {
+      "id": "cambridge-18-test-1-task-2",
+      "title": "Cambridge IELTS 18 Test 1 Task 2",
+      "category": "opinion",
+      "source_book": 18,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅18-1 Task 2",
+      "prompt": "The most important aim of science should be to improve people’s lives. To what extent do you agree or disagree with this statement? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-18-academic-writing-test-1-task-2/",
+      "sort_order": 31
+    },
+    {
+      "id": "cambridge-18-test-2-task-2",
+      "title": "Cambridge IELTS 18 Test 2 Task 2",
+      "category": "discussion",
+      "source_book": 18,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅18-2 Task 2",
+      "prompt": "Some university students want to learn about other subjects in addition to their main subjects. Others believe it is more important to give all their time and attention to studying for a qualification. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-18-academic-writing-test-2-task-2/",
+      "sort_order": 32
+    },
+    {
+      "id": "cambridge-18-test-3-task-2",
+      "title": "Cambridge IELTS 18 Test 3 Task 2",
+      "category": "opinion",
+      "source_book": 18,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅18-3 Task 2",
+      "prompt": "In many countries around the world, rural people are moving to cities, so the population in the countryside is decreasing. Do you think this is a positive or a negative development? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-18-academic-writing-test-3-task-2/",
+      "sort_order": 33
+    },
+    {
+      "id": "cambridge-18-test-4-task-2",
+      "title": "Cambridge IELTS 18 Test 4 Task 2",
+      "category": "advantages_disadvantages",
+      "source_book": 18,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅18-4 Task 2",
+      "prompt": "In many countries, people are now living longer than ever before. Some people say an ageing population creates problems for governments. Other people think there are benefits if society has more elderly people. To what extent do the advantages of having an ageing population outweigh the disadvantages? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-18-academic-writing-test-4-task-2/",
+      "sort_order": 34
+    }
+  ]
+}

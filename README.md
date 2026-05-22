@@ -65,6 +65,33 @@ Practice answers are recorded with the browser microphone using `MediaRecorder`.
 Browser dictation, when available, is used only as an automatic transcript
 source. The formal UI does not provide a typed-answer workflow.
 
+Windows auto-start:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/install-ielts-stack-autostart.ps1
+```
+
+This registers a hidden scheduled task that starts Django, the web UI, and
+Cloudflare Tunnel when you sign in. Public URL stability depends on tunnel
+mode:
+
+- quick tunnel: URL changes on restart
+- named tunnel: URL stays stable if you already have a Cloudflare tunnel and
+  DNS hostname configured; set `IELTS_CLOUDFLARED_TUNNEL_NAME` or place the
+  tunnel name in `~/.cloudflared/config.yml`. Set `IELTS_PUBLIC_URL` when you
+  want the launcher to record the stable hostname in `.runlogs/public-url.txt`.
+
+Manual start / stop:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/start-ielts-stack.ps1
+powershell -ExecutionPolicy Bypass -File scripts/windows/stop-ielts-stack.ps1
+```
+
+After startup, the launcher writes the current public URL to
+`.runlogs/public-url.txt` and a fuller status snapshot to
+`.runlogs/stack-status.json`.
+
 Default flow:
 
 - Part 1: 10 questions, 3 seconds preparation and 35 seconds speaking per turn,

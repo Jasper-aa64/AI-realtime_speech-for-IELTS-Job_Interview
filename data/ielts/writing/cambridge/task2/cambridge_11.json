@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 11,
+  "prompts": [
+    {
+      "id": "cambridge-11-test-1-task-2",
+      "title": "Cambridge IELTS 11 Test 1 Task 2",
+      "category": "opinion",
+      "source_book": 11,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅11-1 Task 2",
+      "prompt": "Governments should spend money on railways rather than roads. To what extent do you agree or disagree with this statement? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-11-academic-writing-test-1-task-2/",
+      "sort_order": 101
+    },
+    {
+      "id": "cambridge-11-test-2-task-2",
+      "title": "Cambridge IELTS 11 Test 2 Task 2",
+      "category": "opinion",
+      "source_book": 11,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅11-2 Task 2",
+      "prompt": "Some people claim that not enough of the waste from homes is recycled. They say that the only way to increase recycling is for governments to make it a legal requirement. To what extent do you think laws are needed to make people recycle more of their waste? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-11-academic-writing-test-2-task-2/",
+      "sort_order": 102
+    },
+    {
+      "id": "cambridge-11-test-3-task-2",
+      "title": "Cambridge IELTS 11 Test 3 Task 2",
+      "category": "discussion",
+      "source_book": 11,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅11-3 Task 2",
+      "prompt": "Some people say that the only reason for learning a foreign language is in order to travel to or work in a foreign country. Others say that these are not the only reasons why someone should learn a foreign language. Discuss both these views and give your own opinion Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-11-academic-writing-test-3-task-2/",
+      "sort_order": 103
+    },
+    {
+      "id": "cambridge-11-test-4-task-2",
+      "title": "Cambridge IELTS 11 Test 4 Task 2",
+      "category": "discussion",
+      "source_book": 11,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅11-4 Task 2",
+      "prompt": "Many governments think that economic progress is their most important goal. Some people, however, think that other types of progress are equally important for a country. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-11-academic-writing-test-4-task-2/",
+      "sort_order": 104
+    }
+  ]
+}

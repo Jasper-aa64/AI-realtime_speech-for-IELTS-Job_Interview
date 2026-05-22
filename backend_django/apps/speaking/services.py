@@ -3377,7 +3377,19 @@ def _p1_question_only_answer(question: str, answer_lower: str = "") -> str:
         if any(w in answer_lower for w in ("work", "job", "office", "engineer", "business")):
             return "I work at the moment. I enjoy it because the work is practical and I get to solve real problems every day."
         return "I'm a university student at the moment, majoring in computer science. I chose it because I enjoy building things and solving practical problems."
-    return ""
+    topic_hint = "this topic"
+    if "hobby" in lowered or "free time" in lowered or "relax" in lowered:
+        topic_hint = "hobbies and free time"
+    elif "holiday" in lowered or "vacation" in lowered:
+        topic_hint = "holidays"
+    elif "country" in lowered:
+        topic_hint = "the situation in my country"
+    return (
+        f"Yes, I think {topic_hint} is quite important in daily life. "
+        "For me, it is not only about enjoyment, but also about having a healthy balance after studying or working. "
+        "For example, when I have some spare time, I prefer doing something simple and relaxing, like taking a walk, listening to music, or focusing on a personal interest. "
+        "It helps me clear my mind and return to my routine with more energy."
+    )
 
 
 def build_turn_band7_fallback(
@@ -3398,6 +3410,26 @@ def build_turn_band7_fallback(
         if turn_metadata.get("prompt", {}).get("flow") == "intro" and turn_metadata.get("prompt", {}).get("role") == "name":
             return p1_name_answer(full_name, english_name)
         return _p1_question_only_answer(question_clean, answer_lower)
+
+    if part == "p2":
+        cue = turn_metadata.get("cue_card") if isinstance(turn_metadata.get("cue_card"), dict) else {}
+        cue_title = clean_report_text(str(cue.get("title") or question_clean))
+        return (
+            f"I would like to talk about {cue_title.lower()}. It is something I remember clearly because it was connected with a real moment in my life, "
+            "not just a general idea. At first, I did not pay much attention to it, but later I realized that it affected the way I handled similar situations. "
+            "What made it meaningful was the combination of the people involved, the pressure at the time, and the result afterwards. "
+            "For example, I had to make a practical decision instead of waiting for everything to be perfect, and that taught me to be more organized and patient. "
+            "Overall, I would say this experience was valuable because it gave me a clearer understanding of myself and helped me respond more confidently next time."
+        )
+
+    if part == "p3":
+        return (
+            f"That's an interesting question. In my view, {question_clean.rstrip('?').lower()} depends a lot on the situation and on people's personal priorities. "
+            "On the one hand, there are clear practical benefits, because people usually want something efficient, affordable and easy to manage. "
+            "On the other hand, we should not ignore the long-term effects, especially when a decision influences families, schools, workplaces or the wider community. "
+            "For instance, a choice that looks convenient in the short term may create extra pressure later if people do not think about responsibility and balance. "
+            "So I would say the best approach is not to choose one extreme, but to look at the purpose, the people affected, and the possible consequences."
+        )
 
     return ""
 
@@ -3536,7 +3568,16 @@ def build_turn_feedback(
             turn.metadata if isinstance(turn.metadata, dict) else None,
         )
     elif not band7:
-        result["feedback_generation_status"] = "failed"
+        band7 = build_turn_band7_fallback(
+            turn.question,
+            part,
+            transcript,
+            full_name,
+            english_name,
+            turn.metadata if isinstance(turn.metadata, dict) else None,
+        )
+        if not band7:
+            result["feedback_generation_status"] = "failed"
 
     result["band7_version"] = clean_report_text(band7)
     result["band7_markdown"] = spoken_markdown(band7, part)
@@ -4270,12 +4311,28 @@ def _fixed_examiner_item_for_text(text: str) -> dict[str, str] | None:
     return None
 
 
+def _fixed_examiner_pending_state(item: dict[str, str]) -> dict[str, Any]:
+    if item["key"].startswith("fixed_examiner_p2"):
+        return {
+            "provider": "browser",
+            "status": "warming",
+            "audio_url": None,
+            "message": f"Fixed examiner audio is warming in the background: {item['key']}",
+        }
+    return {
+        "provider": "browser",
+        "status": "fallback",
+        "audio_url": None,
+        "message": f"Fixed examiner audio is using browser fallback for now: {item['key']}",
+    }
+
+
 def _fixed_examiner_fallback(cache_key: str) -> dict[str, Any]:
     return {
         "provider": "browser",
-        "status": "warming",
+        "status": "fallback",
         "audio_url": None,
-        "message": f"Fixed examiner audio is warming in the background: {cache_key}",
+        "message": f"Fixed examiner audio is using browser fallback for now: {cache_key}",
     }
 
 
@@ -4308,7 +4365,7 @@ def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
             }
             return
         _warm_fixed_examiner_tts_item_background(fixed_item)
-        turn["examiner_tts"] = _fixed_examiner_fallback(fixed_item["key"])
+        turn["examiner_tts"] = _fixed_examiner_pending_state(fixed_item)
         return
     turn["examiner_tts"] = volcengine_tts(
         examiner_text,

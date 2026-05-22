@@ -1,0 +1,25 @@
+{
+  "materials": [
+    {
+      "id": "cambridge-20-test-1-task-1",
+      "task_type": "task1_academic",
+      "book": 20,
+      "test": 1,
+      "source_question": 1,
+      "title": "Cambridge IELTS 20 Test 1 Task 1",
+      "category": "line_graph",
+      "prompt": "Paste authorized Task 1 prompt text here.",
+      "image_path": "images/cambridge_20_test_1_task_1.png"
+    },
+    {
+      "id": "cambridge-20-test-1-task-2",
+      "task_type": "task2",
+      "book": 20,
+      "test": 1,
+      "source_question": 2,
+      "title": "Cambridge IELTS 20 Test 1 Task 2",
+      "category": "opinion",
+      "prompt": "Paste authorized Task 2 prompt text here."
+    }
+  ]
+}

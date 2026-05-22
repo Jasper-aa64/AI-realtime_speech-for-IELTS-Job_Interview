@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 14,
+  "prompts": [
+    {
+      "id": "cambridge-14-test-1-task-2",
+      "title": "Cambridge IELTS 14 Test 1 Task 2",
+      "category": "discussion",
+      "source_book": 14,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅14-1 Task 2",
+      "prompt": "Some people believe that it is best to accept a bad situation, such as an unsatisfactory job or shortage of money. Others argue that it is better to try and improve such situations. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-14-academic-writing-test-1-task-2/",
+      "sort_order": 71
+    },
+    {
+      "id": "cambridge-14-test-2-task-2",
+      "title": "Cambridge IELTS 14 Test 2 Task 2",
+      "category": "discussion",
+      "source_book": 14,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅14-2 Task 2",
+      "prompt": "Some people say that the main environmental problem of our time is the loss of particular species of plants and animals. Others say that there are more important environmental problems. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-14-academic-writing-test-2-task-2/",
+      "sort_order": 72
+    },
+    {
+      "id": "cambridge-14-test-3-task-2",
+      "title": "Cambridge IELTS 14 Test 3 Task 2",
+      "category": "opinion",
+      "source_book": 14,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅14-3 Task 2",
+      "prompt": "Some people say that music is a good way of bringing people of different cultures and ages together. To what extent do you agree of disagree with this opinion? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-14-academic-writing-test-3-task-2/",
+      "sort_order": 73
+    },
+    {
+      "id": "cambridge-14-test-4-task-2",
+      "title": "Cambridge IELTS 14 Test 4 Task 2",
+      "category": "advantages_disadvantages",
+      "source_book": 14,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅14-4 Task 2",
+      "prompt": "Nowadays many people choose to be self-employed, rather than to work for a company or organisation. Why might this be the case? What could be the disadvantages of being self-employed? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-14-academic-writing-test-4-task-2/",
+      "sort_order": 74
+    }
+  ]
+}

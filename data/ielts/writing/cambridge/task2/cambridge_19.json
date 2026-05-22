@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 19,
+  "prompts": [
+    {
+      "id": "cambridge-19-test-1-task-2",
+      "title": "Cambridge IELTS 19 Test 1 Task 2",
+      "category": "discussion",
+      "source_book": 19,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅19-1 Task 2",
+      "prompt": "Some people think that competition at work, at school and in daily life is a good thing. Others believe that we should try to cooperate more, rather than competing against each other. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-19-academic-writing-test-1-task-2/",
+      "sort_order": 21
+    },
+    {
+      "id": "cambridge-19-test-2-task-2",
+      "title": "Cambridge IELTS 19 Test 2 Task 2",
+      "category": "opinion",
+      "source_book": 19,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅19-2 Task 2",
+      "prompt": "The working week should be shorter and workers should have a longer weekend. Do you agree or disagree? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-19-academic-writing-test-2-task-2/",
+      "sort_order": 22
+    },
+    {
+      "id": "cambridge-19-test-3-task-2",
+      "title": "Cambridge IELTS 19 Test 3 Task 2",
+      "category": "opinion",
+      "source_book": 19,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅19-3 Task 2",
+      "prompt": "It is important for everyone, including young people, to save money for their future. To what extent do you agree or disagree with this statement? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-19-academic-writing-test-3-task-2/",
+      "sort_order": 23
+    },
+    {
+      "id": "cambridge-19-test-4-task-2",
+      "title": "Cambridge IELTS 19 Test 4 Task 2",
+      "category": "opinion",
+      "source_book": 19,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅19-4 Task 2",
+      "prompt": "In many countries nowadays, consumers can go to a supermarket and buy food produced all over the world. Do you think this is a positive or negative development? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-19-academic-writing-test-4-task-2/",
+      "sort_order": 24
+    }
+  ]
+}

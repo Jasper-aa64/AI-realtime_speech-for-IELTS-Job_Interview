@@ -99,6 +99,22 @@ WRITING_TASK_LABELS = {
     "task1_academic": "Task 1 Academic",
     "task2": "Task 2",
 }
+WRITING_CATEGORY_LABELS = {
+    "line_graph": "\u6298\u7ebf\u56fe",
+    "bar_chart": "\u67f1\u72b6\u56fe",
+    "pie_chart": "\u997c\u56fe",
+    "table": "\u8868\u683c",
+    "map": "\u5730\u56fe",
+    "process": "\u6d41\u7a0b\u56fe",
+    "mixed": "\u6df7\u5408\u56fe",
+    "opinion": "\u89c2\u70b9\u7c7b",
+    "discussion": "\u8ba8\u8bba\u7c7b",
+    "problem_solution": "\u95ee\u9898\u89e3\u51b3\u7c7b",
+    "causes_solutions": "\u539f\u56e0\u89e3\u51b3\u7c7b",
+    "causes_effects": "\u539f\u56e0\u5f71\u54cd\u7c7b",
+    "advantages_disadvantages": "\u5229\u5f0a\u7c7b",
+    "two_part": "\u53cc\u95ee\u9898\u7c7b",
+}
 
 
 def clamp_band(value: float | int | None) -> float:
@@ -1347,13 +1363,21 @@ class AppState:
             prompts = [prompt for prompt in prompts if prompt.get("category") == selected_category]
         if not prompts:
             raise ValueError(f"No writing prompts available for {selected_type}")
+        cambridge_prompts = [prompt for prompt in prompts if prompt.get("source_book") and prompt.get("source_test")]
+        if cambridge_prompts:
+            prompts = cambridge_prompts
+        display_slots = self.writing_bank.catalog_slots(selected_type)
         used_prompt_ids = {
             str(entry.get("prompt_id"))
             for entry in self.writing_entries()
             if entry.get("status") in {"saved", "scored"} and entry.get("prompt_id")
         }
         unused = [prompt for prompt in prompts if prompt.get("id") not in used_prompt_ids]
-        prompt = random.choice(unused or prompts)
+        pool = unused or prompts
+        prompt = random.choice(pool)
+        prompt_index = prompts.index(prompt) if prompt in prompts else None
+        display_index = prompt_index % len(display_slots) if display_slots and prompt_index is not None else None
+        prompt = self.writing_bank.with_display_slot(prompt, display_index)
         return {**prompt, "selection": "random", "unwritten": bool(unused)}
 
     def history(self) -> list[dict[str, Any]]:
@@ -1425,6 +1449,20 @@ def positive_int(value: Any) -> int | None:
     return number if number > 0 else None
 
 
+def normalize_writing_category(value: Any) -> str:
+    category = clean_report_text(str(value or "")).strip().lower()
+    if category in {"", "all", "*"}:
+        return ""
+    aliases = {
+        "flowchart": "process",
+        "flow_chart": "process",
+        "maps": "map",
+        "mixed_graph": "mixed",
+        "mixed-graph": "mixed",
+    }
+    return aliases.get(category, category)
+
+
 def cambridge_source_label(task_type: str, source_book: int | None, source_test: int | None, source_question: int | None) -> str:
     if not source_book or not source_test:
         return ""
@@ -1462,6 +1500,12 @@ class WritingPromptBank:
         main_file = base_dir / f"{task_type}.json"
         if main_file.exists():
             files.append(main_file)
+        public_file = base_dir / "public_samples" / f"{task_type}.json"
+        if public_file.exists():
+            files.append(public_file)
+        reported_file = base_dir / "reported_actual" / f"{task_type}.json"
+        if reported_file.exists():
+            files.append(reported_file)
         cambridge_dir = base_dir / "cambridge" / task_type
         if cambridge_dir.exists():
             files.extend(sorted(path for path in cambridge_dir.rglob("*.json") if path.is_file()))
@@ -1529,6 +1573,8 @@ class WritingPromptBank:
                     source_book = positive_int(raw_item.get("source_book") or raw_item.get("book")) or file_book
                     source_test = positive_int(raw_item.get("source_test") or raw_item.get("test")) or file_test
                     source_question = positive_int(raw_item.get("source_question") or raw_item.get("question_number"))
+                    source = clean_report_text(str(raw_item.get("source") or file_source or "")) or "local"
+                    raw_source_label = clean_report_text(str(raw_item.get("source_label") or ""))
                     items.append(
                         {
                             "id": safe_slug(prompt_id),
@@ -1536,25 +1582,42 @@ class WritingPromptBank:
                             "task_label": WRITING_TASK_LABELS[item_task_type],
                             "title": clean_report_text(str(raw_item.get("title") or "")) or f"{WRITING_TASK_LABELS[item_task_type]} {index + 1}",
                             "prompt": prompt,
-                            "category": clean_report_text(str(raw_item.get("category") or "")),
+                            "category": normalize_writing_category(raw_item.get("category")),
                             "image_url": clean_report_text(str(raw_item.get("image_url") or raw_item.get("image") or "")),
-                            "source": clean_report_text(str(raw_item.get("source") or file_source or "")) or "local",
+                            "source": source,
                             "source_book": source_book,
                             "source_test": source_test,
                             "source_question": source_question,
-                            "source_label": cambridge_source_label(item_task_type, source_book, source_test, source_question),
+                            "source_label": raw_source_label or cambridge_source_label(item_task_type, source_book, source_test, source_question),
                             "sort_order": positive_int(raw_item.get("sort_order")) or index + 1,
                         }
                     )
-            items.sort(key=lambda item: (
-                0 if item["task_type"] == "task1_academic" else 1,
-                item.get("source_book") is None,
-                -(item.get("source_book") or 0),
-                item.get("source_test") or 999,
-                item.get("source_question") or 999,
-                item.get("sort_order") or 999_999,
-                item.get("id") or "",
-            ))
+            def sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+                source = str(item.get("source") or "")
+                if item.get("source_book"):
+                    source_rank = 0
+                    sort_order = item.get("sort_order") or 999_999
+                elif source.startswith("reported_actual_"):
+                    source_rank = 1
+                    sort_order = -(item.get("sort_order") or 0)
+                elif source == "public_official_sample":
+                    source_rank = 2
+                    sort_order = item.get("sort_order") or 999_999
+                else:
+                    source_rank = 3
+                    sort_order = item.get("sort_order") or 999_999
+                return (
+                    0 if item["task_type"] == "task1_academic" else 1,
+                    source_rank,
+                    item.get("source_book") is None,
+                    -(item.get("source_book") or 0),
+                    item.get("source_test") or 999,
+                    item.get("source_question") or 999,
+                    sort_order,
+                    item.get("id") or "",
+                )
+
+            items.sort(key=sort_key)
             loaded[task_type] = items
         return loaded
 
@@ -1581,11 +1644,39 @@ class WritingPromptBank:
             if not category:
                 continue
             counts[category] = counts.get(category, 0) + 1
-        return [{"category": key, "label": key.replace("_", " ").title(), "count": counts[key]} for key in sorted(counts)]
+        return [{"category": key, "label": WRITING_CATEGORY_LABELS.get(key, key.replace("_", " ").title()), "count": counts[key]} for key in sorted(counts)]
 
     def catalog_slots(self, task_type: str | None = None) -> list[dict[str, Any]]:
         selected = normalize_writing_task_type(task_type) if task_type else ""
         return [dict(item) for item in self.catalog if not selected or item.get("task_type") == selected]
+
+    def display_slot(self, prompt: dict[str, Any], index: int | None = None) -> dict[str, Any] | None:
+        if prompt.get("source_label"):
+            return None
+        task_type = normalize_writing_task_type(str(prompt.get("task_type") or ""))
+        slots = self.catalog_slots(task_type)
+        if prompt.get("id"):
+            for slot in slots:
+                if slot.get("id") == prompt.get("id"):
+                    return slot
+        if index is not None and 0 <= index < len(slots):
+            return slots[index]
+        return None
+
+    def with_display_slot(self, prompt: dict[str, Any], index: int | None = None) -> dict[str, Any]:
+        item = dict(prompt)
+        slot = self.display_slot(item, index)
+        if not slot:
+            return item
+        item["display_catalog_id"] = slot.get("id") or ""
+        item["display_source_label"] = slot.get("source_label") or ""
+        item["source_label"] = item.get("source_label") or slot.get("source_label") or ""
+        item["source_book"] = item.get("source_book") or slot.get("source_book")
+        item["source_test"] = item.get("source_test") or slot.get("source_test")
+        item["source_question"] = item.get("source_question") or slot.get("source_question")
+        if not item.get("image_url") and slot.get("expected_image_url"):
+            item["image_url"] = slot.get("expected_image_url")
+        return item
 
 
 def writing_word_count(answer: str) -> int:
@@ -2011,12 +2102,28 @@ def fixed_examiner_item_for_text(text: str) -> dict[str, str] | None:
     return None
 
 
+def fixed_examiner_pending_state(item: dict[str, str]) -> dict[str, Any]:
+    if item["key"].startswith("fixed_examiner_p2"):
+        return {
+            "provider": "browser",
+            "status": "warming",
+            "audio_url": None,
+            "message": f"Fixed examiner audio is warming in the background: {item['key']}",
+        }
+    return {
+        "provider": "browser",
+        "status": "fallback",
+        "audio_url": None,
+        "message": f"Fixed examiner audio is using browser fallback for now: {item['key']}",
+    }
+
+
 def fixed_examiner_fallback(cache_key: str) -> dict[str, Any]:
     return {
         "provider": "browser",
-        "status": "warming",
+        "status": "fallback",
         "audio_url": None,
-        "message": f"Fixed examiner audio is warming in the background: {cache_key}",
+        "message": f"Fixed examiner audio is using browser fallback for now: {cache_key}",
     }
 
 
@@ -2208,7 +2315,7 @@ def ensure_examiner_tts(state: AppState, attempt_id: str, turn: dict[str, Any]) 
             }
             return
         warm_fixed_examiner_tts_item_background(state, fixed_item)
-        turn["examiner_tts"] = fixed_examiner_fallback(fixed_item["key"])
+        turn["examiner_tts"] = fixed_examiner_pending_state(fixed_item)
         return
     turn["examiner_tts"] = volcengine_tts(
         state,
@@ -4229,6 +4336,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
             return True
         if re.fullmatch(r"/api/history/[^/]+", path):
             return True
+        if re.fullmatch(r"/api/writing/entries/[^/]+", path):
+            return True
         return False
 
     def is_django_corpus_path(self, path: str) -> bool:
@@ -4412,6 +4521,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
     def do_DELETE(self) -> None:
         try:
             path = urlparse(self.path).path
+            if self.try_proxy_django("DELETE", self.path):
+                return
             match = re.fullmatch(r"/api/history/([^/]+)", path)
             if match:
                 attempt_id = match.group(1)

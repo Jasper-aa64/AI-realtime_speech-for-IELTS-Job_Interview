@@ -1,0 +1,69 @@
+{
+  "task_type": "task1_academic",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 15,
+  "prompts": [
+    {
+      "id": "cambridge-15-test-1-task-1",
+      "title": "Cambridge IELTS 15 Test 1 Task 1",
+      "category": "bar_chart",
+      "source_book": 15,
+      "source_test": 1,
+      "source_question": 1,
+      "source_label": "剑雅15-1 Task 1",
+      "prompt": "The chart below shows the results of a survey about people’s coffee and tea buying and drinking habits in five Australian cities. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-15-academic-writing-test-1-task-1/",
+      "sort_order": 61,
+      "image_url": "/assets/writing/task1/cambridge/15/test_1_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-15-academic-writing-test-1-1.png"
+    },
+    {
+      "id": "cambridge-15-test-2-task-1",
+      "title": "Cambridge IELTS 15 Test 2 Task 1",
+      "category": "line_graph",
+      "source_book": 15,
+      "source_test": 2,
+      "source_question": 1,
+      "source_label": "剑雅15-2 Task 1",
+      "prompt": "The graph below shows the number of tourists visiting a particular Caribbean island between 2010 and 2017. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-15-academic-writing-test-2-task-1/",
+      "sort_order": 62,
+      "image_url": "/assets/writing/task1/cambridge/15/test_2_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-15-academic-writing-test-2-1.png"
+    },
+    {
+      "id": "cambridge-15-test-3-task-1",
+      "title": "Cambridge IELTS 15 Test 3 Task 1",
+      "category": "process",
+      "source_book": 15,
+      "source_test": 3,
+      "source_question": 1,
+      "source_label": "剑雅15-3 Task 1",
+      "prompt": "The diagram shows how instant noodles are manufactured. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-15-academic-writing-test-3-task-1/",
+      "sort_order": 63,
+      "image_url": "/assets/writing/task1/cambridge/15/test_3_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-15-academic-writing-test-3-1.png"
+    },
+    {
+      "id": "cambridge-15-test-4-task-1",
+      "title": "Cambridge IELTS 15 Test 4 Task 1",
+      "category": "table",
+      "source_book": 15,
+      "source_test": 4,
+      "source_question": 1,
+      "source_label": "剑雅15-4 Task 1",
+      "prompt": "The chart below shows what Anthropology graduates from one university did after finishing their undergraduate degree course. The table shows the salaries of the anthropologists in work after five years. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-15-academic-writing-test-4-task-1/",
+      "sort_order": 64,
+      "image_url": "/assets/writing/task1/cambridge/15/test_4_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-15-academic-writing-test-4-1.png"
+    }
+  ]
+}

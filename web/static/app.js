@@ -90,6 +90,10 @@ const state = {
       task1_academic: "",
       task2: "",
     },
+    pickerSourceFilters: {
+      task1_academic: "cambridge",
+      task2: "cambridge",
+    },
   },
   account: {
     authenticated: false,
@@ -651,6 +655,7 @@ function switchView(view, options = {}) {
     button.classList.toggle("tone-p3", button.dataset.view === "p3");
   });
   $(".shell")?.classList.toggle("auth-shell", authViews.has(view));
+  document.body.classList.toggle("view-writing", view === "writing");
   $(".shell")?.classList.toggle("account-shell", view === "accountProfile");
   $(".workspace")?.classList.toggle("corpus-workspace", ["corpus", "p1Corpus", "p2Corpus", "takeawayBook"].includes(view));
   $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !["p1Corpus", "p2Corpus", "takeawayBook"].includes(view));
@@ -2024,7 +2029,7 @@ function writingPromptMeta(prompt) {
   if (!prompt) return writingTaskLabel(state.writing.taskType || "task1_academic");
   const sourceLabel = String(prompt.source_label || prompt.display_source_label || "").trim();
   const parts = sourceLabel
-    ? [prompt.title || "", writingTaskLabel(prompt.task_type), writingCategoryLabel(prompt.category)]
+    ? [writingTaskLabel(prompt.task_type), writingCategoryLabel(prompt.category)]
     : [writingTaskLabel(prompt.task_type), writingCategoryLabel(prompt.category)];
   return parts.filter(Boolean).join(" \u00b7 ");
 }
@@ -2048,6 +2053,42 @@ function writingCatalogMissingSlots(taskType, selectedCategory = "") {
     .filter((slot, index) => index >= promptCount && !assignedCatalogIds.has(slot.id));
 }
 
+function writingPromptSourceKey(prompt = {}) {
+  const source = String(prompt.source || "").trim();
+  if ((prompt.source_book && prompt.source_test) || source === "cambridge_ielts" || source.startsWith("cambridge")) return "cambridge";
+  if (source.startsWith("reported_actual_")) return "reported";
+  return "other";
+}
+
+function writingPromptSourceLabel(source) {
+  return {
+    cambridge: "\u5251\u96c5\u771f\u9898",
+    reported: "\u4e2d\u56fd\u8003\u533a\u673a\u7ecf",
+    other: "\u5176\u4ed6\u7ec3\u4e60",
+  }[source] || source;
+}
+
+function writingPromptsForSource(taskType, source) {
+  return (state.writing.prompts[taskType] || []).filter((prompt) => writingPromptSourceKey(prompt) === source);
+}
+
+function writingUsablePromptsForSource(taskType, source) {
+  return writingPromptsForSource(taskType, source).filter((prompt) => {
+    if (taskType === "task1_academic") return Boolean(prompt.image_url);
+    return Boolean(String(prompt.prompt || "").trim());
+  });
+}
+
+function resolveWritingPickerSource(taskType) {
+  const selected = state.writing.pickerSourceFilters[taskType] || "cambridge";
+  if (selected === "cambridge" && !writingUsablePromptsForSource(taskType, "cambridge").length) {
+    const fallback = writingUsablePromptsForSource(taskType, "reported").length ? "reported" : "other";
+    state.writing.pickerSourceFilters[taskType] = fallback;
+    return fallback;
+  }
+  return selected;
+}
+
 async function loadWriting() {
   const firstLoad = !state.writing.prompt && !state.writing.entry;
   if (firstLoad) setWritingPageLoading(true);
@@ -2059,7 +2100,8 @@ async function loadWriting() {
     }
     if (!state.writing.prompt) {
       const prompts = state.writing.prompts[state.writing.taskType] || [];
-      if (prompts.length) setWritingPrompt(prompts[0], false);
+      const defaultPrompt = writingUsablePromptsForSource(state.writing.taskType, "cambridge")[0] || prompts[0];
+      if (defaultPrompt) setWritingPrompt(defaultPrompt, false);
       else await chooseRandomWritingPrompt(false);
     }
     renderWritingSurface();
@@ -2531,7 +2573,7 @@ function closeWritingPromptPicker() {
 function writingPromptChoiceHtml(prompt, active = false) {
   const isTask1 = prompt.task_type === "task1_academic";
   const imageHtml = isTask1
-    ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${prompt.image_url ? `<img src="${escapeHtml(prompt.image_url)}" alt="" loading="lazy" onerror="this.closest('.writing-prompt-choice-image').classList.add('placeholder'); this.remove();">` : "Task 1 chart"}</span>`
+    ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${prompt.image_url ? `<img src="${escapeHtml(prompt.image_url)}" alt="" loading="eager" decoding="async" onerror="this.closest('.writing-prompt-choice-image').classList.add('placeholder'); this.remove();">` : "Task 1 chart"}</span>`
     : "";
   return `
     <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
@@ -2563,10 +2605,12 @@ function writingCatalogSlotHtml(slot) {
 function renderWritingPromptPicker() {
   const taskType = state.writing.pickerTaskType || state.writing.taskType || "task1_academic";
   renderWritingPromptPickerShell(taskType);
+  const selectedSource = resolveWritingPickerSource(taskType);
+  renderWritingPromptSourceFilters(taskType);
   renderWritingPromptTypeFilters(taskType);
   const selectedCategory = state.writing.pickerCategoryFilters[taskType] || "";
-  const prompts = (state.writing.prompts[taskType] || []).filter((prompt) => !selectedCategory || prompt.category === selectedCategory);
-  const missingSlots = writingCatalogMissingSlots(taskType, selectedCategory);
+  const prompts = writingUsablePromptsForSource(taskType, selectedSource).filter((prompt) => !selectedCategory || prompt.category === selectedCategory);
+  const missingSlots = [];
   const grid = $("writingPromptGrid");
   if (!grid) return;
   grid.classList.remove("is-loading");
@@ -2586,6 +2630,30 @@ function renderWritingPromptPicker() {
       state.writing.taskType = prompt.task_type || taskType;
       setWritingPrompt(prompt, true);
       closeWritingPromptPicker();
+    });
+  });
+}
+
+function renderWritingPromptSourceFilters(taskType) {
+  const target = $("writingPromptSourceFilters");
+  if (!target) return;
+  const counts = {
+    cambridge: writingUsablePromptsForSource(taskType, "cambridge").length,
+    reported: writingUsablePromptsForSource(taskType, "reported").length,
+    other: writingUsablePromptsForSource(taskType, "other").length,
+  };
+  const selected = state.writing.pickerSourceFilters[taskType] || "cambridge";
+  target.innerHTML = ["cambridge", "reported", "other"].map((source) => `
+    <button type="button" class="writing-source-filter ${selected === source ? "active" : ""}" data-writing-prompt-source="${escapeHtml(source)}">
+      ${escapeHtml(writingPromptSourceLabel(source))}
+      <span>${escapeHtml(counts[source] || 0)}</span>
+    </button>
+  `).join("");
+  target.querySelectorAll("[data-writing-prompt-source]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.writing.pickerSourceFilters[taskType] = button.dataset.writingPromptSource || "cambridge";
+      state.writing.pickerCategoryFilters[taskType] = "";
+      renderWritingPromptPicker();
     });
   });
 }
@@ -2610,16 +2678,15 @@ function renderWritingPromptPickerShell(taskType) {
     button.classList.toggle("active", button.dataset.writingPickerTask === taskType);
   });
   text("writingPromptModalHint", taskType === "task1_academic"
-    ? "Task 1 \u6709\u56fe\u8868\uff1b\u5251\u96c5\u76ee\u5f55\u6309 20 \u5230 1 \u6392\u5217\uff0c\u5f85\u5bfc\u5165\u7684\u539f\u9898\u4f1a\u7070\u663e\u3002"
-    : "Task 2 \u53ef\u6309\u9898\u578b\u7b5b\u9009\uff1b\u5251\u96c5\u76ee\u5f55\u6309 20 \u5230 1 \u6392\u5217\uff0c\u5f85\u5bfc\u5165\u7684\u539f\u9898\u4f1a\u7070\u663e\u3002");
+    ? "Task 1 \u6709\u56fe\u8868\uff1b\u5251\u96c5\u771f\u9898\u6309 20 \u5230 1 \u6392\u5217\uff0c\u4ec5\u663e\u793a\u5df2\u5bfc\u5165\u7684\u53ef\u7528\u539f\u9898\u3002"
+    : "Task 2 \u53ef\u6309\u9898\u578b\u7b5b\u9009\uff1b\u5251\u96c5\u771f\u9898\u6309 20 \u5230 1 \u6392\u5217\uff0c\u4ec5\u663e\u793a\u5df2\u5bfc\u5165\u7684\u53ef\u7528\u539f\u9898\u3002");
 }
 
 function renderWritingPromptTypeFilters(taskType) {
   const target = $("writingPromptTypeFilters");
   if (!target) return;
-  const categories = state.writing.promptCategories[taskType]?.length
-    ? state.writing.promptCategories[taskType]
-    : inferWritingCategories(state.writing.prompts[taskType] || []);
+  const selectedSource = state.writing.pickerSourceFilters[taskType] || "cambridge";
+  const categories = inferWritingCategories(writingUsablePromptsForSource(taskType, selectedSource));
   const selected = state.writing.pickerCategoryFilters[taskType] || "";
   target.innerHTML = [
     `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category="">\u5168\u90e8</button>`,

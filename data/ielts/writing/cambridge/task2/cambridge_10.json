@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://engnovate.com/ielts-writing-tests/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 10,
+  "prompts": [
+    {
+      "id": "cambridge-10-test-1-task-2",
+      "title": "Cambridge IELTS 10 Test 1 Task 2",
+      "category": "opinion",
+      "source_book": 10,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅10-1 Task 2",
+      "prompt": "It is important for children to learn the difference between right and wrong at an early age. Punishment is necessary to help them learn this distinction. To what extent do you agree or disagree with this opinion? What sort of punishment should parents and teachers be allowed to use to teach good behaviour to children? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-10-academic-writing-test-1-task-2/",
+      "sort_order": 111
+    },
+    {
+      "id": "cambridge-10-test-2-task-2",
+      "title": "Cambridge IELTS 10 Test 2 Task 2",
+      "category": "discussion",
+      "source_book": 10,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅10-2 Task 2",
+      "prompt": "Some people think that all university students should study whatever they like. Others believe that they should only be allowed to study subjects that will be useful in the future, such as those related to science and technology. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-10-academic-writing-test-2-task-2/",
+      "sort_order": 112
+    },
+    {
+      "id": "cambridge-10-test-3-task-2",
+      "title": "Cambridge IELTS 10 Test 3 Task 2",
+      "category": "opinion",
+      "source_book": 10,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅10-3 Task 2",
+      "prompt": "Countries are becoming more and more similar because people can buy the same products anywhere in the world. Do you think this is a positive or negative development? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-10-academic-writing-test-3-task-2/",
+      "sort_order": 113
+    },
+    {
+      "id": "cambridge-10-test-4-task-2",
+      "title": "Cambridge IELTS 10 Test 4 Task 2",
+      "category": "advantages_disadvantages",
+      "source_book": 10,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅10-4 Task 2",
+      "prompt": "Many museums charge for admission while others are free. Do you think the advantages of charging people for admission to museums outweigh the disadvantages? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-10-academic-writing-test-4-task-2/",
+      "sort_order": 114
+    }
+  ]
+}

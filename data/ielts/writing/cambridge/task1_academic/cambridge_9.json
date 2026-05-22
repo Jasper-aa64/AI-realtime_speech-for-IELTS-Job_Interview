@@ -1,0 +1,69 @@
+{
+  "task_type": "task1_academic",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://msslearning.com/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 9,
+  "prompts": [
+    {
+      "id": "cambridge-9-test-1-task-1",
+      "title": "Cambridge IELTS 9 Test 1 Task 1",
+      "category": "map",
+      "source_book": 9,
+      "source_test": 1,
+      "source_question": 1,
+      "source_label": "??9-1 Task 1",
+      "prompt": "The two maps below show an island, before and after the construction of some tourist facilities. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://msslearning.com/cambridge-ielts-9-academic-writing-test-1/",
+      "sort_order": 121,
+      "image_url": "/assets/writing/task1/cambridge/9/test_1_task_1.png",
+      "source_image_url": "https://msslearning.com/wp-content/uploads/2023/09/cambridge-ielts-9-academic-writing-test-1-task-1-map.png"
+    },
+    {
+      "id": "cambridge-9-test-2-task-1",
+      "title": "Cambridge IELTS 9 Test 2 Task 1",
+      "category": "line_graph",
+      "source_book": 9,
+      "source_test": 2,
+      "source_question": 1,
+      "source_label": "??9-2 Task 1",
+      "prompt": "The chart below shows the total number of minutes (in billions) of telephone calls in the UK, divided into three categories, from 1995-2002. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://msslearning.com/cambridge-ielts-9-academic-writing-test-2/",
+      "sort_order": 122,
+      "image_url": "/assets/writing/task1/cambridge/9/test_2_task_1.png",
+      "source_image_url": "https://msslearning.com/wp-content/uploads/2023/09/Cambridge-IELTS-9-Academic-Writing-Test-2-UK-telephone-calls-chart-in-high-quality.png"
+    },
+    {
+      "id": "cambridge-9-test-3-task-1",
+      "title": "Cambridge IELTS 9 Test 3 Task 1",
+      "category": "line_graph",
+      "source_book": 9,
+      "source_test": 3,
+      "source_question": 1,
+      "source_label": "??9-3 Task 1",
+      "prompt": "The chart below gives information on the ages of population of Yemen and Italy in 2000 and projections for 2050. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://msslearning.com/cambridge-ielts-9-academic-writing-test-3/",
+      "sort_order": 123,
+      "image_url": "/assets/writing/task1/cambridge/9/test_3_task_1.png",
+      "source_image_url": "https://msslearning.com/wp-content/uploads/2023/12/Cambridge-IELTS-9-Academic-Writing-Test-3-The-chart-below-gives-information-on-the-ages-of-population-of-Yemen-and-Italy-in-2000-and-projections-for-2050.png"
+    },
+    {
+      "id": "cambridge-9-test-4-task-1",
+      "title": "Cambridge IELTS 9 Test 4 Task 1",
+      "category": "line_graph",
+      "source_book": 9,
+      "source_test": 4,
+      "source_question": 1,
+      "source_label": "??9-4 Task 1",
+      "prompt": "The graph below gives information from a 2008 report about consumption of energy in the USA since 1980 with projections until 2030. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://msslearning.com/cambridge-ielts-9-academic-writing-test-4/",
+      "sort_order": 124,
+      "image_url": "/assets/writing/task1/cambridge/9/test_4_task_1.png",
+      "source_image_url": "https://msslearning.com/wp-content/uploads/2023/12/Cambridge-IELTS-9-Academic-Writing-Test-4-Writing-Task-1-The-graph-below-gives-information-from-a-2008-report-about-consumption-of-energy-in-the-USA-since-1980-with-projections-until-2030.png"
+    }
+  ]
+}
