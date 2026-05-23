@@ -705,6 +705,7 @@ def build_overall_review(
 ) -> dict[str, Any]:
     """Build overall review with Codex or fallback."""
     call_id = f"overall_review_{attempt.attempt_id}"
+    codex_error = ""
 
     if allow_codex:
         try:
@@ -715,9 +716,11 @@ def build_overall_review(
                     "review_points": [],
                     "markdown": markdown,
                     "source": "codex_personalized",
+                    "backend": "codex",
+                    "status": "ready",
                 }
-        except Exception:
-            pass
+        except Exception as exc:
+            codex_error = str(exc)
 
     score_review = score.get("overall_review")
     if isinstance(score_review, dict):
@@ -733,6 +736,8 @@ def build_overall_review(
                 "review_points": points,
                 "markdown": markdown,
                 "source": score_review.get("source") or "codex_score",
+                "backend": "codex" if str(score_review.get("source") or "codex_score").startswith("codex") else score.get("backend", "fallback"),
+                "status": "ready",
             }
         if comment or points:
             if not comment:
@@ -751,17 +756,24 @@ def build_overall_review(
                 "review_points": points,
                 "markdown": "\n".join(markdown_lines),
                 "source": "codex_score",
+                "backend": "codex",
+                "status": "ready",
             }
 
     band = score.get("overall_band")
     band_text = f"Band {band}" if isinstance(band, (int, float)) and not isinstance(band, bool) else "本次练习"
     focus = profile.get("primary_focus_text", "先把答案说完整、说具体。")
-    return {
+    fallback = {
         "comment": f"{band_text} 的主要突破口：{focus}",
         "review_points": ["Complete every answer", "Add reasons and examples", "Review weak short answers first"],
         "markdown": f"### 总体点评\n\n{band_text} 的主要突破口：{focus}\n\n### 复盘重点\n\n- Complete every answer\n- Add reasons and examples\n- Review weak short answers first",
         "source": "fallback",
+        "backend": "fallback",
+        "status": "fallback",
     }
+    if codex_error:
+        fallback["error"] = codex_error
+    return fallback
 
 
 def build_personalized_coaching(profile: dict[str, Any], attempt: SpeakingAttempt, score: dict[str, Any]) -> dict[str, Any]:
@@ -2501,6 +2513,13 @@ def _fallback_p1_identity_follow_up(answer: str) -> str:
 
 def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]:
     fallback = _fallback_p1_identity_follow_up(answer)
+    if not answer.strip():
+        return {
+            "follow_up": fallback,
+            "backend": "fallback",
+            "status": "fallback",
+            "error": "missing_candidate_answer",
+        }
     prompt = f"""Return JSON only with top-level key follow_up.
 Do not repeat the input. Do not include Markdown, explanation, or code fences.
 
@@ -2512,7 +2531,7 @@ Candidate answer:
 {answer}
 """
     try:
-        output, _usage = run_codex(prompt, call_id)
+        output, _usage = run_codex(prompt, call_id, timeout=25)
         payload = extract_json_object_with_keys(output, {"follow_up"})
         follow_up = clean_report_text(str(payload.get("follow_up") or ""))
         if not follow_up or len(follow_up) > 160 or "?" not in follow_up:
@@ -2526,8 +2545,6 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
     if not _is_p1_work_study_turn(completed_turn):
         return None
     transcript = (completed_turn.transcript_cleaned or completed_turn.transcript_raw or "").strip()
-    if not transcript:
-        return None
     existing = attempt.turns.filter(metadata__prompt__after_turn=completed_turn.turn_id).first()
     if existing:
         return existing
@@ -2576,7 +2593,8 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
             "examiner_text": follow_up,
             "examiner_behavior": "auto_play_question",
             "display_index": completed_turn.metadata.get("display_index") if isinstance(completed_turn.metadata, dict) else None,
-            "examiner_tts": turn_data.get("examiner_tts"),
+            "examiner_tts": turn_data.get("examiner_tts")
+            or {"provider": "volcengine", "status": "pending", "audio_url": None},
         },
     )
 
@@ -2607,7 +2625,15 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
                 "title": selected_entry["title"],
                 "linked_at": timezone.now().isoformat(),
             }
-    server_asr = transcribe_turn_audio_with_server_asr(turn)
+    if _is_p1_work_study_turn(turn) and browser_transcript:
+        server_asr = {
+            "ok": False,
+            "status": "skipped_browser_transcript_available",
+            "transcript": "",
+            "error": "Skipped during P1 identity follow-up generation because browser transcript is already available.",
+        }
+    else:
+        server_asr = transcribe_turn_audio_with_server_asr(turn)
     metadata["server_asr"] = {key: value for key, value in server_asr.items() if key != "transcript"}
     if server_asr.get("ok") and str(server_asr.get("transcript") or "").strip():
         transcript = str(server_asr["transcript"]).strip()
@@ -2791,6 +2817,8 @@ Overall Review 写法要求：
         **scores,
         "feedback": str(payload.get("feedback", "")),
         "backend": "codex",
+        "generation_backend": "codex",
+        "generation_status": "ready",
     }
 
     overall_review = payload.get("overall_review")
@@ -3217,6 +3245,19 @@ def _fallback_score(transcript: str, part: str) -> dict[str, Any]:
     }
 
 
+def fallback_score_for_report(transcript: str, questions_text: str, part: str, exc: Exception, call_id: str) -> dict[str, Any]:
+    """Build an explicit fallback score after a real Codex scoring failure."""
+    reason = f"Codex scoring failed: {exc}"
+    score = _fallback_score(transcript, part)
+    score["feedback"] = f"{score['feedback']} Fallback reason: {reason}"
+    score["backend"] = "fallback"
+    score["generation_backend"] = "fallback"
+    score["generation_status"] = "fallback"
+    score["fallback_reason"] = reason
+    score["codex_call_id"] = call_id
+    return cap_off_topic_score(calibrate_realistic_score(score, questions_text, transcript, part), questions_text, transcript)
+
+
 def _criteria_feedback(score: dict[str, Any], transcript: str) -> dict[str, Any]:
     """Build criteria feedback based on score and transcript.
 
@@ -3616,8 +3657,9 @@ def build_turn_feedback(
         result["ai_coaching"] = ""
 
     # Status fields
-    result["feedback_generation_status"] = result.get("feedback_generation_status", "ready")
     result["feedback_generation_backend"] = "codex" if generated else "fallback"
+    if "feedback_generation_status" not in result:
+        result["feedback_generation_status"] = "ready" if generated else "fallback"
 
     return result
 
@@ -3725,7 +3767,7 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
         score = score_with_codex(transcript, questions_text, part, call_id)
         score = calibrate_realistic_score(score, questions_text, transcript, part)
     except Exception as exc:
-        raise SpeakingError(f"AI scoring failed; no report was generated. Please retry scoring. Detail: {exc}") from exc
+        score = fallback_score_for_report(transcript, questions_text, part, exc, call_id)
 
     criteria = _criteria_feedback(score, transcript)
 
@@ -3742,9 +3784,7 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
 
     learning_profile = build_learning_profile(user, attempt)
 
-    # Overall review uses the old dedicated Codex prompt so the report keeps
-    # the long Chinese recap style instead of a short scorer-side summary.
-    overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=True)
+    overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=False)
 
     # Build personalized coaching
     personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
@@ -3754,12 +3794,17 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
             "status": "scored",
             "transcript_cleaned": transcript,
             "ielts_score": score,
+            "score_generation_backend": score.get("generation_backend", score.get("backend")),
+            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") == "codex" else "fallback"),
+            "score_generation_error": score.get("fallback_reason", ""),
+            "report_generation_backend": score.get("backend"),
+            "report_generation_status": "ready" if score.get("backend") == "codex" else "fallback",
             "feedback_summary": score["feedback"],
             "criteria_feedback": criteria,
             "part_scores": {
                 attempt.part or attempt.mode: {
                     "part": attempt.part or attempt.mode,
-                "turn_count": len(scoring_turns),
+                    "turn_count": len(scoring_turns),
                     "band": score["overall_band"],
                     "fluency_coherence": score["fluency_coherence"],
                     "lexical_resource": score["lexical_resource"],
@@ -3817,7 +3862,7 @@ def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) 
                 "relevance": relevance,
                 "weak_item_flag": bool(reasons),
                 "weak_reasons": reasons,
-                "model_version": "django_fallback",
+                "model_version": f"django_{score.get('backend', 'unknown')}",
                 "observed_at": timezone.now(),
                 "next_due": timezone.now() + timezone.timedelta(days=1 if reasons else 14),
             },
@@ -4025,7 +4070,7 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
         score = score_with_codex(transcript, questions_text, part, call_id)
         score = calibrate_realistic_score(score, questions_text, transcript, part)
     except Exception as exc:
-        raise SpeakingError(f"AI scoring failed; existing report was not replaced. Please retry regeneration. Detail: {exc}") from exc
+        score = fallback_score_for_report(transcript, questions_text, part, exc, call_id)
 
     criteria = _criteria_feedback(score, transcript)
 
@@ -4036,9 +4081,7 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     runtime = _runtime_attempt_payload(attempt)
     learning_profile = build_learning_profile(user, attempt)
 
-    # Overall review uses the old dedicated Codex prompt so regenerated reports
-    # keep the long Chinese recap style.
-    overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=True)
+    overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=False)
 
     # Build personalized coaching
     personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
@@ -4048,6 +4091,11 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
             "status": "scored",
             "transcript_cleaned": transcript,
             "ielts_score": score,
+            "score_generation_backend": score.get("generation_backend", score.get("backend")),
+            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") == "codex" else "fallback"),
+            "score_generation_error": score.get("fallback_reason", ""),
+            "report_generation_backend": score.get("backend"),
+            "report_generation_status": "ready" if score.get("backend") == "codex" else "fallback",
             "feedback_summary": score["feedback"],
             "criteria_feedback": criteria,
             "part_scores": {
@@ -4299,6 +4347,7 @@ def volcengine_tts(text: str, voice: str = "en_male_adam", role: str = "model", 
             "provider": "browser",
             "status": "fallback",
             "audio_url": None,
+            "error": str(exc),
             "message": f"VolcEngine TTS unavailable; use browser fallback: {exc}",
         }
 
@@ -4312,18 +4361,11 @@ def _fixed_examiner_item_for_text(text: str) -> dict[str, str] | None:
 
 
 def _fixed_examiner_pending_state(item: dict[str, str]) -> dict[str, Any]:
-    if item["key"].startswith("fixed_examiner_p2"):
-        return {
-            "provider": "browser",
-            "status": "warming",
-            "audio_url": None,
-            "message": f"Fixed examiner audio is warming in the background: {item['key']}",
-        }
     return {
-        "provider": "browser",
-        "status": "fallback",
+        "provider": "volcengine",
+        "status": "warming",
         "audio_url": None,
-        "message": f"Fixed examiner audio is using browser fallback for now: {item['key']}",
+        "message": f"Fixed examiner audio is warming in the background: {item['key']}",
     }
 
 

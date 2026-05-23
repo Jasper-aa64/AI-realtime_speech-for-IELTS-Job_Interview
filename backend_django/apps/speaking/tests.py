@@ -1338,6 +1338,30 @@ class DjangoOnlyRuntimeSurfaceTests(TestCase):
 class CodexValidationTests(TestCase):
     """Test validation logic for Codex AI scoring and feedback."""
 
+    def create_ready_attempt(self, username="score-attempt-user", attempt_id="score-attempt-codex-path"):
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username=username, password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id=attempt_id,
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="Do you work or do you study?",
+            transcript_raw="I study software engineering and I also do an internship at a small technology company.",
+            transcript_cleaned="I study software engineering and I also do an internship at a small technology company.",
+            metadata={"status": "completed"},
+        )
+        return user, attempt, turn
+
     def test_score_with_codex_rejects_missing_scores(self):
         """score_with_codex should reject outputs with missing FC/LR/GRA fields."""
         from unittest.mock import patch
@@ -1398,40 +1422,83 @@ class CodexValidationTests(TestCase):
                 self.assertIn("0 input tokens", str(ctx.exception))
                 self.assertEqual(mock_run.call_count, 2)
 
-    def test_score_attempt_does_not_save_report_on_codex_failure(self):
-        """When Codex fails, score_attempt should not create a heuristic report."""
-        from unittest.mock import patch
-        from apps.speaking.services import SpeakingError, score_attempt
-        from apps.accounts.models import CustomUser
+    def test_score_attempt_uses_scorer_overall_review_without_second_review_codex_call(self):
+        from apps.speaking.services import score_attempt
 
-        user = CustomUser.objects.create_user(username="test-heuristic-user", password="test-pass")
-        attempt = SpeakingAttempt.objects.create(
-            user=user,
-            attempt_id="test-heuristic-attempt",
-            mode="p1",
-            part="p1",
-            status=SpeakingAttempt.Status.READY_TO_SCORE,
-        )
-        turn = SpeakingTurn.objects.create(
-            user=user,
-            attempt=attempt,
-            turn_id="t1",
-            sequence=0,
-            part="p1",
-            question="What is your name?",
-            transcript_raw="My name is John and I am a student at the university.",
-            metadata={"status": "completed"},
-        )
+        user, attempt, turn = self.create_ready_attempt()
+        batch_payload = {
+            "turns": [
+                {
+                    "turn_id": turn.turn_id,
+                    "display_transcript": "I study software engineering and do an internship.",
+                    "band7_version": "I am studying software engineering, and I am also doing an internship at a small tech company.",
+                    "ai_coaching": "这次身份信息很清楚，可以补充一个具体职责。\n\n语法错误纠正：无",
+                }
+            ]
+        }
+        score_payload = {
+            "fluency_coherence": 6.5,
+            "lexical_resource": 6.0,
+            "grammatical_range": 6.0,
+            "feedback": "Codex scored this exact speaking response.",
+            "overall_review": {
+                "markdown": "### 总体点评\n\n这次回答信息明确，能说明学习和实习背景，但还可以把职责和例子展开。\n\n### 复盘重点\n\n- 继续补充具体工作内容。",
+                "comment": "回答清楚，但展开还可以更具体。",
+                "review_points": ["补充实习职责", "给一个具体例子"],
+            },
+        }
 
         with patch("apps.speaking.services.run_codex") as mock_run:
-            mock_run.side_effect = RuntimeError("codex returned 0 input tokens")
-            with self.assertRaises(SpeakingError) as ctx:
-                score_attempt(user, "test-heuristic-attempt")
+            mock_run.side_effect = [
+                (json.dumps(batch_payload), {"input_tokens": 100, "output_tokens": 80}),
+                (json.dumps(score_payload), {"input_tokens": 200, "output_tokens": 120}),
+            ]
+            result = score_attempt(user, attempt.attempt_id)
 
-        self.assertIn("AI scoring failed", str(ctx.exception))
-        attempt.refresh_from_db()
-        self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
-        self.assertFalse(SpeakingReport.objects.filter(attempt=attempt).exists())
+        self.assertEqual(mock_run.call_count, 2)
+        self.assertFalse(any("overall_review_" in call.args[1] for call in mock_run.call_args_list))
+        score_prompt = mock_run.call_args_list[1].args[0]
+        self.assertIn("Do you work or do you study?", score_prompt)
+        self.assertIn("software engineering", score_prompt)
+        self.assertEqual(result["ielts_score"]["backend"], "codex")
+        self.assertEqual(result["ielts_score"]["generation_status"], "ready")
+        self.assertEqual(result["ielts_score"]["overall_band"], 6.0)
+        self.assertEqual(result["feedback_summary"], "Codex scored this exact speaking response.")
+        self.assertEqual(result["overall_review"]["backend"], "codex")
+        self.assertEqual(result["overall_review"]["markdown"], score_payload["overall_review"]["markdown"])
+        turn.refresh_from_db()
+        self.assertEqual(turn.metadata["feedback_generation_backend"], "codex")
+        self.assertEqual(turn.metadata["feedback_generation_status"], "ready")
+        self.assertEqual(turn.metadata["band7_version"], batch_payload["turns"][0]["band7_version"])
+        report = SpeakingReport.objects.get(attempt=attempt)
+        self.assertEqual(report.report_payload["score_generation_backend"], "codex")
+        self.assertEqual(report.report_payload["report_generation_status"], "ready")
+
+    def test_score_attempt_falls_back_with_visible_metadata_when_codex_fails(self):
+        from apps.speaking.services import score_attempt
+
+        user, attempt, turn = self.create_ready_attempt(
+            username="score-attempt-fallback-user",
+            attempt_id="score-attempt-fallback-path",
+        )
+
+        with patch("apps.speaking.services.run_codex", side_effect=RuntimeError("codex returned empty output")) as mock_run:
+            result = score_attempt(user, attempt.attempt_id)
+
+        self.assertGreaterEqual(mock_run.call_count, 3)
+        self.assertEqual(result["ielts_score"]["backend"], "fallback")
+        self.assertEqual(result["ielts_score"]["generation_backend"], "fallback")
+        self.assertEqual(result["ielts_score"]["generation_status"], "fallback")
+        self.assertIn("codex returned empty output", result["ielts_score"]["fallback_reason"])
+        self.assertGreater(result["ielts_score"]["overall_band"], 0)
+        self.assertNotEqual(result["ielts_score"]["overall_band"], 0)
+        self.assertEqual(result["score_generation_status"], "fallback")
+        self.assertEqual(result["report_generation_backend"], "fallback")
+        self.assertTrue(SpeakingReport.objects.filter(attempt=attempt).exists())
+        turn.refresh_from_db()
+        self.assertEqual(turn.metadata["feedback_generation_backend"], "fallback")
+        self.assertEqual(turn.metadata["feedback_generation_status"], "fallback")
+        self.assertIn("codex returned empty output", turn.metadata["feedback_generation_error"])
 
 
 class TurnFeedbackValidationTests(TestCase):
@@ -1676,9 +1743,8 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertEqual(feedback["ai_coaching"], "")
         self.assertIn("university student", feedback["display_transcript"])
 
-    def test_p1_work_study_followup_uses_codex_when_available(self):
-        """Completing work/study identity turn should insert an AI-generated follow-up."""
-        from unittest.mock import patch
+    def test_p1_work_study_followup_uses_codex_result_with_server_tts(self):
+        """Completing work/study identity turn should insert the Codex-generated follow-up with server TTS."""
         from apps.speaking.services import complete_turn
         from apps.accounts.models import CustomUser
 
@@ -1729,11 +1795,22 @@ class TurnFeedbackValidationTests(TestCase):
             metadata={"prompt": {"topic": "home", "question": "Do you like your hometown?"}},
         )
 
-        with patch("apps.speaking.services.run_codex") as mock_run:
-            mock_run.return_value = (
-                '{"follow_up": "How does your internship help you with your software engineering studies?"}',
-                {"input_tokens": 100},
-            )
+        with (
+            patch(
+                "apps.speaking.services.run_codex",
+                return_value=('{"follow_up":"How has your software engineering internship shaped your studies?"}', {"input_tokens": 12}),
+            ) as mock_run,
+            patch(
+                "apps.speaking.services.volcengine_tts",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/test-p1-followup-attempt_t2_followup_examiner.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ) as mock_tts,
+            patch("apps.speaking.services.transcribe_turn_audio_with_server_asr") as mock_asr,
+        ):
             result = complete_turn(
                 user,
                 "test-p1-followup-attempt",
@@ -1745,10 +1822,147 @@ class TurnFeedbackValidationTests(TestCase):
                     )
                 },
             )
+        mock_run.assert_called_once()
+        mock_tts.assert_called_once_with(
+            "How has your software engineering internship shaped your studies?",
+            role="examiner",
+            cache_key="test-p1-followup-attempt_t2_followup_examiner",
+        )
+        mock_asr.assert_not_called()
 
         follow_up = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
         prompt = follow_up.metadata["prompt"]
         self.assertEqual(prompt["backend"], "codex")
         self.assertEqual(prompt["generation_status"], "ready")
-        self.assertIn("internship", follow_up.question.lower())
+        self.assertEqual(follow_up.question, "How has your software engineering internship shaped your studies?")
+        self.assertEqual(follow_up.metadata["examiner_tts"]["provider"], "volcengine")
+        self.assertEqual(follow_up.metadata["examiner_tts"]["status"], "ready")
+        self.assertEqual(
+            follow_up.metadata["examiner_tts"]["audio_url"],
+            "/api/tts-audio/examiner/test-p1-followup-attempt_t2_followup_examiner.mp3",
+        )
+        self.assertEqual(result["next_turn"]["examiner_tts"]["status"], "ready")
         self.assertEqual(result["next_turn"]["id"], "t2_followup")
+        self.assertEqual(result["next_turn"]["question"], "How has your software engineering internship shaped your studies?")
+        self.assertEqual(result["attempt"]["current_turn"], "t2_followup")
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.STARTED)
+        self.assertEqual(attempt.metadata["current_turn"], "t2_followup")
+        self.assertFalse(hasattr(attempt, "report"))
+        completed_turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2")
+        self.assertEqual(completed_turn.metadata["server_asr"]["status"], "skipped_browser_transcript_available")
+
+    def test_p1_work_study_followup_inserts_even_without_transcript(self):
+        from apps.speaking.services import complete_turn
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="test-p1-followup-empty-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-p1-followup-empty-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t2"},
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=0,
+            part="p1",
+            question="Do you work or do you study?",
+            metadata={
+                "prompt": {
+                    "topic": "intro",
+                    "question": "Do you work or do you study?",
+                    "flow": "intro",
+                    "role": "work_study",
+                    "counts_toward_total": True,
+                }
+            },
+        )
+
+        with (
+            patch("apps.speaking.services.run_codex") as mock_run,
+            patch(
+                "apps.speaking.services.volcengine_tts",
+                return_value={"provider": "volcengine", "status": "ready", "audio_url": "/api/tts-audio/examiner/fallback.mp3"},
+            ),
+            patch(
+                "apps.speaking.services.transcribe_turn_audio_with_server_asr",
+                return_value={"ok": False, "status": "missing_audio", "transcript": "", "error": "No uploaded audio."},
+            ) as mock_asr,
+        ):
+            result = complete_turn(user, "test-p1-followup-empty-attempt", "t2", {"transcript_raw": ""})
+
+        mock_run.assert_not_called()
+        mock_asr.assert_called_once()
+        follow_up = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
+        self.assertEqual(follow_up.question, "Can you tell me a little more about what you do now?")
+        prompt = follow_up.metadata["prompt"]
+        self.assertEqual(prompt["backend"], "fallback")
+        self.assertEqual(prompt["generation_status"], "fallback")
+        self.assertEqual(prompt["generation_error"], "missing_candidate_answer")
+        self.assertEqual(result["next_turn"]["id"], "t2_followup")
+        self.assertEqual(result["attempt"]["current_turn"], "t2_followup")
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.STARTED)
+        self.assertEqual(attempt.metadata["current_turn"], "t2_followup")
+        self.assertFalse(hasattr(attempt, "report"))
+
+    def test_p1_work_study_followup_falls_back_when_codex_fails(self):
+        from apps.speaking.services import complete_turn
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="test-p1-followup-codex-fail", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-p1-followup-codex-fail",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t2"},
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=0,
+            part="p1",
+            question="Do you work or do you study?",
+            metadata={
+                "prompt": {
+                    "topic": "intro",
+                    "question": "Do you work or do you study?",
+                    "flow": "intro",
+                    "role": "work_study",
+                    "counts_toward_total": True,
+                }
+            },
+        )
+
+        with (
+            patch("apps.speaking.services.run_codex", side_effect=RuntimeError("codex unavailable")) as mock_run,
+            patch(
+                "apps.speaking.services.volcengine_tts",
+                return_value={"provider": "volcengine", "status": "ready", "audio_url": "/api/tts-audio/examiner/fallback.mp3"},
+            ),
+        ):
+            result = complete_turn(
+                user,
+                "test-p1-followup-codex-fail",
+                "t2",
+                {"transcript_raw": "I'm a university student studying computer science."},
+            )
+
+        mock_run.assert_called_once()
+        follow_up = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
+        prompt = follow_up.metadata["prompt"]
+        self.assertEqual(follow_up.question, "What do you enjoy most about your studies?")
+        self.assertEqual(prompt["backend"], "fallback")
+        self.assertEqual(prompt["generation_status"], "fallback")
+        self.assertIn("codex unavailable", prompt["generation_error"])
+        self.assertEqual(result["next_turn"]["id"], "t2_followup")
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.STARTED)
