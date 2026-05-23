@@ -2482,12 +2482,8 @@ h1 {
 
 .writing-report-prompt-card {
   gap: 14px;
-  border: 1px solid #d7e5df;
-  border-left: 6px solid #1f7af2;
-  border-radius: 12px;
-  background: #fbfdfc;
-  padding: 20px 24px;
-  box-shadow: none;
+  border-left: 5px solid #2563eb;
+  background: #fbfdff;
 }
 
 .writing-report-prompt-card .writing-pill {
@@ -2515,7 +2511,7 @@ h1 {
 
 .writing-overall-copy {
   display: grid;
-  gap: 0;
+  gap: 10px;
   margin-top: 16px;
 }
 
@@ -2526,7 +2522,7 @@ h1 {
   padding: 0;
 }
 
-.writing-overall-copy h4,
+.writing-overall-copy h3,
 .writing-paragraph-review h3,
 .writing-paragraph-stack h4 {
   margin: 0 0 8px;
@@ -2570,14 +2566,26 @@ h1 {
   min-width: 820px;
 }
 
-.writing-paragraph-report-table th,
-.writing-paragraph-report-table td {
+.writing-paragraph-report-table th:nth-child(1),
+.writing-paragraph-report-table .writing-paragraph-content-row > td:nth-child(1) {
   width: 50%;
+}
+
+.writing-paragraph-report-table th:nth-child(2),
+.writing-paragraph-report-table .writing-paragraph-content-row > td:nth-child(2) {
+  width: 50%;
+}
+
+.writing-paragraph-report-table .writing-paragraph-content-row > td {
   vertical-align: middle;
 }
 
-.writing-paragraph-report-table .ai-coaching-cell {
-  width: auto;
+.writing-paragraph-report-table .writing-paragraph-coaching-row > td {
+  vertical-align: top;
+}
+
+.writing-paragraph-report-card .turn-report-wrap {
+  margin-top: 0;
 }
 
 .writing-paragraph-report-table td p {

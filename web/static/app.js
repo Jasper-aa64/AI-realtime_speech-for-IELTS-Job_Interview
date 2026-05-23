@@ -53,6 +53,8 @@ const state = {
     loaded: false,
     selectedText: "",
     rangeRect: null,
+    selectionAnchor: null,
+    selectionScrollRaf: null,
     dragging: false,
     dragOffsetX: 0,
     dragOffsetY: 0,
@@ -1789,7 +1791,9 @@ async function loadHistory(showBusy = true) {
     state.historyItems = payload.items || [];
     renderHistoryList(state.historyItems);
   };
-  if (showBusy && !state.historyItems.length) return withBusy("Loading history...", action).catch(showError);
+  if (showBusy && !state.historyItems.length) {
+    $("detailPanel").innerHTML = centeredLoadingHtml("正在加载口语报告", "正在读取历史记录和报告详情。");
+  }
   return action().catch(showError);
 }
 
@@ -1884,6 +1888,9 @@ function closeHistoryItemMenu() {
 function showDeleteConfirm(attemptId) {
   showConfirmDelete("确定要删除这条练习记录吗？", async () => {
     try {
+      if (state.activeHistoryId === attemptId) {
+        $("detailPanel").innerHTML = centeredLoadingHtml("正在删除报告", "删除完成后会自动刷新列表。");
+      }
       await api(`/api/history/${attemptId}`, null, { method: "DELETE" });
       if (state.activeHistoryId === attemptId) state.activeHistoryId = null;
       state.historyDetailCache.delete(attemptId);
@@ -2178,9 +2185,10 @@ async function loadWritingReports(showBusy = true) {
   try {
     if (state.writing.reportEntries.length) renderWritingReports(state.writing.reportEntries, { refreshActive: false });
     const loader = () => api("/api/writing/reports");
-    const payload = state.writing.reportEntries.length || !showBusy
-      ? await loader()
-      : await withBusy("Loading writing reports...", loader);
+    if (showBusy && !state.writing.reportEntries.length) {
+      $("writingReportDetail").innerHTML = centeredLoadingHtml("正在加载写作报告", "正在读取写作历史和报告详情。");
+    }
+    const payload = await loader();
     await renderWritingReports(payload.items || []);
   } catch (error) {
     showWritingReportError(error);
@@ -2312,6 +2320,9 @@ function showWritingReportItemMenu(anchor, entryId) {
 async function deleteWritingReport(entryId) {
   if (!entryId) return;
   try {
+    if (state.writing.activeReportId === entryId) {
+      $("writingReportDetail").innerHTML = centeredLoadingHtml("正在删除写作报告", "删除完成后会自动刷新列表。");
+    }
     await api(`/api/writing/entries/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
     state.writing.reportDetailCache.delete(entryId);
     state.writing.reportEntries = state.writing.reportEntries.filter((item) => item.id !== entryId);
@@ -2342,11 +2353,12 @@ function writingReportDetailHtml(entry) {
   const taskLabel = entry.task_type === "task1_academic" ? "TA" : "TR";
   const paragraphReviews = Array.isArray(score?.paragraph_reviews) ? score.paragraph_reviews : [];
   const editAction = `<button type="button" class="ghost writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}">修改作文并重新生成报告</button>`;
+  const taskName = entry.task_label || writingTaskLabel(entry.task_type);
   const profile = entry?.writing_profile || null;
   const profileIssues = Array.isArray(profile?.top_issues) ? profile.top_issues : [];
   const profileEvidence = Array.isArray(profile?.recent_evidence) ? profile.recent_evidence : [];
   const profileBlock = profile ? `
-    <div class="detail-card writing-profile-card">
+    <div class="detail-section writing-profile-card">
       <div class="writing-profile-card-head">
         <div>
           <span class="section-label">Personalized profile</span>
@@ -2360,7 +2372,7 @@ function writingReportDetailHtml(entry) {
     </div>
   ` : "";
   const taskBlock = !score && task ? `
-    <div class="detail-card writing-task-state-card">
+    <div class="detail-section writing-task-state-card">
       <div class="detail-header">
         <div>
           <h2>${escapeHtml(writingTaskStatusTitle(task))}</h2>
@@ -2371,12 +2383,11 @@ function writingReportDetailHtml(entry) {
     </div>
   ` : "";
   const scoreBlock = score ? `
-    <div class="detail-card writing-overall-review-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
+    <div class="detail-section writing-score-summary-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
       <div class="detail-header">
         <div>
-          <span class="section-label">Overall Review & Practice Focus</span>
-          <h2>总体点评</h2>
-          <p class="muted">${escapeHtml(entry.title || "")} - ${escapeHtml(entry.word_count ?? 0)} words</p>
+          <h2>IELTS Writing 练习估分</h2>
+          <p class="muted">${escapeHtml(taskName)} · ${escapeHtml(entry.word_count ?? 0)} words</p>
         </div>
         <strong class="overall-badge">Band ${escapeHtml(score.overall_band ?? "—")}</strong>
       </div>
@@ -2386,6 +2397,10 @@ function writingReportDetailHtml(entry) {
         ${scoreCell("LR", score.lexical_resource)}
         ${scoreCell("GRA", score.grammatical_range_accuracy)}
       </div>
+      <div class="writing-report-actions">${editAction}</div>
+    </div>
+    <div class="detail-card overall-review-card writing-overall-review-card">
+      <h3>Overall Review & Practice Focus</h3>
       <div class="writing-overall-copy">
         <section>
           <h3>总体点评</h3>
@@ -2396,19 +2411,18 @@ function writingReportDetailHtml(entry) {
           <p>${escapeHtml(score.practice_focus || "复盘时优先看段落组织、中心句和具体展开。")}</p>
         </section>
       </div>
-      <div class="writing-report-actions">${editAction}</div>
     </div>
     ${score.structure_advice_only ? writingStructureAdviceHtml(score, entry) : writingParagraphReviewHtml(entry, paragraphReviews)}
-    <details class="detail-card writing-raw-feedback">
+    <details class="detail-section writing-raw-feedback">
       <summary>完整 AI 评分与辅导</summary>
       <div class="coaching-content">${renderMarkdown(score.feedback_markdown || "暂无反馈。")}</div>
     </details>
     ${profileBlock}
   ` : `
-    <div class="detail-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
+    <div class="detail-section" data-writing-report-id="${escapeHtml(entry.id || "")}">
       <div class="detail-header">
         <div>
-          <h2>${escapeHtml(entry.task_label || writingTaskLabel(entry.task_type))} saved</h2>
+          <h2>${escapeHtml(taskName)} saved</h2>
           <p class="muted">${escapeHtml(entry.title || "")} - ${escapeHtml(entry.word_count ?? 0)} words</p>
         </div>
         <strong class="overall-badge muted-badge">未评分</strong>
@@ -2418,16 +2432,20 @@ function writingReportDetailHtml(entry) {
     </div>
   `;
   return `
-    <div class="detail-card writing-report-prompt writing-report-prompt-card">
-      <span class="section-label">${escapeHtml(entry.task_label || writingTaskLabel(entry.task_type))}</span>
-      <h2>${escapeHtml(entry.title || entry.task_label || writingTaskLabel(entry.task_type))}</h2>
+    <div class="detail-section writing-report-prompt writing-report-prompt-card">
+      <div class="detail-header">
+        <div>
+          <h2>${escapeHtml(entry.title || taskName)}</h2>
+          <p class="muted">${escapeHtml(taskName)}</p>
+        </div>
+      </div>
       ${entry.image_url ? `<div class="writing-report-image"><img src="${escapeHtml(entry.image_url)}" alt="Task 1 chart"></div>` : ""}
-      <div class="coaching-content">${renderMarkdown(entry.prompt || "")}</div>
+      <div class="writing-report-prompt-text">${renderMarkdown(entry.prompt || "")}</div>
     </div>
     ${taskBlock}
     ${scoreBlock}
-    ${score ? "" : `<div class="detail-card writing-report-answer">
-      <h3>Your answer</h3>
+    ${score ? "" : `<div class="detail-section writing-report-answer">
+      <h3>我的作文</h3>
       <p>${escapeHtml(entry.answer || "").replace(/\n/g, "<br>")}</p>
     </div>`}
   `;
@@ -2436,7 +2454,7 @@ function writingReportDetailHtml(entry) {
 function writingStructureAdviceHtml(score, entry) {
   const answerParagraphs = writingParagraphs(entry.answer || "");
   return `
-    <section class="detail-card writing-structure-advice-card">
+    <section class="detail-section writing-structure-advice-card">
       <span class="section-label">Paragraph structure first</span>
       <h3>分段修改意见</h3>
       <p class="muted">这篇作文的结构还不适合逐段对应生成“我的原文 / AI 写法 / AI 辅导”。建议先按下面方向重排段落，再重新生成报告。</p>
@@ -2460,30 +2478,35 @@ function writingParagraphReviewHtml(entry, reviews) {
     coaching: "这一段可以继续优化中心句、展开和连接方式。",
   }));
   if (!items.length) return "";
-  return `<div class="writing-paragraph-review-list">
-    ${items.map((item, index) => `
-      <section class="detail-card writing-paragraph-review">
-        <div class="writing-paragraph-review-head">
-          <span class="section-label">Paragraph ${escapeHtml(item.index || index + 1)}</span>
-          <h3>分段复盘</h3>
-        </div>
-        <div class="writing-paragraph-stack">
-          <article>
-            <h4>我的原文</h4>
-            <p>${escapeHtml(item.learner || answerParagraphs[index] || "").replace(/\n/g, "<br>")}</p>
-          </article>
-          <article>
-            <h4>AI 写法</h4>
-            <p>${escapeHtml(item.model || "暂无 AI 改写。").replace(/\n/g, "<br>")}</p>
-          </article>
-          <article>
-            <h4>AI 辅导</h4>
-            <p>${escapeHtml(item.coaching || "暂无段落辅导。").replace(/\n/g, "<br>")}</p>
-          </article>
-        </div>
-      </section>
-    `).join("")}
-  </div>`;
+  const rows = items.map((item, index) => `
+    <tbody class="turn-report-group writing-paragraph-group">
+      <tr class="writing-paragraph-content-row">
+        <td>
+          <div class="question-header"><strong>Paragraph ${escapeHtml(item.index || index + 1)}</strong></div>
+          <p>${escapeHtml(item.learner || answerParagraphs[index] || "").replace(/\n/g, "<br>")}</p>
+        </td>
+        <td>
+          <p>${escapeHtml(item.model || "暂无 AI 改写。").replace(/\n/g, "<br>")}</p>
+        </td>
+      </tr>
+      <tr class="writing-paragraph-coaching-row">
+        <td colspan="2" class="ai-coaching-cell">
+          <h4 class="coaching-title">AI 辅导</h4>
+          <div class="coaching-content">${renderMarkdown(item.coaching || "暂无段落辅导。")}</div>
+        </td>
+      </tr>
+    </tbody>
+  `).join("");
+  return `
+    <div class="detail-card turn-report-card writing-paragraph-report-card">
+      <div class="turn-report-wrap">
+        <table class="turn-report-table writing-paragraph-report-table">
+          <thead><tr><th>我的原文</th><th>AI 写法</th></tr></thead>
+          ${rows}
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 function setWritingPrompt(prompt, clearAnswer = true) {
@@ -3274,7 +3297,9 @@ function updateP1CorpusPeekButton(turn = state.currentTurn) {
   const target = currentP1CorpusTarget(turn);
   const entry = target?.questionId ? findP1CorpusEntry(target.questionId) : null;
   const hasCorpus = !!(entry?.corpus_text || "").trim();
-  button.classList.toggle("hidden", !target || !hasCorpus);
+  button.classList.toggle("hidden", !target);
+  button.classList.toggle("has-corpus", hasCorpus);
+  button.title = hasCorpus ? "查看这道题的语料提示" : "这道题还没有保存语料";
   if (target) {
     button.dataset.questionId = target.questionId || "";
     button.dataset.topic = target.topic || "";
@@ -3297,15 +3322,16 @@ async function openP1CorpusPeek() {
   if (!state.p1Corpus.loaded) await ensureP1CorpusLoaded();
   const entry = findP1CorpusEntry(target.questionId);
   const corpusText = (entry?.corpus_text || "").trim();
-  if (!corpusText) {
-    updateP1CorpusPeekButton(state.currentTurn);
-    return;
-  }
-  text("p1CorpusPeekTopic", (entry.topic || target.topic || "PART 1").replaceAll("_", " ").toUpperCase());
-  text("p1CorpusPeekTitle", target.displayQuestion || entry.question || target.question || "语料提示");
+  text("p1CorpusPeekTopic", (entry?.topic || target.topic || "PART 1").replaceAll("_", " ").toUpperCase());
+  text("p1CorpusPeekTitle", target.displayQuestion || entry?.question || target.question || "语料提示");
   const body = $("p1CorpusPeekBody");
-  if (body) body.innerHTML = renderMarkdown(corpusText);
+  if (body) {
+    body.innerHTML = corpusText
+      ? renderMarkdown(corpusText)
+      : '<p class="muted">这道题还没有保存语料。</p>';
+  }
   $("p1CorpusPeekDialog")?.classList.remove("hidden");
+  updateP1CorpusPeekButton(state.currentTurn);
 }
 
 function closeP1CorpusPeek() {
@@ -3798,11 +3824,23 @@ function selectionText() {
   const range = selection.getRangeAt(0);
   const rect = range.getBoundingClientRect();
   if (!rect || (rect.width === 0 && rect.height === 0)) return null;
-  return { text: textValue, rect };
+  return {
+    text: textValue,
+    rect,
+    center: {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    },
+  };
 }
 
 function hideLanguageTakeawayTrigger() {
   $("languageTakeawayTrigger")?.classList.add("hidden");
+  state.languageTakeaway.selectionAnchor = null;
+  if (state.languageTakeaway.selectionScrollRaf) {
+    window.cancelAnimationFrame(state.languageTakeaway.selectionScrollRaf);
+    state.languageTakeaway.selectionScrollRaf = null;
+  }
 }
 
 function hideLanguageTakeawayPopup() {
@@ -3827,8 +3865,33 @@ function showLanguageTakeawayTrigger(selectionInfo) {
   const trigger = $("languageTakeawayTrigger");
   if (!trigger || !selectionInfo) return;
   state.languageTakeaway.selectedText = selectionInfo.text;
+  if (!state.languageTakeaway.selectionAnchor) {
+    state.languageTakeaway.selectionAnchor = selectionInfo.center;
+  }
   placeLanguageTakeawayTrigger(selectionInfo.rect.right + 8, selectionInfo.rect.top - 4);
   trigger.classList.remove("hidden");
+}
+
+function trackLanguageTakeawayTriggerDuringScroll() {
+  const trigger = $("languageTakeawayTrigger");
+  if (!trigger || trigger.classList.contains("hidden")) return;
+  if (!$("languageTakeawayPopup")?.classList.contains("hidden")) return;
+  if (state.languageTakeaway.selectionScrollRaf) return;
+  state.languageTakeaway.selectionScrollRaf = window.requestAnimationFrame(() => {
+    state.languageTakeaway.selectionScrollRaf = null;
+    const info = selectionText();
+    const anchor = state.languageTakeaway.selectionAnchor;
+    if (!info || !anchor) {
+      hideLanguageTakeawayTrigger();
+      return;
+    }
+    const distance = Math.hypot(info.center.x - anchor.x, info.center.y - anchor.y);
+    if (distance > 170) {
+      hideLanguageTakeawayTrigger();
+      return;
+    }
+    placeLanguageTakeawayTrigger(info.rect.right + 8, info.rect.top - 4);
+  });
 }
 
 function scheduleLanguageTakeawayTriggerFromSelection() {
@@ -3836,6 +3899,7 @@ function scheduleLanguageTakeawayTriggerFromSelection() {
   state.languageTakeaway.selectionTimer = window.setTimeout(() => {
     if (!$("languageTakeawayPopup")?.classList.contains("hidden")) return;
     const info = selectionText();
+    state.languageTakeaway.selectionAnchor = info?.center || null;
     if (info) showLanguageTakeawayTrigger(info);
     else hideLanguageTakeawayTrigger();
   }, 80);
@@ -4571,6 +4635,7 @@ function bindEvents() {
     window.clearTimeout(state.languageTakeaway.selectionTimer);
     if (!selectionText()) hideLanguageTakeawayTrigger();
   });
+  document.addEventListener("scroll", trackLanguageTakeawayTriggerDuringScroll, { capture: true, passive: true });
   document.addEventListener("pointerdown", (event) => {
     const popup = $("languageTakeawayPopup");
     const trigger = $("languageTakeawayTrigger");
