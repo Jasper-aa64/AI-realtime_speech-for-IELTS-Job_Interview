@@ -108,6 +108,8 @@ const state = {
     token: 0,
     fixedExaminerTtsWarmed: false,
     fixedExaminerTtsPromise: null,
+    corpusEditorWarmed: false,
+    corpusEditorWarmPromise: null,
   },
 };
 
@@ -115,10 +117,13 @@ const FONT_STORAGE_KEY = "ielts-font-style";
 const VIEW_STORAGE_KEY = "ielts-view";
 const FULL_NAME_STORAGE_KEY = "ielts-full-name";
 const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
+const VDITOR_CSS_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.css";
+const VDITOR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js";
 const fontStyles = new Set(["default", "academic", "popular"]);
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
 const corpusMarkdownEditors = {};
+const dynamicScriptPromises = {};
 const FIXED_EXAMINER_AUDIO_URLS = new Set([
   "/api/tts-audio/examiner/fixed_examiner_what_is_your_full_name.mp3",
   "/api/tts-audio/examiner/fixed_examiner_do_you_work_or_do_you_study.mp3",
@@ -482,6 +487,7 @@ function clearUserScopedCaches() {
   state.prefetch.token += 1;
   state.prefetch.fixedExaminerTtsWarmed = false;
   state.prefetch.fixedExaminerTtsPromise = null;
+  state.prefetch.corpusEditorWarmPromise = null;
 }
 
 function scheduleAuthenticatedPrefetch() {
@@ -495,6 +501,7 @@ function scheduleAuthenticatedPrefetch() {
   scheduleIdleTask(() => prefetchLanguageTakeaways(token), 950);
   scheduleIdleTask(() => prefetchSpeakingHistory(token), 1250);
   scheduleIdleTask(() => prefetchWritingReports(token), 1600);
+  scheduleIdleTask(() => prefetchCorpusEditor(token), 2100);
 }
 
 async function fetchFixedExaminerTtsWarmup() {
@@ -611,6 +618,116 @@ async function prefetchWritingReports(token) {
   if (prefetchCanApply(token) && state.view === "writingReports") {
     await renderWritingReports(state.writing.reportEntries, { refreshActive: false });
   }
+}
+
+function ensureStylesheetLoaded(href) {
+  if ([...document.styleSheets].some((sheet) => sheet.href === href)) return Promise.resolve();
+  if ([...document.querySelectorAll('link[rel="stylesheet"]')].some((link) => link.href === href)) return Promise.resolve();
+  return new Promise((resolve) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.onload = resolve;
+    link.onerror = resolve;
+    document.head.appendChild(link);
+  });
+}
+
+function ensureScriptLoaded(src, globalName) {
+  if (globalName && window[globalName]) return Promise.resolve(window[globalName]);
+  if (dynamicScriptPromises[src]) return dynamicScriptPromises[src];
+  dynamicScriptPromises[src] = new Promise((resolve, reject) => {
+    const done = () => {
+      window.clearTimeout(timer);
+      if (!globalName || window[globalName]) resolve(window[globalName]);
+      else reject(new Error(`Script loaded without ${globalName}`));
+    };
+    const fail = () => {
+      window.clearTimeout(timer);
+      delete dynamicScriptPromises[src];
+      reject(new Error(`Failed to load ${src}`));
+    };
+    const timer = window.setTimeout(() => {
+      delete dynamicScriptPromises[src];
+      reject(new Error(`Timed out loading ${src}`));
+    }, 8000);
+    const existing = [...document.scripts].find((script) => script.src === src);
+    if (existing) {
+      existing.addEventListener("load", done, { once: true });
+      existing.addEventListener("error", fail, { once: true });
+      if (!globalName || window[globalName]) done();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = done;
+    script.onerror = fail;
+    document.body.appendChild(script);
+  });
+  return dynamicScriptPromises[src];
+}
+
+async function ensureVditorLoaded() {
+  ensureStylesheetLoaded(VDITOR_CSS_URL);
+  await ensureScriptLoaded(VDITOR_SCRIPT_URL, "Vditor");
+}
+
+function warmCorpusMarkdownEditor() {
+  if (state.prefetch.corpusEditorWarmed) return Promise.resolve();
+  if (state.prefetch.corpusEditorWarmPromise) return state.prefetch.corpusEditorWarmPromise;
+  state.prefetch.corpusEditorWarmPromise = ensureVditorLoaded().then(() => new Promise((resolve) => {
+    const host = document.createElement("div");
+    host.className = "editor-prewarm-host";
+    document.body.appendChild(host);
+    let editor;
+    let settled = false;
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      window.setTimeout(() => {
+        try {
+          editor?.destroy?.();
+        } catch (_error) {
+          // Best effort; this hidden editor only warms Vditor internals.
+        }
+        host.remove();
+        state.prefetch.corpusEditorWarmed = true;
+        state.prefetch.corpusEditorWarmPromise = null;
+        resolve();
+      }, 0);
+    };
+    try {
+      editor = new Vditor(host, {
+        value: "",
+        mode: "ir",
+        height: 120,
+        cache: { enable: false },
+        toolbar: [],
+        after: cleanup,
+      });
+      window.setTimeout(cleanup, 1800);
+    } catch (_error) {
+      cleanup();
+    }
+  })).catch(() => {
+    state.prefetch.corpusEditorWarmPromise = null;
+  });
+  return state.prefetch.corpusEditorWarmPromise;
+}
+
+async function prefetchCorpusEditor(token) {
+  await warmCorpusMarkdownEditor();
+  if (!prefetchCanApply(token)) return;
+  state.prefetch.corpusEditorWarmed = true;
+}
+
+function ensureCorpusMarkdownEditorReady(textareaId) {
+  const existing = corpusMarkdownEditors[textareaId];
+  if (existing) return Promise.resolve(existing);
+  return ensureVditorLoaded()
+    .then(() => ensureCorpusMarkdownEditor(textareaId))
+    .catch(() => null);
 }
 
 function switchView(view, options = {}) {
@@ -3552,7 +3669,10 @@ async function openP1CorpusEditor(entry) {
   text("p1CorpusSaveStatus", "");
   $("p1CorpusDialog")?.classList.remove("hidden");
   if (!isCorpusEditorReady("p1CorpusText")) setCorpusEditorLoading("p1CorpusText", true);
-  setTimeout(() => corpusMarkdownEditors.p1CorpusText?.focus?.() || $("p1CorpusText")?.focus(), 0);
+  ensureCorpusMarkdownEditorReady("p1CorpusText").then((editor) => {
+    if (!editor) setCorpusEditorLoading("p1CorpusText", false);
+    setTimeout(() => editor?.focus?.() || $("p1CorpusText")?.focus(), 0);
+  });
 }
 
 function closeP1CorpusEditor() {
@@ -4008,6 +4128,9 @@ function openP2CorpusEditor(entry = {}) {
   text("p2CorpusSaveStatus", "");
   $("p2CorpusDialog")?.classList.remove("hidden");
   if (!isCorpusEditorReady("p2CorpusText")) setCorpusEditorLoading("p2CorpusText", true);
+  ensureCorpusMarkdownEditorReady("p2CorpusText").then((editor) => {
+    if (!editor) setCorpusEditorLoading("p2CorpusText", false);
+  });
   setTimeout(() => $("p2CorpusTitle")?.focus(), 0);
 }
 
