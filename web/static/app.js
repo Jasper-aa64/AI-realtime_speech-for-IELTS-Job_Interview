@@ -540,6 +540,7 @@ function applyP1CorpusPayload(payload) {
     stats.textContent = `${payload.topic_count || state.p1Corpus.topics.length} 个话题 · ${payload.question_count || 0} 道题 · 已保存 ${payload.saved_count || 0}`;
   }
   if (state.view === "p1Corpus") renderP1CorpusTopics();
+  updateP1CorpusPeekButton(state.currentTurn);
 }
 
 function applyP2CorpusPayload(payload) {
@@ -831,6 +832,8 @@ function returnFromSettings() {
 
 function resetPracticeSurface() {
   stopExaminerPlayback();
+  closeP1CorpusPeek();
+  updateP1CorpusPeekButton(null);
   state.practiceLocked = false;
   state.status = "idle";
   state.attempt = null;
@@ -1022,6 +1025,7 @@ function renderTurn(turn) {
   $("practiceGrid").classList.toggle("p2-mode", isP2);
   $("cueTop").classList.add("hidden");
   $("promptPane").classList.remove("hidden");
+  updateP1CorpusPeekButton(turn);
   renderExaminerAudio(turn);
   if (isP2 && turn.cue_card) {
     renderCueCardInPrompt(turn.cue_card);
@@ -3248,6 +3252,66 @@ function findP1CorpusEntry(questionId) {
   return null;
 }
 
+function currentP1CorpusTarget(turn = state.currentTurn) {
+  if (!turn || turn.part !== "p1") return null;
+  return p1CorpusTargetForTurn(turn, state.attempt || {});
+}
+
+async function ensureP1CorpusLoaded() {
+  if (state.p1Corpus.loaded) return true;
+  try {
+    const payload = await fetchP1CorpusPayload();
+    applyP1CorpusPayload(payload);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function updateP1CorpusPeekButton(turn = state.currentTurn) {
+  const button = $("peekP1CorpusBtn");
+  if (!button) return;
+  const target = currentP1CorpusTarget(turn);
+  const entry = target?.questionId ? findP1CorpusEntry(target.questionId) : null;
+  const hasCorpus = !!(entry?.corpus_text || "").trim();
+  button.classList.toggle("hidden", !target || !hasCorpus);
+  if (target) {
+    button.dataset.questionId = target.questionId || "";
+    button.dataset.topic = target.topic || "";
+    button.dataset.question = target.displayQuestion || target.question || "";
+    if (!state.p1Corpus.loaded) {
+      ensureP1CorpusLoaded().then(() => {
+        if (state.currentTurn?.id === turn?.id) updateP1CorpusPeekButton(state.currentTurn);
+      });
+    }
+  } else {
+    button.removeAttribute("data-question-id");
+    button.removeAttribute("data-topic");
+    button.removeAttribute("data-question");
+  }
+}
+
+async function openP1CorpusPeek() {
+  const target = currentP1CorpusTarget();
+  if (!target?.questionId) return;
+  if (!state.p1Corpus.loaded) await ensureP1CorpusLoaded();
+  const entry = findP1CorpusEntry(target.questionId);
+  const corpusText = (entry?.corpus_text || "").trim();
+  if (!corpusText) {
+    updateP1CorpusPeekButton(state.currentTurn);
+    return;
+  }
+  text("p1CorpusPeekTopic", (entry.topic || target.topic || "PART 1").replaceAll("_", " ").toUpperCase());
+  text("p1CorpusPeekTitle", target.displayQuestion || entry.question || target.question || "语料提示");
+  const body = $("p1CorpusPeekBody");
+  if (body) body.innerHTML = renderMarkdown(corpusText);
+  $("p1CorpusPeekDialog")?.classList.remove("hidden");
+}
+
+function closeP1CorpusPeek() {
+  $("p1CorpusPeekDialog")?.classList.add("hidden");
+}
+
 function p1CorpusStorageEntry(entry) {
   const prompt = entry?.prompt || {};
   return {
@@ -3523,6 +3587,7 @@ async function saveP1CorpusEntry(options = {}) {
       };
     }
     renderP1CorpusTopics();
+    updateP1CorpusPeekButton(state.currentTurn);
     if (options.closeOnSuccess) closeP1CorpusEditor();
   } catch (error) {
     if (!options.silent) text("p1CorpusSaveStatus", error.message || String(error));
@@ -4458,6 +4523,8 @@ function bindEvents() {
   $("profileSaveBtn")?.addEventListener("click", () => saveCandidateNames(true).catch((error) => renderAccountStatus(error.message, true)));
   $("securityChangePasswordBtn")?.addEventListener("click", submitPasswordChange);
   $("securityLogoutBtn")?.addEventListener("click", logoutAccount);
+  $("peekP1CorpusBtn")?.addEventListener("click", openP1CorpusPeek);
+  $("closeP1CorpusPeekBtn")?.addEventListener("click", closeP1CorpusPeek);
   $("openP1CorpusBtn")?.addEventListener("click", openP1CorpusLibrary);
   $("openP2CorpusBtn")?.addEventListener("click", openP2CorpusLibrary);
   $("topbarBackCorpusBtn")?.addEventListener("click", closeCorpusWindowOrReturn);
@@ -4554,12 +4621,29 @@ function bindEvents() {
     state.languageTakeaway.dragging = false;
   });
   $("saveP1CorpusBtn")?.addEventListener("click", () => saveP1CorpusEntry({ closeOnSuccess: true }));
+  $("copyP1AiAnswerBtn")?.addEventListener("click", async () => {
+    const value = $("p1CorpusAiAnswer")?.innerText?.trim() || "";
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      const button = $("copyP1AiAnswerBtn");
+      if (button) {
+        button.classList.add("copied");
+        window.setTimeout(() => button.classList.remove("copied"), 900);
+      }
+    } catch (_error) {
+      // Clipboard access is browser-dependent; the reference answer remains selectable.
+    }
+  });
   $("saveP2CorpusBtn")?.addEventListener("click", () => saveP2CorpusEntry({ closeOnSuccess: true }));
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (!$("p1CorpusDialog")?.classList.contains("hidden")) {
       event.preventDefault();
       saveAndCloseP1CorpusEditor();
+    } else if (!$("p1CorpusPeekDialog")?.classList.contains("hidden")) {
+      event.preventDefault();
+      closeP1CorpusPeek();
     } else if (!$("p2CorpusDialog")?.classList.contains("hidden")) {
       event.preventDefault();
       saveAndCloseP2CorpusEditor();
