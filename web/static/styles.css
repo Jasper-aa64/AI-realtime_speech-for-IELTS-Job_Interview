@@ -3743,7 +3743,7 @@ h1 {
 }
 
 .writing-prompt-choice.task2-choice {
-  height: 176px;
+  min-height: 112px;
 }
 
 .writing-prompt-choice:hover,
@@ -3873,6 +3873,16 @@ h1 {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.writing-prompt-choice.task2-choice .writing-prompt-choice-body {
+  min-height: 112px;
+  height: 100%;
+  padding: 14px 16px;
+}
+
+.writing-prompt-choice.task2-choice .writing-prompt-choice-body span {
+  -webkit-line-clamp: 3;
 }
 
 .writing-pill {
