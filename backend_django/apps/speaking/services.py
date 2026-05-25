@@ -241,6 +241,8 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45) -> tuple[str, dict[s
                 [codex, "exec", "--json", *config_args, "-"],
                 input=prompt,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 capture_output=True,
                 timeout=timeout,
                 check=True,
@@ -255,6 +257,8 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45) -> tuple[str, dict[s
                 [codex, "exec", *config_args, "-"],
                 input=prompt,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 capture_output=True,
                 timeout=timeout,
                 check=True,
@@ -1414,6 +1418,17 @@ def language_takeaway_library(user) -> dict[str, Any]:
     return {"items": entries, "count": len(entries)}
 
 
+def writing_takeaway_library(user) -> dict[str, Any]:
+    entries = [
+        language_takeaway_payload(entry)
+        for entry in LanguageTakeawayEntry.objects.filter(
+            user=user,
+            metadata__saved_from="writing_takeaway",
+        ).order_by("-updated_at")[:300]
+    ]
+    return {"items": entries, "count": len(entries)}
+
+
 LOCAL_TAKEAWAY_PHRASE_TRANSLATIONS = {
     "a big fan of": "非常喜欢",
     "a good fit for": "很适合",
@@ -1606,6 +1621,15 @@ def save_language_takeaway(user, payload: dict[str, Any]) -> dict[str, Any]:
         },
     )
     return language_takeaway_payload(entry)
+
+
+def save_writing_takeaway(user, payload: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        **payload,
+        "source": "writing_takeaway",
+        "entry_id": clean_report_text(str(payload.get("entry_id") or "")) or f"wt:{takeaway_entry_id(str(payload.get('source_text') or ''))[3:]}",
+    }
+    return save_language_takeaway(user, payload)
 
 
 def delete_language_takeaway(user, entry_id: str) -> dict[str, Any]:
@@ -1971,8 +1995,53 @@ P1_TURN_COUNT = 10
 P1_FOLLOW_UP_CODEX_TIMEOUT = 15
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
+P3_DRILL_COUNT = 3
 DEFAULT_FULL_NAME = "LiHua"
 DEFAULT_ENGLISH_NAME = "Jasper"
+
+P3_FOCUS_OPTIONS: dict[str, dict[str, str]] = {
+    "abstract_discussion": {
+        "label": "Abstract discussion",
+        "description": "Move from personal experience to broader social ideas.",
+    },
+    "cause_effect": {
+        "label": "Causes and effects",
+        "description": "Explain reasons, consequences, and priorities.",
+    },
+    "comparison_concession": {
+        "label": "Comparison and concession",
+        "description": "Compare groups and add a balanced opposing view.",
+    },
+    "future_trends": {
+        "label": "Future trends",
+        "description": "Predict changes and explain why they may happen.",
+    },
+    "policy_society": {
+        "label": "Policy and society",
+        "description": "Discuss responsibility, rules, and public impact.",
+    },
+}
+
+P3_QUESTION_TYPES = [
+    "opinion_justify",
+    "change_trend",
+    "future_prediction",
+    "problem_solution",
+    "policy_responsibility",
+]
+
+P3_TYPE_TARGET_MOVES: dict[str, list[str]] = {
+    "opinion_justify": ["clear position", "reason", "brief contrast"],
+    "change_trend": ["past-present comparison", "cause", "consequence"],
+    "future_prediction": ["prediction", "condition", "long-term impact"],
+    "problem_solution": ["problem", "example", "practical response"],
+    "policy_responsibility": ["stakeholder", "responsibility", "balanced view"],
+    "comparison_concession": ["compare groups", "concession", "specific example"],
+    "abstract_discussion": ["generalize", "define the issue", "social impact"],
+    "cause_effect": ["main cause", "effect", "priority"],
+    "future_trends": ["future change", "driver", "risk or benefit"],
+    "policy_society": ["public role", "individual role", "trade-off"],
+}
 
 P1_INTRO_QUESTIONS: list[dict[str, Any]] = [
     {
@@ -2043,6 +2112,161 @@ def _fallback_p3(theme: str, count: int = P3_MAIN_COUNT) -> dict[str, Any]:
     ]
     follow_up = "Could you give a specific example to support that view?"
     return {"questions": questions[:count], "follow_up": follow_up}
+
+
+def _normalize_p3_focus(value: str | None) -> str:
+    focus = str(value or "").strip().lower()
+    return focus if focus in P3_FOCUS_OPTIONS else "comparison_concession"
+
+
+def _normalize_p3_intensity(value: str | None) -> str:
+    intensity = str(value or "").strip().lower()
+    return intensity if intensity in {"normal", "high", "drill"} else "high"
+
+
+def _p3_source_type(payload: dict[str, Any], source_hint: str = "") -> str:
+    source = str(payload.get("source") or payload.get("p3_source_type") or source_hint or "").strip().lower()
+    if source in {"p2_report", "p2_corpus", "custom", "topic", "p2_answer"}:
+        return source
+    if str(payload.get("p2_corpus_entry_id") or "").strip():
+        return "p2_corpus"
+    if str(payload.get("prior_answer") or "").strip():
+        return "p2_report"
+    return "topic"
+
+
+def _p3_question_type_for_index(index: int, focus: str) -> str:
+    focus_to_type = {
+        "abstract_discussion": "abstract_discussion",
+        "cause_effect": "cause_effect",
+        "comparison_concession": "comparison_concession",
+        "future_trends": "future_trends",
+        "policy_society": "policy_society",
+    }
+    if index == 0:
+        return focus_to_type.get(focus, "comparison_concession")
+    return P3_QUESTION_TYPES[(index - 1) % len(P3_QUESTION_TYPES)]
+
+
+def _p3_follow_up_for_type(question_type: str) -> str:
+    follow_ups = {
+        "opinion_justify": "What might be the opposite view, and why might some people agree with it?",
+        "change_trend": "Which change do you think has had the biggest impact, and why?",
+        "future_prediction": "What could change this situation in the next ten years?",
+        "problem_solution": "Which solution would be the most realistic for ordinary people?",
+        "policy_responsibility": "Should the government be involved, or should individuals decide?",
+        "comparison_concession": "How is this different for younger and older people?",
+        "abstract_discussion": "Can you explain this at a wider social level rather than as a personal example?",
+        "cause_effect": "Which factor matters most, and why?",
+        "future_trends": "What might prevent that future change from happening?",
+        "policy_society": "Who should take more responsibility for this issue?",
+    }
+    return follow_ups.get(question_type, "Could you give a specific example to support that view?")
+
+
+def _dynamic_p3_follow_up(question_type: str, transcript: str, focus: str = "") -> str:
+    words = re.findall(r"[A-Za-z']+", str(transcript or "").lower())
+    word_count = len(words)
+    text = " ".join(words)
+    if word_count < 35:
+        return "Could you develop that answer with one reason and one specific example?"
+    if question_type in {"comparison_concession", "opinion_justify"}:
+        if not any(token in text for token in ("however", "although", "whereas", "while", "on the other hand")):
+            return "What might be the opposite view, and why might some people agree with it?"
+        return "How is this different for younger and older people?"
+    if question_type in {"cause_effect", "change_trend"}:
+        if not any(token in text for token in ("because", "reason", "cause", "lead", "result", "therefore")):
+            return "Which factor do you think matters most, and why?"
+        return "What long-term effect could this have on ordinary people?"
+    if question_type in {"future_prediction", "future_trends"}:
+        return "What could change this situation in the next ten years?"
+    if question_type in {"policy_responsibility", "policy_society", "problem_solution"}:
+        return "Should the government be involved, or should individuals decide?"
+    if focus == "abstract_discussion":
+        return "Can you explain this at a wider social level rather than as a personal example?"
+    return _p3_follow_up_for_type(question_type)
+
+
+def _structured_p3_questions(questions: list[str], source_type: str, focus: str) -> list[dict[str, Any]]:
+    structured: list[dict[str, Any]] = []
+    for index, question in enumerate(questions):
+        clean_question = clean_report_text(str(question))[:260]
+        if not clean_question:
+            continue
+        question_type = _p3_question_type_for_index(index, focus)
+        structured.append(
+            {
+                "id": f"q{index + 1}",
+                "type": question_type,
+                "question": clean_question,
+                "target_moves": P3_TYPE_TARGET_MOVES.get(question_type, P3_TYPE_TARGET_MOVES["opinion_justify"]),
+                "source": source_type,
+            }
+        )
+    return structured
+
+
+def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    theme = str(payload.get("theme") or payload.get("topic") or "society and daily life").replace("_", " ").strip()
+    theme = theme or "society and daily life"
+    focus = _normalize_p3_focus(str(payload.get("p3_focus") or payload.get("focus") or ""))
+    intensity = _normalize_p3_intensity(str(payload.get("p3_intensity") or payload.get("intensity") or ""))
+    question_count = P3_DRILL_COUNT if intensity == "drill" else P3_MAIN_COUNT
+    prior_answer = clean_report_text(str(payload.get("prior_answer") or ""))[:4000]
+    p3_follow_up_text = clean_markdown_text(str(payload.get("p3_follow_up_text") or ""))[:8000]
+    material_questions = _p3_questions_from_material(p3_follow_up_text, question_count)
+
+    if material_questions:
+        raw_plan = {
+            "questions": material_questions,
+            "follow_up": _p3_follow_up_for_type(_p3_question_type_for_index(0, focus)),
+            "backend": "p2_corpus",
+            "status": "ready",
+        }
+        source_type = "p2_corpus"
+    elif prior_answer.strip():
+        raw_plan = _generate_p3_from_p2_answer(
+            theme,
+            prior_answer,
+            f"p3_from_p2_{hashlib.sha1(prior_answer.encode('utf-8')).hexdigest()[:16]}",
+        )
+        source_type = _p3_source_type(payload, "p2_report")
+    else:
+        raw_plan = {**_fallback_p3(theme, question_count), "backend": "fallback", "status": "fallback"}
+        source_type = _p3_source_type(payload, "topic")
+
+    questions = [str(q).strip() for q in raw_plan.get("questions", []) if str(q).strip()][:question_count]
+    fallback_questions = _fallback_p3(theme, P3_MAIN_COUNT)["questions"]
+    while len(questions) < question_count:
+        questions.append(fallback_questions[len(questions) % len(fallback_questions)])
+
+    structured_questions = _structured_p3_questions(questions, source_type, focus)
+    first_type = structured_questions[0]["type"] if structured_questions else _p3_question_type_for_index(0, focus)
+    follow_up = clean_report_text(str(raw_plan.get("follow_up") or _p3_follow_up_for_type(first_type)))
+    if not follow_up or "?" not in follow_up:
+        follow_up = _p3_follow_up_for_type(first_type)
+
+    return {
+        "version": 1,
+        "theme": theme,
+        "focus": focus,
+        "focus_label": P3_FOCUS_OPTIONS[focus]["label"],
+        "intensity": intensity,
+        "source": {
+            "type": source_type,
+            "theme": theme,
+            "p2_attempt_id": clean_report_text(str(payload.get("p2_attempt_id") or "")),
+            "p2_corpus_entry_id": clean_report_text(str(payload.get("p2_corpus_entry_id") or "")),
+        },
+        "questions": structured_questions,
+        "question_texts": [item["question"] for item in structured_questions],
+        "follow_up": follow_up,
+        "backend": str(raw_plan.get("backend") or "fallback"),
+        "status": str(raw_plan.get("status") or "fallback"),
+        "question_count": len(structured_questions),
+        **({"error": str(raw_plan.get("error"))} if raw_plan.get("error") else {}),
+    }
 
 
 def _p3_questions_from_material(value: str, count: int = P3_MAIN_COUNT) -> list[str]:
@@ -2204,39 +2428,86 @@ def _build_p3_turns(
     intensity: str = "high",
     prior_answer: str = "",
     p3_follow_up_text: str = "",
+    focus: str = "comparison_concession",
+    source_type: str = "",
+    plan_payload: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    material_questions = _p3_questions_from_material(p3_follow_up_text, P3_MAIN_COUNT)
-    if material_questions:
-        fallback = _fallback_p3(theme, P3_MAIN_COUNT)
-        plan = {
-            "questions": material_questions,
-            "follow_up": material_questions[0] if material_questions else fallback["follow_up"],
-            "backend": "p2_corpus",
-            "status": "ready",
-        }
-    elif prior_answer.strip():
-        plan = _generate_p3_from_p2_answer(theme, prior_answer, f"p3_from_p2_{hashlib.sha1(prior_answer.encode('utf-8')).hexdigest()[:16]}")
+    focus = _normalize_p3_focus(focus)
+    intensity = _normalize_p3_intensity(intensity)
+    plan = plan_payload if isinstance(plan_payload, dict) else None
+    if not plan or not isinstance(plan.get("questions"), list):
+        plan = build_p3_plan(
+            {
+                "theme": theme,
+                "p3_intensity": intensity,
+                "p3_focus": focus,
+                "prior_answer": prior_answer,
+                "p3_follow_up_text": p3_follow_up_text,
+                "source": source_type,
+            }
+        )
+    plan_questions = plan.get("questions", [])
+    structured_questions: list[dict[str, Any]] = []
+    if plan_questions and isinstance(plan_questions[0], dict):
+        for index, item in enumerate(plan_questions):
+            question = clean_report_text(str(item.get("question") or ""))
+            if not question:
+                continue
+            question_type = str(item.get("type") or _p3_question_type_for_index(index, focus))
+            structured_questions.append(
+                {
+                    "id": str(item.get("id") or f"q{index + 1}"),
+                    "type": question_type,
+                    "question": question,
+                    "target_moves": item.get("target_moves") or P3_TYPE_TARGET_MOVES.get(question_type, []),
+                    "source": str(item.get("source") or plan.get("source", {}).get("type") or source_type or "topic"),
+                }
+            )
     else:
-        plan = {**_fallback_p3(theme, P3_MAIN_COUNT), "backend": "fallback", "status": "fallback"}
-    questions = [str(q).strip() for q in plan.get("questions", []) if str(q).strip()][:P3_MAIN_COUNT]
+        text_questions = [str(q).strip() for q in plan_questions if str(q).strip()]
+        structured_questions = _structured_p3_questions(text_questions, source_type or "topic", focus)
+
+    question_count = P3_DRILL_COUNT if intensity == "drill" else P3_MAIN_COUNT
     fallback_questions = _fallback_p3(theme, P3_MAIN_COUNT)["questions"]
-    while len(questions) < P3_MAIN_COUNT:
-        questions.append(fallback_questions[len(questions)])
+    while len(structured_questions) < question_count:
+        index = len(structured_questions)
+        question_type = _p3_question_type_for_index(index, focus)
+        structured_questions.append(
+            {
+                "id": f"q{index + 1}",
+                "type": question_type,
+                "question": fallback_questions[index % len(fallback_questions)],
+                "target_moves": P3_TYPE_TARGET_MOVES.get(question_type, P3_TYPE_TARGET_MOVES["opinion_justify"]),
+                "source": source_type or "topic",
+            }
+        )
+    structured_questions = structured_questions[:question_count]
+
     use_follow_ups = intensity == "high"
-    total = P3_TURN_COUNT if use_follow_ups else P3_MAIN_COUNT
-    source = "p2_corpus" if material_questions else ("p2_answer" if prior_answer.strip() else "topic")
+    total = P3_TURN_COUNT if use_follow_ups else len(structured_questions)
+    source = str(plan.get("source", {}).get("type") if isinstance(plan.get("source"), dict) else "")
+    source = source or source_type or ("p2_answer" if prior_answer.strip() else "topic")
     turns: list[dict[str, Any]] = []
-    for main_index, question in enumerate(questions):
+    for main_index, item in enumerate(structured_questions):
+        question = item["question"]
         main_turn = _create_turn(
             "p3",
             len(turns),
             total,
             question,
-            {"theme": theme, "question": question, "role": "main", "source": source},
+            {
+                "theme": theme,
+                "question": question,
+                "role": "main",
+                "source": source,
+                "question_type": item.get("type"),
+                "target_moves": item.get("target_moves", []),
+                "plan_question_id": item.get("id"),
+            },
         )
         turns.append(main_turn)
         if use_follow_ups:
-            follow_up = plan.get("follow_up", "Could you give a specific example to support that view?")
+            follow_up = _p3_follow_up_for_type(str(item.get("type") or ""))
             follow_turn = _create_turn(
                 "p3",
                 len(turns),
@@ -2248,15 +2519,30 @@ def _build_p3_turns(
                     "role": "follow_up",
                     "after_main": main_index + 1,
                     "source": source,
+                    "question_type": item.get("type"),
+                    "target_moves": ["respond directly", "add evidence", "extend the idea"],
+                    "plan_question_id": f"{item.get('id', f'q{main_index + 1}')}-follow",
                 },
             )
             turns.append(follow_turn)
+    plan = {
+        **plan,
+        "theme": theme,
+        "focus": focus,
+        "focus_label": P3_FOCUS_OPTIONS[focus]["label"],
+        "intensity": intensity,
+        "questions": structured_questions,
+        "question_texts": [item["question"] for item in structured_questions],
+        "question_count": len(structured_questions),
+    }
     metadata = {
         "p3_generation_status": str(plan.get("status") or "fallback"),
         "p3_generation_source": source,
         "p3_generation_backend": str(plan.get("backend") or "fallback"),
         "p3_theme": theme,
         "p3_intensity": intensity,
+        "p3_focus": focus,
+        "p3_plan": plan,
     }
     if plan.get("error"):
         metadata["p3_generation_error"] = str(plan.get("error"))
@@ -2292,16 +2578,25 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
         return "p2", str(cue.get("title", "Part 2 practice")), turns, cue, metadata
     if mode == "p3":
         theme = str(payload.get("theme") or payload.get("topic") or "society and daily life").strip()
-        intensity = str(payload.get("p3_intensity") or payload.get("intensity") or "high").strip().lower()
-        if intensity not in {"normal", "high"}:
-            intensity = "high"
+        intensity = _normalize_p3_intensity(str(payload.get("p3_intensity") or payload.get("intensity") or "high"))
+        focus = _normalize_p3_focus(str(payload.get("p3_focus") or payload.get("focus") or ""))
         prior_answer = clean_report_text(str(payload.get("prior_answer") or ""))[:4000]
         p3_follow_up_text = clean_markdown_text(str(payload.get("p3_follow_up_text") or ""))[:8000]
         p2_corpus_entry_id = clean_report_text(str(payload.get("p2_corpus_entry_id") or ""))
         if p2_corpus_entry_id and not p3_follow_up_text:
             entry = p2_corpus_for_selection(payload.get("_user"), p2_corpus_entry_id) if payload.get("_user") else None
             p3_follow_up_text = str(entry.get("p3_follow_up_text") or "") if entry else ""
-        turns, metadata = _build_p3_turns(theme, intensity, prior_answer, p3_follow_up_text)
+        source_type = _p3_source_type(payload)
+        plan_payload = payload.get("p3_plan") if isinstance(payload.get("p3_plan"), dict) else None
+        turns, metadata = _build_p3_turns(
+            theme,
+            intensity,
+            prior_answer,
+            p3_follow_up_text,
+            focus,
+            source_type,
+            plan_payload,
+        )
         if p2_corpus_entry_id:
             metadata["p2_corpus_entry_id"] = p2_corpus_entry_id
         if str(payload.get("source") or "") == "p2_report":
@@ -2838,6 +3133,36 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
     next_turn = next((item for item in turns if item.sequence > turn.sequence and _turn_status(item) != "completed"), None)
     if inserted_follow_up is not None:
         next_turn = inserted_follow_up
+    if (
+        turn.part == "p3"
+        and isinstance(turn.metadata, dict)
+        and (turn.metadata.get("prompt") or {}).get("role") == "main"
+        and next_turn is not None
+        and next_turn.part == "p3"
+    ):
+        next_metadata = next_turn.metadata if isinstance(next_turn.metadata, dict) else {}
+        next_prompt = next_metadata.get("prompt") if isinstance(next_metadata.get("prompt"), dict) else {}
+        if next_prompt.get("role") == "follow_up":
+            turn_prompt = turn.metadata.get("prompt") if isinstance(turn.metadata.get("prompt"), dict) else {}
+            attempt_metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+            question_type = str(turn_prompt.get("question_type") or next_prompt.get("question_type") or "")
+            follow_up = _dynamic_p3_follow_up(question_type, cleaned, str(attempt_metadata.get("p3_focus") or ""))
+            next_turn.question = follow_up
+            next_prompt = {
+                **next_prompt,
+                "question": follow_up,
+                "source": "adaptive_answer",
+                "adapted_from_turn": turn.turn_id,
+            }
+            next_metadata = {
+                **next_metadata,
+                "prompt": next_prompt,
+                "examiner_text": follow_up,
+                "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
+                "p3_dynamic_follow_up": True,
+            }
+            next_turn.metadata = next_metadata
+            next_turn.save(update_fields=["question", "metadata", "updated_at"])
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
     metadata["current_turn"] = next_turn.turn_id if next_turn else None
     attempt.metadata = metadata
@@ -3065,6 +3390,91 @@ def build_part_scores(attempt: SpeakingAttempt, score: dict[str, Any]) -> dict[s
         part: score_for_part(turns, part, score)
         for part in ("p1", "p2", "p3")
         if any(turn.part == part for turn in turns)
+    }
+
+
+def build_p3_discussion_skills(attempt: SpeakingAttempt) -> dict[str, Any] | None:
+    """Build an explainable Part 3 discussion skill map from completed turns."""
+    turns = [turn for turn in attempt.turns.all().order_by("sequence") if turn.part == "p3" and turn_counts_for_scoring(turn)]
+    if not turns:
+        return None
+    main_turns = []
+    follow_turns = []
+    all_words = 0
+    concession_hits = 0
+    reason_hits = 0
+    example_hits = 0
+    abstract_hits = 0
+    for turn in turns:
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
+        transcript = turn_display_transcript(turn)
+        text = transcript.lower()
+        words = re.findall(r"[A-Za-z']+", text)
+        all_words += len(words)
+        if prompt.get("role") == "follow_up":
+            follow_turns.append(turn)
+        else:
+            main_turns.append(turn)
+        if any(token in text for token in ("however", "although", "whereas", "on the other hand", "while some")):
+            concession_hits += 1
+        if any(token in text for token in ("because", "reason", "therefore", "as a result", "lead to", "due to")):
+            reason_hits += 1
+        if any(token in text for token in ("for example", "for instance", "such as", "in my city", "in china")):
+            example_hits += 1
+        if any(token in text for token in ("society", "people", "government", "public", "community", "generation")):
+            abstract_hits += 1
+    main_count = max(1, len(main_turns))
+    average_words = round(all_words / max(1, len(turns)))
+
+    def status(hit_count: int, threshold: float) -> str:
+        return "strong" if hit_count / main_count >= threshold else ("developing" if hit_count else "weak")
+
+    dimensions = [
+        {
+            "key": "abstract_extension",
+            "label": "抽象展开",
+            "status": status(abstract_hits, 0.45),
+            "evidence": f"{abstract_hits}/{main_count} 个主问题有社会/群体层面的表达。",
+            "next_action": "每题至少补一句“对社会/年轻人/普通家庭意味着什么”。",
+        },
+        {
+            "key": "reasoning",
+            "label": "原因与影响",
+            "status": status(reason_hits, 0.6),
+            "evidence": f"{reason_hits}/{main_count} 个主问题出现原因或结果连接。",
+            "next_action": "先说观点，再用 because / as a result 明确解释因果。",
+        },
+        {
+            "key": "comparison_concession",
+            "label": "对比让步",
+            "status": status(concession_hits, 0.35),
+            "evidence": f"{concession_hits}/{main_count} 个主问题有让步或对比结构。",
+            "next_action": "练习 however / whereas / on the other hand 承接反方观点。",
+        },
+        {
+            "key": "specific_support",
+            "label": "具体支撑",
+            "status": status(example_hits, 0.45),
+            "evidence": f"{example_hits}/{main_count} 个主问题用了例子或具体场景。",
+            "next_action": "每个抽象观点后面补一个生活场景，不要只停在大词。",
+        },
+        {
+            "key": "follow_up_handling",
+            "label": "追问承接",
+            "status": "strong" if len(follow_turns) >= main_count and average_words >= 35 else ("developing" if follow_turns else "weak"),
+            "evidence": f"完成 {len(follow_turns)} 个追问，平均回答约 {average_words} 词。",
+            "next_action": "追问不要重复主问题答案，直接回应新角度后再补理由。",
+        },
+    ]
+    weakest = next((item for item in dimensions if item["status"] == "weak"), None) or next((item for item in dimensions if item["status"] == "developing"), dimensions[0])
+    best = next((item for item in dimensions if item["status"] == "strong"), None)
+    return {
+        "title": "P3 Discussion Skills",
+        "summary": f"这次 P3 平均每题约 {average_words} 词，系统重点看你能不能把个人想法扩展成原因、对比、社会影响和追问承接。",
+        "dimensions": dimensions,
+        "best_moment": best["label"] if best else "回答完整度",
+        "fix_next": weakest["next_action"],
     }
 
 
@@ -4044,6 +4454,7 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
             },
             "overall_review": overall_review,
             "personalized_coaching": personalized_coaching,
+            "p3_discussion_skills": build_p3_discussion_skills(attempt),
         }
     )
 
@@ -4422,6 +4833,7 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
             },
             "overall_review": overall_review,
             "personalized_coaching": personalized_coaching,
+            "p3_discussion_skills": build_p3_discussion_skills(attempt),
             "regenerated_at": timezone.now().isoformat(),
         }
     )
@@ -4560,19 +4972,28 @@ def regenerate_turn_transcript(user, attempt_id: str, turn_id: str) -> dict[str,
 
 def p3_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    theme = str(payload.get("theme") or "general speaking").replace("_", " ").strip() or "general speaking"
+    plan = build_p3_plan(payload)
+    follow_up = plan["follow_up"]
+    if len(str(payload.get("prior_answer") or "").split()) > 40 and plan["backend"] == "fallback":
+        follow_up = "What might be the opposite argument, and why might some people agree with it?"
+        plan = {**plan, "follow_up": follow_up}
+    return {
+        "questions": plan["question_texts"],
+        "structured_questions": plan["questions"],
+        "follow_up": follow_up,
+        "backend": plan["backend"],
+        "status": plan["status"],
+        "plan": plan,
+    }
+
+
+def p3_follow_up_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
     prior_answer = str(payload.get("prior_answer") or "")
-    questions = [
-        f"Why do people have different opinions about {theme}?",
-        f"How has {theme} changed in your country in recent years?",
-        f"Do you think {theme} will become more important in the future?",
-        f"What problems can {theme} create for ordinary people?",
-        f"How should governments or schools respond to changes in {theme}?",
-    ]
     follow_up = "Could you give a specific example to support that view?"
     if len(prior_answer.split()) > 40:
         follow_up = "What might be the opposite argument, and why might some people agree with it?"
-    return {"questions": questions, "follow_up": follow_up, "backend": "fallback"}
+    return {"follow_up": follow_up, "backend": "fallback"}
 
 
 def tts_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:

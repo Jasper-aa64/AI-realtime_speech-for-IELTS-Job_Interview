@@ -88,6 +88,11 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(payload["part"], "p3")
         self.assertIn("p3_theme", payload)
         self.assertEqual(payload["p3_theme"], "technology")
+        self.assertEqual(payload["p3_focus"], "comparison_concession")
+        self.assertIn("p3_plan", payload)
+        self.assertEqual(payload["p3_plan"]["theme"], "technology")
+        self.assertEqual(len(payload["p3_plan"]["questions"]), 5)
+        self.assertIn("target_moves", payload["p3_plan"]["questions"][0])
 
     def test_start_creates_mock_attempt(self):
         response = self.client.post("/api/attempts/start", data={"mode": "mock"}, content_type="application/json")
@@ -1254,6 +1259,10 @@ class DjangoOnlyRuntimeSurfaceTests(TestCase):
         self.assertEqual(payload["backend"], "fallback")
         self.assertEqual(len(payload["questions"]), 5)
         self.assertIn("follow_up", payload)
+        self.assertIn("plan", payload)
+        self.assertEqual(payload["plan"]["focus"], "comparison_concession")
+        self.assertEqual(payload["structured_questions"][0]["type"], "comparison_concession")
+        self.assertIn("target_moves", payload["structured_questions"][0])
 
     def test_p3_follow_up_uses_same_fallback_contract(self):
         response = self.client.post(

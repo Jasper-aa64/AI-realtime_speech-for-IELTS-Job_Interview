@@ -244,6 +244,8 @@ def run_codex(prompt: str, call_id: str, timeout: int = 120, max_attempts: int =
                 [codex, "exec", "--json", *config_args, "-"],
                 input=prompt,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 capture_output=True,
                 timeout=timeout,
                 check=True,
@@ -258,6 +260,8 @@ def run_codex(prompt: str, call_id: str, timeout: int = 120, max_attempts: int =
                 [codex, "exec", *config_args, "-"],
                 input=prompt,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 capture_output=True,
                 timeout=timeout,
                 check=True,
@@ -344,10 +348,13 @@ Required JSON keys:
 - overall_review: Chinese string. Direct diagnosis of this exact essay.
 - practice_focus: Chinese string. The most important next practice target.
 - grammar_corrections: array of objects with original, suggestion, reason. Include only meaningful grammar, collocation, word form, article/plural, or sentence-control issues.
+- inline_annotations: array of objects for marking the learner's original answer inline. Each object must include original, type, suggestion, and explanation; paragraph_index is recommended when the issue belongs to a specific paragraph. type must be one of spelling, punctuation, format, grammar, word_choice, missing_word, extra_word. Mark visible spelling mistakes, punctuation/spacing/format problems, missing words, redundant words, and sentence-control errors. original must be an exact substring from the user's answer; for missing_word, use the exact nearby anchor phrase before the insertion point as original and put the missing word or phrase in suggestion.
+- spelling_correction_summary: Chinese Markdown string shown once for the whole essay. It must cover all visible spelling mistakes from the whole answer, classify them by cause with Chinese section labels such as `字母多余 / 发音误导类错误`, `词尾后缀混淆类错误`, and list examples like `vidios -> 正确：videos（视频）`. Do not use Markdown numbered lists like `1.` because renderers may restart numbering.
 - structure_advice_only: boolean. Set true if the user's paragraphing is too messy to map paragraph-by-paragraph.
 - structure_advice: Chinese string. Required when structure_advice_only is true; otherwise empty string.
 - model_answer: English string. Improved version with paragraph breaks, unless structure_advice_only is true.
-- paragraph_reviews: array. If structure_advice_only is false, include one object per logical paragraph with index, learner, model, coaching. learner must quote the relevant user paragraph. model must be a better English paragraph. coaching must be Chinese and specific.
+- paragraph_reviews: array. If structure_advice_only is false, include one object per logical paragraph with index, learner, model, coaching, language_correction_upgrade. learner must quote the relevant user paragraph. model must be a better English paragraph. coaching must be Chinese and specific. language_correction_upgrade must be Chinese Markdown appended visually after AI coaching for that paragraph. Let the AI freely generate concise dash bullets using `-`; do not force subsections, fixed categories, or a fixed number of points. Do not mention spelling mistakes in coaching or language_correction_upgrade; spelling belongs only in spelling_correction_summary.
+- expression_upgrade_summary: string. Backward-compatible alias; leave empty unless needed for old clients.
 - backend: string, must be "ai"
 
 Output rules:
@@ -356,7 +363,11 @@ Output rules:
 - If paragraphing is logical enough, paragraph_reviews must match the essay logic.
 - If structure_advice_only is true, paragraph_reviews may be empty and structure_advice must explain how to reorganise the essay before rewriting.
 - Do not return placeholder text.
-- Do not say "暂无 AI 改写".
+- Do not say "由 AI 生成" or similar meta text.
+- inline_annotations should behave like a writing checker: keep the essay readable, mark concrete evidence, and mark all clear spelling errors from the answer.
+- Use spelling_correction_summary once for the whole essay. Do not place spelling explanations or spelling examples under each paragraph.
+- paragraph_reviews[].coaching should discuss paragraph logic, task response, cohesion, grammar control, expression precision, and revision strategy; it must not say the paragraph has spelling mistakes.
+- Put grammar correction, expression correction, and expression upgrade in each paragraph_reviews item as language_correction_upgrade. Use simple dash bullets (`- ...`) and let the AI decide what to include. Do not create one global language-upgrade summary. This field must focus on grammar, collocation, sentence control, cohesion, tone, precision, and richer expression; it must not repeat spelling mistakes already listed in spelling_correction_summary.
 - Chinese feedback should explain what affects the band, why it happens, and what exact revision action helps.
 
 Task:
@@ -397,6 +408,9 @@ Word count:
             "grammatical_range_accuracy": float(payload["grammatical_range_accuracy"]),
             "feedback_markdown": "",
             "grammar_corrections": payload.get("grammar_corrections") if isinstance(payload.get("grammar_corrections"), list) else [],
+            "inline_annotations": payload.get("inline_annotations") if isinstance(payload.get("inline_annotations"), list) else [],
+            "spelling_correction_summary": str(payload.get("spelling_correction_summary") or ""),
+            "expression_upgrade_summary": str(payload.get("expression_upgrade_summary") or ""),
             "overall_review": str(payload.get("overall_review") or ""),
             "practice_focus": str(payload.get("practice_focus") or ""),
             "model_answer": str(payload.get("model_answer") or ""),
@@ -514,6 +528,7 @@ class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
                 "learner": paragraph,
                 "model": f"Mock AI rewrite for paragraph {index + 1}: {paragraph}",
                 "coaching": f"Mock AI paragraph {index + 1} advice: clarify the main idea and support it with a concrete detail.",
+                "language_correction_upgrade": "- Check article and plural agreement.\n- Replace vague wording with precise collocations.",
             }
             for index, paragraph in enumerate(paragraphs)
         ]
@@ -525,6 +540,9 @@ class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
             "grammatical_range_accuracy": grammar,
             "feedback_markdown": feedback_markdown,
             "grammar_corrections": grammar_corrections,
+            "inline_annotations": [],
+            "spelling_correction_summary": "Mock provider did not detect concrete spelling errors.",
+            "expression_upgrade_summary": "",
             "overall_review": "Mock AI overall review based on the submitted paragraph structure.",
             "practice_focus": "Mock AI practice focus: improve paragraph-level development and transitions.",
             "model_answer": "\n\n".join(item["model"] for item in paragraph_reviews),

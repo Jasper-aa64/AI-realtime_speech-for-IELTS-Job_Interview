@@ -754,6 +754,17 @@ class AIWorkerCommandTests(TestCase):
             "grammatical_range_accuracy": 6.0,
             "feedback_markdown": "AI generated feedback for this exact essay.",
             "grammar_corrections": [{"original": "more flexible access", "suggestion": "more flexible access to learning resources"}],
+            "inline_annotations": [
+                {
+                    "paragraph_index": 1,
+                    "original": "more flexible access",
+                    "type": "word_choice",
+                    "suggestion": "more flexible access to learning resources",
+                    "explanation": "需要补出 access 的对象，否则搭配不完整。",
+                }
+            ],
+            "spelling_correction_summary": "未发现明显拼写错误。",
+            "expression_upgrade_summary": "- more flexible access -> more flexible access to learning resources：补出搭配对象。",
             "overall_review": "这篇文章能清楚讨论科技学习的两面，但第二段反方还可以更具体。",
             "practice_focus": "下一次重点练习：每个主体段补一个更具体的例子。",
             "model_answer": "AI rewrite paragraph one.\n\nAI rewrite paragraph two.",
@@ -763,6 +774,7 @@ class AIWorkerCommandTests(TestCase):
                     "learner": "Technology gives students more flexible access to lessons and reference materials.",
                     "model": "Technology gives learners more flexible access to lessons, reference materials, and revision tools.",
                     "coaching": "这一段方向清楚，但需要解释为什么 access 会带来 learning efficiency。",
+                    "language_correction_upgrade": "- more flexible access -> more flexible access to learning resources：补出搭配对象。",
                 },
                 {
                     "index": 2,
@@ -798,6 +810,9 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(score.billing_metadata["input_tokens"], 1100)
         self.assertEqual(score.analysis_payload["overall_review"], codex_payload["overall_review"])
         self.assertEqual(score.analysis_payload["paragraph_reviews"][0]["model"], codex_payload["paragraph_reviews"][0]["model"])
+        self.assertIn("flexible access", score.analysis_payload["paragraph_reviews"][0]["language_correction_upgrade"])
+        self.assertEqual(score.analysis_payload["inline_annotations"][0]["type"], "word_choice")
+        self.assertIn("flexible access", score.analysis_payload["expression_upgrade_summary"])
 
     def test_run_ai_tasks_processes_pending_speaking_report(self):
         from apps.speaking.models import SpeakingAttempt, SpeakingTurn

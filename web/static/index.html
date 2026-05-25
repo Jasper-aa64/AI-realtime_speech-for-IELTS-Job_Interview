@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260525-task2-picker-fulltext">
+    <link rel="stylesheet" href="/styles.css?v=20260525-writing-answer-autogrow">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -63,6 +63,14 @@
         </div>
       </div>
 
+      <button id="agentAssistantBtn" class="agent-assistant-trigger floating-agent-assistant-trigger" type="button" title="题库助手" aria-label="题库助手">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 3l1.9 4.8L19 10l-5.1 2.2L12 17l-1.9-4.8L5 10l5.1-2.2L12 3z"></path>
+          <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"></path>
+        </svg>
+        <span>题库助手</span>
+      </button>
+
       <aside class="nav" aria-label="IELTS practice navigation">
         <div class="nav-top">
           <div class="nav-top-left">
@@ -93,6 +101,7 @@
           <nav class="nav-secondary" aria-label="Libraries">
             <button class="nav-button" data-view="corpus">语料库</button>
             <button class="nav-button" data-view="takeawayBook">Takeaway</button>
+            <button class="nav-button" data-view="writingTakeawayBook">写作积累</button>
           </nav>
           <div class="nav-divider" aria-hidden="true"></div>
           <div class="font-tool" aria-label="Font style">
@@ -223,27 +232,61 @@
           <div id="p3TopicPanel" class="p3-topic-panel hidden">
             <div class="p3-topic-head">
               <div class="p3-topic-copy">
-                <label>Choose a topic for Part 3</label>
-                <p>Pick a topic and practice mode before the prompts appear.</p>
+                <label>Part 3 Training Plan</label>
+                <p>先生成一套追问计划，确认话题、训练目标和强度后再开始录音。</p>
               </div>
               <div class="p3-mode-row">
                 <div class="p3-mode-switch" role="group" aria-label="Part 3 mode">
                   <button type="button" class="p3-mode-option active" data-p3-intensity="normal">Normal</button>
                   <button type="button" class="p3-mode-option" data-p3-intensity="high">High intensity</button>
+                  <button type="button" class="p3-mode-option" data-p3-intensity="drill">Drill</button>
                 </div>
                 <div class="p3-mode-help" id="p3ModeHelp" aria-live="polite">
-                  每轮一个主问题，适合稳定练习节奏
+                  每轮一个主问题，适合先稳住回答节奏。
                 </div>
               </div>
             </div>
             <div class="p3-topic-body">
-              <div id="p3TopicChips" class="topic-chips" aria-label="Suggested Part 3 topics"></div>
+              <section class="p3-launch-section">
+                <div class="p3-launch-label">训练来源</div>
+                <div class="p3-source-grid" role="group" aria-label="Part 3 source">
+                  <button type="button" class="p3-source-option active" data-p3-source="topic">按话题练</button>
+                  <button type="button" class="p3-source-option" data-p3-source="p2_report">根据 P2 报告</button>
+                  <button type="button" class="p3-source-option" data-p3-source="p2_corpus">根据 P2 素材</button>
+                  <button type="button" class="p3-source-option" data-p3-source="custom">自定义主题</button>
+                </div>
+              </section>
+              <section class="p3-launch-section" id="p3TopicSourceSection">
+                <div class="p3-launch-label">推荐话题</div>
+                <div id="p3TopicChips" class="topic-chips" aria-label="Suggested Part 3 topics"></div>
+              </section>
+              <section class="p3-launch-section hidden" id="p3CustomThemeSection">
+                <label class="p3-launch-label" for="p3CustomThemeInput">自定义主题</label>
+                <input id="p3CustomThemeInput" class="p3-custom-input" type="text" placeholder="例如：public transport, online learning, family businesses">
+              </section>
+              <section class="p3-launch-section">
+                <div class="p3-launch-label">训练目标</div>
+                <div class="p3-focus-grid" role="group" aria-label="Part 3 focus">
+                  <button type="button" class="p3-focus-option" data-p3-focus="abstract_discussion">抽象讨论</button>
+                  <button type="button" class="p3-focus-option" data-p3-focus="cause_effect">原因影响</button>
+                  <button type="button" class="p3-focus-option active" data-p3-focus="comparison_concession">对比让步</button>
+                  <button type="button" class="p3-focus-option" data-p3-focus="future_trends">未来趋势</button>
+                  <button type="button" class="p3-focus-option" data-p3-focus="policy_society">社会政策</button>
+                </div>
+              </section>
+              <section class="p3-plan-preview" id="p3PlanPreview" aria-live="polite">
+                <div class="p3-plan-empty">
+                  <strong>还没有生成训练计划</strong>
+                  <span>选择来源和目标后，先生成计划；系统会列出题型、追问方向和回答动作。</span>
+                </div>
+              </section>
               <div class="p3-start-row">
-                <button id="p3StartButton" class="p3-start-button" type="button">Start Part 3 practice</button>
+                <span id="p3PlanStatus" class="p3-plan-status"></span>
+                <button id="p3GeneratePlanButton" class="p3-generate-button" type="button">生成 P3 训练计划</button>
+                <button id="p3StartButton" class="p3-start-button" type="button" disabled>按计划开始练习</button>
               </div>
             </div>
           </div>
-
           <div id="practiceGrid" class="practice-grid">
             <article id="promptPane" class="prompt-pane">
               <div class="section-label" id="promptKicker">Prompt</div>
@@ -388,6 +431,11 @@
                 <strong>Takeaway</strong>
                 <small>复习平时摘录的单词和短语，需要自测时再遮住英文。</small>
               </button>
+              <button type="button" class="corpus-home-card writing-takeaway-card" data-corpus-home-target="writingTakeawayBook">
+                <span class="corpus-card-mark">WT</span>
+                <strong>写作积累</strong>
+                <small>集中复习写作中摘下来的表达、句型和可复用论证素材。</small>
+              </button>
             </div>
           </div>
         </section>
@@ -411,6 +459,28 @@
               </div>
             </header>
             <div id="languageTakeawayList" class="language-takeaway-list"></div>
+          </div>
+        </section>
+
+        <section id="writingTakeawayBookPanel" class="language-takeaway-panel hidden" aria-label="写作积累">
+          <div class="language-book-shell">
+            <header class="language-book-head">
+              <div>
+                <h2>写作积累</h2>
+                <p>保存写作里值得复用的表达、句型和观点素材。</p>
+              </div>
+              <div class="language-book-actions">
+                <span id="writingTakeawayStats">Loading...</span>
+                <button id="writingTakeawayHideToggle" class="language-hide-toggle" type="button" aria-pressed="false">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <span>遮住英文</span>
+                </button>
+              </div>
+            </header>
+            <div id="writingTakeawayList" class="language-takeaway-list"></div>
           </div>
         </section>
 
@@ -533,7 +603,10 @@
           </label>
           <div class="language-takeaway-actions">
             <span id="languageTakeawayStatus"></span>
-            <button id="languageTakeawaySaveBtn" type="button">加入 Takeaway</button>
+            <div class="language-takeaway-action-buttons">
+              <button id="writingTakeawaySaveBtn" type="button" class="secondary">加入写作积累</button>
+              <button id="languageTakeawaySaveBtn" type="button">加入 Takeaway</button>
+            </div>
           </div>
         </div>
 
@@ -630,6 +703,34 @@
               </div>
             </div>
             <div id="writingPromptGrid" class="writing-prompt-grid"></div>
+          </article>
+        </div>
+
+        <div id="agentAssistantModal" class="modal agent-assistant-modal hidden" role="dialog" aria-modal="true" aria-labelledby="agentAssistantTitle">
+          <div class="modal-backdrop" data-agent-assistant-close></div>
+          <article class="modal-card agent-assistant-card">
+            <header class="modal-head agent-assistant-head">
+              <div>
+                <span class="section-label">Question Bank Agent</span>
+                <h2 id="agentAssistantTitle">题库助手</h2>
+                <p>输入自然语言、OCR 片段或关键词，助手会在写作题库里定位题目并给出跳转链接。</p>
+              </div>
+              <button type="button" class="icon-button" data-agent-assistant-close aria-label="关闭题库助手">×</button>
+            </header>
+            <form id="agentAssistantForm" class="agent-assistant-search">
+              <label for="agentAssistantQuery">你要找什么题？</label>
+              <div class="agent-assistant-input-row">
+                <input id="agentAssistantQuery" autocomplete="off" placeholder="例如：computer Internet children schools teachers">
+                <button type="submit">查找</button>
+              </div>
+            </form>
+            <div class="agent-assistant-examples" aria-label="Example searches">
+              <button type="button" data-agent-assistant-example="computer Internet children study schools teachers">电脑和学校教育</button>
+              <button type="button" data-agent-assistant-example="剑雅20 Task 2 education">剑雅20 教育</button>
+              <button type="button" data-agent-assistant-example="bar chart population task 1">Task 1 人口图表</button>
+            </div>
+            <div id="agentAssistantStatus" class="agent-assistant-status">可以直接粘 OCR 题干，不需要完全准确。</div>
+            <div id="agentAssistantResults" class="agent-assistant-results"></div>
           </article>
         </div>
 
@@ -872,10 +973,13 @@
                     <span>英文名</span>
                     <input id="englishNameInput" value="Jasper" autocomplete="nickname">
                   </label>
-                </div>
-                <div class="account-action-row">
                   <button type="button" id="profileSaveBtn" class="account-action-button account-action-button-primary">保存资料</button>
                 </div>
+                <label class="account-theme-toggle" for="darkModeToggle">
+                  <span>深色外观</span>
+                  <input id="darkModeToggle" type="checkbox" aria-label="切换深色外观">
+                  <i aria-hidden="true"></i>
+                </label>
               </article>
               <article class="settings-card account-wallet-card">
                 <div class="settings-card-head account-wallet-head">
@@ -963,6 +1067,6 @@
         </div>
       </main>
     </div>
-    <script src="/app.js?v=20260524-corpus-ui-unify"></script>
+    <script src="/app.js?v=20260525-writing-answer-stable-autogrow"></script>
   </body>
 </html>

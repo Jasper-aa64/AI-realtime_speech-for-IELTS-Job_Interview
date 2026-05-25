@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .services import WritingError, cambridge_catalog, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
+from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
 def read_json_body(request) -> dict:
@@ -65,6 +65,26 @@ def prompts(request):
             "categories": prompt_categories(task_type),
             "catalog": cambridge_catalog(task_type),
         })
+    except WritingError as exc:
+        return writing_error(exc)
+
+
+@require_GET
+def agent_prompt_search(request):
+    query = str(request.GET.get("q") or request.GET.get("query") or "").strip()
+    if not query:
+        return JsonResponse({"error": "query required", "message": "query required"}, status=400)
+    try:
+        limit = int(request.GET.get("limit") or 8)
+    except (TypeError, ValueError):
+        limit = 8
+    try:
+        return JsonResponse(agent_find_writing_prompts(
+            query,
+            request,
+            task_type=request.GET.get("task_type"),
+            limit=limit,
+        ))
     except WritingError as exc:
         return writing_error(exc)
 

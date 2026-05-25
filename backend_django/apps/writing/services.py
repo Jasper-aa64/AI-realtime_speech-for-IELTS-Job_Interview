@@ -46,6 +46,25 @@ WRITING_CATEGORY_LABELS = {
     "advantages_disadvantages": "\u5229\u5f0a\u7c7b",
     "two_part": "\u53cc\u95ee\u9898\u7c7b",
 }
+AGENT_SEARCH_ALIASES = {
+    "computers": "computer",
+    "children": "child",
+    "childrens": "child",
+    "childs": "child",
+    "schools": "school",
+    "teachers": "teacher",
+    "education": "study",
+    "educational": "study",
+    "learning": "study",
+    "learn": "study",
+    "important": "important",
+    "essential": "important",
+    "effective": "important",
+    "effectively": "important",
+    "charts": "graph",
+    "chart": "graph",
+    "graphs": "graph",
+}
 
 _seed_prompt_sync_lock = threading.Lock()
 _seed_prompt_sync_done = False
@@ -320,6 +339,79 @@ def prompt_payload(prompt: WritingPrompt, practice_status: str | None = None) ->
     } | prompt_status_payload(practice_status)
 
 
+def agent_search_normalize(value: str | None) -> str:
+    tokens = re.findall(r"[a-z0-9]+", str(value or "").lower())
+    normalized: list[str] = []
+    for token in tokens:
+        replacement = AGENT_SEARCH_ALIASES.get(token)
+        if replacement:
+            normalized.append(replacement)
+        elif len(token) > 3 and token.endswith("s"):
+            normalized.append(token[:-1])
+        else:
+            normalized.append(token)
+    return " ".join(normalized)
+
+
+def agent_search_score(query: str, prompt: WritingPrompt) -> float:
+    query_tokens = set(agent_search_normalize(query).split())
+    if not query_tokens:
+        return 0.0
+    candidate = " ".join([
+        prompt.title,
+        prompt_source_label(prompt),
+        prompt.category,
+        prompt.prompt,
+    ])
+    candidate_text = agent_search_normalize(candidate)
+    candidate_tokens = set(candidate_text.split())
+    if not candidate_tokens:
+        return 0.0
+    overlap = len(query_tokens & candidate_tokens) / len(query_tokens)
+    phrase_tokens = list(query_tokens)[:3]
+    phrase_bonus = 0.08 if phrase_tokens and " ".join(phrase_tokens) in candidate_text else 0.0
+    size_bonus = min(0.06, len(candidate_tokens) / 900)
+    return min(1.0, overlap * 0.86 + phrase_bonus + size_bonus)
+
+
+def prompt_deep_link(request, prompt: WritingPrompt) -> str:
+    path = f"/?view=writing&task={prompt.task_type}&prompt={prompt.prompt_id}"
+    forwarded_host = str(request.META.get("HTTP_X_FORWARDED_HOST") or "").strip()
+    if forwarded_host:
+        forwarded_proto = str(request.META.get("HTTP_X_FORWARDED_PROTO") or "https").strip() or "https"
+        return f"{forwarded_proto}://{forwarded_host}{path}"
+    return request.build_absolute_uri(path)
+
+
+def agent_find_writing_prompts(query: str, request, task_type: str | None = None, limit: int = 8) -> dict[str, Any]:
+    sync_seed_prompts()
+    normalized_task_type = normalize_task_type(task_type) if task_type else ""
+    limit = max(1, min(int(limit or 8), 20))
+    queryset = WritingPrompt.objects.filter(is_active=True)
+    if normalized_task_type:
+        queryset = queryset.filter(task_type=normalized_task_type)
+    scored: list[tuple[float, WritingPrompt]] = []
+    for prompt in queryset:
+        score = agent_search_score(query, prompt)
+        if score > 0.12:
+            scored.append((score, prompt))
+    scored.sort(key=lambda item: (-item[0], writing_prompt_sort_key(item[1])))
+    items = []
+    for score, prompt in scored[:limit]:
+        payload = prompt_payload(prompt)
+        payload.update({
+            "match_score": round(score, 4),
+            "url": prompt_deep_link(request, prompt),
+        })
+        items.append(payload)
+    return {
+        "query": query,
+        "task_type": normalized_task_type,
+        "count": len(items),
+        "items": items,
+    }
+
+
 def sync_seed_prompts() -> None:
     global _seed_prompt_sync_done
     if _seed_prompt_sync_done and WritingPrompt.objects.filter(is_active=True).count() >= _seed_prompt_min_loaded_count:
@@ -479,9 +571,87 @@ def report_status(value: Any) -> str:
     return status
 
 
+def spelling_terms_from_summary(value: Any) -> set[str]:
+    text = str(value or "")
+    return {match.group(1).lower() for match in re.finditer(r"`?([A-Za-z]{2,})`?\s*(?:->|\u2192)", text)}
+
+
+def looks_like_single_word_spelling_fix(value: str) -> bool:
+    compact = value.replace("`", "").strip().strip("。. ")
+    arrow = "->" if "->" in compact else ("\u2192" if "\u2192" in compact else "")
+    if not arrow:
+        return False
+    left, right = compact.split(arrow, 1)
+    right = right.strip()
+    for prefix in ("正确：", "正确:", "correct:", "Correct:"):
+        if right.startswith(prefix):
+            right = right[len(prefix):].strip()
+    right = right.split("（", 1)[0].split("(", 1)[0].strip()
+    return bool(re.fullmatch(r"[A-Za-z]{2,}", left.strip()) and re.fullmatch(r"[A-Za-z]{2,}", right))
+
+
+def strip_spelling_from_language_upgrade(value: Any, *, spelling_summary: Any = "") -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    spelling_keywords = ("拼写", "错拼", "错别字", "spelling", "misspell", "typo")
+    spelling_terms = spelling_terms_from_summary(spelling_summary)
+    cleaned: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        lowered = line.lower()
+        if any(keyword in lowered for keyword in spelling_keywords):
+            continue
+        if spelling_terms and any(re.search(rf"\b{re.escape(term)}\b", lowered) for term in spelling_terms):
+            continue
+        compact = line.lstrip("-*• \t")
+        if looks_like_single_word_spelling_fix(compact):
+            continue
+        cleaned.append(raw_line)
+    return "\n".join(cleaned).strip()
+
+
+def strip_spelling_from_paragraph_coaching(value: Any, *, spelling_summary: Any = "") -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    spelling_terms = spelling_terms_from_summary(spelling_summary)
+    text = re.sub(r"[，,；;]?\s*但?有(?:明显)?拼写错误[，,]?\s*而且?", "，", text)
+    text = re.sub(r"[，,；;]?\s*存在(?:明显)?拼写错误[，,。；;]?", "。", text)
+    text = re.sub(r"[，,；;]?\s*拼写(?:方面)?(?:也)?(?:需要|可以|应当)?(?:再)?(?:检查|注意|修改|纠正)[，,。；;]?", "。", text)
+    cleaned: list[str] = []
+    for raw_line in text.splitlines():
+        lowered = raw_line.lower()
+        if spelling_terms and any(re.search(rf"\b{re.escape(term)}\b", lowered) for term in spelling_terms):
+            continue
+        cleaned.append(raw_line)
+    return "\n".join(cleaned).replace("，。", "。").strip(" ，,")
+
+
+def paragraph_reviews_payload(value: Any, *, spelling_summary: Any = "") -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    reviews: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        review = dict(item)
+        review["coaching"] = strip_spelling_from_paragraph_coaching(
+            item.get("coaching") or "",
+            spelling_summary=spelling_summary,
+        )
+        review["language_correction_upgrade"] = strip_spelling_from_language_upgrade(
+            item.get("language_correction_upgrade") or item.get("expression_upgrade") or "",
+            spelling_summary=spelling_summary,
+        )
+        reviews.append(review)
+    return reviews
+
+
 def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
     if not score:
         return None
+    analysis = score.analysis_payload or {}
     return {
         "overall_band": float(score.overall_band) if score.overall_band is not None else None,
         "task_response": float(score.task_response) if score.task_response is not None else None,
@@ -491,12 +661,18 @@ def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
         "grammatical_range_accuracy": float(score.grammar_range_accuracy) if score.grammar_range_accuracy is not None else None,
         "feedback_markdown": score.feedback_markdown,
         "grammar_corrections": score.grammar_corrections,
-        "overall_review": (score.analysis_payload or {}).get("overall_review", ""),
-        "practice_focus": (score.analysis_payload or {}).get("practice_focus", ""),
-        "model_answer": (score.analysis_payload or {}).get("model_answer", ""),
-        "paragraph_reviews": (score.analysis_payload or {}).get("paragraph_reviews", []),
-        "structure_advice_only": bool((score.analysis_payload or {}).get("structure_advice_only")),
-        "structure_advice": (score.analysis_payload or {}).get("structure_advice", ""),
+        "inline_annotations": analysis.get("inline_annotations", []),
+        "spelling_correction_summary": analysis.get("spelling_correction_summary", ""),
+        "expression_upgrade_summary": analysis.get("expression_upgrade_summary", ""),
+        "overall_review": analysis.get("overall_review", ""),
+        "practice_focus": analysis.get("practice_focus", ""),
+        "model_answer": analysis.get("model_answer", ""),
+        "paragraph_reviews": paragraph_reviews_payload(
+            analysis.get("paragraph_reviews"),
+            spelling_summary=analysis.get("spelling_correction_summary", ""),
+        ),
+        "structure_advice_only": bool(analysis.get("structure_advice_only")),
+        "structure_advice": analysis.get("structure_advice", ""),
         "backend": score.source,
         "billing_usage": score.billing_metadata,
         "scored_at": score.scored_at.isoformat() if score.scored_at else None,
@@ -561,6 +737,7 @@ def writing_score_task_payload(entry: WritingEntry) -> dict[str, Any] | None:
 def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str, Any]:
     score = getattr(entry, "score", None)
     source_label = prompt_source_label(entry.prompt) if entry.prompt_id else str(entry.metadata.get("source_label") or "")
+    prompt_highlights = normalize_prompt_highlights(entry.metadata.get("prompt_highlights"), entry.prompt_text)
     payload = {
         "id": entry.entry_id,
         "user_id": str(entry.user_id),
@@ -581,6 +758,7 @@ def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str,
         "source_test": entry.prompt.source_test if entry.prompt_id else entry.metadata.get("source_test"),
         "source_question": entry.prompt.source_question if entry.prompt_id else entry.metadata.get("source_question"),
         "source_label": source_label,
+        "prompt_highlights": prompt_highlights,
         "word_count": entry.word_count,
         "score": score_payload(score),
         "ai_task": writing_score_task_payload(entry),
@@ -610,6 +788,7 @@ def compact_entry_payload(entry: WritingEntry) -> dict[str, Any]:
         "source_test": entry.prompt.source_test if entry.prompt_id else entry.metadata.get("source_test"),
         "source_question": entry.prompt.source_question if entry.prompt_id else entry.metadata.get("source_question"),
         "source_label": source_label,
+        "prompt_highlights": normalize_prompt_highlights(entry.metadata.get("prompt_highlights"), entry.prompt_text),
         "word_count": entry.word_count,
         "status": entry.status,
         "overall_band": float(score.overall_band) if score and score.overall_band is not None else None,
@@ -744,6 +923,27 @@ def parse_practice_date(value: str | None):
         raise WritingError("Invalid practice_date") from exc
 
 
+def normalize_prompt_highlights(value: Any, source_text: str = "") -> list[dict[str, int]]:
+    text_len = len(str(source_text or ""))
+    if not isinstance(value, list):
+        return []
+    ranges: list[dict[str, int]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        try:
+            start = int(item.get("start", 0))
+            end = int(item.get("end", 0))
+        except (TypeError, ValueError):
+            continue
+        start = max(0, min(text_len, start))
+        end = max(0, min(text_len, end))
+        if end > start:
+            ranges.append({"start": start, "end": end})
+    ranges.sort(key=lambda item: (item["start"], item["end"]))
+    return ranges
+
+
 @transaction.atomic
 def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     answer = str(payload.get("answer") or "")
@@ -774,6 +974,10 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
         **(entry.metadata or {}),
         "category": str(payload.get("category") or (prompt.category if prompt else "")),
         "image_url": str(payload.get("image_url") or (prompt.image_url if prompt else "")),
+        "prompt_highlights": normalize_prompt_highlights(
+            payload.get("prompt_highlights") if "prompt_highlights" in payload else (entry.metadata or {}).get("prompt_highlights"),
+            prompt_text,
+        ),
     }
     entry.save()
     if answer_changed:
@@ -888,13 +1092,16 @@ def fallback_analysis_payload(entry: WritingEntry, reason: str = "") -> dict[str
             }
             for index, paragraph in enumerate(paragraphs)
         ],
+        "inline_annotations": [],
+        "spelling_correction_summary": "",
+        "expression_upgrade_summary": "",
         "structure_advice_only": True,
         "structure_advice": message,
         "analysis_backend": "fallback",
     }
 
 
-def normalize_paragraph_reviews(value: Any, *, require_model: bool) -> list[dict[str, Any]]:
+def normalize_paragraph_reviews(value: Any, *, require_model: bool, spelling_summary: Any = "") -> list[dict[str, Any]]:
     if not isinstance(value, list) or not value:
         raise WritingError("AI structured analysis must include paragraph_reviews")
     reviews: list[dict[str, Any]] = []
@@ -911,10 +1118,46 @@ def normalize_paragraph_reviews(value: Any, *, require_model: bool) -> list[dict
                 "index": int(item.get("index") or index),
                 "learner": learner,
                 "model": model,
-                "coaching": coaching,
+                "coaching": strip_spelling_from_paragraph_coaching(coaching, spelling_summary=spelling_summary),
+                "language_correction_upgrade": strip_spelling_from_language_upgrade(
+                    item.get("language_correction_upgrade") or item.get("expression_upgrade") or "",
+                    spelling_summary=spelling_summary,
+                ),
             }
         )
     return reviews
+
+
+def normalize_inline_annotations(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    allowed_types = {"spelling", "punctuation", "format", "grammar", "word_choice", "missing_word", "extra_word"}
+    annotations: list[dict[str, Any]] = []
+    for item in value[:40]:
+        if not isinstance(item, dict):
+            continue
+        original = str(item.get("original") or "").strip()
+        if not original:
+            continue
+        annotation_type = str(item.get("type") or item.get("category") or "grammar").strip().lower()
+        if annotation_type not in allowed_types:
+            annotation_type = "grammar"
+        paragraph_index = item.get("paragraph_index")
+        try:
+            paragraph_index = int(paragraph_index) if paragraph_index not in (None, "") else None
+        except (TypeError, ValueError):
+            paragraph_index = None
+        annotations.append(
+            {
+                "paragraph_index": paragraph_index,
+                "original": original[:300],
+                "type": annotation_type,
+                "suggestion": str(item.get("suggestion") or "").strip()[:300],
+                "explanation": str(item.get("explanation") or item.get("reason") or "").strip()[:500],
+                "severity": str(item.get("severity") or "medium").strip().lower()[:40],
+            }
+        )
+    return annotations
 
 
 def normalize_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> dict[str, Any]:
@@ -932,13 +1175,22 @@ def normalize_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> di
 
     advice_only = bool(score.get("structure_advice_only"))
     structure_advice = str(score.get("structure_advice") or "").strip()
+    spelling_summary = str(score.get("spelling_correction_summary") or "").strip()
     if advice_only:
         if not structure_advice:
             raise WritingError("AI structure-advice-only reports must include structure_advice")
-        paragraph_reviews = normalize_paragraph_reviews(score.get("paragraph_reviews"), require_model=False) if isinstance(score.get("paragraph_reviews"), list) else []
+        paragraph_reviews = normalize_paragraph_reviews(
+            score.get("paragraph_reviews"),
+            require_model=False,
+            spelling_summary=spelling_summary,
+        ) if isinstance(score.get("paragraph_reviews"), list) else []
         model_answer = ""
     else:
-        paragraph_reviews = normalize_paragraph_reviews(score.get("paragraph_reviews"), require_model=True)
+        paragraph_reviews = normalize_paragraph_reviews(
+            score.get("paragraph_reviews"),
+            require_model=True,
+            spelling_summary=spelling_summary,
+        )
         model_answer = str(score.get("model_answer") or "").strip()
 
     return {
@@ -946,6 +1198,9 @@ def normalize_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> di
         "practice_focus": practice_focus,
         "model_answer": model_answer,
         "paragraph_reviews": paragraph_reviews,
+        "inline_annotations": normalize_inline_annotations(score.get("inline_annotations")),
+        "spelling_correction_summary": spelling_summary,
+        "expression_upgrade_summary": str(score.get("expression_upgrade_summary") or "").strip(),
         "structure_advice_only": advice_only,
         "structure_advice": structure_advice,
         "analysis_backend": "ai",
@@ -1129,6 +1384,9 @@ def normalize_score_payload(entry: WritingEntry, payload: dict[str, Any]) -> dic
         "practice_focus": str(score.get("practice_focus") or payload.get("practice_focus") or ""),
         "model_answer": str(score.get("model_answer") or payload.get("model_answer") or ""),
         "paragraph_reviews": score.get("paragraph_reviews") if isinstance(score.get("paragraph_reviews"), list) else payload.get("paragraph_reviews"),
+        "inline_annotations": score.get("inline_annotations") if isinstance(score.get("inline_annotations"), list) else payload.get("inline_annotations"),
+        "spelling_correction_summary": str(score.get("spelling_correction_summary") or payload.get("spelling_correction_summary") or ""),
+        "expression_upgrade_summary": str(score.get("expression_upgrade_summary") or payload.get("expression_upgrade_summary") or ""),
         "structure_advice_only": bool(score.get("structure_advice_only") or payload.get("structure_advice_only")),
         "structure_advice": str(score.get("structure_advice") or payload.get("structure_advice") or ""),
         "backend": str(score.get("backend") or "ai"),

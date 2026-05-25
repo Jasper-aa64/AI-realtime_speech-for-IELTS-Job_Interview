@@ -16,6 +16,7 @@ from .services import (
     language_takeaway_library,
     latest_report,
     p3_fallback,
+    p3_follow_up_fallback,
     p1_corpus_library,
     p2_corpus_library,
     question_bank_sample,
@@ -26,6 +27,7 @@ from .services import (
     save_p1_corpus,
     save_p2_corpus,
     save_language_takeaway,
+    save_writing_takeaway,
     score_attempt,
     start_attempt,
     tts_audio_path,
@@ -33,6 +35,7 @@ from .services import (
     upload_turn_audio,
     warm_fixed_examiner_tts,
     weak_items,
+    writing_takeaway_library,
 )
 
 
@@ -142,6 +145,30 @@ def language_takeaway_view(request):
 
 @require_http_methods(["DELETE"])
 def language_takeaway_detail_view(request, entry_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(delete_language_takeaway(request.user, entry_id))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=404)
+
+
+@require_http_methods(["GET", "POST"])
+def writing_takeaway_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    if request.method == "GET":
+        return JsonResponse(writing_takeaway_library(request.user))
+    try:
+        return JsonResponse(save_writing_takeaway(request.user, _json_payload(request)))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["DELETE"])
+def writing_takeaway_detail_view(request, entry_id: str):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
@@ -335,6 +362,14 @@ def p3_view(request):
     if auth_error:
         return auth_error
     return JsonResponse(p3_fallback(_json_payload(request)))
+
+
+@require_http_methods(["POST"])
+def p3_follow_up_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    return JsonResponse(p3_follow_up_fallback(_json_payload(request)))
 
 
 @require_http_methods(["POST"])

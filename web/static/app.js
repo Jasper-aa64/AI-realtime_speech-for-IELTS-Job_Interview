@@ -1,6 +1,7 @@
 const state = {
   view: "home",
   viewHistory: [],
+  routeApplying: false,
   status: "idle",
   attempt: null,
   currentTurn: null,
@@ -29,9 +30,15 @@ const state = {
   historyDetailCache: new Map(),
   abortingAttemptId: null,
   practiceViewBeforeSettings: null,
+  darkMode: false,
   p3Topics: [],
   p3SelectedTopic: "",
   p3Intensity: "normal",
+  p3Focus: "comparison_concession",
+  p3SourceType: "topic",
+  p3CustomTheme: "",
+  p3Plan: null,
+  p3PlanLoading: false,
   p3PracticeSource: null,
   p1Corpus: {
     topics: [],
@@ -65,6 +72,12 @@ const state = {
     revealedEntryIds: new Set(),
     selectionTimer: null,
   },
+  writingTakeaway: {
+    items: [],
+    loaded: false,
+    hideEnglish: false,
+    revealedEntryIds: new Set(),
+  },
   practiceLocked: false,
   startRequestId: 0,
   practiceSessionId: 0,
@@ -78,10 +91,17 @@ const state = {
     taskType: "task1_academic",
     prompts: {},
     prompt: null,
+    requestedPromptId: "",
     promptHighlights: {},
     promptSelectionTimer: null,
     promptSelectionActive: false,
     highlightMenuMode: "select",
+    pendingHighlightDeleteIndex: -1,
+    highlightPersistTimer: null,
+    autosaveTimer: null,
+    autosaveEnabled: false,
+    autosaveSaving: false,
+    autosaveQueued: false,
     entry: null,
     dirty: false,
     month: "",
@@ -108,6 +128,11 @@ const state = {
       task2: "cambridge",
     },
   },
+  agentAssistant: {
+    query: "",
+    results: [],
+    loading: false,
+  },
   speaking: {
     pendingAnalysis: null,
     scorePollTimer: null,
@@ -133,6 +158,7 @@ const state = {
 };
 
 const FONT_STORAGE_KEY = "ielts-font-style";
+const DARK_MODE_STORAGE_KEY = "ielts-dark-mode";
 const VIEW_STORAGE_KEY = "ielts-view";
 const FULL_NAME_STORAGE_KEY = "ielts-full-name";
 const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
@@ -160,6 +186,7 @@ const viewCopy = {
   p1Corpus: ["我的 P1语料库", "Prepare grouped Part 1 answers and reuse them in AI feedback."],
   p2Corpus: ["我准备的P2串题素材库", "Prepare reusable Part 2 story materials and link them during preparation."],
   takeawayBook: ["Takeaway", "Review saved language takeaways with hidden English recall."],
+  writingTakeawayBook: ["写作积累", "Review saved writing phrases and reusable argument material."],
   history: ["口语报告", ""],
   writing: ["", ""],
   writingReports: ["写作报告", ""],
@@ -171,8 +198,8 @@ const viewCopy = {
 };
 
 const authViews = new Set(["login", "register", "forgotPassword"]);
-const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "accountProfile", "accountSecurity"]);
-const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook"]);
+const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "accountProfile", "accountSecurity"]);
+const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 
 const $ = (selector) => {
@@ -187,6 +214,82 @@ const byId = (id) => document.getElementById(id);
 const EXAMINER_AUDIO_PRELOAD_LIMIT = 8;
 const AUDIO_READY_TIMEOUT_MS = 2000;
 const CORPUS_PEEK_WINDOW_MARGIN = 16;
+const P3_SOURCE_LABELS = {
+  topic: "按话题练",
+  p2_report: "根据 P2 报告",
+  p2_corpus: "根据 P2 素材",
+  custom: "自定义主题",
+  p2_answer: "根据 P2 回答",
+};
+const P3_FOCUS_LABELS = {
+  abstract_discussion: "抽象讨论",
+  cause_effect: "原因影响",
+  comparison_concession: "对比让步",
+  future_trends: "未来趋势",
+  policy_society: "社会政策",
+};
+const P3_TYPE_LABELS = {
+  opinion_justify: "观点论证",
+  change_trend: "变化趋势",
+  future_prediction: "未来预测",
+  problem_solution: "问题方案",
+  policy_responsibility: "责任政策",
+  comparison_concession: "对比让步",
+  abstract_discussion: "抽象讨论",
+  cause_effect: "原因影响",
+  future_trends: "未来趋势",
+  policy_society: "社会政策",
+};
+const P3_TYPE_SEQUENCE = [
+  "opinion_justify",
+  "change_trend",
+  "future_prediction",
+  "problem_solution",
+  "policy_responsibility",
+];
+const P3_FOCUS_TO_TYPE = {
+  abstract_discussion: "abstract_discussion",
+  cause_effect: "cause_effect",
+  comparison_concession: "comparison_concession",
+  future_trends: "future_trends",
+  policy_society: "policy_society",
+};
+const P3_TARGET_MOVES = {
+  opinion_justify: ["clear position", "reason", "brief contrast"],
+  change_trend: ["past-present comparison", "cause", "consequence"],
+  future_prediction: ["prediction", "condition", "long-term impact"],
+  problem_solution: ["problem", "example", "practical response"],
+  policy_responsibility: ["stakeholder", "responsibility", "balanced view"],
+  comparison_concession: ["compare groups", "concession", "specific example"],
+  abstract_discussion: ["generalize", "define the issue", "social impact"],
+  cause_effect: ["main cause", "effect", "priority"],
+  future_trends: ["future change", "driver", "risk or benefit"],
+  policy_society: ["public role", "individual role", "trade-off"],
+};
+const P3_INTENSITY_HELP = {
+  normal: "每轮一个主问题，适合先稳住回答节奏。",
+  high: "主问题后追加追问，更接近真实 Part 3 压力。",
+  drill: "只练 3 道同一能力点，适合快速补短板。",
+};
+const AGENT_SEARCH_ALIASES = {
+  computers: "computer",
+  children: "child",
+  childrens: "child",
+  childs: "child",
+  schools: "school",
+  teachers: "teacher",
+  education: "study",
+  educational: "study",
+  learning: "study",
+  learn: "study",
+  important: "important",
+  essential: "important",
+  effective: "important",
+  effectively: "important",
+  chart: "graph",
+  charts: "graph",
+  graphs: "graph",
+};
 const corpusPeekDrag = {
   dialogId: "",
   dragging: false,
@@ -237,8 +340,12 @@ function normalizeWritingPromptHighlightRanges(ranges = [], sourceText = "") {
     .sort((a, b) => a.start - b.start);
 }
 
+function writingPromptHighlightKey(prompt = state.writing.prompt) {
+  return String(prompt?.id || prompt?.prompt_id || prompt?.display_catalog_id || "").trim();
+}
+
 function currentWritingPromptHighlightState() {
-  const promptId = String(state.writing.prompt?.id || "").trim();
+  const promptId = writingPromptHighlightKey();
   if (!promptId) return [];
   return Array.isArray(state.writing.promptHighlights?.[promptId]) ? state.writing.promptHighlights[promptId] : [];
 }
@@ -267,12 +374,17 @@ function setWritingPromptHighlightState(promptId, ranges) {
   const sourceText = String(state.writing.prompt?.prompt || "");
   state.writing.promptHighlights[id] = normalizeWritingPromptHighlightRanges(ranges, sourceText);
   saveWritingPromptHighlights();
+  if (state.writing.entry && id === writingPromptHighlightKey(state.writing.prompt)) {
+    state.writing.entry.prompt_highlights = state.writing.promptHighlights[id];
+    scheduleWritingHighlightPersist();
+  }
   renderWritingSurface();
 }
 
 function setWritingHighlightMenuMode(mode) {
   state.writing.highlightMenuMode = mode === "clear" ? "clear" : "select";
   const button = $("writingHighlightBtn");
+  $("writingHighlightMenu")?.classList.toggle("is-delete", state.writing.highlightMenuMode === "clear");
   if (!button) return;
   if (state.writing.highlightMenuMode === "clear") {
     button.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24">
@@ -280,7 +392,7 @@ function setWritingHighlightMenuMode(mode) {
         <path d="M8 6V4h8v2"></path>
         <path d="M19 6l-1 14H6L5 6"></path>
       </svg>
-      <span>Clear Highlight</span>`;
+      <span>Delete</span>`;
   } else {
     button.innerHTML = `<svg aria-hidden="true" viewBox="0 0 24 24">
         <path d="m9 11 4 4L22 6"></path>
@@ -341,7 +453,7 @@ function renderWritingPromptTextWithHighlights(textValue, ranges = []) {
 function deleteWritingPromptHighlightAtPoint(clientX, clientY) {
   const promptEl = $("writingPromptText");
   const prompt = state.writing.prompt;
-  const promptId = String(prompt?.id || "").trim();
+  const promptId = writingPromptHighlightKey(prompt);
   if (!promptEl || !promptId) return false;
   const point = document.caretRangeFromPoint?.(clientX, clientY) || document.caretPositionFromPoint?.(clientX, clientY);
   if (!point) return false;
@@ -356,6 +468,57 @@ function deleteWritingPromptHighlightAtPoint(clientX, clientY) {
   current.splice(index, 1);
   setWritingPromptHighlightState(promptId, current);
   return true;
+}
+
+function deletePendingWritingPromptHighlight() {
+  const promptId = writingPromptHighlightKey(state.writing.prompt);
+  if (!promptId) return false;
+  const current = currentWritingPromptHighlightState();
+  const index = Number(state.writing.pendingHighlightDeleteIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= current.length) return false;
+  current.splice(index, 1);
+  state.writing.pendingHighlightDeleteIndex = -1;
+  setWritingPromptHighlightState(promptId, current);
+  return true;
+}
+
+function currentWritingPromptHighlightsPayload() {
+  const promptId = writingPromptHighlightKey(state.writing.prompt);
+  if (!promptId) return [];
+  return currentWritingPromptHighlightState().map((range) => ({
+    start: range.start,
+    end: range.end,
+  }));
+}
+
+function scheduleWritingHighlightPersist() {
+  window.clearTimeout(state.writing.highlightPersistTimer);
+  if (!state.writing.entry?.id || !state.writing.prompt) return;
+  if (state.writing.dirty) return;
+  state.writing.highlightPersistTimer = window.setTimeout(() => {
+    persistWritingPromptHighlights().catch(() => null);
+  }, 450);
+}
+
+async function persistWritingPromptHighlights() {
+  if (!state.writing.entry?.id || !state.writing.prompt) return null;
+  if (state.writing.dirty) return null;
+  const prompt = state.writing.prompt;
+  const payload = {
+    id: state.writing.entry.id,
+    task_type: prompt.task_type || state.writing.taskType,
+    prompt_id: prompt.id || prompt.prompt_id || state.writing.entry.prompt_id,
+    prompt: prompt.prompt,
+    title: writingPromptDisplayTitle(prompt),
+    category: prompt.category,
+    image_url: prompt.image_url || "",
+    answer: $("writingAnswer")?.value || state.writing.entry.answer || "",
+    prompt_highlights: currentWritingPromptHighlightsPayload(),
+  };
+  const entry = await api("/api/writing/entries", payload);
+  state.writing.entry = entry;
+  state.writing.reportDetailCache.set(entry.id, entry);
+  return entry;
 }
 
 function renderMarkdown(value) {
@@ -527,6 +690,31 @@ function applyFontStyle(value, options = {}) {
   }
 }
 
+function applyDarkMode(enabled, options = {}) {
+  const active = Boolean(enabled);
+  state.darkMode = active;
+  document.body.classList.toggle("theme-dark", active);
+  const toggle = $("#darkModeToggle");
+  if (toggle) toggle.checked = active;
+  if (!options.skipPersist) {
+    try {
+      localStorage.setItem(DARK_MODE_STORAGE_KEY, active ? "1" : "0");
+    } catch (_error) {
+      // Ignore storage failures; the visual selection still applies for this session.
+    }
+  }
+}
+
+function loadDarkMode() {
+  let enabled = false;
+  try {
+    enabled = localStorage.getItem(DARK_MODE_STORAGE_KEY) === "1";
+  } catch (_error) {
+    enabled = false;
+  }
+  applyDarkMode(enabled, { skipPersist: true });
+}
+
 function loadFontStyle() {
   let stored = "default";
   try {
@@ -651,6 +839,9 @@ function clearUserScopedCaches() {
   state.languageTakeaway.items = [];
   state.languageTakeaway.loaded = false;
   state.languageTakeaway.revealedEntryIds.clear();
+  state.writingTakeaway.items = [];
+  state.writingTakeaway.loaded = false;
+  state.writingTakeaway.revealedEntryIds.clear();
   state.p1Corpus.topics = [];
   state.p1Corpus.loaded = false;
   state.p1Corpus.loadingPromise = null;
@@ -687,6 +878,7 @@ function scheduleAuthenticatedPrefetch() {
   scheduleIdleTask(() => prefetchP1Corpus(token), 950);
   scheduleIdleTask(() => prefetchP2Corpus(token), 1250);
   scheduleIdleTask(() => prefetchLanguageTakeaways(token), 1550);
+  scheduleIdleTask(() => prefetchWritingTakeaways(token), 1800);
   scheduleIdleTask(() => prefetchWritingPrompts(token), 1850);
   scheduleIdleTask(() => prefetchCorpusEditor(token), 2300);
 }
@@ -985,10 +1177,14 @@ function switchView(view, options = {}) {
     }
   }
   stopAllRuntime("Ready");
-  if (view === "p3" && !options.keepP3Source) state.p3PracticeSource = null;
+  if (view === "p3" && !options.keepP3Source) {
+    state.p3PracticeSource = null;
+    state.p3SourceType = "topic";
+    state.p3Plan = null;
+  }
   state.view = view;
   state.practiceViewBeforeSettings = null;
-  if (!options.skipUrl) updateViewUrl(view);
+  if (!options.skipUrl) updateViewUrl(view, { replace: Boolean(options.replaceUrl) });
   if (!options.skipPersist) {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, view);
@@ -1006,15 +1202,17 @@ function switchView(view, options = {}) {
   $(".shell")?.classList.toggle("auth-shell", authViews.has(view));
   document.body.classList.toggle("view-writing", view === "writing");
   $(".shell")?.classList.toggle("account-shell", ["accountProfile", "accountSecurity"].includes(view));
-  $(".workspace")?.classList.toggle("corpus-workspace", ["corpus", "p1Corpus", "p2Corpus", "takeawayBook"].includes(view));
-  $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !["p1Corpus", "p2Corpus", "takeawayBook"].includes(view));
+  $(".workspace")?.classList.toggle("corpus-workspace", ["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"].includes(view));
+  $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"].includes(view));
   $("#accountBackBtn")?.classList.toggle("hidden", !["accountProfile", "accountSecurity"].includes(view));
   $("#homePanel")?.classList.toggle("hidden", view !== "home");
   $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
+  $("#practicePanel")?.classList.toggle("p3-launch-mode", view === "p3" && !state.practiceLocked);
   $("#corpusPanel")?.classList.toggle("hidden", view !== "corpus");
   $("#p1CorpusPanel")?.classList.toggle("hidden", view !== "p1Corpus");
   $("#p2CorpusPanel")?.classList.toggle("hidden", view !== "p2Corpus");
   $("#takeawayBookPanel")?.classList.toggle("hidden", view !== "takeawayBook");
+  $("#writingTakeawayBookPanel")?.classList.toggle("hidden", view !== "writingTakeawayBook");
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
   $("#writingReportsPanel")?.classList.toggle("hidden", view !== "writingReports");
@@ -1026,7 +1224,7 @@ function switchView(view, options = {}) {
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
-  const hideWorkspaceHeader = view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || authViews.has(view) || view === "accountProfile" || view === "accountSecurity";
+  const hideWorkspaceHeader = view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || view === "writingTakeawayBook" || authViews.has(view) || view === "accountProfile" || view === "accountSecurity";
   $(".topbar").classList.toggle("hidden", hideWorkspaceHeader);
   $("#viewTitleBlock").classList.toggle("hidden", hideWorkspaceHeader);
   $("#writingTopbarActions")?.classList.toggle("hidden", view !== "writing");
@@ -1035,6 +1233,7 @@ function switchView(view, options = {}) {
   if (view === "history") loadHistory();
   if (view === "corpus") loadCorpusHome();
   if (view === "takeawayBook") loadLanguageTakeaways();
+  if (view === "writingTakeawayBook") loadWritingTakeaways();
   if (view === "writing") loadWriting();
   if (view === "writingReports") loadWritingReports();
   if (view === "p1Corpus") loadP1Corpus();
@@ -1054,6 +1253,7 @@ function switchView(view, options = {}) {
     closeP3CorpusPeek();
     updateP3CorpusPeekButton(null);
   }
+  if (view === "p3") syncP3LaunchPanel();
   $("#examStatusText")?.classList.remove("hidden");
   $("#exitPractice")?.classList.toggle("hidden", !state.practiceLocked || !["mock", "p1", "p2", "p3"].includes(view));
   if (["mock", "p1", "p2", "p3"].includes(view)) {
@@ -1075,20 +1275,113 @@ function requestedUrlView() {
   }
 }
 
+function requestedRouteState() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get("view");
+    return {
+      view: viewCopy[view] ? view : "",
+      writingTask: params.get("task") || "",
+      writingPromptId: params.get("prompt") || "",
+      speakingReportId: params.get("report") || "",
+      writingReportId: params.get("writing_report") || "",
+    };
+  } catch (_error) {
+    return {
+      view: "",
+      writingTask: "",
+      writingPromptId: "",
+      speakingReportId: "",
+      writingReportId: "",
+    };
+  }
+}
+
 function requestedStandaloneView() {
   const view = requestedUrlView();
   return ["p1Corpus", "p2Corpus"].includes(view) ? view : "";
 }
 
-function updateViewUrl(view) {
-  if (!window.history?.replaceState || !viewCopy[view]) return;
+function updateViewUrl(view, options = {}) {
+  if (!window.history?.replaceState || !viewCopy[view] || state.routeApplying) return;
   const url = new URL(window.location.href);
   if (view === "home") {
     url.searchParams.delete("view");
   } else {
     url.searchParams.set("view", view);
   }
-  window.history.replaceState({}, "", url.toString());
+  if (view === "writing") {
+    url.searchParams.set("task", state.writing.taskType || "task1_academic");
+    if (state.writing.prompt?.id) url.searchParams.set("prompt", state.writing.prompt.id);
+    else url.searchParams.delete("prompt");
+    url.searchParams.delete("report");
+    url.searchParams.delete("writing_report");
+  } else if (view === "history") {
+    if (state.activeHistoryId) url.searchParams.set("report", state.activeHistoryId);
+    else url.searchParams.delete("report");
+    url.searchParams.delete("task");
+    url.searchParams.delete("prompt");
+    url.searchParams.delete("writing_report");
+  } else if (view === "writingReports") {
+    if (state.writing.activeReportId) url.searchParams.set("writing_report", state.writing.activeReportId);
+    else url.searchParams.delete("writing_report");
+    url.searchParams.delete("task");
+    url.searchParams.delete("prompt");
+    url.searchParams.delete("report");
+  } else {
+    url.searchParams.delete("task");
+    url.searchParams.delete("prompt");
+    url.searchParams.delete("report");
+    url.searchParams.delete("writing_report");
+  }
+  const nextUrl = url.toString();
+  if (nextUrl === window.location.href) return;
+  const method = options.replace ? "replaceState" : "pushState";
+  window.history[method]({ view }, "", nextUrl);
+}
+
+function syncUrlForCurrentState(options = {}) {
+  updateViewUrl(state.view, options);
+}
+
+async function prefetchWritingTakeaways(token) {
+  const payload = await api("/api/writing-takeaways");
+  if (token !== state.auth.sessionToken) return;
+  state.writingTakeaway.items = payload.items || [];
+  state.writingTakeaway.loaded = true;
+  if (state.view === "writingTakeawayBook") {
+    renderWritingTakeawayToggle();
+    renderWritingTakeaways();
+    text("writingTakeawayStats", `${payload.count || 0} 条`);
+  }
+}
+
+function writingPromptDeepLink(prompt) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("view", "writing");
+  url.searchParams.set("task", prompt?.task_type || "task2");
+  if (prompt?.id) url.searchParams.set("prompt", prompt.id);
+  return url.toString();
+}
+
+function applyRouteState(route) {
+  if (route.speakingReportId) state.activeHistoryId = route.speakingReportId;
+  if (route.writingReportId) state.writing.activeReportId = route.writingReportId;
+  if (["task1_academic", "task2"].includes(route.writingTask)) state.writing.taskType = route.writingTask;
+  state.writing.requestedPromptId = route.writingPromptId || "";
+}
+
+function restoreRouteFromLocation() {
+  const route = requestedRouteState();
+  applyRouteState(route);
+  state.routeApplying = true;
+  try {
+    switchView(route.view || "home", { force: true, skipPersist: true, skipUrl: true });
+  } finally {
+    state.routeApplying = false;
+  }
 }
 
 function openCorpusWindow(view) {
@@ -1248,12 +1541,21 @@ function resetPracticeSurface() {
   p2PrepPanel?.classList.add("hidden");
   if (p2PrepPanel) p2PrepPanel.innerHTML = "";
   if (state.view !== "p2") state.p2Corpus.selectedEntryId = "";
-  if (state.view !== "p3") state.p3PracticeSource = null;
+  if (state.view !== "p3") {
+    state.p3PracticeSource = null;
+    state.p3Plan = null;
+    state.p3PlanLoading = false;
+  }
   $("#cueTop")?.classList.add("hidden");
   $("#promptPane")?.classList.remove("hidden");
   $("#p3TopicPanel")?.classList.toggle("hidden", !isPracticeMode || state.view !== "p3");
+  $("#practicePanel")?.classList.toggle("p3-launch-mode", state.view === "p3");
   $("#practiceGrid")?.classList.remove("p2-mode", "practice-enter");
   $("#practiceGrid")?.classList.toggle("hidden", !isPracticeMode || state.view === "p3");
+  if (state.view === "p3") {
+    renderP3PlanPreview();
+    syncP3LaunchPanel();
+  }
   summaryPanel?.classList.add("hidden");
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("#exitPractice")?.classList.add("hidden");
@@ -1374,6 +1676,10 @@ async function startPractice() {
     return;
   }
   const mode = state.view === "mock" ? "mock" : state.view;
+  if (mode === "p3" && !state.p3Plan) {
+    await generateP3Plan();
+    if (!state.p3Plan) return;
+  }
   state.abortingAttemptId = null;
   state.practiceLocked = true;
   $(".exam-status")?.classList.remove("hidden");
@@ -1409,7 +1715,7 @@ async function startPractice() {
   setRecordButton("loading", "Loading...", "Preparing exam section.");
   try {
     const p3Source = mode === "p3" ? state.p3PracticeSource : null;
-    const theme = p3Source?.theme || state.p3SelectedTopic || "";
+    const theme = mode === "p3" ? currentP3Theme() : "";
     const names = candidateNames();
     const attempt = await api("/api/attempts/start", {
       mode,
@@ -1417,9 +1723,12 @@ async function startPractice() {
       full_name: names.fullName,
       english_name: names.englishName,
       ...(mode === "p3" ? { p3_intensity: state.p3Intensity } : {}),
+      ...(mode === "p3" ? { p3_focus: state.p3Focus } : {}),
+      ...(mode === "p3" && state.p3Plan ? { p3_plan: state.p3Plan } : {}),
       ...(mode === "p3" && theme ? { theme } : {}),
       ...(mode === "p3" && p3Source?.answer ? { prior_answer: p3Source.answer } : {}),
-      ...(mode === "p3" && p3Source?.attemptId ? { source: "p2_report", p2_attempt_id: p3Source.attemptId } : {}),
+      ...(mode === "p3" ? { source: p3Source?.sourceType || state.p3SourceType } : {}),
+      ...(mode === "p3" && p3Source?.attemptId ? { p2_attempt_id: p3Source.attemptId } : {}),
       ...(mode === "p3" && p3Source?.p2CorpusEntryId ? { p2_corpus_entry_id: p3Source.p2CorpusEntryId } : {}),
       ...(mode === "p3" && p3Source?.p3FollowUpText ? { p3_follow_up_text: p3Source.p3FollowUpText } : {}),
     }, { signal: state.startAbortController.signal });
@@ -1443,6 +1752,7 @@ async function startPractice() {
 
 function revealP3PracticeGrid() {
   $("#p3TopicPanel").classList.add("hidden");
+  $("#practicePanel")?.classList.remove("p3-launch-mode");
   const grid = $("#practiceGrid");
   grid.classList.remove("hidden", "practice-enter");
   void grid.offsetWidth;
@@ -2387,6 +2697,7 @@ function renderHistoryList(items, options = {}) {
     button.addEventListener("click", async () => {
       if (state.activeHistoryId === button.dataset.attemptId) return;
       state.activeHistoryId = button.dataset.attemptId;
+      syncUrlForCurrentState();
       document.querySelectorAll(".history-item").forEach((item) => {
         item.classList.toggle("active", item.dataset.attemptId === state.activeHistoryId);
       });
@@ -2413,6 +2724,7 @@ function renderHistoryList(items, options = {}) {
   if (!state.activeHistoryId && items.length) {
     state.activeHistoryId = items[0].id;
     document.querySelector(".history-item")?.classList.add("active");
+    syncUrlForCurrentState({ replace: true });
   }
   requestAnimationFrame(() => updateReportRailState("historyList"));
   if (refreshActive && state.activeHistoryId) {
@@ -2496,6 +2808,181 @@ function writingParagraphs(value) {
   return String(value || "").split(/\n\s*\n+/).map((item) => item.trim()).filter(Boolean);
 }
 
+function writingAnnotationTypeLabel(type) {
+  return {
+    spelling: "\u62fc\u5199",
+    punctuation: "\u6807\u70b9",
+    format: "\u683c\u5f0f",
+    grammar: "\u8bed\u6cd5",
+    word_choice: "\u7528\u8bcd",
+    missing_word: "\u7f3a\u8bcd",
+    extra_word: "\u591a\u4f59",
+  }[type] || "\u95ee\u9898";
+}
+
+function normalizeWritingAnnotation(item = {}) {
+  const original = String(item.original || "").trim();
+  if (!original) return null;
+  const rawType = String(item.type || item.category || "grammar").trim().toLowerCase();
+  const type = ["spelling", "punctuation", "format", "grammar", "word_choice", "missing_word", "extra_word"].includes(rawType) ? rawType : "grammar";
+  const paragraphIndex = Number.parseInt(item.paragraph_index ?? item.paragraphIndex ?? "", 10);
+  return {
+    paragraphIndex: Number.isFinite(paragraphIndex) ? paragraphIndex : null,
+    original,
+    type,
+    suggestion: String(item.suggestion || "").trim(),
+    explanation: String(item.explanation || item.reason || "").trim(),
+    severity: String(item.severity || "medium").trim().toLowerCase(),
+  };
+}
+
+function writingInlineAnnotations(score = {}) {
+  const annotations = [];
+  if (Array.isArray(score.inline_annotations)) {
+    score.inline_annotations.forEach((item) => {
+      const normalized = normalizeWritingAnnotation(item);
+      if (normalized) annotations.push(normalized);
+    });
+  }
+  if (!annotations.length && Array.isArray(score.grammar_corrections)) {
+    score.grammar_corrections.forEach((item) => {
+      const normalized = normalizeWritingAnnotation({
+        ...item,
+        type: item.type || "grammar",
+        explanation: item.explanation || item.reason || "",
+      });
+      if (normalized) annotations.push(normalized);
+    });
+  }
+  const seen = new Set();
+  return annotations.filter((item) => {
+    const key = `${item.paragraphIndex || ""}:${item.type}:${item.original}:${item.suggestion}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function writingAnnotationsForParagraph(annotations, paragraph, paragraphIndex) {
+  const text = String(paragraph || "");
+  return annotations.filter((item) => {
+    if (item.paragraphIndex && item.paragraphIndex !== paragraphIndex) return false;
+    return text.includes(item.original);
+  });
+}
+
+function renderWritingAnnotatedText(textValue, annotations = []) {
+  const text = String(textValue || "");
+  const ranges = [];
+  annotations.forEach((annotation) => {
+    let start = text.indexOf(annotation.original);
+    while (start >= 0) {
+      const end = start + annotation.original.length;
+      const overlaps = ranges.some((range) => start < range.end && end > range.start);
+      if (!overlaps) {
+        ranges.push({ start, end, annotation });
+        break;
+      }
+      start = text.indexOf(annotation.original, start + 1);
+    }
+  });
+  if (!ranges.length) return escapeHtml(text).replace(/\n/g, "<br>");
+  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+  let cursor = 0;
+  let html = "";
+  ranges.forEach(({ start, end, annotation }) => {
+    if (start < cursor) return;
+    const label = writingAnnotationTypeLabel(annotation.type);
+    const detail = [label, annotation.suggestion ? `\u5efa\u8bae\uff1a${annotation.suggestion}` : "", annotation.explanation].filter(Boolean).join(" \u00b7 ");
+    html += escapeHtml(text.slice(cursor, start)).replace(/\n/g, "<br>");
+    const original = escapeHtml(text.slice(start, end)).replace(/\n/g, "<br>");
+    if (annotation.type === "missing_word") {
+      html += `${original}<mark class="writing-inline-insert" title="${escapeHtml(detail)}" tabindex="0">^ ${escapeHtml(annotation.suggestion || "\u8865\u8bcd")}</mark>`;
+    } else if (annotation.type === "spelling" && annotation.suggestion) {
+      html += `<span class="writing-inline-replacement" title="${escapeHtml(detail)}" tabindex="0"><mark class="writing-inline-issue writing-inline-issue-spelling">${original}</mark><span class="writing-inline-arrow">→</span><span class="writing-inline-suggestion">${escapeHtml(annotation.suggestion)}</span></span>`;
+    } else {
+      html += `<mark class="writing-inline-issue writing-inline-issue-${escapeHtml(annotation.type)}" title="${escapeHtml(detail)}" tabindex="0">${original}</mark>`;
+    }
+    cursor = end;
+  });
+  html += escapeHtml(text.slice(cursor)).replace(/\n/g, "<br>");
+  return html;
+}
+
+function writingSpellingSummaryHtml(score = {}) {
+  const spelling = String(score.spelling_correction_summary || "").trim();
+  if (!spelling) return "";
+  return `
+    <div class="detail-card writing-language-summary-card writing-spelling-summary-card">
+      <section>
+        <span class="section-label">Spelling corrections</span>
+        <h3>拼写纠错</h3>
+        <div class="coaching-content">${renderMarkdown(spelling)}</div>
+      </section>
+    </div>
+  `;
+}
+
+function writingSpellingTermsFromSummary(value = "") {
+  const terms = new Set();
+  String(value || "").replace(/`?([A-Za-z]{2,})`?\s*(?:->|→)/g, (_, term) => {
+    terms.add(String(term || "").toLowerCase());
+    return "";
+  });
+  return terms;
+}
+
+function looksLikeSingleWordSpellingFix(value = "") {
+  const compact = String(value || "").replace(/`/g, "").trim().replace(/[。.]+$/g, "").trim();
+  const arrow = compact.includes("->") ? "->" : (compact.includes("→") ? "→" : "");
+  if (!arrow) return false;
+  const [left, ...rest] = compact.split(arrow);
+  let right = rest.join(arrow).trim();
+  ["正确：", "正确:", "correct:", "Correct:"].forEach((prefix) => {
+    if (right.startsWith(prefix)) right = right.slice(prefix.length).trim();
+  });
+  right = right.split("（")[0].split("(")[0].trim();
+  return /^[A-Za-z]{2,}$/.test(left.trim()) && /^[A-Za-z]{2,}$/.test(right);
+}
+
+function stripSpellingFromLanguageUpgrade(value = "", spellingSummary = "") {
+  const spellingTerms = ["拼写", "错拼", "错别字", "spelling", "misspell", "typo"];
+  const summaryTerms = writingSpellingTermsFromSummary(spellingSummary);
+  return String(value || "").split(/\r?\n/).filter((line) => {
+    const lowered = line.toLowerCase();
+    if (spellingTerms.some((term) => lowered.includes(term))) return false;
+    if ([...summaryTerms].some((term) => new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lowered))) return false;
+    const compact = line.trim().replace(/^[-*•\s]+/, "");
+    return !looksLikeSingleWordSpellingFix(compact);
+  }).join("\n").trim();
+}
+
+function stripSpellingFromParagraphCoaching(value = "", spellingSummary = "") {
+  const summaryTerms = writingSpellingTermsFromSummary(spellingSummary);
+  let text = String(value || "").trim();
+  text = text
+    .replace(/[，,；;]?\s*但?有(?:明显)?拼写错误[，,]?\s*而且?/g, "，")
+    .replace(/[，,；;]?\s*存在(?:明显)?拼写错误[，,。；;]?/g, "。")
+    .replace(/[，,；;]?\s*拼写(?:方面)?(?:也)?(?:需要|可以|应当)?(?:再)?(?:检查|注意|修改|纠正)[，,。；;]?/g, "。");
+  return text.split(/\r?\n/).filter((line) => {
+    const lowered = line.toLowerCase();
+    return ![...summaryTerms].some((term) => new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lowered));
+  }).join("\n").replace(/，。/g, "。").replace(/^[ ，,]+|[ ，,]+$/g, "").trim();
+}
+
+function writingParagraphCoachingMarkdown(item = {}, score = {}) {
+  const coaching = stripSpellingFromParagraphCoaching(
+    item.coaching || "暂无段落辅导。",
+    score.spelling_correction_summary || ""
+  ) || "暂无段落辅导。";
+  const content = stripSpellingFromLanguageUpgrade(
+    item.language_correction_upgrade || item.expression_upgrade || "",
+    score.spelling_correction_summary || ""
+  );
+  if (!content) return coaching;
+  return `${coaching}\n\n**语法纠错 / 表达纠错 / 表达升级**\n${content}`;
+}
+
 function writingParagraphGuidance(taskType = state.writing.taskType || "task1_academic") {
   if (taskType === "task1_academic") {
     return {
@@ -2540,18 +3027,75 @@ function ensureWritingParagraphsBeforeScore(answer, taskType) {
   return false;
 }
 
-function autoResizeWritingAnswer() {
-  const answer = $("writingAnswer");
-  if (!answer) return;
-  answer.style.height = "auto";
-  const targetHeight = Math.min(Math.max(answer.scrollHeight, 500), 800);
-  answer.style.height = `${targetHeight}px`;
+function writingScrollParent(element) {
+  let node = element?.parentElement;
+  while (node && node !== document.body) {
+    const style = window.getComputedStyle(node);
+    if (/(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`)) return node;
+    node = node.parentElement;
+  }
+  return document.scrollingElement || document.documentElement;
 }
 
-function updateWritingWordCount() {
+function autoResizeWritingAnswer(options = {}) {
+  const answer = $("writingAnswer");
+  if (!answer) return;
+  const style = window.getComputedStyle(answer);
+  const lineHeight = Number.parseFloat(style.lineHeight) || 24;
+  const extraRows = 4;
+  const scrollParent = writingScrollParent(answer);
+  const scrollTop = scrollParent?.scrollTop || 0;
+  const currentHeight = answer.offsetHeight || 0;
+  if (options.reset) answer.style.height = "auto";
+  const targetHeight = Math.max(answer.scrollHeight + (lineHeight * extraRows), 500);
+  const nextHeight = options.reset ? targetHeight : Math.max(currentHeight, targetHeight);
+  answer.style.height = `${nextHeight}px`;
+  answer.style.overflowY = "hidden";
+  if (options.preserveScroll && scrollParent) scrollParent.scrollTop = scrollTop;
+}
+
+function updateWritingWordCount(options = {}) {
   const count = currentWritingWordCount();
   text("writingWordCount", `${count} word${count === 1 ? "" : "s"}`);
-  autoResizeWritingAnswer();
+  autoResizeWritingAnswer(options);
+}
+
+function clearWritingAutosaveTimer() {
+  if (state.writing.autosaveTimer) {
+    clearTimeout(state.writing.autosaveTimer);
+    state.writing.autosaveTimer = null;
+  }
+}
+
+function maybeScheduleWritingAutosave() {
+  const count = currentWritingWordCount();
+  if (count > 20) state.writing.autosaveEnabled = true;
+  if (!state.writing.autosaveEnabled || !state.writing.dirty || !state.writing.prompt) return;
+  if (state.writing.scorePollingEntryId) return;
+  clearWritingAutosaveTimer();
+  state.writing.autosaveTimer = setTimeout(() => {
+    state.writing.autosaveTimer = null;
+    runWritingAutosave().catch(showWritingError);
+  }, 900);
+}
+
+async function runWritingAutosave() {
+  if (!state.writing.autosaveEnabled || !state.writing.dirty || !state.writing.prompt) return;
+  if (state.writing.autosaveSaving) {
+    state.writing.autosaveQueued = true;
+    return;
+  }
+  state.writing.autosaveSaving = true;
+  try {
+    text("writingSaveStatus", "自动保存中...");
+    await saveWritingEntry(false, { autosave: true });
+  } finally {
+    state.writing.autosaveSaving = false;
+    if (state.writing.autosaveQueued || state.writing.dirty) {
+      state.writing.autosaveQueued = false;
+      maybeScheduleWritingAutosave();
+    }
+  }
 }
 
 function setWritingPending(isPending, title = "", detail = "") {
@@ -2941,6 +3485,8 @@ async function loadWriting() {
   if (firstLoad) setWritingPageLoading(true);
   try {
     const summaryPromise = loadWritingSummary(false);
+    const routePrompt = await resolveRequestedWritingPrompt();
+    if (routePrompt) setWritingPrompt(routePrompt, false, { replaceUrl: true });
     let quickPrompt = null;
     try {
       quickPrompt = state.writing.prompt
@@ -2951,11 +3497,11 @@ async function loadWriting() {
     }
     if (!state.writing.prompt) {
       if (quickPrompt) {
-        setWritingPrompt(quickPrompt, false);
+        setWritingPrompt(quickPrompt, false, { replaceUrl: true });
       } else {
         const prompts = state.writing.prompts[state.writing.taskType] || [];
         const defaultPrompt = writingUsablePromptsForSource(state.writing.taskType, "cambridge")[0] || prompts[0];
-        if (defaultPrompt) setWritingPrompt(defaultPrompt, false);
+        if (defaultPrompt) setWritingPrompt(defaultPrompt, false, { replaceUrl: true });
         else await chooseRandomWritingPrompt(false);
       }
     }
@@ -2981,6 +3527,25 @@ async function loadWriting() {
   } finally {
     setWritingPageLoading(false);
   }
+}
+
+async function resolveRequestedWritingPrompt() {
+  const promptId = String(state.writing.requestedPromptId || "").trim();
+  if (!promptId) return null;
+  const taskTypes = ["task1_academic", "task2"];
+  const preferredTask = state.writing.taskType || "task1_academic";
+  const orderedTasks = [preferredTask, ...taskTypes.filter((taskType) => taskType !== preferredTask)];
+  for (const taskType of orderedTasks) {
+    const prompts = await loadWritingPrompts(taskType);
+    const found = prompts.find((prompt) => prompt.id === promptId);
+    if (found) {
+      state.writing.taskType = found.task_type || taskType;
+      state.writing.requestedPromptId = "";
+      return found;
+    }
+  }
+  state.writing.requestedPromptId = "";
+  return null;
 }
 
 async function loadQuickWritingPrompt(taskType) {
@@ -3124,6 +3689,7 @@ async function renderWritingReports(items, options = {}) {
   // Determine active report id
   const activeId = items.some((item) => item.id === state.writing.activeReportId) ? state.writing.activeReportId : items[0].id;
   state.writing.activeReportId = activeId;
+  syncUrlForCurrentState({ replace: true });
   // Render list from compact items
   renderWritingReportList(items);
   // Fetch detail only for the selected item
@@ -3168,6 +3734,7 @@ function renderWritingReportList(items) {
       const itemId = button.dataset.writingReportTab;
       if (!itemId) return;
       state.writing.activeReportId = itemId;
+      syncUrlForCurrentState();
       renderWritingReportList(state.writing.reportEntries);
       const target = $("writingReportDetail");
       if (!target) return;
@@ -3357,7 +3924,7 @@ function writingReportDetailHtml(entry) {
       </div>
     </div>
     ${promptCard}
-    ${score.structure_advice_only ? writingStructureAdviceHtml(score, entry) : writingParagraphReviewHtml(entry, paragraphReviews)}
+    ${score.structure_advice_only ? writingStructureAdviceHtml(score, entry) : writingParagraphReviewHtml(entry, score, paragraphReviews)}
     ${profileBlock}
   ` : `
     <div class="detail-card writing-saved-report-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
@@ -3397,6 +3964,7 @@ function writingReportDetailHtml(entry) {
 
 function writingStructureAdviceHtml(score, entry) {
   const answerParagraphs = writingParagraphs(entry.answer || "");
+  const inlineAnnotations = writingInlineAnnotations(score || {});
   return `
     <section class="detail-card writing-structure-advice-card">
       <span class="section-label">Paragraph structure first</span>
@@ -3406,15 +3974,17 @@ function writingStructureAdviceHtml(score, entry) {
       ${answerParagraphs.length ? `<div class="writing-structure-preview">${answerParagraphs.map((paragraph, index) => `
         <article>
           <h4>当前段落 ${index + 1}</h4>
-          <p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>
+          <p class="writing-annotated-original">${renderWritingAnnotatedText(paragraph, writingAnnotationsForParagraph(inlineAnnotations, paragraph, index + 1))}</p>
         </article>
       `).join("")}</div>` : ""}
     </section>
+    ${writingSpellingSummaryHtml(score || {})}
   `;
 }
 
-function writingParagraphReviewHtml(entry, reviews) {
+function writingParagraphReviewHtml(entry, score, reviews) {
   const answerParagraphs = writingParagraphs(entry.answer || "");
+  const inlineAnnotations = writingInlineAnnotations(score || {});
   const items = reviews.length ? reviews : answerParagraphs.map((paragraph, index) => ({
     index: index + 1,
     learner: paragraph,
@@ -3422,25 +3992,30 @@ function writingParagraphReviewHtml(entry, reviews) {
     coaching: "这一段可以继续优化中心句、展开和连接方式。",
   }));
   if (!items.length) return "";
-  const rows = items.map((item, index) => `
-    <tbody class="turn-report-group writing-paragraph-group">
-      <tr class="writing-paragraph-content-row">
-        <td>
-          <div class="question-header"><strong>Paragraph ${escapeHtml(item.index || index + 1)}</strong></div>
-          <p>${escapeHtml(item.learner || answerParagraphs[index] || "").replace(/\n/g, "<br>")}</p>
-        </td>
-        <td>
-          <p>${escapeHtml(item.model || "暂无 AI 改写。").replace(/\n/g, "<br>")}</p>
-        </td>
-      </tr>
-      <tr class="writing-paragraph-coaching-row">
-        <td colspan="2" class="ai-coaching-cell">
-          <h4 class="coaching-title">AI 辅导</h4>
-          <div class="coaching-content">${renderMarkdown(item.coaching || "暂无段落辅导。")}</div>
-        </td>
-      </tr>
-    </tbody>
-  `).join("");
+  const rows = items.map((item, index) => {
+    const paragraphIndex = Number.parseInt(item.index || index + 1, 10);
+    const learnerText = item.learner || answerParagraphs[index] || "";
+    const paragraphAnnotations = writingAnnotationsForParagraph(inlineAnnotations, learnerText, paragraphIndex);
+    return `
+      <tbody class="turn-report-group writing-paragraph-group">
+        <tr class="writing-paragraph-content-row">
+          <td>
+            <div class="question-header"><strong>Paragraph ${escapeHtml(paragraphIndex || index + 1)}</strong></div>
+            <p class="writing-annotated-original">${renderWritingAnnotatedText(learnerText, paragraphAnnotations)}</p>
+          </td>
+          <td>
+            <p>${escapeHtml(item.model || "暂无 AI 改写。").replace(/\n/g, "<br>")}</p>
+          </td>
+        </tr>
+        <tr class="writing-paragraph-coaching-row">
+          <td colspan="2" class="ai-coaching-cell">
+            <h4 class="coaching-title">AI 辅导</h4>
+            <div class="coaching-content">${renderMarkdown(writingParagraphCoachingMarkdown(item, score || {}))}</div>
+          </td>
+        </tr>
+      </tbody>
+    `;
+  }).join("");
   return `
     <div class="detail-card turn-report-card writing-paragraph-report-card">
       <div class="turn-report-wrap">
@@ -3450,16 +4025,25 @@ function writingParagraphReviewHtml(entry, reviews) {
         </table>
       </div>
     </div>
+    ${writingSpellingSummaryHtml(score || {})}
   `;
 }
 
-function setWritingPrompt(prompt, clearAnswer = true) {
+function setWritingPrompt(prompt, clearAnswer = true, options = {}) {
+  clearWritingAutosaveTimer();
+  state.writing.autosaveEnabled = false;
+  state.writing.autosaveQueued = false;
   state.writing.prompt = prompt;
   state.writing.taskType = prompt.task_type || state.writing.taskType;
   const existingHighlights = loadWritingPromptHighlights();
-  if (prompt?.id) {
-    state.writing.promptHighlights[prompt.id] = normalizeWritingPromptHighlightRanges(
-      state.writing.promptHighlights[prompt.id] || existingHighlights[prompt.id] || [],
+  const highlightKey = writingPromptHighlightKey(prompt);
+  if (highlightKey) {
+    const currentHighlights = state.writing.promptHighlights[highlightKey];
+    const promptHighlights = Array.isArray(prompt.prompt_highlights) ? prompt.prompt_highlights : [];
+    state.writing.promptHighlights[highlightKey] = normalizeWritingPromptHighlightRanges(
+      promptHighlights.length
+        ? promptHighlights
+        : (Array.isArray(currentHighlights) && currentHighlights.length ? currentHighlights : existingHighlights[highlightKey] || []),
       String(prompt.prompt || "")
     );
   }
@@ -3469,6 +4053,7 @@ function setWritingPrompt(prompt, clearAnswer = true) {
     if ($("writingAnswer")) $("writingAnswer").value = "";
   }
   renderWritingSurface();
+  if (!options.skipUrl) syncUrlForCurrentState({ replace: Boolean(options.replaceUrl) });
 }
 
 function renderWritingSurface() {
@@ -3495,7 +4080,7 @@ function renderWritingSurface() {
     pickerHint.textContent = prompt ? "点击更换" : "打开题库";
   }
   const promptText = prompt?.prompt || "\u8bf7\u9009\u62e9\u4e00\u9053\u9898\uff0c\u6216\u70b9\u51fb\u968f\u673a\u9898\u5f00\u59cb\u3002";
-  const highlightRanges = prompt?.id ? currentWritingPromptHighlightState() : [];
+  const highlightRanges = writingPromptHighlightKey(prompt) ? currentWritingPromptHighlightState() : [];
   $("writingPromptText").innerHTML = renderWritingPromptTextWithHighlights(promptText, highlightRanges);
   hideWritingHighlightMenu();
 
@@ -3513,7 +4098,7 @@ function renderWritingSurface() {
 
   const entry = state.writing.entry;
   renderWritingScore(entry);
-  updateWritingWordCount();
+  updateWritingWordCount({ reset: true });
   if (entry?.ai_task && isWritingTaskActive(entry.ai_task)) {
     text("writingSaveStatus", writingTaskStatusTitle(entry.ai_task));
   } else if (!entry?.id) {
@@ -3531,14 +4116,24 @@ function currentWritingPromptImageUrl() {
 
 function applyWritingPromptHighlightSelection() {
   const prompt = state.writing.prompt;
-  const promptId = String(prompt?.id || "").trim();
+  const promptId = writingPromptHighlightKey(prompt);
   if (!promptId) return;
+  if (state.writing.highlightMenuMode === "clear") {
+    deletePendingWritingPromptHighlight();
+    hideWritingHighlightMenu();
+    setWritingHighlightMenuMode("select");
+    window.getSelection?.().removeAllRanges?.();
+    return;
+  }
   const selectionRange = getWritingPromptSelectionRange();
   if (!selectionRange) return;
   const current = currentWritingPromptHighlightState();
   const exactIndex = current.findIndex((range) => range.start === selectionRange.start && range.end === selectionRange.end);
   if (exactIndex >= 0) {
-    current.splice(exactIndex, 1);
+    hideWritingHighlightMenu();
+    setWritingHighlightMenuMode("select");
+    window.getSelection?.().removeAllRanges?.();
+    return;
   } else {
     current.push({ start: selectionRange.start, end: selectionRange.end });
   }
@@ -3656,6 +4251,7 @@ function hideWritingHighlightMenu() {
   const menu = $("writingHighlightMenu");
   if (!menu) return;
   menu.classList.add("hidden");
+  state.writing.pendingHighlightDeleteIndex = -1;
 }
 
 function positionWritingHighlightMenu(rect) {
@@ -3849,10 +4445,11 @@ async function chooseRandomWritingPrompt(confirmDirty = true) {
   setWritingPrompt(prompt, true);
 }
 
-async function saveWritingEntry(keepPending = false) {
+async function saveWritingEntry(keepPending = false, options = {}) {
   const prompt = state.writing.prompt;
-  if (!prompt) throw new Error("请先选择一道写作题。");
+  if (!prompt) throw new Error("\u8bf7\u5148\u9009\u62e9\u4e00\u9053\u5199\u4f5c\u9898\u3002");
   const answer = $("writingAnswer")?.value || "";
+  const startedHighlights = JSON.stringify(currentWritingPromptHighlightsPayload());
   const payload = {
     id: state.writing.entry?.id,
     task_type: prompt.task_type || state.writing.taskType,
@@ -3862,17 +4459,42 @@ async function saveWritingEntry(keepPending = false) {
     category: prompt.category,
     image_url: prompt.image_url || "",
     answer,
+    prompt_highlights: currentWritingPromptHighlightsPayload(),
   };
-  setWritingPending(true, "正在保存作文", "保存免费，完成后会直接计入今天的签到。");
+  const saveButton = $("writingSaveBtn");
+  const originalSaveText = saveButton?.textContent || "\u4fdd\u5b58\u4f5c\u6587";
+  const updateButton = !options.autosave && saveButton;
+  if (updateButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = "\u4fdd\u5b58\u4e2d";
+  }
   try {
-    const entry = await withBusy("Saving writing...", () => api("/api/writing/entries", payload));
-    state.writing.entry = entry;
-    state.writing.dirty = false;
-    renderWritingSurface();
+    const entry = await api("/api/writing/entries", payload);
+    const currentAnswer = $("writingAnswer")?.value || "";
+    const currentHighlights = JSON.stringify(currentWritingPromptHighlightsPayload());
+    const changedAfterRequest = currentAnswer !== answer || currentHighlights !== startedHighlights;
+    state.writing.entry = changedAfterRequest ? { ...entry, answer: currentAnswer } : entry;
+    state.writing.dirty = changedAfterRequest;
+    if (options.autosave) {
+      updateWritingWordCount({ preserveScroll: true });
+    } else {
+      renderWritingSurface();
+    }
+    if (changedAfterRequest) {
+      text("writingSaveStatus", "\u672a\u4fdd\u5b58\u7684\u4fee\u6539");
+    } else if (options.autosave) {
+      text("writingSaveStatus", `\u5df2\u81ea\u52a8\u4fdd\u5b58 \u00b7 ${entry.practice_date || ""}`);
+    }
     await loadWritingSummary();
+    if (updateButton) {
+      saveButton.textContent = "\u5df2\u4fdd\u5b58";
+      window.setTimeout(() => {
+        if (saveButton.textContent === "\u5df2\u4fdd\u5b58") saveButton.textContent = originalSaveText;
+      }, 1200);
+    }
     return entry;
   } finally {
-    if (!keepPending) setWritingPending(false);
+    if (updateButton) saveButton.disabled = false;
   }
 }
 
@@ -4071,6 +4693,7 @@ function renderVisibleWritingReport(entry) {
       source_test: entry.source_test ?? existing.source_test,
       source_question: entry.source_question ?? existing.source_question,
       source_label: entry.source_label ?? existing.source_label,
+      prompt_highlights: entry.prompt_highlights ?? existing.prompt_highlights,
     };
     state.writing.reportEntries = reportEntries;
     renderWritingReportList(reportEntries);
@@ -4097,9 +4720,21 @@ async function recoverWritingEntry(entry) {
     source_question: entry.source_question,
     source_label: entry.source_label || "",
     display_source_label: entry.display_source_label || "",
+    prompt_highlights: entry.prompt_highlights || [],
   };
+  const highlightKey = writingPromptHighlightKey(state.writing.prompt);
+  if (highlightKey) {
+    state.writing.promptHighlights[highlightKey] = normalizeWritingPromptHighlightRanges(
+      entry.prompt_highlights || [],
+      String(state.writing.prompt.prompt || "")
+    );
+    saveWritingPromptHighlights();
+  }
   if ($("writingAnswer")) $("writingAnswer").value = entry.answer || "";
   state.writing.dirty = false;
+  state.writing.autosaveEnabled = currentWritingWordCount() > 20;
+  state.writing.autosaveQueued = false;
+  clearWritingAutosaveTimer();
   renderWritingSurface();
 }
 
@@ -4250,6 +4885,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
   const preserveScroll = Boolean(options.preserveScroll);
   const previousScrollTop = detailPanel?.scrollTop || 0;
   state.activeHistoryId = attempt.id;
+  syncUrlForCurrentState({ replace: Boolean(options.replaceUrl) });
   const score = attempt.ielts_score || {};
   const turns = attempt.turns || [];
   const visibleTurns = turns.filter(shouldRenderReportTurn);
@@ -4259,6 +4895,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
     ? `<div class="detail-card p2-cue-card">${cueDetail(attempt.cue_card)}</div>`
     : "";
   const overallReview = overallReviewSection(attempt.overall_review || attempt.personalized_coaching, attempt);
+  const p3Skills = p3DiscussionSkillsSection(attempt.p3_discussion_skills);
 
   detailPanel.innerHTML = `
     <div class="detail-card speaking-score-summary-card">
@@ -4281,6 +4918,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
       </div>
     </div>
     ${overallReview}
+    ${p3Skills}
     ${p2CueCard}
     ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
   `;
@@ -4351,7 +4989,7 @@ function overallReviewSection(review = {}, attempt = null) {
   if (!markdown && !comment && !points.length) return "";
   const isP2 = attempt && (attempt.mode === "p2" || attempt.part === "p2");
   const action = isP2
-    ? `<button type="button" class="p2-report-p3-button" data-start-p3-from-p2="${escapeHtml(attempt.id || "")}">根据本次 P2 生成 P3 追问</button>`
+    ? `<button type="button" class="p2-report-p3-button" data-start-p3-from-p2="${escapeHtml(attempt.id || "")}">生成 P3 训练计划</button>`
     : "";
   const body = markdown ? renderMarkdown(markdown) : `
     ${comment ? `<h4>总体点评</h4><p>${escapeHtml(comment)}</p>` : ""}
@@ -4390,9 +5028,10 @@ async function startP3FromP2Report(attemptId) {
     linkedEntry = findP2CorpusEntry(link.entry_id);
   }
   const title = detailAttempt.cue_card?.title || detailAttempt.title || p2Turn.question || "Part 2 answer";
-  switchView("p3", { force: true });
+  switchView("p3", { force: true, keepP3Source: true });
   state.p3PracticeSource = {
     attemptId: detailAttempt.id || attemptId,
+    sourceType: "p2_report",
     title,
     theme: title,
     answer,
@@ -4400,14 +5039,13 @@ async function startP3FromP2Report(attemptId) {
     p3FollowUpText: linkedEntry?.p3_follow_up_text || link.p3_follow_up_text || "",
   };
   state.p3SelectedTopic = title;
+  state.p3SourceType = "p2_report";
+  state.p3Focus = "comparison_concession";
   state.p3Intensity = "high";
-  document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
-    const active = button.dataset.p3Intensity === "high";
-    button.classList.toggle("active", active);
-  });
-  document.querySelector(".p3-mode-switch")?.classList.add("high-intensity");
-  text("p3ModeHelp", "根据本次 P2 回答生成追问，适合直接接 Part 3。");
-  window.requestAnimationFrame(() => startPractice());
+  state.p3Plan = null;
+  renderP3PlanPreview();
+  syncP3LaunchPanel("正在根据这次 P2 生成训练计划...");
+  window.requestAnimationFrame(() => generateP3Plan({ fromP2: true }));
 }
 
 function partScoreBlock(part, item = {}) {
@@ -4420,6 +5058,42 @@ function partScoreBlock(part, item = {}) {
         ${scoreCell("GRA", item.grammatical_range)}
       </div>
     </div>
+  `;
+}
+
+function p3DiscussionSkillsSection(skills) {
+  if (!skills || !Array.isArray(skills.dimensions) || !skills.dimensions.length) return "";
+  const statusLabel = {
+    strong: "稳定",
+    developing: "待加强",
+    weak: "薄弱",
+  };
+  return `
+    <section class="detail-card p3-skills-card">
+      <div class="p3-skills-head">
+        <div>
+          <span class="section-label">${escapeHtml(skills.title || "P3 Discussion Skills")}</span>
+          <h3>P3 讨论能力画像</h3>
+          <p>${escapeHtml(skills.summary || "")}</p>
+        </div>
+        <div class="p3-fix-next">
+          <span>下次优先改</span>
+          <strong>${escapeHtml(skills.fix_next || "把观点展开成原因、例子和对比。")}</strong>
+        </div>
+      </div>
+      <div class="p3-skills-grid">
+        ${skills.dimensions.map((item) => `
+          <article class="p3-skill-item ${escapeHtml(item.status || "developing")}">
+            <div>
+              <strong>${escapeHtml(item.label || "")}</strong>
+              <span>${escapeHtml(statusLabel[item.status] || "待观察")}</span>
+            </div>
+            <p>${escapeHtml(item.evidence || "")}</p>
+            <small>${escapeHtml(item.next_action || "")}</small>
+          </article>
+        `).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -5320,7 +5994,78 @@ function setLanguageTakeawayStatus(message = "", options = {}) {
     : escapeHtml(message);
 }
 
+function writingAnswerSelectionText() {
+  const answerEl = $("writingAnswer");
+  if (!answerEl || document.activeElement !== answerEl) return null;
+  const start = Number(answerEl.selectionStart);
+  const end = Number(answerEl.selectionEnd);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  const textValue = String(answerEl.value || "").slice(start, end).trim();
+  if (textValue.length < 1 || textValue.length > 160) return null;
+  const selectionRect = textareaSelectionEndpointRect(answerEl, end);
+  if (!selectionRect) return null;
+  return {
+    text: textValue,
+    rect: selectionRect,
+    center: {
+      x: selectionRect.left + selectionRect.width / 2,
+      y: selectionRect.top + selectionRect.height / 2,
+    },
+    source: "writing_answer",
+  };
+}
+
+function textareaSelectionEndpointRect(textarea, endOffset) {
+  const hostRect = textarea.getBoundingClientRect();
+  if (!hostRect.width || !hostRect.height) return null;
+  const style = window.getComputedStyle(textarea);
+  const mirror = document.createElement("div");
+  const marker = document.createElement("span");
+  const copyProperties = [
+    "boxSizing", "width", "height", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+    "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+    "fontFamily", "fontSize", "fontWeight", "fontStyle", "fontVariant", "lineHeight",
+    "letterSpacing", "textTransform", "textIndent", "textAlign", "wordSpacing", "tabSize",
+  ];
+  copyProperties.forEach((property) => {
+    mirror.style[property] = style[property];
+  });
+  mirror.style.position = "fixed";
+  mirror.style.left = `${hostRect.left}px`;
+  mirror.style.top = `${hostRect.top}px`;
+  mirror.style.width = `${hostRect.width}px`;
+  mirror.style.height = `${hostRect.height}px`;
+  mirror.style.overflow = "auto";
+  mirror.style.whiteSpace = "pre-wrap";
+  mirror.style.overflowWrap = "break-word";
+  mirror.style.wordBreak = style.wordBreak || "break-word";
+  mirror.style.visibility = "hidden";
+  mirror.style.pointerEvents = "none";
+  mirror.style.zIndex = "-1";
+  marker.textContent = "\u200b";
+  mirror.append(document.createTextNode(String(textarea.value || "").slice(0, endOffset)));
+  mirror.append(marker);
+  document.body.append(mirror);
+  mirror.scrollTop = textarea.scrollTop;
+  mirror.scrollLeft = textarea.scrollLeft;
+  const markerRect = marker.getBoundingClientRect();
+  mirror.remove();
+  const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.4 || 24;
+  const left = Math.min(hostRect.right - 18, Math.max(hostRect.left + 8, markerRect.left));
+  const top = Math.min(hostRect.bottom - lineHeight, Math.max(hostRect.top + 8, markerRect.top));
+  return {
+    left,
+    right: left + 1,
+    top,
+    bottom: top + lineHeight,
+    width: 1,
+    height: lineHeight,
+  };
+}
+
 function selectionText() {
+  const answerSelection = writingAnswerSelectionText();
+  if (answerSelection) return answerSelection;
   const selection = window.getSelection?.();
   const textValue = String(selection?.toString() || "").trim();
   if (!selection || selection.rangeCount === 0 || textValue.length < 1 || textValue.length > 160) return null;
@@ -5397,7 +6142,7 @@ function trackLanguageTakeawayTriggerDuringScroll() {
       return;
     }
     const distance = Math.hypot(info.center.x - anchor.x, info.center.y - anchor.y);
-    if (distance > 170) {
+    if (distance > 260) {
       hideLanguageTakeawayTrigger();
       return;
     }
@@ -5494,6 +6239,35 @@ async function saveLanguageTakeaway() {
     state.languageTakeaway.revealedEntryIds.add(saved.entry_id);
     renderLanguageTakeaways();
     text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+    hideLanguageTakeawayPopup();
+  } catch (error) {
+    setLanguageTakeawayStatus(error.message || "保存失败");
+  }
+}
+
+async function saveWritingTakeaway() {
+  const sourceText = ($("languageTakeawaySource")?.value || "").trim();
+  const chineseText = ($("languageTakeawayChinese")?.value || "").trim();
+  if (!sourceText) {
+    setLanguageTakeawayStatus("原文为空。");
+    return;
+  }
+  setLanguageTakeawayStatus("保存到写作积累中...");
+  try {
+    const saved = await api("/api/writing-takeaways", {
+      source_text: sourceText,
+      chinese_text: chineseText,
+      context_url: window.location.href,
+      context_label: viewCopy[state.view]?.[0] || "",
+      source: "writing_takeaway",
+    });
+    const existingIndex = state.writingTakeaway.items.findIndex((item) => item.entry_id === saved.entry_id);
+    if (existingIndex >= 0) state.writingTakeaway.items.splice(existingIndex, 1);
+    state.writingTakeaway.items.unshift(saved);
+    state.writingTakeaway.loaded = true;
+    state.writingTakeaway.revealedEntryIds.add(saved.entry_id);
+    renderWritingTakeaways();
+    text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
     hideLanguageTakeawayPopup();
   } catch (error) {
     setLanguageTakeawayStatus(error.message || "保存失败");
@@ -6215,6 +6989,7 @@ function bindEvents() {
   $("englishNameInput")?.addEventListener("input", scheduleCandidateNameSave);
   $("fullNameInput")?.addEventListener("blur", flushCandidateNameSave);
   $("englishNameInput")?.addEventListener("blur", flushCandidateNameSave);
+  $("darkModeToggle")?.addEventListener("change", (event) => applyDarkMode(event.target.checked));
   $("loginSubmitBtn")?.addEventListener("click", submitLogin);
   $("registerSubmitBtn")?.addEventListener("click", submitRegister);
   $("loginBackBtn")?.addEventListener("click", returnToPreviousView);
@@ -6293,6 +7068,7 @@ function bindEvents() {
     button.addEventListener("click", () => switchView(button.dataset.corpusHomeTarget || "corpus"));
   });
   $("languageTakeawayHideToggle")?.addEventListener("click", toggleLanguageTakeawayHiddenMode);
+  $("writingTakeawayHideToggle")?.addEventListener("click", toggleWritingTakeawayHiddenMode);
   $("languageTakeawayList")?.addEventListener("click", (event) => {
     const deleteButton = event.target.closest("[data-takeaway-delete]");
     if (deleteButton) {
@@ -6304,6 +7080,18 @@ function bindEvents() {
     const card = event.target.closest("[data-takeaway-entry]");
     if (!card) return;
     revealAndSpeakLanguageTakeaway(card.dataset.takeawayEntry || "");
+  });
+  $("writingTakeawayList")?.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest("[data-writing-takeaway-delete]");
+    if (deleteButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteWritingTakeawayEntry(deleteButton.dataset.writingTakeawayDelete || "");
+      return;
+    }
+    const card = event.target.closest("[data-writing-takeaway-entry]");
+    if (!card) return;
+    revealAndSpeakWritingTakeaway(card.dataset.writingTakeawayEntry || "");
   });
   document.addEventListener("selectionchange", () => {
     window.clearTimeout(state.languageTakeaway.selectionTimer);
@@ -6320,10 +7108,15 @@ function bindEvents() {
   document.addEventListener("keyup", (event) => {
     if (["Shift", "Meta", "Control", "Alt"].includes(event.key)) scheduleLanguageTakeawayTriggerFromSelection();
   });
+  $("writingAnswer")?.addEventListener("mouseup", () => scheduleLanguageTakeawayTriggerFromSelection());
+  $("writingAnswer")?.addEventListener("keyup", () => scheduleLanguageTakeawayTriggerFromSelection());
+  $("writingAnswer")?.addEventListener("select", () => scheduleLanguageTakeawayTriggerFromSelection());
+  $("writingAnswer")?.addEventListener("scroll", trackLanguageTakeawayTriggerDuringScroll, { passive: true });
   $("languageTakeawayTrigger")?.addEventListener("click", (event) => {
     event.preventDefault();
     openLanguageTakeawayPopup();
   });
+  $("writingTakeawaySaveBtn")?.addEventListener("click", saveWritingTakeaway);
   $("languageTakeawaySaveBtn")?.addEventListener("click", saveLanguageTakeaway);
   $("languageTakeawayCloseBtn")?.addEventListener("click", hideLanguageTakeawayPopup);
   $("writingPromptImage")?.addEventListener("click", (event) => {
@@ -6344,20 +7137,21 @@ function bindEvents() {
     const hit = getWritingPromptRangeAtPoint(event.clientX, event.clientY);
     if (!hit) {
       state.writing.promptSelectionActive = true;
+      state.writing.pendingHighlightDeleteIndex = -1;
       window.clearTimeout(state.writing.promptSelectionTimer);
       hideWritingHighlightMenu();
       return;
     }
     event.preventDefault();
-    const promptEl = $("writingPromptText");
     const menu = $("writingHighlightMenu");
-    if (!promptEl || !menu) return;
-    const promptRect = promptEl.getBoundingClientRect();
+    if (!menu) return;
+    const current = currentWritingPromptHighlightState();
+    state.writing.pendingHighlightDeleteIndex = current.findIndex((range) => range.start === hit.start && range.end === hit.end);
     const menuRect = menu.getBoundingClientRect();
     const width = menuRect.width || 148;
     const height = menuRect.height || 92;
-    const left = Math.min(window.innerWidth - width - 12, Math.max(12, promptRect.left + 12));
-    const top = Math.min(window.innerHeight - height - 12, Math.max(12, promptRect.top - height - 10));
+    const left = Math.min(window.innerWidth - width - 12, Math.max(12, event.clientX - width / 2));
+    const top = Math.min(window.innerHeight - height - 12, Math.max(12, event.clientY - height - 12));
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
     setWritingHighlightMenuMode("clear");
@@ -6390,14 +7184,6 @@ function bindEvents() {
     const promptEl = $("writingPromptText");
     if (promptEl?.contains(event.target)) return;
     hideWritingHighlightMenu();
-  });
-  $("writingPromptText")?.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    if (deleteWritingPromptHighlightAtPoint(event.clientX, event.clientY)) {
-      event.preventDefault();
-      event.stopPropagation();
-      hideWritingHighlightMenu();
-    }
   });
   $("writingImageViewer")?.addEventListener("click", (event) => {
     if (event.target?.id === "writingImageViewer" || event.target?.id === "writingImageViewerImg") {
@@ -6496,38 +7282,42 @@ function bindEvents() {
     button.addEventListener("click", () => startPracticeMode(button.dataset.homeMode || "mock"));
   });
   $("exitPractice")?.addEventListener("click", () => exitPractice());
-  $("p3StartButton")?.addEventListener("click", () => {
-    state.p3PracticeSource = null;
-    startPractice();
+  $("p3GeneratePlanButton")?.addEventListener("click", () => generateP3Plan());
+  $("p3StartButton")?.addEventListener("click", () => startPractice());
+  document.querySelectorAll("[data-p3-source]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const source = button.dataset.p3Source || "topic";
+      state.p3SourceType = source;
+      if (source !== "p2_report") state.p3PracticeSource = null;
+      clearP3Plan(source === "p2_report" ? "从 P2 报告页进入时会自动带入本次回答。" : "");
+    });
+  });
+  document.querySelectorAll("[data-p3-focus]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.p3Focus = button.dataset.p3Focus || "comparison_concession";
+      clearP3Plan();
+    });
+  });
+  $("p3CustomThemeInput")?.addEventListener("input", (event) => {
+    state.p3CustomTheme = String(event.target.value || "").trim();
+    clearP3Plan();
   });
   document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
     button.addEventListener("click", () => {
       state.p3Intensity = button.dataset.p3Intensity || "normal";
-      document.querySelectorAll("[data-p3-intensity]").forEach((option) => {
-        option.classList.toggle("active", option === button);
-      });
-      // Animate switch background
-      const switchEl = document.querySelector(".p3-mode-switch");
-      if (switchEl) {
-        switchEl.classList.toggle("high-intensity", state.p3Intensity === "high");
-      }
-      // Update mode help text
-      const helpEl = $("p3ModeHelp");
-      if (helpEl) {
-        helpEl.textContent = state.p3Intensity === "high"
-          ? "追问加压、话题切换更快，适合高强度训练"
-          : "每轮一个主问题，适合稳定练习节奏";
-      }
+      clearP3Plan();
     });
   });
   $("p3TopicChips")?.addEventListener("click", (event) => {
     const chip = event.target.closest("[data-p3-topic]");
     if (!chip) return;
     state.p3PracticeSource = null;
+    state.p3SourceType = "topic";
     state.p3SelectedTopic = chip.dataset.p3Topic || "";
     document.querySelectorAll("#p3TopicChips .topic-chip").forEach((c) => {
       c.classList.toggle("active", c === chip);
     });
+    clearP3Plan();
   });
   document.querySelectorAll("[data-writing-task]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -6553,6 +7343,20 @@ function bindEvents() {
   $("writingPromptCloseBtn")?.addEventListener("click", closeWritingPromptPicker);
   document.querySelectorAll("[data-writing-prompt-close]").forEach((button) => {
     button.addEventListener("click", closeWritingPromptPicker);
+  });
+  $("agentAssistantBtn")?.addEventListener("click", openAgentAssistant);
+  $("agentAssistantForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    runAgentAssistantSearch();
+  });
+  document.querySelectorAll("[data-agent-assistant-close]").forEach((button) => {
+    button.addEventListener("click", closeAgentAssistant);
+  });
+  document.querySelectorAll("[data-agent-assistant-example]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if ($("agentAssistantQuery")) $("agentAssistantQuery").value = button.dataset.agentAssistantExample || "";
+      runAgentAssistantSearch(button.dataset.agentAssistantExample || "");
+    });
   });
   document.querySelectorAll("[data-writing-paragraph-close]").forEach((button) => {
     button.addEventListener("click", closeWritingParagraphModal);
@@ -6591,8 +7395,13 @@ function bindEvents() {
   });
   $("writingAnswer")?.addEventListener("input", () => {
     state.writing.dirty = true;
-    updateWritingWordCount();
+    updateWritingWordCount({ preserveScroll: true });
     text("writingSaveStatus", "未保存的修改");
+  });
+  $("writingAnswer")?.addEventListener("input", () => {
+    if (currentWritingWordCount() > 20) state.writing.autosaveEnabled = true;
+    text("writingSaveStatus", state.writing.autosaveEnabled ? "等待自动保存..." : "未保存的修改");
+    maybeScheduleWritingAutosave();
   });
   $("writingCalendar")?.addEventListener("click", (event) => {
     const day = event.target.closest("[data-writing-entry-id]");
@@ -6629,6 +7438,173 @@ function bindEvents() {
   });
 }
 
+function p3FocusLabel(value) {
+  return P3_FOCUS_LABELS[value] || P3_FOCUS_LABELS.comparison_concession;
+}
+
+function p3SourceLabel(value) {
+  return P3_SOURCE_LABELS[value] || P3_SOURCE_LABELS.topic;
+}
+
+function p3QuestionTypeLabel(value) {
+  return P3_TYPE_LABELS[value] || "讨论题";
+}
+
+function currentP3Theme() {
+  if (state.p3SourceType === "custom") return String($("#p3CustomThemeInput")?.value || state.p3CustomTheme || "").trim();
+  return String(state.p3PracticeSource?.theme || state.p3SelectedTopic || state.p3CustomTheme || "").trim();
+}
+
+function clearP3Plan(message = "") {
+  state.p3Plan = null;
+  state.p3PlanLoading = false;
+  renderP3PlanPreview();
+  syncP3LaunchPanel(message);
+}
+
+function p3PlanPayload() {
+  const source = state.p3PracticeSource || {};
+  const theme = currentP3Theme() || "society and daily life";
+  return {
+    theme,
+    p3_intensity: state.p3Intensity,
+    p3_focus: state.p3Focus,
+    source: source.sourceType || state.p3SourceType,
+    ...(source.answer ? { prior_answer: source.answer } : {}),
+    ...(source.attemptId ? { p2_attempt_id: source.attemptId } : {}),
+    ...(source.p2CorpusEntryId ? { p2_corpus_entry_id: source.p2CorpusEntryId } : {}),
+    ...(source.p3FollowUpText ? { p3_follow_up_text: source.p3FollowUpText } : {}),
+  };
+}
+
+function syncP3LaunchPanel(message = "") {
+  document.querySelectorAll("[data-p3-source]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.p3Source === state.p3SourceType);
+  });
+  document.querySelectorAll("[data-p3-focus]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.p3Focus === state.p3Focus);
+  });
+  document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.p3Intensity === state.p3Intensity);
+  });
+  const switchEl = document.querySelector(".p3-mode-switch");
+  if (switchEl) {
+    switchEl.classList.toggle("high-intensity", state.p3Intensity === "high");
+    switchEl.classList.toggle("drill-intensity", state.p3Intensity === "drill");
+  }
+  $("#p3TopicSourceSection")?.classList.toggle("hidden", state.p3SourceType !== "topic");
+  $("#p3CustomThemeSection")?.classList.toggle("hidden", state.p3SourceType !== "custom");
+  const customInput = $("#p3CustomThemeInput");
+  if (customInput && customInput.value !== state.p3CustomTheme) customInput.value = state.p3CustomTheme || "";
+  text("p3ModeHelp", P3_INTENSITY_HELP[state.p3Intensity] || P3_INTENSITY_HELP.normal);
+  text("p3PlanStatus", message || (state.p3Plan ? `已生成：${p3SourceLabel(state.p3Plan.source?.type || state.p3SourceType)} · ${p3FocusLabel(state.p3Plan.focus || state.p3Focus)}` : ""));
+  const startButton = $("#p3StartButton");
+  if (startButton) startButton.disabled = !state.p3Plan || state.p3PlanLoading;
+  const generateButton = $("#p3GeneratePlanButton");
+  if (generateButton) {
+    generateButton.disabled = state.p3PlanLoading;
+    generateButton.textContent = state.p3PlanLoading ? "正在生成计划..." : (state.p3Plan ? "重新生成计划" : "生成 P3 训练计划");
+  }
+}
+
+function renderP3PlanPreview() {
+  const panel = $("#p3PlanPreview");
+  if (!panel) return;
+  if (state.p3PlanLoading) {
+    panel.innerHTML = centeredLoadingHtml("正在生成 P3 训练计划", "系统正在整理题型、追问方向和回答动作。");
+    return;
+  }
+  const plan = state.p3Plan;
+  const questions = Array.isArray(plan?.questions) ? plan.questions : [];
+  if (!plan || !questions.length) {
+    panel.innerHTML = `
+      <div class="p3-plan-empty">
+        <strong>还没有生成训练计划</strong>
+        <span>选择来源和目标后，先生成计划；系统会列出题型、追问方向和回答动作。</span>
+      </div>
+    `;
+    return;
+  }
+  panel.innerHTML = `
+    <div class="p3-plan-head">
+      <div>
+        <strong>${escapeHtml(plan.theme || currentP3Theme() || "Part 3 discussion")}</strong>
+        <span>${escapeHtml(p3SourceLabel(plan.source?.type || state.p3SourceType))} · ${escapeHtml(p3FocusLabel(plan.focus || state.p3Focus))} · ${escapeHtml(String(plan.intensity || state.p3Intensity).toUpperCase())}</span>
+      </div>
+      <small>${escapeHtml(plan.backend || "fallback")}</small>
+    </div>
+    <div class="p3-plan-list">
+      ${questions.map((item, index) => `
+        <article class="p3-plan-card">
+          <div class="p3-plan-card-top">
+            <span>Q${index + 1}</span>
+            <em>${escapeHtml(p3QuestionTypeLabel(item.type))}</em>
+          </div>
+          <p>${escapeHtml(item.question || "")}</p>
+          <div class="p3-target-moves">
+            ${(item.target_moves || []).slice(0, 4).map((move) => `<span>${escapeHtml(move)}</span>`).join("")}
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function generateP3Plan(options = {}) {
+  if (state.p3PlanLoading) return;
+  if (state.p3SourceType === "custom") {
+    state.p3CustomTheme = String($("#p3CustomThemeInput")?.value || "").trim();
+    if (!state.p3CustomTheme) {
+      clearP3Plan("先输入一个自定义主题。");
+      $("#p3CustomThemeInput")?.focus();
+      return;
+    }
+  }
+  state.p3PlanLoading = true;
+  renderP3PlanPreview();
+  syncP3LaunchPanel("正在生成计划...");
+  try {
+    const payload = await api("/api/p3/questions", p3PlanPayload());
+    state.p3Plan = payload.plan || {
+      theme: currentP3Theme(),
+      focus: state.p3Focus,
+      intensity: state.p3Intensity,
+      source: { type: state.p3SourceType },
+      questions: (payload.structured_questions || []).length
+        ? payload.structured_questions
+        : (payload.questions || []).map((question, index) => ({
+            id: `q${index + 1}`,
+            type: index === 0
+              ? (P3_FOCUS_TO_TYPE[state.p3Focus] || "comparison_concession")
+              : P3_TYPE_SEQUENCE[(index - 1) % P3_TYPE_SEQUENCE.length],
+            question,
+            target_moves: P3_TARGET_MOVES[
+              index === 0
+                ? (P3_FOCUS_TO_TYPE[state.p3Focus] || "comparison_concession")
+                : P3_TYPE_SEQUENCE[(index - 1) % P3_TYPE_SEQUENCE.length]
+            ] || P3_TARGET_MOVES.opinion_justify,
+            source: state.p3SourceType,
+          })),
+      follow_up: payload.follow_up || "",
+      backend: payload.backend || "fallback",
+      status: payload.status || "fallback",
+    };
+    state.p3Intensity = state.p3Plan.intensity || state.p3Intensity;
+    state.p3Focus = state.p3Plan.focus || state.p3Focus;
+    state.p3SourceType = state.p3Plan.source?.type || state.p3SourceType;
+    renderP3PlanPreview();
+    syncP3LaunchPanel(options.fromP2 ? "已根据这次 P2 生成训练计划，确认后再开始。" : "计划已生成，确认后可以开始。");
+  } catch (error) {
+    state.p3Plan = null;
+    renderP3PlanPreview();
+    syncP3LaunchPanel(error instanceof Error ? error.message : "生成计划失败。");
+  } finally {
+    state.p3PlanLoading = false;
+    renderP3PlanPreview();
+    syncP3LaunchPanel();
+  }
+}
+
 function renderP3TopicChips(topics) {
   state.p3Topics = topics.slice(0, 8);
   $("p3TopicChips").innerHTML = state.p3Topics.map((topic) => (
@@ -6638,6 +7614,241 @@ function renderP3TopicChips(topics) {
     state.p3SelectedTopic = state.p3Topics[0];
     document.querySelector("#p3TopicChips .topic-chip")?.classList.add("active");
   }
+  syncP3LaunchPanel();
+}
+
+async function loadWritingTakeaways() {
+  const stats = $("writingTakeawayStats");
+  const list = $("writingTakeawayList");
+  if (state.writingTakeaway.loaded) {
+    renderWritingTakeawayToggle();
+    renderWritingTakeaways();
+    if (stats) stats.textContent = `${state.writingTakeaway.items.length} 条 · 刷新中`;
+  } else {
+    if (stats) stats.textContent = "Loading...";
+    if (list) list.innerHTML = '<p class="muted">正在加载写作积累...</p>';
+  }
+  try {
+    const payload = await api("/api/writing-takeaways");
+    state.writingTakeaway.items = payload.items || [];
+    state.writingTakeaway.loaded = true;
+    if (stats) stats.textContent = `${payload.count || 0} 条`;
+    renderWritingTakeawayToggle();
+    renderWritingTakeaways();
+  } catch (error) {
+    if (stats) stats.textContent = "加载失败";
+    if (list) list.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
+  }
+}
+
+function renderWritingTakeaways() {
+  const list = $("writingTakeawayList");
+  if (!list) return;
+  const items = state.writingTakeaway.items || [];
+  const hiddenMode = state.writingTakeaway.hideEnglish;
+  const revealed = state.writingTakeaway.revealedEntryIds;
+  if (!items.length) {
+    list.innerHTML = '<p class="muted language-book-empty">还没有写作积累。写作文或看报告时划选表达，点击“加入写作积累”即可保存到这里。</p>';
+    return;
+  }
+  list.innerHTML = items.map((item) => `
+    <div class="language-takeaway-card-wrap ${hiddenMode && !revealed.has(item.entry_id) ? "is-concealed" : "is-revealed"}">
+      <button type="button" class="language-takeaway-card writing-takeaway-item" data-writing-takeaway-entry="${escapeHtml(item.entry_id)}">
+        <strong class="takeaway-source">${escapeHtml(item.source_text)}</strong>
+        <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
+      </button>
+      <button type="button" class="takeaway-delete-button" data-writing-takeaway-delete="${escapeHtml(item.entry_id)}" aria-label="删除写作积累" title="删除写作积累">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 6.5h.01"></path>
+          <path d="M12 12h.01"></path>
+          <path d="M12 17.5h.01"></path>
+        </svg>
+      </button>
+    </div>
+  `).join("");
+}
+
+function renderWritingTakeawayToggle() {
+  const button = $("writingTakeawayHideToggle");
+  if (!button) return;
+  const hidden = state.writingTakeaway.hideEnglish;
+  button.setAttribute("aria-pressed", hidden ? "true" : "false");
+  button.innerHTML = hidden
+    ? `<svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M3 3l18 18"></path>
+        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+        <path d="M9.9 4.2A10.3 10.3 0 0 1 12 4c6.5 0 10 8 10 8a17.9 17.9 0 0 1-4.2 5.1"></path>
+        <path d="M6.6 6.6C3.6 8.6 2 12 2 12s3.5 8 10 8a9.5 9.5 0 0 0 4.8-1.3"></path>
+      </svg><span>显示英文</span>`
+    : `<svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg><span>遮住英文</span>`;
+}
+
+function toggleWritingTakeawayHiddenMode() {
+  state.writingTakeaway.hideEnglish = !state.writingTakeaway.hideEnglish;
+  if (state.writingTakeaway.hideEnglish) state.writingTakeaway.revealedEntryIds.clear();
+  renderWritingTakeawayToggle();
+  renderWritingTakeaways();
+}
+
+function revealAndSpeakWritingTakeaway(entryId) {
+  const item = (state.writingTakeaway.items || []).find((entry) => entry.entry_id === entryId);
+  if (!item) return;
+  state.writingTakeaway.revealedEntryIds.add(entryId);
+  speakLanguageTakeaway(item.source_text);
+  renderWritingTakeaways();
+}
+
+async function deleteWritingTakeawayEntry(entryId) {
+  if (!entryId) return;
+  showConfirmDelete("确定要删除这条写作积累吗？", async () => {
+    await api(`/api/writing-takeaways/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
+    state.writingTakeaway.items = (state.writingTakeaway.items || []).filter((item) => item.entry_id !== entryId);
+    state.writingTakeaway.revealedEntryIds.delete(entryId);
+    renderWritingTakeaways();
+    text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
+  });
+}
+
+function normalizeAgentAssistantText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => AGENT_SEARCH_ALIASES[token] || (token.length > 3 && token.endsWith("s") ? token.slice(0, -1) : token))
+    .join(" ");
+}
+
+function agentAssistantScore(query, candidate) {
+  const queryTokens = new Set(normalizeAgentAssistantText(query).split(/\s+/).filter(Boolean));
+  const candidateText = normalizeAgentAssistantText(candidate);
+  const candidateTokens = new Set(candidateText.split(/\s+/).filter(Boolean));
+  if (!queryTokens.size || !candidateTokens.size) return 0;
+  let overlap = 0;
+  queryTokens.forEach((token) => {
+    if (candidateTokens.has(token)) overlap += 1;
+  });
+  const coverage = overlap / queryTokens.size;
+  const phraseBonus = candidateText.includes(Array.from(queryTokens).slice(0, 3).join(" ")) ? 0.08 : 0;
+  return Math.min(1, coverage * 0.86 + phraseBonus + Math.min(0.06, candidateTokens.size / 900));
+}
+
+function agentAssistantResultUrl(prompt) {
+  return writingPromptDeepLink(prompt);
+}
+
+function renderAgentAssistantResults() {
+  const target = $("agentAssistantResults");
+  if (!target) return;
+  if (state.agentAssistant.loading) {
+    target.innerHTML = centeredLoadingHtml("正在查找题库", "正在检索剑雅、机经和本地写作题。");
+    return;
+  }
+  const results = state.agentAssistant.results || [];
+  if (!results.length) {
+    target.innerHTML = '<div class="agent-result-empty">还没有结果。输入题干片段、主题词或剑雅编号后点击查找。</div>';
+    return;
+  }
+  target.innerHTML = results.map((item) => {
+    const prompt = item.prompt;
+    const url = agentAssistantResultUrl(prompt);
+    const source = prompt.source_label || writingPromptPickerTitle(prompt) || writingTaskLabel(prompt.task_type);
+    return `
+      <article class="agent-result-card">
+        <div class="agent-result-top">
+          <div>
+            <strong>${escapeHtml(prompt.title || source || "Writing prompt")}</strong>
+            <span>${escapeHtml(source)} · ${escapeHtml(writingCategoryLabel(prompt.category) || prompt.category || "未分类")}</span>
+          </div>
+          <em class="agent-result-score">${Math.round(item.score * 100)}%</em>
+        </div>
+        <p class="agent-result-prompt">${escapeHtml(prompt.prompt || "")}</p>
+        <div class="agent-result-actions">
+          <button type="button" class="agent-result-open" data-agent-prompt-id="${escapeHtml(prompt.id)}" data-agent-task-type="${escapeHtml(prompt.task_type || "task2")}">打开题目</button>
+          <a class="agent-result-link" href="${escapeHtml(url)}" data-agent-prompt-link="${escapeHtml(prompt.id)}">${escapeHtml(url)}</a>
+        </div>
+      </article>
+    `;
+  }).join("");
+  target.querySelectorAll("[data-agent-prompt-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openAgentAssistantPrompt(button.dataset.agentPromptId || "", button.dataset.agentTaskType || "task2");
+    });
+  });
+}
+
+function setAgentAssistantStatus(message) {
+  text("agentAssistantStatus", message);
+}
+
+function openAgentAssistant() {
+  $("agentAssistantModal")?.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  renderAgentAssistantResults();
+  window.setTimeout(() => $("agentAssistantQuery")?.focus(), 40);
+}
+
+function closeAgentAssistant() {
+  $("agentAssistantModal")?.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+async function runAgentAssistantSearch(queryValue = $("agentAssistantQuery")?.value || "") {
+  const query = String(queryValue || "").trim();
+  state.agentAssistant.query = query;
+  if (!query) {
+    state.agentAssistant.results = [];
+    setAgentAssistantStatus("先输入一句自然语言、OCR 题干或关键词。");
+    renderAgentAssistantResults();
+    return;
+  }
+  state.agentAssistant.loading = true;
+  setAgentAssistantStatus("正在查找...");
+  renderAgentAssistantResults();
+  try {
+    const taskTypes = ["task1_academic", "task2"];
+    await Promise.all(taskTypes.map((taskType) => loadWritingPrompts(taskType)));
+    const prompts = taskTypes.flatMap((taskType) => state.writing.prompts[taskType] || []);
+    const matches = prompts
+      .map((prompt) => ({
+        prompt,
+        score: agentAssistantScore(query, [
+          prompt.title,
+          prompt.source_label,
+          prompt.category,
+          prompt.prompt,
+        ].join(" ")),
+      }))
+      .filter((item) => item.score > 0.12)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+    state.agentAssistant.results = matches;
+    setAgentAssistantStatus(matches.length ? `找到 ${matches.length} 个候选，已按相关度排序。` : "没有找到明显匹配。可以换成更短的关键词再试。");
+  } catch (error) {
+    state.agentAssistant.results = [];
+    setAgentAssistantStatus(error instanceof Error ? error.message : "查找失败。");
+  } finally {
+    state.agentAssistant.loading = false;
+    renderAgentAssistantResults();
+  }
+}
+
+async function openAgentAssistantPrompt(promptId, taskType) {
+  const normalizedTask = taskType === "task1_academic" ? "task1_academic" : "task2";
+  await loadWritingPrompts(normalizedTask);
+  const prompt = (state.writing.prompts[normalizedTask] || []).find((item) => item.id === promptId);
+  if (!prompt) {
+    setAgentAssistantStatus("这道题刚才没有在本地题库里找到。");
+    return;
+  }
+  closeAgentAssistant();
+  state.writing.taskType = normalizedTask;
+  switchView("writing", { force: true });
+  setWritingPrompt(prompt, true);
 }
 
 async function loadAccountProfile() {
@@ -6730,6 +7941,7 @@ async function loadWeakTraining() {
 
 async function init() {
   loadFontStyle();
+  loadDarkMode();
   loadCandidateNames();
   bindEvents();
   setupReportRails();
@@ -6744,7 +7956,10 @@ async function init() {
       });
     }
   }, true);
-  const urlView = requestedUrlView();
+  window.addEventListener("popstate", restoreRouteFromLocation);
+  const route = requestedRouteState();
+  applyRouteState(route);
+  const urlView = route.view;
   let savedView = urlView || "home";
   if (!viewCopy[savedView]) savedView = "home";
   switchView(savedView, { skipPersist: Boolean(urlView), skipUrl: true });

@@ -26,6 +26,9 @@ def ai_score_payload(*, paragraph_reviews: list[dict] | None = None, **overrides
         "grammatical_range_accuracy": 6.0,
         "feedback_markdown": "- Clear position with room for more examples.",
         "grammar_corrections": [],
+        "inline_annotations": [],
+        "spelling_correction_summary": "未发现明显拼写错误。",
+        "expression_upgrade_summary": "- Use more precise academic collocations.",
         "overall_review": "AI overall review generated from the essay logic.",
         "practice_focus": "AI practice focus generated from the weakest paragraph-level issue.",
         "model_answer": "AI rewrite paragraph one.\n\nAI rewrite paragraph two.",
@@ -36,6 +39,7 @@ def ai_score_payload(*, paragraph_reviews: list[dict] | None = None, **overrides
                 "learner": "Online learning can be useful because students can review lessons at any time.",
                 "model": "AI rewrite paragraph one.",
                 "coaching": "AI explains how this paragraph works logically.",
+                "language_correction_upgrade": "- Check article use in this paragraph.",
             },
             {
                 "index": 2,
@@ -332,6 +336,7 @@ class WritingApiTests(TestCase):
                     "The chart shows a clear change in transport habits over time.",
                     "Overall, the main trend is easy to compare across the period.",
                 ),
+                "prompt_highlights": [{"start": 0, "end": 12}],
                 "practice_date": "2026-05-14",
             },
             content_type="application/json",
@@ -342,6 +347,7 @@ class WritingApiTests(TestCase):
         self.assertEqual(saved["task_label"], WRITING_TASK_LABELS[WritingPrompt.TaskType.TASK1_ACADEMIC])
         self.assertGreater(saved["word_count"], 0)
         self.assertTrue(saved["image_url"])
+        self.assertEqual(saved["prompt_highlights"], [{"start": 0, "end": 12}])
 
         summary = self.client.get("/api/writing/summary?month=2026-05")
         self.assertEqual(summary.status_code, 200)
@@ -354,6 +360,7 @@ class WritingApiTests(TestCase):
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.json()["answer"], saved["answer"])
         self.assertEqual(detail.json()["image_url"], saved["image_url"])
+        self.assertEqual(detail.json()["prompt_highlights"], [{"start": 0, "end": 12}])
 
         score = self.client.post(f"/api/writing/entries/{saved['id']}/score", content_type="application/json")
         self.assertEqual(score.status_code, 200)
@@ -851,6 +858,9 @@ class WritingApiTests(TestCase):
         self.assertEqual(score.billing_metadata, {"input_tokens": 1000, "output_tokens": 100})
         self.assertEqual(score.analysis_payload["analysis_backend"], "ai")
         self.assertEqual(score.analysis_payload["paragraph_reviews"][0]["coaching"], "AI explains how this paragraph works logically.")
+        self.assertIn("article", score.analysis_payload["paragraph_reviews"][0]["language_correction_upgrade"])
+        self.assertEqual(score.analysis_payload["inline_annotations"], [])
+        self.assertEqual(score.analysis_payload["spelling_correction_summary"], "未发现明显拼写错误。")
         detail_after_complete = self.client.get(f"/api/writing/entries/{save['id']}")
         self.assertEqual(detail_after_complete.status_code, 200)
         self.assert_entry_detail_contract(
@@ -1142,3 +1152,35 @@ class WritingApiTests(TestCase):
 
         missing_entry = self.client.get("/api/writing/entries/not-found")
         self.assertEqual(missing_entry.status_code, 404)
+
+    def test_agent_prompt_search_returns_deep_links_without_source_access(self):
+        user = get_user_model().objects.create_user(username="agent-searcher", password="test-pass")
+        self.client.force_login(user)
+        target = self.create_prompt(
+            prompt_id="reported-cn-task2-2015-05-30-20",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="2015.05.30 大作文真题",
+            prompt="Some people think computers and the Internet are more important in child's education. Others believe that schools and teachers are essential for children to learn. Discuss both views and give your opinion.",
+            category="discussion",
+            source="reported_actual_engopen",
+        )
+        self.create_prompt(
+            prompt_id="other-task2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Traffic",
+            prompt="Some people think traffic should be reduced by public transport.",
+            category="opinion",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "computer Internet children study schools teachers", "task_type": "task2", "limit": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        item = payload["items"][0]
+        self.assertEqual(item["id"], target.prompt_id)
+        self.assertIn("?view=writing&task=task2&prompt=reported-cn-task2-2015-05-30-20", item["url"])
+        self.assertGreater(item["match_score"], 0.5)
