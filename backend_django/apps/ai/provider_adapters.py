@@ -13,6 +13,7 @@ from django.conf import settings
 
 from apps.ai.models import AITask
 from apps.ai.provider_config import (
+    ADAPTER_KEY_CODEX_SPEAKING_REPORT,
     ADAPTER_KEY_CODEX_WRITING_SCORE,
     ADAPTER_KEY_FALLBACK,
     ADAPTER_KEY_MOCK_SUCCESS,
@@ -22,7 +23,7 @@ from apps.ai.provider_config import (
     resolve_provider_route,
 )
 from apps.ai.orchestration import fail_billable_ai_task, fallback_billable_ai_task
-from apps.ai.services import fail_ai_task
+from apps.ai.services import fail_ai_task, succeed_ai_task
 from apps.writing.services import WritingEntryDeleted, complete_score_task, fallback_score_task
 
 
@@ -226,7 +227,7 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None, 
     return final_text or str(stdout or ""), usage, has_real_content
 
 
-def run_codex(prompt: str, call_id: str, timeout: int = 120) -> tuple[str, dict[str, Any] | None]:
+def run_codex(prompt: str, call_id: str, timeout: int = 120, max_attempts: int = 2) -> tuple[str, dict[str, Any] | None]:
     if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
         raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
 
@@ -237,7 +238,7 @@ def run_codex(prompt: str, call_id: str, timeout: int = 120) -> tuple[str, dict[
     config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
     cwd = str(Path(settings.BASE_DIR).parent)
     last_error: RuntimeError | None = None
-    for _attempt in range(2):
+    for _attempt in range(max(1, int(max_attempts or 1))):
         try:
             result = subprocess.run(
                 [codex, "exec", "--json", *config_args, "-"],
@@ -284,10 +285,15 @@ class CodexWritingScoreAdapter(BaseProviderAdapter):
 
     def run(self, task: AITask) -> ProviderRunResult:
         request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
-        prompt = self._prompt(request_payload)
         try:
-            output, usage = run_codex(prompt, f"writing_score_{task.task_id}", timeout=180)
-            score = self._score_payload(extract_json_object(output), request_payload)
+            output, usage = run_codex(
+                self._report_prompt(request_payload),
+                f"writing_score_{task.task_id}_report",
+                timeout=180,
+                max_attempts=1,
+            )
+            payload = extract_json_object(output)
+            score = self._score_payload(payload, request_payload)
         except Exception as exc:
             return ProviderRunResult.fallback(
                 f"Codex writing report generation failed: {exc}",
@@ -299,30 +305,59 @@ class CodexWritingScoreAdapter(BaseProviderAdapter):
             metadata=_route_metadata(self.adapter_name, self.route),
         )
 
-    def _prompt(self, request_payload: dict[str, Any]) -> str:
+    def _report_prompt(self, request_payload: dict[str, Any]) -> str:
         task_type = str(request_payload.get("task_type") or "task2")
         task_label = "IELTS Writing Task 1 Academic" if task_type == "task1_academic" else "IELTS Writing Task 2"
+        task_score_key = "task_achievement" if task_type == "task1_academic" else "task_response"
         return f"""Return JSON only. Do not include Markdown outside JSON.
 
-You are an IELTS writing examiner and coach. Analyze this submission like the speaking report: specific, based on the user's text, not generic.
+You are an IELTS Writing examiner and writing coach for a Chinese IELTS learner.
 
-Required JSON keys:
+Evaluate this answer using the public IELTS Writing band descriptors. Be strict and realistic. Do not inflate the score because the essay sounds fluent.
+
+Score keys:
 - overall_band: number
-- task_response or task_achievement: number, choose task_achievement for Task 1 Academic and task_response for Task 2
+- task_achievement: number or null. Use for Task 1 Academic.
+- task_response: number or null. Use for Task 2.
 - coherence_cohesion: number
 - lexical_resource: number
 - grammatical_range_accuracy: number
-- feedback_markdown: string
-- grammar_corrections: array of objects with original and suggestion
-- overall_review: Chinese string, concrete overall review of this exact essay
-- practice_focus: Chinese string, the next focused practice target
-- model_answer: English string, improved version with paragraph breaks, unless structure_advice_only is true
-- paragraph_reviews: array. If structure_advice_only is false, include one object per logical paragraph with index, learner, model, coaching. learner must quote the relevant user paragraph. model must be a better English paragraph. coaching must be Chinese and specific.
+
+Assessment principles:
+- Task 1 Academic: judge whether the candidate selects and compares the main features accurately, gives a clear overview, avoids irrelevant detail, and reports data/trends/maps/processes precisely.
+- Task 2: judge whether the candidate fully answers all parts of the question, keeps a clear position, develops ideas with support, and avoids overgeneralised or memorised arguments.
+- Coherence & Cohesion: judge logical progression, paragraphing, referencing, and whether linking feels natural rather than mechanical.
+- Lexical Resource: judge precision, collocation, topic vocabulary, word form, and whether less common vocabulary is used naturally.
+- Grammar: judge range and accuracy, sentence control, punctuation, and whether errors reduce clarity.
+
+Chinese learner focus:
+- Point out problems common among Chinese candidates only when visible in this essay: unclear overview, listing without comparison, mechanical linking words, translated expressions, vague nouns, overlong sentences, missing article/plural control, weak paragraph topic sentences, or unsupported claims.
+- Do not use generic advice. Every comment must be tied to this exact answer.
+
+Required JSON keys:
+- overall_band: number
+- task_achievement: number or null
+- task_response: number or null
+- coherence_cohesion: number
+- lexical_resource: number
+- grammatical_range_accuracy: number
+- overall_review: Chinese string. Direct diagnosis of this exact essay.
+- practice_focus: Chinese string. The most important next practice target.
+- grammar_corrections: array of objects with original, suggestion, reason. Include only meaningful grammar, collocation, word form, article/plural, or sentence-control issues.
 - structure_advice_only: boolean. Set true if the user's paragraphing is too messy to map paragraph-by-paragraph.
 - structure_advice: Chinese string. Required when structure_advice_only is true; otherwise empty string.
+- model_answer: English string. Improved version with paragraph breaks, unless structure_advice_only is true.
+- paragraph_reviews: array. If structure_advice_only is false, include one object per logical paragraph with index, learner, model, coaching. learner must quote the relevant user paragraph. model must be a better English paragraph. coaching must be Chinese and specific.
 - backend: string, must be "ai"
 
-Do not use placeholder text. Do not say “暂无 AI 改写”. Do not use fixed generic advice. The paragraph split must follow the essay logic.
+Output rules:
+- This is a single combined scoring and coaching call. Do not return feedback_markdown.
+- If this is {task_label}, set {"task_response" if task_score_key == "task_achievement" else "task_achievement"} to null and fill {task_score_key}.
+- If paragraphing is logical enough, paragraph_reviews must match the essay logic.
+- If structure_advice_only is true, paragraph_reviews may be empty and structure_advice must explain how to reorganise the essay before rewriting.
+- Do not return placeholder text.
+- Do not say "暂无 AI 改写".
+- Chinese feedback should explain what affects the band, why it happens, and what exact revision action helps.
 
 Task:
 {task_label}
@@ -343,8 +378,10 @@ Word count:
     def _score_payload(self, payload: dict[str, Any], request_payload: dict[str, Any]) -> dict[str, Any]:
         task_type = str(request_payload.get("task_type") or "").strip().lower()
         task_key = "task_achievement" if task_type == "task1_academic" else "task_response"
-        required = ["overall_band", task_key, "coherence_cohesion", "lexical_resource", "grammatical_range_accuracy", "feedback_markdown", "overall_review", "practice_focus"]
-        missing = [key for key in required if payload.get(key) in (None, "")]
+        score_required = ["overall_band", task_key, "coherence_cohesion", "lexical_resource", "grammatical_range_accuracy"]
+        review_required = ["overall_review", "practice_focus"]
+        missing = [key for key in score_required if payload.get(key) in (None, "")]
+        missing.extend(key for key in review_required if payload.get(key) in (None, ""))
         if missing:
             raise RuntimeError(f"Codex writing score missing fields: {', '.join(missing)}")
         if bool(payload.get("structure_advice_only")):
@@ -358,7 +395,7 @@ Word count:
             "coherence_cohesion": float(payload["coherence_cohesion"]),
             "lexical_resource": float(payload["lexical_resource"]),
             "grammatical_range_accuracy": float(payload["grammatical_range_accuracy"]),
-            "feedback_markdown": str(payload.get("feedback_markdown") or ""),
+            "feedback_markdown": "",
             "grammar_corrections": payload.get("grammar_corrections") if isinstance(payload.get("grammar_corrections"), list) else [],
             "overall_review": str(payload.get("overall_review") or ""),
             "practice_focus": str(payload.get("practice_focus") or ""),
@@ -368,6 +405,47 @@ Word count:
             "structure_advice": str(payload.get("structure_advice") or ""),
             "backend": "ai",
         }
+
+    def _combined_usage(self, *usage_items: dict[str, Any] | None) -> dict[str, Any]:
+        combined: dict[str, Any] = {}
+        for usage in usage_items:
+            if not isinstance(usage, dict):
+                continue
+            for key, value in usage.items():
+                if isinstance(value, (int, float)):
+                    combined[key] = combined.get(key, 0) + value
+                elif key not in combined:
+                    combined[key] = value
+        return combined
+
+
+class CodexSpeakingReportAdapter(BaseProviderAdapter):
+    adapter_name = "speaking_report_codex"
+
+    def run(self, task: AITask) -> ProviderRunResult:
+        from apps.speaking.services import score_attempt_sync
+
+        request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
+        attempt_id = str(request_payload.get("attempt_id") or task.related_id or "").strip()
+        if not attempt_id:
+            return ProviderRunResult.terminal_failure(
+                "Speaking report task is missing attempt_id",
+                error_code="missing_attempt_id",
+                metadata=_route_metadata(self.adapter_name, self.route),
+            )
+        try:
+            attempt_payload = score_attempt_sync(task.user, attempt_id, request_payload)
+        except Exception as exc:
+            return ProviderRunResult.terminal_failure(
+                str(exc),
+                error_code="speaking_report_failed",
+                metadata=_route_metadata(self.adapter_name, self.route),
+            )
+        return ProviderRunResult.success(
+            {"attempt": attempt_payload},
+            usage=attempt_payload.get("billing_usage") if isinstance(attempt_payload.get("billing_usage"), dict) else {},
+            metadata=_route_metadata(self.adapter_name, self.route),
+        )
 
 
 class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
@@ -490,6 +568,8 @@ def select_provider_adapter(task: AITask) -> BaseProviderAdapter:
         return MockSuccessWritingScoreAdapter(route)
     if route.adapter_key == ADAPTER_KEY_CODEX_WRITING_SCORE:
         return CodexWritingScoreAdapter(route)
+    if route.adapter_key == ADAPTER_KEY_CODEX_SPEAKING_REPORT:
+        return CodexSpeakingReportAdapter(route)
     if route.adapter_key == ADAPTER_KEY_FALLBACK:
         return FallbackWritingScoreAdapter(route)
     return UnsupportedTaskAdapter(route)
@@ -502,7 +582,19 @@ def run_claimed_ai_task(task: AITask) -> ProviderRunResult:
 def apply_provider_run_result(task: AITask, result: ProviderRunResult) -> AppliedProviderRunResult:
     if task.task_type == "writing_score":
         return _apply_writing_score_result(task, result)
+    if task.task_type == "speaking_report":
+        return _apply_speaking_report_result(task, result)
     return _apply_terminal_failure_for_claimed_task(task, result, summary_status=SUMMARY_STATUS_SKIPPED)
+
+
+def _apply_speaking_report_result(task: AITask, result: ProviderRunResult) -> AppliedProviderRunResult:
+    if result.outcome == ProviderRunOutcome.SUCCESS:
+        payload = dict(result.result_payload or {})
+        succeed_ai_task(task.task_id, payload, None)
+        return _refreshed_task_result(task, AITask.Status.SUCCEEDED)
+    if result.outcome == ProviderRunOutcome.RETRYABLE_FAILURE:
+        return _apply_failure_result(task, result, retryable=True)
+    return _apply_terminal_failure_for_claimed_task(task, result)
 
 
 def _apply_writing_score_result(task: AITask, result: ProviderRunResult) -> AppliedProviderRunResult:

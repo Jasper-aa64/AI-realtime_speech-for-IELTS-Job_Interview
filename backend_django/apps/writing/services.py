@@ -560,6 +560,7 @@ def writing_score_task_payload(entry: WritingEntry) -> dict[str, Any] | None:
 
 def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str, Any]:
     score = getattr(entry, "score", None)
+    source_label = prompt_source_label(entry.prompt) if entry.prompt_id else str(entry.metadata.get("source_label") or "")
     payload = {
         "id": entry.entry_id,
         "user_id": str(entry.user_id),
@@ -575,6 +576,11 @@ def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str,
         "category": entry.prompt.category if entry.prompt_id else entry.metadata.get("category", ""),
         "prompt": entry.prompt_text,
         "image_url": entry.prompt.image_url if entry.prompt_id else entry.metadata.get("image_url", ""),
+        "source": entry.prompt.source if entry.prompt_id else entry.metadata.get("source", ""),
+        "source_book": entry.prompt.source_book if entry.prompt_id else entry.metadata.get("source_book"),
+        "source_test": entry.prompt.source_test if entry.prompt_id else entry.metadata.get("source_test"),
+        "source_question": entry.prompt.source_question if entry.prompt_id else entry.metadata.get("source_question"),
+        "source_label": source_label,
         "word_count": entry.word_count,
         "score": score_payload(score),
         "ai_task": writing_score_task_payload(entry),
@@ -588,13 +594,22 @@ def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str,
 def compact_entry_payload(entry: WritingEntry) -> dict[str, Any]:
     score = getattr(entry, "score", None)
     display_at = getattr(entry, "latest_activity_at", None) or entry.updated_at
+    source_label = prompt_source_label(entry.prompt) if entry.prompt_id else str(entry.metadata.get("source_label") or "")
     return {
         "id": entry.entry_id,
         "practice_date": entry.practice_date.isoformat(),
         "display_time": display_at.astimezone(timezone.get_current_timezone()).strftime("%Y-%m-%d %H:%M"),
         "task_type": entry.task_type,
         "task_label": WRITING_TASK_LABELS.get(entry.task_type, "Writing"),
+        "prompt_id": entry.prompt.prompt_id if entry.prompt_id else "",
         "title": entry.title or (entry.prompt.title if entry.prompt_id else "Writing"),
+        "category": entry.prompt.category if entry.prompt_id else entry.metadata.get("category", ""),
+        "prompt": entry.prompt_text,
+        "source": entry.prompt.source if entry.prompt_id else entry.metadata.get("source", ""),
+        "source_book": entry.prompt.source_book if entry.prompt_id else entry.metadata.get("source_book"),
+        "source_test": entry.prompt.source_test if entry.prompt_id else entry.metadata.get("source_test"),
+        "source_question": entry.prompt.source_question if entry.prompt_id else entry.metadata.get("source_question"),
+        "source_label": source_label,
         "word_count": entry.word_count,
         "status": entry.status,
         "overall_band": float(score.overall_band) if score and score.overall_band is not None else None,

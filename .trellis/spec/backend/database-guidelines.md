@@ -132,3 +132,11 @@ Writing polling bridge:
 - Settling or releasing wallet reservations outside `apps.ai.orchestration`; this decouples wallet and task terminal state.
 - Treating `fallback` as success; it is terminal and releases billing, but it means default output was used.
 - Failing stale `running` tasks immediately; recovery should requeue while `attempt_count < max_attempts`.
+
+## Sample Databases
+
+- Runtime SQLite stays at `backend_django/db.sqlite3` for local development.
+- If a SQLite database is intentionally committed for demos or handoff, add a
+  separate clearly named copy such as `backend_django/ielts_demo_sample.sqlite3`
+  so reviewers can distinguish sample data from an unintentional local runtime
+  database snapshot.

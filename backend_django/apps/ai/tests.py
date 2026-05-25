@@ -747,6 +747,7 @@ class AIWorkerCommandTests(TestCase):
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
         codex_payload = {
             "overall_band": 6.5,
+            "task_achievement": None,
             "task_response": 6.5,
             "coherence_cohesion": 6.0,
             "lexical_resource": 6.5,
@@ -776,18 +777,79 @@ class AIWorkerCommandTests(TestCase):
         }
         out = StringIO()
 
-        with patch("apps.ai.provider_adapters.run_codex", return_value=(json.dumps(codex_payload), {"input_tokens": 1200, "output_tokens": 500})):
+        with patch("apps.ai.provider_adapters.run_codex") as run_codex:
+            run_codex.return_value = (json.dumps(codex_payload), {"input_tokens": 1100, "output_tokens": 500})
             call_command("run_ai_tasks", "--limit", "5", "--worker-id", "codex-success-worker", stdout=out)
 
         summary = json.loads(out.getvalue())
         self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.SUCCEEDED}])
+        self.assertEqual(run_codex.call_count, 1)
+        prompt_text = run_codex.call_args.args[0]
+        self.assertEqual(run_codex.call_args.kwargs.get("max_attempts"), 1)
+        self.assertIn("single combined scoring and coaching call", prompt_text)
+        self.assertIn("Chinese learner focus", prompt_text)
+        self.assertIn("Task 2: judge whether", prompt_text)
         task = AITask.objects.get(task_id=created["task"]["id"])
         self.assertEqual(task.provider, "codex")
         self.assertEqual(task.status, AITask.Status.SUCCEEDED)
         score = WritingScore.objects.get(entry=entry)
         self.assertEqual(score.source, "ai")
+        self.assertEqual(score.feedback_markdown, "")
+        self.assertEqual(score.billing_metadata["input_tokens"], 1100)
         self.assertEqual(score.analysis_payload["overall_review"], codex_payload["overall_review"])
         self.assertEqual(score.analysis_payload["paragraph_reviews"][0]["model"], codex_payload["paragraph_reviews"][0]["model"])
+
+    def test_run_ai_tasks_processes_pending_speaking_report(self):
+        from apps.speaking.models import SpeakingAttempt, SpeakingTurn
+
+        user = get_user_model().objects.create_user(username="worker-speaking-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="worker-speaking-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+            title="Part 1 practice",
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="Do you work or do you study?",
+            transcript_raw="I study software engineering.",
+            transcript_cleaned="I study software engineering.",
+            metadata={"status": "completed"},
+        )
+        task, _created = create_ai_task(
+            user=user,
+            task_type="speaking_report",
+            idempotency_key="worker-speaking-report",
+            related_type="speaking_attempt",
+            related_id=attempt.attempt_id,
+            request_payload={"attempt_id": attempt.attempt_id},
+        )
+        report_payload = {
+            "id": attempt.attempt_id,
+            "status": "scored",
+            "ielts_score": {
+                "overall_band": 6.0,
+                "fluency_coherence": 6.0,
+                "lexical_resource": 6.0,
+                "grammatical_range": 6.0,
+            },
+        }
+        out = StringIO()
+
+        with patch("apps.speaking.services.score_attempt_sync", return_value=report_payload):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "speaking-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["items"], [{"task_id": task.task_id, "task_type": "speaking_report", "status": AITask.Status.SUCCEEDED}])
+        task.refresh_from_db()
+        self.assertEqual(task.status, AITask.Status.SUCCEEDED)
+        self.assertEqual(task.result_payload["attempt"], report_payload)
 
     def test_run_ai_tasks_falls_back_when_codex_output_is_invalid(self):
         user = get_user_model().objects.create_user(username="worker-codex-invalid-user", password="test-pass")
@@ -1065,7 +1127,7 @@ class AIWorkerCommandTests(TestCase):
         created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
         unsupported, _created = create_billable_ai_task(
             user=user,
-            task_type="speaking_report",
+            task_type="unsupported_report",
             reserved_u=250_000,
             idempotency_key="unsupported-billable-worker-task",
         )
@@ -1080,7 +1142,7 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(summary["failed"], 0)
         self.assertEqual(summary["skipped"], 1)
         self.assertEqual(len(summary["items"]), 2)
-        self.assertIn({"task_id": unsupported.task_id, "task_type": "speaking_report", "status": "skipped"}, summary["items"])
+        self.assertIn({"task_id": unsupported.task_id, "task_type": "unsupported_report", "status": "skipped"}, summary["items"])
         self.assertIn({"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}, summary["items"])
 
         unsupported.refresh_from_db()
@@ -1326,6 +1388,15 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(payload["summary"]["completed"], 0)
         self.assertEqual(payload["summary"]["failed"], 0)
         self.assertEqual(payload["summary"]["items"], [])
+
+    def test_worker_batch_force_refreshes_db_connections(self):
+        from apps.ai.worker import run_ai_task_batch
+
+        with patch("apps.ai.worker.connections.close_all") as mock_close_all:
+            summary = run_ai_task_batch(limit=1, worker_id="connection-refresh-test-worker")
+
+        self.assertEqual(summary["claimed"], 0)
+        self.assertGreaterEqual(mock_close_all.call_count, 2)
 
     def test_run_ai_worker_existing_stop_file_exits_before_batch(self):
         _user, _entry, created = self.create_writing_score_task(

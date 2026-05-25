@@ -13,6 +13,7 @@ MOCK_SUCCESS_PROVIDER = "mock_success"
 ADAPTER_KEY_FALLBACK = "fallback"
 ADAPTER_KEY_MOCK_SUCCESS = "mock_success"
 ADAPTER_KEY_CODEX_WRITING_SCORE = "codex_writing_score"
+ADAPTER_KEY_CODEX_SPEAKING_REPORT = "codex_speaking_report"
 ADAPTER_KEY_UNSUPPORTED_TASK = "unsupported_task"
 
 DEFAULT_PROVIDER_SECRET_ENV_NAMES = {
@@ -126,6 +127,27 @@ def resolve_provider_route(
     normalized_task_type = str(task_type or "").strip().lower()
     requested_provider = normalize_provider_name(provider) or active_config.default_provider
     requested_model = str(model or "").strip()
+
+    if normalized_task_type == "speaking_report":
+        if requested_provider == DEFAULT_REQUESTED_PROVIDER and active_config.is_provider_enabled(requested_provider):
+            return ProviderRoute(
+                task_type=normalized_task_type,
+                requested_provider=requested_provider,
+                requested_model=requested_model,
+                adapter_key=ADAPTER_KEY_CODEX_SPEAKING_REPORT,
+                effective_provider=requested_provider,
+                config_mode=active_config.mode,
+            )
+        return ProviderRoute(
+            task_type=normalized_task_type,
+            requested_provider=requested_provider,
+            requested_model=requested_model,
+            adapter_key=ADAPTER_KEY_UNSUPPORTED_TASK,
+            effective_provider=FALLBACK_PROVIDER,
+            fallback_reason=f"{requested_provider} provider is not enabled for speaking reports",
+            error_code="unsupported_task_type",
+            config_mode=active_config.mode,
+        )
 
     if normalized_task_type != "writing_score":
         return ProviderRoute(

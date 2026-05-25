@@ -158,6 +158,10 @@ await api("/api/score", {
   Chinese labels, not literal English placeholders. If weak-question training
   is shown, surface the weak reason and the next review time rather than only
   a count.
+- Scrollable card grids such as P1/P2 corpus libraries must size rows from
+  content, e.g. `grid-auto-rows: max-content`, instead of forcing equal-height
+  tracks inside a constrained scroll region. Otherwise populated cards can
+  collapse into thin bars when the grid has many rows and `overflow` is hidden.
 
 ---
 

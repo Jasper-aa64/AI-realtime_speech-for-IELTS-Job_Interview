@@ -282,7 +282,13 @@ def attempt_score_view(request, attempt_id: str):
         return JsonResponse(score_attempt(request.user, attempt_id, payload))
     except SpeakingError as exc:
         msg = str(exc)
-        status = 404 if "not found" in msg.lower() else 400
+        lower_msg = msg.lower()
+        if "not found" in lower_msg:
+            status = 404
+        elif "ai analysis failed" in lower_msg or "ai report regeneration failed" in lower_msg:
+            status = 503
+        else:
+            status = 400
         return JsonResponse({"error": msg}, status=status)
 
 
