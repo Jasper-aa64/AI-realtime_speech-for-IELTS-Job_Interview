@@ -316,6 +316,44 @@ class WritingApiTests(TestCase):
         self.assertEqual(WritingScore.objects.filter(entry=entry).count(), 1)
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=clone["id"]).exists())
 
+    def test_clone_unscored_saved_entry_is_rejected_without_new_revision(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-clone-unscored-saved",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Clone unscored saved prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Draft paragraph one.", "Draft paragraph two."),
+            status=WritingEntry.Status.SAVED,
+        )
+
+        response = self.client.post(f"/api/writing/entries/{entry.entry_id}/clone", content_type="application/json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Only scored writing entries", response.json()["message"])
+        self.assertEqual(WritingEntry.objects.filter(user=self.user, prompt=prompt).count(), 1)
+
+    def test_clone_entry_with_scored_status_but_no_score_is_rejected(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-clone-scored-status-without-score",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Clone scored status without score prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Draft paragraph one.", "Draft paragraph two."),
+            status=WritingEntry.Status.SCORED,
+        )
+
+        response = self.client.post(f"/api/writing/entries/{entry.entry_id}/clone", content_type="application/json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Only scored writing entries", response.json()["message"])
+        self.assertEqual(WritingEntry.objects.filter(user=self.user, prompt=prompt).count(), 1)
+
     def test_saving_changed_scored_entry_creates_revision_instead_of_deleting_report(self):
         prompt = self.create_prompt(
             prompt_id="task2-save-scored-revision",
@@ -352,6 +390,38 @@ class WritingApiTests(TestCase):
         self.assertEqual(entry.answer, "Original paragraph one.\n\nOriginal paragraph two.")
         self.assertEqual(entry.status, WritingEntry.Status.SCORED)
         self.assertTrue(WritingScore.objects.filter(entry=entry, overall_band=6.0).exists())
+
+    def test_saving_changed_entry_with_scored_status_but_no_score_updates_original(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-status-without-score",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored status without score prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("Revised paragraph one.", "Revised paragraph two."),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()
+        self.assertEqual(saved["id"], entry.entry_id)
+        self.assertEqual(saved["status"], WritingEntry.Status.SAVED)
+        self.assertEqual(saved["answer"], "Revised paragraph one.\n\nRevised paragraph two.")
+        self.assertEqual(WritingEntry.objects.filter(user=self.user, prompt=prompt).count(), 1)
 
     def test_deleted_writing_entry_terminalizes_running_score_task_on_apply(self):
         prompt = self.create_prompt(

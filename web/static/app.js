@@ -1408,6 +1408,10 @@ function writingEntryEditUrl(entry = {}) {
   return url.toString();
 }
 
+function isWritingEntryScored(entry = {}) {
+  return entry?.status === "scored" && Boolean(entry?.score);
+}
+
 function applyRouteState(route) {
   if (route.speakingReportId) state.activeHistoryId = route.speakingReportId;
   if (route.writingReportId) state.writing.activeReportId = route.writingReportId;
@@ -3910,7 +3914,9 @@ function writingReportDetailHtml(entry) {
   const taskKey = entry.task_type === "task1_academic" ? "task_achievement" : "task_response";
   const taskLabel = entry.task_type === "task1_academic" ? "TA" : "TR";
   const paragraphReviews = Array.isArray(score?.paragraph_reviews) ? score.paragraph_reviews : [];
-  const editAction = `<button type="button" class="primary writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}">修改作文并重新生成报告</button>`;
+  const isScoredReport = isWritingEntryScored(entry);
+  const editLabel = isScoredReport ? "修改作文并重新生成报告" : "继续编辑";
+  const editAction = `<button type="button" class="primary writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}" data-writing-report-scored="${isScoredReport ? "true" : "false"}" data-writing-report-task="${escapeHtml(entry.task_type || "")}" data-writing-report-prompt="${escapeHtml(entry.prompt_id || "")}">${editLabel}</button>`;
   const taskName = entry.task_label || writingTaskLabel(entry.task_type);
   const taskSubline = entry.task_type === "task1_academic" ? "Task 1" : "Task 2";
   const displayTitle = writingEntryDisplayTitle(entry);
@@ -4762,6 +4768,25 @@ async function cloneWritingEntryForRevision(entryId) {
   }
 }
 
+function cachedWritingReportEntry(entryId) {
+  if (!entryId) return null;
+  if (state.writing.activeReportDetail?.id === entryId) return state.writing.activeReportDetail;
+  return state.writing.reportDetailCache.get(entryId) || null;
+}
+
+function writingReportEntryFromEditButton(button) {
+  const entryId = button?.dataset?.writingReportEdit || "";
+  const cached = cachedWritingReportEntry(entryId) || {};
+  return {
+    ...cached,
+    id: entryId,
+    status: button?.dataset?.writingReportScored === "true" ? "scored" : (cached.status || "saved"),
+    score: button?.dataset?.writingReportScored === "true" ? (cached.score || { overall_band: cached.overall_band ?? null }) : null,
+    task_type: cached.task_type || button?.dataset?.writingReportTask || state.writing.taskType || "task1_academic",
+    prompt_id: cached.prompt_id || button?.dataset?.writingReportPrompt || "",
+  };
+}
+
 function showWritingReportEditError(error) {
   const message = error instanceof Error ? error.message : String(error);
   showWritingError(error);
@@ -4959,11 +4984,42 @@ async function openWritingEntry(entryId) {
 async function editWritingReportEntry(entryId) {
   if (!entryId) return;
   if (state.writing.reportEditLoading) return;
+  const cachedEntry = cachedWritingReportEntry(entryId);
+  if (cachedEntry && !isWritingEntryScored(cachedEntry)) {
+    state.writing.requestedEntryId = "";
+    state.writing.requestedPromptId = "";
+    state.writing.dirty = false;
+    clearWritingAutosaveTimer();
+    switchView("writing", { force: true });
+    await recoverWritingEntry(cachedEntry);
+    syncWritingScorePolling(cachedEntry, { switchOnComplete: false });
+    syncUrlForCurrentState({ replace: true });
+    text("writingSaveStatus", "已打开未评分作文，可继续编辑原稿。");
+    $("writingAnswer")?.focus();
+    return;
+  }
   const requestId = state.writing.reportEditRequestId + 1;
   state.writing.reportEditRequestId = requestId;
   state.writing.reportEditLoading = true;
-  text("writingSaveStatus", "正在复制这篇作文...");
+  text("writingSaveStatus", cachedEntry ? "正在复制这篇作文..." : "正在加载这篇作文...");
   try {
+    const source = cachedEntry || await withBusy("正在加载这篇作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
+    if (state.writing.reportEditRequestId !== requestId) return;
+    state.writing.reportDetailCache.set(source.id, source);
+    state.writing.activeReportDetail = source;
+    if (!isWritingEntryScored(source)) {
+      state.writing.requestedEntryId = "";
+      state.writing.requestedPromptId = "";
+      state.writing.dirty = false;
+      clearWritingAutosaveTimer();
+      switchView("writing", { force: true });
+      await recoverWritingEntry(source);
+      syncWritingScorePolling(source, { switchOnComplete: false });
+      syncUrlForCurrentState({ replace: true });
+      text("writingSaveStatus", "已打开未评分作文，可继续编辑原稿。");
+      $("writingAnswer")?.focus();
+      return;
+    }
     const clone = await withBusy("正在复制作文...", () => cloneWritingEntryForRevision(entryId));
     if (state.writing.reportEditRequestId !== requestId) return;
     state.writing.requestedEntryId = "";
@@ -4987,8 +5043,15 @@ async function editWritingReportEntry(entryId) {
   }
 }
 
-async function editWritingReportEntryInNewTab(entryId) {
+async function editWritingReportEntryInNewTab(entryId, entryHint = null) {
   if (!entryId) return;
+  if (entryHint && !isWritingEntryScored(entryHint)) {
+    const opened = window.open(writingEntryEditUrl(entryHint), "_blank", "noopener");
+    if (!opened) {
+      showWritingReportEditError(new Error("浏览器阻止了新窗口。请允许弹窗后重试，或普通点击按钮在当前页面编辑。"));
+    }
+    return;
+  }
   let targetWindow = null;
   try {
     targetWindow = window.open("about:blank", "_blank");
@@ -5001,6 +5064,21 @@ async function editWritingReportEntryInNewTab(entryId) {
     targetWindow = null;
   }
   try {
+    const source = entryHint && isWritingEntryScored(entryHint)
+      ? entryHint
+      : await withBusy("正在加载这篇作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
+    if (!isWritingEntryScored(source)) {
+      const url = writingEntryEditUrl(source);
+      if (targetWindow && !targetWindow.closed) {
+        targetWindow.location.replace(url);
+        return;
+      }
+      const opened = window.open(url, "_blank", "noopener");
+      if (!opened) {
+        throw new Error("浏览器阻止了新窗口。请允许弹窗后重试，或普通点击按钮在当前页面编辑。");
+      }
+      return;
+    }
     const clone = await withBusy("正在复制作文...", () => cloneWritingEntryForRevision(entryId));
     const url = writingEntryEditUrl(clone);
     if (targetWindow && !targetWindow.closed) {
@@ -7558,8 +7636,9 @@ function bindEvents() {
     event.preventDefault();
     event.stopPropagation();
     const entryId = button.dataset.writingReportEdit || "";
+    const entryHint = writingReportEntryFromEditButton(button);
     if (isNewTabNavigationEvent(event)) {
-      editWritingReportEntryInNewTab(entryId).catch(showWritingError);
+      editWritingReportEntryInNewTab(entryId, entryHint).catch(showWritingError);
       return;
     }
     editWritingReportEntry(entryId).catch(showWritingError);

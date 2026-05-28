@@ -79,6 +79,10 @@ class WritingEntryDeleted(WritingError):
     pass
 
 
+def writing_entry_is_scored(entry: WritingEntry) -> bool:
+    return entry.status == WritingEntry.Status.SCORED and getattr(entry, "score", None) is not None
+
+
 def normalize_task_type(value: str | None) -> str:
     task_type = str(value or "").strip().lower()
     aliases = {
@@ -962,7 +966,7 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     title = str(payload.get("title") or (prompt.title if prompt else "") or WRITING_TASK_LABELS[task_type])[:200]
     now = timezone.now()
     answer_changed = bool(existing and existing.answer != answer)
-    create_revision = bool(answer_changed and getattr(existing, "score", None))
+    create_revision = bool(answer_changed and existing and writing_entry_is_scored(existing))
     entry = WritingEntry(
         user=user,
         entry_id=uuid.uuid4().hex,
@@ -1018,6 +1022,8 @@ def clone_entry_for_revision(user, entry_id: str) -> dict[str, Any]:
     )
     if not source:
         raise WritingError("Writing entry not found")
+    if not writing_entry_is_scored(source):
+        raise WritingError("Only scored writing entries can be cloned for revision")
     now = timezone.now()
     clone = WritingEntry.objects.create(
         user=user,
