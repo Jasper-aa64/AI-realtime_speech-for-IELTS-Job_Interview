@@ -381,3 +381,74 @@ await recoverWritingEntry(clone);
 ```
 
 Clone first, then navigate and recover the cloned prompt and answer.
+
+## Scenario: Writing Prompt Highlight Delete Menu
+
+### 1. Scope / Trigger
+
+- Trigger: A user clicks an existing highlighted phrase inside the writing prompt and wants to remove that highlight.
+- Scope: `web/static/app.js` prompt highlight event handling and `web/static/styles.css` highlight menu styling.
+- Contract: text selection creates highlights; clicking an existing highlight opens a stable delete menu near the pointer.
+
+### 2. Signatures
+
+- Prompt highlight state is stored on the writing entry payload:
+  ```json
+  { "prompt_highlights": [{ "start": 46, "end": 127 }] }
+  ```
+- Delete menu target state:
+  ```js
+  state.writing.pendingHighlightDeleteIndex
+  ```
+
+### 3. Contracts
+
+- Dragging/selecting plain prompt text must not show `Delete`; it may show the highlight action.
+- Clicking an existing `.writing-highlight-mark` opens `writingHighlightMenu` in delete mode near the pointer/click anchor.
+- The same pointer/click/selectionchange event sequence that opened the menu must not immediately close it.
+- Pointer events inside the menu must not bubble into outside-close handlers.
+- `Enter` or `Space` on a focused highlight mark must open the same delete menu.
+- Delete remains a destructive action: confirm before removing the range.
+
+### 4. Validation & Error Matrix
+
+- Click existing highlight -> menu stays visible until the user clicks Delete, clicks outside, presses Esc, or navigates away.
+- Click Delete -> confirmation appears; confirm removes the indexed range and persists `prompt_highlights`.
+- Drag select text across highlight -> treat as text selection, not as delete intent.
+- Stale or invalid highlight index -> close safely and do not mutate highlight state.
+
+### 5. Good/Base/Bad Cases
+
+- Good: User clicks highlighted text, the compact Delete menu appears beside the cursor, and the user can move to it and delete.
+- Base: Keyboard user tabs to a highlight and presses `Enter`; the Delete menu appears with visible focus.
+- Bad: The menu appears while selecting ordinary text.
+- Bad: The menu opens and disappears on the same mouseup/selectionchange before the user can click it.
+- Bad: The menu is a large bright danger block that covers the prompt text.
+
+### 6. Tests Required
+
+- `node --check web/static/app.js`.
+- `git diff --check`.
+- Browser smoke: create a prompt highlight, click the highlighted range, verify Delete remains visible near the pointer, click Delete, confirm removal.
+- Browser smoke: drag select prompt text and verify Delete does not appear.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```js
+promptEl.addEventListener("pointerdown", () => hideWritingHighlightMenu());
+document.addEventListener("selectionchange", hideWritingHighlightMenu);
+```
+
+This closes the menu during the same click sequence that is supposed to open it.
+
+#### Correct
+
+```js
+if (event.target.closest(".writing-highlight-mark")) {
+  openWritingPromptHighlightDeleteMenu(index, { clientX: event.clientX, clientY: event.clientY });
+}
+```
+
+Treat highlight clicks as object actions, and keep outside-close logic from consuming menu-internal pointer events.
