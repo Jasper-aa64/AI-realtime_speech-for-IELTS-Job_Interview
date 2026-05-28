@@ -162,6 +162,12 @@ await api("/api/score", {
   content, e.g. `grid-auto-rows: max-content`, instead of forcing equal-height
   tracks inside a constrained scroll region. Otherwise populated cards can
   collapse into thin bars when the grid has many rows and `overflow` is hidden.
+- Writing prompt highlight deletion must be driven by the highlight index and
+  pointer coordinates captured on `pointerdown`. A click on an existing
+  highlight may produce selection/range churn before `pointerup`, and
+  `event.target` can be unreliable after DOM selection changes. Do not require
+  an empty selection before opening the Delete menu, and stop propagation inside
+  the menu so outside-click handlers cannot close it immediately.
 
 ---
 

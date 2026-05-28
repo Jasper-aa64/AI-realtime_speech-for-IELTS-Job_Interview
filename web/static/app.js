@@ -460,8 +460,6 @@ function deletePendingWritingPromptHighlight() {
   const current = currentWritingPromptHighlightState();
   const index = Number(state.writing.pendingHighlightDeleteIndex);
   if (!Number.isInteger(index) || index < 0 || index >= current.length) return false;
-  const confirmed = window.confirm?.("删除这条题目高亮？") ?? true;
-  if (!confirmed) return false;
   current.splice(index, 1);
   state.writing.pendingHighlightDeleteIndex = -1;
   setWritingPromptHighlightState(promptId, current);
@@ -7438,15 +7436,23 @@ function bindEvents() {
     state.writing.promptSelectionActive = false;
     if (pending) {
       const distance = Math.hypot(event.clientX - pending.x, event.clientY - pending.y);
-      const hasSelection = Boolean(getWritingPromptSelectionRange());
-      if (distance <= 4 && !hasSelection) {
-        const mark = event.target.closest?.(".writing-highlight-mark");
-        const index = Number.isInteger(pending.index) ? pending.index : Number(mark?.dataset.writingHighlightIndex);
+      if (distance <= 6) {
+        const index = Number(pending.index);
         openWritingPromptHighlightDeleteMenu(index, { clientX: pending.x, clientY: pending.y });
+        event.preventDefault();
+        event.stopPropagation();
         return;
       }
     }
     handleWritingPromptSelectionChange({ force: true, delay: 120 });
+  });
+  $("writingPromptText")?.addEventListener("click", (event) => {
+    const mark = event.target.closest?.(".writing-highlight-mark");
+    if (!mark || !$("writingPromptText")?.contains(mark)) return;
+    const index = Number(mark.dataset.writingHighlightIndex);
+    openWritingPromptHighlightDeleteMenu(index, { clientX: event.clientX, clientY: event.clientY });
+    event.preventDefault();
+    event.stopPropagation();
   });
   $("writingPromptText")?.addEventListener("pointercancel", () => {
     state.writing.promptSelectionActive = false;
@@ -7455,9 +7461,13 @@ function bindEvents() {
   });
   $("writingHighlightBtn")?.addEventListener("click", (event) => {
     event.preventDefault();
+    event.stopPropagation();
     applyWritingPromptHighlightSelection();
   });
   $("writingHighlightMenu")?.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+  $("writingHighlightMenu")?.addEventListener("click", (event) => {
     event.stopPropagation();
   });
   document.addEventListener("selectionchange", () => {
