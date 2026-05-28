@@ -297,9 +297,9 @@ completion append the result to the user's writing record.
 
 ### 1. Scope / Trigger
 
-- Trigger: A user opens an existing writing report and chooses `修改作文并重新生成报告`.
+- Trigger: A user opens an existing writing report and chooses either `继续编辑` for an unscored draft or `修改作文并重新生成报告` for a scored report.
 - Scope: `web/static/app.js`, Django writing entry APIs, and writing report list ordering.
-- Cross-layer contract: editing a scored report must create a new draft revision, not mutate the scored source entry.
+- Cross-layer contract: editing an unscored report continues the same entry; editing a scored report with an existing `WritingScore` creates a new draft revision and never mutates the scored source entry.
 
 ### 2. Signatures
 
@@ -311,6 +311,10 @@ completion append the result to the user's writing record.
   ```text
   GET /?view=writing&task={task_type}&prompt={prompt_id}&writing_entry={clone_entry_id}
   ```
+- Continue editing an unscored entry directly:
+  ```text
+  GET /?view=writing&task={task_type}&prompt={prompt_id}&writing_entry={source_entry_id}
+  ```
 - Existing fallback/read surfaces:
   ```text
   GET  /api/writing/entries/{entry_id}
@@ -319,15 +323,20 @@ completion append the result to the user's writing record.
 
 ### 3. Contracts
 
-- Normal click on the report edit action clones the source entry, then switches the current tab to the writing editor and calls `recoverWritingEntry(clone)`.
-- Command/Ctrl/middle-click opens a blank tab synchronously, clones the source entry, then redirects that tab to `writingEntryEditUrl(clone)`.
+- An entry is treated as scored only when `entry.status === "scored"` and a persisted `WritingScore` exists.
+- For an unscored entry, normal click switches the current tab to the writing editor and calls `recoverWritingEntry(sourceEntry)`; it must not call `/clone` or create another draft.
+- For an unscored entry, Command/Ctrl/middle-click opens `writingEntryEditUrl(sourceEntry)` directly in the new tab.
+- For a scored entry, normal click clones the source entry, then switches the current tab to the writing editor and calls `recoverWritingEntry(clone)`.
+- For a scored entry, Command/Ctrl/middle-click opens a blank tab synchronously, clones the source entry, then redirects that tab to `writingEntryEditUrl(clone)`.
 - The cloned entry must copy `task_type`, `prompt_id`, `prompt`, `title`, `category`, `image_url`, `answer`, and `prompt_highlights`.
 - The source scored entry keeps its existing `WritingScore`; the clone starts as `saved` with no `score`.
 - The UI must not clear `state.writing.prompt`, `state.writing.entry`, or the answer textarea before a valid clone exists.
 
 ### 4. Validation & Error Matrix
 
+- Unscored source entry -> continue editing the source entry; no `/clone` request is made.
 - Clone succeeds -> load cloned prompt and answer into the editor; old report remains visible in reports.
+- Clone requested for unscored or `status=scored` without `WritingScore` -> backend rejects it; frontend should not normally reach this path.
 - Clone endpoint returns legacy route `404` but source entry `GET` succeeds -> create a new saved draft through `POST /api/writing/entries`.
 - Clone endpoint returns missing-source `404` -> stay on the report page and show an inline error; do not blank the editor.
 - Popup blocked on modifier-click -> show an error telling the user to allow popups or use normal click.
@@ -336,16 +345,19 @@ completion append the result to the user's writing record.
 ### 5. Good/Base/Bad Cases
 
 - Good: The user edits a Band 5.5 report, gets a new unscored draft to the left of the old report, and the old Band 5.5 report is still available.
+- Good: The user opens an unscored saved draft from reports, sees `继续编辑`, and returns to the same prompt and answer without a duplicate report card.
 - Base: Legacy server lacks `/clone`; frontend reads the source entry and saves a new draft without touching the source score.
 - Bad: The frontend opens the writing page and clears the prompt/textarea before clone completes.
 - Bad: Autosave writes edited text back into the scored source entry and deletes the original `WritingScore`.
+- Bad: A saved unscored draft is cloned into another unscored draft when the user only wanted to continue editing.
 
 ### 6. Tests Required
 
 - `node --check web/static/app.js`.
 - Django tests proving `POST /api/writing/entries/{entry_id}/clone` returns a saved clone with no score and preserves the source `WritingScore`.
+- Django tests proving `POST /api/writing/entries/{entry_id}/clone` rejects unscored entries and `status=scored` entries without `WritingScore`.
 - Django tests proving `POST /api/writing/entries` with a changed scored entry creates a revision instead of deleting the old score.
-- Browser smoke for normal click and Command/Ctrl-click from a scored writing report.
+- Browser smoke for normal click and Command/Ctrl-click from both an unscored writing report and a scored writing report.
 
 ### 7. Wrong vs Correct
 
