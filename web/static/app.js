@@ -3071,14 +3071,15 @@ function autoResizeWritingAnswer(options = {}) {
   if (!answer) return;
   const style = window.getComputedStyle(answer);
   const lineHeight = Number.parseFloat(style.lineHeight) || 24;
-  const extraRows = 4;
+  const minPixelHeight = 500;
+  const minRows = 12;
+  const bufferRows = 1;
   const scrollParent = writingScrollParent(answer);
   const scrollTop = scrollParent?.scrollTop || 0;
-  const currentHeight = answer.offsetHeight || 0;
-  if (options.reset) answer.style.height = "auto";
-  const targetHeight = Math.max(answer.scrollHeight + (lineHeight * extraRows), 500);
-  const nextHeight = options.reset ? targetHeight : Math.max(currentHeight, targetHeight);
-  answer.style.height = `${nextHeight}px`;
+  answer.style.height = "auto";
+  const minHeight = Math.max(minPixelHeight, lineHeight * minRows);
+  const targetHeight = Math.max(answer.scrollHeight + (lineHeight * bufferRows), minHeight);
+  answer.style.height = `${targetHeight}px`;
   answer.style.overflowY = "hidden";
   if (options.preserveScroll && scrollParent) scrollParent.scrollTop = scrollTop;
 }
