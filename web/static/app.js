@@ -1163,6 +1163,7 @@ function switchView(view, options = {}) {
     }
   }
   stopAllRuntime("Ready");
+  hideWritingHighlightMenu();
   if (view === "p3" && !options.keepP3Source) {
     state.p3PracticeSource = null;
     state.p3SourceType = "topic";
@@ -4207,6 +4208,9 @@ function applyWritingPromptHighlightSelection() {
 function handleWritingPromptSelectionChange(options = {}) {
   const { force = false, delay = 120 } = options;
   window.clearTimeout(state.writing.promptSelectionTimer);
+  // Delete menus are opened by an explicit click/focus action on an existing mark.
+  // Selection churn from that same pointer gesture must not immediately close it.
+  if (isWritingHighlightDeleteMenuOpen()) return;
   if (state.writing.promptSelectionActive && !force) {
     hideWritingHighlightMenu();
     return;
@@ -4228,6 +4232,7 @@ function handleWritingPromptSelectionChange(options = {}) {
     }
     const selection = selectionText();
     if (selection?.source === "writing_prompt") hideLanguageTakeawayTrigger();
+    if (isWritingHighlightDeleteMenuOpen()) return;
     hideWritingHighlightMenu();
   }, delay);
 }
@@ -4279,6 +4284,9 @@ function handleGlobalKeydown(event) {
   if (isWritingImageViewerOpen()) {
     event.preventDefault();
     closeWritingImageViewer();
+  } else if (!$("writingHighlightMenu")?.classList.contains("hidden")) {
+    event.preventDefault();
+    hideWritingHighlightMenu();
   } else if (!$("p1CorpusDialog")?.classList.contains("hidden")) {
     event.preventDefault();
     saveAndCloseP1CorpusEditor();
@@ -4316,6 +4324,11 @@ function hideWritingHighlightMenu() {
   state.writing.pendingHighlightPointer = null;
 }
 
+function isWritingHighlightDeleteMenuOpen() {
+  const menu = $("writingHighlightMenu");
+  return Boolean(menu && !menu.classList.contains("hidden") && state.writing.highlightMenuMode === "clear");
+}
+
 function positionWritingHighlightMenu(rect) {
   const menu = $("writingHighlightMenu");
   if (!menu || !rect) return;
@@ -4329,13 +4342,33 @@ function positionWritingHighlightMenu(rect) {
   menu.style.top = `${top}px`;
 }
 
-function openWritingPromptHighlightDeleteMenu(index, rect) {
+function positionWritingHighlightMenuNearPoint(clientX, clientY) {
+  const menu = $("writingHighlightMenu");
+  if (!menu) return;
+  const margin = 12;
+  const gap = 10;
+  const menuRect = menu.getBoundingClientRect();
+  const width = menuRect.width || 148;
+  const height = menuRect.height || 52;
+  const preferRight = clientX + gap + width <= window.innerWidth - margin;
+  const preferBelow = clientY + gap + height <= window.innerHeight - margin;
+  const left = preferRight ? clientX + gap : clientX - width - gap;
+  const top = preferBelow ? clientY + gap : clientY - height - gap;
+  menu.style.left = `${Math.min(window.innerWidth - width - margin, Math.max(margin, left))}px`;
+  menu.style.top = `${Math.min(window.innerHeight - height - margin, Math.max(margin, top))}px`;
+}
+
+function openWritingPromptHighlightDeleteMenu(index, anchor) {
   const menu = $("writingHighlightMenu");
   if (!menu || !Number.isInteger(index) || index < 0) return;
   state.writing.pendingHighlightDeleteIndex = index;
   setWritingHighlightMenuMode("clear");
-  positionWritingHighlightMenu(rect);
   menu.classList.remove("hidden");
+  if (anchor && Number.isFinite(anchor.clientX) && Number.isFinite(anchor.clientY)) {
+    positionWritingHighlightMenuNearPoint(anchor.clientX, anchor.clientY);
+  } else {
+    positionWritingHighlightMenu(anchor);
+  }
   hideLanguageTakeawayTrigger();
 }
 
@@ -7358,6 +7391,7 @@ function bindEvents() {
     openWritingImageViewer(image.getAttribute("src"));
   });
   $("writingPromptText")?.addEventListener("mouseup", () => {
+    if (isWritingHighlightDeleteMenuOpen()) return;
     state.writing.promptSelectionActive = false;
     handleWritingPromptSelectionChange({ force: true, delay: 120 });
   });
@@ -7408,8 +7442,7 @@ function bindEvents() {
       if (distance <= 4 && !hasSelection) {
         const mark = event.target.closest?.(".writing-highlight-mark");
         const index = Number.isInteger(pending.index) ? pending.index : Number(mark?.dataset.writingHighlightIndex);
-        const rect = mark?.getBoundingClientRect?.() || new DOMRect(event.clientX, event.clientY, 0, 0);
-        openWritingPromptHighlightDeleteMenu(index, rect);
+        openWritingPromptHighlightDeleteMenu(index, { clientX: pending.x, clientY: pending.y });
         return;
       }
     }
@@ -7423,6 +7456,9 @@ function bindEvents() {
   $("writingHighlightBtn")?.addEventListener("click", (event) => {
     event.preventDefault();
     applyWritingPromptHighlightSelection();
+  });
+  $("writingHighlightMenu")?.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
   });
   document.addEventListener("selectionchange", () => {
     handleWritingPromptSelectionChange({ delay: 160 });
