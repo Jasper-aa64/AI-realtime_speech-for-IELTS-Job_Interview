@@ -95,6 +95,7 @@ const state = {
     promptHighlights: {},
     promptSelectionTimer: null,
     promptSelectionActive: false,
+    pendingHighlightPointer: null,
     highlightMenuMode: "select",
     pendingHighlightDeleteIndex: -1,
     highlightPersistTimer: null,
@@ -446,31 +447,11 @@ function renderWritingPromptTextWithHighlights(textValue, ranges = []) {
   let cursor = 0;
   normalized.forEach((range, index) => {
     output += escapeHtml(text.slice(cursor, range.start)).replace(/\n/g, "<br>");
-    output += `<mark class="writing-highlight-mark" data-writing-highlight-index="${index}">${escapeHtml(text.slice(range.start, range.end)).replace(/\n/g, "<br>")}</mark>`;
+    output += `<mark class="writing-highlight-mark" data-writing-highlight-index="${index}" tabindex="0" role="button" aria-label="删除这条题目高亮">${escapeHtml(text.slice(range.start, range.end)).replace(/\n/g, "<br>")}</mark>`;
     cursor = range.end;
   });
   output += escapeHtml(text.slice(cursor)).replace(/\n/g, "<br>");
   return output;
-}
-
-function deleteWritingPromptHighlightAtPoint(clientX, clientY) {
-  const promptEl = $("writingPromptText");
-  const prompt = state.writing.prompt;
-  const promptId = writingPromptHighlightKey(prompt);
-  if (!promptEl || !promptId) return false;
-  const point = document.caretRangeFromPoint?.(clientX, clientY) || document.caretPositionFromPoint?.(clientX, clientY);
-  if (!point) return false;
-  let node = point.startContainer || point.offsetNode || null;
-  let offset = point.startOffset ?? point.offset ?? 0;
-  if (!node) return false;
-  if (!promptEl.contains(node)) return false;
-  const textOffset = textOffsetFromNode(promptEl, node, offset);
-  const current = currentWritingPromptHighlightState();
-  const index = current.findIndex((range) => textOffset >= range.start && textOffset <= range.end);
-  if (index < 0) return false;
-  current.splice(index, 1);
-  setWritingPromptHighlightState(promptId, current);
-  return true;
 }
 
 function deletePendingWritingPromptHighlight() {
@@ -479,6 +460,8 @@ function deletePendingWritingPromptHighlight() {
   const current = currentWritingPromptHighlightState();
   const index = Number(state.writing.pendingHighlightDeleteIndex);
   if (!Number.isInteger(index) || index < 0 || index >= current.length) return false;
+  const confirmed = window.confirm?.("删除这条题目高亮？") ?? true;
+  if (!confirmed) return false;
   current.splice(index, 1);
   state.writing.pendingHighlightDeleteIndex = -1;
   setWritingPromptHighlightState(promptId, current);
@@ -4330,6 +4313,7 @@ function hideWritingHighlightMenu() {
   if (!menu) return;
   menu.classList.add("hidden");
   state.writing.pendingHighlightDeleteIndex = -1;
+  state.writing.pendingHighlightPointer = null;
 }
 
 function positionWritingHighlightMenu(rect) {
@@ -4343,6 +4327,16 @@ function positionWritingHighlightMenu(rect) {
   const top = Math.min(window.innerHeight - height - margin, Math.max(margin, rect.top - height - 10));
   menu.style.left = `${left}px`;
   menu.style.top = `${top}px`;
+}
+
+function openWritingPromptHighlightDeleteMenu(index, rect) {
+  const menu = $("writingHighlightMenu");
+  if (!menu || !Number.isInteger(index) || index < 0) return;
+  state.writing.pendingHighlightDeleteIndex = index;
+  setWritingHighlightMenuMode("clear");
+  positionWritingHighlightMenu(rect);
+  menu.classList.remove("hidden");
+  hideLanguageTakeawayTrigger();
 }
 
 function renderWritingScore(entry) {
@@ -7370,38 +7364,60 @@ function bindEvents() {
   $("writingPromptText")?.addEventListener("keyup", () => {
     handleWritingPromptSelectionChange({ force: true, delay: 120 });
   });
+  $("writingPromptText")?.addEventListener("keydown", (event) => {
+    const mark = event.target.closest?.(".writing-highlight-mark");
+    if (!mark || !["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    const index = Number(mark.dataset.writingHighlightIndex);
+    openWritingPromptHighlightDeleteMenu(index, mark.getBoundingClientRect());
+  });
   $("writingPromptText")?.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
-    const hit = getWritingPromptRangeAtPoint(event.clientX, event.clientY);
-    if (!hit) {
+    const mark = event.target.closest?.(".writing-highlight-mark");
+    if (mark && $("writingPromptText")?.contains(mark)) {
+      state.writing.promptSelectionActive = true;
+      window.clearTimeout(state.writing.promptSelectionTimer);
+      hideWritingHighlightMenu();
+      state.writing.pendingHighlightPointer = {
+        index: Number(mark.dataset.writingHighlightIndex),
+        x: event.clientX,
+        y: event.clientY,
+      };
+      return;
+    }
+    if (!getWritingPromptRangeAtPoint(event.clientX, event.clientY)) {
       state.writing.promptSelectionActive = true;
       state.writing.pendingHighlightDeleteIndex = -1;
+      state.writing.pendingHighlightPointer = null;
       window.clearTimeout(state.writing.promptSelectionTimer);
       hideWritingHighlightMenu();
       return;
     }
-    event.preventDefault();
-    const menu = $("writingHighlightMenu");
-    if (!menu) return;
-    const current = currentWritingPromptHighlightState();
-    state.writing.pendingHighlightDeleteIndex = current.findIndex((range) => range.start === hit.start && range.end === hit.end);
-    const menuRect = menu.getBoundingClientRect();
-    const width = menuRect.width || 148;
-    const height = menuRect.height || 92;
-    const left = Math.min(window.innerWidth - width - 12, Math.max(12, event.clientX - width / 2));
-    const top = Math.min(window.innerHeight - height - 12, Math.max(12, event.clientY - height - 12));
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
-    setWritingHighlightMenuMode("clear");
-    menu.classList.remove("hidden");
-    hideLanguageTakeawayTrigger();
+    state.writing.promptSelectionActive = true;
+    state.writing.pendingHighlightPointer = null;
+    window.clearTimeout(state.writing.promptSelectionTimer);
+    hideWritingHighlightMenu();
   });
-  $("writingPromptText")?.addEventListener("pointerup", () => {
+  $("writingPromptText")?.addEventListener("pointerup", (event) => {
+    const pending = state.writing.pendingHighlightPointer;
+    state.writing.pendingHighlightPointer = null;
     state.writing.promptSelectionActive = false;
+    if (pending) {
+      const distance = Math.hypot(event.clientX - pending.x, event.clientY - pending.y);
+      const hasSelection = Boolean(getWritingPromptSelectionRange());
+      if (distance <= 4 && !hasSelection) {
+        const mark = event.target.closest?.(".writing-highlight-mark");
+        const index = Number.isInteger(pending.index) ? pending.index : Number(mark?.dataset.writingHighlightIndex);
+        const rect = mark?.getBoundingClientRect?.() || new DOMRect(event.clientX, event.clientY, 0, 0);
+        openWritingPromptHighlightDeleteMenu(index, rect);
+        return;
+      }
+    }
     handleWritingPromptSelectionChange({ force: true, delay: 120 });
   });
   $("writingPromptText")?.addEventListener("pointercancel", () => {
     state.writing.promptSelectionActive = false;
+    state.writing.pendingHighlightPointer = null;
     hideWritingHighlightMenu();
   });
   $("writingHighlightBtn")?.addEventListener("click", (event) => {
