@@ -414,12 +414,12 @@ Clone first, then navigate and recover the cloned prompt and answer.
 - The same pointer/click/selectionchange event sequence that opened the menu must not immediately close it.
 - Pointer events inside the menu must not bubble into outside-close handlers.
 - `Enter` or `Space` on a focused highlight mark must open the same delete menu.
-- Delete remains a destructive action: confirm before removing the range.
+- Delete removes the selected highlight immediately without a confirmation dialog.
 
 ### 4. Validation & Error Matrix
 
 - Click existing highlight -> menu stays visible until the user clicks Delete, clicks outside, presses Esc, or navigates away.
-- Click Delete -> confirmation appears; confirm removes the indexed range and persists `prompt_highlights`.
+- Click Delete -> remove the indexed range immediately and persist `prompt_highlights`.
 - Drag select text across highlight -> treat as text selection, not as delete intent.
 - Stale or invalid highlight index -> close safely and do not mutate highlight state.
 
@@ -435,7 +435,7 @@ Clone first, then navigate and recover the cloned prompt and answer.
 
 - `node --check web/static/app.js`.
 - `git diff --check`.
-- Browser smoke: create a prompt highlight, click the highlighted range, verify Delete remains visible near the pointer, click Delete, confirm removal.
+- Browser smoke: create a prompt highlight, click the highlighted range, verify Delete remains visible near the pointer, click Delete, and verify the highlight is removed without a confirmation dialog.
 - Browser smoke: drag select prompt text and verify Delete does not appear.
 
 ### 7. Wrong vs Correct
