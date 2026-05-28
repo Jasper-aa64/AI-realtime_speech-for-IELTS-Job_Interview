@@ -2737,9 +2737,9 @@ h1 {
   grid-template-areas:
     "editor result";
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
   min-height: 0;
-  height: 100%;
+  height: auto;
 }
 
 .writing-calendar-card,
@@ -2764,10 +2764,10 @@ h1 {
 .writing-editor-card {
   grid-area: editor;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
   gap: 12px;
   padding: 18px 20px 18px;
-  height: 100%;
+  height: auto;
   max-height: calc(100vh - 76px - var(--safe-top) - var(--safe-bottom));
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -4398,8 +4398,8 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
 
 .writing-answer {
   width: 100%;
-  min-height: 0;
-  height: 100%;
+  min-height: 500px;
+  height: 500px;
   max-height: none;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -11575,7 +11575,7 @@ body.theme-dark.font-academic .history-item:hover {
     gap: 14px;
   }
   .writing-editor-card {
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
     padding: 18px;
   }
   .writing-task-bar {
@@ -12066,10 +12066,10 @@ body.theme-dark.font-academic .history-item:hover {
     grid-template-columns: minmax(0, 1.7fr) minmax(236px, 280px);
     grid-template-areas:
       "editor result";
-    height: 100%;
+    height: auto;
   }
   .writing-editor-card {
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
     max-height: calc(100vh - 76px - var(--safe-top) - var(--safe-bottom));
     overflow-y: auto;
   }
