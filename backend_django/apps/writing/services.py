@@ -673,6 +673,8 @@ def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
         ),
         "structure_advice_only": bool(analysis.get("structure_advice_only")),
         "structure_advice": analysis.get("structure_advice", ""),
+        "analysis_backend": analysis.get("analysis_backend", score.source),
+        "fallback_reason": analysis.get("fallback_reason", ""),
         "backend": score.source,
         "billing_usage": score.billing_metadata,
         "scored_at": score.scored_at.isoformat() if score.scored_at else None,
@@ -954,13 +956,18 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     if not prompt_text:
         raise WritingError("Missing writing prompt")
     entry_id = str(payload.get("id") or "").strip()
-    existing = WritingEntry.objects.select_related("prompt").filter(user=user, entry_id=entry_id).first() if entry_id else None
+    existing = WritingEntry.objects.select_related("prompt", "score").filter(user=user, entry_id=entry_id).first() if entry_id else None
     if not entry_id:
         entry_id = uuid.uuid4().hex
     title = str(payload.get("title") or (prompt.title if prompt else "") or WRITING_TASK_LABELS[task_type])[:200]
     now = timezone.now()
-    entry = existing or WritingEntry(user=user, entry_id=entry_id, task_type=task_type)
     answer_changed = bool(existing and existing.answer != answer)
+    create_revision = bool(answer_changed and getattr(existing, "score", None))
+    entry = WritingEntry(
+        user=user,
+        entry_id=uuid.uuid4().hex,
+        task_type=task_type,
+    ) if create_revision else (existing or WritingEntry(user=user, entry_id=entry_id, task_type=task_type))
     entry.prompt = prompt
     entry.task_type = task_type
     entry.practice_date = parse_practice_date(str(payload.get("practice_date") or "") or None)
@@ -968,19 +975,25 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     entry.prompt_text = prompt_text
     entry.answer = answer
     entry.word_count = word_count(answer)
-    entry.status = WritingEntry.Status.SAVED if answer_changed or not existing else entry.status
+    entry.status = WritingEntry.Status.SAVED if create_revision or answer_changed or not existing else entry.status
     entry.saved_at = now
+    base_metadata = entry.metadata if not create_revision else (existing.metadata if existing else {})
     entry.metadata = {
-        **(entry.metadata or {}),
+        **(base_metadata or {}),
         "category": str(payload.get("category") or (prompt.category if prompt else "")),
         "image_url": str(payload.get("image_url") or (prompt.image_url if prompt else "")),
         "prompt_highlights": normalize_prompt_highlights(
-            payload.get("prompt_highlights") if "prompt_highlights" in payload else (entry.metadata or {}).get("prompt_highlights"),
+            payload.get("prompt_highlights") if "prompt_highlights" in payload else (base_metadata or {}).get("prompt_highlights"),
             prompt_text,
         ),
     }
+    if create_revision and existing:
+        entry.metadata.update({
+            "revision_parent_entry_id": existing.entry_id,
+            "revision_source": "scored_entry_edit",
+        })
     entry.save()
-    if answer_changed:
+    if answer_changed and not create_revision:
         WritingScore.objects.filter(entry=entry).delete()
     return entry_payload(entry)
 
@@ -994,6 +1007,37 @@ def get_entry(user, entry_id: str) -> dict[str, Any]:
     if not entry:
         raise WritingError("Writing entry not found")
     return entry_payload(entry)
+
+
+@transaction.atomic
+def clone_entry_for_revision(user, entry_id: str) -> dict[str, Any]:
+    source = (
+        WritingEntry.objects.select_related("prompt", "score")
+        .filter(user=user, entry_id=str(entry_id or "").strip())
+        .first()
+    )
+    if not source:
+        raise WritingError("Writing entry not found")
+    now = timezone.now()
+    clone = WritingEntry.objects.create(
+        user=user,
+        entry_id=uuid.uuid4().hex,
+        prompt=source.prompt,
+        task_type=source.task_type,
+        practice_date=timezone.localdate(),
+        title=source.title,
+        prompt_text=source.prompt_text,
+        answer=source.answer,
+        word_count=word_count(source.answer),
+        status=WritingEntry.Status.SAVED,
+        saved_at=now,
+        metadata={
+            **(source.metadata or {}),
+            "revision_parent_entry_id": source.entry_id,
+            "revision_source": "writing_report_edit",
+        },
+    )
+    return entry_payload(clone)
 
 
 @transaction.atomic
@@ -1098,6 +1142,7 @@ def fallback_analysis_payload(entry: WritingEntry, reason: str = "") -> dict[str
         "structure_advice_only": True,
         "structure_advice": message,
         "analysis_backend": "fallback",
+        "fallback_reason": reason,
     }
 
 

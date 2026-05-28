@@ -299,8 +299,9 @@ class CodexWritingScoreAdapter(BaseProviderAdapter):
             payload = extract_json_object(output)
             score = self._score_payload(payload, request_payload)
         except Exception as exc:
-            return ProviderRunResult.fallback(
+            return ProviderRunResult.terminal_failure(
                 f"Codex writing report generation failed: {exc}",
+                error_code="codex_writing_score_failed",
                 metadata=_route_metadata(self.adapter_name, self.route),
             )
         return ProviderRunResult.success(

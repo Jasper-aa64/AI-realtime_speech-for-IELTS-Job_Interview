@@ -292,3 +292,80 @@ startWritingScorePolling(result.entry.id);
 
 Polling entry detail keeps Django as the source of truth and lets worker
 completion append the result to the user's writing record.
+
+## Scenario: Writing Report Revision Editing
+
+### 1. Scope / Trigger
+
+- Trigger: A user opens an existing writing report and chooses `修改作文并重新生成报告`.
+- Scope: `web/static/app.js`, Django writing entry APIs, and writing report list ordering.
+- Cross-layer contract: editing a scored report must create a new draft revision, not mutate the scored source entry.
+
+### 2. Signatures
+
+- Clone a report entry for revision:
+  ```text
+  POST /api/writing/entries/{entry_id}/clone
+  ```
+- Load a cloned draft directly in the editor:
+  ```text
+  GET /?view=writing&task={task_type}&prompt={prompt_id}&writing_entry={clone_entry_id}
+  ```
+- Existing fallback/read surfaces:
+  ```text
+  GET  /api/writing/entries/{entry_id}
+  POST /api/writing/entries
+  ```
+
+### 3. Contracts
+
+- Normal click on the report edit action clones the source entry, then switches the current tab to the writing editor and calls `recoverWritingEntry(clone)`.
+- Command/Ctrl/middle-click opens a blank tab synchronously, clones the source entry, then redirects that tab to `writingEntryEditUrl(clone)`.
+- The cloned entry must copy `task_type`, `prompt_id`, `prompt`, `title`, `category`, `image_url`, `answer`, and `prompt_highlights`.
+- The source scored entry keeps its existing `WritingScore`; the clone starts as `saved` with no `score`.
+- The UI must not clear `state.writing.prompt`, `state.writing.entry`, or the answer textarea before a valid clone exists.
+
+### 4. Validation & Error Matrix
+
+- Clone succeeds -> load cloned prompt and answer into the editor; old report remains visible in reports.
+- Clone endpoint returns legacy route `404` but source entry `GET` succeeds -> create a new saved draft through `POST /api/writing/entries`.
+- Clone endpoint returns missing-source `404` -> stay on the report page and show an inline error; do not blank the editor.
+- Popup blocked on modifier-click -> show an error telling the user to allow popups or use normal click.
+- Duplicate rapid clicks while clone is pending -> ignore additional clicks to avoid duplicate drafts.
+
+### 5. Good/Base/Bad Cases
+
+- Good: The user edits a Band 5.5 report, gets a new unscored draft to the left of the old report, and the old Band 5.5 report is still available.
+- Base: Legacy server lacks `/clone`; frontend reads the source entry and saves a new draft without touching the source score.
+- Bad: The frontend opens the writing page and clears the prompt/textarea before clone completes.
+- Bad: Autosave writes edited text back into the scored source entry and deletes the original `WritingScore`.
+
+### 6. Tests Required
+
+- `node --check web/static/app.js`.
+- Django tests proving `POST /api/writing/entries/{entry_id}/clone` returns a saved clone with no score and preserves the source `WritingScore`.
+- Django tests proving `POST /api/writing/entries` with a changed scored entry creates a revision instead of deleting the old score.
+- Browser smoke for normal click and Command/Ctrl-click from a scored writing report.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```js
+state.writing.prompt = null;
+state.writing.entry = null;
+switchView("writing");
+const clone = await cloneWritingEntryForRevision(entryId);
+```
+
+This can leave the editor empty if cloning fails or if `loadWriting()` races into default prompt loading.
+
+#### Correct
+
+```js
+const clone = await cloneWritingEntryForRevision(entryId);
+switchView("writing", { force: true });
+await recoverWritingEntry(clone);
+```
+
+Clone first, then navigate and recover the cloned prompt and answer.

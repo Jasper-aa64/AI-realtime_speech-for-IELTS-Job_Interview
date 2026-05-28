@@ -681,7 +681,7 @@ class AIWorkerCommandTests(TestCase):
         created = create_score_task(user, entry.entry_id, task_payload)
         return user, entry, created
 
-    def test_run_ai_tasks_processes_pending_writing_score_with_fallback(self):
+    def test_run_ai_tasks_fails_pending_writing_score_when_codex_errors(self):
         user = get_user_model().objects.create_user(username="worker-writing-user", password="test-pass")
         prompt = WritingPrompt.objects.create(
             prompt_id="worker-writing-prompt",
@@ -710,12 +710,15 @@ class AIWorkerCommandTests(TestCase):
 
         summary = json.loads(out.getvalue())
         self.assertEqual(summary["claimed"], 1)
-        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["completed"], 0)
+        self.assertEqual(summary["failed"], 1)
         task = AITask.objects.get(task_id=created["task"]["id"])
         self.assertEqual(task.provider, "codex")
-        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertEqual(task.status, AITask.Status.FAILED)
+        self.assertEqual(task.error_code, "codex_writing_score_failed")
+        self.assertIn("Codex writing report generation failed", task.error_message)
         self.assertEqual(task.worker_id, "test-worker")
-        self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
         reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
         self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
         wallet = TokenWallet.objects.get(user=user)
@@ -866,7 +869,7 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(task.status, AITask.Status.SUCCEEDED)
         self.assertEqual(task.result_payload["attempt"], report_payload)
 
-    def test_run_ai_tasks_falls_back_when_codex_output_is_invalid(self):
+    def test_run_ai_tasks_fails_when_codex_output_is_invalid(self):
         user = get_user_model().objects.create_user(username="worker-codex-invalid-user", password="test-pass")
         prompt = WritingPrompt.objects.create(
             prompt_id="worker-codex-invalid-prompt",
@@ -895,13 +898,15 @@ class AIWorkerCommandTests(TestCase):
             call_command("run_ai_tasks", "--limit", "5", "--worker-id", "codex-invalid-worker", stdout=out)
 
         summary = json.loads(out.getvalue())
-        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}])
+        self.assertEqual(summary["items"][0]["task_id"], created["task"]["id"])
+        self.assertEqual(summary["items"][0]["task_type"], "writing_score")
+        self.assertEqual(summary["items"][0]["status"], AITask.Status.FAILED)
+        self.assertIn("Codex writing report generation failed", summary["items"][0]["error"])
         task = AITask.objects.get(task_id=created["task"]["id"])
-        self.assertEqual(task.status, AITask.Status.FALLBACK)
-        self.assertIn("Codex writing report generation failed", task.fallback_reason)
-        score = WritingScore.objects.get(entry=entry)
-        self.assertEqual(score.source, "fallback")
-        self.assertEqual(score.analysis_payload["analysis_backend"], "fallback")
+        self.assertEqual(task.status, AITask.Status.FAILED)
+        self.assertEqual(task.error_code, "codex_writing_score_failed")
+        self.assertIn("Codex writing report generation failed", task.error_message)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
 
     def test_run_ai_tasks_falls_back_when_mock_success_is_disabled(self):
         user = get_user_model().objects.create_user(username="worker-mock-disabled-user", password="test-pass")
@@ -1080,9 +1085,11 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(summary["recovered"]["requeued"], 1)
         self.assertEqual(summary["recovered"]["failed"], 0)
         self.assertEqual(summary["claimed"], 1)
-        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["completed"], 0)
+        self.assertEqual(summary["failed"], 1)
         task.refresh_from_db()
-        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertEqual(task.status, AITask.Status.FAILED)
+        self.assertEqual(task.error_code, "codex_writing_score_failed")
         self.assertEqual(task.worker_id, "recovery-worker")
 
     def test_run_ai_tasks_does_not_claim_cancelled_task(self):
@@ -1153,12 +1160,15 @@ class AIWorkerCommandTests(TestCase):
 
         summary = json.loads(out.getvalue())
         self.assertEqual(summary["claimed"], 2)
-        self.assertEqual(summary["completed"], 1)
-        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["completed"], 0)
+        self.assertEqual(summary["failed"], 1)
         self.assertEqual(summary["skipped"], 1)
         self.assertEqual(len(summary["items"]), 2)
         self.assertIn({"task_id": unsupported.task_id, "task_type": "unsupported_report", "status": "skipped"}, summary["items"])
-        self.assertIn({"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}, summary["items"])
+        writing_item = next(item for item in summary["items"] if item["task_id"] == created["task"]["id"])
+        self.assertEqual(writing_item["task_type"], "writing_score")
+        self.assertEqual(writing_item["status"], AITask.Status.FAILED)
+        self.assertIn("Codex writing report generation failed", writing_item["error"])
 
         unsupported.refresh_from_db()
         self.assertEqual(unsupported.status, AITask.Status.FAILED)
@@ -1167,8 +1177,9 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(unsupported_reservation.status, WalletReservation.Status.RELEASED)
 
         supported = AITask.objects.get(task_id=created["task"]["id"])
-        self.assertEqual(supported.status, AITask.Status.FALLBACK)
-        self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
+        self.assertEqual(supported.status, AITask.Status.FAILED)
+        self.assertEqual(supported.error_code, "codex_writing_score_failed")
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
 
     def test_run_ai_tasks_falls_back_for_unknown_requested_provider(self):
         user = get_user_model().objects.create_user(username="worker-unknown-provider-user", password="test-pass")
@@ -1337,13 +1348,16 @@ class AIWorkerCommandTests(TestCase):
 
         summary = json.loads(out.getvalue())
         self.assertEqual(summary["claimed"], 1)
-        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["completed"], 0)
         self.assertEqual(summary["skipped"], 0)
-        self.assertEqual(summary["failed"], 0)
-        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}])
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["items"][0]["task_id"], created["task"]["id"])
+        self.assertEqual(summary["items"][0]["task_type"], "writing_score")
+        self.assertEqual(summary["items"][0]["status"], AITask.Status.FAILED)
+        self.assertIn("Codex writing report generation failed", summary["items"][0]["error"])
         task = AITask.objects.get(task_id=created["task"]["id"])
-        self.assertEqual(task.status, AITask.Status.FALLBACK)
-        self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
+        self.assertEqual(task.status, AITask.Status.FAILED)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
         reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
         self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
 
@@ -1373,13 +1387,16 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(payload["worker_id"], "loop-worker")
         summary = payload["summary"]
         self.assertEqual(summary["claimed"], 1)
-        self.assertEqual(summary["completed"], 1)
-        self.assertEqual(summary["failed"], 0)
-        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.FALLBACK}])
+        self.assertEqual(summary["completed"], 0)
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["items"][0]["task_id"], created["task"]["id"])
+        self.assertEqual(summary["items"][0]["task_type"], "writing_score")
+        self.assertEqual(summary["items"][0]["status"], AITask.Status.FAILED)
+        self.assertIn("Codex writing report generation failed", summary["items"][0]["error"])
         task = AITask.objects.get(task_id=created["task"]["id"])
-        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertEqual(task.status, AITask.Status.FAILED)
         self.assertEqual(task.worker_id, "loop-worker")
-        self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
         wallet = TokenWallet.objects.get(user=user)
         self.assertEqual(wallet.reserved_u, 0)
 
@@ -1468,7 +1485,8 @@ class AIWorkerCommandTests(TestCase):
         summary = payload["summary"]
         self.assertEqual(summary["recovered"]["requeued"], 1)
         self.assertEqual(summary["claimed"], 1)
-        self.assertEqual(summary["completed"], 1)
+        self.assertEqual(summary["completed"], 0)
+        self.assertEqual(summary["failed"], 1)
         task.refresh_from_db()
-        self.assertEqual(task.status, AITask.Status.FALLBACK)
+        self.assertEqual(task.status, AITask.Status.FAILED)
         self.assertEqual(task.worker_id, "recovered-loop-worker")

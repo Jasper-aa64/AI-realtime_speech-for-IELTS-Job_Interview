@@ -1,6 +1,10 @@
+import json
 import uuid
+from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -285,6 +289,69 @@ class WritingApiTests(TestCase):
         self.assertEqual(task.status, AITask.Status.CANCELLED)
         self.assertEqual(task.error_code, "writing_entry_deleted")
         self.assertFalse(WritingEntry.objects.filter(entry_id=entry.entry_id).exists())
+
+    def test_clone_scored_entry_for_revision_keeps_original_report(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-clone-scored",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Clone scored prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+
+        response = self.client.post(f"/api/writing/entries/{entry.entry_id}/clone", content_type="application/json")
+
+        self.assertEqual(response.status_code, 201)
+        clone = response.json()
+        self.assertNotEqual(clone["id"], entry.entry_id)
+        self.assertEqual(clone["status"], WritingEntry.Status.SAVED)
+        self.assertIsNone(clone["score"])
+        self.assertEqual(clone["answer"], entry.answer)
+        self.assertEqual(clone["prompt_id"], prompt.prompt_id)
+        self.assertEqual(WritingScore.objects.filter(entry=entry).count(), 1)
+        self.assertFalse(WritingScore.objects.filter(entry__entry_id=clone["id"]).exists())
+
+    def test_saving_changed_scored_entry_creates_revision_instead_of_deleting_report(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-revision",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored revision prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("Revised paragraph one.", "Revised paragraph two."),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        revision = response.json()
+        self.assertNotEqual(revision["id"], entry.entry_id)
+        self.assertEqual(revision["status"], WritingEntry.Status.SAVED)
+        self.assertIsNone(revision["score"])
+        self.assertEqual(revision["answer"], "Revised paragraph one.\n\nRevised paragraph two.")
+        entry.refresh_from_db()
+        self.assertEqual(entry.answer, "Original paragraph one.\n\nOriginal paragraph two.")
+        self.assertEqual(entry.status, WritingEntry.Status.SCORED)
+        self.assertTrue(WritingScore.objects.filter(entry=entry, overall_band=6.0).exists())
 
     def test_deleted_writing_entry_terminalizes_running_score_task_on_apply(self):
         prompt = self.create_prompt(
@@ -652,7 +719,7 @@ class WritingApiTests(TestCase):
         self.assertTrue(all(item["status"] == WritingEntry.Status.SAVED for item in saved_task2_payload["items"]))
         self.assertTrue(all(item["task_type"] == WritingPrompt.TaskType.TASK2 for item in saved_task2_payload["items"]))
 
-    def test_saving_changed_answer_resets_existing_score(self):
+    def test_saving_changed_answer_on_scored_entry_creates_revision(self):
         prompt = WritingPrompt.objects.create(
             prompt_id="task2-api-reset",
             task_type=WritingPrompt.TaskType.TASK2,
@@ -673,9 +740,13 @@ class WritingApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(changed.status_code, 200)
-        self.assertEqual(changed.json()["status"], WritingEntry.Status.SAVED)
-        self.assertIsNone(changed.json()["score"])
-        self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
+        changed_payload = changed.json()
+        self.assertNotEqual(changed_payload["id"], save["id"])
+        self.assertEqual(changed_payload["status"], WritingEntry.Status.SAVED)
+        self.assertIsNone(changed_payload["score"])
+        self.assertTrue(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
+        original = WritingEntry.objects.get(entry_id=save["id"])
+        self.assertEqual(original.answer, "First answer with a clear position.\n\nSecond paragraph adds a basic supporting reason.")
 
     def test_score_task_creates_refresh_safe_billable_ai_task(self):
         prompt = WritingPrompt.objects.create(
@@ -706,6 +777,7 @@ class WritingApiTests(TestCase):
         self.assertEqual(created.status_code, 201)
         task = created.json()["task"]
         self.assertEqual(task["task_type"], "writing_score")
+        self.assertEqual(task["provider"], "codex")
         self.assertEqual(task["status"], AITask.Status.PENDING)
         self.assertEqual(task["related_type"], "writing_entry")
         self.assertEqual(task["related_id"], save["id"])
@@ -756,6 +828,46 @@ class WritingApiTests(TestCase):
             ai_task_status=AITask.Status.CANCELLED,
         )
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
+
+    def test_score_task_worker_uses_codex_provider_on_normal_path(self):
+        prompt = WritingPrompt.objects.create(
+            prompt_id="task2-codex-worker-normal",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="AI provider normal path",
+            prompt="Some people think online learning is better than classroom learning. Discuss.",
+        )
+        save = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer(
+                    "Online learning can be useful because students can review lessons at any time.",
+                    "However, classrooms still provide direct support and immediate interaction.",
+                ),
+            },
+            content_type="application/json",
+        ).json()
+        task = self.client.post(
+            f"/api/writing/entries/{save['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        out = StringIO()
+
+        with patch("apps.ai.provider_adapters.run_codex") as run_codex:
+            run_codex.return_value = (json.dumps(ai_score_payload()), {"input_tokens": 1200, "output_tokens": 420})
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "writing-codex-normal", stdout=out)
+
+        run_codex.assert_called_once()
+        task_row = AITask.objects.get(task_id=task["id"])
+        self.assertEqual(task_row.provider, "codex")
+        self.assertEqual(task_row.status, AITask.Status.SUCCEEDED)
+        scored = self.client.get(f"/api/writing/entries/{save['id']}").json()
+        self.assertEqual(scored["score"]["backend"], "ai")
+        self.assertEqual(scored["score"]["analysis_backend"], "ai")
+        self.assertEqual(scored["score"]["billing_usage"]["input_tokens"], 1200)
 
     def test_score_task_rejects_unsegmented_task2_answer_with_guidance(self):
         prompt = WritingPrompt.objects.create(
@@ -968,6 +1080,8 @@ class WritingApiTests(TestCase):
 
         self.assertEqual(fallback["status"], WritingEntry.Status.SCORED)
         self.assertEqual(fallback["score"]["backend"], "fallback")
+        self.assertEqual(fallback["score"]["analysis_backend"], "fallback")
+        self.assertEqual(fallback["score"]["fallback_reason"], "provider unavailable")
         self.assertIn("AI \u8bc4\u5206\u751f\u6210\u5931\u8d25", fallback["score"]["feedback_markdown"])
         task = AITask.objects.get(task_id=task_payload["id"])
         self.assertEqual(task.status, AITask.Status.FALLBACK)

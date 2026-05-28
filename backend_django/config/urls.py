@@ -71,6 +71,7 @@ urlpatterns = [
     path("api/writing/prompts/random", writing_views.random_prompt_view, name="writing-random-prompt"),
     path("api/writing/entries", writing_views.entries, name="writing-entries"),
     path("api/writing/entries/<str:entry_id>", writing_views.entry_detail, name="writing-entry-detail"),
+    path("api/writing/entries/<str:entry_id>/clone", writing_views.entry_clone, name="writing-entry-clone"),
     path("api/writing/entries/<str:entry_id>/score", writing_views.entry_score, name="writing-entry-score"),
     path("api/writing/entries/<str:entry_id>/score-task", writing_views.entry_score_task, name="writing-entry-score-task"),
 ]

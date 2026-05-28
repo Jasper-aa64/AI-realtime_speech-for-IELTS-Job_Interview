@@ -1,6 +1,7 @@
 import json
+import subprocess
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
@@ -1410,7 +1411,6 @@ class CodexValidationTests(TestCase):
 
     def test_run_codex_rejects_zero_input_tokens(self):
         """run_codex should raise error if model received 0 tokens."""
-        from unittest.mock import patch, MagicMock
         from apps.speaking.services import run_codex
 
         with patch("apps.speaking.services.subprocess.run") as mock_run:
@@ -1424,20 +1424,116 @@ class CodexValidationTests(TestCase):
                 self.assertIn("0 input tokens", str(ctx.exception))
                 self.assertEqual(mock_run.call_count, 2)
 
+    def test_quick_p3_follow_up_runner_success_uses_tmp_codex(self):
+        from apps.speaking.services import quick_follow_up_runner
+
+        with patch("apps.speaking.services.shutil.which", return_value="/usr/local/bin/codex"), patch(
+            "apps.speaking.services.subprocess.run"
+        ) as mock_run:
+            mock_run.return_value = MagicMock(stdout="How would this affect older people in the long term?\n", stderr="")
+            follow_up = quick_follow_up_runner(
+                "Why do people have different opinions about technology?",
+                "I think younger people use it more because they grow up with phones, but older people can feel stressed.",
+                focus="comparison_concession",
+                question_type="opinion_justify",
+                timeout=12,
+            )
+
+        self.assertEqual(follow_up, "How would this affect older people in the long term?")
+        command = mock_run.call_args.args[0]
+        self.assertIn("--skip-git-repo-check", command)
+        self.assertIn("--ignore-rules", command)
+        self.assertIn("--ignore-user-config", command)
+        self.assertIn("--ephemeral", command)
+        self.assertIn("gpt-5.4-mini", command)
+        self.assertIn('model_reasoning_effort="low"', command)
+        self.assertEqual(mock_run.call_args.kwargs["cwd"], "/tmp")
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], 12)
+
+    def test_generate_p3_dynamic_follow_up_falls_back_on_quick_timeout(self):
+        from apps.speaking.services import _generate_p3_dynamic_follow_up
+
+        with patch("apps.speaking.services.shutil.which", return_value="/usr/local/bin/codex"), patch(
+            "apps.speaking.services.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="codex", timeout=12)
+        ):
+            result = _generate_p3_dynamic_follow_up(
+                "Why do people have different opinions about technology?",
+                "opinion_justify",
+                " ".join(["technology helps people communicate"] * 12),
+                "comparison_concession",
+                "test-timeout",
+            )
+
+        self.assertEqual(result["backend"], "fallback")
+        self.assertEqual(result["status"], "fallback")
+        self.assertIn("timed out", result["error"])
+        self.assertIn("opposite view", result["follow_up"])
+
+    def test_generate_p3_dynamic_follow_up_returns_quick_codex_question(self):
+        from apps.speaking.services import _generate_p3_dynamic_follow_up
+
+        with patch("apps.speaking.services.shutil.which", return_value="/usr/local/bin/codex"), patch(
+            "apps.speaking.services.subprocess.run"
+        ) as mock_run:
+            mock_run.return_value = MagicMock(stdout="How might this change the way families spend time together?\n", stderr="")
+            result = _generate_p3_dynamic_follow_up(
+                "Why do people have different opinions about technology?",
+                "opinion_justify",
+                "I think younger people use it more because they grow up with phones, but older people can feel stressed.",
+                "comparison_concession",
+                "test-success",
+            )
+
+        self.assertEqual(result["backend"], "codex_quick")
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["follow_up"], "How might this change the way families spend time together?")
+
+    def test_generate_p3_dynamic_follow_up_falls_back_on_invalid_quick_output(self):
+        from apps.speaking.services import _generate_p3_dynamic_follow_up
+
+        with patch("apps.speaking.services.shutil.which", return_value="/usr/local/bin/codex"), patch(
+            "apps.speaking.services.subprocess.run"
+        ) as mock_run:
+            mock_run.return_value = MagicMock(stdout="Here is a useful follow-up.", stderr="")
+            result = _generate_p3_dynamic_follow_up(
+                "How has public transport changed in recent years?",
+                "change_trend",
+                " ".join(["It has become more convenient because cities have invested in apps and cleaner buses"] * 8),
+                "cause_effect",
+                "test-invalid",
+            )
+
+        self.assertEqual(result["backend"], "fallback")
+        self.assertEqual(result["status"], "fallback")
+        self.assertIn("usable question", result["error"])
+        self.assertIn("long-term effect", result["follow_up"])
+
+    def test_generate_p3_dynamic_follow_up_ignores_echoed_main_question(self):
+        from apps.speaking.services import _generate_p3_dynamic_follow_up
+
+        current_question = "How has public transport changed in recent years?"
+        with patch("apps.speaking.services.shutil.which", return_value="/usr/local/bin/codex"), patch(
+            "apps.speaking.services.subprocess.run"
+        ) as mock_run:
+            mock_run.return_value = MagicMock(stdout=f"{current_question}\n", stderr="")
+            result = _generate_p3_dynamic_follow_up(
+                current_question,
+                "change_trend",
+                " ".join(["It has become more convenient because cities have invested in apps and cleaner buses"] * 8),
+                "cause_effect",
+                "test-echo",
+            )
+
+        self.assertEqual(result["backend"], "fallback")
+        self.assertEqual(result["status"], "fallback")
+        self.assertIn("usable question", result["error"])
+        self.assertNotEqual(result["follow_up"], current_question)
+        self.assertIn("long-term effect", result["follow_up"])
+
     def test_score_attempt_uses_scorer_overall_review_without_second_review_codex_call(self):
         from apps.speaking.services import score_attempt_sync
 
         user, attempt, turn = self.create_ready_attempt()
-        batch_payload = {
-            "turns": [
-                {
-                    "turn_id": turn.turn_id,
-                    "display_transcript": "I study software engineering and do an internship.",
-                    "band7_version": "I am studying software engineering, and I am also doing an internship at a small tech company.",
-                    "ai_coaching": "这次身份信息很清楚，可以补充一个具体职责。\n\n语法错误纠正：无",
-                }
-            ]
-        }
         score_payload = {
             "fluency_coherence": 6.5,
             "lexical_resource": 6.0,
@@ -1451,15 +1547,12 @@ class CodexValidationTests(TestCase):
         }
 
         with patch("apps.speaking.services.run_codex") as mock_run:
-            mock_run.side_effect = [
-                (json.dumps(batch_payload), {"input_tokens": 100, "output_tokens": 80}),
-                (json.dumps(score_payload), {"input_tokens": 200, "output_tokens": 120}),
-            ]
+            mock_run.return_value = (json.dumps(score_payload), {"input_tokens": 200, "output_tokens": 120})
             result = score_attempt_sync(user, attempt.attempt_id)
 
-        self.assertEqual(mock_run.call_count, 2)
+        self.assertEqual(mock_run.call_count, 1)
         self.assertFalse(any("overall_review_" in call.args[1] for call in mock_run.call_args_list))
-        score_prompt = mock_run.call_args_list[1].args[0]
+        score_prompt = mock_run.call_args_list[0].args[0]
         self.assertIn("Do you work or do you study?", score_prompt)
         self.assertIn("software engineering", score_prompt)
         self.assertEqual(result["ielts_score"]["backend"], "codex")
@@ -1470,11 +1563,14 @@ class CodexValidationTests(TestCase):
         self.assertEqual(result["overall_review"]["markdown"], score_payload["overall_review"]["markdown"])
         turn.refresh_from_db()
         self.assertEqual(turn.metadata["feedback_generation_backend"], "codex")
-        self.assertEqual(turn.metadata["feedback_generation_status"], "ready")
-        self.assertEqual(turn.metadata["band7_version"], batch_payload["turns"][0]["band7_version"])
+        self.assertEqual(turn.metadata["feedback_generation_status"], "pending")
+        self.assertEqual(turn.metadata["band7_version"], "")
+        self.assertEqual(turn.metadata["band7_source"], "pending")
         report = SpeakingReport.objects.get(attempt=attempt)
         self.assertEqual(report.report_payload["score_generation_backend"], "codex")
         self.assertEqual(report.report_payload["report_generation_status"], "ready")
+        self.assertEqual(report.report_payload["turns"][0]["feedback_generation_status"], "pending")
+        self.assertEqual(report.report_payload["turns"][0]["band7_version"], "")
 
     def test_score_attempt_returns_existing_report_without_regenerating(self):
         from apps.speaking.services import score_attempt
@@ -1573,7 +1669,7 @@ class CodexValidationTests(TestCase):
             with self.assertRaises(SpeakingError) as ctx:
                 score_attempt_sync(user, attempt.attempt_id)
 
-        self.assertGreaterEqual(mock_run.call_count, 3)
+        self.assertGreaterEqual(mock_run.call_count, 1)
         self.assertIn("AI analysis failed", str(ctx.exception))
         self.assertFalse(SpeakingReport.objects.filter(attempt=attempt).exists())
         attempt.refresh_from_db()
@@ -1583,9 +1679,31 @@ class CodexValidationTests(TestCase):
         self.assertEqual(attempt.metadata["report_generation_status"], "failed")
         self.assertIn("codex returned empty output", attempt.metadata["analysis_error"])
         turn.refresh_from_db()
-        self.assertEqual(turn.metadata["feedback_generation_backend"], "fallback")
-        self.assertEqual(turn.metadata["feedback_generation_status"], "fallback")
-        self.assertIn("codex returned empty output", turn.metadata["feedback_generation_error"])
+        self.assertEqual(turn.metadata["feedback_generation_backend"], "codex")
+        self.assertEqual(turn.metadata["feedback_generation_status"], "pending")
+        self.assertEqual(turn.metadata["band7_version"], "")
+
+    def test_turn_feedback_codex_failure_does_not_store_generic_band7_answer(self):
+        from apps.speaking.services import build_turn_feedback
+
+        _user, attempt, turn = self.create_ready_attempt(
+            username="turn-feedback-failure-user",
+            attempt_id="turn-feedback-failure",
+        )
+
+        with (
+            patch("apps.speaking.services.run_codex", side_effect=RuntimeError("codex timeout")),
+            patch("apps.speaking.services.volcengine_tts") as mock_tts,
+        ):
+            feedback = build_turn_feedback(turn, attempt, allow_codex=True)
+
+        mock_tts.assert_not_called()
+        self.assertEqual(feedback["feedback_generation_backend"], "fallback")
+        self.assertEqual(feedback["feedback_generation_status"], "failed")
+        self.assertIn("codex timeout", feedback["feedback_generation_error"])
+        self.assertEqual(feedback["band7_version"], "")
+        self.assertEqual(feedback["band7_markdown"], "")
+        self.assertEqual(feedback["model_audio"]["status"], "empty_text")
 
 
 class TurnFeedbackValidationTests(TestCase):

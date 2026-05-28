@@ -86,22 +86,22 @@
           </div>
           <div id="navLockHint" class="nav-lock-hint hidden">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
           <nav class="nav-primary" aria-label="Practice modes">
-            <button class="nav-button active" data-view="home">首页</button>
-            <button class="nav-button" data-view="mock">Mock</button>
-            <button class="nav-button" data-view="p1">P1</button>
-            <button class="nav-button" data-view="p2">P2</button>
-            <button class="nav-button" data-view="p3">P3</button>
-            <button class="nav-button" data-view="history">口语报告</button>
+            <a class="nav-button active" data-view="home" href="?view=home">首页</a>
+            <a class="nav-button" data-view="mock" href="?view=mock">Mock</a>
+            <a class="nav-button" data-view="p1" href="?view=p1">P1</a>
+            <a class="nav-button" data-view="p2" href="?view=p2">P2</a>
+            <a class="nav-button" data-view="p3" href="?view=p3">P3</a>
+            <a class="nav-button" data-view="history" href="?view=history">口语报告</a>
             <div class="nav-divider" aria-hidden="true"></div>
-            <button class="nav-button" data-view="writing">每日写作</button>
-            <button class="nav-button" data-view="writingReports">写作报告</button>
+            <a class="nav-button" data-view="writing" href="?view=writing">每日写作</a>
+            <a class="nav-button" data-view="writingReports" href="?view=writingReports">写作报告</a>
           </nav>
         </div>
         <div class="nav-bottom">
           <nav class="nav-secondary" aria-label="Libraries">
-            <button class="nav-button" data-view="corpus">语料库</button>
-            <button class="nav-button" data-view="takeawayBook">Takeaway</button>
-            <button class="nav-button" data-view="writingTakeawayBook">写作积累</button>
+            <a class="nav-button" data-view="corpus" href="?view=corpus">语料库</a>
+            <a class="nav-button" data-view="takeawayBook" href="?view=takeawayBook">Takeaway</a>
+            <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook">写作积累</a>
           </nav>
           <div class="nav-divider" aria-hidden="true"></div>
           <div class="font-tool" aria-label="Font style">
@@ -144,26 +144,26 @@
           </div>
 
           <div class="home-practice-grid" aria-label="Speaking practice entries">
-            <button class="home-practice-card tone-p1" type="button" data-home-mode="p1">
+            <a class="home-practice-card tone-p1" data-home-mode="p1" href="?view=p1">
               <span class="home-card-kicker">Part 1</span>
               <strong>P1 短问短答</strong>
               <small>练直答、原因和具体细节。</small>
-            </button>
-            <button class="home-practice-card tone-p2" type="button" data-home-mode="p2">
+            </a>
+            <a class="home-practice-card tone-p2" data-home-mode="p2" href="?view=p2">
               <span class="home-card-kicker">Part 2</span>
               <strong>P2 Cue Card</strong>
               <small>准备 1 分钟后完成长回答。</small>
-            </button>
-            <button class="home-practice-card tone-p3" type="button" data-home-mode="p3">
+            </a>
+            <a class="home-practice-card tone-p3" data-home-mode="p3" href="?view=p3">
               <span class="home-card-kicker">Part 3</span>
               <strong>P3 深入讨论</strong>
               <small>围绕话题练观点、原因和对比。</small>
-            </button>
-            <button id="startFullMockBtn" class="home-practice-card tone-mock" type="button" data-home-mode="mock">
+            </a>
+            <a id="startFullMockBtn" class="home-practice-card tone-mock" data-home-mode="mock" href="?view=mock">
               <span class="home-card-kicker">Full Mock</span>
               <strong>完整 Mock</strong>
               <small>P1、P2、P3 串联模拟。</small>
-            </button>
+            </a>
           </div>
         </section>
 
@@ -416,26 +416,26 @@
               </div>
             </header>
             <div class="corpus-home-grid">
-              <button type="button" class="corpus-home-card corpus-card-p1" data-corpus-home-target="p1Corpus">
+              <a class="corpus-home-card corpus-card-p1" data-corpus-home-target="p1Corpus" href="?view=p1Corpus">
                 <span class="corpus-card-mark">P1</span>
                 <strong>我的 P1语料库</strong>
                 <small>按题组整理每道短问题准备的语料。</small>
-              </button>
-              <button type="button" class="corpus-home-card corpus-card-p2" data-corpus-home-target="p2Corpus">
+              </a>
+              <a class="corpus-home-card corpus-card-p2" data-corpus-home-target="p2Corpus" href="?view=p2Corpus">
                 <span class="corpus-card-mark">P2</span>
                 <strong>我准备的P2串题素材库</strong>
                 <small>人物、地点、事件、物品和特殊题素材。</small>
-              </button>
-              <button type="button" class="corpus-home-card language-card" data-corpus-home-target="takeawayBook">
+              </a>
+              <a class="corpus-home-card language-card" data-corpus-home-target="takeawayBook" href="?view=takeawayBook">
                 <span class="corpus-card-mark">LT</span>
                 <strong>Takeaway</strong>
                 <small>复习平时摘录的单词和短语，需要自测时再遮住英文。</small>
-              </button>
-              <button type="button" class="corpus-home-card writing-takeaway-card" data-corpus-home-target="writingTakeawayBook">
+              </a>
+              <a class="corpus-home-card writing-takeaway-card" data-corpus-home-target="writingTakeawayBook" href="?view=writingTakeawayBook">
                 <span class="corpus-card-mark">WT</span>
                 <strong>写作积累</strong>
                 <small>集中复习写作中摘下来的表达、句型和可复用论证素材。</small>
-              </button>
+              </a>
             </div>
           </div>
         </section>

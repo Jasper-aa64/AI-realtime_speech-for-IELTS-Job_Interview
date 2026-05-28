@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
+from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
 def read_json_body(request) -> dict:
@@ -130,6 +130,18 @@ def entry_detail(request, entry_id: str):
             return writing_error(exc, status=404 if "not found" in str(exc).lower() else 400)
     try:
         return JsonResponse(get_entry(request.user, entry_id))
+    except WritingError as exc:
+        return writing_error(exc, status=404 if "not found" in str(exc).lower() else 400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def entry_clone(request, entry_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(clone_entry_for_revision(request.user, entry_id), status=201)
     except WritingError as exc:
         return writing_error(exc, status=404 if "not found" in str(exc).lower() else 400)
 

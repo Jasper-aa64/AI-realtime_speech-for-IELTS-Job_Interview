@@ -662,6 +662,9 @@ button:active {
   color: #eef5f3;
   text-align: left;
   padding: 0 12px;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .nav-divider {
@@ -1265,6 +1268,7 @@ h1 {
   gap: 10px;
   align-content: start;
   color: var(--ink);
+  text-decoration: none;
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   transition: transform var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast);
@@ -4821,7 +4825,12 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   border: 1px solid color-mix(in srgb, var(--accent-dark) 24%, transparent);
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 94%, #fff), var(--accent-dark));
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
   box-shadow: 0 10px 22px color-mix(in srgb, var(--accent-dark) 18%, transparent);
 }
 
@@ -5687,11 +5696,13 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+  color: var(--ink);
   display: grid;
   grid-template-rows: auto auto 1fr;
   align-content: start;
   gap: 12px;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;

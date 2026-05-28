@@ -1993,6 +1993,8 @@ def _coverage_queue(weak_question_ids: set[str], limit: int) -> list[dict[str, A
 
 P1_TURN_COUNT = 10
 P1_FOLLOW_UP_CODEX_TIMEOUT = 15
+P3_QUICK_FOLLOW_UP_CODEX_MODEL = "gpt-5.4-mini"
+P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT = 12
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
 P3_DRILL_COUNT = 3
@@ -2185,6 +2187,165 @@ def _dynamic_p3_follow_up(question_type: str, transcript: str, focus: str = "") 
     if focus == "abstract_discussion":
         return "Can you explain this at a wider social level rather than as a personal example?"
     return _p3_follow_up_for_type(question_type)
+
+
+def _reasonable_p3_follow_up_question(value: str) -> bool:
+    question = clean_report_text(value)
+    lowered = question.lower()
+    if not question.endswith("?") or question.count("?") != 1:
+        return False
+    if len(question) < 20 or len(question) > 180:
+        return False
+    if any(marker in lowered for marker in ("```", "{", "}", "as an ai", "here is", "candidate answer", "current question")):
+        return False
+    starters = (
+        "what",
+        "why",
+        "how",
+        "do",
+        "does",
+        "did",
+        "is",
+        "are",
+        "should",
+        "could",
+        "would",
+        "can",
+        "which",
+        "who",
+        "when",
+        "where",
+        "in what",
+        "to what extent",
+    )
+    return lowered.startswith(starters)
+
+
+def _normalize_question_for_match(value: str) -> str:
+    return re.sub(r"\s+", " ", clean_report_text(value).strip().lower())
+
+
+def _extract_single_follow_up_question(output: str, rejected_questions: tuple[str, ...] = ()) -> str:
+    text = str(output or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    text = re.sub(r"```(?:[a-zA-Z0-9_-]+)?", "", text).replace("```", "")
+    rejected = {_normalize_question_for_match(item) for item in rejected_questions if item}
+    candidates: list[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line)
+        line = re.sub(r"^\s*(?:follow[-_ ]?up|question|answer)\s*:\s*", "", line, flags=re.I).strip()
+        line = line.strip("\"'“”‘’")
+        if line:
+            candidates.append(line)
+    if not candidates and text:
+        candidates.append(text.strip("\"'“”‘’"))
+    for candidate in candidates:
+        question = clean_report_text(candidate)
+        if _normalize_question_for_match(question) in rejected:
+            continue
+        if _reasonable_p3_follow_up_question(question):
+            return question
+    raise RuntimeError("codex quick follow-up did not return a usable question")
+
+
+def quick_follow_up_runner(
+    current_question: str,
+    candidate_answer: str,
+    focus: str = "",
+    question_type: str = "",
+    timeout: int = P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
+) -> str:
+    """Generate one P3 follow-up through a low-overhead Codex exec call."""
+    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
+        raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
+    question = clean_report_text(current_question)[:500]
+    answer = clean_report_text(candidate_answer)[:2500]
+    if not question:
+        raise RuntimeError("missing current P3 question")
+    if not answer:
+        raise RuntimeError("missing candidate answer")
+
+    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
+    if not shutil.which(codex) and not Path(codex).exists():
+        raise RuntimeError("codex CLI not found")
+
+    prompt = f"""You are an IELTS Speaking Part 3 examiner.
+Write exactly one natural follow-up question based on the candidate's answer.
+Output one line only. Do not include JSON, Markdown, labels, explanations, or quotes.
+Do not repeat the current question. Make the follow-up more specific and deeper.
+
+Current Part 3 question:
+{question}
+
+Question type: {question_type or "general"}
+Training focus: {focus or "general IELTS Part 3 discussion"}
+
+Candidate answer:
+{answer}
+
+One follow-up question:
+"""
+    cmd = [
+        codex,
+        "exec",
+        "--skip-git-repo-check",
+        "--ignore-rules",
+        "--ignore-user-config",
+        "--ephemeral",
+        "--cd",
+        "/tmp",
+        "-m",
+        P3_QUICK_FOLLOW_UP_CODEX_MODEL,
+        "-c",
+        f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"',
+        "-",
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            input=prompt,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=timeout,
+            check=True,
+            cwd="/tmp",
+        )
+        return _extract_single_follow_up_question(str(result.stdout or ""), rejected_questions=(question,))
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"codex quick follow-up timed out after {timeout}s") from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = clean_report_text(str(exc.stderr or ""))[:180]
+        raise RuntimeError(f"codex quick follow-up failed{f': {stderr}' if stderr else ''}") from exc
+
+
+def _generate_p3_dynamic_follow_up(
+    current_question: str,
+    question_type: str,
+    transcript: str,
+    focus: str = "",
+    call_id: str = "",
+) -> dict[str, str]:
+    fallback = _dynamic_p3_follow_up(question_type, transcript, focus)
+    try:
+        follow_up = quick_follow_up_runner(
+            current_question,
+            transcript,
+            focus=focus,
+            question_type=question_type,
+            timeout=P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
+        )
+        return {"follow_up": follow_up, "backend": "codex_quick", "status": "ready"}
+    except Exception as exc:  # noqa: BLE001 - P3 follow-up must never block the flow
+        return {
+            "follow_up": fallback,
+            "backend": "fallback",
+            "status": "fallback",
+            "error": f"{call_id}: {exc}" if call_id else str(exc),
+        }
 
 
 def _structured_p3_questions(questions: list[str], source_type: str, focus: str) -> list[dict[str, Any]]:
@@ -3146,13 +3307,25 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
             turn_prompt = turn.metadata.get("prompt") if isinstance(turn.metadata.get("prompt"), dict) else {}
             attempt_metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
             question_type = str(turn_prompt.get("question_type") or next_prompt.get("question_type") or "")
-            follow_up = _dynamic_p3_follow_up(question_type, cleaned, str(attempt_metadata.get("p3_focus") or ""))
+            focus = str(attempt_metadata.get("p3_focus") or "")
+            current_question = str(turn_prompt.get("question") or turn.question or "")
+            result = _generate_p3_dynamic_follow_up(
+                current_question,
+                question_type,
+                cleaned,
+                focus,
+                f"p3_follow_up_{attempt.attempt_id}_{turn.turn_id}",
+            )
+            follow_up = result["follow_up"]
             next_turn.question = follow_up
             next_prompt = {
                 **next_prompt,
                 "question": follow_up,
                 "source": "adaptive_answer",
                 "adapted_from_turn": turn.turn_id,
+                "backend": result["backend"],
+                "generation_status": result["status"],
+                **({"generation_error": result["error"]} if result.get("error") else {}),
             }
             next_metadata = {
                 **next_metadata,
@@ -3160,6 +3333,9 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
                 "examiner_text": follow_up,
                 "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
                 "p3_dynamic_follow_up": True,
+                "p3_dynamic_follow_up_backend": result["backend"],
+                "p3_dynamic_follow_up_status": result["status"],
+                **({"p3_dynamic_follow_up_error": result["error"]} if result.get("error") else {}),
             }
             next_turn.metadata = next_metadata
             next_turn.save(update_fields=["question", "metadata", "updated_at"])
@@ -4248,16 +4424,8 @@ def build_turn_feedback(
             turn.metadata if isinstance(turn.metadata, dict) else None,
         )
     elif not band7:
-        band7 = build_turn_band7_fallback(
-            turn.question,
-            part,
-            transcript,
-            full_name,
-            english_name,
-            turn.metadata if isinstance(turn.metadata, dict) else None,
-        )
-        if not band7:
-            result["feedback_generation_status"] = "failed"
+        result["feedback_generation_status"] = "failed" if result.get("feedback_generation_error") else "pending"
+        result["feedback_generation_error"] = result.get("feedback_generation_error") or "AI turn feedback has not been generated yet."
 
     result["band7_version"] = plain_spoken_text(band7)
     result["band7_markdown"] = spoken_markdown(band7, part)
@@ -4269,11 +4437,14 @@ def build_turn_feedback(
         result["display_transcript"] = display_transcript
         result["display_transcript_markdown"] = _spoken_markdown(display_transcript)
 
-    result["model_audio"] = volcengine_tts(
-        result["band7_version"],
-        role="model",
-        cache_key=_model_band7_tts_cache_key(attempt.attempt_id, turn.turn_id, result["band7_version"]),
-    )
+    if result["band7_version"]:
+        result["model_audio"] = volcengine_tts(
+            result["band7_version"],
+            role="model",
+            cache_key=_model_band7_tts_cache_key(attempt.attempt_id, turn.turn_id, result["band7_version"]),
+        )
+    else:
+        result["model_audio"] = {"provider": "none", "status": "empty_text", "audio_url": None}
 
     # Upgrade notes
     feedback_transcript = result.get("display_transcript") or transcript
@@ -4317,6 +4488,33 @@ def build_ai_coaching_fallback(
     return ensure_grammar_correction_bullet("\n".join(lines), transcript)
 
 
+def mark_missing_turn_feedback_pending(turns: list[SpeakingTurn]) -> None:
+    """Keep report payloads honest when turn-level AI feedback is not ready."""
+    for turn in turns:
+        transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+        if not transcript or is_p1_name_intro_turn(turn):
+            continue
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        if metadata.get("feedback_generation_backend") == "codex" and metadata.get("feedback_generation_status") == "ready":
+            continue
+        metadata.update(
+            {
+                "band7_version": "",
+                "band7_markdown": "",
+                "target_band_version": "",
+                "target_band_markdown": "",
+                "model_audio": {"provider": "none", "status": "pending", "audio_url": None},
+                "ai_coaching": "",
+                "feedback_generation_backend": "codex",
+                "feedback_generation_status": "pending",
+                "band7_source": "pending",
+                "ai_coaching_source": "pending",
+            }
+        )
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+
+
 def _training_relevance(question: str, transcript: str) -> Decimal:
     q_words = {word.strip(".,?!:;").lower() for word in question.split() if len(word.strip(".,?!:;")) > 3}
     t_words = {word.strip(".,?!:;").lower() for word in transcript.split() if len(word.strip(".,?!:;")) > 3}
@@ -4338,60 +4536,7 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     call_id = f"score_attempt_{attempt_id}"
     part = attempt.part or attempt.mode or ""
 
-    # Get user profile for personalization
-    from apps.accounts.models import UserProfile
-    profile_obj, _ = UserProfile.objects.get_or_create(user=user)
-    user_profile = {
-        "full_name": profile_obj.full_name,
-        "english_name": profile_obj.english_name,
-    }
-
-    try:
-        generated_turn_feedback = turn_feedback_batch_with_codex(
-            turns,
-            attempt,
-            target_band_label(attempt),
-            user_profile,
-            f"turn_feedback_batch_{attempt.attempt_id}",
-            prepared_corpus_for_turns(user, turns),
-        )
-    except Exception as exc:
-        generated_turn_feedback = {}
-        batch_feedback_error = str(exc)
-    else:
-        batch_feedback_error = ""
-
-    # Apply AI feedback for each turn without additional per-turn Codex calls.
-    for turn in turns:
-        turn_transcript = turn.transcript_cleaned or turn.transcript_raw
-        if not turn_transcript.strip():
-            continue
-
-        feedback = build_turn_feedback(
-            turn,
-            attempt,
-            user_profile,
-            allow_codex=False,
-            generated_feedback=generated_turn_feedback.get(turn.turn_id),
-        )
-        if batch_feedback_error and feedback.get("feedback_generation_backend") != "codex":
-            feedback["feedback_generation_error"] = batch_feedback_error
-
-        # Update turn metadata
-        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-        metadata.update(feedback)
-
-        # Track source for scoring context
-        if feedback.get("feedback_generation_backend") == "codex":
-            metadata["band7_source"] = "codex"
-            metadata["ai_coaching_source"] = "codex"
-        else:
-            metadata["band7_source"] = "fallback"
-            metadata["ai_coaching_source"] = "fallback"
-
-        turn.metadata = metadata
-        turn.save()
-
+    mark_missing_turn_feedback_pending(turns)
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
@@ -4725,58 +4870,7 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     call_id = f"regenerate_{attempt_id}"
     part = attempt.part or attempt.mode or ""
 
-    # Get user profile for personalization
-    from apps.accounts.models import UserProfile
-    profile_obj, _ = UserProfile.objects.get_or_create(user=user)
-    user_profile = {
-        "full_name": profile_obj.full_name,
-        "english_name": profile_obj.english_name,
-    }
-
-    try:
-        generated_turn_feedback = turn_feedback_batch_with_codex(
-            turns,
-            attempt,
-            target_band_label(attempt),
-            user_profile,
-            f"turn_feedback_batch_regenerate_{attempt.attempt_id}",
-            prepared_corpus_for_turns(user, turns),
-        )
-    except Exception as exc:
-        generated_turn_feedback = {}
-        batch_feedback_error = str(exc)
-    else:
-        batch_feedback_error = ""
-
-    # Regenerate AI feedback for each turn without additional per-turn Codex calls.
-    for turn in turns:
-        turn_transcript = turn.transcript_cleaned or turn.transcript_raw
-        if not turn_transcript.strip():
-            continue
-
-        feedback = build_turn_feedback(
-            turn,
-            attempt,
-            user_profile,
-            allow_codex=False,
-            generated_feedback=generated_turn_feedback.get(turn.turn_id),
-        )
-        if batch_feedback_error and feedback.get("feedback_generation_backend") != "codex":
-            feedback["feedback_generation_error"] = batch_feedback_error
-
-        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-        metadata.update(feedback)
-
-        if feedback.get("feedback_generation_backend") == "codex":
-            metadata["band7_source"] = "codex_regenerated"
-            metadata["ai_coaching_source"] = "codex_regenerated"
-        else:
-            metadata["band7_source"] = "fallback_regenerated"
-            metadata["ai_coaching_source"] = "fallback_regenerated"
-
-        turn.metadata = metadata
-        turn.save(update_fields=["metadata"])
-
+    mark_missing_turn_feedback_pending(turns)
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
@@ -4990,10 +5084,23 @@ def p3_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:
 def p3_follow_up_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     prior_answer = str(payload.get("prior_answer") or "")
+    current_question = str(payload.get("current_question") or payload.get("question") or payload.get("p3_question") or "")
+    question_type = str(payload.get("question_type") or payload.get("type") or "")
+    focus = _normalize_p3_focus(str(payload.get("p3_focus") or payload.get("focus") or ""))
+    if current_question.strip() and prior_answer.strip():
+        result = _generate_p3_dynamic_follow_up(
+            current_question,
+            question_type,
+            prior_answer,
+            focus,
+            f"p3_follow_up_api_{hashlib.sha1((current_question + prior_answer).encode('utf-8')).hexdigest()[:16]}",
+        )
+        return {key: value for key, value in result.items() if value}
+
     follow_up = "Could you give a specific example to support that view?"
     if len(prior_answer.split()) > 40:
         follow_up = "What might be the opposite argument, and why might some people agree with it?"
-    return {"follow_up": follow_up, "backend": "fallback"}
+    return {"follow_up": follow_up, "backend": "fallback", "status": "fallback"}
 
 
 def tts_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:

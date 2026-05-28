@@ -103,6 +103,7 @@ const state = {
     autosaveSaving: false,
     autosaveQueued: false,
     entry: null,
+    requestedEntryId: "",
     dirty: false,
     month: "",
     recentEntries: [],
@@ -110,6 +111,8 @@ const state = {
     activeReportId: null,
     activeReportDetail: null,
     reportDetailCache: new Map(),
+    reportEditLoading: false,
+    reportEditRequestId: 0,
     scorePollTimer: null,
     scorePollingEntryId: null,
     scoreCompletionModalEntry: null,
@@ -1285,6 +1288,7 @@ function requestedRouteState() {
       writingPromptId: params.get("prompt") || "",
       speakingReportId: params.get("report") || "",
       writingReportId: params.get("writing_report") || "",
+      writingEntryId: params.get("writing_entry") || "",
     };
   } catch (_error) {
     return {
@@ -1293,6 +1297,7 @@ function requestedRouteState() {
       writingPromptId: "",
       speakingReportId: "",
       writingReportId: "",
+      writingEntryId: "",
     };
   }
 }
@@ -1300,6 +1305,26 @@ function requestedRouteState() {
 function requestedStandaloneView() {
   const view = requestedUrlView();
   return ["p1Corpus", "p2Corpus"].includes(view) ? view : "";
+}
+
+function viewUrl(view) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("view", viewCopy[view] ? view : "home");
+  return url.toString();
+}
+
+function isNewTabNavigationEvent(event) {
+  return Boolean(event?.metaKey || event?.ctrlKey || event?.button === 1);
+}
+
+function openViewInNewTabForModifier(event, view) {
+  if (!isNewTabNavigationEvent(event)) return false;
+  window.open(viewUrl(view), "_blank", "noopener");
+  event.preventDefault();
+  event.stopPropagation();
+  return true;
 }
 
 function updateViewUrl(view, options = {}) {
@@ -1314,6 +1339,9 @@ function updateViewUrl(view, options = {}) {
     url.searchParams.set("task", state.writing.taskType || "task1_academic");
     if (state.writing.prompt?.id) url.searchParams.set("prompt", state.writing.prompt.id);
     else url.searchParams.delete("prompt");
+    const writingEntryId = state.writing.entry?.id || state.writing.requestedEntryId || "";
+    if (writingEntryId) url.searchParams.set("writing_entry", writingEntryId);
+    else url.searchParams.delete("writing_entry");
     url.searchParams.delete("report");
     url.searchParams.delete("writing_report");
   } else if (view === "history") {
@@ -1322,17 +1350,20 @@ function updateViewUrl(view, options = {}) {
     url.searchParams.delete("task");
     url.searchParams.delete("prompt");
     url.searchParams.delete("writing_report");
+    url.searchParams.delete("writing_entry");
   } else if (view === "writingReports") {
     if (state.writing.activeReportId) url.searchParams.set("writing_report", state.writing.activeReportId);
     else url.searchParams.delete("writing_report");
     url.searchParams.delete("task");
     url.searchParams.delete("prompt");
     url.searchParams.delete("report");
+    url.searchParams.delete("writing_entry");
   } else {
     url.searchParams.delete("task");
     url.searchParams.delete("prompt");
     url.searchParams.delete("report");
     url.searchParams.delete("writing_report");
+    url.searchParams.delete("writing_entry");
   }
   const nextUrl = url.toString();
   if (nextUrl === window.location.href) return;
@@ -1366,11 +1397,23 @@ function writingPromptDeepLink(prompt) {
   return url.toString();
 }
 
+function writingEntryEditUrl(entry = {}) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("view", "writing");
+  url.searchParams.set("task", entry.task_type || state.writing.taskType || "task1_academic");
+  if (entry.prompt_id) url.searchParams.set("prompt", entry.prompt_id);
+  if (entry.id) url.searchParams.set("writing_entry", entry.id);
+  return url.toString();
+}
+
 function applyRouteState(route) {
   if (route.speakingReportId) state.activeHistoryId = route.speakingReportId;
   if (route.writingReportId) state.writing.activeReportId = route.writingReportId;
   if (["task1_academic", "task2"].includes(route.writingTask)) state.writing.taskType = route.writingTask;
   state.writing.requestedPromptId = route.writingPromptId || "";
+  state.writing.requestedEntryId = route.writingEntryId || "";
 }
 
 function restoreRouteFromLocation() {
@@ -3481,10 +3524,25 @@ function resolveWritingPickerSource(taskType) {
 }
 
 async function loadWriting() {
+  if (state.writing.reportEditLoading) {
+    setWritingPageLoading(false);
+    text("writingSaveStatus", "正在复制这篇作文...");
+    return;
+  }
   const firstLoad = !state.writing.prompt && !state.writing.entry;
   if (firstLoad) setWritingPageLoading(true);
   try {
     const summaryPromise = loadWritingSummary(false);
+    if (await loadRequestedWritingEntry()) {
+      setWritingPageLoading(false);
+      summaryPromise.catch((error) => {
+        text("writingSaveStatus", error?.message || "签到信息稍后刷新。");
+      });
+      scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType), 80);
+      const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
+      scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 120);
+      return;
+    }
     const routePrompt = await resolveRequestedWritingPrompt();
     if (routePrompt) setWritingPrompt(routePrompt, false, { replaceUrl: true });
     let quickPrompt = null;
@@ -3527,6 +3585,20 @@ async function loadWriting() {
   } finally {
     setWritingPageLoading(false);
   }
+}
+
+async function loadRequestedWritingEntry() {
+  const entryId = String(state.writing.requestedEntryId || "").trim();
+  if (!entryId) return false;
+  text("writingSaveStatus", "正在加载这篇作文...");
+  const entry = await api(`/api/writing/entries/${encodeURIComponent(entryId)}`);
+  state.writing.requestedEntryId = "";
+  await recoverWritingEntry(entry);
+  syncWritingScorePolling(entry, { switchOnComplete: false });
+  syncUrlForCurrentState({ replace: true });
+  text("writingSaveStatus", "已打开这篇作文。修改分段后，再点击 AI 评分与辅导重新生成报告。");
+  $("writingAnswer")?.focus();
+  return true;
 }
 
 async function resolveRequestedWritingPrompt() {
@@ -4670,6 +4742,37 @@ function isScoreTaskUnsupported(error) {
   return error?.status === 404 && /Unknown API endpoint/i.test(message);
 }
 
+async function cloneWritingEntryForRevision(entryId) {
+  try {
+    return await api(`/api/writing/entries/${encodeURIComponent(entryId)}/clone`, {});
+  } catch (error) {
+    if (error?.status !== 404) throw error;
+    const source = await api(`/api/writing/entries/${encodeURIComponent(entryId)}`);
+    if (!source?.id) throw error;
+    return api("/api/writing/entries", {
+      task_type: source.task_type || "task2",
+      prompt_id: source.prompt_id || "",
+      prompt: source.prompt || "",
+      title: source.title || writingEntryDisplayTitle(source) || writingTaskLabel(source.task_type),
+      category: source.category || "",
+      image_url: source.image_url || "",
+      answer: source.answer || "",
+      prompt_highlights: source.prompt_highlights || [],
+    });
+  }
+}
+
+function showWritingReportEditError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  showWritingError(error);
+  if (state.view !== "writingReports") return;
+  const target = $("writingReportDetail");
+  if (!target) return;
+  const existing = target.querySelector("[data-writing-report-edit-error]");
+  if (existing) existing.remove();
+  target.insertAdjacentHTML("afterbegin", `<div class="detail-card" data-writing-report-edit-error><p class="error">${escapeHtml(message)}</p></div>`);
+}
+
 function renderVisibleWritingReport(entry) {
   if (state.view !== "writingReports" || state.writing.activeReportId !== entry?.id) return;
   // Update active report detail
@@ -4854,16 +4957,63 @@ async function openWritingEntry(entryId) {
 }
 
 async function editWritingReportEntry(entryId) {
-  switchView("writing", { force: true });
-  text("writingSaveStatus", "正在加载这篇作文...");
+  if (!entryId) return;
+  if (state.writing.reportEditLoading) return;
+  const requestId = state.writing.reportEditRequestId + 1;
+  state.writing.reportEditRequestId = requestId;
+  state.writing.reportEditLoading = true;
+  text("writingSaveStatus", "正在复制这篇作文...");
   try {
-    await openWritingEntry(entryId);
+    const clone = await withBusy("正在复制作文...", () => cloneWritingEntryForRevision(entryId));
+    if (state.writing.reportEditRequestId !== requestId) return;
+    state.writing.requestedEntryId = "";
+    state.writing.requestedPromptId = "";
+    state.writing.dirty = false;
+    clearWritingAutosaveTimer();
+    switchView("writing", { force: true });
+    await recoverWritingEntry(clone);
+    state.writing.reportDetailCache.set(clone.id, clone);
     state.writing.activeReportId = entryId;
     state.writing.activeReportDetail = state.writing.reportDetailCache.get(entryId) || state.writing.activeReportDetail || null;
-    text("writingSaveStatus", "已打开这篇作文。修改分段后，再点击 AI 评分与辅导重新生成报告。");
+    syncUrlForCurrentState({ replace: true });
+    text("writingSaveStatus", "已复制为新版草稿。旧报告会保留，重新评分后新版会排在旧报告左边。");
     $("writingAnswer")?.focus();
   } catch (error) {
-    showWritingError(error);
+    if (state.writing.reportEditRequestId === requestId) showWritingReportEditError(error);
+  } finally {
+    if (state.writing.reportEditRequestId === requestId) {
+      state.writing.reportEditLoading = false;
+    }
+  }
+}
+
+async function editWritingReportEntryInNewTab(entryId) {
+  if (!entryId) return;
+  let targetWindow = null;
+  try {
+    targetWindow = window.open("about:blank", "_blank");
+    if (targetWindow) {
+      targetWindow.opener = null;
+      targetWindow.document.title = "正在复制作文...";
+      targetWindow.document.body.innerHTML = "<p>正在复制作文，请稍候...</p>";
+    }
+  } catch (_error) {
+    targetWindow = null;
+  }
+  try {
+    const clone = await withBusy("正在复制作文...", () => cloneWritingEntryForRevision(entryId));
+    const url = writingEntryEditUrl(clone);
+    if (targetWindow && !targetWindow.closed) {
+      targetWindow.location.replace(url);
+      return;
+    }
+    const opened = window.open(url, "_blank", "noopener");
+    if (!opened) {
+      throw new Error("浏览器阻止了新窗口。请允许弹窗后重试，或普通点击按钮在当前页面编辑。");
+    }
+  } catch (error) {
+    if (targetWindow && !targetWindow.closed) targetWindow.close();
+    showWritingReportEditError(error);
   }
 }
 
@@ -6954,35 +7104,41 @@ function bindEvents() {
   };
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.addEventListener("click", (event) => {
-      if (state.practiceLocked && button.dataset.view === state.practiceViewBeforeSettings) {
-        event.preventDefault();
+      const targetView = button.dataset.view || "home";
+      if (isNewTabNavigationEvent(event)) return;
+      event.preventDefault();
+      if (state.practiceLocked && targetView === state.practiceViewBeforeSettings) {
         returnFromSettings();
         return;
       }
-      if (button.dataset.view === state.view) {
-        event.preventDefault();
+      if (targetView === state.view) {
         return;
       }
-      if (state.practiceLocked && button.dataset.view !== state.view) {
-        event.preventDefault();
-        if (corpusViews.has(button.dataset.view)) {
-          exitPracticeAndSwitch(button.dataset.view).catch(showError);
+      if (state.practiceLocked && targetView !== state.view) {
+        if (corpusViews.has(targetView)) {
+          exitPracticeAndSwitch(targetView).catch(showError);
           return;
         }
         showNavLockHint(button);
         return;
       }
-      switchView(button.dataset.view);
+      switchView(targetView);
     });
   });
+  const handleAccountNavigation = (event) => {
+    const targetView = state.account.authenticated ? "accountProfile" : "login";
+    if (openViewInNewTabForModifier(event, targetView)) return;
+    if (event.type === "auxclick") return;
+    event.preventDefault();
+    if (state.account.authenticated) {
+      switchView("accountProfile", { preservePractice: true, fromView: state.view });
+    } else {
+      switchView("login", { fromView: state.view });
+    }
+  };
   document.querySelectorAll(".avatar-settings-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (state.account.authenticated) {
-        switchView("accountProfile", { preservePractice: true, fromView: state.view });
-      } else {
-        switchView("login", { fromView: state.view });
-      }
-    });
+    button.addEventListener("click", handleAccountNavigation);
+    button.addEventListener("auxclick", handleAccountNavigation);
   });
   $("accountBackBtn")?.addEventListener("click", returnToPreviousView);
   $("fullNameInput")?.addEventListener("input", scheduleCandidateNameSave);
@@ -7065,7 +7221,11 @@ function bindEvents() {
     if (created) openP2CorpusEditor({ category: created.dataset.p2CorpusNew || "person" });
   });
   document.querySelectorAll("[data-corpus-home-target]").forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.corpusHomeTarget || "corpus"));
+    button.addEventListener("click", (event) => {
+      if (isNewTabNavigationEvent(event)) return;
+      event.preventDefault();
+      switchView(button.dataset.corpusHomeTarget || "corpus");
+    });
   });
   $("languageTakeawayHideToggle")?.addEventListener("click", toggleLanguageTakeawayHiddenMode);
   $("writingTakeawayHideToggle")?.addEventListener("click", toggleWritingTakeawayHiddenMode);
@@ -7279,7 +7439,11 @@ function bindEvents() {
     }
   });
   document.querySelectorAll("[data-home-mode]").forEach((button) => {
-    button.addEventListener("click", () => startPracticeMode(button.dataset.homeMode || "mock"));
+    button.addEventListener("click", (event) => {
+      if (isNewTabNavigationEvent(event)) return;
+      event.preventDefault();
+      startPracticeMode(button.dataset.homeMode || "mock");
+    });
   });
   $("exitPractice")?.addEventListener("click", () => exitPractice());
   $("p3GeneratePlanButton")?.addEventListener("click", () => generateP3Plan());
@@ -7387,12 +7551,21 @@ function bindEvents() {
   $("writingSaveBtn")?.addEventListener("click", () => saveWritingEntry().catch(showWritingError));
   $("writingScoreBtn")?.addEventListener("click", () => scoreWritingEntry().catch(showWritingError));
   $("writingRefreshBtn")?.addEventListener("click", () => loadWriting().catch(showWritingError));
-  document.addEventListener("click", (event) => {
+  const handleWritingReportEditClick = (event) => {
     const button = event.target.closest("[data-writing-report-edit]");
     if (!button) return;
+    if (event.type === "auxclick" && event.button !== 1) return;
     event.preventDefault();
-    editWritingReportEntry(button.dataset.writingReportEdit || "").catch(showWritingError);
-  });
+    event.stopPropagation();
+    const entryId = button.dataset.writingReportEdit || "";
+    if (isNewTabNavigationEvent(event)) {
+      editWritingReportEntryInNewTab(entryId).catch(showWritingError);
+      return;
+    }
+    editWritingReportEntry(entryId).catch(showWritingError);
+  };
+  document.addEventListener("click", handleWritingReportEditClick);
+  document.addEventListener("auxclick", handleWritingReportEditClick);
   $("writingAnswer")?.addEventListener("input", () => {
     state.writing.dirty = true;
     updateWritingWordCount({ preserveScroll: true });
