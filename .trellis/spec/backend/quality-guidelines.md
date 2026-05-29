@@ -214,6 +214,131 @@ if (!wav) {
 - Realtime integrations used by CLI flows must expose a connection check and
   route disconnected/no-transcript cases to explicit fallback behavior.
 
+## Scenario: C++ Audio Core Pure Module
+
+### 1. Scope / Trigger
+
+- Trigger: Realtime speaking and browser WASM work needs a shared audio
+  preprocessing foundation without changing the existing browser/Django product
+  flow.
+- Scope: `include/ielts/audio_core.h`, `src/ielts/audio_core.cpp`,
+  `tests/audio_core_test.cpp`, and CMake/CTest wiring.
+
+### 2. Signatures
+
+```cpp
+namespace ielts::audio {
+
+double NormalizedRms(const std::vector<int16_t>& samples);
+double NormalizedPeak(const std::vector<int16_t>& samples);
+
+FrameAnalysis AnalyzeFrame(
+    const std::vector<int16_t>& samples,
+    double speech_threshold);
+
+bool IsSpeechFrame(
+    const std::vector<int16_t>& samples,
+    double speech_threshold);
+
+std::vector<int16_t> TrimSilence(
+    const std::vector<int16_t>& samples,
+    int sample_rate,
+    int frame_ms,
+    double speech_threshold,
+    int padding_ms);
+
+std::vector<int16_t> ResampleLinear(
+    const std::vector<int16_t>& samples,
+    int source_rate,
+    int target_rate);
+
+} // namespace ielts::audio
+```
+
+- Build target: `audio_core_test`
+- Focused validation:
+  ```bash
+  cmake --build build --target audio_core_test
+  ctest --test-dir build -R audio_core_test --output-on-failure
+  ```
+
+### 3. Contracts
+
+- The audio core is a pure C++ module. It must not open devices, files,
+  sockets, subprocesses, Django models, or logging sinks.
+- Input samples are mono signed 16-bit PCM.
+- `NormalizedRms` and `NormalizedPeak` return normalized values in the
+  approximate range `[0.0, 1.0]` for valid PCM frames.
+- `TrimSilence` returns a deterministic subset of the input samples plus
+  optional padding. When no speech frame is found, it returns an empty vector.
+- `ResampleLinear` is deterministic and dependency-free. It is acceptable as a
+  first-pass quality baseline before Experiment 5 integrates WebRTC VAD,
+  SpeexDSP, or libsamplerate.
+- Existing P1/P2/P3 browser behavior must not change when this module is
+  introduced.
+
+### 4. Validation & Error Matrix
+
+- Empty samples -> RMS/peak are `0.0`; trim returns empty; resample returns
+  empty.
+- Invalid `sample_rate`, `frame_ms`, or resample rates -> throw a clear
+  `std::invalid_argument` instead of silently producing nonsense.
+- Threshold below or above normal range -> keep behavior deterministic; tests
+  should prove expected speech/silence decisions at representative thresholds.
+- Any new PortAudio, WebSocket, ASR, Django, filesystem, or logging dependency
+  in `audio_core` -> reject in review.
+
+### 5. Good/Base/Bad Cases
+
+- Good: A future WASM build links `audio_core.cpp` and exposes the same pure
+  functions to browser-side preprocessing.
+- Good: A future realtime gateway reuses `TrimSilence` or `ResampleLinear`
+  before sending frames upstream.
+- Base: `audio_core_test` builds and runs without live ASR credentials, audio
+  devices, browser APIs, or Django settings.
+- Bad: `audio_core.cpp` includes PortAudio, websocket, HTTP, Django, or
+  application logging headers.
+- Bad: Product recording flow changes as part of the extraction task. Product
+  integration must be a separate task with its own fallback contract.
+
+### 6. Tests Required
+
+- Silence detection.
+- Speech detection at a representative threshold.
+- Trim behavior around leading/trailing silence.
+- Padding behavior.
+- No-speech trimming returns empty.
+- Upsample and downsample behavior for `ResampleLinear`.
+- Invalid configuration errors.
+- Full CTest should still pass after CMake target wiring changes.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```cpp
+#include "realtime_client.h"
+
+std::vector<int16_t> TrimSilence(...) {
+    RealtimeClient client;
+    client.Connect();
+    ...
+}
+```
+
+#### Correct
+
+```cpp
+std::vector<int16_t> TrimSilence(
+    const std::vector<int16_t>& samples,
+    int sample_rate,
+    int frame_ms,
+    double speech_threshold,
+    int padding_ms) {
+    // Pure deterministic sample processing only.
+}
+```
+
 ---
 
 ## Testing Requirements
