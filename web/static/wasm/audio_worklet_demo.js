@@ -1,8 +1,12 @@
+import { ANALYZER_DESCRIPTORS, DEFAULT_ANALYZER_ID, analyzerById, analyzerLabel } from "./audio_analyzer.js";
+
 const statusEl = document.getElementById("status");
 const startButton = document.getElementById("startAudio");
 const stopButton = document.getElementById("stopAudio");
 const thresholdInput = document.getElementById("threshold");
+const analyzerSelect = document.getElementById("analyzer");
 const meters = {
+  analyzer: document.getElementById("analyzerLabel"),
   sampleRate: document.getElementById("sampleRate"),
   frameSize: document.getElementById("frameSize"),
   frameCount: document.getElementById("frameCount"),
@@ -34,6 +38,7 @@ function setRunning(running) {
 }
 
 function resetMeters() {
+  meters.analyzer.textContent = analyzerLabel(currentAnalyzerId());
   meters.sampleRate.textContent = "-";
   meters.frameSize.textContent = "-";
   meters.frameCount.textContent = "0";
@@ -49,12 +54,37 @@ function currentThreshold() {
   return Number.isFinite(value) ? value : 0.02;
 }
 
+function currentAnalyzerId() {
+  const descriptor = analyzerById(analyzerSelect.value);
+  return descriptor.status === "ready" ? descriptor.id : DEFAULT_ANALYZER_ID;
+}
+
+function populateAnalyzerSelect() {
+  analyzerSelect.replaceChildren();
+  for (const descriptor of ANALYZER_DESCRIPTORS) {
+    const option = document.createElement("option");
+    option.value = descriptor.id;
+    option.textContent = descriptor.label;
+    option.disabled = descriptor.status !== "ready";
+    option.title = descriptor.description;
+    analyzerSelect.appendChild(option);
+  }
+  analyzerSelect.value = DEFAULT_ANALYZER_ID;
+}
+
+function updateAnalyzerStatus() {
+  const descriptor = analyzerById(currentAnalyzerId());
+  meters.analyzer.textContent = descriptor.label;
+  setStatus(descriptor.description, descriptor.status === "ready" ? "neutral" : "error");
+}
+
 function handleFrameMessage(event) {
   const data = event.data || {};
   if (data.type !== "audio-frame") {
     return;
   }
 
+  meters.analyzer.textContent = analyzerLabel(data.analyzer);
   meters.sampleRate.textContent = String(data.sampleRate);
   meters.frameSize.textContent = String(data.frameSize);
   meters.frameCount.textContent = String(data.frameCount);
@@ -63,6 +93,9 @@ function handleFrameMessage(event) {
   meters.decision.textContent = data.speech ? "speech" : "silence";
   meters.decision.dataset.speech = data.speech ? "true" : "false";
   meters.speechFrames.textContent = String(data.speechFrameCount);
+  if (data.analyzerError) {
+    setStatus(data.analyzerError, "error");
+  }
 }
 
 async function startAudio() {
@@ -98,6 +131,7 @@ async function startAudio() {
       numberOfOutputs: 0,
       channelCount: 1,
       processorOptions: {
+        analyzerId: currentAnalyzerId(),
         threshold: currentThreshold(),
         reportEveryFrames: 8,
       },
@@ -156,6 +190,17 @@ thresholdInput.addEventListener("input", () => {
   }
 });
 
+analyzerSelect.addEventListener("change", () => {
+  resetMeters();
+  updateAnalyzerStatus();
+  if (state.workletNode) {
+    state.workletNode.port.postMessage({
+      analyzerId: currentAnalyzerId(),
+      threshold: currentThreshold(),
+    });
+  }
+});
+
 startButton.addEventListener("click", startAudio);
 stopButton.addEventListener("click", stopAudio);
 window.addEventListener("beforeunload", () => {
@@ -166,6 +211,6 @@ window.addEventListener("beforeunload", () => {
   }
 });
 
+populateAnalyzerSelect();
 resetMeters();
 setRunning(false);
-

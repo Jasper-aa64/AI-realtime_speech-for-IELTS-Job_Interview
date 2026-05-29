@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check frontend runtime safety and validation expectations."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Verify the new analyzer boundary does not create avoidable duplication."}

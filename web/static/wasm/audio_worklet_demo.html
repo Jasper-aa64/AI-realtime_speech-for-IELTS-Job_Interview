@@ -89,6 +89,16 @@
         accent-color: #0f9f7a;
       }
 
+      select {
+        background: #fff;
+        border: 1px solid #d1d5db;
+        border-radius: 999px;
+        color: #111827;
+        font: inherit;
+        font-weight: 800;
+        padding: 10px 14px;
+      }
+
       .status {
         border-radius: 999px;
         background: #f1f5f9;
@@ -167,11 +177,16 @@
             Mock speech threshold
             <input id="threshold" type="range" min="0.005" max="0.08" step="0.005" value="0.02" />
           </label>
+          <label>
+            Analyzer
+            <select id="analyzer" aria-label="Audio frame analyzer"></select>
+          </label>
         </div>
 
         <div id="status" class="status">Waiting to start.</div>
 
         <div class="grid" aria-live="polite">
+          <div class="metric"><span>Analyzer</span><strong id="analyzerLabel">Mock RMS</strong></div>
           <div class="metric"><span>Sample rate</span><strong id="sampleRate">-</strong></div>
           <div class="metric"><span>Frame size</span><strong id="frameSize">-</strong></div>
           <div class="metric"><span>Frames</span><strong id="frameCount">0</strong></div>
@@ -185,4 +200,3 @@
     <script type="module" src="./audio_worklet_demo.js"></script>
   </body>
 </html>
-

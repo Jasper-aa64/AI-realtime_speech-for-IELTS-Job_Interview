@@ -1,0 +1,20 @@
+# Abstract AudioWorklet Analyzer for WASM Swap
+
+## Goal
+
+Keep the standalone AudioWorklet microphone demo usable today while separating frame capture from frame analysis, so the current JavaScript RMS analyzer can later be replaced by `audio_core_wasm.js` without changing the frame-stream plumbing.
+
+## Scope
+
+- Only modify the standalone files under `web/static/wasm/`.
+- Do not integrate this into the production P1/P2/P3 recording flow.
+- Do not require Emscripten or generated WASM artifacts.
+
+## Acceptance Criteria
+
+- [x] `audio_frame_processor.js` owns frame capture and delegates analysis through an analyzer boundary.
+- [x] The demo exposes the active analyzer in the UI.
+- [x] The default analyzer remains the current JavaScript RMS behavior.
+- [x] A future `wasm-audio-core` analyzer slot is represented but not selectable until generated artifacts exist.
+- [x] The production app files remain untouched.
+
