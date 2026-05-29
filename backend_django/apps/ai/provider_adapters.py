@@ -135,14 +135,26 @@ class AppliedProviderRunResult:
     summary_status: str
 
 
-class BaseProviderAdapter:
+class ProviderExecutionError(RuntimeError):
+    def __init__(self, message: str, *, error_code: str = "provider_runner_failed"):
+        super().__init__(message)
+        self.error_code = error_code
+
+
+class AIProvider:
+    """Strategy interface for durable AI task providers."""
+
+    adapter_name = "base"
+
+    def run(self, task: AITask) -> ProviderRunResult:
+        raise NotImplementedError
+
+
+class BaseProviderAdapter(AIProvider):
     adapter_name = "base"
 
     def __init__(self, route: ProviderRoute | None = None):
         self.route = route
-
-    def run(self, task: AITask) -> ProviderRunResult:
-        raise NotImplementedError
 
 
 class FallbackWritingScoreAdapter(BaseProviderAdapter):
@@ -227,88 +239,131 @@ def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None, 
     return final_text or str(stdout or ""), usage, has_real_content
 
 
-def run_codex(prompt: str, call_id: str, timeout: int = 120, max_attempts: int = 2) -> tuple[str, dict[str, Any] | None]:
-    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
-        raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
+class CodexCliClient:
+    """Adapter around the local Codex CLI JSON event stream."""
 
-    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
-    if not shutil.which(codex) and not Path(codex).exists():
-        raise RuntimeError("codex CLI not found")
+    def __init__(self, *, executable: str | None = None, cwd: str | None = None):
+        self.executable = executable
+        self.cwd = cwd
 
-    config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
-    cwd = str(Path(settings.BASE_DIR).parent)
-    last_error: RuntimeError | None = None
-    for _attempt in range(max(1, int(max_attempts or 1))):
-        try:
-            result = subprocess.run(
-                [codex, "exec", "--json", *config_args, "-"],
-                input=prompt,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                capture_output=True,
-                timeout=timeout,
-                check=True,
-                cwd=cwd,
-            )
-            output, usage, has_real_content = extract_codex_json_events(result.stdout)
-        except subprocess.TimeoutExpired:
-            last_error = RuntimeError(f"codex timed out after {timeout}s for {call_id}")
-            continue
-        except Exception:
-            result = subprocess.run(
-                [codex, "exec", *config_args, "-"],
-                input=prompt,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                capture_output=True,
-                timeout=timeout,
-                check=True,
-                cwd=cwd,
-            )
-            output, usage, has_real_content = result.stdout, None, bool(result.stdout.strip())
+    def run(self, prompt: str, call_id: str, timeout: int = 120, max_attempts: int = 2) -> tuple[str, dict[str, Any] | None]:
+        if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
+            raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
 
-        if usage:
-            input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
-            if input_tokens == 0:
-                last_error = RuntimeError(f"codex returned 0 input tokens for {call_id}")
+        codex = self.executable or shutil.which("codex") or "/opt/homebrew/bin/codex"
+        if not shutil.which(codex) and not Path(codex).exists():
+            raise RuntimeError("codex CLI not found")
+
+        config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
+        cwd = self.cwd or str(Path(settings.BASE_DIR).parent)
+        last_error: RuntimeError | None = None
+        for _attempt in range(max(1, int(max_attempts or 1))):
+            try:
+                result = subprocess.run(
+                    [codex, "exec", "--json", *config_args, "-"],
+                    input=prompt,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    capture_output=True,
+                    timeout=timeout,
+                    check=True,
+                    cwd=cwd,
+                )
+                output, usage, has_real_content = extract_codex_json_events(result.stdout)
+            except subprocess.TimeoutExpired:
+                last_error = RuntimeError(f"codex timed out after {timeout}s for {call_id}")
                 continue
-        if not output or not output.strip():
-            last_error = RuntimeError(f"codex returned empty output for {call_id}")
-            continue
-        if not has_real_content:
-            last_error = RuntimeError(f"codex returned only event stream for {call_id}")
-            continue
-        return output, usage
-    raise last_error or RuntimeError(f"codex returned no usable output for {call_id}")
+            except Exception as exc:
+                last_error = RuntimeError(f"codex failed for {call_id}: {exc}")
+                continue
+
+            if usage:
+                input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+                if input_tokens == 0:
+                    last_error = RuntimeError(f"codex returned 0 input tokens for {call_id}")
+                    continue
+            if not output or not output.strip():
+                last_error = RuntimeError(f"codex returned empty output for {call_id}")
+                continue
+            if not has_real_content:
+                last_error = RuntimeError(f"codex returned only event stream for {call_id}")
+                continue
+            return output, usage
+        raise last_error or RuntimeError(f"codex returned no usable output for {call_id}")
 
 
-class CodexWritingScoreAdapter(BaseProviderAdapter):
-    adapter_name = "writing_score_codex"
+_DEFAULT_CODEX_CLIENT = CodexCliClient()
+
+
+def run_codex(prompt: str, call_id: str, timeout: int = 120, max_attempts: int = 2) -> tuple[str, dict[str, Any] | None]:
+    return _DEFAULT_CODEX_CLIENT.run(prompt, call_id, timeout=timeout, max_attempts=max_attempts)
+
+
+class AiTaskTemplate(BaseProviderAdapter):
+    """Template Method for provider-backed durable AI task execution."""
+
+    failure_error_code = "provider_runner_failed"
 
     def run(self, task: AITask) -> ProviderRunResult:
         request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
         try:
-            output, usage = run_codex(
-                self._report_prompt(request_payload),
-                f"writing_score_{task.task_id}_report",
-                timeout=180,
-                max_attempts=1,
-            )
-            payload = extract_json_object(output)
-            score = self._score_payload(payload, request_payload)
+            provider_payload, usage = self._execute_provider(task, request_payload)
+            result_payload = self._parse_payload(provider_payload, request_payload, task)
         except Exception as exc:
-            return ProviderRunResult.terminal_failure(
-                f"Codex writing report generation failed: {exc}",
-                error_code="codex_writing_score_failed",
-                metadata=_route_metadata(self.adapter_name, self.route),
-            )
+            return self._on_failure(exc, task, request_payload)
         return ProviderRunResult.success(
-            {"score": score},
+            result_payload,
             usage=usage or {},
             metadata=_route_metadata(self.adapter_name, self.route),
         )
+
+    def _execute_provider(self, task: AITask, request_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        raise NotImplementedError
+
+    def _parse_payload(
+        self,
+        provider_payload: dict[str, Any],
+        request_payload: dict[str, Any],
+        task: AITask,
+    ) -> dict[str, Any]:
+        return dict(provider_payload or {})
+
+    def _on_failure(self, exc: Exception, task: AITask, request_payload: dict[str, Any]) -> ProviderRunResult:
+        error_code = exc.error_code if isinstance(exc, ProviderExecutionError) else self.failure_error_code
+        return ProviderRunResult.terminal_failure(
+            self._failure_message(exc),
+            error_code=error_code,
+            metadata=_route_metadata(self.adapter_name, self.route),
+        )
+
+    def _failure_message(self, exc: Exception) -> str:
+        return str(exc)
+
+
+class CodexWritingScoreAdapter(AiTaskTemplate):
+    adapter_name = "writing_score_codex"
+    failure_error_code = "codex_writing_score_failed"
+
+    def _execute_provider(self, task: AITask, request_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        output, usage = run_codex(
+            self._report_prompt(request_payload),
+            f"writing_score_{task.task_id}_report",
+            timeout=180,
+            max_attempts=1,
+        )
+        return extract_json_object(output), usage
+
+    def _parse_payload(
+        self,
+        provider_payload: dict[str, Any],
+        request_payload: dict[str, Any],
+        task: AITask,
+    ) -> dict[str, Any]:
+        return {"score": self._score_payload(provider_payload, request_payload)}
+
+    def _failure_message(self, exc: Exception) -> str:
+        return f"Codex writing report generation failed: {exc}"
 
     def _report_prompt(self, request_payload: dict[str, Any]) -> str:
         task_type = str(request_payload.get("task_type") or "task2")
@@ -434,33 +489,22 @@ Word count:
         return combined
 
 
-class CodexSpeakingReportAdapter(BaseProviderAdapter):
+class CodexSpeakingReportAdapter(AiTaskTemplate):
     adapter_name = "speaking_report_codex"
+    failure_error_code = "speaking_report_failed"
 
-    def run(self, task: AITask) -> ProviderRunResult:
+    def _execute_provider(self, task: AITask, request_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
         from apps.speaking.services import score_attempt_sync
 
-        request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
         attempt_id = str(request_payload.get("attempt_id") or task.related_id or "").strip()
         if not attempt_id:
-            return ProviderRunResult.terminal_failure(
+            raise ProviderExecutionError(
                 "Speaking report task is missing attempt_id",
                 error_code="missing_attempt_id",
-                metadata=_route_metadata(self.adapter_name, self.route),
             )
-        try:
-            attempt_payload = score_attempt_sync(task.user, attempt_id, request_payload)
-        except Exception as exc:
-            return ProviderRunResult.terminal_failure(
-                str(exc),
-                error_code="speaking_report_failed",
-                metadata=_route_metadata(self.adapter_name, self.route),
-            )
-        return ProviderRunResult.success(
-            {"attempt": attempt_payload},
-            usage=attempt_payload.get("billing_usage") if isinstance(attempt_payload.get("billing_usage"), dict) else {},
-            metadata=_route_metadata(self.adapter_name, self.route),
-        )
+        attempt_payload = score_attempt_sync(task.user, attempt_id, request_payload)
+        usage = attempt_payload.get("billing_usage") if isinstance(attempt_payload.get("billing_usage"), dict) else {}
+        return {"attempt": attempt_payload}, usage
 
 
 class MockSuccessWritingScoreAdapter(BaseProviderAdapter):
@@ -577,21 +621,48 @@ class UnsupportedTaskAdapter(BaseProviderAdapter):
         )
 
 
-def select_provider_adapter(task: AITask) -> BaseProviderAdapter:
+class ProviderChain(BaseProviderAdapter):
+    adapter_name = "provider_chain"
+
+    def __init__(self, providers: list[AIProvider], route: ProviderRoute | None = None):
+        super().__init__(route)
+        self.providers = list(providers)
+
+    def run(self, task: AITask) -> ProviderRunResult:
+        if not self.providers:
+            return ProviderRunResult.skipped(
+                f"no provider runner registered for task_type={task.task_type}",
+                error_code="unsupported_task_type",
+                metadata=_route_metadata(self.adapter_name, self.route),
+            )
+        last_result: ProviderRunResult | None = None
+        for provider in self.providers:
+            result = provider.run(task)
+            last_result = result
+            if result.outcome != ProviderRunOutcome.SKIPPED:
+                return result
+        return last_result or ProviderRunResult.skipped(
+            f"no provider runner registered for task_type={task.task_type}",
+            error_code="unsupported_task_type",
+            metadata=_route_metadata(self.adapter_name, self.route),
+        )
+
+
+def select_provider_adapter(task: AITask) -> AIProvider:
     route = resolve_provider_route(
         task_type=task.task_type,
         provider=task.provider,
         model=task.model,
     )
     if route.adapter_key == ADAPTER_KEY_MOCK_SUCCESS:
-        return MockSuccessWritingScoreAdapter(route)
+        return ProviderChain([MockSuccessWritingScoreAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_CODEX_WRITING_SCORE:
-        return CodexWritingScoreAdapter(route)
+        return ProviderChain([CodexWritingScoreAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_CODEX_SPEAKING_REPORT:
-        return CodexSpeakingReportAdapter(route)
+        return ProviderChain([CodexSpeakingReportAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_FALLBACK:
-        return FallbackWritingScoreAdapter(route)
-    return UnsupportedTaskAdapter(route)
+        return ProviderChain([FallbackWritingScoreAdapter(route)], route)
+    return ProviderChain([UnsupportedTaskAdapter(route)], route)
 
 
 def run_claimed_ai_task(task: AITask) -> ProviderRunResult:
@@ -698,17 +769,25 @@ def _route_metadata(adapter_name: str, route: ProviderRoute | None) -> dict[str,
 
 
 __all__ = [
+    "AIProvider",
+    "AiTaskTemplate",
     "AppliedProviderRunResult",
+    "BaseProviderAdapter",
+    "CodexCliClient",
+    "CodexSpeakingReportAdapter",
     "DEFAULT_FALLBACK_REASON",
     "CodexWritingScoreAdapter",
     "FallbackWritingScoreAdapter",
     "MOCK_SUCCESS_PROVIDER",
     "MockSuccessWritingScoreAdapter",
+    "ProviderChain",
+    "ProviderExecutionError",
     "ProviderRunOutcome",
     "ProviderRunResult",
     "SUMMARY_STATUS_SKIPPED",
     "UnsupportedTaskAdapter",
     "apply_provider_run_result",
+    "run_codex",
     "run_claimed_ai_task",
     "select_provider_adapter",
 ]
