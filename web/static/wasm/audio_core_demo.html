@@ -89,7 +89,13 @@
         <p>
           This standalone demo does not touch the production P1/P2/P3 recording flow.
           Build the generated WASM files with <code>scripts/build_audio_core_wasm.sh</code>,
-          then run the smoke test below.
+          then run the smoke test below. It verifies the RMS fallback path and the
+          vendored <code>libfvad</code> WebRTC VAD path.
+        </p>
+        <p>
+          WebRTC VAD frames must be 10, 20, or 30 ms at 8, 16, 32, or 48 kHz.
+          The demo intentionally checks both a valid 20 ms silence frame and an
+          invalid frame length.
         </p>
         <button id="runDemo" type="button">Run WASM smoke test</button>
         <pre id="output">Waiting for generated audio_core_wasm.js...</pre>
@@ -98,4 +104,3 @@
     <script type="module" src="./audio_core_demo.js"></script>
   </body>
 </html>
-

@@ -1,0 +1,2 @@
+{"file": "web/static/wasm/audio_core_demo.js", "reason": "Verify demo assertions cover RMS fallback and WebRTC VAD valid/invalid frames."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify no product recording flow is touched."}

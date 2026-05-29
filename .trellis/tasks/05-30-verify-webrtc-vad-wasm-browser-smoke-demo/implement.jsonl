@@ -1,0 +1,3 @@
+{"file": "web/static/wasm/audio_core_demo.js", "reason": "Standalone browser smoke demo for audio_core WASM exports."}
+{"file": "web/static/wasm/audio_core_demo.html", "reason": "Standalone demo page copy and user-facing validation instructions."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "C++ audio_core/WebRTC VAD backend contract."}

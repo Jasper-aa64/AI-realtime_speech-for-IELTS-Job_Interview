@@ -5,6 +5,19 @@ function write(message) {
   output.textContent = message;
 }
 
+function describeDecision(code) {
+  if (code === 1) return "speech";
+  if (code === 0) return "silence";
+  if (code === -1) return "error";
+  return `unexpected(${code})`;
+}
+
+function assertCondition(condition, message) {
+  if (!condition) {
+    throw new Error(`Smoke assertion failed: ${message}`);
+  }
+}
+
 function allocateInt16(module, values) {
   const bytes = values.length * Int16Array.BYTES_PER_ELEMENT;
   const ptr = module._malloc(bytes);
@@ -35,6 +48,8 @@ async function runDemo() {
 
   let module;
   let inputPtr = 0;
+  let webRtcSilencePtr = 0;
+  let invalidFramePtr = 0;
   let trimPtr = 0;
   let resamplePtr = 0;
 
@@ -53,14 +68,25 @@ async function runDemo() {
 
     const webRtcSilence = new Int16Array(320).fill(0);
     const allocatedSilence = allocateInt16(module, webRtcSilence);
+    webRtcSilencePtr = allocatedSilence.ptr;
     const webRtcSilenceDecision = module._audio_core_is_speech_webrtc(
-      allocatedSilence.ptr,
+      webRtcSilencePtr,
       webRtcSilence.length,
       16000,
       20,
       2,
     );
-    module._free(allocatedSilence.ptr);
+
+    const invalidFrame = new Int16Array(100).fill(0);
+    const allocatedInvalidFrame = allocateInt16(module, invalidFrame);
+    invalidFramePtr = allocatedInvalidFrame.ptr;
+    const invalidFrameDecision = module._audio_core_is_speech_webrtc(
+      invalidFramePtr,
+      invalidFrame.length,
+      16000,
+      20,
+      2,
+    );
 
     trimPtr = module._malloc(input.length * Int16Array.BYTES_PER_ELEMENT);
     const trimmedLength = module._audio_core_trim_silence(
@@ -86,6 +112,14 @@ async function runDemo() {
 
     const trimmedPreview = trimmedLength > 0 ? readInt16(module, trimPtr, Math.min(trimmedLength, 12)) : [];
 
+    assertCondition(Number.isFinite(rms) && rms > 0, "RMS should be positive for mixed input");
+    assertCondition(Number.isFinite(peak) && peak > 0, "Peak should be positive for mixed input");
+    assertCondition(speechDecision === 1, "RMS VAD should classify the mixed frame as speech");
+    assertCondition(webRtcSilenceDecision === 0, "WebRTC VAD should classify a 20ms silence frame as silence");
+    assertCondition(invalidFrameDecision === -1, "WebRTC VAD should reject an invalid 100-sample frame");
+    assertCondition(trimmedLength > 0 && trimmedLength < input.length, "Trim should keep a smaller speech region");
+    assertCondition(resampledLength > 0 && resampledLength < input.length, "Downsample should reduce sample count");
+
     write(
       [
         "WASM smoke test passed.",
@@ -93,11 +127,18 @@ async function runDemo() {
         `Input samples: ${input.length}`,
         `RMS: ${rms.toFixed(4)}`,
         `Peak: ${peak.toFixed(4)}`,
-        `RMS VAD decision: ${speechDecision === 1 ? "speech" : "silence"}`,
-        `WebRTC VAD silence decision: ${webRtcSilenceDecision === 1 ? "speech" : "silence"}`,
+        `RMS VAD decision: ${describeDecision(speechDecision)}`,
+        `WebRTC VAD silence decision: ${describeDecision(webRtcSilenceDecision)}`,
+        `WebRTC VAD invalid-frame decision: ${describeDecision(invalidFrameDecision)}`,
         `Trimmed samples: ${trimmedLength}`,
         `Trimmed preview: [${trimmedPreview.join(", ")}${trimmedLength > trimmedPreview.length ? ", ..." : ""}]`,
         `Resampled samples: ${resampledLength}`,
+        "",
+        "Verified:",
+        "- audio_core exports loaded through WebAssembly",
+        "- RMS fallback VAD still works",
+        "- libfvad/WebRTC VAD accepts a valid 20ms frame",
+        "- libfvad/WebRTC VAD rejects an invalid frame length",
       ].join("\n"),
     );
   } catch (error) {
@@ -105,6 +146,8 @@ async function runDemo() {
   } finally {
     if (module) {
       if (inputPtr) module._free(inputPtr);
+      if (webRtcSilencePtr) module._free(webRtcSilencePtr);
+      if (invalidFramePtr) module._free(invalidFramePtr);
       if (trimPtr) module._free(trimPtr);
       if (resamplePtr) module._free(resamplePtr);
     }
