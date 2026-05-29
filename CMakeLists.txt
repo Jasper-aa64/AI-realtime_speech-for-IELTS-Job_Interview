@@ -248,6 +248,34 @@ add_test(
     COMMAND ielts_data_test
 )
 
+# ==================== Audio Core Test ====================
+
+add_executable(
+    audio_core_test
+    tests/audio_core_test.cpp
+    src/ielts/audio_core.cpp
+)
+
+target_include_directories(
+    audio_core_test
+    PRIVATE
+    ${VCPKG_LOCAL}/include
+    ${VCPKG_GLOBAL}/include
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(
+    audio_core_test
+    PRIVATE
+    ${VCPKG_GLOBAL}/lib/libgtest.a
+)
+
+add_test(
+    NAME audio_core_test
+    COMMAND audio_core_test
+)
+
 # ==================== Protocol Test ====================
 
 add_executable(

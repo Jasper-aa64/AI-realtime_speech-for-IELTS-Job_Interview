@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "C++ IELTS simulator and realtime/audio contracts; build/test expectations for CMake/CTest."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Audio core extraction should avoid duplicating existing audio logic and isolate shared reusable behavior."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Future audio_core output feeds browser/WASM, realtime gateway, and Django fallback boundaries."}
