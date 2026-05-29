@@ -70,6 +70,25 @@ int audio_core_is_speech(const int16_t* samples, int length, double speech_thres
 }
 
 EMSCRIPTEN_KEEPALIVE
+int audio_core_is_speech_webrtc(
+    const int16_t* samples,
+    int length,
+    int sample_rate,
+    int frame_ms,
+    int aggressiveness) {
+    try {
+        ielts::audio::VadConfig config;
+        config.backend = ielts::audio::VadBackend::WebRtc;
+        config.sample_rate = sample_rate;
+        config.frame_ms = frame_ms;
+        config.aggressiveness = aggressiveness;
+        return ielts::audio::IsSpeechFrameWithVad(CopyInput(samples, length), config) ? 1 : 0;
+    } catch (const std::exception&) {
+        return -1;
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
 int audio_core_trim_silence(
     const int16_t* samples,
     int length,
@@ -111,4 +130,3 @@ int audio_core_resample_linear(
 }
 
 } // extern "C"
-
