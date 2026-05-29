@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "C++ audio_core pure-module contract and CMake/CTest validation expectations."}
+{"file": "软件构造/重构总体架构.md", "reason": "Overall architecture says C++/WASM is an incremental acceleration layer, not a product redesign."}
+{"file": "软件构造/实验5_开源复用与WASM方案.md", "reason": "Experiment 5 open-source reuse decision and WASM demo boundary."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "WASM work spans C++ source, generated browser artifacts, and future frontend integration boundaries."}
