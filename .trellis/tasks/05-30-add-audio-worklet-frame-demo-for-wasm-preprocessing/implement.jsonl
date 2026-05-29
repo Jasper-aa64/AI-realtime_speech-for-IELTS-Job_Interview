@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend demo should avoid touching production SPA behavior and should keep standalone UX clear."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Audio core remains a separate acceleration layer; production flow remains unchanged."}
+{"file": "web/static/wasm/audio_worklet_demo.html", "reason": "Standalone AudioWorklet demo shell."}
+{"file": "web/static/wasm/audio_worklet_demo.js", "reason": "Main-thread microphone and AudioWorklet orchestration."}
+{"file": "web/static/wasm/audio_frame_processor.js", "reason": "AudioWorkletProcessor frame metric implementation."}
