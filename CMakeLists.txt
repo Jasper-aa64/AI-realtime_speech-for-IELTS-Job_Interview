@@ -250,6 +250,39 @@ add_test(
 
 # ==================== Audio Core Test ====================
 
+set(
+    LIBFVAD_SOURCES
+    third_party/libfvad/src/fvad.c
+    third_party/libfvad/src/signal_processing/division_operations.c
+    third_party/libfvad/src/signal_processing/energy.c
+    third_party/libfvad/src/signal_processing/get_scaling_square.c
+    third_party/libfvad/src/signal_processing/resample_48khz.c
+    third_party/libfvad/src/signal_processing/resample_by_2_internal.c
+    third_party/libfvad/src/signal_processing/resample_fractional.c
+    third_party/libfvad/src/signal_processing/spl_inl.c
+    third_party/libfvad/src/vad/vad_core.c
+    third_party/libfvad/src/vad/vad_filterbank.c
+    third_party/libfvad/src/vad/vad_gmm.c
+    third_party/libfvad/src/vad/vad_sp.c
+)
+
+add_library(fvad_vendor STATIC ${LIBFVAD_SOURCES})
+
+target_include_directories(
+    fvad_vendor
+    PUBLIC
+    ${PROJECT_SOURCE_DIR}/third_party/libfvad/include
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/third_party/libfvad/src
+)
+
+set_target_properties(
+    fvad_vendor
+    PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+)
+
 add_executable(
     audio_core_test
     tests/audio_core_test.cpp
@@ -259,6 +292,7 @@ add_executable(
 target_include_directories(
     audio_core_test
     PRIVATE
+    ${PROJECT_SOURCE_DIR}/third_party/libfvad/include
     ${VCPKG_LOCAL}/include
     ${VCPKG_GLOBAL}/include
     ${PROJECT_SOURCE_DIR}/include
@@ -268,6 +302,7 @@ target_include_directories(
 target_link_libraries(
     audio_core_test
     PRIVATE
+    fvad_vendor
     ${VCPKG_GLOBAL}/lib/libgtest.a
 )
 

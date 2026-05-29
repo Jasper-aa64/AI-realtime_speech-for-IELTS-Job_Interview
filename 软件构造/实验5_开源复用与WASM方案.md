@@ -14,7 +14,7 @@ C++ realtime gateway        = 后续实时转写网关
 
 ## 选型结论
 
-实验5的开源复用目标选 `libfvad`。
+实验5的开源复用目标选 `libfvad`。当前代码已经将 `libfvad` vendor 到 `third_party/libfvad/`，并通过 `audio_core` 的 VAD backend 抽象接入。
 
 `libfvad` 是基于 WebRTC VAD 引擎的独立 C 库。相比直接引入完整 WebRTC，它更适合当前项目：
 
@@ -34,7 +34,7 @@ C++ realtime gateway        = 后续实时转写网关
 
 ## 当前 WASM Demo 边界
 
-新增 demo 只验证一件事：已经抽出的 `ielts::audio` 纯 C++ 核可以通过 Emscripten 跑在浏览器里。
+新增 demo 只验证一件事：已经抽出的 `ielts::audio` 纯 C++ 核可以通过 Emscripten 跑在浏览器里。构建脚本现在会同时编译 `audio_core` 和 `libfvad` 源码，使后续 browser-side WebRTC VAD demo 能在同一条路径上继续推进。
 
 文件：
 
@@ -50,8 +50,8 @@ C++ realtime gateway        = 后续实时转写网关
 
 ## 后续集成计划
 
-1. Vendor 或 submodule 引入 `libfvad`，保留 LICENSE / PATENTS / 来源说明。
-2. 在 `audio_core` 增加 `VadBackend` 或等价 wrapper：
+1. 在浏览器 demo 中增加 WebRTC VAD smoke test，验证 10/20/30ms frame 输入。
+2. 在 `audio_core` 继续保留 `VadBackend` 抽象：
 
    ```cpp
    class VadBackend {
@@ -69,4 +69,3 @@ C++ realtime gateway        = 后续实时转写网关
 - WebRTC upstream VAD wrapper: <https://chromium.googlesource.com/external/webrtc/trunk/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/common_audio/vad/vad.cc>
 - `libfvad`: <https://github.com/dpirch/libfvad>
 - libsamplerate wrapper / license note: <https://pypi.org/project/samplerate/>
-

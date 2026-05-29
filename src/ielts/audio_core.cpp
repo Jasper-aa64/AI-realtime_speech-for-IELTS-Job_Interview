@@ -1,8 +1,11 @@
 #include "ielts/audio_core.h"
 
+#include "fvad.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <memory>
 #include <stdexcept>
 
 namespace ielts::audio {
@@ -32,6 +35,30 @@ int FrameSize(int sample_rate, int frame_ms) {
         throw std::invalid_argument("frame_ms must be positive");
     }
     return std::max(1, SamplesForDuration(sample_rate, frame_ms));
+}
+
+bool IsSupportedWebRtcSampleRate(int sample_rate) {
+    return sample_rate == 8000 || sample_rate == 16000 || sample_rate == 32000 || sample_rate == 48000;
+}
+
+bool IsSupportedWebRtcFrameDuration(int frame_ms) {
+    return frame_ms == 10 || frame_ms == 20 || frame_ms == 30;
+}
+
+void ValidateWebRtcConfig(const std::vector<int16_t>& samples, const VadConfig& config) {
+    if (!IsSupportedWebRtcSampleRate(config.sample_rate)) {
+        throw std::invalid_argument("WebRTC VAD sample_rate must be 8000, 16000, 32000, or 48000");
+    }
+    if (!IsSupportedWebRtcFrameDuration(config.frame_ms)) {
+        throw std::invalid_argument("WebRTC VAD frame_ms must be 10, 20, or 30");
+    }
+    if (config.aggressiveness < 0 || config.aggressiveness > 3) {
+        throw std::invalid_argument("WebRTC VAD aggressiveness must be between 0 and 3");
+    }
+    const int expected_samples = SamplesForDuration(config.sample_rate, config.frame_ms);
+    if (samples.size() != static_cast<std::size_t>(expected_samples)) {
+        throw std::invalid_argument("WebRTC VAD frame length must match sample_rate and frame_ms");
+    }
 }
 
 int16_t ClampToInt16(double value) {
@@ -75,6 +102,41 @@ FrameAnalysis AnalyzeFrame(const std::vector<int16_t>& samples, double speech_th
 
 bool IsSpeechFrame(const std::vector<int16_t>& samples, double speech_threshold) {
     return AnalyzeFrame(samples, speech_threshold).speech;
+}
+
+FrameAnalysis AnalyzeFrameWithVad(const std::vector<int16_t>& samples, const VadConfig& config) {
+    if (config.backend == VadBackend::RmsThreshold) {
+        return AnalyzeFrame(samples, config.speech_threshold);
+    }
+
+    ValidateWebRtcConfig(samples, config);
+
+    using FvadPtr = std::unique_ptr<Fvad, decltype(&fvad_free)>;
+    FvadPtr vad(fvad_new(), fvad_free);
+    if (!vad) {
+        throw std::runtime_error("Failed to allocate WebRTC VAD instance");
+    }
+    if (fvad_set_sample_rate(vad.get(), config.sample_rate) != 0) {
+        throw std::invalid_argument("Unsupported WebRTC VAD sample_rate");
+    }
+    if (fvad_set_mode(vad.get(), config.aggressiveness) != 0) {
+        throw std::invalid_argument("Unsupported WebRTC VAD aggressiveness");
+    }
+
+    const int decision = fvad_process(vad.get(), samples.data(), samples.size());
+    if (decision < 0) {
+        throw std::invalid_argument("Invalid WebRTC VAD frame length");
+    }
+
+    FrameAnalysis result;
+    result.rms = NormalizedRms(samples);
+    result.peak = NormalizedPeak(samples);
+    result.speech = decision == 1;
+    return result;
+}
+
+bool IsSpeechFrameWithVad(const std::vector<int16_t>& samples, const VadConfig& config) {
+    return AnalyzeFrameWithVad(samples, config).speech;
 }
 
 std::vector<int16_t> TrimSilence(

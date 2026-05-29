@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify audio_core remains pure and product behavior is unchanged."}
+{"file": "软件构造/实验5_开源复用与WASM方案.md", "reason": "Verify open-source reuse claims match actual vendored source and license files."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check libfvad integration stays behind C++ audio_core and does not leak into frontend/Django yet."}

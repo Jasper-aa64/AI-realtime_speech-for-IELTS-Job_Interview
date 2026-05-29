@@ -276,6 +276,9 @@ std::vector<int16_t> ResampleLinear(
   SpeexDSP, or libsamplerate.
 - Existing P1/P2/P3 browser behavior must not change when this module is
   introduced.
+- WebRTC VAD is integrated through the vendored `third_party/libfvad` C
+  library. Keep its public use behind `audio_core` backend configuration; do
+  not call `fvad_*` directly from frontend, Django, or product session code.
 
 ### 4. Validation & Error Matrix
 
@@ -287,6 +290,14 @@ std::vector<int16_t> ResampleLinear(
   should prove expected speech/silence decisions at representative thresholds.
 - Any new PortAudio, WebSocket, ASR, Django, filesystem, or logging dependency
   in `audio_core` -> reject in review.
+- WebRTC VAD sample rate not in `8000, 16000, 32000, 48000` -> throw
+  `std::invalid_argument`.
+- WebRTC VAD frame duration not in `10, 20, 30` ms -> throw
+  `std::invalid_argument`.
+- WebRTC VAD aggressiveness not in `0, 1, 2, 3` -> throw
+  `std::invalid_argument`.
+- WebRTC VAD frame length that does not match sample rate and frame duration ->
+  throw `std::invalid_argument`.
 
 ### 5. Good/Base/Bad Cases
 
@@ -294,10 +305,14 @@ std::vector<int16_t> ResampleLinear(
   functions to browser-side preprocessing.
 - Good: A future realtime gateway reuses `TrimSilence` or `ResampleLinear`
   before sending frames upstream.
+- Good: A future browser or gateway caller selects `VadBackend::WebRtc` through
+  `VadConfig`, while product fallback can still select `VadBackend::RmsThreshold`.
 - Base: `audio_core_test` builds and runs without live ASR credentials, audio
   devices, browser APIs, or Django settings.
 - Bad: `audio_core.cpp` includes PortAudio, websocket, HTTP, Django, or
   application logging headers.
+- Bad: Product code includes `fvad.h` directly instead of going through
+  `audio_core`.
 - Bad: Product recording flow changes as part of the extraction task. Product
   integration must be a separate task with its own fallback contract.
 
@@ -310,6 +325,8 @@ std::vector<int16_t> ResampleLinear(
 - No-speech trimming returns empty.
 - Upsample and downsample behavior for `ResampleLinear`.
 - Invalid configuration errors.
+- RMS fallback backend behavior remains available.
+- WebRTC VAD backend initialization and invalid config behavior.
 - Full CTest should still pass after CMake target wiring changes.
 
 ### 7. Wrong vs Correct

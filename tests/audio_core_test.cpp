@@ -6,11 +6,15 @@
 #include <vector>
 
 using ielts::audio::AnalyzeFrame;
+using ielts::audio::AnalyzeFrameWithVad;
 using ielts::audio::IsSpeechFrame;
+using ielts::audio::IsSpeechFrameWithVad;
 using ielts::audio::NormalizedPeak;
 using ielts::audio::NormalizedRms;
 using ielts::audio::ResampleLinear;
 using ielts::audio::TrimSilence;
+using ielts::audio::VadBackend;
+using ielts::audio::VadConfig;
 
 TEST(AudioCoreTest, SilentFrameHasZeroEnergy) {
     const std::vector<int16_t> samples(160, 0);
@@ -97,6 +101,55 @@ TEST(AudioCoreTest, RejectsInvalidConfiguration) {
     EXPECT_THROW(TrimSilence(samples, 1000, 100, 1.5), std::invalid_argument);
     EXPECT_THROW(ResampleLinear(samples, 0, 16000), std::invalid_argument);
     EXPECT_THROW(ResampleLinear(samples, 16000, 0), std::invalid_argument);
+}
+
+TEST(AudioCoreTest, VadBackendKeepsRmsFallbackBehavior) {
+    const std::vector<int16_t> samples(160, 4096);
+    VadConfig config;
+    config.backend = VadBackend::RmsThreshold;
+    config.speech_threshold = 0.05;
+
+    const auto analysis = AnalyzeFrameWithVad(samples, config);
+
+    EXPECT_TRUE(analysis.speech);
+    EXPECT_TRUE(IsSpeechFrameWithVad(samples, config));
+    EXPECT_NEAR(analysis.rms, 0.125, 0.001);
+}
+
+TEST(AudioCoreTest, WebRtcVadBackendInitializesAndRejectsSilence) {
+    const std::vector<int16_t> samples(320, 0);
+    VadConfig config;
+    config.backend = VadBackend::WebRtc;
+    config.sample_rate = 16000;
+    config.frame_ms = 20;
+    config.aggressiveness = 2;
+
+    const auto analysis = AnalyzeFrameWithVad(samples, config);
+
+    EXPECT_FALSE(analysis.speech);
+    EXPECT_DOUBLE_EQ(analysis.rms, 0.0);
+    EXPECT_DOUBLE_EQ(analysis.peak, 0.0);
+}
+
+TEST(AudioCoreTest, WebRtcVadBackendRejectsInvalidConfiguration) {
+    const std::vector<int16_t> samples(320, 0);
+    VadConfig config;
+    config.backend = VadBackend::WebRtc;
+
+    config.sample_rate = 44100;
+    EXPECT_THROW(IsSpeechFrameWithVad(samples, config), std::invalid_argument);
+
+    config.sample_rate = 16000;
+    config.frame_ms = 40;
+    EXPECT_THROW(IsSpeechFrameWithVad(samples, config), std::invalid_argument);
+
+    config.frame_ms = 20;
+    config.aggressiveness = 4;
+    EXPECT_THROW(IsSpeechFrameWithVad(samples, config), std::invalid_argument);
+
+    config.aggressiveness = 2;
+    const std::vector<int16_t> wrong_size(100, 0);
+    EXPECT_THROW(IsSpeechFrameWithVad(wrong_size, config), std::invalid_argument);
 }
 
 int main(int argc, char** argv) {

@@ -51,6 +51,17 @@ async function runDemo() {
     const peak = module._audio_core_normalized_peak(inputPtr, input.length);
     const speechDecision = module._audio_core_is_speech(inputPtr, input.length, 0.02);
 
+    const webRtcSilence = new Int16Array(320).fill(0);
+    const allocatedSilence = allocateInt16(module, webRtcSilence);
+    const webRtcSilenceDecision = module._audio_core_is_speech_webrtc(
+      allocatedSilence.ptr,
+      webRtcSilence.length,
+      16000,
+      20,
+      2,
+    );
+    module._free(allocatedSilence.ptr);
+
     trimPtr = module._malloc(input.length * Int16Array.BYTES_PER_ELEMENT);
     const trimmedLength = module._audio_core_trim_silence(
       inputPtr,
@@ -82,7 +93,8 @@ async function runDemo() {
         `Input samples: ${input.length}`,
         `RMS: ${rms.toFixed(4)}`,
         `Peak: ${peak.toFixed(4)}`,
-        `Speech decision: ${speechDecision === 1 ? "speech" : "silence"}`,
+        `RMS VAD decision: ${speechDecision === 1 ? "speech" : "silence"}`,
+        `WebRTC VAD silence decision: ${webRtcSilenceDecision === 1 ? "speech" : "silence"}`,
         `Trimmed samples: ${trimmedLength}`,
         `Trimmed preview: [${trimmedPreview.join(", ")}${trimmedLength > trimmedPreview.length ? ", ..." : ""}]`,
         `Resampled samples: ${resampledLength}`,
@@ -101,4 +113,3 @@ async function runDemo() {
 }
 
 runButton.addEventListener("click", runDemo);
-
