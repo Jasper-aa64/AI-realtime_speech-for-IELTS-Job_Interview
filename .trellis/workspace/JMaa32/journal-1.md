@@ -63,7 +63,9 @@
 
 ### Main Changes
 
-(Add details)
+- Confirmed `backend_django/apps/ai/provider_adapters.py` already contains the planned Strategy / Template Method / Codex CLI Adapter / ProviderChain structure from `71ebbd9`.
+- Verified public compatibility names remain exported from `apps.ai.provider_adapters`.
+- Archived `.trellis/tasks/05-29-3` into the May 2026 task archive.
 
 ### Git Commits
 
@@ -73,7 +75,8 @@
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `python3 -m py_compile backend_django/apps/ai/provider_adapters.py`
+- [OK] `cd backend_django && ../.venv-django/bin/python manage.py test apps.ai -v 1`
 
 ### Status
 
@@ -1866,6 +1869,39 @@ Added feature-flagged per-turn WASM audio preprocessing diagnostics, server-side
 |------|---------|
 | `09050d9` | (see git log) |
 | `e96e355` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 53: Archive apps.ai provider adapter refactor
+
+**Date**: 2026-05-30
+**Task**: Archive apps.ai provider adapter refactor
+**Branch**: `main`
+
+### Summary
+
+Verified apps.ai provider adapter refactor, confirmed apps.ai tests pass, and archived the implementation task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `71ebbd9` | (see git log) |
 
 ### Testing
 
