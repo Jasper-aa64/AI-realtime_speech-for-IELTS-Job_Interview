@@ -38,3 +38,36 @@ Froze web/ielts_server.py as legacy reference, switched docs/scripts to Django-o
 ### Next Steps
 
 - None - task complete
+
+
+## Session 57: Split shared frontend UI helpers
+
+**Date**: 2026-05-30
+**Task**: Split shared frontend UI helpers
+**Branch**: `main`
+
+### Summary
+
+Extracted shared frontend escaping and markdown helpers into shared-ui.js, served the asset through Django, and kept app.js using the shared compatibility surface.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `73a3f25` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
