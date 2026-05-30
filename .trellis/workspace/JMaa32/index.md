@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 57
+- **Total Sessions**: 58
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~73 | Active |
+| `journal-2.md` | ~106 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 58 | 2026-05-30 | Split writing prompt services | `acfa5c1` | `main` |
 | 57 | 2026-05-30 | Split shared frontend UI helpers | `73a3f25` | `main` |
 | 56 | 2026-05-30 | Retire legacy server and split production service boundaries | `ebd0a8d` | `main` |
 | 55 | 2026-05-30 | Finalize software construction deliverables | - | `main` |

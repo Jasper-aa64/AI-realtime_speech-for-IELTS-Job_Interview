@@ -71,3 +71,36 @@ Extracted shared frontend escaping and markdown helpers into shared-ui.js, serve
 ### Next Steps
 
 - None - task complete
+
+
+## Session 58: Split writing prompt services
+
+**Date**: 2026-05-30
+**Task**: Split writing prompt services
+**Branch**: `main`
+
+### Summary
+
+Extracted writing prompt catalog, seed synchronization, random prompt selection, and agent prompt search into prompt_services.py while keeping apps.writing.services as the compatibility facade.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `acfa5c1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
