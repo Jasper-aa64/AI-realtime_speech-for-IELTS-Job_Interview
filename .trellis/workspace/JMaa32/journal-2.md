@@ -496,3 +496,34 @@ Verified audio_core WASM in a real browser, added Django /wasm static serving, c
 ### Next Steps
 
 - None - task complete
+
+
+## Session 71: Add HTTP API provider for fast speaking follow-ups
+
+**Date**: 2026-05-30
+**Task**: Add HTTP API provider for fast speaking follow-ups
+**Branch**: `main`
+
+### Summary
+
+Implemented an OpenAI-compatible HTTP provider for latency-sensitive P1/P3 speaking follow-ups. Follow-up generation now tries HTTP first, falls back to Codex CLI, then explicit local fallback metadata. Added focused tests, a benchmark diagnostic script, backend quality guidance, and task research/changes notes. Validation: manage.py check, targeted provider/follow-up tests, apps.ai tests, full Django test suite, makemigrations dry-run, and diagnostic script.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
