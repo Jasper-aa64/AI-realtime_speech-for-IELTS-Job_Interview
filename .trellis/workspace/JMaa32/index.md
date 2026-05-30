@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 75
+- **Total Sessions**: 76
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~665 | Active |
+| `journal-2.md` | ~696 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 76 | 2026-05-30 | Add refactoring completion report | - | `main` |
 | 75 | 2026-05-30 | Consolidate remaining WIP lines | `3380bd7`, `a46c05d`, `4221e82` | `main` |
 | 74 | 2026-05-30 | Add speaking question bank scope selector | `d9ed747`, `68a330a` | `main` |
 | 73 | 2026-05-30 | Consolidate refactor stage status | `3a5f76d` | `main` |
