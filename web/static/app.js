@@ -2894,6 +2894,15 @@ function scrollToSummary() {
   $("summaryPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function isRealtimeTranscriptSource(source = state.transcriptSource) {
+  return Boolean(source && source !== "browser_dictation");
+}
+
+function shouldApplyBrowserDictationResult() {
+  if (!isRealtimeTranscriptSource()) return true;
+  return !state.transcript;
+}
+
 function startDictation() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
@@ -2927,10 +2936,18 @@ function startDictation() {
         interim = textValue;
       }
     }
+    const transcript = [finalText, interim].filter(Boolean).join(" ").trim();
+    const transcriptStatus = finalText ? "captured" : (interim ? "interim_fallback" : "missing");
+    if (!shouldApplyBrowserDictationResult()) {
+      if (transcript) {
+        setDictationStatus("listening", "服务端实时转写优先，浏览器转写继续作为兜底监听。");
+      }
+      return;
+    }
     state.transcriptFinal = finalText;
     state.transcriptInterim = interim;
-    state.transcript = [finalText, interim].filter(Boolean).join(" ").trim();
-    state.transcriptStatus = finalText ? "captured" : (interim ? "interim_fallback" : "missing");
+    state.transcript = transcript;
+    state.transcriptStatus = transcriptStatus;
     if (state.transcript) state.transcriptSource = "browser_dictation";
     if (state.transcriptStatus === "captured") {
       setDictationStatus("captured", "已捕捉到转写，继续说即可。");
