@@ -4658,6 +4658,12 @@ function currentWritingPromptImageUrl() {
   return String(state.writing.prompt?.image_url || $("writingPromptImage img")?.getAttribute("src") || "").trim();
 }
 
+const writingImageViewerController = window.IELTSWritingImageViewer?.createWritingImageViewerController?.({
+  state,
+  $,
+  currentWritingPromptImageUrl,
+});
+
 function applyWritingPromptHighlightSelection() {
   const prompt = state.writing.prompt;
   const promptId = writingPromptHighlightKey(prompt);
@@ -4720,38 +4726,23 @@ function handleWritingPromptSelectionChange(options = {}) {
 }
 
 function openWritingImageViewer(src = currentWritingPromptImageUrl()) {
-  const url = String(src || "").trim();
-  if (!url) return;
-  const viewer = $("writingImageViewer");
-  const image = $("writingImageViewerImg");
-  if (!viewer || !image) return;
-  image.src = url;
-  viewer.classList.remove("hidden");
-  document.body.classList.add("modal-open");
+  writingImageViewerController?.open(src);
 }
 
 function closeWritingImageViewer() {
-  const viewer = $("writingImageViewer");
-  const image = $("writingImageViewerImg");
-  viewer?.classList.add("hidden");
-  if (image) image.src = "";
-  document.body.classList.remove("modal-open");
+  writingImageViewerController?.close();
 }
 
 function isWritingImageViewerOpen() {
-  return Boolean($("writingImageViewer") && !$("writingImageViewer").classList.contains("hidden"));
+  return Boolean(writingImageViewerController?.isOpen());
 }
 
 function canToggleWritingImageViewer() {
-  if (isWritingImageViewerOpen()) return true;
-  const writingPanel = $("writingPanel");
-  const writingPanelVisible = Boolean(writingPanel && !writingPanel.classList.contains("hidden"));
-  return Boolean(currentWritingPromptImageUrl() && (state.view === "writing" || writingPanelVisible));
+  return Boolean(writingImageViewerController?.canToggle());
 }
 
 function isShiftSpaceShortcut(event) {
-  const isSpace = event.code === "Space" || event.key === " " || event.key === "Spacebar" || event.key === "Space";
-  return Boolean(isSpace && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey);
+  return Boolean(writingImageViewerController?.isShiftSpaceShortcut(event));
 }
 
 function handleGlobalKeydown(event) {
@@ -4791,11 +4782,7 @@ function handleGlobalKeydown(event) {
 }
 
 function toggleWritingImageViewer() {
-  if (isWritingImageViewerOpen()) {
-    closeWritingImageViewer();
-    return;
-  }
-  openWritingImageViewer();
+  writingImageViewerController?.toggle();
 }
 
 function hideWritingHighlightMenu() {

@@ -34,6 +34,7 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "index.html": "text/html; charset=utf-8",
         "shared-ui.js": "text/javascript; charset=utf-8",
         "writing-image-preload.js": "text/javascript; charset=utf-8",
+        "writing-image-viewer.js": "text/javascript; charset=utf-8",
         "writing-prompt-picker.js": "text/javascript; charset=utf-8",
         "corpus-markdown-editor.js": "text/javascript; charset=utf-8",
         "corpus-takeaway.js": "text/javascript; charset=utf-8",
