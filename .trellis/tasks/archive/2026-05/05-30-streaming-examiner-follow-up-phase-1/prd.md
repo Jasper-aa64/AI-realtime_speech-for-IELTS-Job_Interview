@@ -26,11 +26,11 @@ Primary implementation contract: `docs/SPEC-streaming-examiner-followup.md`.
 
 ## Acceptance Criteria
 
-- [ ] `HttpApiProvider.stream_tokens()` yields text chunks as the provider streams them.
-- [ ] Stream-token unit tests cover chunk parsing and provider errors.
-- [ ] `/api/attempts/{attempt_id}/turns/{turn_id}/follow-up-stream` returns `text/event-stream`.
-- [ ] SSE emits `chunk`, `question_complete`, `tts_ready` or explicit fallback/timeout events.
-- [ ] The endpoint is authenticated and owner-scoped.
-- [ ] Frontend consumes the stream with `fetch`/`ReadableStream` and progressively displays the next follow-up.
-- [ ] Existing `/complete` behavior still works when streaming is unavailable.
-- [ ] Targeted tests and syntax checks pass.
+- [x] `HttpApiProvider.stream_tokens()` yields text chunks as the provider streams them.
+- [x] Stream-token unit tests cover chunk parsing and provider errors.
+- [x] `/api/attempts/{attempt_id}/turns/{turn_id}/follow-up-stream` returns `text/event-stream`.
+- [x] SSE emits `chunk`, `question_complete`, `tts_ready` or explicit fallback/timeout events.
+- [x] The endpoint is authenticated and owner-scoped.
+- [x] Frontend consumes the stream with `fetch`/`ReadableStream` and progressively displays the next follow-up.
+- [x] Existing `/complete` behavior still works when streaming is unavailable.
+- [x] Targeted tests and syntax checks pass.
