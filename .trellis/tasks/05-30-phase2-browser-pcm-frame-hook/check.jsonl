@@ -1,0 +1,2 @@
+{"command":"node --check web/static/wasm/speaking_audio_preprocessor.js","why":"Validate edited module syntax."}
+{"command":"node --check web/static/app.js","why":"Validate main frontend syntax."}

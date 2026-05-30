@@ -35,6 +35,41 @@ function roundMetric(value, precision = 6) {
   return Math.round(numeric * multiplier) / multiplier;
 }
 
+function clampSample(sample) {
+  return Math.max(-1, Math.min(1, Number(sample) || 0));
+}
+
+function resampleFloat32Linear(samples, sourceSampleRate, targetSampleRate) {
+  const sourceRate = Math.max(1, Number(sourceSampleRate || 0));
+  const targetRate = Math.max(1, Number(targetSampleRate || 0));
+  if (sourceRate === targetRate) return new Float32Array(samples);
+  const ratio = sourceRate / targetRate;
+  const outputLength = Math.max(1, Math.round(samples.length / ratio));
+  const output = new Float32Array(outputLength);
+
+  for (let index = 0; index < outputLength; index += 1) {
+    const sourceIndex = index * ratio;
+    const leftIndex = Math.floor(sourceIndex);
+    const rightIndex = Math.min(samples.length - 1, leftIndex + 1);
+    const fraction = sourceIndex - leftIndex;
+    const left = Number(samples[leftIndex] || 0);
+    const right = Number(samples[rightIndex] || 0);
+    output[index] = left + (right - left) * fraction;
+  }
+  return output;
+}
+
+export function convertFloat32FrameToPcm16(samples, sourceSampleRate, targetSampleRate = 16000) {
+  const normalized = samples instanceof Float32Array ? samples : new Float32Array(samples || []);
+  const resampled = resampleFloat32Linear(normalized, sourceSampleRate, targetSampleRate);
+  const output = new Int16Array(resampled.length);
+  for (let index = 0; index < resampled.length; index += 1) {
+    const sample = clampSample(resampled[index]);
+    output[index] = sample < 0 ? sample * 32768 : sample * 32767;
+  }
+  return output;
+}
+
 export function summarizeSpeakingAudioPreprocessingMetrics(metrics = {}) {
   if (!metrics || metrics.enabled !== true) return null;
   const totalFrames = Math.max(0, Number(metrics.frameCount || 0));
@@ -65,6 +100,8 @@ export function createSpeakingAudioPreprocessor(options = {}) {
   const analyzerId = options.analyzerId || DEFAULT_ANALYZER_ID;
   const threshold = typeof options.threshold === "number" ? options.threshold : DEFAULT_THRESHOLD;
   const reportEveryFrames = Math.max(1, options.reportEveryFrames || 8);
+  const targetSampleRate = Math.max(1, Number(options.targetSampleRate || 16000));
+  const onPcmFrame = typeof options.onPcmFrame === "function" ? options.onPcmFrame : null;
   const metrics = emptyMetrics({ analyzerId });
   const state = {
     audioContext: null,
@@ -102,6 +139,18 @@ export function createSpeakingAudioPreprocessor(options = {}) {
       metrics.latestPeak = Number(result.peak || 0);
       metrics.latestSpeech = Boolean(result.speech);
       if (result.speech) metrics.speechFrameCount += 1;
+      if (onPcmFrame) {
+        const pcm = convertFloat32FrameToPcm16(data.samples, data.sampleRate, targetSampleRate);
+        onPcmFrame({
+          pcm,
+          sampleRate: targetSampleRate,
+          sourceSampleRate: Number(data.sampleRate || 0),
+          frameCount: data.frameCount,
+          speech: Boolean(result.speech),
+          rms: Number(result.rms || 0),
+          peak: Number(result.peak || 0),
+        });
+      }
     } catch (error) {
       metrics.lastError = error instanceof Error ? error.message : String(error);
     }
