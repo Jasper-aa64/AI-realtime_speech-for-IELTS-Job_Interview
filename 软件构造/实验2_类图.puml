@@ -1,0 +1,181 @@
+' 实验2 类图 —— 同一套设计模式，两种语言（Python 后端 / C++ 实时语音核）
+' 渲染：plantuml 实验2_类图.puml  或  https://www.plantuml.com/plantuml
+' 本文件仅为设计制品，不代表已实现代码。
+'
+' baseline 原则：现有浏览器产品功能不改。下列抽象是叠加在 baseline 之上的
+' 加速层(C++/WASM/实时) + 可降级可选能力；旧批处理流程 = fallback。
+
+@startuml 实验2_Python侧_AIProvider
+title 实验2 · Python 侧（apps/ai）：Strategy + Adapter + 责任链 + Template Method
+
+interface AIProvider <<Strategy>> {
+  +run(task) : ProviderRunResult
+}
+
+abstract class AiTaskTemplate <<Template Method>> {
+  +run(task) : ProviderRunResult
+  #_build_prompt(task)
+  #_parse_payload(raw, task)
+  #_on_failure(...)
+}
+
+class HttpApiProvider <<Strategy>> {
+  - client : HttpApiClient
+  +run(task) : ProviderRunResult
+}
+class CodexProvider <<Strategy>> {
+  - client : CodexCliClient
+  +run(task) : ProviderRunResult
+}
+class WritingScoreProvider
+class SpeakingReportProvider
+class MockSuccessProvider <<Strategy>>
+class FallbackProvider <<Chain tail>> {
+  +run(task) : ProviderRunResult
+}
+
+class HttpApiClient <<Adaptee>> {
+  +invoke(prompt, stream=True)
+}
+class CodexCliClient <<Adaptee>> {
+  +invoke(prompt)
+}
+
+class ProviderChain <<Chain of Responsibility>> {
+  - providers : List<AIProvider>
+  +execute(task) : ProviderRunResult
+}
+class ProviderRoute {
+  + task_type
+  + adapter_key
+  + effective_provider
+  + fallback_reason
+}
+class ProviderRunResult {
+  + outcome
+  + payload
+  + metadata
+}
+
+AIProvider <|.. AiTaskTemplate
+AIProvider <|.. MockSuccessProvider
+AIProvider <|.. FallbackProvider
+AiTaskTemplate <|-- HttpApiProvider
+AiTaskTemplate <|-- CodexProvider
+HttpApiProvider <|-- WritingScoreProvider
+SpeakingReportProvider --|> AiTaskTemplate
+HttpApiProvider o--> HttpApiClient
+CodexProvider o--> CodexCliClient
+ProviderChain o--> "1..*" AIProvider
+ProviderChain ..> ProviderRoute
+AIProvider ..> ProviderRunResult
+
+note bottom of FallbackProvider
+  红线：fallback 路径结构上
+  不可能产出 outcome=SUCCESS，
+  杜绝"假装 AI 成功"
+end note
+@enduml
+
+
+@startuml 实验2_Python侧_报告与ASR
+title 实验2 · Python 侧：ReportPipeline(Template) + ASRProvider(Strategy)
+
+abstract class ReportPipeline <<Template Method>> {
+  +generate(ctx) : Report
+  #_collect_material(ctx)
+  #_run_ai(material) : ProviderRunResult
+  #_assemble_report(ai_result, material)
+  #_assemble_fallback(ai_result, material)
+}
+class SpeakingReportPipeline
+class WritingReportPipeline
+ReportPipeline <|-- SpeakingReportPipeline
+ReportPipeline <|-- WritingReportPipeline
+
+interface ASRProvider <<Strategy>> {
+  +start(fmt)
+  +push_audio(pcm)
+  +on_result(cb)
+  +finish()
+}
+class OpenSpeechAsrProvider
+class WhisperLocalAsrProvider <<future>>
+ASRProvider <|.. OpenSpeechAsrProvider
+ASRProvider <|.. WhisperLocalAsrProvider
+@enduml
+
+
+@startuml 实验2_CPP侧_实时语音核
+title 实验2 · C++ 侧（src/ + include/）：同一组模式，本实验仅接口/类图
+
+interface AudioProcessor <<纯算法核>> {
+  +detect_voice(frame) : VadResult
+  +trim_silence(buf) : Buffer
+  +normalize(buf) : Buffer
+  +resample(buf, target_hz) : Buffer
+  +quality_check(buf) : QualityReport
+}
+note right of AudioProcessor
+  无 IO、无平台依赖。
+  实验4 抽核；实验5 内部接开源库
+  (WebRTC VAD / SpeexDSP / libsamplerate)；
+  编译目标：WASM + native
+end note
+
+interface ASRProvider <<Strategy>> {
+  +Start(fmt)
+  +PushAudio(pcm, n)
+  +OnResult(cb)
+  +Finish()
+}
+class OpenSpeechAsrProvider
+ASRProvider <|.. OpenSpeechAsrProvider
+
+interface ProtocolAdapter <<Adapter>> {
+  +EncodeAudioFrame(pcm, n) : bytes
+  +EncodeTextQuery(text) : bytes
+  +DecodeFrame(data, n) : ParsedResponse
+}
+class OpenSpeechProtocolAdapter
+ProtocolAdapter <|.. OpenSpeechProtocolAdapter
+note right of OpenSpeechProtocolAdapter
+  复用现有 protocol.cpp(478)
+  二进制帧编解码逻辑
+end note
+
+class RealtimeGateway <<Adapter / 常驻服务>> {
+  - protocol : ProtocolAdapter
+  - asr : ASRProvider
+  +on_client_audio(frame)
+  +stream_transcript_to_client()
+}
+RealtimeGateway o--> ProtocolAdapter
+RealtimeGateway o--> ASRProvider
+RealtimeGateway ..> AudioProcessor
+
+class FallbackPipeline <<Chain of Responsibility>> {
+  +handle(audio) : TranscriptResult
+}
+note bottom of FallbackPipeline
+  实时 ASR 网关失败
+  → 批处理"录完上传评分"兜底
+end note
+RealtimeGateway ..> FallbackPipeline
+
+class Scorer <<现存·Strategy 实例>> {
+  - backend : ScorerBackend
+  +Score(transcript) : IELTSScore
+}
+enum ScorerBackend {
+  kCodexExec
+  kOpenAIAPI
+  kClaude
+  kHeuristic
+}
+Scorer o--> ScorerBackend
+note bottom of Scorer
+  既有代码即 Strategy：
+  佐证"同一模式、两种语言"
+end note
+@enduml
