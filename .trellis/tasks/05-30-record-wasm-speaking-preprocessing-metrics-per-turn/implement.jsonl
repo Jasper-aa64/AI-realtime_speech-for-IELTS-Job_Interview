@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/05-30-record-wasm-speaking-preprocessing-metrics-per-turn/prd.md", "reason": "Task scope, baseline constraints, acceptance criteria, and diagnostic-only boundary."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend conventions and required pre-development context."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Production speaking recorder safety, async cleanup, and payload compatibility expectations."}
+{"file": ".trellis/spec/frontend/wasm-audio-guidelines.md", "reason": "Existing AudioWorklet/WASM analyzer contracts and validation matrix."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Potential payload metadata spans frontend and backend completion boundaries."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse the existing feature-flagged preprocessor and analyzer abstraction."}

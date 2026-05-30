@@ -895,10 +895,13 @@ class SpeakingRuntimeApiTests(TestCase):
         )
         return attempt, turn1, turn2
 
-    def complete_turn(self, attempt_id="runtime-attempt", turn_id="t1", transcript="My full name is Sam."):
+    def complete_turn(self, attempt_id="runtime-attempt", turn_id="t1", transcript="My full name is Sam.", extra_payload=None):
+        payload = {"transcript_raw": transcript, "transcript_status": "captured", "transcript_source": "browser_dictation"}
+        if extra_payload:
+            payload.update(extra_payload)
         return self.client.post(
             f"/api/attempts/{attempt_id}/turns/{turn_id}/complete",
-            data={"transcript_raw": transcript, "transcript_status": "captured", "transcript_source": "browser_dictation"},
+            data=payload,
             content_type="application/json",
         )
 
@@ -937,6 +940,44 @@ class SpeakingRuntimeApiTests(TestCase):
         self.assertEqual(turn.metadata["status"], "completed")
         self.assertEqual(turn.transcript_source, "browser_dictation")
         self.assertEqual(turn.metadata["server_asr"]["status"], "skipped_browser_transcript_available")
+
+    def test_turn_complete_persists_audio_preprocessing_metrics(self):
+        self.create_attempt()
+        response = self.complete_turn(extra_payload={
+            "audio_preprocessing_metrics": {
+                "enabled": True,
+                "analyzer": "wasm-audio-core",
+                "fallback_analyzer": "",
+                "fallback_reason": "",
+                "total_frames": 100,
+                "speech_frames": 25,
+                "silence_frames": 75,
+                "speech_ratio": 0.333333333,
+                "silence_ratio": 0.666666666,
+                "latest_rms": 0.123456789,
+                "latest_peak": 0.987654321,
+                "latest_speech": True,
+                "sample_rate": 48000,
+                "frame_size": 128,
+                "started_at_ms": 10.1234,
+                "stopped_at_ms": 20.5678,
+                "last_error": "",
+                "samples": [1, 2, 3],
+            }
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        metrics = payload["turn"]["audio_preprocessing_metrics"]
+        self.assertEqual(metrics["analyzer"], "wasm-audio-core")
+        self.assertEqual(metrics["total_frames"], 100)
+        self.assertEqual(metrics["speech_frames"], 25)
+        self.assertEqual(metrics["silence_frames"], 75)
+        self.assertEqual(metrics["speech_ratio"], 0.25)
+        self.assertEqual(metrics["silence_ratio"], 0.75)
+        self.assertNotIn("samples", metrics)
+
+        turn = SpeakingTurn.objects.get(turn_id="t1")
+        self.assertEqual(turn.metadata["audio_preprocessing_metrics"], metrics)
 
     def test_turn_complete_uses_server_asr_when_browser_transcript_is_missing(self):
         _attempt, turn1, _turn2 = self.create_attempt()

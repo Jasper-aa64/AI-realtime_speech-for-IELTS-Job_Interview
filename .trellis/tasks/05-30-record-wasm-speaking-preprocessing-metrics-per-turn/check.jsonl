@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/05-30-record-wasm-speaking-preprocessing-metrics-per-turn/prd.md", "reason": "Verify diagnostics implementation against acceptance criteria and out-of-scope limits."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check existing recording flow remains stable and cleanup-safe."}
+{"file": ".trellis/spec/frontend/wasm-audio-guidelines.md", "reason": "Check WASM analyzer fallback behavior and generated artifact handling."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify optional diagnostics payload is backwards-compatible."}

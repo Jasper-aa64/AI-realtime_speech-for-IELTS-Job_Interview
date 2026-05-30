@@ -120,3 +120,43 @@ const analyzer = await createAnalyzer("wasm-audio-core", { threshold: 0.02 });
 const result = analyzer.analyze(frame);
 ```
 
+## Scenario: Feature-Flagged Speaking Runtime Diagnostics
+
+### 1. Scope / Trigger
+
+- Trigger: Production speaking recording is opened with `?wasm_audio=1` or
+  `?wasm_audio=mock`.
+- Scope: Observe the existing browser recording stream and attach a compact
+  preprocessing summary to the normal `turns/{id}/complete` payload.
+- Out of scope: Replacing the uploaded audio blob, changing dictation behavior,
+  changing scoring/reporting, or requiring generated WASM artifacts for the
+  baseline speaking flow.
+
+### 2. Contracts
+
+- The normal `MediaRecorder`/dictation path remains the source of truth.
+- The analyzer may fall back to `mock-rms`; fallback status must be visible in
+  metrics (`analyzer`, `fallback_analyzer`, `fallback_reason`) instead of
+  silently pretending to use generated WASM.
+- Per-turn payloads may include `audio_preprocessing_metrics`, but only as a
+  small diagnostic summary: frame counts, ratios, analyzer ids, frame size,
+  sample rate, latest RMS/peak, timestamps, and error text.
+- Never send raw PCM samples, frame arrays, or large analyzer buffers in
+  production API payloads.
+- Server persistence must sanitize the summary, recompute ratios from counts,
+  and ignore unknown heavy fields.
+
+### 3. Tests Required
+
+- JavaScript syntax:
+  ```bash
+  node --check web/static/app.js
+  node --check web/static/wasm/speaking_audio_preprocessor.js
+  ```
+- Backend persistence:
+  ```bash
+  .venv-django/bin/python backend_django/manage.py test apps.speaking.tests.SpeakingRuntimeApiTests.test_turn_complete_persists_audio_preprocessing_metrics
+  ```
+- Browser smoke should cover both generated WASM available and generated WASM
+  unavailable/fallback paths, and assert no raw samples are included in the
+  completed turn payload.

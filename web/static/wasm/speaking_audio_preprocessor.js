@@ -28,6 +28,39 @@ function emptyMetrics(options = {}) {
   };
 }
 
+function roundMetric(value, precision = 6) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  const multiplier = 10 ** precision;
+  return Math.round(numeric * multiplier) / multiplier;
+}
+
+export function summarizeSpeakingAudioPreprocessingMetrics(metrics = {}) {
+  if (!metrics || metrics.enabled !== true) return null;
+  const totalFrames = Math.max(0, Number(metrics.frameCount || 0));
+  const speechFrames = Math.max(0, Math.min(totalFrames, Number(metrics.speechFrameCount || 0)));
+  const silenceFrames = Math.max(0, totalFrames - speechFrames);
+  return {
+    enabled: true,
+    analyzer: String(metrics.analyzer || ""),
+    fallback_analyzer: String(metrics.fallbackAnalyzer || ""),
+    fallback_reason: String(metrics.fallbackReason || ""),
+    total_frames: totalFrames,
+    speech_frames: speechFrames,
+    silence_frames: silenceFrames,
+    speech_ratio: totalFrames ? roundMetric(speechFrames / totalFrames) : 0,
+    silence_ratio: totalFrames ? roundMetric(silenceFrames / totalFrames) : 0,
+    latest_rms: roundMetric(metrics.latestRms),
+    latest_peak: roundMetric(metrics.latestPeak),
+    latest_speech: Boolean(metrics.latestSpeech),
+    sample_rate: Math.max(0, Number(metrics.sampleRate || 0)),
+    frame_size: Math.max(0, Number(metrics.frameSize || 0)),
+    started_at_ms: roundMetric(metrics.startedAt, 3),
+    stopped_at_ms: roundMetric(metrics.stoppedAt, 3),
+    last_error: String(metrics.lastError || ""),
+  };
+}
+
 export function createSpeakingAudioPreprocessor(options = {}) {
   const analyzerId = options.analyzerId || DEFAULT_ANALYZER_ID;
   const threshold = typeof options.threshold === "number" ? options.threshold : DEFAULT_THRESHOLD;

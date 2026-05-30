@@ -146,6 +146,8 @@ const state = {
     audioPreprocessor: null,
     audioPreprocessorToken: 0,
     audioPreprocessorMetrics: null,
+    audioPreprocessorTurnMetrics: null,
+    audioPreprocessorStopPromise: null,
   },
   account: {
     authenticated: false,
@@ -2209,11 +2211,46 @@ function recordWasmAudioPreprocessMetrics(metrics, extra = {}) {
   };
 }
 
+async function summarizeWasmAudioPreprocessMetrics(metrics) {
+  if (!metrics || metrics.enabled !== true) return null;
+  try {
+    const module = await import("/wasm/speaking_audio_preprocessor.js");
+    return module.summarizeSpeakingAudioPreprocessingMetrics(metrics);
+  } catch (error) {
+    const totalFrames = Math.max(0, Number(metrics.frameCount || 0));
+    const speechFrames = Math.max(0, Math.min(totalFrames, Number(metrics.speechFrameCount || 0)));
+    const silenceFrames = Math.max(0, totalFrames - speechFrames);
+    return {
+      enabled: true,
+      analyzer: String(metrics.analyzer || ""),
+      fallback_analyzer: String(metrics.fallbackAnalyzer || ""),
+      fallback_reason: String(metrics.fallbackReason || ""),
+      total_frames: totalFrames,
+      speech_frames: speechFrames,
+      silence_frames: silenceFrames,
+      speech_ratio: totalFrames ? speechFrames / totalFrames : 0,
+      silence_ratio: totalFrames ? silenceFrames / totalFrames : 0,
+      sample_rate: Math.max(0, Number(metrics.sampleRate || 0)),
+      frame_size: Math.max(0, Number(metrics.frameSize || 0)),
+      last_error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function waitForSpeakingAudioPreprocessorTurnMetrics() {
+  if (state.speaking.audioPreprocessorStopPromise) {
+    await state.speaking.audioPreprocessorStopPromise.catch(() => null);
+  }
+  return state.speaking.audioPreprocessorTurnMetrics || null;
+}
+
 async function maybeStartSpeakingAudioPreprocessor(stream, sessionId = state.practiceSessionId) {
   const config = resolveWasmAudioPreprocessConfig();
   if (!config.enabled || !stream) return;
   const token = state.speaking.audioPreprocessorToken + 1;
   state.speaking.audioPreprocessorToken = token;
+  state.speaking.audioPreprocessorTurnMetrics = null;
+  state.speaking.audioPreprocessorStopPromise = null;
   recordWasmAudioPreprocessMetrics(null, {
     enabled: true,
     running: false,
@@ -2259,15 +2296,22 @@ function stopSpeakingAudioPreprocessor(reason = "stopped") {
         status: reason,
       });
     }
-    return;
+    state.speaking.audioPreprocessorTurnMetrics = null;
+    state.speaking.audioPreprocessorStopPromise = null;
+    return Promise.resolve(null);
   }
-  preprocessor.stop()
+  const stopPromise = preprocessor.stop()
     .then((metrics) => {
       recordWasmAudioPreprocessMetrics(metrics, {
         running: false,
         status: reason,
       });
+      return summarizeWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics);
+    })
+    .then((summary) => {
+      state.speaking.audioPreprocessorTurnMetrics = summary;
       console.info("[wasm-audio] preprocessing stopped", state.speaking.audioPreprocessorMetrics);
+      return summary;
     })
     .catch((error) => {
       recordWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics, {
@@ -2275,7 +2319,10 @@ function stopSpeakingAudioPreprocessor(reason = "stopped") {
         status: "stop_failed",
         lastError: error instanceof Error ? error.message : String(error),
       });
+      return summarizeWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics);
     });
+  state.speaking.audioPreprocessorStopPromise = stopPromise;
+  return stopPromise;
 }
 
 async function startRecording(sessionId = state.practiceSessionId) {
@@ -2345,6 +2392,7 @@ async function finalizeTurn(mimeType) {
   const turn = state.currentTurn;
   if (!attempt || !turn) return;
   await waitForFinalDictation();
+  const audioPreprocessingMetrics = await waitForSpeakingAudioPreprocessorTurnMetrics();
   if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
   const blob = new Blob(state.audioChunks, { type: mimeType });
   setRecordButton("processing", "Saving", "Uploading answer audio...");
@@ -2371,6 +2419,7 @@ async function finalizeTurn(mimeType) {
       transcript_status: state.transcriptStatus,
       transcript_source: "browser_dictation",
       ...(turn.part === "p2" && state.p2Corpus.selectedEntryId ? { p2_corpus_link: { entry_id: state.p2Corpus.selectedEntryId } } : {}),
+      ...(audioPreprocessingMetrics ? { audio_preprocessing_metrics: audioPreprocessingMetrics } : {}),
     });
     if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
     state.attempt = completePayload.attempt;

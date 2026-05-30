@@ -3032,6 +3032,7 @@ def _turn_payload(turn: SpeakingTurn, total: int | None = None) -> dict[str, Any
         "feedback_generation_error": metadata.get("feedback_generation_error"),
         "band7_source": metadata.get("band7_source"),
         "ai_coaching_source": metadata.get("ai_coaching_source"),
+        "audio_preprocessing_metrics": metadata.get("audio_preprocessing_metrics") if isinstance(metadata.get("audio_preprocessing_metrics"), dict) else None,
         "counts_toward_total": turn.counts_toward_total,
         "display_index": metadata.get("display_index"),
         "question_id": prompt.get("question_id") or p1_question_id(str(prompt.get("topic") or "general"), turn.question) if turn.part == "p1" else "",
@@ -3216,6 +3217,57 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
     return follow_up_turn
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return default
+    if numeric != numeric or numeric in (float("inf"), float("-inf")):
+        return default
+    return numeric
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return max(0, int(float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _sanitize_audio_preprocessing_metrics(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or not value.get("enabled"):
+        return None
+    total_frames = _safe_int(value.get("total_frames"))
+    speech_frames = min(total_frames, _safe_int(value.get("speech_frames")))
+    silence_frames = min(total_frames, _safe_int(value.get("silence_frames"), total_frames - speech_frames))
+    if total_frames and speech_frames + silence_frames != total_frames:
+        silence_frames = max(0, total_frames - speech_frames)
+    speech_ratio = round(_safe_float(value.get("speech_ratio")), 6)
+    silence_ratio = round(_safe_float(value.get("silence_ratio")), 6)
+    if total_frames:
+        speech_ratio = round(speech_frames / total_frames, 6)
+        silence_ratio = round(silence_frames / total_frames, 6)
+    return {
+        "enabled": True,
+        "analyzer": clean_report_text(str(value.get("analyzer") or ""))[:80],
+        "fallback_analyzer": clean_report_text(str(value.get("fallback_analyzer") or ""))[:80],
+        "fallback_reason": clean_report_text(str(value.get("fallback_reason") or ""))[:300],
+        "total_frames": total_frames,
+        "speech_frames": speech_frames,
+        "silence_frames": silence_frames,
+        "speech_ratio": speech_ratio,
+        "silence_ratio": silence_ratio,
+        "latest_rms": round(_safe_float(value.get("latest_rms")), 6),
+        "latest_peak": round(_safe_float(value.get("latest_peak")), 6),
+        "latest_speech": bool(value.get("latest_speech")),
+        "sample_rate": _safe_int(value.get("sample_rate")),
+        "frame_size": _safe_int(value.get("frame_size")),
+        "started_at_ms": round(_safe_float(value.get("started_at_ms")), 3),
+        "stopped_at_ms": round(_safe_float(value.get("stopped_at_ms")), 3),
+        "last_error": clean_report_text(str(value.get("last_error") or ""))[:300],
+    }
+
+
 def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     attempt = _load_attempt_for_user(user, attempt_id)
     if attempt.status == SpeakingAttempt.Status.ABORTED:
@@ -3231,6 +3283,9 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         transcript_status = "captured" if transcript else "missing"
     source = str(payload.get("transcript_source") or "browser_dictation").strip() or "browser_dictation"
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    audio_preprocessing_metrics = _sanitize_audio_preprocessing_metrics(payload.get("audio_preprocessing_metrics"))
+    if audio_preprocessing_metrics:
+        metadata["audio_preprocessing_metrics"] = audio_preprocessing_metrics
     p2_link = payload.get("p2_corpus_link") if isinstance(payload.get("p2_corpus_link"), dict) else None
     if turn.part == "p2" and p2_link:
         selected_entry = p2_corpus_for_selection(user, str(p2_link.get("entry_id") or ""))
