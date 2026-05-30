@@ -19,6 +19,7 @@ urlpatterns = [
     path("examiner-audio-diagnostics.js", frontend_asset, {"asset_path": "examiner-audio-diagnostics.js"}, name="frontend-examiner-audio-diagnostics-js"),
     path("candidate-profile.js", frontend_asset, {"asset_path": "candidate-profile.js"}, name="frontend-candidate-profile-js"),
     path("realtime-pcm-uplink.js", frontend_asset, {"asset_path": "realtime-pcm-uplink.js"}, name="frontend-realtime-pcm-uplink-js"),
+    path("speaking-audio-preprocessor-runtime.js", frontend_asset, {"asset_path": "speaking-audio-preprocessor-runtime.js"}, name="frontend-speaking-audio-preprocessor-runtime-js"),
     path("api-client.js", frontend_asset, {"asset_path": "api-client.js"}, name="frontend-api-client-js"),
     path("appearance.js", frontend_asset, {"asset_path": "appearance.js"}, name="frontend-appearance-js"),
     path("view-router.js", frontend_asset, {"asset_path": "view-router.js"}, name="frontend-view-router-js"),

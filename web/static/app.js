@@ -211,7 +211,6 @@ const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 9;
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
-const WASM_AUDIO_PREPROCESS_STORAGE_KEY = "ielts-wasm-audio-preprocess";
 const FIXED_EXAMINER_AUDIO_URLS = new Set([
   "/api/tts-audio/examiner/fixed_examiner_what_is_your_full_name.mp3",
   "/api/tts-audio/examiner/fixed_examiner_do_you_work_or_do_you_study.mp3",
@@ -725,6 +724,16 @@ const realtimePcmUplinkController = window.IELTSRealtimePcmUplink?.createRealtim
 });
 if (!realtimePcmUplinkController) {
   throw new Error("IELTSRealtimePcmUplink module failed to initialize.");
+}
+
+const speakingAudioPreprocessorRuntime = window.IELTSSpeakingAudioPreprocessorRuntime?.createSpeakingAudioPreprocessorRuntime?.({
+  state,
+  isActivePracticeSession,
+  startRealtimePcmUplink,
+  stopRealtimePcmUplink,
+});
+if (!speakingAudioPreprocessorRuntime) {
+  throw new Error("IELTSSpeakingAudioPreprocessorRuntime module failed to initialize.");
 }
 
 const corpusTakeawayController = window.IELTSCorpusTakeaway?.createCorpusTakeawayController?.({
@@ -2345,34 +2354,6 @@ function scheduleExaminerPhase(sessionId, turnId = state.currentTurn?.id, delayM
   }, Math.max(0, Number(delayMs) || 0));
 }
 
-function resolveWasmAudioPreprocessConfig() {
-  const params = new URLSearchParams(window.location.search);
-  const queryValue = params.get("wasm_audio");
-  if (queryValue !== null) {
-    const normalized = queryValue.trim().toLowerCase();
-    if (["0", "false", "off", "disabled"].includes(normalized)) {
-      localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "off");
-    } else if (["mock", "mock-rms"].includes(normalized)) {
-      localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "mock-rms");
-    } else {
-      localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "wasm-audio-core");
-    }
-  }
-  const stored = localStorage.getItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY) || "wasm-audio-core";
-  if (stored === "wasm-audio-core" || stored === "mock-rms") {
-    return {
-      enabled: true,
-      analyzerId: stored,
-      threshold: 0.02,
-    };
-  }
-  return {
-    enabled: false,
-    analyzerId: "wasm-audio-core",
-    threshold: 0.02,
-  };
-}
-
 function stopRealtimePcmUplink(reason = "stopped") {
   return realtimePcmUplinkController.stop(reason);
 }
@@ -2382,149 +2363,19 @@ function startRealtimePcmUplink(sessionId = state.practiceSessionId) {
 }
 
 function exposeWasmAudioPreprocessMetrics() {
-  window.__ieltsWasmAudioPreprocess = {
-    enabled: () => resolveWasmAudioPreprocessConfig().enabled,
-    metrics: () => ({ ...(state.speaking.audioPreprocessorMetrics || {}) }),
-    realtimePcm: () => realtimePcmUplinkController.metrics(),
-    disable: () => {
-      localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "off");
-      stopSpeakingAudioPreprocessor("disabled");
-    },
-  };
-}
-
-function recordWasmAudioPreprocessMetrics(metrics, extra = {}) {
-  state.speaking.audioPreprocessorMetrics = {
-    ...(metrics || {}),
-    ...extra,
-    updatedAt: Date.now(),
-  };
-}
-
-function loadSpeakingAudioPreprocessorModule() {
-  if (!state.speaking.audioPreprocessorModulePromise) {
-    state.speaking.audioPreprocessorModulePromise = import("/wasm/speaking_audio_preprocessor.js")
-      .catch((error) => {
-        state.speaking.audioPreprocessorModulePromise = null;
-        throw error;
-      });
-  }
-  return state.speaking.audioPreprocessorModulePromise;
-}
-
-async function summarizeWasmAudioPreprocessMetrics(metrics) {
-  if (!metrics || metrics.enabled !== true) return null;
-  try {
-    const module = await loadSpeakingAudioPreprocessorModule();
-    return module.summarizeSpeakingAudioPreprocessingMetrics(metrics);
-  } catch (error) {
-    return {
-      enabled: true,
-      analyzer: String(metrics.analyzer || ""),
-      fallback_analyzer: String(metrics.fallbackAnalyzer || ""),
-      fallback_reason: String(metrics.fallbackReason || ""),
-      total_frames: Math.max(0, Number(metrics.frameCount || 0)),
-      speech_frames: Math.max(0, Number(metrics.speechFrameCount || 0)),
-      silence_frames: Math.max(0, Number(metrics.frameCount || 0) - Number(metrics.speechFrameCount || 0)),
-      speech_ratio: 0,
-      silence_ratio: 0,
-      sample_rate: Math.max(0, Number(metrics.sampleRate || 0)),
-      frame_size: Math.max(0, Number(metrics.frameSize || 0)),
-      last_error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  return speakingAudioPreprocessorRuntime.expose(() => realtimePcmUplinkController.metrics());
 }
 
 async function waitForSpeakingAudioPreprocessorTurnMetrics() {
-  if (state.speaking.audioPreprocessorStopPromise) {
-    await state.speaking.audioPreprocessorStopPromise.catch(() => null);
-  }
-  return state.speaking.audioPreprocessorTurnMetrics || null;
+  return speakingAudioPreprocessorRuntime.waitForTurnMetrics();
 }
 
 async function maybeStartSpeakingAudioPreprocessor(stream, sessionId = state.practiceSessionId) {
-  const config = resolveWasmAudioPreprocessConfig();
-  if (!config.enabled || !stream) return;
-  const token = state.speaking.audioPreprocessorToken + 1;
-  state.speaking.audioPreprocessorToken = token;
-  state.speaking.audioPreprocessorTurnMetrics = null;
-  state.speaking.audioPreprocessorStopPromise = null;
-  recordWasmAudioPreprocessMetrics(null, {
-    enabled: true,
-    running: false,
-    status: "starting",
-    analyzer: config.analyzerId,
-  });
-
-  try {
-    const module = await loadSpeakingAudioPreprocessorModule();
-    if (token !== state.speaking.audioPreprocessorToken || !isActivePracticeSession(sessionId)) return;
-    const onPcmFrame = startRealtimePcmUplink(sessionId);
-    const preprocessor = module.createSpeakingAudioPreprocessor({
-      analyzerId: config.analyzerId,
-      threshold: config.threshold,
-      onPcmFrame,
-    });
-    state.speaking.audioPreprocessor = preprocessor;
-    const metrics = await preprocessor.start(stream);
-    if (token !== state.speaking.audioPreprocessorToken || !isActivePracticeSession(sessionId)) {
-      await preprocessor.stop();
-      return;
-    }
-    recordWasmAudioPreprocessMetrics(metrics, { status: "running" });
-    console.info("[wasm-audio] preprocessing started", state.speaking.audioPreprocessorMetrics);
-  } catch (error) {
-    stopRealtimePcmUplink("preprocessor-failed");
-    recordWasmAudioPreprocessMetrics(null, {
-      enabled: true,
-      running: false,
-      status: "failed",
-      analyzer: config.analyzerId,
-      lastError: error instanceof Error ? error.message : String(error),
-    });
-    console.info("[wasm-audio] preprocessing unavailable; continuing baseline recorder", state.speaking.audioPreprocessorMetrics);
-  }
+  return speakingAudioPreprocessorRuntime.maybeStart(stream, sessionId);
 }
 
 function stopSpeakingAudioPreprocessor(reason = "stopped") {
-  state.speaking.audioPreprocessorToken += 1;
-  stopRealtimePcmUplink(reason);
-  const preprocessor = state.speaking.audioPreprocessor;
-  state.speaking.audioPreprocessor = null;
-  if (!preprocessor) {
-    if (state.speaking.audioPreprocessorMetrics) {
-      recordWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics, {
-        running: false,
-        status: reason,
-      });
-    }
-    state.speaking.audioPreprocessorTurnMetrics = null;
-    state.speaking.audioPreprocessorStopPromise = null;
-    return Promise.resolve(null);
-  }
-  const stopPromise = preprocessor.stop()
-    .then((metrics) => {
-      recordWasmAudioPreprocessMetrics(metrics, {
-        running: false,
-        status: reason,
-      });
-      return summarizeWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics);
-    })
-    .then((summary) => {
-      state.speaking.audioPreprocessorTurnMetrics = summary;
-      console.info("[wasm-audio] preprocessing stopped", state.speaking.audioPreprocessorMetrics);
-      return summary;
-    })
-    .catch((error) => {
-      recordWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics, {
-        running: false,
-        status: "stop_failed",
-        lastError: error instanceof Error ? error.message : String(error),
-      });
-      return summarizeWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics);
-    });
-  state.speaking.audioPreprocessorStopPromise = stopPromise;
-  return stopPromise;
+  return speakingAudioPreprocessorRuntime.stop(reason);
 }
 
 async function startRecording(sessionId = state.practiceSessionId) {
