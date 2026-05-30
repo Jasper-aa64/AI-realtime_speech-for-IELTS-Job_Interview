@@ -184,8 +184,6 @@ const state = {
   },
 };
 
-const FONT_STORAGE_KEY = "ielts-font-style";
-const DARK_MODE_STORAGE_KEY = "ielts-dark-mode";
 const VIEW_STORAGE_KEY = "ielts-view";
 const FULL_NAME_STORAGE_KEY = "ielts-full-name";
 const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
@@ -193,7 +191,6 @@ const VDITOR_CSS_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.css";
 const VDITOR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js";
 const WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT = 2;
 const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 9;
-const fontStyles = new Set(["default", "academic", "popular"]);
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
 const corpusMarkdownEditors = {};
@@ -350,6 +347,17 @@ const {
   renderMarkdown,
   renderSpokenAnswerMarkdown,
 } = window.IELTSSharedUI || {};
+
+const appearance = window.IELTSAppearance?.createAppearanceControls?.({ state });
+if (!appearance) {
+  throw new Error("IELTSAppearance module failed to initialize.");
+}
+const {
+  applyFontStyle,
+  applyDarkMode,
+  loadDarkMode,
+  loadFontStyle,
+} = appearance;
 
 function loadWritingPromptHighlights() {
   try {
@@ -598,82 +606,7 @@ function setBusy(message) {
   text("busyText", message || "");
 }
 
-let fontStyleTransitionTimer = null;
 let candidateNameSaveTimer = null;
-
-function applyFontStyle(value, options = {}) {
-  const style = fontStyles.has(value) ? value : "default";
-  state.fontStyle = style;
-
-  // Clear any pending transition
-  if (fontStyleTransitionTimer) {
-    clearTimeout(fontStyleTransitionTimer);
-  }
-
-  // Animate font options background immediately
-  document.querySelectorAll(".font-options").forEach((el) => {
-    el.classList.toggle("academic", style === "academic");
-    el.classList.toggle("popular", style === "popular");
-  });
-
-  // Update button active states
-  document.querySelectorAll("[data-font-style]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.fontStyle === style);
-  });
-
-  const updateBodyClass = () => {
-    document.body.classList.toggle("font-academic", style === "academic");
-    document.body.classList.toggle("font-popular", style === "popular");
-    fontStyleTransitionTimer = null;
-  };
-  if (options.immediate) {
-    updateBodyClass();
-  } else {
-    // Delay body class change to wait for slider animation (250ms) on user-initiated changes.
-    fontStyleTransitionTimer = setTimeout(updateBodyClass, 250);
-  }
-
-  try {
-    localStorage.setItem(FONT_STORAGE_KEY, style);
-  } catch (_error) {
-    // Ignore storage failures; the visual selection still applies for this session.
-  }
-}
-
-function applyDarkMode(enabled, options = {}) {
-  const active = Boolean(enabled);
-  state.darkMode = active;
-  document.body.classList.toggle("theme-dark", active);
-  const toggle = $("#darkModeToggle");
-  if (toggle) toggle.checked = active;
-  if (!options.skipPersist) {
-    try {
-      localStorage.setItem(DARK_MODE_STORAGE_KEY, active ? "1" : "0");
-    } catch (_error) {
-      // Ignore storage failures; the visual selection still applies for this session.
-    }
-  }
-}
-
-function loadDarkMode() {
-  let enabled = false;
-  try {
-    enabled = localStorage.getItem(DARK_MODE_STORAGE_KEY) === "1";
-  } catch (_error) {
-    enabled = false;
-  }
-  applyDarkMode(enabled, { skipPersist: true });
-}
-
-function loadFontStyle() {
-  let stored = "default";
-  try {
-    stored = localStorage.getItem(FONT_STORAGE_KEY) || "default";
-  } catch (_error) {
-    stored = "default";
-  }
-  applyFontStyle(stored, { immediate: true });
-}
 
 function candidateNames() {
   return {

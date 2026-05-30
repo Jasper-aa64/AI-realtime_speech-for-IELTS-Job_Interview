@@ -33,6 +33,7 @@ def frontend_asset(request, asset_path: str = "index.html"):
     allowed = {
         "index.html": "text/html; charset=utf-8",
         "shared-ui.js": "text/javascript; charset=utf-8",
+        "appearance.js": "text/javascript; charset=utf-8",
         "app.js": "text/javascript; charset=utf-8",
         "styles.css": "text/css; charset=utf-8",
     }
