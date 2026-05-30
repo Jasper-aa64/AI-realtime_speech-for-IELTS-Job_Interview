@@ -37,6 +37,7 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "writing-prompt-picker.js": "text/javascript; charset=utf-8",
         "corpus-takeaway.js": "text/javascript; charset=utf-8",
         "examiner-audio-diagnostics.js": "text/javascript; charset=utf-8",
+        "candidate-profile.js": "text/javascript; charset=utf-8",
         "api-client.js": "text/javascript; charset=utf-8",
         "appearance.js": "text/javascript; charset=utf-8",
         "view-router.js": "text/javascript; charset=utf-8",

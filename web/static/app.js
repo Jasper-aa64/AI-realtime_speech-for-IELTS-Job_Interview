@@ -600,85 +600,46 @@ function setBusy(message) {
   text("busyText", message || "");
 }
 
-let candidateNameSaveTimer = null;
-
-function candidateNames() {
-  return {
-    fullName: ($("#fullNameInput")?.value || DEFAULT_FULL_NAME).trim() || DEFAULT_FULL_NAME,
-    englishName: ($("#englishNameInput")?.value || DEFAULT_ENGLISH_NAME).trim() || DEFAULT_ENGLISH_NAME,
-  };
+const candidateProfile = window.IELTSCandidateProfile?.createCandidateProfileController?.({
+  state,
+  $,
+  api,
+  defaultFullName: DEFAULT_FULL_NAME,
+  defaultEnglishName: DEFAULT_ENGLISH_NAME,
+  fullNameStorageKey: FULL_NAME_STORAGE_KEY,
+  englishNameStorageKey: ENGLISH_NAME_STORAGE_KEY,
+  renderAccountStatus,
+});
+if (!candidateProfile) {
+  throw new Error("IELTSCandidateProfile module failed to initialize.");
 }
 
-function storeCandidateNamesLocally(names) {
-  try {
-    localStorage.setItem(FULL_NAME_STORAGE_KEY, names.fullName);
-    localStorage.setItem(ENGLISH_NAME_STORAGE_KEY, names.englishName);
-  } catch (_error) {
-    // Local identity settings still apply for the current session.
-  }
+function candidateNames(...args) {
+  return candidateProfile.candidateNames(...args);
 }
 
-function applyCandidateNames(names, persistLocal = false) {
-  const fullName = (names?.fullName || DEFAULT_FULL_NAME).trim() || DEFAULT_FULL_NAME;
-  const englishName = (names?.englishName || DEFAULT_ENGLISH_NAME).trim() || DEFAULT_ENGLISH_NAME;
-  if ($("#fullNameInput")) $("#fullNameInput").value = fullName;
-  if ($("#englishNameInput")) $("#englishNameInput").value = englishName;
-  if (persistLocal) storeCandidateNamesLocally({ fullName, englishName });
-  updateAvatars(englishName);
+function applyCandidateNames(...args) {
+  return candidateProfile.applyCandidateNames(...args);
 }
 
-async function saveCandidateNames(syncBackend = true) {
-  const names = candidateNames();
-  updateAvatars(names.englishName);
-  if (state.account.authenticated && syncBackend) {
-    const payload = await api("/api/accounts/me/", {
-      full_name: names.fullName,
-      english_name: names.englishName,
-      display_name: names.englishName,
-    }, { method: "PATCH" });
-    state.account.user = payload.user || state.account.user;
-    renderAccountStatus("姓名已同步到账号。");
-    return;
-  }
-  storeCandidateNamesLocally(names);
-  renderAccountStatus(state.account.backendAvailable ? "未登录，姓名暂存在本机。" : "Django 未连接，姓名暂存在本机。");
+function saveCandidateNames(...args) {
+  return candidateProfile.saveCandidateNames(...args);
 }
 
-function scheduleCandidateNameSave() {
-  updateAvatars(candidateNames().englishName);
-  if (candidateNameSaveTimer) clearTimeout(candidateNameSaveTimer);
-  candidateNameSaveTimer = setTimeout(() => {
-    candidateNameSaveTimer = null;
-    saveCandidateNames().catch((error) => renderAccountStatus(error.message, true));
-  }, 650);
+function scheduleCandidateNameSave(...args) {
+  return candidateProfile.scheduleCandidateNameSave(...args);
 }
 
-function flushCandidateNameSave() {
-  if (candidateNameSaveTimer) {
-    clearTimeout(candidateNameSaveTimer);
-    candidateNameSaveTimer = null;
-  }
-  saveCandidateNames().catch((error) => renderAccountStatus(error.message, true));
+function flushCandidateNameSave(...args) {
+  return candidateProfile.flushCandidateNameSave(...args);
 }
 
-function updateAvatars(name) {
-  const initial = (name || "J").charAt(0).toUpperCase();
-  ["userAvatarDesktop", "userAvatar"].forEach((id) => {
-    const avatar = $(id);
-    if (avatar) avatar.textContent = initial;
-  });
+function updateAvatars(...args) {
+  return candidateProfile.updateAvatars(...args);
 }
 
-function loadCandidateNames() {
-  let fullName = DEFAULT_FULL_NAME;
-  let englishName = DEFAULT_ENGLISH_NAME;
-  try {
-    fullName = localStorage.getItem(FULL_NAME_STORAGE_KEY) || fullName;
-    englishName = localStorage.getItem(ENGLISH_NAME_STORAGE_KEY) || englishName;
-  } catch (_error) {
-    // Use defaults.
-  }
-  applyCandidateNames({ fullName, englishName });
+function loadCandidateNames(...args) {
+  return candidateProfile.loadCandidateNames(...args);
 }
 
 async function withBusy(message, action) {
