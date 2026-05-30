@@ -9,18 +9,20 @@ Current split:
 - `corpus_services.py`: IELTS question bank, P1/P2 corpus material, Takeaway,
   and translation helpers.
 - `exceptions.py`: shared service exception types.
+- `report_services.py`: report validity, history/detail/delete payloads, AI
+  task summary payloads, and weak-item/replay-queue read models.
 - `text_utils.py`: pure report/model-answer/coaching text cleanup helpers.
 - `volcengine_asr.py`: ASR provider integration.
 - `services.py`: compatibility facade and orchestration for attempts, reports,
-  scoring, TTS, history, and training.
+  scoring, TTS, and runtime state transitions.
 
 Next safe extraction targets:
 
 1. `tts_services.py`: server TTS, fixed examiner warmup, and audio path lookup.
 2. `runtime_services.py`: attempt start, turn upload/complete, abort, and score
    task creation.
-3. `report_services.py`: history payloads, report payloads, per-turn feedback,
-   and retry/regenerate helpers.
+3. `report_regeneration_services.py`: per-turn feedback retry/regenerate and
+   full report regeneration helpers.
 
 Refactor rule: preserve public imports from `services.py` until all views/tests
 move to the narrower modules.
