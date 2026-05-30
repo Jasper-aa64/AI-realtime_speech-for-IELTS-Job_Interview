@@ -28,6 +28,12 @@ from urllib import error, parse, request
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BACKEND_DIR = ROOT / "backend_django"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from apps.writing.search_utils import expanded_search_terms, search_normalize
+
 DEFAULT_BASE_URL = os.environ.get("IELTS_BASE_URL", "http://127.0.0.1:8082/").rstrip("/") + "/"
 DEFAULT_BANK_DIR = Path(os.environ.get("IELTS_BANK_DIR", ROOT / "data" / "ielts")).expanduser()
 DEFAULT_TIMEOUT_SECONDS = float(os.environ.get("IELTS_AGENT_TIMEOUT", "12"))
@@ -35,41 +41,22 @@ USER_AGENT = "IELTS-Agent-CLI/1.0 (+local study locator)"
 
 
 def normalize_text(value: str | None) -> str:
-    aliases = {
-        "computers": "computer",
-        "children": "child",
-        "childrens": "child",
-        "childs": "child",
-        "schools": "school",
-        "teachers": "teacher",
-        "education": "study",
-        "educational": "study",
-        "learning": "study",
-        "learn": "study",
-        "charts": "graph",
-        "chart": "graph",
-        "graphs": "graph",
-        "maps": "map",
-        "processes": "process",
-        "advantages": "advantage",
-        "disadvantages": "disadvantage",
-    }
-    raw_tokens = re.findall(r"[a-z0-9]+", str(value or "").lower())
-    tokens = [aliases.get(token, token[:-1] if len(token) > 3 and token.endswith("s") else token) for token in raw_tokens]
-    return " ".join(tokens)
+    return search_normalize(value)
 
 
 def score_text(query: str, candidate: str) -> float:
     query_norm = normalize_text(query)
     candidate_norm = normalize_text(candidate)
     query_tokens = set(query_norm.split())
+    expanded_tokens = set(expanded_search_terms(query))
     candidate_tokens = set(candidate_norm.split())
-    if not query_tokens or not candidate_tokens:
+    if not (query_tokens or expanded_tokens) or not candidate_tokens:
         return 0.0
-    overlap = len(query_tokens & candidate_tokens) / len(query_tokens)
+    direct_overlap = len(query_tokens & candidate_tokens) / max(len(query_tokens), 1)
+    expanded_overlap = len(expanded_tokens & candidate_tokens) / max(len(expanded_tokens), 1)
     sequence = SequenceMatcher(None, query_norm, candidate_norm[: max(240, len(query_norm) * 6)]).ratio()
     phrase_bonus = 0.08 if query_norm and query_norm[:80] in candidate_norm else 0.0
-    return round(min(1.0, overlap * 0.72 + sequence * 0.24 + phrase_bonus), 4)
+    return round(min(1.0, direct_overlap * 0.42 + expanded_overlap * 0.34 + sequence * 0.18 + phrase_bonus), 4)
 
 
 def write_json(payload: dict | list, exit_code: int = 0) -> int:

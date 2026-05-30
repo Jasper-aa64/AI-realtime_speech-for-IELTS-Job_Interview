@@ -1,4 +1,5 @@
 import json
+import time
 import uuid
 from io import StringIO
 from unittest.mock import patch
@@ -1368,3 +1369,278 @@ class WritingApiTests(TestCase):
         self.assertEqual(item["id"], target.prompt_id)
         self.assertIn("?view=writing&task=task2&prompt=reported-cn-task2-2015-05-30-20", item["url"])
         self.assertGreater(item["match_score"], 0.5)
+
+    def test_agent_prompt_search_uses_hybrid_semantic_retrieval(self):
+        self.create_prompt(
+            prompt_id="reported-cn-task2-education-unique",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Education and online technology",
+            prompt="Some people think technology and the Internet are more important in children's education than schools and teachers. Discuss both views and give your opinion.",
+            category="discussion",
+            source="reported_actual_engopen",
+        )
+        self.create_prompt(
+            prompt_id="reported-cn-task2-traffic",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Traffic and public transport",
+            prompt="Some people think traffic congestion should be reduced by improving public transport. To what extent do you agree?",
+            category="opinion",
+            source="reported_actual_engopen",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "孩子线上学习 科技 比 老师 学校 更重要", "task_type": "task2", "limit": "20"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertGreaterEqual(payload["count"], 1)
+        item = payload["items"][0]
+        self.assertIn(item["match_type"], {"semantic", "bm25"})
+        self.assertGreater(item["semantic_score"], item["keyword_score"])
+        self.assertTrue({"technology", "computer", "internet"} & set(item["matched_terms"]))
+        self.assertIn("learn", item["prompt"].lower())
+
+    def test_agent_prompt_search_handles_chinese_water_free_waste_query(self):
+        target = self.create_prompt(
+            prompt_id="cambridge-20-test-1-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Clean water should be free",
+            prompt="Access to clean water is a basic human right. Therefore, every home should have a water supply that is provided free of charge. To what extent do you agree or disagree?",
+            category="opinion",
+            source_book=20,
+            source_test=1,
+            source_question=2,
+            source="cambridge",
+        )
+        self.create_prompt(
+            prompt_id="cambridge-11-test-2-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Household waste recycling",
+            prompt="Some people claim that not enough household waste is recycled. They say that the only way to increase recycling is for governments to make it a legal requirement.",
+            category="opinion",
+            source_book=11,
+            source_test=2,
+            source_question=2,
+            source="cambridge",
+        )
+        self.create_prompt(
+            prompt_id="task1-water-line",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Water consumption line graph",
+            prompt="The line graph shows water consumption in three countries over time.",
+            category="line_graph",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "水 浪费 免费", "task_type": "task2", "limit": "5"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertGreaterEqual(payload["count"], 1)
+        item = payload["items"][0]
+        self.assertEqual(item["id"], target.prompt_id)
+        self.assertGreater(item["match_score"], 0.25)
+        self.assertIn("water", item["matched_terms"])
+        self.assertIn("free", item["matched_terms"])
+        self.assertIn(item["match_type"], {"bm25", "semantic"})
+
+    def test_agent_prompt_search_chinese_recycling_query_prefers_waste_prompt(self):
+        target = self.create_prompt(
+            prompt_id="cambridge-11-test-2-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Household waste recycling",
+            prompt="Some people claim that not enough household waste is recycled. They say that the only way to increase recycling is for governments to make it a legal requirement.",
+            category="opinion",
+            source_book=11,
+            source_test=2,
+            source_question=2,
+            source="cambridge",
+        )
+        self.create_prompt(
+            prompt_id="cambridge-20-test-1-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Clean water should be free",
+            prompt="Access to clean water is a basic human right. Therefore, every home should have a water supply that is provided free of charge.",
+            category="opinion",
+            source_book=20,
+            source_test=1,
+            source_question=2,
+            source="cambridge",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "浪费 回收 垃圾", "task_type": "task2", "limit": "3"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["items"][0]
+        self.assertEqual(item["id"], target.prompt_id)
+        self.assertIn("waste", item["matched_terms"])
+        self.assertIn("recycle", item["matched_terms"])
+
+    def test_agent_prompt_search_chinese_task1_population_visual_query(self):
+        self.create_prompt(
+            prompt_id="task1-population-table-unique",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Population table",
+            prompt="The table shows the population of three cities in 1990, 2000 and 2010.",
+            category="table",
+        )
+        self.create_prompt(
+            prompt_id="task2-city-life",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="City life",
+            prompt="Some people believe city life is becoming more stressful.",
+            category="opinion",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "人口 图表", "task_type": "task1_academic", "limit": "3"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["items"][0]
+        self.assertIn("population", item["prompt"].lower())
+        self.assertIn("population", item["matched_terms"])
+        self.assertTrue({"table", "graph", "chart"} & set(item["matched_terms"]))
+
+    def test_agent_prompt_search_keeps_small_bank_fast(self):
+        target = self.create_prompt(
+            prompt_id="cambridge-20-test-1-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Clean water should be free",
+            prompt="Access to clean water is a basic human right. Therefore, every home should have a water supply that is provided free of charge.",
+            category="opinion",
+            source_book=20,
+            source_test=1,
+            source_question=2,
+            source="cambridge",
+        )
+        for index in range(220):
+            self.create_prompt(
+                prompt_id=f"filler-task2-{index}",
+                task_type=WritingPrompt.TaskType.TASK2,
+                title=f"Filler topic {index}",
+                prompt=f"Some people discuss topic number {index} about society and work.",
+                category="opinion",
+            )
+
+        started = time.perf_counter()
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "免费 供水", "task_type": "task2", "limit": "5"},
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"][0]["id"], target.prompt_id)
+        self.assertLess(elapsed_ms, 500)
+
+    def test_agent_prompt_search_cache_refreshes_after_prompt_insert(self):
+        self.create_prompt(
+            prompt_id="task2-initial-unrelated-cache",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Initial unrelated cache",
+            prompt="Some people discuss city transport and public roads.",
+            category="opinion",
+        )
+
+        first_response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "cacheonly hydrosolar", "task_type": "task2", "limit": "3"},
+        )
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(first_response.json()["items"], [])
+
+        target = self.create_prompt(
+            prompt_id="task2-new-hydrosolar",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="New hydrosolar water supply",
+            prompt="Every hydrosolar home should have a clean water supply.",
+            category="opinion",
+        )
+
+        second_response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "hydrosolar", "task_type": "task2", "limit": "3"},
+        )
+
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(second_response.json()["items"][0]["id"], target.prompt_id)
+
+    def test_agent_prompt_search_handles_common_typos_without_heavy_dependencies(self):
+        museum = self.create_prompt(
+            prompt_id="cambridge-10-test-4-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Museums admission charges",
+            prompt="Many museums charge for admission while others are free.",
+            category="advantages_disadvantages",
+            source_book=10,
+            source_test=4,
+            source_question=2,
+            source="cambridge",
+        )
+        self.create_prompt(
+            prompt_id="cambridge-20-test-1-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Clean water should be free",
+            prompt="Access to clean water is a basic human right and every home should have a water supply that is provided free of charge.",
+            category="opinion",
+            source_book=20,
+            source_test=1,
+            source_question=2,
+            source="cambridge",
+        )
+
+        museum_response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "musem free admision charge", "task_type": "task2", "limit": "3"},
+        )
+        water_response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "fresh water goverment controll", "task_type": "task2", "limit": "3"},
+        )
+
+        self.assertEqual(museum_response.status_code, 200)
+        self.assertEqual(museum_response.json()["items"][0]["id"], museum.prompt_id)
+        self.assertEqual(water_response.status_code, 200)
+        water_item = water_response.json()["items"][0]
+        self.assertIn("water", water_item["matched_concepts"])
+        self.assertIn("government", water_item["matched_concepts"])
+        self.assertIn("water", water_item["prompt"].lower())
+
+    def test_agent_prompt_search_does_not_treat_salary_as_water(self):
+        self.create_prompt(
+            prompt_id="task2-work-salary",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Work and salary",
+            prompt="Some people choose a job mainly because of salary and company benefits.",
+            category="opinion",
+        )
+        self.create_prompt(
+            prompt_id="cambridge-20-test-1-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Clean water should be free",
+            prompt="Access to clean water is a basic human right and every home should have a water supply that is provided free of charge.",
+            category="opinion",
+            source_book=20,
+            source_test=1,
+            source_question=2,
+            source="cambridge",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "工作 薪水 公司", "task_type": "task2", "limit": "3"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["items"][0]
+        self.assertEqual(item["id"], "task2-work-salary")
+        self.assertIn("work", item["matched_concepts"])
