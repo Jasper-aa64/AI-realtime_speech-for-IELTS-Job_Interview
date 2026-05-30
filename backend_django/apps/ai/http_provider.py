@@ -6,7 +6,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterator
 
 from django.conf import settings
 
@@ -167,63 +167,137 @@ class HttpApiProvider:
             metadata={"stream": bool(stream), "endpoint_configured": True},
         )
 
+    def stream_tokens(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float = DEFAULT_HTTP_TEMPERATURE,
+        max_tokens: int = 120,
+        timeout_seconds: float | None = None,
+    ) -> Iterator[str]:
+        body = {
+            "model": self.config.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max(1, int(max_tokens or 1)),
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        request = urllib.request.Request(
+            self.config.endpoint,
+            data=json.dumps(body).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.config.api_key}",
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream",
+                "User-Agent": "IELTS-Speaking-Monitor/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_seconds or self.config.timeout_seconds) as response:
+                yielded = False
+                for payload in self._iter_stream_payloads(response):
+                    content, _usage = self._stream_payload_content(payload, extra_secrets=(self.config.api_key,))
+                    if content:
+                        yielded = True
+                        yield content
+                if not yielded:
+                    raise HttpApiProviderError(
+                        "HTTP AI provider returned empty output",
+                        error_code="http_api_provider_empty_output",
+                    )
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                detail = exc.read().decode("utf-8", errors="replace")
+            except Exception:  # noqa: BLE001 - best effort diagnostic only
+                detail = str(exc)
+            raise HttpApiProviderError(
+                f"HTTP AI provider returned {exc.code}: {_safe_error_detail(detail, extra_secrets=(self.config.api_key,))}",
+                error_code="http_api_provider_http_error",
+            ) from exc
+        except (TimeoutError, urllib.error.URLError, OSError) as exc:
+            raise HttpApiProviderError(
+                f"HTTP AI provider request failed: {_safe_error_detail(str(exc), extra_secrets=(self.config.api_key,))}",
+                error_code="http_api_provider_request_failed",
+            ) from exc
+
     @staticmethod
     def _parse_stream_response(response: Any) -> tuple[str, dict[str, Any] | None]:
         parts: list[str] = []
         usage: dict[str, Any] | None = None
+
+        for payload in HttpApiProvider._iter_stream_payloads(response):
+            content, payload_usage = HttpApiProvider._stream_payload_content(payload)
+            if payload_usage is not None:
+                usage = payload_usage
+            if content:
+                parts.append(content)
+        return "".join(parts), usage
+
+    @staticmethod
+    def _stream_payload_content(
+        payload: dict[str, Any],
+        *,
+        extra_secrets: tuple[str, ...] = (),
+    ) -> tuple[str, dict[str, Any] | None]:
+        if isinstance(payload.get("error"), dict):
+            error = payload["error"]
+            message = error.get("message") if isinstance(error.get("message"), str) else "stream error"
+            raise HttpApiProviderError(
+                f"HTTP AI provider stream error: {_safe_error_detail(message, extra_secrets=extra_secrets)}",
+                error_code="http_api_provider_stream_error",
+            )
+        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else None
+        choices = payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return "", usage
+        choice = choices[0] if isinstance(choices[0], dict) else {}
+        finish_reason = choice.get("finish_reason")
+        if finish_reason in {"length", "content_filter"}:
+            raise HttpApiProviderError(
+                f"HTTP AI provider stopped with finish_reason={finish_reason}",
+                error_code="http_api_provider_finish_reason",
+            )
+        delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+        content = delta.get("content")
+        return (content if isinstance(content, str) else ""), usage
+
+    @staticmethod
+    def _iter_stream_payloads(response: Any) -> Iterator[dict[str, Any]]:
         data_lines: list[str] = []
 
-        def flush_event() -> bool:
-            nonlocal usage
+        def flush_event() -> dict[str, Any] | str | None:
             if not data_lines:
-                return False
+                return None
             payload_text = "\n".join(data_lines).strip()
             data_lines.clear()
             if payload_text == "[DONE]":
-                return True
+                return "[DONE]"
             try:
-                payload = json.loads(payload_text)
+                return json.loads(payload_text)
             except ValueError:
-                return False
-            if isinstance(payload.get("error"), dict):
-                error = payload["error"]
-                message = error.get("message") if isinstance(error.get("message"), str) else "stream error"
-                raise HttpApiProviderError(
-                    f"HTTP AI provider stream error: {_safe_error_detail(message)}",
-                    error_code="http_api_provider_stream_error",
-                )
-            if isinstance(payload.get("usage"), dict):
-                usage = payload["usage"]
-            choices = payload.get("choices")
-            if not isinstance(choices, list) or not choices:
-                return False
-            choice = choices[0] if isinstance(choices[0], dict) else {}
-            finish_reason = choice.get("finish_reason")
-            if finish_reason in {"length", "content_filter"}:
-                raise HttpApiProviderError(
-                    f"HTTP AI provider stopped with finish_reason={finish_reason}",
-                    error_code="http_api_provider_finish_reason",
-                )
-            delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
-            content = delta.get("content")
-            if isinstance(content, str):
-                parts.append(content)
-            return False
+                return None
 
         for raw_line in response:
             line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else str(raw_line)
             for normalized_line in line.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
                 event_line = normalized_line.rstrip("\n")
                 if not event_line:
-                    if flush_event():
-                        return "".join(parts), usage
+                    payload = flush_event()
+                    if payload == "[DONE]":
+                        return
+                    if isinstance(payload, dict):
+                        yield payload
                     continue
                 if event_line.startswith(":"):
                     continue
                 if event_line.startswith("data:"):
                     data_lines.append(event_line[len("data:") :].lstrip())
-        flush_event()
-        return "".join(parts), usage
+        payload = flush_event()
+        if isinstance(payload, dict):
+            yield payload
 
     @staticmethod
     def _parse_json_response(raw_body: bytes) -> tuple[str, dict[str, Any] | None]:

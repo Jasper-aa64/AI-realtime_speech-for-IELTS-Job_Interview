@@ -51,6 +51,44 @@ class HttpApiProviderTests(SimpleTestCase):
         self.assertEqual(text, "What changed?")
         self.assertEqual(usage, {"prompt_tokens": 3, "completion_tokens": 2})
 
+    def test_stream_tokens_yields_delta_content_as_it_arrives(self):
+        config = HttpApiProviderConfig(
+            base_url="https://example.test/v1",
+            api_key="secret-token",
+            model="fast-model",
+            timeout_seconds=1,
+        )
+        provider = HttpApiProvider(config)
+        response = _StreamingResponse(
+            [
+                b'data: {"choices":[{"delta":{"content":"How "}}]}\n\n',
+                b'data: {"choices":[{"delta":{"content":"exactly?"},"finish_reason":"stop"}]}\n\n',
+                b"data: [DONE]\n\n",
+            ]
+        )
+
+        with patch("apps.ai.http_provider.urllib.request.urlopen", return_value=response):
+            chunks = list(provider.stream_tokens([{"role": "user", "content": "Ask one question"}], max_tokens=8))
+
+        self.assertEqual(chunks, ["How ", "exactly?"])
+
+    def test_stream_tokens_rejects_provider_stream_error(self):
+        config = HttpApiProviderConfig(
+            base_url="https://example.test/v1",
+            api_key="secret-token",
+            model="fast-model",
+            timeout_seconds=1,
+        )
+        provider = HttpApiProvider(config)
+        response = _StreamingResponse([b'data: {"error":{"message":"bad request secret-token"}}\n\n'])
+
+        with patch("apps.ai.http_provider.urllib.request.urlopen", return_value=response):
+            with self.assertRaises(HttpApiProviderError) as raised:
+                list(provider.stream_tokens([{"role": "user", "content": "Ask one question"}], max_tokens=8))
+
+        self.assertEqual(raised.exception.error_code, "http_api_provider_stream_error")
+        self.assertNotIn("secret-token", str(raised.exception))
+
     def test_complete_chat_redacts_api_key_from_http_error(self):
         config = HttpApiProviderConfig(
             base_url="https://example.test/v1",
