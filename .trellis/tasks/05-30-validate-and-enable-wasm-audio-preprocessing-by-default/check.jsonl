@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/wasm-audio-guidelines.md", "reason": "Verify WASM default enablement has browser proof and fallback safety."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify frontend validation and unrelated WIP boundaries."}

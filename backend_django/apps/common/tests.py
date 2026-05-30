@@ -23,6 +23,17 @@ class HealthEndpointTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_frontend_wasm_asset_route_serves_generated_wasm(self):
+        response = Client().get("/wasm/audio_core_wasm.wasm")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "application/wasm")
+
+    def test_frontend_wasm_asset_route_rejects_path_traversal(self):
+        response = Client().get("/wasm/../app.js")
+
+        self.assertEqual(response.status_code, 404)
+
 
 class UserModelTests(TestCase):
     def test_custom_user_model_is_active(self):

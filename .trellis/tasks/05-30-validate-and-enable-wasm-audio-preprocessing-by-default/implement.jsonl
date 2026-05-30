@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/wasm-audio-guidelines.md", "reason": "Defines browser-side audio_core WASM integration boundaries and fallback requirements."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality checks and baseline preservation rules for UI/recording behavior."}

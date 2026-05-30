@@ -58,3 +58,19 @@ def frontend_static_asset(request, asset_path: str):
     if not path.exists() or not path.is_file():
         raise Http404("Static asset not found")
     return FileResponse(open(path, "rb"))
+
+
+@require_GET
+def frontend_wasm_asset(request, asset_path: str):
+    normalized = (asset_path or "").lstrip("/")
+    if not normalized or ".." in normalized.split("/"):
+        raise Http404("Static asset not found")
+    path = settings.BASE_DIR.parent / "web" / "static" / "wasm" / normalized
+    if not path.exists() or not path.is_file():
+        raise Http404("Static asset not found")
+    content_types = {
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".wasm": "application/wasm",
+    }
+    return FileResponse(open(path, "rb"), content_type=content_types.get(path.suffix))

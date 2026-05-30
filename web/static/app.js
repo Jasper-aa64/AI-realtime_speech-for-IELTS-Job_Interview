@@ -2022,7 +2022,7 @@ function resolveWasmAudioPreprocessConfig() {
       localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "wasm-audio-core");
     }
   }
-  const stored = localStorage.getItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY) || "off";
+  const stored = localStorage.getItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY) || "wasm-audio-core";
   if (stored === "wasm-audio-core" || stored === "mock-rms") {
     return {
       enabled: true,
