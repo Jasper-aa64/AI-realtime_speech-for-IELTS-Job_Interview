@@ -14,16 +14,17 @@ Current split:
 - `scoring_services.py`: pure score calibration, heuristic fallback scoring,
   relevance caps, transcript counters, and turn habit/focus tagging.
 - `text_utils.py`: pure report/model-answer/coaching text cleanup helpers.
+- `tts_services.py`: low-level TTS fallback contract, VolcEngine synthesis,
+  cached TTS URL lookup, and TTS media path lookup.
 - `volcengine_asr.py`: ASR provider integration.
 - `services.py`: compatibility facade and orchestration for attempts, reports,
-  scoring, TTS, and runtime state transitions.
+  scoring, examiner TTS orchestration, and runtime state transitions.
 
 Next safe extraction targets:
 
-1. `tts_services.py`: server TTS, fixed examiner warmup, and audio path lookup.
-2. `runtime_services.py`: attempt start, turn upload/complete, abort, and score
+1. `runtime_services.py`: attempt start, turn upload/complete, abort, and score
    task creation.
-3. `report_regeneration_services.py`: per-turn feedback retry/regenerate and
+2. `report_regeneration_services.py`: per-turn feedback retry/regenerate and
    full report regeneration helpers.
 
 Refactor rule: preserve public imports from `services.py` until all views/tests
