@@ -1,0 +1,5 @@
+{"type":"spec","path":".trellis/spec/backend/index.md","reason":"Backend conventions, Django-only runtime, service split rule."}
+{"type":"spec","path":".trellis/spec/backend/directory-structure.md","reason":"Django app module boundary guidance."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","reason":"Production runtime and split-monolith conventions."}
+{"type":"spec","path":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Move existing helpers instead of rewriting behavior."}
+{"type":"task","path":".trellis/tasks/05-30-split-writing-report-payload-services-production-pass/prd.md","reason":"Current task scope and validation plan."}

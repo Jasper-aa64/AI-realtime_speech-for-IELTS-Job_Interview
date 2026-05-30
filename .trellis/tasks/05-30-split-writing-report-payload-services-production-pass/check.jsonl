@@ -1,0 +1,3 @@
+{"type":"spec","path":".trellis/spec/backend/index.md","reason":"Check backend behavior and public API compatibility."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","reason":"Check Django-only runtime and service split constraints."}
+{"type":"task","path":".trellis/tasks/05-30-split-writing-report-payload-services-production-pass/prd.md","reason":"Acceptance criteria and validation commands."}
