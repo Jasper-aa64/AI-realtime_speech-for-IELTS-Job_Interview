@@ -99,7 +99,9 @@
 
 ### Main Changes
 
-(Add details)
+- Added `scripts/run_experiment3_tdd_validation.sh` as the repeatable experiment 3 validation entrypoint.
+- Added `scripts/test_wasm_audio_preprocessor_metrics.mjs` to unit-test browser-side preprocessing metric summaries.
+- The validation script covers C++ `audio_core_test`, WASM build and ignore contracts, WASM/frontend syntax, JS metrics behavior, Django `apps.ai`, and speaking metrics persistence.
 
 ### Git Commits
 
@@ -110,7 +112,9 @@
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `bash -n scripts/run_experiment3_tdd_validation.sh`
+- [OK] `node --check scripts/test_wasm_audio_preprocessor_metrics.mjs`
+- [OK] `scripts/run_experiment3_tdd_validation.sh`
 
 ### Status
 
@@ -1902,6 +1906,39 @@ Verified apps.ai provider adapter refactor, confirmed apps.ai tests pass, and ar
 | Hash | Message |
 |------|---------|
 | `71ebbd9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 54: Add experiment3 TDD validation layer
+
+**Date**: 2026-05-30
+**Task**: Add experiment3 TDD validation layer
+**Branch**: `main`
+
+### Summary
+
+Added a repeatable experiment3 validation script and JS metrics unit test covering C++ audio_core, WASM build, frontend diagnostics, Django apps.ai, and speaking metrics persistence.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1361c1a` | (see git log) |
 
 ### Testing
 
