@@ -348,6 +348,17 @@ const {
   renderSpokenAnswerMarkdown,
 } = window.IELTSSharedUI || {};
 
+const apiClient = window.IELTSApiClient;
+if (!apiClient) {
+  throw new Error("IELTSApiClient module failed to initialize.");
+}
+const {
+  api,
+  ensureCsrfToken,
+  getCsrfToken,
+  resetCsrfToken,
+} = apiClient;
+
 const appearance = window.IELTSAppearance?.createAppearanceControls?.({ state });
 if (!appearance) {
   throw new Error("IELTSAppearance module failed to initialize.");
@@ -547,58 +558,6 @@ async function persistWritingPromptHighlights() {
   state.writing.entry = entry;
   state.writing.reportDetailCache.set(entry.id, entry);
   return entry;
-}
-
-let csrfToken = null;
-
-async function ensureCsrfToken() {
-  if (csrfToken) return csrfToken;
-  try {
-    const response = await fetch("/api/accounts/csrf/", { credentials: "same-origin" });
-    const data = await response.json();
-    csrfToken = data.csrfToken || null;
-  } catch (_error) {
-    csrfToken = null;
-  }
-  return csrfToken;
-}
-
-async function api(path, body = null, requestOptions = {}) {
-  const method = requestOptions.method || (body !== null ? "POST" : "GET");
-  const options = {
-    method,
-    credentials: "same-origin",
-    headers: { ...(requestOptions.headers || {}) },
-  };
-  if (requestOptions.signal) options.signal = requestOptions.signal;
-  if (body !== null) {
-    options.headers["Content-Type"] = "application/json";
-    options.body = JSON.stringify(body);
-  }
-  if (method !== "GET") {
-    const token = await ensureCsrfToken();
-    if (token) options.headers["X-CSRFToken"] = token;
-  }
-  const response = await fetch(path, options);
-  const raw = await response.text();
-  let payload = null;
-  if (raw) {
-    try {
-      payload = JSON.parse(raw);
-    } catch (error) {
-      if (!response.ok) throw new Error(`Request failed: ${response.status} ${response.statusText}`);
-      throw new Error(`Invalid JSON response from ${path}`);
-    }
-  }
-  if (!response.ok) {
-    const message = payload?.message || payload?.error || `Request failed: ${response.status} ${response.statusText}`;
-    const error = new Error(message);
-    error.status = response.status;
-    error.payload = payload;
-    error.errors = payload?.errors || null;
-    throw error;
-  }
-  return payload;
 }
 
 function setBusy(message) {
@@ -6254,6 +6213,7 @@ function setCorpusMarkdownValue(textareaId, value) {
 function sendKeepaliveJson(path, payload) {
   try {
     const headers = { "Content-Type": "application/json" };
+    const csrfToken = getCsrfToken();
     if (csrfToken) headers["X-CSRFToken"] = csrfToken;
     navigator.sendBeacon?.(
       path,
@@ -7489,7 +7449,7 @@ async function submitLogin() {
     state.account.backendAvailable = true;
     state.account.authenticated = true;
     state.account.user = result.user || null;
-    csrfToken = null;
+    resetCsrfToken();
     await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
     await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
@@ -7544,7 +7504,7 @@ async function submitRegister() {
     state.account.backendAvailable = true;
     state.account.authenticated = true;
     state.account.user = result.user || null;
-    csrfToken = null;
+    resetCsrfToken();
     await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
     await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
@@ -7621,7 +7581,7 @@ async function logoutAccount() {
   state.wallet.fetchedAt = 0;
   state.viewHistory = [];
   clearUserScopedCaches();
-  csrfToken = null;
+  resetCsrfToken();
   loadCandidateNames();
   switchView("login", { force: true, skipAuthGate: true, authMessage: "你已退出登录。" });
 }
