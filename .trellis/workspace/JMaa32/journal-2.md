@@ -977,3 +977,34 @@ Phase 2.1 added Channels/Daphne, ProtocolTypeRouter preserving HTTP through Djan
 ### Next Steps
 
 - None - task complete
+
+
+## Session 86: Add realtime PCM websocket uplink
+
+**Date**: 2026-05-30
+**Task**: Add realtime PCM websocket uplink
+**Branch**: `main`
+
+### Summary
+
+Phase 2.2 added an explicit ?realtime_pcm=1 browser PCM uplink path over Channels WebSocket. Backend /ws/realtime/pcm/ counts binary PCM frames and acks frames/bytes. Existing recording remains unchanged unless explicitly enabled. Validation: test_asgi_channels 2/2 OK, node checks, manage.py check, full Django suite 270 tests OK.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
