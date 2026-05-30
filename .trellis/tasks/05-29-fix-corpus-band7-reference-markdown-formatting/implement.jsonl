@@ -1,0 +1,4 @@
+{"type":"spec","path":".trellis/spec/frontend/index.md","note":"Frontend conventions for report/corpus rendering changes."}
+{"type":"file","path":"web/static/app.js","note":"P1 corpus markdown rendering and copy behavior."}
+{"type":"file","path":"web/static/index.html","note":"P1 corpus dialog structure."}
+{"type":"file","path":"web/static/styles.css","note":"P1 corpus Band 7 answer styling."}

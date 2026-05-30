@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend report contract: speaking reports must show official score, per-turn transcript, Band 7 spoken version, and AI guidance without fake hardcoded AI."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Backend AI/report generation rules, fallback/error handling, and testing expectations for speaking report payloads."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend report rendering contract for speaking history/detail views and user-visible guidance."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Frontend report UI requirements, async safety, and speaking turn/report display expectations."}

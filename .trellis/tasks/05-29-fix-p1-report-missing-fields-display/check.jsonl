@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Check speaking report payload follows backend conventions and does not fake AI content."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check backend tests and AI fallback/status behavior."}
+{"file":".trellis/spec/frontend/index.md","reason":"Check frontend displays per-turn transcript, Band 7 answer, AI guidance, and status clearly."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check JS/report rendering safety and required frontend validation."}
