@@ -11,6 +11,8 @@ Current split:
 - `exceptions.py`: shared service exception types.
 - `report_services.py`: report validity, history/detail/delete payloads, AI
   task summary payloads, and weak-item/replay-queue read models.
+- `scoring_services.py`: pure score calibration, heuristic fallback scoring,
+  relevance caps, transcript counters, and turn habit/focus tagging.
 - `text_utils.py`: pure report/model-answer/coaching text cleanup helpers.
 - `volcengine_asr.py`: ASR provider integration.
 - `services.py`: compatibility facade and orchestration for attempts, reports,
