@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification expectations for frontend SPA and Django static asset changes."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend static asset boundary touched by the Django URL allowlist."}

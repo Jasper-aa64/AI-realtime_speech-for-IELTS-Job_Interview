@@ -14,6 +14,7 @@ urlpatterns = [
     path("shared-ui.js", frontend_asset, {"asset_path": "shared-ui.js"}, name="frontend-shared-ui-js"),
     path("api-client.js", frontend_asset, {"asset_path": "api-client.js"}, name="frontend-api-client-js"),
     path("appearance.js", frontend_asset, {"asset_path": "appearance.js"}, name="frontend-appearance-js"),
+    path("view-router.js", frontend_asset, {"asset_path": "view-router.js"}, name="frontend-view-router-js"),
     path("app.js", frontend_asset, {"asset_path": "app.js"}, name="frontend-app-js"),
     path("styles.css", frontend_asset, {"asset_path": "styles.css"}, name="frontend-styles-css"),
     path("assets/<path:asset_path>", frontend_static_asset, name="frontend-static-asset"),
