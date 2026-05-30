@@ -43,6 +43,7 @@ from .corpus_services import (
     language_takeaway_library,
     language_takeaway_payload,
     local_takeaway_translate_text,
+    normalize_question_bank_scope,
     p1_corpus_for_turns,
     p1_corpus_library,
     p1_question_id,
@@ -1039,9 +1040,23 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     question_count = P3_DRILL_COUNT if intensity == "drill" else P3_MAIN_COUNT
     prior_answer = clean_report_text(str(payload.get("prior_answer") or ""))[:4000]
     p3_follow_up_text = clean_markdown_text(str(payload.get("p3_follow_up_text") or ""))[:8000]
+    provided_follow_ups = payload.get("p3_follow_ups")
+    cue_questions = [
+        clean_report_text(str(item))[:260]
+        for item in provided_follow_ups
+        if clean_report_text(str(item)) and ("?" in str(item) or "？" in str(item))
+    ] if isinstance(provided_follow_ups, list) else []
     material_questions = _p3_questions_from_material(p3_follow_up_text, question_count)
 
-    if material_questions:
+    if cue_questions:
+        raw_plan = {
+            "questions": cue_questions[:question_count],
+            "follow_up": _p3_follow_up_for_type(_p3_question_type_for_index(0, focus)),
+            "backend": "season_bank",
+            "status": "ready",
+        }
+        source_type = "season_bank"
+    elif material_questions:
         raw_plan = {
             "questions": material_questions,
             "follow_up": _p3_follow_up_for_type(_p3_question_type_for_index(0, focus)),
@@ -1082,6 +1097,7 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "theme": theme,
             "p2_attempt_id": clean_report_text(str(payload.get("p2_attempt_id") or "")),
             "p2_corpus_entry_id": clean_report_text(str(payload.get("p2_corpus_entry_id") or "")),
+            "season": clean_report_text(str(payload.get("season") or "")),
         },
         "questions": structured_questions,
         "question_texts": [item["question"] for item in structured_questions],
@@ -1185,16 +1201,21 @@ def _create_turn(
     }
 
 
-def _build_p1_turns(total: int = P1_TURN_COUNT, display_total: int | None = None) -> list[dict[str, Any]]:
+def _build_p1_turns(
+    total: int = P1_TURN_COUNT,
+    display_total: int | None = None,
+    question_bank_scope: str | None = None,
+) -> list[dict[str, Any]]:
     bank = get_question_bank()
+    p1_bank = bank.part1_for_scope(question_bank_scope)
     countable_intro_items = [item for item in P1_INTRO_QUESTIONS if item.get("counts_toward_total", True)]
     uncounted_intro_items = [item for item in P1_INTRO_QUESTIONS if not item.get("counts_toward_total", True)]
     remaining_count = max(0, total - len(countable_intro_items))
     ordinary_pool = [
-        item for item in bank.p1 if not _is_p1_work_study_identity_question(str(item.get("question") or ""))
+        item for item in p1_bank if not _is_p1_work_study_identity_question(str(item.get("question") or ""))
     ]
     if len(ordinary_pool) < remaining_count:
-        ordinary_pool = bank.p1
+        ordinary_pool = p1_bank
     if not ordinary_pool:
         ordinary_pool = [
             {"topic": "general", "question": "What do you like to do in your free time?"},
@@ -1238,6 +1259,11 @@ def _build_p1_turns(total: int = P1_TURN_COUNT, display_total: int | None = None
                 "question": item["question"],
                 "question_id": str(item.get("question_id") or p1_question_id(str(item["topic"]), str(item["question"]))),
                 "counts_toward_total": counts_toward_total,
+                **{
+                    key: item[key]
+                    for key in ("season", "status", "region", "source", "source_url")
+                    if item.get(key)
+                },
                 **({"flow": item["flow"], "role": item["role"]} if item.get("flow") else {}),
             },
         )
@@ -1255,6 +1281,8 @@ def _build_p3_turns(
     focus: str = "comparison_concession",
     source_type: str = "",
     plan_payload: dict[str, Any] | None = None,
+    season_bank_follow_ups: list[str] | None = None,
+    season: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     focus = _normalize_p3_focus(focus)
     intensity = _normalize_p3_intensity(intensity)
@@ -1267,7 +1295,9 @@ def _build_p3_turns(
                 "p3_focus": focus,
                 "prior_answer": prior_answer,
                 "p3_follow_up_text": p3_follow_up_text,
+                "p3_follow_ups": season_bank_follow_ups or [],
                 "source": source_type,
+                "season": season,
             }
         )
     plan_questions = plan.get("questions", [])
@@ -1373,31 +1403,36 @@ def _build_p3_turns(
     return turns, metadata
 
 
-def _sample_p2_cue() -> dict[str, Any]:
+def _sample_p2_cue(question_bank_scope: str | None = None) -> dict[str, Any]:
     bank = get_question_bank()
-    if bank.p2:
-        return random.choice(bank.p2)
+    p2_bank = bank.part2_for_scope(question_bank_scope)
+    if p2_bank:
+        return random.choice(p2_bank)
     return {"title": "Describe a person you admire", "bullets": [], "rounding": ""}
 
 
 def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], dict[str, Any] | None, dict[str, Any]]:
-    metadata: dict[str, Any] = {}
+    question_bank_scope = normalize_question_bank_scope(str(payload.get("question_bank_scope") or payload.get("bank_scope") or ""))
+    metadata: dict[str, Any] = {"question_bank_scope": question_bank_scope}
     if mode == "mock":
-        cue = _sample_p2_cue()
-        p1_turns = _build_p1_turns(P1_TURN_COUNT, P1_TURN_COUNT + 1)
+        cue = _sample_p2_cue(question_bank_scope)
+        p1_turns = _build_p1_turns(P1_TURN_COUNT, P1_TURN_COUNT + 1, question_bank_scope)
         p2_turn = _create_turn("p2", len(p1_turns), P1_TURN_COUNT + 1, _cue_to_text(cue), cue, cue)
         turns = p1_turns + [p2_turn]
         metadata = {
+            **metadata,
             "p3_generation_status": "pending_after_p2",
             "p3_generation_source": "p2_answer",
             "p3_theme": str(cue.get("p3_theme") or cue.get("title") or "general speaking"),
         }
+        if isinstance(cue.get("p3_follow_ups"), list):
+            metadata["p3_follow_ups"] = cue["p3_follow_ups"]
         return "mock", "Full mock exam", turns, cue, metadata
     if mode == "p1":
-        turns = _build_p1_turns(P1_TURN_COUNT)
+        turns = _build_p1_turns(P1_TURN_COUNT, question_bank_scope=question_bank_scope)
         return "p1", "Part 1 practice", turns, None, metadata
     if mode == "p2":
-        cue = _sample_p2_cue()
+        cue = _sample_p2_cue(question_bank_scope)
         turns = [_create_turn("p2", 0, 1, _cue_to_text(cue), cue, cue)]
         return "p2", str(cue.get("title", "Part 2 practice")), turns, cue, metadata
     if mode == "p3":
@@ -1410,6 +1445,12 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
         if p2_corpus_entry_id and not p3_follow_up_text:
             entry = p2_corpus_for_selection(payload.get("_user"), p2_corpus_entry_id) if payload.get("_user") else None
             p3_follow_up_text = str(entry.get("p3_follow_up_text") or "") if entry else ""
+        if not payload.get("p3_follow_ups"):
+            for cue in get_question_bank().part2_for_scope(question_bank_scope):
+                if str(cue.get("p3_theme") or "") == theme and isinstance(cue.get("p3_follow_ups"), list):
+                    payload["p3_follow_ups"] = cue["p3_follow_ups"]
+                    payload.setdefault("season", cue.get("season"))
+                    break
         source_type = _p3_source_type(payload)
         plan_payload = payload.get("p3_plan") if isinstance(payload.get("p3_plan"), dict) else None
         turns, metadata = _build_p3_turns(
@@ -1420,9 +1461,12 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
             focus,
             source_type,
             plan_payload,
+            payload.get("p3_follow_ups") if isinstance(payload.get("p3_follow_ups"), list) else None,
+            str(payload.get("season") or ""),
         )
         if p2_corpus_entry_id:
             metadata["p2_corpus_entry_id"] = p2_corpus_entry_id
+        metadata["question_bank_scope"] = question_bank_scope
         if str(payload.get("source") or "") == "p2_report":
             metadata["p3_generation_entry"] = "p2_report"
         return "p3", f"Part 3 discussion: {theme}", turns, None, metadata

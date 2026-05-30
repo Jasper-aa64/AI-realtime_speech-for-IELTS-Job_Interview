@@ -8030,6 +8030,149 @@ body.theme-dark .account-action-button-ghost {
   border-radius: 16px;
 }
 
+.account-bank-selector {
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid rgba(126, 139, 153, 0.18);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(248, 251, 250, 0.92), rgba(255, 255, 255, 0.78));
+}
+
+.account-bank-selector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.account-bank-selector h3 {
+  margin: 4px 0 0;
+  font-size: 17px;
+  line-height: 1.15;
+}
+
+.account-bank-season {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(13, 138, 106, 0.14);
+  color: #0f766e;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.account-bank-selector .account-card-subtitle {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.account-bank-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.account-bank-options button {
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink);
+  padding: 8px 9px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.account-bank-options button:hover {
+  border-color: rgba(13, 138, 106, 0.26);
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.account-bank-options button:focus-visible {
+  outline: 3px solid rgba(13, 138, 106, 0.22);
+  outline-offset: 2px;
+}
+
+.account-bank-option-label {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-bank-options button small {
+  color: #64748b;
+  font-size: 9.5px;
+  font-weight: 750;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.account-bank-options button.is-active {
+  border-color: rgba(13, 138, 106, 0.42);
+  background: #0f8f72;
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(13, 138, 106, 0.14);
+}
+
+.account-bank-options button.is-active small {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+body.theme-dark .account-bank-selector {
+  border-color: var(--dark-border);
+  background: rgba(15, 23, 32, 0.50);
+}
+
+body.theme-dark .account-bank-season,
+body.theme-dark .account-bank-options button {
+  background: rgba(15, 23, 32, 0.72);
+  border-color: rgba(148, 163, 184, 0.20);
+  color: var(--ink);
+}
+
+body.theme-dark .account-bank-options button small {
+  color: var(--muted);
+}
+
+body.theme-dark .account-bank-options button.is-active {
+  background: var(--dark-primary);
+  border-color: var(--dark-primary-border);
+  color: #ecfdf5;
+}
+
+body.theme-dark .account-bank-options button:hover {
+  background: rgba(22, 34, 44, 0.92);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+body.theme-dark .account-bank-options button.is-active:hover {
+  background: var(--dark-primary);
+}
+
+body.theme-dark .account-bank-selector .account-card-subtitle {
+  color: #9fb1bf;
+}
+
+@media (max-width: 1120px) {
+  .account-bank-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .account-theme-toggle {
   display: inline-flex;
   align-items: center;

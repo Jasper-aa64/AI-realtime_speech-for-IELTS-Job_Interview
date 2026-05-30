@@ -478,11 +478,221 @@
       ],
       "rounding": "And explain whether changing the decision was a good choice.",
       "p3_theme": "decision_changes_and_flexibility"
+    },
+    {
+      "title": "Describe a time when you felt proud of a family member",
+      "status": "new",
+      "bullets": [
+        "When it happened",
+        "Who the person was",
+        "What this person did"
+      ],
+      "rounding": "And explain why you felt proud of this family member.",
+      "p3_theme": "family_pride_and_rewards",
+      "p3_follow_ups": [
+        "When do parents usually feel proud of their children?",
+        "Should children be rewarded for doing well?",
+        "Can rewards sometimes make children focus too much on results?"
+      ]
+    },
+    {
+      "title": "Describe a perfect job you would like to have in the future",
+      "status": "new",
+      "bullets": [
+        "What the job is",
+        "How you found out about it",
+        "What you need to learn to get this job"
+      ],
+      "rounding": "And explain why you think this would be a perfect job for you.",
+      "p3_theme": "career_choices_and_job_values",
+      "p3_follow_ups": [
+        "What should young people consider when choosing a career?",
+        "Is salary the main reason people choose a job?",
+        "Why do some people regret their career choices later?"
+      ]
+    },
+    {
+      "title": "Describe a famous person you would like to meet",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "How you knew about this person",
+        "Where you would like to meet this person"
+      ],
+      "rounding": "And explain why you would like to meet this famous person.",
+      "p3_theme": "fame_and_public_influence",
+      "p3_follow_ups": [
+        "Why do some people become famous?",
+        "What are the disadvantages of being famous?",
+        "Do famous people influence young people?"
+      ]
+    },
+    {
+      "title": "Describe an occasion when you were not allowed to use your mobile phone",
+      "status": "new",
+      "bullets": [
+        "When it was",
+        "Where it was",
+        "Why you were not allowed to use your phone"
+      ],
+      "rounding": "And explain how you felt about this rule.",
+      "p3_theme": "mobile_phone_rules_and_manners",
+      "p3_follow_ups": [
+        "How do young and older people use mobile phones differently?",
+        "Should there be rules about phone use in public places?",
+        "What are examples of good phone manners?"
+      ]
+    },
+    {
+      "title": "Describe a program or app on your computer or phone",
+      "status": "new",
+      "bullets": [
+        "What it is",
+        "When or how you use it",
+        "Where you found it"
+      ],
+      "rounding": "And explain how you feel about this program or app.",
+      "p3_theme": "apps_and_digital_life",
+      "p3_follow_ups": [
+        "What apps are popular in your country?",
+        "Why do some people dislike using apps?",
+        "Should parents limit children's use of apps and games?"
+      ]
+    },
+    {
+      "title": "Describe a piece of technology other than a phone that you would like to own",
+      "status": "new",
+      "bullets": [
+        "What it is",
+        "How much it costs",
+        "What you would use it for"
+      ],
+      "rounding": "And explain why you would like to own it.",
+      "p3_theme": "technology_and_communication",
+      "p3_follow_ups": [
+        "How has technology changed communication?",
+        "What technology do young people like to use?",
+        "What negative effects can technology have on relationships?"
+      ]
+    },
+    {
+      "title": "Describe a person who makes plans and is good at planning",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "How you know this person",
+        "What plans this person usually makes"
+      ],
+      "rounding": "And explain how you feel about this person.",
+      "p3_theme": "planning_and_future_choices",
+      "p3_follow_ups": [
+        "Is it important to plan ahead?",
+        "What activities do people need to plan carefully?",
+        "Should children plan their future careers early?"
+      ]
+    },
+    {
+      "title": "Describe a time when you gave advice to someone",
+      "status": "new",
+      "bullets": [
+        "When it was",
+        "Who you gave advice to",
+        "What advice you gave"
+      ],
+      "rounding": "And explain why you gave this advice.",
+      "p3_theme": "advice_and_decision_support",
+      "p3_follow_ups": [
+        "Should people prepare before giving advice?",
+        "Is it good to ask strangers online for advice?",
+        "Why do some people prefer advice from friends?"
+      ]
+    },
+    {
+      "title": "Describe something important that has been kept in your family for a long time",
+      "status": "new",
+      "bullets": [
+        "What it is",
+        "When your family got it",
+        "How your family got it"
+      ],
+      "rounding": "And explain why it is important to your family.",
+      "p3_theme": "family_objects_and_memory",
+      "p3_follow_ups": [
+        "What kinds of things do families keep for a long time?",
+        "Why do people keep old things?",
+        "What kinds of things are kept in museums?"
+      ]
+    },
+    {
+      "title": "Describe a shopping mall",
+      "status": "new",
+      "bullets": [
+        "What its name is",
+        "Where it is",
+        "How often you visit it"
+      ],
+      "rounding": "And explain what you usually buy at this mall.",
+      "p3_theme": "shopping_malls_and_consumption",
+      "p3_follow_ups": [
+        "Why do people buy things they do not need?",
+        "Why are some people keen on shopping?",
+        "Where do people like to shop in your country?"
+      ]
+    },
+    {
+      "title": "Describe a bicycle, motorcycle, or car trip you would like to go on",
+      "status": "new",
+      "bullets": [
+        "Who you would like to go with",
+        "Where you would like to go",
+        "When you would like to go"
+      ],
+      "rounding": "And explain why you would like to travel this way.",
+      "p3_theme": "transport_and_environment",
+      "p3_follow_ups": [
+        "Which form of transport is most popular in your country?",
+        "How are urban and rural transport systems different?",
+        "Should people change how they travel to protect the environment?"
+      ]
+    },
+    {
+      "title": "Describe a person who solved a problem in a smart way",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "What the problem was",
+        "How this person solved it"
+      ],
+      "rounding": "And explain why you think the solution was smart.",
+      "p3_theme": "problem_solving_and_intelligence",
+      "p3_follow_ups": [
+        "Are children born smart or do they learn to become smart?",
+        "How can schools help children become better problem solvers?",
+        "Why does modern society need different kinds of talents?"
+      ]
+    },
+    {
+      "title": "Describe a TV or online program you enjoy watching",
+      "status": "new",
+      "bullets": [
+        "What it is",
+        "What it is about",
+        "Which country it is from",
+        "When you watch it"
+      ],
+      "rounding": "And explain why you enjoy watching it.",
+      "p3_theme": "tv_programs_and_online_media",
+      "p3_follow_ups": [
+        "What programs do people like to watch in your country?",
+        "Do people like watching foreign TV programs?",
+        "Can people acquire knowledge from watching TV programs?"
+      ]
     }
   ],
   "source_notes": [
     "New Oriental public list names 17 Part 2&3 new-topic directions for 2026 May-August.",
     "New Channel public page confirms the May-August season bank is active and China-relevant.",
-    "Koolearn current-season practice pages were used as a secondary topic-signal check where available."
+    "Koolearn current-season practice pages were used as a secondary topic-signal check where available.",
+    "Cathoven's April 2026 May-August cue-card bank was used to cross-check missing P2/P3 topic directions; only topic prompts and follow-up directions were added, not sample answers."
   ]
 }

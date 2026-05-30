@@ -104,9 +104,9 @@
             <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook">写作积累</a>
           </nav>
           <div class="nav-divider" aria-hidden="true"></div>
-          <div class="font-tool" aria-label="Font style">
-            <div class="font-tool-label">Typeface</div>
-            <div class="font-options" role="group" aria-label="Typeface options">
+          <div class="font-tool" aria-label="Appearance style">
+            <div class="font-tool-label">Appearance</div>
+            <div class="font-options" role="group" aria-label="Appearance options">
               <button type="button" class="font-option active" data-font-style="default" title="Helpful & efficient">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
               </button>
@@ -212,17 +212,6 @@
                 </svg>
                 <span>我准备的P2串题素材库</span>
               </button>
-              <div class="font-options mobile-font-options" role="group" aria-label="Typeface options">
-                <button type="button" class="font-option active" data-font-style="default" title="Helpful & efficient">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
-                </button>
-                <button type="button" class="font-option" data-font-style="academic" title="Thoughtful & precise">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-                </button>
-                <button type="button" class="font-option" data-font-style="popular" title="Creative & vibrant">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                </button>
-              </div>
             </div>
           </div>
 
@@ -850,12 +839,12 @@
             <aside class="auth-copy">
               <span class="auth-kicker">IELTS Studio Account</span>
               <h1>登录后继续练习</h1>
-              <p>保存口语报告、写作签到、钱包余额和个性化弱题训练。未登录时不会静默显示空数据。</p>
+              <p>保存口语报告、写作签到、钱包余额和个人资料。未登录时不会静默显示空数据。</p>
               <div class="auth-benefits" aria-label="Account benefits">
                 <span>报告历史</span>
                 <span>写作签到</span>
                 <span>钱包余额</span>
-                <span>弱题训练</span>
+                <span>个人资料</span>
               </div>
             </aside>
             <article class="auth-card">
@@ -997,6 +986,23 @@
                   </div>
                   <button type="button" id="profileSaveBtn" class="account-action-button account-action-button-primary">保存资料</button>
                 </div>
+                <section class="account-bank-selector" aria-labelledby="accountBankSelectorTitle">
+                  <div class="account-bank-selector-head">
+                    <div>
+                      <span class="account-card-eyebrow">Question Bank</span>
+                      <h3 id="accountBankSelectorTitle">题库选择</h3>
+                    </div>
+                    <span id="accountBankSeasonPill" class="account-bank-season">读取中</span>
+                  </div>
+                  <p id="accountBankStatus" class="account-card-subtitle" aria-live="polite">正在读取当前题库...</p>
+                  <div id="accountBankScopeOptions" class="account-bank-options" role="radiogroup" aria-label="选择口语题库范围">
+                    <button type="button" data-bank-scope="current" class="is-active"><span>当前考季</span></button>
+                    <button type="button" data-bank-scope="new"><span>新题</span></button>
+                    <button type="button" data-bank-scope="retained"><span>保留题</span></button>
+                    <button type="button" data-bank-scope="archive"><span>历史考季</span></button>
+                    <button type="button" data-bank-scope="all"><span>全部题库</span></button>
+                  </div>
+                </section>
                 <div class="account-card-footer">
                   <label class="account-theme-toggle" for="darkModeToggle">
                     <span>深色外观</span>
@@ -1026,20 +1032,6 @@
                 </div>
                 <div id="ledgerList" class="settings-list account-ledger-list" aria-live="polite">
                   <div class="account-skeleton-row"></div>
-                  <div class="account-skeleton-row"></div>
-                  <div class="account-skeleton-row"></div>
-                </div>
-              </article>
-              <article class="settings-card account-weak-card">
-                <div class="account-card-head">
-                  <div>
-                    <span class="account-card-eyebrow">Review</span>
-                    <h2>弱题训练</h2>
-                    <p class="muted">记录你更容易失分的话题，方便后续复习。</p>
-                  </div>
-                  <div id="weakTrainingStatus" class="account-count-badge">加载中</div>
-                </div>
-                <div id="weakTrainingList" class="settings-list account-weak-list" aria-live="polite">
                   <div class="account-skeleton-row"></div>
                   <div class="account-skeleton-row"></div>
                 </div>

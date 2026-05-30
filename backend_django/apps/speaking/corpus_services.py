@@ -44,18 +44,71 @@ P1_INTRO_QUESTIONS: list[dict[str, Any]] = [
 ]
 
 
+CURRENT_SPEAKING_SEASON = "2026-may-august"
+CURRENT_SPEAKING_REGION = "china_mainland"
+QUESTION_BANK_SCOPE_CURRENT = "current"
+QUESTION_BANK_SCOPE_NEW = "new"
+QUESTION_BANK_SCOPE_RETAINED = "retained"
+QUESTION_BANK_SCOPE_ARCHIVE = "archive"
+QUESTION_BANK_SCOPE_ALL = "all"
+QUESTION_BANK_SCOPE_LABELS = {
+    QUESTION_BANK_SCOPE_CURRENT: "当前考季",
+    QUESTION_BANK_SCOPE_NEW: "新题",
+    QUESTION_BANK_SCOPE_RETAINED: "保留题",
+    QUESTION_BANK_SCOPE_ARCHIVE: "历史考季",
+    QUESTION_BANK_SCOPE_ALL: "全部题库",
+}
+
+
+def normalize_question_bank_scope(scope: str | None) -> str:
+    value = str(scope or "").strip().lower().replace("-", "_")
+    aliases = {
+        "current_season": QUESTION_BANK_SCOPE_CURRENT,
+        "current_season_only": QUESTION_BANK_SCOPE_CURRENT,
+        "season": QUESTION_BANK_SCOPE_CURRENT,
+        "all_current": QUESTION_BANK_SCOPE_CURRENT,
+        "new_questions": QUESTION_BANK_SCOPE_NEW,
+        "retained_questions": QUESTION_BANK_SCOPE_RETAINED,
+        "archive_bank": QUESTION_BANK_SCOPE_ARCHIVE,
+        "archived": QUESTION_BANK_SCOPE_ARCHIVE,
+        "history": QUESTION_BANK_SCOPE_ARCHIVE,
+        "historical": QUESTION_BANK_SCOPE_ARCHIVE,
+        "old": QUESTION_BANK_SCOPE_ARCHIVE,
+        "all": QUESTION_BANK_SCOPE_ALL,
+        "full": QUESTION_BANK_SCOPE_ALL,
+        "all_bank": QUESTION_BANK_SCOPE_ALL,
+        "all_questions": QUESTION_BANK_SCOPE_ALL,
+    }
+    value = aliases.get(value, value)
+    if value in QUESTION_BANK_SCOPE_LABELS:
+        return value
+    return QUESTION_BANK_SCOPE_CURRENT
+
+
 class QuestionBank:
     """Load IELTS speaking questions from JSON files."""
 
     def __init__(self, data_dir: Path | None = None) -> None:
         self.data_dir = data_dir or Path(settings.BASE_DIR).parent / "data" / "ielts"
+        self.all_p1: list[dict[str, Any]] = []
+        self.all_p2: list[dict[str, Any]] = []
         self.p1: list[dict[str, Any]] = []
         self.p2: list[dict[str, Any]] = []
         self._load()
 
     def _load(self) -> None:
-        self.p1 = self._load_p1()
-        self.p2 = self._load_p2()
+        self.all_p1 = self._load_p1()
+        self.all_p2 = self._load_p2()
+        self.p1 = self._current_season_items(self.all_p1)
+        self.p2 = self._current_season_items(self.all_p2)
+
+    def _current_season_items(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        current = [
+            item
+            for item in items
+            if str(item.get("season") or "") == CURRENT_SPEAKING_SEASON
+        ]
+        return current or items
 
     def _load_p1(self) -> list[dict[str, Any]]:
         part_dir = self.data_dir / "part1"
@@ -94,6 +147,7 @@ class QuestionBank:
                         "topic": topic,
                         "question": question,
                         "question_id": p1_question_id(topic, question),
+                        "legacy_question_id": legacy_p1_question_id(topic, question),
                         **{key: value for key, value in meta.items() if value},
                     })
         return questions
@@ -122,6 +176,8 @@ class QuestionBank:
                     topic = dict(item)
                     for key, value in file_meta.items():
                         topic.setdefault(key, value)
+                    topic["cue_id"] = p2_cue_id(topic)
+                    topic["canonical_entry_id"] = p2_canonical_entry_id(topic)
                     topics.append(topic)
         return topics
 
@@ -133,33 +189,133 @@ class QuestionBank:
         except (OSError, json.JSONDecodeError):
             return {}
 
-    def summary(self) -> dict[str, Any]:
+    def _items_for_scope(self, items: list[dict[str, Any]], scope: str | None = None) -> list[dict[str, Any]]:
+        normalized = normalize_question_bank_scope(scope)
+        if normalized == QUESTION_BANK_SCOPE_ALL:
+            selected = list(items)
+        elif normalized == QUESTION_BANK_SCOPE_ARCHIVE:
+            selected = [
+                item
+                for item in items
+                if str(item.get("season") or "") != CURRENT_SPEAKING_SEASON
+            ]
+        else:
+            selected = [
+                item
+                for item in items
+                if str(item.get("season") or "") == CURRENT_SPEAKING_SEASON
+            ]
+            if normalized in {QUESTION_BANK_SCOPE_NEW, QUESTION_BANK_SCOPE_RETAINED}:
+                selected = [
+                    item
+                    for item in selected
+                    if str(item.get("status") or "").lower() == normalized
+                ]
+        return self._dedupe_scope_items(selected)
+
+    def _dedupe_scope_items(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        deduped: dict[str, dict[str, Any]] = {}
+        for item in items:
+            key = str(item.get("question_id") or item.get("cue_id") or item.get("title") or item.get("question") or "")
+            if not key:
+                continue
+            existing = deduped.get(key)
+            if not existing:
+                deduped[key] = item
+                continue
+            if str(existing.get("season") or "") != CURRENT_SPEAKING_SEASON and str(item.get("season") or "") == CURRENT_SPEAKING_SEASON:
+                deduped[key] = item
+        return list(deduped.values())
+
+    def part1_for_scope(self, scope: str | None = None) -> list[dict[str, Any]]:
+        selected = self._items_for_scope(self.all_p1, scope)
+        if normalize_question_bank_scope(scope) == QUESTION_BANK_SCOPE_CURRENT and not selected:
+            return self.all_p1
+        return selected
+
+    def part2_for_scope(self, scope: str | None = None) -> list[dict[str, Any]]:
+        selected = self._items_for_scope(self.all_p2, scope)
+        if normalize_question_bank_scope(scope) == QUESTION_BANK_SCOPE_CURRENT and not selected:
+            return self.all_p2
+        return selected
+
+    def scope_options(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "scope": scope,
+                "label": QUESTION_BANK_SCOPE_LABELS[scope],
+                "part1_count": len(self.part1_for_scope(scope)),
+                "part2_count": len(self.part2_for_scope(scope)),
+            }
+            for scope in (
+                QUESTION_BANK_SCOPE_CURRENT,
+                QUESTION_BANK_SCOPE_NEW,
+                QUESTION_BANK_SCOPE_RETAINED,
+                QUESTION_BANK_SCOPE_ARCHIVE,
+                QUESTION_BANK_SCOPE_ALL,
+            )
+        ]
+
+    def summary(self, scope: str | None = None) -> dict[str, Any]:
+        normalized_scope = normalize_question_bank_scope(scope)
+        selected_p1 = self.part1_for_scope(normalized_scope)
+        selected_p2 = self.part2_for_scope(normalized_scope)
         p1_status_counts: dict[str, int] = {}
-        for item in self.p1:
+        for item in selected_p1:
             status = str(item.get("status") or "seed")
             p1_status_counts[status] = p1_status_counts.get(status, 0) + 1
         p2_status_counts: dict[str, int] = {}
-        for item in self.p2:
+        for item in selected_p2:
             status = str(item.get("status") or "seed")
             p2_status_counts[status] = p2_status_counts.get(status, 0) + 1
+        archived_p1 = [
+            item
+            for item in self.all_p1
+            if str(item.get("season") or "") != CURRENT_SPEAKING_SEASON
+        ]
+        archived_p2 = [
+            item
+            for item in self.all_p2
+            if str(item.get("season") or "") != CURRENT_SPEAKING_SEASON
+        ]
+        p3_follow_up_count = sum(
+            len(item.get("p3_follow_ups") or [])
+            for item in selected_p2
+            if isinstance(item.get("p3_follow_ups"), list)
+        )
         return {
-            "part1_count": len(self.p1),
-            "part2_count": len(self.p2),
-            "part1_topics": sorted({item["topic"] for item in self.p1}),
-            "part2_themes": sorted({item.get("p3_theme", "") for item in self.p2 if item.get("p3_theme")}),
+            "active_season": CURRENT_SPEAKING_SEASON,
+            "active_region": CURRENT_SPEAKING_REGION,
+            "active_scope": normalized_scope,
+            "active_scope_label": QUESTION_BANK_SCOPE_LABELS[normalized_scope],
+            "scope": "current_season_only" if normalized_scope == QUESTION_BANK_SCOPE_CURRENT else normalized_scope,
+            "part3_mode": "derived_from_part2",
+            "part3_follow_up_count": p3_follow_up_count,
+            "part1_count": len(selected_p1),
+            "part2_count": len(selected_p2),
+            "part1_total_count": len(self.all_p1),
+            "part2_total_count": len(self.all_p2),
+            "archived_part1_count": len(archived_p1),
+            "archived_part2_count": len(archived_p2),
+            "part1_topics": sorted({item["topic"] for item in selected_p1}),
+            "part2_themes": sorted({item.get("p3_theme", "") for item in selected_p2 if item.get("p3_theme")}),
             "part1_status_counts": p1_status_counts,
             "part2_status_counts": p2_status_counts,
-            "seasons": sorted({str(item.get("season") or "") for item in [*self.p1, *self.p2] if item.get("season")}),
-            "regions": sorted({str(item.get("region") or "") for item in [*self.p1, *self.p2] if item.get("region")}),
+            "bank_scope_options": self.scope_options(),
+            "seasons": sorted({str(item.get("season") or "") for item in [*self.all_p1, *self.all_p2] if item.get("season")}),
+            "regions": sorted({str(item.get("region") or "") for item in [*self.all_p1, *self.all_p2] if item.get("region")}),
         }
 
-    def sample(self, p1_count: int = 5) -> dict[str, Any]:
-        p1_count = max(1, min(p1_count, len(self.p1)))
+    def sample(self, p1_count: int = 5, scope: str | None = None) -> dict[str, Any]:
+        p1_pool = self.part1_for_scope(scope)
+        p2_pool = self.part2_for_scope(scope)
+        p1_count = max(1, min(p1_count, len(p1_pool)))
         result = {}
-        if self.p1:
-            result["part1"] = random.sample(self.p1, p1_count)
-        if self.p2:
-            result["part2"] = random.choice(self.p2)
+        if p1_pool:
+            result["part1"] = random.sample(p1_pool, p1_count)
+        if p2_pool:
+            result["part2"] = random.choice(p2_pool)
+        result["active_scope"] = normalize_question_bank_scope(scope)
         return result
 
 
@@ -173,26 +329,40 @@ def get_question_bank() -> QuestionBank:
     return _question_bank
 
 
-def question_bank_summary() -> dict[str, Any]:
-    return get_question_bank().summary()
+def question_bank_summary(scope: str | None = None) -> dict[str, Any]:
+    return get_question_bank().summary(scope)
 
 
-def question_bank_sample(p1_count: int = 5) -> dict[str, Any]:
-    return get_question_bank().sample(p1_count)
+def question_bank_sample(p1_count: int = 5, scope: str | None = None) -> dict[str, Any]:
+    return get_question_bank().sample(p1_count, scope)
 
 
-def p1_question_id(topic: str, question: str) -> str:
+def stable_question_text(value: str) -> str:
+    text = clean_report_text(str(value or "")).lower()
+    text = re.sub(r"[\u2018\u2019\u201c\u201d\"'`]", "", text)
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def legacy_p1_question_id(topic: str, question: str) -> str:
     topic_key = re.sub(r"[^a-z0-9]+", "_", str(topic or "general").lower()).strip("_") or "general"
     digest = hashlib.md5(f"{topic_key}\n{str(question or '').strip()}".encode("utf-8")).hexdigest()[:12]
     return f"p1:{topic_key}:{digest}"
+
+
+def p1_question_id(topic: str, question: str) -> str:
+    normalized = stable_question_text(question)
+    digest = hashlib.md5(normalized.encode("utf-8")).hexdigest()[:16]
+    return f"p1q:{digest}"
 
 
 def p1_topic_label(topic: str) -> str:
     return str(topic or "general").replace("_", " ").strip().title()
 
 
-def p1_corpus_library(user) -> dict[str, Any]:
+def p1_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
     bank = get_question_bank()
+    normalized_scope = normalize_question_bank_scope(scope)
     entries = {
         entry.question_id: entry
         for entry in P1CorpusEntry.objects.filter(user=user)
@@ -202,7 +372,8 @@ def p1_corpus_library(user) -> dict[str, Any]:
     def add_question(topic: str, question: str, meta: dict[str, Any] | None = None) -> None:
         meta = meta or {}
         question_id = p1_question_id(topic, question)
-        entry = entries.get(question_id)
+        legacy_question_id = legacy_p1_question_id(topic, question)
+        entry = entries.get(question_id) or entries.get(legacy_question_id)
         group = grouped.setdefault(
             topic,
             {
@@ -214,6 +385,8 @@ def p1_corpus_library(user) -> dict[str, Any]:
         group["questions"].append(
             {
                 "question_id": question_id,
+                "legacy_question_id": legacy_question_id,
+                "storage_question_id": question_id,
                 "topic": topic,
                 "question": question,
                 "corpus_text": entry.corpus_text if entry else "",
@@ -225,7 +398,7 @@ def p1_corpus_library(user) -> dict[str, Any]:
 
     for item in P1_INTRO_QUESTIONS:
         add_question(str(item.get("topic") or "intro"), str(item.get("question") or ""))
-    for item in bank.p1:
+    for item in bank.part1_for_scope(normalized_scope):
         add_question(str(item.get("topic") or "general"), str(item.get("question") or ""), item)
 
     topics = sorted(grouped.values(), key=lambda item: (item["topic"] != "intro", item["label"]))
@@ -236,6 +409,11 @@ def p1_corpus_library(user) -> dict[str, Any]:
         "topic_count": len(topics),
         "question_count": total_questions,
         "saved_count": saved_count,
+        "active_season": CURRENT_SPEAKING_SEASON,
+        "active_region": CURRENT_SPEAKING_REGION,
+        "active_scope": normalized_scope,
+        "active_scope_label": QUESTION_BANK_SCOPE_LABELS[normalized_scope],
+        "scope": "current_season_only" if normalized_scope == QUESTION_BANK_SCOPE_CURRENT else normalized_scope,
     }
 
 
@@ -244,22 +422,28 @@ def save_p1_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
     question = clean_report_text(str(payload.get("question") or ""))
     if not question:
         raise SpeakingError("Missing P1 question.")
-    question_id = clean_report_text(str(payload.get("question_id") or "")) or p1_question_id(topic, question)
+    submitted_question_id = clean_report_text(str(payload.get("question_id") or ""))
+    question_id = p1_question_id(topic, question)
     corpus_text = clean_markdown_text(str(payload.get("corpus_text") or ""))[:8000]
     if not corpus_text.strip():
         raise SpeakingError("Corpus text is empty.")
     last_ai_answer = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:8000]
-    entry, _ = P1CorpusEntry.objects.update_or_create(
-        user=user,
-        question_id=question_id,
-        defaults={
-            "topic": topic,
-            "question": question,
-            "corpus_text": corpus_text,
-            "last_ai_answer": last_ai_answer,
-            "metadata": {"saved_from": clean_report_text(str(payload.get("source") or "p1_corpus"))},
-        },
-    )
+    entry = P1CorpusEntry.objects.filter(user=user, question_id=question_id).first()
+    if not entry and submitted_question_id and submitted_question_id != question_id:
+        entry = P1CorpusEntry.objects.filter(user=user, question_id=submitted_question_id).first()
+        if entry and not P1CorpusEntry.objects.filter(user=user, question_id=question_id).exists():
+            entry.question_id = question_id
+    if not entry:
+        entry = P1CorpusEntry(user=user, question_id=question_id)
+    entry.topic = topic
+    entry.question = question
+    entry.corpus_text = corpus_text
+    entry.last_ai_answer = last_ai_answer
+    entry.metadata = {
+        "saved_from": clean_report_text(str(payload.get("source") or "p1_corpus")),
+        "legacy_question_id": submitted_question_id if submitted_question_id and submitted_question_id != question_id else "",
+    }
+    entry.save()
     return {
         "question_id": entry.question_id,
         "topic": entry.topic,
@@ -279,7 +463,59 @@ P2_CORPUS_CATEGORIES = [
 ]
 
 
-def p2_entry_id(category: str, title: str) -> str:
+def p2_topic_category(topic: dict[str, Any]) -> str:
+    title = str(topic.get("title") or "").lower()
+    theme = str(topic.get("p3_theme") or "").lower()
+    text = f"{title} {theme}"
+    if any(word in text for word in ("person", "friend", "family member", "old person", "sportsperson", "business person")):
+        return P2CorpusEntry.Category.PERSON
+    if any(word in text for word in ("place", "building", "city", "mall", "shop", "store", "park", "natural", "country")):
+        return P2CorpusEntry.Category.PLACE
+    if any(word in text for word in ("item", "thing", "object", "book", "technology", "toy", "website", "app", "food")):
+        return P2CorpusEntry.Category.OBJECT
+    if any(word in text for word in ("time", "occasion", "activity", "trip", "journey", "event", "decision", "promise", "advice")):
+        return P2CorpusEntry.Category.EVENT
+    return P2CorpusEntry.Category.SPECIAL
+
+
+def p2_current_topic_categories(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped = {
+        item["category"]: {
+            "category": item["category"],
+            "label": item["label"],
+            "topic_count": 0,
+        }
+        for item in P2_CORPUS_CATEGORIES
+    }
+    for topic in topics:
+        category = p2_topic_category(topic)
+        grouped.setdefault(category, {"category": category, "label": str(category), "topic_count": 0})
+        grouped[category]["topic_count"] += 1
+    return list(grouped.values())
+
+
+def p2_cue_identity_text(topic: dict[str, Any]) -> str:
+    title = clean_report_text(str(topic.get("title") or ""))
+    bullets = [clean_report_text(str(item)) for item in topic.get("bullets") or [] if clean_report_text(str(item))]
+    rounding = clean_report_text(str(topic.get("rounding") or ""))
+    return "\n".join([title, *bullets, rounding]).strip()
+
+
+def p2_cue_id(topic: dict[str, Any]) -> str:
+    normalized = stable_question_text(p2_cue_identity_text(topic))
+    digest = hashlib.md5(normalized.encode("utf-8")).hexdigest()[:16]
+    return f"p2cue:{digest}"
+
+
+def p2_canonical_entry_id(topic: dict[str, Any]) -> str:
+    return f"p2:{p2_cue_id(topic)[6:]}"
+
+
+def p2_entry_id(category: str, title: str, linked_question: str = "") -> str:
+    if clean_report_text(linked_question):
+        normalized = stable_question_text(linked_question)
+        digest = hashlib.md5(normalized.encode("utf-8")).hexdigest()[:16]
+        return f"p2:{digest}"
     category_key = re.sub(r"[^a-z0-9]+", "_", str(category or "special").lower()).strip("_") or "special"
     digest = hashlib.md5(f"{category_key}\n{str(title or '').strip()}".encode("utf-8")).hexdigest()[:12]
     return f"p2:{category_key}:{digest}"
@@ -306,7 +542,8 @@ def p2_corpus_entry_payload(entry: P2CorpusEntry) -> dict[str, Any]:
     }
 
 
-def p2_corpus_library(user) -> dict[str, Any]:
+def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
+    normalized_scope = normalize_question_bank_scope(scope)
     grouped = {
         item["category"]: {
             "category": item["category"],
@@ -322,10 +559,19 @@ def p2_corpus_library(user) -> dict[str, Any]:
         )
         group["items"].append(p2_corpus_entry_payload(entry))
     categories = list(grouped.values())
+    bank = get_question_bank()
+    selected_topics = bank.part2_for_scope(normalized_scope)
     return {
         "categories": categories,
         "category_count": len(categories),
         "material_count": sum(len(group["items"]) for group in categories),
+        "active_season": CURRENT_SPEAKING_SEASON,
+        "active_region": CURRENT_SPEAKING_REGION,
+        "active_scope": normalized_scope,
+        "active_scope_label": QUESTION_BANK_SCOPE_LABELS[normalized_scope],
+        "scope": "current_season_only" if normalized_scope == QUESTION_BANK_SCOPE_CURRENT else normalized_scope,
+        "current_part2_count": len(selected_topics),
+        "current_part2_categories": p2_current_topic_categories(selected_topics),
     }
 
 
@@ -335,12 +581,12 @@ def save_p2_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
     if category not in valid_categories:
         category = P2CorpusEntry.Category.SPECIAL
     title = clean_report_text(str(payload.get("title") or "未命名素材"))[:200] or "未命名素材"
-    entry_id = clean_report_text(str(payload.get("entry_id") or "")) or p2_entry_id(category, title)
     material_text = clean_markdown_text(str(payload.get("material_text") or ""))[:12000]
     if not material_text.strip():
         raise SpeakingError("P2 material text is empty.")
     p3_follow_up_text = clean_markdown_text(str(payload.get("p3_follow_up_text") or ""))[:8000]
     linked_question = clean_report_text(str(payload.get("linked_question") or ""))[:1000]
+    entry_id = clean_report_text(str(payload.get("entry_id") or "")) or p2_entry_id(category, title, linked_question)
     metadata = {
         "saved_from": clean_report_text(str(payload.get("source") or "p2_corpus")),
         "p3_follow_up_text": p3_follow_up_text,
@@ -626,7 +872,7 @@ def p2_corpus_for_selection(user, entry_id: str) -> dict[str, Any] | None:
 
 def p1_corpus_for_turns(user, turns: list[SpeakingTurn]) -> dict[str, str]:
     ids: list[str] = []
-    id_by_turn: dict[str, str] = {}
+    ids_by_turn: dict[str, list[str]] = {}
     by_turn_id = {turn.turn_id: turn for turn in turns}
     for turn in turns:
         if turn.part != "p1":
@@ -639,9 +885,17 @@ def p1_corpus_for_turns(user, turns: list[SpeakingTurn]) -> dict[str, str]:
         ref_metadata = ref_turn.metadata if isinstance(ref_turn.metadata, dict) else {}
         ref_prompt = ref_metadata.get("prompt") if isinstance(ref_metadata.get("prompt"), dict) else {}
         topic = str(ref_prompt.get("topic") or "general")
-        question_id = str(ref_prompt.get("question_id") or p1_question_id(topic, ref_turn.question))
-        ids.append(question_id)
-        id_by_turn[turn.turn_id] = question_id
+        question = str(ref_prompt.get("question") or ref_turn.question)
+        canonical_id = p1_question_id(topic, question)
+        candidate_ids = [
+            canonical_id,
+            str(ref_prompt.get("question_id") or ""),
+            str(ref_prompt.get("legacy_question_id") or ""),
+            legacy_p1_question_id(topic, question),
+        ]
+        candidate_ids = [item for item in dict.fromkeys(candidate_ids) if item]
+        ids.extend(candidate_ids)
+        ids_by_turn[turn.turn_id] = candidate_ids
     if not ids:
         return {}
     entries = {
@@ -649,11 +903,13 @@ def p1_corpus_for_turns(user, turns: list[SpeakingTurn]) -> dict[str, str]:
         for entry in P1CorpusEntry.objects.filter(user=user, question_id__in=ids)
         if entry.corpus_text.strip()
     }
-    return {
-        turn_id: entries[question_id]
-        for turn_id, question_id in id_by_turn.items()
-        if question_id in entries
-    }
+    prepared: dict[str, str] = {}
+    for turn_id, candidate_ids in ids_by_turn.items():
+        for question_id in candidate_ids:
+            if question_id in entries:
+                prepared[turn_id] = entries[question_id]
+                break
+    return prepared
 
 
 def prepared_corpus_for_turns(user, turns: list[SpeakingTurn]) -> dict[str, str]:

@@ -77,6 +77,32 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(payload["cue_card"]["title"], selected["title"])
         self.assertEqual(payload["title"], selected["title"])
 
+    def test_start_p1_respects_question_bank_scope(self):
+        response = self.client.post(
+            "/api/attempts/start",
+            data={"mode": "p1", "question_bank_scope": "new"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        countable_bank_turns = [
+            turn
+            for turn in payload["turns"]
+            if turn.get("counts_toward_total") and turn.get("prompt", {}).get("topic") != "intro"
+        ]
+        self.assertTrue(countable_bank_turns)
+        self.assertTrue(all(turn.get("prompt", {}).get("status") == "new" for turn in countable_bank_turns))
+
+    def test_start_p2_respects_question_bank_scope(self):
+        response = self.client.post(
+            "/api/attempts/start",
+            data={"mode": "p2", "question_bank_scope": "retained"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["cue_card"]["status"], "retained")
+
     def test_start_creates_p3_attempt(self):
         response = self.client.post(
             "/api/attempts/start",
@@ -94,6 +120,38 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(payload["p3_plan"]["theme"], "technology")
         self.assertEqual(len(payload["p3_plan"]["questions"]), 5)
         self.assertIn("target_moves", payload["p3_plan"]["questions"][0])
+
+    def test_start_p3_uses_current_season_p2_follow_ups_when_theme_matches(self):
+        from apps.speaking import services as speaking_services
+
+        cue = {
+            "title": "Describe a perfect job you would like to have in the future",
+            "season": "2026-may-august",
+            "p3_theme": "career_choices_and_job_values",
+            "p3_follow_ups": [
+                "What should young people consider when choosing a career?",
+                "Is salary the main reason people choose a job?",
+                "Why do some people regret their career choices later?",
+            ],
+        }
+        bank = MagicMock()
+        bank.p2 = [cue]
+        bank.part2_for_scope.return_value = [cue]
+        with patch.object(speaking_services, "get_question_bank", return_value=bank):
+            response = self.client.post(
+                "/api/attempts/start",
+                data={"mode": "p3", "theme": "career_choices_and_job_values", "p3_intensity": "normal"},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["p3_generation_backend"], "season_bank")
+        self.assertEqual(payload["p3_plan"]["source"]["type"], "season_bank")
+        self.assertEqual(payload["p3_plan"]["source"]["season"], "2026-may-august")
+        self.assertEqual(
+            payload["p3_plan"]["questions"][0]["question"],
+            "What should young people consider when choosing a career?",
+        )
 
     def test_start_creates_mock_attempt(self):
         response = self.client.post("/api/attempts/start", data={"mode": "mock"}, content_type="application/json")
@@ -342,20 +400,44 @@ class QuestionBankApiTests(TestCase):
         self.assertIn("part2_count", payload)
         self.assertIn("part1_topics", payload)
         self.assertIn("part2_themes", payload)
+        self.assertEqual(payload["active_season"], "2026-may-august")
+        self.assertEqual(payload["active_region"], "china_mainland")
+        self.assertEqual(payload["scope"], "current_season_only")
+        self.assertEqual(payload["part3_mode"], "derived_from_part2")
+        self.assertGreater(payload["part3_follow_up_count"], 0)
         self.assertIsInstance(payload["part1_count"], int)
         self.assertIsInstance(payload["part2_count"], int)
         self.assertIn("2026-may-august", payload["seasons"])
         self.assertIn("china_mainland", payload["regions"])
+        self.assertGreater(payload["archived_part1_count"], 0)
+        self.assertGreater(payload["archived_part2_count"], 0)
         self.assertGreater(payload["part1_status_counts"]["new"], 0)
         self.assertGreater(payload["part1_status_counts"]["retained"], 0)
         self.assertGreater(payload["part2_status_counts"]["new"], 0)
         self.assertGreater(payload["part2_status_counts"]["retained"], 0)
         self.assertGreaterEqual(payload["part1_count"], 100)
-        self.assertGreaterEqual(payload["part2_count"], 40)
+        self.assertGreaterEqual(payload["part2_count"], 55)
         for topic in ("social_media", "study_or_work", "public_gardens_and_parks"):
             self.assertIn(topic, payload["part1_topics"])
         for theme in ("medical_work_and_public_health", "traditional_customs_and_modern_life", "repairing_things_and_practical_skills"):
             self.assertIn(theme, payload["part2_themes"])
+
+    def test_question_bank_summary_returns_scope_options(self):
+        response = self.client.get("/api/question-bank/summary?scope=new")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["active_scope"], "new")
+        self.assertEqual(payload["active_scope_label"], "新题")
+        self.assertEqual(payload["scope"], "new")
+        self.assertGreater(payload["part1_count"], 0)
+        self.assertGreater(payload["part2_count"], 0)
+        scopes = {item["scope"]: item for item in payload["bank_scope_options"]}
+        for scope in ("current", "new", "retained", "archive", "all"):
+            self.assertIn(scope, scopes)
+            self.assertIn("part1_count", scopes[scope])
+            self.assertIn("part2_count", scopes[scope])
+        self.assertEqual(scopes["archive"]["label"], "历史考季")
+        self.assertEqual(scopes["all"]["label"], "全部题库")
 
     def test_question_bank_sample_returns_structure(self):
         response = self.client.post("/api/question-bank/sample", data={"p1_count": 3}, content_type="application/json")
@@ -363,16 +445,33 @@ class QuestionBankApiTests(TestCase):
         payload = response.json()
         if "part1" in payload:
             self.assertIsInstance(payload["part1"], list)
+            self.assertTrue(all(item.get("season") == "2026-may-august" for item in payload["part1"]))
         if "part2" in payload:
             self.assertIsInstance(payload["part2"], dict)
             self.assertIn("season", payload["part2"])
             self.assertIn("region", payload["part2"])
+            self.assertEqual(payload["part2"]["season"], "2026-may-august")
+
+    def test_question_bank_sample_respects_scope(self):
+        response = self.client.post(
+            "/api/question-bank/sample",
+            data={"p1_count": 3, "scope": "retained"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["active_scope"], "retained")
+        self.assertTrue(all(item.get("status") == "retained" for item in payload.get("part1", [])))
+        if payload.get("part2"):
+            self.assertEqual(payload["part2"].get("status"), "retained")
 
     def test_p1_corpus_library_and_save(self):
         library = self.client.get("/api/p1-corpus")
         self.assertEqual(library.status_code, 200)
         payload = library.json()
         self.assertIn("topics", payload)
+        self.assertEqual(payload["active_season"], "2026-may-august")
+        self.assertEqual(payload["scope"], "current_season_only")
         self.assertGreater(payload["question_count"], 0)
 
         first_question = payload["topics"][0]["questions"][0]
@@ -391,6 +490,92 @@ class QuestionBankApiTests(TestCase):
         saved = response.json()
         self.assertEqual(saved["corpus_text"], "My prepared answer.")
         self.assertTrue(P1CorpusEntry.objects.filter(user=self.user, question_id=first_question["question_id"]).exists())
+
+    def test_p1_corpus_reuses_legacy_topic_bound_entry_by_canonical_question(self):
+        from apps.speaking.corpus_services import legacy_p1_question_id, p1_question_id
+
+        question = "Do you prefer using a pen or a pencil?"
+        legacy_id = legacy_p1_question_id("old_topic", question)
+        canonical_id = p1_question_id("new_topic", question)
+        P1CorpusEntry.objects.create(
+            user=self.user,
+            question_id=legacy_id,
+            topic="old_topic",
+            question=question,
+            corpus_text="I prefer using a pen because it feels more formal.",
+        )
+
+        response = self.client.post(
+            "/api/p1-corpus",
+            data={
+                "question_id": legacy_id,
+                "topic": "new_topic",
+                "question": question,
+                "corpus_text": "I still prefer using a pen for notes.",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["question_id"], canonical_id)
+        self.assertTrue(P1CorpusEntry.objects.filter(user=self.user, question_id=canonical_id).exists())
+        self.assertFalse(P1CorpusEntry.objects.filter(user=self.user, question_id=legacy_id).exists())
+
+    def test_p1_corpus_library_respects_scope(self):
+        response = self.client.get("/api/p1-corpus?scope=new")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["active_scope"], "new")
+        bank_questions = [
+            question
+            for topic in payload["topics"]
+            for question in topic["questions"]
+            if topic["topic"] != "intro"
+        ]
+        self.assertTrue(bank_questions)
+        self.assertTrue(all(question.get("status") == "new" for question in bank_questions))
+
+    def test_p2_corpus_library_marks_current_season_bank(self):
+        response = self.client.get("/api/p2-corpus")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["active_season"], "2026-may-august")
+        self.assertEqual(payload["scope"], "current_season_only")
+        self.assertGreaterEqual(payload["current_part2_count"], 55)
+        self.assertEqual(len(payload["current_part2_categories"]), 5)
+
+    def test_p2_corpus_library_respects_scope(self):
+        response = self.client.get("/api/p2-corpus?scope=archive")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["active_scope"], "archive")
+        self.assertGreater(payload["current_part2_count"], 0)
+
+    def test_p2_corpus_save_uses_linked_question_as_stable_entry_id(self):
+        linked_question = "Describe a book you have recently read\nWhat it was about\nWhy you chose it"
+        first = self.client.post(
+            "/api/p2-corpus",
+            data={
+                "category": "object",
+                "title": "Book material",
+                "material_text": "I can talk about a travel book.",
+                "linked_question": linked_question,
+            },
+            content_type="application/json",
+        )
+        second = self.client.post(
+            "/api/p2-corpus",
+            data={
+                "category": "special",
+                "title": "Same retained cue in a new season",
+                "material_text": "The same prepared material should update.",
+                "linked_question": linked_question,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()["entry_id"], second.json()["entry_id"])
+        self.assertEqual(P2CorpusEntry.objects.filter(user=self.user, entry_id=first.json()["entry_id"]).count(), 1)
 
     def test_p1_corpus_library_does_not_append_dynamic_follow_ups(self):
         library = self.client.get("/api/p1-corpus")

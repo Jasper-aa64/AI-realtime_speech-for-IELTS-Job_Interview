@@ -167,6 +167,10 @@ const state = {
     user: null,
     returnView: null,
     fromView: null,
+    questionBankScope: "current",
+    questionBankSummary: null,
+    questionBankLoadingPromise: null,
+    questionBankLoadingScope: "",
   },
   wallet: {
     payload: null,
@@ -187,6 +191,8 @@ const state = {
 const VIEW_STORAGE_KEY = "ielts-view";
 const FULL_NAME_STORAGE_KEY = "ielts-full-name";
 const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
+const QUESTION_BANK_SCOPE_STORAGE_KEY = "ielts-speaking-question-bank-scope";
+const QUESTION_BANK_SCOPES = new Set(["current", "new", "retained", "archive", "all"]);
 const VDITOR_CSS_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.css";
 const VDITOR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js";
 const WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT = 2;
@@ -758,6 +764,52 @@ function scheduleAuthenticatedPrefetch() {
   scheduleIdleTask(() => prefetchWritingPrompts(token), 8200);
 }
 
+function normalizeQuestionBankScope(scope) {
+  const value = String(scope || "").trim().toLowerCase();
+  return QUESTION_BANK_SCOPES.has(value) ? value : "current";
+}
+
+function loadStoredQuestionBankScope() {
+  try {
+    state.account.questionBankScope = normalizeQuestionBankScope(localStorage.getItem(QUESTION_BANK_SCOPE_STORAGE_KEY));
+  } catch (_error) {
+    state.account.questionBankScope = "current";
+  }
+}
+
+function questionBankScopeQuery() {
+  return `scope=${encodeURIComponent(normalizeQuestionBankScope(state.account.questionBankScope))}`;
+}
+
+function clearQuestionBankScopedCaches() {
+  state.p1Corpus.topics = [];
+  state.p1Corpus.loaded = false;
+  state.p1Corpus.loadingPromise = null;
+  state.p2Corpus.categories = [];
+  state.p2Corpus.loaded = false;
+  state.p2Corpus.loadingPromise = null;
+}
+
+async function loadQuestionBankSummary(options = {}) {
+  const scope = normalizeQuestionBankScope(options.scope || state.account.questionBankScope);
+  if (!options.force && state.account.questionBankSummary?.active_scope === scope) {
+    return state.account.questionBankSummary;
+  }
+  if (!state.account.questionBankLoadingPromise || state.account.questionBankLoadingScope !== scope) {
+    state.account.questionBankLoadingScope = scope;
+    state.account.questionBankLoadingPromise = api(`/api/question-bank/summary?scope=${encodeURIComponent(scope)}`)
+      .then((summary) => {
+        state.account.questionBankSummary = summary;
+        return summary;
+      })
+      .finally(() => {
+        state.account.questionBankLoadingPromise = null;
+        state.account.questionBankLoadingScope = "";
+      });
+  }
+  return state.account.questionBankLoadingPromise;
+}
+
 async function fetchFixedExaminerTtsWarmup() {
   if (!state.prefetch.fixedExaminerTtsPromise) {
     state.prefetch.fixedExaminerTtsPromise = api("/api/tts/warmup", {}).finally(() => {
@@ -785,7 +837,7 @@ function warmFixedExaminerTtsNow() {
 
 async function fetchP1CorpusPayload() {
   if (!state.p1Corpus.loadingPromise) {
-    state.p1Corpus.loadingPromise = api("/api/p1-corpus").finally(() => {
+    state.p1Corpus.loadingPromise = api(`/api/p1-corpus?${questionBankScopeQuery()}`).finally(() => {
       state.p1Corpus.loadingPromise = null;
     });
   }
@@ -794,7 +846,7 @@ async function fetchP1CorpusPayload() {
 
 async function fetchP2CorpusPayload() {
   if (!state.p2Corpus.loadingPromise) {
-    state.p2Corpus.loadingPromise = api("/api/p2-corpus").finally(() => {
+    state.p2Corpus.loadingPromise = api(`/api/p2-corpus?${questionBankScopeQuery()}`).finally(() => {
       state.p2Corpus.loadingPromise = null;
     });
   }
@@ -806,7 +858,9 @@ function applyP1CorpusPayload(payload) {
   state.p1Corpus.loaded = true;
   const stats = $("p1CorpusStats");
   if (stats) {
-    stats.textContent = `${payload.topic_count || state.p1Corpus.topics.length} 个话题 · ${payload.question_count || 0} 道题 · 已保存 ${payload.saved_count || 0}`;
+    const season = payload.active_season ? `${payload.active_season.replace(/-/g, " ")} · ` : "";
+    const scope = payload.active_scope_label ? `${payload.active_scope_label} · ` : "";
+    stats.textContent = `${season}${scope}${payload.topic_count || state.p1Corpus.topics.length} 个话题 · ${payload.question_count || 0} 道题 · 已保存 ${payload.saved_count || 0}`;
   }
   if (state.view === "p1Corpus") renderP1CorpusTopics();
   updateP1CorpusPeekButton(state.currentTurn);
@@ -816,7 +870,11 @@ function applyP2CorpusPayload(payload) {
   state.p2Corpus.categories = payload.categories || [];
   state.p2Corpus.loaded = true;
   const stats = $("p2CorpusStats");
-  if (stats) stats.textContent = `${payload.category_count || 5} 个分类 · 已保存 ${payload.material_count || 0}`;
+  if (stats) {
+    const season = payload.active_season ? `${payload.active_season.replace(/-/g, " ")} · ` : "";
+    const scope = payload.active_scope_label ? `${payload.active_scope_label} · ` : "";
+    stats.textContent = `${season}${scope}${payload.current_part2_count || 0} 道 P2 题 · ${payload.category_count || 5} 个素材分类 · 已保存 ${payload.material_count || 0}`;
+  }
   if (state.view === "p2Corpus") renderP2CorpusTopics();
   renderP2CorpusPrepPanel();
   updateP2CorpusPeekButton(state.currentTurn);
@@ -1581,6 +1639,7 @@ async function startPractice() {
     const names = candidateNames();
     const attempt = await api("/api/attempts/start", {
       mode,
+      question_bank_scope: normalizeQuestionBankScope(state.account.questionBankScope),
       candidate: names.englishName,
       full_name: names.fullName,
       english_name: names.englishName,
@@ -1690,7 +1749,7 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
   }
   if (!(state.p2Corpus.categories || []).length) {
     try {
-      const payload = await api("/api/p2-corpus");
+      const payload = await api(`/api/p2-corpus?${questionBankScopeQuery()}`);
       state.p2Corpus.categories = payload.categories || [];
     } catch (_error) {
       state.p2Corpus.categories = [];
@@ -7300,6 +7359,82 @@ function renderAccountStatus(message = "", isError = false) {
   }
 }
 
+function formatSeasonLabel(value) {
+  const textValue = String(value || "").trim();
+  if (!textValue) return "当前考季";
+  const match = textValue.match(/^(\d{4})-([a-z]+)-([a-z]+)$/i);
+  if (match) {
+    const monthMap = {
+      january: "1月",
+      february: "2月",
+      march: "3月",
+      april: "4月",
+      may: "5月",
+      june: "6月",
+      july: "7月",
+      august: "8月",
+      september: "9月",
+      october: "10月",
+      november: "11月",
+      december: "12月",
+    };
+    const start = monthMap[match[2].toLowerCase()] || match[2];
+    const end = monthMap[match[3].toLowerCase()] || match[3];
+    return `${match[1]} ${start}-${end}`;
+  }
+  return textValue.replace(/-/g, " ");
+}
+
+function renderQuestionBankSelector(summary = state.account.questionBankSummary) {
+  const activeScope = normalizeQuestionBankScope(summary?.active_scope || state.account.questionBankScope);
+  const options = Array.isArray(summary?.bank_scope_options) && summary.bank_scope_options.length
+    ? summary.bank_scope_options
+    : [
+        { scope: "current", label: "当前考季" },
+        { scope: "new", label: "新题" },
+        { scope: "retained", label: "保留题" },
+        { scope: "archive", label: "历史考季" },
+        { scope: "all", label: "全部题库" },
+      ];
+  const seasonPill = $("accountBankSeasonPill");
+  if (seasonPill) {
+    seasonPill.textContent = formatSeasonLabel(summary?.active_season);
+  }
+  const status = $("accountBankStatus");
+  if (status) {
+    const label = summary?.active_scope_label || options.find((item) => item.scope === activeScope)?.label || "当季全部";
+    const part1 = Number(summary?.part1_count || 0);
+    const part2 = Number(summary?.part2_count || 0);
+    const p3 = Number(summary?.part3_follow_up_count || 0);
+    status.textContent = summary
+      ? `${label}：${part1} P1 · ${part2} P2${p3 ? ` · ${p3} P3 参考追问` : ""}`
+      : "正在读取当前题库...";
+    status.classList.remove("error");
+  }
+  const optionRoot = $("accountBankScopeOptions");
+  if (optionRoot) {
+    optionRoot.innerHTML = options.map((item) => {
+      const scope = normalizeQuestionBankScope(item.scope);
+      const countText = Number.isFinite(Number(item.part1_count)) || Number.isFinite(Number(item.part2_count))
+        ? `<small>${Number(item.part1_count || 0)} P1 · ${Number(item.part2_count || 0)} P2</small>`
+        : "";
+      return `<button type="button" data-bank-scope="${escapeHtml(scope)}" class="${scope === activeScope ? "is-active" : ""}" aria-pressed="${scope === activeScope ? "true" : "false"}">
+        <span class="account-bank-option-label">${escapeHtml(item.label || scope)}</span>
+        ${countText}
+      </button>`;
+    }).join("");
+  }
+}
+
+function renderQuestionBankSelectorError(error) {
+  renderQuestionBankSelector(state.account.questionBankSummary);
+  const status = $("accountBankStatus");
+  if (status) {
+    status.textContent = error?.message || "题库读取失败，练习会继续使用默认当季题库。";
+    status.classList.add("error");
+  }
+}
+
 function resetAccountProfileLoadingUi() {
   const status = $("accountProfileStatus");
   if (status) {
@@ -7325,11 +7460,7 @@ function resetAccountProfileLoadingUi() {
   if (ledgerList) {
     ledgerList.innerHTML = '<div class="account-skeleton-row"></div><div class="account-skeleton-row"></div><div class="account-skeleton-row"></div>';
   }
-  text("weakTrainingStatus", "加载中");
-  const weakList = $("weakTrainingList");
-  if (weakList) {
-    weakList.innerHTML = '<div class="account-skeleton-row"></div><div class="account-skeleton-row"></div>';
-  }
+  renderQuestionBankSelector(state.account.questionBankSummary);
 }
 
 async function loadAccount() {
@@ -7625,6 +7756,11 @@ function bindEvents() {
   $("fullNameInput")?.addEventListener("blur", flushCandidateNameSave);
   $("englishNameInput")?.addEventListener("blur", flushCandidateNameSave);
   $("darkModeToggle")?.addEventListener("change", (event) => applyDarkMode(event.target.checked));
+  $("accountBankScopeOptions")?.addEventListener("click", (event) => {
+    const button = event.target?.closest?.("[data-bank-scope]");
+    if (!button) return;
+    selectQuestionBankScope(button.dataset.bankScope).catch(renderQuestionBankSelectorError);
+  });
   $("loginSubmitBtn")?.addEventListener("click", submitLogin);
   $("registerSubmitBtn")?.addEventListener("click", submitRegister);
   $("loginBackBtn")?.addEventListener("click", returnToPreviousView);
@@ -8546,7 +8682,39 @@ async function loadAccountProfile() {
   resetAccountProfileLoadingUi();
   await loadAccount();
   renderAccountStatus();
-  await Promise.all([loadWallet(), loadWeakTraining()]);
+  loadQuestionBankSummary({ force: true })
+    .then(renderQuestionBankSelector)
+    .catch(renderQuestionBankSelectorError);
+  await loadWallet();
+}
+
+async function selectQuestionBankScope(scope) {
+  const normalized = normalizeQuestionBankScope(scope);
+  if (normalized === state.account.questionBankScope && state.account.questionBankSummary?.active_scope === normalized) {
+    renderQuestionBankSelector(state.account.questionBankSummary);
+    return;
+  }
+  state.account.questionBankScope = normalized;
+  try {
+    localStorage.setItem(QUESTION_BANK_SCOPE_STORAGE_KEY, normalized);
+  } catch (_error) {
+    // Local UI preference only; failing to persist should not block practice.
+  }
+  clearQuestionBankScopedCaches();
+  renderQuestionBankSelector({
+    ...(state.account.questionBankSummary || {}),
+    active_scope: normalized,
+    active_scope_label: "",
+  });
+  try {
+    const summary = await loadQuestionBankSummary({ force: true, scope: normalized });
+    renderQuestionBankSelector(summary);
+    const seasonLabel = summary.active_season ? summary.active_season.replace(/-/g, " ") : "current season";
+    text("bankStatus", `${seasonLabel} · ${summary.active_scope_label || "题库"} · ${summary.part1_count} P1 · ${summary.part2_count} P2 · P3 follows P2`);
+    renderP3TopicChips(summary.part2_themes || []);
+  } catch (error) {
+    renderQuestionBankSelectorError(error);
+  }
 }
 
 function formatLocalTime(value) {
@@ -8671,25 +8839,6 @@ async function doRecharge() {
   }
 }
 
-async function loadWeakTraining() {
-  try {
-    const payload = await api("/api/training/weak-items");
-    const items = payload.items || [];
-    text("weakTrainingStatus", `${items.length} 条弱题记录`);
-    $("weakTrainingList").innerHTML = items.length
-      ? items.slice(0, 6).map((item) => `<div class="settings-list-row account-weak-row">
-          <strong>${escapeHtml((item.part || "").toUpperCase())}</strong>
-          <span>${escapeHtml((item.weak_reason || []).join("、") || "未命中明显弱项")}</span>
-          <small>${escapeHtml(item.question || "")}</small>
-          <small>下次复习：${escapeHtml(formatLocalTime(item.next_due))}</small>
-        </div>`).join("")
-      : '<p class="account-empty-state">暂无弱题记录。</p>';
-  } catch (error) {
-    text("weakTrainingStatus", error.message);
-    $("weakTrainingList").innerHTML = '<p class="account-empty-state">弱题记录暂时不可用。</p>';
-  }
-}
-
 async function init() {
   loadFontStyle();
   loadDarkMode();
@@ -8709,6 +8858,8 @@ async function init() {
     }
   }, true);
   window.addEventListener("popstate", restoreRouteFromLocation);
+  loadStoredQuestionBankScope();
+  renderQuestionBankSelector();
   const route = requestedRouteState();
   applyRouteState(route);
   const urlView = route.view;
@@ -8718,11 +8869,14 @@ async function init() {
   document.body.classList.remove("app-booting");
   scheduleAuthenticatedPrefetch();
   try {
-    const summary = await api("/api/question-bank/summary");
-    text("bankStatus", `${summary.part1_count} P1 · ${summary.part2_count} P2`);
+    const summary = await loadQuestionBankSummary({ force: true });
+    const seasonLabel = summary.active_season ? summary.active_season.replace(/-/g, " ") : "current season";
+    text("bankStatus", `${seasonLabel} · ${summary.active_scope_label || "题库"} · ${summary.part1_count} P1 · ${summary.part2_count} P2 · P3 follows P2`);
+    renderQuestionBankSelector(summary);
     renderP3TopicChips(summary.part2_themes || []);
   } catch (error) {
     text("bankStatus", error.message);
+    renderQuestionBankSelectorError(error);
   }
 }
 

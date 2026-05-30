@@ -75,7 +75,7 @@ def question_bank_summary_view(request):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
-    return JsonResponse(question_bank_summary())
+    return JsonResponse(question_bank_summary(request.GET.get("scope")))
 
 
 @require_http_methods(["POST"])
@@ -91,7 +91,7 @@ def question_bank_sample_view(request):
     p1_count = payload.get("p1_count", 5)
     if isinstance(p1_count, str):
         p1_count = int(p1_count) if p1_count.isdigit() else 5
-    return JsonResponse(question_bank_sample(int(p1_count)))
+    return JsonResponse(question_bank_sample(int(p1_count), payload.get("scope")))
 
 
 @require_http_methods(["GET", "POST"])
@@ -100,7 +100,7 @@ def p1_corpus_view(request):
     if auth_error:
         return auth_error
     if request.method == "GET":
-        return JsonResponse(p1_corpus_library(request.user))
+        return JsonResponse(p1_corpus_library(request.user, request.GET.get("scope")))
     try:
         return JsonResponse(save_p1_corpus(request.user, _json_payload(request)))
     except SpeakingError as exc:
@@ -113,7 +113,7 @@ def p2_corpus_view(request):
     if auth_error:
         return auth_error
     if request.method == "GET":
-        return JsonResponse(p2_corpus_library(request.user))
+        return JsonResponse(p2_corpus_library(request.user, request.GET.get("scope")))
     try:
         return JsonResponse(save_p2_corpus(request.user, _json_payload(request)))
     except SpeakingError as exc:
