@@ -915,3 +915,34 @@ Added a secret-safe realtime ASR readiness endpoint and a VolcEngine PCM streami
 ### Next Steps
 
 - None - task complete
+
+
+## Session 84: Add browser PCM frame hook
+
+**Date**: 2026-05-30
+**Task**: Add browser PCM frame hook
+**Branch**: `main`
+
+### Summary
+
+Added an optional 16kHz PCM frame callback to the existing speaking AudioWorklet preprocessor. The baseline recorder remains unchanged unless a caller supplies onPcmFrame. Validation: node --check for preprocessor and app.js, PCM helper smoke, diff check.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
