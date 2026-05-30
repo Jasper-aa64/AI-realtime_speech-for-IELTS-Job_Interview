@@ -1,0 +1,2 @@
+{"type":"command","cmd":"node --check web/static/app.js","note":"Validate JavaScript syntax."}
+{"type":"source","path":"web/static/app.js","note":"Review home card click handler no longer starts practice."}

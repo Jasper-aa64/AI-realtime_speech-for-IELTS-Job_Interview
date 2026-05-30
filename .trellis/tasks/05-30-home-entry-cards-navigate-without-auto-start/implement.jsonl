@@ -1,0 +1,4 @@
+{"type":"spec","path":".trellis/spec/frontend/index.md","note":"Frontend conventions for SPA navigation and visible modes."}
+{"type":"spec","path":".trellis/spec/frontend/quality-guidelines.md","note":"Frontend quality and practice-flow contracts."}
+{"type":"source","path":"web/static/app.js","note":"Home card click handler and practice start flow."}
+{"type":"source","path":"web/static/index.html","note":"Home card anchors and href contracts."}
