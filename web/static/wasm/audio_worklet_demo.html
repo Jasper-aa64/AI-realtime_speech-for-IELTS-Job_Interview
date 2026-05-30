@@ -163,8 +163,8 @@
         <h1>AudioWorklet microphone frame demo</h1>
         <p>
           This standalone page proves the browser can feed realtime microphone frames into the
-          preprocessing layer. It uses a JavaScript mock analyzer today; when Emscripten is ready,
-          this same frame stream can call <code>audio_core_wasm.js</code>.
+          preprocessing layer. It can use either the JavaScript mock analyzer or the generated
+          <code>audio_core_wasm.js</code> module.
         </p>
         <p>
           This does not touch the production P1/P2/P3 recording flow.

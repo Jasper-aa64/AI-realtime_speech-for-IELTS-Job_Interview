@@ -1,4 +1,10 @@
-import { ANALYZER_DESCRIPTORS, DEFAULT_ANALYZER_ID, analyzerById, analyzerLabel } from "./audio_analyzer.js";
+import {
+  ANALYZER_DESCRIPTORS,
+  DEFAULT_ANALYZER_ID,
+  analyzerById,
+  analyzerLabel,
+  createAnalyzer,
+} from "./audio_analyzer.js";
 
 const statusEl = document.getElementById("status");
 const startButton = document.getElementById("startAudio");
@@ -21,6 +27,9 @@ const state = {
   stream: null,
   sourceNode: null,
   workletNode: null,
+  analyzer: null,
+  analyzerId: DEFAULT_ANALYZER_ID,
+  speechFrameCount: 0,
 };
 
 function setStatus(message, tone = "neutral") {
@@ -47,6 +56,7 @@ function resetMeters() {
   meters.decision.textContent = "idle";
   meters.decision.dataset.speech = "false";
   meters.speechFrames.textContent = "0";
+  state.speechFrameCount = 0;
 }
 
 function currentThreshold() {
@@ -78,24 +88,59 @@ function updateAnalyzerStatus() {
   setStatus(descriptor.description, descriptor.status === "ready" ? "neutral" : "error");
 }
 
-function handleFrameMessage(event) {
+async function ensureAnalyzer(analyzerId = currentAnalyzerId()) {
+  if (state.analyzer && state.analyzerId === analyzerId) {
+    state.analyzer.update({ threshold: currentThreshold() });
+    return state.analyzer;
+  }
+
+  state.analyzer = await createAnalyzer(analyzerId, { threshold: currentThreshold() });
+  state.analyzerId = analyzerId;
+  return state.analyzer;
+}
+
+async function switchAnalyzer() {
+  const analyzerId = currentAnalyzerId();
+  resetMeters();
+  updateAnalyzerStatus();
+  try {
+    await ensureAnalyzer(analyzerId);
+    setStatus(`${analyzerLabel(analyzerId)} analyzer is ready.`, "ok");
+  } catch (error) {
+    state.analyzer = await createAnalyzer(DEFAULT_ANALYZER_ID, { threshold: currentThreshold() });
+    state.analyzerId = DEFAULT_ANALYZER_ID;
+    analyzerSelect.value = DEFAULT_ANALYZER_ID;
+    resetMeters();
+    setStatus(`Falling back to Mock RMS: ${error.message}`, "error");
+  }
+}
+
+async function handleFrameMessage(event) {
   const data = event.data || {};
   if (data.type !== "audio-frame") {
     return;
   }
 
-  meters.analyzer.textContent = analyzerLabel(data.analyzer);
+  try {
+    const analyzer = await ensureAnalyzer();
+    const result = analyzer.analyze(data.samples);
+    if (result.speech) {
+      state.speechFrameCount += 1;
+    }
+
+    meters.analyzer.textContent = analyzerLabel(result.analyzer);
+    meters.rms.textContent = formatFloat(result.rms);
+    meters.peak.textContent = formatFloat(result.peak);
+    meters.decision.textContent = result.speech ? "speech" : "silence";
+    meters.decision.dataset.speech = result.speech ? "true" : "false";
+    meters.speechFrames.textContent = String(state.speechFrameCount);
+  } catch (error) {
+    setStatus(`Analyzer failed: ${error.message}`, "error");
+  }
+
   meters.sampleRate.textContent = String(data.sampleRate);
   meters.frameSize.textContent = String(data.frameSize);
   meters.frameCount.textContent = String(data.frameCount);
-  meters.rms.textContent = formatFloat(data.rms);
-  meters.peak.textContent = formatFloat(data.peak);
-  meters.decision.textContent = data.speech ? "speech" : "silence";
-  meters.decision.dataset.speech = data.speech ? "true" : "false";
-  meters.speechFrames.textContent = String(data.speechFrameCount);
-  if (data.analyzerError) {
-    setStatus(data.analyzerError, "error");
-  }
 }
 
 async function startAudio() {
@@ -113,6 +158,8 @@ async function startAudio() {
   setStatus("Requesting microphone permission...", "neutral");
 
   try {
+    await ensureAnalyzer(currentAnalyzerId());
+
     const audioContext = new AudioContext();
     await audioContext.audioWorklet.addModule("./audio_frame_processor.js");
 
@@ -131,8 +178,6 @@ async function startAudio() {
       numberOfOutputs: 0,
       channelCount: 1,
       processorOptions: {
-        analyzerId: currentAnalyzerId(),
-        threshold: currentThreshold(),
         reportEveryFrames: 8,
       },
     });
@@ -185,21 +230,12 @@ async function stopAudio() {
 }
 
 thresholdInput.addEventListener("input", () => {
-  if (state.workletNode) {
-    state.workletNode.port.postMessage({ threshold: currentThreshold() });
+  if (state.analyzer) {
+    state.analyzer.update({ threshold: currentThreshold() });
   }
 });
 
-analyzerSelect.addEventListener("change", () => {
-  resetMeters();
-  updateAnalyzerStatus();
-  if (state.workletNode) {
-    state.workletNode.port.postMessage({
-      analyzerId: currentAnalyzerId(),
-      threshold: currentThreshold(),
-    });
-  }
-});
+analyzerSelect.addEventListener("change", switchAnalyzer);
 
 startButton.addEventListener("click", startAudio);
 stopButton.addEventListener("click", stopAudio);

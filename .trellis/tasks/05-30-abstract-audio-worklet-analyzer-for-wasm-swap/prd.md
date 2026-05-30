@@ -15,6 +15,5 @@ Keep the standalone AudioWorklet microphone demo usable today while separating f
 - [x] `audio_frame_processor.js` owns frame capture and delegates analysis through an analyzer boundary.
 - [x] The demo exposes the active analyzer in the UI.
 - [x] The default analyzer remains the current JavaScript RMS behavior.
-- [x] A future `wasm-audio-core` analyzer slot is represented but not selectable until generated artifacts exist.
+- [x] `wasm-audio-core` is selectable after `scripts/build_audio_core_wasm.sh` generates `audio_core_wasm.js/.wasm`.
 - [x] The production app files remain untouched.
-

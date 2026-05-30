@@ -8,3 +8,4 @@
 - Verified the standalone WASM demo artifacts can be built and served from a local static server with `audio_core_wasm.wasm` served as `application/wasm`.
 - Exported `HEAP16` and enabled C++ exception catching in the WASM build so the browser demo can write Int16 samples and receive wrapper error codes instead of aborting on invalid WebRTC VAD frames.
 - Browser-smoked `audio_core_demo.html`; the demo reports `WASM smoke test passed` with RMS VAD, WebRTC VAD silence, invalid-frame rejection, trim, and resample checks.
+- Connected `audio_worklet_demo.html` to the generated `audio_core_wasm.js` analyzer path while keeping `Mock RMS` as the fallback analyzer.
