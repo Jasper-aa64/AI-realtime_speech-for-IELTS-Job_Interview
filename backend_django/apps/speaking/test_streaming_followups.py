@@ -185,3 +185,92 @@ class StreamingFollowUpTests(TestCase):
         self.assertEqual(payload["turn"]["realtime_asr_metrics"]["first_transcript_ms"], 360)
         self.assertEqual(payload["next_turn"]["prompt"]["backend"], "stream_pending")
         self.assertEqual(payload["next_turn"]["examiner_tts"]["status"], "pending")
+
+    def test_realtime_asr_complete_then_streams_p1_follow_up_and_tts(self):
+        SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="stream-p1-e2e-attempt",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t2"},
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=SpeakingAttempt.objects.get(attempt_id="stream-p1-e2e-attempt"),
+            turn_id="t2",
+            sequence=1,
+            part="p1",
+            question="Do you work or do you study?",
+            metadata={
+                "prompt": {
+                    "topic": "intro",
+                    "question": "Do you work or do you study?",
+                    "flow": "intro",
+                    "role": "work_study",
+                    "counts_toward_total": True,
+                },
+                "display_index": 1,
+            },
+        )
+
+        complete_response = self.client.post(
+            "/api/attempts/stream-p1-e2e-attempt/turns/t2/complete",
+            data={
+                "transcript_raw": "I study software engineering and do an internship at a tech company.",
+                "transcript_source": "volcengine_realtime_asr",
+                "realtime_asr_metrics": {
+                    "enabled": True,
+                    "status": "closed",
+                    "asrStatus": "done",
+                    "asrConfigured": True,
+                    "asrEnabled": True,
+                    "asrProvider": "volcengine_realtime_asr",
+                    "transcriptSource": "volcengine_realtime_asr",
+                    "framesSent": 4,
+                    "framesAcked": 4,
+                    "bytesSent": 1280,
+                    "bytesAcked": 1280,
+                    "firstTranscriptMs": 320,
+                    "finalTranscriptMs": 860,
+                    "doneMs": 920,
+                },
+                "stream_follow_up": True,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(complete_response.status_code, 200)
+        complete_payload = complete_response.json()
+        self.assertEqual(complete_payload["turn"]["transcript_source"], "volcengine_realtime_asr")
+        self.assertEqual(complete_payload["next_turn"]["prompt"]["backend"], "stream_pending")
+
+        with (
+            patch(
+                "apps.speaking.services.HttpApiProvider",
+                return_value=_StreamingProvider(["How does ", "your internship help your studies?"]),
+            ),
+            patch(
+                "apps.speaking.services.volcengine_tts",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/stream-p1-e2e-attempt_t2_followup_examiner.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ),
+        ):
+            stream_response = self.client.get(
+                "/api/attempts/stream-p1-e2e-attempt/turns/t2/follow-up-stream"
+            )
+            payloads = _sse_payloads(stream_response)
+
+        self.assertEqual(stream_response.status_code, 200)
+        events = [payload["event"] for payload in payloads]
+        self.assertIn("chunk", events)
+        self.assertIn("question_complete", events)
+        self.assertIn("tts_ready", events)
+        follow_up = SpeakingTurn.objects.get(attempt__attempt_id="stream-p1-e2e-attempt", turn_id="t2_followup")
+        self.assertEqual(follow_up.question, "How does your internship help your studies?")
+        self.assertEqual(follow_up.metadata["prompt"]["backend"], "http_api_stream")
+        self.assertEqual(follow_up.metadata["examiner_tts"]["status"], "ready")
