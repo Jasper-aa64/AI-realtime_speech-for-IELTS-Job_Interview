@@ -946,3 +946,34 @@ Added an optional 16kHz PCM frame callback to the existing speaking AudioWorklet
 ### Next Steps
 
 - None - task complete
+
+
+## Session 85: Add ASGI Channels ping transport
+
+**Date**: 2026-05-30
+**Task**: Add ASGI Channels ping transport
+**Branch**: `main`
+
+### Summary
+
+Phase 2.1 added Channels/Daphne, ProtocolTypeRouter preserving HTTP through Django ASGI, and a minimal /ws/realtime/ping/ WebSocket consumer with WebsocketCommunicator coverage. Validation: targeted ping websocket test, manage.py check, full Django suite 269 tests OK.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
