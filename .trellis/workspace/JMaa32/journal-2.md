@@ -137,3 +137,34 @@ Extracted speaking question bank, P1/P2 corpus, Takeaway, and translation helper
 ### Next Steps
 
 - None - task complete
+
+
+## Session 60: Split speaking report history services
+
+**Date**: 2026-05-30
+**Task**: Split speaking report history services
+**Branch**: `main`
+
+### Summary
+
+Extracted speaking report validity, history/detail/delete payloads, AI task summary payloads, and weak-item/replay-queue read services into backend_django/apps/speaking/report_services.py. Kept apps.speaking.services as the compatibility facade. Verified speaking tests, full Django tests, system checks, migrations dry-run, and legacy retirement validator.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
