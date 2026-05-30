@@ -55,6 +55,21 @@ realtime ASR 流式转写 → 实时回前端显示 → 串到 Phase 1 流式追
 - [ ] Channels 依赖入 requirements；ASR 凭据走环境变量未入库。
 - [ ] 分步提交（2.1–2.5 各 commit），CHANGES 记录每步结果 + 首字延迟数字。
 
+## 2.5 CLI 验收入口
+
+真实 ASR 凭据配置后，先跑命令行诊断再进浏览器：
+
+```bash
+VOLCENGINE_ASR_ENABLED=1 \
+VOLCENGINE_ASR_WS_URL=... \
+VOLCENGINE_ASR_APP_ID=... \
+VOLCENGINE_ASR_ACCESS_KEY=... \
+VOLCENGINE_ASR_APP_KEY=... \
+.venv-django/bin/python scripts/validate_realtime_asr_provider.py --audio sample-16k-mono.wav --require-transcript
+```
+
+未配置凭据时脚本返回 `78`，只打印 secret-safe 状态，不泄露 key。没有 `--audio` 时脚本会发送短 tone，只能验证连接与协议，不保证产生文字稿。
+
 ## 部署备注（说明，不强求本 goal 完成）
 
 ASGI 上 WebSocket 需 uvicorn/daphne 跑（`runserver` 仅开发够用）。生产 Linux 部署、
