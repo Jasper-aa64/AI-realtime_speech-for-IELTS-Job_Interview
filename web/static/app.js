@@ -1561,13 +1561,9 @@ function restorePendingSpeakingAnalysisView(view = state.view) {
   updateSidebarLock();
 }
 
-function startPracticeMode(mode) {
+function navigatePracticeMode(mode) {
   if (!["mock", "p1", "p2", "p3"].includes(mode)) return;
   switchView(mode, { force: true });
-  window.requestAnimationFrame(() => {
-    if (mode === "p3") return;
-    startPractice();
-  });
 }
 
 function setRecordButton(status, title, hint) {
@@ -7876,7 +7872,7 @@ function bindEvents() {
     button.addEventListener("click", (event) => {
       if (isNewTabNavigationEvent(event)) return;
       event.preventDefault();
-      startPracticeMode(button.dataset.homeMode || "mock");
+      navigatePracticeMode(button.dataset.homeMode || "mock");
     });
   });
   $("exitPractice")?.addEventListener("click", () => exitPractice());
