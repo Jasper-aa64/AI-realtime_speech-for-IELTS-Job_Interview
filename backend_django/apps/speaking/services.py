@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 import uuid
 from decimal import Decimal
 from pathlib import Path
@@ -1775,9 +1776,9 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
     turn_data["id"] = turn_id
     turn_data["counts_toward_total"] = False
 
-    # Codex success can use the normal server TTS path immediately. When Codex
-    # timed out and this is a fallback follow-up, do not add another blocking
-    # network call before returning the next turn.
+    # Codex success preserves the legacy synchronous server TTS behavior. HTTP
+    # success and fallback return the question first, then warm server TTS in the
+    # background so the live practice flow is not held by a second network call.
     if result["backend"] == "codex":
         ensure_examiner_tts(attempt.attempt_id, turn_data)
     else:
@@ -1785,7 +1786,7 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
             "provider": "volcengine",
             "status": "pending",
             "audio_url": None,
-            "message": "Fallback follow-up returned immediately; server TTS will be generated in the background.",
+            "message": "Follow-up returned immediately; server TTS will be generated in the background.",
         }
 
     follow_up_turn = SpeakingTurn.objects.create(
@@ -1989,6 +1990,7 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
             }
             next_turn.metadata = next_metadata
             next_turn.save(update_fields=["question", "metadata", "updated_at"])
+            _generate_remaining_examiner_tts_after_commit(attempt.attempt_id, [next_turn.turn_id])
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
     metadata["current_turn"] = next_turn.turn_id if next_turn else None
     attempt.metadata = metadata
@@ -3911,13 +3913,17 @@ def _warm_fixed_examiner_tts_item_background(item: dict[str, str]) -> None:
     threading.Thread(target=_warm_fixed_examiner_tts_item, args=(item,), daemon=True).start()
 
 
+def _examiner_tts_cache_key(attempt_id: str, turn_id: str) -> str:
+    return f"{attempt_id}_{turn_id}_examiner"
+
+
 def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
     """Ensure turn has examiner TTS audio_url generated."""
     current = turn.get("examiner_tts") or {}
     if current.get("audio_url") or current.get("status") not in (None, "pending"):
         return
     examiner_text = str(turn.get("examiner_text") or turn.get("question") or "")
-    cache_key = f"{attempt_id}_{turn['id']}_examiner"
+    cache_key = _examiner_tts_cache_key(attempt_id, str(turn["id"]))
     try:
         fixed_item = _fixed_examiner_item_for_text(examiner_text)
         if fixed_item:
@@ -3945,6 +3951,28 @@ def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
             "audio_url": None,
             "message": f"Server TTS unavailable; use browser fallback: {exc}",
         }
+
+
+def _cached_examiner_tts_for_turn(attempt_id: str, turn_id: str, examiner_text: str) -> dict[str, Any] | None:
+    fixed_item = _fixed_examiner_item_for_text(examiner_text)
+    if fixed_item:
+        cached_url = _cached_tts_url("examiner", fixed_item["key"])
+        if cached_url:
+            return {
+                "provider": "volcengine",
+                "status": "cached",
+                "audio_url": cached_url,
+                "content_type": "audio/mpeg",
+            }
+    cached_url = _cached_tts_url("examiner", _examiner_tts_cache_key(attempt_id, turn_id))
+    if cached_url:
+        return {
+            "provider": "volcengine",
+            "status": "cached",
+            "audio_url": cached_url,
+            "content_type": "audio/mpeg",
+        }
+    return None
 
 
 def warm_fixed_examiner_tts() -> dict[str, Any]:
@@ -3992,11 +4020,20 @@ def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> No
             current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
             if current.get("audio_url") or current.get("status") not in (None, "pending"):
                 continue
+            generating_state = {
+                **(current or {}),
+                "provider": "volcengine",
+                "status": "generating",
+                "audio_url": None,
+            }
+            metadata["examiner_tts"] = generating_state
+            db_turn.metadata = metadata
+            db_turn.save(update_fields=["metadata", "updated_at"])
             turn_data = {
                 "id": db_turn.turn_id,
                 "question": db_turn.question,
                 "examiner_text": metadata.get("examiner_text") or db_turn.question,
-                "examiner_tts": current or {"provider": "volcengine", "status": "pending", "audio_url": None},
+                "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
             }
             ensure_examiner_tts(attempt_id, turn_data)
             metadata["examiner_tts"] = turn_data.get("examiner_tts")
@@ -4006,6 +4043,43 @@ def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> No
         return
     finally:
         close_old_connections()
+
+
+def examiner_tts_status(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
+    """Return the latest examiner TTS state, generating it once when pending."""
+    started = time.monotonic()
+    attempt = _load_attempt_for_user(user, attempt_id)
+    turn = _find_turn(attempt, turn_id)
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
+    tts = current or {"provider": "volcengine", "status": "pending", "audio_url": None}
+    examiner_text = str(metadata.get("examiner_text") or turn.question)
+    cached_tts = _cached_examiner_tts_for_turn(attempt.attempt_id, turn.turn_id, examiner_text)
+    if cached_tts:
+        tts = cached_tts
+        metadata["examiner_tts"] = tts
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+    elif not tts.get("audio_url") and tts.get("status") in (None, "pending"):
+        turn_data = {
+            "id": turn.turn_id,
+            "question": turn.question,
+            "examiner_text": examiner_text,
+            "examiner_tts": tts,
+        }
+        ensure_examiner_tts(attempt.attempt_id, turn_data)
+        tts = turn_data.get("examiner_tts") or tts
+        metadata["examiner_tts"] = tts
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+    return {
+        "attempt_id": attempt.attempt_id,
+        "turn_id": turn.turn_id,
+        "examiner_tts": {
+            **tts,
+            "refresh_latency_ms": int((time.monotonic() - started) * 1000),
+        },
+    }
 
 
 def latest_report(user) -> dict[str, Any]:

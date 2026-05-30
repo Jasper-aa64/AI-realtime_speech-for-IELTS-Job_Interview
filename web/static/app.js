@@ -240,6 +240,8 @@ const text = (id, value) => { document.getElementById(id).textContent = value; }
 const byId = (id) => document.getElementById(id);
 const EXAMINER_AUDIO_PRELOAD_LIMIT = 8;
 const AUDIO_READY_TIMEOUT_MS = 2000;
+const EXAMINER_TTS_REFRESH_WAIT_MS = 4200;
+const EXAMINER_TTS_REFRESH_INTERVAL_MS = 550;
 const CORPUS_PEEK_WINDOW_MARGIN = 16;
 const P3_SOURCE_LABELS = {
   topic: "按话题练",
@@ -1872,6 +1874,39 @@ function waitForAudioReady(audio) {
   });
 }
 
+function isPendingExaminerTts(tts) {
+  return ["pending", "warming", "generating"].includes(String(tts?.status || ""));
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function refreshPendingExaminerTts(turn, sessionId) {
+  if (!turn || !state.attempt?.id || !isPendingExaminerTts(turn.examiner_tts)) return turn;
+  const deadline = Date.now() + EXAMINER_TTS_REFRESH_WAIT_MS;
+  let delay = 0;
+  while (Date.now() <= deadline && isActivePracticeSession(sessionId) && state.currentTurn?.id === turn.id) {
+    if (delay > 0) await wait(delay);
+    try {
+      const payload = await api(`/api/attempts/${encodeURIComponent(state.attempt.id)}/turns/${encodeURIComponent(turn.id)}/examiner-tts`);
+      const refreshedTts = payload?.examiner_tts || null;
+      if (refreshedTts) {
+        turn.examiner_tts = refreshedTts;
+        state.currentTurn = { ...state.currentTurn, examiner_tts: refreshedTts };
+        state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, examiner_tts: refreshedTts });
+        renderExaminerAudio(state.currentTurn);
+        if (refreshedTts.audio_url) return state.currentTurn;
+        if (!isPendingExaminerTts(refreshedTts)) return state.currentTurn;
+      }
+    } catch (_error) {
+      return turn;
+    }
+    delay = EXAMINER_TTS_REFRESH_INTERVAL_MS;
+  }
+  return state.currentTurn?.id === turn.id ? state.currentTurn : turn;
+}
+
 function isActivePracticeSession(sessionId) {
   return !!sessionId && state.practiceSessionId === sessionId && state.practiceLocked;
 }
@@ -1901,7 +1936,13 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
     ? "Listen to the examiner identity question. Preparation starts automatically."
     : "Listen to the examiner question. Preparation starts automatically.");
 
-  const tts = turn.examiner_tts || {};
+  let tts = turn.examiner_tts || {};
+  if (!tts.audio_url && isPendingExaminerTts(tts)) {
+    text("recordStatus", "Preparing examiner audio...");
+    const refreshedTurn = await refreshPendingExaminerTts(turn, sessionId);
+    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
+    tts = refreshedTurn?.examiner_tts || {};
+  }
   if (tts.audio_url) {
     const preloaded = state.examinerAudioPreloads.get(tts.audio_url);
     if (preloaded && preloaded.readyState >= 3) {

@@ -36,6 +36,7 @@ urlpatterns = [
     path("api/attempts/start", speaking_views.attempt_start_view, name="attempts-start"),
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/audio", speaking_views.turn_audio_upload_view, name="turn-audio-upload"),
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/complete", speaking_views.turn_complete_view, name="turn-complete"),
+    path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/examiner-tts", speaking_views.turn_examiner_tts_view, name="turn-examiner-tts"),
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/feedback/regenerate", speaking_views.turn_feedback_regenerate_view, name="turn-feedback-regenerate"),
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/transcript/regenerate", speaking_views.turn_transcript_regenerate_view, name="turn-transcript-regenerate"),
     path("api/attempts/<str:attempt_id>/abort", speaking_views.attempt_abort_view, name="attempt-abort"),

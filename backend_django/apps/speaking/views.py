@@ -10,6 +10,7 @@ from .services import (
     delete_language_takeaway,
     delete_p2_corpus,
     detail,
+    examiner_tts_status,
     get_turn_audio_path,
     history,
     caiyun_translate_text,
@@ -262,6 +263,19 @@ def turn_audio_candidate_view(request, attempt_id: str, turn_id: str):
     if not audio_path or not audio_path.exists():
         return JsonResponse({"error": "Audio not found"}, status=404)
     return FileResponse(open(audio_path, 'rb'), content_type='application/octet-stream')
+
+
+@require_GET
+def turn_examiner_tts_view(request, attempt_id: str, turn_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(examiner_tts_status(request.user, attempt_id, turn_id))
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)
 
 
 @require_http_methods(["POST"])

@@ -89,6 +89,18 @@ def normalize_user_visible_text(...):
 - Fallback output must be marked as fallback and must not masquerade as successful AI output.
 - Tests should cover HTTP success, HTTP-to-Codex fallback, final local fallback, and secret redaction.
 
+### Convention: Generated follow-up turns must have a server TTS refresh path
+
+**What**: When live P1/P3 follow-up text is generated dynamically, the turn payload may return with `examiner_tts.status=pending`, but there must be an owner-scoped endpoint or equivalent backend path that can refresh that turn into a cached server `audio_url` without regenerating the follow-up text.
+
+**Why**: Follow-up text generation and TTS synthesis are two separate latency sources. Keeping TTS out of `/complete` prevents the save flow from blocking, but returning a permanently pending TTS state makes the examiner silently skip the spoken prompt.
+
+**Required**:
+- Pending/generated follow-up TTS must reuse the existing server TTS cache key for the attempt and turn.
+- The frontend may wait only a bounded short window for refreshed TTS, then continue safely.
+- If server TTS fails, the payload must keep explicit fallback metadata instead of silently reintroducing browser TTS as the normal path.
+- Owner scoping must be enforced for any TTS refresh endpoint.
+
 ## Scenario: IELTS Speaking CLI Simulator
 
 ### 1. Scope / Trigger

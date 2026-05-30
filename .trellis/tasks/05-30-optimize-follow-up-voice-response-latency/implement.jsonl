@@ -1,0 +1,3 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend conventions for AI-generated speaking feedback, fallback metadata, and production Django runtime boundaries."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Latency-sensitive follow-up routing and backend quality gates for touched Django code."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This change spans backend endpoint, turn payload metadata, and frontend playback behavior."}
