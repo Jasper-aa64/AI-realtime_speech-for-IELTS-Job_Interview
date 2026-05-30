@@ -561,3 +561,36 @@ Added dynamic examiner TTS refresh for generated follow-up turns, short frontend
 ### Next Steps
 
 - None - task complete
+
+
+## Session 73: Consolidate refactor stage status
+
+**Date**: 2026-05-30
+**Task**: Consolidate refactor stage status
+**Branch**: `main`
+
+### Summary
+
+Captured the refactor stage consolidation spec, completion report, dirty-worktree ownership split, validation results, and remaining architecture debt. Business WIP was deliberately left unstaged.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3a5f76d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
