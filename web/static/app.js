@@ -3951,7 +3951,7 @@ async function loadWritingReports(showBusy = true) {
       ? state.writing.activeReportId
       : state.writing.reportEntries[0]?.id;
     const panel = $("writingReportsPanel");
-    if (showBusy && (!currentActiveId || !state.writing.reportDetailCache.has(currentActiveId))) {
+    if (showBusy && (!currentActiveId || !cachedWritingReportEntry(currentActiveId))) {
       panel?.classList.add("is-loading");
       $("writingReportDetail").innerHTML = centeredLoadingHtml("正在加载写作报告", "正在读取写作历史和报告详情。");
     }
@@ -3985,7 +3985,7 @@ async function renderWritingReports(items, options = {}) {
   renderWritingReportList(items);
   // Fetch detail only for the selected item
   const activeItem = items.find((item) => item.id === activeId) || items[0];
-  const cached = state.writing.reportDetailCache.get(activeItem.id);
+  const cached = cachedWritingReportEntry(activeItem.id);
   if (cached) {
     state.writing.activeReportDetail = cached;
     target.innerHTML = writingReportDetailHtml(cached);
@@ -4029,7 +4029,7 @@ function renderWritingReportList(items) {
       renderWritingReportList(state.writing.reportEntries);
       const target = $("writingReportDetail");
       if (!target) return;
-      const cached = state.writing.reportDetailCache.get(itemId);
+      const cached = cachedWritingReportEntry(itemId);
       if (cached) {
         state.writing.activeReportDetail = cached;
         target.innerHTML = writingReportDetailHtml(cached);
@@ -4662,8 +4662,11 @@ async function saveWritingEntry(keepPending = false, options = {}) {
   if (!prompt) throw new Error("\u8bf7\u5148\u9009\u62e9\u4e00\u9053\u5199\u4f5c\u9898\u3002");
   const answer = $("writingAnswer")?.value || "";
   const startedHighlights = JSON.stringify(currentWritingPromptHighlightsPayload());
+  const previousEntry = state.writing.entry || null;
+  const previousEntryId = String(previousEntry?.id || "").trim();
+  const savingExistingUnscoredEntry = Boolean(previousEntryId) && !isWritingEntryScored(previousEntry);
   const payload = {
-    id: state.writing.entry?.id,
+    id: previousEntry?.id,
     task_type: prompt.task_type || state.writing.taskType,
     prompt_id: prompt.id,
     prompt: prompt.prompt,
@@ -4687,6 +4690,10 @@ async function saveWritingEntry(keepPending = false, options = {}) {
     const changedAfterRequest = currentAnswer !== answer || currentHighlights !== startedHighlights;
     state.writing.entry = changedAfterRequest ? { ...entry, answer: currentAnswer } : entry;
     state.writing.dirty = changedAfterRequest;
+    if (savingExistingUnscoredEntry && String(entry?.id || "") === previousEntryId && !isWritingEntryScored(entry)) {
+      syncWritingReportEntryCache(entry);
+      renderVisibleWritingReport(entry);
+    }
     if (options.autosave) {
       updateWritingWordCount({ preserveScroll: true });
     } else {
@@ -4903,9 +4910,57 @@ async function cloneWritingEntryForRevision(entryId) {
 }
 
 function cachedWritingReportEntry(entryId) {
-  if (!entryId) return null;
-  if (state.writing.activeReportDetail?.id === entryId) return state.writing.activeReportDetail;
-  return state.writing.reportDetailCache.get(entryId) || null;
+  const id = String(entryId || "").trim();
+  if (!id) return null;
+  if (String(state.writing.activeReportDetail?.id || "") === id) return state.writing.activeReportDetail;
+  return state.writing.reportDetailCache.get(id) || null;
+}
+
+function mergeWritingReportEntryMetadata(entry) {
+  const id = String(entry?.id || "").trim();
+  if (!id || !Array.isArray(state.writing.reportEntries)) return false;
+  const reportIndex = state.writing.reportEntries.findIndex((item) => String(item?.id || "") === id);
+  if (reportIndex < 0) return false;
+  const reportEntries = [...state.writing.reportEntries];
+  const existing = reportEntries[reportIndex] || {};
+  reportEntries[reportIndex] = {
+    ...existing,
+    status: entry.status ?? existing.status,
+    overall_band: entry.score?.overall_band ?? entry.overall_band ?? existing.overall_band,
+    ai_task: entry.ai_task ?? existing.ai_task,
+    title: entry.title ?? existing.title,
+    category: entry.category ?? existing.category,
+    task_type: entry.task_type ?? existing.task_type,
+    task_label: entry.task_label ?? existing.task_label,
+    prompt: entry.prompt ?? existing.prompt,
+    prompt_id: entry.prompt_id ?? existing.prompt_id,
+    word_count: entry.word_count ?? existing.word_count,
+    display_time: entry.display_time ?? existing.display_time,
+    practice_date: entry.practice_date ?? existing.practice_date,
+    updated_at: entry.updated_at ?? existing.updated_at,
+    source: entry.source ?? existing.source,
+    source_book: entry.source_book ?? existing.source_book,
+    source_test: entry.source_test ?? existing.source_test,
+    source_question: entry.source_question ?? existing.source_question,
+    source_label: entry.source_label ?? existing.source_label,
+    display_source_label: entry.display_source_label ?? existing.display_source_label,
+    prompt_highlights: entry.prompt_highlights ?? existing.prompt_highlights,
+  };
+  state.writing.reportEntries = reportEntries;
+  return true;
+}
+
+function syncWritingReportEntryCache(entry, options = {}) {
+  const id = String(entry?.id || "").trim();
+  if (!id) return false;
+  state.writing.reportDetailPromises.delete(id);
+  state.writing.reportDetailCache.set(id, entry);
+  if (String(state.writing.activeReportDetail?.id || "") === id) state.writing.activeReportDetail = entry;
+  const metadataChanged = mergeWritingReportEntryMetadata(entry);
+  if (metadataChanged && options.renderList && state.view === "writingReports") {
+    renderWritingReportList(state.writing.reportEntries);
+  }
+  return metadataChanged;
 }
 
 function writingReportEntryFromEditButton(button) {
@@ -4933,33 +4988,11 @@ function showWritingReportEditError(error) {
 }
 
 function renderVisibleWritingReport(entry) {
-  if (state.view !== "writingReports" || state.writing.activeReportId !== entry?.id) return;
-  // Update active report detail
+  const id = String(entry?.id || "").trim();
+  if (!id) return;
+  syncWritingReportEntryCache(entry, { renderList: state.view === "writingReports" });
+  if (state.view !== "writingReports" || String(state.writing.activeReportId || "") !== id) return;
   state.writing.activeReportDetail = entry;
-  // Merge status/overall_band/ai_task into the corresponding compact item
-  const reportEntries = Array.isArray(state.writing.reportEntries) ? [...state.writing.reportEntries] : [];
-  const reportIndex = reportEntries.findIndex((item) => item.id === entry.id);
-  if (reportIndex >= 0) {
-    const existing = reportEntries[reportIndex] || {};
-    reportEntries[reportIndex] = {
-      ...existing,
-      status: entry.status ?? existing.status,
-      overall_band: entry.score?.overall_band ?? entry.overall_band ?? existing.overall_band,
-      ai_task: entry.ai_task ?? existing.ai_task,
-      title: entry.title ?? existing.title,
-      category: entry.category ?? existing.category,
-      prompt: entry.prompt ?? existing.prompt,
-      prompt_id: entry.prompt_id ?? existing.prompt_id,
-      source: entry.source ?? existing.source,
-      source_book: entry.source_book ?? existing.source_book,
-      source_test: entry.source_test ?? existing.source_test,
-      source_question: entry.source_question ?? existing.source_question,
-      source_label: entry.source_label ?? existing.source_label,
-      prompt_highlights: entry.prompt_highlights ?? existing.prompt_highlights,
-    };
-    state.writing.reportEntries = reportEntries;
-    renderWritingReportList(reportEntries);
-  }
   const target = $("writingReportDetail");
   if (target) target.innerHTML = writingReportDetailHtml(entry);
 }
@@ -5119,27 +5152,16 @@ async function editWritingReportEntry(entryId) {
   if (!entryId) return;
   if (state.writing.reportEditLoading) return;
   const cachedEntry = cachedWritingReportEntry(entryId);
-  if (cachedEntry && !isWritingEntryScored(cachedEntry)) {
-    state.writing.requestedEntryId = "";
-    state.writing.requestedPromptId = "";
-    state.writing.dirty = false;
-    clearWritingAutosaveTimer();
-    switchView("writing", { force: true });
-    await recoverWritingEntry(cachedEntry);
-    syncWritingScorePolling(cachedEntry, { switchOnComplete: false });
-    syncUrlForCurrentState({ replace: true });
-    text("writingSaveStatus", "已打开未评分作文，可继续编辑原稿。");
-    $("writingAnswer")?.focus();
-    return;
-  }
   const requestId = state.writing.reportEditRequestId + 1;
   state.writing.reportEditRequestId = requestId;
   state.writing.reportEditLoading = true;
-  text("writingSaveStatus", cachedEntry ? "正在复制这篇作文..." : "正在加载这篇作文...");
+  text("writingSaveStatus", cachedEntry && isWritingEntryScored(cachedEntry) ? "正在复制这篇作文..." : "正在加载这篇作文...");
   try {
-    const source = cachedEntry || await withBusy("正在加载这篇作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
+    const source = cachedEntry && isWritingEntryScored(cachedEntry)
+      ? cachedEntry
+      : await withBusy("正在加载这篇作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
     if (state.writing.reportEditRequestId !== requestId) return;
-    state.writing.reportDetailCache.set(source.id, source);
+    syncWritingReportEntryCache(source);
     state.writing.activeReportDetail = source;
     if (!isWritingEntryScored(source)) {
       state.writing.requestedEntryId = "";
@@ -5164,7 +5186,7 @@ async function editWritingReportEntry(entryId) {
     await recoverWritingEntry(clone);
     state.writing.reportDetailCache.set(clone.id, clone);
     state.writing.activeReportId = entryId;
-    state.writing.activeReportDetail = state.writing.reportDetailCache.get(entryId) || state.writing.activeReportDetail || null;
+    state.writing.activeReportDetail = cachedWritingReportEntry(entryId) || state.writing.activeReportDetail || null;
     syncUrlForCurrentState({ replace: true });
     text("writingSaveStatus", "已复制为新版草稿。旧报告会保留，重新评分后新版会排在旧报告左边。");
     $("writingAnswer")?.focus();
@@ -5179,13 +5201,6 @@ async function editWritingReportEntry(entryId) {
 
 async function editWritingReportEntryInNewTab(entryId, entryHint = null) {
   if (!entryId) return;
-  if (entryHint && !isWritingEntryScored(entryHint)) {
-    const opened = window.open(writingEntryEditUrl(entryHint), "_blank", "noopener");
-    if (!opened) {
-      showWritingReportEditError(new Error("浏览器阻止了新窗口。请允许弹窗后重试，或普通点击按钮在当前页面编辑。"));
-    }
-    return;
-  }
   let targetWindow = null;
   try {
     targetWindow = window.open("about:blank", "_blank");
@@ -5201,6 +5216,7 @@ async function editWritingReportEntryInNewTab(entryId, entryHint = null) {
     const source = entryHint && isWritingEntryScored(entryHint)
       ? entryHint
       : await withBusy("正在加载这篇作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
+    syncWritingReportEntryCache(source);
     if (!isWritingEntryScored(source)) {
       const url = writingEntryEditUrl(source);
       if (targetWindow && !targetWindow.closed) {
