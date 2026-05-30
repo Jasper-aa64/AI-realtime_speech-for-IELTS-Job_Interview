@@ -199,3 +199,34 @@ Extracted writing summary, report list payloads, entry payloads, score payload s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 62: Split speaking scoring helpers
+
+**Date**: 2026-05-30
+**Task**: Split speaking scoring helpers
+**Branch**: `main`
+
+### Summary
+
+Extracted pure speaking scoring calibration, heuristic fallback scoring, relevance caps, transcript counters, and turn habit/focus tagging into backend_django/apps/speaking/scoring_services.py. Kept apps.speaking.services as the compatibility facade. Verified speaking tests, full Django tests, system checks, migrations dry-run, and legacy retirement validator.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
