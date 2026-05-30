@@ -527,3 +527,37 @@ Implemented an OpenAI-compatible HTTP provider for latency-sensitive P1/P3 speak
 ### Next Steps
 
 - None - task complete
+
+
+## Session 72: Refresh dynamic examiner TTS
+
+**Date**: 2026-05-30
+**Task**: Refresh dynamic examiner TTS
+**Branch**: `main`
+
+### Summary
+
+Added dynamic examiner TTS refresh for generated follow-up turns, short frontend wait for pending server audio, backend owner-scoped refresh endpoint, tests, and archived the Trellis task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cd72655` | (see git log) |
+| `d823e0d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

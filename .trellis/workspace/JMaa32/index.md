@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 71
+- **Total Sessions**: 72
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~529 | Active |
+| `journal-2.md` | ~563 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 72 | 2026-05-30 | Refresh dynamic examiner TTS | `cd72655`, `d823e0d` | `main` |
 | 71 | 2026-05-30 | Add HTTP API provider for fast speaking follow-ups | - | `main` |
 | 70 | 2026-05-30 | Enable WASM audio preprocessing by default | `9169c6c`, `075fb51` | `main` |
 | 69 | 2026-05-30 | Integrate legacy retirement validation into deliverables | `867427b`, `5e0c748` | `main` |
