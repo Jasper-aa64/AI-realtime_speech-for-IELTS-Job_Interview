@@ -14,6 +14,7 @@ urlpatterns = [
     path("shared-ui.js", frontend_asset, {"asset_path": "shared-ui.js"}, name="frontend-shared-ui-js"),
     path("writing-image-preload.js", frontend_asset, {"asset_path": "writing-image-preload.js"}, name="frontend-writing-image-preload-js"),
     path("writing-prompt-picker.js", frontend_asset, {"asset_path": "writing-prompt-picker.js"}, name="frontend-writing-prompt-picker-js"),
+    path("corpus-markdown-editor.js", frontend_asset, {"asset_path": "corpus-markdown-editor.js"}, name="frontend-corpus-markdown-editor-js"),
     path("corpus-takeaway.js", frontend_asset, {"asset_path": "corpus-takeaway.js"}, name="frontend-corpus-takeaway-js"),
     path("examiner-audio-diagnostics.js", frontend_asset, {"asset_path": "examiner-audio-diagnostics.js"}, name="frontend-examiner-audio-diagnostics-js"),
     path("candidate-profile.js", frontend_asset, {"asset_path": "candidate-profile.js"}, name="frontend-candidate-profile-js"),

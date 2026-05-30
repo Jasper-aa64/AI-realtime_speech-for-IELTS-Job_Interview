@@ -206,14 +206,10 @@ const FULL_NAME_STORAGE_KEY = "ielts-full-name";
 const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
 const QUESTION_BANK_SCOPE_STORAGE_KEY = "ielts-speaking-question-bank-scope";
 const QUESTION_BANK_SCOPES = new Set(["current", "new", "retained", "archive", "all"]);
-const VDITOR_CSS_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.css";
-const VDITOR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js";
 const WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT = 2;
 const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 9;
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
-const corpusMarkdownEditors = {};
-const dynamicScriptPromises = {};
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
 const WASM_AUDIO_PREPROCESS_STORAGE_KEY = "ielts-wasm-audio-preprocess";
 const REALTIME_PCM_UPLINK_QUERY_KEY = "realtime_pcm";
@@ -712,6 +708,17 @@ if (!writingPromptPickerController) {
   throw new Error("IELTSWritingPromptPicker module failed to initialize.");
 }
 
+const corpusMarkdownEditorController = window.IELTSCorpusMarkdownEditor?.createCorpusMarkdownEditorController?.({
+  state,
+  $,
+  prefetchCanApply,
+  vditorCssUrl: "https://cdn.jsdelivr.net/npm/vditor/dist/index.css",
+  vditorScriptUrl: "https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js",
+});
+if (!corpusMarkdownEditorController) {
+  throw new Error("IELTSCorpusMarkdownEditor module failed to initialize.");
+}
+
 const corpusTakeawayController = window.IELTSCorpusTakeaway?.createCorpusTakeawayController?.({
   state,
   $,
@@ -1000,114 +1007,12 @@ async function prefetchWritingReports(token) {
   }
 }
 
-function ensureStylesheetLoaded(href) {
-  if ([...document.styleSheets].some((sheet) => sheet.href === href)) return Promise.resolve();
-  if ([...document.querySelectorAll('link[rel="stylesheet"]')].some((link) => link.href === href)) return Promise.resolve();
-  return new Promise((resolve) => {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = href;
-    link.onload = resolve;
-    link.onerror = resolve;
-    document.head.appendChild(link);
-  });
-}
-
-function ensureScriptLoaded(src, globalName) {
-  if (globalName && window[globalName]) return Promise.resolve(window[globalName]);
-  if (dynamicScriptPromises[src]) return dynamicScriptPromises[src];
-  dynamicScriptPromises[src] = new Promise((resolve, reject) => {
-    const done = () => {
-      window.clearTimeout(timer);
-      if (!globalName || window[globalName]) resolve(window[globalName]);
-      else reject(new Error(`Script loaded without ${globalName}`));
-    };
-    const fail = () => {
-      window.clearTimeout(timer);
-      delete dynamicScriptPromises[src];
-      reject(new Error(`Failed to load ${src}`));
-    };
-    const timer = window.setTimeout(() => {
-      delete dynamicScriptPromises[src];
-      reject(new Error(`Timed out loading ${src}`));
-    }, 8000);
-    const existing = [...document.scripts].find((script) => script.src === src);
-    if (existing) {
-      existing.addEventListener("load", done, { once: true });
-      existing.addEventListener("error", fail, { once: true });
-      if (!globalName || window[globalName]) done();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.onload = done;
-    script.onerror = fail;
-    document.body.appendChild(script);
-  });
-  return dynamicScriptPromises[src];
-}
-
-async function ensureVditorLoaded() {
-  ensureStylesheetLoaded(VDITOR_CSS_URL);
-  await ensureScriptLoaded(VDITOR_SCRIPT_URL, "Vditor");
-}
-
-function warmCorpusMarkdownEditor() {
-  if (state.prefetch.corpusEditorWarmed) return Promise.resolve();
-  if (state.prefetch.corpusEditorWarmPromise) return state.prefetch.corpusEditorWarmPromise;
-  state.prefetch.corpusEditorWarmPromise = ensureVditorLoaded().then(() => new Promise((resolve) => {
-    const host = document.createElement("div");
-    host.className = "editor-prewarm-host";
-    document.body.appendChild(host);
-    let editor;
-    let settled = false;
-    const cleanup = () => {
-      if (settled) return;
-      settled = true;
-      window.setTimeout(() => {
-        try {
-          editor?.destroy?.();
-        } catch (_error) {
-          // Best effort; this hidden editor only warms Vditor internals.
-        }
-        host.remove();
-        state.prefetch.corpusEditorWarmed = true;
-        state.prefetch.corpusEditorWarmPromise = null;
-        resolve();
-      }, 0);
-    };
-    try {
-      editor = new Vditor(host, {
-        value: "",
-        mode: "ir",
-        height: 120,
-        cache: { enable: false },
-        toolbar: [],
-        after: cleanup,
-      });
-      window.setTimeout(cleanup, 1800);
-    } catch (_error) {
-      cleanup();
-    }
-  })).catch(() => {
-    state.prefetch.corpusEditorWarmPromise = null;
-  });
-  return state.prefetch.corpusEditorWarmPromise;
-}
-
 async function prefetchCorpusEditor(token) {
-  await warmCorpusMarkdownEditor();
-  if (!prefetchCanApply(token)) return;
-  state.prefetch.corpusEditorWarmed = true;
+  return corpusMarkdownEditorController.prefetchCorpusEditor(token);
 }
 
 function ensureCorpusMarkdownEditorReady(textareaId) {
-  const existing = corpusMarkdownEditors[textareaId];
-  if (existing) return Promise.resolve(existing);
-  return ensureVditorLoaded()
-    .then(() => ensureCorpusMarkdownEditor(textareaId))
-    .catch(() => null);
+  return corpusMarkdownEditorController.ensureCorpusMarkdownEditorReady(textareaId);
 }
 
 function guestVisibleView(view) {
@@ -6375,50 +6280,19 @@ function upsertP1CorpusEntry(...args) {
 }
 
 function getCorpusMarkdownValue(textareaId) {
-  const editor = corpusMarkdownEditors[textareaId];
-  if (editor?._corpusReady) return editor.getValue();
-  return $(textareaId)?.value || "";
+  return corpusMarkdownEditorController.getCorpusMarkdownValue(textareaId);
 }
 
 function isCorpusEditorReady(textareaId) {
-  const editor = corpusMarkdownEditors[textareaId];
-  return !editor || !!editor._corpusReady;
+  return corpusMarkdownEditorController.isCorpusEditorReady(textareaId);
 }
 
 function setCorpusEditorLoading(textareaId, isLoading) {
-  const textarea = $(textareaId);
-  if (!textarea) return;
-  const loadingId = `${textareaId}Loading`;
-  let loading = document.getElementById(loadingId);
-  if (isLoading && !loading) {
-    loading = document.createElement("div");
-    loading.id = loadingId;
-    loading.className = "corpus-editor-loading";
-    loading.innerHTML = `
-      <div>
-        <span class="spinner"></span>
-        <div>
-          <strong>正在打开编辑器</strong>
-          <span>首次加载 Markdown 编辑器需要几秒。</span>
-        </div>
-      </div>
-    `;
-    textarea.insertAdjacentElement("afterend", loading);
-  }
-  loading?.classList.toggle("hidden", !isLoading);
+  return corpusMarkdownEditorController.setCorpusEditorLoading(textareaId, isLoading);
 }
 
 function setCorpusMarkdownValue(textareaId, value) {
-  const textarea = $(textareaId);
-  if (textarea) textarea.value = value || "";
-  const editor = ensureCorpusMarkdownEditor(textareaId);
-  if (editor) {
-    if (editor._corpusReady) {
-      editor.setValue(value || "", true);
-    } else {
-      editor._pendingCorpusValue = value || "";
-    }
-  }
+  return corpusMarkdownEditorController.setCorpusMarkdownValue(textareaId, value);
 }
 
 function sendKeepaliveJson(...args) {
@@ -6427,53 +6301,6 @@ function sendKeepaliveJson(...args) {
 
 function autosaveOpenCorpusEditors(...args) {
   return corpusTakeawayController.autosaveOpenCorpusEditors(...args);
-}
-
-function ensureCorpusMarkdownEditor(textareaId) {
-  if (corpusMarkdownEditors[textareaId]) return corpusMarkdownEditors[textareaId];
-  const textarea = $(textareaId);
-  if (!textarea || !window.Vditor) return null;
-  const mount = document.createElement("div");
-  mount.className = "corpus-live-editor";
-  textarea.classList.add("hidden");
-  textarea.insertAdjacentElement("afterend", mount);
-  let editor;
-  editor = new Vditor(mount, {
-    value: textarea.value || "",
-    mode: "ir",
-    height: "100%",
-    cache: { enable: false },
-    counter: { enable: false },
-    typewriterMode: false,
-    toolbarConfig: { pin: true },
-    toolbar: [
-      "headings",
-      "bold",
-      "italic",
-      "strike",
-      "|",
-      "quote",
-      "list",
-      "ordered-list",
-      "|",
-      "link",
-    ],
-    input(value) {
-      textarea.value = value || "";
-    },
-    after() {
-      editor._corpusReady = true;
-      setCorpusEditorLoading(textareaId, false);
-      if (editor._pendingCorpusValue !== undefined) {
-        editor.setValue(editor._pendingCorpusValue || "", true);
-        textarea.value = editor._pendingCorpusValue || "";
-        delete editor._pendingCorpusValue;
-      }
-    },
-  });
-  editor._corpusReady = false;
-  corpusMarkdownEditors[textareaId] = editor;
-  return editor;
 }
 
 async function openP1CorpusLibrary(...args) {
