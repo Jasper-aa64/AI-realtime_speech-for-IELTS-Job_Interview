@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 77
+- **Total Sessions**: 78
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~729 | Active |
+| `journal-2.md` | ~762 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 78 | 2026-05-30 | Fix second fixed examiner TTS playback stutter | `bd5b8eb` | `main` |
 | 77 | 2026-05-30 | Fix dynamic speaking TTS playback stalls | `c527035` | `main` |
 | 76 | 2026-05-30 | Add refactoring completion report | - | `main` |
 | 75 | 2026-05-30 | Consolidate remaining WIP lines | `3380bd7`, `a46c05d`, `4221e82` | `main` |

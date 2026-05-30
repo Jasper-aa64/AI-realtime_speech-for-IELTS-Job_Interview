@@ -727,3 +727,36 @@ Deduped pending examiner TTS refreshes per attempt/turn, reused the same preload
 ### Next Steps
 
 - None - task complete
+
+
+## Session 78: Fix second fixed examiner TTS playback stutter
+
+**Date**: 2026-05-30
+**Task**: Fix second fixed examiner TTS playback stutter
+**Branch**: `main`
+
+### Summary
+
+Stopped ordinary examiner phase resets from pausing every preloaded examiner audio object. This keeps the next fixed examiner prompt buffered while preserving full cache cleanup on practice exit/reset.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bd5b8eb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
