@@ -329,3 +329,36 @@ Extracted low-level speaking TTS fallback, VolcEngine synthesis, cache URL looku
 ### Next Steps
 
 - None - task complete
+
+
+## Session 66: Tighten legacy server retirement boundary
+
+**Date**: 2026-05-30
+**Task**: Tighten legacy server retirement boundary
+**Branch**: `main`
+
+### Summary
+
+Documented the frozen legacy server archive boundary and strengthened scripts/validate_legacy_server_retirement.py to verify the retirement doc, startup guard, Django backend import isolation, Django URL surface, Windows launcher, and accidental legacy startup blocking.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5543f1e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
