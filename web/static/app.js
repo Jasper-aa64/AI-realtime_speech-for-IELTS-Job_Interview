@@ -95,6 +95,10 @@ const state = {
   examinerPlaybackSamples: [],
   examinerPlaybackSampleTimer: null,
   examinerPlaybackTimelineReports: [],
+  examinerSignalSamples: [],
+  examinerSignalSampleTimer: null,
+  examinerSignalReports: [],
+  examinerSignalContext: null,
   writing: {
     taskType: "task1_academic",
     prompts: {},
@@ -1986,103 +1990,35 @@ function attachExaminerAudioTelemetry(audio, role = "unknown", url = "") {
   telemetry.url = url || telemetry.url || audio.currentSrc || audio.src || "";
 }
 
+const examinerAudioDiagnostics = window.IELTSExaminerAudioDiagnostics?.createExaminerAudioDiagnostics?.({
+  state,
+  $,
+  audioSnapshot,
+  traceExaminerAudio,
+  diagnosticsEnabled: examinerAudioDiagnosticsEnabled,
+});
+if (!examinerAudioDiagnostics) {
+  throw new Error("IELTSExaminerAudioDiagnostics module failed to initialize.");
+}
+
 function exposeExaminerAudioDiagnostics() {
-  window.__ieltsExaminerAudio = {
-    events: () => [...state.examinerAudioDiagnostics],
-    clear: () => {
-      state.examinerAudioDiagnostics = [];
-    },
-    enable: () => {
-      localStorage.setItem("ielts-examiner-audio-debug", "1");
-    },
-    disable: () => {
-      localStorage.removeItem("ielts-examiner-audio-debug");
-    },
-    preloads: () => [...state.examinerAudioBlobUrls.entries()].map(([url, item]) => ({
-      url,
-      playbackUrl: item.playbackUrl,
-      size: item.size,
-      type: item.type,
-    })),
-    timeline: () => [...state.examinerPlaybackTimelineReports],
-    samples: () => [...state.examinerPlaybackSamples],
-    active: () => ({
-      element: audioSnapshot(state.activeExaminerAudio || $("examinerAudio")),
-    }),
-  };
+  return examinerAudioDiagnostics.expose();
 }
 
 function startExaminerPlaybackSampler(audio, url) {
-  stopExaminerPlaybackSampler("restart");
-  state.examinerPlaybackSamples = [];
-  const startedAt = performance.now();
-  const pushSample = () => {
-    if (!audio) return;
-    state.examinerPlaybackSamples.push({
-      wallMs: Number((performance.now() - startedAt).toFixed(1)),
-      currentMs: Number(((Number.isFinite(audio.currentTime) ? audio.currentTime : 0) * 1000).toFixed(1)),
-      paused: !!audio.paused,
-      ended: !!audio.ended,
-      readyState: audio.readyState,
-      networkState: audio.networkState,
-    });
-    if (state.examinerPlaybackSamples.length > 600) state.examinerPlaybackSamples.shift();
-  };
-  pushSample();
-  state.examinerPlaybackSampleTimer = window.setInterval(pushSample, 50);
-  traceExaminerAudio("timeline:start", { url });
+  return examinerAudioDiagnostics.startPlaybackSampler(audio, url);
 }
 
 function stopExaminerPlaybackSampler(reason = "stopped") {
-  if (state.examinerPlaybackSampleTimer) {
-    window.clearInterval(state.examinerPlaybackSampleTimer);
-    state.examinerPlaybackSampleTimer = null;
-  }
-  const samples = state.examinerPlaybackSamples || [];
-  if (samples.length < 2) return null;
-  const report = summarizeExaminerPlaybackTimeline(samples, reason);
-  state.examinerPlaybackTimelineReports.push(report);
-  if (state.examinerPlaybackTimelineReports.length > 20) state.examinerPlaybackTimelineReports.shift();
-  traceExaminerAudio("timeline:summary", report);
-  return report;
+  return examinerAudioDiagnostics.stopPlaybackSampler(reason);
 }
 
-function summarizeExaminerPlaybackTimeline(samples, reason) {
-  const stalls = [];
-  const jumps = [];
-  for (let index = 1; index < samples.length; index += 1) {
-    const prev = samples[index - 1];
-    const next = samples[index];
-    const wallDelta = next.wallMs - prev.wallMs;
-    const audioDelta = next.currentMs - prev.currentMs;
-    if (!prev.paused && !next.paused && !next.ended && wallDelta >= 35 && audioDelta < Math.max(8, wallDelta * 0.25)) {
-      stalls.push({
-        atWallMs: next.wallMs,
-        currentMs: next.currentMs,
-        wallDelta: Number(wallDelta.toFixed(1)),
-        audioDelta: Number(audioDelta.toFixed(1)),
-        readyState: next.readyState,
-      });
-    }
-    if (audioDelta < -20 || audioDelta > wallDelta * 2.5 + 80) {
-      jumps.push({
-        atWallMs: next.wallMs,
-        fromMs: prev.currentMs,
-        toMs: next.currentMs,
-        wallDelta: Number(wallDelta.toFixed(1)),
-        audioDelta: Number(audioDelta.toFixed(1)),
-      });
-    }
-  }
-  return {
-    reason,
-    sampleCount: samples.length,
-    wallDurationMs: samples.at(-1)?.wallMs || 0,
-    audioDurationMs: samples.at(-1)?.currentMs || 0,
-    stalls: stalls.slice(0, 20),
-    jumps: jumps.slice(0, 20),
-    verdict: stalls.length || jumps.length ? "playback timeline has stalls/jumps" : "playback timeline is continuous",
-  };
+function startExaminerSignalSampler(audio, url) {
+  return examinerAudioDiagnostics.startSignalSampler(audio, url);
+}
+
+function stopExaminerSignalSampler(reason = "stopped") {
+  return examinerAudioDiagnostics.stopSignalSampler(reason);
 }
 
 function renderExaminerAudio(turn) {
@@ -2161,6 +2097,7 @@ function clearExaminerAudioPreloads() {
 
 function stopExaminerPlayback() {
   stopExaminerPlaybackSampler("stop-playback");
+  stopExaminerSignalSampler("stop-playback");
   const activeAudio = state.activeExaminerAudio;
   if (activeAudio) {
     traceExaminerAudio("playback:stop-active", { audio: audioSnapshot(activeAudio) });
@@ -2400,12 +2337,14 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
     state.activeExaminerAudio = audio;
     audio.onended = () => {
       stopExaminerPlaybackSampler("ended");
+      stopExaminerSignalSampler("ended");
       traceExaminerAudio("playback:ended-handler", { url: tts.audio_url, audio: audioSnapshot(audio) });
       if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
       if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
     };
     audio.onerror = () => {
       stopExaminerPlaybackSampler("error");
+      stopExaminerSignalSampler("error");
       traceExaminerAudio("playback:error-handler", { url: tts.audio_url, audio: audioSnapshot(audio) });
       if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
       if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
@@ -2428,8 +2367,10 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
       .then(() => {
         traceExaminerAudio("playback:play-resolved", { url: tts.audio_url, audio: audioSnapshot(audio) });
         startExaminerPlaybackSampler(audio, tts.audio_url);
+        startExaminerSignalSampler(audio, tts.audio_url);
       })
       .catch((error) => {
+        stopExaminerSignalSampler("play-rejected");
         traceExaminerAudio("playback:play-rejected", {
           url: tts.audio_url,
           error: error instanceof Error ? error.message : String(error),

@@ -15,6 +15,7 @@ urlpatterns = [
     path("writing-image-preload.js", frontend_asset, {"asset_path": "writing-image-preload.js"}, name="frontend-writing-image-preload-js"),
     path("writing-prompt-picker.js", frontend_asset, {"asset_path": "writing-prompt-picker.js"}, name="frontend-writing-prompt-picker-js"),
     path("corpus-takeaway.js", frontend_asset, {"asset_path": "corpus-takeaway.js"}, name="frontend-corpus-takeaway-js"),
+    path("examiner-audio-diagnostics.js", frontend_asset, {"asset_path": "examiner-audio-diagnostics.js"}, name="frontend-examiner-audio-diagnostics-js"),
     path("api-client.js", frontend_asset, {"asset_path": "api-client.js"}, name="frontend-api-client-js"),
     path("appearance.js", frontend_asset, {"asset_path": "appearance.js"}, name="frontend-appearance-js"),
     path("view-router.js", frontend_asset, {"asset_path": "view-router.js"}, name="frontend-view-router-js"),
