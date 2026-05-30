@@ -212,7 +212,6 @@ const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
 const WASM_AUDIO_PREPROCESS_STORAGE_KEY = "ielts-wasm-audio-preprocess";
-const REALTIME_PCM_UPLINK_QUERY_KEY = "realtime_pcm";
 const FIXED_EXAMINER_AUDIO_URLS = new Set([
   "/api/tts-audio/examiner/fixed_examiner_what_is_your_full_name.mp3",
   "/api/tts-audio/examiner/fixed_examiner_do_you_work_or_do_you_study.mp3",
@@ -717,6 +716,15 @@ const corpusMarkdownEditorController = window.IELTSCorpusMarkdownEditor?.createC
 });
 if (!corpusMarkdownEditorController) {
   throw new Error("IELTSCorpusMarkdownEditor module failed to initialize.");
+}
+
+const realtimePcmUplinkController = window.IELTSRealtimePcmUplink?.createRealtimePcmUplinkController?.({
+  state,
+  isActivePracticeSession,
+  setDictationStatus,
+});
+if (!realtimePcmUplinkController) {
+  throw new Error("IELTSRealtimePcmUplink module failed to initialize.");
 }
 
 const corpusTakeawayController = window.IELTSCorpusTakeaway?.createCorpusTakeawayController?.({
@@ -2365,165 +2373,19 @@ function resolveWasmAudioPreprocessConfig() {
   };
 }
 
-function resolveRealtimePcmUplinkConfig() {
-  const params = new URLSearchParams(window.location.search);
-  const raw = params.get(REALTIME_PCM_UPLINK_QUERY_KEY);
-  const enabled = raw !== null && ["1", "true", "on", "ws", "websocket"].includes(raw.trim().toLowerCase());
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return {
-    enabled,
-    url: `${protocol}//${window.location.host}/ws/realtime/pcm/`,
-  };
-}
-
-function recordRealtimePcmMetrics(patch = {}) {
-  state.speaking.realtimePcmMetrics = {
-    ...(state.speaking.realtimePcmMetrics || {}),
-    ...patch,
-    updatedAt: Date.now(),
-  };
-}
-
-function applyRealtimeAsrTranscript(payload = {}) {
-  const event = String(payload.event || "");
-  if (event === "asr_started") {
-    recordRealtimePcmMetrics({ asrStatus: "started", asrProvider: payload.provider || "" });
-    setDictationStatus("listening", "服务端实时转写已连接，继续直接回答。");
-    return;
-  }
-  if (event === "asr_interim") {
-    const interim = String(payload.interim || "");
-    const finalText = state.transcriptFinal || String(payload.text || "");
-    state.transcriptFinal = finalText;
-    state.transcriptInterim = interim;
-    state.transcript = [finalText, interim].filter(Boolean).join(" ").trim();
-    state.transcriptStatus = state.transcript ? "interim_fallback" : "missing";
-    recordRealtimePcmMetrics({ asrStatus: "interim", asrInterim: interim });
-    if (state.transcript) setDictationStatus("listening", "服务端实时转写正在更新。");
-    return;
-  }
-  if (event === "asr_final") {
-    const finalText = String(payload.text || payload.segment || "").trim();
-    if (finalText) {
-      state.transcriptFinal = finalText;
-      state.transcriptInterim = "";
-      state.transcript = finalText;
-      state.transcriptStatus = "captured";
-      recordRealtimePcmMetrics({ asrStatus: "final", asrTranscript: finalText });
-      setDictationStatus("captured", "服务端实时转写已捕捉到文字。");
-    }
-    return;
-  }
-  if (event === "asr_done") {
-    const transcript = String(payload.transcript || "").trim();
-    if (transcript) {
-      state.transcriptFinal = transcript;
-      state.transcriptInterim = "";
-      state.transcript = transcript;
-      state.transcriptStatus = "captured";
-      setDictationStatus("captured", "服务端实时转写已完成。");
-    }
-    recordRealtimePcmMetrics({ asrStatus: payload.ok ? "done" : "done_empty", asrTranscript: transcript });
-    return;
-  }
-  if (event === "asr_error") {
-    recordRealtimePcmMetrics({ asrStatus: "error", lastError: String(payload.error || "ASR failed") });
-    setDictationStatus("reconnecting", "服务端实时转写暂不可用，继续使用浏览器转写和批处理兜底。");
-  }
-}
-
 function stopRealtimePcmUplink(reason = "stopped") {
-  const socket = state.speaking.realtimePcmSocket;
-  state.speaking.realtimePcmSocket = null;
-  if (!socket) return;
-  recordRealtimePcmMetrics({ running: false, status: reason });
-  try {
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ event: "stop", reason }));
-    }
-  } catch {
-    // Ignore close races; the socket is diagnostic and must not block recording.
-  }
-  try {
-    socket.close(1000, reason);
-  } catch {
-    // Ignore already-closed sockets.
-  }
+  return realtimePcmUplinkController.stop(reason);
 }
 
 function startRealtimePcmUplink(sessionId = state.practiceSessionId) {
-  const config = resolveRealtimePcmUplinkConfig();
-  if (!config.enabled || !window.WebSocket) return null;
-  stopRealtimePcmUplink("restart");
-  const socket = new WebSocket(config.url);
-  socket.binaryType = "arraybuffer";
-  state.speaking.realtimePcmSocket = socket;
-  recordRealtimePcmMetrics({
-    enabled: true,
-    running: true,
-    status: "connecting",
-    url: config.url,
-    framesSent: 0,
-    bytesSent: 0,
-    framesAcked: 0,
-    bytesAcked: 0,
-    droppedFrames: 0,
-    lastError: "",
-  });
-  socket.onopen = () => {
-    if (!isActivePracticeSession(sessionId)) {
-      stopRealtimePcmUplink("inactive-session");
-      return;
-    }
-    recordRealtimePcmMetrics({ status: "open" });
-    socket.send(JSON.stringify({ event: "start", sample_rate: 16000, channels: 1 }));
-    socket.send(JSON.stringify({ event: "start_asr" }));
-  };
-  socket.onmessage = (event) => {
-    try {
-      const payload = JSON.parse(event.data || "{}");
-      if (payload.event === "pcm_ack" || payload.event === "stopped" || payload.event === "status") {
-        recordRealtimePcmMetrics({
-          status: payload.event,
-          framesAcked: Number(payload.frames || 0),
-          bytesAcked: Number(payload.bytes || 0),
-        });
-      } else if (String(payload.event || "").startsWith("asr_")) {
-        applyRealtimeAsrTranscript(payload);
-      }
-    } catch {
-      // Keep PCM uplink diagnostic-only; malformed server messages should not affect recording.
-    }
-  };
-  socket.onerror = () => {
-    recordRealtimePcmMetrics({ status: "error", lastError: "WebSocket error" });
-  };
-  socket.onclose = () => {
-    recordRealtimePcmMetrics({ running: false, status: "closed" });
-    if (state.speaking.realtimePcmSocket === socket) state.speaking.realtimePcmSocket = null;
-  };
-  return ({ pcm }) => {
-    if (!isActivePracticeSession(sessionId) || !pcm) return;
-    if (socket.readyState !== WebSocket.OPEN) {
-      recordRealtimePcmMetrics({
-        droppedFrames: Number(state.speaking.realtimePcmMetrics?.droppedFrames || 0) + 1,
-      });
-      return;
-    }
-    const bytes = pcm.byteLength || 0;
-    socket.send(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength));
-    recordRealtimePcmMetrics({
-      framesSent: Number(state.speaking.realtimePcmMetrics?.framesSent || 0) + 1,
-      bytesSent: Number(state.speaking.realtimePcmMetrics?.bytesSent || 0) + bytes,
-    });
-  };
+  return realtimePcmUplinkController.start(sessionId);
 }
 
 function exposeWasmAudioPreprocessMetrics() {
   window.__ieltsWasmAudioPreprocess = {
     enabled: () => resolveWasmAudioPreprocessConfig().enabled,
     metrics: () => ({ ...(state.speaking.audioPreprocessorMetrics || {}) }),
-    realtimePcm: () => ({ ...(state.speaking.realtimePcmMetrics || {}) }),
+    realtimePcm: () => realtimePcmUplinkController.metrics(),
     disable: () => {
       localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "off");
       stopSpeakingAudioPreprocessor("disabled");
