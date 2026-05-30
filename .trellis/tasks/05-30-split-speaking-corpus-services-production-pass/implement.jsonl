@@ -1,0 +1,5 @@
+{"type":"spec","path":".trellis/spec/backend/index.md","note":"Backend conventions."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","note":"Service split and Django-only runtime rules."}
+{"type":"code","path":"backend_django/apps/speaking/services.py","note":"Current speaking compatibility facade and extraction source."}
+{"type":"code","path":"backend_django/apps/speaking/text_utils.py","note":"Existing pure text helper split to reuse from corpus services."}
+{"type":"code","path":"backend_django/apps/speaking/README.md","note":"Speaking app architecture map to update."}

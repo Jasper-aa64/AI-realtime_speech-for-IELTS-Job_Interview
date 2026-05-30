@@ -1,0 +1,4 @@
+{"command":"cd backend_django && python3 manage.py test apps.speaking.tests -v 1","reason":"Speaking behavior contract must remain unchanged."}
+{"command":"cd backend_django && python3 manage.py check","reason":"Django system check must pass."}
+{"command":"cd backend_django && python3 manage.py makemigrations --check --dry-run","reason":"No schema change expected."}
+{"command":"python3 scripts/validate_legacy_server_retirement.py","reason":"Do not regress Django-only runtime."}

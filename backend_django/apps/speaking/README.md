@@ -6,10 +6,13 @@ facade.
 
 Current split:
 
+- `corpus_services.py`: IELTS question bank, P1/P2 corpus material, Takeaway,
+  and translation helpers.
+- `exceptions.py`: shared service exception types.
 - `text_utils.py`: pure report/model-answer/coaching text cleanup helpers.
 - `volcengine_asr.py`: ASR provider integration.
 - `services.py`: compatibility facade and orchestration for attempts, reports,
-  scoring, TTS, corpus, Takeaway, history, and training.
+  scoring, TTS, history, and training.
 
 Next safe extraction targets:
 
