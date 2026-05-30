@@ -1,0 +1,2 @@
+{"type":"command","cmd":"node --check web/static/writing-prompt-picker.js && node --check web/static/app.js","note":"Validate extracted picker module and app syntax."}
+{"type":"command","cmd":".venv-django/bin/python backend_django/manage.py check","note":"Validate Django static URL addition."}

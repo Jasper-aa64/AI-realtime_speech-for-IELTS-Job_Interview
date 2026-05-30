@@ -710,6 +710,33 @@ const {
   scheduleNearbyWritingPromptImagePreload,
 } = writingPromptImagePreloader;
 
+const writingPromptPickerController = window.IELTSWritingPromptPicker?.createWritingPromptPickerController?.({
+  state,
+  $,
+  text,
+  escapeHtml,
+  centeredLoadingHtml,
+  loadWritingPrompts,
+  writingPromptPickerTitle,
+  writingPromptDisplayTitle,
+  writingPromptMeta,
+  writingPromptSourceKey,
+  writingPromptSourceLabel,
+  writingUsablePromptsForSource,
+  resolveWritingPickerSource,
+  inferWritingCategories,
+  writingCategoryLabel,
+  setWritingSwitchState,
+  showWritingError,
+  api,
+  ensureWritingPromptImageReady,
+  setWritingPrompt,
+  eagerImageCount: WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT,
+});
+if (!writingPromptPickerController) {
+  throw new Error("IELTSWritingPromptPicker module failed to initialize.");
+}
+
 function prefetchCanApply(token) {
   return state.account.authenticated && state.prefetch.token === token;
 }
@@ -4611,179 +4638,27 @@ function renderWritingScore(entry) {
 }
 
 function openWritingPromptPicker(taskType = state.writing.taskType || "task1_academic") {
-  state.writing.pickerTaskType = taskType;
-  $("writingPromptModal")?.classList.remove("hidden");
-  document.body.classList.add("modal-open");
-  const grid = $("writingPromptGrid");
-  if (grid) {
-    grid.classList.add("is-loading");
-    grid.innerHTML = centeredLoadingHtml("正在加载写作题库", "题目和 Task 1 图表正在准备。");
-  }
-  renderWritingPromptPickerShell(taskType);
-  loadWritingPrompts(taskType)
-    .then(() => renderWritingPromptPicker())
-    .catch(renderWritingPromptPickerError);
+  writingPromptPickerController.open(taskType);
 }
 
 function closeWritingPromptPicker() {
-  $("writingPromptModal")?.classList.add("hidden");
-  document.body.classList.remove("modal-open");
-}
-
-function writingPromptChoiceHtml(prompt, active = false, index = 0) {
-  const isTask1 = prompt.task_type === "task1_academic";
-  const isCambridgePrompt = writingPromptSourceKey(prompt) === "cambridge";
-  const choiceTitle = isCambridgePrompt
-    ? writingPromptPickerTitle(prompt)
-    : writingPromptDisplayTitle(prompt);
-  const choiceMeta = isCambridgePrompt ? "" : writingPromptMeta(prompt);
-  const loadImmediately = isTask1 && index < WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT;
-  const imageLoading = loadImmediately ? "eager" : "lazy";
-  const imagePriority = loadImmediately ? "auto" : "low";
-  const imageHtml = isTask1
-    ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${prompt.image_url ? `<img src="${escapeHtml(prompt.image_url)}" alt="" loading="${imageLoading}" decoding="async" fetchpriority="${imagePriority}" onerror="this.closest('.writing-prompt-choice-image').classList.add('placeholder'); this.remove();">` : "Task 1 chart"}</span>`
-    : "";
-  return `
-    <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
-      ${imageHtml}
-      <span class="writing-prompt-choice-body">
-        <strong>${escapeHtml(choiceTitle)}</strong>
-        ${choiceMeta ? `<small class="writing-prompt-choice-subtitle">${escapeHtml(choiceMeta)}</small>` : ""}
-        <span>${escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "")}</span>
-      </span>
-    </button>
-  `;
-}
-
-function writingCatalogSlotHtml(slot) {
-  const isTask1 = slot.task_type === "task1_academic";
-  const statusText = isTask1 ? "\u5f85\u5bfc\u5165\u6388\u6743\u9898\u5e72/\u914d\u56fe" : "\u5f85\u5bfc\u5165\u6388\u6743\u9898\u5e72";
-  return `
-    <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} missing" disabled aria-disabled="true">
-      ${isTask1 ? `<span class="writing-prompt-choice-image placeholder">Task 1 chart</span>` : ""}
-      <span class="writing-prompt-choice-body">
-        <strong>${escapeHtml(slot.source_label || slot.id || "Cambridge IELTS")}</strong>
-        <small>${escapeHtml(statusText)}</small>
-        <span>${escapeHtml(isTask1 && slot.expected_image_url ? slot.expected_image_url : "Add an authorized prompt JSON file with this id to enable the slot.")}</span>
-      </span>
-    </button>
-  `;
+  writingPromptPickerController.close();
 }
 
 function renderWritingPromptPicker() {
-  const taskType = state.writing.pickerTaskType || state.writing.taskType || "task1_academic";
-  renderWritingPromptPickerShell(taskType);
-  const selectedSource = resolveWritingPickerSource(taskType);
-  renderWritingPromptSourceFilters(taskType);
-  renderWritingPromptTypeFilters(taskType);
-  const selectedCategory = state.writing.pickerCategoryFilters[taskType] || "";
-  const prompts = writingUsablePromptsForSource(taskType, selectedSource).filter((prompt) => !selectedCategory || prompt.category === selectedCategory);
-  const missingSlots = [];
-  const grid = $("writingPromptGrid");
-  if (!grid) return;
-  grid.classList.remove("is-loading");
-  if (!prompts.length && !missingSlots.length) {
-    grid.innerHTML = '<p class="muted writing-prompt-empty">\u5f53\u524d\u7b5b\u9009\u4e0b\u6ca1\u6709\u53ef\u7528\u9898\u76ee\u3002</p>';
-    return;
-  }
-  grid.innerHTML = [
-    ...prompts.map((prompt, index) => writingPromptChoiceHtml(prompt, prompt.id === state.writing.prompt?.id, index)),
-    ...missingSlots.map((slot) => writingCatalogSlotHtml(slot)),
-  ].join("");
-  grid.querySelectorAll("[data-writing-prompt-choice]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (state.writing.dirty && !window.confirm("\u5f53\u524d\u4f5c\u6587\u8fd8\u6ca1\u6709\u4fdd\u5b58\uff0c\u786e\u5b9a\u8981\u6362\u9898\u5417\uff1f")) return;
-      const prompt = prompts.find((item) => item.id === button.dataset.writingPromptChoice);
-      if (!prompt) return;
-      state.writing.taskType = prompt.task_type || taskType;
-      if (prompt.task_type === "task1_academic" && prompt.image_url) {
-        ensureWritingPromptImageReady(prompt.image_url).catch(() => null);
-      }
-      setWritingPrompt(prompt, true);
-      closeWritingPromptPicker();
-    });
-  });
-}
-
-function renderWritingPromptSourceFilters(taskType) {
-  const target = $("writingPromptSourceFilters");
-  if (!target) return;
-  const counts = {
-    cambridge: writingUsablePromptsForSource(taskType, "cambridge").length,
-    reported: writingUsablePromptsForSource(taskType, "reported").length,
-    other: writingUsablePromptsForSource(taskType, "other").length,
-  };
-  const selected = state.writing.pickerSourceFilters[taskType] || "cambridge";
-  target.innerHTML = ["cambridge", "reported", "other"].map((source) => `
-    <button type="button" class="writing-source-filter ${selected === source ? "active" : ""}" data-writing-prompt-source="${escapeHtml(source)}">
-      ${escapeHtml(writingPromptSourceLabel(source))}
-      <span>${escapeHtml(counts[source] || 0)}</span>
-    </button>
-  `).join("");
-  target.querySelectorAll("[data-writing-prompt-source]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.writing.pickerSourceFilters[taskType] = button.dataset.writingPromptSource || "cambridge";
-      state.writing.pickerCategoryFilters[taskType] = "";
-      renderWritingPromptPicker();
-    });
-  });
+  writingPromptPickerController.render();
 }
 
 function renderWritingPromptPickerError(error) {
-  const grid = $("writingPromptGrid");
-  if (grid) {
-    grid.classList.remove("is-loading");
-    grid.innerHTML = `
-      <div class="writing-prompt-load-error">
-        <strong>写作题库加载失败</strong>
-        <span>${escapeHtml(error?.message || String(error || "请稍后重试。"))}</span>
-      </div>
-    `;
-  }
-  showWritingError(error);
+  writingPromptPickerController.renderError(error);
 }
 
 function renderWritingPromptPickerShell(taskType) {
-  setWritingSwitchState(".writing-prompt-modal-toolbar .writing-task-switch", taskType);
-  document.querySelectorAll("[data-writing-picker-task]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.writingPickerTask === taskType);
-  });
-  text("writingPromptModalHint", taskType === "task1_academic"
-    ? "Task 1 \u6709\u56fe\u8868\uff1b\u5251\u96c5\u771f\u9898\u6309 20 \u5230 1 \u6392\u5217\uff0c\u4ec5\u663e\u793a\u5df2\u5bfc\u5165\u7684\u53ef\u7528\u539f\u9898\u3002"
-    : "Task 2 \u53ef\u6309\u9898\u578b\u7b5b\u9009\uff1b\u5251\u96c5\u771f\u9898\u6309 20 \u5230 1 \u6392\u5217\uff0c\u4ec5\u663e\u793a\u5df2\u5bfc\u5165\u7684\u53ef\u7528\u539f\u9898\u3002");
-}
-
-function renderWritingPromptTypeFilters(taskType) {
-  const target = $("writingPromptTypeFilters");
-  if (!target) return;
-  const selectedSource = state.writing.pickerSourceFilters[taskType] || "cambridge";
-  const categories = inferWritingCategories(writingUsablePromptsForSource(taskType, selectedSource));
-  const selected = state.writing.pickerCategoryFilters[taskType] || "";
-  target.innerHTML = [
-    `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category="">\u5168\u90e8</button>`,
-    ...categories.map((item) => `
-      <button type="button" class="writing-type-filter ${selected === item.category ? "active" : ""}" data-writing-prompt-category="${escapeHtml(item.category)}">
-        ${escapeHtml(writingCategoryLabel(item.category) || item.label)}
-        <span>${escapeHtml(item.count ?? "")}</span>
-      </button>
-    `),
-  ].join("");
-  target.querySelectorAll("[data-writing-prompt-category]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.writing.pickerCategoryFilters[taskType] = button.dataset.writingPromptCategory || "";
-      renderWritingPromptPicker();
-    });
-  });
+  writingPromptPickerController.renderShell(taskType);
 }
 
 async function chooseRandomWritingPrompt(confirmDirty = true) {
-  if (confirmDirty && state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) return;
-  const taskType = state.writing.taskType || "task1_academic";
-  const prompt = await api("/api/writing/prompts/random", {
-    task_type: taskType,
-    category: state.writing.pickerCategoryFilters[taskType] || "",
-  });
-  setWritingPrompt(prompt, true);
+  return writingPromptPickerController.chooseRandom(confirmDirty);
 }
 
 async function saveWritingEntry(keepPending = false, options = {}) {
@@ -8095,15 +7970,7 @@ function bindEvents() {
   document.querySelectorAll("[data-writing-picker-task]").forEach((button) => {
     button.addEventListener("click", async () => {
       const taskType = button.dataset.writingPickerTask || "task1_academic";
-      state.writing.pickerTaskType = taskType;
-      renderWritingPromptPickerShell(taskType);
-      const grid = $("writingPromptGrid");
-      if (grid) {
-        grid.classList.add("is-loading");
-        grid.innerHTML = centeredLoadingHtml("正在加载写作题库", "题目和 Task 1 图表正在准备。");
-      }
-      await loadWritingPrompts(taskType).catch(renderWritingPromptPickerError);
-      renderWritingPromptPicker();
+      await writingPromptPickerController.switchTask(taskType);
     });
   });
   $("writingRandomBtn")?.addEventListener("click", () => chooseRandomWritingPrompt(true).catch(showWritingError));
