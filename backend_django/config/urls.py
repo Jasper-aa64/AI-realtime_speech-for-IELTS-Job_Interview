@@ -12,6 +12,7 @@ urlpatterns = [
     path("", frontend_asset, name="frontend-index"),
     path("index.html", frontend_asset, name="frontend-index-html"),
     path("shared-ui.js", frontend_asset, {"asset_path": "shared-ui.js"}, name="frontend-shared-ui-js"),
+    path("writing-image-preload.js", frontend_asset, {"asset_path": "writing-image-preload.js"}, name="frontend-writing-image-preload-js"),
     path("api-client.js", frontend_asset, {"asset_path": "api-client.js"}, name="frontend-api-client-js"),
     path("appearance.js", frontend_asset, {"asset_path": "appearance.js"}, name="frontend-appearance-js"),
     path("view-router.js", frontend_asset, {"asset_path": "view-router.js"}, name="frontend-view-router-js"),

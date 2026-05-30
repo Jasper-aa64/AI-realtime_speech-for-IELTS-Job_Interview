@@ -692,6 +692,22 @@ function scheduleIdleTask(action, timeout = 1200) {
   }, delay);
 }
 
+const writingPromptImagePreloader = window.IELTSWritingImagePreload?.createWritingPromptImagePreloader?.({
+  state,
+  scheduleIdleTask,
+  imagePreloadLimit: WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT,
+});
+if (!writingPromptImagePreloader) {
+  throw new Error("IELTSWritingImagePreload module failed to initialize.");
+}
+const {
+  canWarmWritingPromptImages,
+  drainWritingPromptImagePreloadQueue,
+  ensureWritingPromptImageReady,
+  primeWritingPromptImage,
+  scheduleNearbyWritingPromptImagePreload,
+} = writingPromptImagePreloader;
+
 function prefetchCanApply(token) {
   return state.account.authenticated && state.prefetch.token === token;
 }
@@ -3843,123 +3859,6 @@ async function loadWritingPrompts(taskType) {
   }
   await state.writing.promptLoadingPromises[normalized];
   return state.writing.prompts[normalized];
-}
-
-function writingPromptImageUrls(prompts = []) {
-  return prompts
-    .map((prompt) => String(prompt?.image_url || "").trim())
-    .filter(Boolean);
-}
-
-function primeWritingPromptImage(url, options = {}) {
-  const imageUrl = String(url || "").trim();
-  if (!imageUrl || state.writing.promptImagePreloads.has(imageUrl)) return false;
-  state.writing.promptImagePreloads.add(imageUrl);
-  const image = new Image();
-  image.decoding = "async";
-  image.loading = options.priority === "low" ? "lazy" : "eager";
-  if ("fetchPriority" in image) image.fetchPriority = options.priority === "low" ? "low" : "high";
-  const loaded = new Promise((resolve) => {
-    image.onload = () => resolve({ url: imageUrl, ok: true });
-    image.onerror = () => resolve({ url: imageUrl, ok: false });
-  });
-  const promise = loaded.then(async (result) => {
-    if (result.ok && typeof image.decode === "function") {
-      await image.decode().catch(() => null);
-    }
-    return result;
-  });
-  state.writing.promptImagePreloadPromises.set(imageUrl, promise);
-  image.src = imageUrl;
-  return true;
-}
-
-function queueWritingPromptImages(prompts = [], options = {}) {
-  const offset = Math.max(0, Number(options.offset || 0));
-  const limit = Number.isFinite(Number(options.limit)) ? Math.max(0, Number(options.limit)) : Infinity;
-  let queued = 0;
-  for (const url of writingPromptImageUrls(prompts).slice(offset)) {
-    if (queued >= limit) break;
-    if (state.writing.promptImagePreloads.has(url) || state.writing.promptImagePreloadQueued.has(url)) continue;
-    state.writing.promptImagePreloadQueued.add(url);
-    state.writing.promptImagePreloadQueue.push(url);
-    queued += 1;
-  }
-}
-
-function writingPromptCanUseBackgroundPreload() {
-  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-  if (connection?.saveData) return false;
-  const effectiveType = String(connection?.effectiveType || "").toLowerCase();
-  return effectiveType !== "slow-2g" && effectiveType !== "2g";
-}
-
-function canWarmWritingPromptImages() {
-  return state.view === "writing" && document.visibilityState !== "hidden";
-}
-
-function scheduleNearbyWritingPromptImagePreload(prompt) {
-  if (!prompt || prompt.task_type !== "task1_academic") return;
-  if (!writingPromptCanUseBackgroundPreload()) return;
-  const prompts = state.writing.prompts.task1_academic || [];
-  if (!prompts.length) return;
-  const currentIndex = prompts.findIndex((item) => item.id === prompt.id);
-  if (currentIndex < 0) return;
-  const nearbyPrompts = prompts.slice(currentIndex + 1, currentIndex + 1 + WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT);
-  if (!nearbyPrompts.length) return;
-  const currentImageUrl = String(prompt.image_url || "").trim();
-  const preloadSource = `${prompt.id || currentIndex}:${currentImageUrl}`;
-  if (state.writing.nearbyPromptImagePreloadSource === preloadSource) {
-    if (canWarmWritingPromptImages() && state.writing.promptImagePreloadQueue.length) drainWritingPromptImagePreloadQueue();
-    return;
-  }
-  state.writing.nearbyPromptImagePreloadSource = preloadSource;
-  const preloadAfterCurrent = () => {
-    if (!canWarmWritingPromptImages()) return;
-    state.writing.promptImagePreloadQueue = [];
-    state.writing.promptImagePreloadQueued.clear();
-    queueWritingPromptImages(nearbyPrompts, { limit: WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT });
-    drainWritingPromptImagePreloadQueue();
-  };
-  const currentPromise = currentImageUrl ? state.writing.promptImagePreloadPromises.get(currentImageUrl) : null;
-  if (currentPromise) {
-    currentPromise.finally(() => scheduleIdleTask(preloadAfterCurrent, 250));
-  } else {
-    scheduleIdleTask(preloadAfterCurrent, 250);
-  }
-}
-
-function drainWritingPromptImagePreloadQueue() {
-  if (state.writing.promptImagePreloadScheduled) return;
-  if (!state.writing.promptImagePreloadQueue.length) return;
-  state.writing.promptImagePreloadScheduled = true;
-  scheduleIdleTask(() => {
-    state.writing.promptImagePreloadScheduled = false;
-    if (!canWarmWritingPromptImages()) return;
-    while (state.writing.promptImagePreloadActive < WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT && state.writing.promptImagePreloadQueue.length) {
-      const url = state.writing.promptImagePreloadQueue.shift();
-      state.writing.promptImagePreloadQueued.delete(url);
-      if (!url || state.writing.promptImagePreloads.has(url)) continue;
-      state.writing.promptImagePreloadActive += 1;
-      const started = primeWritingPromptImage(url, { priority: "low" });
-      const promise = state.writing.promptImagePreloadPromises.get(url) || Promise.resolve();
-      promise.finally(() => {
-        state.writing.promptImagePreloadActive = Math.max(0, state.writing.promptImagePreloadActive - 1);
-        drainWritingPromptImagePreloadQueue();
-      });
-      if (!started) {
-        state.writing.promptImagePreloadActive = Math.max(0, state.writing.promptImagePreloadActive - 1);
-      }
-    }
-    if (state.writing.promptImagePreloadQueue.length) drainWritingPromptImagePreloadQueue();
-  }, 250);
-}
-
-async function ensureWritingPromptImageReady(url) {
-  const imageUrl = String(url || "").trim();
-  if (!imageUrl) return;
-  primeWritingPromptImage(imageUrl);
-  await state.writing.promptImagePreloadPromises.get(imageUrl);
 }
 
 async function prefetchWritingPrompts(token) {
