@@ -20,6 +20,12 @@ from django.utils import timezone
 
 from apps.ai.models import AITask
 from apps.ai.services import create_ai_task, task_payload
+from .audio_services import (
+    MAX_AUDIO_BYTES,
+    get_turn_audio_path,
+    transcribe_turn_audio_with_server_asr,
+    upload_turn_audio,
+)
 from .corpus_services import (
     CAIYUN_COMPAT_DEVICE_ID,
     CAIYUN_COMPAT_TOKEN,
@@ -96,7 +102,6 @@ from .tts_services import (
     volcengine_tts,
 )
 from .text_utils import acceptable_coaching_markdown, clean_band7_output, clean_coaching_markdown_text, clean_markdown_text, clean_report_text, concise_coaching_markdown, ensure_grammar_correction_bullet, infer_grammar_corrections, normalize_coaching_markdown, plain_spoken_text, spoken_markdown
-from .volcengine_asr import transcribe_audio as volcengine_transcribe_audio
 
 
 # --- Codex Integration ---
@@ -1415,114 +1420,6 @@ def start_attempt(user, payload: dict[str, Any]) -> dict[str, Any]:
         **metadata,
     }
     return response
-
-
-# --- Audio Upload ---
-
-MAX_AUDIO_BYTES = 25 * 1024 * 1024
-
-
-def upload_turn_audio(user, attempt_id: str, turn_id: str, audio_file) -> dict[str, Any]:
-    """Upload audio for a speaking turn.
-
-    Args:
-        user: The authenticated user
-        attempt_id: The attempt ID
-        turn_id: The turn ID
-        audio_file: Django UploadedFile object
-
-    Returns:
-        dict with 'ok' and 'audio' keys
-
-    Raises:
-        SpeakingError: If validation fails or attempt/turn not found
-    """
-    attempt = SpeakingAttempt.objects.filter(user=user, attempt_id=attempt_id).first()
-    if not attempt:
-        raise SpeakingError("Attempt not found")
-    if attempt.status == SpeakingAttempt.Status.ABORTED:
-        raise SpeakingError("Aborted attempts cannot accept audio")
-
-    turn = SpeakingTurn.objects.filter(attempt=attempt, turn_id=turn_id).first()
-    if not turn:
-        raise SpeakingError("Turn not found")
-
-    content_type = getattr(audio_file, 'content_type', '') or ''
-    if not (content_type.startswith('audio/') or content_type == 'application/octet-stream'):
-        raise SpeakingError(f"Unsupported audio content type: {content_type}")
-
-    audio_file.seek(0, 2)
-    size = audio_file.tell()
-    audio_file.seek(0)
-
-    if size <= 0:
-        raise SpeakingError("Audio upload is empty")
-    if size > MAX_AUDIO_BYTES:
-        raise SpeakingError("Audio upload exceeds 25 MB")
-
-    import mimetypes
-    extension = mimetypes.guess_extension(content_type) or '.webm'
-    if extension == '.weba':
-        extension = '.webm'
-
-    media_root = Path(settings.MEDIA_ROOT)
-    audio_dir = media_root / 'audio'
-    audio_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = f"{attempt_id}_{turn_id}{extension}"
-    relative_path = f"audio/{filename}"
-    full_path = media_root / relative_path
-
-    with open(full_path, 'wb') as dest:
-        for chunk in audio_file.chunks():
-            dest.write(chunk)
-
-    turn.audio_path = relative_path
-    turn.metadata['audio_content_type'] = content_type
-    turn.metadata['audio_bytes'] = size
-    turn.metadata['audio_uploaded_at'] = timezone.now().isoformat()
-    turn.save(update_fields=['audio_path', 'metadata'])
-
-    return {
-        "ok": True,
-        "audio": {
-            "path": str(full_path),
-            "content_type": content_type,
-            "bytes": size,
-            "duration_seconds": None,
-            "url": f"/api/audio/{attempt_id}/{turn_id}/candidate",
-        },
-    }
-
-
-def transcribe_turn_audio_with_server_asr(turn: SpeakingTurn) -> dict[str, Any]:
-    if not turn.audio_path:
-        return {"ok": False, "status": "missing_audio", "transcript": "", "error": "No uploaded audio."}
-    audio_path = Path(settings.MEDIA_ROOT) / turn.audio_path
-    if not audio_path.exists():
-        return {"ok": False, "status": "missing_audio", "transcript": "", "error": "Uploaded audio file not found."}
-    return volcengine_transcribe_audio(audio_path)
-
-
-def get_turn_audio_path(user, attempt_id: str, turn_id: str) -> Path | None:
-    """Get the audio file path for a turn.
-
-    Args:
-        user: The authenticated user
-        attempt_id: The attempt ID
-        turn_id: The turn ID
-
-    Returns:
-        Path to audio file or None if not found
-    """
-    turn = (
-        SpeakingTurn.objects
-        .filter(attempt__user=user, attempt__attempt_id=attempt_id, turn_id=turn_id)
-        .first()
-    )
-    if not turn or not turn.audio_path:
-        return None
-    return Path(settings.MEDIA_ROOT) / turn.audio_path
 
 
 # --- Runtime completion and scoring ---

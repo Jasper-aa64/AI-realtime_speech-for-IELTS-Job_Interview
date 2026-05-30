@@ -6,6 +6,8 @@ facade.
 
 Current split:
 
+- `audio_services.py`: candidate audio upload validation, candidate audio path
+  lookup, and server-ASR handoff for uploaded turn audio.
 - `corpus_services.py`: IELTS question bank, P1/P2 corpus material, Takeaway,
   and translation helpers.
 - `exceptions.py`: shared service exception types.
