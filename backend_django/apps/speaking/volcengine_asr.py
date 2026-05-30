@@ -282,7 +282,11 @@ def _ws_headers() -> tuple[str, list[str]]:
     return ws_url, headers
 
 
-def _asr_event_from_response(response: ParsedResponse, final_segments: list[str]) -> dict[str, Any] | None:
+def _asr_event_from_response(
+    response: ParsedResponse,
+    final_segments: list[str],
+    latest_interim: list[str] | None = None,
+) -> dict[str, Any] | None:
     if response.message_type == "SERVER_ERROR":
         raise VolcengineAsrError(str((response.payload or {}).get("error") or response.code))
     if response.event != ASR_RESULT or not response.payload:
@@ -300,6 +304,8 @@ def _asr_event_from_response(response: ParsedResponse, final_segments: list[str]
             "provider": "volcengine_realtime_asr",
         }
     if interim:
+        if latest_interim is not None:
+            latest_interim[:] = [interim]
         return {
             "event": "interim",
             "text": transcript,
@@ -336,11 +342,13 @@ def stream_pcm_chunks(
     session_id = str(uuid.uuid4())
     ws = websocket.create_connection(ws_url, timeout=timeout, header=headers, host=parsed.netloc)
     final_segments: list[str] = []
+    latest_interim: list[str] = []
+    session_finished = False
 
     def recv_one() -> dict[str, Any] | None:
         raw = ws.recv()
         response = _parse_response(raw)
-        return _asr_event_from_response(response, final_segments)
+        return _asr_event_from_response(response, final_segments, latest_interim)
 
     try:
         ws.send_binary(_build_full_request(START_CONNECTION, "", {}))
@@ -362,7 +370,12 @@ def stream_pcm_chunks(
         for chunk in pcm_chunks:
             if not chunk:
                 continue
-            ws.send_binary(_build_audio_request(TASK_REQUEST, session_id, chunk))
+            try:
+                ws.send_binary(_build_audio_request(TASK_REQUEST, session_id, chunk))
+            except Exception:
+                if final_segments or latest_interim:
+                    break
+                raise
             try:
                 event = recv_one()
                 if event:
@@ -374,25 +387,66 @@ def stream_pcm_chunks(
             if chunk_delay_seconds > 0:
                 time.sleep(chunk_delay_seconds)
 
-        if hasattr(ws, "settimeout"):
+        if final_segments or latest_interim:
+            if hasattr(ws, "settimeout"):
+                try:
+                    ws.settimeout(max(0.001, receive_timeout_seconds))
+                except Exception:
+                    pass
+            drain_deadline = time.monotonic() + min(0.5, max(0.05, receive_timeout_seconds * 4))
+            while time.monotonic() < drain_deadline:
+                try:
+                    raw = ws.recv()
+                    response = _parse_response(raw)
+                    event = _asr_event_from_response(response, final_segments, latest_interim)
+                except VolcengineAsrError:
+                    break
+                except Exception:
+                    break
+                if event:
+                    yield event
+                if response.event in {USER_STOP_SPEAKING, SESSION_FINISHED, SESSION_ENDED}:
+                    break
+        else:
             try:
-                ws.settimeout(timeout)
+                ws.send_binary(_build_full_request(FINISH_SESSION, session_id, {}))
+                session_finished = True
             except Exception:
                 pass
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            try:
-                raw = ws.recv()
-            except Exception:
-                break
-            response = _parse_response(raw)
-            event = _asr_event_from_response(response, final_segments)
-            if event:
-                yield event
-            if response.event in {USER_STOP_SPEAKING, SESSION_FINISHED, SESSION_ENDED} and final_segments:
-                break
 
-        transcript = " ".join(segment for segment in final_segments if segment).strip()
+            if hasattr(ws, "settimeout"):
+                try:
+                    ws.settimeout(timeout)
+                except Exception:
+                    pass
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                try:
+                    raw = ws.recv()
+                except VolcengineAsrError:
+                    if final_segments or latest_interim:
+                        break
+                    raise
+                except Exception:
+                    break
+                try:
+                    response = _parse_response(raw)
+                except VolcengineAsrError:
+                    if final_segments or latest_interim:
+                        break
+                    raise
+                try:
+                    event = _asr_event_from_response(response, final_segments, latest_interim)
+                except VolcengineAsrError:
+                    if final_segments or latest_interim:
+                        break
+                    raise
+                if event:
+                    yield event
+                if response.event in {USER_STOP_SPEAKING, SESSION_FINISHED, SESSION_ENDED} and final_segments:
+                    break
+
+        transcript = " ".join(segment for segment in final_segments if segment).strip() or " ".join(latest_interim).strip()
         yield {
             "event": "done",
             "provider": "volcengine_realtime_asr",
@@ -401,11 +455,22 @@ def stream_pcm_chunks(
         }
     finally:
         try:
-            ws.send_binary(_build_full_request(FINISH_SESSION, session_id, {}))
+            if hasattr(ws, "settimeout"):
+                ws.settimeout(1)
+            if not session_finished:
+                ws.send_binary(_build_full_request(FINISH_SESSION, session_id, {}))
             ws.send_binary(_build_full_request(FINISH_CONNECTION, "", {}))
         except Exception:
             pass
-        ws.close()
+        try:
+            ws.close(timeout=1)
+        except TypeError:
+            try:
+                ws.close()
+            except Exception:
+                pass
+        except Exception:
+            pass
 
 
 def _convert_to_pcm(audio_path: Path) -> bytes:

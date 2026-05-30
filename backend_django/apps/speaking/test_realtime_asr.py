@@ -11,6 +11,7 @@ from .volcengine_asr import (
     ASR_RESULT,
     CONNECTION_STARTED,
     JSON_SERIALIZATION,
+    SERVER_ERROR_RESPONSE,
     SERVER_FULL_RESPONSE,
     SESSION_FINISHED,
     _header,
@@ -31,14 +32,22 @@ def _server_response(event: int, payload: dict, session_id: str = "session-1", c
     return _header(SERVER_FULL_RESPONSE, JSON_SERIALIZATION) + body + _u32(len(payload_bytes)) + payload_bytes
 
 
+def _server_error(message: str) -> bytes:
+    payload = message.encode("utf-8")
+    return _header(SERVER_ERROR_RESPONSE, JSON_SERIALIZATION) + _u32(52000042) + _u32(len(payload)) + payload
+
+
 class _FakeWebSocket:
-    def __init__(self, responses: list[bytes]):
+    def __init__(self, responses: list[bytes], fail_send_after: int | None = None):
         self.responses = list(responses)
         self.sent: list[bytes] = []
         self.closed = False
         self.timeouts: list[float | int] = []
+        self.fail_send_after = fail_send_after
 
     def send_binary(self, payload: bytes):
+        if self.fail_send_after is not None and len(self.sent) >= self.fail_send_after:
+            raise BrokenPipeError("fake broken pipe")
         self.sent.append(payload)
 
     def recv(self):
@@ -111,6 +120,80 @@ class RealtimeAsrProviderTests(TestCase):
         self.assertTrue(any(item["event"] == "final" and item["text"] == "I study software engineering." for item in events))
         self.assertEqual(events[-1]["event"], "done")
         self.assertEqual(events[-1]["transcript"], "I study software engineering.")
+        self.assertTrue(fake_ws.closed)
+
+    @override_settings(
+        VOLCENGINE_ASR_ENABLED=True,
+        VOLCENGINE_ASR_WS_URL="wss://example.invalid/realtime",
+        VOLCENGINE_ASR_APP_ID="app-id",
+        VOLCENGINE_ASR_ACCESS_KEY="access-key",
+        VOLCENGINE_ASR_APP_KEY="app-key",
+        VOLCENGINE_ASR_TIMEOUT_SECONDS=5,
+    )
+    def test_stream_pcm_chunks_uses_latest_interim_when_no_final_arrives(self):
+        fake_ws = _FakeWebSocket([
+            _server_response(CONNECTION_STARTED, {}),
+            _server_response(ASR_RESULT, {"results": [{"text": "I study software engineering", "is_interim": True}]}),
+            _server_response(SESSION_FINISHED, {}),
+        ])
+        fake_module = types.SimpleNamespace(create_connection=lambda *args, **kwargs: fake_ws)
+
+        with patch.dict("sys.modules", {"websocket": fake_module}):
+            events = list(stream_pcm_chunks([b"\x01\x02" * 160], chunk_delay_seconds=0, receive_timeout_seconds=0.001))
+
+        self.assertTrue(any(item["event"] == "interim" for item in events))
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertEqual(events[-1]["transcript"], "I study software engineering")
+        self.assertTrue(events[-1]["ok"])
+        self.assertTrue(fake_ws.closed)
+
+    @override_settings(
+        VOLCENGINE_ASR_ENABLED=True,
+        VOLCENGINE_ASR_WS_URL="wss://example.invalid/realtime",
+        VOLCENGINE_ASR_APP_ID="app-id",
+        VOLCENGINE_ASR_ACCESS_KEY="access-key",
+        VOLCENGINE_ASR_APP_KEY="app-key",
+        VOLCENGINE_ASR_TIMEOUT_SECONDS=5,
+    )
+    def test_stream_pcm_chunks_keeps_latest_interim_on_idle_timeout_error(self):
+        fake_ws = _FakeWebSocket([
+            _server_response(CONNECTION_STARTED, {}),
+            _server_response(ASR_RESULT, {"results": [{"text": "I study software engineering", "is_interim": True}]}),
+            _server_error('{"error":"sami error: codes=52000042, desc=DialogAudioIdleTimeoutError"}'),
+        ])
+        fake_module = types.SimpleNamespace(create_connection=lambda *args, **kwargs: fake_ws)
+
+        with patch.dict("sys.modules", {"websocket": fake_module}):
+            events = list(stream_pcm_chunks([b"\x01\x02" * 160], chunk_delay_seconds=0, receive_timeout_seconds=0.001))
+
+        self.assertTrue(any(item["event"] == "interim" for item in events))
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertEqual(events[-1]["transcript"], "I study software engineering")
+        self.assertTrue(events[-1]["ok"])
+        self.assertTrue(fake_ws.closed)
+
+    @override_settings(
+        VOLCENGINE_ASR_ENABLED=True,
+        VOLCENGINE_ASR_WS_URL="wss://example.invalid/realtime",
+        VOLCENGINE_ASR_APP_ID="app-id",
+        VOLCENGINE_ASR_ACCESS_KEY="access-key",
+        VOLCENGINE_ASR_APP_KEY="app-key",
+        VOLCENGINE_ASR_TIMEOUT_SECONDS=5,
+    )
+    def test_stream_pcm_chunks_keeps_latest_interim_when_socket_closes_after_partial_result(self):
+        fake_ws = _FakeWebSocket([
+            _server_response(CONNECTION_STARTED, {}),
+            _server_response(ASR_RESULT, {"results": [{"text": "I study", "is_interim": True}]}),
+        ], fail_send_after=3)
+        fake_module = types.SimpleNamespace(create_connection=lambda *args, **kwargs: fake_ws)
+
+        with patch.dict("sys.modules", {"websocket": fake_module}):
+            events = list(stream_pcm_chunks([b"\x01\x02" * 160, b"\x03\x04" * 160], chunk_delay_seconds=0, receive_timeout_seconds=0.001))
+
+        self.assertTrue(any(item["event"] == "interim" for item in events))
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertEqual(events[-1]["transcript"], "I study")
+        self.assertTrue(events[-1]["ok"])
         self.assertTrue(fake_ws.closed)
 
     @override_settings(VOLCENGINE_ASR_ENABLED=False)
