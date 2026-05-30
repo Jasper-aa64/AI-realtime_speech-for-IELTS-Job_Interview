@@ -42,28 +42,39 @@ cmake --build build --target IELTSSpeakingSimulator -j
 
 题库会在启动时扫描 `data/ielts/part1/*.json` 和 `data/ielts/part2/*.json`。新增 P1 题库 JSON 后重启程序即可加载，无需重新编译。报告写入 `reports/ielts_YYYYMMDD_HHMMSS.json`。
 
-## IELTS Web Voice App
+## IELTS Web App
 
-The Web app is a voice-first browser UI plus a lightweight Python
-standard-library backend boundary. It does not place API keys, scorer prompts,
-or local CLI commands in frontend code.
+The production web app is now served by Django from `backend_django/`, with the
+browser UI in `web/static/`. Django is the only production runtime for static
+frontend files and `/api/*` routes.
+
+The old `web/ielts_server.py` runtime is retired and frozen as a reference
+artifact. It is blocked from accidental startup unless
+`IELTS_ALLOW_LEGACY_SERVER=1` is set for explicit legacy debugging.
 
 Run locally from the repository root:
 
+```bash
+python backend_django/manage.py migrate
+python backend_django/manage.py runserver 127.0.0.1:8767 --noreload
 ```
-python3 web/ielts_server.py --host 127.0.0.1 --port 8765 --data-dir data/ielts --reports-dir reports
+
+Run the worker in a second terminal when testing queued AI tasks:
+
+```bash
+python backend_django/manage.py run_ai_worker --interval-seconds 2 --idle-interval-seconds 5
 ```
 
 Open:
 
-```
-http://127.0.0.1:8765
+```text
+http://127.0.0.1:8767
 ```
 
-The UI supports Mock Exam, Part 1, Part 2, Part 3, History, and Settings.
-Practice answers are recorded with the browser microphone using `MediaRecorder`.
-Browser dictation, when available, is used only as an automatic transcript
-source. The formal UI does not provide a typed-answer workflow.
+The UI supports Home, Mock, Part 1, Part 2, Part 3, speaking reports, daily
+writing, writing reports, corpus, and Takeaway. Practice answers are recorded
+with the browser microphone using `MediaRecorder`. Browser dictation, when
+available, is used only as an automatic transcript source.
 
 Windows auto-start:
 
@@ -117,24 +128,29 @@ configured reports directory and can be opened as a detailed report with:
 Backend JSON contracts:
 
 ```
+GET  /api/accounts/me/
+GET  /api/writing/summary
+GET  /api/writing/reports
+GET  /api/writing/prompts
+POST /api/writing/prompts/random
+POST /api/writing/entries
+GET  /api/writing/entries/{entry_id}
+POST /api/writing/entries/{entry_id}/score-task
 GET  /api/question-bank/summary
 POST /api/question-bank/sample
-POST /api/session/start
-POST /api/score
+GET  /api/training/weak-items
+GET  /api/training/replay-queue
 POST /api/attempts/start
 POST /api/attempts/{id}/turns/{turn_id}/audio
 POST /api/attempts/{id}/turns/{turn_id}/complete
 POST /api/attempts/{id}/score
-POST /api/tts
+POST /api/attempts/{id}/abort
 GET  /api/history
 GET  /api/history/{id}
+DELETE /api/history/{id}
 GET  /api/audio/{id}/{turn_id}/candidate
-GET  /api/audio/{id}/{turn_id}/examiner
-GET  /api/audio/{id}/model
-GET  /api/tts-audio/{role}/{filename}
-POST /api/p3/questions
-POST /api/p3/follow-up
-GET  /api/reports/latest
+POST /api/tts
+GET  /api/billing/wallet/
 ```
 
 By default, dynamic AI generation uses local `codex exec` with
@@ -153,17 +169,15 @@ export AZURE_SPEECH_REGION=...
 To force fallback mode:
 
 ```
-IELTS_WEB_DISABLE_CODEX=1 python3 web/ielts_server.py
-IELTS_WEB_DISABLE_VOLCENGINE_TTS=1 python3 web/ielts_server.py
+AI_PROVIDER_ENABLE_CODEX=0 python backend_django/manage.py run_ai_worker
 ```
 
 Blog/deploy notes:
 
 - Link blog readers to the hosted Web URL directly; the first screen is the
   practice experience, not a landing page.
-- Serve `web/static/` and route `/api/*` to `web/ielts_server.py` or an
-  equivalent backend process.
+- Serve the Django app. It serves `web/static/` entrypoints and owns `/api/*`.
 - Keep any future CLI/API credentials only in the backend environment. Do not
   put secrets in `web/static/`.
 - Public static hosting alone can show the UI shell, but live sampling,
-  scoring, reports, and P3 generation require the backend boundary.
+  scoring, reports, and P3 generation require the Django backend boundary.

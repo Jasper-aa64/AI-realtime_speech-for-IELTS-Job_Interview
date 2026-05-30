@@ -3,15 +3,17 @@ import hashlib
 import json
 import random
 import re
+import sqlite3
 import threading
 import uuid
 from decimal import Decimal
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import DateTimeField, Exists, F, OuterRef, Q, Subquery
+from django.db.models import DateTimeField, Exists, F, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 
@@ -20,6 +22,8 @@ from apps.ai.orchestration import AIOrchestrationError, cancel_billable_ai_task,
 from apps.ai.services import task_payload
 
 from .models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
+from .search_utils import QUERY_EXPANSION_LIMIT, QUERY_EXPANSIONS, expanded_search_terms, query_concepts as expanded_query_concepts, search_base_tokens, search_normalize, unique_terms
+from .validation import WRITING_TASK_TYPES, WritingEntryDeleted, WritingError, normalize_task_type, paragraph_guidance, validate_answer_paragraphs, word_count, writing_entry_is_scored, writing_paragraphs
 
 
 DEFAULT_WRITING_SCORE_RESERVATION_U = 1_000_000
@@ -29,7 +33,6 @@ WRITING_TASK_LABELS = {
     WritingPrompt.TaskType.TASK1_ACADEMIC: "Task 1 Academic",
     WritingPrompt.TaskType.TASK2: "Task 2",
 }
-WRITING_TASK_TYPES = set(WRITING_TASK_LABELS)
 WRITING_CATEGORY_LABELS = {
     "line_graph": "\u6298\u7ebf\u56fe",
     "bar_chart": "\u67f1\u72b6\u56fe",
@@ -46,100 +49,16 @@ WRITING_CATEGORY_LABELS = {
     "advantages_disadvantages": "\u5229\u5f0a\u7c7b",
     "two_part": "\u53cc\u95ee\u9898\u7c7b",
 }
-AGENT_SEARCH_ALIASES = {
-    "computers": "computer",
-    "children": "child",
-    "childrens": "child",
-    "childs": "child",
-    "schools": "school",
-    "teachers": "teacher",
-    "education": "study",
-    "educational": "study",
-    "learning": "study",
-    "learn": "study",
-    "important": "important",
-    "essential": "important",
-    "effective": "important",
-    "effectively": "important",
-    "charts": "graph",
-    "chart": "graph",
-    "graphs": "graph",
-}
+_agent_fts_available: bool | None = None
 
 _seed_prompt_sync_lock = threading.Lock()
 _seed_prompt_sync_done = False
 _seed_prompt_min_loaded_count = 50
-
-
-class WritingError(ValueError):
-    pass
-
-
-class WritingEntryDeleted(WritingError):
-    pass
-
-
-def writing_entry_is_scored(entry: WritingEntry) -> bool:
-    return entry.status == WritingEntry.Status.SCORED and getattr(entry, "score", None) is not None
-
-
-def normalize_task_type(value: str | None) -> str:
-    task_type = str(value or "").strip().lower()
-    aliases = {
-        "task1": WritingPrompt.TaskType.TASK1_ACADEMIC,
-        "task_1": WritingPrompt.TaskType.TASK1_ACADEMIC,
-        "task1academic": WritingPrompt.TaskType.TASK1_ACADEMIC,
-        "task 1 academic": WritingPrompt.TaskType.TASK1_ACADEMIC,
-        "task2": WritingPrompt.TaskType.TASK2,
-        "task_2": WritingPrompt.TaskType.TASK2,
-        "task 2": WritingPrompt.TaskType.TASK2,
-    }
-    task_type = aliases.get(task_type, task_type)
-    if task_type not in WRITING_TASK_TYPES:
-        raise WritingError("Unknown writing task type")
-    return task_type
-
-
-def word_count(answer: str) -> int:
-    return len(re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)?|\d+(?:\.\d+)?", answer or ""))
-
-
-def writing_paragraphs(answer: str) -> list[str]:
-    return [part.strip() for part in re.split(r"\n\s*\n+", answer or "") if part.strip()]
-
-
-def paragraph_guidance(task_type: str) -> dict[str, Any]:
-    normalized = normalize_task_type(task_type)
-    if normalized == WritingPrompt.TaskType.TASK1_ACADEMIC:
-        return {
-            "task_type": normalized,
-            "title": "Task 1 需要先分段，再进行 AI 评分",
-            "message": "你的作文现在还没有清楚分段。Task 1 评分会看信息组织和概述位置，所以请先把答案分成 3-4 段。",
-            "tips": [
-                "第 1 段：改写题目，说明图表、地图或流程图展示的内容。",
-                "第 2 段：写 Overview，总结最明显的总体趋势或关键特征，不要堆细节。",
-                "第 3-4 段：按类别、时间段或对比关系展开主要数据和细节。",
-            ],
-        }
-    return {
-        "task_type": normalized,
-        "title": "Task 2 需要先分段，再进行 AI 评分",
-        "message": "你的作文现在还没有清楚分段。Task 2 评分会看观点展开和段落组织，所以请先把答案分成清晰的 4 段左右。",
-        "tips": [
-            "第 1 段：引入题目，并给出你的立场或回应方向。",
-            "第 2-3 段：每段只讲一个中心观点，用解释和例子展开。",
-            "第 4 段：总结立场，不要加入新的大观点。",
-        ],
-    }
-
-
-def validate_answer_paragraphs(task_type: str, answer: str) -> None:
-    if len(writing_paragraphs(answer)) >= 2:
-        return
-    guidance = paragraph_guidance(task_type)
-    error = WritingError(guidance["message"])
-    error.payload = {"code": "paragraphs_required", "paragraph_guidance": guidance}
-    raise error
+_agent_prompt_snapshot_lock = threading.Lock()
+_agent_prompt_snapshot_cache: dict[str, tuple[str, str, list[WritingPrompt]]] = {}
+_agent_fts_cache_lock = threading.Lock()
+_agent_fts_cache_signature = ""
+_agent_fts_cache_conn: sqlite3.Connection | None = None
 
 
 def data_writing_dir() -> Path:
@@ -343,31 +262,30 @@ def prompt_payload(prompt: WritingPrompt, practice_status: str | None = None) ->
     } | prompt_status_payload(practice_status)
 
 
-def agent_search_normalize(value: str | None) -> str:
-    tokens = re.findall(r"[a-z0-9]+", str(value or "").lower())
-    normalized: list[str] = []
-    for token in tokens:
-        replacement = AGENT_SEARCH_ALIASES.get(token)
-        if replacement:
-            normalized.append(replacement)
-        elif len(token) > 3 and token.endswith("s"):
-            normalized.append(token[:-1])
-        else:
-            normalized.append(token)
-    return " ".join(normalized)
-
-
-def agent_search_score(query: str, prompt: WritingPrompt) -> float:
-    query_tokens = set(agent_search_normalize(query).split())
-    if not query_tokens:
-        return 0.0
-    candidate = " ".join([
+def agent_search_text(prompt: WritingPrompt) -> str:
+    cached = getattr(prompt, "_agent_search_text", None)
+    if cached is not None:
+        return cached
+    return " ".join([
         prompt.title,
         prompt_source_label(prompt),
         prompt.category,
         prompt.prompt,
     ])
-    candidate_text = agent_search_normalize(candidate)
+
+
+def search_normalized_text(prompt: WritingPrompt) -> str:
+    cached = getattr(prompt, "_search_normalized_text", None)
+    if cached is not None:
+        return cached
+    return search_normalize(agent_search_text(prompt))
+
+
+def agent_keyword_search_score(query: str, candidate: str) -> float:
+    query_tokens = set(search_base_tokens(query))
+    if not query_tokens:
+        return 0.0
+    candidate_text = search_normalize(candidate)
     candidate_tokens = set(candidate_text.split())
     if not candidate_tokens:
         return 0.0
@@ -376,6 +294,337 @@ def agent_search_score(query: str, prompt: WritingPrompt) -> float:
     phrase_bonus = 0.08 if phrase_tokens and " ".join(phrase_tokens) in candidate_text else 0.0
     size_bonus = min(0.06, len(candidate_tokens) / 900)
     return min(1.0, overlap * 0.86 + phrase_bonus + size_bonus)
+
+
+def agent_keyword_search_score_for_prompt(query: str, prompt: WritingPrompt) -> float:
+    query_tokens = set(search_base_tokens(query))
+    if not query_tokens:
+        return 0.0
+    candidate_text = search_normalized_text(prompt)
+    candidate_tokens = set(candidate_text.split())
+    if not candidate_tokens:
+        return 0.0
+    overlap = len(query_tokens & candidate_tokens) / len(query_tokens)
+    phrase_tokens = list(query_tokens)[:3]
+    phrase_bonus = 0.08 if phrase_tokens and " ".join(phrase_tokens) in candidate_text else 0.0
+    size_bonus = min(0.06, len(candidate_tokens) / 900)
+    return min(1.0, overlap * 0.86 + phrase_bonus + size_bonus)
+
+
+def agent_query_coverage_score(query_terms: list[str], candidate: str) -> float:
+    if not query_terms:
+        return 0.0
+    candidate_text = f" {search_normalize(candidate)} "
+    candidate_tokens = set(candidate_text.split())
+    if not candidate_tokens:
+        return 0.0
+    matched_terms: list[str] = []
+    for term in query_terms:
+        normalized_term = search_normalize(term)
+        if not normalized_term:
+            continue
+        if " " in normalized_term:
+            if f" {normalized_term} " in candidate_text:
+                matched_terms.append(normalized_term)
+        elif normalized_term in candidate_tokens:
+            matched_terms.append(normalized_term)
+    if not matched_terms:
+        return 0.0
+    direct_query_terms = set(search_base_tokens(" ".join(query_terms[:6]))) or set(query_terms)
+    direct_matches = len(set(matched_terms) & direct_query_terms)
+    expanded_coverage = len(set(matched_terms)) / max(len(set(query_terms)), 1)
+    direct_coverage = direct_matches / max(len(direct_query_terms), 1)
+    return min(1.0, direct_coverage * 0.62 + expanded_coverage * 0.38)
+
+
+def agent_query_coverage_score_for_prompt(query_terms: list[str], prompt: WritingPrompt) -> float:
+    if not query_terms:
+        return 0.0
+    candidate_text = f" {search_normalized_text(prompt)} "
+    candidate_tokens = set(candidate_text.split())
+    if not candidate_tokens:
+        return 0.0
+    matched_terms: list[str] = []
+    for term in query_terms:
+        normalized_term = search_normalize(term)
+        if not normalized_term:
+            continue
+        if " " in normalized_term:
+            if f" {normalized_term} " in candidate_text:
+                matched_terms.append(normalized_term)
+        elif normalized_term in candidate_tokens:
+            matched_terms.append(normalized_term)
+    if not matched_terms:
+        return 0.0
+    direct_query_terms = set(search_base_tokens(" ".join(query_terms[:6]))) or set(query_terms)
+    direct_matches = len(set(matched_terms) & direct_query_terms)
+    expanded_coverage = len(set(matched_terms)) / max(len(set(query_terms)), 1)
+    direct_coverage = direct_matches / max(len(direct_query_terms), 1)
+    return min(1.0, direct_coverage * 0.62 + expanded_coverage * 0.38)
+
+
+def agent_fuzzy_search_score(query: str, candidate: str) -> float:
+    query_text = search_normalize(query)
+    candidate_text = search_normalize(candidate)
+    if not query_text or not candidate_text:
+        return 0.0
+    window = candidate_text[: max(280, len(query_text) * 8)]
+    return SequenceMatcher(None, query_text, window).ratio()
+
+
+def agent_fuzzy_search_score_for_prompt(query: str, prompt: WritingPrompt) -> float:
+    query_text = search_normalize(query)
+    candidate_text = search_normalized_text(prompt)
+    if not query_text or not candidate_text:
+        return 0.0
+    window = candidate_text[: max(280, len(query_text) * 8)]
+    return SequenceMatcher(None, query_text, window).ratio()
+
+
+def agent_match_evidence(query_terms: list[str], candidate: str, limit: int = 8) -> list[str]:
+    candidate_text = f" {search_normalize(candidate)} "
+    candidate_tokens = set(candidate_text.split())
+    matches: list[str] = []
+    for term in query_terms:
+        normalized_term = search_normalize(term)
+        if not normalized_term:
+            continue
+        if (" " in normalized_term and f" {normalized_term} " in candidate_text) or normalized_term in candidate_tokens:
+            matches.append(normalized_term)
+    return unique_terms(matches, limit)
+
+
+def agent_prompt_match_evidence(query_terms: list[str], prompt: WritingPrompt, limit: int = 8) -> list[str]:
+    candidate_text = f" {search_normalized_text(prompt)} "
+    candidate_tokens = set(candidate_text.split())
+    matches: list[str] = []
+    for term in query_terms:
+        normalized_term = search_normalize(term)
+        if not normalized_term:
+            continue
+        if (" " in normalized_term and f" {normalized_term} " in candidate_text) or normalized_term in candidate_tokens:
+            matches.append(normalized_term)
+    return unique_terms(matches, limit)
+
+
+def agent_candidate_concept_matches(concepts: list[str], candidate: str) -> list[str]:
+    if not concepts:
+        return []
+    candidate_text = f" {search_normalize(candidate)} "
+    candidate_tokens = set(candidate_text.split())
+    matched_concepts: list[str] = []
+    for concept in concepts:
+        for term in QUERY_EXPANSIONS.get(concept, []):
+            if re.search(r"[\u4e00-\u9fff]", term):
+                continue
+            normalized_term = search_normalize(term)
+            if not normalized_term:
+                continue
+            if (" " in normalized_term and f" {normalized_term} " in candidate_text) or normalized_term in candidate_tokens:
+                matched_concepts.append(concept)
+                break
+    return matched_concepts
+
+
+def agent_prompt_concept_matches(concepts: list[str], prompt: WritingPrompt) -> list[str]:
+    if not concepts:
+        return []
+    candidate_text = f" {search_normalized_text(prompt)} "
+    candidate_tokens = set(candidate_text.split())
+    matched_concepts: list[str] = []
+    for concept in concepts:
+        for term in QUERY_EXPANSIONS.get(concept, []):
+            if re.search(r"[\u4e00-\u9fff]", term):
+                continue
+            normalized_term = search_normalize(term)
+            if not normalized_term:
+                continue
+            if (" " in normalized_term and f" {normalized_term} " in candidate_text) or normalized_term in candidate_tokens:
+                matched_concepts.append(concept)
+                break
+    return matched_concepts
+
+
+def agent_source_match_score(query: str, prompt: WritingPrompt) -> float:
+    query_text = str(query or "").lower()
+    source_label = prompt_source_label(prompt).lower()
+    prompt_id = prompt.prompt_id.lower()
+    if source_label and source_label in query_text:
+        return 1.0
+    if prompt_id and prompt_id in query_text:
+        return 1.0
+    cambridge_match = re.search(r"(?:cambridge|剑雅)\s*(\d+)\D+(?:test\s*)?(\d+)", query_text)
+    if cambridge_match and prompt.source_book and prompt.source_test:
+        book, test = (int(cambridge_match.group(1)), int(cambridge_match.group(2)))
+        if book == prompt.source_book and test == prompt.source_test:
+            return 1.0
+    cambridge_book_match = re.search(r"(?:cambridge|剑雅)\s*(\d+)", query_text)
+    if cambridge_book_match and prompt.source_book:
+        if int(cambridge_book_match.group(1)) == prompt.source_book:
+            return 0.32
+    return 0.0
+
+
+def agent_fts_available() -> bool:
+    global _agent_fts_available
+    if _agent_fts_available is not None:
+        return _agent_fts_available
+    try:
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE VIRTUAL TABLE prompt_fts USING fts5(prompt_id UNINDEXED, body, tokenize='unicode61')")
+    except sqlite3.Error:
+        _agent_fts_available = False
+    else:
+        _agent_fts_available = True
+        conn.close()
+    return _agent_fts_available
+
+
+def agent_prompt_index_signature(prompts: list[WritingPrompt]) -> str:
+    digest = hashlib.sha1()
+    for prompt in sorted(prompts, key=lambda item: item.prompt_id):
+        updated_at = prompt.updated_at.isoformat() if getattr(prompt, "updated_at", None) else ""
+        digest.update(f"{prompt.prompt_id}:{updated_at}:{prompt.is_active}\n".encode("utf-8"))
+    return digest.hexdigest()
+
+
+def agent_fts_match_query(query_terms: list[str]) -> str:
+    fts_terms: list[str] = []
+    for term in query_terms:
+        for token in search_base_tokens(term):
+            if len(token) >= 2 and not token.isdigit():
+                fts_terms.append(f'"{token}"')
+    return " OR ".join(unique_terms(fts_terms, limit=32))
+
+
+def agent_fts_connection(prompts: list[WritingPrompt], index_signature: str | None = None) -> sqlite3.Connection | None:
+    global _agent_fts_cache_conn, _agent_fts_cache_signature
+    if not prompts or not agent_fts_available():
+        return None
+    signature = index_signature or agent_prompt_index_signature(prompts)
+    with _agent_fts_cache_lock:
+        if _agent_fts_cache_conn is not None and _agent_fts_cache_signature == signature:
+            return _agent_fts_cache_conn
+        if _agent_fts_cache_conn is not None:
+            _agent_fts_cache_conn.close()
+        conn = sqlite3.connect(":memory:", check_same_thread=False)
+        conn.execute("CREATE VIRTUAL TABLE prompt_fts USING fts5(prompt_id UNINDEXED, body, tokenize='unicode61')")
+        conn.executemany(
+            "INSERT INTO prompt_fts(prompt_id, body) VALUES (?, ?)",
+            [(prompt.prompt_id, f"{agent_search_text(prompt)} {search_normalized_text(prompt)}") for prompt in prompts],
+        )
+        _agent_fts_cache_conn = conn
+        _agent_fts_cache_signature = signature
+        return conn
+
+
+def agent_fts_candidate_ranks(prompts: list[WritingPrompt], query_terms: list[str], limit: int = 80, index_signature: str | None = None) -> dict[str, float]:
+    if not prompts or not query_terms:
+        return {}
+    match_query = agent_fts_match_query(query_terms)
+    if not match_query:
+        return {}
+    conn = agent_fts_connection(prompts, index_signature)
+    if conn is None:
+        return {}
+    try:
+        with _agent_fts_cache_lock:
+            rows = conn.execute(
+                "SELECT prompt_id, bm25(prompt_fts, 0.8, 1.0) AS rank FROM prompt_fts WHERE prompt_fts MATCH ? ORDER BY rank LIMIT ?",
+                (match_query, limit),
+            ).fetchall()
+    except sqlite3.Error:
+        return {}
+    if not rows:
+        return {}
+    best = min(float(row[1]) for row in rows)
+    worst = max(float(row[1]) for row in rows)
+    span = max(worst - best, 0.000001)
+    return {str(prompt_id): 1.0 - ((float(rank) - best) / span) for prompt_id, rank in rows}
+
+
+def agent_source_candidate_ids(query: str, prompts: list[WritingPrompt]) -> set[str]:
+    query_text = str(query or "").lower()
+    if not query_text:
+        return set()
+    prompt_id_terms = set(re.findall(r"[a-z0-9][a-z0-9_-]{5,}", query_text))
+    source_ids: set[str] = set()
+    cambridge_match = re.search(r"(?:cambridge|剑雅)\s*(\d+)\D+(?:test\s*)?(\d+)", query_text)
+    cambridge_book_match = re.search(r"(?:cambridge|剑雅)\s*(\d+)", query_text)
+    for prompt in prompts:
+        prompt_id = prompt.prompt_id.lower()
+        source_label = prompt_source_label(prompt).lower()
+        if prompt_id in query_text or prompt_id in prompt_id_terms or (source_label and source_label in query_text):
+            source_ids.add(prompt.prompt_id)
+            continue
+        if cambridge_match and prompt.source_book and prompt.source_test:
+            book, test = (int(cambridge_match.group(1)), int(cambridge_match.group(2)))
+            if book == prompt.source_book and test == prompt.source_test:
+                source_ids.add(prompt.prompt_id)
+                continue
+        if cambridge_book_match and prompt.source_book:
+            if int(cambridge_book_match.group(1)) == prompt.source_book:
+                source_ids.add(prompt.prompt_id)
+    return source_ids
+
+
+def agent_search_score_details(
+    query: str,
+    prompt: WritingPrompt,
+    query_terms: list[str] | None = None,
+    fts_score: float = 0.0,
+    query_concepts: list[str] | None = None,
+) -> dict[str, float | str | list[str]]:
+    candidate = agent_search_text(prompt)
+    keyword_score = agent_keyword_search_score_for_prompt(query, prompt)
+    expanded_terms = query_terms or expanded_search_terms(query)
+    concepts = query_concepts if query_concepts is not None else expanded_query_concepts(query)
+    matched_concepts = agent_prompt_concept_matches(concepts, prompt)
+    concept_score = len(set(matched_concepts)) / max(len(set(concepts)), 1) if concepts else 0.0
+    if (
+        any(term.isdigit() for term in expanded_terms)
+        and any(not term.isdigit() for term in expanded_terms)
+        and keyword_score > 0.18
+        and agent_prompt_match_evidence([term for term in expanded_terms if not term.isdigit()], prompt, limit=1) == []
+    ):
+        keyword_score = min(keyword_score, 0.18)
+    semantic_score = agent_query_coverage_score_for_prompt(expanded_terms, prompt)
+    source_score = agent_source_match_score(query, prompt)
+    if len(concepts) >= 2 and concept_score < 0.66 and source_score < 0.95:
+        fts_score = min(fts_score, 0.22)
+        semantic_score = min(semantic_score, 0.24)
+        keyword_score = min(keyword_score, 0.24)
+    fuzzy_score = 0.0
+    if max(fts_score, semantic_score, keyword_score, source_score) > 0.05:
+        fuzzy_score = agent_fuzzy_search_score_for_prompt(query, prompt)
+    hybrid_score = min(1.0, fts_score * 0.3 + semantic_score * 0.26 + keyword_score * 0.18 + concept_score * 0.16 + fuzzy_score * 0.06 + source_score * 0.04)
+    score = max(keyword_score, semantic_score * 0.92, hybrid_score, source_score)
+    if source_score >= 0.95:
+        match_type = "source"
+    elif fts_score >= 0.5:
+        match_type = "bm25"
+    elif semantic_score > keyword_score + 0.08:
+        match_type = "semantic"
+    elif fuzzy_score > keyword_score + 0.15:
+        match_type = "fuzzy"
+    else:
+        match_type = "keyword"
+    return {
+        "score": score,
+        "keyword_score": keyword_score,
+        "semantic_score": semantic_score,
+        "bm25_score": fts_score,
+        "fuzzy_score": fuzzy_score,
+        "concept_score": concept_score,
+        "source_score": source_score,
+        "match_type": match_type,
+        "matched_terms": agent_prompt_match_evidence(expanded_terms, prompt),
+        "matched_concepts": matched_concepts,
+    }
+
+
+def agent_search_score(query: str, prompt: WritingPrompt) -> float:
+    return float(agent_search_score_details(query, prompt)["score"])
 
 
 def prompt_deep_link(request, prompt: WritingPrompt) -> str:
@@ -387,24 +636,70 @@ def prompt_deep_link(request, prompt: WritingPrompt) -> str:
     return request.build_absolute_uri(path)
 
 
+def agent_prompt_snapshot(task_type: str = "") -> tuple[str, list[WritingPrompt]]:
+    queryset = WritingPrompt.objects.filter(is_active=True)
+    if task_type:
+        queryset = queryset.filter(task_type=task_type)
+    aggregate = queryset.aggregate(max_updated_at=Max("updated_at"))
+    count = queryset.count()
+    max_updated_at = aggregate["max_updated_at"]
+    signature = f"{task_type}:{count}:{max_updated_at.isoformat() if max_updated_at else ''}"
+    cache_key = task_type or "__all__"
+    with _agent_prompt_snapshot_lock:
+        cached = _agent_prompt_snapshot_cache.get(cache_key)
+        if cached and cached[0] == signature:
+            return cached[1], cached[2]
+        prompts = list(queryset)
+        for prompt in prompts:
+            search_text = " ".join([
+                prompt.title,
+                prompt_source_label(prompt),
+                prompt.category,
+                prompt.prompt,
+            ])
+            setattr(prompt, "_agent_search_text", search_text)
+            setattr(prompt, "_search_normalized_text", search_normalize(search_text))
+        index_signature = agent_prompt_index_signature(prompts)
+        _agent_prompt_snapshot_cache[cache_key] = (signature, index_signature, prompts)
+        if len(_agent_prompt_snapshot_cache) > 3:
+            for key in list(_agent_prompt_snapshot_cache):
+                if key != cache_key:
+                    _agent_prompt_snapshot_cache.pop(key, None)
+        return index_signature, prompts
+
+
 def agent_find_writing_prompts(query: str, request, task_type: str | None = None, limit: int = 8) -> dict[str, Any]:
     sync_seed_prompts()
     normalized_task_type = normalize_task_type(task_type) if task_type else ""
     limit = max(1, min(int(limit or 8), 20))
-    queryset = WritingPrompt.objects.filter(is_active=True)
-    if normalized_task_type:
-        queryset = queryset.filter(task_type=normalized_task_type)
-    scored: list[tuple[float, WritingPrompt]] = []
-    for prompt in queryset:
-        score = agent_search_score(query, prompt)
-        if score > 0.12:
-            scored.append((score, prompt))
-    scored.sort(key=lambda item: (-item[0], writing_prompt_sort_key(item[1])))
+    index_signature, prompts = agent_prompt_snapshot(normalized_task_type)
+    query_terms = expanded_search_terms(query)
+    query_concept_names = expanded_query_concepts(query)
+    fts_scores = agent_fts_candidate_ranks(prompts, query_terms, index_signature=index_signature)
+    source_candidate_ids = agent_source_candidate_ids(query, prompts)
+    candidate_ids = set(fts_scores) | source_candidate_ids
+    candidate_prompts = [prompt for prompt in prompts if prompt.prompt_id in candidate_ids] if candidate_ids else prompts
+    scored: list[tuple[float, dict[str, Any], WritingPrompt]] = []
+    for prompt in candidate_prompts:
+        scores = agent_search_score_details(query, prompt, query_terms, fts_scores.get(prompt.prompt_id, 0.0), query_concept_names)
+        score = float(scores["score"])
+        if score > 0.1:
+            scored.append((score, scores, prompt))
+    scored.sort(key=lambda item: (-item[0], writing_prompt_sort_key(item[2])))
     items = []
-    for score, prompt in scored[:limit]:
+    for score, scores, prompt in scored[:limit]:
         payload = prompt_payload(prompt)
         payload.update({
             "match_score": round(score, 4),
+            "keyword_score": round(float(scores["keyword_score"]), 4),
+            "semantic_score": round(float(scores["semantic_score"]), 4),
+            "bm25_score": round(float(scores["bm25_score"]), 4),
+            "fuzzy_score": round(float(scores["fuzzy_score"]), 4),
+            "concept_score": round(float(scores["concept_score"]), 4),
+            "source_score": round(float(scores["source_score"]), 4),
+            "match_type": scores["match_type"],
+            "matched_terms": scores["matched_terms"],
+            "matched_concepts": scores["matched_concepts"],
             "url": prompt_deep_link(request, prompt),
         })
         items.append(payload)
@@ -412,16 +707,26 @@ def agent_find_writing_prompts(query: str, request, task_type: str | None = None
         "query": query,
         "task_type": normalized_task_type,
         "count": len(items),
+        "expanded_terms": query_terms[:QUERY_EXPANSION_LIMIT],
+        "query_concepts": query_concept_names,
         "items": items,
     }
 
 
 def sync_seed_prompts() -> None:
     global _seed_prompt_sync_done
-    if _seed_prompt_sync_done and WritingPrompt.objects.filter(is_active=True).count() >= _seed_prompt_min_loaded_count:
+    active_prompt_count = WritingPrompt.objects.filter(is_active=True).count()
+    if active_prompt_count >= _seed_prompt_min_loaded_count:
+        _seed_prompt_sync_done = True
+        return
+    if _seed_prompt_sync_done and active_prompt_count >= _seed_prompt_min_loaded_count:
         return
     with _seed_prompt_sync_lock:
-        if _seed_prompt_sync_done and WritingPrompt.objects.filter(is_active=True).count() >= _seed_prompt_min_loaded_count:
+        active_prompt_count = WritingPrompt.objects.filter(is_active=True).count()
+        if active_prompt_count >= _seed_prompt_min_loaded_count:
+            _seed_prompt_sync_done = True
+            return
+        if _seed_prompt_sync_done and active_prompt_count >= _seed_prompt_min_loaded_count:
             return
         _sync_seed_prompts_locked()
         _seed_prompt_sync_done = True

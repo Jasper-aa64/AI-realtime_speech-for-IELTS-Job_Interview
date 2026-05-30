@@ -19,8 +19,10 @@ from ielts_server import AppState, IELTSHandler, build_ai_coaching, build_learni
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LEGACY_SKIP_REASON = "web/ielts_server.py is frozen legacy reference; Django is the production runtime."
 
 
+@unittest.skip(LEGACY_SKIP_REASON)
 class IELTSWebServerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

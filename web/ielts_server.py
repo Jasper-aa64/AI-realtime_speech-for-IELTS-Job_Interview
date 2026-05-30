@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Voice-first web boundary for the IELTS Speaking Simulator.
+"""Frozen legacy web boundary for the IELTS Speaking Simulator.
 
 The browser receives only JSON contracts. Audio, reports, CLI integrations, and
 TTS/scoring credentials stay on the server side.
 
-DEPRECATED: This server is no longer the primary runtime backend.
-All API endpoints have been migrated to Django (backend_django/).
-This file is retained for reference and fallback purposes only.
-See backend_django/README.md for the current runtime setup.
+DEPRECATED AND RETIRED: This server is no longer a production runtime.
+All API endpoints and static frontend serving have been migrated to Django
+(`backend_django/`). This file is retained only as a frozen reference for
+historical behavior and debugging.
+
+Direct startup is blocked unless `IELTS_ALLOW_LEGACY_SERVER=1` is set.
+See `docs/LEGACY_SERVER_RETIREMENT.md` and `backend_django/README.md` for the
+current runtime setup.
 """
 
 from __future__ import annotations
@@ -44,6 +48,12 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+LEGACY_SERVER_ALLOW_ENV = "IELTS_ALLOW_LEGACY_SERVER"
+LEGACY_SERVER_RETIRED_MESSAGE = (
+    "web/ielts_server.py is retired and is no longer a production runtime. "
+    "Run Django instead: python backend_django/manage.py runserver 127.0.0.1:8767. "
+    f"Set {LEGACY_SERVER_ALLOW_ENV}=1 only for frozen legacy reference debugging."
+)
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 P1_TURN_COUNT = 10
 P1_INTRO_QUESTIONS = [
@@ -5379,6 +5389,10 @@ class IELTSHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> int:
+    if os.environ.get(LEGACY_SERVER_ALLOW_ENV) != "1":
+        print(LEGACY_SERVER_RETIRED_MESSAGE, file=sys.stderr)
+        return 78
+
     parser = argparse.ArgumentParser(description="Serve the IELTS Speaking Simulator Web app.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)

@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend conventions for speaking/writing services, AI feedback, report payloads, and production API behavior."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend conventions for SPA behavior, report rendering, and preserving mature browser flows during refactor."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer and code-reuse thinking guides for splitting monoliths without breaking API/UI contracts."}

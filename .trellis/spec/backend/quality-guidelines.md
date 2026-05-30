@@ -13,6 +13,50 @@ the boundary behavior instead of relying only on manual end-to-end runs.
 
 ## Project Conventions
 
+### Convention: Django is the only production web runtime
+
+**What**: New web/API work belongs in `backend_django/` and `web/static/`.
+`web/ielts_server.py` is a frozen legacy reference and must not be started by
+normal scripts, docs, tests, or public tunnels.
+
+**Why**: The product now has one production runtime. Reintroducing the retired
+server makes debugging impossible because two backends can answer similar
+routes with different behavior.
+
+**Required checks**:
+- `python scripts/validate_legacy_server_retirement.py`
+- `python backend_django/manage.py check`
+- Targeted Django tests for touched apps.
+
+**Forbidden**:
+- Do not add features to `web/ielts_server.py`.
+- Do not route `/api/*` to the retired server in docs or scripts.
+- Do not start the retired server unless explicitly debugging with
+  `IELTS_ALLOW_LEGACY_SERVER=1`.
+
+### Convention: Split pure helpers out of monolithic services
+
+**What**: Keep `apps.speaking.services` and `apps.writing.services` as
+compatibility facades, but move pure helpers and cohesive subdomains into
+smaller modules such as `text_utils.py`, `validation.py`, `search_utils.py`,
+`report_services.py`, or `runtime_services.py`.
+
+**Why**: These service files are still large orchestration facades. New helper
+logic added directly to them makes the production architecture harder to
+reason about and harder to test.
+
+**Correct**:
+```python
+from .validation import validate_answer_paragraphs
+```
+
+**Wrong**:
+```python
+# adding another unrelated pure helper into services.py
+def normalize_user_visible_text(...):
+    ...
+```
+
 ### Convention: Running AI analysis is not user-cancellable
 
 **What**: Durable AI tasks may be cancelled by the user only while `status=pending`. Once a worker claims the task and it becomes `running`, the cancel API must reject the request and the normal success/fallback/failure path must persist the result for the user record.

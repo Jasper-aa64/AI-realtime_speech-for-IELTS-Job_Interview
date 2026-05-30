@@ -26,6 +26,7 @@ from django.utils import timezone
 from apps.ai.models import AITask
 from apps.ai.services import create_ai_task, task_payload
 from .models import LanguageTakeawayEntry, P1CorpusEntry, P2CorpusEntry, SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
+from .text_utils import acceptable_coaching_markdown, clean_band7_output, clean_coaching_markdown_text, clean_markdown_text, clean_report_text, concise_coaching_markdown, ensure_grammar_correction_bullet, infer_grammar_corrections, normalize_coaching_markdown, plain_spoken_text, spoken_markdown
 from .volcengine_asr import transcribe_audio as volcengine_transcribe_audio
 
 
@@ -548,8 +549,9 @@ def score_prompt_for_part(part: str) -> str:
     if part == "p3":
         return (
             "Section type: IELTS Speaking Part 3. Score abstract discussion quality: clear opinions, reasons, examples, "
-            "comparison, speculation, and ability to extend ideas. Do not award 6.5+ for brief opinions without reasons, "
-            "examples, comparison, or abstract development."
+            "comparison, concession, speculation, and ability to extend ideas from personal examples to broader social or abstract issues. "
+            "Do not award 6.5+ for brief opinions without reasons, examples, comparison, or abstract development. "
+            "The most useful feedback should tell the learner which discussion move is missing: position, reason, example, contrast, concession, consequence, or wider implication."
         )
     return "Section type: full/mock IELTS Speaking section. Score the completed section as a whole."
 
@@ -793,6 +795,7 @@ def build_personalized_coaching(profile: dict[str, Any], attempt: SpeakingAttemp
         "task_relevance": "先把题目答准，再去追求更高阶表达",
         "answer_development": "先补答案展开，不要只停在一句点到为止",
         "lexical_variety": "先把模板化表达换掉，改成更自然的说法",
+        "abstract_discussion": "P3 先练讨论动作：原因、对比、让步和社会影响",
     }.get(str(profile.get("primary_focus") or ""), "先处理最影响分数的说话习惯")
 
     focus = profile.get("primary_focus_text", "先把答案说完整、说具体。")
@@ -804,6 +807,10 @@ def build_personalized_coaching(profile: dict[str, Any], attempt: SpeakingAttemp
         next_practice.append("把高频模板词替换成你自己的经历说法，先录 1 次再回听。")
     if "off_topic" in tags:
         next_practice.append("每次开口前先复述题目里的关键词，确认回答没有跑题。")
+    if "missing_concession" in tags:
+        next_practice.append("每个 P3 主问题都补一句让步：However, some people may think... because...")
+    if "limited_abstract_extension" in tags:
+        next_practice.append("每个 P3 答案结尾补一句 wider impact：This could affect schools / families / society because...")
     if not next_practice:
         next_practice.extend([
             "先挑一题慢速录音，再对照 Band 7 版本改一遍。",
@@ -817,218 +824,6 @@ def build_personalized_coaching(profile: dict[str, Any], attempt: SpeakingAttemp
         "next_practice": next_practice[:3],
         "habit_tags": tags[:8],
     }
-
-
-def clean_band7_output(value: str) -> str:
-    """Clean Band 7 model answer output."""
-    text = str(value or "").replace("\r\n", "\n").strip()
-    text = re.sub(r"```(?:[a-zA-Z0-9_-]+)?", "", text)
-    text = text.replace("```", "")
-
-    blocked = (
-        "trellis sessionstart",
-        "workflow",
-        "active tasks",
-        "spec index",
-        "git status",
-        "current task",
-        "session context",
-        "developer",
-        "system:",
-        "assistant:",
-        "user:",
-        "codex",
-    )
-
-    kept: list[str] = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            if kept and kept[-1]:
-                kept.append("")
-            continue
-        lowered = stripped.lower()
-        if any(marker in lowered for marker in blocked):
-            continue
-        if re.fullmatch(r"[-=*#_` ]{3,}", stripped):
-            continue
-        if stripped.startswith(("{", "}", "[", "]")):
-            continue
-        stripped = re.sub(
-            r"^\s*(?:band\s*7\s*(?:spoken\s*)?(?:version|answer)?|answer|model answer)\s*:\s*",
-            "",
-            stripped,
-            flags=re.I,
-        )
-        if stripped:
-            kept.append(stripped)
-
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
-
-
-# --- Text Processing Helpers ---
-
-
-def clean_report_text(value: str) -> str:
-    """Clean text for display in reports."""
-    text = clean_band7_output(value)
-    text = re.sub(r"\s+", " ", text).strip()
-    blocked = (
-        "trellis sessionstart",
-        "workflow-state",
-        "session context",
-        "current task",
-        "active tasks",
-        "git status",
-    )
-    lowered = text.lower()
-    if not text or any(marker in lowered for marker in blocked):
-        return ""
-    return text
-
-
-def clean_markdown_text(value: str) -> str:
-    """Clean and normalize markdown text."""
-    text = clean_band7_output(value)
-    text = re.sub(r"[ \t]+", " ", text).replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    blocked = (
-        "trellis sessionstart",
-        "workflow-state",
-        "session context",
-        "current task",
-        "active tasks",
-        "git status",
-    )
-    lowered = text.lower()
-    if not text or any(marker in lowered for marker in blocked):
-        return ""
-    return text
-
-
-def plain_spoken_text(value: str) -> str:
-    """Convert a spoken Markdown answer to plain text for TTS and legacy fields."""
-    text = clean_band7_output(value)
-    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-    text = re.sub(r"\*\*([^*\n]+?)\*\*", r"\1", text)
-    text = re.sub(r"(^|[^\*])\*([^*\n]+?)\*", r"\1\2", text)
-    text = re.sub(r"`([^`\n]+?)`", r"\1", text)
-    return clean_report_text(text)
-
-
-def clean_coaching_markdown_text(value: str) -> str:
-    """Lightly normalize AI coaching without keyword-based rejection."""
-    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
-    text = re.sub(r"```(?:[a-zA-Z0-9_-]+)?", "", text)
-    text = text.replace("```", "")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    return text
-
-
-def normalize_coaching_markdown(value: str) -> str:
-    """Normalize coaching markdown format."""
-    text = clean_coaching_markdown_text(value)
-    if not text:
-        return ""
-    text = re.sub(r"(可以直接替换成：)\s*`([^`\n]+)`", r"\1\n\2", text)
-    text = re.sub(r"(可以说：)\s*`([^`\n]+)`", r"\1\"\2\"", text)
-    text = text.replace("\n\n- ", "\n- ")
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
-
-
-def spoken_markdown(value: str, part: str = "") -> str:
-    """Format spoken text with paragraph breaks."""
-    text = clean_band7_output(value)
-    text = re.sub(r"[ \t]+", " ", text).strip()
-    if not text:
-        return ""
-    existing = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", text) if paragraph.strip()]
-    if len(existing) > 1:
-        return "\n\n".join(existing)
-    sentences = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text).strip())
-    sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
-    if not sentences:
-        return text
-    if part == "p1":
-        return "\n\n".join(sentences)
-    paragraphs = [" ".join(sentences[index:index + 2]) for index in range(0, len(sentences), 2)]
-    return "\n\n".join(paragraphs)
-
-
-def acceptable_coaching_markdown(value: str) -> bool:
-    """Validate only the product-critical coaching contract.
-
-    The AI owns the coaching structure. We only require meaningful text and a
-    grammar-correction section so the report remains predictable for learners.
-    """
-    text = clean_coaching_markdown_text(value)
-    if not text:
-        return False
-    if "语法错误纠正" not in text and "语法 & 表达纠正" not in text:
-        return False
-    lowered = text.lower()
-    leaked_system_markers = (
-        "<workflow-state",
-        "</workflow-state>",
-        "session context",
-        "tool_uses",
-        "function_call",
-        "codex exec",
-    )
-    if any(marker in lowered for marker in leaked_system_markers):
-        return False
-    return True
-
-
-def concise_coaching_markdown(value: str) -> bool:
-    """Backward-compatible alias for tests and older callers."""
-    return acceptable_coaching_markdown(value)
-
-
-def infer_grammar_corrections(transcript: str) -> list[str]:
-    """Infer grammar corrections from transcript based on common patterns."""
-    lowered = clean_report_text(transcript).lower()
-    corrections: list[str] = []
-    patterns = [
-        ("i prefer study", "`I prefer study` -> `I prefer studying ...`"),
-        ("that's efficiency", "`that's efficiency` -> `It is more efficient.`"),
-        ("as an introverted people", "`as an introverted people` -> `as an introverted person`"),
-        ("going internship", "`going internship` -> `I am doing an internship.`"),
-        ("going all an internship", "`going all an internship` -> `I am doing an internship.`"),
-        ("i live on my own current", "`I live on my own current` -> `I live on my own at the moment.`"),
-        ("temporary temporary live", "`temporary temporary live` -> `I am living here temporarily.`"),
-        ("just temporary", "`just temporary` -> `It is just temporary.`"),
-        ("major in my computer science", "`major in my computer science` -> `I study computer science.`"),
-        ("most of time", "`most of time` -> `most of my time`"),
-        ("near to the company", "`near to the company` -> `near the company` / `close to the company`"),
-        ("what i enjoyed most", "`What I enjoyed most` -> `What I enjoy most`"),
-        ("problems of the aspect", "`problems of the aspect` -> `the problem-solving aspect`"),
-    ]
-    for needle, correction in patterns:
-        if needle in lowered and correction not in corrections:
-            corrections.append(correction)
-    return corrections[:3]
-
-
-def ensure_grammar_correction_bullet(coaching: str, transcript: str) -> str:
-    """Ensure coaching ends with a grammar correction section."""
-    text = clean_coaching_markdown_text(coaching)
-    if not text:
-        return ""
-    if "语法错误纠正" in text or "语法 & 表达纠正" in text:
-        return text
-    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
-    corrections = infer_grammar_corrections(transcript)
-    if lines:
-        lines.append("")
-    if not corrections:
-        lines.append("语法错误纠正：无")
-    else:
-        lines.append("语法错误纠正：")
-        lines.extend(f"{index}. {correction}" for index, correction in enumerate(corrections, start=1))
-    return "\n".join(lines).strip()
 
 
 # --- Model Answer Helpers ---
@@ -2003,23 +1798,23 @@ DEFAULT_ENGLISH_NAME = "Jasper"
 
 P3_FOCUS_OPTIONS: dict[str, dict[str, str]] = {
     "abstract_discussion": {
-        "label": "Abstract discussion",
+        "label": "抽象讨论",
         "description": "Move from personal experience to broader social ideas.",
     },
     "cause_effect": {
-        "label": "Causes and effects",
+        "label": "原因影响",
         "description": "Explain reasons, consequences, and priorities.",
     },
     "comparison_concession": {
-        "label": "Comparison and concession",
+        "label": "对比让步",
         "description": "Compare groups and add a balanced opposing view.",
     },
     "future_trends": {
-        "label": "Future trends",
+        "label": "未来趋势",
         "description": "Predict changes and explain why they may happen.",
     },
     "policy_society": {
-        "label": "Policy and society",
+        "label": "社会政策",
         "description": "Discuss responsibility, rules, and public impact.",
     },
 }
@@ -2033,16 +1828,16 @@ P3_QUESTION_TYPES = [
 ]
 
 P3_TYPE_TARGET_MOVES: dict[str, list[str]] = {
-    "opinion_justify": ["clear position", "reason", "brief contrast"],
-    "change_trend": ["past-present comparison", "cause", "consequence"],
-    "future_prediction": ["prediction", "condition", "long-term impact"],
-    "problem_solution": ["problem", "example", "practical response"],
-    "policy_responsibility": ["stakeholder", "responsibility", "balanced view"],
-    "comparison_concession": ["compare groups", "concession", "specific example"],
-    "abstract_discussion": ["generalize", "define the issue", "social impact"],
-    "cause_effect": ["main cause", "effect", "priority"],
-    "future_trends": ["future change", "driver", "risk or benefit"],
-    "policy_society": ["public role", "individual role", "trade-off"],
+    "opinion_justify": ["先给明确立场", "解释原因", "补一个反方角度"],
+    "change_trend": ["过去/现在对比", "指出原因", "说明影响"],
+    "future_prediction": ["给出预测", "补充条件", "长期影响"],
+    "problem_solution": ["指出问题", "给具体例子", "给现实方案"],
+    "policy_responsibility": ["点出相关群体", "讨论责任", "平衡观点"],
+    "comparison_concession": ["比较不同群体", "承认反方合理性", "具体例子支撑"],
+    "abstract_discussion": ["上升到一般现象", "界定问题", "社会层面影响"],
+    "cause_effect": ["主因", "结果影响", "判断优先级"],
+    "future_trends": ["未来变化", "变化驱动因素", "风险/好处"],
+    "policy_society": ["公共角色", "个人角色", "权衡利弊"],
 }
 
 P1_INTRO_QUESTIONS: list[dict[str, Any]] = [
@@ -3461,6 +3256,7 @@ Overall Review 写法要求：
 - 可以稍长，不要限制内容，让建议充分展开
 - 必须结合学习画像进行个性化点评
 - 不要输出类似“回答基本相关，但展开偏短”这种过短 fallback 文案
+- 如果练习部分是 p3，必须围绕 Part 3 的抽象讨论能力复盘：观点是否明确、原因链是否完整、是否有对比/让步、是否能从个人例子上升到社会层面、追问是否承接新角度；复盘重点要给出可直接练的 discussion move 和示范句。
 
 本次成绩会由你在同一个 JSON 中给出。
 练习部分：{part}
@@ -3702,10 +3498,15 @@ def build_p3_discussion_skills(attempt: SpeakingAttempt) -> dict[str, Any] | Non
     best = next((item for item in dimensions if item["status"] == "strong"), None)
     return {
         "title": "P3 Discussion Skills",
-        "summary": f"这次 P3 平均每题约 {average_words} 词，系统重点看你能不能把个人想法扩展成原因、对比、社会影响和追问承接。",
+        "summary": f"这次 P3 平均每题约 {average_words} 词。P3 的关键不是讲个人经历，而是把观点扩展成原因、对比、社会影响和追问承接。",
         "dimensions": dimensions,
         "best_moment": best["label"] if best else "回答完整度",
         "fix_next": weakest["next_action"],
+        "next_drill": [
+            "选 1 道主问题，先用一句话直接表态。",
+            "连续补两句：一个 because 原因，一个 for example / whereas 支撑。",
+            "最后加一句 wider impact：对社会、学校、家庭或年轻人意味着什么。",
+        ],
     }
 
 
@@ -3725,7 +3526,8 @@ def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_
     elif part == "p3":
         part_constraints = (
             "This is IELTS Speaking Part 3. Write a developed discussion answer, about 4-6 sentences, "
-            "with an opinion, reasoning, and one concrete example or contrast."
+            "with a clear position, reasoning, one concrete example or contrast, and a wider social implication. "
+            "Do not make it a Part 2 personal story."
         )
     else:
         part_constraints = "Write an answer appropriate to the IELTS Speaking part shown by the questions."
@@ -3802,6 +3604,20 @@ def coaching_prompt_constraints(part: str) -> str:
 **亮点**（如有）：简短肯定 1 句用得好的地方
 
 不要输出【】占位符；不要为了凑格式拆成“问题/改法”两行；根据这次回答决定立即改进点和语法表达纠正的数量。"""
+    if part == "p3":
+        return """你是 IELTS Speaking Part 3 真人教练。
+请用中文给这一次回答做简短但有帮助的口语反馈，只输出正文，不要标题。
+
+重点判断这次回答在 P3 真实考试里最影响分数的 discussion 问题：
+- 有没有直接表达观点
+- 有没有解释原因和影响
+- 有没有对比、让步或反方角度
+- 有没有从个人经历上升到更 general / social / abstract 的讨论
+- 追问是否直接回应了新角度，而不是重复主问题
+
+反馈可以自由分点，不要套固定模板，也不要限制点数。每一点都要具体指出这次回答缺了哪个讨论动作，并给一个可以马上照着说的改法或句型。
+最后保留「语法 & 表达纠正」部分；如无错误，写：无。
+不要点评大小写、标点、ASR 噪声或转写显示格式。"""
     return """请用中文给这一次回答做简短 IELTS Speaking 口语反馈，只输出正文，不要标题。
 先判断真实考试里最影响分数的问题，只讲最值得改的 1-2 点，具体、短、能马上照着改。
 最后保留「语法 & 表达纠正」部分；如无错误，写：无。"""
@@ -3998,7 +3814,7 @@ Use display_transcript as the source of truth:
 Band 7 version constraints:
 - For Part 1, write only 1-3 natural spoken sentences.
 - For Part 2, write a natural long-turn answer in Markdown paragraphs and cover the cue-card points.
-- For Part 3, write a developed discussion answer with an opinion, reasoning, and one concrete example or contrast.
+- For Part 3, write a developed discussion answer with a clear position, reasoning, one concrete example or contrast, and a wider social implication. Do not make it a Part 2 personal story.
 - Use Markdown bold inside band7_version to mark the phrases the learner should notice and reuse.
 - Bold 2-5 useful upgraded chunks per answer, such as natural collocations, idiomatic spoken links, or topic-specific phrases.
 - Do not bold the whole answer or full sentences.
@@ -4412,10 +4228,24 @@ def build_scoring_learning_profile(transcript: str, part: str) -> dict[str, Any]
         if part == "p3" and sum(word_counts) / max(1, len(word_counts)) < 55:
             tags.append("limited_development")
             evidence.append("P3 回答需要补充原因、对比和例子。")
+    if part == "p3":
+        lowered = transcript.lower()
+        if not any(token in lowered for token in ("however", "although", "whereas", "on the other hand", "while some")):
+            tags.append("missing_concession")
+            evidence.append("P3 缺少对比或让步，观点容易显得单薄。")
+        if not any(token in lowered for token in ("society", "government", "public", "community", "generation", "families", "schools")):
+            tags.append("limited_abstract_extension")
+            evidence.append("P3 还需要从个人想法上升到社会/群体层面。")
     focus = "answer_development" if any(tag in tags for tag in ("short_answer", "limited_development")) else "task_relevance"
+    if part == "p3" and any(tag in tags for tag in ("missing_concession", "limited_abstract_extension")):
+        focus = "abstract_discussion"
     return {
         "primary_focus": focus,
-        "primary_focus_text": "这次主要卡在回答展开不够，不是题目完全不会。" if focus == "answer_development" else "这次主要问题是先把回答方向答准。",
+        "primary_focus_text": (
+            "这次 P3 主要要补 discussion move：观点后面要有原因、对比/让步和社会层面的影响。"
+            if focus == "abstract_discussion"
+            else "这次主要卡在回答展开不够，不是题目完全不会。" if focus == "answer_development" else "这次主要问题是先把回答方向答准。"
+        ),
         "habit_tags": sorted(set(tags)),
         "evidence": evidence[:8],
     }
@@ -4570,6 +4400,88 @@ def mark_missing_turn_feedback_pending(turns: list[SpeakingTurn]) -> None:
         turn.save(update_fields=["metadata", "updated_at"])
 
 
+def _turn_feedback_ready(turn: SpeakingTurn) -> bool:
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    return (
+        metadata.get("feedback_generation_backend") == "codex"
+        and metadata.get("feedback_generation_status") == "ready"
+        and bool(clean_report_text(metadata.get("band7_version") or metadata.get("band7_markdown") or ""))
+    )
+
+
+def _mark_turn_feedback_failed(turns: list[SpeakingTurn], exc: Exception) -> None:
+    error = str(exc or "AI turn feedback generation failed")
+    for turn in turns:
+        transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+        if not transcript or is_p1_name_intro_turn(turn):
+            continue
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        metadata.update(
+            {
+                "band7_version": "",
+                "band7_markdown": "",
+                "target_band_version": "",
+                "target_band_markdown": "",
+                "model_audio": {"provider": "none", "status": "empty_text", "audio_url": None},
+                "ai_coaching": "",
+                "feedback_generation_backend": "codex",
+                "feedback_generation_status": "failed",
+                "feedback_generation_error": error,
+                "band7_source": "failed",
+                "ai_coaching_source": "failed",
+            }
+        )
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+
+
+def generate_turn_feedback_for_report(
+    attempt: SpeakingAttempt,
+    scoring_turns: list[SpeakingTurn],
+    learning_profile: dict[str, Any],
+    call_id: str,
+) -> None:
+    """Generate per-turn Band 7 answers and coaching before publishing report payload."""
+    pending_turns = [
+        turn
+        for turn in scoring_turns
+        if not is_p1_name_intro_turn(turn)
+        and (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+        and not _turn_feedback_ready(turn)
+    ]
+    if not pending_turns:
+        return
+
+    try:
+        generated_by_turn = turn_feedback_batch_with_codex(
+            pending_turns,
+            attempt,
+            target_band_label(attempt),
+            learning_profile,
+            f"{call_id}_turn_feedback_batch",
+        )
+    except Exception as exc:
+        _mark_turn_feedback_failed(pending_turns, exc)
+        return
+
+    for turn in pending_turns:
+        generated = generated_by_turn.get(turn.turn_id) or {}
+        feedback = build_turn_feedback(
+            turn,
+            attempt,
+            learning_profile,
+            allow_codex=False,
+            generated_feedback=generated,
+        )
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        metadata.update(feedback)
+        if feedback.get("feedback_generation_backend") == "codex":
+            metadata["band7_source"] = "codex_report_batch"
+            metadata["ai_coaching_source"] = "codex_report_batch"
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+
+
 def _training_relevance(question: str, transcript: str) -> Decimal:
     q_words = {word.strip(".,?!:;").lower() for word in question.split() if len(word.strip(".,?!:;")) > 3}
     t_words = {word.strip(".,?!:;").lower() for word in transcript.split() if len(word.strip(".,?!:;")) > 3}
@@ -4619,12 +4531,13 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
         "scored_at": timezone.now().isoformat(),
     }
     attempt.save()
+    learning_profile = build_learning_profile(user, attempt)
+    generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
     attempt.refresh_from_db()
+    turns = list(attempt.turns.all().order_by("sequence"))
+    scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
 
     runtime = _runtime_attempt_payload(attempt)
-
-    learning_profile = build_learning_profile(user, attempt)
-
     overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=False)
 
     # Build personalized coaching
@@ -4950,9 +4863,13 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     attempt.save(update_fields=["updated_at"])
     attempt.refresh_from_db()
 
-    runtime = _runtime_attempt_payload(attempt)
     learning_profile = build_learning_profile(user, attempt)
+    generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
+    attempt.refresh_from_db()
+    turns = list(attempt.turns.all().order_by("sequence"))
+    scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
 
+    runtime = _runtime_attempt_payload(attempt)
     overall_review = build_overall_review(learning_profile, attempt, score, allow_codex=False)
 
     # Build personalized coaching

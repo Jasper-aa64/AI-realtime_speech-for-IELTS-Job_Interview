@@ -1,6 +1,5 @@
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
-    [int]$WebPort = $(if ($env:IELTS_WEB_PORT) { [int]$env:IELTS_WEB_PORT } else { 8082 }),
     [int]$DjangoPort = $(if ($env:IELTS_DJANGO_PORT) { [int]$env:IELTS_DJANGO_PORT } else { 8000 })
 )
 
@@ -89,7 +88,7 @@ function Write-StackStatus {
     $urlPath = Join-Path $runlogs "public-url.txt"
     $status = [ordered]@{
         updated_at = (Get-Date).ToString("s")
-        web = "http://127.0.0.1:$WebPort"
+        app = "http://127.0.0.1:$DjangoPort"
         django = "http://127.0.0.1:$DjangoPort"
         tunnel_mode = $Mode
         public_url = $PublicUrl
@@ -140,9 +139,6 @@ function Get-NamedTunnelName {
 $python = Resolve-Python
 $cloudflared = Resolve-Cloudflared
 $managePy = Join-Path $RepoRoot "backend_django\manage.py"
-$webServer = Join-Path $RepoRoot "web\ielts_server.py"
-$dataDir = Join-Path $RepoRoot "data\ielts"
-$reportsDir = Join-Path $RepoRoot "reports"
 
 if (-not (Test-TcpPort -HostName "127.0.0.1" -Port $DjangoPort)) {
     Start-DetachedProcess `
@@ -150,20 +146,6 @@ if (-not (Test-TcpPort -HostName "127.0.0.1" -Port $DjangoPort)) {
         -ArgumentList @($managePy, "runserver", "127.0.0.1:$DjangoPort") `
         -WorkingDirectory $RepoRoot `
         -LogStem "django"
-}
-
-if (-not (Test-TcpPort -HostName "127.0.0.1" -Port $WebPort)) {
-    Start-DetachedProcess `
-        -FilePath $python `
-        -ArgumentList @(
-            $webServer,
-            "--host", "127.0.0.1",
-            "--port", "$WebPort",
-            "--data-dir", $dataDir,
-            "--reports-dir", $reportsDir
-        ) `
-        -WorkingDirectory $RepoRoot `
-        -LogStem "web"
 }
 
 Start-Sleep -Seconds 2
@@ -179,7 +161,7 @@ if (-not (Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue)) {
     } else {
         Start-DetachedProcess `
             -FilePath $cloudflared `
-            -ArgumentList @("tunnel", "--url", "http://127.0.0.1:$WebPort", "--no-autoupdate") `
+            -ArgumentList @("tunnel", "--url", "http://127.0.0.1:$DjangoPort", "--no-autoupdate") `
             -WorkingDirectory $RepoRoot `
             -LogStem "cloudflared"
     }
@@ -197,7 +179,7 @@ if (-not $publicUrl -and -not $tunnelName) {
 }
 
 Write-Host "IELTS stack launch requested."
-Write-Host "Web: http://127.0.0.1:$WebPort"
+Write-Host "App: http://127.0.0.1:$DjangoPort"
 Write-Host "Django: http://127.0.0.1:$DjangoPort"
 if ($tunnelName) {
     Write-Host "Tunnel mode: named tunnel '$tunnelName' (stable URL if DNS is already routed)."

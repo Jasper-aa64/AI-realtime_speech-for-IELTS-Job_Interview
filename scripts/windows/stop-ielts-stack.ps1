@@ -12,8 +12,10 @@ if (-not $RepoRoot) {
 
 $repoPattern = [regex]::Escape($RepoRoot)
 $targets = Get-CimInstance Win32_Process | Where-Object {
+    # Stop the current Django runtime and any stale retired legacy server process
+    # that may have been started before the retirement guard was introduced.
     ($_.Name -eq "python.exe" -and $_.CommandLine -match $repoPattern -and ($_.CommandLine -match "web\\ielts_server\.py" -or $_.CommandLine -match "backend_django\\manage\.py")) -or
-    ($_.Name -eq "cloudflared.exe" -and $_.CommandLine -match "127\.0\.0\.1:8082")
+    ($_.Name -eq "cloudflared.exe" -and $_.CommandLine -match "127\.0\.0\.1:")
 }
 
 foreach ($target in $targets) {

@@ -6,11 +6,11 @@
 
 ## Overview
 
-Frontend work in this project currently includes a native Qt interface for the
-original interview product and a Web-first IELTS practice UI under `web/`.
-The IELTS Web UI is the distribution-oriented surface: it must be shareable by
-link, avoid browser-side secrets, and keep practice workflows usable when
-server-side CLI integrations are unavailable.
+Frontend work in this project now treats `web/static/` as the production SPA
+surface served by Django. The retired `web/ielts_server.py` is not a production
+runtime. The UI must remain shareable by link, avoid browser-side secrets, and
+keep practice workflows usable when server-side AI/TTS integrations are
+unavailable.
 
 ## Scenario: IELTS Web UI
 
@@ -18,18 +18,17 @@ server-side CLI integrations are unavailable.
 
 - Trigger: Browser UI for IELTS Speaking practice that can be linked from a
   blog and backed by server-side CLI integrations.
-- Scope: `web/static/*`, `web/ielts_server.py`, API tests under `tests/`, and
-  documentation in `README.md`.
+- Scope: `web/static/*`, Django `/api/*` contracts, and runtime documentation.
 
 ### 2. Signatures
 
 - Local server:
   ```bash
-  python3 web/ielts_server.py --host 127.0.0.1 --port 8765 --data-dir data/ielts --reports-dir reports
+  python backend_django/manage.py runserver 127.0.0.1:8767 --noreload
   ```
 - Browser entry:
   ```text
-  http://127.0.0.1:8765/
+  http://127.0.0.1:8767/
   ```
 - API boundary:
   ```text
@@ -53,8 +52,8 @@ server-side CLI integrations are unavailable.
 
 - Frontend code must not contain API keys, CLI tokens, model credentials, or
   hidden prompt secrets.
-- Scoring and P3 generation must go through backend endpoints. The backend may
-  use local `codex`/`claude` CLI tools or deterministic fallbacks.
+- Scoring and P3 generation must go through Django backend endpoints. The
+  backend may use local AI providers or explicit fallbacks.
 - The UI must expose `Mock`, `P1`, `P2`, `P3`, `History`, and `Settings`
   navigation.
 - The formal practice UI is voice-first: do not expose a textarea answer entry.
@@ -95,8 +94,10 @@ server-side CLI integrations are unavailable.
 ### 6. Tests Required
 
 - `node --check web/static/app.js`
-- `python3 -m py_compile web/ielts_server.py tests/test_ielts_web_server.py`
-- `python3 -m unittest discover -s tests -p 'test_*.py'`
+- `python backend_django/manage.py check`
+- Targeted Django tests for touched apps.
+- `python scripts/validate_legacy_server_retirement.py` when runtime docs,
+  launch scripts, or legacy server boundaries change.
 - HTTP smoke checks for `/`, API summary, session start, score, and P3
   generation.
 - Existing C++ CLI/Qt build checks and `ctest` must remain green.
@@ -124,7 +125,8 @@ await api("/api/score", {
 ## Forbidden Patterns
 
 - Do not put secrets, local CLI paths, or model credentials in browser code.
-- Do not make the IELTS Web UI depend on the old Qt interview widgets.
+- Do not make the IELTS Web UI depend on the old Qt interview widgets or the
+  retired `web/ielts_server.py` runtime.
 - Do not render reports only as raw JSON when structured fields are available.
 - Do not let timers, speech synthesis, audio playback, MediaRecorder, or
   delayed next-turn callbacks continue after Exit or navigation.
@@ -135,6 +137,7 @@ await api("/api/score", {
 ## Required Patterns
 
 - Route model/scoring/generation operations through backend endpoints.
+- Keep all frontend network traffic on the Django `/api/*` surface.
 - Provide deterministic fallback behavior for demo/practice flows.
 - Keep mode navigation explicit: Mock, P1, P2, P3, History, Settings.
 - Keep P2 layout stable after start: cue card fixed at top and recorder position
@@ -168,6 +171,12 @@ await api("/api/score", {
   `event.target` can be unreliable after DOM selection changes. Do not require
   an empty selection before opening the Delete menu, and stop propagation inside
   the menu so outside-click handlers cannot close it immediately.
+- Speaking turn completion should not block the next pre-existing question
+  after the answer audio upload succeeds. Keep `/turns/{id}/complete` in the
+  background for ordinary turns, then wait for pending completions before final
+  scoring. Only keep completion synchronous when the next prompt depends on the
+  just-recorded answer, such as P1 work/study identity follow-up insertion, P3
+  adaptive follow-up generation, or the final turn before scoring.
 
 ---
 
