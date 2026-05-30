@@ -143,6 +143,9 @@ const state = {
     scorePollingTaskId: null,
     scoreCompletionModalAttempt: null,
     scoreCompletionNotifiedIds: new Set(),
+    audioPreprocessor: null,
+    audioPreprocessorToken: 0,
+    audioPreprocessorMetrics: null,
   },
   account: {
     authenticated: false,
@@ -174,6 +177,7 @@ const DEFAULT_ENGLISH_NAME = "Jasper";
 const corpusMarkdownEditors = {};
 const dynamicScriptPromises = {};
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
+const WASM_AUDIO_PREPROCESS_STORAGE_KEY = "ielts-wasm-audio-preprocess";
 const FIXED_EXAMINER_AUDIO_URLS = new Set([
   "/api/tts-audio/examiner/fixed_examiner_what_is_your_full_name.mp3",
   "/api/tts-audio/examiner/fixed_examiner_do_you_work_or_do_you_study.mp3",
@@ -2158,6 +2162,122 @@ function clearAutoNextTimeout() {
   state.autoNextTimeout = null;
 }
 
+function resolveWasmAudioPreprocessConfig() {
+  const params = new URLSearchParams(window.location.search);
+  const queryValue = params.get("wasm_audio");
+  if (queryValue !== null) {
+    const normalized = queryValue.trim().toLowerCase();
+    if (["0", "false", "off", "disabled"].includes(normalized)) {
+      localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "off");
+    } else if (["mock", "mock-rms"].includes(normalized)) {
+      localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "mock-rms");
+    } else {
+      localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "wasm-audio-core");
+    }
+  }
+  const stored = localStorage.getItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY) || "off";
+  if (stored === "wasm-audio-core" || stored === "mock-rms") {
+    return {
+      enabled: true,
+      analyzerId: stored,
+      threshold: 0.02,
+    };
+  }
+  return {
+    enabled: false,
+    analyzerId: "wasm-audio-core",
+    threshold: 0.02,
+  };
+}
+
+function exposeWasmAudioPreprocessMetrics() {
+  window.__ieltsWasmAudioPreprocess = {
+    enabled: () => resolveWasmAudioPreprocessConfig().enabled,
+    metrics: () => ({ ...(state.speaking.audioPreprocessorMetrics || {}) }),
+    disable: () => {
+      localStorage.setItem(WASM_AUDIO_PREPROCESS_STORAGE_KEY, "off");
+      stopSpeakingAudioPreprocessor("disabled");
+    },
+  };
+}
+
+function recordWasmAudioPreprocessMetrics(metrics, extra = {}) {
+  state.speaking.audioPreprocessorMetrics = {
+    ...(metrics || {}),
+    ...extra,
+    updatedAt: Date.now(),
+  };
+}
+
+async function maybeStartSpeakingAudioPreprocessor(stream, sessionId = state.practiceSessionId) {
+  const config = resolveWasmAudioPreprocessConfig();
+  if (!config.enabled || !stream) return;
+  const token = state.speaking.audioPreprocessorToken + 1;
+  state.speaking.audioPreprocessorToken = token;
+  recordWasmAudioPreprocessMetrics(null, {
+    enabled: true,
+    running: false,
+    status: "starting",
+    analyzer: config.analyzerId,
+  });
+
+  try {
+    const module = await import("/wasm/speaking_audio_preprocessor.js");
+    if (token !== state.speaking.audioPreprocessorToken || !isActivePracticeSession(sessionId)) return;
+    const preprocessor = module.createSpeakingAudioPreprocessor({
+      analyzerId: config.analyzerId,
+      threshold: config.threshold,
+    });
+    state.speaking.audioPreprocessor = preprocessor;
+    const metrics = await preprocessor.start(stream);
+    if (token !== state.speaking.audioPreprocessorToken || !isActivePracticeSession(sessionId)) {
+      await preprocessor.stop();
+      return;
+    }
+    recordWasmAudioPreprocessMetrics(metrics, { status: "running" });
+    console.info("[wasm-audio] preprocessing started", state.speaking.audioPreprocessorMetrics);
+  } catch (error) {
+    recordWasmAudioPreprocessMetrics(null, {
+      enabled: true,
+      running: false,
+      status: "failed",
+      analyzer: config.analyzerId,
+      lastError: error instanceof Error ? error.message : String(error),
+    });
+    console.info("[wasm-audio] preprocessing unavailable; continuing baseline recorder", state.speaking.audioPreprocessorMetrics);
+  }
+}
+
+function stopSpeakingAudioPreprocessor(reason = "stopped") {
+  state.speaking.audioPreprocessorToken += 1;
+  const preprocessor = state.speaking.audioPreprocessor;
+  state.speaking.audioPreprocessor = null;
+  if (!preprocessor) {
+    if (state.speaking.audioPreprocessorMetrics) {
+      recordWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics, {
+        running: false,
+        status: reason,
+      });
+    }
+    return;
+  }
+  preprocessor.stop()
+    .then((metrics) => {
+      recordWasmAudioPreprocessMetrics(metrics, {
+        running: false,
+        status: reason,
+      });
+      console.info("[wasm-audio] preprocessing stopped", state.speaking.audioPreprocessorMetrics);
+    })
+    .catch((error) => {
+      recordWasmAudioPreprocessMetrics(state.speaking.audioPreprocessorMetrics, {
+        running: false,
+        status: "stop_failed",
+        lastError: error instanceof Error ? error.message : String(error),
+      });
+    });
+}
+
 async function startRecording(sessionId = state.practiceSessionId) {
   if (!isActivePracticeSession(sessionId)) return;
   if (!state.currentTurn) return;
@@ -2192,6 +2312,7 @@ async function startRecording(sessionId = state.practiceSessionId) {
   };
   state.mediaRecorder.start();
   state.cancelRecording = false;
+  maybeStartSpeakingAudioPreprocessor(stream, sessionId);
   startDictation();
   setRecordButton("recording", "Stop", "Recording. Press to finish early.");
   text("recordStatus", "Recording in progress...");
@@ -2205,6 +2326,7 @@ function stopRecording() {
   setRecordButton("processing", "Saving", "Uploading this answer.");
   text("recordStatus", "Saving this answer...");
   stopDictation();
+  stopSpeakingAudioPreprocessor("recording-stopped");
   if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
     state.mediaRecorder.stop();
   }
@@ -6841,6 +6963,7 @@ function stopAllRuntime(label = "Ready") {
   state.startAbortController?.abort();
   state.startAbortController = null;
   stopExaminerPlayback();
+  stopSpeakingAudioPreprocessor("runtime-stopped");
   clearTimer();
   clearAutoNextTimeout();
   stopDictation();
@@ -8258,6 +8381,7 @@ async function init() {
   loadFontStyle();
   loadDarkMode();
   loadCandidateNames();
+  exposeWasmAudioPreprocessMetrics();
   bindEvents();
   setupReportRails();
   await loadAccount();

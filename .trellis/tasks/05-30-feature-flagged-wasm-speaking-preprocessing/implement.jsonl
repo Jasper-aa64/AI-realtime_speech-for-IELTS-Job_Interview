@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/05-30-feature-flagged-wasm-speaking-preprocessing/prd.md", "reason": "Task goal, feature-flag boundary, acceptance criteria, and explicit out-of-scope constraints."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend conventions and required pre-development context."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Production speaking recorder safety, async cleanup, and frontend validation expectations."}
+{"file": ".trellis/spec/frontend/wasm-audio-guidelines.md", "reason": "Existing AudioWorklet/WASM contracts and validation matrix for browser-side audio preprocessing."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Use the existing WASM analyzer abstraction instead of duplicating analyzer logic."}
