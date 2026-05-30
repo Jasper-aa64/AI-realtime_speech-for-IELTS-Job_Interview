@@ -760,3 +760,34 @@ Stopped ordinary examiner phase resets from pausing every preloaded examiner aud
 ### Next Steps
 
 - None - task complete
+
+
+## Session 79: Extract writing prompt picker module
+
+**Date**: 2026-05-30
+**Task**: Extract writing prompt picker module
+**Branch**: `main`
+
+### Summary
+
+Moved writing prompt picker rendering, filters, task switching, random prompt selection, and choice handling into web/static/writing-prompt-picker.js while keeping app.js as a facade. Added Django static routing for the new module and bumped the frontend script version. Validation: node --check for app.js and writing-prompt-picker.js, Django check, git diff --check.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
