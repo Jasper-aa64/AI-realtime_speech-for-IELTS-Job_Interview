@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/guides/index.md", "reason": "Use project thinking guide expectations while adding a deliverables index and validation script."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Confirm project constraints such as not committing db.sqlite3 while validating backend-related evidence."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Confirm frontend/WASM validation conventions referenced by the deliverables index."}
