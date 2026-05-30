@@ -1633,6 +1633,7 @@ def _turn_payload(turn: SpeakingTurn, total: int | None = None) -> dict[str, Any
         "band7_source": metadata.get("band7_source"),
         "ai_coaching_source": metadata.get("ai_coaching_source"),
         "audio_preprocessing_metrics": metadata.get("audio_preprocessing_metrics") if isinstance(metadata.get("audio_preprocessing_metrics"), dict) else None,
+        "realtime_asr_metrics": metadata.get("realtime_asr_metrics") if isinstance(metadata.get("realtime_asr_metrics"), dict) else None,
         "counts_toward_total": turn.counts_toward_total,
         "display_index": metadata.get("display_index"),
         "question_id": prompt.get("question_id") or p1_question_id(str(prompt.get("topic") or "general"), turn.question) if turn.part == "p1" else "",
@@ -1921,6 +1922,46 @@ def _sanitize_audio_preprocessing_metrics(value: Any) -> dict[str, Any] | None:
     }
 
 
+def _sanitize_realtime_asr_metrics(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or not value.get("enabled"):
+        return None
+
+    status = clean_report_text(str(value.get("status") or ""))[:80]
+    asr_status = clean_report_text(str(value.get("asrStatus") or value.get("asr_status") or ""))[:80]
+    transcript_source = clean_report_text(str(value.get("transcriptSource") or value.get("transcript_source") or ""))[:80]
+    asr_provider = clean_report_text(str(value.get("asrProvider") or value.get("asr_provider") or ""))[:80]
+    last_error = clean_report_text(str(value.get("lastError") or value.get("last_error") or ""))[:300]
+
+    frames_sent = _safe_int(value.get("framesSent", value.get("frames_sent")))
+    frames_acked = _safe_int(value.get("framesAcked", value.get("frames_acked")))
+    dropped_frames = _safe_int(value.get("droppedFrames", value.get("dropped_frames")))
+    bytes_sent = _safe_int(value.get("bytesSent", value.get("bytes_sent")))
+    bytes_acked = _safe_int(value.get("bytesAcked", value.get("bytes_acked")))
+
+    return {
+        "enabled": True,
+        "running": bool(value.get("running")),
+        "status": status,
+        "asr_status": asr_status,
+        "asr_configured": bool(value.get("asrConfigured", value.get("asr_configured"))),
+        "asr_enabled": bool(value.get("asrEnabled", value.get("asr_enabled"))),
+        "asr_provider": asr_provider,
+        "transcript_source": transcript_source,
+        "frames_sent": frames_sent,
+        "frames_acked": min(frames_sent, frames_acked) if frames_sent else frames_acked,
+        "dropped_frames": dropped_frames,
+        "bytes_sent": bytes_sent,
+        "bytes_acked": min(bytes_sent, bytes_acked) if bytes_sent else bytes_acked,
+        "asr_status_check_ms": _safe_int(value.get("asrStatusCheckMs", value.get("asr_status_check_ms"))),
+        "socket_open_ms": _safe_int(value.get("socketOpenMs", value.get("socket_open_ms"))),
+        "first_asr_event_ms": _safe_int(value.get("firstAsrEventMs", value.get("first_asr_event_ms"))),
+        "first_transcript_ms": _safe_int(value.get("firstTranscriptMs", value.get("first_transcript_ms"))),
+        "final_transcript_ms": _safe_int(value.get("finalTranscriptMs", value.get("final_transcript_ms"))),
+        "done_ms": _safe_int(value.get("doneMs", value.get("done_ms"))),
+        "last_error": last_error,
+    }
+
+
 def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     attempt = _load_attempt_for_user(user, attempt_id)
     if attempt.status == SpeakingAttempt.Status.ABORTED:
@@ -1940,6 +1981,9 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
     audio_preprocessing_metrics = _sanitize_audio_preprocessing_metrics(payload.get("audio_preprocessing_metrics"))
     if audio_preprocessing_metrics:
         metadata["audio_preprocessing_metrics"] = audio_preprocessing_metrics
+    realtime_asr_metrics = _sanitize_realtime_asr_metrics(payload.get("realtime_asr_metrics"))
+    if realtime_asr_metrics:
+        metadata["realtime_asr_metrics"] = realtime_asr_metrics
     p2_link = payload.get("p2_corpus_link") if isinstance(payload.get("p2_corpus_link"), dict) else None
     if turn.part == "p2" and p2_link:
         selected_entry = p2_corpus_for_selection(user, str(p2_link.get("entry_id") or ""))

@@ -1198,6 +1198,54 @@ class SpeakingRuntimeApiTests(TestCase):
         turn = SpeakingTurn.objects.get(turn_id="t1")
         self.assertEqual(turn.metadata["audio_preprocessing_metrics"], metrics)
 
+    def test_turn_complete_persists_realtime_asr_metrics(self):
+        self.create_attempt()
+        response = self.complete_turn(
+            transcript="I study software engineering.",
+            extra_payload={
+                "transcript_source": "volcengine_realtime_asr",
+                "realtime_asr_metrics": {
+                    "enabled": True,
+                    "running": False,
+                    "status": "closed",
+                    "asrStatus": "done",
+                    "asrConfigured": True,
+                    "asrEnabled": True,
+                    "asrProvider": "volcengine_realtime_asr",
+                    "transcriptSource": "volcengine_realtime_asr",
+                    "framesSent": 20,
+                    "framesAcked": 22,
+                    "droppedFrames": 1,
+                    "bytesSent": 6400,
+                    "bytesAcked": 7000,
+                    "asrStatusCheckMs": 12,
+                    "socketOpenMs": 40,
+                    "firstAsrEventMs": 55,
+                    "firstTranscriptMs": 420,
+                    "finalTranscriptMs": 1180,
+                    "doneMs": 1250,
+                    "lastError": "",
+                    "asrTranscript": "I study software engineering.",
+                    "url": "wss://secret.example/realtime",
+                },
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        metrics = payload["turn"]["realtime_asr_metrics"]
+        self.assertEqual(metrics["asr_status"], "done")
+        self.assertEqual(metrics["transcript_source"], "volcengine_realtime_asr")
+        self.assertEqual(metrics["frames_sent"], 20)
+        self.assertEqual(metrics["frames_acked"], 20)
+        self.assertEqual(metrics["bytes_sent"], 6400)
+        self.assertEqual(metrics["bytes_acked"], 6400)
+        self.assertEqual(metrics["first_transcript_ms"], 420)
+        self.assertNotIn("url", metrics)
+        self.assertNotIn("asrTranscript", metrics)
+
+        turn = SpeakingTurn.objects.get(turn_id="t1")
+        self.assertEqual(turn.metadata["realtime_asr_metrics"], metrics)
+
     def test_turn_complete_uses_server_asr_when_browser_transcript_is_missing(self):
         _attempt, turn1, _turn2 = self.create_attempt()
         turn1.audio_path = "audio/runtime-asr.webm"

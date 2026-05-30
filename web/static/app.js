@@ -2460,6 +2460,7 @@ function completeTurnPayload(
   transcriptSource = "browser_dictation",
   p2CorpusEntryId = state.p2Corpus.selectedEntryId,
   audioPreprocessingMetrics = null,
+  realtimeAsrMetrics = null,
   streamFollowUp = false,
 ) {
   return {
@@ -2468,6 +2469,7 @@ function completeTurnPayload(
     transcript_source: transcriptSource || "browser_dictation",
     ...(turn.part === "p2" && p2CorpusEntryId ? { p2_corpus_link: { entry_id: p2CorpusEntryId } } : {}),
     ...(audioPreprocessingMetrics ? { audio_preprocessing_metrics: audioPreprocessingMetrics } : {}),
+    ...(realtimeAsrMetrics ? { realtime_asr_metrics: realtimeAsrMetrics } : {}),
     ...(streamFollowUp ? { stream_follow_up: true } : {}),
   };
 }
@@ -2652,6 +2654,7 @@ async function finalizeTurn(mimeType) {
   if (!attempt || !turn) return;
   await waitForFinalDictation();
   const audioPreprocessingMetrics = await waitForSpeakingAudioPreprocessorTurnMetrics();
+  const realtimeAsrMetrics = realtimePcmUplinkController.metrics();
   if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
   const blob = new Blob(state.audioChunks, { type: mimeType });
   setRecordButton("processing", "Saving", "Uploading answer audio...");
@@ -2684,6 +2687,7 @@ async function finalizeTurn(mimeType) {
       transcriptSourceSnapshot,
       p2CorpusEntrySnapshot,
       audioPreprocessingMetrics,
+      realtimeAsrMetrics,
       streamFollowUp,
     ));
     if (!requiresSyncComplete) {
