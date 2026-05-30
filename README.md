@@ -51,6 +51,8 @@ frontend files and `/api/*` routes.
 The old `web/ielts_server.py` runtime is retired and frozen as a reference
 artifact. It is blocked from accidental startup unless
 `IELTS_ALLOW_LEGACY_SERVER=1` is set for explicit legacy debugging.
+The retirement boundary is documented in `docs/LEGACY_SERVER_RETIREMENT.md` and
+validated by `python scripts/validate_legacy_server_retirement.py`.
 
 Run locally from the repository root:
 

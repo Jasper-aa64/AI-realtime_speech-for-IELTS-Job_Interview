@@ -5,6 +5,15 @@
 `web/ielts_server.py` is frozen as a legacy reference artifact. It is not a
 production runtime, and normal local/public startup must use Django.
 
+Frozen means:
+
+- Do not add features to `web/ielts_server.py`.
+- Do not route `/api/*` traffic to `web/ielts_server.py`.
+- Do not use it for local demo, public tunnel, or production startup.
+- Only inspect it to compare historical behavior while migrating or debugging.
+- Any behavior still needed by the product must be migrated into Django or
+  `web/static/`, then validated on the Django runtime.
+
 Current production runtime:
 
 ```bash
@@ -58,5 +67,6 @@ python scripts/validate_legacy_server_retirement.py
 ```
 
 The script checks that docs/scripts do not route production to the old server,
-that Django still exposes the current app surface, and that accidental legacy
-startup is blocked.
+that Django still exposes the current app surface, that Django does not import
+the retired server, that the frozen file still carries its startup guard, and
+that accidental legacy startup is blocked.
