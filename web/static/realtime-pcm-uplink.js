@@ -6,6 +6,7 @@
       state,
       isActivePracticeSession,
       setDictationStatus,
+      setRealtimePcmStatus,
       queryKey = "realtime_pcm",
     } = options || {};
 
@@ -34,12 +35,36 @@
       return response.json();
     }
 
+    function elapsedSince(startedAt) {
+      const start = Number(startedAt || 0);
+      return start > 0 ? Math.max(0, Date.now() - start) : 0;
+    }
+
     function recordMetrics(patch = {}) {
       state.speaking.realtimePcmMetrics = {
         ...(state.speaking.realtimePcmMetrics || {}),
         ...patch,
         updatedAt: Date.now(),
       };
+      setRealtimePcmStatus?.(state.speaking.realtimePcmMetrics);
+    }
+
+    function markFirstAsrEvent() {
+      const metrics = state.speaking.realtimePcmMetrics || {};
+      if (metrics.firstAsrEventAt) return;
+      recordMetrics({
+        firstAsrEventAt: Date.now(),
+        firstAsrEventMs: elapsedSince(metrics.startedAt),
+      });
+    }
+
+    function markFirstTranscript() {
+      const metrics = state.speaking.realtimePcmMetrics || {};
+      if (metrics.firstTranscriptAt) return;
+      recordMetrics({
+        firstTranscriptAt: Date.now(),
+        firstTranscriptMs: elapsedSince(metrics.startedAt),
+      });
     }
 
     function transcriptSourceFromPayload(payload = {}) {
@@ -50,6 +75,7 @@
       const event = String(payload.event || "");
       const context = payload.turn_context && typeof payload.turn_context === "object" ? payload.turn_context : {};
       if (event === "asr_started") {
+        markFirstAsrEvent();
         recordMetrics({ asrStatus: "started", asrProvider: payload.provider || "", turnContext: context });
         setDictationStatus?.("listening", "服务端实时转写已连接，继续直接回答。");
         return;
@@ -62,6 +88,7 @@
         state.transcript = [finalText, interim].filter(Boolean).join(" ").trim();
         state.transcriptStatus = state.transcript ? "interim_fallback" : "missing";
         if (state.transcript) state.transcriptSource = transcriptSourceFromPayload(payload);
+        if (state.transcript) markFirstTranscript();
         recordMetrics({ asrStatus: "interim", asrInterim: interim, transcriptSource: state.transcriptSource, turnContext: context });
         if (state.transcript) setDictationStatus?.("listening", "服务端实时转写正在更新。");
         return;
@@ -69,12 +96,20 @@
       if (event === "asr_final") {
         const finalText = String(payload.text || payload.segment || "").trim();
         if (finalText) {
+          markFirstTranscript();
           state.transcriptFinal = finalText;
           state.transcriptInterim = "";
           state.transcript = finalText;
           state.transcriptStatus = "captured";
           state.transcriptSource = transcriptSourceFromPayload(payload);
-          recordMetrics({ asrStatus: "final", asrTranscript: finalText, transcriptSource: state.transcriptSource, turnContext: context });
+          recordMetrics({
+            asrStatus: "final",
+            asrTranscript: finalText,
+            finalTranscriptAt: Date.now(),
+            finalTranscriptMs: elapsedSince(state.speaking.realtimePcmMetrics?.startedAt),
+            transcriptSource: state.transcriptSource,
+            turnContext: context,
+          });
           setDictationStatus?.("captured", "服务端实时转写已捕捉到文字。");
         }
         return;
@@ -82,6 +117,7 @@
       if (event === "asr_done") {
         const transcript = String(payload.transcript || "").trim();
         if (transcript) {
+          markFirstTranscript();
           state.transcriptFinal = transcript;
           state.transcriptInterim = "";
           state.transcript = transcript;
@@ -89,7 +125,14 @@
           state.transcriptSource = transcriptSourceFromPayload(payload);
           setDictationStatus?.("captured", "服务端实时转写已完成。");
         }
-        recordMetrics({ asrStatus: payload.ok ? "done" : "done_empty", asrTranscript: transcript, transcriptSource: state.transcriptSource, turnContext: context });
+        recordMetrics({
+          asrStatus: payload.ok ? "done" : "done_empty",
+          asrTranscript: transcript,
+          doneAt: Date.now(),
+          doneMs: elapsedSince(state.speaking.realtimePcmMetrics?.startedAt),
+          transcriptSource: state.transcriptSource,
+          turnContext: context,
+        });
         return;
       }
       if (event === "asr_error") {
@@ -128,6 +171,8 @@
         running: false,
         status: "checking_asr",
         url: config.url,
+        startedAt: Date.now(),
+        asrStatusCheckStartedAt: Date.now(),
         framesSent: 0,
         bytesSent: 0,
         framesAcked: 0,
@@ -146,7 +191,11 @@
             stop("inactive-session");
             return;
           }
-          recordMetrics({ status: "open" });
+          recordMetrics({
+            status: "open",
+            socketOpenedAt: Date.now(),
+            socketOpenMs: elapsedSince(state.speaking.realtimePcmMetrics?.startedAt),
+          });
           socket.send(JSON.stringify({ event: "start", sample_rate: 16000, channels: 1 }));
           socket.send(JSON.stringify({
             event: "start_asr",
@@ -182,7 +231,13 @@
       fetchRealtimeAsrStatus()
         .then((status) => {
           if (!isActivePracticeSession(sessionId)) return;
-          recordMetrics({ asrConfigured: Boolean(status?.configured), asrEnabled: Boolean(status?.enabled), asrProvider: status?.provider || "" });
+          recordMetrics({
+            asrConfigured: Boolean(status?.configured),
+            asrEnabled: Boolean(status?.enabled),
+            asrProvider: status?.provider || "",
+            asrStatusCheckedAt: Date.now(),
+            asrStatusCheckMs: elapsedSince(state.speaking.realtimePcmMetrics?.asrStatusCheckStartedAt),
+          });
           if (!status?.configured) {
             disabled = true;
             recordMetrics({ running: false, status: "asr_not_configured", lastError: "Realtime ASR is not configured" });

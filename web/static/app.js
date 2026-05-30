@@ -722,6 +722,7 @@ const realtimePcmUplinkController = window.IELTSRealtimePcmUplink?.createRealtim
   state,
   isActivePracticeSession,
   setDictationStatus,
+  setRealtimePcmStatus,
 });
 if (!realtimePcmUplinkController) {
   throw new Error("IELTSRealtimePcmUplink module failed to initialize.");
@@ -1418,6 +1419,8 @@ function resetPracticeSurface() {
   state.currentTurn = null;
   state.examinerPlaybackKey = "";
   state.transcript = "";
+  state.speaking.realtimePcmMetrics = null;
+  setRealtimePcmStatus({});
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();
   state.speaking.examinerTtsRefreshPromises.clear();
@@ -2995,6 +2998,50 @@ function setDictationStatus(kind, message) {
   }
   el.className = `dictation-status ${kind || "info"}`;
   el.textContent = message;
+}
+
+function setRealtimePcmStatus(metrics = {}) {
+  const el = $("realtimePcmStatus");
+  if (!el) return;
+  if (!metrics.enabled) {
+    el.className = "realtime-pcm-status hidden";
+    el.textContent = "";
+    return;
+  }
+
+  const status = String(metrics.status || "");
+  const asrStatus = String(metrics.asrStatus || "");
+  const framesSent = Number(metrics.framesSent || 0);
+  const framesAcked = Number(metrics.framesAcked || 0);
+  const droppedFrames = Number(metrics.droppedFrames || 0);
+  const source = String(metrics.transcriptSource || state.transcriptSource || "browser_dictation");
+  const latencyParts = [];
+  if (Number(metrics.socketOpenMs || 0) > 0) latencyParts.push(`WS ${Math.round(metrics.socketOpenMs)}ms`);
+  if (Number(metrics.firstTranscriptMs || 0) > 0) latencyParts.push(`首字 ${Math.round(metrics.firstTranscriptMs)}ms`);
+  if (Number(metrics.finalTranscriptMs || 0) > 0) latencyParts.push(`final ${Math.round(metrics.finalTranscriptMs)}ms`);
+
+  let tone = "info";
+  let headline = "Realtime ASR";
+  if (status === "asr_not_configured" || status === "asr_status_error") {
+    tone = "fallback";
+    headline = "Realtime ASR 未启用";
+  } else if (status === "open" || asrStatus === "started" || asrStatus === "interim" || asrStatus === "final" || asrStatus === "done") {
+    tone = "live";
+    headline = "Realtime ASR 已连接";
+  } else if (status === "error" || asrStatus === "error") {
+    tone = "fallback";
+    headline = "Realtime ASR 降级";
+  }
+
+  const detail = [
+    headline,
+    `source ${source}`,
+    `frames ${framesSent}/${framesAcked}`,
+    droppedFrames ? `dropped ${droppedFrames}` : "",
+    latencyParts.join(" · "),
+  ].filter(Boolean).join(" · ");
+  el.className = `realtime-pcm-status ${tone}`;
+  el.textContent = detail;
 }
 
 function waitForFinalDictation() {
@@ -6315,10 +6362,13 @@ function stopAllRuntime(label = "Ready") {
   state.startAbortController = null;
   stopExaminerPlayback();
   stopSpeakingAudioPreprocessor("runtime-stopped");
+  stopRealtimePcmUplink("runtime-stopped");
   clearTimer();
   clearAutoNextTimeout();
   stopDictation();
   setDictationStatus("", "");
+  state.speaking.realtimePcmMetrics = null;
+  setRealtimePcmStatus({});
   state.currentTurn = null;
   state.examinerPlaybackKey = "";
   state.transcript = "";

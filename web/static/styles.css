@@ -6432,6 +6432,33 @@ body.font-popular .record-control.scoring {
   color: #b91c1c;
 }
 
+.realtime-pcm-status {
+  justify-self: center;
+  max-width: 620px;
+  margin: 8px auto 0;
+  padding: 7px 11px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.realtime-pcm-status.live {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.realtime-pcm-status.fallback {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
 audio {
   width: 100%;
   margin-top: 12px;
