@@ -104,3 +104,36 @@ Extracted writing prompt catalog, seed synchronization, random prompt selection,
 ### Next Steps
 
 - None - task complete
+
+
+## Session 59: Split speaking corpus services
+
+**Date**: 2026-05-30
+**Task**: Split speaking corpus services
+**Branch**: `main`
+
+### Summary
+
+Extracted speaking question bank, P1/P2 corpus, Takeaway, and translation helpers into corpus_services.py while preserving apps.speaking.services compatibility imports.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `87dfb55` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
