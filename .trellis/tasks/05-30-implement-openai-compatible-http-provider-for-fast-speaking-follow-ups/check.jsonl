@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Verify implementation preserves backend AI/fallback conventions."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify checks cover Django runtime, tests, and secret handling."}
+{"file":"docs/SPEC-http-api-provider-followup-latency.md","reason":"Verify implementation satisfies task-specific acceptance criteria and red lines."}
+{"file":".trellis/tasks/05-30-implement-openai-compatible-http-provider-for-fast-speaking-follow-ups/research/openai-compatible-chat-streaming.md","reason":"Verify HTTP client behavior matches researched streaming contract."}

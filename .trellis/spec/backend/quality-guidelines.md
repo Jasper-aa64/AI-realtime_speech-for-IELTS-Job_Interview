@@ -78,6 +78,17 @@ def normalize_user_visible_text(...):
 - Provider-config tests must prove that secret env values never appear in task payloads, fallback reasons, error fields, or worker summaries.
 - Writing entry detail contract tests must cover `pending`, `fallback`, `succeeded`, and cancelled-pending score-task states, including `ai_task`, `score`, `word_count`, `task_type`, `prompt_id`, and `entry_id`.
 
+### Convention: Latency-sensitive speaking follow-ups use HTTP provider first
+
+**What**: User-visible P1/P3 follow-up generation should try the OpenAI-compatible HTTP provider before falling back to Codex CLI and then local fallback text. HTTP provider configuration must come from environment/settings (`AI_HTTP_BASE_URL`, `AI_HTTP_API_KEY`, `AI_HTTP_MODEL`), and failures must keep explicit backend/status metadata.
+
+**Why**: Follow-up generation is part of the live speaking flow. Spawning `codex exec` for every follow-up causes cold-start latency that makes the examiner feel stuck. HTTP-first routing keeps the product responsive while preserving Codex CLI and local fallback as safe compatibility paths.
+
+**Required**:
+- Do not expose provider keys in logs, task metadata, API responses, or benchmark output.
+- Fallback output must be marked as fallback and must not masquerade as successful AI output.
+- Tests should cover HTTP success, HTTP-to-Codex fallback, final local fallback, and secret redaction.
+
 ## Scenario: IELTS Speaking CLI Simulator
 
 ### 1. Scope / Trigger

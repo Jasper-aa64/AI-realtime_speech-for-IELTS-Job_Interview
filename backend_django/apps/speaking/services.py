@@ -18,6 +18,7 @@ from django.db import close_old_connections, transaction
 from django.db.utils import DatabaseError
 from django.utils import timezone
 
+from apps.ai.http_provider import HttpApiProvider
 from apps.ai.models import AITask
 from apps.ai.services import create_ai_task, task_payload
 from .audio_services import (
@@ -574,8 +575,10 @@ def _model_band7_tts_cache_key(attempt_id: str, turn_id: str, band7_version: str
 # --- Attempt Start ---
 
 P1_TURN_COUNT = 10
+P1_FOLLOW_UP_HTTP_TIMEOUT = 8
 P1_FOLLOW_UP_CODEX_TIMEOUT = 15
 P3_QUICK_FOLLOW_UP_CODEX_MODEL = "gpt-5.4-mini"
+P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT = 8
 P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT = 12
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
@@ -814,28 +817,14 @@ def _extract_single_follow_up_question(output: str, rejected_questions: tuple[st
     raise RuntimeError("codex quick follow-up did not return a usable question")
 
 
-def quick_follow_up_runner(
-    current_question: str,
-    candidate_answer: str,
-    focus: str = "",
-    question_type: str = "",
-    timeout: int = P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
-) -> str:
-    """Generate one P3 follow-up through a low-overhead Codex exec call."""
-    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
-        raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
+def _quick_follow_up_prompt(current_question: str, candidate_answer: str, focus: str = "", question_type: str = "") -> str:
     question = clean_report_text(current_question)[:500]
     answer = clean_report_text(candidate_answer)[:2500]
     if not question:
         raise RuntimeError("missing current P3 question")
     if not answer:
         raise RuntimeError("missing candidate answer")
-
-    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
-    if not shutil.which(codex) and not Path(codex).exists():
-        raise RuntimeError("codex CLI not found")
-
-    prompt = f"""You are an IELTS Speaking Part 3 examiner.
+    return f"""You are an IELTS Speaking Part 3 examiner.
 Write exactly one natural follow-up question based on the candidate's answer.
 Output one line only. Do not include JSON, Markdown, labels, explanations, or quotes.
 Do not repeat the current question. Make the follow-up more specific and deeper.
@@ -851,6 +840,64 @@ Candidate answer:
 
 One follow-up question:
 """
+
+
+def quick_follow_up_http_runner(
+    current_question: str,
+    candidate_answer: str,
+    focus: str = "",
+    question_type: str = "",
+) -> dict[str, Any]:
+    """Generate one P3 follow-up through an OpenAI-compatible HTTP endpoint."""
+    question = clean_report_text(current_question)[:500]
+    prompt = _quick_follow_up_prompt(current_question, candidate_answer, focus=focus, question_type=question_type)
+    provider = HttpApiProvider()
+    result = provider.complete_chat(
+        [
+            {
+                "role": "system",
+                "content": "You are an IELTS Speaking examiner. Return only one concise follow-up question.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=80,
+        temperature=0.2,
+        timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
+        stream=True,
+    )
+    follow_up = _extract_single_follow_up_question(result.text, rejected_questions=(question,))
+    return {
+        "follow_up": follow_up,
+        "backend": "http_api",
+        "status": "ready",
+        "provider": "openai_compatible_http",
+        "latency_ms": int(result.elapsed_seconds * 1000),
+        "model": result.model,
+    }
+
+
+def quick_follow_up_codex_runner(
+    current_question: str,
+    candidate_answer: str,
+    focus: str = "",
+    question_type: str = "",
+    timeout: int = P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
+) -> str:
+    """Generate one P3 follow-up through the legacy low-overhead Codex exec call."""
+    if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
+        raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
+    question = clean_report_text(current_question)[:500]
+    answer = clean_report_text(candidate_answer)[:2500]
+    if not question:
+        raise RuntimeError("missing current P3 question")
+    if not answer:
+        raise RuntimeError("missing candidate answer")
+
+    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
+    if not shutil.which(codex) and not Path(codex).exists():
+        raise RuntimeError("codex CLI not found")
+
+    prompt = _quick_follow_up_prompt(current_question, candidate_answer, focus=focus, question_type=question_type)
     cmd = [
         codex,
         "exec",
@@ -886,6 +933,57 @@ One follow-up question:
         raise RuntimeError(f"codex quick follow-up failed{f': {stderr}' if stderr else ''}") from exc
 
 
+def quick_follow_up_runner_with_metadata(
+    current_question: str,
+    candidate_answer: str,
+    focus: str = "",
+    question_type: str = "",
+    timeout: int = P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
+) -> dict[str, Any]:
+    """Generate one P3 follow-up through HTTP first, then Codex CLI."""
+    http_error = ""
+    try:
+        return quick_follow_up_http_runner(
+            current_question,
+            candidate_answer,
+            focus=focus,
+            question_type=question_type,
+        )
+    except Exception as exc:  # noqa: BLE001 - provider chain must continue to Codex
+        http_error = str(exc)
+
+    try:
+        follow_up = quick_follow_up_codex_runner(
+            current_question,
+            candidate_answer,
+            focus=focus,
+            question_type=question_type,
+            timeout=timeout,
+        )
+        return {"follow_up": follow_up, "backend": "codex_quick", "status": "ready", "provider": "codex_cli"}
+    except Exception as exc:  # noqa: BLE001 - caller will emit explicit fallback metadata
+        raise RuntimeError(f"http_api: {http_error}; codex_quick: {exc}") from exc
+
+
+def quick_follow_up_runner(
+    current_question: str,
+    candidate_answer: str,
+    focus: str = "",
+    question_type: str = "",
+    timeout: int = P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
+) -> str:
+    """Backward-compatible follow-up API returning only the generated question."""
+    return str(
+        quick_follow_up_runner_with_metadata(
+            current_question,
+            candidate_answer,
+            focus=focus,
+            question_type=question_type,
+            timeout=timeout,
+        )["follow_up"]
+    )
+
+
 def _generate_p3_dynamic_follow_up(
     current_question: str,
     question_type: str,
@@ -895,14 +993,14 @@ def _generate_p3_dynamic_follow_up(
 ) -> dict[str, str]:
     fallback = _dynamic_p3_follow_up(question_type, transcript, focus)
     try:
-        follow_up = quick_follow_up_runner(
+        result = quick_follow_up_runner_with_metadata(
             current_question,
             transcript,
             focus=focus,
             question_type=question_type,
             timeout=P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
         )
-        return {"follow_up": follow_up, "backend": "codex_quick", "status": "ready"}
+        return {key: str(value) for key, value in result.items()}
     except Exception as exc:  # noqa: BLE001 - P3 follow-up must never block the flow
         return {
             "follow_up": fallback,
@@ -1569,6 +1667,17 @@ def _fallback_p1_identity_follow_up(answer: str) -> str:
     return "Can you tell me a little more about what you do now?"
 
 
+def _extract_p1_identity_follow_up_output(output: str) -> str:
+    try:
+        payload = extract_json_object_with_keys(output, {"follow_up"})
+        follow_up = clean_report_text(str(payload.get("follow_up") or ""))
+    except Exception:  # noqa: BLE001 - HTTP-compatible endpoints may return plain text
+        follow_up = _extract_single_follow_up_question(output)
+    if not follow_up or len(follow_up) > 160 or "?" not in follow_up:
+        raise RuntimeError("p1 follow-up provider did not return a usable question")
+    return follow_up
+
+
 def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]:
     fallback = _fallback_p1_identity_follow_up(answer)
     if not answer.strip():
@@ -1588,15 +1697,45 @@ Keep it short, conversational, and suitable for Part 1.
 Candidate answer:
 {answer}
 """
+    http_error = ""
+    try:
+        provider = HttpApiProvider()
+        result = provider.complete_chat(
+            [
+                {
+                    "role": "system",
+                    "content": "You are an IELTS Speaking Part 1 examiner. Return JSON only.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=80,
+            temperature=0.2,
+            timeout_seconds=P1_FOLLOW_UP_HTTP_TIMEOUT,
+            stream=True,
+        )
+        follow_up = _extract_p1_identity_follow_up_output(result.text)
+        return {
+            "follow_up": follow_up,
+            "backend": "http_api",
+            "status": "ready",
+            "provider": "openai_compatible_http",
+            "latency_ms": str(int(result.elapsed_seconds * 1000)),
+            "model": result.model,
+        }
+    except Exception as exc:  # noqa: BLE001 - provider chain must continue to Codex
+        http_error = str(exc)
+
     try:
         output, _usage = run_codex(prompt, call_id, timeout=P1_FOLLOW_UP_CODEX_TIMEOUT)
-        payload = extract_json_object_with_keys(output, {"follow_up"})
-        follow_up = clean_report_text(str(payload.get("follow_up") or ""))
-        if not follow_up or len(follow_up) > 160 or "?" not in follow_up:
-            raise RuntimeError("codex p1 follow-up did not return a usable question")
+        follow_up = _extract_p1_identity_follow_up_output(output)
         return {"follow_up": follow_up, "backend": "codex", "status": "ready"}
     except Exception as exc:
-        return {"follow_up": fallback, "backend": "fallback", "status": "fallback", "error": str(exc)}
+        return {
+            "follow_up": fallback,
+            "backend": "fallback",
+            "status": "fallback",
+            "error": f"http_api: {http_error}; codex: {exc}",
+        }
 
 
 def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: SpeakingTurn) -> SpeakingTurn | None:

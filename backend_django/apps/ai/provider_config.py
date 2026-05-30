@@ -18,7 +18,7 @@ ADAPTER_KEY_UNSUPPORTED_TASK = "unsupported_task"
 
 DEFAULT_PROVIDER_SECRET_ENV_NAMES = {
     "codex": ("CODEX_API_KEY",),
-    "openai": ("OPENAI_API_KEY",),
+    "openai": ("OPENAI_API_KEY", "AI_HTTP_API_KEY"),
     "claude": ("ANTHROPIC_API_KEY",),
     MOCK_SUCCESS_PROVIDER: (),
     FALLBACK_PROVIDER: (),

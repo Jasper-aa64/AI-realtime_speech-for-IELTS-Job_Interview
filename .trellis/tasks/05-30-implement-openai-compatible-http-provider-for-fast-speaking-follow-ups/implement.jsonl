@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend conventions for AI speaking feedback, fallback transparency, and not replacing AI output with hardcoded content."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Quality bar for Django runtime, AI task lifecycle, secret handling, and targeted checks."}
+{"file":"docs/SPEC-http-api-provider-followup-latency.md","reason":"Task-specific goal, boundaries, red lines, and acceptance criteria for HTTP provider follow-up latency."}
+{"file":".trellis/tasks/05-30-implement-openai-compatible-http-provider-for-fast-speaking-follow-ups/research/openai-compatible-chat-streaming.md","reason":"Research output for OpenAI-compatible streaming chat completions request/response shape and security notes."}
