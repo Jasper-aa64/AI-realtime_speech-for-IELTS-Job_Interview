@@ -6,19 +6,22 @@ Mode: no-key, no-human, self-verifying work only.
 
 ## Summary
 
-The safe headless queue was evaluated against the current working tree.
+The unattended queue was continued after Phase 2.3 had already been completed.
+The remaining work focused on safe frontend modularization because those cuts do
+not require ASR credentials, browser microphone validation, or product decisions.
 
-- Completed: Phase 2.3 realtime ASR logic layer is already committed and archived.
-- Blocked: real OpenSpeech/VolcEngine endpoint validation still requires user-provided ASR credentials and a real microphone run.
-- Deferred: further `app.js` and `speaking/services.py` cuts are not safe to continue headlessly from the current dirty tree because both areas already contain unrelated WIP.
+Final validation:
 
-No production behavior was changed by this report.
+- Django full test suite: `272/272` passed
+- Django system check: passed
+- Frontend syntax checks: passed for `app.js` and all newly extracted modules
+- Remaining working tree state: `backend_django/db.sqlite3` only
 
 ## Completed Work
 
 ### A. Phase 2.3 realtime ASR logic layer
 
-Status: completed before this report.
+Status: completed before this continuation.
 
 Commits:
 
@@ -28,19 +31,56 @@ Commits:
 
 What is covered:
 
-- `/ws/realtime/pcm/` accepts `start_asr` and `stop_asr` control messages.
+- `/ws/realtime/pcm/` accepts realtime PCM frames and ASR control events.
 - PCM frames are queued into the realtime ASR provider logic.
 - Fake websocket tests cover interim, final, done, and error event forwarding.
 - Frontend `?realtime_pcm=1` can consume `asr_*` events and update live transcript state.
 
-Validation recorded at completion:
+Blocked real-world validation:
 
-- `apps.speaking.test_asgi_channels`: 4/4 passed
-- `apps.speaking.test_realtime_asr`: 4/4 passed
-- `node --check web/static/app.js`: passed
-- `python manage.py check`: passed
-- Full Django suite: 272 tests passed
-- `git diff --check`: passed
+- Real OpenSpeech/VolcEngine endpoint validation still requires user-provided
+  ASR credentials and a real browser microphone run.
+
+### B. app.js modularization
+
+Status: advanced by four safe extraction knives.
+
+Commits:
+
+- `ad66a06` - `refactor: extract candidate profile module`
+- `3e9ab13` - `refactor: extract corpus markdown editor module`
+- `17b4bcd` - `refactor: extract realtime pcm uplink module`
+- `7c6aceb` - `refactor: extract speaking audio preprocessor runtime`
+
+Extracted modules:
+
+- `web/static/candidate-profile.js`
+- `web/static/corpus-markdown-editor.js`
+- `web/static/realtime-pcm-uplink.js`
+- `web/static/speaking-audio-preprocessor-runtime.js`
+
+Line-count movement:
+
+- `web/static/app.js`: `8352` lines after `candidate-profile` extraction -> `7892` lines now
+- Net reduction during this continuation: `460` lines from `app.js`
+
+Validation per knife:
+
+- `node --check` for the touched frontend modules and `app.js`
+- `python backend_django/manage.py check`
+- `apps.common` Django tests for static route coverage
+- `git diff --check`
+
+Final validation:
+
+- `node --check web/static/app.js`
+- `node --check web/static/corpus-markdown-editor.js`
+- `node --check web/static/realtime-pcm-uplink.js`
+- `node --check web/static/speaking-audio-preprocessor-runtime.js`
+- `node --check web/static/candidate-profile.js`
+- `node --check web/static/examiner-audio-diagnostics.js`
+- `python backend_django/manage.py check`
+- `python backend_django/manage.py test`
 
 ## Blocked / Human-Gated Items
 
@@ -63,55 +103,39 @@ Expected manual validation:
 
 ## Deferred Headless Work
 
-### B. Continue `app.js` modularization
-
-Deferred for this unattended pass.
-
-Reason: `web/static/app.js` and `web/static/index.html` are already dirty with existing WIP. Continuing module extraction without a clean boundary risks mixing unrelated work into a refactor commit.
-
-Current baseline:
-
-- `web/static/app.js`: 8368 lines
-
 ### C. Continue `speaking/services.py` split
 
-Deferred for this unattended pass.
+Deferred.
 
-Reason: multiple speaking service files are already dirty, including `services.py`, `tts_services.py`, `views.py`, `tests.py`, and `corpus_services.py`. Continuing service extraction headlessly risks mixing behavior changes, tests, and refactor movement.
+Reason: Phase 2 realtime validation is now the higher-value next integration
+checkpoint, while `speaking/services.py` extraction should happen one knife at a
+time after the ASR logic layer is accepted.
 
 Current baseline:
 
-- `backend_django/apps/speaking/services.py`: 4387 lines
-- `backend_django/apps/writing/services.py`: 605 lines
+- `backend_django/apps/speaking/services.py`: `4387` lines
 
 ### D. Add more tests
 
 Deferred.
 
-Reason: the current dirty tree already contains speaking test changes. More tests should be added after those changes are classified and either committed or separated.
+Reason: the current full Django suite is green at `272` tests. New tests should
+be added with the next behavior-bearing knife rather than as speculative churn.
 
-## Current Dirty Working Tree
+## Current Working Tree
 
-At report time, the remaining dirty files were:
+At report time, the only remaining dirty file is:
 
-- `backend_django/apps/speaking/corpus_services.py`
-- `backend_django/apps/speaking/services.py`
-- `backend_django/apps/speaking/tests.py`
-- `backend_django/apps/speaking/tts_services.py`
-- `backend_django/apps/speaking/views.py`
 - `backend_django/db.sqlite3`
-- `docs/SPEC-streaming-examiner-followup-phase2.md`
-- `web/static/app.js`
-- `web/static/index.html`
-- `docs/SPEC-overnight-headless.md` (to be committed with this report)
 
-`backend_django/db.sqlite3` remains local state and must not be included in refactor commits.
+`backend_django/db.sqlite3` remains local runtime state and was not included in
+any refactor commit.
 
 ## Next Safe Step
 
-1. Commit this report and the overnight headless plan as documentation only.
-2. Classify the existing dirty speaking and frontend files into their owning work streams.
-3. After the tree is clean or isolated, resume either:
-   - real ASR endpoint validation, if credentials are ready; or
-   - one clean `app.js` extraction knife; or
-   - one clean `speaking/services.py` extraction knife.
+1. If ASR credentials are ready, perform real OpenSpeech/VolcEngine validation
+   for Phase 2.3.
+2. If credentials are not ready, continue `app.js` modularization with another
+   low-risk view/controller extraction.
+3. Keep `speaking/services.py` extraction as a separate one-knife-at-a-time
+   refactor after the realtime path is verified.
