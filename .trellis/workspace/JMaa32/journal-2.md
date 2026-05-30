@@ -168,3 +168,34 @@ Extracted speaking report validity, history/detail/delete payloads, AI task summ
 ### Next Steps
 
 - None - task complete
+
+
+## Session 61: Split writing report services
+
+**Date**: 2026-05-30
+**Task**: Split writing report services
+**Branch**: `main`
+
+### Summary
+
+Extracted writing summary, report list payloads, entry payloads, score payload shaping, and learner profile snapshots into backend_django/apps/writing/report_services.py. Kept apps.writing.services as the compatibility facade for existing views, tests, and worker callbacks. Verified writing tests, full Django tests, system checks, migrations dry-run, and legacy retirement validator.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
