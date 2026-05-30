@@ -1882,16 +1882,10 @@ function stopExaminerPlayback() {
       // Ignore seek errors for unloaded audio.
     }
   }
-  for (const audio of state.examinerAudioPreloads.values()) {
-    audio.pause();
-    audio.onended = null;
-    audio.onerror = null;
-    try {
-      audio.currentTime = 0;
-    } catch {
-      // Ignore seek errors for unloaded audio.
-    }
-  }
+  // Keep inactive preload cache warm. Resetting every cached Audio object here
+  // cancels buffering for the next fixed examiner prompt and can cause mid-play
+  // stalls when that prompt starts a few seconds later. Full cache cleanup still
+  // happens through clearExaminerAudioPreloads() when the practice surface exits.
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   state.browserTtsUtterance = null;
 }
