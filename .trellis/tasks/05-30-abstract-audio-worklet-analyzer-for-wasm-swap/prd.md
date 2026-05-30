@@ -8,7 +8,8 @@ Keep the standalone AudioWorklet microphone demo usable today while separating f
 
 - Only modify the standalone files under `web/static/wasm/`.
 - Do not integrate this into the production P1/P2/P3 recording flow.
-- Do not require Emscripten or generated WASM artifacts.
+- The `Mock RMS` analyzer remains usable without generated artifacts.
+- The `WASM audio_core` analyzer requires `scripts/build_audio_core_wasm.sh` to generate the ignored `audio_core_wasm.js/.wasm` artifacts.
 
 ## Acceptance Criteria
 

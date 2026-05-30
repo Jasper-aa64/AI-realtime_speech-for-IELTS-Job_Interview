@@ -10,7 +10,7 @@ audio_core.wasm             = 浏览器端轻量预处理
 C++ realtime gateway        = 后续实时转写网关
 ```
 
-本阶段只做选型和 demo scaffold，不接入正式 P1/P2/P3 练习流程。
+本阶段只做开源库复用、C++ 纯核、WASM 构建和独立浏览器 demo，不接入正式 P1/P2/P3 练习流程。
 
 ## 选型结论
 
@@ -32,9 +32,14 @@ C++ realtime gateway        = 后续实时转写网关
 | SpeexDSP | DSP / resampler / noise processing | 音频处理能力更广 | 不是最直接的 VAD 目标，第一阶段会分散重点 | 后续可作为 resampler/noise 备选 |
 | libsamplerate | 高质量采样率转换 | resampling 质量高，BSD-2 | 不解决 VAD；当前 `audio_core` 已有 deterministic linear baseline | 暂不作为实验5主复用点 |
 
-## 当前 WASM Demo 边界
+## 当前 WASM Demo 边界与实际进度
 
-新增 demo 只验证一件事：已经抽出的 `ielts::audio` 纯 C++ 核可以通过 Emscripten 跑在浏览器里。构建脚本现在会同时编译 `audio_core` 和 `libfvad` 源码，使后续 browser-side WebRTC VAD demo 能在同一条路径上继续推进。
+新增 demo 验证两件事：
+
+1. 已经抽出的 `ielts::audio` 纯 C++ 核可以通过 Emscripten 跑在浏览器里。
+2. 浏览器 `AudioWorklet` 采集到的实时 frame 可以通过 analyzer 抽象切换到 `audio_core_wasm.js` 分析，而不是停留在 JavaScript mock。
+
+构建脚本现在会同时编译 `audio_core` 和 `libfvad` 源码。`libfvad` 的 C 源文件以 C object 编译，`audio_core` / wrapper 以 C++17 编译，再统一链接成浏览器端 `audio_core_wasm.js/.wasm`。WASM wrapper 导出 `HEAP16`，并开启 C++ exception catching，使 invalid frame 等边界错误能返回 wrapper 错误码，而不是在浏览器里 abort。
 
 文件：
 
@@ -42,15 +47,27 @@ C++ realtime gateway        = 后续实时转写网关
 - `scripts/build_audio_core_wasm.sh`：Emscripten 构建脚本。
 - `web/static/wasm/audio_core_demo.html`：独立 demo 页面。
 - `web/static/wasm/audio_core_demo.js`：加载生成的 WASM module 并跑 smoke test。
+- `web/static/wasm/audio_worklet_demo.html`：独立 AudioWorklet frame demo。
+- `web/static/wasm/audio_worklet_demo.js`：麦克风 frame 流与 analyzer 切换 UI。
+- `web/static/wasm/audio_frame_processor.js`：只负责在 AudioWorklet 中采集 frame 并传回主线程。
+- `web/static/wasm/audio_analyzer.js`：主线程 analyzer registry，包含 `Mock RMS` 和 `WASM audio_core` 两条路径。
 
 生成文件不提交：
 
 - `web/static/wasm/audio_core_wasm.js`
 - `web/static/wasm/audio_core_wasm.wasm`
 
+已验证：
+
+- `scripts/build_audio_core_wasm.sh` 可真实生成 WASM 产物。
+- `audio_core_demo.html` 浏览器 smoke 显示 `WASM smoke test passed`。
+- `audio_worklet_demo.html` 中 `WASM audio_core` 可选，切换后显示 `WASM audio_core analyzer is ready.`。
+- `.wasm` 静态服务 MIME 为 `application/wasm`。
+- 生成产物被 `.gitignore` 忽略，不进入仓库。
+
 ## 后续集成计划
 
-1. 在浏览器 demo 中增加 WebRTC VAD smoke test，验证 10/20/30ms frame 输入。
+1. 在正式 P1/P2/P3 录音链路中增加 feature flag，默认关闭，允许开发环境切到 `WASM audio_core` 预处理。
 2. 在 `audio_core` 继续保留 `VadBackend` 抽象：
 
    ```cpp
@@ -61,8 +78,8 @@ C++ realtime gateway        = 后续实时转写网关
    };
    ```
 
-3. 保留现有 RMS-threshold VAD 作为 deterministic fallback。
-4. WASM demo 先使用 mock PCM；产品集成单独立项，必须保证 baseline 可降级。
+3. 保留现有 RMS-threshold VAD / `Mock RMS` 作为 deterministic fallback。
+4. 产品集成单独立项，必须保证 baseline 可降级；任何 P1/P2/P3 正式流程接入都不能破坏现有浏览器录音与报告生成。
 
 ## 参考来源
 
