@@ -160,6 +160,8 @@ const state = {
     audioPreprocessorMetrics: null,
     audioPreprocessorTurnMetrics: null,
     audioPreprocessorStopPromise: null,
+    audioPreprocessorModulePromise: null,
+    examinerTtsRefreshPromises: new Map(),
   },
   account: {
     authenticated: false,
@@ -1454,6 +1456,7 @@ function resetPracticeSurface() {
   state.transcript = "";
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();
+  state.speaking.examinerTtsRefreshPromises.clear();
   clearExaminerAudioPreloads();
   const summaryPanel = $("#summaryPanel");
   const isPracticeMode = ["mock", "p1", "p2", "p3"].includes(state.view);
@@ -1807,8 +1810,9 @@ function renderExaminerAudio(turn) {
   audio.classList.add("hidden");
   $("browserTtsFallback").classList.add("hidden");
   if (tts.audio_url) {
-    prepareExaminerAudioElement(audio, tts.audio_url);
     primeExaminerAudio(tts.audio_url);
+  } else if (isPendingExaminerTts(tts) && state.attempt?.id && state.practiceSessionId) {
+    refreshPendingExaminerTts(turn, state.practiceSessionId).catch(() => null);
   }
 }
 
@@ -1939,7 +1943,7 @@ function waitForAudioReady(audio) {
     audio.addEventListener("canplaythrough", finish, { once: true });
     audio.addEventListener("loadeddata", finish, { once: true });
     audio.addEventListener("error", finish, { once: true });
-    audio.load();
+    if (audio.networkState === HTMLMediaElement.NETWORK_EMPTY) audio.load();
   });
 }
 
@@ -1953,27 +1957,41 @@ function wait(ms) {
 
 async function refreshPendingExaminerTts(turn, sessionId) {
   if (!turn || !state.attempt?.id || !isPendingExaminerTts(turn.examiner_tts)) return turn;
-  const deadline = Date.now() + EXAMINER_TTS_REFRESH_WAIT_MS;
-  let delay = 0;
-  while (Date.now() <= deadline && isActivePracticeSession(sessionId) && state.currentTurn?.id === turn.id) {
-    if (delay > 0) await wait(delay);
-    try {
-      const payload = await api(`/api/attempts/${encodeURIComponent(state.attempt.id)}/turns/${encodeURIComponent(turn.id)}/examiner-tts`);
-      const refreshedTts = payload?.examiner_tts || null;
-      if (refreshedTts) {
-        turn.examiner_tts = refreshedTts;
-        state.currentTurn = { ...state.currentTurn, examiner_tts: refreshedTts };
-        state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, examiner_tts: refreshedTts });
-        renderExaminerAudio(state.currentTurn);
-        if (refreshedTts.audio_url) return state.currentTurn;
-        if (!isPendingExaminerTts(refreshedTts)) return state.currentTurn;
+  const attemptId = state.attempt.id;
+  const key = `${attemptId}:${turn.id}`;
+  const existing = state.speaking.examinerTtsRefreshPromises.get(key);
+  if (existing) return existing;
+  const refreshPromise = (async () => {
+    const deadline = Date.now() + EXAMINER_TTS_REFRESH_WAIT_MS;
+    let delay = 0;
+    while (Date.now() <= deadline && isActivePracticeSession(sessionId) && state.currentTurn?.id === turn.id) {
+      if (delay > 0) await wait(delay);
+      try {
+        const payload = await api(`/api/attempts/${encodeURIComponent(attemptId)}/turns/${encodeURIComponent(turn.id)}/examiner-tts`);
+        const refreshedTts = payload?.examiner_tts || null;
+        if (refreshedTts) {
+          turn.examiner_tts = refreshedTts;
+          if (state.currentTurn?.id === turn.id) {
+            state.currentTurn = { ...state.currentTurn, examiner_tts: refreshedTts };
+            state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, examiner_tts: refreshedTts });
+            renderExaminerAudio(state.currentTurn);
+          }
+          if (refreshedTts.audio_url) return state.currentTurn?.id === turn.id ? state.currentTurn : turn;
+          if (!isPendingExaminerTts(refreshedTts)) return state.currentTurn?.id === turn.id ? state.currentTurn : turn;
+        }
+      } catch (_error) {
+        return turn;
       }
-    } catch (_error) {
-      return turn;
+      delay = EXAMINER_TTS_REFRESH_INTERVAL_MS;
     }
-    delay = EXAMINER_TTS_REFRESH_INTERVAL_MS;
-  }
-  return state.currentTurn?.id === turn.id ? state.currentTurn : turn;
+    return state.currentTurn?.id === turn.id ? state.currentTurn : turn;
+  })().finally(() => {
+    if (state.speaking.examinerTtsRefreshPromises.get(key) === refreshPromise) {
+      state.speaking.examinerTtsRefreshPromises.delete(key);
+    }
+  });
+  state.speaking.examinerTtsRefreshPromises.set(key, refreshPromise);
+  return refreshPromise;
 }
 
 function isActivePracticeSession(sessionId) {
@@ -2013,36 +2031,21 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
     tts = refreshedTurn?.examiner_tts || {};
   }
   if (tts.audio_url) {
-    const preloaded = state.examinerAudioPreloads.get(tts.audio_url);
-    if (preloaded && preloaded.readyState >= 3) {
-      state.activeExaminerAudio = preloaded;
-      preloaded.onended = () => {
-        if (state.activeExaminerAudio === preloaded) state.activeExaminerAudio = null;
-        if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
-      };
-      preloaded.onerror = () => {
-        if (state.activeExaminerAudio === preloaded) state.activeExaminerAudio = null;
-        if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
-      };
-      preloaded.currentTime = 0;
-      preloaded.play().catch(() => isActivePracticeSession(sessionId) && beginPreparation(sessionId));
-    } else {
-      const audio = $("examinerAudio");
-      state.activeExaminerAudio = audio;
-      audio.onended = () => {
-        if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
-        if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
-      };
-      audio.onerror = () => {
-        if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
-        if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
-      };
-      prepareExaminerAudioElement(audio, tts.audio_url);
-      await waitForAudioReady(audio);
-      if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
-      audio.currentTime = 0;
-      audio.play().catch(() => isActivePracticeSession(sessionId) && beginPreparation(sessionId));
-    }
+    const audio = primeExaminerAudio(tts.audio_url) || $("examinerAudio");
+    state.activeExaminerAudio = audio;
+    audio.onended = () => {
+      if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
+      if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
+    };
+    audio.onerror = () => {
+      if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
+      if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
+    };
+    if (audio === $("examinerAudio")) prepareExaminerAudioElement(audio, tts.audio_url);
+    await waitForAudioReady(audio);
+    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
+    audio.currentTime = 0;
+    audio.play().catch(() => isActivePracticeSession(sessionId) && beginPreparation(sessionId));
     return;
   }
   text("recordStatus", "Examiner audio is not ready. Starting preparation without browser voice.");
@@ -2166,10 +2169,21 @@ function recordWasmAudioPreprocessMetrics(metrics, extra = {}) {
   };
 }
 
+function loadSpeakingAudioPreprocessorModule() {
+  if (!state.speaking.audioPreprocessorModulePromise) {
+    state.speaking.audioPreprocessorModulePromise = import("/wasm/speaking_audio_preprocessor.js")
+      .catch((error) => {
+        state.speaking.audioPreprocessorModulePromise = null;
+        throw error;
+      });
+  }
+  return state.speaking.audioPreprocessorModulePromise;
+}
+
 async function summarizeWasmAudioPreprocessMetrics(metrics) {
   if (!metrics || metrics.enabled !== true) return null;
   try {
-    const module = await import("/wasm/speaking_audio_preprocessor.js");
+    const module = await loadSpeakingAudioPreprocessorModule();
     return module.summarizeSpeakingAudioPreprocessingMetrics(metrics);
   } catch (error) {
     return {
@@ -2211,7 +2225,7 @@ async function maybeStartSpeakingAudioPreprocessor(stream, sessionId = state.pra
   });
 
   try {
-    const module = await import("/wasm/speaking_audio_preprocessor.js");
+    const module = await loadSpeakingAudioPreprocessorModule();
     if (token !== state.speaking.audioPreprocessorToken || !isActivePracticeSession(sessionId)) return;
     const preprocessor = module.createSpeakingAudioPreprocessor({
       analyzerId: config.analyzerId,
@@ -7137,6 +7151,7 @@ function stopAllRuntime(label = "Ready") {
   state.transcript = "";
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();
+  state.speaking.examinerTtsRefreshPromises.clear();
   state.transcriptFinal = "";
   state.transcriptInterim = "";
   state.transcriptStatus = "missing";

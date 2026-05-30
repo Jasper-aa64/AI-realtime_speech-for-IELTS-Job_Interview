@@ -23,6 +23,8 @@ export function analyzerLabel(analyzerId) {
   return analyzerById(analyzerId).label;
 }
 
+let wasmAudioCoreModulePromise = null;
+
 function clampSample(sample) {
   return Math.max(-1, Math.min(1, sample));
 }
@@ -75,8 +77,15 @@ class WasmAudioCoreAnalyzer {
   }
 
   static async create(options = {}) {
-    const moduleFactory = await import("./audio_core_wasm.js");
-    const module = await moduleFactory.default();
+    if (!wasmAudioCoreModulePromise) {
+      wasmAudioCoreModulePromise = import("./audio_core_wasm.js")
+        .then((moduleFactory) => moduleFactory.default())
+        .catch((error) => {
+          wasmAudioCoreModulePromise = null;
+          throw error;
+        });
+    }
+    const module = await wasmAudioCoreModulePromise;
     return new WasmAudioCoreAnalyzer(module, options);
   }
 
