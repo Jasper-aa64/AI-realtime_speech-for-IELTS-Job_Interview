@@ -61,6 +61,7 @@ bash -n "${ROOT_DIR}/scripts/run_experiment5_reuse_validation.sh"
 "${ROOT_DIR}/scripts/run_experiment3_tdd_validation.sh"
 "${ROOT_DIR}/scripts/run_experiment4_refactor_validation.sh"
 "${ROOT_DIR}/scripts/run_experiment5_reuse_validation.sh"
+python3 "${ROOT_DIR}/scripts/validate_legacy_server_retirement.py"
 echo
 
 echo "Software construction deliverables validation passed."
