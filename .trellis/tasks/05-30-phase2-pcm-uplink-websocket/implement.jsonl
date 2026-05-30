@@ -1,0 +1,4 @@
+{"file":"docs/SPEC-streaming-examiner-followup-phase2.md","why":"Phase 2.2 scope and red lines."}
+{"file":"backend_django/apps/speaking/consumers.py","why":"Existing Phase 2.1 ping consumer to extend safely."}
+{"file":"web/static/wasm/speaking_audio_preprocessor.js","why":"Existing PCM callback hook."}
+{"file":"web/static/app.js","why":"Existing recording/preprocessor wiring."}

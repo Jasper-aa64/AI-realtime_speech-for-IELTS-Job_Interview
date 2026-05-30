@@ -1,0 +1,4 @@
+{"command":"cd backend_django && ../.venv-django/bin/python manage.py test apps.speaking.test_asgi_channels -v 1","why":"WebSocket ping and PCM uplink tests."}
+{"command":"node --check web/static/app.js","why":"Frontend syntax."}
+{"command":"node --check web/static/wasm/speaking_audio_preprocessor.js","why":"Preprocessor syntax."}
+{"command":"cd backend_django && ../.venv-django/bin/python manage.py test -v 1","why":"Full sync-stack regression after Channels/WS change."}
