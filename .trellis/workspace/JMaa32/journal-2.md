@@ -230,3 +230,36 @@ Extracted pure speaking scoring calibration, heuristic fallback scoring, relevan
 ### Next Steps
 
 - None - task complete
+
+
+## Session 63: Split frontend appearance controls
+
+**Date**: 2026-05-30
+**Task**: Split frontend appearance controls
+**Branch**: `main`
+
+### Summary
+
+Extracted local font style and dark mode behavior from web/static/app.js into web/static/appearance.js, added Django static serving for /appearance.js, and verified JS syntax, Django check, asset smoke, diff check, and legacy-server retirement validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `19088d2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

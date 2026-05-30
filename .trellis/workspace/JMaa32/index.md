@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 62
+- **Total Sessions**: 63
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~232 | Active |
+| `journal-2.md` | ~265 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 63 | 2026-05-30 | Split frontend appearance controls | `19088d2` | `main` |
 | 62 | 2026-05-30 | Split speaking scoring helpers | - | `main` |
 | 61 | 2026-05-30 | Split writing report services | - | `main` |
 | 60 | 2026-05-30 | Split speaking report history services | - | `main` |
