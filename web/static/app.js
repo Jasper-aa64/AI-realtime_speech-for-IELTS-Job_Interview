@@ -2606,13 +2606,21 @@ function mergeCompletedTurnPayload(attemptPayload, completedTurn) {
   return { ...attemptPayload, turns };
 }
 
-function completeTurnPayload(turn, transcript, transcriptStatus, p2CorpusEntryId = state.p2Corpus.selectedEntryId, audioPreprocessingMetrics = null) {
+function completeTurnPayload(
+  turn,
+  transcript,
+  transcriptStatus,
+  p2CorpusEntryId = state.p2Corpus.selectedEntryId,
+  audioPreprocessingMetrics = null,
+  streamFollowUp = false,
+) {
   return {
     transcript_raw: transcript,
     transcript_status: transcriptStatus,
     transcript_source: "browser_dictation",
     ...(turn.part === "p2" && p2CorpusEntryId ? { p2_corpus_link: { entry_id: p2CorpusEntryId } } : {}),
     ...(audioPreprocessingMetrics ? { audio_preprocessing_metrics: audioPreprocessingMetrics } : {}),
+    ...(streamFollowUp ? { stream_follow_up: true } : {}),
   };
 }
 
@@ -2656,6 +2664,141 @@ function handleTurnCompletionResult(attempt, turn, completePayload) {
   }
 }
 
+function shouldStreamFollowUpTurn(turn) {
+  const prompt = turn?.prompt || {};
+  return prompt.backend === "stream_pending" || prompt.generation_status === "pending";
+}
+
+function mergeStreamingFollowUpTurn(nextTurn, patch) {
+  const question = patch.question ?? patch.text ?? nextTurn?.question ?? "";
+  const prompt = { ...(nextTurn?.prompt || {}), ...(patch.prompt || {}), ...(question ? { question } : {}) };
+  return {
+    ...nextTurn,
+    ...(patch.turn || {}),
+    question,
+    prompt,
+    examiner_text: patch.examiner_text ?? question,
+    ...(patch.examiner_tts ? { examiner_tts: patch.examiner_tts } : {}),
+  };
+}
+
+function parseSseEventBlock(block) {
+  const dataLines = String(block || "")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart());
+  if (!dataLines.length) return null;
+  try {
+    return JSON.parse(dataLines.join("\n"));
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function consumeSseResponse(response, onPayload) {
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    let message = body || `Request failed: ${response.status}`;
+    try {
+      const parsed = JSON.parse(body);
+      message = parsed.error || message;
+    } catch (_error) {
+      // Keep the raw response text.
+    }
+    throw new Error(message);
+  }
+  if (!response.body?.getReader) {
+    throw new Error("Streaming follow-up is not supported in this browser.");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\n\n/);
+    buffer = blocks.pop() || "";
+    for (const block of blocks) {
+      const payload = parseSseEventBlock(block);
+      if (payload) await onPayload(payload);
+    }
+  }
+  buffer += decoder.decode();
+  const payload = parseSseEventBlock(buffer);
+  if (payload) await onPayload(payload);
+}
+
+async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, sessionId) {
+  if (!attempt?.id || !completedTurn?.id || !nextTurn?.id || !shouldStreamFollowUpTurn(nextTurn)) return false;
+  let currentNextTurn = nextTurn;
+  let streamedText = "";
+  let examinerStarted = false;
+  const startExaminerOnce = () => {
+    if (examinerStarted || !isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
+    examinerStarted = true;
+    clearAutoNextTimeout();
+    state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 120);
+  };
+  const applyTurnPatch = (patch) => {
+    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
+    currentNextTurn = mergeStreamingFollowUpTurn(currentNextTurn, patch);
+    state.currentTurn = currentNextTurn;
+    state.attempt = mergeCompletedTurnPayload(state.attempt, currentNextTurn);
+    renderTurn(currentNextTurn);
+  };
+
+  text("recordStatus", "Examiner is generating the follow-up...");
+  const response = await fetch(`/api/attempts/${encodeURIComponent(attempt.id)}/turns/${encodeURIComponent(completedTurn.id)}/follow-up-stream`, {
+    method: "GET",
+    credentials: "same-origin",
+    headers: { "Accept": "text/event-stream" },
+  });
+  await consumeSseResponse(response, async (payload) => {
+    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
+    if (payload.event === "chunk") {
+      streamedText += payload.text || "";
+      if (streamedText.trim()) {
+        applyTurnPatch({ text: streamedText });
+        text("recordStatus", "Examiner follow-up is appearing...");
+      }
+      return;
+    }
+    if (payload.event === "question_complete") {
+      streamedText = payload.text || streamedText;
+      applyTurnPatch({ text: streamedText, turn: payload.turn });
+      text("recordStatus", "Question ready. The examiner audio will start automatically.");
+      return;
+    }
+    if (payload.event === "tts_ready") {
+      applyTurnPatch({ examiner_tts: payload.examiner_tts || { audio_url: payload.audio_url, status: "ready", provider: "volcengine" } });
+      text("recordStatus", "Examiner audio is ready.");
+      startExaminerOnce();
+      return;
+    }
+    if (payload.event === "tts_timeout") {
+      applyTurnPatch({ examiner_tts: payload.examiner_tts || { provider: "volcengine", status: "pending", audio_url: null } });
+      text("recordStatus", "Examiner audio is still generating. Starting preparation safely.");
+      startExaminerOnce();
+      return;
+    }
+    if (payload.event === "fallback") {
+      streamedText = payload.text || streamedText || currentNextTurn.question || "";
+      applyTurnPatch({ text: streamedText, turn: payload.turn });
+      text("recordStatus", "Follow-up generated through fallback. The examiner prompt will start automatically.");
+      startExaminerOnce();
+      return;
+    }
+    if (payload.event === "done") {
+      if (payload.turn) applyTurnPatch({ turn: payload.turn });
+      startExaminerOnce();
+    }
+  });
+  startExaminerOnce();
+  return true;
+}
+
 async function finalizeTurn(mimeType) {
   const attempt = state.attempt;
   const turn = state.currentTurn;
@@ -2686,12 +2829,13 @@ async function finalizeTurn(mimeType) {
     const transcriptSnapshot = state.transcript;
     const transcriptStatusSnapshot = state.transcriptStatus;
     const p2CorpusEntrySnapshot = state.p2Corpus.selectedEntryId;
-    const completeRequest = () => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
+    const completeRequest = (streamFollowUp = false) => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
       turn,
       transcriptSnapshot,
       transcriptStatusSnapshot,
       p2CorpusEntrySnapshot,
       audioPreprocessingMetrics,
+      streamFollowUp,
     ));
     if (!requiresSyncComplete) {
       const sessionId = state.practiceSessionId;
@@ -2721,7 +2865,7 @@ async function finalizeTurn(mimeType) {
     }
     setRecordButton("processing", "Saving", completionStatus);
     text("recordStatus", completionStatus);
-    const completePayload = await completeRequest();
+    const completePayload = await completeRequest(requiresSyncComplete);
     if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
     state.attempt = completePayload.attempt;
     if (completePayload.next_turn) {
@@ -2729,9 +2873,19 @@ async function finalizeTurn(mimeType) {
       state.currentTurn = completePayload.next_turn;
       renderTurn(completePayload.next_turn);
       setRecordButton("turn_saved", "Next", "Moving to the next question.");
-      text("recordStatus", "Question saved. The next examiner prompt will start automatically.");
       clearAutoNextTimeout();
-      state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 650);
+      if (shouldStreamFollowUpTurn(completePayload.next_turn)) {
+        text("recordStatus", "Question saved. Streaming examiner follow-up...");
+        streamFollowUpForCompletedTurn(attempt, turn, completePayload.next_turn, sessionId)
+          .catch((error) => {
+            if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+            showError(error);
+            state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 650);
+          });
+      } else {
+        text("recordStatus", "Question saved. The next examiner prompt will start automatically.");
+        state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 650);
+      }
     } else {
       state.currentTurn = null;
       await scoreAttempt();
