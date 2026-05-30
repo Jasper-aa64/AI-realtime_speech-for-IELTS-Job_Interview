@@ -628,3 +628,38 @@ Added account-page question bank scope selector, scoped Django question-bank/sam
 ### Next Steps
 
 - None - task complete
+
+
+## Session 75: Consolidate remaining WIP lines
+
+**Date**: 2026-05-30
+**Task**: Consolidate remaining WIP lines
+**Branch**: `main`
+
+### Summary
+
+Separated and committed the remaining appearance theme CSS, writing prompt search quality tests and evaluator, CLI search reuse, and speaking report batch feedback regression test. Left local db.sqlite3 unstaged.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3380bd7` | (see git log) |
+| `a46c05d` | (see git log) |
+| `4221e82` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
