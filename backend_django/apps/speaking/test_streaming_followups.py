@@ -156,6 +156,22 @@ class StreamingFollowUpTests(TestCase):
                 "/api/attempts/stream-p1-attempt/turns/t2/complete",
                 data={
                     "transcript_raw": "I study software engineering and do an internship at a tech company.",
+                    "transcript_source": "volcengine_realtime_asr",
+                    "realtime_asr_metrics": {
+                        "enabled": True,
+                        "status": "closed",
+                        "asrStatus": "done",
+                        "asrConfigured": True,
+                        "asrEnabled": True,
+                        "asrProvider": "volcengine_realtime_asr",
+                        "transcriptSource": "volcengine_realtime_asr",
+                        "framesSent": 12,
+                        "framesAcked": 12,
+                        "bytesSent": 3840,
+                        "bytesAcked": 3840,
+                        "firstTranscriptMs": 360,
+                        "finalTranscriptMs": 980,
+                    },
                     "stream_follow_up": True,
                 },
                 content_type="application/json",
@@ -164,5 +180,8 @@ class StreamingFollowUpTests(TestCase):
         self.assertEqual(response.status_code, 200)
         generate_follow_up.assert_not_called()
         payload = response.json()
+        self.assertEqual(payload["turn"]["transcript_source"], "volcengine_realtime_asr")
+        self.assertEqual(payload["turn"]["realtime_asr_metrics"]["asr_status"], "done")
+        self.assertEqual(payload["turn"]["realtime_asr_metrics"]["first_transcript_ms"], 360)
         self.assertEqual(payload["next_turn"]["prompt"]["backend"], "stream_pending")
         self.assertEqual(payload["next_turn"]["examiner_tts"]["status"], "pending")

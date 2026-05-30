@@ -1618,6 +1618,7 @@ def _turn_payload(turn: SpeakingTurn, total: int | None = None) -> dict[str, Any
         "display_transcript_markdown": metadata.get("display_transcript_markdown", ""),
         "transcript_markdown": metadata.get("transcript_markdown") or _spoken_markdown(turn.transcript_cleaned or turn.transcript_raw),
         "transcript_status": metadata.get("transcript_status") or ("captured" if (turn.transcript_cleaned or turn.transcript_raw) else "missing"),
+        "transcript_source": turn.transcript_source or metadata.get("transcript_source", ""),
         "duration_seconds": float(turn.duration_seconds) if turn.duration_seconds is not None else None,
         "band7_version": metadata.get("band7_version", ""),
         "band7_markdown": metadata.get("band7_markdown", metadata.get("band7_version", "")),
