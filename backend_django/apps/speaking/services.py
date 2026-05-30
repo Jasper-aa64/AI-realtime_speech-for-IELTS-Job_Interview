@@ -2223,6 +2223,7 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
     def generate() -> Iterator[str]:
         started = time.monotonic()
         parts: list[str] = []
+        yield _sse_payload({"event": "start"})
         try:
             provider = HttpApiProvider()
             for token in provider.stream_tokens(
@@ -2230,7 +2231,7 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
                     {"role": "system", "content": context["system"]},
                     {"role": "user", "content": context["prompt"]},
                 ],
-                max_tokens=90,
+                max_tokens=32,
                 temperature=0.2,
                 timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
             ):
