@@ -1,0 +1,5 @@
+{"type":"command","cmd":"../.venv-django/bin/python manage.py test apps.speaking.test_asgi_channels -v 1","cwd":"backend_django","note":"Target ASGI WebSocket logic-layer tests."}
+{"type":"command","cmd":"node --check web/static/app.js","cwd":".","note":"Frontend syntax check."}
+{"type":"command","cmd":"../.venv-django/bin/python manage.py check","cwd":"backend_django","note":"Django system check."}
+{"type":"command","cmd":"../.venv-django/bin/python manage.py test -v 1","cwd":"backend_django","note":"Full Django regression suite before commit."}
+{"type":"command","cmd":"git diff --check","cwd":".","note":"Whitespace and patch hygiene."}

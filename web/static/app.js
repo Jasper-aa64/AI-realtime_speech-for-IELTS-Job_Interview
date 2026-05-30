@@ -2455,6 +2455,54 @@ function recordRealtimePcmMetrics(patch = {}) {
   };
 }
 
+function applyRealtimeAsrTranscript(payload = {}) {
+  const event = String(payload.event || "");
+  if (event === "asr_started") {
+    recordRealtimePcmMetrics({ asrStatus: "started", asrProvider: payload.provider || "" });
+    setDictationStatus("listening", "服务端实时转写已连接，继续直接回答。");
+    return;
+  }
+  if (event === "asr_interim") {
+    const interim = String(payload.interim || "");
+    const finalText = state.transcriptFinal || String(payload.text || "");
+    state.transcriptFinal = finalText;
+    state.transcriptInterim = interim;
+    state.transcript = [finalText, interim].filter(Boolean).join(" ").trim();
+    state.transcriptStatus = state.transcript ? "interim_fallback" : "missing";
+    recordRealtimePcmMetrics({ asrStatus: "interim", asrInterim: interim });
+    if (state.transcript) setDictationStatus("listening", "服务端实时转写正在更新。");
+    return;
+  }
+  if (event === "asr_final") {
+    const finalText = String(payload.text || payload.segment || "").trim();
+    if (finalText) {
+      state.transcriptFinal = finalText;
+      state.transcriptInterim = "";
+      state.transcript = finalText;
+      state.transcriptStatus = "captured";
+      recordRealtimePcmMetrics({ asrStatus: "final", asrTranscript: finalText });
+      setDictationStatus("captured", "服务端实时转写已捕捉到文字。");
+    }
+    return;
+  }
+  if (event === "asr_done") {
+    const transcript = String(payload.transcript || "").trim();
+    if (transcript) {
+      state.transcriptFinal = transcript;
+      state.transcriptInterim = "";
+      state.transcript = transcript;
+      state.transcriptStatus = "captured";
+      setDictationStatus("captured", "服务端实时转写已完成。");
+    }
+    recordRealtimePcmMetrics({ asrStatus: payload.ok ? "done" : "done_empty", asrTranscript: transcript });
+    return;
+  }
+  if (event === "asr_error") {
+    recordRealtimePcmMetrics({ asrStatus: "error", lastError: String(payload.error || "ASR failed") });
+    setDictationStatus("reconnecting", "服务端实时转写暂不可用，继续使用浏览器转写和批处理兜底。");
+  }
+}
+
 function stopRealtimePcmUplink(reason = "stopped") {
   const socket = state.speaking.realtimePcmSocket;
   state.speaking.realtimePcmSocket = null;
@@ -2500,6 +2548,7 @@ function startRealtimePcmUplink(sessionId = state.practiceSessionId) {
     }
     recordRealtimePcmMetrics({ status: "open" });
     socket.send(JSON.stringify({ event: "start", sample_rate: 16000, channels: 1 }));
+    socket.send(JSON.stringify({ event: "start_asr" }));
   };
   socket.onmessage = (event) => {
     try {
@@ -2510,6 +2559,8 @@ function startRealtimePcmUplink(sessionId = state.practiceSessionId) {
           framesAcked: Number(payload.frames || 0),
           bytesAcked: Number(payload.bytes || 0),
         });
+      } else if (String(payload.event || "").startsWith("asr_")) {
+        applyRealtimeAsrTranscript(payload);
       }
     } catch {
       // Keep PCM uplink diagnostic-only; malformed server messages should not affect recording.

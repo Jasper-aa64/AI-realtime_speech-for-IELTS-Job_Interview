@@ -1,0 +1,11 @@
+{"type":"spec","path":".trellis/spec/backend/index.md","note":"Backend conventions and AI/runtime boundaries."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","note":"Django-only runtime, service split, testing requirements."}
+{"type":"spec","path":".trellis/spec/frontend/index.md","note":"Frontend conventions and runtime UX rules."}
+{"type":"spec","path":".trellis/spec/frontend/quality-guidelines.md","note":"Voice-first UI, fallback and timer/audio safety contracts."}
+{"type":"spec","path":".trellis/spec/frontend/wasm-audio-guidelines.md","note":"Feature-flagged speaking runtime diagnostics and PCM constraints."}
+{"type":"spec","path":".trellis/spec/guides/cross-layer-thinking-guide.md","note":"Feature crosses browser, WS consumer, provider, and UI transcript state."}
+{"type":"code","path":"backend_django/apps/speaking/consumers.py","note":"Realtime PCM WebSocket consumer to extend."}
+{"type":"code","path":"backend_django/apps/speaking/volcengine_asr.py","note":"Existing realtime ASR provider stream function."}
+{"type":"code","path":"backend_django/apps/speaking/test_asgi_channels.py","note":"ASGI WebSocket tests."}
+{"type":"code","path":"backend_django/apps/speaking/test_realtime_asr.py","note":"Existing fake websocket ASR provider tests."}
+{"type":"code","path":"web/static/app.js","note":"Existing optional PCM uplink and live transcript state."}
