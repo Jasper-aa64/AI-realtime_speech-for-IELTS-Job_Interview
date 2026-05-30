@@ -32,6 +32,10 @@
       };
     }
 
+    function transcriptSourceFromPayload(payload = {}) {
+      return payload.provider || "volcengine_realtime_asr";
+    }
+
     function applyAsrTranscript(payload = {}) {
       const event = String(payload.event || "");
       const context = payload.turn_context && typeof payload.turn_context === "object" ? payload.turn_context : {};
@@ -47,7 +51,8 @@
         state.transcriptInterim = interim;
         state.transcript = [finalText, interim].filter(Boolean).join(" ").trim();
         state.transcriptStatus = state.transcript ? "interim_fallback" : "missing";
-        recordMetrics({ asrStatus: "interim", asrInterim: interim, turnContext: context });
+        if (state.transcript) state.transcriptSource = transcriptSourceFromPayload(payload);
+        recordMetrics({ asrStatus: "interim", asrInterim: interim, transcriptSource: state.transcriptSource, turnContext: context });
         if (state.transcript) setDictationStatus?.("listening", "服务端实时转写正在更新。");
         return;
       }
@@ -58,7 +63,8 @@
           state.transcriptInterim = "";
           state.transcript = finalText;
           state.transcriptStatus = "captured";
-          recordMetrics({ asrStatus: "final", asrTranscript: finalText, turnContext: context });
+          state.transcriptSource = transcriptSourceFromPayload(payload);
+          recordMetrics({ asrStatus: "final", asrTranscript: finalText, transcriptSource: state.transcriptSource, turnContext: context });
           setDictationStatus?.("captured", "服务端实时转写已捕捉到文字。");
         }
         return;
@@ -70,9 +76,10 @@
           state.transcriptInterim = "";
           state.transcript = transcript;
           state.transcriptStatus = "captured";
+          state.transcriptSource = transcriptSourceFromPayload(payload);
           setDictationStatus?.("captured", "服务端实时转写已完成。");
         }
-        recordMetrics({ asrStatus: payload.ok ? "done" : "done_empty", asrTranscript: transcript, turnContext: context });
+        recordMetrics({ asrStatus: payload.ok ? "done" : "done_empty", asrTranscript: transcript, transcriptSource: state.transcriptSource, turnContext: context });
         return;
       }
       if (event === "asr_error") {

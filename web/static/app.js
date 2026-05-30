@@ -23,6 +23,7 @@ const state = {
   transcriptFinal: "",
   transcriptInterim: "",
   transcriptStatus: "missing",
+  transcriptSource: "browser_dictation",
   dictationFinalWait: null,
   browserTtsUtterance: null,
   activeHistoryId: null,
@@ -2393,6 +2394,7 @@ async function startRecording(sessionId = state.practiceSessionId) {
   state.transcriptFinal = "";
   state.transcriptInterim = "";
   state.transcriptStatus = "missing";
+  state.transcriptSource = "browser_dictation";
   state.dictationRestartCount = 0;
   state.dictationLastError = "";
   setDictationStatus("starting", "浏览器转写启动中；如果开头静音，系统会自动重新监听。");
@@ -2452,6 +2454,7 @@ function completeTurnPayload(
   turn,
   transcript,
   transcriptStatus,
+  transcriptSource = "browser_dictation",
   p2CorpusEntryId = state.p2Corpus.selectedEntryId,
   audioPreprocessingMetrics = null,
   streamFollowUp = false,
@@ -2459,7 +2462,7 @@ function completeTurnPayload(
   return {
     transcript_raw: transcript,
     transcript_status: transcriptStatus,
-    transcript_source: "browser_dictation",
+    transcript_source: transcriptSource || "browser_dictation",
     ...(turn.part === "p2" && p2CorpusEntryId ? { p2_corpus_link: { entry_id: p2CorpusEntryId } } : {}),
     ...(audioPreprocessingMetrics ? { audio_preprocessing_metrics: audioPreprocessingMetrics } : {}),
     ...(streamFollowUp ? { stream_follow_up: true } : {}),
@@ -2669,11 +2672,13 @@ async function finalizeTurn(mimeType) {
     const requiresSyncComplete = turnRequiresSynchronousComplete(turn, localNextTurn);
     const transcriptSnapshot = state.transcript;
     const transcriptStatusSnapshot = state.transcriptStatus;
+    const transcriptSourceSnapshot = state.transcriptSource || "browser_dictation";
     const p2CorpusEntrySnapshot = state.p2Corpus.selectedEntryId;
     const completeRequest = (streamFollowUp = false) => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
       turn,
       transcriptSnapshot,
       transcriptStatusSnapshot,
+      transcriptSourceSnapshot,
       p2CorpusEntrySnapshot,
       audioPreprocessingMetrics,
       streamFollowUp,
@@ -2687,6 +2692,7 @@ async function finalizeTurn(mimeType) {
         transcript_raw: transcriptSnapshot,
         transcript_cleaned: transcriptSnapshot,
         transcript_status: transcriptStatusSnapshot,
+        transcript_source: transcriptSourceSnapshot,
       });
       state.currentTurn = localNextTurn;
       renderTurn(localNextTurn);
@@ -2918,6 +2924,7 @@ function startDictation() {
     state.transcriptInterim = interim;
     state.transcript = [finalText, interim].filter(Boolean).join(" ").trim();
     state.transcriptStatus = finalText ? "captured" : (interim ? "interim_fallback" : "missing");
+    if (state.transcript) state.transcriptSource = "browser_dictation";
     if (state.transcriptStatus === "captured") {
       setDictationStatus("captured", "已捕捉到转写，继续说即可。");
     } else if (state.transcriptStatus === "interim_fallback") {
@@ -6334,6 +6341,7 @@ function stopAllRuntime(label = "Ready") {
   state.transcriptFinal = "";
   state.transcriptInterim = "";
   state.transcriptStatus = "missing";
+  state.transcriptSource = "browser_dictation";
   state.practiceLocked = false;
   const summaryPanel = $("#summaryPanel");
   clearExaminerAudioPreloads();
