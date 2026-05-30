@@ -296,3 +296,36 @@ Extracted frontend CSRF caching and JSON API request handling from web/static/ap
 ### Next Steps
 
 - None - task complete
+
+
+## Session 65: Split speaking TTS services
+
+**Date**: 2026-05-30
+**Task**: Split speaking TTS services
+**Branch**: `main`
+
+### Summary
+
+Extracted low-level speaking TTS fallback, VolcEngine synthesis, cache URL lookup, and media path lookup from apps.speaking.services into apps.speaking.tts_services while preserving services.py public imports and examiner TTS orchestration. Verified speaking tests, full Django tests, check, migration dry-run, diff check, and legacy retirement validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c6a81ae` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
