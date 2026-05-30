@@ -791,3 +791,34 @@ Moved writing prompt picker rendering, filters, task switching, random prompt se
 ### Next Steps
 
 - None - task complete
+
+
+## Session 80: Trace examiner audio playback stability
+
+**Date**: 2026-05-30
+**Task**: Trace examiner audio playback stability
+**Branch**: `main`
+
+### Summary
+
+Added examiner audio diagnostics and changed examiner TTS playback to use the visible audio element while keeping preload cache warm. Fixed prompts now wait for stronger readiness before play, dynamic TTS polling is traced, and window.__ieltsExaminerAudio exposes events/preloads/active state for browser debugging. Validation: node --check web/static/app.js, manage.py check, git diff --check.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
