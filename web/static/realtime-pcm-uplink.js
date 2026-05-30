@@ -24,6 +24,16 @@
       };
     }
 
+    async function fetchRealtimeAsrStatus() {
+      const response = await fetch("/api/speaking/realtime-asr/status", {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" },
+      });
+      if (!response.ok) throw new Error(`Realtime ASR status failed: ${response.status}`);
+      return response.json();
+    }
+
     function recordMetrics(patch = {}) {
       state.speaking.realtimePcmMetrics = {
         ...(state.speaking.realtimePcmMetrics || {}),
@@ -111,13 +121,12 @@
       const config = resolveConfig();
       if (!config.enabled || !window.WebSocket) return null;
       stop("restart");
-      const socket = new WebSocket(config.url);
-      socket.binaryType = "arraybuffer";
-      state.speaking.realtimePcmSocket = socket;
+      let socket = null;
+      let disabled = false;
       recordMetrics({
         enabled: true,
-        running: true,
-        status: "connecting",
+        running: false,
+        status: "checking_asr",
         url: config.url,
         framesSent: 0,
         bytesSent: 0,
@@ -126,46 +135,70 @@
         droppedFrames: 0,
         lastError: "",
       });
-      socket.onopen = () => {
-        if (!isActivePracticeSession(sessionId)) {
-          stop("inactive-session");
-          return;
-        }
-        recordMetrics({ status: "open" });
-        socket.send(JSON.stringify({ event: "start", sample_rate: 16000, channels: 1 }));
-        socket.send(JSON.stringify({
-          event: "start_asr",
-          attempt_id: state.attempt?.id || "",
-          turn_id: state.currentTurn?.id || "",
-          stream_follow_up: shouldStreamFollowUp(state.currentTurn),
-        }));
-      };
-      socket.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data || "{}");
-          if (payload.event === "pcm_ack" || payload.event === "stopped" || payload.event === "status") {
-            recordMetrics({
-              status: payload.event,
-              framesAcked: Number(payload.frames || 0),
-              bytesAcked: Number(payload.bytes || 0),
-            });
-          } else if (String(payload.event || "").startsWith("asr_")) {
-            applyAsrTranscript(payload);
+      const openSocket = () => {
+        if (!isActivePracticeSession(sessionId)) return;
+        socket = new WebSocket(config.url);
+        socket.binaryType = "arraybuffer";
+        state.speaking.realtimePcmSocket = socket;
+        recordMetrics({ running: true, status: "connecting" });
+        socket.onopen = () => {
+          if (!isActivePracticeSession(sessionId)) {
+            stop("inactive-session");
+            return;
           }
-        } catch {
-          // Malformed server messages should not affect baseline recording.
-        }
+          recordMetrics({ status: "open" });
+          socket.send(JSON.stringify({ event: "start", sample_rate: 16000, channels: 1 }));
+          socket.send(JSON.stringify({
+            event: "start_asr",
+            attempt_id: state.attempt?.id || "",
+            turn_id: state.currentTurn?.id || "",
+            stream_follow_up: shouldStreamFollowUp(state.currentTurn),
+          }));
+        };
+        socket.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data || "{}");
+            if (payload.event === "pcm_ack" || payload.event === "stopped" || payload.event === "status") {
+              recordMetrics({
+                status: payload.event,
+                framesAcked: Number(payload.frames || 0),
+                bytesAcked: Number(payload.bytes || 0),
+              });
+            } else if (String(payload.event || "").startsWith("asr_")) {
+              applyAsrTranscript(payload);
+            }
+          } catch {
+            // Malformed server messages should not affect baseline recording.
+          }
+        };
+        socket.onerror = () => {
+          recordMetrics({ status: "error", lastError: "WebSocket error" });
+        };
+        socket.onclose = () => {
+          recordMetrics({ running: false, status: "closed" });
+          if (state.speaking.realtimePcmSocket === socket) state.speaking.realtimePcmSocket = null;
+        };
       };
-      socket.onerror = () => {
-        recordMetrics({ status: "error", lastError: "WebSocket error" });
-      };
-      socket.onclose = () => {
-        recordMetrics({ running: false, status: "closed" });
-        if (state.speaking.realtimePcmSocket === socket) state.speaking.realtimePcmSocket = null;
-      };
+      fetchRealtimeAsrStatus()
+        .then((status) => {
+          if (!isActivePracticeSession(sessionId)) return;
+          recordMetrics({ asrConfigured: Boolean(status?.configured), asrEnabled: Boolean(status?.enabled), asrProvider: status?.provider || "" });
+          if (!status?.configured) {
+            disabled = true;
+            recordMetrics({ running: false, status: "asr_not_configured", lastError: "Realtime ASR is not configured" });
+            setDictationStatus?.("unavailable", "服务端实时转写未配置，继续使用浏览器转写和批处理兜底。");
+            return;
+          }
+          openSocket();
+        })
+        .catch((error) => {
+          disabled = true;
+          recordMetrics({ running: false, status: "asr_status_error", lastError: String(error?.message || error || "status failed") });
+          setDictationStatus?.("reconnecting", "服务端实时转写状态检查失败，继续使用浏览器转写和批处理兜底。");
+        });
       return ({ pcm }) => {
-        if (!isActivePracticeSession(sessionId) || !pcm) return;
-        if (socket.readyState !== WebSocket.OPEN) {
+        if (!isActivePracticeSession(sessionId) || !pcm || disabled) return;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
           recordMetrics({
             droppedFrames: Number(state.speaking.realtimePcmMetrics?.droppedFrames || 0) + 1,
           });
