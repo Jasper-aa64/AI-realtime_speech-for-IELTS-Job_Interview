@@ -263,3 +263,36 @@ Extracted local font style and dark mode behavior from web/static/app.js into we
 ### Next Steps
 
 - None - task complete
+
+
+## Session 64: Split frontend API client
+
+**Date**: 2026-05-30
+**Task**: Split frontend API client
+**Branch**: `main`
+
+### Summary
+
+Extracted frontend CSRF caching and JSON API request handling from web/static/app.js into web/static/api-client.js, served it through Django, and verified JS syntax, Django check, static asset smoke, diff check, and legacy-server retirement validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `355d26f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
