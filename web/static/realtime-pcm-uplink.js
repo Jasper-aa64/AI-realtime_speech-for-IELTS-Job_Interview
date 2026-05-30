@@ -14,6 +14,34 @@
       throw new Error("Realtime PCM uplink requires shared app state and session guard.");
     }
 
+    let stopWaitPromise = null;
+    let stopWaitResolve = null;
+    let stopWaitTimer = null;
+
+    function resolveStopWait(payload = {}) {
+      if (stopWaitTimer) {
+        window.clearTimeout(stopWaitTimer);
+        stopWaitTimer = null;
+      }
+      if (stopWaitResolve) {
+        stopWaitResolve(payload);
+      }
+      stopWaitResolve = null;
+      stopWaitPromise = null;
+    }
+
+    function waitForAsrStop(timeoutMs = 1400) {
+      if (stopWaitPromise) return stopWaitPromise;
+      stopWaitPromise = new Promise((resolve) => {
+        stopWaitResolve = resolve;
+        stopWaitTimer = window.setTimeout(() => {
+          recordMetrics({ asrStatus: "stop_timeout", lastError: "Realtime ASR stop timed out" });
+          resolveStopWait({ event: "asr_stop_timeout" });
+        }, timeoutMs);
+      });
+      return stopWaitPromise;
+    }
+
     function resolveConfig() {
       const params = new URLSearchParams(window.location.search);
       const raw = params.get(queryKey);
@@ -133,31 +161,40 @@
           transcriptSource: state.transcriptSource,
           turnContext: context,
         });
+        resolveStopWait(payload);
         return;
       }
       if (event === "asr_error") {
         recordMetrics({ asrStatus: "error", lastError: String(payload.error || "ASR failed"), turnContext: context });
         setDictationStatus?.("reconnecting", "服务端实时转写暂不可用，继续使用浏览器转写和批处理兜底。");
+        resolveStopWait(payload);
       }
     }
 
     function stop(reason = "stopped") {
       const socket = state.speaking.realtimePcmSocket;
       state.speaking.realtimePcmSocket = null;
-      if (!socket) return;
-      recordMetrics({ running: false, status: reason });
+      if (!socket) return Promise.resolve(null);
+      const waitForStop = waitForAsrStop();
+      recordMetrics({ running: false, status: "stopping_asr", stopReason: reason });
       try {
         if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ event: "stop", reason }));
+          socket.send(JSON.stringify({ event: "stop_asr", reason }));
         }
       } catch {
         // Ignore close races; realtime PCM is diagnostic and must not block recording.
+        resolveStopWait({ event: "asr_stop_send_failed" });
       }
-      try {
-        socket.close(1000, reason);
-      } catch {
-        // Ignore already-closed sockets.
-      }
+      if (socket.readyState !== WebSocket.OPEN) resolveStopWait({ event: "socket_not_open" });
+      return waitForStop.finally(() => {
+        try {
+          if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+            socket.close(1000, reason);
+          }
+        } catch {
+          // Ignore already-closed sockets.
+        }
+      });
     }
 
     function start(sessionId = state.practiceSessionId) {
@@ -226,6 +263,7 @@
         socket.onclose = () => {
           recordMetrics({ running: false, status: "closed" });
           if (state.speaking.realtimePcmSocket === socket) state.speaking.realtimePcmSocket = null;
+          resolveStopWait({ event: "closed" });
         };
       };
       fetchRealtimeAsrStatus()

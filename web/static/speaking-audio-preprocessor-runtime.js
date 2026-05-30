@@ -137,7 +137,7 @@
 
     function stop(reason = "stopped") {
       state.speaking.audioPreprocessorToken += 1;
-      stopRealtimePcmUplink?.(reason);
+      const realtimeStopPromise = Promise.resolve(stopRealtimePcmUplink?.(reason)).catch(() => null);
       const preprocessor = state.speaking.audioPreprocessor;
       state.speaking.audioPreprocessor = null;
       if (!preprocessor) {
@@ -149,7 +149,7 @@
         }
         state.speaking.audioPreprocessorTurnMetrics = null;
         state.speaking.audioPreprocessorStopPromise = null;
-        return Promise.resolve(null);
+        return realtimeStopPromise.then(() => null);
       }
       const stopPromise = preprocessor.stop()
         .then((metrics) => {
@@ -158,6 +158,10 @@
             status: reason,
           });
           return summarizeMetrics(state.speaking.audioPreprocessorMetrics);
+        })
+        .then(async (summary) => {
+          await realtimeStopPromise;
+          return summary;
         })
         .then((summary) => {
           state.speaking.audioPreprocessorTurnMetrics = summary;
@@ -170,7 +174,7 @@
             status: "stop_failed",
             lastError: error instanceof Error ? error.message : String(error),
           });
-          return summarizeMetrics(state.speaking.audioPreprocessorMetrics);
+          return realtimeStopPromise.then(() => summarizeMetrics(state.speaking.audioPreprocessorMetrics));
         });
       state.speaking.audioPreprocessorStopPromise = stopPromise;
       return stopPromise;
