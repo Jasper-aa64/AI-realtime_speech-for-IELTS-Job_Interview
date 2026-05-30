@@ -694,3 +694,36 @@ Added a stage consolidation refactoring completion report, updated the stage con
 ### Next Steps
 
 - None - task complete
+
+
+## Session 77: Fix dynamic speaking TTS playback stalls
+
+**Date**: 2026-05-30
+**Task**: Fix dynamic speaking TTS playback stalls
+**Branch**: `main`
+
+### Summary
+
+Deduped pending examiner TTS refreshes per attempt/turn, reused the same preloaded Audio object for dynamic examiner playback, and cached WASM audio analyzer/module loading to avoid repeat initialization during speaking turns.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c527035` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
