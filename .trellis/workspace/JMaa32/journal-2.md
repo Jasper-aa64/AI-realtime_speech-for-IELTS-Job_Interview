@@ -853,3 +853,34 @@ Added OpenAI-compatible HTTP token streaming, a Django SSE follow-up endpoint fo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 82: Extract corpus and takeaway module
+
+**Date**: 2026-05-30
+**Task**: Extract corpus and takeaway module
+**Branch**: `main`
+
+### Summary
+
+Extracted corpus and Takeaway frontend logic from web/static/app.js into web/static/corpus-takeaway.js, added Django static routing for /corpus-takeaway.js, kept app.js facade wrappers for existing handlers, and verified syntax, Django check, static asset smoke, apps.common tests, and QuestionBankApiTests. app.js is now 8166 lines; corpus-takeaway.js is 1432 lines.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
