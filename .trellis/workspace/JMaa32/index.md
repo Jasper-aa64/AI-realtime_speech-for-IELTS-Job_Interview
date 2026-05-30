@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 51
-- **Last Active**: 2026-05-19
+- **Total Sessions**: 52
+- **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1837 | Active |
+| `journal-1.md` | ~1871 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 52 | 2026-05-30 | Record WASM speaking preprocessing metrics | `09050d9`, `e96e355` | `main` |
 | 51 | 2026-05-19 | Wire Codex writing report generation | `205f698` | `main` |
 | 50 | 2026-05-19 | Require AI-supplied writing paragraph analysis | `079e7d8` | `main` |
 | 49 | 2026-05-19 | Restructure writing reports and enforce paragraphs | `f039938` | `main` |

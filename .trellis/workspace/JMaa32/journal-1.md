@@ -19,7 +19,10 @@
 
 ### Main Changes
 
-(Add details)
+- Added a compact per-turn `audio_preprocessing_metrics` summary for the feature-flagged speaking WASM observer.
+- Persisted sanitized metrics on `SpeakingTurn.metadata` and exposed them through the runtime turn payload.
+- Added regression coverage ensuring raw sample arrays are dropped and ratios are recomputed server-side.
+- Captured the production diagnostics contract in `.trellis/spec/frontend/wasm-audio-guidelines.md`.
 
 ### Git Commits
 
@@ -31,7 +34,13 @@
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `node --check web/static/app.js`
+- [OK] `node --check web/static/wasm/speaking_audio_preprocessor.js`
+- [OK] `python3 -m py_compile backend_django/apps/speaking/services.py backend_django/apps/speaking/tests.py`
+- [OK] `.venv-django/bin/python backend_django/manage.py test apps.speaking.tests.SpeakingRuntimeApiTests.test_turn_complete_persists_audio_preprocessing_metrics -v 2`
+- [OK] `.venv-django/bin/python backend_django/manage.py test apps.speaking.tests -v 1`
+- [OK] `scripts/build_audio_core_wasm.sh`
+- [OK] `git check-ignore -v web/static/wasm/audio_core_wasm.js web/static/wasm/audio_core_wasm.wasm`
 
 ### Status
 
@@ -1823,6 +1832,40 @@ Connected writing score worker to a real Codex adapter, requiring JSON output wi
 | Hash | Message |
 |------|---------|
 | `205f698` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 52: Record WASM speaking preprocessing metrics
+
+**Date**: 2026-05-30
+**Task**: Record WASM speaking preprocessing metrics
+**Branch**: `main`
+
+### Summary
+
+Added feature-flagged per-turn WASM audio preprocessing diagnostics, server-side sanitization/persistence, tests, and WASM audio spec guidance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `09050d9` | (see git log) |
+| `e96e355` | (see git log) |
 
 ### Testing
 
