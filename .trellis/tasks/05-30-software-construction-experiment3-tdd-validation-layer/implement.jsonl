@@ -1,0 +1,7 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend conventions for AI task lifecycle and tests."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Required backend quality gates and existing C++/AI validation contracts."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"AI task lifecycle failure behavior that validation must not regress."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"AI task persistence and terminal-state invariants covered by apps.ai tests."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend convention index and WASM audio guideline pointer."}
+{"file":".trellis/spec/frontend/wasm-audio-guidelines.md","reason":"WASM audio build, analyzer, production diagnostics, and browser smoke contracts."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared cross-layer and code reuse thinking triggers."}
