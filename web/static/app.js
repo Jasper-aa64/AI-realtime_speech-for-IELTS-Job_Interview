@@ -235,15 +235,6 @@ const protectedViews = new Set(["history", "writing", "writingReports", "corpus"
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 
-const $ = (selector) => {
-  if (typeof selector !== "string") return null;
-  if (selector.startsWith("#") || selector.startsWith(".") || selector.startsWith("[") || selector.includes(" ") || selector.includes(">") || selector.includes(":")) {
-    return document.querySelector(selector);
-  }
-  return document.getElementById(selector) || document.querySelector(selector);
-};
-const text = (id, value) => { document.getElementById(id).textContent = value; };
-const byId = (id) => document.getElementById(id);
 const EXAMINER_AUDIO_PRELOAD_LIMIT = 8;
 const AUDIO_READY_TIMEOUT_MS = 2000;
 const EXAMINER_TTS_REFRESH_WAIT_MS = 4200;
@@ -349,11 +340,14 @@ const corpusPeekDrag = {
 };
 
 const {
+  $,
+  byId,
   escapeCssValue,
   escapeHtml,
   normalizeSpokenAnswerMarkdown,
   renderMarkdown,
   renderSpokenAnswerMarkdown,
+  text,
 } = window.IELTSSharedUI || {};
 
 const apiClient = window.IELTSApiClient;

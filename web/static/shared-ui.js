@@ -15,6 +15,22 @@
     return String(value ?? "").replace(/["\\]/g, "\\$&");
   }
 
+  function $(selector) {
+    if (typeof selector !== "string") return null;
+    if (selector.startsWith("#") || selector.startsWith(".") || selector.startsWith("[") || selector.includes(" ") || selector.includes(">") || selector.includes(":")) {
+      return document.querySelector(selector);
+    }
+    return document.getElementById(selector) || document.querySelector(selector);
+  }
+
+  function text(id, value) {
+    document.getElementById(id).textContent = value;
+  }
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
   function renderMarkdown(value) {
     if (!value) return "";
     const codeSpans = [];
@@ -165,10 +181,13 @@
   }
 
   window.IELTSSharedUI = {
+    $,
+    byId,
     escapeCssValue,
     escapeHtml,
     normalizeSpokenAnswerMarkdown,
     renderMarkdown,
     renderSpokenAnswerMarkdown,
+    text,
   };
 })();
