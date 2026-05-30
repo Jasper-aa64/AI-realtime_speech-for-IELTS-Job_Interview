@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-1.md`
-- **Total Sessions**: 55
+- **Active File**: `journal-2.md`
+- **Total Sessions**: 56
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1984 | Active |
+| `journal-2.md` | ~40 | Active |
+| `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 56 | 2026-05-30 | Retire legacy server and split production service boundaries | `ebd0a8d` | `main` |
 | 55 | 2026-05-30 | Finalize software construction deliverables | - | `main` |
 | 54 | 2026-05-30 | Add experiment3 TDD validation layer | `1361c1a` | `main` |
 | 53 | 2026-05-30 | Archive apps.ai provider adapter refactor | `71ebbd9` | `main` |
