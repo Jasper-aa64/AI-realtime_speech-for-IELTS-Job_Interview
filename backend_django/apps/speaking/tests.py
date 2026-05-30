@@ -1231,6 +1231,29 @@ class SpeakingRuntimeApiTests(TestCase):
         self.assertEqual(turn.transcript_raw, "Browser transcript stays.")
         self.assertEqual(turn.transcript_source, "browser_dictation")
         self.assertEqual(turn.metadata["server_asr"]["status"], "skipped_browser_transcript_available")
+        self.assertEqual(turn.metadata["browser_transcript_raw"], "Browser transcript stays.")
+        self.assertEqual(turn.metadata["client_transcript_raw"], "Browser transcript stays.")
+        self.assertEqual(turn.metadata["transcript_source"], "browser_dictation")
+
+    def test_turn_complete_preserves_realtime_asr_transcript_source(self):
+        self.create_attempt()
+        with patch(
+            "apps.speaking.services.transcribe_turn_audio_with_server_asr",
+            return_value={"ok": False, "status": "error", "transcript": "", "error": "service unavailable"},
+        ) as mock_asr:
+            response = self.complete_turn(
+                transcript="Realtime transcript stays.",
+                extra_payload={"transcript_source": "volcengine_realtime_asr"},
+            )
+        self.assertEqual(response.status_code, 200)
+        mock_asr.assert_not_called()
+        turn = SpeakingTurn.objects.get(turn_id="t1")
+        self.assertEqual(turn.transcript_raw, "Realtime transcript stays.")
+        self.assertEqual(turn.transcript_source, "volcengine_realtime_asr")
+        self.assertEqual(turn.metadata["server_asr"]["status"], "skipped_client_transcript_available")
+        self.assertEqual(turn.metadata["browser_transcript_raw"], "")
+        self.assertEqual(turn.metadata["client_transcript_raw"], "Realtime transcript stays.")
+        self.assertEqual(turn.metadata["transcript_source"], "volcengine_realtime_asr")
 
     def test_turn_complete_final_turn_marks_ready_to_score(self):
         attempt, turn1, turn2 = self.create_attempt()

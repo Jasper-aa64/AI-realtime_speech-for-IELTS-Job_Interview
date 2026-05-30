@@ -1929,12 +1929,13 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         raise SpeakingError("Scored attempts cannot be completed.")
     turn = _find_turn(attempt, turn_id)
 
-    browser_transcript = str(payload.get("transcript_raw") or payload.get("transcript") or "").strip()
-    transcript = browser_transcript
+    client_transcript = str(payload.get("transcript_raw") or payload.get("transcript") or "").strip()
+    transcript = client_transcript
     transcript_status = str(payload.get("transcript_status") or ("captured" if transcript else "missing")).strip()
     if transcript_status not in {"captured", "interim_fallback", "missing"}:
         transcript_status = "captured" if transcript else "missing"
     source = str(payload.get("transcript_source") or "browser_dictation").strip() or "browser_dictation"
+    browser_transcript = client_transcript if source == "browser_dictation" else ""
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
     audio_preprocessing_metrics = _sanitize_audio_preprocessing_metrics(payload.get("audio_preprocessing_metrics"))
     if audio_preprocessing_metrics:
@@ -1951,12 +1952,17 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
                 "p3_follow_up_text": selected_entry.get("p3_follow_up_text", ""),
                 "linked_at": timezone.now().isoformat(),
             }
-    if browser_transcript:
+    if client_transcript:
+        skipped_status = (
+            "skipped_browser_transcript_available"
+            if source == "browser_dictation"
+            else "skipped_client_transcript_available"
+        )
         server_asr = {
             "ok": False,
-            "status": "skipped_browser_transcript_available",
+            "status": skipped_status,
             "transcript": "",
-            "error": "Skipped during turn completion because browser transcript is already available.",
+            "error": f"Skipped during turn completion because {source} transcript is already available.",
         }
     else:
         server_asr = transcribe_turn_audio_with_server_asr(turn)
@@ -1994,6 +2000,8 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         "cleaning_notes": [],
         "feedback_generation_status": "pending",
         "browser_transcript_raw": browser_transcript,
+        "client_transcript_raw": client_transcript,
+        "transcript_source": source,
     }
     turn.save()
 
