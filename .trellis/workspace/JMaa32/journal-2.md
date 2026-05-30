@@ -462,3 +462,37 @@ Connected the legacy server retirement validator to the software construction ag
 ### Next Steps
 
 - None - task complete
+
+
+## Session 70: Enable WASM audio preprocessing by default
+
+**Date**: 2026-05-30
+**Task**: Enable WASM audio preprocessing by default
+**Branch**: `main`
+
+### Summary
+
+Verified audio_core WASM in a real browser, added Django /wasm static serving, confirmed fallback to mock-rms on WASM load failure, enabled wasm-audio-core by default, and archived the Trellis task while leaving unrelated WIP unstaged.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9169c6c` | (see git log) |
+| `075fb51` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

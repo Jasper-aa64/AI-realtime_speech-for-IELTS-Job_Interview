@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 69
+- **Total Sessions**: 70
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~464 | Active |
+| `journal-2.md` | ~498 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 70 | 2026-05-30 | Enable WASM audio preprocessing by default | `9169c6c`, `075fb51` | `main` |
 | 69 | 2026-05-30 | Integrate legacy retirement validation into deliverables | `867427b`, `5e0c748` | `main` |
 | 68 | 2026-05-30 | Split frontend view router | `4676d36` | `main` |
 | 67 | 2026-05-30 | Split speaking candidate audio services | `711586d` | `main` |
