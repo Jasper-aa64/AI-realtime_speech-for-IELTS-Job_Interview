@@ -1,1 +1,4 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"type":"task","path":".trellis/tasks/05-30-diagnose-and-fix-examiner-audio-tearing/prd.md","note":"Task scope, regression history, and acceptance criteria for examiner TTS tearing."}
+{"type":"spec","path":".trellis/spec/frontend/index.md","note":"Frontend conventions and spec index."}
+{"type":"spec","path":".trellis/spec/frontend/quality-guidelines.md","note":"Speaking runtime state, audio/timer cleanup, and practice-flow quality contracts."}
+{"type":"spec","path":".trellis/spec/frontend/wasm-audio-guidelines.md","note":"WASM/audio preprocessing constraints and production speaking diagnostics boundaries."}
