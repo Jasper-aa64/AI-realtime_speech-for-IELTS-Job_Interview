@@ -594,3 +594,37 @@ Captured the refactor stage consolidation spec, completion report, dirty-worktre
 ### Next Steps
 
 - None - task complete
+
+
+## Session 74: Add speaking question bank scope selector
+
+**Date**: 2026-05-30
+**Task**: Add speaking question bank scope selector
+**Branch**: `main`
+
+### Summary
+
+Added account-page question bank scope selector, scoped Django question-bank/sample/corpus APIs, scoped P1/P2/P3 attempt selection, stable corpus IDs for retained questions, updated current season bank data, tests, and archived the task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d9ed747` | (see git log) |
+| `68a330a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
