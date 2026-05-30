@@ -428,3 +428,37 @@ Extracted URL parsing/building and route helper functions from web/static/app.js
 ### Next Steps
 
 - None - task complete
+
+
+## Session 69: Integrate legacy retirement validation into deliverables
+
+**Date**: 2026-05-30
+**Task**: Integrate legacy retirement validation into deliverables
+**Branch**: `main`
+
+### Summary
+
+Connected the legacy server retirement validator to the software construction aggregate validation script, verified the standalone retirement checks and the full deliverables validation, archived the Trellis task, and left unrelated business WIP unstaged.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `867427b` | (see git log) |
+| `5e0c748` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
