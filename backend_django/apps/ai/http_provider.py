@@ -130,6 +130,7 @@ class HttpApiProvider:
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream" if stream else "application/json",
+                "User-Agent": "IELTS-Speaking-Monitor/1.0",
             },
             method="POST",
         )
