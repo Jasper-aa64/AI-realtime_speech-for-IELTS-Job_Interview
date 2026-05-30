@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 82
+- **Total Sessions**: 83
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~886 | Active |
+| `journal-2.md` | ~917 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 83 | 2026-05-30 | Add realtime ASR provider foundation | - | `main` |
 | 82 | 2026-05-30 | Extract corpus and takeaway module | - | `main` |
 | 81 | 2026-05-30 | Implement streaming examiner follow-up phase 1 | - | `main` |
 | 80 | 2026-05-30 | Trace examiner audio playback stability | - | `main` |

@@ -884,3 +884,34 @@ Extracted corpus and Takeaway frontend logic from web/static/app.js into web/sta
 ### Next Steps
 
 - None - task complete
+
+
+## Session 83: Add realtime ASR provider foundation
+
+**Date**: 2026-05-30
+**Task**: Add realtime ASR provider foundation
+**Branch**: `main`
+
+### Summary
+
+Added a secret-safe realtime ASR readiness endpoint and a VolcEngine PCM streaming provider core for Phase 2. Covered status redaction, disabled path, and fake-websocket interim/final/done streaming tests. Validation: realtime ASR tests, streaming follow-up tests, examiner TTS tests, Django check, diff check.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
