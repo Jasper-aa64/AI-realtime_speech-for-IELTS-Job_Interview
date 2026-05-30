@@ -65,6 +65,22 @@ C++ realtime gateway        = 后续实时转写网关
 - `.wasm` 静态服务 MIME 为 `application/wasm`。
 - 生成产物被 `.gitignore` 忽略，不进入仓库。
 
+## 一键验收命令
+
+```bash
+scripts/run_experiment5_reuse_validation.sh
+```
+
+该脚本覆盖：
+
+1. `third_party/libfvad/` 的 license、patent、author 和源码文件存在性。
+2. `audio_core.cpp` 真实调用 `fvad_new`、`fvad_set_sample_rate`、`fvad_set_mode`、`fvad_process`。
+3. CMake native 链路中存在 `fvad_vendor`，并与 `audio_core_test` 链接。
+4. Emscripten WASM 构建脚本把 `libfvad` C 源和 `audio_core` C++ 源分阶段编译再链接。
+5. 生成的 `audio_core_wasm.js/.wasm` 仍被 `.gitignore` 忽略。
+6. demo JavaScript 语法检查通过。
+7. 本地静态服务能以 `application/wasm` 返回 `.wasm` 文件。
+
 ## 后续集成计划
 
 1. 在正式 P1/P2/P3 录音链路中增加 feature flag，默认关闭，允许开发环境切到 `WASM audio_core` 预处理。
