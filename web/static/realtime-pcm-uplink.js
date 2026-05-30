@@ -34,8 +34,9 @@
 
     function applyAsrTranscript(payload = {}) {
       const event = String(payload.event || "");
+      const context = payload.turn_context && typeof payload.turn_context === "object" ? payload.turn_context : {};
       if (event === "asr_started") {
-        recordMetrics({ asrStatus: "started", asrProvider: payload.provider || "" });
+        recordMetrics({ asrStatus: "started", asrProvider: payload.provider || "", turnContext: context });
         setDictationStatus?.("listening", "服务端实时转写已连接，继续直接回答。");
         return;
       }
@@ -46,7 +47,7 @@
         state.transcriptInterim = interim;
         state.transcript = [finalText, interim].filter(Boolean).join(" ").trim();
         state.transcriptStatus = state.transcript ? "interim_fallback" : "missing";
-        recordMetrics({ asrStatus: "interim", asrInterim: interim });
+        recordMetrics({ asrStatus: "interim", asrInterim: interim, turnContext: context });
         if (state.transcript) setDictationStatus?.("listening", "服务端实时转写正在更新。");
         return;
       }
@@ -57,7 +58,7 @@
           state.transcriptInterim = "";
           state.transcript = finalText;
           state.transcriptStatus = "captured";
-          recordMetrics({ asrStatus: "final", asrTranscript: finalText });
+          recordMetrics({ asrStatus: "final", asrTranscript: finalText, turnContext: context });
           setDictationStatus?.("captured", "服务端实时转写已捕捉到文字。");
         }
         return;
@@ -71,11 +72,11 @@
           state.transcriptStatus = "captured";
           setDictationStatus?.("captured", "服务端实时转写已完成。");
         }
-        recordMetrics({ asrStatus: payload.ok ? "done" : "done_empty", asrTranscript: transcript });
+        recordMetrics({ asrStatus: payload.ok ? "done" : "done_empty", asrTranscript: transcript, turnContext: context });
         return;
       }
       if (event === "asr_error") {
-        recordMetrics({ asrStatus: "error", lastError: String(payload.error || "ASR failed") });
+        recordMetrics({ asrStatus: "error", lastError: String(payload.error || "ASR failed"), turnContext: context });
         setDictationStatus?.("reconnecting", "服务端实时转写暂不可用，继续使用浏览器转写和批处理兜底。");
       }
     }
@@ -125,7 +126,12 @@
         }
         recordMetrics({ status: "open" });
         socket.send(JSON.stringify({ event: "start", sample_rate: 16000, channels: 1 }));
-        socket.send(JSON.stringify({ event: "start_asr" }));
+        socket.send(JSON.stringify({
+          event: "start_asr",
+          attempt_id: state.attempt?.id || "",
+          turn_id: state.currentTurn?.id || "",
+          stream_follow_up: shouldStreamFollowUp(state.currentTurn),
+        }));
       };
       socket.onmessage = (event) => {
         try {
@@ -169,6 +175,11 @@
 
     function metrics() {
       return { ...(state.speaking.realtimePcmMetrics || {}) };
+    }
+
+    function shouldStreamFollowUp(turn) {
+      const prompt = turn?.prompt || {};
+      return prompt.backend === "stream_pending" || prompt.generation_status === "pending";
     }
 
     return {

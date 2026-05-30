@@ -46,6 +46,7 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
         self.asr_queue: queue.Queue[bytes | None] | None = None
         self.asr_thread: threading.Thread | None = None
         self.asr_loop = asyncio.get_running_loop()
+        self.asr_context: dict[str, str | bool] = {}
         await self.accept()
         await self._send_json({
             "event": "connected",
@@ -75,6 +76,7 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
             await self._send_json(self._status_payload("status"))
             return
         if event == "start_asr":
+            self.asr_context = self._asr_context_from_payload(payload)
             self._start_asr_thread()
             await self._send_json(self._status_payload("asr_connecting"))
             return
@@ -152,47 +154,60 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
             pass
 
     @staticmethod
-    def _asr_payload(event: dict) -> dict:
+    def _asr_context_from_payload(payload: dict) -> dict[str, str | bool]:
+        return {
+            "attempt_id": str(payload.get("attempt_id") or "").strip(),
+            "turn_id": str(payload.get("turn_id") or "").strip(),
+            "stream_follow_up": bool(payload.get("stream_follow_up")),
+        }
+
+    def _with_asr_context(self, payload: dict) -> dict:
+        context = {key: value for key, value in self.asr_context.items() if value not in ("", None, False)}
+        if not context:
+            return payload
+        return {**payload, "turn_context": context}
+
+    def _asr_payload(self, event: dict) -> dict:
         event_name = str(event.get("event") or "")
         if event_name == "started":
-            return {
+            return self._with_asr_context({
                 "event": "asr_started",
                 "provider": event.get("provider", ""),
                 "sample_rate": event.get("sample_rate", 16000),
                 "channels": event.get("channels", 1),
-            }
+            })
         if event_name == "interim":
-            return {
+            return self._with_asr_context({
                 "event": "asr_interim",
                 "provider": event.get("provider", ""),
                 "text": event.get("text", ""),
                 "interim": event.get("interim", ""),
-            }
+            })
         if event_name == "final":
-            return {
+            return self._with_asr_context({
                 "event": "asr_final",
                 "provider": event.get("provider", ""),
                 "text": event.get("text", ""),
                 "segment": event.get("segment", ""),
-            }
+            })
         if event_name == "done":
-            return {
+            return self._with_asr_context({
                 "event": "asr_done",
                 "provider": event.get("provider", ""),
                 "transcript": event.get("transcript", ""),
                 "ok": bool(event.get("ok")),
-            }
+            })
         if event_name == "error":
-            return {
+            return self._with_asr_context({
                 "event": "asr_error",
                 "status": event.get("status", "error"),
                 "error": event.get("error", "ASR failed."),
-            }
-        return {
+            })
+        return self._with_asr_context({
             "event": "asr_event",
             "provider": event.get("provider", ""),
             "payload": event,
-        }
+        })
 
     async def _send_json(self, payload: dict):
         await self.send(text_data=json.dumps(payload, separators=(",", ":")))

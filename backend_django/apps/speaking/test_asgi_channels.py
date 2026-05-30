@@ -111,7 +111,12 @@ class AsgiChannelsPingTests(SimpleTestCase):
         try:
             await communicator.receive_json_from()
             with patch("apps.speaking.consumers.stream_pcm_chunks", side_effect=fake_stream_pcm_chunks):
-                await communicator.send_json_to({"event": "start_asr"})
+                await communicator.send_json_to({
+                    "event": "start_asr",
+                    "attempt_id": "attempt-123",
+                    "turn_id": "t2",
+                    "stream_follow_up": True,
+                })
                 first_events = await self._receive_events_until(communicator, {"asr_started", "asr_connecting"})
                 self.assertIn("asr_started", {event["event"] for event in first_events})
 
@@ -122,8 +127,13 @@ class AsgiChannelsPingTests(SimpleTestCase):
 
                 await communicator.send_to(bytes_data=b"\x03\x04" * 160)
                 final_events = await self._receive_events_until(communicator, {"pcm_ack", "asr_final"})
-                self.assertTrue(any(event.get("event") == "asr_final" for event in final_events))
-                self.assertTrue(any(event.get("text") == "I study software engineering." for event in final_events))
+                final_asr = next(event for event in final_events if event.get("event") == "asr_final")
+                self.assertEqual(final_asr.get("text"), "I study software engineering.")
+                self.assertEqual(final_asr.get("turn_context"), {
+                    "attempt_id": "attempt-123",
+                    "turn_id": "t2",
+                    "stream_follow_up": True,
+                })
 
                 await communicator.send_json_to({"event": "stop_asr"})
                 done_events = await self._receive_events_until(communicator, {"asr_done", "asr_stopped"})
