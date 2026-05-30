@@ -1,0 +1,2 @@
+{"command":"cd backend_django && ../.venv-django/bin/python manage.py test apps.speaking.test_realtime_asr -v 1","why":"New provider/status contract tests."}
+{"command":"cd backend_django && ../.venv-django/bin/python manage.py check","why":"Django system check."}

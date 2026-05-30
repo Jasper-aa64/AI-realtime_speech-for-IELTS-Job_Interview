@@ -1,0 +1,3 @@
+{"file":"docs/SPEC-streaming-examiner-followup-phase2.md","why":"Phase 2 realtime ASR scope and red lines."}
+{"file":"backend_django/apps/speaking/volcengine_asr.py","why":"Existing openspeech protocol and batch ASR implementation to extend."}
+{"file":".trellis/spec/backend/quality-guidelines.md","why":"Backend runtime, HTTP provider, and fallback conventions."}

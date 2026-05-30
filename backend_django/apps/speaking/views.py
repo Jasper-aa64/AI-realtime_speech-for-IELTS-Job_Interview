@@ -39,6 +39,7 @@ from .services import (
     weak_items,
     writing_takeaway_library,
 )
+from .volcengine_asr import realtime_asr_status
 
 
 def require_user(request):
@@ -314,6 +315,14 @@ def turn_follow_up_stream_view(request, attempt_id: str, turn_id: str):
         msg = str(exc)
         status = 404 if "not found" in msg.lower() else 400
         return JsonResponse({"error": msg}, status=status)
+
+
+@require_GET
+def realtime_asr_status_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    return JsonResponse(realtime_asr_status())
 
 
 @require_http_methods(["POST"])

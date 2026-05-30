@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import time
 import uuid
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -99,6 +100,33 @@ def _headers() -> dict[str, str]:
         "X-Api-Resource-Id": resource_id,
         "X-Api-App-Key": app_key,
         "X-Api-Connect-Id": connect_id,
+    }
+
+
+def realtime_asr_status() -> dict[str, Any]:
+    """Return a secret-safe readiness payload for realtime ASR wiring."""
+    legacy_headers = _legacy_ws().get("headers")
+    legacy_headers = legacy_headers if isinstance(legacy_headers, dict) else {}
+    required = {
+        "VOLCENGINE_ASR_APP_ID": bool(getattr(settings, "VOLCENGINE_ASR_APP_ID", "") or legacy_headers.get("X-Api-App-ID")),
+        "VOLCENGINE_ASR_ACCESS_KEY": bool(
+            getattr(settings, "VOLCENGINE_ASR_ACCESS_KEY", "") or legacy_headers.get("X-Api-Access-Key")
+        ),
+        "VOLCENGINE_ASR_APP_KEY": bool(getattr(settings, "VOLCENGINE_ASR_APP_KEY", "") or legacy_headers.get("X-Api-App-Key")),
+    }
+    ws_url = str(getattr(settings, "VOLCENGINE_ASR_WS_URL", "") or _legacy_ws().get("base_url") or "").strip()
+    missing = [name for name, present in required.items() if not present]
+    if not ws_url:
+        missing.append("VOLCENGINE_ASR_WS_URL")
+    return {
+        "enabled": _enabled(),
+        "configured": _enabled() and not missing,
+        "provider": "volcengine_realtime_asr",
+        "sample_rate": 16000,
+        "channels": 1,
+        "ws_url_configured": bool(ws_url),
+        "missing_env": missing,
+        "fallback": "batch_audio_upload",
     }
 
 
@@ -244,6 +272,142 @@ def _extract_asr_text(payload: dict[str, Any]) -> tuple[list[str], str]:
     return finals, interim
 
 
+def _ws_headers() -> tuple[str, list[str]]:
+    ws_url = str(getattr(settings, "VOLCENGINE_ASR_WS_URL", "") or _legacy_ws().get("base_url") or "").strip()
+    if not ws_url:
+        raise VolcengineAsrError("VolcEngine ASR URL is missing.")
+    parsed = urlparse(ws_url)
+    headers = [f"{key}: {value}" for key, value in _headers().items()]
+    headers.append("User-Agent: Python/3.7 websockets/10.0")
+    return ws_url, headers
+
+
+def _asr_event_from_response(response: ParsedResponse, final_segments: list[str]) -> dict[str, Any] | None:
+    if response.message_type == "SERVER_ERROR":
+        raise VolcengineAsrError(str((response.payload or {}).get("error") or response.code))
+    if response.event != ASR_RESULT or not response.payload:
+        return None
+    finals, interim = _extract_asr_text(response.payload)
+    for text in finals:
+        if not final_segments or final_segments[-1] != text:
+            final_segments.append(text)
+    transcript = " ".join(segment for segment in final_segments if segment).strip()
+    if finals:
+        return {
+            "event": "final",
+            "text": transcript,
+            "segment": finals[-1],
+            "provider": "volcengine_realtime_asr",
+        }
+    if interim:
+        return {
+            "event": "interim",
+            "text": transcript,
+            "interim": interim,
+            "provider": "volcengine_realtime_asr",
+        }
+    return None
+
+
+def stream_pcm_chunks(
+    pcm_chunks: Iterable[bytes],
+    *,
+    chunk_delay_seconds: float = 0.02,
+    receive_timeout_seconds: float = 0.02,
+    timeout_seconds: int | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Stream PCM chunks to VolcEngine ASR and yield safe transcript events.
+
+    This is the provider core for Phase 2. It intentionally accepts already
+    normalized 16kHz mono PCM so browser/server transport can evolve without
+    changing the openspeech protocol layer.
+    """
+    if not _enabled():
+        yield {"event": "error", "status": "disabled", "error": "VolcEngine ASR disabled."}
+        return
+    try:
+        import websocket  # type: ignore
+    except Exception as exc:
+        raise VolcengineAsrError("websocket-client is not installed.") from exc
+
+    ws_url, headers = _ws_headers()
+    parsed = urlparse(ws_url)
+    timeout = max(5, int(timeout_seconds or getattr(settings, "VOLCENGINE_ASR_TIMEOUT_SECONDS", 30)))
+    session_id = str(uuid.uuid4())
+    ws = websocket.create_connection(ws_url, timeout=timeout, header=headers, host=parsed.netloc)
+    final_segments: list[str] = []
+
+    def recv_one() -> dict[str, Any] | None:
+        raw = ws.recv()
+        response = _parse_response(raw)
+        return _asr_event_from_response(response, final_segments)
+
+    try:
+        ws.send_binary(_build_full_request(START_CONNECTION, "", {}))
+        try:
+            recv_one()
+        except VolcengineAsrError:
+            raise
+        except Exception:
+            pass
+        ws.send_binary(_build_full_request(START_SESSION, session_id, _start_session_payload()))
+        yield {"event": "started", "provider": "volcengine_realtime_asr", "sample_rate": 16000, "channels": 1}
+
+        if hasattr(ws, "settimeout"):
+            try:
+                ws.settimeout(max(0.001, receive_timeout_seconds))
+            except Exception:
+                pass
+
+        for chunk in pcm_chunks:
+            if not chunk:
+                continue
+            ws.send_binary(_build_audio_request(TASK_REQUEST, session_id, chunk))
+            try:
+                event = recv_one()
+                if event:
+                    yield event
+            except VolcengineAsrError:
+                raise
+            except Exception:
+                pass
+            if chunk_delay_seconds > 0:
+                time.sleep(chunk_delay_seconds)
+
+        if hasattr(ws, "settimeout"):
+            try:
+                ws.settimeout(timeout)
+            except Exception:
+                pass
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                raw = ws.recv()
+            except Exception:
+                break
+            response = _parse_response(raw)
+            event = _asr_event_from_response(response, final_segments)
+            if event:
+                yield event
+            if response.event in {USER_STOP_SPEAKING, SESSION_FINISHED, SESSION_ENDED} and final_segments:
+                break
+
+        transcript = " ".join(segment for segment in final_segments if segment).strip()
+        yield {
+            "event": "done",
+            "provider": "volcengine_realtime_asr",
+            "transcript": transcript,
+            "ok": bool(transcript),
+        }
+    finally:
+        try:
+            ws.send_binary(_build_full_request(FINISH_SESSION, session_id, {}))
+            ws.send_binary(_build_full_request(FINISH_CONNECTION, "", {}))
+        except Exception:
+            pass
+        ws.close()
+
+
 def _convert_to_pcm(audio_path: Path) -> bytes:
     ffmpeg = str(getattr(settings, "VOLCENGINE_ASR_FFMPEG", "ffmpeg") or "ffmpeg")
     ffmpeg_path = shutil.which(ffmpeg) or (ffmpeg if Path(ffmpeg).exists() else "")
@@ -290,13 +454,9 @@ def _transcribe_audio(audio_path: Path) -> dict[str, Any]:
     if not pcm:
         raise VolcengineAsrError("converted audio is empty")
 
-    ws_url = str(getattr(settings, "VOLCENGINE_ASR_WS_URL", "") or _legacy_ws().get("base_url") or "").strip()
-    if not ws_url:
-        raise VolcengineAsrError("VolcEngine ASR URL is missing.")
+    ws_url, headers = _ws_headers()
     parsed = urlparse(ws_url)
     host = parsed.netloc
-    headers = [f"{key}: {value}" for key, value in _headers().items()]
-    headers.append("User-Agent: Python/3.7 websockets/10.0")
     timeout = max(5, int(getattr(settings, "VOLCENGINE_ASR_TIMEOUT_SECONDS", 30)))
     session_id = str(uuid.uuid4())
 
