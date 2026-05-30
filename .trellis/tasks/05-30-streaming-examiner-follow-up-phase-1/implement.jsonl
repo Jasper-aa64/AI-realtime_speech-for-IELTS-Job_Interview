@@ -1,0 +1,4 @@
+{"type":"spec","path":"docs/SPEC-streaming-examiner-followup.md","note":"Primary task spec for streaming examiner follow-up Phase 1."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","note":"Backend contracts for HTTP follow-up provider, TTS refresh, and Django runtime boundaries."}
+{"type":"spec","path":".trellis/spec/backend/error-handling.md","note":"Backend error response and secret-redaction conventions."}
+{"type":"spec","path":".trellis/spec/frontend/quality-guidelines.md","note":"Frontend runtime, async guard, and practice-flow contracts."}

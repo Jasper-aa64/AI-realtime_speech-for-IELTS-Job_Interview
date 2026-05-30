@@ -1,0 +1,3 @@
+{"type":"spec","path":"docs/SPEC-streaming-examiner-followup.md","note":"Verify all acceptance criteria and red lines."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","note":"Verify Django-only runtime, HTTP-first follow-up behavior, and TTS refresh safety."}
+{"type":"spec","path":".trellis/spec/frontend/quality-guidelines.md","note":"Verify async practice flow remains guarded and frontend secrets are absent."}

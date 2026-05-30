@@ -1,4 +1,4 @@
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, JsonResponse, StreamingHttpResponse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.views.decorators.http import require_GET, require_http_methods
 
@@ -31,6 +31,7 @@ from .services import (
     save_writing_takeaway,
     score_attempt,
     start_attempt,
+    stream_follow_up_sse_events,
     tts_audio_path,
     tts_fallback,
     upload_turn_audio,
@@ -290,6 +291,25 @@ def turn_complete_view(request, attempt_id: str, turn_id: str):
         payload = {}
     try:
         return JsonResponse(complete_turn(request.user, attempt_id, turn_id, payload))
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)
+
+
+@require_GET
+def turn_follow_up_stream_view(request, attempt_id: str, turn_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        response = StreamingHttpResponse(
+            stream_follow_up_sse_events(request.user, attempt_id, turn_id),
+            content_type="text/event-stream",
+        )
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
     except SpeakingError as exc:
         msg = str(exc)
         status = 404 if "not found" in msg.lower() else 400

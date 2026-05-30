@@ -12,7 +12,7 @@ import time
 import uuid
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from django.conf import settings
 from django.db import close_old_connections, transaction
@@ -1723,16 +1723,8 @@ def _extract_p1_identity_follow_up_output(output: str) -> str:
     return follow_up
 
 
-def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]:
-    fallback = _fallback_p1_identity_follow_up(answer)
-    if not answer.strip():
-        return {
-            "follow_up": fallback,
-            "backend": "fallback",
-            "status": "fallback",
-            "error": "missing_candidate_answer",
-        }
-    prompt = f"""Return JSON only with top-level key follow_up.
+def _p1_identity_follow_up_prompt(answer: str) -> str:
+    return f"""Return JSON only with top-level key follow_up.
 Do not repeat the input. Do not include Markdown, explanation, or code fences.
 
 You are an IELTS Speaking Part 1 examiner. Write one natural follow-up question based on the candidate's previous answer.
@@ -1742,6 +1734,18 @@ Keep it short, conversational, and suitable for Part 1.
 Candidate answer:
 {answer}
 """
+
+
+def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]:
+    fallback = _fallback_p1_identity_follow_up(answer)
+    if not answer.strip():
+        return {
+            "follow_up": fallback,
+            "backend": "fallback",
+            "status": "fallback",
+            "error": "missing_candidate_answer",
+        }
+    prompt = _p1_identity_follow_up_prompt(answer)
     http_error = ""
     try:
         provider = HttpApiProvider()
@@ -1783,7 +1787,7 @@ Candidate answer:
         }
 
 
-def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: SpeakingTurn) -> SpeakingTurn | None:
+def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: SpeakingTurn, *, stream_pending: bool = False) -> SpeakingTurn | None:
     if not _is_p1_work_study_turn(completed_turn):
         return None
     transcript = (completed_turn.transcript_cleaned or completed_turn.transcript_raw or "").strip()
@@ -1791,7 +1795,15 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
     if existing:
         return existing
 
-    result = _generate_p1_identity_follow_up(transcript, f"p1_follow_up_{attempt.attempt_id}_{completed_turn.turn_id}")
+    result = (
+        {
+            "follow_up": _fallback_p1_identity_follow_up(transcript),
+            "backend": "stream_pending",
+            "status": "pending",
+        }
+        if stream_pending
+        else _generate_p1_identity_follow_up(transcript, f"p1_follow_up_{attempt.attempt_id}_{completed_turn.turn_id}")
+    )
     follow_up = result["follow_up"]
     for item in attempt.turns.filter(sequence__gt=completed_turn.sequence).order_by("-sequence"):
         item.sequence += 1
@@ -1852,7 +1864,7 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
             or {"provider": "volcengine", "status": "pending", "audio_url": None},
         },
     )
-    if result["backend"] != "codex":
+    if result["backend"] not in {"codex", "stream_pending"}:
         _generate_remaining_examiner_tts_after_commit(attempt.attempt_id, [follow_up_turn.turn_id])
     return follow_up_turn
 
@@ -1984,7 +1996,8 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
     }
     turn.save()
 
-    inserted_follow_up = _insert_p1_identity_follow_up(attempt, turn)
+    stream_follow_up = bool(payload.get("stream_follow_up"))
+    inserted_follow_up = _insert_p1_identity_follow_up(attempt, turn, stream_pending=stream_follow_up)
     turns = list(attempt.turns.all().order_by("sequence"))
     next_turn = next((item for item in turns if item.sequence > turn.sequence and _turn_status(item) != "completed"), None)
     if inserted_follow_up is not None:
@@ -2004,12 +2017,20 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
             question_type = str(turn_prompt.get("question_type") or next_prompt.get("question_type") or "")
             focus = str(attempt_metadata.get("p3_focus") or "")
             current_question = str(turn_prompt.get("question") or turn.question or "")
-            result = _generate_p3_dynamic_follow_up(
-                current_question,
-                question_type,
-                cleaned,
-                focus,
-                f"p3_follow_up_{attempt.attempt_id}_{turn.turn_id}",
+            result = (
+                {
+                    "follow_up": _dynamic_p3_follow_up(question_type, cleaned, focus),
+                    "backend": "stream_pending",
+                    "status": "pending",
+                }
+                if stream_follow_up
+                else _generate_p3_dynamic_follow_up(
+                    current_question,
+                    question_type,
+                    cleaned,
+                    focus,
+                    f"p3_follow_up_{attempt.attempt_id}_{turn.turn_id}",
+                )
             )
             follow_up = result["follow_up"]
             next_turn.question = follow_up
@@ -2034,7 +2055,8 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
             }
             next_turn.metadata = next_metadata
             next_turn.save(update_fields=["question", "metadata", "updated_at"])
-            _generate_remaining_examiner_tts_after_commit(attempt.attempt_id, [next_turn.turn_id])
+            if not stream_follow_up:
+                _generate_remaining_examiner_tts_after_commit(attempt.attempt_id, [next_turn.turn_id])
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
     metadata["current_turn"] = next_turn.turn_id if next_turn else None
     attempt.metadata = metadata
@@ -2048,6 +2070,230 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         "turn": _turn_payload(turn, len(turns)),
         "next_turn": _turn_payload(next_turn, len(turns)) if next_turn else None,
     }
+
+
+def _sse_payload(payload: dict[str, Any]) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _p1_identity_stream_prompt(answer: str) -> str:
+    return f"""You are an IELTS Speaking Part 1 examiner.
+Write exactly one natural follow-up question based on the candidate's previous answer.
+Use the candidate's real identity details. Do not invent facts.
+Output one line only. Do not include JSON, Markdown, labels, explanations, or quotes.
+
+Candidate answer:
+{clean_report_text(answer)[:1800]}
+
+One follow-up question:
+"""
+
+
+def _follow_up_stream_context(attempt: SpeakingAttempt, source_turn: SpeakingTurn) -> dict[str, Any]:
+    source_metadata = source_turn.metadata if isinstance(source_turn.metadata, dict) else {}
+    transcript = clean_report_text(source_turn.transcript_cleaned or source_turn.transcript_raw)
+    if not transcript:
+        raise SpeakingError("Completed turn transcript is required for streaming follow-up.")
+
+    if _is_p1_work_study_turn(source_turn):
+        target = attempt.turns.filter(metadata__prompt__after_turn=source_turn.turn_id).first()
+        if target is None:
+            target = _insert_p1_identity_follow_up(attempt, source_turn, stream_pending=True)
+        if target is None:
+            raise SpeakingError("Follow-up turn could not be prepared.")
+        return {
+            "kind": "p1_identity",
+            "target_turn": target,
+            "prompt": _p1_identity_stream_prompt(transcript),
+            "fallback": _fallback_p1_identity_follow_up(transcript),
+            "rejected_questions": (),
+            "extract": _extract_p1_identity_follow_up_output,
+            "system": "You are an IELTS Speaking Part 1 examiner. Return only one concise follow-up question.",
+        }
+
+    prompt = source_metadata.get("prompt") if isinstance(source_metadata.get("prompt"), dict) else {}
+    if source_turn.part == "p3" and prompt.get("role") == "main":
+        target = (
+            attempt.turns
+            .filter(sequence__gt=source_turn.sequence, part="p3")
+            .order_by("sequence")
+            .first()
+        )
+        if target is None:
+            raise SpeakingError("P3 follow-up turn not found.")
+        target_metadata = target.metadata if isinstance(target.metadata, dict) else {}
+        target_prompt = target_metadata.get("prompt") if isinstance(target_metadata.get("prompt"), dict) else {}
+        if target_prompt.get("role") != "follow_up":
+            raise SpeakingError("Next P3 turn is not a follow-up turn.")
+        attempt_metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+        question_type = str(prompt.get("question_type") or target_prompt.get("question_type") or "")
+        focus = str(attempt_metadata.get("p3_focus") or "")
+        current_question = str(prompt.get("question") or source_turn.question or "")
+        return {
+            "kind": "p3_dynamic",
+            "target_turn": target,
+            "prompt": _quick_follow_up_prompt(current_question, transcript, focus=focus, question_type=question_type),
+            "fallback": _dynamic_p3_follow_up(question_type, transcript, focus),
+            "rejected_questions": (current_question,),
+            "extract": lambda output: _extract_single_follow_up_question(output, rejected_questions=(current_question,)),
+            "system": "You are an IELTS Speaking Part 3 examiner. Return only one concise follow-up question.",
+            "question_type": question_type,
+        }
+
+    raise SpeakingError("This turn does not support streaming follow-up generation.")
+
+
+def _save_streamed_follow_up(
+    attempt: SpeakingAttempt,
+    source_turn: SpeakingTurn,
+    target_turn: SpeakingTurn,
+    question: str,
+    *,
+    backend: str,
+    status: str,
+    error: str = "",
+    question_type: str = "",
+) -> dict[str, Any]:
+    metadata = target_turn.metadata if isinstance(target_turn.metadata, dict) else {}
+    prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
+    updated_prompt = {
+        **prompt,
+        "question": question,
+        "source": "streaming_follow_up",
+        "adapted_from_turn": source_turn.turn_id,
+        "backend": backend,
+        "generation_status": status,
+        **({"generation_error": error} if error else {}),
+    }
+    metadata = {
+        **metadata,
+        "prompt": updated_prompt,
+        "examiner_text": question,
+        "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
+        "streaming_follow_up": True,
+        "streaming_follow_up_backend": backend,
+        "streaming_follow_up_status": status,
+        **({"streaming_follow_up_error": error} if error else {}),
+    }
+    if question_type:
+        metadata["p3_dynamic_follow_up"] = True
+        metadata["p3_dynamic_follow_up_backend"] = backend
+        metadata["p3_dynamic_follow_up_status"] = status
+    target_turn.question = question
+    target_turn.metadata = metadata
+    target_turn.save(update_fields=["question", "metadata", "updated_at"])
+
+    attempt_metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    attempt_metadata["current_turn"] = target_turn.turn_id
+    attempt.metadata = attempt_metadata
+    attempt.save(update_fields=["metadata", "updated_at"])
+    return metadata
+
+
+def _generate_streamed_follow_up_tts(attempt: SpeakingAttempt, target_turn: SpeakingTurn) -> dict[str, Any]:
+    target_turn.refresh_from_db()
+    metadata = target_turn.metadata if isinstance(target_turn.metadata, dict) else {}
+    turn_data = {
+        "id": target_turn.turn_id,
+        "question": target_turn.question,
+        "examiner_text": metadata.get("examiner_text") or target_turn.question,
+        "examiner_tts": metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {
+            "provider": "volcengine",
+            "status": "pending",
+            "audio_url": None,
+        },
+    }
+    ensure_examiner_tts(attempt.attempt_id, turn_data)
+    metadata["examiner_tts"] = turn_data.get("examiner_tts") or metadata.get("examiner_tts")
+    target_turn.metadata = metadata
+    target_turn.save(update_fields=["metadata", "updated_at"])
+    return metadata["examiner_tts"]
+
+
+def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator[str]:
+    attempt = _load_attempt_for_user(user, attempt_id)
+    if attempt.status == SpeakingAttempt.Status.ABORTED:
+        raise SpeakingError("Aborted attempts cannot stream follow-up questions.")
+    if attempt.status == SpeakingAttempt.Status.SCORED:
+        raise SpeakingError("Scored attempts cannot stream follow-up questions.")
+    source_turn = _find_turn(attempt, turn_id)
+    context = _follow_up_stream_context(attempt, source_turn)
+    target_turn = context["target_turn"]
+
+    def generate() -> Iterator[str]:
+        started = time.monotonic()
+        parts: list[str] = []
+        try:
+            provider = HttpApiProvider()
+            for token in provider.stream_tokens(
+                [
+                    {"role": "system", "content": context["system"]},
+                    {"role": "user", "content": context["prompt"]},
+                ],
+                max_tokens=90,
+                temperature=0.2,
+                timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
+            ):
+                parts.append(token)
+                yield _sse_payload({"event": "chunk", "text": token})
+            follow_up = context["extract"]("".join(parts))
+            _save_streamed_follow_up(
+                attempt,
+                source_turn,
+                target_turn,
+                follow_up,
+                backend="http_api_stream",
+                status="ready",
+                question_type=str(context.get("question_type") or ""),
+            )
+            yield _sse_payload({
+                "event": "question_complete",
+                "text": follow_up,
+                "backend": "http_api_stream",
+                "latency_ms": int((time.monotonic() - started) * 1000),
+                "turn": _turn_payload(target_turn),
+            })
+        except Exception as exc:  # noqa: BLE001 - streaming endpoint must keep the practice flow usable
+            fallback = str(context["fallback"])
+            error = str(exc)
+            _save_streamed_follow_up(
+                attempt,
+                source_turn,
+                target_turn,
+                fallback,
+                backend="fallback",
+                status="fallback",
+                error=error,
+                question_type=str(context.get("question_type") or ""),
+            )
+            yield _sse_payload({
+                "event": "fallback",
+                "text": fallback,
+                "backend": "fallback",
+                "error": clean_report_text(error)[:220],
+                "turn": _turn_payload(target_turn),
+            })
+            yield _sse_payload({"event": "done"})
+            return
+
+        try:
+            tts = _generate_streamed_follow_up_tts(attempt, target_turn)
+        except Exception as exc:  # noqa: BLE001 - TTS failure should not block the next question
+            tts = {
+                "provider": "volcengine",
+                "status": "failed",
+                "audio_url": None,
+                "error": clean_report_text(str(exc))[:220],
+            }
+        if tts.get("audio_url"):
+            yield _sse_payload({"event": "tts_ready", "audio_url": tts["audio_url"], "examiner_tts": tts})
+        else:
+            yield _sse_payload({"event": "tts_timeout", "examiner_tts": tts})
+        target_turn.refresh_from_db()
+        yield _sse_payload({"event": "done", "turn": _turn_payload(target_turn)})
+
+    return generate()
+
 
 
 def abort_attempt(user, attempt_id: str) -> dict[str, Any]:
