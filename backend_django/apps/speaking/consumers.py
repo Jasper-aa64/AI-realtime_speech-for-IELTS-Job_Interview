@@ -7,6 +7,7 @@ import threading
 from collections.abc import Iterator
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer, AsyncWebsocketConsumer
+from django.conf import settings
 
 from .volcengine_asr import stream_pcm_chunks
 
@@ -47,6 +48,7 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
         self.asr_thread: threading.Thread | None = None
         self.asr_loop = asyncio.get_running_loop()
         self.asr_context: dict[str, str | bool] = {}
+        self.fake_asr_enabled = False
         await self.accept()
         await self._send_json({
             "event": "connected",
@@ -77,6 +79,7 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
             return
         if event == "start_asr":
             self.asr_context = self._asr_context_from_payload(payload)
+            self.fake_asr_enabled = bool(payload.get("fake_asr")) and bool(settings.DEBUG)
             self._start_asr_thread()
             await self._send_json(self._status_payload("asr_connecting"))
             return
@@ -133,7 +136,8 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
 
     def _run_asr_stream(self):
         try:
-            for event in stream_pcm_chunks(self._pcm_chunks()):
+            stream = self._fake_stream_pcm_chunks if self.fake_asr_enabled else stream_pcm_chunks
+            for event in stream(self._pcm_chunks()):
                 self._send_from_thread(self._asr_payload(event))
         except Exception as exc:
             self._send_from_thread({
@@ -143,6 +147,38 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
             })
         finally:
             self.asr_enabled = False
+            self.fake_asr_enabled = False
+
+    def _fake_stream_pcm_chunks(self, pcm_chunks: Iterator[bytes]) -> Iterator[dict]:
+        """Deterministic DEBUG-only ASR stream for no-key realtime pipeline drills."""
+        provider = "fake_realtime_asr"
+        yield {"event": "started", "provider": provider, "sample_rate": 16000, "channels": 1}
+        transcript = "I study software engineering and I am doing an internship at a tech company."
+        saw_audio = False
+        for index, _chunk in enumerate(pcm_chunks, start=1):
+            saw_audio = True
+            if index == 1:
+                yield {"event": "interim", "provider": provider, "text": "", "interim": "I study software engineering"}
+            elif index == 2:
+                yield {
+                    "event": "final",
+                    "provider": provider,
+                    "text": transcript,
+                    "segment": transcript,
+                }
+            else:
+                yield {
+                    "event": "interim",
+                    "provider": provider,
+                    "text": transcript,
+                    "interim": "",
+                }
+        yield {
+            "event": "done",
+            "provider": provider,
+            "transcript": transcript if saw_audio else "",
+            "ok": saw_audio,
+        }
 
     def _send_from_thread(self, payload: dict):
         try:

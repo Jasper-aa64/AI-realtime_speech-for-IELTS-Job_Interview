@@ -8,7 +8,7 @@ from unittest.mock import patch
 from config.asgi import application
 
 
-@override_settings(ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"], DEBUG=True)
 class AsgiChannelsPingTests(SimpleTestCase):
     def test_ping_websocket_connects_and_echoes_json(self):
         async_to_sync(self._run_ping_websocket)()
@@ -138,6 +138,56 @@ class AsgiChannelsPingTests(SimpleTestCase):
                 await communicator.send_json_to({"event": "stop_asr"})
                 done_events = await self._receive_events_until(communicator, {"asr_done", "asr_stopped"})
                 self.assertTrue(any(event.get("event") == "asr_done" and event.get("ok") for event in done_events))
+        finally:
+            await communicator.disconnect()
+
+    def test_pcm_uplink_debug_fake_asr_mode_streams_without_provider_credentials(self):
+        async_to_sync(self._run_pcm_uplink_debug_fake_asr_mode_streams_without_provider_credentials)()
+
+    async def _run_pcm_uplink_debug_fake_asr_mode_streams_without_provider_credentials(self):
+        communicator = WebsocketCommunicator(
+            application,
+            "/ws/realtime/pcm/",
+            headers=[
+                (b"host", b"testserver"),
+                (b"origin", b"http://testserver"),
+            ],
+        )
+        connected, _subprotocol = await communicator.connect()
+        self.assertTrue(connected)
+        try:
+            await communicator.receive_json_from()
+            await communicator.send_json_to({
+                "event": "start_asr",
+                "attempt_id": "attempt-456",
+                "turn_id": "t3",
+                "stream_follow_up": True,
+                "fake_asr": True,
+            })
+            first_events = await self._receive_events_until(communicator, {"asr_started", "asr_connecting"})
+            started = next(event for event in first_events if event.get("event") == "asr_started")
+            self.assertEqual(started.get("provider"), "fake_realtime_asr")
+
+            await communicator.send_to(bytes_data=b"\x01\x02" * 160)
+            interim_events = await self._receive_events_until(communicator, {"pcm_ack", "asr_interim"})
+            self.assertTrue(any(event.get("interim") == "I study software engineering" for event in interim_events))
+
+            await communicator.send_to(bytes_data=b"\x03\x04" * 160)
+            final_events = await self._receive_events_until(communicator, {"pcm_ack", "asr_final"})
+            final_asr = next(event for event in final_events if event.get("event") == "asr_final")
+            self.assertEqual(final_asr.get("provider"), "fake_realtime_asr")
+            self.assertIn("software engineering", final_asr.get("text", ""))
+            self.assertEqual(final_asr.get("turn_context"), {
+                "attempt_id": "attempt-456",
+                "turn_id": "t3",
+                "stream_follow_up": True,
+            })
+
+            await communicator.send_json_to({"event": "stop_asr"})
+            done_events = await self._receive_events_until(communicator, {"asr_done", "asr_stopped"})
+            done = next(event for event in done_events if event.get("event") == "asr_done")
+            self.assertTrue(done.get("ok"))
+            self.assertEqual(done.get("provider"), "fake_realtime_asr")
         finally:
             await communicator.disconnect()
 

@@ -45,10 +45,14 @@
     function resolveConfig() {
       const params = new URLSearchParams(window.location.search);
       const raw = params.get(queryKey);
-      const enabled = raw !== null && ["1", "true", "on", "ws", "websocket"].includes(raw.trim().toLowerCase());
+      const normalized = String(raw || "").trim().toLowerCase();
+      const fakeAsr = ["fake", "mock", "simulate"].includes(normalized);
+      const enabled = raw !== null && (fakeAsr || ["1", "true", "on", "ws", "websocket"].includes(normalized));
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       return {
         enabled,
+        fakeAsr,
+        mode: fakeAsr ? "fake" : "real",
         url: `${protocol}//${window.location.host}/ws/realtime/pcm/`,
       };
     }
@@ -239,6 +243,7 @@
             attempt_id: state.attempt?.id || "",
             turn_id: state.currentTurn?.id || "",
             stream_follow_up: shouldStreamFollowUp(state.currentTurn),
+            fake_asr: Boolean(config.fakeAsr),
           }));
         };
         socket.onmessage = (event) => {
@@ -266,6 +271,34 @@
           resolveStopWait({ event: "closed" });
         };
       };
+      const sendPcmFrame = ({ pcm }) => {
+        if (!isActivePracticeSession(sessionId) || !pcm || disabled) return;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          recordMetrics({
+            droppedFrames: Number(state.speaking.realtimePcmMetrics?.droppedFrames || 0) + 1,
+          });
+          return;
+        }
+        const bytes = pcm.byteLength || 0;
+        socket.send(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength));
+        recordMetrics({
+          framesSent: Number(state.speaking.realtimePcmMetrics?.framesSent || 0) + 1,
+          bytesSent: Number(state.speaking.realtimePcmMetrics?.bytesSent || 0) + bytes,
+        });
+      };
+      if (config.fakeAsr) {
+        recordMetrics({
+          asrConfigured: true,
+          asrEnabled: true,
+          asrProvider: "fake_realtime_asr",
+          asrStatusCheckedAt: Date.now(),
+          asrStatusCheckMs: elapsedSince(state.speaking.realtimePcmMetrics?.asrStatusCheckStartedAt),
+          status: "fake_asr_ready",
+        });
+        setDictationStatus?.("listening", "服务端实时转写模拟模式已开启。");
+        openSocket();
+        return sendPcmFrame;
+      }
       fetchRealtimeAsrStatus()
         .then((status) => {
           if (!isActivePracticeSession(sessionId)) return;
@@ -289,21 +322,7 @@
           recordMetrics({ running: false, status: "asr_status_error", lastError: String(error?.message || error || "status failed") });
           setDictationStatus?.("reconnecting", "服务端实时转写状态检查失败，继续使用浏览器转写和批处理兜底。");
         });
-      return ({ pcm }) => {
-        if (!isActivePracticeSession(sessionId) || !pcm || disabled) return;
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-          recordMetrics({
-            droppedFrames: Number(state.speaking.realtimePcmMetrics?.droppedFrames || 0) + 1,
-          });
-          return;
-        }
-        const bytes = pcm.byteLength || 0;
-        socket.send(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength));
-        recordMetrics({
-          framesSent: Number(state.speaking.realtimePcmMetrics?.framesSent || 0) + 1,
-          bytesSent: Number(state.speaking.realtimePcmMetrics?.bytesSent || 0) + bytes,
-        });
-      };
+      return sendPcmFrame;
     }
 
     function metrics() {
