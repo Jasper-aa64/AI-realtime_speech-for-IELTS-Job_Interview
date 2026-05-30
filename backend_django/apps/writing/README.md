@@ -10,8 +10,10 @@ Current split:
   and writing-specific service exceptions.
 - `search_utils.py`: text normalization, query expansion, and reusable search
   token helpers.
-- `services.py`: persistence orchestration, prompt catalog synchronization,
-  reports, score task lifecycle, and compatibility exports.
+- `prompt_services.py`: prompt seed synchronization, Cambridge catalog
+  metadata, prompt payloads, random selection, and agent prompt search.
+- `services.py`: persistence orchestration, reports, score task lifecycle, and
+  compatibility exports for existing callers.
 
 Refactor rule: move pure helpers and cohesive subdomains out of `services.py`,
 then re-export names from `services.py` only when an existing caller depends on

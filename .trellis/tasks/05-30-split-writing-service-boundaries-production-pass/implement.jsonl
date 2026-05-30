@@ -1,0 +1,5 @@
+{"type":"spec","path":".trellis/spec/backend/index.md","note":"Backend conventions and pre-development checklist."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","note":"Django-only runtime and service split rules."}
+{"type":"code","path":"backend_django/apps/writing/services.py","note":"Current writing compatibility facade and extraction source."}
+{"type":"code","path":"backend_django/apps/writing/search_utils.py","note":"Existing prompt search primitives to reuse."}
+{"type":"code","path":"backend_django/apps/writing/validation.py","note":"Existing validation split pattern."}
