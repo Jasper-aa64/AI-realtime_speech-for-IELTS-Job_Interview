@@ -362,3 +362,36 @@ Documented the frozen legacy server archive boundary and strengthened scripts/va
 ### Next Steps
 
 - None - task complete
+
+
+## Session 67: Split speaking candidate audio services
+
+**Date**: 2026-05-30
+**Task**: Split speaking candidate audio services
+**Branch**: `main`
+
+### Summary
+
+Extracted candidate audio upload, media path lookup, and server-ASR handoff from apps.speaking.services into apps.speaking.audio_services while preserving services.py import compatibility. Verified speaking tests, full Django tests, check, migration dry-run, diff check, and legacy retirement validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `711586d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
