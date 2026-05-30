@@ -822,3 +822,34 @@ Added examiner audio diagnostics and changed examiner TTS playback to use the vi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 81: Implement streaming examiner follow-up phase 1
+
+**Date**: 2026-05-30
+**Task**: Implement streaming examiner follow-up phase 1
+**Branch**: `main`
+
+### Summary
+
+Added OpenAI-compatible HTTP token streaming, a Django SSE follow-up endpoint for dynamic P1/P3 examiner questions, and frontend streaming consumption with TTS readiness handling. Verified targeted AI/speaking tests, Django check, node syntax, and full Django test suite.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
