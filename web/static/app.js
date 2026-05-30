@@ -90,6 +90,7 @@ const state = {
   pendingRecharge: 0,
   examinerAudioPreloads: new Map(),
   activeExaminerAudio: null,
+  examinerAudioDiagnostics: [],
   writing: {
     taskType: "task1_academic",
     prompts: {},
@@ -210,6 +211,7 @@ const FIXED_EXAMINER_AUDIO_URLS = new Set([
   "/api/tts-audio/examiner/fixed_examiner_do_you_work_or_do_you_study.mp3",
   "/api/tts-audio/examiner/fixed_examiner_p2_cue_card_instruction.mp3",
 ]);
+const examinerAudioTelemetry = new WeakMap();
 
 const viewCopy = {
   home: ["首页", "选择今天要练的口语模式。"],
@@ -238,7 +240,9 @@ const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 
 const EXAMINER_AUDIO_PRELOAD_LIMIT = 8;
+const EXAMINER_AUDIO_DIAGNOSTIC_LIMIT = 240;
 const AUDIO_READY_TIMEOUT_MS = 2000;
+const FIXED_AUDIO_READY_TIMEOUT_MS = 4500;
 const EXAMINER_TTS_REFRESH_WAIT_MS = 4200;
 const EXAMINER_TTS_REFRESH_INTERVAL_MS = 550;
 const CORPUS_PEEK_WINDOW_MARGIN = 16;
@@ -1827,32 +1831,183 @@ function renderCueTop(cue) {
   `;
 }
 
+function examinerAudioDiagnosticsEnabled() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("audio_debug")) {
+    const value = String(params.get("audio_debug") || "").toLowerCase();
+    return !["0", "false", "off", "disabled"].includes(value);
+  }
+  return localStorage.getItem("ielts-examiner-audio-debug") === "1";
+}
+
+function bufferedRangesSnapshot(audio) {
+  const ranges = [];
+  if (!audio?.buffered) return ranges;
+  for (let index = 0; index < audio.buffered.length; index += 1) {
+    try {
+      ranges.push([
+        Number(audio.buffered.start(index).toFixed(3)),
+        Number(audio.buffered.end(index).toFixed(3)),
+      ]);
+    } catch {
+      // Ignore transient buffered range errors while media state changes.
+    }
+  }
+  return ranges;
+}
+
+function audioSnapshot(audio) {
+  if (!audio) return {};
+  return {
+    src: audio.currentSrc || audio.getAttribute?.("src") || audio.src || "",
+    readyState: audio.readyState,
+    networkState: audio.networkState,
+    currentTime: Number.isFinite(audio.currentTime) ? Number(audio.currentTime.toFixed(3)) : 0,
+    duration: Number.isFinite(audio.duration) ? Number(audio.duration.toFixed(3)) : null,
+    paused: audio.paused,
+    ended: audio.ended,
+    buffered: bufferedRangesSnapshot(audio),
+  };
+}
+
+function traceExaminerAudio(event, details = {}) {
+  const record = {
+    event,
+    at: Number(performance.now().toFixed(1)),
+    wallTime: new Date().toISOString(),
+    sessionId: state.practiceSessionId,
+    status: state.status,
+    view: state.view,
+    turnId: state.currentTurn?.id || "",
+    turnIndex: state.currentTurn?.index ?? null,
+    ...details,
+  };
+  state.examinerAudioDiagnostics.push(record);
+  if (state.examinerAudioDiagnostics.length > EXAMINER_AUDIO_DIAGNOSTIC_LIMIT) {
+    state.examinerAudioDiagnostics.splice(0, state.examinerAudioDiagnostics.length - EXAMINER_AUDIO_DIAGNOSTIC_LIMIT);
+  }
+  if (examinerAudioDiagnosticsEnabled()) {
+    console.info("[examiner-audio]", event, record);
+  }
+  return record;
+}
+
+function attachExaminerAudioTelemetry(audio, role = "unknown", url = "") {
+  if (!audio) return;
+  let telemetry = examinerAudioTelemetry.get(audio);
+  if (!telemetry) {
+    telemetry = { role, url, waitingStartedAt: 0 };
+    examinerAudioTelemetry.set(audio, telemetry);
+    [
+      "loadstart",
+      "loadedmetadata",
+      "loadeddata",
+      "canplay",
+      "canplaythrough",
+      "play",
+      "playing",
+      "pause",
+      "waiting",
+      "stalled",
+      "suspend",
+      "seeking",
+      "seeked",
+      "ended",
+      "emptied",
+      "error",
+    ].forEach((eventName) => {
+      audio.addEventListener(eventName, () => {
+        if (eventName === "waiting" || eventName === "stalled") {
+          telemetry.waitingStartedAt = performance.now();
+        }
+        const waitingMs = eventName === "playing" && telemetry.waitingStartedAt
+          ? Math.round(performance.now() - telemetry.waitingStartedAt)
+          : 0;
+        if (eventName === "playing") telemetry.waitingStartedAt = 0;
+        traceExaminerAudio(`media:${eventName}`, {
+          role: telemetry.role,
+          url: telemetry.url || audio.currentSrc || audio.src || "",
+          waitingMs,
+          audio: audioSnapshot(audio),
+          error: audio.error ? {
+            code: audio.error.code,
+            message: audio.error.message,
+          } : null,
+        });
+      });
+    });
+  }
+  telemetry.role = role;
+  telemetry.url = url || telemetry.url || audio.currentSrc || audio.src || "";
+}
+
+function exposeExaminerAudioDiagnostics() {
+  window.__ieltsExaminerAudio = {
+    events: () => [...state.examinerAudioDiagnostics],
+    clear: () => {
+      state.examinerAudioDiagnostics = [];
+    },
+    enable: () => {
+      localStorage.setItem("ielts-examiner-audio-debug", "1");
+    },
+    disable: () => {
+      localStorage.removeItem("ielts-examiner-audio-debug");
+    },
+    preloads: () => [...state.examinerAudioPreloads.entries()].map(([url, audio]) => ({
+      url,
+      ...audioSnapshot(audio),
+    })),
+    active: () => audioSnapshot(state.activeExaminerAudio || $("examinerAudio")),
+  };
+}
+
 function renderExaminerAudio(turn) {
   const tts = turn.examiner_tts || {};
   const audio = $("examinerAudio");
   audio.classList.add("hidden");
   $("browserTtsFallback").classList.add("hidden");
   if (tts.audio_url) {
+    traceExaminerAudio("render:prime-ready-url", {
+      url: tts.audio_url,
+      ttsStatus: tts.status || "",
+    });
     primeExaminerAudio(tts.audio_url);
   } else if (isPendingExaminerTts(tts) && state.attempt?.id && state.practiceSessionId) {
+    traceExaminerAudio("render:refresh-pending-tts", {
+      turnId: turn.id,
+      ttsStatus: tts.status || "",
+    });
     refreshPendingExaminerTts(turn, state.practiceSessionId).catch(() => null);
   }
 }
 
 function prepareExaminerAudioElement(audio, url) {
   if (!audio || !url) return;
+  attachExaminerAudioTelemetry(audio, "playback", url);
   audio.preload = "auto";
-  if (audio.dataset.src === url && audio.getAttribute("src") === url) return;
+  if (audio.dataset.src === url && audio.getAttribute("src") === url) {
+    traceExaminerAudio("prepare:reuse", { url, audio: audioSnapshot(audio) });
+    return;
+  }
   audio.dataset.src = url;
   audio.src = url;
+  traceExaminerAudio("prepare:load", { url, audio: audioSnapshot(audio) });
   audio.load();
 }
 
 function primeExaminerAudio(url) {
-  if (!url || state.examinerAudioPreloads.has(url)) return state.examinerAudioPreloads.get(url);
+  if (!url) return null;
+  if (state.examinerAudioPreloads.has(url)) {
+    const cached = state.examinerAudioPreloads.get(url);
+    attachExaminerAudioTelemetry(cached, "preload", url);
+    traceExaminerAudio("preload:reuse", { url, audio: audioSnapshot(cached) });
+    return cached;
+  }
   const preload = new Audio();
+  attachExaminerAudioTelemetry(preload, "preload", url);
   preload.preload = "auto";
   preload.src = url;
+  traceExaminerAudio("preload:start", { url, audio: audioSnapshot(preload) });
   preload.load();
   state.examinerAudioPreloads.set(url, preload);
   while (state.examinerAudioPreloads.size > EXAMINER_AUDIO_PRELOAD_LIMIT) {
@@ -1865,6 +2020,7 @@ function primeExaminerAudio(url) {
 
 function clearExaminerAudioPreloads() {
   for (const [url, audio] of state.examinerAudioPreloads.entries()) {
+    traceExaminerAudio("preload:clear", { url, fixed: FIXED_EXAMINER_AUDIO_URLS.has(url), audio: audioSnapshot(audio) });
     audio.pause();
     audio.onended = null;
     audio.onerror = null;
@@ -1882,6 +2038,7 @@ function clearExaminerAudioPreloads() {
 function stopExaminerPlayback() {
   const activeAudio = state.activeExaminerAudio;
   if (activeAudio) {
+    traceExaminerAudio("playback:stop-active", { audio: audioSnapshot(activeAudio) });
     activeAudio.pause();
     activeAudio.onended = null;
     activeAudio.onerror = null;
@@ -1893,7 +2050,8 @@ function stopExaminerPlayback() {
   }
   state.activeExaminerAudio = null;
   const examinerAudio = $("examinerAudio");
-  if (examinerAudio) {
+  if (examinerAudio && examinerAudio !== activeAudio) {
+    traceExaminerAudio("playback:reset-element", { audio: audioSnapshot(examinerAudio) });
     examinerAudio.pause();
     examinerAudio.onended = null;
     examinerAudio.onerror = null;
@@ -1941,25 +2099,54 @@ function turnRequiresSynchronousComplete(turn, nextTurn) {
   return isP1WorkStudyIdentityTurn(turn) || isP3DynamicFollowUpBoundary(turn, nextTurn);
 }
 
-function waitForAudioReady(audio) {
-  if (!audio || audio.readyState >= 3) return Promise.resolve();
+function waitForAudioReady(audio, options = {}) {
+  const targetReadyState = Math.max(1, Number(options.targetReadyState || 3));
+  const timeoutMs = Math.max(250, Number(options.timeoutMs || AUDIO_READY_TIMEOUT_MS));
+  const url = options.url || audio?.currentSrc || audio?.src || "";
+  if (!audio || audio.readyState >= targetReadyState) {
+    traceExaminerAudio("ready:skip", {
+      url,
+      targetReadyState,
+      audio: audioSnapshot(audio),
+    });
+    return Promise.resolve();
+  }
+  const startedAt = performance.now();
+  traceExaminerAudio("ready:wait-start", {
+    url,
+    targetReadyState,
+    timeoutMs,
+    audio: audioSnapshot(audio),
+  });
   return new Promise((resolve) => {
     let done = false;
-    const finish = () => {
+    const finishIfReady = (event) => {
+      if (audio.readyState >= targetReadyState || event?.type === "error") {
+        finish(event?.type || "event");
+      }
+    };
+    const finish = (reason = "event") => {
       if (done) return;
       done = true;
-      audio.removeEventListener("canplay", finish);
-      audio.removeEventListener("canplaythrough", finish);
-      audio.removeEventListener("loadeddata", finish);
-      audio.removeEventListener("error", finish);
+      audio.removeEventListener("canplay", finishIfReady);
+      audio.removeEventListener("canplaythrough", finishIfReady);
+      audio.removeEventListener("loadeddata", finishIfReady);
+      audio.removeEventListener("error", finishIfReady);
       window.clearTimeout(timeout);
+      traceExaminerAudio("ready:wait-end", {
+        url,
+        reason,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        targetReadyState,
+        audio: audioSnapshot(audio),
+      });
       resolve();
     };
-    const timeout = window.setTimeout(finish, AUDIO_READY_TIMEOUT_MS);
-    audio.addEventListener("canplay", finish, { once: true });
-    audio.addEventListener("canplaythrough", finish, { once: true });
-    audio.addEventListener("loadeddata", finish, { once: true });
-    audio.addEventListener("error", finish, { once: true });
+    const timeout = window.setTimeout(() => finish("timeout"), timeoutMs);
+    audio.addEventListener("canplay", finishIfReady, { once: false });
+    audio.addEventListener("canplaythrough", finishIfReady, { once: false });
+    audio.addEventListener("loadeddata", finishIfReady, { once: false });
+    audio.addEventListener("error", finishIfReady, { once: true });
     if (audio.networkState === HTMLMediaElement.NETWORK_EMPTY) audio.load();
   });
 }
@@ -1977,8 +2164,12 @@ async function refreshPendingExaminerTts(turn, sessionId) {
   const attemptId = state.attempt.id;
   const key = `${attemptId}:${turn.id}`;
   const existing = state.speaking.examinerTtsRefreshPromises.get(key);
-  if (existing) return existing;
+  if (existing) {
+    traceExaminerAudio("tts-refresh:reuse", { key, ttsStatus: turn.examiner_tts?.status || "" });
+    return existing;
+  }
   const refreshPromise = (async () => {
+    traceExaminerAudio("tts-refresh:start", { key, ttsStatus: turn.examiner_tts?.status || "" });
     const deadline = Date.now() + EXAMINER_TTS_REFRESH_WAIT_MS;
     let delay = 0;
     while (Date.now() <= deadline && isActivePracticeSession(sessionId) && state.currentTurn?.id === turn.id) {
@@ -1987,6 +2178,12 @@ async function refreshPendingExaminerTts(turn, sessionId) {
         const payload = await api(`/api/attempts/${encodeURIComponent(attemptId)}/turns/${encodeURIComponent(turn.id)}/examiner-tts`);
         const refreshedTts = payload?.examiner_tts || null;
         if (refreshedTts) {
+          traceExaminerAudio("tts-refresh:payload", {
+            key,
+            ttsStatus: refreshedTts.status || "",
+            audioUrl: refreshedTts.audio_url || "",
+            latencyMs: refreshedTts.refresh_latency_ms ?? null,
+          });
           turn.examiner_tts = refreshedTts;
           if (state.currentTurn?.id === turn.id) {
             state.currentTurn = { ...state.currentTurn, examiner_tts: refreshedTts };
@@ -1997,10 +2194,12 @@ async function refreshPendingExaminerTts(turn, sessionId) {
           if (!isPendingExaminerTts(refreshedTts)) return state.currentTurn?.id === turn.id ? state.currentTurn : turn;
         }
       } catch (_error) {
+        traceExaminerAudio("tts-refresh:error", { key });
         return turn;
       }
       delay = EXAMINER_TTS_REFRESH_INTERVAL_MS;
     }
+    traceExaminerAudio("tts-refresh:deadline", { key });
     return state.currentTurn?.id === turn.id ? state.currentTurn : turn;
   })().finally(() => {
     if (state.speaking.examinerTtsRefreshPromises.get(key) === refreshPromise) {
@@ -2048,21 +2247,50 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
     tts = refreshedTurn?.examiner_tts || {};
   }
   if (tts.audio_url) {
-    const audio = primeExaminerAudio(tts.audio_url) || $("examinerAudio");
+    const preload = primeExaminerAudio(tts.audio_url);
+    const audio = $("examinerAudio");
+    const isFixedAudio = FIXED_EXAMINER_AUDIO_URLS.has(tts.audio_url);
+    traceExaminerAudio("playback:select", {
+      url: tts.audio_url,
+      isFixedAudio,
+      preload: audioSnapshot(preload),
+    });
+    prepareExaminerAudioElement(audio, tts.audio_url);
     state.activeExaminerAudio = audio;
     audio.onended = () => {
+      traceExaminerAudio("playback:ended-handler", { url: tts.audio_url, audio: audioSnapshot(audio) });
       if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
       if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
     };
     audio.onerror = () => {
+      traceExaminerAudio("playback:error-handler", { url: tts.audio_url, audio: audioSnapshot(audio) });
       if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
       if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
     };
-    if (audio === $("examinerAudio")) prepareExaminerAudioElement(audio, tts.audio_url);
-    await waitForAudioReady(audio);
+    await waitForAudioReady(audio, {
+      url: tts.audio_url,
+      targetReadyState: isFixedAudio ? 4 : 3,
+      timeoutMs: isFixedAudio ? FIXED_AUDIO_READY_TIMEOUT_MS : AUDIO_READY_TIMEOUT_MS,
+    });
     if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
-    audio.currentTime = 0;
-    audio.play().catch(() => isActivePracticeSession(sessionId) && beginPreparation(sessionId));
+    if (audio.currentTime > 0.05 || audio.ended) {
+      try {
+        audio.currentTime = 0;
+      } catch {
+        // Ignore seek errors for partially loaded audio.
+      }
+    }
+    traceExaminerAudio("playback:play-call", { url: tts.audio_url, audio: audioSnapshot(audio) });
+    audio.play()
+      .then(() => traceExaminerAudio("playback:play-resolved", { url: tts.audio_url, audio: audioSnapshot(audio) }))
+      .catch((error) => {
+        traceExaminerAudio("playback:play-rejected", {
+          url: tts.audio_url,
+          error: error instanceof Error ? error.message : String(error),
+          audio: audioSnapshot(audio),
+        });
+        if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
+      });
     return;
   }
   text("recordStatus", "Examiner audio is not ready. Starting preparation without browser voice.");
@@ -8693,6 +8921,7 @@ async function init() {
   loadFontStyle();
   loadDarkMode();
   loadCandidateNames();
+  exposeExaminerAudioDiagnostics();
   exposeWasmAudioPreprocessMetrics();
   bindEvents();
   setupReportRails();
