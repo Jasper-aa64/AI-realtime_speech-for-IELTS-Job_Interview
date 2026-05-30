@@ -1,0 +1,2 @@
+{"type":"spec","path":".trellis/spec/frontend/quality-guidelines.md","note":"Frontend module extraction and behavior-preserving facade requirements."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","note":"Django static asset route and check requirements."}

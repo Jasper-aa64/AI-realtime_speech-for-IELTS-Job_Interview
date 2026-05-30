@@ -1,0 +1,2 @@
+{"type":"spec","path":".trellis/spec/frontend/quality-guidelines.md","note":"Verify syntax checks and behavior-preserving extraction."}
+{"type":"spec","path":".trellis/spec/backend/quality-guidelines.md","note":"Verify Django check and static asset serving."}
