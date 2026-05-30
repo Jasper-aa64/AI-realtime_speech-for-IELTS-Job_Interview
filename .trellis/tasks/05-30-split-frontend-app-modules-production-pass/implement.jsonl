@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend static deployment and SPA behavior conventions for safe app.js extraction."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend validation requirements and Django-only runtime boundary."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Code reuse guidance for extracting shared helpers without behavior drift."}

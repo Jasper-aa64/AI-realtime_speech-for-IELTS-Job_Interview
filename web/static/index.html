@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260528-writing-answer-layout-fix">
+    <link rel="stylesheet" href="/styles.css?v=20260529-corpus-band7-strong-inline">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -232,28 +232,41 @@
           <div id="p3TopicPanel" class="p3-topic-panel hidden">
             <div class="p3-topic-head">
               <div class="p3-topic-copy">
-                <label>Part 3 Training Plan</label>
-                <p>先生成一套追问计划，确认话题、训练目标和强度后再开始录音。</p>
+                <label>Part 3 Discussion Lab</label>
+                <h2>P3 深入讨论训练</h2>
+                <p>先把来源、训练能力和强度定好，再生成一套追问计划。重点练抽象讨论、解释观点、对比让步和社会层面的展开。</p>
               </div>
+              <div class="p3-exam-brief" aria-label="Part 3 training target">
+                <span>4-5 min</span>
+                <strong>从个人经历上升到 general / abstract discussion</strong>
+                <small>练 explain opinions · analyse · discuss · speculate</small>
+              </div>
+            </div>
+            <div class="p3-flow-steps" aria-label="Part 3 flow">
+              <span class="active">1 选择来源</span>
+              <span>2 选择能力</span>
+              <span>3 生成追问</span>
+              <span>4 开始录音</span>
+            </div>
+            <div class="p3-topic-body">
               <div class="p3-mode-row">
+                <div class="p3-launch-label">训练强度</div>
                 <div class="p3-mode-switch" role="group" aria-label="Part 3 mode">
-                  <button type="button" class="p3-mode-option active" data-p3-intensity="normal">Normal</button>
-                  <button type="button" class="p3-mode-option" data-p3-intensity="high">High intensity</button>
-                  <button type="button" class="p3-mode-option" data-p3-intensity="drill">Drill</button>
+                  <button type="button" class="p3-mode-option active" data-p3-intensity="normal">标准练习</button>
+                  <button type="button" class="p3-mode-option" data-p3-intensity="high">追问压力</button>
+                  <button type="button" class="p3-mode-option" data-p3-intensity="drill">专项快练</button>
                 </div>
                 <div class="p3-mode-help" id="p3ModeHelp" aria-live="polite">
                   每轮一个主问题，适合先稳住回答节奏。
                 </div>
               </div>
-            </div>
-            <div class="p3-topic-body">
-              <section class="p3-launch-section">
+              <section class="p3-launch-section p3-source-section">
                 <div class="p3-launch-label">训练来源</div>
                 <div class="p3-source-grid" role="group" aria-label="Part 3 source">
-                  <button type="button" class="p3-source-option active" data-p3-source="topic">按话题练</button>
-                  <button type="button" class="p3-source-option" data-p3-source="p2_report">根据 P2 报告</button>
-                  <button type="button" class="p3-source-option" data-p3-source="p2_corpus">根据 P2 素材</button>
-                  <button type="button" class="p3-source-option" data-p3-source="custom">自定义主题</button>
+                  <button type="button" class="p3-source-option active" data-p3-source="topic"><strong>按话题练</strong><small>从常见 IELTS 话题抽 P3 问题</small></button>
+                  <button type="button" class="p3-source-option" data-p3-source="p2_report"><strong>根据 P2 报告</strong><small>把刚才的长回答延伸成讨论</small></button>
+                  <button type="button" class="p3-source-option" data-p3-source="p2_corpus"><strong>根据 P2 素材</strong><small>围绕串题素材准备追问</small></button>
+                  <button type="button" class="p3-source-option" data-p3-source="custom"><strong>自定义主题</strong><small>输入想练的抽象话题</small></button>
                 </div>
               </section>
               <section class="p3-launch-section" id="p3TopicSourceSection">
@@ -267,11 +280,11 @@
               <section class="p3-launch-section">
                 <div class="p3-launch-label">训练目标</div>
                 <div class="p3-focus-grid" role="group" aria-label="Part 3 focus">
-                  <button type="button" class="p3-focus-option" data-p3-focus="abstract_discussion">抽象讨论</button>
-                  <button type="button" class="p3-focus-option" data-p3-focus="cause_effect">原因影响</button>
-                  <button type="button" class="p3-focus-option active" data-p3-focus="comparison_concession">对比让步</button>
-                  <button type="button" class="p3-focus-option" data-p3-focus="future_trends">未来趋势</button>
-                  <button type="button" class="p3-focus-option" data-p3-focus="policy_society">社会政策</button>
+                  <button type="button" class="p3-focus-option" data-p3-focus="abstract_discussion"><strong>抽象讨论</strong><small>从个人例子上升到社会层面</small></button>
+                  <button type="button" class="p3-focus-option" data-p3-focus="cause_effect"><strong>原因影响</strong><small>解释 why / result / priority</small></button>
+                  <button type="button" class="p3-focus-option active" data-p3-focus="comparison_concession"><strong>对比让步</strong><small>比较群体并承认反方观点</small></button>
+                  <button type="button" class="p3-focus-option" data-p3-focus="future_trends"><strong>未来趋势</strong><small>预测变化和限制条件</small></button>
+                  <button type="button" class="p3-focus-option" data-p3-focus="policy_society"><strong>社会政策</strong><small>讨论责任、规则和公共影响</small></button>
                 </div>
               </section>
               <section class="p3-plan-preview" id="p3PlanPreview" aria-live="polite">
@@ -963,46 +976,73 @@
             </header>
             <div class="account-dashboard-grid">
               <article class="settings-card auth-card account-profile-card">
-                <div id="accountProfileStatus" class="settings-metric"></div>
-                <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
-                  <label>
-                    <span>中文名</span>
-                    <input id="fullNameInput" value="LiHua" autocomplete="name">
-                  </label>
-                  <label>
-                    <span>英文名</span>
-                    <input id="englishNameInput" value="Jasper" autocomplete="nickname">
-                  </label>
+                <div class="account-card-head">
+                  <div>
+                    <span class="account-card-eyebrow">Profile</span>
+                    <h2>口语身份资料</h2>
+                    <p id="accountProfileStatus" class="account-card-subtitle">正在读取账号资料...</p>
+                  </div>
+                  <span class="account-card-mark" aria-hidden="true">ID</span>
+                </div>
+                <div class="account-profile-body">
+                  <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
+                    <label>
+                      <span>中文名</span>
+                      <input id="fullNameInput" value="LiHua" autocomplete="name">
+                    </label>
+                    <label>
+                      <span>英文名</span>
+                      <input id="englishNameInput" value="Jasper" autocomplete="nickname">
+                    </label>
+                  </div>
                   <button type="button" id="profileSaveBtn" class="account-action-button account-action-button-primary">保存资料</button>
                 </div>
-                <label class="account-theme-toggle" for="darkModeToggle">
-                  <span>深色外观</span>
-                  <input id="darkModeToggle" type="checkbox" aria-label="切换深色外观">
-                  <i aria-hidden="true"></i>
-                </label>
+                <div class="account-card-footer">
+                  <label class="account-theme-toggle" for="darkModeToggle">
+                    <span>深色外观</span>
+                    <input id="darkModeToggle" type="checkbox" aria-label="切换深色外观">
+                    <i aria-hidden="true"></i>
+                  </label>
+                </div>
               </article>
               <article class="settings-card account-wallet-card">
-                <div class="settings-card-head account-wallet-head">
+                <div class="account-card-head account-wallet-head">
                   <div>
+                    <span class="account-card-eyebrow">Wallet</span>
                     <h2>钱包</h2>
                     <p class="muted">查看余额、预留金额和最近流水。</p>
                   </div>
                   <button type="button" id="openRechargeBtn" class="confirm-recharge-btn account-action-button account-action-button-accent">充值</button>
                 </div>
-                <div class="wallet-header">
-                  <div id="walletStatus" class="settings-metric">加载中...</div>
+                <div id="walletStatus" class="account-balance-panel is-loading">
+                  <div>
+                    <span>余额</span>
+                    <strong>加载中</strong>
+                  </div>
+                  <div>
+                    <span>预留</span>
+                    <strong>--</strong>
+                  </div>
                 </div>
-                <div id="ledgerList" class="settings-list"></div>
+                <div id="ledgerList" class="settings-list account-ledger-list" aria-live="polite">
+                  <div class="account-skeleton-row"></div>
+                  <div class="account-skeleton-row"></div>
+                  <div class="account-skeleton-row"></div>
+                </div>
               </article>
               <article class="settings-card account-weak-card">
-                <div class="settings-card-head">
+                <div class="account-card-head">
                   <div>
+                    <span class="account-card-eyebrow">Review</span>
                     <h2>弱题训练</h2>
                     <p class="muted">记录你更容易失分的话题，方便后续复习。</p>
                   </div>
+                  <div id="weakTrainingStatus" class="account-count-badge">加载中</div>
                 </div>
-                <div id="weakTrainingStatus" class="settings-metric">加载中...</div>
-                <div id="weakTrainingList" class="settings-list"></div>
+                <div id="weakTrainingList" class="settings-list account-weak-list" aria-live="polite">
+                  <div class="account-skeleton-row"></div>
+                  <div class="account-skeleton-row"></div>
+                </div>
               </article>
             </div>
           </div>
@@ -1044,7 +1084,11 @@
         <!-- Recharge Dialog -->
         <div id="rechargeDialog" class="recharge-dialog-overlay hidden">
           <div class="recharge-dialog">
-            <h3>充值</h3>
+            <div class="recharge-dialog-head">
+              <span>Wallet top-up</span>
+              <h3>充值</h3>
+              <p>选择预设金额，或输入自定义金额。</p>
+            </div>
             <div class="recharge-buttons">
               <button type="button" class="recharge-btn" data-amount="1">¥1</button>
               <button type="button" class="recharge-btn" data-amount="5">¥5</button>
@@ -1067,6 +1111,7 @@
         </div>
       </main>
     </div>
-    <script src="/app.js?v=20260528-writing-answer-layout-fix"></script>
+    <script src="/shared-ui.js?v=20260530-front-shared-ui"></script>
+    <script src="/app.js?v=20260530-front-shared-ui"></script>
   </body>
 </html>

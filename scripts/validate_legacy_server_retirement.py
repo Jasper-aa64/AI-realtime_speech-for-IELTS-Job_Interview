@@ -39,6 +39,7 @@ def ensure_django_url_surface_exists() -> None:
     urls = read_text("backend_django/config/urls.py")
     for token in [
         'path("", frontend_asset',
+        'path("shared-ui.js", frontend_asset',
         'path("app.js", frontend_asset',
         'path("api/attempts/start"',
         'path("api/writing/',

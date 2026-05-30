@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Check extracted frontend helper boundary against static SPA conventions."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check JavaScript syntax and Django-only frontend runtime assumptions."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Check reuse boundary and avoid duplicating helpers in app.js."}

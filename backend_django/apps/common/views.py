@@ -30,7 +30,12 @@ def frontend_asset(request, asset_path: str = "index.html"):
     normalized = (asset_path or "index.html").lstrip("/")
     if normalized in {"", "."}:
         normalized = "index.html"
-    allowed = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "styles.css": "text/css; charset=utf-8"}
+    allowed = {
+        "index.html": "text/html; charset=utf-8",
+        "shared-ui.js": "text/javascript; charset=utf-8",
+        "app.js": "text/javascript; charset=utf-8",
+        "styles.css": "text/css; charset=utf-8",
+    }
     if normalized not in allowed:
         raise Http404("Static asset not found")
     path = settings.BASE_DIR.parent / "web" / "static" / normalized

@@ -28,6 +28,7 @@ const state = {
   activeHistoryId: null,
   historyItems: [],
   historyDetailCache: new Map(),
+  historyDetailPromises: new Map(),
   abortingAttemptId: null,
   practiceViewBeforeSettings: null,
   darkMode: false,
@@ -61,6 +62,7 @@ const state = {
   languageTakeaway: {
     items: [],
     loaded: false,
+    loadingPromise: null,
     selectedText: "",
     rangeRect: null,
     selectionAnchor: null,
@@ -75,6 +77,7 @@ const state = {
   writingTakeaway: {
     items: [],
     loaded: false,
+    loadingPromise: null,
     hideEnglish: false,
     revealedEntryIds: new Set(),
   },
@@ -112,6 +115,7 @@ const state = {
     activeReportId: null,
     activeReportDetail: null,
     reportDetailCache: new Map(),
+    reportDetailPromises: new Map(),
     reportEditLoading: false,
     reportEditRequestId: 0,
     scorePollTimer: null,
@@ -123,6 +127,12 @@ const state = {
     promptCatalog: {},
     promptLoadingPromises: {},
     promptImagePreloads: new Set(),
+    promptImagePreloadPromises: new Map(),
+    promptImagePreloadQueue: [],
+    promptImagePreloadQueued: new Set(),
+    promptImagePreloadActive: 0,
+    promptImagePreloadScheduled: false,
+    nearbyPromptImagePreloadSource: "",
     pickerCategoryFilters: {
       task1_academic: "",
       task2: "",
@@ -139,6 +149,8 @@ const state = {
   },
   speaking: {
     pendingAnalysis: null,
+    pendingTurnCompletions: new Map(),
+    turnCompletionErrors: new Map(),
     scorePollTimer: null,
     scorePollingTaskId: null,
     scoreCompletionModalAttempt: null,
@@ -155,6 +167,12 @@ const state = {
     user: null,
     returnView: null,
     fromView: null,
+  },
+  wallet: {
+    payload: null,
+    loaded: false,
+    loadingPromise: null,
+    fetchedAt: 0,
   },
   prefetch: {
     started: false,
@@ -173,6 +191,8 @@ const FULL_NAME_STORAGE_KEY = "ielts-full-name";
 const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
 const VDITOR_CSS_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.css";
 const VDITOR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js";
+const WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT = 2;
+const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 9;
 const fontStyles = new Set(["default", "academic", "popular"]);
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
@@ -191,7 +211,7 @@ const viewCopy = {
   mock: ["Mock", "完整模拟 P1、P2 和 P3 的口语考试流程。"],
   p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
   p2: ["Part 2", "Cue card, one-minute preparation, then a long turn."],
-  p3: ["Part 3", "Discussion generated from your P2 answer with normal or high-intensity practice."],
+  p3: ["Part 3", "练观点解释、对比让步、未来趋势和社会层面的深入讨论。"],
   corpus: ["语料库", "Manage prepared speaking material and language takeaways."],
   p1Corpus: ["我的 P1语料库", "Prepare grouped Part 1 answers and reuse them in AI feedback."],
   p2Corpus: ["我准备的P2串题素材库", "Prepare reusable Part 2 story materials and link them during preparation."],
@@ -250,6 +270,41 @@ const P3_TYPE_LABELS = {
   future_trends: "未来趋势",
   policy_society: "社会政策",
 };
+const P3_MOVE_LABELS = {
+  "clear position": "先给明确立场",
+  reason: "解释原因",
+  "brief contrast": "补一个反方角度",
+  "past-present comparison": "过去/现在对比",
+  cause: "指出原因",
+  consequence: "说明影响",
+  prediction: "给出预测",
+  condition: "补充条件",
+  "long-term impact": "长期影响",
+  problem: "指出问题",
+  example: "给具体例子",
+  "practical response": "给现实方案",
+  stakeholder: "点出相关群体",
+  responsibility: "讨论责任",
+  "balanced view": "平衡观点",
+  "compare groups": "比较不同群体",
+  concession: "承认反方合理性",
+  "specific example": "具体例子支撑",
+  generalize: "上升到一般现象",
+  "define the issue": "界定问题",
+  "social impact": "社会层面影响",
+  "main cause": "主因",
+  effect: "结果影响",
+  priority: "判断优先级",
+  "future change": "未来变化",
+  driver: "变化驱动因素",
+  "risk or benefit": "风险/好处",
+  "public role": "公共角色",
+  "individual role": "个人角色",
+  "trade-off": "权衡利弊",
+  "respond directly": "直接回应追问",
+  "add evidence": "补证据",
+  "extend the idea": "继续延展观点",
+};
 const P3_TYPE_SEQUENCE = [
   "opinion_justify",
   "change_trend",
@@ -277,28 +332,9 @@ const P3_TARGET_MOVES = {
   policy_society: ["public role", "individual role", "trade-off"],
 };
 const P3_INTENSITY_HELP = {
-  normal: "每轮一个主问题，适合先稳住回答节奏。",
-  high: "主问题后追加追问，更接近真实 Part 3 压力。",
-  drill: "只练 3 道同一能力点，适合快速补短板。",
-};
-const AGENT_SEARCH_ALIASES = {
-  computers: "computer",
-  children: "child",
-  childrens: "child",
-  childs: "child",
-  schools: "school",
-  teachers: "teacher",
-  education: "study",
-  educational: "study",
-  learning: "study",
-  learn: "study",
-  important: "important",
-  essential: "important",
-  effective: "important",
-  effectively: "important",
-  chart: "graph",
-  charts: "graph",
-  graphs: "graph",
+  normal: "5 个主问题，重点把每题说成“观点 + 原因 + 例子/对比 + 影响”。",
+  high: "每个主问题后追加追问，训练临场承接和更深一层解释。",
+  drill: "只练 3 道同一能力点，适合快速补一个短板。",
 };
 const corpusPeekDrag = {
   dialogId: "",
@@ -307,19 +343,13 @@ const corpusPeekDrag = {
   dragOffsetY: 0,
 };
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function escapeCssValue(value) {
-  if (window.CSS?.escape) return window.CSS.escape(String(value ?? ""));
-  return String(value ?? "").replace(/["\\]/g, "\\$&");
-}
+const {
+  escapeCssValue,
+  escapeHtml,
+  normalizeSpokenAnswerMarkdown,
+  renderMarkdown,
+  renderSpokenAnswerMarkdown,
+} = window.IELTSSharedUI || {};
 
 function loadWritingPromptHighlights() {
   try {
@@ -509,76 +539,6 @@ async function persistWritingPromptHighlights() {
   state.writing.entry = entry;
   state.writing.reportDetailCache.set(entry.id, entry);
   return entry;
-}
-
-function renderMarkdown(value) {
-  if (!value) return "";
-  const codeSpans = [];
-  let text = escapeHtml(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  text = text.replace(/`([^`\n]+?)`/g, (_match, code) => {
-    const token = `@@CODE_SPAN_${codeSpans.length}@@`;
-    codeSpans.push(`<code>${code}</code>`);
-    return token;
-  });
-  text = text
-    .replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^\*])\*([^*\n]+?)\*/g, "$1<em>$2</em>");
-  codeSpans.forEach((code, index) => {
-    text = text.replaceAll(`@@CODE_SPAN_${index}@@`, code);
-  });
-
-  const lines = text.split("\n");
-  const chunks = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i].trim();
-    if (!line) {
-      i += 1;
-      continue;
-    }
-    if (/^#{2,4}\s+/.test(line)) {
-      chunks.push(`<h4>${line.replace(/^#{2,4}\s+/, "")}</h4>`);
-      i += 1;
-      continue;
-    }
-    if (/^[-*]\s+/.test(line)) {
-      const items = [];
-      while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
-        const item = lines[i].trim().replace(/^[-*]\s+/, "");
-        i += 1;
-        const nested = [];
-        while (i < lines.length && /^\s{2,}\d+\.\s+/.test(lines[i])) {
-          nested.push(lines[i].trim().replace(/^\d+\.\s+/, ""));
-          i += 1;
-        }
-        items.push(nested.length
-          ? `${item}<ol>${nested.map((nestedItem) => `<li>${nestedItem}</li>`).join("")}</ol>`
-          : item);
-      }
-      chunks.push(`<ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>`);
-      continue;
-    }
-    if (/^\d+\.\s+/.test(line)) {
-      const items = [];
-      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
-        items.push(lines[i].trim().replace(/^\d+\.\s+/, ""));
-        i += 1;
-      }
-      chunks.push(`<ol>${items.map((item) => `<li>${item}</li>`).join("")}</ol>`);
-      continue;
-    }
-
-    const paragraph = [];
-    while (i < lines.length) {
-      const current = lines[i].trim();
-      if (!current || /^[-*]\s+/.test(current) || /^\d+\.\s+/.test(current) || /^#{2,4}\s+/.test(current)) break;
-      paragraph.push(current);
-      i += 1;
-    }
-    if (paragraph.length) chunks.push(`<p>${paragraph.join("<br>")}</p>`);
-  }
-
-  return chunks.join("");
 }
 
 let csrfToken = null;
@@ -811,11 +771,14 @@ function scheduleIdleTask(action, timeout = 1200) {
         // Background prefetch should never interrupt the active learner flow.
       });
   };
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(run, { timeout });
-  } else {
-    window.setTimeout(run, Math.min(timeout, 400));
-  }
+  const delay = Math.max(0, Number(timeout) || 0);
+  window.setTimeout(() => {
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(run, { timeout: Math.max(800, delay) });
+    } else {
+      run();
+    }
+  }, delay);
 }
 
 function prefetchCanApply(token) {
@@ -825,12 +788,15 @@ function prefetchCanApply(token) {
 function clearUserScopedCaches() {
   state.historyItems = [];
   state.historyDetailCache.clear();
+  state.historyDetailPromises.clear();
   state.activeHistoryId = null;
   state.languageTakeaway.items = [];
   state.languageTakeaway.loaded = false;
+  state.languageTakeaway.loadingPromise = null;
   state.languageTakeaway.revealedEntryIds.clear();
   state.writingTakeaway.items = [];
   state.writingTakeaway.loaded = false;
+  state.writingTakeaway.loadingPromise = null;
   state.writingTakeaway.revealedEntryIds.clear();
   state.p1Corpus.topics = [];
   state.p1Corpus.loaded = false;
@@ -842,11 +808,19 @@ function clearUserScopedCaches() {
   state.writing.activeReportId = null;
   state.writing.activeReportDetail = null;
   state.writing.reportDetailCache.clear();
+  state.writing.reportDetailPromises.clear();
   state.writing.scoreCompletionModalEntry = null;
   state.writing.scoreCompletionNotifiedIds.clear();
   state.writing.promptLoadingPromises = {};
   state.writing.promptImagePreloads.clear();
+  state.writing.promptImagePreloadPromises.clear();
+  state.writing.promptImagePreloadQueue = [];
+  state.writing.promptImagePreloadQueued.clear();
+  state.writing.promptImagePreloadActive = 0;
+  state.writing.promptImagePreloadScheduled = false;
   state.speaking.pendingAnalysis = null;
+  state.speaking.pendingTurnCompletions.clear();
+  state.speaking.turnCompletionErrors.clear();
   state.speaking.scoreCompletionModalAttempt = null;
   state.speaking.scoreCompletionNotifiedIds.clear();
   state.prefetch.started = false;
@@ -863,14 +837,14 @@ function scheduleAuthenticatedPrefetch() {
   state.prefetch.token += 1;
   const token = state.prefetch.token;
   prefetchFixedExaminerTts(token);
-  scheduleIdleTask(() => prefetchSpeakingHistory(token), 350);
-  scheduleIdleTask(() => prefetchWritingReports(token), 650);
-  scheduleIdleTask(() => prefetchP1Corpus(token), 950);
-  scheduleIdleTask(() => prefetchP2Corpus(token), 1250);
-  scheduleIdleTask(() => prefetchLanguageTakeaways(token), 1550);
-  scheduleIdleTask(() => prefetchWritingTakeaways(token), 1800);
-  scheduleIdleTask(() => prefetchWritingPrompts(token), 1850);
-  scheduleIdleTask(() => prefetchCorpusEditor(token), 2300);
+  scheduleIdleTask(() => prefetchSpeakingHistory(token), 550);
+  scheduleIdleTask(() => prefetchWritingReports(token), 1300);
+  scheduleIdleTask(() => prefetchLanguageTakeaways(token), 2200);
+  scheduleIdleTask(() => prefetchWritingTakeaways(token), 3000);
+  scheduleIdleTask(() => prefetchP1Corpus(token), 4200);
+  scheduleIdleTask(() => prefetchP2Corpus(token), 5400);
+  scheduleIdleTask(() => prefetchCorpusEditor(token), 6500);
+  scheduleIdleTask(() => prefetchWritingPrompts(token), 8200);
 }
 
 async function fetchFixedExaminerTtsWarmup() {
@@ -951,16 +925,30 @@ async function prefetchP2Corpus(token) {
 }
 
 async function prefetchLanguageTakeaways(token) {
-  const payload = await api("/api/language-takeaways");
+  const payload = await fetchLanguageTakeawaysPayload();
   if (!prefetchCanApply(token)) return;
-  state.languageTakeaway.items = payload.items || [];
-  state.languageTakeaway.loaded = true;
+  applyLanguageTakeawaysPayload(payload);
   if (state.view === "takeawayBook") {
     const stats = $("languageTakeawayStats");
     if (stats) stats.textContent = `${payload.count || 0} 条`;
     renderLanguageTakeawayToggle();
     renderLanguageTakeaways();
   }
+}
+
+async function fetchLanguageTakeawaysPayload() {
+  if (!state.languageTakeaway.loadingPromise) {
+    state.languageTakeaway.loadingPromise = api("/api/language-takeaways")
+      .finally(() => {
+        state.languageTakeaway.loadingPromise = null;
+      });
+  }
+  return state.languageTakeaway.loadingPromise;
+}
+
+function applyLanguageTakeawaysPayload(payload) {
+  state.languageTakeaway.items = payload.items || [];
+  state.languageTakeaway.loaded = true;
 }
 
 async function prefetchSpeakingHistory(token) {
@@ -972,7 +960,7 @@ async function prefetchSpeakingHistory(token) {
     ? state.activeHistoryId
     : items[0]?.id;
   if (activeId && !state.historyDetailCache.has(activeId)) {
-    const detail = await api(`/api/history/${activeId}`);
+    const detail = await fetchHistoryDetail(activeId);
     if (prefetchCanApply(token)) state.historyDetailCache.set(activeId, detail);
   }
 }
@@ -986,7 +974,7 @@ async function prefetchWritingReports(token) {
     ? state.writing.activeReportId
     : items[0]?.id;
   if (activeId && !state.writing.reportDetailCache.has(activeId)) {
-    const detail = await api(`/api/writing/entries/${activeId}`);
+    const detail = await fetchWritingReportDetail(activeId);
     if (prefetchCanApply(token)) state.writing.reportDetailCache.set(activeId, detail);
   }
 }
@@ -1364,15 +1352,63 @@ function syncUrlForCurrentState(options = {}) {
 }
 
 async function prefetchWritingTakeaways(token) {
-  const payload = await api("/api/writing-takeaways");
-  if (token !== state.auth.sessionToken) return;
-  state.writingTakeaway.items = payload.items || [];
-  state.writingTakeaway.loaded = true;
+  const payload = await fetchWritingTakeawaysPayload();
+  if (!prefetchCanApply(token)) return;
+  applyWritingTakeawaysPayload(payload);
   if (state.view === "writingTakeawayBook") {
     renderWritingTakeawayToggle();
     renderWritingTakeaways();
     text("writingTakeawayStats", `${payload.count || 0} 条`);
   }
+}
+
+async function fetchWritingTakeawaysPayload() {
+  if (!state.writingTakeaway.loadingPromise) {
+    state.writingTakeaway.loadingPromise = api("/api/writing-takeaways")
+      .finally(() => {
+        state.writingTakeaway.loadingPromise = null;
+      });
+  }
+  return state.writingTakeaway.loadingPromise;
+}
+
+function applyWritingTakeawaysPayload(payload) {
+  state.writingTakeaway.items = payload.items || [];
+  state.writingTakeaway.loaded = true;
+}
+
+async function fetchHistoryDetail(attemptId) {
+  const id = String(attemptId || "").trim();
+  if (!id) return null;
+  if (state.historyDetailCache.has(id)) return state.historyDetailCache.get(id);
+  if (!state.historyDetailPromises.has(id)) {
+    state.historyDetailPromises.set(id, api(`/api/history/${encodeURIComponent(id)}`)
+      .then((detail) => {
+        state.historyDetailCache.set(id, detail);
+        return detail;
+      })
+      .finally(() => {
+        state.historyDetailPromises.delete(id);
+      }));
+  }
+  return state.historyDetailPromises.get(id);
+}
+
+async function fetchWritingReportDetail(entryId) {
+  const id = String(entryId || "").trim();
+  if (!id) return null;
+  if (state.writing.reportDetailCache.has(id)) return state.writing.reportDetailCache.get(id);
+  if (!state.writing.reportDetailPromises.has(id)) {
+    state.writing.reportDetailPromises.set(id, api(`/api/writing/entries/${encodeURIComponent(id)}`)
+      .then((entry) => {
+        state.writing.reportDetailCache.set(id, entry);
+        return entry;
+      })
+      .finally(() => {
+        state.writing.reportDetailPromises.delete(id);
+      }));
+  }
+  return state.writing.reportDetailPromises.get(id);
 }
 
 function writingPromptDeepLink(prompt) {
@@ -1564,10 +1600,12 @@ function resetPracticeSurface() {
   state.attempt = null;
   state.currentTurn = null;
   state.transcript = "";
+  state.speaking.pendingTurnCompletions.clear();
+  state.speaking.turnCompletionErrors.clear();
   clearExaminerAudioPreloads();
   const summaryPanel = $("#summaryPanel");
   const isPracticeMode = ["mock", "p1", "p2", "p3"].includes(state.view);
-  $(".exam-status")?.classList.toggle("hidden", !isPracticeMode);
+  $(".exam-status")?.classList.toggle("hidden", !isPracticeMode || state.view === "p3");
   $("#examStatusText")?.classList.toggle("hidden", state.view === "p2");
   $("#candidateAudio")?.classList.add("hidden");
   $("#examinerAudio")?.classList.add("hidden");
@@ -1695,6 +1733,8 @@ async function startPractice() {
   if (state.speaking.pendingAnalysis?.attemptId) return;
   if (state.status === "loading" || state.practiceLocked) return;
   stopExaminerPlayback();
+  state.speaking.pendingTurnCompletions.clear();
+  state.speaking.turnCompletionErrors.clear();
   const requestId = state.startRequestId + 1;
   state.startRequestId = requestId;
   const sessionId = state.practiceSessionId + 1;
@@ -1724,7 +1764,10 @@ async function startPractice() {
   updateSidebarLock();
   setRecordButton("loading", "Loading...", "Checking account balance.");
   try {
-    const wallet = await api("/api/billing/wallet", null, { signal: state.startAbortController.signal });
+    const wallet = await fetchWalletPayload({
+      maxAgeMs: 60000,
+      requestOptions: { signal: state.startAbortController.signal },
+    });
     if (state.startRequestId !== requestId || state.practiceSessionId !== sessionId || state.abortingAttemptId === "__loading__") return;
     const balance = Number(wallet.balance_rmb || 0);
     if (balance <= 0) {
@@ -2004,6 +2047,26 @@ function preloadNextExaminerAudio(turn) {
   primeExaminerAudio(nextUrl);
 }
 
+function localNextTurnAfter(turn, attempt = state.attempt) {
+  if (!turn || !attempt) return null;
+  const turns = attempt.turns || [];
+  const currentIndex = turns.findIndex((item) => item.id === turn.id);
+  if (currentIndex < 0) return null;
+  return turns[currentIndex + 1] || null;
+}
+
+function isP3DynamicFollowUpBoundary(turn, nextTurn) {
+  return turn?.part === "p3"
+    && turn?.prompt?.role === "main"
+    && nextTurn?.part === "p3"
+    && nextTurn?.prompt?.role === "follow_up";
+}
+
+function turnRequiresSynchronousComplete(turn, nextTurn) {
+  if (!nextTurn) return true;
+  return isP1WorkStudyIdentityTurn(turn) || isP3DynamicFollowUpBoundary(turn, nextTurn);
+}
+
 function waitForAudioReady(audio) {
   if (!audio || audio.readyState >= 3) return Promise.resolve();
   return new Promise((resolve) => {
@@ -2217,19 +2280,16 @@ async function summarizeWasmAudioPreprocessMetrics(metrics) {
     const module = await import("/wasm/speaking_audio_preprocessor.js");
     return module.summarizeSpeakingAudioPreprocessingMetrics(metrics);
   } catch (error) {
-    const totalFrames = Math.max(0, Number(metrics.frameCount || 0));
-    const speechFrames = Math.max(0, Math.min(totalFrames, Number(metrics.speechFrameCount || 0)));
-    const silenceFrames = Math.max(0, totalFrames - speechFrames);
     return {
       enabled: true,
       analyzer: String(metrics.analyzer || ""),
       fallback_analyzer: String(metrics.fallbackAnalyzer || ""),
       fallback_reason: String(metrics.fallbackReason || ""),
-      total_frames: totalFrames,
-      speech_frames: speechFrames,
-      silence_frames: silenceFrames,
-      speech_ratio: totalFrames ? speechFrames / totalFrames : 0,
-      silence_ratio: totalFrames ? silenceFrames / totalFrames : 0,
+      total_frames: Math.max(0, Number(metrics.frameCount || 0)),
+      speech_frames: Math.max(0, Number(metrics.speechFrameCount || 0)),
+      silence_frames: Math.max(0, Number(metrics.frameCount || 0) - Number(metrics.speechFrameCount || 0)),
+      speech_ratio: 0,
+      silence_ratio: 0,
       sample_rate: Math.max(0, Number(metrics.sampleRate || 0)),
       frame_size: Math.max(0, Number(metrics.frameSize || 0)),
       last_error: error instanceof Error ? error.message : String(error),
@@ -2387,6 +2447,64 @@ function isP1WorkStudyIdentityTurn(turn) {
   return turn?.part === "p1" && turn?.prompt?.flow === "intro" && turn?.prompt?.role === "work_study";
 }
 
+function mergeCompletedTurnPayload(attemptPayload, completedTurn) {
+  if (!attemptPayload || !completedTurn) return attemptPayload;
+  const turns = (attemptPayload.turns || []).map((item) => (
+    item.id === completedTurn.id ? { ...item, ...completedTurn } : item
+  ));
+  return { ...attemptPayload, turns };
+}
+
+function completeTurnPayload(turn, transcript, transcriptStatus, p2CorpusEntryId = state.p2Corpus.selectedEntryId, audioPreprocessingMetrics = null) {
+  return {
+    transcript_raw: transcript,
+    transcript_status: transcriptStatus,
+    transcript_source: "browser_dictation",
+    ...(turn.part === "p2" && p2CorpusEntryId ? { p2_corpus_link: { entry_id: p2CorpusEntryId } } : {}),
+    ...(audioPreprocessingMetrics ? { audio_preprocessing_metrics: audioPreprocessingMetrics } : {}),
+  };
+}
+
+function pendingTurnCompletionKey(attemptId, turnId) {
+  return `${attemptId}:${turnId}`;
+}
+
+function registerPendingTurnCompletion(attempt, turn, promise) {
+  const key = pendingTurnCompletionKey(attempt.id, turn.id);
+  state.speaking.turnCompletionErrors.delete(key);
+  state.speaking.pendingTurnCompletions.set(key, promise);
+  promise.finally(() => {
+    if (state.speaking.pendingTurnCompletions.get(key) === promise) {
+      state.speaking.pendingTurnCompletions.delete(key);
+    }
+  });
+}
+
+async function waitForPendingTurnCompletions(attemptId) {
+  const pending = [...state.speaking.pendingTurnCompletions.entries()]
+    .filter(([key]) => key.startsWith(`${attemptId}:`))
+    .map(([, promise]) => promise);
+  if (pending.length) await Promise.all(pending);
+  const errors = [...state.speaking.turnCompletionErrors.entries()]
+    .filter(([key]) => key.startsWith(`${attemptId}:`));
+  if (errors.length) {
+    const [, error] = errors[0];
+    throw error;
+  }
+}
+
+function handleTurnCompletionResult(attempt, turn, completePayload) {
+  if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+  if (completePayload?.turn) {
+    state.attempt = mergeCompletedTurnPayload(state.attempt, completePayload.turn);
+  }
+  if (completePayload?.next_turn && state.currentTurn?.id === completePayload.next_turn.id) {
+    state.currentTurn = completePayload.next_turn;
+    state.attempt = mergeCompletedTurnPayload(state.attempt, completePayload.next_turn);
+    renderTurn(completePayload.next_turn);
+  }
+}
+
 async function finalizeTurn(mimeType) {
   const attempt = state.attempt;
   const turn = state.currentTurn;
@@ -2412,15 +2530,47 @@ async function finalizeTurn(mimeType) {
     const completionStatus = isP1WorkStudyIdentityTurn(turn)
       ? "Generating follow-up..."
       : "Saving turn...";
+    const localNextTurn = localNextTurnAfter(turn, attempt);
+    const requiresSyncComplete = turnRequiresSynchronousComplete(turn, localNextTurn);
+    const transcriptSnapshot = state.transcript;
+    const transcriptStatusSnapshot = state.transcriptStatus;
+    const p2CorpusEntrySnapshot = state.p2Corpus.selectedEntryId;
+    const completeRequest = () => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
+      turn,
+      transcriptSnapshot,
+      transcriptStatusSnapshot,
+      p2CorpusEntrySnapshot,
+      audioPreprocessingMetrics,
+    ));
+    if (!requiresSyncComplete) {
+      const sessionId = state.practiceSessionId;
+      state.attempt = mergeCompletedTurnPayload(state.attempt, {
+        id: turn.id,
+        status: "completed",
+        audio: payload.audio || turn.audio,
+        transcript_raw: transcriptSnapshot,
+        transcript_cleaned: transcriptSnapshot,
+        transcript_status: transcriptStatusSnapshot,
+      });
+      state.currentTurn = localNextTurn;
+      renderTurn(localNextTurn);
+      setRecordButton("turn_saved", "Next", "Moving to the next question.");
+      text("recordStatus", "Audio uploaded. Saving transcript in the background.");
+      clearAutoNextTimeout();
+      state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 200);
+      const completion = completeRequest()
+        .then((completePayload) => handleTurnCompletionResult(attempt, turn, completePayload))
+        .catch((error) => {
+          if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+          state.speaking.turnCompletionErrors.set(pendingTurnCompletionKey(attempt.id, turn.id), error);
+          showError(error);
+        });
+      registerPendingTurnCompletion(attempt, turn, completion);
+      return;
+    }
     setRecordButton("processing", "Saving", completionStatus);
     text("recordStatus", completionStatus);
-    const completePayload = await api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, {
-      transcript_raw: state.transcript,
-      transcript_status: state.transcriptStatus,
-      transcript_source: "browser_dictation",
-      ...(turn.part === "p2" && state.p2Corpus.selectedEntryId ? { p2_corpus_link: { entry_id: state.p2Corpus.selectedEntryId } } : {}),
-      ...(audioPreprocessingMetrics ? { audio_preprocessing_metrics: audioPreprocessingMetrics } : {}),
-    });
+    const completePayload = await completeRequest();
     if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
     state.attempt = completePayload.attempt;
     if (completePayload.next_turn) {
@@ -2456,6 +2606,8 @@ async function scoreAttempt() {
   setRecordButton("scoring", "Analyzing", "Analyzing the full section and generating the report.");
   text("recordStatus", "Analyzing the full section and generating the report.");
   try {
+    await waitForPendingTurnCompletions(attemptId);
+    if (state.abortingAttemptId === attemptId || state.attempt?.id !== attemptId) return;
     const scored = await api(`/api/attempts/${attemptId}/score`, {});
     if (state.abortingAttemptId === attemptId) return;
     const task = scored.ai_task || null;
@@ -2902,12 +3054,14 @@ function renderHistoryList(items, options = {}) {
         item.classList.toggle("active", item.dataset.attemptId === state.activeHistoryId);
       });
       const cached = state.historyDetailCache.get(button.dataset.attemptId);
-      if (cached) renderDetail(cached, false);
-      else $("detailPanel").innerHTML = centeredLoadingHtml("正在加载口语报告", "报告内容首次打开需要从服务端读取。");
-      api(`/api/history/${button.dataset.attemptId}`)
+      if (cached) {
+        renderDetail(cached, false);
+        return;
+      }
+      $("detailPanel").innerHTML = centeredLoadingHtml("正在加载口语报告", "报告内容首次打开需要从服务端读取。");
+      fetchHistoryDetail(button.dataset.attemptId)
         .then((detail) => {
-          state.historyDetailCache.set(button.dataset.attemptId, detail);
-          if (state.activeHistoryId === button.dataset.attemptId) renderDetail(detail, false, { preserveScroll: Boolean(cached) });
+          if (detail && state.activeHistoryId === button.dataset.attemptId) renderDetail(detail, false);
         })
         .catch(showError);
     });
@@ -2929,12 +3083,14 @@ function renderHistoryList(items, options = {}) {
   requestAnimationFrame(() => updateReportRailState("historyList"));
   if (refreshActive && state.activeHistoryId) {
     const cached = state.historyDetailCache.get(state.activeHistoryId);
-    if (cached) renderDetail(cached, false, { preserveScroll: true });
-    else $("detailPanel").innerHTML = centeredLoadingHtml("正在加载口语报告", "报告内容首次打开需要从服务端读取。");
-    api(`/api/history/${state.activeHistoryId}`)
+    if (cached) {
+      renderDetail(cached, false, { preserveScroll: true });
+      return;
+    }
+    $("detailPanel").innerHTML = centeredLoadingHtml("正在加载口语报告", "报告内容首次打开需要从服务端读取。");
+    fetchHistoryDetail(state.activeHistoryId)
       .then((detail) => {
-        state.historyDetailCache.set(state.activeHistoryId, detail);
-        if (state.activeHistoryId === detail.id) renderDetail(detail, false, { preserveScroll: Boolean(cached) });
+        if (detail && state.activeHistoryId === detail.id) renderDetail(detail, false);
       })
       .catch(showError);
   }
@@ -3698,7 +3854,7 @@ async function loadWriting() {
       });
       scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType), 80);
       const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
-      scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 120);
+      scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 2600);
       return;
     }
     const routePrompt = await resolveRequestedWritingPrompt();
@@ -3737,7 +3893,7 @@ async function loadWriting() {
     });
     scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType), 80);
     const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
-    scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 120);
+    scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 2600);
   } catch (error) {
     showWritingError(error);
   } finally {
@@ -3803,7 +3959,6 @@ async function loadWritingPrompts(taskType) {
         state.writing.promptCatalog[normalized] = payload.catalog || [];
         state.writing.prompts[normalized] = attachWritingDisplayLabels(normalized, payload.items || [], state.writing.promptCatalog[normalized]);
         state.writing.promptCategories[normalized] = payload.categories || inferWritingCategories(state.writing.prompts[normalized]);
-        preloadWritingPromptImages(state.writing.prompts[normalized]);
         return state.writing.prompts[normalized];
       })
       .finally(() => {
@@ -3814,28 +3969,128 @@ async function loadWritingPrompts(taskType) {
   return state.writing.prompts[normalized];
 }
 
-function preloadWritingPromptImages(prompts = [], limit = 14) {
-  let loaded = 0;
-  for (const prompt of prompts) {
-    const url = String(prompt?.image_url || "").trim();
-    if (!url || state.writing.promptImagePreloads.has(url)) continue;
-    state.writing.promptImagePreloads.add(url);
-    const image = new Image();
-    image.decoding = "async";
-    image.loading = "eager";
-    image.src = url;
-    loaded += 1;
-    if (loaded >= limit) break;
+function writingPromptImageUrls(prompts = []) {
+  return prompts
+    .map((prompt) => String(prompt?.image_url || "").trim())
+    .filter(Boolean);
+}
+
+function primeWritingPromptImage(url, options = {}) {
+  const imageUrl = String(url || "").trim();
+  if (!imageUrl || state.writing.promptImagePreloads.has(imageUrl)) return false;
+  state.writing.promptImagePreloads.add(imageUrl);
+  const image = new Image();
+  image.decoding = "async";
+  image.loading = options.priority === "low" ? "lazy" : "eager";
+  if ("fetchPriority" in image) image.fetchPriority = options.priority === "low" ? "low" : "high";
+  const loaded = new Promise((resolve) => {
+    image.onload = () => resolve({ url: imageUrl, ok: true });
+    image.onerror = () => resolve({ url: imageUrl, ok: false });
+  });
+  const promise = loaded.then(async (result) => {
+    if (result.ok && typeof image.decode === "function") {
+      await image.decode().catch(() => null);
+    }
+    return result;
+  });
+  state.writing.promptImagePreloadPromises.set(imageUrl, promise);
+  image.src = imageUrl;
+  return true;
+}
+
+function queueWritingPromptImages(prompts = [], options = {}) {
+  const offset = Math.max(0, Number(options.offset || 0));
+  const limit = Number.isFinite(Number(options.limit)) ? Math.max(0, Number(options.limit)) : Infinity;
+  let queued = 0;
+  for (const url of writingPromptImageUrls(prompts).slice(offset)) {
+    if (queued >= limit) break;
+    if (state.writing.promptImagePreloads.has(url) || state.writing.promptImagePreloadQueued.has(url)) continue;
+    state.writing.promptImagePreloadQueued.add(url);
+    state.writing.promptImagePreloadQueue.push(url);
+    queued += 1;
   }
 }
 
+function writingPromptCanUseBackgroundPreload() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (connection?.saveData) return false;
+  const effectiveType = String(connection?.effectiveType || "").toLowerCase();
+  return effectiveType !== "slow-2g" && effectiveType !== "2g";
+}
+
+function canWarmWritingPromptImages() {
+  return state.view === "writing" && document.visibilityState !== "hidden";
+}
+
+function scheduleNearbyWritingPromptImagePreload(prompt) {
+  if (!prompt || prompt.task_type !== "task1_academic") return;
+  if (!writingPromptCanUseBackgroundPreload()) return;
+  const prompts = state.writing.prompts.task1_academic || [];
+  if (!prompts.length) return;
+  const currentIndex = prompts.findIndex((item) => item.id === prompt.id);
+  if (currentIndex < 0) return;
+  const nearbyPrompts = prompts.slice(currentIndex + 1, currentIndex + 1 + WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT);
+  if (!nearbyPrompts.length) return;
+  const currentImageUrl = String(prompt.image_url || "").trim();
+  const preloadSource = `${prompt.id || currentIndex}:${currentImageUrl}`;
+  if (state.writing.nearbyPromptImagePreloadSource === preloadSource) {
+    if (canWarmWritingPromptImages() && state.writing.promptImagePreloadQueue.length) drainWritingPromptImagePreloadQueue();
+    return;
+  }
+  state.writing.nearbyPromptImagePreloadSource = preloadSource;
+  const preloadAfterCurrent = () => {
+    if (!canWarmWritingPromptImages()) return;
+    state.writing.promptImagePreloadQueue = [];
+    state.writing.promptImagePreloadQueued.clear();
+    queueWritingPromptImages(nearbyPrompts, { limit: WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT });
+    drainWritingPromptImagePreloadQueue();
+  };
+  const currentPromise = currentImageUrl ? state.writing.promptImagePreloadPromises.get(currentImageUrl) : null;
+  if (currentPromise) {
+    currentPromise.finally(() => scheduleIdleTask(preloadAfterCurrent, 250));
+  } else {
+    scheduleIdleTask(preloadAfterCurrent, 250);
+  }
+}
+
+function drainWritingPromptImagePreloadQueue() {
+  if (state.writing.promptImagePreloadScheduled) return;
+  if (!state.writing.promptImagePreloadQueue.length) return;
+  state.writing.promptImagePreloadScheduled = true;
+  scheduleIdleTask(() => {
+    state.writing.promptImagePreloadScheduled = false;
+    if (!canWarmWritingPromptImages()) return;
+    while (state.writing.promptImagePreloadActive < WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT && state.writing.promptImagePreloadQueue.length) {
+      const url = state.writing.promptImagePreloadQueue.shift();
+      state.writing.promptImagePreloadQueued.delete(url);
+      if (!url || state.writing.promptImagePreloads.has(url)) continue;
+      state.writing.promptImagePreloadActive += 1;
+      const started = primeWritingPromptImage(url, { priority: "low" });
+      const promise = state.writing.promptImagePreloadPromises.get(url) || Promise.resolve();
+      promise.finally(() => {
+        state.writing.promptImagePreloadActive = Math.max(0, state.writing.promptImagePreloadActive - 1);
+        drainWritingPromptImagePreloadQueue();
+      });
+      if (!started) {
+        state.writing.promptImagePreloadActive = Math.max(0, state.writing.promptImagePreloadActive - 1);
+      }
+    }
+    if (state.writing.promptImagePreloadQueue.length) drainWritingPromptImagePreloadQueue();
+  }, 250);
+}
+
+async function ensureWritingPromptImageReady(url) {
+  const imageUrl = String(url || "").trim();
+  if (!imageUrl) return;
+  primeWritingPromptImage(imageUrl);
+  await state.writing.promptImagePreloadPromises.get(imageUrl);
+}
+
 async function prefetchWritingPrompts(token) {
-  await Promise.allSettled([
-    loadWritingPrompts("task1_academic"),
-    loadWritingPrompts("task2"),
-  ]);
+  await loadWritingPrompts(state.writing.taskType || "task1_academic").catch(() => []);
   if (!prefetchCanApply(token)) return;
-  preloadWritingPromptImages(state.writing.prompts.task1_academic || [], 18);
+  const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
+  scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 5200);
 }
 
 function inferWritingCategories(prompts = []) {
@@ -3937,9 +4192,9 @@ async function renderWritingReports(items, options = {}) {
     target.innerHTML = centeredLoadingHtml("正在加载写作报告", "首次打开报告需要读取详情和图表信息。");
   }
   if (!refreshActive) return;
+  if (cached) return;
   try {
-    const entry = await api(`/api/writing/entries/${activeItem.id}`);
-    state.writing.reportDetailCache.set(activeItem.id, entry);
+    const entry = await fetchWritingReportDetail(activeItem.id);
     state.writing.activeReportDetail = entry;
     target.innerHTML = writingReportDetailHtml(entry);
     if (isWritingTaskActive(entry?.ai_task)) startWritingScorePolling(entry.id, { switchOnComplete: false });
@@ -3973,14 +4228,16 @@ function renderWritingReportList(items) {
         state.writing.activeReportDetail = cached;
         target.innerHTML = writingReportDetailHtml(cached);
         target.scrollTo({ top: 0, behavior: "auto" });
+        syncWritingScorePolling(cached, { notifyOnComplete: false });
+        if (isWritingTaskActive(cached.ai_task)) startWritingScorePolling(cached.id, { switchOnComplete: false });
+        return;
       } else {
         state.writing.activeReportDetail = null;
         target.innerHTML = centeredLoadingHtml("正在加载写作报告", "首次打开报告需要读取详情和图表信息。");
       }
       // Fetch detail for the selected report
       try {
-        const entry = await api(`/api/writing/entries/${itemId}`);
-        state.writing.reportDetailCache.set(itemId, entry);
+        const entry = await fetchWritingReportDetail(itemId);
         state.writing.activeReportDetail = entry;
         target.innerHTML = writingReportDetailHtml(entry);
         target.scrollTo({ top: 0, behavior: cached ? "auto" : "smooth" });
@@ -4267,6 +4524,9 @@ function setWritingPrompt(prompt, clearAnswer = true, options = {}) {
   state.writing.autosaveQueued = false;
   state.writing.prompt = prompt;
   state.writing.taskType = prompt.task_type || state.writing.taskType;
+  if (prompt?.task_type === "task1_academic" && prompt.image_url) {
+    primeWritingPromptImage(prompt.image_url);
+  }
   const existingHighlights = loadWritingPromptHighlights();
   const highlightKey = writingPromptHighlightKey(prompt);
   if (highlightKey) {
@@ -4320,10 +4580,27 @@ function renderWritingSurface() {
   const imageContainer = $("writingPromptImage");
   if (imageContainer) {
     if (taskType === "task1_academic" && prompt?.image_url) {
-      imageContainer.innerHTML = `<img src="${escapeHtml(prompt.image_url)}" alt="Task 1 chart" loading="eager" decoding="async" data-writing-image-preview onerror="this.parentElement.classList.add('hidden')">`;
+      const imageUrl = String(prompt.image_url || "").trim();
+      primeWritingPromptImage(imageUrl);
+      if (imageContainer.dataset.imageUrl !== imageUrl || imageContainer.classList.contains("image-error")) {
+        imageContainer.dataset.imageUrl = imageUrl;
+        imageContainer.innerHTML = `
+          <div class="writing-prompt-image-loading" aria-hidden="true">
+            <span></span>
+            <strong>图表加载中</strong>
+          </div>
+          <img src="${escapeHtml(imageUrl)}" alt="Task 1 chart" loading="eager" decoding="async" fetchpriority="high" data-writing-image-preview
+            onload="this.parentElement.classList.add('image-ready')"
+            onerror="this.parentElement.classList.add('image-error'); this.remove();">
+        `;
+        imageContainer.classList.remove("image-ready", "image-error");
+      }
       imageContainer.classList.remove("hidden");
+      scheduleNearbyWritingPromptImagePreload(prompt);
     } else {
       imageContainer.innerHTML = "";
+      imageContainer.dataset.imageUrl = "";
+      imageContainer.classList.remove("image-ready", "image-error");
       imageContainer.classList.add("hidden");
     }
   }
@@ -4570,15 +4847,18 @@ function closeWritingPromptPicker() {
   document.body.classList.remove("modal-open");
 }
 
-function writingPromptChoiceHtml(prompt, active = false) {
+function writingPromptChoiceHtml(prompt, active = false, index = 0) {
   const isTask1 = prompt.task_type === "task1_academic";
   const isCambridgePrompt = writingPromptSourceKey(prompt) === "cambridge";
   const choiceTitle = isCambridgePrompt
     ? writingPromptPickerTitle(prompt)
     : writingPromptDisplayTitle(prompt);
   const choiceMeta = isCambridgePrompt ? "" : writingPromptMeta(prompt);
+  const loadImmediately = isTask1 && index < WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT;
+  const imageLoading = loadImmediately ? "eager" : "lazy";
+  const imagePriority = loadImmediately ? "auto" : "low";
   const imageHtml = isTask1
-    ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${prompt.image_url ? `<img src="${escapeHtml(prompt.image_url)}" alt="" loading="eager" decoding="async" onerror="this.closest('.writing-prompt-choice-image').classList.add('placeholder'); this.remove();">` : "Task 1 chart"}</span>`
+    ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${prompt.image_url ? `<img src="${escapeHtml(prompt.image_url)}" alt="" loading="${imageLoading}" decoding="async" fetchpriority="${imagePriority}" onerror="this.closest('.writing-prompt-choice-image').classList.add('placeholder'); this.remove();">` : "Task 1 chart"}</span>`
     : "";
   return `
     <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
@@ -4624,7 +4904,7 @@ function renderWritingPromptPicker() {
     return;
   }
   grid.innerHTML = [
-    ...prompts.map((prompt) => writingPromptChoiceHtml(prompt, prompt.id === state.writing.prompt?.id)),
+    ...prompts.map((prompt, index) => writingPromptChoiceHtml(prompt, prompt.id === state.writing.prompt?.id, index)),
     ...missingSlots.map((slot) => writingCatalogSlotHtml(slot)),
   ].join("");
   grid.querySelectorAll("[data-writing-prompt-choice]").forEach((button) => {
@@ -4633,6 +4913,9 @@ function renderWritingPromptPicker() {
       const prompt = prompts.find((item) => item.id === button.dataset.writingPromptChoice);
       if (!prompt) return;
       state.writing.taskType = prompt.task_type || taskType;
+      if (prompt.task_type === "task1_academic" && prompt.image_url) {
+        ensureWritingPromptImageReady(prompt.image_url).catch(() => null);
+      }
       setWritingPrompt(prompt, true);
       closeWritingPromptPicker();
     });
@@ -5133,7 +5416,7 @@ async function scoreWritingEntry() {
       setWritingPending(true, "AI 正在评分与生成辅导", "作文已保存，正在继续生成写作反馈。");
     }
     try {
-      const wallet = await api("/api/billing/wallet");
+      const wallet = await fetchWalletPayload({ maxAgeMs: 30000 });
       if (Number(wallet.balance_rmb || 0) <= 0) {
         alert("余额不足，请先充值后再使用 AI 评分与辅导。");
         switchView("accountProfile");
@@ -5493,6 +5776,15 @@ function p3DiscussionSkillsSection(skills) {
     developing: "待加强",
     weak: "薄弱",
   };
+  const bestMoment = skills.best_moment
+    ? `<div class="p3-skill-highlight"><span>本次相对优势</span><strong>${escapeHtml(skills.best_moment)}</strong></div>`
+    : "";
+  const nextDrill = Array.isArray(skills.next_drill) && skills.next_drill.length
+    ? `<div class="p3-next-drill">
+        <span>下一轮训练动作</span>
+        <ol>${skills.next_drill.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
+      </div>`
+    : "";
   return `
     <section class="detail-card p3-skills-card">
       <div class="p3-skills-head">
@@ -5505,6 +5797,10 @@ function p3DiscussionSkillsSection(skills) {
           <span>下次优先改</span>
           <strong>${escapeHtml(skills.fix_next || "把观点展开成原因、例子和对比。")}</strong>
         </div>
+      </div>
+      <div class="p3-skill-brief-row">
+        ${bestMoment}
+        ${nextDrill}
       </div>
       <div class="p3-skills-grid">
         ${skills.dimensions.map((item) => `
@@ -5519,6 +5815,20 @@ function p3DiscussionSkillsSection(skills) {
         `).join("")}
       </div>
     </section>
+  `;
+}
+
+function p3TurnDiscussionMoves(turn) {
+  if (turn?.part !== "p3") return "";
+  const prompt = turn.prompt || {};
+  const moves = Array.isArray(prompt.target_moves) ? prompt.target_moves : [];
+  const typeLabel = p3QuestionTypeLabel(prompt.question_type || "");
+  if (!moves.length && !typeLabel) return "";
+  return `
+    <div class="p3-turn-moves">
+      <span>${escapeHtml(prompt.role === "follow_up" ? "追问承接" : typeLabel)}</span>
+      ${moves.slice(0, 4).map((move) => `<em>${escapeHtml(p3MoveLabel(move))}</em>`).join("")}
+    </div>
   `;
 }
 
@@ -5620,9 +5930,24 @@ function missingTranscriptHtml(turn) {
 
 function aiCoachingHtml(turn, attempt) {
   const coaching = turn.ai_coaching || attempt.ai_coaching || "";
+  const status = String(turn.feedback_generation_status || "").toLowerCase();
   const fallback = isFallbackCoaching(turn, coaching);
   const fallbackNotice = fallback ? fallbackCoachingNotice(turn) : "";
   if (coaching) return `${fallbackNotice}<div class="coaching-content">${renderMarkdown(coaching)}</div>`;
+  if (status === "pending") {
+    return `
+      <div class="fallback-coaching-notice">
+        <div>
+          <strong>AI 辅导生成中</strong>
+          <small>这题的逐题分析还没有写入报告。可以稍后刷新，或点击重新生成。</small>
+        </div>
+        <button type="button" class="ghost regenerate-feedback-button" data-regenerate-turn="${escapeHtml(turn.id)}">
+          一键重新生成
+        </button>
+      </div>
+    `;
+  }
+  if (status === "failed") return fallbackCoachingNotice(turn);
   const notes = turn.upgrade_notes || attempt.upgrade_notes || [];
   if (!notes.length) return '<p class="muted">No AI coaching generated for this turn.</p>';
   return `${fallbackNotice}<ul>${notes.map((item) => `
@@ -5650,6 +5975,21 @@ function fallbackCoachingNotice(turn) {
       </button>
     </div>
   `;
+}
+
+function modelAnswerHtml(turn, band7Markdown) {
+  if (band7Markdown) {
+    return `<p class="model-answer-markdown" data-markdown-source="${escapeHtml(band7Markdown)}">${renderMarkdown(band7Markdown)}</p>`;
+  }
+  const status = String(turn.feedback_generation_status || "").toLowerCase();
+  if (status === "pending") {
+    return '<p class="muted">Band 7 spoken version 正在生成中。</p>';
+  }
+  if (status === "failed") {
+    const error = turn.feedback_generation_error ? ` ${friendlyFeedbackError(turn.feedback_generation_error)}` : "";
+    return `<p class="audio-warning">Band 7 spoken version 生成失败。${escapeHtml(error)}</p>`;
+  }
+  return '<p class="muted">Band 7 spoken version 尚未生成。</p>';
 }
 
 async function loadP1Corpus() {
@@ -6136,7 +6476,7 @@ async function openP1CorpusEditor(entry) {
   aiWrap?.classList.toggle("hidden", !aiAnswer);
   if (aiBox) {
     aiBox.dataset.markdownSource = aiAnswer || "";
-    aiBox.innerHTML = aiAnswer ? renderMarkdown(aiAnswer) : "";
+    aiBox.innerHTML = aiAnswer ? renderSpokenAnswerMarkdown(aiAnswer) : "";
   }
   text("p1CorpusSaveStatus", "");
   $("p1CorpusDialog")?.classList.remove("hidden");
@@ -6302,15 +6642,15 @@ async function loadLanguageTakeaways() {
   if (state.languageTakeaway.loaded) {
     renderLanguageTakeawayToggle();
     renderLanguageTakeaways();
-    if (stats) stats.textContent = `${state.languageTakeaway.items.length} 条 · 刷新中`;
+    if (stats) stats.textContent = `${state.languageTakeaway.items.length} 条`;
+    return;
   } else {
     if (stats) stats.textContent = "Loading...";
     if (list) list.innerHTML = '<p class="muted">正在加载 Takeaway...</p>';
   }
   try {
-    const payload = await api("/api/language-takeaways");
-    state.languageTakeaway.items = payload.items || [];
-    state.languageTakeaway.loaded = true;
+    const payload = await fetchLanguageTakeawaysPayload();
+    applyLanguageTakeawaysPayload(payload);
     if (stats) stats.textContent = `${payload.count || 0} 条`;
     renderLanguageTakeawayToggle();
     renderLanguageTakeaways();
@@ -6940,7 +7280,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const band7Markdown = turn.band7_markdown || attempt.band7_markdown || band7;
   const isFollowUp = turn.prompt?.role === "follow_up";
   const modelAudioControl = modelAudio.audio_url
-    ? `<audio controls src="${escapeHtml(modelAudio.audio_url)}"></audio>`
+    ? `<audio controls preload="none" src="${escapeHtml(modelAudio.audio_url)}"></audio>`
     : '<p class="audio-warning">Server model-answer audio unavailable.</p>';
   const corpusTarget = p1CorpusTargetForTurn(turn, attempt);
   const corpusButton = corpusTarget
@@ -6968,13 +7308,13 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
         <td>
           ${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}
           ${(turn.audio || {}).url
-            ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
+            ? `<audio controls preload="none" src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
             : '<p class="audio-warning">Recording missing. This turn has no playable audio.</p>'}
           <p>${transcriptText(turn)}</p>
         </td>
         <td>
           ${modelAudioControl}
-          <p class="model-answer-markdown" data-markdown-source="${escapeHtml(band7Markdown)}">${renderMarkdown(band7Markdown)}</p>
+          ${modelAnswerHtml(turn, band7Markdown)}
         </td>
       </tr>
       <tr class="p2-coaching-row">
@@ -6987,19 +7327,19 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   }
 
   // Non-P2 layout: two rows - content row + AI coaching row
-  const questionCell = `<td><div class="question-header"><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong>${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}</div><p>${escapeHtml(turn.question)}</p>${corpusButton ? `<div class="question-cell-actions">${corpusButton}</div>` : ""}</td>`;
+  const questionCell = `<td><div class="question-header"><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong>${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}</div><p>${escapeHtml(turn.question)}</p>${p3TurnDiscussionMoves(turn)}${corpusButton ? `<div class="question-cell-actions">${corpusButton}</div>` : ""}</td>`;
   return `
     <tr class="p1-p3-content-row">
       ${questionCell}
       <td>
         ${(turn.audio || {}).url
-          ? `<audio controls src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
+          ? `<audio controls preload="none" src="/api/audio/${escapeHtml(attemptId)}/${escapeHtml(turn.id)}/candidate"></audio>`
           : '<p class="audio-warning">Recording missing. This turn has no playable audio.</p>'}
         <p>${transcriptText(turn)}</p>
       </td>
       <td>
         ${modelAudioControl}
-        <p class="model-answer-markdown" data-markdown-source="${escapeHtml(band7Markdown)}">${renderMarkdown(band7Markdown)}</p>
+        ${modelAnswerHtml(turn, band7Markdown)}
       </td>
     </tr>
     ${coachingRow}
@@ -7019,6 +7359,8 @@ function stopAllRuntime(label = "Ready") {
   setDictationStatus("", "");
   state.currentTurn = null;
   state.transcript = "";
+  state.speaking.pendingTurnCompletions.clear();
+  state.speaking.turnCompletionErrors.clear();
   state.transcriptFinal = "";
   state.transcriptInterim = "";
   state.transcriptStatus = "missing";
@@ -7117,6 +7459,7 @@ function renderAccountStatus(message = "", isError = false) {
   if (status) {
     status.textContent = message || fallback;
     status.classList.toggle("error", Boolean(isError));
+    status.classList.toggle("account-card-subtitle", true);
   }
   if (details) {
     if (state.account.authenticated) {
@@ -7130,6 +7473,38 @@ function renderAccountStatus(message = "", isError = false) {
   if (!message && securityStatus && !securityStatus.textContent.trim()) {
     securityStatus.textContent = state.account.authenticated ? "请使用强密码，并定期更换。" : "登录后可修改密码。";
     securityStatus.classList.remove("error");
+  }
+}
+
+function resetAccountProfileLoadingUi() {
+  const status = $("accountProfileStatus");
+  if (status) {
+    status.textContent = "正在读取账号资料...";
+    status.classList.remove("error");
+  }
+  const walletStatus = $("walletStatus");
+  if (walletStatus) {
+    walletStatus.classList.remove("is-error");
+    walletStatus.classList.add("is-loading");
+    walletStatus.innerHTML = `
+      <div>
+        <span>余额</span>
+        <strong>加载中</strong>
+      </div>
+      <div>
+        <span>预留</span>
+        <strong>--</strong>
+      </div>
+    `;
+  }
+  const ledgerList = $("ledgerList");
+  if (ledgerList) {
+    ledgerList.innerHTML = '<div class="account-skeleton-row"></div><div class="account-skeleton-row"></div><div class="account-skeleton-row"></div>';
+  }
+  text("weakTrainingStatus", "加载中");
+  const weakList = $("weakTrainingList");
+  if (weakList) {
+    weakList.innerHTML = '<div class="account-skeleton-row"></div><div class="account-skeleton-row"></div>';
   }
 }
 
@@ -7307,6 +7682,10 @@ async function logoutAccount() {
   state.account.user = null;
   state.account.returnView = null;
   state.account.fromView = null;
+  state.wallet.payload = null;
+  state.wallet.loaded = false;
+  state.wallet.loadingPromise = null;
+  state.wallet.fetchedAt = 0;
   state.viewHistory = [];
   clearUserScopedCaches();
   csrfToken = null;
@@ -7732,6 +8111,11 @@ function bindEvents() {
     saveAndCloseP2CorpusP3Editor().catch(() => null);
   });
   document.addEventListener("keydown", handleGlobalKeydown, true);
+  document.addEventListener("visibilitychange", () => {
+    if (canWarmWritingPromptImages() && state.writing.promptImagePreloadQueue.length) {
+      drainWritingPromptImagePreloadQueue();
+    }
+  });
   window.addEventListener("beforeunload", autosaveOpenCorpusEditors);
   $("recordControl")?.addEventListener("click", () => {
     if (state.status === "recording") {
@@ -7937,6 +8321,18 @@ function p3QuestionTypeLabel(value) {
   return P3_TYPE_LABELS[value] || "讨论题";
 }
 
+function p3MoveLabel(value) {
+  return P3_MOVE_LABELS[String(value || "").trim()] || String(value || "").trim();
+}
+
+function p3IntensityLabel(value) {
+  return {
+    normal: "标准练习",
+    high: "追问压力",
+    drill: "专项快练",
+  }[value] || "标准练习";
+}
+
 function currentP3Theme() {
   if (state.p3SourceType === "custom") return String($("#p3CustomThemeInput")?.value || state.p3CustomTheme || "").trim();
   return String(state.p3PracticeSource?.theme || state.p3SelectedTopic || state.p3CustomTheme || "").trim();
@@ -7984,7 +8380,7 @@ function syncP3LaunchPanel(message = "") {
   const customInput = $("#p3CustomThemeInput");
   if (customInput && customInput.value !== state.p3CustomTheme) customInput.value = state.p3CustomTheme || "";
   text("p3ModeHelp", P3_INTENSITY_HELP[state.p3Intensity] || P3_INTENSITY_HELP.normal);
-  text("p3PlanStatus", message || (state.p3Plan ? `已生成：${p3SourceLabel(state.p3Plan.source?.type || state.p3SourceType)} · ${p3FocusLabel(state.p3Plan.focus || state.p3Focus)}` : ""));
+  text("p3PlanStatus", message || (state.p3Plan ? `已生成：${p3SourceLabel(state.p3Plan.source?.type || state.p3SourceType)} · ${p3FocusLabel(state.p3Plan.focus || state.p3Focus)} · ${p3IntensityLabel(state.p3Plan.intensity || state.p3Intensity)}` : ""));
   const startButton = $("#p3StartButton");
   if (startButton) startButton.disabled = !state.p3Plan || state.p3PlanLoading;
   const generateButton = $("#p3GeneratePlanButton");
@@ -8007,7 +8403,7 @@ function renderP3PlanPreview() {
     panel.innerHTML = `
       <div class="p3-plan-empty">
         <strong>还没有生成训练计划</strong>
-        <span>选择来源和目标后，先生成计划；系统会列出题型、追问方向和回答动作。</span>
+        <span>选择来源和目标后，先生成计划。系统会列出题型、追问方向和每题要完成的 discussion move。</span>
       </div>
     `;
     return;
@@ -8016,9 +8412,13 @@ function renderP3PlanPreview() {
     <div class="p3-plan-head">
       <div>
         <strong>${escapeHtml(plan.theme || currentP3Theme() || "Part 3 discussion")}</strong>
-        <span>${escapeHtml(p3SourceLabel(plan.source?.type || state.p3SourceType))} · ${escapeHtml(p3FocusLabel(plan.focus || state.p3Focus))} · ${escapeHtml(String(plan.intensity || state.p3Intensity).toUpperCase())}</span>
+        <span>${escapeHtml(p3SourceLabel(plan.source?.type || state.p3SourceType))} · ${escapeHtml(p3FocusLabel(plan.focus || state.p3Focus))} · ${escapeHtml(p3IntensityLabel(plan.intensity || state.p3Intensity))}</span>
       </div>
-      <small>${escapeHtml(plan.backend || "fallback")}</small>
+      <small>${escapeHtml(questions.length)} 个主问题${(plan.intensity || state.p3Intensity) === "high" ? " + 即时追问" : ""}</small>
+    </div>
+    <div class="p3-plan-coachline">
+      <strong>回答目标</strong>
+      <span>每题不要只表态，至少完成“观点 → 原因 → 例子/对比 → 更大影响”。</span>
     </div>
     <div class="p3-plan-list">
       ${questions.map((item, index) => `
@@ -8029,7 +8429,7 @@ function renderP3PlanPreview() {
           </div>
           <p>${escapeHtml(item.question || "")}</p>
           <div class="p3-target-moves">
-            ${(item.target_moves || []).slice(0, 4).map((move) => `<span>${escapeHtml(move)}</span>`).join("")}
+            ${(item.target_moves || []).slice(0, 4).map((move) => `<span>${escapeHtml(p3MoveLabel(move))}</span>`).join("")}
           </div>
         </article>
       `).join("")}
@@ -8110,15 +8510,15 @@ async function loadWritingTakeaways() {
   if (state.writingTakeaway.loaded) {
     renderWritingTakeawayToggle();
     renderWritingTakeaways();
-    if (stats) stats.textContent = `${state.writingTakeaway.items.length} 条 · 刷新中`;
+    if (stats) stats.textContent = `${state.writingTakeaway.items.length} 条`;
+    return;
   } else {
     if (stats) stats.textContent = "Loading...";
     if (list) list.innerHTML = '<p class="muted">正在加载写作积累...</p>';
   }
   try {
-    const payload = await api("/api/writing-takeaways");
-    state.writingTakeaway.items = payload.items || [];
-    state.writingTakeaway.loaded = true;
+    const payload = await fetchWritingTakeawaysPayload();
+    applyWritingTakeawaysPayload(payload);
     if (stats) stats.textContent = `${payload.count || 0} 条`;
     renderWritingTakeawayToggle();
     renderWritingTakeaways();
@@ -8199,33 +8599,17 @@ async function deleteWritingTakeawayEntry(entryId) {
   });
 }
 
-function normalizeAgentAssistantText(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((token) => AGENT_SEARCH_ALIASES[token] || (token.length > 3 && token.endsWith("s") ? token.slice(0, -1) : token))
-    .join(" ");
-}
-
-function agentAssistantScore(query, candidate) {
-  const queryTokens = new Set(normalizeAgentAssistantText(query).split(/\s+/).filter(Boolean));
-  const candidateText = normalizeAgentAssistantText(candidate);
-  const candidateTokens = new Set(candidateText.split(/\s+/).filter(Boolean));
-  if (!queryTokens.size || !candidateTokens.size) return 0;
-  let overlap = 0;
-  queryTokens.forEach((token) => {
-    if (candidateTokens.has(token)) overlap += 1;
-  });
-  const coverage = overlap / queryTokens.size;
-  const phraseBonus = candidateText.includes(Array.from(queryTokens).slice(0, 3).join(" ")) ? 0.08 : 0;
-  return Math.min(1, coverage * 0.86 + phraseBonus + Math.min(0.06, candidateTokens.size / 900));
-}
-
 function agentAssistantResultUrl(prompt) {
-  return writingPromptDeepLink(prompt);
+  return prompt.url || writingPromptDeepLink(prompt);
+}
+
+function agentAssistantMatchLabel(prompt = {}) {
+  const labels = {
+    semantic: "语义相关",
+    keyword: "关键词匹配",
+    source: "来源匹配",
+  };
+  return labels[prompt.match_type] || "相关匹配";
 }
 
 function renderAgentAssistantResults() {
@@ -8241,9 +8625,10 @@ function renderAgentAssistantResults() {
     return;
   }
   target.innerHTML = results.map((item) => {
-    const prompt = item.prompt;
+    const prompt = item.prompt || item;
     const url = agentAssistantResultUrl(prompt);
     const source = prompt.source_label || writingPromptPickerTitle(prompt) || writingTaskLabel(prompt.task_type);
+    const score = Number(item.score ?? prompt.match_score ?? 0);
     return `
       <article class="agent-result-card">
         <div class="agent-result-top">
@@ -8251,7 +8636,7 @@ function renderAgentAssistantResults() {
             <strong>${escapeHtml(prompt.title || source || "Writing prompt")}</strong>
             <span>${escapeHtml(source)} · ${escapeHtml(writingCategoryLabel(prompt.category) || prompt.category || "未分类")}</span>
           </div>
-          <em class="agent-result-score">${Math.round(item.score * 100)}%</em>
+          <em class="agent-result-score">${escapeHtml(agentAssistantMatchLabel(prompt))} · ${Math.round(score * 100)}%</em>
         </div>
         <p class="agent-result-prompt">${escapeHtml(prompt.prompt || "")}</p>
         <div class="agent-result-actions">
@@ -8297,24 +8682,13 @@ async function runAgentAssistantSearch(queryValue = $("agentAssistantQuery")?.va
   setAgentAssistantStatus("正在查找...");
   renderAgentAssistantResults();
   try {
-    const taskTypes = ["task1_academic", "task2"];
-    await Promise.all(taskTypes.map((taskType) => loadWritingPrompts(taskType)));
-    const prompts = taskTypes.flatMap((taskType) => state.writing.prompts[taskType] || []);
-    const matches = prompts
-      .map((prompt) => ({
-        prompt,
-        score: agentAssistantScore(query, [
-          prompt.title,
-          prompt.source_label,
-          prompt.category,
-          prompt.prompt,
-        ].join(" ")),
-      }))
-      .filter((item) => item.score > 0.12)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 8);
+    const payload = await api(`/api/agent/writing/prompts/search?q=${encodeURIComponent(query)}&limit=8`);
+    const matches = (payload?.items || []).map((prompt) => ({
+      prompt,
+      score: Number(prompt.match_score || 0),
+    }));
     state.agentAssistant.results = matches;
-    setAgentAssistantStatus(matches.length ? `找到 ${matches.length} 个候选，已按相关度排序。` : "没有找到明显匹配。可以换成更短的关键词再试。");
+    setAgentAssistantStatus(matches.length ? `找到 ${matches.length} 个候选，已按语义相关度排序。` : "没有找到明显匹配。可以换成更短的关键词再试。");
   } catch (error) {
     state.agentAssistant.results = [];
     setAgentAssistantStatus(error instanceof Error ? error.message : "查找失败。");
@@ -8326,8 +8700,14 @@ async function runAgentAssistantSearch(queryValue = $("agentAssistantQuery")?.va
 
 async function openAgentAssistantPrompt(promptId, taskType) {
   const normalizedTask = taskType === "task1_academic" ? "task1_academic" : "task2";
-  await loadWritingPrompts(normalizedTask);
-  const prompt = (state.writing.prompts[normalizedTask] || []).find((item) => item.id === promptId);
+  const resultPrompt = (state.agentAssistant.results || []).map((item) => item.prompt || item).find((item) => item.id === promptId);
+  try {
+    await loadWritingPrompts(normalizedTask);
+  } catch (_error) {
+    if (!resultPrompt) throw _error;
+  }
+  const cachedPrompt = (state.writing.prompts[normalizedTask] || []).find((item) => item.id === promptId);
+  const prompt = cachedPrompt || resultPrompt;
   if (!prompt) {
     setAgentAssistantStatus("这道题刚才没有在本地题库里找到。");
     return;
@@ -8339,7 +8719,9 @@ async function openAgentAssistantPrompt(promptId, taskType) {
 }
 
 async function loadAccountProfile() {
+  resetAccountProfileLoadingUi();
   await loadAccount();
+  renderAccountStatus();
   await Promise.all([loadWallet(), loadWeakTraining()]);
 }
 
@@ -8347,16 +8729,65 @@ function formatLocalTime(value) {
   return formatCompactDateTime(value);
 }
 
+async function fetchWalletPayload(options = {}) {
+  const maxAgeMs = Number(options.maxAgeMs ?? 45000);
+  const now = Date.now();
+  if (!options.force && state.wallet.loaded && now - state.wallet.fetchedAt < maxAgeMs) {
+    return state.wallet.payload;
+  }
+  if (!state.wallet.loadingPromise) {
+    state.wallet.loadingPromise = api("/api/billing/wallet", null, options.requestOptions || {})
+      .then((wallet) => {
+        state.wallet.payload = wallet;
+        state.wallet.loaded = true;
+        state.wallet.fetchedAt = Date.now();
+        return wallet;
+      })
+      .finally(() => {
+        state.wallet.loadingPromise = null;
+      });
+  }
+  return state.wallet.loadingPromise;
+}
+
 async function loadWallet() {
   try {
-    const wallet = await api("/api/billing/wallet");
-    text("walletStatus", `余额 ¥${Number(wallet.balance_rmb || 0).toFixed(2)} · 预留 ¥${Number(wallet.reserved_rmb || 0).toFixed(2)}`);
+    const wallet = await fetchWalletPayload({ force: true });
+    const balance = Number(wallet.balance_rmb || 0).toFixed(2);
+    const reserved = Number(wallet.reserved_rmb || 0).toFixed(2);
+    const walletStatus = $("walletStatus");
+    if (walletStatus) {
+      walletStatus.classList.remove("is-loading", "is-error");
+      walletStatus.innerHTML = `
+        <div>
+          <span>余额</span>
+          <strong>¥${escapeHtml(balance)}</strong>
+        </div>
+        <div>
+          <span>预留</span>
+          <strong>¥${escapeHtml(reserved)}</strong>
+        </div>
+      `;
+    }
     const entries = wallet.entries || [];
     $("ledgerList").innerHTML = entries.length
-      ? entries.slice(0, 10).map((entry) => `<div class="settings-list-row"><strong>${escapeHtml(entry.entry_type === "reserve" ? "预留" : entry.entry_type === "settle" ? "结算" : entry.entry_type)}</strong><span>¥${Number(entry.amount_rmb || 0).toFixed(2)}</span><small>${escapeHtml(formatCompactDateTime(entry.created_at || "") || entry.metadata?.reason || "")}</small></div>`).join("")
-      : '<p class="muted">暂无流水。</p>';
+      ? entries.slice(0, 10).map((entry) => {
+          const label = entry.entry_type === "reserve" ? "预留" : entry.entry_type === "settle" ? "结算" : entry.entry_type;
+          return `<div class="settings-list-row account-ledger-row">
+            <strong>${escapeHtml(label)}</strong>
+            <span>¥${Number(entry.amount_rmb || 0).toFixed(2)}</span>
+            <small>${escapeHtml(formatCompactDateTime(entry.created_at || "") || entry.metadata?.reason || "")}</small>
+          </div>`;
+        }).join("")
+      : '<p class="account-empty-state">暂无流水。</p>';
   } catch (error) {
-    text("walletStatus", error.message);
+    const walletStatus = $("walletStatus");
+    if (walletStatus) {
+      walletStatus.classList.remove("is-loading");
+      walletStatus.classList.add("is-error");
+      walletStatus.innerHTML = `<div><span>钱包加载失败</span><strong>${escapeHtml(error.message)}</strong></div>`;
+    }
+    $("ledgerList").innerHTML = '<p class="account-empty-state">钱包流水暂时不可用。</p>';
   }
 }
 
@@ -8406,6 +8837,9 @@ async function doRecharge() {
   const amount = state.pendingRecharge;
   try {
     await api("/api/billing/recharge", { amount_rmb: amount });
+    state.wallet.loaded = false;
+    state.wallet.payload = null;
+    state.wallet.fetchedAt = 0;
     closeRechargeDialog();
     await loadWallet();
   } catch (error) {
@@ -8419,10 +8853,16 @@ async function loadWeakTraining() {
     const items = payload.items || [];
     text("weakTrainingStatus", `${items.length} 条弱题记录`);
     $("weakTrainingList").innerHTML = items.length
-      ? items.slice(0, 6).map((item) => `<div class="settings-list-row"><strong>${escapeHtml((item.part || "").toUpperCase())}</strong><span>${escapeHtml((item.weak_reason || []).join("、") || "未命中明显弱项")}</span><small>${escapeHtml(item.question || "")}</small><small>下次复习：${escapeHtml(formatLocalTime(item.next_due))}</small></div>`).join("")
-      : '<p class="muted">暂无弱题记录。</p>';
+      ? items.slice(0, 6).map((item) => `<div class="settings-list-row account-weak-row">
+          <strong>${escapeHtml((item.part || "").toUpperCase())}</strong>
+          <span>${escapeHtml((item.weak_reason || []).join("、") || "未命中明显弱项")}</span>
+          <small>${escapeHtml(item.question || "")}</small>
+          <small>下次复习：${escapeHtml(formatLocalTime(item.next_due))}</small>
+        </div>`).join("")
+      : '<p class="account-empty-state">暂无弱题记录。</p>';
   } catch (error) {
     text("weakTrainingStatus", error.message);
+    $("weakTrainingList").innerHTML = '<p class="account-empty-state">弱题记录暂时不可用。</p>';
   }
 }
 
