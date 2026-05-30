@@ -24,11 +24,11 @@ Restore the visual personality of the appearance themes after the previous dark-
 
 ## Acceptance Criteria
 
-- [ ] Appearance switcher has three centered, non-drifting buttons.
-- [ ] Popular theme active state visibly uses a colorful/rainbow gradient.
-- [ ] Popular theme primary action buttons keep a colorful gradient rather than flat dark blue.
-- [ ] Record control dark states visibly change color by status.
-- [ ] `git diff --check` passes for touched files.
+- [x] Appearance switcher has three centered, non-drifting buttons.
+- [x] Popular theme active state visibly uses a colorful/rainbow gradient.
+- [x] Popular theme primary action buttons keep a colorful gradient rather than flat dark blue.
+- [x] Record control dark states visibly change color by status.
+- [x] `git diff --check` passes for touched files.
 
 ## Out of Scope
 
