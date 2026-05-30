@@ -395,3 +395,36 @@ Extracted candidate audio upload, media path lookup, and server-ASR handoff from
 ### Next Steps
 
 - None - task complete
+
+
+## Session 68: Split frontend view router
+
+**Date**: 2026-05-30
+**Task**: Split frontend view router
+**Branch**: `main`
+
+### Summary
+
+Extracted URL parsing/building and route helper functions from web/static/app.js into web/static/view-router.js, added Django static serving for /view-router.js, and verified JS syntax, Django check, static asset smoke, diff check, and legacy-server retirement validation. Used partial staging to keep unrelated existing app/index/styles changes out of the commit.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4676d36` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

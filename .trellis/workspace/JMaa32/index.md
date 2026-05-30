@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 67
+- **Total Sessions**: 68
 - **Last Active**: 2026-05-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~397 | Active |
+| `journal-2.md` | ~430 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 68 | 2026-05-30 | Split frontend view router | `4676d36` | `main` |
 | 67 | 2026-05-30 | Split speaking candidate audio services | `711586d` | `main` |
 | 66 | 2026-05-30 | Tighten legacy server retirement boundary | `5543f1e` | `main` |
 | 65 | 2026-05-30 | Split speaking TTS services | `c6a81ae` | `main` |
