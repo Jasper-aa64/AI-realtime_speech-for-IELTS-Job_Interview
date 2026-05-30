@@ -5717,11 +5717,66 @@ function renderP1CorpusTopics() {
 }
 
 function findP1CorpusEntry(questionId) {
+  const id = String(questionId || "").trim();
+  if (!id) return null;
   for (const topic of state.p1Corpus.topics || []) {
-    const found = (topic.questions || []).find((item) => item.question_id === questionId);
+    const found = (topic.questions || []).find((item) => (
+      item.question_id === id
+      || item.storage_question_id === id
+      || item.legacy_question_id === id
+    ));
     if (found) return found;
   }
   return null;
+}
+
+function p1CorpusEntryIds(entry) {
+  return [
+    entry?.question_id,
+    entry?.storage_question_id,
+    entry?.legacy_question_id,
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+}
+
+function normalizeP1CorpusQuestionText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201c\u201d"'`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findP1CorpusEntryByExactQuestion(question) {
+  const normalizedQuestion = normalizeP1CorpusQuestionText(question);
+  if (!normalizedQuestion) return null;
+  for (const topicGroup of state.p1Corpus.topics || []) {
+    for (const item of topicGroup.questions || []) {
+      if (normalizeP1CorpusQuestionText(item.question) === normalizedQuestion) return item;
+    }
+  }
+  return null;
+}
+
+function findExactP1CorpusEntryForTarget(target) {
+  const storage = p1CorpusStorageEntry(target);
+  const targetIds = new Set(p1CorpusEntryIds({
+    question_id: storage.question_id,
+    storage_question_id: target?.storage_question_id,
+    legacy_question_id: target?.legacy_question_id,
+  }));
+  const targetQuestion = normalizeP1CorpusQuestionText(storage.question || target?.display_question);
+  let textMatch = null;
+  for (const topicGroup of state.p1Corpus.topics || []) {
+    for (const item of topicGroup.questions || []) {
+      const itemQuestion = normalizeP1CorpusQuestionText(item.question);
+      if ([...targetIds].some((id) => p1CorpusEntryIds(item).includes(id))) {
+        if (!targetQuestion || !itemQuestion || itemQuestion === targetQuestion) return item;
+      }
+      if (!textMatch && targetQuestion && itemQuestion === targetQuestion) textMatch = item;
+    }
+  }
+  return textMatch;
 }
 
 function currentP1CorpusTarget(turn = state.currentTurn) {
@@ -5923,7 +5978,7 @@ function p1CorpusStorageEntry(entry) {
   return {
     question_id: entry?.storage_question_id || entry?.question_id || "",
     topic: entry?.storage_topic || entry?.topic || prompt.topic || "general",
-    question: entry?.storage_question || entry?.question || prompt.question || "",
+    question: entry?.storage_question || entry?.question || entry?.display_question || prompt.question || "",
   };
 }
 
@@ -6116,16 +6171,27 @@ async function openP1CorpusEditor(entry) {
   if (!entry) return;
   const storage = p1CorpusStorageEntry(entry);
   let preparedEntry = { ...entry, ...storage };
-  if (storage.question_id && !preparedEntry.corpus_text) {
+  if ((storage.question_id || storage.question || preparedEntry.display_question) && !preparedEntry.corpus_text) {
+    let refreshedCorpus = false;
     if (!(state.p1Corpus.topics || []).length) {
       try {
         const payload = await fetchP1CorpusPayload();
         applyP1CorpusPayload(payload);
+        refreshedCorpus = true;
       } catch (_error) {
         // The editor can still open with the current report answer.
       }
     }
-    const existing = findP1CorpusEntry(storage.question_id);
+    let existing = findExactP1CorpusEntryForTarget(preparedEntry);
+    if (!existing?.corpus_text && !refreshedCorpus) {
+      try {
+        const payload = await fetchP1CorpusPayload();
+        applyP1CorpusPayload(payload);
+        existing = findExactP1CorpusEntryForTarget(preparedEntry);
+      } catch (_error) {
+        // The editor can still open with the current report answer.
+      }
+    }
     if (existing) {
       preparedEntry = {
         ...preparedEntry,
@@ -6209,10 +6275,13 @@ async function saveP1CorpusEntry(options = {}) {
     if (!options.silent) text("p1CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
     const updated = upsertP1CorpusEntry(saved);
     if (state.p1Corpus.activeEntry) {
+      const activeEntry = state.p1Corpus.activeEntry || {};
       state.p1Corpus.activeEntry = {
-        ...(state.p1Corpus.activeEntry || {}),
-        ...(updated || saved),
-        display_question: state.p1Corpus.activeEntry?.display_question || saved.question || "",
+        ...activeEntry,
+        corpus_text: (updated || saved)?.corpus_text || nextCorpusText,
+        last_ai_answer: (updated || saved)?.last_ai_answer || activeEntry.last_ai_answer || "",
+        updated_at: (updated || saved)?.updated_at || activeEntry.updated_at || "",
+        display_question: activeEntry.display_question || activeEntry.question || saved.question || "",
       };
     }
     renderP1CorpusTopics();
