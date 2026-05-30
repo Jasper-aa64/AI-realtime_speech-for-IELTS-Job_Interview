@@ -1008,3 +1008,34 @@ Phase 2.2 added an explicit ?realtime_pcm=1 browser PCM uplink path over Channel
 ### Next Steps
 
 - None - task complete
+
+
+## Session 87: Stream realtime ASR events over PCM websocket
+
+**Date**: 2026-05-30
+**Task**: Stream realtime ASR events over PCM websocket
+**Branch**: `main`
+
+### Summary
+
+Phase 2.3 logic layer now connects /ws/realtime/pcm/ PCM frames to stream_pcm_chunks() through a background queue/thread and forwards asr_started/asr_interim/asr_final/asr_done/asr_error events to the browser. Frontend ?realtime_pcm=1 applies those ASR events to live transcript state while keeping browser dictation and batch completion as fallback. Validation: ASGI websocket tests 4/4 OK, realtime ASR provider tests 4/4 OK, node --check app.js, manage.py check, full Django suite 272 tests OK. Real openspeech endpoint validation is pending user ASR credentials.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
