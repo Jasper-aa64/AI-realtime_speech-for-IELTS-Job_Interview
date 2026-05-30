@@ -1771,12 +1771,28 @@ class CodexValidationTests(TestCase):
                 "review_points": ["补充实习职责", "给一个具体例子"],
             },
         }
+        turn_feedback_payload = {
+            "turns": [
+                {
+                    "turn_id": turn.turn_id,
+                    "display_transcript": "I study software engineering.",
+                    "band7_version": "I'm a university student majoring in **software engineering**, and I also do **practical internship work**.",
+                    "ai_coaching": "这一题已经能直接回答身份，下一步可以补一句实习如何帮助学习。\n\n语法错误纠正：无",
+                }
+            ]
+        }
 
-        with patch("apps.speaking.services.run_codex") as mock_run:
-            mock_run.return_value = (json.dumps(score_payload), {"input_tokens": 200, "output_tokens": 120})
+        with patch("apps.speaking.services.run_codex") as mock_run, patch(
+            "apps.speaking.services.volcengine_tts",
+            return_value={"provider": "volcengine", "status": "ready", "audio_url": "/model.mp3"},
+        ):
+            mock_run.side_effect = [
+                (json.dumps(score_payload), {"input_tokens": 200, "output_tokens": 120}),
+                (json.dumps(turn_feedback_payload), {"input_tokens": 180, "output_tokens": 100}),
+            ]
             result = score_attempt_sync(user, attempt.attempt_id)
 
-        self.assertEqual(mock_run.call_count, 1)
+        self.assertEqual(mock_run.call_count, 2)
         self.assertFalse(any("overall_review_" in call.args[1] for call in mock_run.call_args_list))
         score_prompt = mock_run.call_args_list[0].args[0]
         self.assertIn("Do you work or do you study?", score_prompt)
@@ -1789,14 +1805,14 @@ class CodexValidationTests(TestCase):
         self.assertEqual(result["overall_review"]["markdown"], score_payload["overall_review"]["markdown"])
         turn.refresh_from_db()
         self.assertEqual(turn.metadata["feedback_generation_backend"], "codex")
-        self.assertEqual(turn.metadata["feedback_generation_status"], "pending")
-        self.assertEqual(turn.metadata["band7_version"], "")
-        self.assertEqual(turn.metadata["band7_source"], "pending")
+        self.assertEqual(turn.metadata["feedback_generation_status"], "ready")
+        self.assertIn("software engineering", turn.metadata["band7_version"])
+        self.assertEqual(turn.metadata["band7_source"], "codex_report_batch")
         report = SpeakingReport.objects.get(attempt=attempt)
         self.assertEqual(report.report_payload["score_generation_backend"], "codex")
         self.assertEqual(report.report_payload["report_generation_status"], "ready")
-        self.assertEqual(report.report_payload["turns"][0]["feedback_generation_status"], "pending")
-        self.assertEqual(report.report_payload["turns"][0]["band7_version"], "")
+        self.assertEqual(report.report_payload["turns"][0]["feedback_generation_status"], "ready")
+        self.assertIn("software engineering", report.report_payload["turns"][0]["band7_version"])
 
     def test_score_attempt_returns_existing_report_without_regenerating(self):
         from apps.speaking.services import score_attempt
