@@ -1,0 +1,3 @@
+{"file":"docs/SPEC-streaming-examiner-followup-phase2.md","why":"Phase 2.1 ASGI/Channels scope and red lines."}
+{"file":"backend_django/config/asgi.py","why":"Current ASGI entrypoint to wrap with ProtocolTypeRouter."}
+{"file":".trellis/spec/backend/quality-guidelines.md","why":"Backend runtime and fallback conventions."}

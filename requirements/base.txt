@@ -1,3 +1,4 @@
 Django>=5.2,<5.3
 djangorestframework>=3.16,<3.17
 websocket-client>=1.8,<2
+channels[daphne]>=4.3,<5

@@ -1,0 +1,2 @@
+{"command":"cd backend_django && ../.venv-django/bin/python manage.py test apps.speaking.test_asgi_channels -v 1","why":"New ping websocket smoke tests."}
+{"command":"cd backend_django && ../.venv-django/bin/python manage.py check","why":"Django system check after ASGI dependency/config change."}
