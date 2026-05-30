@@ -2430,6 +2430,7 @@ function stopRecording() {
   clearTimer();
   setRecordButton("processing", "Saving", "Uploading this answer.");
   text("recordStatus", "Saving this answer...");
+  recordRealtimePhaseMetric({ recordingStoppedAt: Date.now() });
   stopDictation();
   stopSpeakingAudioPreprocessor("recording-stopped");
   if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
@@ -2585,9 +2586,20 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
   let currentNextTurn = nextTurn;
   let streamedText = "";
   let examinerStarted = false;
+  const streamStartedAt = Date.now();
+  recordRealtimePhaseMetric({
+    followUpStreamStartedAt: streamStartedAt,
+    followUpStreamStartAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "followUpStreamStartedAt"),
+  });
   const startExaminerOnce = () => {
     if (examinerStarted || !isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
     examinerStarted = true;
+    const examinerStartedAt = Date.now();
+    recordRealtimePhaseMetric({
+      followUpExaminerStartedAt: examinerStartedAt,
+      followUpExaminerStartAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "followUpExaminerStartedAt"),
+      followUpExaminerStartAfterStreamMs: realtimeMetricElapsed("followUpStreamStartedAt", "followUpExaminerStartedAt"),
+    });
     scheduleExaminerPhase(sessionId, currentNextTurn.id, 120);
   };
   const applyTurnPatch = (patch) => {
@@ -2609,6 +2621,14 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
     if (payload.event === "chunk") {
       streamedText += payload.text || "";
       if (streamedText.trim()) {
+        if (!state.speaking.realtimePcmMetrics?.followUpFirstChunkAt) {
+          const firstChunkAt = Date.now();
+          recordRealtimePhaseMetric({
+            followUpFirstChunkAt: firstChunkAt,
+            followUpFirstChunkAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "followUpFirstChunkAt"),
+            followUpFirstChunkAfterStreamMs: realtimeMetricElapsed("followUpStreamStartedAt", "followUpFirstChunkAt"),
+          });
+        }
         applyTurnPatch({ text: streamedText });
         text("recordStatus", "Examiner follow-up is appearing...");
       }
@@ -2616,17 +2636,34 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
     }
     if (payload.event === "question_complete") {
       streamedText = payload.text || streamedText;
+      const questionCompleteAt = Date.now();
+      recordRealtimePhaseMetric({
+        followUpQuestionCompleteAt: questionCompleteAt,
+        followUpQuestionCompleteAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "followUpQuestionCompleteAt"),
+        followUpQuestionCompleteAfterStreamMs: realtimeMetricElapsed("followUpStreamStartedAt", "followUpQuestionCompleteAt"),
+        followUpBackend: payload.backend || "",
+      });
       applyTurnPatch({ text: streamedText, turn: payload.turn });
       text("recordStatus", "Question ready. The examiner audio will start automatically.");
       return;
     }
     if (payload.event === "tts_ready") {
+      const ttsReadyAt = Date.now();
+      recordRealtimePhaseMetric({
+        followUpTtsReadyAt: ttsReadyAt,
+        followUpTtsReadyAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "followUpTtsReadyAt"),
+        followUpTtsReadyAfterStreamMs: realtimeMetricElapsed("followUpStreamStartedAt", "followUpTtsReadyAt"),
+      });
       applyTurnPatch({ examiner_tts: payload.examiner_tts || { audio_url: payload.audio_url, status: "ready", provider: "volcengine" } });
       text("recordStatus", "Examiner audio is ready.");
       startExaminerOnce();
       return;
     }
     if (payload.event === "tts_timeout") {
+      recordRealtimePhaseMetric({
+        followUpTtsTimeoutAt: Date.now(),
+        followUpTtsStatus: "timeout",
+      });
       applyTurnPatch({ examiner_tts: payload.examiner_tts || { provider: "volcengine", status: "pending", audio_url: null } });
       text("recordStatus", "Examiner audio is still generating. Starting preparation safely.");
       startExaminerOnce();
@@ -2634,6 +2671,12 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
     }
     if (payload.event === "fallback") {
       streamedText = payload.text || streamedText || currentNextTurn.question || "";
+      const fallbackAt = Date.now();
+      recordRealtimePhaseMetric({
+        followUpFallbackAt: fallbackAt,
+        followUpFallbackAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "followUpFallbackAt"),
+        followUpBackend: "fallback",
+      });
       applyTurnPatch({ text: streamedText, turn: payload.turn });
       text("recordStatus", "Follow-up generated through fallback. The examiner prompt will start automatically.");
       startExaminerOnce();
@@ -2680,6 +2723,7 @@ async function finalizeTurn(mimeType) {
     const transcriptStatusSnapshot = state.transcriptStatus;
     const transcriptSourceSnapshot = state.transcriptSource || "browser_dictation";
     const p2CorpusEntrySnapshot = state.p2Corpus.selectedEntryId;
+    recordRealtimePhaseMetric({ turnCompleteStartedAt: Date.now() });
     const completeRequest = (streamFollowUp = false) => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
       turn,
       transcriptSnapshot,
@@ -2719,6 +2763,10 @@ async function finalizeTurn(mimeType) {
     setRecordButton("processing", "Saving", completionStatus);
     text("recordStatus", completionStatus);
     const completePayload = await completeRequest(requiresSyncComplete);
+    recordRealtimePhaseMetric({
+      turnCompleteReturnedAt: Date.now(),
+      turnCompleteAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "turnCompleteReturnedAt"),
+    });
     if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
     state.attempt = completePayload.attempt;
     if (completePayload.next_turn) {
@@ -2894,6 +2942,24 @@ function scrollToSummary() {
   $("summaryPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function realtimeMetricElapsed(fromKey, toKey = "") {
+  const metrics = state.speaking.realtimePcmMetrics || {};
+  const from = Number(metrics[fromKey] || 0);
+  const to = toKey ? Number(metrics[toKey] || 0) : Date.now();
+  return from > 0 && to > 0 ? Math.max(0, to - from) : 0;
+}
+
+function recordRealtimePhaseMetric(patch = {}) {
+  if (!state.speaking.realtimePcmMetrics?.enabled) return;
+  state.speaking.realtimePcmMetrics = {
+    ...(state.speaking.realtimePcmMetrics || {}),
+    ...patch,
+    updatedAt: Date.now(),
+  };
+  window.__ieltsRealtimePhase2Metrics = { ...state.speaking.realtimePcmMetrics };
+  setRealtimePcmStatus(state.speaking.realtimePcmMetrics);
+}
+
 function isRealtimeTranscriptSource(source = state.transcriptSource) {
   return Boolean(source && source !== "browser_dictation");
 }
@@ -3040,6 +3106,15 @@ function setRealtimePcmStatus(metrics = {}) {
   if (Number(metrics.socketOpenMs || 0) > 0) latencyParts.push(`WS ${Math.round(metrics.socketOpenMs)}ms`);
   if (Number(metrics.firstTranscriptMs || 0) > 0) latencyParts.push(`首字 ${Math.round(metrics.firstTranscriptMs)}ms`);
   if (Number(metrics.finalTranscriptMs || 0) > 0) latencyParts.push(`final ${Math.round(metrics.finalTranscriptMs)}ms`);
+  if (Number(metrics.followUpFirstChunkAfterStopMs || 0) > 0) {
+    latencyParts.push(`追问首字 ${Math.round(metrics.followUpFirstChunkAfterStopMs)}ms`);
+  }
+  if (Number(metrics.followUpTtsReadyAfterStopMs || 0) > 0) {
+    latencyParts.push(`TTS ${Math.round(metrics.followUpTtsReadyAfterStopMs)}ms`);
+  }
+  if (Number(metrics.followUpExaminerStartAfterStopMs || 0) > 0) {
+    latencyParts.push(`考官 ${Math.round(metrics.followUpExaminerStartAfterStopMs)}ms`);
+  }
 
   let tone = "info";
   let headline = "Realtime ASR";
