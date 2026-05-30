@@ -100,6 +100,7 @@ from .scoring_services import (
 )
 from .tts_services import (
     cached_tts_url as _cached_tts_url,
+    stable_tts_audio_path,
     tts_audio_path,
     tts_fallback,
     volcengine_tts,

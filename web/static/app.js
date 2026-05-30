@@ -88,9 +88,13 @@ const state = {
   navToastTimer: null,
   fontStyle: "default",
   pendingRecharge: 0,
-  examinerAudioPreloads: new Map(),
+  examinerAudioBlobUrls: new Map(),
   activeExaminerAudio: null,
+  examinerPlaybackKey: "",
   examinerAudioDiagnostics: [],
+  examinerPlaybackSamples: [],
+  examinerPlaybackSampleTimer: null,
+  examinerPlaybackTimelineReports: [],
   writing: {
     taskType: "task1_academic",
     prompts: {},
@@ -242,7 +246,6 @@ const protectedViews = new Set(["history", "writing", "writingReports", "corpus"
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 
-const EXAMINER_AUDIO_PRELOAD_LIMIT = 8;
 const EXAMINER_AUDIO_DIAGNOSTIC_LIMIT = 240;
 const AUDIO_READY_TIMEOUT_MS = 2000;
 const FIXED_AUDIO_READY_TIMEOUT_MS = 4500;
@@ -903,9 +906,9 @@ async function prefetchFixedExaminerTts(token) {
   if (state.prefetch.fixedExaminerTtsWarmed) return;
   const payload = await fetchFixedExaminerTtsWarmup();
   if (!prefetchCanApply(token)) return;
-  for (const url of payload.audio_urls || []) {
-    primeExaminerAudio(url);
-  }
+  traceExaminerAudio("warmup:fixed-tts-ready", {
+    count: (payload.audio_urls || []).length,
+  });
   state.prefetch.fixedExaminerTtsWarmed = true;
 }
 
@@ -1525,6 +1528,7 @@ function resetPracticeSurface() {
   state.status = "idle";
   state.attempt = null;
   state.currentTurn = null;
+  state.examinerPlaybackKey = "";
   state.transcript = "";
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();
@@ -1994,11 +1998,90 @@ function exposeExaminerAudioDiagnostics() {
     disable: () => {
       localStorage.removeItem("ielts-examiner-audio-debug");
     },
-    preloads: () => [...state.examinerAudioPreloads.entries()].map(([url, audio]) => ({
+    preloads: () => [...state.examinerAudioBlobUrls.entries()].map(([url, item]) => ({
       url,
-      ...audioSnapshot(audio),
+      playbackUrl: item.playbackUrl,
+      size: item.size,
+      type: item.type,
     })),
-    active: () => audioSnapshot(state.activeExaminerAudio || $("examinerAudio")),
+    timeline: () => [...state.examinerPlaybackTimelineReports],
+    samples: () => [...state.examinerPlaybackSamples],
+    active: () => ({
+      element: audioSnapshot(state.activeExaminerAudio || $("examinerAudio")),
+    }),
+  };
+}
+
+function startExaminerPlaybackSampler(audio, url) {
+  stopExaminerPlaybackSampler("restart");
+  state.examinerPlaybackSamples = [];
+  const startedAt = performance.now();
+  const pushSample = () => {
+    if (!audio) return;
+    state.examinerPlaybackSamples.push({
+      wallMs: Number((performance.now() - startedAt).toFixed(1)),
+      currentMs: Number(((Number.isFinite(audio.currentTime) ? audio.currentTime : 0) * 1000).toFixed(1)),
+      paused: !!audio.paused,
+      ended: !!audio.ended,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+    });
+    if (state.examinerPlaybackSamples.length > 600) state.examinerPlaybackSamples.shift();
+  };
+  pushSample();
+  state.examinerPlaybackSampleTimer = window.setInterval(pushSample, 50);
+  traceExaminerAudio("timeline:start", { url });
+}
+
+function stopExaminerPlaybackSampler(reason = "stopped") {
+  if (state.examinerPlaybackSampleTimer) {
+    window.clearInterval(state.examinerPlaybackSampleTimer);
+    state.examinerPlaybackSampleTimer = null;
+  }
+  const samples = state.examinerPlaybackSamples || [];
+  if (samples.length < 2) return null;
+  const report = summarizeExaminerPlaybackTimeline(samples, reason);
+  state.examinerPlaybackTimelineReports.push(report);
+  if (state.examinerPlaybackTimelineReports.length > 20) state.examinerPlaybackTimelineReports.shift();
+  traceExaminerAudio("timeline:summary", report);
+  return report;
+}
+
+function summarizeExaminerPlaybackTimeline(samples, reason) {
+  const stalls = [];
+  const jumps = [];
+  for (let index = 1; index < samples.length; index += 1) {
+    const prev = samples[index - 1];
+    const next = samples[index];
+    const wallDelta = next.wallMs - prev.wallMs;
+    const audioDelta = next.currentMs - prev.currentMs;
+    if (!prev.paused && !next.paused && !next.ended && wallDelta >= 35 && audioDelta < Math.max(8, wallDelta * 0.25)) {
+      stalls.push({
+        atWallMs: next.wallMs,
+        currentMs: next.currentMs,
+        wallDelta: Number(wallDelta.toFixed(1)),
+        audioDelta: Number(audioDelta.toFixed(1)),
+        readyState: next.readyState,
+      });
+    }
+    if (audioDelta < -20 || audioDelta > wallDelta * 2.5 + 80) {
+      jumps.push({
+        atWallMs: next.wallMs,
+        fromMs: prev.currentMs,
+        toMs: next.currentMs,
+        wallDelta: Number(wallDelta.toFixed(1)),
+        audioDelta: Number(audioDelta.toFixed(1)),
+      });
+    }
+  }
+  return {
+    reason,
+    sampleCount: samples.length,
+    wallDurationMs: samples.at(-1)?.wallMs || 0,
+    audioDurationMs: samples.at(-1)?.currentMs || 0,
+    stalls: stalls.slice(0, 20),
+    jumps: jumps.slice(0, 20),
+    verdict: stalls.length || jumps.length ? "playback timeline has stalls/jumps" : "playback timeline is continuous",
   };
 }
 
@@ -2012,7 +2095,6 @@ function renderExaminerAudio(turn) {
       url: tts.audio_url,
       ttsStatus: tts.status || "",
     });
-    primeExaminerAudio(tts.audio_url);
   } else if (isPendingExaminerTts(tts) && state.attempt?.id && state.practiceSessionId) {
     traceExaminerAudio("render:refresh-pending-tts", {
       turnId: turn.id,
@@ -2022,61 +2104,63 @@ function renderExaminerAudio(turn) {
   }
 }
 
-function prepareExaminerAudioElement(audio, url) {
-  if (!audio || !url) return;
-  attachExaminerAudioTelemetry(audio, "playback", url);
+function prepareExaminerAudioElement(audio, playbackUrl, sourceUrl = playbackUrl) {
+  if (!audio || !playbackUrl) return;
+  attachExaminerAudioTelemetry(audio, "playback", sourceUrl);
   audio.preload = "auto";
-  if (audio.dataset.src === url && audio.getAttribute("src") === url) {
-    traceExaminerAudio("prepare:reuse", { url, audio: audioSnapshot(audio) });
+  if (audio.dataset.src === playbackUrl && audio.getAttribute("src") === playbackUrl) {
+    traceExaminerAudio("prepare:reuse", { url: sourceUrl, playbackUrl, audio: audioSnapshot(audio) });
     return;
   }
-  audio.dataset.src = url;
-  audio.src = url;
-  traceExaminerAudio("prepare:load", { url, audio: audioSnapshot(audio) });
+  audio.dataset.src = playbackUrl;
+  audio.src = playbackUrl;
+  traceExaminerAudio("prepare:load", { url: sourceUrl, playbackUrl, audio: audioSnapshot(audio) });
   audio.load();
 }
 
-function primeExaminerAudio(url) {
-  if (!url) return null;
-  if (state.examinerAudioPreloads.has(url)) {
-    const cached = state.examinerAudioPreloads.get(url);
-    attachExaminerAudioTelemetry(cached, "preload", url);
-    traceExaminerAudio("preload:reuse", { url, audio: audioSnapshot(cached) });
-    return cached;
+async function resolveExaminerAudioPlaybackUrl(url) {
+  if (!url) return "";
+  const cached = state.examinerAudioBlobUrls.get(url);
+  if (cached?.playbackUrl) {
+    traceExaminerAudio("blob-audio:reuse", { url, size: cached.size, type: cached.type });
+    return cached.playbackUrl;
   }
-  const preload = new Audio();
-  attachExaminerAudioTelemetry(preload, "preload", url);
-  preload.preload = "auto";
-  preload.src = url;
-  traceExaminerAudio("preload:start", { url, audio: audioSnapshot(preload) });
-  preload.load();
-  state.examinerAudioPreloads.set(url, preload);
-  while (state.examinerAudioPreloads.size > EXAMINER_AUDIO_PRELOAD_LIMIT) {
-    const removableUrl = [...state.examinerAudioPreloads.keys()].find((item) => !FIXED_EXAMINER_AUDIO_URLS.has(item));
-    if (!removableUrl) break;
-    state.examinerAudioPreloads.delete(removableUrl);
+  const stableUrl = stableExaminerAudioUrl(url);
+  traceExaminerAudio("blob-audio:fetch-start", { url, stableUrl });
+  const response = await fetch(stableUrl, { credentials: "same-origin", cache: "force-cache" });
+  if (!response.ok) throw new Error(`Examiner audio fetch failed: ${response.status}`);
+  const blob = await response.blob();
+  const playbackUrl = URL.createObjectURL(blob);
+  state.examinerAudioBlobUrls.set(url, {
+    playbackUrl,
+    size: blob.size,
+    type: blob.type || "audio/mpeg",
+  });
+  traceExaminerAudio("blob-audio:fetch-ready", { url, size: blob.size, type: blob.type || "audio/mpeg" });
+  return playbackUrl;
+}
+
+function stableExaminerAudioUrl(url) {
+  if (!url || !url.includes("/api/tts-audio/examiner/")) return url;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    parsed.searchParams.set("stable", "1");
+    return parsed.pathname + parsed.search;
+  } catch {
+    return url.includes("?") ? `${url}&stable=1` : `${url}?stable=1`;
   }
-  return preload;
 }
 
 function clearExaminerAudioPreloads() {
-  for (const [url, audio] of state.examinerAudioPreloads.entries()) {
-    traceExaminerAudio("preload:clear", { url, fixed: FIXED_EXAMINER_AUDIO_URLS.has(url), audio: audioSnapshot(audio) });
-    audio.pause();
-    audio.onended = null;
-    audio.onerror = null;
-    try {
-      audio.currentTime = 0;
-    } catch {
-      // Some browsers reject seeking before metadata is loaded.
-    }
-    if (FIXED_EXAMINER_AUDIO_URLS.has(url)) continue;
-    audio.removeAttribute("src");
-    state.examinerAudioPreloads.delete(url);
+  for (const [url, item] of state.examinerAudioBlobUrls.entries()) {
+    traceExaminerAudio("blob-audio:clear", { url, size: item.size, type: item.type });
+    if (item.playbackUrl) URL.revokeObjectURL(item.playbackUrl);
   }
+  state.examinerAudioBlobUrls.clear();
 }
 
 function stopExaminerPlayback() {
+  stopExaminerPlaybackSampler("stop-playback");
   const activeAudio = state.activeExaminerAudio;
   if (activeAudio) {
     traceExaminerAudio("playback:stop-active", { audio: audioSnapshot(activeAudio) });
@@ -2104,20 +2188,8 @@ function stopExaminerPlayback() {
       // Ignore seek errors for unloaded audio.
     }
   }
-  // Keep inactive preload cache warm. Resetting every cached Audio object here
-  // cancels buffering for the next fixed examiner prompt and can cause mid-play
-  // stalls when that prompt starts a few seconds later. Full cache cleanup still
-  // happens through clearExaminerAudioPreloads() when the practice surface exits.
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   state.browserTtsUtterance = null;
-}
-
-function preloadNextExaminerAudio(turn) {
-  const nextIndex = Number(turn?.index ?? -1) + 1;
-  const nextTurn = (state.attempt?.turns || [])[nextIndex];
-  const nextUrl = nextTurn?.examiner_tts?.audio_url;
-  if (!nextUrl) return;
-  primeExaminerAudio(nextUrl);
 }
 
 function localNextTurnAfter(turn, attempt = state.attempt) {
@@ -2258,14 +2330,30 @@ function isActivePracticeSession(sessionId) {
 async function beginExaminerPhase(sessionId = state.practiceSessionId) {
   if (!isActivePracticeSession(sessionId)) return;
   if (!state.currentTurn) return;
+  clearAutoNextTimeout();
+  if (["preparing", "recording", "processing", "scoring"].includes(state.status)) {
+    traceExaminerAudio("playback:begin-blocked-by-status", {
+      status: state.status,
+      turnId: state.currentTurn.id,
+    });
+    return;
+  }
   clearTimer();
-  stopExaminerPlayback();
-  if (!isActivePracticeSession(sessionId)) return;
   const turn = state.currentTurn;
   const turnId = turn.id;
+  const playbackKey = `${sessionId}:${turnId}`;
+  if (state.status === "examiner_playing" && state.examinerPlaybackKey === playbackKey) {
+    traceExaminerAudio("playback:duplicate-begin-skipped", {
+      playbackKey,
+      audio: audioSnapshot(state.activeExaminerAudio),
+    });
+    return;
+  }
+  state.examinerPlaybackKey = playbackKey;
+  stopExaminerPlayback();
+  if (!isActivePracticeSession(sessionId)) return;
   const isP2 = turn.part === "p2";
   const isIntro = turn.counts_toward_total === false;
-  preloadNextExaminerAudio(turn);
   setRecordButton("examiner_playing", "Listening...", "The examiner is asking the question.");
   const progress = turnProgressLabel(turn);
   text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
@@ -2288,22 +2376,36 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
     tts = refreshedTurn?.examiner_tts || {};
   }
   if (tts.audio_url) {
-    const preload = primeExaminerAudio(tts.audio_url);
-    const audio = $("examinerAudio");
     const isFixedAudio = FIXED_EXAMINER_AUDIO_URLS.has(tts.audio_url);
+    let playbackUrl = "";
+    try {
+      playbackUrl = await resolveExaminerAudioPlaybackUrl(tts.audio_url);
+    } catch (error) {
+      traceExaminerAudio("blob-audio:fetch-failed", {
+        url: tts.audio_url,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      playbackUrl = tts.audio_url;
+    }
+    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
     traceExaminerAudio("playback:select", {
       url: tts.audio_url,
+      playbackUrl,
       isFixedAudio,
-      preload: audioSnapshot(preload),
+      element: "examinerAudio",
     });
-    prepareExaminerAudioElement(audio, tts.audio_url);
+    const audio = $("examinerAudio");
+    attachExaminerAudioTelemetry(audio, "playback", tts.audio_url);
+    prepareExaminerAudioElement(audio, playbackUrl, tts.audio_url);
     state.activeExaminerAudio = audio;
     audio.onended = () => {
+      stopExaminerPlaybackSampler("ended");
       traceExaminerAudio("playback:ended-handler", { url: tts.audio_url, audio: audioSnapshot(audio) });
       if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
       if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
     };
     audio.onerror = () => {
+      stopExaminerPlaybackSampler("error");
       traceExaminerAudio("playback:error-handler", { url: tts.audio_url, audio: audioSnapshot(audio) });
       if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
       if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
@@ -2323,7 +2425,10 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
     }
     traceExaminerAudio("playback:play-call", { url: tts.audio_url, audio: audioSnapshot(audio) });
     audio.play()
-      .then(() => traceExaminerAudio("playback:play-resolved", { url: tts.audio_url, audio: audioSnapshot(audio) }))
+      .then(() => {
+        traceExaminerAudio("playback:play-resolved", { url: tts.audio_url, audio: audioSnapshot(audio) });
+        startExaminerPlaybackSampler(audio, tts.audio_url);
+      })
       .catch((error) => {
         traceExaminerAudio("playback:play-rejected", {
           url: tts.audio_url,
@@ -2344,9 +2449,9 @@ function beginBrowserExaminerPlayback(value, sessionId = state.practiceSessionId
 
 function beginPreparation(sessionId = state.practiceSessionId) {
   if (!isActivePracticeSession(sessionId)) return;
+  state.examinerPlaybackKey = "";
   const seconds = state.currentTurn?.timers?.prep_seconds || 3;
   const isP2 = state.currentTurn?.part === "p2";
-  preloadNextExaminerAudio(state.currentTurn);
   setRecordButton("preparing", isP2 ? "Skip" : "Prepare", isP2 ? "Click to start recording now." : "Recording starts automatically.");
   text("phaseLabel", `Preparing -> ${turnProgressLabel(state.currentTurn)}`);
   text("recordStatus", isP2 ? "Prepare your answer. Click to start recording early." : `Prepare your answer. Recording starts in ${seconds} seconds.`);
@@ -2406,6 +2511,23 @@ function clearTimer() {
 function clearAutoNextTimeout() {
   if (state.autoNextTimeout) window.clearTimeout(state.autoNextTimeout);
   state.autoNextTimeout = null;
+}
+
+function scheduleExaminerPhase(sessionId, turnId = state.currentTurn?.id, delayMs = 0) {
+  clearAutoNextTimeout();
+  const expectedTurnId = turnId || "";
+  state.autoNextTimeout = window.setTimeout(() => {
+    state.autoNextTimeout = null;
+    if (!isActivePracticeSession(sessionId)) return;
+    if (expectedTurnId && state.currentTurn?.id !== expectedTurnId) {
+      traceExaminerAudio("playback:scheduled-begin-skipped", {
+        expectedTurnId,
+        currentTurnId: state.currentTurn?.id || "",
+      });
+      return;
+    }
+    beginExaminerPhase(sessionId);
+  }, Math.max(0, Number(delayMs) || 0));
 }
 
 function resolveWasmAudioPreprocessConfig() {
@@ -2938,8 +3060,7 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
   const startExaminerOnce = () => {
     if (examinerStarted || !isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
     examinerStarted = true;
-    clearAutoNextTimeout();
-    state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 120);
+    scheduleExaminerPhase(sessionId, currentNextTurn.id, 120);
   };
   const applyTurnPatch = (patch) => {
     if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
@@ -3051,8 +3172,7 @@ async function finalizeTurn(mimeType) {
       renderTurn(localNextTurn);
       setRecordButton("turn_saved", "Next", "Moving to the next question.");
       text("recordStatus", "Audio uploaded. Saving transcript in the background.");
-      clearAutoNextTimeout();
-      state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 200);
+      scheduleExaminerPhase(sessionId, localNextTurn.id, 200);
       const completion = completeRequest()
         .then((completePayload) => handleTurnCompletionResult(attempt, turn, completePayload))
         .catch((error) => {
@@ -3080,11 +3200,11 @@ async function finalizeTurn(mimeType) {
           .catch((error) => {
             if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
             showError(error);
-            state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 650);
+            scheduleExaminerPhase(sessionId, completePayload.next_turn.id, 650);
           });
       } else {
         text("recordStatus", "Question saved. The next examiner prompt will start automatically.");
-        state.autoNextTimeout = window.setTimeout(() => beginExaminerPhase(sessionId), 650);
+        scheduleExaminerPhase(sessionId, completePayload.next_turn.id, 650);
       }
     } else {
       state.currentTurn = null;
@@ -6764,6 +6884,7 @@ function stopAllRuntime(label = "Ready") {
   stopDictation();
   setDictationStatus("", "");
   state.currentTurn = null;
+  state.examinerPlaybackKey = "";
   state.transcript = "";
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();

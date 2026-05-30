@@ -32,6 +32,7 @@ from .services import (
     score_attempt,
     start_attempt,
     stream_follow_up_sse_events,
+    stable_tts_audio_path,
     tts_audio_path,
     tts_fallback,
     upload_turn_audio,
@@ -436,10 +437,14 @@ def tts_audio_view(request, role: str, filename: str):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
-    path = tts_audio_path(role, filename)
+    if request.GET.get("stable") == "1":
+        path, content_type = stable_tts_audio_path(role, filename)
+    else:
+        path = tts_audio_path(role, filename)
+        content_type = "audio/mpeg"
     if not path:
         return JsonResponse({"error": "Audio not available"}, status=404)
-    return FileResponse(open(path, "rb"), content_type="audio/mpeg")
+    return FileResponse(open(path, "rb"), content_type=content_type)
 
 
 @require_GET

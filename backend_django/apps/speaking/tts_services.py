@@ -4,6 +4,8 @@ import base64
 import json
 import os
 import re
+import shutil
+import subprocess
 import urllib.request
 import uuid
 from pathlib import Path
@@ -108,3 +110,54 @@ def tts_audio_path(role: str, filename: str) -> Path | None:
         return None
     path = Path(settings.MEDIA_ROOT) / "tts" / safe_role / safe_name
     return path if path.exists() else None
+
+
+def stable_tts_audio_path(role: str, filename: str) -> tuple[Path | None, str]:
+    """Return a browser-friendly playback file when a local transcoder is available."""
+    source_path = tts_audio_path(role, filename)
+    if not source_path:
+        return None, "audio/mpeg"
+    if source_path.suffix.lower() != ".mp3":
+        return source_path, _audio_content_type(source_path)
+
+    stable_path = source_path.with_suffix(".m4a")
+    if stable_path.exists() and stable_path.stat().st_mtime >= source_path.stat().st_mtime:
+        return stable_path, "audio/mp4"
+
+    afconvert = shutil.which("afconvert")
+    if not afconvert:
+        return source_path, "audio/mpeg"
+
+    try:
+        subprocess.run(
+            [
+                afconvert,
+                "-f",
+                "m4af",
+                "-d",
+                "aac",
+                "-s",
+                "3",
+                "-q",
+                "127",
+                str(source_path),
+                str(stable_path),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except Exception:  # noqa: BLE001
+        return source_path, "audio/mpeg"
+
+    return (stable_path, "audio/mp4") if stable_path.exists() else (source_path, "audio/mpeg")
+
+
+def _audio_content_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".m4a":
+        return "audio/mp4"
+    if suffix == ".wav":
+        return "audio/wav"
+    return "audio/mpeg"

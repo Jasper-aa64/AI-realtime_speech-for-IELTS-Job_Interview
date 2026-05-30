@@ -520,6 +520,40 @@ class QuestionBankApiTests(TestCase):
         self.assertTrue(P1CorpusEntry.objects.filter(user=self.user, question_id=canonical_id).exists())
         self.assertFalse(P1CorpusEntry.objects.filter(user=self.user, question_id=legacy_id).exists())
 
+    def test_p1_corpus_does_not_migrate_mismatched_submitted_question_id(self):
+        from apps.speaking.corpus_services import p1_question_id
+
+        existing_question = "Do you work or do you study?"
+        existing_id = p1_question_id("intro", existing_question)
+        P1CorpusEntry.objects.create(
+            user=self.user,
+            question_id=existing_id,
+            topic="intro",
+            question=existing_question,
+            corpus_text="Actually, I do both. I study and work part-time.",
+        )
+
+        response = self.client.post(
+            "/api/p1-corpus",
+            data={
+                "question_id": existing_id,
+                "topic": "intro",
+                "question": "What is your full name?",
+                "corpus_text": "My name is Jasper.",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        new_id = p1_question_id("intro", "What is your full name?")
+        self.assertEqual(response.json()["question_id"], new_id)
+        original = P1CorpusEntry.objects.get(user=self.user, question_id=existing_id)
+        self.assertEqual(original.question, existing_question)
+        self.assertEqual(original.corpus_text, "Actually, I do both. I study and work part-time.")
+        created = P1CorpusEntry.objects.get(user=self.user, question_id=new_id)
+        self.assertEqual(created.question, "What is your full name?")
+        self.assertEqual(created.corpus_text, "My name is Jasper.")
+
     def test_p1_corpus_library_respects_scope(self):
         response = self.client.get("/api/p1-corpus?scope=new")
         self.assertEqual(response.status_code, 200)
@@ -1552,6 +1586,13 @@ class DjangoOnlyRuntimeSurfaceTests(TestCase):
         response = self.client.get("/api/tts-audio/examiner/sample.mp3")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(b"".join(response.streaming_content), b"mp3-data")
+
+        with patch("apps.speaking.tts_services.shutil.which", return_value=None):
+            stable_response = self.client.get("/api/tts-audio/examiner/sample.mp3?stable=1")
+
+        self.assertEqual(stable_response.status_code, 200)
+        self.assertEqual(stable_response["Content-Type"], "audio/mpeg")
+        self.assertEqual(b"".join(stable_response.streaming_content), b"mp3-data")
 
     def test_latest_report_returns_latest_valid_report(self):
         no_report = self.client.get("/api/reports/latest")

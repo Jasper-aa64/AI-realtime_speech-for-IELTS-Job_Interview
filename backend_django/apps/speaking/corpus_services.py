@@ -430,9 +430,11 @@ def save_p1_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
     last_ai_answer = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:8000]
     entry = P1CorpusEntry.objects.filter(user=user, question_id=question_id).first()
     if not entry and submitted_question_id and submitted_question_id != question_id:
-        entry = P1CorpusEntry.objects.filter(user=user, question_id=submitted_question_id).first()
-        if entry and not P1CorpusEntry.objects.filter(user=user, question_id=question_id).exists():
-            entry.question_id = question_id
+        submitted_entry = P1CorpusEntry.objects.filter(user=user, question_id=submitted_question_id).first()
+        if submitted_entry and stable_question_text(submitted_entry.question) == stable_question_text(question):
+            entry = submitted_entry
+            if not P1CorpusEntry.objects.filter(user=user, question_id=question_id).exists():
+                entry.question_id = question_id
     if not entry:
         entry = P1CorpusEntry(user=user, question_id=question_id)
     entry.topic = topic
