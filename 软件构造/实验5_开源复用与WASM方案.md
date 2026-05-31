@@ -14,7 +14,7 @@ C++ realtime gateway        = 后续实时转写网关
 
 ## 选型结论
 
-实验5的开源复用目标选 `libfvad`。当前代码已经将 `libfvad` vendor 到 `third_party/libfvad/`，并通过 `audio_core` 的 VAD backend 抽象接入。
+实验5的核心开源复用目标选 `libfvad`。当前代码已经将 `libfvad` vendor 到 `third_party/libfvad/`，并通过 `audio_core` 的 VAD backend 抽象接入。
 
 `libfvad` 是基于 WebRTC VAD 引擎的独立 C 库。相比直接引入完整 WebRTC，它更适合当前项目：
 
@@ -23,12 +23,18 @@ C++ realtime gateway        = 后续实时转写网关
 - BSD-3-Clause license，适合课程报告说明和项目集成。
 - 可以同时服务两条路径：浏览器 WASM 预处理、Linux realtime gateway 预处理。
 
+后续在 P1 examiner TTS 播放稳定性治理中，又补充复用了 `howler.js`
+作为浏览器端音频播放层。它不替代 `libfvad` 的实验核心地位，而是作为
+第二个复用资源，解决浏览器短音频播放、preload、end/error 回调和
+跨浏览器播放差异，避免继续维护项目内手写 `<audio>` 状态机。
+
 ## 候选对比
 
 | 候选 | 作用 | 优点 | 风险 / 不选原因 | 结论 |
 | --- | --- | --- | --- | --- |
 | WebRTC VAD upstream | 语音活动检测 | 成熟、实时场景常用、BSD-style license | 完整 WebRTC tree 太大，直接引入会让作业和项目边界变重 | 不直接引入完整 tree |
 | `libfvad` | 独立 WebRTC VAD | 小型 C 库、BSD-3、独立于完整 WebRTC | 后续需要 vendor 或子模块，并写 license 归档 | 选中 |
+| `howler.js` | 浏览器音频播放 | 成熟 Web 音频库、支持 preload / onload / onplay / onend / onerror、MIT license | 只解决播放稳定性，不解决 VAD / WASM 计算 | 作为前端播放层补充复用 |
 | SpeexDSP | DSP / resampler / noise processing | 音频处理能力更广 | 不是最直接的 VAD 目标，第一阶段会分散重点 | 后续可作为 resampler/noise 备选 |
 | libsamplerate | 高质量采样率转换 | resampling 质量高，BSD-2 | 不解决 VAD；当前 `audio_core` 已有 deterministic linear baseline | 暂不作为实验5主复用点 |
 
@@ -64,6 +70,29 @@ C++ realtime gateway        = 后续实时转写网关
 - `audio_worklet_demo.html` 中 `WASM audio_core` 可选，切换后显示 `WASM audio_core analyzer is ready.`。
 - `.wasm` 静态服务 MIME 为 `application/wasm`。
 - 生成产物被 `.gitignore` 忽略，不进入仓库。
+
+## 浏览器 TTS 播放复用：howler.js
+
+P1 examiner TTS 曾经由项目内手写 `<audio>` 播放状态机维护。该实现需要同时处理
+预加载、播放开始、播放结束、错误、停止、旧回调失效和题目切换，容易和 P1
+业务状态机互相干扰。为避免继续手搓底层播放机制，当前前端引入：
+
+- `web/static/vendor/howler.min.js`：vendored `howler.js` v2.2.4。
+- `ExaminerAudioPlayer`：项目内小型 wrapper，只向业务层暴露 load / play /
+  stop / unload 和 ready / play / end / error 事件。
+- `/vendor/<path>` Django 静态路由：只服务 `web/static/vendor/` 下的文件，并
+  拒绝路径穿越。
+
+接入后的边界：
+
+- P1/P3 examiner TTS 仍由 Django 后端生成，前端不保存任何 TTS secret。
+- `/api/tts-audio/examiner/...` 播放前仍会转换到 `?stable=1`，优先走后端
+  browser-friendly 音频路径。
+- Howler 只负责浏览器播放引擎；IELTS turn 推进、follow-up 生成、realtime ASR
+  和 WASM 预处理仍由原有业务层控制。
+
+这部分复用体现的是“用成熟库替换不稳定自研底层能力”：项目保留自身业务状态机，
+但不再把浏览器音频播放细节作为手写基础设施维护。
 
 ## 一键验收命令
 
@@ -101,4 +130,5 @@ scripts/run_experiment5_reuse_validation.sh
 
 - WebRTC upstream VAD wrapper: <https://chromium.googlesource.com/external/webrtc/trunk/webrtc/+/f54860e9ef0b68e182a01edc994626d21961bc4b/common_audio/vad/vad.cc>
 - `libfvad`: <https://github.com/dpirch/libfvad>
+- `howler.js`: <https://github.com/goldfire/howler.js>
 - libsamplerate wrapper / license note: <https://pypi.org/project/samplerate/>

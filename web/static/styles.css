@@ -885,7 +885,9 @@ body.font-popular .nav-divider {
 }
 
 .shell.account-shell .workspace {
-  overflow-y: auto;
+  grid-template-rows: minmax(0, 1fr);
+  padding: calc(58px + var(--safe-top)) clamp(24px, 4vw, 56px) calc(20px + var(--safe-bottom));
+  overflow: hidden;
 }
 
 .shell.account-shell .global-topbar {
@@ -6273,6 +6275,7 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   opacity: 0.72;
 }
 .record-control.loading,
+.record-control.examiner_loading,
 .record-control.preparing { background: var(--blue) !important; cursor: wait; }
 .record-control.examiner_playing,
 .record-control.turn_saved { background: #45535b !important; cursor: wait; }
@@ -8630,7 +8633,10 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 }
 
 #accountProfilePanel.auth-panel {
-  padding: 18px 24px 24px;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
 }
 
 #accountSecurityPanel.auth-panel {
@@ -9089,17 +9095,24 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 }
 
 #accountProfilePanel.auth-panel {
-  padding: 8px clamp(24px, 4vw, 56px) 42px;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .account-dashboard {
-  gap: 22px;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 18px;
+  padding-top: 0;
 }
 
 .account-page-header {
   width: min(1280px, 100%);
-  min-height: 112px;
-  padding: 6px 4px 12px;
+  min-height: 0;
+  padding: 0 4px 4px;
   align-items: center;
 }
 
@@ -9118,7 +9131,7 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 }
 
 .account-page-copy h1 {
-  font-size: clamp(36px, 3.8vw, 54px);
+  font-size: clamp(32px, 3.3vw, 48px);
   line-height: 0.98;
   letter-spacing: 0;
 }
@@ -9179,8 +9192,10 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 
 .account-dashboard-grid {
   width: min(1280px, 100%);
+  height: 100%;
+  min-height: 0;
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .account-profile-card,
@@ -9193,7 +9208,10 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 
 .account-profile-card,
 .account-wallet-card {
-  min-height: 400px;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .account-profile-card,
@@ -9209,6 +9227,7 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 }
 
 .account-card-head {
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -9263,6 +9282,7 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 }
 
 .account-profile-body {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 136px;
   gap: 14px;
@@ -9305,7 +9325,7 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 }
 
 .account-card-footer {
-  margin-top: 16px;
+  margin-top: auto;
   padding-top: 14px;
   border-top: 1px solid rgba(126, 139, 153, 0.18);
 }
@@ -9358,9 +9378,10 @@ body.theme-dark .account-profile-card .settings-name-fields input {
 
 .account-wallet-card .settings-list,
 .account-ledger-list {
-  height: 188px;
-  min-height: 188px;
-  max-height: 188px;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
   padding-right: 2px;
   overscroll-behavior: contain;
@@ -9418,6 +9439,50 @@ body.theme-dark .account-profile-card .settings-name-fields input {
   border-radius: 14px;
   color: #7a8a99;
   background: rgba(248, 250, 252, 0.62);
+}
+
+/* Account profile is a fixed control surface: only inner ledger content scrolls. */
+.shell.account-shell {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.shell.account-shell .workspace {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden !important;
+}
+
+#accountProfilePanel.auth-panel,
+#accountProfilePanel.auth-panel:not(.hidden),
+#accountProfilePanel .account-dashboard,
+#accountProfilePanel .account-dashboard-grid {
+  min-height: 0;
+  overflow: hidden;
+}
+
+#accountProfilePanel .account-dashboard-grid {
+  align-items: stretch;
+}
+
+#accountProfilePanel .account-profile-card,
+#accountProfilePanel .account-wallet-card {
+  height: 100%;
+  min-height: 0;
+}
+
+#accountProfilePanel .account-wallet-card {
+  display: flex;
+  flex-direction: column;
+}
+
+#accountProfilePanel .account-ledger-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 
 .account-skeleton-row {
@@ -15056,6 +15121,7 @@ body.theme-dark.font-popular .mobile-font-options .font-option.active svg {
 }
 
 body.theme-dark .record-control.loading,
+body.theme-dark .record-control.examiner_loading,
 body.theme-dark .record-control.preparing {
   background:
     radial-gradient(circle at 50% 18%, rgba(191, 219, 254, 0.18), transparent 24%),
@@ -15119,6 +15185,7 @@ body.theme-dark.font-popular .record-control:hover {
 }
 
 body.theme-dark.font-popular .record-control.loading,
+body.theme-dark.font-popular .record-control.examiner_loading,
 body.theme-dark.font-popular .record-control.preparing {
   background:
     radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.74), transparent 34%),

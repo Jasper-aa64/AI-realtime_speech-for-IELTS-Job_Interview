@@ -38,7 +38,6 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "writing-prompt-picker.js": "text/javascript; charset=utf-8",
         "corpus-markdown-editor.js": "text/javascript; charset=utf-8",
         "corpus-takeaway.js": "text/javascript; charset=utf-8",
-        "examiner-audio-diagnostics.js": "text/javascript; charset=utf-8",
         "candidate-profile.js": "text/javascript; charset=utf-8",
         "realtime-pcm-uplink.js": "text/javascript; charset=utf-8",
         "speaking-audio-preprocessor-runtime.js": "text/javascript; charset=utf-8",
@@ -83,3 +82,24 @@ def frontend_wasm_asset(request, asset_path: str):
         ".wasm": "application/wasm",
     }
     return FileResponse(open(path, "rb"), content_type=content_types.get(path.suffix))
+
+
+@require_GET
+def frontend_vendor_asset(request, asset_path: str):
+    normalized = (asset_path or "").lstrip("/")
+    if not normalized or any(part in {"", ".", ".."} for part in normalized.split("/")):
+        raise Http404("Static asset not found")
+    vendor_root = (settings.BASE_DIR.parent / "web" / "static" / "vendor").resolve()
+    path = (vendor_root / normalized).resolve()
+    try:
+        path.relative_to(vendor_root)
+    except ValueError:
+        raise Http404("Static asset not found")
+    if not path.exists() or not path.is_file():
+        raise Http404("Static asset not found")
+    content_types = {
+        ".js": "text/javascript; charset=utf-8",
+    }
+    response = FileResponse(open(path, "rb"), content_type=content_types.get(path.suffix))
+    response["Cache-Control"] = "no-store"
+    return response

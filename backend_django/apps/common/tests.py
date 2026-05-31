@@ -34,6 +34,18 @@ class HealthEndpointTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_frontend_vendor_asset_route_serves_howler(self):
+        response = Client().get("/vendor/howler.min.js")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+
+    def test_frontend_vendor_asset_route_rejects_path_traversal(self):
+        response = Client().get("/vendor/../app.js")
+
+        self.assertEqual(response.status_code, 404)
+
 
 class UserModelTests(TestCase):
     def test_custom_user_model_is_active(self):

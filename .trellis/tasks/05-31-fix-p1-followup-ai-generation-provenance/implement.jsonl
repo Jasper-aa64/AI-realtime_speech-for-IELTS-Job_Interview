@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/05-31-fix-p1-followup-ai-generation-provenance/prd.md", "reason": "Task requirements and acceptance criteria for replacing P1 examiner TTS playback with howler.js."}
+{"file": ".trellis/tasks/05-31-fix-p1-followup-ai-generation-provenance/research/howler-playback.md", "reason": "Research notes for howler.js API and playback integration decisions."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend conventions and required checks for web/static changes."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend runtime contracts: timers/audio cleanup, practice states, and validation requirements."}
+{"file": ".trellis/spec/frontend/wasm-audio-guidelines.md", "reason": "Audio preprocessing boundaries so the playback fix does not break WASM/realtime recording paths."}
+{"file": "docs/SPEC-p1-audio-playback-coordinator.md", "reason": "Existing project-specific playback coordinator diagnosis and desired P1 playback contract."}

@@ -62,6 +62,9 @@ unavailable.
   `processing`/`scoring`, `summary`, or aborted/reset.
 - P1/P3 play the examiner question automatically after the learner starts a
   section; P2 plays instruction-only audio and shows the cue card for reading.
+- P1/P3 examiner TTS playback must use the project audio player wrapper backed
+  by `howler.js`, not ad hoc hidden `<audio>` state machines. The practice flow
+  should react only to player lifecycle events: ready, play, end, and error.
 - Every active attempt needs an `Exit` control. Exit must stop examiner audio,
   browser `speechSynthesis`, timers, pending next-turn timeouts, dictation,
   MediaRecorder, and media tracks, then call the abort endpoint.
@@ -177,12 +180,33 @@ await api("/api/score", {
   scoring. Only keep completion synchronous when the next prompt depends on the
   just-recorded answer, such as P1 work/study identity follow-up insertion, P3
   adaptive follow-up generation, or the final turn before scoring.
+- Examiner TTS URLs under `/api/tts-audio/examiner/...` must be normalized to
+  the stable playback variant (`?stable=1`) before reaching `howler.js`. The
+  stable backend path converts volatile provider MP3 output into
+  browser-friendlier audio when possible. Do not route examiner playback through
+  both Howler and a parallel hidden `<audio>` element.
+- Examiner playback and learner recording must be treated as mutually
+  exclusive audio sessions. Before playing an examiner TTS turn, stop browser
+  dictation, realtime PCM upload, WASM/AudioWorklet preprocessing, and stale
+  microphone tracks, then wait a short drain interval before calling
+  `Howl.play()`. This avoids Bluetooth headsets being held in hands-free /
+  microphone mode while the examiner audio is playing.
+- Speaking capture should avoid Bluetooth headset microphones when another
+  usable input device is available. Enumerate `audioinput` devices, prefer
+  built-in/internal/non-Bluetooth microphones for `getUserMedia`, and expose the
+  selected input for diagnostics. Browser `SpeechRecognition` cannot be bound to
+  a chosen device, so disable it when Bluetooth input devices are present and a
+  non-Bluetooth capture stream is selected; otherwise it may reopen the default
+  Bluetooth headset microphone and reintroduce hands-free audio tearing.
 
 ---
 
 ## Testing Requirements
 
 - Web UI changes require JS syntax checks and backend API tests.
+- Examiner TTS playback changes require checking `web/static/app.js`,
+  `web/static/vendor/howler.min.js`, the Django vendor asset route, and at
+  least one P1 manual smoke in a real browser with audio available.
 - Backend boundary changes require HTTP-level tests for success and error
   responses.
 - Changes must not break existing C++ CLI/Qt targets or CTest.

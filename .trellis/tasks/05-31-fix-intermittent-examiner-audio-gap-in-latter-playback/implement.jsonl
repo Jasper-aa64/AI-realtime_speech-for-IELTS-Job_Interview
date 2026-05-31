@@ -1,0 +1,4 @@
+{"file": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.trellis/tasks/05-31-fix-intermittent-examiner-audio-gap-in-latter-playback/prd.md", "reason": "Updated task scope and acceptance criteria for the readyState-based playback fix."}
+{"file": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.trellis/tasks/05-31-fix-intermittent-examiner-audio-gap-in-latter-playback/research/ready-state-diagnosis.md", "reason": "Root-cause research showing dynamic TTS is gated at a lower readyState than fixed examiner audio."}
+{"file": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.trellis/spec/backend/quality-guidelines.md", "reason": "Spec note requiring a bounded frontend wait for refreshed examiner TTS before safe fallback."}
+{"file": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.trellis/spec/frontend/quality-guidelines.md", "reason": "Voice-first playback requirements for examiner prompts in P1, P2, and P3."}

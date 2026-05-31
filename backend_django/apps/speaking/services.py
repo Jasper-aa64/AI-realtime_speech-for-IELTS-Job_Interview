@@ -19,7 +19,7 @@ from django.db import close_old_connections, transaction
 from django.db.utils import DatabaseError
 from django.utils import timezone
 
-from apps.ai.http_provider import HttpApiProvider
+from apps.ai.http_provider import HttpApiProvider, HttpApiProviderConfig
 from apps.ai.models import AITask
 from apps.ai.services import create_ai_task, task_payload
 from .audio_services import (
@@ -578,16 +578,111 @@ def _model_band7_tts_cache_key(attempt_id: str, turn_id: str, band7_version: str
 # --- Attempt Start ---
 
 P1_TURN_COUNT = 10
+SPEAKING_AI_DEFAULT_HTTP_MODEL = "gpt-5.4-mini"
+SPEAKING_AI_CALL_MODE_CHAIN = "chain"
+SPEAKING_AI_CALL_MODE_HTTP = "http"
+SPEAKING_AI_CALL_MODE_CODEX = "codex"
+SPEAKING_AI_CALL_MODE_FALLBACK = "fallback"
+SPEAKING_AI_CALL_MODES = {
+    SPEAKING_AI_CALL_MODE_CHAIN,
+    SPEAKING_AI_CALL_MODE_HTTP,
+    SPEAKING_AI_CALL_MODE_CODEX,
+    SPEAKING_AI_CALL_MODE_FALLBACK,
+}
 P1_FOLLOW_UP_HTTP_TIMEOUT = 8
 P1_FOLLOW_UP_CODEX_TIMEOUT = 15
-P3_QUICK_FOLLOW_UP_CODEX_MODEL = "gpt-5.4-mini"
+P3_QUICK_FOLLOW_UP_CODEX_MODEL = SPEAKING_AI_DEFAULT_HTTP_MODEL
 P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT = 8
 P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT = 12
+SPEAKING_REPORT_HTTP_TIMEOUT = 60
+SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT = 90
 P3_MAIN_COUNT = 5
 P3_TURN_COUNT = 10
 P3_DRILL_COUNT = 3
 DEFAULT_FULL_NAME = "LiHua"
 DEFAULT_ENGLISH_NAME = "Jasper"
+
+
+def _setting_or_env(name: str, default: str = "") -> str:
+    value = getattr(settings, name, None)
+    if value is None:
+        value = os.environ.get(name, default)
+    return str(value or "").strip()
+
+
+def _float_setting_or_env(name: str, default: float) -> float:
+    raw = _setting_or_env(name, "")
+    if not raw:
+        return default
+    try:
+        return max(0.5, float(raw))
+    except (TypeError, ValueError):
+        return default
+
+
+def _speaking_ai_kind_key(kind: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "_", str(kind or "speaking").upper()).strip("_") or "SPEAKING"
+
+
+def speaking_ai_call_mode(kind: str = "speaking") -> str:
+    """Return the configurable speaking AI route.
+
+    Modes:
+    - chain: HTTP chat first, then Codex fallback.
+    - http: HTTP chat only, then explicit fallback/failure.
+    - codex: Codex only.
+    - fallback: skip real providers.
+    """
+    key = _speaking_ai_kind_key(kind)
+    raw = (
+        _setting_or_env(f"SPEAKING_{key}_AI_CALL_MODE")
+        or _setting_or_env("SPEAKING_AI_CALL_MODE")
+        or SPEAKING_AI_CALL_MODE_CHAIN
+    ).lower()
+    return raw if raw in SPEAKING_AI_CALL_MODES else SPEAKING_AI_CALL_MODE_CHAIN
+
+
+def speaking_ai_http_model(kind: str = "speaking") -> str:
+    key = _speaking_ai_kind_key(kind)
+    return (
+        _setting_or_env(f"SPEAKING_{key}_AI_MODEL")
+        or _setting_or_env("SPEAKING_AI_MODEL")
+        or SPEAKING_AI_DEFAULT_HTTP_MODEL
+    )
+
+
+def _speaking_http_provider(kind: str = "speaking", timeout_seconds: float | None = None) -> HttpApiProvider:
+    base_url = _setting_or_env("AI_HTTP_BASE_URL")
+    api_key = _setting_or_env("AI_HTTP_API_KEY")
+    missing = [name for name, value in (("AI_HTTP_BASE_URL", base_url), ("AI_HTTP_API_KEY", api_key)) if not value]
+    if missing:
+        raise RuntimeError(f"HTTP speaking AI provider is not configured: missing {', '.join(missing)}")
+    timeout = timeout_seconds or _float_setting_or_env("AI_HTTP_TIMEOUT_SECONDS", 8.0)
+    return HttpApiProvider(
+        HttpApiProviderConfig(
+            base_url=base_url,
+            api_key=api_key,
+            model=speaking_ai_http_model(kind),
+            timeout_seconds=timeout,
+        )
+    )
+
+
+def _mode_allows_http(kind: str) -> bool:
+    return speaking_ai_call_mode(kind) in {SPEAKING_AI_CALL_MODE_CHAIN, SPEAKING_AI_CALL_MODE_HTTP}
+
+
+def _mode_allows_codex(kind: str) -> bool:
+    return speaking_ai_call_mode(kind) in {SPEAKING_AI_CALL_MODE_CHAIN, SPEAKING_AI_CALL_MODE_CODEX}
+
+
+def _mode_is_fallback_only(kind: str) -> bool:
+    return speaking_ai_call_mode(kind) == SPEAKING_AI_CALL_MODE_FALLBACK
+
+
+def _http_backend_name(stream: bool = False) -> str:
+    return "http_api_stream" if stream else "http_api"
+
 
 P3_FOCUS_OPTIONS: dict[str, dict[str, str]] = {
     "abstract_discussion": {
@@ -854,7 +949,7 @@ def quick_follow_up_http_runner(
     """Generate one P3 follow-up through an OpenAI-compatible HTTP endpoint."""
     question = clean_report_text(current_question)[:500]
     prompt = _quick_follow_up_prompt(current_question, candidate_answer, focus=focus, question_type=question_type)
-    provider = HttpApiProvider()
+    provider = _speaking_http_provider("followup", timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT)
     result = provider.complete_chat(
         [
             {
@@ -876,6 +971,7 @@ def quick_follow_up_http_runner(
         "provider": "openai_compatible_http",
         "latency_ms": int(result.elapsed_seconds * 1000),
         "model": result.model,
+        "usage": getattr(result, "usage", None) or {},
     }
 
 
@@ -943,29 +1039,40 @@ def quick_follow_up_runner_with_metadata(
     question_type: str = "",
     timeout: int = P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
 ) -> dict[str, Any]:
-    """Generate one P3 follow-up through HTTP first, then Codex CLI."""
-    http_error = ""
-    try:
-        return quick_follow_up_http_runner(
-            current_question,
-            candidate_answer,
-            focus=focus,
-            question_type=question_type,
-        )
-    except Exception as exc:  # noqa: BLE001 - provider chain must continue to Codex
-        http_error = str(exc)
+    """Generate one P3 follow-up through the configured speaking AI route."""
+    if _mode_is_fallback_only("followup"):
+        raise RuntimeError("speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback")
 
-    try:
-        follow_up = quick_follow_up_codex_runner(
-            current_question,
-            candidate_answer,
-            focus=focus,
-            question_type=question_type,
-            timeout=timeout,
-        )
-        return {"follow_up": follow_up, "backend": "codex_quick", "status": "ready", "provider": "codex_cli"}
-    except Exception as exc:  # noqa: BLE001 - caller will emit explicit fallback metadata
-        raise RuntimeError(f"http_api: {http_error}; codex_quick: {exc}") from exc
+    http_error = ""
+    if _mode_allows_http("followup"):
+        try:
+            return quick_follow_up_http_runner(
+                current_question,
+                candidate_answer,
+                focus=focus,
+                question_type=question_type,
+            )
+        except Exception as exc:  # noqa: BLE001 - provider chain may continue to Codex
+            http_error = str(exc)
+            if speaking_ai_call_mode("followup") == SPEAKING_AI_CALL_MODE_HTTP:
+                raise RuntimeError(f"http_api: {http_error}") from exc
+
+    if _mode_allows_codex("followup"):
+        try:
+            follow_up = quick_follow_up_codex_runner(
+                current_question,
+                candidate_answer,
+                focus=focus,
+                question_type=question_type,
+                timeout=timeout,
+            )
+            return {"follow_up": follow_up, "backend": "codex_quick", "status": "ready", "provider": "codex_cli"}
+        except Exception as exc:  # noqa: BLE001 - caller will emit explicit fallback metadata
+            if http_error:
+                raise RuntimeError(f"http_api: {http_error}; codex_quick: {exc}") from exc
+            raise RuntimeError(f"codex_quick: {exc}") from exc
+
+    raise RuntimeError(f"speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
 
 
 def quick_follow_up_runner(
@@ -1140,15 +1247,45 @@ Candidate Part 2 answer:
 {answer}
 """
     try:
-        output, _usage = run_codex(prompt, f"{call_id}_p3_from_p2", timeout=45)
+        if _mode_is_fallback_only("followup"):
+            raise RuntimeError("speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback")
+        if _mode_allows_http("followup"):
+            result = _speaking_http_provider("followup", timeout_seconds=45).complete_chat(
+                [
+                    {"role": "system", "content": "You are an IELTS Speaking Part 3 examiner. Return JSON only."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=420,
+                temperature=0.25,
+                timeout_seconds=45,
+                stream=True,
+            )
+            output = result.text
+            backend = "http_api"
+            provider_model = result.model
+            usage = getattr(result, "usage", None) or {}
+        elif _mode_allows_codex("followup"):
+            output, _usage = run_codex(prompt, f"{call_id}_p3_from_p2", timeout=45)
+            backend = "codex"
+            provider_model = ""
+            usage = _usage or {}
+        else:
+            raise RuntimeError(f"speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
         payload = extract_json_object_with_keys(output, {"questions", "follow_up"})
         questions = [clean_report_text(str(item)) for item in payload.get("questions", []) if clean_report_text(str(item))][:P3_MAIN_COUNT]
         if len(questions) < P3_MAIN_COUNT:
-            raise RuntimeError("codex p3 generation returned too few questions")
+            raise RuntimeError("P3 generation returned too few questions")
         follow_up = clean_report_text(str(payload.get("follow_up") or fallback["follow_up"]))
         if not follow_up or "?" not in follow_up:
             follow_up = fallback["follow_up"]
-        return {"questions": questions, "follow_up": follow_up, "backend": "codex", "status": "ready"}
+        return {
+            "questions": questions,
+            "follow_up": follow_up,
+            "backend": backend,
+            "status": "ready",
+            **({"model": provider_model} if provider_model else {}),
+            **({"usage": usage} if usage else {}),
+        }
     except Exception as exc:  # noqa: BLE001 - P3 generation must fall back cleanly
         return {**fallback, "backend": "fallback", "status": "fallback", "error": str(exc)}
 
@@ -1750,44 +1887,71 @@ def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]
         }
     prompt = _p1_identity_follow_up_prompt(answer)
     http_error = ""
-    try:
-        provider = HttpApiProvider()
-        result = provider.complete_chat(
-            [
-                {
-                    "role": "system",
-                    "content": "You are an IELTS Speaking Part 1 examiner. Return JSON only.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=80,
-            temperature=0.2,
-            timeout_seconds=P1_FOLLOW_UP_HTTP_TIMEOUT,
-            stream=True,
-        )
-        follow_up = _extract_p1_identity_follow_up_output(result.text)
-        return {
-            "follow_up": follow_up,
-            "backend": "http_api",
-            "status": "ready",
-            "provider": "openai_compatible_http",
-            "latency_ms": str(int(result.elapsed_seconds * 1000)),
-            "model": result.model,
-        }
-    except Exception as exc:  # noqa: BLE001 - provider chain must continue to Codex
-        http_error = str(exc)
-
-    try:
-        output, _usage = run_codex(prompt, call_id, timeout=P1_FOLLOW_UP_CODEX_TIMEOUT)
-        follow_up = _extract_p1_identity_follow_up_output(output)
-        return {"follow_up": follow_up, "backend": "codex", "status": "ready"}
-    except Exception as exc:
+    if _mode_is_fallback_only("followup"):
         return {
             "follow_up": fallback,
             "backend": "fallback",
             "status": "fallback",
-            "error": f"http_api: {http_error}; codex: {exc}",
+            "error": "speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback",
         }
+    if _mode_allows_http("followup"):
+        try:
+            provider = _speaking_http_provider("followup", timeout_seconds=P1_FOLLOW_UP_HTTP_TIMEOUT)
+            result = provider.complete_chat(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are an IELTS Speaking Part 1 examiner. Return JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=80,
+                temperature=0.2,
+                timeout_seconds=P1_FOLLOW_UP_HTTP_TIMEOUT,
+                stream=True,
+            )
+            follow_up = _extract_p1_identity_follow_up_output(result.text)
+            return {
+                "follow_up": follow_up,
+                "backend": "http_api",
+                "status": "ready",
+                "provider": "openai_compatible_http",
+                "latency_ms": str(int(result.elapsed_seconds * 1000)),
+                "model": result.model,
+                "usage": getattr(result, "usage", None) or {},
+            }
+        except Exception as exc:  # noqa: BLE001 - provider chain may continue to Codex
+            http_error = str(exc)
+            if speaking_ai_call_mode("followup") == SPEAKING_AI_CALL_MODE_HTTP:
+                return {
+                    "follow_up": fallback,
+                    "backend": "fallback",
+                    "status": "fallback",
+                    "error": f"http_api: {http_error}",
+                }
+
+    if _mode_allows_codex("followup"):
+        try:
+            output, _usage = run_codex(prompt, call_id, timeout=P1_FOLLOW_UP_CODEX_TIMEOUT)
+            follow_up = _extract_p1_identity_follow_up_output(output)
+            return {"follow_up": follow_up, "backend": "codex", "status": "ready"}
+        except Exception as exc:
+            error = f"codex: {exc}"
+            if http_error:
+                error = f"http_api: {http_error}; {error}"
+            return {
+                "follow_up": fallback,
+                "backend": "fallback",
+                "status": "fallback",
+                "error": error,
+            }
+
+    return {
+        "follow_up": fallback,
+        "backend": "fallback",
+        "status": "fallback",
+        "error": f"speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}",
+    }
 
 
 def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: SpeakingTurn, *, stream_pending: bool = False) -> SpeakingTurn | None:
@@ -2146,8 +2310,6 @@ One follow-up question:
 def _follow_up_stream_context(attempt: SpeakingAttempt, source_turn: SpeakingTurn) -> dict[str, Any]:
     source_metadata = source_turn.metadata if isinstance(source_turn.metadata, dict) else {}
     transcript = clean_report_text(source_turn.transcript_cleaned or source_turn.transcript_raw)
-    if not transcript:
-        raise SpeakingError("Completed turn transcript is required for streaming follow-up.")
 
     if _is_p1_work_study_turn(source_turn):
         target = attempt.turns.filter(metadata__prompt__after_turn=source_turn.turn_id).first()
@@ -2163,6 +2325,8 @@ def _follow_up_stream_context(attempt: SpeakingAttempt, source_turn: SpeakingTur
             "rejected_questions": (),
             "extract": _extract_p1_identity_follow_up_output,
             "system": "You are an IELTS Speaking Part 1 examiner. Return only one concise follow-up question.",
+            "skip_provider": not bool(transcript),
+            "skip_reason": "missing_transcript" if not transcript else "",
         }
 
     prompt = source_metadata.get("prompt") if isinstance(source_metadata.get("prompt"), dict) else {}
@@ -2183,15 +2347,18 @@ def _follow_up_stream_context(attempt: SpeakingAttempt, source_turn: SpeakingTur
         question_type = str(prompt.get("question_type") or target_prompt.get("question_type") or "")
         focus = str(attempt_metadata.get("p3_focus") or "")
         current_question = str(prompt.get("question") or source_turn.question or "")
+        fallback = _dynamic_p3_follow_up(question_type, transcript, focus)
         return {
             "kind": "p3_dynamic",
             "target_turn": target,
-            "prompt": _quick_follow_up_prompt(current_question, transcript, focus=focus, question_type=question_type),
-            "fallback": _dynamic_p3_follow_up(question_type, transcript, focus),
+            "prompt": _quick_follow_up_prompt(current_question, transcript, focus=focus, question_type=question_type) if transcript else "",
+            "fallback": fallback,
             "rejected_questions": (current_question,),
             "extract": lambda output: _extract_single_follow_up_question(output, rejected_questions=(current_question,)),
             "system": "You are an IELTS Speaking Part 3 examiner. Return only one concise follow-up question.",
             "question_type": question_type,
+            "skip_provider": not bool(transcript),
+            "skip_reason": "missing_transcript" if not transcript else "",
         }
 
     raise SpeakingError("This turn does not support streaming follow-up generation.")
@@ -2277,9 +2444,14 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
     def generate() -> Iterator[str]:
         started = time.monotonic()
         parts: list[str] = []
+        usage: dict[str, Any] = {}
         yield _sse_payload({"event": "start"})
         try:
-            provider = HttpApiProvider()
+            if context.get("skip_provider"):
+                raise RuntimeError(str(context.get("skip_reason") or "follow-up provider skipped"))
+            if not _mode_allows_http("followup") or _mode_is_fallback_only("followup"):
+                raise RuntimeError(f"speaking follow-up HTTP provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
+            provider = _speaking_http_provider("followup", timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT)
             for token in provider.stream_tokens(
                 [
                     {"role": "system", "content": context["system"]},
@@ -2288,6 +2460,7 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
                 max_tokens=32,
                 temperature=0.2,
                 timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
+                on_usage=lambda value: usage.update(value),
             ):
                 parts.append(token)
                 yield _sse_payload({"event": "chunk", "text": token})
@@ -2306,6 +2479,9 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
                 "text": follow_up,
                 "backend": "http_api_stream",
                 "latency_ms": int((time.monotonic() - started) * 1000),
+                "provider": "openai_compatible_http",
+                "model": speaking_ai_http_model("followup"),
+                "usage": usage,
                 "turn": _turn_payload(target_turn),
             })
         except Exception as exc:  # noqa: BLE001 - streaming endpoint must keep the practice flow usable
@@ -2328,7 +2504,21 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
                 "error": clean_report_text(error)[:220],
                 "turn": _turn_payload(target_turn),
             })
-            yield _sse_payload({"event": "done"})
+            try:
+                tts = _generate_streamed_follow_up_tts(attempt, target_turn)
+            except Exception as tts_exc:  # noqa: BLE001 - fallback text must still remain usable
+                tts = {
+                    "provider": "volcengine",
+                    "status": "failed",
+                    "audio_url": None,
+                    "error": clean_report_text(str(tts_exc))[:220],
+                }
+            if tts.get("audio_url"):
+                yield _sse_payload({"event": "tts_ready", "audio_url": tts["audio_url"], "examiner_tts": tts})
+            else:
+                yield _sse_payload({"event": "tts_timeout", "examiner_tts": tts})
+            target_turn.refresh_from_db()
+            yield _sse_payload({"event": "done", "turn": _turn_payload(target_turn)})
             return
 
         try:
@@ -2439,18 +2629,51 @@ Overall Review 写法要求：
     )
 
     last_error: Exception | None = None
+    provider_backend = ""
+    provider_model = ""
+    usage: dict[str, Any] | None = None
     for index, prompt in enumerate((full_prompt, compact_prompt), start=1):
-        try:
-            output, usage = run_codex(prompt, f"{call_id}_p{index}", timeout=180)
-            payload = extract_json_object_with_keys(
-                output,
-                {"fluency_coherence", "lexical_resource", "grammatical_range"},
-            )
-            break
-        except Exception as exc:
-            last_error = exc
+        if _mode_is_fallback_only("report"):
+            last_error = RuntimeError("speaking report provider disabled by SPEAKING_AI_CALL_MODE=fallback")
+            continue
+        if _mode_allows_http("report"):
+            try:
+                result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT).complete_chat(
+                    [
+                        {"role": "system", "content": "You are an IELTS Speaking examiner. Return JSON only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=1800 if index == 1 else 1200,
+                    temperature=0.15,
+                    timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT,
+                    stream=True,
+                )
+                payload = extract_json_object_with_keys(
+                    result.text,
+                    {"fluency_coherence", "lexical_resource", "grammatical_range"},
+                )
+                usage = getattr(result, "usage", None)
+                provider_backend = "http_api"
+                provider_model = result.model
+                break
+            except Exception as exc:
+                last_error = exc
+                if speaking_ai_call_mode("report") == SPEAKING_AI_CALL_MODE_HTTP:
+                    continue
+        if _mode_allows_codex("report"):
+            try:
+                output, usage = run_codex(prompt, f"{call_id}_p{index}", timeout=180)
+                payload = extract_json_object_with_keys(
+                    output,
+                    {"fluency_coherence", "lexical_resource", "grammatical_range"},
+                )
+                provider_backend = "codex"
+                provider_model = ""
+                break
+            except Exception as exc:
+                last_error = exc
     else:
-        raise RuntimeError(str(last_error or "codex scoring failed"))
+        raise RuntimeError(str(last_error or "speaking report scoring failed"))
 
     # Validate required fields are present and numeric
     fc_raw = payload.get("fluency_coherence")
@@ -2477,9 +2700,10 @@ Overall Review 写法要求：
     result_payload = {
         **scores,
         "feedback": str(payload.get("feedback", "")),
-        "backend": "codex",
-        "generation_backend": "codex",
+        "backend": provider_backend or "unknown",
+        "generation_backend": provider_backend or "unknown",
         "generation_status": "ready",
+        **({"model": provider_model} if provider_model else {}),
     }
 
     overall_review = payload.get("overall_review")
@@ -2493,7 +2717,7 @@ Overall Review 写法要求：
                 "comment": comment,
                 "review_points": points,
                 "markdown": markdown,
-                "source": "codex_score",
+                "source": f"{provider_backend or 'unknown'}_score",
             }
 
     if usage:
@@ -2658,7 +2882,7 @@ def build_p3_discussion_skills(attempt: SpeakingAttempt) -> dict[str, Any] | Non
 
 
 def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_id: str) -> str:
-    """Generate Band 7 model answer using Codex CLI."""
+    """Generate Band 7 model answer using the configured speaking AI route."""
     part_constraints = ""
     if part == "p1":
         part_constraints = (
@@ -2694,12 +2918,30 @@ def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_
         + "\n\nBand 7 spoken version:"
     )
 
+    if _mode_allows_http("report") and not _mode_is_fallback_only("report"):
+        try:
+            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT).complete_chat(
+                [
+                    {"role": "system", "content": "You are an IELTS Speaking coach. Return only the answer text."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=700,
+                temperature=0.25,
+                timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT,
+                stream=True,
+            )
+            return clean_band7_output(result.text)
+        except Exception:
+            if speaking_ai_call_mode("report") == SPEAKING_AI_CALL_MODE_HTTP:
+                raise
+    if not _mode_allows_codex("report"):
+        raise RuntimeError(f"speaking report provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('report')}")
     output, _ = run_codex(prompt, call_id)
     return clean_band7_output(output)
 
 
 def build_ai_coaching_with_codex(question: str, transcript: str, band7: str, part: str, call_id: str, profile: dict[str, Any] | None = None) -> str:
-    """Generate natural AI coaching using Codex CLI."""
+    """Generate natural AI coaching using the configured speaking AI route."""
     prompt = f"""请为这一段 IELTS Speaking 回答生成中文 coaching。只输出 Markdown，不要标题。
 请结合当前题目、用户转写、Band 7 参考答案和学习画像，自主判断该怎么评价。
 不要套固定模板，不要强制写成固定几条，也不要按“问题/原因/替代表达/下一步”这种固定栏目组织。
@@ -2726,7 +2968,27 @@ Band 7 spoken version:
 Learning profile:
 {json.dumps(profile or {})}
 """
-    output, _ = run_codex(prompt, call_id)
+    if _mode_allows_http("report") and not _mode_is_fallback_only("report"):
+        try:
+            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT).complete_chat(
+                [
+                    {"role": "system", "content": "你是 IELTS Speaking 中文教练。只输出 Markdown 正文。"},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=900,
+                temperature=0.2,
+                timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT,
+                stream=True,
+            )
+            output = result.text
+        except Exception:
+            if speaking_ai_call_mode("report") == SPEAKING_AI_CALL_MODE_HTTP:
+                raise
+            output, _ = run_codex(prompt, call_id)
+    else:
+        if not _mode_allows_codex("report"):
+            raise RuntimeError(f"speaking report provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('report')}")
+        output, _ = run_codex(prompt, call_id)
     coaching = normalize_coaching_markdown(output)
     coaching = ensure_grammar_correction_bullet(coaching, transcript)
     if not acceptable_coaching_markdown(coaching):
@@ -2980,8 +3242,43 @@ Learning profile:
 Input turns:
 {json.dumps(items, ensure_ascii=False)}
 """
-    output, usage = run_codex(prompt, call_id, timeout=180)
-    payload = extract_json_object_with_keys(output, {"turns"})
+    if _mode_is_fallback_only("report"):
+        raise RuntimeError("speaking report provider disabled by SPEAKING_AI_CALL_MODE=fallback")
+
+    last_error: Exception | None = None
+    usage: dict[str, Any] | None = None
+    provider_backend = ""
+    provider_model = ""
+    payload: dict[str, Any] | None = None
+    if _mode_allows_http("report"):
+        try:
+            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT).complete_chat(
+                [
+                    {"role": "system", "content": "You are an IELTS Speaking coach. Return JSON only."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=2600,
+                temperature=0.2,
+                timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT,
+                stream=True,
+            )
+            usage = getattr(result, "usage", None)
+            provider_backend = "http_api"
+            provider_model = result.model
+            payload = extract_json_object_with_keys(result.text, {"turns"})
+        except Exception as exc:
+            last_error = exc
+            if speaking_ai_call_mode("report") == SPEAKING_AI_CALL_MODE_HTTP:
+                raise
+    if payload is None and _mode_allows_codex("report"):
+        try:
+            output, usage = run_codex(prompt, call_id, timeout=180)
+            provider_backend = "codex"
+            payload = extract_json_object_with_keys(output, {"turns"})
+        except Exception as exc:
+            last_error = exc
+    if payload is None:
+        raise RuntimeError(str(last_error or "speaking turn feedback provider failed"))
     raw_turns = payload.get("turns")
     if not isinstance(raw_turns, list):
         raise RuntimeError(f"codex batch turn feedback missing turns for {call_id}")
@@ -3013,6 +3310,8 @@ Input turns:
             "band7_version": band7,
             "ai_coaching": coaching if requires_ai_coaching else "",
             "usage": usage or {},
+            "generation_backend": provider_backend or "unknown",
+            **({"model": provider_model} if provider_model else {}),
         }
     if len(by_id) != len(items):
         missing = [item["turn_id"] for item in items if item["turn_id"] not in by_id]
@@ -3185,6 +3484,7 @@ def _criteria_feedback(score: dict[str, Any], transcript: str) -> dict[str, Any]
 
 DEFAULT_FULL_NAME = "Li Hua"
 DEFAULT_ENGLISH_NAME = "Jasper"
+
 
 
 def is_p1_name_intro_turn(turn: dict[str, Any] | SpeakingTurn) -> bool:
@@ -3622,9 +3922,14 @@ def generate_turn_feedback_for_report(
         )
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
         metadata.update(feedback)
-        if feedback.get("feedback_generation_backend") == "codex":
-            metadata["band7_source"] = "codex_report_batch"
-            metadata["ai_coaching_source"] = "codex_report_batch"
+        generation_backend = str(generated.get("generation_backend") or feedback.get("feedback_generation_backend") or "")
+        if generation_backend in {"codex", "http_api"}:
+            metadata["band7_source"] = f"{generation_backend}_report_batch"
+            metadata["ai_coaching_source"] = f"{generation_backend}_report_batch"
+            metadata["feedback_generation_backend"] = generation_backend
+            metadata["feedback_generation_status"] = "ready"
+            if generated.get("model"):
+                metadata["feedback_generation_model"] = generated["model"]
         turn.metadata = metadata
         turn.save(update_fields=["metadata", "updated_at"])
 
@@ -3696,10 +4001,10 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
             "transcript_cleaned": transcript,
             "ielts_score": score,
             "score_generation_backend": score.get("generation_backend", score.get("backend")),
-            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") == "codex" else "fallback"),
+            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") in {"codex", "http_api"} else "fallback"),
             "score_generation_error": score.get("fallback_reason", ""),
             "report_generation_backend": score.get("backend"),
-            "report_generation_status": "ready" if score.get("backend") == "codex" else "fallback",
+            "report_generation_status": "ready" if score.get("backend") in {"codex", "http_api"} else "fallback",
             "feedback_summary": score["feedback"],
             "criteria_feedback": criteria,
             "part_scores": {
@@ -4028,10 +4333,10 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
             "transcript_cleaned": transcript,
             "ielts_score": score,
             "score_generation_backend": score.get("generation_backend", score.get("backend")),
-            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") == "codex" else "fallback"),
+            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") in {"codex", "http_api"} else "fallback"),
             "score_generation_error": score.get("fallback_reason", ""),
             "report_generation_backend": score.get("backend"),
-            "report_generation_status": "ready" if score.get("backend") == "codex" else "fallback",
+            "report_generation_status": "ready" if score.get("backend") in {"codex", "http_api"} else "fallback",
             "feedback_summary": score["feedback"],
             "criteria_feedback": criteria,
             "part_scores": {
@@ -4390,6 +4695,17 @@ def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> No
         close_old_connections()
 
 
+def _is_stream_pending_follow_up_metadata(metadata: dict[str, Any]) -> bool:
+    prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
+    return (
+        prompt.get("role") == "follow_up"
+        and (
+            prompt.get("backend") == "stream_pending"
+            or prompt.get("generation_status") == "pending"
+        )
+    )
+
+
 def examiner_tts_status(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
     """Return the latest examiner TTS state, generating it once when pending."""
     started = time.monotonic()
@@ -4398,6 +4714,24 @@ def examiner_tts_status(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
     current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
     tts = current or {"provider": "volcengine", "status": "pending", "audio_url": None}
+    if _is_stream_pending_follow_up_metadata(metadata):
+        tts = {
+            "provider": "volcengine",
+            "status": "pending",
+            "audio_url": None,
+            "message": "Follow-up text is still generating; server TTS waits for the finalized question.",
+        }
+        metadata["examiner_tts"] = tts
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+        return {
+            "attempt_id": attempt.attempt_id,
+            "turn_id": turn.turn_id,
+            "examiner_tts": {
+                **tts,
+                "refresh_latency_ms": int((time.monotonic() - started) * 1000),
+            },
+        }
     examiner_text = str(metadata.get("examiner_text") or turn.question)
     cached_tts = _cached_examiner_tts_for_turn(attempt.attempt_id, turn.turn_id, examiner_text)
     if cached_tts:

@@ -64,6 +64,49 @@ class ExaminerTtsRefreshTests(TestCase):
         turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
         self.assertEqual(turn.metadata["examiner_tts"]["status"], "ready")
 
+    def test_examiner_tts_refresh_does_not_generate_for_stream_pending_follow_up(self):
+        owner = CustomUser.objects.create_user(username="tts-stream-owner", password="pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=owner,
+            attempt_id="tts-stream-pending-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        SpeakingTurn.objects.create(
+            user=owner,
+            attempt=attempt,
+            turn_id="t2_followup",
+            sequence=1,
+            part="p1",
+            question="How does your internship connect with what you study?",
+            metadata={
+                "prompt": {
+                    "role": "follow_up",
+                    "question": "How does your internship connect with what you study?",
+                    "backend": "stream_pending",
+                    "generation_status": "pending",
+                },
+                "examiner_text": "How does your internship connect with what you study?",
+                "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
+            },
+        )
+
+        self.client.force_login(owner)
+        with patch("apps.speaking.services.volcengine_tts") as mock_tts:
+            response = self.client.get("/api/attempts/tts-stream-pending-attempt/turns/t2_followup/examiner-tts")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["examiner_tts"]["status"], "pending")
+        self.assertIsNone(payload["examiner_tts"]["audio_url"])
+        mock_tts.assert_not_called()
+        turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
+        self.assertEqual(turn.metadata["prompt"]["backend"], "stream_pending")
+        self.assertEqual(turn.metadata["prompt"]["generation_status"], "pending")
+        self.assertEqual(turn.metadata["examiner_tts"]["status"], "pending")
+        self.assertIsNone(turn.metadata["examiner_tts"]["audio_url"])
+
     def test_p3_dynamic_follow_up_enqueues_server_tts_generation_after_commit(self):
         user = CustomUser.objects.create_user(username="p3-tts-user", password="pass")
         attempt = SpeakingAttempt.objects.create(

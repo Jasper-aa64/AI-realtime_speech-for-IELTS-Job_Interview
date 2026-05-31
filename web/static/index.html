@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260529-corpus-band7-strong-inline">
+    <link rel="stylesheet" href="/styles.css?v=20260531-account-fixed-layout">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -294,7 +294,6 @@
               <div class="section-label" id="promptKicker">Prompt</div>
               <div id="promptCard" class="prompt-card short-prompt">Start a voice practice session to load a question.</div>
               <div id="followUp" class="follow-up"></div>
-              <audio id="examinerAudio" controls class="tts-player hidden"></audio>
               <button id="browserTtsFallback" class="ghost hidden">Play with browser voice</button>
             </article>
 
@@ -1110,13 +1109,13 @@
     <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
     <script src="/corpus-markdown-editor.js?v=20260530-corpus-markdown-editor"></script>
     <script src="/corpus-takeaway.js?v=20260530-corpus-archive-lookup"></script>
-    <script src="/examiner-audio-diagnostics.js?v=20260530-examiner-audio-diagnostics-probe"></script>
+    <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260530-writing-image-viewer-module"></script>
+    <script src="/app.js?v=20260531-howler-examiner-audio"></script>
   </body>
 </html>

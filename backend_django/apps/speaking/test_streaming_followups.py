@@ -4,7 +4,7 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 
 from .models import SpeakingAttempt, SpeakingTurn
 
@@ -28,6 +28,7 @@ def _sse_payloads(response) -> list[dict]:
     return payloads
 
 
+@override_settings(AI_HTTP_BASE_URL="https://ai.example/v1", AI_HTTP_API_KEY="test-key", AI_HTTP_MODEL="legacy-model")
 class StreamingFollowUpTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -111,15 +112,61 @@ class StreamingFollowUpTests(TestCase):
 
     def test_follow_up_stream_emits_fallback_when_http_provider_fails(self):
         _attempt, main_turn, follow_up_turn = self.create_p3_attempt()
-        with patch("apps.speaking.services.HttpApiProvider", side_effect=RuntimeError("provider unavailable")):
+        with (
+            patch("apps.speaking.services.HttpApiProvider", side_effect=RuntimeError("provider unavailable")),
+            patch(
+                "apps.speaking.services._generate_streamed_follow_up_tts",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/stream-p3-attempt_t2_followup_examiner.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ) as generate_tts,
+        ):
             response = self.client.get(
                 f"/api/attempts/stream-p3-attempt/turns/{main_turn.turn_id}/follow-up-stream"
             )
             payloads = _sse_payloads(response)
 
         self.assertEqual(response.status_code, 200)
+        generate_tts.assert_called_once()
         fallback = next(payload for payload in payloads if payload["event"] == "fallback")
         self.assertEqual(fallback["backend"], "fallback")
+        self.assertIn("tts_ready", [payload["event"] for payload in payloads])
+        follow_up_turn.refresh_from_db()
+        self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "fallback")
+
+    def test_follow_up_stream_falls_back_when_transcript_missing(self):
+        _attempt, main_turn, follow_up_turn = self.create_p3_attempt()
+        main_turn.transcript_raw = ""
+        main_turn.transcript_cleaned = ""
+        main_turn.save(update_fields=["transcript_raw", "transcript_cleaned"])
+
+        with (
+            patch("apps.speaking.services.HttpApiProvider") as provider,
+            patch(
+                "apps.speaking.services._generate_streamed_follow_up_tts",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/stream-p3-attempt_t2_followup_examiner.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ) as generate_tts,
+        ):
+            response = self.client.get(
+                f"/api/attempts/stream-p3-attempt/turns/{main_turn.turn_id}/follow-up-stream"
+            )
+            payloads = _sse_payloads(response)
+
+        self.assertEqual(response.status_code, 200)
+        provider.assert_not_called()
+        generate_tts.assert_called_once()
+        fallback = next(payload for payload in payloads if payload["event"] == "fallback")
+        self.assertEqual(fallback["backend"], "fallback")
+        self.assertIn("missing_transcript", fallback["error"])
+        self.assertIn("tts_ready", [payload["event"] for payload in payloads])
         follow_up_turn.refresh_from_db()
         self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "fallback")
 

@@ -91,15 +91,8 @@ const state = {
   pendingRecharge: 0,
   examinerAudioBlobUrls: new Map(),
   activeExaminerAudio: null,
-  examinerPlaybackKey: "",
-  examinerAudioDiagnostics: [],
-  examinerPlaybackSamples: [],
-  examinerPlaybackSampleTimer: null,
-  examinerPlaybackTimelineReports: [],
-  examinerSignalSamples: [],
-  examinerSignalSampleTimer: null,
-  examinerSignalReports: [],
-  examinerSignalContext: null,
+  activeExaminerAudioPlayer: null,
+  examinerPlayback: null,
   writing: {
     taskType: "task1_academic",
     prompts: {},
@@ -174,6 +167,7 @@ const state = {
     realtimePcmSocket: null,
     realtimePcmMetrics: null,
     examinerTtsRefreshPromises: new Map(),
+    captureDevice: null,
   },
   account: {
     authenticated: false,
@@ -212,13 +206,6 @@ const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 9;
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
-const FIXED_EXAMINER_AUDIO_URLS = new Set([
-  "/api/tts-audio/examiner/fixed_examiner_what_is_your_full_name.mp3",
-  "/api/tts-audio/examiner/fixed_examiner_do_you_work_or_do_you_study.mp3",
-  "/api/tts-audio/examiner/fixed_examiner_p2_cue_card_instruction.mp3",
-]);
-const examinerAudioTelemetry = new WeakMap();
-
 const viewCopy = {
   home: ["首页", "选择今天要练的口语模式。"],
   mock: ["Mock", "完整模拟 P1、P2 和 P3 的口语考试流程。"],
@@ -245,9 +232,9 @@ const protectedViews = new Set(["history", "writing", "writingReports", "corpus"
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 
-const EXAMINER_AUDIO_DIAGNOSTIC_LIMIT = 240;
-const AUDIO_READY_TIMEOUT_MS = 2000;
-const FIXED_AUDIO_READY_TIMEOUT_MS = 4500;
+const EXAMINER_AUDIO_LOAD_TIMEOUT_MS = 15000;
+const EXAMINER_AUDIO_INPUT_RELEASE_TIMEOUT_MS = 1800;
+const EXAMINER_AUDIO_BLUETOOTH_DRAIN_MS = 320;
 const EXAMINER_TTS_REFRESH_WAIT_MS = 4200;
 const EXAMINER_TTS_REFRESH_INTERVAL_MS = 550;
 const CORPUS_PEEK_WINDOW_MARGIN = 16;
@@ -1406,7 +1393,7 @@ function returnToPreviousView() {
 }
 
 function resetPracticeSurface() {
-  stopExaminerPlayback();
+  stopExaminerPlayback("reset-practice-surface");
   closeP1CorpusPeek();
   closeP2CorpusPeek();
   closeP3CorpusPeek();
@@ -1417,7 +1404,8 @@ function resetPracticeSurface() {
   state.status = "idle";
   state.attempt = null;
   state.currentTurn = null;
-  state.examinerPlaybackKey = "";
+  state.examinerPlayback = null;
+  state.activeExaminerAudioPlayer = null;
   state.transcript = "";
   state.speaking.realtimePcmMetrics = null;
   setRealtimePcmStatus({});
@@ -1430,7 +1418,6 @@ function resetPracticeSurface() {
   $(".exam-status")?.classList.toggle("hidden", !isPracticeMode || state.view === "p3");
   $("#examStatusText")?.classList.toggle("hidden", state.view === "p2");
   $("#candidateAudio")?.classList.add("hidden");
-  $("#examinerAudio")?.classList.add("hidden");
   $("#browserTtsFallback")?.classList.add("hidden");
   const p2PrepPanel = $("#p2CorpusPrepPanel");
   p2PrepPanel?.classList.add("hidden");
@@ -1481,7 +1468,6 @@ function restorePendingSpeakingAnalysisView(view = state.view) {
   $(".exam-status")?.classList.remove("hidden");
   $("#examStatusText")?.classList.toggle("hidden", view === "p2");
   $("#candidateAudio")?.classList.add("hidden");
-  $("#examinerAudio")?.classList.add("hidden");
   $("#browserTtsFallback")?.classList.add("hidden");
   $("#cueTop")?.classList.add("hidden");
   $("#promptPane")?.classList.remove("hidden");
@@ -1509,7 +1495,7 @@ function navigatePracticeMode(mode) {
 function setRecordButton(status, title, hint) {
   state.status = status;
   $("#recordControl").className = `record-control ${status}`;
-  $("#recordControl").disabled = ["loading", "examiner_playing", "processing", "scoring", "turn_saved"].includes(status);
+  $("#recordControl").disabled = ["loading", "examiner_loading", "examiner_playing", "processing", "scoring", "turn_saved"].includes(status);
   text("recordTitle", title);
   text("recordHint", hint);
   // Timer color based on status
@@ -1550,7 +1536,7 @@ function promptSize(question) {
 async function startPractice() {
   if (state.speaking.pendingAnalysis?.attemptId) return;
   if (state.status === "loading" || state.practiceLocked) return;
-  stopExaminerPlayback();
+  stopExaminerPlayback("start-practice");
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();
   const requestId = state.startRequestId + 1;
@@ -1658,6 +1644,14 @@ function revealP3PracticeGrid() {
 
 function renderTurn(turn) {
   if (!turn) return;
+  if (state.status === "examiner_playing") {
+    traceExaminerAudio("render-turn-during-playback", {
+      renderTurnId: turn.id || "",
+      currentTurnId: state.currentTurn?.id || "",
+      playbackTurnId: state.examinerPlayback?.turnId || "",
+      activePlayer: examinerPlayerSnapshot(state.activeExaminerAudioPlayer),
+    });
+  }
   const isP2 = turn.part === "p2";
   const isFollowUp = turn.prompt?.role === "follow_up";
   const isIntro = turn.counts_toward_total === false;
@@ -1767,7 +1761,7 @@ function renderCueTop(cue) {
   `;
 }
 
-function examinerAudioDiagnosticsEnabled() {
+function examinerAudioDebugEnabled() {
   const params = new URLSearchParams(window.location.search);
   if (params.has("audio_debug")) {
     const value = String(params.get("audio_debug") || "").toLowerCase();
@@ -1776,191 +1770,51 @@ function examinerAudioDiagnosticsEnabled() {
   return localStorage.getItem("ielts-examiner-audio-debug") === "1";
 }
 
-function bufferedRangesSnapshot(audio) {
-  const ranges = [];
-  if (!audio?.buffered) return ranges;
-  for (let index = 0; index < audio.buffered.length; index += 1) {
-    try {
-      ranges.push([
-        Number(audio.buffered.start(index).toFixed(3)),
-        Number(audio.buffered.end(index).toFixed(3)),
-      ]);
-    } catch {
-      // Ignore transient buffered range errors while media state changes.
-    }
-  }
-  return ranges;
-}
-
-function audioSnapshot(audio) {
-  if (!audio) return {};
-  return {
-    src: audio.currentSrc || audio.getAttribute?.("src") || audio.src || "",
-    readyState: audio.readyState,
-    networkState: audio.networkState,
-    currentTime: Number.isFinite(audio.currentTime) ? Number(audio.currentTime.toFixed(3)) : 0,
-    duration: Number.isFinite(audio.duration) ? Number(audio.duration.toFixed(3)) : null,
-    paused: audio.paused,
-    ended: audio.ended,
-    buffered: bufferedRangesSnapshot(audio),
-  };
-}
-
 function traceExaminerAudio(event, details = {}) {
-  const record = {
-    event,
-    at: Number(performance.now().toFixed(1)),
-    wallTime: new Date().toISOString(),
-    sessionId: state.practiceSessionId,
-    status: state.status,
-    view: state.view,
-    turnId: state.currentTurn?.id || "",
-    turnIndex: state.currentTurn?.index ?? null,
-    ...details,
-  };
-  state.examinerAudioDiagnostics.push(record);
-  if (state.examinerAudioDiagnostics.length > EXAMINER_AUDIO_DIAGNOSTIC_LIMIT) {
-    state.examinerAudioDiagnostics.splice(0, state.examinerAudioDiagnostics.length - EXAMINER_AUDIO_DIAGNOSTIC_LIMIT);
-  }
-  if (examinerAudioDiagnosticsEnabled()) {
+  if (examinerAudioDebugEnabled()) {
+    const record = {
+      event,
+      at: Number(performance.now().toFixed(1)),
+      sessionId: state.practiceSessionId,
+      status: state.status,
+      view: state.view,
+      turnId: state.currentTurn?.id || "",
+      ...details,
+    };
     console.info("[examiner-audio]", event, record);
+    return record;
   }
-  return record;
-}
-
-function attachExaminerAudioTelemetry(audio, role = "unknown", url = "") {
-  if (!audio) return;
-  let telemetry = examinerAudioTelemetry.get(audio);
-  if (!telemetry) {
-    telemetry = { role, url, waitingStartedAt: 0 };
-    examinerAudioTelemetry.set(audio, telemetry);
-    [
-      "loadstart",
-      "loadedmetadata",
-      "loadeddata",
-      "canplay",
-      "canplaythrough",
-      "play",
-      "playing",
-      "pause",
-      "waiting",
-      "stalled",
-      "suspend",
-      "seeking",
-      "seeked",
-      "ended",
-      "emptied",
-      "error",
-    ].forEach((eventName) => {
-      audio.addEventListener(eventName, () => {
-        if (eventName === "waiting" || eventName === "stalled") {
-          telemetry.waitingStartedAt = performance.now();
-        }
-        const waitingMs = eventName === "playing" && telemetry.waitingStartedAt
-          ? Math.round(performance.now() - telemetry.waitingStartedAt)
-          : 0;
-        if (eventName === "playing") telemetry.waitingStartedAt = 0;
-        traceExaminerAudio(`media:${eventName}`, {
-          role: telemetry.role,
-          url: telemetry.url || audio.currentSrc || audio.src || "",
-          waitingMs,
-          audio: audioSnapshot(audio),
-          error: audio.error ? {
-            code: audio.error.code,
-            message: audio.error.message,
-          } : null,
-        });
-      });
-    });
-  }
-  telemetry.role = role;
-  telemetry.url = url || telemetry.url || audio.currentSrc || audio.src || "";
-}
-
-const examinerAudioDiagnostics = window.IELTSExaminerAudioDiagnostics?.createExaminerAudioDiagnostics?.({
-  state,
-  $,
-  audioSnapshot,
-  traceExaminerAudio,
-  diagnosticsEnabled: examinerAudioDiagnosticsEnabled,
-});
-if (!examinerAudioDiagnostics) {
-  throw new Error("IELTSExaminerAudioDiagnostics module failed to initialize.");
+  return { event, ...details };
 }
 
 function exposeExaminerAudioDiagnostics() {
-  return examinerAudioDiagnostics.expose();
-}
-
-function startExaminerPlaybackSampler(audio, url) {
-  return examinerAudioDiagnostics.startPlaybackSampler(audio, url);
-}
-
-function stopExaminerPlaybackSampler(reason = "stopped") {
-  return examinerAudioDiagnostics.stopPlaybackSampler(reason);
-}
-
-function startExaminerSignalSampler(audio, url) {
-  return examinerAudioDiagnostics.startSignalSampler(audio, url);
-}
-
-function stopExaminerSignalSampler(reason = "stopped") {
-  return examinerAudioDiagnostics.stopSignalSampler(reason);
+  window.__ieltsExaminerAudio = {
+    current: () => state.activeExaminerAudioPlayer?.snapshot?.() || null,
+    stop: () => stopExaminerPlayback("debug-stop"),
+  };
+  return window.__ieltsExaminerAudio;
 }
 
 function renderExaminerAudio(turn) {
   const tts = turn.examiner_tts || {};
-  const audio = $("examinerAudio");
-  audio.classList.add("hidden");
-  $("browserTtsFallback").classList.add("hidden");
+  $("browserTtsFallback")?.classList.add("hidden");
   if (tts.audio_url) {
     traceExaminerAudio("render:prime-ready-url", {
       url: tts.audio_url,
       ttsStatus: tts.status || "",
     });
-  } else if (isPendingExaminerTts(tts) && state.attempt?.id && state.practiceSessionId) {
+  } else if (
+    isPendingExaminerTts(tts)
+    && !shouldStreamFollowUpTurn(turn)
+    && state.attempt?.id
+    && state.practiceSessionId
+  ) {
     traceExaminerAudio("render:refresh-pending-tts", {
       turnId: turn.id,
       ttsStatus: tts.status || "",
     });
     refreshPendingExaminerTts(turn, state.practiceSessionId).catch(() => null);
   }
-}
-
-function prepareExaminerAudioElement(audio, playbackUrl, sourceUrl = playbackUrl) {
-  if (!audio || !playbackUrl) return;
-  attachExaminerAudioTelemetry(audio, "playback", sourceUrl);
-  audio.preload = "auto";
-  if (audio.dataset.src === playbackUrl && audio.getAttribute("src") === playbackUrl) {
-    traceExaminerAudio("prepare:reuse", { url: sourceUrl, playbackUrl, audio: audioSnapshot(audio) });
-    return;
-  }
-  audio.dataset.src = playbackUrl;
-  audio.src = playbackUrl;
-  traceExaminerAudio("prepare:load", { url: sourceUrl, playbackUrl, audio: audioSnapshot(audio) });
-  audio.load();
-}
-
-async function resolveExaminerAudioPlaybackUrl(url) {
-  if (!url) return "";
-  const cached = state.examinerAudioBlobUrls.get(url);
-  if (cached?.playbackUrl) {
-    traceExaminerAudio("blob-audio:reuse", { url, size: cached.size, type: cached.type });
-    return cached.playbackUrl;
-  }
-  const stableUrl = stableExaminerAudioUrl(url);
-  traceExaminerAudio("blob-audio:fetch-start", { url, stableUrl });
-  const response = await fetch(stableUrl, { credentials: "same-origin", cache: "force-cache" });
-  if (!response.ok) throw new Error(`Examiner audio fetch failed: ${response.status}`);
-  const blob = await response.blob();
-  const playbackUrl = URL.createObjectURL(blob);
-  state.examinerAudioBlobUrls.set(url, {
-    playbackUrl,
-    size: blob.size,
-    type: blob.type || "audio/mpeg",
-  });
-  traceExaminerAudio("blob-audio:fetch-ready", { url, size: blob.size, type: blob.type || "audio/mpeg" });
-  return playbackUrl;
 }
 
 function stableExaminerAudioUrl(url) {
@@ -1974,6 +1828,13 @@ function stableExaminerAudioUrl(url) {
   }
 }
 
+function resolveExaminerAudioPlaybackSource(url) {
+  if (!url) return null;
+  const stableUrl = stableExaminerAudioUrl(url);
+  traceExaminerAudio("playback-url:stable", { url, stableUrl });
+  return { sourceUrl: url, playbackUrl: stableUrl, stableUrl, objectUrl: false };
+}
+
 function clearExaminerAudioPreloads() {
   for (const [url, item] of state.examinerAudioBlobUrls.entries()) {
     traceExaminerAudio("blob-audio:clear", { url, size: item.size, type: item.type });
@@ -1982,38 +1843,248 @@ function clearExaminerAudioPreloads() {
   state.examinerAudioBlobUrls.clear();
 }
 
-function stopExaminerPlayback() {
-  stopExaminerPlaybackSampler("stop-playback");
-  stopExaminerSignalSampler("stop-playback");
-  const activeAudio = state.activeExaminerAudio;
-  if (activeAudio) {
-    traceExaminerAudio("playback:stop-active", { audio: audioSnapshot(activeAudio) });
-    activeAudio.pause();
-    activeAudio.onended = null;
-    activeAudio.onerror = null;
-    try {
-      activeAudio.currentTime = 0;
-    } catch {
-      // Ignore seek errors for partially loaded audio.
+function examinerPlayerSnapshot(player = state.activeExaminerAudioPlayer) {
+  if (!player) return {};
+  return player.snapshot();
+}
+
+function inferHowlerFormat(url) {
+  const path = String(url || "").split("?")[0].toLowerCase();
+  if (path.endsWith(".mp3") || path.endsWith(".mpeg")) return ["mp3"];
+  if (path.endsWith(".wav")) return ["wav"];
+  if (path.endsWith(".m4a") || path.endsWith(".mp4") || path.endsWith(".aac")) return ["mp4"];
+  if (path.endsWith(".ogg") || path.endsWith(".oga")) return ["ogg"];
+  if (path.endsWith(".webm")) return ["webm"];
+  return ["mp3"];
+}
+
+function normalizeHowlerError(error) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") return JSON.stringify(error);
+  return String(error ?? "unknown error");
+}
+
+class ExaminerAudioPlayer {
+  constructor() {
+    this.howl = null;
+    this.playId = null;
+    this.source = null;
+    this.status = "idle";
+    this.loadTimer = null;
+    this._loadReject = null;
+    this._playResolve = null;
+    this._playReject = null;
+    this._onPlay = null;
+  }
+
+  load(source) {
+    this.unload("load-new-source");
+    this.source = source;
+    this.status = "loading";
+    const playbackUrl = source?.playbackUrl || "";
+    const sourceUrl = source?.sourceUrl || playbackUrl;
+    if (!playbackUrl) return Promise.reject(new Error("Missing examiner audio URL"));
+    if (typeof window.Howl !== "function") return Promise.reject(new Error("Howler.js is not loaded"));
+
+    traceExaminerAudio("howler:load-start", { url: sourceUrl, playbackUrl });
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      this._loadReject = reject;
+      this.loadTimer = window.setTimeout(() => {
+        this._fail("load", `Timed out loading examiner audio after ${EXAMINER_AUDIO_LOAD_TIMEOUT_MS}ms`);
+      }, EXAMINER_AUDIO_LOAD_TIMEOUT_MS);
+      const clearLoadTimeout = () => {
+        if (this.loadTimer) window.clearTimeout(this.loadTimer);
+        this.loadTimer = null;
+      };
+      const ready = () => {
+        if (settled) return;
+        settled = true;
+        this._loadReject = null;
+        clearLoadTimeout();
+        this.status = "ready";
+        traceExaminerAudio("howler:ready", { url: sourceUrl, playbackUrl, player: this.snapshot() });
+        resolve(this);
+      };
+      const failLoad = (_id, error) => {
+        if (settled) return;
+        settled = true;
+        clearLoadTimeout();
+        const message = normalizeHowlerError(error);
+        this._fail("load", message);
+      };
+      try {
+        this.howl = new window.Howl({
+          src: [playbackUrl],
+          html5: true,
+          preload: true,
+          autoplay: false,
+          format: inferHowlerFormat(playbackUrl),
+          onload: ready,
+          onloaderror: failLoad,
+          onplay: (id) => {
+            this.playId = id;
+            this.status = "started";
+            this._onPlay?.({ id, player: this, source });
+          },
+          onplayerror: (_id, error) => this._fail("play", error),
+          onend: () => this._finish("ended"),
+          onstop: () => this._finish("stopped"),
+        });
+      } catch (error) {
+        clearLoadTimeout();
+        settled = true;
+        this.status = "failed";
+        reject(error);
+      }
+    });
+  }
+
+  playToEnd({ onPlay } = {}) {
+    if (!this.howl) return Promise.reject(new Error("Examiner audio is not loaded"));
+    this._onPlay = onPlay || null;
+    return new Promise((resolve, reject) => {
+      this._playResolve = resolve;
+      this._playReject = reject;
+      try {
+        this.playId = this.howl.play();
+      } catch (error) {
+        this._fail("play", error);
+      }
+    });
+  }
+
+  _finish(result) {
+    if (!this._playResolve) return;
+    this.status = result;
+    const resolve = this._playResolve;
+    this._playResolve = null;
+    this._playReject = null;
+    this._onPlay = null;
+    resolve(result);
+  }
+
+  _fail(stage, error) {
+    const message = normalizeHowlerError(error);
+    this.status = "failed";
+    traceExaminerAudio("howler:error", { stage, error: message, player: this.snapshot() });
+    if (stage === "load" && this._loadReject) {
+      const reject = this._loadReject;
+      this._loadReject = null;
+      reject(new Error(message));
+      return;
+    }
+    if (this._playReject) {
+      const reject = this._playReject;
+      this._playResolve = null;
+      this._playReject = null;
+      this._onPlay = null;
+      reject(new Error(message));
     }
   }
+
+  stop(reason = "stop") {
+    traceExaminerAudio("howler:stop", { reason, player: this.snapshot() });
+    try {
+      this.howl?.stop();
+    } catch {
+      // Ignore stop errors while Howler is unloading.
+    }
+    this._finish("stopped");
+  }
+
+  unload(reason = "unload") {
+    this.stop(reason);
+    if (this.howl) {
+      traceExaminerAudio("howler:unload", { reason, player: this.snapshot() });
+      try {
+        this.howl.unload();
+      } catch {
+        // Ignore unload errors during teardown.
+      }
+    }
+    if (this.loadTimer) window.clearTimeout(this.loadTimer);
+    this.howl = null;
+    this.playId = null;
+    this.loadTimer = null;
+    this._loadReject = null;
+    this._playResolve = null;
+    this._playReject = null;
+    this._onPlay = null;
+    this.status = "unloaded";
+  }
+
+  playing() {
+    if (!this.howl) return false;
+    try {
+      return this.playId !== null ? this.howl.playing(this.playId) : this.howl.playing();
+    } catch {
+      return false;
+    }
+  }
+
+  snapshot() {
+    const howl = this.howl;
+    let seek = 0;
+    let duration = null;
+    let howlerState = "unloaded";
+    if (howl) {
+      try {
+        const currentSeek = howl.seek(this.playId ?? undefined);
+        seek = Number.isFinite(currentSeek) ? Number(currentSeek.toFixed(3)) : 0;
+      } catch {
+        seek = 0;
+      }
+      try {
+        const currentDuration = howl.duration(this.playId ?? undefined);
+        duration = Number.isFinite(currentDuration) ? Number(currentDuration.toFixed(3)) : null;
+      } catch {
+        duration = null;
+      }
+      try {
+        howlerState = howl.state();
+      } catch {
+        howlerState = "unknown";
+      }
+    }
+    return {
+      engine: "howler",
+      url: this.source?.sourceUrl || "",
+      playbackUrl: this.source?.playbackUrl || "",
+      stableUrl: this.source?.stableUrl || "",
+      state: this.status,
+      howlerState,
+      playId: this.playId ?? null,
+      playing: this.playing(),
+      currentTime: seek,
+      duration,
+    };
+  }
+}
+
+function isCurrentExaminerPlayback(playback) {
+  return Boolean(
+    playback
+    && state.examinerPlayback === playback
+    && !playback.cancelled
+    && isActivePracticeSession(playback.sessionId)
+    && state.currentTurn?.id === playback.turnId
+  );
+}
+
+function stopExaminerPlayback(reason = "stop-playback") {
+  const playback = state.examinerPlayback;
+  if (playback) {
+    playback.cancelled = true;
+    playback.promise = null;
+  }
+  const activePlayer = state.activeExaminerAudioPlayer;
+  if (activePlayer) activePlayer.unload(reason);
   state.activeExaminerAudio = null;
-  const examinerAudio = $("examinerAudio");
-  if (examinerAudio && examinerAudio !== activeAudio) {
-    traceExaminerAudio("playback:reset-element", { audio: audioSnapshot(examinerAudio) });
-    examinerAudio.pause();
-    examinerAudio.onended = null;
-    examinerAudio.onerror = null;
-    examinerAudio.removeAttribute("src");
-    examinerAudio.removeAttribute("data-src");
-    try {
-      examinerAudio.currentTime = 0;
-    } catch {
-      // Ignore seek errors for unloaded audio.
-    }
-  }
+  state.activeExaminerAudioPlayer = null;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   state.browserTtsUtterance = null;
+  state.examinerPlayback = null;
 }
 
 function localNextTurnAfter(turn, attempt = state.attempt) {
@@ -2034,58 +2105,6 @@ function isP3DynamicFollowUpBoundary(turn, nextTurn) {
 function turnRequiresSynchronousComplete(turn, nextTurn) {
   if (!nextTurn) return true;
   return isP1WorkStudyIdentityTurn(turn) || isP3DynamicFollowUpBoundary(turn, nextTurn);
-}
-
-function waitForAudioReady(audio, options = {}) {
-  const targetReadyState = Math.max(1, Number(options.targetReadyState || 3));
-  const timeoutMs = Math.max(250, Number(options.timeoutMs || AUDIO_READY_TIMEOUT_MS));
-  const url = options.url || audio?.currentSrc || audio?.src || "";
-  if (!audio || audio.readyState >= targetReadyState) {
-    traceExaminerAudio("ready:skip", {
-      url,
-      targetReadyState,
-      audio: audioSnapshot(audio),
-    });
-    return Promise.resolve();
-  }
-  const startedAt = performance.now();
-  traceExaminerAudio("ready:wait-start", {
-    url,
-    targetReadyState,
-    timeoutMs,
-    audio: audioSnapshot(audio),
-  });
-  return new Promise((resolve) => {
-    let done = false;
-    const finishIfReady = (event) => {
-      if (audio.readyState >= targetReadyState || event?.type === "error") {
-        finish(event?.type || "event");
-      }
-    };
-    const finish = (reason = "event") => {
-      if (done) return;
-      done = true;
-      audio.removeEventListener("canplay", finishIfReady);
-      audio.removeEventListener("canplaythrough", finishIfReady);
-      audio.removeEventListener("loadeddata", finishIfReady);
-      audio.removeEventListener("error", finishIfReady);
-      window.clearTimeout(timeout);
-      traceExaminerAudio("ready:wait-end", {
-        url,
-        reason,
-        elapsedMs: Math.round(performance.now() - startedAt),
-        targetReadyState,
-        audio: audioSnapshot(audio),
-      });
-      resolve();
-    };
-    const timeout = window.setTimeout(() => finish("timeout"), timeoutMs);
-    audio.addEventListener("canplay", finishIfReady, { once: false });
-    audio.addEventListener("canplaythrough", finishIfReady, { once: false });
-    audio.addEventListener("loadeddata", finishIfReady, { once: false });
-    audio.addEventListener("error", finishIfReady, { once: true });
-    if (audio.networkState === HTMLMediaElement.NETWORK_EMPTY) audio.load();
-  });
 }
 
 function isPendingExaminerTts(tts) {
@@ -2151,6 +2170,167 @@ function isActivePracticeSession(sessionId) {
   return !!sessionId && state.practiceSessionId === sessionId && state.practiceLocked;
 }
 
+function examinerLoadingHint(turn) {
+  if (turn?.prompt?.role === "follow_up") return "Preparing follow-up...";
+  if (turn?.counts_toward_total === false) return "Preparing identity question...";
+  return "Preparing examiner audio...";
+}
+
+function examinerListeningStatus(turn) {
+  if (turn?.part === "p2") {
+    return "Listen to the examiner instruction, then read the cue card during preparation.";
+  }
+  if (turn?.prompt?.role === "follow_up") {
+    return "Listen to the examiner follow-up question. Preparation starts automatically.";
+  }
+  if (turn?.counts_toward_total === false) {
+    return "Listen to the examiner identity question. Preparation starts automatically.";
+  }
+  return "Listen to the examiner question. Preparation starts automatically.";
+}
+
+function beginPreparationWithoutExaminerAudio(sessionId, turn, reason = "no-examiner-audio") {
+  if (!isActivePracticeSession(sessionId) || !turn || state.currentTurn?.id !== turn.id) return false;
+  clearAutoNextTimeout();
+  stopExaminerPlayback(reason);
+  traceExaminerAudio("playback:prepare-without-audio", {
+    reason,
+    turnId: turn.id,
+    ttsStatus: turn.examiner_tts?.status || "",
+    hasQuestion: hasUsableTurnQuestion(turn),
+  });
+  text("recordStatus", turn.prompt?.role === "follow_up"
+    ? "Follow-up audio is not ready. Prepare your answer directly."
+    : "Examiner audio is not ready. Prepare your answer directly.");
+  beginPreparation(sessionId, { reason, turnId: turn.id });
+  return true;
+}
+
+function setExaminerLoadingUi(turn) {
+  setRecordButton("examiner_loading", "Preparing", examinerLoadingHint(turn));
+  const progress = turnProgressLabel(turn);
+  text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
+  text("phaseLabel", `${progress} -> Preparing examiner`);
+  text("timerValue", "00:00");
+  $("phaseMeter").style.width = "0%";
+  text("recordStatus", examinerLoadingHint(turn));
+}
+
+function setExaminerListeningUi(turn) {
+  const progress = turnProgressLabel(turn);
+  setRecordButton("examiner_playing", "Listening...", "The examiner is asking the question.");
+  text("phaseLabel", `${progress} -> Examiner`);
+  text("recordStatus", examinerListeningStatus(turn));
+}
+
+function currentExaminerTurnStillMatches(sessionId, turnId, playback) {
+  return Boolean(
+    isActivePracticeSession(sessionId)
+    && state.currentTurn?.id === turnId
+    && isCurrentExaminerPlayback(playback)
+  );
+}
+
+async function playExaminerTurn(turn, sessionId = state.practiceSessionId) {
+  if (!isActivePracticeSession(sessionId) || !turn) return false;
+  if (isWaitingForStreamedFollowUpText(turn)) {
+    text("recordStatus", "Examiner follow-up is still generating...");
+    traceExaminerAudio("playback:stream-pending-follow-up-blocked", {
+      turnId: turn.id,
+      hasQuestion: hasUsableTurnQuestion(turn),
+      question: turn.question || turn.prompt?.question || "",
+      promptBackend: turn.prompt?.backend || "",
+      generationStatus: turn.prompt?.generation_status || "",
+    });
+    return false;
+  }
+
+  const turnId = turn.id;
+  const existingPlayback = state.examinerPlayback;
+  if (
+    existingPlayback
+    && !existingPlayback.cancelled
+    && existingPlayback.sessionId === sessionId
+    && existingPlayback.turnId === turnId
+    && existingPlayback.promise
+  ) {
+    return existingPlayback.promise;
+  }
+
+  stopExaminerPlayback("begin-new-examiner-turn");
+  if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId) return false;
+
+  const playback = {
+    sessionId,
+    turnId,
+    player: null,
+    promise: null,
+    cancelled: false,
+  };
+  state.examinerPlayback = playback;
+  setExaminerLoadingUi(turn);
+
+  const playbackPromise = (async () => {
+    await releaseRecordingAudioSessionForExaminerPlayback(playback, "before-examiner-playback");
+    if (!currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
+
+    let currentTurn = state.currentTurn?.id === turnId ? state.currentTurn : turn;
+    let tts = currentTurn.examiner_tts || {};
+    if (!tts.audio_url && isPendingExaminerTts(tts)) {
+      currentTurn = await refreshPendingExaminerTts(currentTurn, sessionId);
+      if (!currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
+      tts = currentTurn?.examiner_tts || {};
+    }
+
+    if (!tts.audio_url) {
+      return beginPreparationWithoutExaminerAudio(sessionId, currentTurn, "no-audio");
+    }
+
+    const source = resolveExaminerAudioPlaybackSource(tts.audio_url);
+    if (!source || !currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
+
+    const player = new ExaminerAudioPlayer();
+    playback.player = player;
+    state.activeExaminerAudio = null;
+    state.activeExaminerAudioPlayer = player;
+
+    try {
+      await player.load(source);
+      if (!currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
+      const outcome = await player.playToEnd({
+        onPlay: () => {
+          if (currentExaminerTurnStillMatches(sessionId, turnId, playback)) {
+            setExaminerListeningUi(currentTurn);
+          }
+        },
+      });
+      if (!currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
+      if (outcome === "ended") {
+        player.unload("ended");
+        if (state.activeExaminerAudioPlayer === player) state.activeExaminerAudioPlayer = null;
+        beginPreparation(sessionId, { reason: "ended", turnId });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      traceExaminerAudio("playback:error", {
+        turnId,
+        error: error instanceof Error ? error.message : String(error),
+        player: player.snapshot(),
+      });
+      if (!currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
+      return beginPreparationWithoutExaminerAudio(sessionId, currentTurn, "playback-error");
+    } finally {
+      if (state.examinerPlayback === playback) {
+        playback.promise = null;
+      }
+    }
+  })();
+
+  playback.promise = playbackPromise;
+  return playbackPromise;
+}
+
 async function beginExaminerPhase(sessionId = state.practiceSessionId) {
   if (!isActivePracticeSession(sessionId)) return;
   if (!state.currentTurn) return;
@@ -2164,120 +2344,29 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
   }
   clearTimer();
   const turn = state.currentTurn;
-  const turnId = turn.id;
-  const playbackKey = `${sessionId}:${turnId}`;
-  if (state.status === "examiner_playing" && state.examinerPlaybackKey === playbackKey) {
-    traceExaminerAudio("playback:duplicate-begin-skipped", {
-      playbackKey,
-      audio: audioSnapshot(state.activeExaminerAudio),
+  await playExaminerTurn(turn, sessionId);
+}
+
+function beginPreparation(sessionId = state.practiceSessionId, options = {}) {
+  if (!isActivePracticeSession(sessionId)) return;
+  const expectedTurnId = options.turnId || "";
+  if (expectedTurnId && state.currentTurn?.id !== expectedTurnId) {
+    traceExaminerAudio("preparation:stale-turn-skipped", {
+      reason: options.reason || "",
+      expectedTurnId,
+      currentTurnId: state.currentTurn?.id || "",
+      playbackTurnId: state.examinerPlayback?.turnId || "",
     });
     return;
   }
-  state.examinerPlaybackKey = playbackKey;
-  stopExaminerPlayback();
-  if (!isActivePracticeSession(sessionId)) return;
-  const isP2 = turn.part === "p2";
-  const isIntro = turn.counts_toward_total === false;
-  setRecordButton("examiner_playing", "Listening...", "The examiner is asking the question.");
-  const progress = turnProgressLabel(turn);
-  text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
-  text("phaseLabel", `${progress} -> Examiner`);
-  text("timerValue", "00:00");
-  $("phaseMeter").style.width = "0%";
-  text("recordStatus", isP2
-    ? "Listen to the examiner instruction, then read the cue card during preparation."
-    : turn.prompt?.role === "follow_up"
-    ? "Listen to the examiner follow-up question. Preparation starts automatically."
-    : isIntro
-    ? "Listen to the examiner identity question. Preparation starts automatically."
-    : "Listen to the examiner question. Preparation starts automatically.");
-
-  let tts = turn.examiner_tts || {};
-  if (!tts.audio_url && isPendingExaminerTts(tts)) {
-    text("recordStatus", "Preparing examiner audio...");
-    const refreshedTurn = await refreshPendingExaminerTts(turn, sessionId);
-    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
-    tts = refreshedTurn?.examiner_tts || {};
-  }
-  if (tts.audio_url) {
-    const isFixedAudio = FIXED_EXAMINER_AUDIO_URLS.has(tts.audio_url);
-    let playbackUrl = "";
-    try {
-      playbackUrl = await resolveExaminerAudioPlaybackUrl(tts.audio_url);
-    } catch (error) {
-      traceExaminerAudio("blob-audio:fetch-failed", {
-        url: tts.audio_url,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      playbackUrl = tts.audio_url;
-    }
-    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
-    traceExaminerAudio("playback:select", {
-      url: tts.audio_url,
-      playbackUrl,
-      isFixedAudio,
-      element: "examinerAudio",
-    });
-    const audio = $("examinerAudio");
-    attachExaminerAudioTelemetry(audio, "playback", tts.audio_url);
-    prepareExaminerAudioElement(audio, playbackUrl, tts.audio_url);
-    state.activeExaminerAudio = audio;
-    audio.onended = () => {
-      stopExaminerPlaybackSampler("ended");
-      stopExaminerSignalSampler("ended");
-      traceExaminerAudio("playback:ended-handler", { url: tts.audio_url, audio: audioSnapshot(audio) });
-      if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
-      if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
-    };
-    audio.onerror = () => {
-      stopExaminerPlaybackSampler("error");
-      stopExaminerSignalSampler("error");
-      traceExaminerAudio("playback:error-handler", { url: tts.audio_url, audio: audioSnapshot(audio) });
-      if (state.activeExaminerAudio === audio) state.activeExaminerAudio = null;
-      if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
-    };
-    await waitForAudioReady(audio, {
-      url: tts.audio_url,
-      targetReadyState: isFixedAudio ? 4 : 3,
-      timeoutMs: isFixedAudio ? FIXED_AUDIO_READY_TIMEOUT_MS : AUDIO_READY_TIMEOUT_MS,
-    });
-    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turnId || state.status !== "examiner_playing") return;
-    if (audio.currentTime > 0.05 || audio.ended) {
-      try {
-        audio.currentTime = 0;
-      } catch {
-        // Ignore seek errors for partially loaded audio.
-      }
-    }
-    traceExaminerAudio("playback:play-call", { url: tts.audio_url, audio: audioSnapshot(audio) });
-    audio.play()
-      .then(() => {
-        traceExaminerAudio("playback:play-resolved", { url: tts.audio_url, audio: audioSnapshot(audio) });
-        startExaminerPlaybackSampler(audio, tts.audio_url);
-        startExaminerSignalSampler(audio, tts.audio_url);
-      })
-      .catch((error) => {
-        stopExaminerSignalSampler("play-rejected");
-        traceExaminerAudio("playback:play-rejected", {
-          url: tts.audio_url,
-          error: error instanceof Error ? error.message : String(error),
-          audio: audioSnapshot(audio),
-        });
-        if (isActivePracticeSession(sessionId)) beginPreparation(sessionId);
-      });
-    return;
-  }
-  text("recordStatus", "Examiner audio is not ready. Starting preparation without browser voice.");
-  beginPreparation(sessionId);
-}
-
-function beginBrowserExaminerPlayback(value, sessionId = state.practiceSessionId) {
-  beginPreparation(sessionId);
-}
-
-function beginPreparation(sessionId = state.practiceSessionId) {
-  if (!isActivePracticeSession(sessionId)) return;
-  state.examinerPlaybackKey = "";
+  traceExaminerAudio("preparation:begin", {
+    reason: options.reason || "",
+    expectedTurnId,
+    currentTurnId: state.currentTurn?.id || "",
+    playbackTurnId: state.examinerPlayback?.turnId || "",
+    player: examinerPlayerSnapshot(options.player || state.activeExaminerAudioPlayer),
+  });
+  state.examinerPlayback = null;
   const seconds = state.currentTurn?.timers?.prep_seconds || 3;
   const isP2 = state.currentTurn?.part === "p2";
   setRecordButton("preparing", isP2 ? "Skip" : "Prepare", isP2 ? "Click to start recording now." : "Recording starts automatically.");
@@ -2344,6 +2433,13 @@ function clearAutoNextTimeout() {
 function scheduleExaminerPhase(sessionId, turnId = state.currentTurn?.id, delayMs = 0) {
   clearAutoNextTimeout();
   const expectedTurnId = turnId || "";
+  traceExaminerAudio("playback:scheduled-begin-set", {
+    expectedTurnId,
+    currentTurnId: state.currentTurn?.id || "",
+    delayMs: Math.max(0, Number(delayMs) || 0),
+    status: state.status,
+    playbackTurnId: state.examinerPlayback?.turnId || "",
+  });
   state.autoNextTimeout = window.setTimeout(() => {
     state.autoNextTimeout = null;
     if (!isActivePracticeSession(sessionId)) return;
@@ -2351,9 +2447,33 @@ function scheduleExaminerPhase(sessionId, turnId = state.currentTurn?.id, delayM
       traceExaminerAudio("playback:scheduled-begin-skipped", {
         expectedTurnId,
         currentTurnId: state.currentTurn?.id || "",
+        status: state.status,
+        playbackTurnId: state.examinerPlayback?.turnId || "",
       });
       return;
     }
+    const activePlayback = state.examinerPlayback;
+    if (
+      activePlayback
+      && !activePlayback.cancelled
+      && activePlayback.sessionId === sessionId
+      && activePlayback.turnId === (expectedTurnId || state.currentTurn?.id || "")
+      && activePlayback.promise
+    ) return;
+    if (["preparing", "recording", "processing", "scoring"].includes(state.status)) {
+      traceExaminerAudio("playback:scheduled-begin-status-skipped", {
+        expectedTurnId,
+        currentTurnId: state.currentTurn?.id || "",
+        status: state.status,
+      });
+      return;
+    }
+    traceExaminerAudio("playback:scheduled-begin-fire", {
+      expectedTurnId,
+      currentTurnId: state.currentTurn?.id || "",
+      status: state.status,
+      playbackTurnId: state.examinerPlayback?.turnId || "",
+    });
     beginExaminerPhase(sessionId);
   }, Math.max(0, Number(delayMs) || 0));
 }
@@ -2382,11 +2502,322 @@ function stopSpeakingAudioPreprocessor(reason = "stopped") {
   return speakingAudioPreprocessorRuntime.stop(reason);
 }
 
+function normalizedDeviceLabel(label = "") {
+  return String(label || "").trim().toLowerCase();
+}
+
+function isBluetoothAudioInputLabel(label = "") {
+  const value = normalizedDeviceLabel(label);
+  return Boolean(value && [
+    "bluetooth",
+    "headset",
+    "hands-free",
+    "handsfree",
+    "airpods",
+    "oppo",
+    "enco",
+    "soundcore",
+    "rose openfun",
+    "q45",
+    "beats",
+    "buds",
+    "earbuds",
+  ].some((token) => value.includes(token)));
+}
+
+function isVirtualAudioInputLabel(label = "") {
+  const value = normalizedDeviceLabel(label);
+  return Boolean(value && [
+    "virtual",
+    "oray",
+    "blackhole",
+    "soundflower",
+    "loopback",
+    "aggregate",
+    "multi-output",
+  ].some((token) => value.includes(token)));
+}
+
+function speakingInputDeviceScore(device) {
+  const label = normalizedDeviceLabel(device?.label || "");
+  if (!device || device.kind !== "audioinput" || !label) return -100;
+  if (isBluetoothAudioInputLabel(label)) return -100;
+  if (isVirtualAudioInputLabel(label)) return -80;
+  let score = 1;
+  if (label.includes("macbook") || label.includes("built-in") || label.includes("internal")) score += 100;
+  if (label.includes("microphone") || label.includes("mic")) score += 30;
+  if (label.includes("usb") || label.includes("studio display")) score += 20;
+  if (label.includes("default")) score -= 10;
+  return score;
+}
+
+function maskDeviceId(deviceId = "") {
+  const value = String(deviceId || "");
+  if (!value) return "";
+  if (value.length <= 8) return `${value.slice(0, 2)}…`;
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
+
+function captureDeviceDiagnostics(device, extra = {}) {
+  const label = device?.label || "";
+  return {
+    label,
+    deviceId: maskDeviceId(device?.deviceId || ""),
+    bluetoothLike: isBluetoothAudioInputLabel(label),
+    virtualLike: isVirtualAudioInputLabel(label),
+    ...extra,
+  };
+}
+
+async function enumerateAudioInputDevices() {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter((device) => device.kind === "audioinput");
+  } catch {
+    return [];
+  }
+}
+
+async function selectPreferredSpeakingInputDevice() {
+  const inputs = await enumerateAudioInputDevices();
+  const bluetoothInputs = inputs.filter((device) => isBluetoothAudioInputLabel(device.label));
+  const ranked = inputs
+    .map((device) => ({ device, score: speakingInputDeviceScore(device) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+  return {
+    device: ranked[0]?.device || null,
+    bluetoothInputs,
+    inputs,
+  };
+}
+
+function speakingAudioConstraintsForDevice(device) {
+  const audio = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  };
+  if (device?.deviceId) {
+    audio.deviceId = { exact: device.deviceId };
+  }
+  return { audio };
+}
+
+function activeTrackDeviceInfo(stream) {
+  const track = stream?.getAudioTracks?.()[0] || null;
+  return {
+    label: track?.label || "",
+    deviceId: "",
+    bluetoothLike: isBluetoothAudioInputLabel(track?.label || ""),
+    virtualLike: isVirtualAudioInputLabel(track?.label || ""),
+  };
+}
+
+function exposeSpeakingInputDevice(info = {}) {
+  state.speaking.captureDevice = {
+    ...(state.speaking.captureDevice || {}),
+    ...info,
+    updatedAt: Date.now(),
+  };
+  window.__ieltsSpeakingInputDevice = { ...state.speaking.captureDevice };
+  traceExaminerAudio("capture-device:selected", state.speaking.captureDevice);
+}
+
+async function getSpeakingAudioStream() {
+  const initialSelection = await selectPreferredSpeakingInputDevice();
+  const bluetoothInputsPresent = initialSelection.bluetoothInputs.length > 0;
+
+  if (initialSelection.device) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(speakingAudioConstraintsForDevice(initialSelection.device));
+      exposeSpeakingInputDevice({
+        ...captureDeviceDiagnostics(initialSelection.device, {
+          source: "preferred-enumerated-device",
+          bluetoothInputsPresent,
+          avoidBrowserDictation: bluetoothInputsPresent,
+        }),
+        activeTrack: activeTrackDeviceInfo(stream),
+      });
+      return stream;
+    } catch (error) {
+      traceExaminerAudio("capture-device:preferred-failed", {
+        preferred: captureDeviceDiagnostics(initialSelection.device),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const baselineStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  });
+  const baselineTrack = activeTrackDeviceInfo(baselineStream);
+
+  if (baselineTrack.bluetoothLike) {
+    const postPermissionSelection = await selectPreferredSpeakingInputDevice();
+    const preferred = postPermissionSelection.device;
+    if (preferred) {
+      baselineStream.getTracks().forEach((track) => track.stop());
+      const stream = await navigator.mediaDevices.getUserMedia(speakingAudioConstraintsForDevice(preferred));
+      exposeSpeakingInputDevice({
+        ...captureDeviceDiagnostics(preferred, {
+          source: "preferred-after-permission",
+          bluetoothInputsPresent: true,
+          avoidedBluetoothInput: baselineTrack.label || true,
+          avoidBrowserDictation: true,
+        }),
+        activeTrack: activeTrackDeviceInfo(stream),
+      });
+      return stream;
+    }
+  }
+
+  exposeSpeakingInputDevice({
+    label: baselineTrack.label || "Default microphone",
+    deviceId: "",
+    bluetoothLike: baselineTrack.bluetoothLike,
+    virtualLike: baselineTrack.virtualLike,
+    source: "browser-default",
+    bluetoothInputsPresent,
+    avoidBrowserDictation: bluetoothInputsPresent || baselineTrack.bluetoothLike,
+    activeTrack: baselineTrack,
+  });
+  return baselineStream;
+}
+
+function stopDictationForExaminerPlayback(reason = "examiner-playback") {
+  const waitPromise = state.dictationRecognition ? waitForFinalDictation() : Promise.resolve();
+  state.dictationShouldRun = false;
+  state.dictationStopping = true;
+  if (state.dictationRestartTimer) {
+    window.clearTimeout(state.dictationRestartTimer);
+    state.dictationRestartTimer = null;
+  }
+  if (state.dictationRecognition) {
+    try {
+      state.dictationRecognition.stop();
+    } catch {
+      // Ignore browser dictation stop races; examiner audio stability is the priority.
+    }
+    window.setTimeout(resolveDictationWait, 800);
+  } else {
+    resolveDictationWait();
+  }
+  traceExaminerAudio("audio-session:dictation-stop-requested", {
+    reason,
+    hadRecognition: Boolean(state.dictationRecognition),
+  });
+  return waitPromise;
+}
+
+function stopMediaTracksForExaminerPlayback(reason = "examiner-playback") {
+  const stream = state.mediaStream;
+  if (!stream) return false;
+  let stopped = false;
+  try {
+    stream.getTracks().forEach((track) => {
+      try {
+        if (track.readyState !== "ended") {
+          track.stop();
+          stopped = true;
+        }
+      } catch {
+        // Ignore individual stale track failures.
+      }
+    });
+  } finally {
+    state.mediaStream = null;
+  }
+  traceExaminerAudio("audio-session:media-tracks-stopped", { reason, stopped });
+  return stopped;
+}
+
+async function withTimeout(promise, timeoutMs, fallbackValue = null) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      Promise.resolve(promise),
+      new Promise((resolve) => {
+        timer = window.setTimeout(() => resolve(fallbackValue), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
+}
+
+async function releaseRecordingAudioSessionForExaminerPlayback(playback, reason = "examiner-playback") {
+  const startedAt = Date.now();
+  const hadDictation = Boolean(state.dictationRecognition || state.dictationShouldRun || state.dictationRestartTimer);
+  const hadPreprocessor = Boolean(state.speaking.audioPreprocessor || state.speaking.audioPreprocessorStopPromise);
+  const hadRealtimeSocket = Boolean(state.speaking.realtimePcmSocket);
+  const hadMediaStream = Boolean(state.mediaStream);
+  if (!hadDictation && !hadPreprocessor && !hadRealtimeSocket && !hadMediaStream) {
+    traceExaminerAudio("audio-session:release-skip", { reason });
+    return;
+  }
+
+  traceExaminerAudio("audio-session:release-start", {
+    reason,
+    turnId: playback?.turnId || state.currentTurn?.id || "",
+    hadDictation,
+    hadPreprocessor,
+    hadRealtimeSocket,
+    hadMediaStream,
+  });
+
+  const dictationPromise = hadDictation
+    ? stopDictationForExaminerPlayback(reason).catch(() => null)
+    : Promise.resolve(null);
+
+  let preprocessorPromise = null;
+  if (state.speaking.audioPreprocessorStopPromise) {
+    preprocessorPromise = state.speaking.audioPreprocessorStopPromise.catch(() => null);
+  } else if (state.speaking.audioPreprocessor) {
+    preprocessorPromise = Promise.resolve(stopSpeakingAudioPreprocessor(reason)).catch(() => null);
+  } else if (state.speaking.realtimePcmSocket) {
+    preprocessorPromise = Promise.resolve(stopRealtimePcmUplink(reason)).catch(() => null);
+  } else {
+    preprocessorPromise = Promise.resolve(null);
+  }
+
+  const tracksStopped = stopMediaTracksForExaminerPlayback(reason);
+
+  await withTimeout(
+    Promise.allSettled([dictationPromise, preprocessorPromise]),
+    EXAMINER_AUDIO_INPUT_RELEASE_TIMEOUT_MS,
+    null,
+  );
+
+  if (!isCurrentExaminerPlayback(playback)) {
+    traceExaminerAudio("audio-session:release-stale", {
+      reason,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return;
+  }
+
+  if (hadDictation || hadPreprocessor || hadRealtimeSocket || hadMediaStream || tracksStopped) {
+    await wait(EXAMINER_AUDIO_BLUETOOTH_DRAIN_MS);
+  }
+
+  traceExaminerAudio("audio-session:release-end", {
+    reason,
+    elapsedMs: Date.now() - startedAt,
+  });
+}
+
 async function startRecording(sessionId = state.practiceSessionId) {
   if (!isActivePracticeSession(sessionId)) return;
   if (!state.currentTurn) return;
+  stopExaminerPlayback("start-recording");
   state.status = "recording";
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stream = await getSpeakingAudioStream();
   if (!isActivePracticeSession(sessionId)) {
     stream.getTracks().forEach((track) => track.stop());
     return;
@@ -2400,7 +2831,9 @@ async function startRecording(sessionId = state.practiceSessionId) {
   state.transcriptSource = "browser_dictation";
   state.dictationRestartCount = 0;
   state.dictationLastError = "";
-  setDictationStatus("starting", "浏览器转写启动中；如果开头静音，系统会自动重新监听。");
+  setDictationStatus("starting", state.speaking.captureDevice?.avoidBrowserDictation
+    ? "检测到蓝牙耳机输入风险，已优先使用非蓝牙麦克风录音，并关闭浏览器转写以避免耳机通话模式。"
+    : "浏览器转写启动中；如果开头静音，系统会自动重新监听。");
   const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
     ? "audio/webm;codecs=opus"
     : "audio/webm";
@@ -2511,6 +2944,15 @@ function handleTurnCompletionResult(attempt, turn, completePayload) {
   if (completePayload?.next_turn && state.currentTurn?.id === completePayload.next_turn.id) {
     state.currentTurn = completePayload.next_turn;
     state.attempt = mergeCompletedTurnPayload(state.attempt, completePayload.next_turn);
+    if (["examiner_loading", "examiner_playing", "preparing", "recording", "processing"].includes(state.status)) {
+      traceExaminerAudio("render-turn-background-complete-skipped", {
+        completedTurnId: turn?.id || "",
+        nextTurnId: completePayload.next_turn.id || "",
+        status: state.status,
+        playbackTurnId: state.examinerPlayback?.turnId || "",
+      });
+      return;
+    }
     renderTurn(completePayload.next_turn);
   }
 }
@@ -2520,15 +2962,35 @@ function shouldStreamFollowUpTurn(turn) {
   return prompt.backend === "stream_pending" || prompt.generation_status === "pending";
 }
 
+function hasUsableTurnQuestion(turn) {
+  return Boolean(String(
+    turn?.question ||
+    turn?.prompt?.question ||
+    turn?.examiner_text ||
+    turn?.text ||
+    "",
+  ).trim());
+}
+
+function isWaitingForStreamedFollowUpText(turn) {
+  return shouldStreamFollowUpTurn(turn) && !hasUsableTurnQuestion(turn);
+}
+
 function mergeStreamingFollowUpTurn(nextTurn, patch) {
   const question = patch.question ?? patch.text ?? nextTurn?.question ?? "";
-  const prompt = { ...(nextTurn?.prompt || {}), ...(patch.prompt || {}), ...(question ? { question } : {}) };
+  const turnPatch = patch.turn || {};
+  const prompt = {
+    ...(nextTurn?.prompt || {}),
+    ...(turnPatch.prompt || {}),
+    ...(patch.prompt || {}),
+    ...(question ? { question } : {}),
+  };
   return {
     ...nextTurn,
-    ...(patch.turn || {}),
+    ...turnPatch,
     question,
     prompt,
-    examiner_text: patch.examiner_text ?? question,
+    examiner_text: patch.examiner_text ?? turnPatch.examiner_text ?? question,
     ...(patch.examiner_tts ? { examiner_tts: patch.examiner_tts } : {}),
   };
 }
@@ -2586,6 +3048,7 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
   let currentNextTurn = nextTurn;
   let streamedText = "";
   let examinerStarted = false;
+  let ttsWaitPromise = null;
   const streamStartedAt = Date.now();
   recordRealtimePhaseMetric({
     followUpStreamStartedAt: streamStartedAt,
@@ -2601,6 +3064,60 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
       followUpExaminerStartAfterStreamMs: realtimeMetricElapsed("followUpStreamStartedAt", "followUpExaminerStartedAt"),
     });
     scheduleExaminerPhase(sessionId, currentNextTurn.id, 120);
+  };
+  const startPreparationWithoutAudioOnce = (reason) => {
+    if (examinerStarted || !isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
+    examinerStarted = true;
+    const startedAt = Date.now();
+    recordRealtimePhaseMetric({
+      followUpExaminerStartedAt: startedAt,
+      followUpExaminerStartAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "followUpExaminerStartedAt"),
+      followUpExaminerStartAfterStreamMs: realtimeMetricElapsed("followUpStreamStartedAt", "followUpExaminerStartedAt"),
+      followUpTtsStatus: reason,
+    });
+    beginPreparationWithoutExaminerAudio(sessionId, currentNextTurn, reason);
+  };
+  const waitForFollowUpAudioThenStart = async (reason = "tts-refresh") => {
+    if (examinerStarted || !isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
+    if (ttsWaitPromise) return ttsWaitPromise;
+    ttsWaitPromise = (async () => {
+      const currentTts = currentNextTurn.examiner_tts || {};
+      if (currentTts.audio_url) {
+        startExaminerOnce();
+        return;
+      }
+      text("recordStatus", "Follow-up text is ready. Preparing examiner audio...");
+      traceExaminerAudio("follow-up-tts:wait-start", {
+        reason,
+        turnId: currentNextTurn.id,
+        ttsStatus: currentTts.status || "",
+      });
+      let refreshedTurn = currentNextTurn;
+      if (isPendingExaminerTts(currentTts)) {
+        refreshedTurn = await refreshPendingExaminerTts(currentNextTurn, sessionId);
+      }
+      if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id || examinerStarted) return;
+      currentNextTurn = refreshedTurn || currentNextTurn;
+      state.currentTurn = currentNextTurn;
+      state.attempt = mergeCompletedTurnPayload(state.attempt, currentNextTurn);
+      const refreshedTts = currentNextTurn.examiner_tts || {};
+      traceExaminerAudio("follow-up-tts:wait-end", {
+        reason,
+        turnId: currentNextTurn.id,
+        ttsStatus: refreshedTts.status || "",
+        audioUrl: refreshedTts.audio_url || "",
+      });
+      if (refreshedTts.audio_url) {
+        text("recordStatus", "Examiner audio is ready.");
+        startExaminerOnce();
+        return;
+      }
+      text("recordStatus", "Follow-up audio is unavailable. Prepare your answer directly.");
+      startPreparationWithoutAudioOnce(`${reason}-no-audio`);
+    })().finally(() => {
+      ttsWaitPromise = null;
+    });
+    return ttsWaitPromise;
   };
   const applyTurnPatch = (patch) => {
     if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
@@ -2644,7 +3161,8 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         followUpBackend: payload.backend || "",
       });
       applyTurnPatch({ text: streamedText, turn: payload.turn });
-      text("recordStatus", "Question ready. The examiner audio will start automatically.");
+      text("recordStatus", "Question ready. Preparing examiner audio...");
+      waitForFollowUpAudioThenStart("question-complete");
       return;
     }
     if (payload.event === "tts_ready") {
@@ -2665,8 +3183,8 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         followUpTtsStatus: "timeout",
       });
       applyTurnPatch({ examiner_tts: payload.examiner_tts || { provider: "volcengine", status: "pending", audio_url: null } });
-      text("recordStatus", "Examiner audio is still generating. Starting preparation safely.");
-      startExaminerOnce();
+      text("recordStatus", "Examiner audio is still generating. Waiting briefly...");
+      waitForFollowUpAudioThenStart("tts-timeout");
       return;
     }
     if (payload.event === "fallback") {
@@ -2678,16 +3196,24 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         followUpBackend: "fallback",
       });
       applyTurnPatch({ text: streamedText, turn: payload.turn });
-      text("recordStatus", "Follow-up generated through fallback. The examiner prompt will start automatically.");
-      startExaminerOnce();
+      text("recordStatus", "Follow-up generated through fallback. Preparing examiner audio...");
+      waitForFollowUpAudioThenStart("fallback");
       return;
     }
     if (payload.event === "done") {
       if (payload.turn) applyTurnPatch({ turn: payload.turn });
-      startExaminerOnce();
+      if ((currentNextTurn.examiner_tts || {}).audio_url) {
+        startExaminerOnce();
+      } else {
+        waitForFollowUpAudioThenStart("stream-done");
+      }
     }
   });
-  startExaminerOnce();
+  if ((currentNextTurn.examiner_tts || {}).audio_url) {
+    startExaminerOnce();
+  } else {
+    await waitForFollowUpAudioThenStart("stream-ended");
+  }
   return true;
 }
 
@@ -2970,6 +3496,17 @@ function shouldApplyBrowserDictationResult() {
 }
 
 function startDictation() {
+  if (state.speaking.captureDevice?.avoidBrowserDictation) {
+    state.dictationShouldRun = false;
+    state.dictationStopping = false;
+    state.dictationRecognition = null;
+    state.transcriptStatus = "missing";
+    setDictationStatus("unavailable", "蓝牙耳机兼容模式：浏览器转写已关闭，避免系统重新启用蓝牙耳机麦克风。录音仍会保存；开启 Realtime ASR 时会使用所选麦克风。");
+    traceExaminerAudio("dictation:skipped-for-bluetooth-input-compat", {
+      captureDevice: state.speaking.captureDevice || null,
+    });
+    return;
+  }
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     state.transcriptStatus = "missing";
@@ -6456,7 +6993,7 @@ function stopAllRuntime(label = "Ready") {
   state.practiceSessionId += 1;
   state.startAbortController?.abort();
   state.startAbortController = null;
-  stopExaminerPlayback();
+  stopExaminerPlayback("runtime-stopped");
   stopSpeakingAudioPreprocessor("runtime-stopped");
   stopRealtimePcmUplink("runtime-stopped");
   clearTimer();
@@ -6466,7 +7003,7 @@ function stopAllRuntime(label = "Ready") {
   state.speaking.realtimePcmMetrics = null;
   setRealtimePcmStatus({});
   state.currentTurn = null;
-  state.examinerPlaybackKey = "";
+  state.examinerPlayback = null;
   state.transcript = "";
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();
@@ -6503,7 +7040,7 @@ async function exitPractice() {
   state.practiceSessionId += 1;
   state.startAbortController?.abort();
   state.startAbortController = null;
-  stopExaminerPlayback();
+  stopExaminerPlayback("exit-practice");
   let exitSessionId = state.practiceSessionId;
   if (state.status === "recording") {
     state.abortingAttemptId = attemptId || "__loading__";
@@ -6523,6 +7060,42 @@ async function exitPractice() {
   resetPracticeSurface();
 }
 
+function recoverActivePracticeAfterError(error) {
+  const sessionId = state.practiceSessionId;
+  if (!isActivePracticeSession(sessionId) || !state.currentTurn) return false;
+  const message = error instanceof Error ? error.message : String(error || "");
+  setBusy("");
+  $("summaryPanel")?.classList.add("hidden");
+  traceExaminerAudio("practice:error-recover", {
+    status: state.status,
+    turnId: state.currentTurn.id || "",
+    hasQuestion: hasUsableTurnQuestion(state.currentTurn),
+    hasAudio: Boolean(state.currentTurn.examiner_tts?.audio_url),
+    message,
+  });
+  if (["recording", "preparing"].includes(state.status)) {
+    text("recordStatus", message || "Temporary issue detected; continuing the current question.");
+    return true;
+  }
+  if (isWaitingForStreamedFollowUpText(state.currentTurn)) {
+    setRecordButton("turn_saved", "Next", "Waiting for the examiner follow-up.");
+    text("recordStatus", "Examiner follow-up is still generating...");
+    return true;
+  }
+  if (hasUsableTurnQuestion(state.currentTurn)) {
+    if (state.currentTurn.examiner_tts?.audio_url) {
+      setRecordButton("ready", "Continue", "Continue the current examiner question.");
+      text("recordStatus", "Temporary issue detected. Continue the current question.");
+    } else {
+      beginPreparationWithoutExaminerAudio(sessionId, state.currentTurn, "error-recovery-no-audio");
+    }
+    return true;
+  }
+  setRecordButton("turn_saved", "Next", "Waiting for the next examiner question.");
+  text("recordStatus", message || "Temporary issue detected while preparing the next question.");
+  return true;
+}
+
 function showError(error) {
   if (error?.status === 401) {
     state.account.authenticated = false;
@@ -6536,6 +7109,7 @@ function showError(error) {
     return;
   }
   const message = error instanceof Error ? error.message : String(error);
+  if (recoverActivePracticeAfterError(error)) return;
   setBusy("");
   setRecordButton("ready", "Try Again", "The last attempt failed. Start again when ready.");
   text("recordStatus", "Something went wrong. Please try again.");
@@ -7314,7 +7888,16 @@ function bindEvents() {
       clearTimer();
       startRecording(sessionId).catch(showError);
     } else if (state.status === "analysis_failed") {
-      scoreAttempt().catch(showError);
+      const sessionId = state.practiceSessionId;
+      if (isActivePracticeSession(sessionId) && state.currentTurn) {
+        if (hasUsableTurnQuestion(state.currentTurn) && !state.currentTurn.examiner_tts?.audio_url) {
+          beginPreparationWithoutExaminerAudio(sessionId, state.currentTurn, "analysis-failed-recovery-no-audio");
+        } else {
+          beginExaminerPhase(sessionId).catch(showError);
+        }
+      } else {
+        scoreAttempt().catch(showError);
+      }
     } else if (state.status === "idle" || state.status === "ready" || state.status === "summary") {
       if (state.currentTurn && state.status === "ready") {
         beginExaminerPhase(state.practiceSessionId);
@@ -7997,15 +8580,16 @@ async function init() {
   bindEvents();
   setupReportRails();
   await loadAccount();
-  // Exclusive audio playback - pause all others when one plays
+  // Keep general audio playback exclusive, but do not let report/player audio interrupt
+  // the in-flow examiner prompt once it has started.
   document.addEventListener("play", (e) => {
-    if (e.target.tagName === "AUDIO") {
-      document.querySelectorAll("audio").forEach((audio) => {
-        if (audio !== e.target && !audio.paused) {
-          audio.pause();
-        }
-      });
-    }
+    if (e.target.tagName !== "AUDIO") return;
+    const targetAudio = e.target;
+
+    document.querySelectorAll("audio").forEach((audio) => {
+      if (audio === targetAudio || audio.paused) return;
+      audio.pause();
+    });
   }, true);
   window.addEventListener("popstate", restoreRouteFromLocation);
   loadStoredQuestionBankScope();

@@ -4,7 +4,7 @@ from django.urls import path
 from apps.accounts import views as account_views
 from apps.ai import views as ai_views
 from apps.billing import views as billing_views
-from apps.common.views import frontend_asset, frontend_static_asset, frontend_wasm_asset, health
+from apps.common.views import frontend_asset, frontend_static_asset, frontend_vendor_asset, frontend_wasm_asset, health
 from apps.speaking import views as speaking_views
 from apps.writing import views as writing_views
 
@@ -17,7 +17,6 @@ urlpatterns = [
     path("writing-prompt-picker.js", frontend_asset, {"asset_path": "writing-prompt-picker.js"}, name="frontend-writing-prompt-picker-js"),
     path("corpus-markdown-editor.js", frontend_asset, {"asset_path": "corpus-markdown-editor.js"}, name="frontend-corpus-markdown-editor-js"),
     path("corpus-takeaway.js", frontend_asset, {"asset_path": "corpus-takeaway.js"}, name="frontend-corpus-takeaway-js"),
-    path("examiner-audio-diagnostics.js", frontend_asset, {"asset_path": "examiner-audio-diagnostics.js"}, name="frontend-examiner-audio-diagnostics-js"),
     path("candidate-profile.js", frontend_asset, {"asset_path": "candidate-profile.js"}, name="frontend-candidate-profile-js"),
     path("realtime-pcm-uplink.js", frontend_asset, {"asset_path": "realtime-pcm-uplink.js"}, name="frontend-realtime-pcm-uplink-js"),
     path("speaking-audio-preprocessor-runtime.js", frontend_asset, {"asset_path": "speaking-audio-preprocessor-runtime.js"}, name="frontend-speaking-audio-preprocessor-runtime-js"),
@@ -27,6 +26,7 @@ urlpatterns = [
     path("app.js", frontend_asset, {"asset_path": "app.js"}, name="frontend-app-js"),
     path("styles.css", frontend_asset, {"asset_path": "styles.css"}, name="frontend-styles-css"),
     path("assets/<path:asset_path>", frontend_static_asset, name="frontend-static-asset"),
+    path("vendor/<path:asset_path>", frontend_vendor_asset, name="frontend-vendor-asset"),
     path("wasm/<path:asset_path>", frontend_wasm_asset, name="frontend-wasm-asset"),
     path("admin/", admin.site.urls),
     path("api/health/", health, name="health"),

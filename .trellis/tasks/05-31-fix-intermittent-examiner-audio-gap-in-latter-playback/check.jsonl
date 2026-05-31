@@ -1,0 +1,4 @@
+{"file": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.trellis/tasks/05-31-fix-intermittent-examiner-audio-gap-in-latter-playback/prd.md", "reason": "Check the implemented behavior against the updated task goal and acceptance criteria."}
+{"file": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.trellis/tasks/05-31-fix-intermittent-examiner-audio-gap-in-latter-playback/research/ready-state-diagnosis.md", "reason": "Verify the code change removes the lower-readyState dynamic playback path identified in research."}
+{"file": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.trellis/spec/backend/quality-guidelines.md", "reason": "Ensure the frontend still uses only a bounded wait before fallback when refreshed TTS is slow."}
+{"file": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.trellis/spec/frontend/quality-guidelines.md", "reason": "Confirm the fix preserves required examiner auto-play behavior."}

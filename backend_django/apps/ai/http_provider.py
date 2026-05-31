@@ -6,7 +6,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from django.conf import settings
 
@@ -174,6 +174,7 @@ class HttpApiProvider:
         temperature: float = DEFAULT_HTTP_TEMPERATURE,
         max_tokens: int = 120,
         timeout_seconds: float | None = None,
+        on_usage: Callable[[dict[str, Any]], None] | None = None,
     ) -> Iterator[str]:
         body = {
             "model": self.config.model,
@@ -198,7 +199,9 @@ class HttpApiProvider:
             with urllib.request.urlopen(request, timeout=timeout_seconds or self.config.timeout_seconds) as response:
                 yielded = False
                 for payload in self._iter_stream_payloads(response):
-                    content, _usage = self._stream_payload_content(payload, extra_secrets=(self.config.api_key,))
+                    content, usage = self._stream_payload_content(payload, extra_secrets=(self.config.api_key,))
+                    if usage is not None and on_usage is not None:
+                        on_usage(usage)
                     if content:
                         yielded = True
                         yield content

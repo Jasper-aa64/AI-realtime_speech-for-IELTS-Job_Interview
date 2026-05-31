@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from apps.speaking import services
 
@@ -23,6 +23,7 @@ class _Provider:
         return _ProviderResult(self.text)
 
 
+@override_settings(AI_HTTP_BASE_URL="https://ai.example/v1", AI_HTTP_API_KEY="test-key", AI_HTTP_MODEL="legacy-model")
 class HttpFollowUpRoutingTests(SimpleTestCase):
     def test_p3_follow_up_prefers_http_success(self):
         with patch("apps.speaking.services.HttpApiProvider", return_value=_Provider("How might this affect families?")), patch(
@@ -39,6 +40,39 @@ class HttpFollowUpRoutingTests(SimpleTestCase):
         self.assertEqual(result["backend"], "http_api")
         self.assertEqual(result["status"], "ready")
         codex_runner.assert_not_called()
+
+
+    def test_follow_up_http_uses_speaking_default_model_override(self):
+        captured = {}
+
+        def fake_provider(config=None):
+            captured["model"] = config.model
+            return _Provider("How might this affect families?")
+
+        with patch("apps.speaking.services.HttpApiProvider", side_effect=fake_provider):
+            result = services.quick_follow_up_http_runner(
+                "Why do some people prefer living in cities?",
+                "It gives people better jobs and services, so families can plan their lives more easily.",
+                question_type="cause_effect",
+            )
+
+        self.assertEqual(result["backend"], "http_api")
+        self.assertEqual(captured["model"], "gpt-5.4-mini")
+
+    @override_settings(SPEAKING_FOLLOWUP_AI_CALL_MODE="codex")
+    def test_p3_follow_up_can_force_codex_mode(self):
+        with patch("apps.speaking.services.quick_follow_up_http_runner") as http_runner, patch(
+            "apps.speaking.services.quick_follow_up_codex_runner", return_value="What could happen in the future?"
+        ):
+            result = services._generate_p3_dynamic_follow_up(
+                "Why is public transport important?",
+                "future_prediction",
+                "It can reduce traffic and make cities cleaner for ordinary people.",
+                call_id="case-codex-mode",
+            )
+
+        self.assertEqual(result["backend"], "codex_quick")
+        http_runner.assert_not_called()
 
     def test_p3_http_failure_falls_back_to_codex(self):
         with patch("apps.speaking.services.quick_follow_up_http_runner", side_effect=RuntimeError("http unavailable")), patch(
