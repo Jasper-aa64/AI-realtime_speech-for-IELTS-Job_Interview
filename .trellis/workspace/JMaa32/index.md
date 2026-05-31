@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 87
-- **Last Active**: 2026-05-30
+- **Total Sessions**: 88
+- **Last Active**: 2026-05-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1041 | Active |
+| `journal-2.md` | ~1075 | Active |
 | `journal-1.md` | ~1984 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 88 | 2026-05-31 | Fix realtime browser PCM ASR streaming | `f0421c9`, `ddd9031` | `main` |
 | 87 | 2026-05-30 | Stream realtime ASR events over PCM websocket | - | `main` |
 | 86 | 2026-05-30 | Add realtime PCM websocket uplink | - | `main` |
 | 85 | 2026-05-30 | Add ASGI Channels ping transport | - | `main` |

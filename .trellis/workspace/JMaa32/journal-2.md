@@ -1039,3 +1039,37 @@ Phase 2.3 logic layer now connects /ws/realtime/pcm/ PCM frames to stream_pcm_ch
 ### Next Steps
 
 - None - task complete
+
+
+## Session 88: Fix realtime browser PCM ASR streaming
+
+**Date**: 2026-05-31
+**Task**: Fix realtime browser PCM ASR streaming
+**Branch**: `main`
+
+### Summary
+
+Aggregated browser realtime PCM frames to provider-sized chunks, preserved stop until ASR done, and validated real VolcEngine websocket transcript events.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f0421c9` | (see git log) |
+| `ddd9031` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
