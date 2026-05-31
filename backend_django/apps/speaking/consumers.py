@@ -11,6 +11,8 @@ from django.conf import settings
 
 from .volcengine_asr import stream_pcm_chunks
 
+REALTIME_ASR_CHUNK_BYTES = 3200
+
 
 class RealtimePingConsumer(AsyncJsonWebsocketConsumer):
     """Minimal Phase 2.1 WebSocket consumer used to validate ASGI wiring."""
@@ -87,8 +89,8 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
             await self._send_json(self._status_payload("status"))
             return
         if event == "stop_asr":
-            self._stop_asr_thread()
-            await self._send_json(self._status_payload("asr_stopped"))
+            self._request_asr_stop()
+            await self._send_json({**self._status_payload("status"), "status": "asr_stop_requested"})
             return
         if event == "stop":
             self._stop_asr_thread()
@@ -118,21 +120,34 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
         self.asr_thread.start()
 
     def _stop_asr_thread(self):
-        self.asr_enabled = False
-        if self.asr_queue is not None:
-            self.asr_queue.put(None)
+        self._request_asr_stop()
         self.asr_queue = None
         self.asr_thread = None
 
+    def _request_asr_stop(self):
+        self.asr_enabled = False
+        if self.asr_queue is not None:
+            self.asr_queue.put(None)
+
     def _pcm_chunks(self) -> Iterator[bytes]:
+        buffer = bytearray()
         while True:
             current_queue = self.asr_queue
             if current_queue is None:
+                if buffer:
+                    yield bytes(buffer)
                 return
             chunk = current_queue.get()
             if chunk is None:
+                if buffer:
+                    yield bytes(buffer)
                 return
-            yield chunk
+            if not chunk:
+                continue
+            buffer.extend(chunk)
+            while len(buffer) >= REALTIME_ASR_CHUNK_BYTES:
+                yield bytes(buffer[:REALTIME_ASR_CHUNK_BYTES])
+                del buffer[:REALTIME_ASR_CHUNK_BYTES]
 
     def _run_asr_stream(self):
         try:
@@ -148,6 +163,8 @@ class RealtimePcmUplinkConsumer(AsyncWebsocketConsumer):
         finally:
             self.asr_enabled = False
             self.fake_asr_enabled = False
+            self.asr_queue = None
+            self.asr_thread = None
 
     def _fake_stream_pcm_chunks(self, pcm_chunks: Iterator[bytes]) -> Iterator[dict]:
         """Deterministic DEBUG-only ASR stream for no-key realtime pipeline drills."""

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import queue
+
 from asgiref.sync import async_to_sync
 from channels.testing import WebsocketCommunicator
 from django.test import SimpleTestCase, override_settings
 from unittest.mock import patch
 
+from apps.speaking.consumers import REALTIME_ASR_CHUNK_BYTES, RealtimePcmUplinkConsumer
 from config.asgi import application
 
 
@@ -37,6 +40,29 @@ class AsgiChannelsPingTests(SimpleTestCase):
 
     def test_pcm_uplink_websocket_counts_binary_frames(self):
         async_to_sync(self._run_pcm_uplink_websocket)()
+
+    def test_pcm_chunks_aggregates_browser_sized_frames_for_asr(self):
+        consumer = RealtimePcmUplinkConsumer()
+        consumer.asr_queue = queue.Queue()
+        frame = b"\x01\x02" * 46
+        for _ in range(36):
+            consumer.asr_queue.put(frame)
+        consumer.asr_queue.put(None)
+
+        chunks = list(consumer._pcm_chunks())
+
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual(len(chunks[0]), REALTIME_ASR_CHUNK_BYTES)
+        self.assertEqual(len(chunks[1]), len(frame) * 36 - REALTIME_ASR_CHUNK_BYTES)
+        self.assertEqual(b"".join(chunks), frame * 36)
+
+    def test_pcm_chunks_flushes_partial_buffer_on_stop(self):
+        consumer = RealtimePcmUplinkConsumer()
+        consumer.asr_queue = queue.Queue()
+        consumer.asr_queue.put(b"\x01\x02" * 80)
+        consumer.asr_queue.put(None)
+
+        self.assertEqual(list(consumer._pcm_chunks()), [b"\x01\x02" * 80])
 
     async def _run_pcm_uplink_websocket(self):
         communicator = WebsocketCommunicator(
@@ -120,12 +146,12 @@ class AsgiChannelsPingTests(SimpleTestCase):
                 first_events = await self._receive_events_until(communicator, {"asr_started", "asr_connecting"})
                 self.assertIn("asr_started", {event["event"] for event in first_events})
 
-                await communicator.send_to(bytes_data=b"\x01\x02" * 160)
+                await communicator.send_to(bytes_data=b"\x01\x02" * 1600)
                 interim_events = await self._receive_events_until(communicator, {"pcm_ack", "asr_interim"})
                 self.assertIn("pcm_ack", {event["event"] for event in interim_events})
                 self.assertTrue(any(event.get("interim") == "I study" for event in interim_events))
 
-                await communicator.send_to(bytes_data=b"\x03\x04" * 160)
+                await communicator.send_to(bytes_data=b"\x03\x04" * 1600)
                 final_events = await self._receive_events_until(communicator, {"pcm_ack", "asr_final"})
                 final_asr = next(event for event in final_events if event.get("event") == "asr_final")
                 self.assertEqual(final_asr.get("text"), "I study software engineering.")
@@ -136,7 +162,7 @@ class AsgiChannelsPingTests(SimpleTestCase):
                 })
 
                 await communicator.send_json_to({"event": "stop_asr"})
-                done_events = await self._receive_events_until(communicator, {"asr_done", "asr_stopped"})
+                done_events = await self._receive_events_until(communicator, {"asr_done"})
                 self.assertTrue(any(event.get("event") == "asr_done" and event.get("ok") for event in done_events))
         finally:
             await communicator.disconnect()
@@ -168,11 +194,11 @@ class AsgiChannelsPingTests(SimpleTestCase):
             started = next(event for event in first_events if event.get("event") == "asr_started")
             self.assertEqual(started.get("provider"), "fake_realtime_asr")
 
-            await communicator.send_to(bytes_data=b"\x01\x02" * 160)
+            await communicator.send_to(bytes_data=b"\x01\x02" * 1600)
             interim_events = await self._receive_events_until(communicator, {"pcm_ack", "asr_interim"})
             self.assertTrue(any(event.get("interim") == "I study software engineering" for event in interim_events))
 
-            await communicator.send_to(bytes_data=b"\x03\x04" * 160)
+            await communicator.send_to(bytes_data=b"\x03\x04" * 1600)
             final_events = await self._receive_events_until(communicator, {"pcm_ack", "asr_final"})
             final_asr = next(event for event in final_events if event.get("event") == "asr_final")
             self.assertEqual(final_asr.get("provider"), "fake_realtime_asr")
@@ -184,7 +210,7 @@ class AsgiChannelsPingTests(SimpleTestCase):
             })
 
             await communicator.send_json_to({"event": "stop_asr"})
-            done_events = await self._receive_events_until(communicator, {"asr_done", "asr_stopped"})
+            done_events = await self._receive_events_until(communicator, {"asr_done"})
             done = next(event for event in done_events if event.get("event") == "asr_done")
             self.assertTrue(done.get("ok"))
             self.assertEqual(done.get("provider"), "fake_realtime_asr")

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify backend tests, Django check, no legacy server changes, and latency-sensitive ASR/follow-up contracts."}
+{"file": ".trellis/tasks/05-31-fix-realtime-browser-pcm-chunking-for-asr/prd.md", "reason": "Acceptance criteria for PCM aggregation, flush behavior, ack preservation, and real ASR validation."}
