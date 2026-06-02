@@ -660,55 +660,61 @@
       const container = $("p2CorpusTopics");
       if (!container) return;
       const categories = state.p2Corpus.categories || [];
-      if (!categories.length) {
+      const currentCards = state.p2Corpus.currentPart2Cards || [];
+      if (!categories.length && !currentCards.length) {
         container.innerHTML = '<p class="muted">还没有 P2 素材分类。</p>';
         return;
       }
-      container.innerHTML = categories.map((category) => {
-        const items = category.items || [];
-        return `
-          <article class="p2-topic-card">
+      const categoryHtml = categories.map((category) => `
+          <article class="p2-topic-card p2-category-entry-card">
             <header>
               <h3>${escapeHtml(category.label || category.category)}</h3>
-              <span class="p2-topic-count">${items.length}</span>
+              <span class="p2-topic-count">${category.material_count ?? (category.items || []).length}</span>
             </header>
             <div class="p2-topic-material-list">
-              ${items.length ? "" : '<div class="p2-topic-empty">暂无素材</div>'}
-              ${items.map((item, index) => `
-                <div class="p2-material-row">
-                  <button type="button" class="p2-material-entry-button has-corpus" data-p2-corpus-entry="${escapeHtml(item.entry_id)}">
-                    <strong class="p2-material-index">${index + 1}</strong>
-                    <span class="p2-material-title">${escapeHtml(item.title || "未命名素材")}</span>
-                    <span class="p2-material-status${item.p3_follow_up_text ? " has-follow-up" : " is-empty"}" ${item.p3_follow_up_text ? "" : 'aria-hidden="true"'}>
-                      ${item.p3_follow_up_text ? "P3 已填" : ""}
-                    </span>
-                  </button>
-                  <div class="p2-material-actions" aria-label="素材操作">
-                    <button type="button" class="p2-follow-up-edit-button${item.p3_follow_up_text ? " has-follow-up" : ""}" data-p2-corpus-p3="${escapeHtml(item.entry_id)}" aria-label="编辑相关 P3 追问" title="编辑相关 P3 追问">
-                      <svg aria-hidden="true" viewBox="0 0 24 24">
-                        <path d="M5 7.5h14"></path>
-                        <path d="M5 12h9"></path>
-                        <path d="M5 16.5h6"></path>
-                        <path d="M16 15.5l1.6 1.6 3.2-3.6"></path>
-                      </svg>
-                    </button>
-                    ${corpusCardActionMenuHtml({
-                      menuAttr: "data-p2-corpus-menu",
-                      editAttr: "data-p2-corpus-edit",
-                      deleteAttr: "data-p2-corpus-delete",
-                      entryId: item.entry_id,
-                    })}
-                  </div>
-                </div>
-              `).join("")}
               <button type="button" class="p2-add-material-button" data-p2-corpus-new="${escapeHtml(category.category)}">
                 <strong>+</strong>
                 <span>新增${escapeHtml(category.label || "素材")}</span>
               </button>
             </div>
           </article>
+        `).join("");
+      const cardHtml = currentCards.map((item) => {
+        const statusLabel = item.status === "new" ? "新题" : item.status === "retained" ? "保留题" : item.status || "";
+        return `
+          <article class="p2-seasonal-card">
+            <header>
+              <div>
+                <span class="p2-seasonal-card-kicker">${escapeHtml(item.label || item.category || "P2")}${statusLabel ? ` · ${escapeHtml(statusLabel)}` : ""}</span>
+                <h3>${escapeHtml(item.cue_title || item.title || "未命名题卡")}</h3>
+              </div>
+              <span class="p2-seasonal-card-state${item.has_material ? " is-ready" : ""}">${item.has_material ? "正文已填" : "正文待填"}</span>
+            </header>
+            ${p2CueQuestionHtml(item)}
+            <footer>
+              <button type="button" class="p2-seasonal-action primary" data-p2-corpus-card-material="${escapeHtml(item.entry_id)}">正文</button>
+              <button type="button" class="p2-seasonal-action${item.has_p3_follow_up ? " is-ready" : ""}" data-p2-corpus-card-p3="${escapeHtml(item.entry_id)}">P3 追问</button>
+            </footer>
+          </article>
         `;
       }).join("");
+      container.innerHTML = `
+        <section class="p2-category-entry-grid" aria-label="P2 分类入口">
+          ${categoryHtml}
+        </section>
+        <section class="p2-seasonal-card-section" aria-label="当季 P2 题卡">
+          <header class="p2-seasonal-section-head">
+            <div>
+              <span class="corpus-page-kicker">CURRENT SEASON</span>
+              <h3>当季 P2 题卡</h3>
+            </div>
+            <span>${currentCards.length} 张题卡</span>
+          </header>
+          <div class="p2-seasonal-card-grid">
+            ${cardHtml || '<p class="muted">当前范围没有 P2 题卡。</p>'}
+          </div>
+        </section>
+      `;
     }
 
     async function loadCorpusHome() {}
@@ -1215,7 +1221,7 @@
         const saved = await api(takeawayEditEndpoint(active.kind, active.entryId), {
           source_text: sourceText,
           chinese_text: chineseText,
-        }, { method: "PATCH" });
+        }, { method: "POST" });
         replaceTakeawayEntry(active.kind, saved);
         closeTakeawayEditor();
         return true;
@@ -1236,7 +1242,20 @@
         const found = (category.items || []).find((item) => item.entry_id === entryId);
         if (found) return { ...found, label: category.label || found.label };
       }
+      const card = (state.p2Corpus.currentPart2Cards || []).find((item) => item.entry_id === entryId);
+      if (card) return { ...card };
       return null;
+    }
+
+    function p2CueQuestionHtml(item) {
+      const bullets = (item.bullets || []).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("");
+      return `
+        <div class="p2-seasonal-cue">
+          <strong>${escapeHtml(item.cue_title || item.title || "未命名题卡")}</strong>
+          ${bullets ? `<ul>${bullets}</ul>` : ""}
+          ${item.rounding ? `<p>${escapeHtml(item.rounding)}</p>` : ""}
+        </div>
+      `;
     }
 
     async function openP2CorpusLibrary() {
@@ -1271,14 +1290,113 @@
       state.p2Corpus.activeEntry = null;
     }
 
+    function p2OfficialFollowUpQuestions(entry = {}) {
+      const seen = new Set();
+      return (entry.p3_follow_ups || [])
+        .map((item) => String(item || "").replace(/\s+/g, " ").trim())
+        .filter((item) => {
+          if (!item || seen.has(item)) return false;
+          seen.add(item);
+          return true;
+        });
+    }
+
+    function p2P3FollowUpMarkdownTemplate(entry = {}, selectedQuestions = null) {
+      const questions = Array.isArray(selectedQuestions) ? selectedQuestions : p2OfficialFollowUpQuestions(entry);
+      if (!questions.length) return "";
+      const title = String(entry.cue_title || entry.title || "P2 题卡").trim();
+      const lines = [
+        `## ${title} 相关 P3 追问`,
+        "",
+        "根据题库追问整理答案。每道题下面留空给你写自己的回答。",
+        "",
+      ];
+      questions.forEach((question, index) => {
+        lines.push(`### ${index + 1}. ${question}`);
+        lines.push("");
+        lines.push("- 我的回答：");
+        lines.push("");
+      });
+      return lines.join("\n").trim();
+    }
+
+    function updateP2CorpusP3QuestionSource(entry = {}) {
+      const questions = p2OfficialFollowUpQuestions(entry);
+      text("p2CorpusP3QuestionSourceStatus", questions.length ? `题库追问 ${questions.length} 道` : "这张题卡暂无题库 P3 追问");
+      const pickerButton = $("openP2CorpusP3QuestionPickerBtn");
+      if (pickerButton) {
+        pickerButton.disabled = !questions.length;
+        pickerButton.textContent = questions.length ? "选择题库追问" : "暂无题库追问";
+      }
+      renderP2CorpusP3QuestionPicker(entry);
+    }
+
+    function renderP2CorpusP3QuestionPicker(entry = state.p2Corpus.activeP3Entry || {}) {
+      const list = $("p2CorpusP3QuestionList");
+      if (!list) return;
+      const questions = p2OfficialFollowUpQuestions(entry);
+      if (!questions.length) {
+        list.innerHTML = '<p class="muted">这张 P2 题卡暂时没有题库 P3 追问。你可以直接在编辑器里手动添加。</p>';
+        text("p2CorpusP3QuestionPickerStatus", "");
+        return;
+      }
+      list.innerHTML = questions.map((question, index) => `
+        <label class="p2-p3-question-option">
+          <input type="checkbox" value="${index}" checked>
+          <span>
+            <strong>Q${index + 1}</strong>
+            <em>${escapeHtml(question)}</em>
+          </span>
+        </label>
+      `).join("");
+      text("p2CorpusP3QuestionPickerStatus", `已默认选择 ${questions.length} 道`);
+    }
+
+    function openP2CorpusP3QuestionPicker() {
+      const entry = state.p2Corpus.activeP3Entry || {};
+      renderP2CorpusP3QuestionPicker(entry);
+      $("p2CorpusP3QuestionPicker")?.classList.remove("hidden");
+    }
+
+    function closeP2CorpusP3QuestionPicker() {
+      $("p2CorpusP3QuestionPicker")?.classList.add("hidden");
+    }
+
+    function insertSelectedP2CorpusP3Questions() {
+      const entry = state.p2Corpus.activeP3Entry || {};
+      const officialQuestions = p2OfficialFollowUpQuestions(entry);
+      if (!officialQuestions.length) {
+        text("p2CorpusP3QuestionPickerStatus", "这张题卡暂无题库追问。");
+        return;
+      }
+      const selected = Array.from(document.querySelectorAll("#p2CorpusP3QuestionList input[type='checkbox']:checked"))
+        .map((input) => officialQuestions[Number(input.value)])
+        .filter(Boolean);
+      if (!selected.length) {
+        text("p2CorpusP3QuestionPickerStatus", "请选择至少一道追问。");
+        return;
+      }
+      setCorpusMarkdownValue("p2CorpusP3FollowUp", p2P3FollowUpMarkdownTemplate(entry, selected));
+      text("p2CorpusP3QuestionPickerStatus", `已插入 ${selected.length} 道追问`);
+      text("p2CorpusP3SaveStatus", "已插入题库追问，编辑回答后保存。");
+      closeP2CorpusP3QuestionPicker();
+      setTimeout(() => {
+        const editor = isCorpusEditorReady("p2CorpusP3FollowUp") ? null : $("p2CorpusP3FollowUp");
+        editor?.focus?.();
+      }, 0);
+    }
+
     function openP2CorpusP3Editor(entry = {}) {
       if (!entry?.entry_id) return;
       const category = entry.category || "person";
       state.p2Corpus.activeP3Entry = { ...entry, category };
       text("p2CorpusP3DialogCategory", (entry.label || category).toString());
       text("p2CorpusP3DialogTitle", entry.title ? `相关 P3 追问：${entry.title}` : "编辑相关 P3 追问");
-      setCorpusMarkdownValue("p2CorpusP3FollowUp", entry.p3_follow_up_text || "");
-      text("p2CorpusP3SaveStatus", "");
+      updateP2CorpusP3QuestionSource(state.p2Corpus.activeP3Entry);
+      const initialText = entry.p3_follow_up_text || p2P3FollowUpMarkdownTemplate(entry);
+      setCorpusMarkdownValue("p2CorpusP3FollowUp", initialText);
+      text("p2CorpusP3SaveStatus", entry.p3_follow_up_text ? "" : (initialText ? "已放入题库追问，可直接补充回答。" : "这张题卡暂无题库 P3 追问，可手动添加。"));
+      closeP2CorpusP3QuestionPicker();
       $("p2CorpusP3Dialog")?.classList.remove("hidden");
       if (!isCorpusEditorReady("p2CorpusP3FollowUp")) setCorpusEditorLoading("p2CorpusP3FollowUp", true);
       ensureCorpusMarkdownEditorReady("p2CorpusP3FollowUp").then((editor) => {
@@ -1289,6 +1407,7 @@
 
     function closeP2CorpusP3Editor() {
       $("p2CorpusP3Dialog")?.classList.add("hidden");
+      closeP2CorpusP3QuestionPicker();
       state.p2Corpus.activeP3Entry = null;
     }
 
@@ -1316,7 +1435,7 @@
       const editorReady = isCorpusEditorReady("p2CorpusP3FollowUp");
       const p3FollowUpText = editorReady ? getCorpusMarkdownValue("p2CorpusP3FollowUp").trim() : "";
       closeP2CorpusP3Editor();
-      if (entry.entry_id && String(entry.material_text || "").trim()) {
+      if (entry.entry_id && p3FollowUpText) {
         saveP2CorpusEntry({
           entry,
           materialText: entry.material_text,
@@ -1330,7 +1449,8 @@
     async function saveP2CorpusEntry(options = {}) {
       const entry = options.entry || state.p2Corpus.activeEntry || {};
       if (state.p2Corpus.saving) return;
-      if (!options.materialText && !isCorpusEditorReady("p2CorpusText")) {
+      const hasExplicitP3Text = typeof options.p3FollowUpText === "string";
+      if (!options.materialText && !hasExplicitP3Text && !isCorpusEditorReady("p2CorpusText")) {
         text("p2CorpusSaveStatus", "编辑器还没加载完成，请等一秒再保存。");
         if (options.closeOnError) closeP2CorpusEditor();
         return;
@@ -1345,7 +1465,7 @@
       const nextTitle = (options.title ?? (materialDialogOpen ? $("p2CorpusTitle")?.value : "")) || entry.title || "";
       const nextLinkedQuestion = (options.linkedQuestion ?? (materialDialogOpen ? $("p2CorpusLinkedQuestion")?.value : "")) || entry.linked_question || "";
       const nextP3FollowUpText = options.p3FollowUpText ?? (p3DialogOpen ? getCorpusMarkdownValue("p2CorpusP3FollowUp") : entry.p3_follow_up_text || "");
-      if (!nextMaterialText) {
+      if (!nextMaterialText && !String(nextP3FollowUpText || "").trim()) {
         if (!options.silent) text("p2CorpusSaveStatus", "内容为空，未保存。");
         state.p2Corpus.saving = false;
         if (options.closeOnEmpty) closeP2CorpusEditor();
@@ -1570,6 +1690,9 @@
       closeP2CorpusEditor,
       openP2CorpusP3Editor,
       closeP2CorpusP3Editor,
+      openP2CorpusP3QuestionPicker,
+      closeP2CorpusP3QuestionPicker,
+      insertSelectedP2CorpusP3Questions,
       saveAndCloseP2CorpusEditor,
       saveAndCloseP2CorpusP3Editor,
       saveP2CorpusEntry,

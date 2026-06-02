@@ -576,6 +576,83 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(payload["scope"], "current_season_only")
         self.assertGreaterEqual(payload["current_part2_count"], 55)
         self.assertEqual(len(payload["current_part2_categories"]), 5)
+        self.assertIn("current_part2_cards", payload)
+        self.assertEqual(len(payload["current_part2_cards"]), payload["current_part2_count"])
+        first_card = payload["current_part2_cards"][0]
+        self.assertTrue(first_card["entry_id"].startswith("p2:"))
+        self.assertTrue(first_card["cue_id"].startswith("p2cue:"))
+        self.assertIn("bullets", first_card)
+        self.assertIn("rounding", first_card)
+        self.assertFalse(first_card["has_material"])
+        self.assertFalse(first_card["has_p3_follow_up"])
+
+    def test_p2_corpus_category_counts_user_saved_material_not_season_topics(self):
+        payload = self.client.get("/api/p2-corpus").json()
+        self.assertTrue(payload["current_part2_categories"])
+        self.assertTrue(all(category["material_count"] == 0 for category in payload["categories"]))
+        self.assertNotIn("topic_count", payload["categories"][0])
+
+        response = self.client.post(
+            "/api/p2-corpus",
+            data={
+                "category": "person",
+                "title": "Reusable person story",
+                "material_text": "This is a reusable person story across seasons.",
+                "linked_question": "",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        updated = self.client.get("/api/p2-corpus").json()
+        counts = {item["category"]: item["material_count"] for item in updated["categories"]}
+        self.assertEqual(counts["person"], 1)
+        self.assertEqual(counts["place"], 0)
+
+    def test_p2_corpus_library_merges_current_season_card_with_saved_entry(self):
+        library = self.client.get("/api/p2-corpus").json()
+        card = library["current_part2_cards"][0]
+        save_response = self.client.post(
+            "/api/p2-corpus",
+            data={
+                "entry_id": card["entry_id"],
+                "category": card["category"],
+                "title": card["title"],
+                "material_text": "I can use one prepared story for this cue card.",
+                "p3_follow_up_text": "How do people usually prepare for this kind of topic?",
+                "linked_question": card["linked_question"],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(save_response.status_code, 200)
+
+        updated = self.client.get("/api/p2-corpus").json()
+        updated_card = next(item for item in updated["current_part2_cards"] if item["entry_id"] == card["entry_id"])
+        self.assertTrue(updated_card["has_material"])
+        self.assertTrue(updated_card["has_p3_follow_up"])
+        self.assertEqual(updated_card["material_text"], "I can use one prepared story for this cue card.")
+        self.assertEqual(updated_card["p3_follow_up_text"], "How do people usually prepare for this kind of topic?")
+
+    def test_p2_corpus_can_save_p3_follow_up_before_main_material(self):
+        library = self.client.get("/api/p2-corpus").json()
+        card = library["current_part2_cards"][0]
+        response = self.client.post(
+            "/api/p2-corpus",
+            data={
+                "entry_id": card["entry_id"],
+                "category": card["category"],
+                "title": card["title"],
+                "material_text": "",
+                "p3_follow_up_text": "Work, public places, and habits.",
+                "linked_question": card["linked_question"],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()
+        self.assertEqual(saved["entry_id"], card["entry_id"])
+        self.assertEqual(saved["material_text"], "")
+        self.assertEqual(saved["p3_follow_up_text"], "Work, public places, and habits.")
 
     def test_p2_corpus_library_respects_scope(self):
         response = self.client.get("/api/p2-corpus?scope=archive")
@@ -956,6 +1033,43 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(language_entry.source_text, "strike a better balance")
         self.assertEqual(language_entry.metadata.get("saved_from"), "language_takeaway")
         self.assertEqual(writing_entry.source_text, "clearer topic sentence")
+
+    def test_takeaway_detail_update_accepts_post_for_editor_save(self):
+        language_entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-post-owned",
+            source_text="beneficial",
+            chinese_text="有益",
+            metadata={"saved_from": "language_takeaway"},
+        )
+        writing_entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="wt-post-owned",
+            source_text="clear topic sentence",
+            chinese_text="清晰的主题句",
+            metadata={"saved_from": "writing_takeaway"},
+        )
+
+        language_response = self.client.post(
+            f"/api/language-takeaways/{language_entry.entry_id}",
+            data={"source_text": "beneficial effect", "chinese_text": "有益影响"},
+            content_type="application/json",
+        )
+        writing_response = self.client.post(
+            f"/api/writing-takeaways/{writing_entry.entry_id}",
+            data={"source_text": "clearer topic sentence", "chinese_text": "更清晰的主题句"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(language_response.status_code, 200)
+        self.assertEqual(writing_response.status_code, 200)
+        language_entry.refresh_from_db()
+        writing_entry.refresh_from_db()
+        self.assertEqual(language_entry.source_text, "beneficial effect")
+        self.assertEqual(language_entry.chinese_text, "有益影响")
+        self.assertEqual(language_entry.metadata.get("saved_from"), "language_takeaway")
+        self.assertEqual(writing_entry.source_text, "clearer topic sentence")
+        self.assertEqual(writing_entry.metadata.get("saved_from"), "writing_takeaway")
         self.assertEqual(writing_entry.metadata.get("saved_from"), "writing_takeaway")
 
     def test_writing_takeaway_delete_is_writing_scoped(self):

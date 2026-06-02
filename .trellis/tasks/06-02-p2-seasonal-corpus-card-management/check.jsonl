@@ -1,0 +1,5 @@
+{"command":".venv-django/bin/python backend_django/manage.py test apps.speaking.tests","reason":"Validate speaking corpus API behavior and existing speaking regressions."}
+{"command":".venv-django/bin/python backend_django/manage.py check","reason":"Django configuration/system validation."}
+{"command":"node --check web/static/corpus-takeaway.js","reason":"Validate changed corpus frontend module syntax."}
+{"command":"node --check web/static/app.js","reason":"Validate SPA shell syntax remains intact."}
+{"command":"git diff --check","reason":"Catch whitespace and patch formatting issues."}

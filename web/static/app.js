@@ -52,6 +52,7 @@ const state = {
   },
   p2Corpus: {
     categories: [],
+    currentPart2Cards: [],
     loaded: false,
     loadingPromise: null,
     activeEntry: null,
@@ -782,6 +783,7 @@ function clearUserScopedCaches() {
   state.p1Corpus.loaded = false;
   state.p1Corpus.loadingPromise = null;
   state.p2Corpus.categories = [];
+  state.p2Corpus.currentPart2Cards = [];
   state.p2Corpus.loaded = false;
   state.p2Corpus.loadingPromise = null;
   state.writing.reportEntries = [];
@@ -849,6 +851,7 @@ function clearQuestionBankScopedCaches() {
   state.p1Corpus.loaded = false;
   state.p1Corpus.loadingPromise = null;
   state.p2Corpus.categories = [];
+  state.p2Corpus.currentPart2Cards = [];
   state.p2Corpus.loaded = false;
   state.p2Corpus.loadingPromise = null;
 }
@@ -935,6 +938,7 @@ function applyP1CorpusPayload(payload) {
 
 function applyP2CorpusPayload(payload) {
   state.p2Corpus.categories = payload.categories || [];
+  state.p2Corpus.currentPart2Cards = payload.current_part2_cards || [];
   state.p2Corpus.loaded = true;
   const stats = $("p2CorpusStats");
   if (stats) {
@@ -1723,15 +1727,27 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
     try {
       const payload = await api(`/api/p2-corpus?${questionBankScopeQuery()}`);
       state.p2Corpus.categories = payload.categories || [];
+      state.p2Corpus.currentPart2Cards = payload.current_part2_cards || [];
     } catch (_error) {
       state.p2Corpus.categories = [];
+      state.p2Corpus.currentPart2Cards = [];
     }
   }
   if (!isCurrentP2Prep()) return;
   const options = [];
+  const optionIds = new Set();
   for (const category of state.p2Corpus.categories || []) {
     for (const item of category.items || []) {
+      if (optionIds.has(item.entry_id)) continue;
+      optionIds.add(item.entry_id);
       options.push({ ...item, label: category.label || item.label || item.category });
+    }
+  }
+  for (const item of state.p2Corpus.currentPart2Cards || []) {
+    if (item.has_material || item.has_p3_follow_up) {
+      if (optionIds.has(item.entry_id)) continue;
+      optionIds.add(item.entry_id);
+      options.push({ ...item, label: item.label || item.category });
     }
   }
   panel.classList.remove("hidden");
@@ -7679,6 +7695,20 @@ function bindEvents() {
       event.preventDefault();
       event.stopPropagation();
       openP2CorpusP3Editor(findP2CorpusEntry(p3Button.dataset.p2CorpusP3 || ""));
+      return;
+    }
+    const cardMaterialButton = event.target.closest("[data-p2-corpus-card-material]");
+    if (cardMaterialButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      openP2CorpusEditor(findP2CorpusEntry(cardMaterialButton.dataset.p2CorpusCardMaterial || ""));
+      return;
+    }
+    const cardP3Button = event.target.closest("[data-p2-corpus-card-p3]");
+    if (cardP3Button) {
+      event.preventDefault();
+      event.stopPropagation();
+      openP2CorpusP3Editor(findP2CorpusEntry(cardP3Button.dataset.p2CorpusCardP3 || ""));
       return;
     }
     const existing = event.target.closest("[data-p2-corpus-entry]");

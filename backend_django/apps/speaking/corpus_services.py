@@ -497,6 +497,13 @@ def p2_current_topic_categories(topics: list[dict[str, Any]]) -> list[dict[str, 
     return list(grouped.values())
 
 
+def p2_category_label(category: str) -> str:
+    for item in P2_CORPUS_CATEGORIES:
+        if item["category"] == category:
+            return item["label"]
+    return str(category or P2CorpusEntry.Category.SPECIAL)
+
+
 def p2_cue_identity_text(topic: dict[str, Any]) -> str:
     title = clean_report_text(str(topic.get("title") or ""))
     bullets = [clean_report_text(str(item)) for item in topic.get("bullets") or [] if clean_report_text(str(item))]
@@ -545,8 +552,54 @@ def p2_corpus_entry_payload(entry: P2CorpusEntry) -> dict[str, Any]:
     }
 
 
+def p2_topic_card_payload(topic: dict[str, Any], entry: P2CorpusEntry | None = None) -> dict[str, Any]:
+    category = p2_topic_category(topic)
+    cue_id = str(topic.get("cue_id") or p2_cue_id(topic))
+    entry_id = str(topic.get("canonical_entry_id") or p2_canonical_entry_id(topic))
+    title = clean_report_text(str(topic.get("title") or ""))
+    bullets = [clean_report_text(str(item)) for item in topic.get("bullets") or [] if clean_report_text(str(item))]
+    rounding = clean_report_text(str(topic.get("rounding") or ""))
+    p3_follow_ups = [
+        clean_report_text(str(item))[:260]
+        for item in topic.get("p3_follow_ups") or []
+        if clean_report_text(str(item))
+    ]
+    linked_question = p2_cue_identity_text({"title": title, "bullets": bullets, "rounding": rounding})
+    extra = p2_corpus_extra(entry) if entry else {"p3_follow_up_text": ""}
+    resolved_category = entry.category if entry else category
+    return {
+        "entry_id": entry.entry_id if entry else entry_id,
+        "canonical_entry_id": entry_id,
+        "cue_id": cue_id,
+        "category": resolved_category,
+        "label": p2_category_label(resolved_category),
+        "title": entry.title if entry else title,
+        "cue_title": title,
+        "bullets": bullets,
+        "rounding": rounding,
+        "linked_question": entry.linked_question if entry and entry.linked_question else linked_question,
+        "material_text": entry.material_text if entry else "",
+        "p3_follow_up_text": extra["p3_follow_up_text"],
+        "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M") if entry else "",
+        "season": str(topic.get("season") or ""),
+        "status": str(topic.get("status") or ""),
+        "region": str(topic.get("region") or ""),
+        "source": str(topic.get("source") or ""),
+        "source_url": str(topic.get("source_url") or ""),
+        "p3_theme": str(topic.get("p3_theme") or ""),
+        "p3_follow_ups": p3_follow_ups,
+        "p3_follow_up_count": len(p3_follow_ups),
+        "has_material": bool(entry and entry.material_text.strip()),
+        "has_p3_follow_up": bool(extra["p3_follow_up_text"].strip()),
+    }
+
+
 def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
     normalized_scope = normalize_question_bank_scope(scope)
+    entries_by_id = {
+        entry.entry_id: entry
+        for entry in P2CorpusEntry.objects.filter(user=user)
+    }
     grouped = {
         item["category"]: {
             "category": item["category"],
@@ -555,15 +608,23 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
         }
         for item in P2_CORPUS_CATEGORIES
     }
-    for entry in P2CorpusEntry.objects.filter(user=user).order_by("category", "-updated_at", "title"):
+    ordered_entries = sorted(entries_by_id.values(), key=lambda item: (item.category, -item.updated_at.timestamp(), item.title))
+    for entry in ordered_entries:
         group = grouped.setdefault(
             entry.category,
             {"category": entry.category, "label": entry.get_category_display(), "items": []},
         )
         group["items"].append(p2_corpus_entry_payload(entry))
     categories = list(grouped.values())
+    for category in categories:
+        category["material_count"] = len(category["items"])
     bank = get_question_bank()
     selected_topics = bank.part2_for_scope(normalized_scope)
+    current_part2_categories = p2_current_topic_categories(selected_topics)
+    current_part2_cards = [
+        p2_topic_card_payload(topic, entries_by_id.get(str(topic.get("canonical_entry_id") or p2_canonical_entry_id(topic))))
+        for topic in selected_topics
+    ]
     return {
         "categories": categories,
         "category_count": len(categories),
@@ -574,7 +635,8 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
         "active_scope_label": QUESTION_BANK_SCOPE_LABELS[normalized_scope],
         "scope": "current_season_only" if normalized_scope == QUESTION_BANK_SCOPE_CURRENT else normalized_scope,
         "current_part2_count": len(selected_topics),
-        "current_part2_categories": p2_current_topic_categories(selected_topics),
+        "current_part2_categories": current_part2_categories,
+        "current_part2_cards": current_part2_cards,
     }
 
 
@@ -585,9 +647,9 @@ def save_p2_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
         category = P2CorpusEntry.Category.SPECIAL
     title = clean_report_text(str(payload.get("title") or "未命名素材"))[:200] or "未命名素材"
     material_text = clean_markdown_text(str(payload.get("material_text") or ""))[:12000]
-    if not material_text.strip():
-        raise SpeakingError("P2 material text is empty.")
     p3_follow_up_text = clean_markdown_text(str(payload.get("p3_follow_up_text") or ""))[:8000]
+    if not material_text.strip() and not p3_follow_up_text.strip():
+        raise SpeakingError("P2 material text is empty.")
     linked_question = clean_report_text(str(payload.get("linked_question") or ""))[:1000]
     entry_id = clean_report_text(str(payload.get("entry_id") or "")) or p2_entry_id(category, title, linked_question)
     metadata = {

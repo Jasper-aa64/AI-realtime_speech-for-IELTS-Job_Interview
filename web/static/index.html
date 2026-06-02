@@ -545,6 +545,27 @@
               <button id="saveP2CorpusP3Btn" type="button">保存追问</button>
             </header>
             <label class="p1-corpus-label" for="p2CorpusP3FollowUp">相关 P3 追问</label>
+            <div class="p2-p3-source-tools">
+              <div>
+                <strong>题库 P3 追问</strong>
+                <span id="p2CorpusP3QuestionSourceStatus">暂无题库追问</span>
+              </div>
+              <button id="openP2CorpusP3QuestionPickerBtn" type="button">选择题库追问</button>
+            </div>
+            <div id="p2CorpusP3QuestionPicker" class="p2-p3-question-picker hidden" role="dialog" aria-label="选择题库 P3 追问">
+              <header>
+                <div>
+                  <strong>选择要放入语料库的 P3 追问</strong>
+                  <span>来自当前 P2 题卡，不限制题目数量。</span>
+                </div>
+                <button id="closeP2CorpusP3QuestionPickerBtn" type="button" aria-label="关闭题库追问选择">关闭</button>
+              </header>
+              <div id="p2CorpusP3QuestionList" class="p2-p3-question-list"></div>
+              <footer>
+                <span id="p2CorpusP3QuestionPickerStatus"></span>
+                <button id="insertP2CorpusP3QuestionsBtn" type="button">插入选中追问</button>
+              </footer>
+            </div>
             <textarea id="p2CorpusP3FollowUp" class="p1-corpus-textarea p2-p3-follow-up" spellcheck="true"></textarea>
             <div class="p1-corpus-dialog-actions">
               <span id="p2CorpusP3SaveStatus"></span>
@@ -1127,7 +1148,7 @@
     <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
     <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
     <script src="/corpus-markdown-editor.js?v=20260530-corpus-markdown-editor"></script>
-    <script src="/corpus-takeaway.js?v=20260530-corpus-archive-lookup"></script>
+    <script src="/corpus-takeaway.js?v=20260602-p2-p3-followups"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
@@ -1135,6 +1156,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260531-howler-examiner-audio"></script>
+    <script src="/app.js?v=20260602-p2-p3-followups"></script>
   </body>
 </html>

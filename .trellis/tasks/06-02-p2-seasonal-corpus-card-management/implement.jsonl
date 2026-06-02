@@ -1,0 +1,11 @@
+{"path":".trellis/spec/frontend/index.md","reason":"Frontend conventions and UI quality expectations for corpus pages."}
+{"path":".trellis/spec/backend/index.md","reason":"Backend service/API conventions for speaking endpoints."}
+{"path":"data/ielts/part2/2026_may_august_topics.json","reason":"Runtime source for current-season P2 cue cards."}
+{"path":".firecrawl/ieltsbro-api/ieltsbro-2026-5-8-catalog.json","reason":"Downloaded public snapshot for cross-checking the current season source."}
+{"path":"backend_django/apps/speaking/corpus_services.py","reason":"P2 corpus library payload, stable IDs, save behavior."}
+{"path":"backend_django/apps/speaking/models.py","reason":"P2CorpusEntry schema and category values."}
+{"path":"backend_django/apps/speaking/tests.py","reason":"Existing P2 corpus tests and target for new coverage."}
+{"path":"web/static/corpus-takeaway.js","reason":"P2 corpus UI rendering, editor opening, save handlers."}
+{"path":"web/static/index.html","reason":"Existing P2 material and P3 follow-up dialogs."}
+{"path":"web/static/styles.css","reason":"P2 corpus page and card styling."}
+

@@ -1758,6 +1758,15 @@ h1 {
   overflow: auto;
 }
 
+.takeaway-edit-dialog .p1-corpus-dialog-card.takeaway-edit-card {
+  width: min(540px, calc(100vw - 32px));
+  max-width: 540px;
+  height: auto;
+  min-height: 0;
+  max-height: min(560px, calc(100vh - 64px));
+  padding: 14px 16px;
+}
+
 .p1-corpus-dialog-card.takeaway-edit-card .p1-corpus-dialog-head {
   padding-bottom: 6px;
 }
@@ -1775,12 +1784,16 @@ h1 {
 
 .p1-corpus-dialog-card.takeaway-edit-card .takeaway-edit-source,
 .p1-corpus-dialog-card.takeaway-edit-card .takeaway-edit-chinese {
-  min-height: 84px;
-  max-height: 180px;
+  min-height: 76px;
+  max-height: 132px;
   font-size: 15px;
   line-height: 1.45;
   resize: vertical;
   overflow: auto;
+}
+
+.takeaway-edit-dialog .p1-corpus-dialog-actions {
+  padding-top: 4px;
 }
 
 #languageTakeawayStatus {
@@ -1940,9 +1953,188 @@ h1 {
 }
 
 .p2-corpus-topics {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 0 4px 6px 0;
+}
+
+.p2-category-entry-grid,
+.p2-seasonal-card-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.p2-category-entry-grid {
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+}
+
+.p2-seasonal-card-section {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.p2-seasonal-section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 2px 2px 0;
+}
+
+.p2-seasonal-section-head h3 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.p2-seasonal-section-head > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.p2-seasonal-card-grid {
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
+  grid-auto-rows: max-content;
+}
+
+.p2-seasonal-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  min-height: 260px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-left: 5px solid var(--p2-corpus-accent);
+  border-radius: 8px;
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.045);
+}
+
+.p2-seasonal-card:hover {
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
+}
+
+.p2-seasonal-card header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.p2-seasonal-card h3 {
+  margin: 5px 0 0;
+  color: #0f172a;
+  font-size: 17px;
+  line-height: 1.24;
+  font-weight: 820;
+}
+
+.p2-seasonal-card-kicker {
+  color: var(--p2-corpus-accent-dark);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.p2-seasonal-card-state {
+  flex: 0 0 auto;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.p2-seasonal-card-state.is-ready {
+  border-color: rgba(37, 99, 235, 0.18);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.p2-seasonal-cue {
+  display: grid;
+  gap: 9px;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.p2-seasonal-cue strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.p2-seasonal-cue ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.p2-seasonal-cue p {
+  margin: 0;
+}
+
+.p2-seasonal-card footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.p2-seasonal-action {
+  min-height: 42px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 8px;
+  background: #fff;
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 820;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.p2-seasonal-action.primary,
+.p2-seasonal-action.is-ready {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.p2-seasonal-action:hover,
+.p2-seasonal-action:focus-visible {
+  border-color: rgba(37, 99, 235, 0.34);
+  background: #dbeafe;
+  outline: none;
+}
+
+@media (max-width: 1420px) {
+  .p2-category-entry-grid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .p2-seasonal-card-grid {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+  }
 }
 
 .p1-topic-card,
@@ -10884,6 +11076,7 @@ body.theme-dark .language-hide-toggle[aria-pressed="true"] {
 
 body.theme-dark .p1-topic-card,
 body.theme-dark .p2-topic-card,
+body.theme-dark .p2-seasonal-card,
 body.theme-dark .language-takeaway-card {
   background: linear-gradient(180deg, var(--dark-panel-top), var(--dark-panel-bottom));
   border-color: var(--dark-border);
@@ -10893,6 +11086,7 @@ body.theme-dark .language-takeaway-card {
 
 body.theme-dark .p1-topic-card:hover,
 body.theme-dark .p2-topic-card:hover,
+body.theme-dark .p2-seasonal-card:hover,
 body.theme-dark .language-takeaway-card:hover {
   border-color: var(--dark-primary-border);
   box-shadow: var(--dark-shadow);
@@ -10926,6 +11120,39 @@ body.theme-dark .p2-topic-material-list .p2-add-material-button strong {
   background: var(--dark-chip-bg);
   border-color: var(--dark-chip-border);
   color: var(--dark-chip-text);
+}
+
+body.theme-dark .p2-seasonal-section-head h3,
+body.theme-dark .p2-seasonal-card h3,
+body.theme-dark .p2-seasonal-cue strong {
+  color: var(--ink);
+}
+
+body.theme-dark .p2-seasonal-cue {
+  color: var(--muted);
+}
+
+body.theme-dark .p2-seasonal-section-head > span,
+body.theme-dark .p2-seasonal-card-state,
+body.theme-dark .p2-seasonal-action {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  color: var(--muted);
+}
+
+body.theme-dark .p2-seasonal-card-state.is-ready,
+body.theme-dark .p2-seasonal-action.primary,
+body.theme-dark .p2-seasonal-action.is-ready {
+  background: var(--dark-primary-soft);
+  border-color: var(--dark-primary-border);
+  color: var(--dark-primary-text);
+}
+
+body.theme-dark .p2-seasonal-action:hover,
+body.theme-dark .p2-seasonal-action:focus-visible {
+  background: var(--dark-primary-soft);
+  border-color: var(--dark-primary-border);
+  color: var(--dark-primary-text);
 }
 
 body.theme-dark .p1-topic-progress {
@@ -13044,6 +13271,15 @@ body.theme-dark.font-academic .history-item:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .p2-category-entry-grid,
+  .p2-seasonal-card-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
+  .p2-seasonal-card {
+    min-height: 240px;
+  }
+
   .p2-corpus-peek-dialog {
     left: 0;
     padding: 0;
@@ -13373,6 +13609,26 @@ body.theme-dark.font-academic .history-item:hover {
     font-size: 13px;
   }
 
+  .p2-category-entry-grid,
+  .p2-seasonal-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .p2-seasonal-section-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .p2-seasonal-card {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .p2-seasonal-card footer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .p2-material-row {
     grid-template-columns: minmax(0, 1fr) 96px;
     min-height: 64px;
@@ -13445,7 +13701,7 @@ body.theme-dark.font-academic .history-item:hover {
     max-height: calc(100vh - 24px);
   }
   .p1-corpus-dialog-card.takeaway-edit-card {
-    width: min(100%, 560px);
+    width: min(100%, 540px);
     height: auto;
     min-height: 0;
     max-height: calc(100vh - 24px);
