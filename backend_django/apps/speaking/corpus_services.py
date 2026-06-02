@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from .exceptions import SpeakingError
@@ -633,10 +634,16 @@ def language_takeaway_payload(entry: LanguageTakeawayEntry) -> dict[str, Any]:
     }
 
 
+def language_takeaway_queryset(user):
+    return LanguageTakeawayEntry.objects.filter(user=user).filter(
+        Q(metadata__saved_from__isnull=True) | ~Q(metadata__saved_from="writing_takeaway")
+    )
+
+
 def language_takeaway_library(user) -> dict[str, Any]:
     entries = [
         language_takeaway_payload(entry)
-        for entry in LanguageTakeawayEntry.objects.filter(user=user).order_by("-updated_at")[:300]
+        for entry in language_takeaway_queryset(user).order_by("-updated_at")[:300]
     ]
     return {"items": entries, "count": len(entries)}
 
@@ -855,8 +862,61 @@ def save_writing_takeaway(user, payload: dict[str, Any]) -> dict[str, Any]:
     return save_language_takeaway(user, payload)
 
 
+def update_language_takeaway(user, entry_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    entry = language_takeaway_queryset(user).filter(entry_id=str(entry_id or "").strip()).first()
+    if not entry:
+        raise SpeakingError("Language takeaway entry not found")
+    editable_payload = {key: payload[key] for key in ("source_text", "chinese_text") if key in payload}
+    payload = {
+        "source_text": entry.source_text,
+        "chinese_text": entry.chinese_text,
+        "source_language": entry.source_language,
+        "target_language": entry.target_language,
+        "context_url": entry.context_url,
+        "context_label": entry.context_label,
+        "source": (entry.metadata or {}).get("saved_from") or "language_takeaway",
+        **editable_payload,
+        "entry_id": entry.entry_id,
+    }
+    return save_language_takeaway(user, payload)
+
+
+def update_writing_takeaway(user, entry_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    entry = LanguageTakeawayEntry.objects.filter(
+        user=user,
+        entry_id=str(entry_id or "").strip(),
+        metadata__saved_from="writing_takeaway",
+    ).first()
+    if not entry:
+        raise SpeakingError("Language takeaway entry not found")
+    editable_payload = {key: payload[key] for key in ("source_text", "chinese_text") if key in payload}
+    payload = {
+        "source_text": entry.source_text,
+        "chinese_text": entry.chinese_text,
+        "source_language": entry.source_language,
+        "target_language": entry.target_language,
+        "context_url": entry.context_url,
+        "context_label": entry.context_label,
+        **editable_payload,
+        "entry_id": entry.entry_id,
+    }
+    return save_writing_takeaway(user, payload)
+
+
 def delete_language_takeaway(user, entry_id: str) -> dict[str, Any]:
-    entry = LanguageTakeawayEntry.objects.filter(user=user, entry_id=str(entry_id or "").strip()).first()
+    entry = language_takeaway_queryset(user).filter(entry_id=str(entry_id or "").strip()).first()
+    if not entry:
+        raise SpeakingError("Language takeaway entry not found")
+    entry.delete()
+    return {"ok": True}
+
+
+def delete_writing_takeaway(user, entry_id: str) -> dict[str, Any]:
+    entry = LanguageTakeawayEntry.objects.filter(
+        user=user,
+        entry_id=str(entry_id or "").strip(),
+        metadata__saved_from="writing_takeaway",
+    ).first()
     if not entry:
         raise SpeakingError("Language takeaway entry not found")
     entry.delete()

@@ -39,6 +39,7 @@ from .corpus_services import (
     caiyun_translate_text,
     delete_language_takeaway,
     delete_p2_corpus,
+    delete_writing_takeaway,
     get_question_bank,
     language_takeaway_library,
     language_takeaway_payload,
@@ -61,6 +62,8 @@ from .corpus_services import (
     save_p2_corpus,
     save_writing_takeaway,
     takeaway_entry_id,
+    update_language_takeaway,
+    update_writing_takeaway,
     writing_takeaway_library,
 )
 from .exceptions import SpeakingError

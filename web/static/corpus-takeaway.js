@@ -38,6 +38,45 @@
     }
 
     const CORPUS_PEEK_WINDOW_MARGIN = Number(corpusPeekWindowMargin) || 16;
+    const DOTS_ICON = `
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M12 6.5h.01"></path>
+        <path d="M12 12h.01"></path>
+        <path d="M12 17.5h.01"></path>
+      </svg>
+    `;
+
+    function corpusCardActionMenuHtml({ menuAttr, editAttr, deleteAttr, entryId }) {
+      const id = escapeHtml(entryId);
+      return `
+        <button type="button" class="corpus-menu-button" ${menuAttr}="${id}" data-corpus-card-menu aria-haspopup="menu" aria-expanded="false" aria-label="打开操作菜单" title="更多操作">
+          ${DOTS_ICON}
+        </button>
+        <div class="corpus-card-action-menu hidden" data-corpus-card-action-menu role="menu" aria-label="项目操作">
+          <button type="button" role="menuitem" ${editAttr}="${id}">修改</button>
+          <button type="button" role="menuitem" class="danger" ${deleteAttr}="${id}">删除</button>
+        </div>
+      `;
+    }
+
+    function closeCorpusCardActionMenus(exceptMenu = null) {
+      document.querySelectorAll("[data-corpus-card-action-menu]").forEach((menu) => {
+        if (menu === exceptMenu) return;
+        menu.classList.add("hidden");
+        const button = menu.parentElement?.querySelector("[data-corpus-card-menu]");
+        button?.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    function toggleCorpusCardActionMenu(button) {
+      if (!button) return;
+      const menu = button.parentElement?.querySelector("[data-corpus-card-action-menu]");
+      if (!menu) return;
+      const willOpen = menu.classList.contains("hidden");
+      closeCorpusCardActionMenus(menu);
+      menu.classList.toggle("hidden", !willOpen);
+      button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    }
 
     async function loadP1Corpus() {
       const stats = $("p1CorpusStats");
@@ -653,13 +692,12 @@
                         <path d="M16 15.5l1.6 1.6 3.2-3.6"></path>
                       </svg>
                     </button>
-                    <button type="button" class="corpus-delete-button" data-p2-corpus-delete="${escapeHtml(item.entry_id)}" aria-label="删除素材" title="删除素材">
-                      <svg aria-hidden="true" viewBox="0 0 24 24">
-                        <path d="M12 6.5h.01"></path>
-                        <path d="M12 12h.01"></path>
-                        <path d="M12 17.5h.01"></path>
-                      </svg>
-                    </button>
+                    ${corpusCardActionMenuHtml({
+                      menuAttr: "data-p2-corpus-menu",
+                      editAttr: "data-p2-corpus-edit",
+                      deleteAttr: "data-p2-corpus-delete",
+                      entryId: item.entry_id,
+                    })}
                   </div>
                 </div>
               `).join("")}
@@ -715,13 +753,12 @@
             <strong class="takeaway-source">${escapeHtml(item.source_text)}</strong>
             <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
           </button>
-          <button type="button" class="takeaway-delete-button" data-takeaway-delete="${escapeHtml(item.entry_id)}" aria-label="删除生词" title="删除生词">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 6.5h.01"></path>
-              <path d="M12 12h.01"></path>
-              <path d="M12 17.5h.01"></path>
-            </svg>
-          </button>
+          ${corpusCardActionMenuHtml({
+            menuAttr: "data-takeaway-menu",
+            editAttr: "data-takeaway-edit",
+            deleteAttr: "data-takeaway-delete",
+            entryId: item.entry_id,
+          })}
         </div>
       `).join("");
     }
@@ -1078,6 +1115,122 @@
       }
     }
 
+    function takeawayItems(kind) {
+      return kind === "writing" ? (state.writingTakeaway.items || []) : (state.languageTakeaway.items || []);
+    }
+
+    function findTakeawayEntry(kind, entryId) {
+      return takeawayItems(kind).find((entry) => entry.entry_id === entryId) || null;
+    }
+
+    function takeawayEditEndpoint(kind, entryId) {
+      const base = kind === "writing" ? "/api/writing-takeaways" : "/api/language-takeaways";
+      return `${base}/${encodeURIComponent(entryId)}`;
+    }
+
+    function openTakeawayEditor(kind, entryId) {
+      const entry = findTakeawayEntry(kind, entryId);
+      if (!entry) return;
+      closeCorpusCardActionMenus();
+      state.languageTakeaway.activeEdit = {
+        kind,
+        entryId,
+        originalSourceText: entry.source_text || "",
+        originalChineseText: entry.chinese_text || "",
+      };
+      text("takeawayEditDialogType", kind === "writing" ? "写作积累" : "Takeaway");
+      text("takeawayEditDialogTitle", kind === "writing" ? "编辑写作积累" : "编辑 Takeaway");
+      if ($("takeawayEditSource")) $("takeawayEditSource").value = entry.source_text || "";
+      if ($("takeawayEditChinese")) $("takeawayEditChinese").value = entry.chinese_text || "";
+      text("takeawayEditStatus", "");
+      $("takeawayEditDialog")?.classList.remove("hidden");
+      setTimeout(() => $("takeawayEditSource")?.focus(), 0);
+    }
+
+    function takeawayEditorValues() {
+      return {
+        sourceText: ($("takeawayEditSource")?.value || "").trim(),
+        chineseText: ($("takeawayEditChinese")?.value || "").trim(),
+      };
+    }
+
+    function isTakeawayEditorDirty() {
+      const active = state.languageTakeaway.activeEdit;
+      if (!active?.entryId) return false;
+      const values = takeawayEditorValues();
+      return (
+        values.sourceText !== String(active.originalSourceText || "").trim() ||
+        values.chineseText !== String(active.originalChineseText || "").trim()
+      );
+    }
+
+    async function closeTakeawayEditor(options = {}) {
+      if (options.saveDirty && isTakeawayEditorDirty()) {
+        const saved = await saveTakeawayEditor();
+        if (!saved) return false;
+        return true;
+      }
+      $("takeawayEditDialog")?.classList.add("hidden");
+      state.languageTakeaway.activeEdit = null;
+      state.languageTakeaway.editing = false;
+      text("takeawayEditStatus", "");
+      return true;
+    }
+
+    function replaceTakeawayEntry(kind, saved) {
+      const listState = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      const items = listState.items || [];
+      const index = items.findIndex((item) => item.entry_id === saved.entry_id);
+      if (index >= 0) items.splice(index, 1, saved);
+      else items.unshift(saved);
+      listState.items = items;
+      if (kind === "writing") {
+        state.writingTakeaway.revealedEntryIds.add(saved.entry_id);
+        renderWritingTakeaways();
+        text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
+      } else {
+        state.languageTakeaway.revealedEntryIds.add(saved.entry_id);
+        renderLanguageTakeaways();
+        text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+      }
+    }
+
+    async function saveTakeawayEditor() {
+      const active = state.languageTakeaway.activeEdit;
+      if (!active?.entryId || state.languageTakeaway.editing) return false;
+      const { sourceText, chineseText } = takeawayEditorValues();
+      if (!sourceText) {
+        text("takeawayEditStatus", "原文为空，未保存。");
+        return false;
+      }
+      state.languageTakeaway.editing = true;
+      const button = $("saveTakeawayEditBtn");
+      const original = button?.textContent || "保存";
+      if (button) {
+        button.disabled = true;
+        button.textContent = "保存中...";
+      }
+      text("takeawayEditStatus", "");
+      try {
+        const saved = await api(takeawayEditEndpoint(active.kind, active.entryId), {
+          source_text: sourceText,
+          chinese_text: chineseText,
+        }, { method: "PATCH" });
+        replaceTakeawayEntry(active.kind, saved);
+        closeTakeawayEditor();
+        return true;
+      } catch (error) {
+        text("takeawayEditStatus", error.message || String(error));
+        return false;
+      } finally {
+        state.languageTakeaway.editing = false;
+        if (button) {
+          button.disabled = false;
+          button.textContent = original;
+        }
+      }
+    }
+
     function findP2CorpusEntry(entryId) {
       for (const category of state.p2Corpus.categories || []) {
         const found = (category.items || []).find((item) => item.entry_id === entryId);
@@ -1291,13 +1444,12 @@
             <strong class="takeaway-source">${escapeHtml(item.source_text)}</strong>
             <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
           </button>
-          <button type="button" class="takeaway-delete-button" data-writing-takeaway-delete="${escapeHtml(item.entry_id)}" aria-label="删除写作积累" title="删除写作积累">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 6.5h.01"></path>
-              <path d="M12 12h.01"></path>
-              <path d="M12 17.5h.01"></path>
-            </svg>
-          </button>
+          ${corpusCardActionMenuHtml({
+            menuAttr: "data-writing-takeaway-menu",
+            editAttr: "data-writing-takeaway-edit",
+            deleteAttr: "data-writing-takeaway-delete",
+            entryId: item.entry_id,
+          })}
         </div>
       `).join("");
     }
@@ -1376,6 +1528,8 @@
       upsertP1CorpusEntry,
       sendKeepaliveJson,
       autosaveOpenCorpusEditors,
+      closeCorpusCardActionMenus,
+      toggleCorpusCardActionMenu,
       openP1CorpusLibrary,
       openP1CorpusEditor,
       closeP1CorpusEditor,
@@ -1407,6 +1561,9 @@
       translateLanguageTakeawaySource,
       saveLanguageTakeaway,
       saveWritingTakeaway,
+      openTakeawayEditor,
+      closeTakeawayEditor,
+      saveTakeawayEditor,
       findP2CorpusEntry,
       openP2CorpusLibrary,
       openP2CorpusEditor,

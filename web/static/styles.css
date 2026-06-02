@@ -1486,7 +1486,8 @@ h1 {
 }
 
 .takeaway-delete-button,
-.corpus-delete-button {
+.corpus-delete-button,
+.corpus-menu-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1501,12 +1502,20 @@ h1 {
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
-.takeaway-delete-button {
+.takeaway-delete-button,
+.language-takeaway-card-wrap > .corpus-menu-button {
   position: absolute;
   top: 10px;
   right: 10px;
   width: 32px;
   height: 32px;
+}
+
+.p2-material-actions .corpus-menu-button {
+  align-self: center;
+  justify-self: center;
+  width: 40px;
+  height: 40px;
 }
 
 .takeaway-delete-button:hover,
@@ -1519,8 +1528,18 @@ h1 {
   outline: none;
 }
 
+.corpus-menu-button:hover,
+.corpus-menu-button:focus-visible,
+.corpus-menu-button[aria-expanded="true"] {
+  background: #f1f5f9;
+  border-color: rgba(100, 116, 139, 0.34);
+  color: #334155;
+  outline: none;
+}
+
 .takeaway-delete-button span,
-.corpus-delete-button span {
+.corpus-delete-button span,
+.corpus-menu-button span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1534,6 +1553,7 @@ h1 {
 
 .takeaway-delete-button svg,
 .corpus-delete-button svg,
+.corpus-menu-button svg,
 .p2-follow-up-edit-button svg {
   width: 17px;
   height: 17px;
@@ -1542,6 +1562,53 @@ h1 {
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.corpus-card-action-menu {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  z-index: 40;
+  width: 96px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+  padding: 5px;
+}
+
+.p2-material-actions .corpus-card-action-menu {
+  top: calc(100% - 2px);
+  right: 8px;
+}
+
+.corpus-card-action-menu button {
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  padding: 0 10px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 720;
+  line-height: 1;
+}
+
+.corpus-card-action-menu button:hover,
+.corpus-card-action-menu button:focus-visible {
+  background: #f1f5f9;
+  outline: none;
+}
+
+.corpus-card-action-menu button.danger {
+  color: var(--danger);
+}
+
+.corpus-card-action-menu button.danger:hover,
+.corpus-card-action-menu button.danger:focus-visible {
+  background: rgba(239, 68, 68, 0.08);
 }
 
 .language-takeaway-card:hover {
@@ -1678,6 +1745,42 @@ h1 {
   min-height: 44px;
   justify-content: center;
   white-space: nowrap;
+}
+
+.p1-corpus-dialog-card.takeaway-edit-card {
+  width: min(560px, calc(100vw - 24px));
+  height: auto;
+  min-height: 0;
+  max-height: min(620px, calc(100vh - 96px));
+  grid-template-rows: auto auto auto auto auto auto;
+  gap: 10px;
+  padding: 14px 16px;
+  overflow: auto;
+}
+
+.p1-corpus-dialog-card.takeaway-edit-card .p1-corpus-dialog-head {
+  padding-bottom: 6px;
+}
+
+.p1-corpus-dialog-card.takeaway-edit-card .p1-corpus-dialog-head h3 {
+  font-size: 18px;
+}
+
+.p1-corpus-dialog-card.takeaway-edit-card .p1-corpus-dialog-head button {
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.p1-corpus-dialog-card.takeaway-edit-card .takeaway-edit-source,
+.p1-corpus-dialog-card.takeaway-edit-card .takeaway-edit-chinese {
+  min-height: 84px;
+  max-height: 180px;
+  font-size: 15px;
+  line-height: 1.45;
+  resize: vertical;
+  overflow: auto;
 }
 
 #languageTakeawayStatus {
@@ -2039,6 +2142,7 @@ h1 {
 }
 
 .p2-material-actions {
+  position: relative;
   width: 96px;
   display: flex;
   align-items: center;
@@ -10847,10 +10951,43 @@ body.theme-dark .p2-topic-material-list button.has-corpus strong {
 
 body.theme-dark .takeaway-delete-button,
 body.theme-dark .corpus-delete-button,
+body.theme-dark .corpus-menu-button,
 body.theme-dark .p2-follow-up-edit-button {
   background: var(--dark-surface);
   border-color: var(--dark-border);
   color: var(--muted);
+}
+
+body.theme-dark .corpus-menu-button:hover,
+body.theme-dark .corpus-menu-button:focus-visible,
+body.theme-dark .corpus-menu-button[aria-expanded="true"] {
+  background: var(--dark-primary-soft);
+  border-color: var(--dark-primary-border);
+  color: var(--dark-primary-text);
+}
+
+body.theme-dark .corpus-card-action-menu {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+}
+
+body.theme-dark .corpus-card-action-menu button {
+  color: var(--ink);
+}
+
+body.theme-dark .corpus-card-action-menu button:hover,
+body.theme-dark .corpus-card-action-menu button:focus-visible {
+  background: var(--dark-primary-soft);
+}
+
+body.theme-dark .corpus-card-action-menu button.danger {
+  color: #fca5a5;
+}
+
+body.theme-dark .corpus-card-action-menu button.danger:hover,
+body.theme-dark .corpus-card-action-menu button.danger:focus-visible {
+  background: rgba(248, 113, 113, 0.14);
 }
 
 body.theme-dark .language-takeaway-card-wrap.is-concealed .takeaway-source {
@@ -13305,6 +13442,12 @@ body.theme-dark.font-academic .history-item:hover {
   .p1-corpus-dialog-card {
     width: calc(100vw - 24px);
     height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+  }
+  .p1-corpus-dialog-card.takeaway-edit-card {
+    width: min(100%, 560px);
+    height: auto;
+    min-height: 0;
     max-height: calc(100vh - 24px);
   }
   .p1-corpus-peek-card {

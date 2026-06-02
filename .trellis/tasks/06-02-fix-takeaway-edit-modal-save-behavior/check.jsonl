@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Check frontend UI behavior against project conventions"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check frontend quality and scoped changes"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Check backend conventions if persistence endpoint changes are present"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check backend quality if endpoint changes are present"}

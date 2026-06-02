@@ -888,6 +888,12 @@ task = fail_billable_ai_task(
 - Keep product-specific work adapters thin; route status and billing transitions through AI services.
 - Use stable idempotency keys for billable product actions. For writing score tasks, include the entry and answer hash so changed answers can create a new task.
 - Return deterministic JSON payloads and preserve owner filtering on all task reads.
+- Keep ordinary Takeaway and writing takeaway endpoints scope-separated even when
+  they share `LanguageTakeawayEntry` storage. `/api/language-takeaways*` should
+  ignore rows marked `metadata.saved_from = "writing_takeaway"`;
+  `/api/writing-takeaways*` should only read, edit, and delete those
+  writing-scoped rows. Both wrong-owner and wrong-scope detail mutations should
+  behave like not-found.
 - Prefer management-command worker boundaries until Celery/Redis and worker auth are explicitly introduced.
 
 ## Code Review Checklist

@@ -722,6 +722,28 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["items"][0]["source_text"], "strike a balance")
 
+    def test_language_takeaway_list_excludes_writing_takeaways(self):
+        LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-list-language",
+            source_text="strike a balance",
+            chinese_text="取得平衡",
+            metadata={"saved_from": "language_takeaway"},
+        )
+        LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="wt-list-writing",
+            source_text="clear topic sentence",
+            chinese_text="清晰的主题句",
+            metadata={"saved_from": "writing_takeaway"},
+        )
+
+        language_payload = self.client.get("/api/language-takeaways").json()
+        writing_payload = self.client.get("/api/writing-takeaways").json()
+
+        self.assertEqual([item["entry_id"] for item in language_payload["items"]], ["lt-list-language"])
+        self.assertEqual([item["entry_id"] for item in writing_payload["items"]], ["wt-list-writing"])
+
     def test_language_takeaway_delete_requires_login(self):
         entry = LanguageTakeawayEntry.objects.create(
             user=self.user,
@@ -757,6 +779,208 @@ class QuestionBankApiTests(TestCase):
         library = self.client.get("/api/language-takeaways").json()
         self.assertEqual(library["count"], 0)
         self.assertEqual(library["items"], [])
+
+    def test_language_takeaway_delete_rejects_writing_scoped_entry(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="wt-delete-via-language",
+            source_text="clear topic sentence",
+            chinese_text="清晰的主题句",
+            metadata={"saved_from": "writing_takeaway"},
+        )
+
+        response = self.client.delete(f"/api/language-takeaways/{entry.entry_id}")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(LanguageTakeawayEntry.objects.filter(user=self.user, entry_id=entry.entry_id).exists())
+
+    def test_language_takeaway_detail_update_edits_existing_entry(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-edit-owned",
+            source_text="strike a balance",
+            chinese_text="取得平衡",
+            context_label="P1",
+            metadata={"saved_from": "language_takeaway"},
+        )
+        response = self.client.patch(
+            f"/api/language-takeaways/{entry.entry_id}",
+            data={
+                "source_text": "strike a better balance",
+                "chinese_text": "取得更好的平衡",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["entry_id"], entry.entry_id)
+        self.assertEqual(payload["source_text"], "strike a better balance")
+        self.assertEqual(payload["chinese_text"], "取得更好的平衡")
+        entry.refresh_from_db()
+        self.assertEqual(entry.source_text, "strike a better balance")
+        self.assertEqual(entry.context_label, "P1")
+
+    def test_language_takeaway_detail_update_is_owner_scoped(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-edit-other",
+            source_text="strike a balance",
+            chinese_text="取得平衡",
+        )
+        other_user = get_user_model().objects.create_user(username="other-takeaway-edit", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+        response = self.client.patch(
+            f"/api/language-takeaways/{entry.entry_id}",
+            data={"source_text": "changed"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+        entry.refresh_from_db()
+        self.assertEqual(entry.source_text, "strike a balance")
+
+    def test_language_takeaway_detail_update_rejects_writing_scoped_entry(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="wt-edit-via-language",
+            source_text="clear topic sentence",
+            chinese_text="清晰的主题句",
+            metadata={"saved_from": "writing_takeaway"},
+        )
+
+        response = self.client.patch(
+            f"/api/language-takeaways/{entry.entry_id}",
+            data={"source_text": "changed"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        entry.refresh_from_db()
+        self.assertEqual(entry.source_text, "clear topic sentence")
+
+    def test_writing_takeaway_detail_update_keeps_writing_scope(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="wt-edit-owned",
+            source_text="clear topic sentence",
+            chinese_text="清晰的主题句",
+            metadata={"saved_from": "writing_takeaway"},
+        )
+        response = self.client.patch(
+            f"/api/writing-takeaways/{entry.entry_id}",
+            data={
+                "source_text": "clearer topic sentence",
+                "chinese_text": "更清晰的主题句",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["entry_id"], entry.entry_id)
+        self.assertEqual(payload["source_text"], "clearer topic sentence")
+        entry.refresh_from_db()
+        self.assertEqual(entry.metadata.get("saved_from"), "writing_takeaway")
+
+    def test_writing_takeaway_detail_update_is_owner_scoped(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="wt-edit-other",
+            source_text="clear topic sentence",
+            chinese_text="清晰的主题句",
+            metadata={"saved_from": "writing_takeaway"},
+        )
+        other_user = get_user_model().objects.create_user(username="other-writing-takeaway-edit", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+
+        response = self.client.patch(
+            f"/api/writing-takeaways/{entry.entry_id}",
+            data={"source_text": "changed"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        entry.refresh_from_db()
+        self.assertEqual(entry.source_text, "clear topic sentence")
+
+    def test_writing_takeaway_detail_update_rejects_language_scoped_entry(self):
+        entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-edit-via-writing",
+            source_text="strike a balance",
+            chinese_text="取得平衡",
+            metadata={"saved_from": "language_takeaway"},
+        )
+
+        response = self.client.patch(
+            f"/api/writing-takeaways/{entry.entry_id}",
+            data={"source_text": "changed"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        entry.refresh_from_db()
+        self.assertEqual(entry.source_text, "strike a balance")
+
+    def test_takeaway_detail_update_accepts_put_for_language_and_writing(self):
+        language_entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-put-owned",
+            source_text="strike a balance",
+            chinese_text="取得平衡",
+            metadata={"saved_from": "language_takeaway"},
+        )
+        writing_entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="wt-put-owned",
+            source_text="clear topic sentence",
+            chinese_text="清晰的主题句",
+            metadata={"saved_from": "writing_takeaway"},
+        )
+
+        language_response = self.client.put(
+            f"/api/language-takeaways/{language_entry.entry_id}",
+            data={"source_text": "strike a better balance", "chinese_text": "取得更好的平衡"},
+            content_type="application/json",
+        )
+        writing_response = self.client.put(
+            f"/api/writing-takeaways/{writing_entry.entry_id}",
+            data={"source_text": "clearer topic sentence", "chinese_text": "更清晰的主题句"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(language_response.status_code, 200)
+        self.assertEqual(writing_response.status_code, 200)
+        language_entry.refresh_from_db()
+        writing_entry.refresh_from_db()
+        self.assertEqual(language_entry.source_text, "strike a better balance")
+        self.assertEqual(language_entry.metadata.get("saved_from"), "language_takeaway")
+        self.assertEqual(writing_entry.source_text, "clearer topic sentence")
+        self.assertEqual(writing_entry.metadata.get("saved_from"), "writing_takeaway")
+
+    def test_writing_takeaway_delete_is_writing_scoped(self):
+        language_entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="lt-delete-via-writing",
+            source_text="strike a balance",
+            chinese_text="取得平衡",
+            metadata={"saved_from": "language_takeaway"},
+        )
+        writing_entry = LanguageTakeawayEntry.objects.create(
+            user=self.user,
+            entry_id="wt-delete-owned",
+            source_text="clear topic sentence",
+            chinese_text="清晰的主题句",
+            metadata={"saved_from": "writing_takeaway"},
+        )
+
+        language_response = self.client.delete(f"/api/writing-takeaways/{language_entry.entry_id}")
+        writing_response = self.client.delete(f"/api/writing-takeaways/{writing_entry.entry_id}")
+
+        self.assertEqual(language_response.status_code, 404)
+        self.assertTrue(LanguageTakeawayEntry.objects.filter(user=self.user, entry_id=language_entry.entry_id).exists())
+        self.assertEqual(writing_response.status_code, 200)
+        self.assertFalse(LanguageTakeawayEntry.objects.filter(user=self.user, entry_id=writing_entry.entry_id).exists())
 
     def test_language_takeaway_translate_without_token_uses_local_offline_dictionary(self):
         with (

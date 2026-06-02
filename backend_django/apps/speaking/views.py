@@ -9,6 +9,7 @@ from .services import (
     delete_attempt,
     delete_language_takeaway,
     delete_p2_corpus,
+    delete_writing_takeaway,
     detail,
     examiner_tts_status,
     get_turn_audio_path,
@@ -35,6 +36,8 @@ from .services import (
     stable_tts_audio_path,
     tts_audio_path,
     tts_fallback,
+    update_language_takeaway,
+    update_writing_takeaway,
     upload_turn_audio,
     warm_fixed_examiner_tts,
     weak_items,
@@ -147,15 +150,17 @@ def language_takeaway_view(request):
         return JsonResponse({"error": str(exc)}, status=400)
 
 
-@require_http_methods(["DELETE"])
+@require_http_methods(["DELETE", "PATCH", "PUT"])
 def language_takeaway_detail_view(request, entry_id: str):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
     try:
+        if request.method in {"PATCH", "PUT"}:
+            return JsonResponse(update_language_takeaway(request.user, entry_id, _json_payload(request)))
         return JsonResponse(delete_language_takeaway(request.user, entry_id))
     except SpeakingError as exc:
-        return JsonResponse({"error": str(exc)}, status=404)
+        return JsonResponse({"error": str(exc)}, status=404 if "not found" in str(exc).lower() else 400)
 
 
 @require_http_methods(["GET", "POST"])
@@ -171,15 +176,17 @@ def writing_takeaway_view(request):
         return JsonResponse({"error": str(exc)}, status=400)
 
 
-@require_http_methods(["DELETE"])
+@require_http_methods(["DELETE", "PATCH", "PUT"])
 def writing_takeaway_detail_view(request, entry_id: str):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
     try:
-        return JsonResponse(delete_language_takeaway(request.user, entry_id))
+        if request.method in {"PATCH", "PUT"}:
+            return JsonResponse(update_writing_takeaway(request.user, entry_id, _json_payload(request)))
+        return JsonResponse(delete_writing_takeaway(request.user, entry_id))
     except SpeakingError as exc:
-        return JsonResponse({"error": str(exc)}, status=404)
+        return JsonResponse({"error": str(exc)}, status=404 if "not found" in str(exc).lower() else 400)
 
 
 @require_http_methods(["POST"])

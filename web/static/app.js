@@ -74,6 +74,8 @@ const state = {
     hideEnglish: false,
     revealedEntryIds: new Set(),
     selectionTimer: null,
+    activeEdit: null,
+    editing: false,
   },
   writingTakeaway: {
     items: [],
@@ -5440,6 +5442,12 @@ function handleGlobalKeydown(event) {
   } else if (!$("writingHighlightMenu")?.classList.contains("hidden")) {
     event.preventDefault();
     hideWritingHighlightMenu();
+  } else if (document.querySelector("[data-corpus-card-action-menu]:not(.hidden)")) {
+    event.preventDefault();
+    closeCorpusCardActionMenus();
+  } else if (!$("takeawayEditDialog")?.classList.contains("hidden")) {
+    event.preventDefault();
+    closeTakeawayEditor();
   } else if (!$("p1CorpusDialog")?.classList.contains("hidden")) {
     event.preventDefault();
     saveAndCloseP1CorpusEditor();
@@ -6690,6 +6698,14 @@ function autosaveOpenCorpusEditors(...args) {
   return corpusTakeawayController.autosaveOpenCorpusEditors(...args);
 }
 
+function closeCorpusCardActionMenus(...args) {
+  return corpusTakeawayController.closeCorpusCardActionMenus(...args);
+}
+
+function toggleCorpusCardActionMenu(...args) {
+  return corpusTakeawayController.toggleCorpusCardActionMenu(...args);
+}
+
 async function openP1CorpusLibrary(...args) {
   return corpusTakeawayController.openP1CorpusLibrary(...args);
 }
@@ -6812,6 +6828,18 @@ async function saveLanguageTakeaway(...args) {
 
 async function saveWritingTakeaway(...args) {
   return corpusTakeawayController.saveWritingTakeaway(...args);
+}
+
+function openTakeawayEditor(...args) {
+  return corpusTakeawayController.openTakeawayEditor(...args);
+}
+
+function closeTakeawayEditor(...args) {
+  return corpusTakeawayController.closeTakeawayEditor(...args);
+}
+
+async function saveTakeawayEditor(...args) {
+  return corpusTakeawayController.saveTakeawayEditor(...args);
 }
 
 function findP2CorpusEntry(...args) {
@@ -7609,16 +7637,40 @@ function bindEvents() {
   bindCorpusOverlayClose("p1CorpusDialog", saveAndCloseP1CorpusEditor);
   bindCorpusOverlayClose("p2CorpusDialog", saveAndCloseP2CorpusEditor);
   bindCorpusOverlayClose("p2CorpusP3Dialog", saveAndCloseP2CorpusP3Editor);
+  $("takeawayEditDialog")?.addEventListener("pointerdown", (event) => {
+    if (event.target === $("takeawayEditDialog")) {
+      event.preventDefault();
+      closeTakeawayEditor({ saveDirty: true }).catch(showError);
+    }
+  });
+  $("saveTakeawayEditBtn")?.addEventListener("click", saveTakeawayEditor);
+  $("cancelTakeawayEditBtn")?.addEventListener("click", closeTakeawayEditor);
   $("p1CorpusTopics")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-p1-corpus-question]");
     if (!button) return;
     openP1CorpusEditor(findP1CorpusEntry(button.dataset.p1CorpusQuestion || ""));
   });
   $("p2CorpusTopics")?.addEventListener("click", (event) => {
+    const menuButton = event.target.closest("[data-p2-corpus-menu]");
+    if (menuButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleCorpusCardActionMenu(menuButton);
+      return;
+    }
+    const editButton = event.target.closest("[data-p2-corpus-edit]");
+    if (editButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeCorpusCardActionMenus();
+      openP2CorpusEditor(findP2CorpusEntry(editButton.dataset.p2CorpusEdit || ""));
+      return;
+    }
     const deleteButton = event.target.closest("[data-p2-corpus-delete]");
     if (deleteButton) {
       event.preventDefault();
       event.stopPropagation();
+      closeCorpusCardActionMenus();
       deleteP2CorpusEntry(deleteButton.dataset.p2CorpusDelete || "");
       return;
     }
@@ -7647,10 +7699,26 @@ function bindEvents() {
   $("languageTakeawayHideToggle")?.addEventListener("click", toggleLanguageTakeawayHiddenMode);
   $("writingTakeawayHideToggle")?.addEventListener("click", toggleWritingTakeawayHiddenMode);
   $("languageTakeawayList")?.addEventListener("click", (event) => {
+    const menuButton = event.target.closest("[data-takeaway-menu]");
+    if (menuButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleCorpusCardActionMenu(menuButton);
+      return;
+    }
+    const editButton = event.target.closest("[data-takeaway-edit]");
+    if (editButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeCorpusCardActionMenus();
+      openTakeawayEditor("language", editButton.dataset.takeawayEdit || "");
+      return;
+    }
     const deleteButton = event.target.closest("[data-takeaway-delete]");
     if (deleteButton) {
       event.preventDefault();
       event.stopPropagation();
+      closeCorpusCardActionMenus();
       deleteLanguageTakeawayEntry(deleteButton.dataset.takeawayDelete || "");
       return;
     }
@@ -7659,10 +7727,26 @@ function bindEvents() {
     revealAndSpeakLanguageTakeaway(card.dataset.takeawayEntry || "");
   });
   $("writingTakeawayList")?.addEventListener("click", (event) => {
+    const menuButton = event.target.closest("[data-writing-takeaway-menu]");
+    if (menuButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleCorpusCardActionMenu(menuButton);
+      return;
+    }
+    const editButton = event.target.closest("[data-writing-takeaway-edit]");
+    if (editButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeCorpusCardActionMenus();
+      openTakeawayEditor("writing", editButton.dataset.writingTakeawayEdit || "");
+      return;
+    }
     const deleteButton = event.target.closest("[data-writing-takeaway-delete]");
     if (deleteButton) {
       event.preventDefault();
       event.stopPropagation();
+      closeCorpusCardActionMenus();
       deleteWritingTakeawayEntry(deleteButton.dataset.writingTakeawayDelete || "");
       return;
     }
@@ -7675,6 +7759,10 @@ function bindEvents() {
     if (!selectionText()) hideLanguageTakeawayTrigger();
   });
   document.addEventListener("scroll", trackLanguageTakeawayTriggerDuringScroll, { capture: true, passive: true });
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("[data-corpus-card-menu]") || event.target.closest("[data-corpus-card-action-menu]")) return;
+    closeCorpusCardActionMenus();
+  });
   document.addEventListener("pointerdown", (event) => {
     const popup = $("languageTakeawayPopup");
     const trigger = $("languageTakeawayTrigger");

@@ -611,6 +611,25 @@
             </div>
           </div>
         </div>
+        <div id="takeawayEditDialog" class="p1-corpus-dialog takeaway-edit-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="takeawayEditDialogTitle">
+          <div class="p1-corpus-dialog-card takeaway-edit-card">
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="takeawayEditDialogType">Takeaway</span>
+                <h3 id="takeawayEditDialogTitle">编辑积累</h3>
+              </div>
+              <button id="saveTakeawayEditBtn" type="button">保存</button>
+            </header>
+            <label class="p1-corpus-label" for="takeawayEditSource">英文 / 原文</label>
+            <textarea id="takeawayEditSource" class="p1-corpus-textarea takeaway-edit-source" spellcheck="true"></textarea>
+            <label class="p1-corpus-label" for="takeawayEditChinese">中文</label>
+            <textarea id="takeawayEditChinese" class="p1-corpus-textarea takeaway-edit-chinese" spellcheck="true"></textarea>
+            <div class="p1-corpus-dialog-actions">
+              <button id="cancelTakeawayEditBtn" class="ghost" type="button">取消</button>
+              <span id="takeawayEditStatus"></span>
+            </div>
+          </div>
+        </div>
 
         <section id="writingPanel" class="panel writing-panel hidden">
           <div class="writing-shell">

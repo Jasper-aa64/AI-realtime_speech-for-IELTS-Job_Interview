@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend project conventions for Takeaway modal/list UI changes"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality rules for scoped UI and state updates"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend conventions if PATCH persistence requires endpoint verification"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality rules if endpoint changes are required"}

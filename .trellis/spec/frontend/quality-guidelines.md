@@ -168,6 +168,10 @@ await api("/api/score", {
   content, e.g. `grid-auto-rows: max-content`, instead of forcing equal-height
   tracks inside a constrained scroll region. Otherwise populated cards can
   collapse into thin bars when the grid has many rows and `overflow` is hidden.
+- Ordinary Takeaway cards and writing takeaway cards must use their matching
+  `/api/language-takeaways*` and `/api/writing-takeaways*` detail endpoints for
+  edit/delete actions. Do not let shared card-menu UI route writing-scoped rows
+  through the ordinary Takeaway endpoint, or vice versa.
 - Writing prompt highlight deletion must be driven by the highlight index and
   pointer coordinates captured on `pointerdown`. A click on an existing
   highlight may produce selection/range churn before `pointerup`, and
