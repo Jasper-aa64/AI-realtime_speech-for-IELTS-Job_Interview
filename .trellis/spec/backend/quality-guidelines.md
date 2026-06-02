@@ -88,6 +88,8 @@ def normalize_user_visible_text(...):
 - Do not expose provider keys in logs, task metadata, API responses, or benchmark output.
 - Fallback output must be marked as fallback and must not masquerade as successful AI output.
 - Tests should cover HTTP success, HTTP-to-Codex fallback, final local fallback, and secret redaction.
+- Durable AI tasks are product runtime, not optional test-only behavior. Local demos and public tunnels must start `run_ai_worker` alongside Django, using the same `AI_HTTP_BASE_URL`, `AI_HTTP_API_KEY`, `AI_HTTP_MODEL`, `AI_HTTP_TIMEOUT_SECONDS`, and speaking call-mode environment. If Django runs without the worker, writing reports will remain queued; if the worker lacks `AI_HTTP_*`, it may fall back to slow Codex CLI paths.
+- For `writing_score`, a fully configured OpenAI-compatible HTTP provider should be preferred over local Codex CLI even when legacy task rows still carry `provider=codex`. Codex remains fallback compatibility, not the default fast path.
 
 ### Convention: Generated follow-up turns must have a server TTS refresh path
 

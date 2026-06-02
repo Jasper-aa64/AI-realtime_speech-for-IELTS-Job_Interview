@@ -151,7 +151,7 @@ python3 -m venv .venv-django
 pip install -r requirements/local.txt
 
 python backend_django/manage.py migrate
-python backend_django/manage.py runserver 127.0.0.1:8767 --noreload
+scripts/start-local-stack.sh
 ```
 
 打开：
@@ -160,12 +160,34 @@ python backend_django/manage.py runserver 127.0.0.1:8767 --noreload
 http://127.0.0.1:8767
 ```
 
-需要测试异步 AI task 时，在第二个终端启动 worker：
+`scripts/start-local-stack.sh` 会同时启动 Django 和 `run_ai_worker`。如果本机存在
+`~/.cc-switch/cc-switch.db`，脚本会自动读取 Codex 的 Aiaps1/Aiapis provider，
+把 OpenAI-compatible HTTP provider 注入 worker，默认模型为 `gpt-5.4-mini`。
+脚本不会把 API key 打印到终端或日志。
+
+如需手工覆盖 provider，可以在启动前显式导出：
 
 ```bash
-. .venv-django/bin/activate
-python backend_django/manage.py run_ai_worker --interval-seconds 2 --idle-interval-seconds 5
+export AI_HTTP_BASE_URL="https://<compatible-host>/v1"
+export AI_HTTP_API_KEY="<api-key>"
+export AI_HTTP_MODEL="gpt-5.4-mini"
+export AI_HTTP_TIMEOUT_SECONDS="60"
+export SPEAKING_AI_CALL_MODE="chain"
+export SPEAKING_AI_MODEL="gpt-5.4-mini"
+scripts/start-local-stack.sh
 ```
+
+如果只启动 `runserver` 而没有启动 worker，写作页会一直停在“AI 评分已排队”。
+如果 worker 没有带 `AI_HTTP_*`，它会回到较慢的本地 Codex CLI / fallback 路径。
+
+需要临时公网展示时：
+
+```bash
+IELTS_PUBLIC=1 scripts/start-local-stack.sh
+```
+
+公网 quick tunnel URL 会出现在 `.runlogs/cloudflared.err.log`，本地地址仍是
+`http://127.0.0.1:8767`。
 
 健康检查：
 
