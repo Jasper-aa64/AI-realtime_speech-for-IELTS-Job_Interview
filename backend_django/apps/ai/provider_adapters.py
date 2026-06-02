@@ -12,10 +12,12 @@ from typing import Any
 from django.conf import settings
 
 from apps.ai.models import AITask
+from apps.ai.http_provider import HttpApiProvider, HttpApiProviderError
 from apps.ai.provider_config import (
     ADAPTER_KEY_CODEX_SPEAKING_REPORT,
     ADAPTER_KEY_CODEX_WRITING_SCORE,
     ADAPTER_KEY_FALLBACK,
+    ADAPTER_KEY_HTTP_WRITING_SCORE,
     ADAPTER_KEY_MOCK_SUCCESS,
     FALLBACK_PROVIDER,
     MOCK_SUCCESS_PROVIDER,
@@ -369,11 +371,14 @@ class CodexWritingScoreAdapter(AiTaskTemplate):
         task_type = str(request_payload.get("task_type") or "task2")
         task_label = "IELTS Writing Task 1 Academic" if task_type == "task1_academic" else "IELTS Writing Task 2"
         task_score_key = "task_achievement" if task_type == "task1_academic" else "task_response"
+        opposite_score_key = "task_response" if task_score_key == "task_achievement" else "task_achievement"
+        task1_specific_block = self._task1_specific_block() if task_type == "task1_academic" else ""
+        chart_facts_block = self._chart_facts_block(request_payload) if task_type == "task1_academic" else ""
         return f"""Return JSON only. Do not include Markdown outside JSON.
 
 You are an IELTS Writing examiner and writing coach for a Chinese IELTS learner.
 
-Evaluate this answer using the public IELTS Writing band descriptors. Be strict and realistic. Do not inflate the score because the essay sounds fluent.
+Evaluate this answer using the public IELTS Writing band descriptors. Be strict and realistic. Do not inflate the score because the essay sounds fluent. A fluent essay that misreports the data, misses the overview, or does not answer the question must still receive a low Task score.
 
 Score keys:
 - overall_band: number
@@ -384,15 +389,17 @@ Score keys:
 - grammatical_range_accuracy: number
 
 Assessment principles:
-- Task 1 Academic: judge whether the candidate selects and compares the main features accurately, gives a clear overview, avoids irrelevant detail, and reports data/trends/maps/processes precisely.
+- Task 1 Academic: judge whether the candidate selects and compares the MAIN features accurately, gives a clear overview, avoids irrelevant detail, and reports data / trends / maps / processes precisely. Inaccurate or invented data, a missing overview, or listing every figure without comparison are the most common reasons Task Achievement stays at band 6 or below.
 - Task 2: judge whether the candidate fully answers all parts of the question, keeps a clear position, develops ideas with support, and avoids overgeneralised or memorised arguments.
 - Coherence & Cohesion: judge logical progression, paragraphing, referencing, and whether linking feels natural rather than mechanical.
 - Lexical Resource: judge precision, collocation, topic vocabulary, word form, and whether less common vocabulary is used naturally.
 - Grammar: judge range and accuracy, sentence control, punctuation, and whether errors reduce clarity.
 
 Chinese learner focus:
-- Point out problems common among Chinese candidates only when visible in this essay: unclear overview, listing without comparison, mechanical linking words, translated expressions, vague nouns, overlong sentences, missing article/plural control, weak paragraph topic sentences, or unsupported claims.
+- Point out problems common among Chinese candidates only when visible in this essay: unclear or missing overview, listing without comparison, mechanical linking words, translated expressions, vague nouns, overlong sentences, missing article / plural control, weak paragraph topic sentences, or unsupported claims.
 - Do not use generic advice. Every comment must be tied to this exact answer.
+{task1_specific_block}
+{chart_facts_block}
 
 Required JSON keys:
 - overall_band: number
@@ -401,21 +408,22 @@ Required JSON keys:
 - coherence_cohesion: number
 - lexical_resource: number
 - grammatical_range_accuracy: number
-- overall_review: Chinese string. Direct diagnosis of this exact essay.
+- overall_review: Chinese string. Direct diagnosis of this exact essay. For Task 1, explicitly state whether the overview and the main features are correct.
 - practice_focus: Chinese string. The most important next practice target.
 - grammar_corrections: array of objects with original, suggestion, reason. Include only meaningful grammar, collocation, word form, article/plural, or sentence-control issues.
 - inline_annotations: array of objects for marking the learner's original answer inline. Each object must include original, type, suggestion, and explanation; paragraph_index is recommended when the issue belongs to a specific paragraph. type must be one of spelling, punctuation, format, grammar, word_choice, missing_word, extra_word. Mark visible spelling mistakes, punctuation/spacing/format problems, missing words, redundant words, and sentence-control errors. original must be an exact substring from the user's answer; for missing_word, use the exact nearby anchor phrase before the insertion point as original and put the missing word or phrase in suggestion.
+- data_accuracy_notes: array of Chinese strings. Task 1 only; otherwise empty array. List each place where the candidate's reported figure, trend, or comparison disagrees with the chart facts, quoting the candidate's wording. If chart facts are not provided, judge only internal consistency and leave this empty when nothing is clearly wrong.
 - spelling_correction_summary: Chinese Markdown string shown once for the whole essay. It must cover all visible spelling mistakes from the whole answer, classify them by cause with Chinese section labels such as `字母多余 / 发音误导类错误`, `词尾后缀混淆类错误`, and list examples like `vidios -> 正确：videos（视频）`. Do not use Markdown numbered lists like `1.` because renderers may restart numbering.
 - structure_advice_only: boolean. Set true if the user's paragraphing is too messy to map paragraph-by-paragraph.
 - structure_advice: Chinese string. Required when structure_advice_only is true; otherwise empty string.
-- model_answer: English string. Improved version with paragraph breaks, unless structure_advice_only is true.
+- model_answer: English string. Improved version with paragraph breaks, unless structure_advice_only is true. For Task 1, the model answer must contain a correct one-sentence overview of the main features and must only use figures consistent with the chart facts when those facts are provided.
 - paragraph_reviews: array. If structure_advice_only is false, include one object per logical paragraph with index, learner, model, coaching, language_correction_upgrade. learner must quote the relevant user paragraph. model must be a better English paragraph. coaching must be Chinese and specific. language_correction_upgrade must be Chinese Markdown appended visually after AI coaching for that paragraph. Let the AI freely generate concise dash bullets using `-`; do not force subsections, fixed categories, or a fixed number of points. Do not mention spelling mistakes in coaching or language_correction_upgrade; spelling belongs only in spelling_correction_summary.
 - expression_upgrade_summary: string. Backward-compatible alias; leave empty unless needed for old clients.
 - backend: string, must be "ai"
 
 Output rules:
 - This is a single combined scoring and coaching call. Do not return feedback_markdown.
-- If this is {task_label}, set {"task_response" if task_score_key == "task_achievement" else "task_achievement"} to null and fill {task_score_key}.
+- If this is {task_label}, set {opposite_score_key} to null and fill {task_score_key}.
 - If paragraphing is logical enough, paragraph_reviews must match the essay logic.
 - If structure_advice_only is true, paragraph_reviews may be empty and structure_advice must explain how to reorganise the essay before rewriting.
 - Do not return placeholder text.
@@ -442,6 +450,33 @@ Word count:
 {request_payload.get("word_count") or ""}
 """
 
+    def _task1_specific_block(self) -> str:
+        return """
+Task 1 specific checks (apply strictly):
+- Overview: there must be a clear overview sentence that states the main trends / biggest differences / overall pattern, without specific data. If it is missing or buried, Task Achievement cannot reach band 7.
+- Selection: the candidate should report the MAIN features, not every single number. Penalise mechanical listing of all data points with no comparison.
+- Comparison: for graphs/charts/tables, the candidate must compare and contrast (highest vs lowest, fastest change, crossovers). For maps/processes, the candidate must describe change/sequence accurately.
+- Accuracy: figures, trend directions (rise/fall/stable/fluctuate), and time references must match the chart. Cross-check against chart facts when provided.
+- No opinion / no reasons: Task 1 Academic must not explain causes or give opinions; flag this if present.
+"""
+
+    def _chart_facts_block(self, request_payload: dict[str, Any]) -> str:
+        chart_facts = request_payload.get("chart_facts")
+        if not isinstance(chart_facts, dict) or not chart_facts:
+            return ""
+        chart_facts_status = str(request_payload.get("chart_facts_status") or chart_facts.get("facts_source") or "ai_unverified").strip() or "ai_unverified"
+        enriched = {**chart_facts, "facts_source": chart_facts.get("facts_source") or chart_facts_status}
+        chart_facts_json = json.dumps(enriched, ensure_ascii=False, sort_keys=True, indent=2)
+        return f"""
+Chart facts (reference ground truth for this Task 1 figure):
+The following structured facts describe the chart the candidate is writing about. Use them to check the candidate's accuracy.
+- These facts are machine-generated and may contain minor errors (facts_source may be "ai_unverified"). Treat them as a strong reference, NOT as absolute truth. If the candidate's essay clearly contradicts a fact in a way that the essay itself proves is correct, trust the essay and do not penalise.
+- Use the facts to: (1) verify the overview captures the real main features; (2) detect misreported figures, wrong trend directions, and wrong comparisons; (3) record each disagreement in data_accuracy_notes; (4) keep model_answer consistent with these facts.
+- Do NOT dump the raw facts into the feedback. Use them only to judge accuracy and to write a correct model answer.
+
+{chart_facts_json}
+"""
+
     def _score_payload(self, payload: dict[str, Any], request_payload: dict[str, Any]) -> dict[str, Any]:
         task_type = str(request_payload.get("task_type") or "").strip().lower()
         task_key = "task_achievement" if task_type == "task1_academic" else "task_response"
@@ -465,6 +500,7 @@ Word count:
             "feedback_markdown": "",
             "grammar_corrections": payload.get("grammar_corrections") if isinstance(payload.get("grammar_corrections"), list) else [],
             "inline_annotations": payload.get("inline_annotations") if isinstance(payload.get("inline_annotations"), list) else [],
+            "data_accuracy_notes": payload.get("data_accuracy_notes") if isinstance(payload.get("data_accuracy_notes"), list) else [],
             "spelling_correction_summary": str(payload.get("spelling_correction_summary") or ""),
             "expression_upgrade_summary": str(payload.get("expression_upgrade_summary") or ""),
             "overall_review": str(payload.get("overall_review") or ""),
@@ -487,6 +523,32 @@ Word count:
                 elif key not in combined:
                     combined[key] = value
         return combined
+
+
+class HttpWritingScoreAdapter(CodexWritingScoreAdapter):
+    adapter_name = "writing_score_http"
+    failure_error_code = "http_writing_score_failed"
+
+    def _execute_provider(self, task: AITask, request_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        try:
+            result = HttpApiProvider().complete_chat(
+                [
+                    {
+                        "role": "user",
+                        "content": self._report_prompt(request_payload),
+                    }
+                ],
+                temperature=0.2,
+                max_tokens=5200,
+                timeout_seconds=120,
+                stream=True,
+            )
+        except HttpApiProviderError as exc:
+            raise ProviderExecutionError(str(exc), error_code=exc.error_code) from exc
+        return extract_json_object(result.text), result.usage or {}
+
+    def _failure_message(self, exc: Exception) -> str:
+        return f"HTTP writing report generation failed: {exc}"
 
 
 class CodexSpeakingReportAdapter(AiTaskTemplate):
@@ -658,6 +720,8 @@ def select_provider_adapter(task: AITask) -> AIProvider:
         return ProviderChain([MockSuccessWritingScoreAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_CODEX_WRITING_SCORE:
         return ProviderChain([CodexWritingScoreAdapter(route)], route)
+    if route.adapter_key == ADAPTER_KEY_HTTP_WRITING_SCORE:
+        return ProviderChain([HttpWritingScoreAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_CODEX_SPEAKING_REPORT:
         return ProviderChain([CodexSpeakingReportAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_FALLBACK:

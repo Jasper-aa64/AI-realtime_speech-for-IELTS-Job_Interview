@@ -14,6 +14,8 @@ class WritingPrompt(models.Model):
     category = models.CharField(max_length=120, blank=True)
     prompt = models.TextField()
     image_url = models.CharField(max_length=500, blank=True, default="")
+    chart_facts = models.JSONField(default=dict, blank=True)
+    chart_facts_status = models.CharField(max_length=32, default="none")
     source = models.CharField(max_length=120, default="local_seed")
     source_book = models.PositiveSmallIntegerField(null=True, blank=True)
     source_test = models.PositiveSmallIntegerField(null=True, blank=True)

@@ -14,6 +14,7 @@ ADAPTER_KEY_FALLBACK = "fallback"
 ADAPTER_KEY_MOCK_SUCCESS = "mock_success"
 ADAPTER_KEY_CODEX_WRITING_SCORE = "codex_writing_score"
 ADAPTER_KEY_CODEX_SPEAKING_REPORT = "codex_speaking_report"
+ADAPTER_KEY_HTTP_WRITING_SCORE = "http_writing_score"
 ADAPTER_KEY_UNSUPPORTED_TASK = "unsupported_task"
 
 DEFAULT_PROVIDER_SECRET_ENV_NAMES = {
@@ -44,6 +45,14 @@ def _setting_bool(name: str, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _http_provider_configured() -> bool:
+    return bool(
+        _setting_text("AI_HTTP_BASE_URL")
+        and _setting_text("AI_HTTP_API_KEY")
+        and _setting_text("AI_HTTP_MODEL")
+    )
 
 
 def _secret_env_names() -> dict[str, tuple[str, ...]]:
@@ -193,6 +202,15 @@ def resolve_provider_route(
         )
 
     if not active_config.is_provider_enabled(requested_provider):
+        if requested_provider == DEFAULT_REQUESTED_PROVIDER and _http_provider_configured():
+            return ProviderRoute(
+                task_type=normalized_task_type,
+                requested_provider=requested_provider,
+                requested_model=requested_model or _setting_text("AI_HTTP_MODEL"),
+                adapter_key=ADAPTER_KEY_HTTP_WRITING_SCORE,
+                effective_provider="openai",
+                config_mode=active_config.mode,
+            )
         return ProviderRoute(
             task_type=normalized_task_type,
             requested_provider=requested_provider,
@@ -204,11 +222,30 @@ def resolve_provider_route(
         )
 
     if requested_provider == DEFAULT_REQUESTED_PROVIDER:
+        if _http_provider_configured():
+            return ProviderRoute(
+                task_type=normalized_task_type,
+                requested_provider=requested_provider,
+                requested_model=requested_model or _setting_text("AI_HTTP_MODEL"),
+                adapter_key=ADAPTER_KEY_HTTP_WRITING_SCORE,
+                effective_provider="openai",
+                config_mode=active_config.mode,
+            )
         return ProviderRoute(
             task_type=normalized_task_type,
             requested_provider=requested_provider,
             requested_model=requested_model,
             adapter_key=ADAPTER_KEY_CODEX_WRITING_SCORE,
+        effective_provider=requested_provider,
+        config_mode=active_config.mode,
+    )
+
+    if requested_provider == "openai":
+        return ProviderRoute(
+            task_type=normalized_task_type,
+            requested_provider=requested_provider,
+            requested_model=requested_model or _setting_text("AI_HTTP_MODEL"),
+            adapter_key=ADAPTER_KEY_HTTP_WRITING_SCORE,
             effective_provider=requested_provider,
             config_mode=active_config.mode,
         )
@@ -229,6 +266,7 @@ def resolve_provider_route(
 __all__ = [
     "ADAPTER_KEY_FALLBACK",
     "ADAPTER_KEY_CODEX_WRITING_SCORE",
+    "ADAPTER_KEY_HTTP_WRITING_SCORE",
     "ADAPTER_KEY_MOCK_SUCCESS",
     "ADAPTER_KEY_UNSUPPORTED_TASK",
     "AIProviderConfig",

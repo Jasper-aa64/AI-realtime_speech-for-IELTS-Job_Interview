@@ -817,6 +817,176 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(score.analysis_payload["inline_annotations"][0]["type"], "word_choice")
         self.assertIn("flexible access", score.analysis_payload["expression_upgrade_summary"])
 
+    def test_task1_writing_score_injects_chart_facts_and_preserves_data_accuracy_notes(self):
+        user = get_user_model().objects.create_user(username="worker-task1-facts-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-task1-facts-prompt",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Line graph: library visits",
+            prompt="The line graph shows visits to three libraries between 2000 and 2020.",
+            chart_facts={
+                "chart_type": "line_graph",
+                "overview_hint": "Central library visits rose steadily, while the East branch declined.",
+                "series": [
+                    {"name": "Central", "trend": "increased", "start": 120, "end": 260},
+                    {"name": "East", "trend": "decreased", "start": 210, "end": 90},
+                ],
+            },
+            chart_facts_status="ai_unverified",
+        )
+        answer = paragraph_answer(
+            "The chart shows that Central library visits fell from 120 to 90 during the period.",
+            "Overall, the East branch was the most successful library because it became more popular.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer=answer,
+            word_count=len(answer.split()),
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.request_payload["chart_facts"]["overview_hint"], prompt.chart_facts["overview_hint"])
+        self.assertEqual(task.request_payload["chart_facts_status"], "ai_unverified")
+        codex_payload = {
+            "overall_band": 5.5,
+            "task_achievement": 5.0,
+            "task_response": None,
+            "coherence_cohesion": 6.0,
+            "lexical_resource": 6.0,
+            "grammatical_range_accuracy": 5.5,
+            "overall_review": "这篇 Task 1 有基本结构，但关键趋势写反。",
+            "practice_focus": "先核对最高、最低和总体趋势。",
+            "grammar_corrections": [],
+            "inline_annotations": [],
+            "data_accuracy_notes": [
+                "考生写 Central library visits fell from 120 to 90，但事实卡显示 Central 从 120 上升到 260。"
+            ],
+            "spelling_correction_summary": "未发现明显拼写错误。",
+            "structure_advice_only": False,
+            "structure_advice": "",
+            "model_answer": "The line graph shows changes in library visits.\n\nOverall, visits to the Central library increased steadily, while the East branch declined.",
+            "paragraph_reviews": [
+                {
+                    "index": 1,
+                    "learner": "The chart shows that Central library visits fell from 120 to 90 during the period.",
+                    "model": "The chart shows that Central library visits rose from 120 to 260 during the period.",
+                    "coaching": "这一段最大问题是趋势写反，会直接影响 Task Achievement。",
+                    "language_correction_upgrade": "- fell from 120 to 90 -> rose from 120 to 260：趋势和数据必须与图表一致。",
+                }
+            ],
+            "expression_upgrade_summary": "",
+            "backend": "ai",
+        }
+        out = StringIO()
+
+        with patch("apps.ai.provider_adapters.run_codex") as run_codex:
+            run_codex.return_value = (json.dumps(codex_payload), {"input_tokens": 1300, "output_tokens": 600})
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "task1-facts-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.SUCCEEDED}])
+        prompt_text = run_codex.call_args.args[0]
+        self.assertIn("Chart facts", prompt_text)
+        self.assertIn("overview_hint", prompt_text)
+        self.assertIn("Task 1 specific checks", prompt_text)
+        self.assertIn("data_accuracy_notes", prompt_text)
+        self.assertIn("Central library visits rose steadily", prompt_text)
+        score = WritingScore.objects.get(entry=entry)
+        self.assertEqual(score.task_response, 5.0)
+        self.assertEqual(score.analysis_payload["data_accuracy_notes"], codex_payload["data_accuracy_notes"])
+        self.assertEqual(score.analysis_payload["analysis_backend"], "ai")
+
+    @override_settings(
+        AI_HTTP_BASE_URL="https://ai.example/v1",
+        AI_HTTP_API_KEY="test-key",
+        AI_HTTP_MODEL="gpt-5.4-mini",
+    )
+    def test_run_ai_tasks_prefers_http_writing_score_when_http_provider_is_configured(self):
+        user = get_user_model().objects.create_user(username="worker-http-success-user", password="test-pass")
+        prompt = WritingPrompt.objects.create(
+            prompt_id="worker-http-success-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Technology and learning",
+            prompt="Some people think technology has made learning easier while others believe it has created distractions. Discuss.",
+        )
+        answer = paragraph_answer(
+            "Technology gives students more flexible access to lessons and reference materials.",
+            "However, phones and social media can interrupt concentration during study time.",
+        )
+        entry = WritingEntry.objects.create(
+            user=user,
+            prompt=prompt,
+            task_type=WritingPrompt.TaskType.TASK2,
+            practice_date=timezone.localdate(),
+            title=prompt.title,
+            prompt_text=prompt.prompt,
+            answer=answer,
+            word_count=len(answer.split()),
+        )
+        created = create_score_task(user, entry.entry_id, {"reserved_u": 300_000})
+        http_payload = {
+            "overall_band": 6.5,
+            "task_achievement": None,
+            "task_response": 6.5,
+            "coherence_cohesion": 6.0,
+            "lexical_resource": 6.5,
+            "grammatical_range_accuracy": 6.0,
+            "overall_review": "HTTP provider review for this exact essay.",
+            "practice_focus": "Use concrete examples in each body paragraph.",
+            "grammar_corrections": [],
+            "inline_annotations": [],
+            "spelling_correction_summary": "未发现明显拼写错误。",
+            "structure_advice_only": False,
+            "structure_advice": "",
+            "model_answer": "HTTP rewrite paragraph one.\n\nHTTP rewrite paragraph two.",
+            "paragraph_reviews": [
+                {
+                    "index": 1,
+                    "learner": "Technology gives students more flexible access to lessons and reference materials.",
+                    "model": "Technology gives students more flexible access to lessons and reference materials.",
+                    "coaching": "这一段方向清楚，可以继续补具体例子。",
+                    "language_correction_upgrade": "- access to lessons -> access to learning resources：表达更完整。",
+                }
+            ],
+            "expression_upgrade_summary": "",
+            "backend": "ai",
+        }
+
+        class FakeHttpProvider:
+            def complete_chat(self, messages, **_kwargs):
+                self.messages = messages
+                return type(
+                    "FakeHttpResult",
+                    (),
+                    {
+                        "text": json.dumps(http_payload),
+                        "usage": {"input_tokens": 900, "output_tokens": 300},
+                    },
+                )()
+
+        out = StringIO()
+        with patch("apps.ai.provider_adapters.HttpApiProvider", return_value=FakeHttpProvider()) as http_provider, patch(
+            "apps.ai.provider_adapters.run_codex"
+        ) as run_codex:
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "http-success-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["items"], [{"task_id": created["task"]["id"], "task_type": "writing_score", "status": AITask.Status.SUCCEEDED}])
+        http_provider.assert_called_once()
+        run_codex.assert_not_called()
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.provider, "codex")
+        self.assertEqual(task.status, AITask.Status.SUCCEEDED)
+        score = WritingScore.objects.get(entry=entry)
+        self.assertEqual(score.source, "ai")
+        self.assertEqual(score.billing_metadata["input_tokens"], 900)
+        self.assertEqual(score.analysis_payload["overall_review"], http_payload["overall_review"])
+
     def test_run_ai_tasks_processes_pending_speaking_report(self):
         from apps.speaking.models import SpeakingAttempt, SpeakingTurn
 

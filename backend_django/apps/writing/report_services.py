@@ -137,6 +137,7 @@ def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
         "feedback_markdown": score.feedback_markdown,
         "grammar_corrections": score.grammar_corrections,
         "inline_annotations": analysis.get("inline_annotations", []),
+        "data_accuracy_notes": analysis.get("data_accuracy_notes", []),
         "spelling_correction_summary": analysis.get("spelling_correction_summary", ""),
         "expression_upgrade_summary": analysis.get("expression_upgrade_summary", ""),
         "overall_review": analysis.get("overall_review", ""),

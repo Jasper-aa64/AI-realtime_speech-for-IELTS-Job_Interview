@@ -216,6 +216,8 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
         raise WritingError("reserved_u must be a positive integer") from exc
     answer_hash = hashlib.sha1(entry.answer.encode("utf-8")).hexdigest()[:16]
     idempotency_key = f"writing_score:{entry.entry_id}:{answer_hash}"
+    prompt_chart_facts = entry.prompt.chart_facts if entry.prompt_id and isinstance(entry.prompt.chart_facts, dict) else {}
+    prompt_chart_facts_status = entry.prompt.chart_facts_status if entry.prompt_id else "none"
     try:
         task, created = create_billable_ai_task(
             user=user,
@@ -231,10 +233,13 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
                 "entry_id": entry.entry_id,
                 "task_type": entry.task_type,
                 "prompt_id": entry.prompt.prompt_id if entry.prompt_id else "",
+                "title": entry.title,
                 "prompt": entry.prompt_text,
                 "answer": entry.answer,
                 "word_count": entry.word_count,
                 "answer_hash": answer_hash,
+                "chart_facts": prompt_chart_facts if entry.task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else {},
+                "chart_facts_status": prompt_chart_facts_status if entry.task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else "none",
             },
             metadata={"source": "writing_score_task"},
         )
@@ -375,6 +380,7 @@ def normalize_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> di
         "model_answer": model_answer,
         "paragraph_reviews": paragraph_reviews,
         "inline_annotations": normalize_inline_annotations(score.get("inline_annotations")),
+        "data_accuracy_notes": score.get("data_accuracy_notes") if isinstance(score.get("data_accuracy_notes"), list) else [],
         "spelling_correction_summary": spelling_summary,
         "expression_upgrade_summary": str(score.get("expression_upgrade_summary") or "").strip(),
         "structure_advice_only": advice_only,
@@ -549,6 +555,7 @@ def normalize_score_payload(entry: WritingEntry, payload: dict[str, Any]) -> dic
         "model_answer": str(score.get("model_answer") or payload.get("model_answer") or ""),
         "paragraph_reviews": score.get("paragraph_reviews") if isinstance(score.get("paragraph_reviews"), list) else payload.get("paragraph_reviews"),
         "inline_annotations": score.get("inline_annotations") if isinstance(score.get("inline_annotations"), list) else payload.get("inline_annotations"),
+        "data_accuracy_notes": score.get("data_accuracy_notes") if isinstance(score.get("data_accuracy_notes"), list) else payload.get("data_accuracy_notes"),
         "spelling_correction_summary": str(score.get("spelling_correction_summary") or payload.get("spelling_correction_summary") or ""),
         "expression_upgrade_summary": str(score.get("expression_upgrade_summary") or payload.get("expression_upgrade_summary") or ""),
         "structure_advice_only": bool(score.get("structure_advice_only") or payload.get("structure_advice_only")),
