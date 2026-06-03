@@ -1,0 +1,380 @@
+from __future__ import annotations
+
+import hashlib
+import re
+from dataclasses import dataclass
+from typing import Any
+
+from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
+
+from apps.speaking.corpus_services import LOCAL_TAKEAWAY_WORD_TRANSLATIONS
+
+from .models import SpellingDrillWord, WritingScore
+from .report_services import looks_like_single_word_spelling_fix, spelling_terms_from_summary
+from .validation import WritingError
+
+
+SPELLING_MASTERED_STREAK = 4
+SPELLING_WORD_RE = re.compile(r"^[A-Za-z][A-Za-z'\-]*$")
+
+
+@dataclass(frozen=True)
+class SpellingCandidate:
+    wrong: str
+    correct: str
+    gloss: str = ""
+    explanation: str = ""
+    entry_id: str = ""
+    snippet: str = ""
+
+    @property
+    def normalized(self) -> str:
+        return normalize_spelling_display(self.correct).lower()
+
+    @property
+    def harvest_key(self) -> str:
+        raw = "|".join([
+            self.entry_id,
+            self.normalized,
+            normalize_spelling_display(self.wrong).lower(),
+            self.snippet[:160],
+        ])
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def normalize_spelling_display(value: Any) -> str:
+    text = str(value or "").strip().strip("`*_“”\"'.,;:!?()[]{}，。；：！？、")
+    text = text.replace("’", "'").replace("‘", "'").replace("–", "-").replace("—", "-")
+    if text.isupper():
+        text = text.lower()
+    return text
+
+
+def is_single_word_spelling(value: Any) -> bool:
+    text = normalize_spelling_display(value)
+    return len(text) >= 2 and bool(SPELLING_WORD_RE.fullmatch(text))
+
+
+def spelling_word_id(normalized: str) -> str:
+    digest = hashlib.sha1(str(normalized or "").lower().encode("utf-8")).hexdigest()[:16]
+    return f"sp:{digest}"
+
+
+def first_local_gloss(correct: str) -> str:
+    normalized = str(correct or "").strip().lower()
+    singular = normalized[:-1] if normalized.endswith("s") else normalized
+    return LOCAL_TAKEAWAY_WORD_TRANSLATIONS.get(normalized) or LOCAL_TAKEAWAY_WORD_TRANSLATIONS.get(singular) or ""
+
+
+def short_snippet(text: str, needle: str, *, max_len: int = 180) -> str:
+    source = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not source:
+        return ""
+    match = re.search(rf"\b{re.escape(str(needle or ''))}\b", source, flags=re.IGNORECASE)
+    if not match:
+        return source[:max_len]
+    start = max(0, match.start() - 70)
+    end = min(len(source), match.end() + 90)
+    snippet = source[start:end].strip()
+    if start:
+        snippet = f"...{snippet}"
+    if end < len(source):
+        snippet = f"{snippet}..."
+    return snippet[:max_len]
+
+
+def paragraph_snippet(score: WritingScore, annotation: dict[str, Any], wrong: str) -> str:
+    entry = getattr(score, "entry", None)
+    answer = getattr(entry, "answer", "") or ""
+    try:
+        index = int(annotation.get("paragraph_index") or 0)
+    except (TypeError, ValueError):
+        index = 0
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", answer) if part.strip()]
+    source = paragraphs[index - 1] if index > 0 and index <= len(paragraphs) else answer
+    return short_snippet(source, wrong)
+
+
+def summary_line_candidate(line: str, score: WritingScore) -> SpellingCandidate | None:
+    compact = str(line or "").lstrip("-*• \t").strip()
+    if not looks_like_single_word_spelling_fix(compact):
+        return None
+    arrow = "->" if "->" in compact else "\u2192"
+    wrong, right = compact.replace("`", "").split(arrow, 1)
+    right = right.strip().strip("。. ")
+    for prefix in ("正确：", "正确:", "correct:", "Correct:"):
+        if right.startswith(prefix):
+            right = right[len(prefix):].strip()
+    gloss = ""
+    gloss_match = re.search(r"[（(]([^（）()]+)[）)]", right)
+    if gloss_match:
+        gloss = gloss_match.group(1).strip()
+    correct = right.split("（", 1)[0].split("(", 1)[0].strip()
+    wrong = wrong.strip()
+    if not is_single_word_spelling(wrong) or not is_single_word_spelling(correct):
+        return None
+    entry = getattr(score, "entry", None)
+    entry_id = getattr(entry, "entry_id", "") or str(getattr(entry, "pk", "") or "")
+    return SpellingCandidate(
+        wrong=normalize_spelling_display(wrong),
+        correct=normalize_spelling_display(correct),
+        gloss=gloss[:200],
+        entry_id=entry_id,
+        snippet=short_snippet(getattr(entry, "answer", "") or "", wrong),
+    )
+
+
+def inline_annotation_candidates(score: WritingScore) -> list[SpellingCandidate]:
+    analysis = score.analysis_payload if isinstance(score.analysis_payload, dict) else {}
+    annotations = analysis.get("inline_annotations")
+    if not isinstance(annotations, list):
+        return []
+    entry = getattr(score, "entry", None)
+    entry_id = getattr(entry, "entry_id", "") or str(getattr(entry, "pk", "") or "")
+    candidates: list[SpellingCandidate] = []
+    for item in annotations:
+        if not isinstance(item, dict) or item.get("type") != "spelling":
+            continue
+        wrong = normalize_spelling_display(item.get("original"))
+        correct = normalize_spelling_display(item.get("suggestion"))
+        if not is_single_word_spelling(wrong) or not is_single_word_spelling(correct):
+            continue
+        candidates.append(SpellingCandidate(
+            wrong=wrong,
+            correct=correct,
+            explanation=str(item.get("explanation") or "").strip(),
+            entry_id=entry_id,
+            snippet=paragraph_snippet(score, item, wrong),
+        ))
+    return candidates
+
+
+def summary_candidates(score: WritingScore) -> list[SpellingCandidate]:
+    analysis = score.analysis_payload if isinstance(score.analysis_payload, dict) else {}
+    summary = str(analysis.get("spelling_correction_summary") or "")
+    if not spelling_terms_from_summary(summary):
+        return []
+    candidates: list[SpellingCandidate] = []
+    for line in summary.splitlines():
+        candidate = summary_line_candidate(line, score)
+        if candidate:
+            candidates.append(candidate)
+    return candidates
+
+
+def spelling_candidates_for_score(score: WritingScore) -> list[SpellingCandidate]:
+    return inline_annotation_candidates(score) + summary_candidates(score)
+
+
+def merge_unique(values: list[Any], additions: list[Any], *, limit: int | None = None) -> list[Any]:
+    result = list(values or [])
+    seen = {str(item).lower() for item in result}
+    for item in additions:
+        key = str(item).lower()
+        if not key or key in seen:
+            continue
+        result.append(item)
+        seen.add(key)
+        if limit and len(result) >= limit:
+            break
+    return result
+
+
+def merge_examples(existing: list[dict[str, Any]], additions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = [item for item in existing or [] if isinstance(item, dict)]
+    seen = {(str(item.get("entry_id") or ""), str(item.get("snippet") or "")) for item in result}
+    for item in additions:
+        key = (str(item.get("entry_id") or ""), str(item.get("snippet") or ""))
+        if not key[1] or key in seen:
+            continue
+        result.append(item)
+        seen.add(key)
+        if len(result) >= 5:
+            break
+    return result[:5]
+
+
+def harvest_spelling_words(user) -> int:
+    now = timezone.now()
+    changed = 0
+    scores = (
+        WritingScore.objects
+        .filter(user=user)
+        .select_related("entry")
+        .order_by("created_at", "pk")
+    )
+    by_normalized: dict[str, list[SpellingCandidate]] = {}
+    for score in scores:
+        for candidate in spelling_candidates_for_score(score):
+            if candidate.normalized:
+                by_normalized.setdefault(candidate.normalized, []).append(candidate)
+
+    for normalized, candidates in by_normalized.items():
+        with transaction.atomic():
+            word = SpellingDrillWord.objects.select_for_update().filter(user=user, normalized=normalized).first()
+            new_keys: list[str] = []
+            if word:
+                metadata = dict(word.metadata or {})
+                seen_keys = set(metadata.get("harvest_keys") or [])
+            else:
+                metadata = {"harvest_keys": []}
+                seen_keys = set()
+            for candidate in candidates:
+                if candidate.harvest_key not in seen_keys:
+                    new_keys.append(candidate.harvest_key)
+                    seen_keys.add(candidate.harvest_key)
+            if word and not new_keys:
+                continue
+            first = candidates[0]
+            wrong_forms = merge_unique(word.wrong_forms if word else [], [item.wrong for item in candidates])
+            source_refs = merge_unique(word.source_refs if word else [], [item.entry_id for item in candidates if item.entry_id])
+            examples = merge_examples(
+                word.examples if word else [],
+                [{"entry_id": item.entry_id, "snippet": item.snippet} for item in candidates if item.snippet],
+            )
+            gloss = (word.chinese_gloss if word else "") or next((item.gloss for item in candidates if item.gloss), "") or first_local_gloss(first.correct)
+            if word and (word.metadata or {}).get("gloss_edited"):
+                gloss = word.chinese_gloss
+            explanation = next((item.explanation for item in reversed(candidates) if item.explanation), "")
+            metadata["harvest_keys"] = sorted(seen_keys)
+            defaults = {
+                "correct_spelling": word.correct_spelling if word else first.correct,
+                "wrong_forms": wrong_forms,
+                "chinese_gloss": gloss[:200],
+                "explanation": explanation or (word.explanation if word else ""),
+                "examples": examples,
+                "occurrence_count": (word.occurrence_count if word else 0) + len(new_keys),
+                "last_seen_at": now,
+                "source_refs": source_refs,
+                "metadata": metadata,
+            }
+            if word:
+                for field, value in defaults.items():
+                    setattr(word, field, value)
+                word.save(update_fields=[*defaults.keys(), "updated_at"])
+            else:
+                SpellingDrillWord.objects.create(
+                    user=user,
+                    word_id=spelling_word_id(normalized),
+                    normalized=normalized,
+                    first_seen_at=now,
+                    status=SpellingDrillWord.Status.ACTIVE,
+                    **defaults,
+                )
+            changed += 1
+    return changed
+
+
+def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
+    return {
+        "word_id": word.word_id,
+        "correct_spelling": word.correct_spelling,
+        "wrong_forms": word.wrong_forms or [],
+        "chinese_gloss": word.chinese_gloss,
+        "explanation": word.explanation,
+        "examples": word.examples or [],
+        "occurrence_count": word.occurrence_count,
+        "attempt_count": word.attempt_count,
+        "correct_count": word.correct_count,
+        "current_streak": word.current_streak,
+        "status": word.status,
+        "last_practiced_at": word.last_practiced_at.isoformat() if word.last_practiced_at else None,
+    }
+
+
+def spelling_drill_library(user, *, scope: str = "active") -> dict[str, Any]:
+    scope = str(scope or "active").strip().lower()
+    if scope not in {"active", "mastered", "all"}:
+        raise WritingError("Unknown spelling drill scope")
+    # TODO: Future scoring completion can call harvest incrementally once the scoring pipeline owns a stable hook.
+    harvest_spelling_words(user)
+    queryset = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
+    if scope != "all":
+        queryset = queryset.filter(status=scope)
+    items = [spelling_word_payload(word) for word in queryset.order_by("status", "last_practiced_at", "-occurrence_count", "normalized")[:500]]
+    visible_words = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
+    total = visible_words.count()
+    active = SpellingDrillWord.objects.filter(user=user, status=SpellingDrillWord.Status.ACTIVE).count()
+    mastered = SpellingDrillWord.objects.filter(user=user, status=SpellingDrillWord.Status.MASTERED).count()
+    attempt_totals = visible_words.aggregate(attempts=Sum("attempt_count"), correct=Sum("correct_count"))
+    attempts = int(attempt_totals.get("attempts") or 0)
+    correct = int(attempt_totals.get("correct") or 0)
+    return {
+        "items": items,
+        "count": len(items),
+        "stats": {
+            "total": total,
+            "active": active,
+            "mastered": mastered,
+            "accuracy": (correct / attempts) if attempts else 0,
+        },
+    }
+
+
+def get_spelling_word(user, word_id: str) -> SpellingDrillWord:
+    word = SpellingDrillWord.objects.filter(user=user, word_id=str(word_id or "").strip()).first()
+    if not word:
+        raise WritingError("Spelling drill word not found")
+    return word
+
+
+def record_spelling_attempt(user, word_id: str, typed: Any) -> dict[str, Any]:
+    typed_text = str(typed or "").strip().lower()
+    if not typed_text:
+        raise WritingError("Typed spelling is required")
+    with transaction.atomic():
+        word = SpellingDrillWord.objects.select_for_update().filter(user=user, word_id=str(word_id or "").strip()).first()
+        if not word:
+            raise WritingError("Spelling drill word not found")
+        is_correct = typed_text == word.normalized
+        word.attempt_count += 1
+        word.last_practiced_at = timezone.now()
+        if is_correct:
+            word.correct_count += 1
+            word.current_streak += 1
+            if word.current_streak >= SPELLING_MASTERED_STREAK:
+                word.status = SpellingDrillWord.Status.MASTERED
+        else:
+            word.current_streak = 0
+        word.save(update_fields=["attempt_count", "correct_count", "current_streak", "status", "last_practiced_at", "updated_at"])
+    return {
+        "correct": is_correct,
+        "correct_spelling": "" if is_correct else word.correct_spelling,
+        "current_streak": word.current_streak,
+        "status": word.status,
+        "explanation": "" if is_correct else word.explanation,
+    }
+
+
+def update_spelling_word(user, word_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    action = str((payload or {}).get("action") or "").strip()
+    with transaction.atomic():
+        word = SpellingDrillWord.objects.select_for_update().filter(user=user, word_id=str(word_id or "").strip()).first()
+        if not word:
+            raise WritingError("Spelling drill word not found")
+        if action == "master":
+            word.status = SpellingDrillWord.Status.MASTERED
+            update_fields = ["status", "updated_at"]
+        elif action == "reset":
+            word.status = SpellingDrillWord.Status.ACTIVE
+            word.current_streak = 0
+            update_fields = ["status", "current_streak", "updated_at"]
+        elif action == "edit_gloss":
+            word.chinese_gloss = str(payload.get("chinese_gloss") or "").strip()[:200]
+            metadata = dict(word.metadata or {})
+            metadata["gloss_edited"] = True
+            word.metadata = metadata
+            update_fields = ["chinese_gloss", "metadata", "updated_at"]
+        else:
+            raise WritingError("Unknown spelling drill action")
+        word.save(update_fields=update_fields)
+    return spelling_word_payload(word)
+
+
+def delete_spelling_word(user, word_id: str) -> dict[str, Any]:
+    word = get_spelling_word(user, word_id)
+    word.status = SpellingDrillWord.Status.DISMISSED
+    word.save(update_fields=["status", "updated_at"])
+    return {"ok": True}

@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260531-account-fixed-layout">
+    <link rel="stylesheet" href="/styles.css?v=20260603-spelling-drill">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -102,6 +102,7 @@
             <a class="nav-button" data-view="corpus" href="?view=corpus">语料库</a>
             <a class="nav-button" data-view="takeawayBook" href="?view=takeawayBook">Takeaway</a>
             <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook">写作积累</a>
+            <a class="nav-button" data-view="spellingDrill" href="?view=spellingDrill">拼写错词训练</a>
           </nav>
           <div class="nav-divider" aria-hidden="true"></div>
           <div class="font-tool" aria-label="Appearance style">
@@ -438,6 +439,11 @@
                 <strong>写作积累</strong>
                 <small>集中复习写作中摘下来的表达、句型和可复用论证素材。</small>
               </a>
+              <a class="corpus-home-card spelling-drill-home-card" data-corpus-home-target="spellingDrill" href="?view=spellingDrill">
+                <span class="corpus-card-mark">SP</span>
+                <strong>拼写错词训练</strong>
+                <small>从作文批改里的 spelling 批注自动整理错词，逐词背写到连对 4 次。</small>
+              </a>
             </div>
           </div>
         </section>
@@ -483,6 +489,30 @@
               </div>
             </header>
             <div id="writingTakeawayList" class="language-takeaway-list"></div>
+          </div>
+        </section>
+
+        <section id="spellingDrillPanel" class="language-takeaway-panel spelling-drill-panel hidden" aria-label="拼写错词训练">
+          <div class="language-book-shell spelling-drill-shell">
+            <header class="language-book-head spelling-drill-head">
+              <div>
+                <h2>拼写错词训练</h2>
+                <p>遮住正确拼写，根据中文提示和错拼记录重新敲一遍。</p>
+              </div>
+              <div class="language-book-actions spelling-drill-actions">
+                <span id="spellingDrillStats">Loading...</span>
+                <div class="spelling-scope-switch" role="group" aria-label="错词范围">
+                  <button type="button" class="is-active" data-spelling-scope="active" aria-pressed="true">待练</button>
+                  <button type="button" data-spelling-scope="mastered" aria-pressed="false">已掌握</button>
+                  <button type="button" data-spelling-scope="all" aria-pressed="false">全部</button>
+                </div>
+              </div>
+            </header>
+            <div id="spellingDrillStatus" class="spelling-drill-status" aria-live="polite"></div>
+            <div class="spelling-drill-layout">
+              <div id="spellingPracticeCard" class="spelling-practice-card"></div>
+              <div id="spellingDrillList" class="spelling-word-list"></div>
+            </div>
           </div>
         </section>
 
@@ -1149,6 +1179,7 @@
     <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
     <script src="/corpus-markdown-editor.js?v=20260530-corpus-markdown-editor"></script>
     <script src="/corpus-takeaway.js?v=20260602-p2-p3-followups"></script>
+    <script src="/spelling-drill.js?v=20260603-spelling-drill"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
@@ -1156,6 +1187,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260602-p2-p3-followups"></script>
+    <script src="/app.js?v=20260603-spelling-drill"></script>
   </body>
 </html>

@@ -1,0 +1,229 @@
+import json
+import uuid
+
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.utils import timezone
+
+from apps.writing.models import SpellingDrillWord, WritingEntry, WritingPrompt, WritingScore
+from apps.writing.spelling_services import (
+    harvest_spelling_words,
+    record_spelling_attempt,
+    spelling_drill_library,
+    update_spelling_word,
+)
+
+
+class SpellingDrillTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="spelling-user", password="test-pass")
+        self.prompt = WritingPrompt.objects.create(
+            prompt_id="spelling-task2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Technology",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+
+    def create_score(self, *, answer: str, analysis_payload: dict, user=None) -> WritingScore:
+        entry = WritingEntry.objects.create(
+            user=user or self.user,
+            entry_id=uuid.uuid4().hex,
+            prompt=self.prompt,
+            task_type=self.prompt.task_type,
+            practice_date=timezone.localdate(),
+            title=self.prompt.title,
+            prompt_text=self.prompt.prompt,
+            answer=answer,
+            word_count=len(answer.split()),
+            status=WritingEntry.Status.SCORED,
+            saved_at=timezone.now(),
+        )
+        return WritingScore.objects.create(
+            user=entry.user,
+            entry=entry,
+            overall_band=6.0,
+            source="ai",
+            analysis_payload=analysis_payload,
+            scored_at=timezone.now(),
+        )
+
+    def test_harvest_collects_inline_and_summary_words(self):
+        self.create_score(
+            answer="I watched many vidios online. The classes were confortable.",
+            analysis_payload={
+                "inline_annotations": [
+                    {
+                        "type": "spelling",
+                        "original": "confortable",
+                        "suggestion": "comfortable",
+                        "explanation": "应拼为 comfortable。",
+                        "paragraph_index": 1,
+                    }
+                ],
+                "spelling_correction_summary": "- vidios -> 正确：videos（视频）",
+            },
+        )
+
+        changed = harvest_spelling_words(self.user)
+        self.assertEqual(changed, 2)
+        comfortable = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
+        videos = SpellingDrillWord.objects.get(user=self.user, normalized="videos")
+        self.assertEqual(comfortable.wrong_forms, ["confortable"])
+        self.assertEqual(comfortable.explanation, "应拼为 comfortable。")
+        self.assertTrue(comfortable.examples[0]["snippet"])
+        self.assertEqual(videos.chinese_gloss, "视频")
+
+    def test_harvest_filters_phrases_noise_and_merges_wrong_forms(self):
+        self.create_score(
+            answer="I saw vidios and viedos in class.",
+            analysis_payload={
+                "inline_annotations": [
+                    {"type": "spelling", "original": "bad phrase", "suggestion": "good phrase"},
+                    {"type": "spelling", "original": "viedos", "suggestion": "videos"},
+                    {"type": "word_choice", "original": "basic", "suggestion": "simple"},
+                ],
+                "spelling_correction_summary": "\n".join([
+                    "- vidios -> 正确：videos（视频）",
+                    "- 123 -> 正确：videos（视频）",
+                    "- weak idea -> 正确：clear idea（表达）",
+                ]),
+            },
+        )
+
+        harvest_spelling_words(self.user)
+        words = list(SpellingDrillWord.objects.filter(user=self.user))
+        self.assertEqual(len(words), 1)
+        word = words[0]
+        self.assertEqual(word.normalized, "videos")
+        self.assertCountEqual(word.wrong_forms, ["viedos", "vidios"])
+        self.assertEqual(word.occurrence_count, 2)
+
+    def test_harvest_is_idempotent_and_preserves_progress(self):
+        self.create_score(
+            answer="This app is confortable.",
+            analysis_payload={
+                "inline_annotations": [
+                    {"type": "spelling", "original": "confortable", "suggestion": "comfortable"},
+                ],
+            },
+        )
+
+        harvest_spelling_words(self.user)
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
+        word.current_streak = 3
+        word.status = SpellingDrillWord.Status.MASTERED
+        word.attempt_count = 5
+        word.correct_count = 4
+        word.save()
+
+        changed = harvest_spelling_words(self.user)
+        word.refresh_from_db()
+        self.assertEqual(changed, 0)
+        self.assertEqual(word.occurrence_count, 1)
+        self.assertEqual(word.current_streak, 3)
+        self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
+        self.assertEqual(word.attempt_count, 5)
+        self.assertEqual(word.correct_count, 4)
+
+    def test_attempt_marks_mastered_after_four_correct_streak(self):
+        self.create_score(
+            answer="This app is confortable.",
+            analysis_payload={"inline_annotations": [{"type": "spelling", "original": "confortable", "suggestion": "comfortable", "explanation": "拼写错误"}]},
+        )
+        harvest_spelling_words(self.user)
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
+
+        wrong = record_spelling_attempt(self.user, word.word_id, "comfortble")
+        self.assertFalse(wrong["correct"])
+        self.assertEqual(wrong["correct_spelling"], "comfortable")
+        word.refresh_from_db()
+        self.assertEqual(word.current_streak, 0)
+
+        for typed in [" Comfortable ", "comfortable", "COMFORTABLE", "comfortable"]:
+            result = record_spelling_attempt(self.user, word.word_id, typed)
+        word.refresh_from_db()
+        self.assertTrue(result["correct"])
+        self.assertEqual(word.current_streak, 4)
+        self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
+        self.assertEqual(word.attempt_count, 5)
+        self.assertEqual(word.correct_count, 4)
+
+    def test_update_edit_gloss_reset_master_and_delete(self):
+        self.create_score(
+            answer="I watched vidios online.",
+            analysis_payload={"spelling_correction_summary": "- vidios -> 正确：videos（视频）"},
+        )
+        harvest_spelling_words(self.user)
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="videos")
+
+        update_spelling_word(self.user, word.word_id, {"action": "edit_gloss", "chinese_gloss": "影片"})
+        harvest_spelling_words(self.user)
+        word.refresh_from_db()
+        self.assertEqual(word.chinese_gloss, "影片")
+        self.assertTrue(word.metadata["gloss_edited"])
+
+        update_spelling_word(self.user, word.word_id, {"action": "master"})
+        word.refresh_from_db()
+        self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
+
+        update_spelling_word(self.user, word.word_id, {"action": "reset"})
+        word.refresh_from_db()
+        self.assertEqual(word.status, SpellingDrillWord.Status.ACTIVE)
+        self.assertEqual(word.current_streak, 0)
+
+        client = Client()
+        client.force_login(self.user)
+        response = client.delete(f"/api/writing/spelling-words/{word.word_id}")
+        self.assertEqual(response.status_code, 200)
+        word.refresh_from_db()
+        self.assertEqual(word.status, SpellingDrillWord.Status.DISMISSED)
+        library = spelling_drill_library(self.user, scope="all")
+        self.assertEqual(library["count"], 0)
+
+    def test_api_auth_routes_and_owner_scope(self):
+        self.create_score(
+            answer="This app is confortable.",
+            analysis_payload={"inline_annotations": [{"type": "spelling", "original": "confortable", "suggestion": "comfortable"}]},
+        )
+        anonymous = Client()
+        self.assertEqual(anonymous.get("/api/writing/spelling-words").status_code, 401)
+
+        client = Client()
+        client.force_login(self.user)
+        library_response = client.get("/api/writing/spelling-words?scope=active")
+        self.assertEqual(library_response.status_code, 200)
+        item = library_response.json()["items"][0]
+        word_id = item["word_id"]
+
+        attempt = client.post(
+            f"/api/writing/spelling-words/{word_id}/attempt",
+            data=json.dumps({"typed": "comfortable"}),
+            content_type="application/json",
+        )
+        self.assertEqual(attempt.status_code, 200)
+        self.assertTrue(attempt.json()["correct"])
+
+        patch = client.patch(
+            f"/api/writing/spelling-words/{word_id}",
+            data=json.dumps({"action": "master"}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch.status_code, 200)
+        self.assertEqual(patch.json()["status"], SpellingDrillWord.Status.MASTERED)
+
+        method_not_allowed = client.post(
+            f"/api/writing/spelling-words/{word_id}",
+            data=json.dumps({"action": "reset"}),
+            content_type="application/json",
+        )
+        self.assertEqual(method_not_allowed.status_code, 405)
+
+        other = get_user_model().objects.create_user(username="other-spelling", password="test-pass")
+        other_client = Client()
+        other_client.force_login(other)
+        other_attempt = other_client.post(
+            f"/api/writing/spelling-words/{word_id}/attempt",
+            data=json.dumps({"typed": "comfortable"}),
+            content_type="application/json",
+        )
+        self.assertEqual(other_attempt.status_code, 404)

@@ -91,6 +91,44 @@ class WritingScore(UserOwnedModel):
         return f"writing score:{self.entry_id}"
 
 
+class SpellingDrillWord(UserOwnedModel):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        MASTERED = "mastered", "Mastered"
+        DISMISSED = "dismissed", "Dismissed"
+
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="spelling_drill_words")
+    word_id = models.CharField(max_length=64)
+    correct_spelling = models.CharField(max_length=120)
+    normalized = models.CharField(max_length=120)
+    wrong_forms = models.JSONField(default=list, blank=True)
+    chinese_gloss = models.CharField(max_length=200, blank=True)
+    explanation = models.TextField(blank=True)
+    examples = models.JSONField(default=list, blank=True)
+    occurrence_count = models.PositiveIntegerField(default=0)
+    attempt_count = models.PositiveIntegerField(default=0)
+    correct_count = models.PositiveIntegerField(default=0)
+    current_streak = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.ACTIVE)
+    first_seen_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    last_practiced_at = models.DateTimeField(null=True, blank=True)
+    source_refs = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "normalized"], name="unique_spelling_word_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "status", "last_practiced_at"]),
+            models.Index(fields=["user", "updated_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"spelling drill:{self.normalized}:{self.user_id}"
+
+
 class WritingLearnerProfile(UserOwnedModel):
     user = models.OneToOneField("accounts.CustomUser", on_delete=models.CASCADE, related_name="writing_learner_profile")
     total_scored = models.PositiveIntegerField(default=0)

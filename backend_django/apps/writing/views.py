@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
+from .spelling_services import delete_spelling_word, record_spelling_attempt, spelling_drill_library, update_spelling_word
 from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
@@ -51,6 +52,43 @@ def reports(request):
         return JsonResponse(writing_reports(request.user, request.GET))
     except WritingError as exc:
         return writing_error(exc)
+
+
+@require_GET
+def spelling_words(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(spelling_drill_library(request.user, scope=request.GET.get("scope") or "active"))
+    except WritingError as exc:
+        return writing_error(exc)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def spelling_word_attempt(request, word_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(record_spelling_attempt(request.user, word_id, read_json_body(request).get("typed")))
+    except WritingError as exc:
+        return writing_error(exc, status=404 if "not found" in str(exc).lower() else 400)
+
+
+@csrf_exempt
+@require_http_methods(["PATCH", "DELETE"])
+def spelling_word_detail(request, word_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        if request.method == "PATCH":
+            return JsonResponse(update_spelling_word(request.user, word_id, read_json_body(request)))
+        return JsonResponse(delete_spelling_word(request.user, word_id))
+    except WritingError as exc:
+        return writing_error(exc, status=404 if "not found" in str(exc).lower() else 400)
 
 
 @require_GET

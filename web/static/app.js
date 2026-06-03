@@ -85,6 +85,16 @@ const state = {
     hideEnglish: false,
     revealedEntryIds: new Set(),
   },
+  spellingDrill: {
+    items: [],
+    stats: {},
+    scope: "active",
+    loaded: false,
+    loadingPromise: null,
+    currentIndex: 0,
+    result: null,
+    hintLevel: 0,
+  },
   practiceLocked: false,
   startRequestId: 0,
   practiceSessionId: 0,
@@ -220,6 +230,7 @@ const viewCopy = {
   p2Corpus: ["我准备的P2串题素材库", "Prepare reusable Part 2 story materials and link them during preparation."],
   takeawayBook: ["Takeaway", "Review saved language takeaways with hidden English recall."],
   writingTakeawayBook: ["写作积累", "Review saved writing phrases and reusable argument material."],
+  spellingDrill: ["拼写错词训练", "Rewrite spelling mistakes from scored writing reports until they are mastered."],
   history: ["口语报告", ""],
   writing: ["", ""],
   writingReports: ["写作报告", ""],
@@ -231,8 +242,8 @@ const viewCopy = {
 };
 
 const authViews = new Set(["login", "register", "forgotPassword"]);
-const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "accountProfile", "accountSecurity"]);
-const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"]);
+const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill", "accountProfile", "accountSecurity"]);
+const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 
 const EXAMINER_AUDIO_LOAD_TIMEOUT_MS = 15000;
@@ -762,6 +773,17 @@ if (!corpusTakeawayController) {
   throw new Error("IELTSCorpusTakeaway module failed to initialize.");
 }
 
+const spellingDrillController = window.IELTSSpellingDrill?.createSpellingDrillController?.({
+  state,
+  $,
+  escapeHtml,
+  api,
+  showConfirmDelete,
+});
+if (!spellingDrillController) {
+  throw new Error("IELTSSpellingDrill module failed to initialize.");
+}
+
 function prefetchCanApply(token) {
   return state.account.authenticated && state.prefetch.token === token;
 }
@@ -779,6 +801,13 @@ function clearUserScopedCaches() {
   state.writingTakeaway.loaded = false;
   state.writingTakeaway.loadingPromise = null;
   state.writingTakeaway.revealedEntryIds.clear();
+  state.spellingDrill.items = [];
+  state.spellingDrill.stats = {};
+  state.spellingDrill.loaded = false;
+  state.spellingDrill.loadingPromise = null;
+  state.spellingDrill.currentIndex = 0;
+  state.spellingDrill.result = null;
+  state.spellingDrill.hintLevel = 0;
   state.p1Corpus.topics = [];
   state.p1Corpus.loaded = false;
   state.p1Corpus.loadingPromise = null;
@@ -1119,8 +1148,8 @@ function switchView(view, options = {}) {
   $(".shell")?.classList.toggle("auth-shell", authViews.has(view));
   document.body.classList.toggle("view-writing", view === "writing");
   $(".shell")?.classList.toggle("account-shell", ["accountProfile", "accountSecurity"].includes(view));
-  $(".workspace")?.classList.toggle("corpus-workspace", ["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"].includes(view));
-  $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"].includes(view));
+  $(".workspace")?.classList.toggle("corpus-workspace", ["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"].includes(view));
+  $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"].includes(view));
   $("#accountBackBtn")?.classList.toggle("hidden", !["accountProfile", "accountSecurity"].includes(view));
   $("#homePanel")?.classList.toggle("hidden", view !== "home");
   $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
@@ -1130,6 +1159,7 @@ function switchView(view, options = {}) {
   $("#p2CorpusPanel")?.classList.toggle("hidden", view !== "p2Corpus");
   $("#takeawayBookPanel")?.classList.toggle("hidden", view !== "takeawayBook");
   $("#writingTakeawayBookPanel")?.classList.toggle("hidden", view !== "writingTakeawayBook");
+  $("#spellingDrillPanel")?.classList.toggle("hidden", view !== "spellingDrill");
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
   $("#writingReportsPanel")?.classList.toggle("hidden", view !== "writingReports");
@@ -1141,7 +1171,7 @@ function switchView(view, options = {}) {
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
-  const hideWorkspaceHeader = view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || view === "writingTakeawayBook" || authViews.has(view) || view === "accountProfile" || view === "accountSecurity";
+  const hideWorkspaceHeader = view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || view === "writingTakeawayBook" || view === "spellingDrill" || authViews.has(view) || view === "accountProfile" || view === "accountSecurity";
   $(".topbar").classList.toggle("hidden", hideWorkspaceHeader);
   $("#viewTitleBlock").classList.toggle("hidden", hideWorkspaceHeader);
   $("#writingTopbarActions")?.classList.toggle("hidden", view !== "writing");
@@ -1151,6 +1181,7 @@ function switchView(view, options = {}) {
   if (view === "corpus") loadCorpusHome();
   if (view === "takeawayBook") loadLanguageTakeaways();
   if (view === "writingTakeawayBook") loadWritingTakeaways();
+  if (view === "spellingDrill") loadSpellingDrill();
   if (view === "writing") loadWriting();
   if (view === "writingReports") loadWritingReports();
   if (view === "p1Corpus") loadP1Corpus();
@@ -6754,6 +6785,14 @@ async function loadCorpusHome(...args) {
   return corpusTakeawayController.loadCorpusHome(...args);
 }
 
+async function loadSpellingDrill(...args) {
+  return spellingDrillController.loadSpellingDrill(...args);
+}
+
+function renderSpellingDrill(...args) {
+  return spellingDrillController.renderSpellingDrill(...args);
+}
+
 async function loadLanguageTakeaways(...args) {
   return corpusTakeawayController.loadLanguageTakeaways(...args);
 }
@@ -7726,6 +7765,7 @@ function bindEvents() {
       switchView(button.dataset.corpusHomeTarget || "corpus");
     });
   });
+  spellingDrillController.bindSpellingDrillEvents();
   $("languageTakeawayHideToggle")?.addEventListener("click", toggleLanguageTakeawayHiddenMode);
   $("writingTakeawayHideToggle")?.addEventListener("click", toggleWritingTakeawayHiddenMode);
   $("languageTakeawayList")?.addEventListener("click", (event) => {
