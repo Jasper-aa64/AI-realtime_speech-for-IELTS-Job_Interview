@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import re
 import shutil
@@ -10,6 +11,8 @@ import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 from django.conf import settings
 
@@ -124,34 +127,39 @@ def stable_tts_audio_path(role: str, filename: str) -> tuple[Path | None, str]:
     if stable_path.exists() and stable_path.stat().st_mtime >= source_path.stat().st_mtime:
         return stable_path, "audio/mp4"
 
-    afconvert = shutil.which("afconvert")
-    if not afconvert:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        _log.warning(
+            "tts_stable: ffmpeg not found — serving mp3 directly (no transcoder available). "
+            "Install ffmpeg to enable m4a/AAC conversion for examiner audio."
+        )
         return source_path, "audio/mpeg"
 
     try:
         subprocess.run(
             [
-                afconvert,
-                "-f",
-                "m4af",
-                "-d",
-                "aac",
-                "-s",
-                "3",
-                "-q",
-                "127",
-                str(source_path),
+                ffmpeg,
+                "-i", str(source_path),
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-movflags", "+faststart",
+                "-y",
                 str(stable_path),
             ],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=5,
+            timeout=10,
         )
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("tts_stable: ffmpeg transcode failed (%s) — serving mp3 directly.", exc)
         return source_path, "audio/mpeg"
 
-    return (stable_path, "audio/mp4") if stable_path.exists() else (source_path, "audio/mpeg")
+    if not stable_path.exists():
+        _log.warning("tts_stable: ffmpeg ran but output missing — serving mp3 directly.")
+        return source_path, "audio/mpeg"
+
+    return stable_path, "audio/mp4"
 
 
 def _audio_content_type(path: Path) -> str:

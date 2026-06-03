@@ -1,198 +1,82 @@
+# IELTS stack launcher for Windows (daphne ASGI + AI worker)
+# Requires: .env in project root, Python 3.13 in system PATH or .venv-django
+# Usage: .\scripts\windows\start-ielts-stack.ps1
+
 param(
-    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
-    [int]$DjangoPort = $(if ($env:IELTS_DJANGO_PORT) { [int]$env:IELTS_DJANGO_PORT } else { 8000 })
+    [string]$EnvFile = ".env",
+    [string]$BindHost = "127.0.0.1",
+    [int]$Port = 8767
 )
 
 $ErrorActionPreference = "Stop"
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+Set-Location $ProjectRoot
 
-function Test-TcpPort {
-    param(
-        [string]$HostName,
-        [int]$Port
-    )
-
-    try {
-        $client = [System.Net.Sockets.TcpClient]::new()
-        $async = $client.BeginConnect($HostName, $Port, $null, $null)
-        if (-not $async.AsyncWaitHandle.WaitOne(250)) {
-            $client.Close()
-            return $false
-        }
-        $client.EndConnect($async)
-        $client.Close()
-        return $true
-    } catch {
-        return $false
+# --- Load .env ---
+if (Test-Path $EnvFile) {
+    Get-Content $EnvFile | Where-Object { $_ -match "^\s*[^#]" -and $_ -match "=" } | ForEach-Object {
+        $parts = $_ -split "=", 2
+        $key   = $parts[0].Trim()
+        $value = $parts[1].Trim().Trim('"').Trim("'")
+        [Environment]::SetEnvironmentVariable($key, $value, "Process")
     }
-}
-
-function Resolve-Python {
-    foreach ($candidate in @("python.exe", "py.exe")) {
-        $command = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($command) {
-            return $command.Source
-        }
-    }
-    throw "Unable to find python.exe or py.exe on PATH."
-}
-
-function Resolve-Cloudflared {
-    $command = Get-Command "cloudflared.exe" -ErrorAction SilentlyContinue
-    if ($command) {
-        return $command.Source
-    }
-
-    $known = Join-Path $env:LOCALAPPDATA "npm-cache\_npx"
-    if (Test-Path $known) {
-        $found = Get-ChildItem $known -Recurse -Filter "cloudflared.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($found) {
-            return $found.FullName
-        }
-    }
-
-    throw "Unable to locate cloudflared.exe."
-}
-
-function Start-DetachedProcess {
-    param(
-        [string]$FilePath,
-        [string[]]$ArgumentList,
-        [string]$WorkingDirectory,
-        [string]$LogStem
-    )
-
-    $runlogs = Join-Path $RepoRoot ".runlogs"
-    New-Item -ItemType Directory -Force -Path $runlogs | Out-Null
-    $stdout = Join-Path $runlogs "$LogStem.out.log"
-    $stderr = Join-Path $runlogs "$LogStem.err.log"
-
-    Start-Process `
-        -FilePath $FilePath `
-        -ArgumentList $ArgumentList `
-        -WorkingDirectory $WorkingDirectory `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput $stdout `
-        -RedirectStandardError $stderr | Out-Null
-}
-
-function Write-StackStatus {
-    param(
-        [string]$Mode,
-        [string]$PublicUrl
-    )
-
-    $runlogs = Join-Path $RepoRoot ".runlogs"
-    New-Item -ItemType Directory -Force -Path $runlogs | Out-Null
-
-    $statusPath = Join-Path $runlogs "stack-status.json"
-    $urlPath = Join-Path $runlogs "public-url.txt"
-    $status = [ordered]@{
-        updated_at = (Get-Date).ToString("s")
-        app = "http://127.0.0.1:$DjangoPort"
-        django = "http://127.0.0.1:$DjangoPort"
-        tunnel_mode = $Mode
-        public_url = $PublicUrl
-    }
-
-    $status | ConvertTo-Json | Set-Content -Path $statusPath -Encoding UTF8
-    if ($PublicUrl) {
-        Set-Content -Path $urlPath -Value $PublicUrl -Encoding UTF8
-    }
-}
-
-function Get-QuickTunnelUrl {
-    $logPath = Join-Path $RepoRoot ".runlogs\cloudflared.err.log"
-    if (-not (Test-Path $logPath)) {
-        return $null
-    }
-
-    $match = Select-String -Path $logPath -Pattern 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | Select-Object -Last 1
-    if ($match) {
-        return $match.Matches[0].Value
-    }
-
-    return $null
-}
-
-function Get-NamedTunnelName {
-    $envName = $env:IELTS_CLOUDFLARED_TUNNEL_NAME
-    if ($envName) {
-        return $envName.Trim()
-    }
-
-    $configPath = if ($env:IELTS_CLOUDFLARED_CONFIG) {
-        $env:IELTS_CLOUDFLARED_CONFIG
-    } else {
-        Join-Path $env:USERPROFILE ".cloudflared\config.yml"
-    }
-
-    if (Test-Path $configPath) {
-        $match = Select-String -Path $configPath -Pattern '^\s*tunnel:\s*([^\s#]+)\s*$' | Select-Object -First 1
-        if ($match) {
-            return $match.Matches[0].Groups[1].Value.Trim()
-        }
-    }
-
-    return $null
-}
-
-$python = Resolve-Python
-$cloudflared = Resolve-Cloudflared
-$managePy = Join-Path $RepoRoot "backend_django\manage.py"
-
-if (-not (Test-TcpPort -HostName "127.0.0.1" -Port $DjangoPort)) {
-    Start-DetachedProcess `
-        -FilePath $python `
-        -ArgumentList @($managePy, "runserver", "127.0.0.1:$DjangoPort") `
-        -WorkingDirectory $RepoRoot `
-        -LogStem "django"
-}
-
-Start-Sleep -Seconds 2
-
-$tunnelName = Get-NamedTunnelName
-if (-not (Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue)) {
-    if ($tunnelName) {
-        Start-DetachedProcess `
-            -FilePath $cloudflared `
-            -ArgumentList @("tunnel", "run", $tunnelName) `
-            -WorkingDirectory $RepoRoot `
-            -LogStem "cloudflared"
-    } else {
-        Start-DetachedProcess `
-            -FilePath $cloudflared `
-            -ArgumentList @("tunnel", "--url", "http://127.0.0.1:$DjangoPort", "--no-autoupdate") `
-            -WorkingDirectory $RepoRoot `
-            -LogStem "cloudflared"
-    }
-}
-
-$publicUrl = $env:IELTS_PUBLIC_URL
-if (-not $publicUrl -and -not $tunnelName) {
-    for ($i = 0; $i -lt 20; $i += 1) {
-        $publicUrl = Get-QuickTunnelUrl
-        if ($publicUrl) {
-            break
-        }
-        Start-Sleep -Seconds 1
-    }
-}
-
-Write-Host "IELTS stack launch requested."
-Write-Host "App: http://127.0.0.1:$DjangoPort"
-Write-Host "Django: http://127.0.0.1:$DjangoPort"
-if ($tunnelName) {
-    Write-Host "Tunnel mode: named tunnel '$tunnelName' (stable URL if DNS is already routed)."
-    if ($publicUrl) {
-        Write-Host "Public URL: $publicUrl"
-    } else {
-        Write-Host "Public URL: set IELTS_PUBLIC_URL to record the routed hostname in .runlogs."
-    }
-    Write-StackStatus -Mode "named" -PublicUrl $publicUrl
+    Write-Host "[ielts] Loaded $EnvFile"
 } else {
-    Write-Host "Tunnel mode: quick tunnel (URL changes on restart unless you switch to a named tunnel)."
-    if ($publicUrl) {
-        Write-Host "Public URL: $publicUrl"
+    Write-Warning "[ielts] $EnvFile not found. Copy .env.example to .env and fill in real keys."
+}
+
+# --- Resolve Python (venv preferred, system fallback) ---
+$VenvPython = Join-Path $ProjectRoot ".venv-django\Scripts\python.exe"
+$Python = if (Test-Path $VenvPython) { $VenvPython } else {
+    (Get-Command python -ErrorAction SilentlyContinue)?.Source
+}
+if (-not $Python) { throw "[ielts] Python not found. Create .venv-django or add python to PATH." }
+Write-Host "[ielts] Python: $Python"
+
+# --- Ensure runlogs dir ---
+$RunLogs = Join-Path $ProjectRoot ".runlogs"
+New-Item -ItemType Directory -Force -Path $RunLogs | Out-Null
+
+# --- Stop-file for worker graceful shutdown ---
+$StopFile = Join-Path ([System.IO.Path]::GetTempPath()) "ielts_worker_$(Get-Date -Format 'yyyyMMddHHmmss').stop"
+if (Test-Path $StopFile) { Remove-Item $StopFile }
+
+# --- Launch daphne (ASGI, supports WebSocket/Channels) ---
+Write-Host "[ielts] Starting daphne on ${BindHost}:${Port} ..."
+$DjangoLog = Join-Path $RunLogs "django.log"
+$DjangoProc = Start-Process -FilePath $Python -ArgumentList @(
+    "-m", "daphne",
+    "-b", $BindHost,
+    "-p", $Port,
+    "config.asgi:application"
+) -WorkingDirectory (Join-Path $ProjectRoot "backend_django") `
+  -PassThru -NoNewWindow `
+  -RedirectStandardOutput $DjangoLog -RedirectStandardError $DjangoLog
+
+# --- Launch AI worker ---
+Write-Host "[ielts] Starting AI worker ..."
+$WorkerLog = Join-Path $RunLogs "worker.log"
+$WorkerProc = Start-Process -FilePath $Python -ArgumentList @(
+    "manage.py", "run_ai_worker",
+    "--stop-file", $StopFile
+) -WorkingDirectory (Join-Path $ProjectRoot "backend_django") `
+  -PassThru -NoNewWindow `
+  -RedirectStandardOutput $WorkerLog -RedirectStandardError $WorkerLog
+
+Write-Host "[ielts] Stack running."
+Write-Host "  Django  PID=$($DjangoProc.Id)  log=$DjangoLog"
+Write-Host "  Worker  PID=$($WorkerProc.Id)  log=$WorkerLog"
+Write-Host "  Local:  http://${BindHost}:${Port}"
+Write-Host "  Tailscale: https://psi-linagjm.tail46b1c.ts.net"
+Write-Host "[ielts] Press Ctrl+C to stop."
+
+try {
+    Wait-Process -Id $DjangoProc.Id
+} finally {
+    New-Item -ItemType File -Path $StopFile -Force | Out-Null
+    Start-Sleep -Seconds 2
+    @($DjangoProc, $WorkerProc) | Where-Object { -not $_.HasExited } | ForEach-Object {
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
     }
-    Write-StackStatus -Mode "quick" -PublicUrl $publicUrl
+    Write-Host "[ielts] Stack stopped."
 }
