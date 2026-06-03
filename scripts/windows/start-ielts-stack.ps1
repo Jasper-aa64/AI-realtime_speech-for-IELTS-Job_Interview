@@ -27,8 +27,11 @@ if (Test-Path $EnvFile) {
 
 # --- Resolve Python (venv preferred, system fallback) ---
 $VenvPython = Join-Path $ProjectRoot ".venv-django\Scripts\python.exe"
-$Python = if (Test-Path $VenvPython) { $VenvPython } else {
-    (Get-Command python -ErrorAction SilentlyContinue)?.Source
+if (Test-Path $VenvPython) {
+    $Python = $VenvPython
+} else {
+    $PythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    $Python = if ($PythonCmd) { $PythonCmd.Source } else { $null }
 }
 if (-not $Python) { throw "[ielts] Python not found. Create .venv-django or add python to PATH." }
 Write-Host "[ielts] Python: $Python"

@@ -10,8 +10,11 @@ $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 # --- Config ---
 $NssmExe     = "C:\Users\liangjunming\tools\nssm-2.24\win64\nssm.exe"
 $VenvPython  = Join-Path $ProjectRoot ".venv-django\Scripts\python.exe"
-$Python      = if (Test-Path $VenvPython) { $VenvPython } else {
-    (Get-Command python -ErrorAction SilentlyContinue)?.Source
+if (Test-Path $VenvPython) {
+    $Python = $VenvPython
+} else {
+    $PythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    $Python = if ($PythonCmd) { $PythonCmd.Source } else { $null }
 }
 if (-not $Python) { throw "Python not found." }
 if (-not (Test-Path $NssmExe)) { throw "NSSM not found at $NssmExe" }
@@ -42,7 +45,7 @@ function Install-IeltsService {
     )
 
     Write-Host "Installing service: $Name ..."
-    & $NssmExe remove $Name confirm 2>$null
+    try { & $NssmExe remove $Name confirm 2>&1 | Out-Null } catch {}
 
     & $NssmExe install        $Name $Python
     & $NssmExe set            $Name AppParameters    $Args
