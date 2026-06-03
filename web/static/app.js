@@ -42,6 +42,7 @@ const state = {
   p3Plan: null,
   p3PlanLoading: false,
   p3PracticeSource: null,
+  p3CorpusSourceEntryId: "",
   p1Corpus: {
     topics: [],
     loaded: false,
@@ -231,6 +232,7 @@ const authViews = new Set(["login", "register", "forgotPassword"]);
 const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "accountProfile", "accountSecurity"]);
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
+const agentAssistantViews = new Set(["writing", "writingReports", "writingTakeawayBook"]);
 
 const EXAMINER_AUDIO_LOAD_TIMEOUT_MS = 15000;
 const EXAMINER_AUDIO_INPUT_RELEASE_TIMEOUT_MS = 1800;
@@ -1090,6 +1092,7 @@ function switchView(view, options = {}) {
   hideWritingHighlightMenu();
   if (view === "p3" && !options.keepP3Source) {
     state.p3PracticeSource = null;
+    state.p3CorpusSourceEntryId = "";
     state.p3SourceType = "topic";
     state.p3Plan = null;
   }
@@ -1167,6 +1170,7 @@ function switchView(view, options = {}) {
   if (view === "p3") syncP3LaunchPanel();
   $("#examStatusText")?.classList.remove("hidden");
   $("#exitPractice")?.classList.toggle("hidden", !state.practiceLocked || !["mock", "p1", "p2", "p3"].includes(view));
+  updateAgentAssistantVisibility(view);
   if (["mock", "p1", "p2", "p3"].includes(view)) {
     if (hasPendingSpeakingAnalysisForView(view)) {
       restorePendingSpeakingAnalysisView(view);
@@ -1176,6 +1180,18 @@ function switchView(view, options = {}) {
   }
   updateSidebarLock();
 }
+
+
+function updateAgentAssistantVisibility(view = state.view) {
+  const button = $("agentAssistantBtn");
+  if (!button) return;
+  const visible = agentAssistantViews.has(view) && !authViews.has(view) && !accountViews.has(view);
+  button.classList.toggle("hidden", !visible);
+  button.setAttribute("aria-hidden", visible ? "false" : "true");
+  button.tabIndex = visible ? 0 : -1;
+  if (!visible) closeAgentAssistant();
+}
+
 
 async function prefetchWritingTakeaways(token) {
   const payload = await fetchWritingTakeawaysPayload();
@@ -1348,6 +1364,7 @@ function showPracticeOverlay(view = "accountProfile") {
   text("viewSubtitle", viewCopy[view][1]);
   if (view === "accountProfile") loadAccountProfile();
   if (view === "accountSecurity") loadAccount();
+  updateAgentAssistantVisibility(view);
   updateSidebarLock();
 }
 
@@ -1372,6 +1389,7 @@ function returnFromSettings() {
   $(".shell")?.classList.remove("auth-shell", "account-shell");
   text("viewTitle", viewCopy[practiceView][0]);
   text("viewSubtitle", viewCopy[practiceView][1]);
+  updateAgentAssistantVisibility(practiceView);
   updateSidebarLock();
 }
 
@@ -6311,6 +6329,8 @@ async function startP3FromP2Report(attemptId) {
     answer,
     p2CorpusEntryId: link.entry_id || "",
     p3FollowUpText: linkedEntry?.p3_follow_up_text || link.p3_follow_up_text || "",
+    band: detailAttempt.ielts_score?.overall_band ?? detailAttempt.overall_band ?? "",
+    displayTime: detailAttempt.display_time || detailAttempt.timestamp || "",
   };
   state.p3SelectedTopic = title;
   state.p3SourceType = "p2_report";
@@ -6616,6 +6636,44 @@ function placeCorpusPeekWindow(...args) {
 
 function resetCorpusPeekWindowPosition(...args) {
   return corpusTakeawayController.resetCorpusPeekWindowPosition(...args);
+}
+
+function p2CorpusSourceText(entry) {
+  if (!entry) return "";
+  return String(entry.material_text || entry.linked_question || entry.title || "").trim();
+}
+
+function p3CorpusSourceOptions() {
+  const options = [];
+  for (const category of state.p2Corpus.categories || []) {
+    for (const item of category.items || []) {
+      options.push({
+        ...item,
+        label: category.label || item.label || item.category || "P2 素材",
+      });
+    }
+  }
+  return options;
+}
+
+function setP3SourceFromCorpusEntry(entry) {
+  if (!entry) {
+    state.p3PracticeSource = null;
+    state.p3CorpusSourceEntryId = "";
+    state.p3SelectedTopic = "";
+    return;
+  }
+  state.p3CorpusSourceEntryId = entry.entry_id || "";
+  state.p3PracticeSource = {
+    sourceType: "p2_corpus",
+    title: entry.title || "P2 素材",
+    theme: entry.title || entry.label || "P2 素材",
+    answer: p2CorpusSourceText(entry),
+    p2CorpusEntryId: entry.entry_id || "",
+    p3FollowUpText: entry.p3_follow_up_text || "",
+    categoryLabel: entry.label || entry.category || "",
+  };
+  state.p3SelectedTopic = state.p3PracticeSource.theme;
 }
 
 function keepOpenCorpusPeekWindowsInBounds(...args) {
@@ -7920,8 +7978,17 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const source = button.dataset.p3Source || "topic";
       state.p3SourceType = source;
-      if (source !== "p2_report") state.p3PracticeSource = null;
-      clearP3Plan(source === "p2_report" ? "从 P2 报告页进入时会自动带入本次回答。" : "");
+      if (source !== "p2_report" && source !== "p2_corpus") state.p3PracticeSource = null;
+      if (source !== "p2_corpus") state.p3CorpusSourceEntryId = "";
+      if (source === "p2_corpus") {
+        ensureP2CorpusLoaded().then(() => {
+          const entry = p3CorpusSourceOptions().find((item) => item.entry_id === state.p3CorpusSourceEntryId) || p3CorpusSourceOptions()[0];
+          if (entry) setP3SourceFromCorpusEntry(entry);
+          clearP3Plan(entry ? "已选择 P2 素材，生成计划后会基于这条素材追问。" : "先到 P2 素材库保存一条素材。");
+        });
+      } else {
+        clearP3Plan(source === "p2_report" ? "从 P2 报告页进入时会自动带入本次回答。" : "");
+      }
     });
   });
   document.querySelectorAll("[data-p3-focus]").forEach((button) => {
@@ -7944,6 +8011,7 @@ function bindEvents() {
     const chip = event.target.closest("[data-p3-topic]");
     if (!chip) return;
     state.p3PracticeSource = null;
+    state.p3CorpusSourceEntryId = "";
     state.p3SourceType = "topic";
     state.p3SelectedTopic = chip.dataset.p3Topic || "";
     document.querySelectorAll("#p3TopicChips .topic-chip").forEach((c) => {
@@ -8101,6 +8169,96 @@ function currentP3Theme() {
   return String(state.p3PracticeSource?.theme || state.p3SelectedTopic || state.p3CustomTheme || "").trim();
 }
 
+function p3ReportContextCard(source = state.p3PracticeSource || {}) {
+  const title = source.title || "P2 report";
+  const band = source.band || "";
+  const time = formatReportTime(source.displayTime || "");
+  return `
+    <article class="p3-source-report-card tone-p2">
+      <div class="history-item-top">
+        <span class="history-item-tag p2">P2</span>
+        ${band !== "" ? `<span class="history-item-band">Band ${escapeHtml(band)}</span>` : ""}
+      </div>
+      <span class="p3-source-card-menu" aria-hidden="true">•••</span>
+      <strong class="history-item-title">${escapeHtml(title)}</strong>
+      ${time ? `<small class="history-item-time">${escapeHtml(time)}</small>` : ""}
+    </article>
+  `;
+}
+
+function p3CorpusContextHtml() {
+  const options = p3CorpusSourceOptions();
+  if (!options.length) {
+    return `
+      <div class="p3-context-note">
+        <strong>还没有可选的 P2 素材</strong>
+        <span>先到“我准备的 P2 串题素材库”里保存素材，再回到这里按素材生成 P3 追问。</span>
+      </div>
+    `;
+  }
+  let selected = options.find((item) => item.entry_id === state.p3CorpusSourceEntryId);
+  if (!selected) {
+    selected = options[0];
+    setP3SourceFromCorpusEntry(selected);
+  }
+  return `
+    <div class="p3-corpus-context">
+      <select id="p3CorpusSourceSelect" class="p3-custom-input" aria-label="选择 P2 素材">
+        ${options.map((item) => `<option value="${escapeHtml(item.entry_id)}"${item.entry_id === state.p3CorpusSourceEntryId ? " selected" : ""}>${escapeHtml(item.label)} · ${escapeHtml(item.title || "未命名素材")}</option>`).join("")}
+      </select>
+      <article class="p3-source-corpus-card">
+        <div>
+          <span>${escapeHtml(selected.label || "P2 素材")}</span>
+          <strong>${escapeHtml(selected.title || "未命名素材")}</strong>
+        </div>
+        <p>${escapeHtml((selected.material_text || selected.linked_question || "").slice(0, 180))}${String(selected.material_text || selected.linked_question || "").length > 180 ? "..." : ""}</p>
+      </article>
+    </div>
+  `;
+}
+
+function renderP3SourceContext(message = "") {
+  const section = $("#p3SourceContextSection");
+  const target = $("#p3SourceContext");
+  if (!section || !target) return;
+  const sourceType = state.p3SourceType;
+  const source = state.p3PracticeSource || {};
+  if (sourceType === "p2_report") {
+    section.classList.remove("hidden");
+    if (source.sourceType === "p2_report") {
+      target.innerHTML = `
+        <div class="p3-context-grid">
+          ${p3ReportContextCard(source)}
+          <div class="p3-context-note">
+            <strong>已带入这次 P2 回答</strong>
+            <span>系统会基于这次报告里的 P2 题目和你的回答，生成更像真实 Part 3 的延展追问。</span>
+          </div>
+        </div>
+      `;
+    } else {
+      target.innerHTML = `
+        <div class="p3-context-note p3-context-warning">
+          <strong>需要从 P2 报告进入</strong>
+          <span>打开一份 P2 口语报告，点击“生成 P3 训练计划”，这里才会自动带入那次 P2 的题目、回答和分数上下文。</span>
+        </div>
+      `;
+    }
+    return;
+  }
+  if (sourceType === "p2_corpus") {
+    section.classList.remove("hidden");
+    target.innerHTML = p3CorpusContextHtml();
+    $("p3CorpusSourceSelect")?.addEventListener("change", (event) => {
+      const entry = p3CorpusSourceOptions().find((item) => item.entry_id === event.target.value);
+      setP3SourceFromCorpusEntry(entry);
+      clearP3Plan("已切换 P2 素材，重新生成计划后生效。");
+    });
+    return;
+  }
+  section.classList.toggle("hidden", !message);
+  target.innerHTML = message ? `<div class="p3-context-note"><span>${escapeHtml(message)}</span></div>` : "";
+}
+
 function clearP3Plan(message = "") {
   state.p3Plan = null;
   state.p3PlanLoading = false;
@@ -8140,6 +8298,7 @@ function syncP3LaunchPanel(message = "") {
   }
   $("#p3TopicSourceSection")?.classList.toggle("hidden", state.p3SourceType !== "topic");
   $("#p3CustomThemeSection")?.classList.toggle("hidden", state.p3SourceType !== "custom");
+  renderP3SourceContext(message);
   const customInput = $("#p3CustomThemeInput");
   if (customInput && customInput.value !== state.p3CustomTheme) customInput.value = state.p3CustomTheme || "";
   text("p3ModeHelp", P3_INTENSITY_HELP[state.p3Intensity] || P3_INTENSITY_HELP.normal);
@@ -8202,6 +8361,19 @@ function renderP3PlanPreview() {
 
 async function generateP3Plan(options = {}) {
   if (state.p3PlanLoading) return;
+  if (state.p3SourceType === "p2_report" && state.p3PracticeSource?.sourceType !== "p2_report") {
+    clearP3Plan("请先从一份 P2 报告进入，系统才能带入那次回答作为 P3 上下文。");
+    return;
+  }
+  if (state.p3SourceType === "p2_corpus") {
+    if (!state.p2Corpus.loaded) await ensureP2CorpusLoaded();
+    const entry = p3CorpusSourceOptions().find((item) => item.entry_id === state.p3CorpusSourceEntryId) || p3CorpusSourceOptions()[0];
+    setP3SourceFromCorpusEntry(entry);
+    if (!state.p3PracticeSource?.answer) {
+      clearP3Plan("先选择一条有正文的 P2 素材。");
+      return;
+    }
+  }
   if (state.p3SourceType === "custom") {
     state.p3CustomTheme = String($("#p3CustomThemeInput")?.value || "").trim();
     if (!state.p3CustomTheme) {
@@ -8321,6 +8493,7 @@ function renderAgentAssistantResults() {
     const url = agentAssistantResultUrl(prompt);
     const source = prompt.source_label || writingPromptPickerTitle(prompt) || writingTaskLabel(prompt.task_type);
     const score = Number(item.score ?? prompt.match_score ?? 0);
+    const reasons = item.reasons || prompt.match_reasons || [];
     return `
       <article class="agent-result-card">
         <div class="agent-result-top">
@@ -8330,6 +8503,7 @@ function renderAgentAssistantResults() {
           </div>
           <em class="agent-result-score">${escapeHtml(agentAssistantMatchLabel(prompt))} · ${Math.round(score * 100)}%</em>
         </div>
+        ${reasons.length ? `<div class="agent-result-reasons">${reasons.slice(0, 3).map((reason) => `<span>${escapeHtml(reason)}</span>`).join("")}</div>` : ""}
         <p class="agent-result-prompt">${escapeHtml(prompt.prompt || "")}</p>
         <div class="agent-result-actions">
           <button type="button" class="agent-result-open" data-agent-prompt-id="${escapeHtml(prompt.id)}" data-agent-task-type="${escapeHtml(prompt.task_type || "task2")}">打开题目</button>
@@ -8371,19 +8545,45 @@ async function runAgentAssistantSearch(queryValue = $("agentAssistantQuery")?.va
     return;
   }
   state.agentAssistant.loading = true;
-  setAgentAssistantStatus("正在查找...");
+  setAgentAssistantStatus("正在语义检索题库...");
   renderAgentAssistantResults();
   try {
-    const payload = await api(`/api/agent/writing/prompts/search?q=${encodeURIComponent(query)}&limit=8`);
-    const matches = (payload?.items || []).map((prompt) => ({
+    const search = await api(`/api/agent/writing/prompts/search?q=${encodeURIComponent(query)}&limit=8`);
+    state.agentAssistant.results = (search.items || []).map((prompt) => ({
       prompt,
       score: Number(prompt.match_score || 0),
+      reasons: prompt.match_reasons || [],
     }));
-    state.agentAssistant.results = matches;
-    setAgentAssistantStatus(matches.length ? `找到 ${matches.length} 个候选，已按语义相关度排序。` : "没有找到明显匹配。可以换成更短的关键词再试。");
+    setAgentAssistantStatus(
+      state.agentAssistant.results.length
+        ? `找到 ${state.agentAssistant.results.length} 个候选 · ${search.search_backend === "local_embedding" ? "本地向量语义重排" : "免费本地语义匹配"}`
+        : "没有找到明显匹配。可以换成更短的关键词或粘贴完整题干。"
+    );
   } catch (error) {
-    state.agentAssistant.results = [];
-    setAgentAssistantStatus(error instanceof Error ? error.message : "查找失败。");
+    try {
+      const taskTypes = ["task1_academic", "task2"];
+      await Promise.all(taskTypes.map((taskType) => loadWritingPrompts(taskType)));
+      const prompts = taskTypes.flatMap((taskType) => state.writing.prompts[taskType] || []);
+      const matches = prompts
+        .map((prompt) => ({
+          prompt,
+          score: agentAssistantScore(query, [
+            prompt.title,
+            prompt.source_label,
+            prompt.category,
+            prompt.prompt,
+          ].join(" ")),
+          reasons: ["本地关键词兜底"],
+        }))
+        .filter((item) => item.score > 0.12)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8);
+      state.agentAssistant.results = matches;
+      setAgentAssistantStatus(matches.length ? `找到 ${matches.length} 个候选 · 后端不可用，已使用本地关键词兜底` : "没有找到明显匹配。可以换成更短的关键词再试。");
+    } catch (_fallbackError) {
+      state.agentAssistant.results = [];
+      setAgentAssistantStatus(error instanceof Error ? error.message : "查找失败。");
+    }
   } finally {
     state.agentAssistant.loading = false;
     renderAgentAssistantResults();

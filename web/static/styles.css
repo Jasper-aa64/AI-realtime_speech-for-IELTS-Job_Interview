@@ -4017,6 +4017,22 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   white-space: nowrap;
 }
 
+.agent-result-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-result-reasons span {
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 760;
+  padding: 3px 7px;
+}
+
 .agent-result-prompt {
   margin: 0;
   color: #1f2937;
@@ -5700,6 +5716,87 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.p3-source-context {
+  display: grid;
+  gap: 10px;
+}
+
+.p3-context-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 250px) 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.p3-source-report-card {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 116px;
+  border: 1px solid var(--tone-p2-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+}
+
+.p3-source-card-menu {
+  position: absolute;
+  top: 9px;
+  right: 11px;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+.p3-context-note,
+.p3-source-corpus-card {
+  border: 1px solid #dce6eb;
+  border-radius: 12px;
+  background: #f8fbfc;
+  padding: 12px 14px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.p3-context-note strong,
+.p3-source-corpus-card strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.p3-context-note span,
+.p3-source-corpus-card span,
+.p3-source-corpus-card p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.p3-context-warning {
+  border-color: rgba(245, 158, 11, 0.38);
+  background: #fffbeb;
+}
+
+.p3-corpus-context {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.42fr) 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.p3-source-corpus-card p {
+  margin: 0;
+  font-weight: 600;
+  max-width: 78ch;
 }
 
 .p3-plan-preview {
@@ -9858,6 +9955,9 @@ body.theme-dark .writing-profile-card,
 body.theme-dark .p3-topic-panel,
 body.theme-dark .p3-topic-body,
 body.theme-dark .p3-plan-preview,
+body.theme-dark .p3-context-note,
+body.theme-dark .p3-source-corpus-card,
+body.theme-dark .p3-source-report-card,
 body.theme-dark .detail-cue-wrap,
 body.theme-dark .part-detail-box,
 body.theme-dark .p3-skills-card,
@@ -10082,6 +10182,12 @@ body.theme-dark .p3-skill-item span {
   color: #bfdbfe;
 }
 
+body.theme-dark .agent-result-reasons span {
+  border-color: rgba(147, 197, 253, 0.20);
+  background: rgba(96, 165, 250, 0.13);
+  color: #bfdbfe;
+}
+
 body.theme-dark .writing-prompt-card p,
 body.theme-dark .writing-report-prompt-text,
 body.theme-dark .writing-prompt-choice-body span,
@@ -10220,6 +10326,9 @@ body.theme-dark .coaching-content,
 body.theme-dark .turn-report-table p,
 body.theme-dark .p3-topic-panel p,
 body.theme-dark .p3-plan-card p,
+body.theme-dark .p3-context-note span,
+body.theme-dark .p3-source-corpus-card span,
+body.theme-dark .p3-source-corpus-card p,
 body.theme-dark .p3-skill-item p,
 body.theme-dark .p3-skill-item small,
 body.theme-dark .p3-source-option small,
@@ -10247,7 +10356,9 @@ body.theme-dark .agent-result-top strong,
 body.theme-dark .writing-stats-grid strong,
 body.theme-dark .history-item-title,
 body.theme-dark .writing-history-item strong,
-body.theme-dark .writing-picker-button strong {
+body.theme-dark .writing-picker-button strong,
+body.theme-dark .p3-context-note strong,
+body.theme-dark .p3-source-corpus-card strong {
   color: var(--ink);
 }
 
@@ -13178,6 +13289,13 @@ body.theme-dark.font-academic .history-item:hover {
   .p3-source-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .p3-context-grid,
+  .p3-corpus-context {
+    grid-template-columns: 1fr;
+  }
+  .p3-source-report-card {
+    max-width: 260px;
+  }
   .p3-focus-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -13618,7 +13736,9 @@ body.theme-dark.font-academic .history-item:hover {
   }
   .p3-source-grid,
   .p3-focus-grid,
-  .p3-plan-list {
+  .p3-plan-list,
+  .p3-context-grid,
+  .p3-corpus-context {
     grid-template-columns: 1fr;
   }
   .p3-flow-steps {
