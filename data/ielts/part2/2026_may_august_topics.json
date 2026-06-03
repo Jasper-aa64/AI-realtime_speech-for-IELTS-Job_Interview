@@ -15,7 +15,12 @@
         "What you did there"
       ],
       "rounding": "And explain how you felt about being in this crowded place.",
-      "p3_theme": "crowded_places_and_public_order"
+      "p3_theme": "crowded_places_and_public_order",
+      "p3_follow_ups": [
+        "What kinds of places are usually crowded in your country?",
+        "Why do some people dislike going to crowded places?",
+        "How can public places be managed better when there are too many people?"
+      ]
     },
     {
       "title": "Describe a place where you read and write, apart from your home",
@@ -26,7 +31,12 @@
         "What you read or write there"
       ],
       "rounding": "And explain why this place is suitable for reading and writing.",
-      "p3_theme": "study_places_and_concentration"
+      "p3_theme": "study_places_and_concentration",
+      "p3_follow_ups": [
+        "What kinds of places are suitable for reading and writing?",
+        "Why do some people find it difficult to concentrate at home?",
+        "Should cities provide more quiet public spaces for study and work?"
+      ]
     },
     {
       "title": "Describe a long-term goal you would like to achieve",
@@ -37,7 +47,12 @@
         "What you need to do to achieve it"
       ],
       "rounding": "And explain why this goal is important to you.",
-      "p3_theme": "goals_and_self_development"
+      "p3_theme": "goals_and_self_development",
+      "p3_follow_ups": [
+        "Why do people set long-term goals?",
+        "What makes it difficult for people to keep working towards a goal?",
+        "Should schools teach students how to make future plans?"
+      ]
     },
     {
       "title": "Describe an interesting old person you know",
@@ -48,7 +63,12 @@
         "What you usually talk about"
       ],
       "rounding": "And explain why you think this person is interesting.",
-      "p3_theme": "older_people_and_generation_gap"
+      "p3_theme": "older_people_and_generation_gap",
+      "p3_follow_ups": [
+        "What can young people learn from older people?",
+        "Why do some older people remain active and interesting?",
+        "How has the relationship between young and old people changed?"
+      ]
     },
     {
       "title": "Describe a person who likes to make things by hand",
@@ -59,7 +79,12 @@
         "How you know about this skill"
       ],
       "rounding": "And explain why making things by hand is valuable.",
-      "p3_theme": "handmade_skills_and_creativity"
+      "p3_theme": "handmade_skills_and_creativity",
+      "p3_follow_ups": [
+        "Why do some people enjoy making things by hand?",
+        "Are handmade products more valuable than machine-made products?",
+        "Should children learn practical handcraft skills at school?"
+      ]
     },
     {
       "title": "Describe a person who encouraged you to achieve a goal",
@@ -70,7 +95,12 @@
         "What this person said or did"
       ],
       "rounding": "And explain how this encouragement helped you.",
-      "p3_theme": "encouragement_and_motivation"
+      "p3_theme": "encouragement_and_motivation",
+      "p3_follow_ups": [
+        "Why is encouragement important for young people?",
+        "Who usually encourages children in your country?",
+        "Can too much encouragement create pressure?"
+      ]
     },
     {
       "title": "Describe a person who likes to read a lot",
@@ -81,7 +111,12 @@
         "How often this person reads"
       ],
       "rounding": "And explain what you can learn from this person.",
-      "p3_theme": "reading_habits_and_learning"
+      "p3_theme": "reading_habits_and_learning",
+      "p3_follow_ups": [
+        "Why do some people enjoy reading more than others?",
+        "What kinds of books are popular among young people?",
+        "Has the Internet changed people's reading habits?"
+      ]
     },
     {
       "title": "Describe a person who has strong opinions",
@@ -92,7 +127,12 @@
         "How this person expresses opinions"
       ],
       "rounding": "And explain how you feel about this person.",
-      "p3_theme": "opinions_and_communication"
+      "p3_theme": "opinions_and_communication",
+      "p3_follow_ups": [
+        "Is it good for people to have strong opinions?",
+        "Why do people sometimes disagree strongly with each other?",
+        "How can people express opinions politely?"
+      ]
     },
     {
       "title": "Describe a small business you would like to start",
@@ -103,7 +143,12 @@
         "Who your customers would be"
       ],
       "rounding": "And explain why you would like to start this business.",
-      "p3_theme": "small_business_and_work"
+      "p3_theme": "small_business_and_work",
+      "p3_follow_ups": [
+        "Why do some people want to start their own business?",
+        "What difficulties do small businesses usually face?",
+        "Should governments support young entrepreneurs?"
+      ]
     },
     {
       "title": "Describe a time when you were late",
@@ -114,7 +159,12 @@
         "Why you were late"
       ],
       "rounding": "And explain what happened afterwards.",
-      "p3_theme": "punctuality_and_time_management"
+      "p3_theme": "punctuality_and_time_management",
+      "p3_follow_ups": [
+        "Why are some people often late?",
+        "Is punctuality important in your country?",
+        "How can people manage their time better?"
+      ]
     },
     {
       "title": "Describe an activity you enjoyed in your free time when you were young",
@@ -125,7 +175,12 @@
         "Who you did it with"
       ],
       "rounding": "And explain why you enjoyed it.",
-      "p3_theme": "childhood_free_time_and_play"
+      "p3_theme": "childhood_free_time_and_play",
+      "p3_follow_ups": [
+        "What activities do children enjoy in their free time?",
+        "How are children's leisure activities different from the past?",
+        "Should parents control how children spend their free time?"
+      ]
     },
     {
       "title": "Describe a time when you had a problem using a computer",
@@ -136,7 +191,12 @@
         "How you tried to solve it"
       ],
       "rounding": "And explain how you felt about this problem.",
-      "p3_theme": "computer_problems_and_digital_skills"
+      "p3_theme": "computer_problems_and_digital_skills",
+      "p3_follow_ups": [
+        "What computer problems do people often have?",
+        "Why do some older people find technology difficult to use?",
+        "Should schools teach students more practical computer skills?"
+      ]
     },
     {
       "title": "Describe a website you often visit",
@@ -147,7 +207,12 @@
         "What you use it for"
       ],
       "rounding": "And explain why this website is useful to you.",
-      "p3_theme": "websites_and_online_services"
+      "p3_theme": "websites_and_online_services",
+      "p3_follow_ups": [
+        "What kinds of websites are popular in your country?",
+        "Why do people spend a lot of time on websites?",
+        "How can people judge whether information online is reliable?"
+      ]
     },
     {
       "title": "Describe a difficult decision you made",
@@ -158,7 +223,12 @@
         "Who helped you make it"
       ],
       "rounding": "And explain why it was difficult.",
-      "p3_theme": "decision_making_and_responsibility"
+      "p3_theme": "decision_making_and_responsibility",
+      "p3_follow_ups": [
+        "What kinds of decisions are difficult for young people?",
+        "Should people ask others for advice before making decisions?",
+        "How can making difficult decisions help people grow?"
+      ]
     },
     {
       "title": "Describe a piece of good advice you received",
@@ -169,7 +239,12 @@
         "When you received it"
       ],
       "rounding": "And explain why this advice was helpful.",
-      "p3_theme": "advice_and_life_choices"
+      "p3_theme": "advice_and_life_choices",
+      "p3_follow_ups": [
+        "Who do people usually ask for advice?",
+        "Why is some advice difficult to follow?",
+        "Is advice from older people always useful?"
+      ]
     },
     {
       "title": "Describe an important rule at your school or workplace",
@@ -180,7 +255,12 @@
         "Why the rule exists"
       ],
       "rounding": "And explain how you feel about this rule.",
-      "p3_theme": "rules_and_social_order"
+      "p3_theme": "rules_and_social_order",
+      "p3_follow_ups": [
+        "Why do schools and workplaces need rules?",
+        "What rules do young people sometimes dislike?",
+        "Should rules be strict or flexible?"
+      ]
     },
     {
       "title": "Describe a time when someone gave you something you really wanted",
@@ -191,7 +271,12 @@
         "Why you wanted it"
       ],
       "rounding": "And explain how you felt when you received it.",
-      "p3_theme": "gifts_and_appreciation"
+      "p3_theme": "gifts_and_appreciation",
+      "p3_follow_ups": [
+        "Why do people give gifts to others?",
+        "Is it better to give practical gifts or surprising gifts?",
+        "Do people in your country spend too much money on gifts?"
+      ]
     },
     {
       "title": "Describe a time when you showed something new to another person",
@@ -202,7 +287,12 @@
         "How you showed it"
       ],
       "rounding": "And explain how this person reacted.",
-      "p3_theme": "teaching_others_and_sharing_knowledge"
+      "p3_theme": "teaching_others_and_sharing_knowledge",
+      "p3_follow_ups": [
+        "Why do people enjoy teaching others new things?",
+        "What skills are useful to share with friends or family?",
+        "Is it easier to learn from people or from online videos?"
+      ]
     },
     {
       "title": "Describe a time when you saw a lot of people smiling",
@@ -213,7 +303,12 @@
         "Why they were smiling"
       ],
       "rounding": "And explain how you felt at that moment.",
-      "p3_theme": "happiness_and_public_events"
+      "p3_theme": "happiness_and_public_events",
+      "p3_follow_ups": [
+        "What kinds of events make people smile?",
+        "Why is smiling important in social situations?",
+        "Do people smile more in public than in the past?"
+      ]
     },
     {
       "title": "Describe a time when you made a promise to someone",
@@ -224,7 +319,12 @@
         "Why you made it"
       ],
       "rounding": "And explain whether it was easy to keep this promise.",
-      "p3_theme": "promises_and_trust"
+      "p3_theme": "promises_and_trust",
+      "p3_follow_ups": [
+        "Why is it important to keep promises?",
+        "What kinds of promises do people often make?",
+        "What should people do if they cannot keep a promise?"
+      ]
     },
     {
       "title": "Describe a time when you helped a family member",
@@ -235,7 +335,12 @@
         "What you did"
       ],
       "rounding": "And explain how you felt after helping this family member.",
-      "p3_theme": "family_help_and_responsibility"
+      "p3_theme": "family_help_and_responsibility",
+      "p3_follow_ups": [
+        "How do family members help each other in your country?",
+        "Should children help with family responsibilities?",
+        "Has family support changed in modern society?"
+      ]
     },
     {
       "title": "Describe a movie you watched and enjoyed",
@@ -246,7 +351,12 @@
         "Who you watched it with"
       ],
       "rounding": "And explain why you enjoyed this movie.",
-      "p3_theme": "movies_and_cinema_culture"
+      "p3_theme": "movies_and_cinema_culture",
+      "p3_follow_ups": [
+        "What kinds of movies are popular in your country?",
+        "Why do people like watching movies with friends?",
+        "Can movies influence people's values or behaviour?"
+      ]
     },
     {
       "title": "Describe a place you visited that was affected by pollution",
@@ -257,7 +367,12 @@
         "Why you went there"
       ],
       "rounding": "And explain how you felt about this place.",
-      "p3_theme": "pollution_and_environmental_protection"
+      "p3_theme": "pollution_and_environmental_protection",
+      "p3_follow_ups": [
+        "What kinds of pollution are common in cities?",
+        "Who should be responsible for reducing pollution?",
+        "How can ordinary people help protect the environment?"
+      ]
     },
     {
       "title": "Describe a sport you enjoyed watching",
@@ -268,7 +383,12 @@
         "Who you watched it with"
       ],
       "rounding": "And explain why you enjoyed watching it.",
-      "p3_theme": "sports_and_spectators"
+      "p3_theme": "sports_and_spectators",
+      "p3_follow_ups": [
+        "What sports do people like watching in your country?",
+        "Why do some people prefer watching sports to playing sports?",
+        "Do sports events bring people together?"
+      ]
     },
     {
       "title": "Describe an important traditional festival in your country",
@@ -279,7 +399,12 @@
         "What people usually do"
       ],
       "rounding": "And explain why this festival is important.",
-      "p3_theme": "festivals_and_cultural_traditions"
+      "p3_theme": "festivals_and_cultural_traditions",
+      "p3_follow_ups": [
+        "Why are traditional festivals important?",
+        "How have festivals changed in modern society?",
+        "Should young people learn more about traditional festivals?"
+      ]
     },
     {
       "title": "Describe a quiet place you like to spend time in",
@@ -290,7 +415,12 @@
         "What you do there"
       ],
       "rounding": "And explain why you like this quiet place.",
-      "p3_theme": "quiet_places_and_mental_rest"
+      "p3_theme": "quiet_places_and_mental_rest",
+      "p3_follow_ups": [
+        "Why do people need quiet places?",
+        "Are cities becoming too noisy?",
+        "How can public places be designed to be more peaceful?"
+      ]
     },
     {
       "title": "Describe a person you know who has chosen a career in the medical field",
@@ -301,7 +431,12 @@
         "How you know about this person"
       ],
       "rounding": "And explain why you think this career is important.",
-      "p3_theme": "medical_work_and_public_health"
+      "p3_theme": "medical_work_and_public_health",
+      "p3_follow_ups": [
+        "Why do some people choose to work in medicine?",
+        "What qualities should medical workers have?",
+        "How important are doctors and nurses to society?"
+      ]
     },
     {
       "title": "Describe a successful business person you admire",
@@ -312,7 +447,12 @@
         "How you learned about this person"
       ],
       "rounding": "And explain why you admire this business person.",
-      "p3_theme": "business_success_and_entrepreneurship"
+      "p3_theme": "business_success_and_entrepreneurship",
+      "p3_follow_ups": [
+        "What qualities do successful business people usually have?",
+        "Is success in business mostly about hard work or opportunity?",
+        "Should business people have social responsibilities?"
+      ]
     },
     {
       "title": "Describe a boring place you have been to",
@@ -323,7 +463,12 @@
         "Why you went there"
       ],
       "rounding": "And explain why you thought this place was boring.",
-      "p3_theme": "boring_places_and_public_spaces"
+      "p3_theme": "boring_places_and_public_spaces",
+      "p3_follow_ups": [
+        "What makes a place boring for visitors?",
+        "How can public places become more interesting?",
+        "Do people of different ages enjoy different kinds of places?"
+      ]
     },
     {
       "title": "Describe a tall building you like or dislike",
@@ -334,7 +479,12 @@
         "What it is used for"
       ],
       "rounding": "And explain why you like or dislike this tall building.",
-      "p3_theme": "tall_buildings_and_city_design"
+      "p3_theme": "tall_buildings_and_city_design",
+      "p3_follow_ups": [
+        "Why do cities build many tall buildings?",
+        "What are the advantages and disadvantages of tall buildings?",
+        "Should cities preserve old buildings or build new ones?"
+      ]
     },
     {
       "title": "Describe a building you would like to visit",
@@ -345,7 +495,12 @@
         "What you know about it"
       ],
       "rounding": "And explain why you would like to visit this building.",
-      "p3_theme": "architecture_and_travel"
+      "p3_theme": "architecture_and_travel",
+      "p3_follow_ups": [
+        "Why do people visit famous buildings?",
+        "What kinds of buildings attract tourists?",
+        "Is architecture important to a city's identity?"
+      ]
     },
     {
       "title": "Describe a place you would like to travel to",
@@ -356,7 +511,12 @@
         "Who you would like to go with"
       ],
       "rounding": "And explain why you would like to travel to this place.",
-      "p3_theme": "travel_plans_and_destinations"
+      "p3_theme": "travel_plans_and_destinations",
+      "p3_follow_ups": [
+        "Why do people like travelling to new places?",
+        "What should people prepare before travelling?",
+        "How has tourism affected local communities?"
+      ]
     },
     {
       "title": "Describe some food you ate on a special occasion",
@@ -367,7 +527,12 @@
         "Who you ate it with"
       ],
       "rounding": "And explain why this food was special to you.",
-      "p3_theme": "food_and_special_occasions"
+      "p3_theme": "food_and_special_occasions",
+      "p3_follow_ups": [
+        "What foods are eaten on special occasions in your country?",
+        "Why is food important in celebrations?",
+        "Are traditional foods still popular among young people?"
+      ]
     },
     {
       "title": "Describe a wild animal that you want to know more about",
@@ -378,7 +543,12 @@
         "What you already know about it"
       ],
       "rounding": "And explain why you want to know more about this animal.",
-      "p3_theme": "animals_and_nature_education"
+      "p3_theme": "animals_and_nature_education",
+      "p3_follow_ups": [
+        "Why are people interested in wild animals?",
+        "How can children learn about wildlife?",
+        "Should more be done to protect wild animals?"
+      ]
     },
     {
       "title": "Describe a traditional object that you like",
@@ -389,7 +559,12 @@
         "How people use it"
       ],
       "rounding": "And explain why you think this object is interesting or valuable.",
-      "p3_theme": "traditional_objects_and_culture"
+      "p3_theme": "traditional_objects_and_culture",
+      "p3_follow_ups": [
+        "Why do people value traditional objects?",
+        "Are traditional objects still useful in modern life?",
+        "How can museums help preserve traditional culture?"
+      ]
     },
     {
       "title": "Describe a piece of local news that interested you",
@@ -400,7 +575,12 @@
         "Who was involved"
       ],
       "rounding": "And explain why this local news interested you.",
-      "p3_theme": "local_news_and_community_life"
+      "p3_theme": "local_news_and_community_life",
+      "p3_follow_ups": [
+        "What kinds of local news do people care about?",
+        "Do young people pay attention to local news?",
+        "How has social media changed the way people get news?"
+      ]
     },
     {
       "title": "Describe a time when you watched a sports match",
@@ -411,7 +591,12 @@
         "Who you watched it with"
       ],
       "rounding": "And explain how you felt while watching this match.",
-      "p3_theme": "sports_events_and_spectators"
+      "p3_theme": "sports_events_and_spectators",
+      "p3_follow_ups": [
+        "Why do people enjoy watching sports matches?",
+        "What is the difference between watching sports live and on TV?",
+        "Can sports matches influence national pride?"
+      ]
     },
     {
       "title": "Describe an activity you tried for the first time",
@@ -422,7 +607,12 @@
         "Who you tried it with"
       ],
       "rounding": "And explain whether you would like to do it again.",
-      "p3_theme": "new_activities_and_learning"
+      "p3_theme": "new_activities_and_learning",
+      "p3_follow_ups": [
+        "Why do people like trying new activities?",
+        "Is it easier for children or adults to try new things?",
+        "What can people learn from new experiences?"
+      ]
     },
     {
       "title": "Describe a time when you waited for something special to happen",
@@ -433,7 +623,12 @@
         "Who you were with"
       ],
       "rounding": "And explain why this thing was special to you.",
-      "p3_theme": "waiting_and_expectations"
+      "p3_theme": "waiting_and_expectations",
+      "p3_follow_ups": [
+        "Why do people sometimes have to wait for important events?",
+        "Is waiting easier now than in the past?",
+        "How can people become more patient?"
+      ]
     },
     {
       "title": "Describe a time when the electricity suddenly went off",
@@ -444,7 +639,12 @@
         "What you were doing"
       ],
       "rounding": "And explain how you dealt with the situation.",
-      "p3_theme": "electricity_and_daily_life"
+      "p3_theme": "electricity_and_daily_life",
+      "p3_follow_ups": [
+        "How important is electricity in daily life?",
+        "What problems can happen when electricity stops suddenly?",
+        "Should people learn how to deal with emergencies at home?"
+      ]
     },
     {
       "title": "Describe a traditional custom in your country",
@@ -455,7 +655,12 @@
         "Who usually takes part in it"
       ],
       "rounding": "And explain why this custom is important.",
-      "p3_theme": "traditional_customs_and_modern_life"
+      "p3_theme": "traditional_customs_and_modern_life",
+      "p3_follow_ups": [
+        "Why do countries preserve traditional customs?",
+        "Are young people still interested in traditional customs?",
+        "How can traditions adapt to modern life?"
+      ]
     },
     {
       "title": "Describe a time when you fixed something that was broken",
@@ -466,7 +671,12 @@
         "Whether anyone helped you"
       ],
       "rounding": "And explain how you felt after fixing it.",
-      "p3_theme": "repairing_things_and_practical_skills"
+      "p3_theme": "repairing_things_and_practical_skills",
+      "p3_follow_ups": [
+        "Why do some people prefer repairing things instead of replacing them?",
+        "Should children learn basic repair skills?",
+        "How has modern technology changed the way people repair things?"
+      ]
     },
     {
       "title": "Describe a time when you changed your decision",
@@ -477,7 +687,12 @@
         "Why you changed it"
       ],
       "rounding": "And explain whether changing the decision was a good choice.",
-      "p3_theme": "decision_changes_and_flexibility"
+      "p3_theme": "decision_changes_and_flexibility",
+      "p3_follow_ups": [
+        "Why do people change their decisions?",
+        "Is it better to be flexible or to stick to a plan?",
+        "Can changing a decision sometimes lead to better results?"
+      ]
     },
     {
       "title": "Describe a time when you felt proud of a family member",

@@ -945,7 +945,8 @@ async function fetchP1CorpusPayload(options = {}) {
   return state.p1Corpus.loadingPromise;
 }
 
-async function fetchP2CorpusPayload() {
+async function fetchP2CorpusPayload(options = {}) {
+  if (options.force) state.p2Corpus.loadingPromise = null;
   if (!state.p2Corpus.loadingPromise) {
     state.p2Corpus.loadingPromise = api(`/api/p2-corpus?${questionBankScopeQuery()}`).finally(() => {
       state.p2Corpus.loadingPromise = null;
@@ -1188,7 +1189,7 @@ function switchView(view, options = {}) {
   if (view === "writing") loadWriting();
   if (view === "writingReports") loadWritingReports();
   if (view === "p1Corpus") loadP1Corpus();
-  if (view === "p2Corpus") loadP2Corpus();
+  if (view === "p2Corpus") loadP2Corpus({ force: true });
   if (view === "accountProfile") loadAccountProfile();
   if (view === "accountSecurity") loadAccount();
   if (view !== "accountSecurity") $("#accountSecurityPanel")?.classList.add("hidden");
@@ -6979,6 +6980,18 @@ function closeP2CorpusP3Editor(...args) {
   return corpusTakeawayController.closeP2CorpusP3Editor(...args);
 }
 
+function openP2CorpusP3QuestionPicker(...args) {
+  return corpusTakeawayController.openP2CorpusP3QuestionPicker(...args);
+}
+
+function closeP2CorpusP3QuestionPicker(...args) {
+  return corpusTakeawayController.closeP2CorpusP3QuestionPicker(...args);
+}
+
+function insertSelectedP2CorpusP3Questions(...args) {
+  return corpusTakeawayController.insertSelectedP2CorpusP3Questions(...args);
+}
+
 async function saveAndCloseP2CorpusEditor(...args) {
   return corpusTakeawayController.saveAndCloseP2CorpusEditor(...args);
 }
@@ -8088,6 +8101,9 @@ function bindEvents() {
   $("saveP2CorpusP3Btn")?.addEventListener("click", () => {
     saveAndCloseP2CorpusP3Editor().catch(() => null);
   });
+  $("openP2CorpusP3QuestionPickerBtn")?.addEventListener("click", openP2CorpusP3QuestionPicker);
+  $("closeP2CorpusP3QuestionPickerBtn")?.addEventListener("click", closeP2CorpusP3QuestionPicker);
+  $("insertP2CorpusP3QuestionsBtn")?.addEventListener("click", insertSelectedP2CorpusP3Questions);
   document.addEventListener("keydown", handleGlobalKeydown, true);
   document.addEventListener("visibilitychange", () => {
     if (canWarmWritingPromptImages() && state.writing.promptImagePreloadQueue.length) {

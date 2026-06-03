@@ -637,7 +637,7 @@
       }
     }
 
-    async function loadP2Corpus() {
+    async function loadP2Corpus(options = {}) {
       const stats = $("p2CorpusStats");
       const container = $("p2CorpusTopics");
       if (state.p2Corpus.loaded) {
@@ -648,7 +648,7 @@
         if (container) container.innerHTML = '<p class="muted">正在加载 P2 素材库...</p>';
       }
       try {
-        const payload = await fetchP2CorpusPayload();
+        const payload = await fetchP2CorpusPayload({ force: Boolean(options.force) });
         applyP2CorpusPayload(payload);
       } catch (error) {
         if (container) container.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
@@ -665,20 +665,48 @@
         container.innerHTML = '<p class="muted">还没有 P2 素材分类。</p>';
         return;
       }
-      const categoryHtml = categories.map((category) => `
+      const categoryHtml = categories.map((category) => {
+        const items = category.items || [];
+        const materialRows = items.map((item, index) => {
+          const hasP3 = !!String(item.p3_follow_up_text || "").trim();
+          const menu = corpusCardActionMenuHtml({
+            menuAttr: "data-p2-corpus-menu",
+            editAttr: "data-p2-corpus-edit",
+            deleteAttr: "data-p2-corpus-delete",
+            entryId: item.entry_id,
+          });
+          return `
+            <div class="p2-material-row">
+              <button type="button" class="p2-material-entry-button has-corpus" data-p2-corpus-entry="${escapeHtml(item.entry_id)}">
+                <span class="p2-material-index">${index + 1}</span>
+                <span class="p2-material-copy">
+                  <span class="p2-material-title">${escapeHtml(item.title || "未命名素材")}</span>
+                  <span class="p2-material-status${hasP3 ? " has-follow-up" : " is-empty"}">${hasP3 ? "P3 已填" : "P3 待填"}</span>
+                </span>
+              </button>
+              <div class="p2-material-actions">
+                <button type="button" class="p2-follow-up-edit-button${hasP3 ? " has-follow-up" : ""}" data-p2-corpus-p3="${escapeHtml(item.entry_id)}" aria-label="编辑 P3 追问" title="编辑 P3 追问">P3</button>
+                ${menu}
+              </div>
+            </div>
+          `;
+        }).join("");
+        return `
           <article class="p2-topic-card p2-category-entry-card">
             <header>
               <h3>${escapeHtml(category.label || category.category)}</h3>
               <span class="p2-topic-count">${category.material_count ?? (category.items || []).length}</span>
             </header>
             <div class="p2-topic-material-list">
+              ${materialRows || '<div class="p2-topic-empty">还没有保存素材</div>'}
               <button type="button" class="p2-add-material-button" data-p2-corpus-new="${escapeHtml(category.category)}">
                 <strong>+</strong>
                 <span>新增${escapeHtml(category.label || "素材")}</span>
               </button>
             </div>
           </article>
-        `).join("");
+        `;
+      }).join("");
       const cardHtml = currentCards.map((item) => {
         const statusLabel = item.status === "new" ? "新题" : item.status === "retained" ? "保留题" : item.status || "";
         return `

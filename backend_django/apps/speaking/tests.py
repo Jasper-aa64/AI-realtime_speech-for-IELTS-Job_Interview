@@ -586,6 +586,17 @@ class QuestionBankApiTests(TestCase):
         self.assertFalse(first_card["has_material"])
         self.assertFalse(first_card["has_p3_follow_up"])
 
+    def test_p2_corpus_library_includes_official_p3_follow_ups(self):
+        response = self.client.get("/api/p2-corpus")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["current_part2_cards"])
+        for card in payload["current_part2_cards"]:
+            with self.subTest(card=card["cue_title"]):
+                self.assertTrue(card.get("p3_follow_ups"))
+                self.assertEqual(card["p3_follow_up_count"], len(card["p3_follow_ups"]))
+                self.assertTrue(all("?" in question for question in card["p3_follow_ups"]))
+
     def test_p2_corpus_category_counts_user_saved_material_not_season_topics(self):
         payload = self.client.get("/api/p2-corpus").json()
         self.assertTrue(payload["current_part2_categories"])

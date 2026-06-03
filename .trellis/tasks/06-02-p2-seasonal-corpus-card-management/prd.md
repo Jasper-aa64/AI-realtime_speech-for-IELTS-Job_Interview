@@ -36,9 +36,12 @@ Rework the P2 corpus library so user-owned reusable material categories remain c
   - Season/status metadata.
   - Existing saved `material_text`, if any.
   - Existing saved `p3_follow_up_text`, if any.
+  - Official `p3_follow_ups` from the cue-card bank, if the bank provides them.
 - Each cue card should expose two management actions:
   - `正文`: opens the existing P2 material editor for that cue card.
   - `P3 追问`: opens the existing P3 follow-up editor for that cue card.
+- `P3 追问` should default-fill a Markdown scaffold from the cue card's official P3 follow-up questions, leaving blank answer slots for the learner to edit.
+- `P3 追问` should provide a picker modal/list for selecting any number of official follow-up questions; do not assume the count is exactly five.
 - Saving either entry point should update the same stable `P2CorpusEntry`, so existing material is not duplicated or lost.
 - Retained questions must stay stable across seasons if the cue card text matches; old material should still attach through `linked_question` based stable IDs.
 
@@ -53,6 +56,8 @@ Rework the P2 corpus library so user-owned reusable material categories remain c
 - [x] Each cue card has separate `正文` and `P3 追问` actions.
 - [x] `正文` opens the existing P2 material editor prefilled with saved material and cue-card metadata.
 - [x] `P3 追问` opens the existing P3 follow-up editor prefilled with saved follow-up material.
+- [x] `P3 追问` defaults to official cue-card P3 follow-up questions when no saved follow-up material exists.
+- [x] `P3 追问` provides a selectable official-question picker and does not cap the question count at five.
 - [x] Saving `正文` and `P3 追问` update the same stable entry, not two separate entries.
 - [x] Existing saved entries remain visible/usable after the change.
 - [x] Backend tests cover payload merge and stable save behavior.
