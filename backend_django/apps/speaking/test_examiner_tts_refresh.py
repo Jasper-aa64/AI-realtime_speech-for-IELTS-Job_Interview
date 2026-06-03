@@ -139,7 +139,13 @@ class ExaminerTtsRefreshTests(TestCase):
         with (
             patch(
                 "apps.speaking.services.quick_follow_up_runner_with_metadata",
-                return_value={"follow_up": "How could this affect traditional schools?", "backend": "http_api", "status": "ready"},
+                return_value={
+                    "follow_up": "How could this affect traditional schools?",
+                    "backend": "codex_quick",
+                    "status": "ready",
+                    "provider": "codex_cli",
+                    "model": "gpt-5-codex-mini",
+                },
             ),
             patch("apps.speaking.services.threading.Thread") as mock_thread,
             self.captureOnCommitCallbacks(execute=True),
@@ -153,6 +159,8 @@ class ExaminerTtsRefreshTests(TestCase):
 
         self.assertEqual(result["next_turn"]["id"], "t2")
         self.assertEqual(result["next_turn"]["question"], "How could this affect traditional schools?")
+        self.assertEqual(result["next_turn"]["prompt"]["provider"], "codex_cli")
+        self.assertEqual(result["next_turn"]["prompt"]["model"], "gpt-5-codex-mini")
         self.assertEqual(result["next_turn"]["examiner_tts"]["status"], "pending")
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()

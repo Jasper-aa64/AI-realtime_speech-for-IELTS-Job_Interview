@@ -687,6 +687,21 @@ def _http_backend_name(stream: bool = False) -> str:
     return "http_api_stream" if stream else "http_api"
 
 
+def _follow_up_generation_provenance(result: dict[str, Any]) -> dict[str, Any]:
+    provenance: dict[str, Any] = {}
+    for key in ("provider", "model"):
+        value = _clean_report_text(str(result.get(key) or ""))[:120]
+        if value:
+            provenance[key] = value
+    usage = result.get("usage")
+    if isinstance(usage, dict) and usage:
+        provenance["usage"] = usage
+    latency_ms = result.get("latency_ms")
+    if latency_ms not in (None, ""):
+        provenance["latency_ms"] = _safe_int(latency_ms)
+    return provenance
+
+
 P3_FOCUS_OPTIONS: dict[str, dict[str, str]] = {
     "abstract_discussion": {
         "label": "抽象讨论",
@@ -1069,7 +1084,13 @@ def quick_follow_up_runner_with_metadata(
                 question_type=question_type,
                 timeout=timeout,
             )
-            return {"follow_up": follow_up, "backend": "codex_quick", "status": "ready", "provider": "codex_cli"}
+            return {
+                "follow_up": follow_up,
+                "backend": "codex_quick",
+                "status": "ready",
+                "provider": "codex_cli",
+                "model": P3_QUICK_FOLLOW_UP_CODEX_MODEL,
+            }
         except Exception as exc:  # noqa: BLE001 - caller will emit explicit fallback metadata
             if http_error:
                 raise RuntimeError(f"http_api: {http_error}; codex_quick: {exc}") from exc
@@ -1103,7 +1124,7 @@ def _generate_p3_dynamic_follow_up(
     transcript: str,
     focus: str = "",
     call_id: str = "",
-) -> dict[str, str]:
+) -> dict[str, Any]:
     fallback = _dynamic_p3_follow_up(question_type, transcript, focus)
     try:
         result = quick_follow_up_runner_with_metadata(
@@ -1113,7 +1134,7 @@ def _generate_p3_dynamic_follow_up(
             question_type=question_type,
             timeout=P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
         )
-        return {key: str(value) for key, value in result.items()}
+        return result
     except Exception as exc:  # noqa: BLE001 - P3 follow-up must never block the flow
         return {
             "follow_up": fallback,
@@ -1879,7 +1900,7 @@ Candidate answer:
 """
 
 
-def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]:
+def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, Any]:
     fallback = _fallback_p1_identity_follow_up(answer)
     if not answer.strip():
         return {
@@ -1919,7 +1940,7 @@ def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]
                 "backend": "http_api",
                 "status": "ready",
                 "provider": "openai_compatible_http",
-                "latency_ms": str(int(result.elapsed_seconds * 1000)),
+                "latency_ms": int(result.elapsed_seconds * 1000),
                 "model": result.model,
                 "usage": getattr(result, "usage", None) or {},
             }
@@ -1937,7 +1958,14 @@ def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, str]
         try:
             output, _usage = run_codex(prompt, call_id, timeout=P1_FOLLOW_UP_CODEX_TIMEOUT)
             follow_up = _extract_p1_identity_follow_up_output(output)
-            return {"follow_up": follow_up, "backend": "codex", "status": "ready"}
+            return {
+                "follow_up": follow_up,
+                "backend": "codex",
+                "status": "ready",
+                "provider": "codex_cli",
+                "model": "codex-cli",
+                "usage": _usage or {},
+            }
         except Exception as exc:
             error = f"codex: {exc}"
             if http_error:
@@ -1996,6 +2024,7 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
             "backend": result["backend"],
             "generation_status": result["status"],
             **({"generation_error": result["error"]} if result.get("error") else {}),
+            **_follow_up_generation_provenance(result),
             "counts_toward_total": False,
         },
     )
@@ -2263,6 +2292,7 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
                 "backend": result["backend"],
                 "generation_status": result["status"],
                 **({"generation_error": result["error"]} if result.get("error") else {}),
+                **_follow_up_generation_provenance(result),
             }
             next_metadata = {
                 **next_metadata,
@@ -2377,6 +2407,10 @@ def _save_streamed_follow_up(
     status: str,
     error: str = "",
     question_type: str = "",
+    provider: str = "",
+    model: str = "",
+    usage: dict[str, Any] | None = None,
+    latency_ms: int | None = None,
 ) -> dict[str, Any]:
     metadata = target_turn.metadata if isinstance(target_turn.metadata, dict) else {}
     prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
@@ -2388,6 +2422,14 @@ def _save_streamed_follow_up(
         "backend": backend,
         "generation_status": status,
         **({"generation_error": error} if error else {}),
+        **_follow_up_generation_provenance(
+            {
+                "provider": provider,
+                "model": model,
+                "usage": usage or {},
+                "latency_ms": latency_ms,
+            }
+        ),
     }
     metadata = {
         **metadata,
@@ -2468,6 +2510,8 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
                 parts.append(token)
                 yield _sse_payload({"event": "chunk", "text": token})
             follow_up = context["extract"]("".join(parts))
+            latency_ms = int((time.monotonic() - started) * 1000)
+            model = speaking_ai_http_model("followup")
             _save_streamed_follow_up(
                 attempt,
                 source_turn,
@@ -2476,14 +2520,18 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
                 backend="http_api_stream",
                 status="ready",
                 question_type=str(context.get("question_type") or ""),
+                provider="openai_compatible_http",
+                model=model,
+                usage=usage,
+                latency_ms=latency_ms,
             )
             yield _sse_payload({
                 "event": "question_complete",
                 "text": follow_up,
                 "backend": "http_api_stream",
-                "latency_ms": int((time.monotonic() - started) * 1000),
+                "latency_ms": latency_ms,
                 "provider": "openai_compatible_http",
-                "model": speaking_ai_http_model("followup"),
+                "model": model,
                 "usage": usage,
                 "turn": _turn_payload(target_turn),
             })

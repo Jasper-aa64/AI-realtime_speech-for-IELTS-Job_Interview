@@ -10,10 +10,14 @@ from .models import SpeakingAttempt, SpeakingTurn
 
 
 class _StreamingProvider:
-    def __init__(self, chunks: list[str]):
+    def __init__(self, chunks: list[str], usage: dict | None = None):
         self.chunks = chunks
+        self.usage = usage or {}
 
     def stream_tokens(self, *args, **kwargs):
+        on_usage = kwargs.get("on_usage")
+        if on_usage and self.usage:
+            on_usage(self.usage)
         yield from self.chunks
 
 
@@ -82,7 +86,10 @@ class StreamingFollowUpTests(TestCase):
         with (
             patch(
                 "apps.speaking.services.HttpApiProvider",
-                return_value=_StreamingProvider(["How could ", "this affect families in the future?"]),
+                return_value=_StreamingProvider(
+                    ["How could ", "this affect families in the future?"],
+                    usage={"input_tokens": 18, "output_tokens": 8},
+                ),
             ),
             patch(
                 "apps.speaking.services.volcengine_tts",
@@ -108,6 +115,10 @@ class StreamingFollowUpTests(TestCase):
         follow_up_turn.refresh_from_db()
         self.assertEqual(follow_up_turn.question, "How could this affect families in the future?")
         self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "http_api_stream")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["provider"], "openai_compatible_http")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["model"], "gpt-5.4-mini")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["usage"], {"input_tokens": 18, "output_tokens": 8})
+        self.assertIn("latency_ms", follow_up_turn.metadata["prompt"])
         self.assertEqual(follow_up_turn.metadata["examiner_tts"]["status"], "ready")
 
     def test_follow_up_stream_emits_fallback_when_http_provider_fails(self):
@@ -295,7 +306,10 @@ class StreamingFollowUpTests(TestCase):
         with (
             patch(
                 "apps.speaking.services.HttpApiProvider",
-                return_value=_StreamingProvider(["How does ", "your internship help your studies?"]),
+                return_value=_StreamingProvider(
+                    ["How does ", "your internship help your studies?"],
+                    usage={"input_tokens": 16, "output_tokens": 7},
+                ),
             ),
             patch(
                 "apps.speaking.services.volcengine_tts",
@@ -320,4 +334,8 @@ class StreamingFollowUpTests(TestCase):
         follow_up = SpeakingTurn.objects.get(attempt__attempt_id="stream-p1-e2e-attempt", turn_id="t2_followup")
         self.assertEqual(follow_up.question, "How does your internship help your studies?")
         self.assertEqual(follow_up.metadata["prompt"]["backend"], "http_api_stream")
+        self.assertEqual(follow_up.metadata["prompt"]["provider"], "openai_compatible_http")
+        self.assertEqual(follow_up.metadata["prompt"]["model"], "gpt-5.4-mini")
+        self.assertEqual(follow_up.metadata["prompt"]["usage"], {"input_tokens": 16, "output_tokens": 7})
+        self.assertIn("latency_ms", follow_up.metadata["prompt"])
         self.assertEqual(follow_up.metadata["examiner_tts"]["status"], "ready")

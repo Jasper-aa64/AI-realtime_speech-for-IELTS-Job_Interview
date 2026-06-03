@@ -72,6 +72,8 @@ class HttpFollowUpRoutingTests(SimpleTestCase):
             )
 
         self.assertEqual(result["backend"], "codex_quick")
+        self.assertEqual(result["provider"], "codex_cli")
+        self.assertEqual(result["model"], services.P3_QUICK_FOLLOW_UP_CODEX_MODEL)
         http_runner.assert_not_called()
 
     def test_p3_http_failure_falls_back_to_codex(self):

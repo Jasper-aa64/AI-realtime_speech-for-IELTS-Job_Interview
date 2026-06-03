@@ -4,7 +4,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.conf import settings
 
 from apps.speaking.models import LanguageTakeawayEntry, P1CorpusEntry, P2CorpusEntry, SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
@@ -2856,6 +2856,9 @@ class TurnFeedbackValidationTests(TestCase):
         prompt = follow_up.metadata["prompt"]
         self.assertEqual(prompt["backend"], "codex")
         self.assertEqual(prompt["generation_status"], "ready")
+        self.assertEqual(prompt["provider"], "codex_cli")
+        self.assertEqual(prompt["model"], "codex-cli")
+        self.assertEqual(prompt["usage"], {"input_tokens": 12})
         self.assertEqual(follow_up.question, "How has your software engineering internship shaped your studies?")
         self.assertEqual(follow_up.sequence, 2)
         self.assertEqual(follow_up.metadata["examiner_tts"]["provider"], "volcengine")
@@ -2876,6 +2879,81 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertFalse(hasattr(attempt, "report"))
         completed_turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2")
         self.assertEqual(completed_turn.metadata["server_asr"]["status"], "skipped_browser_transcript_available")
+
+    @override_settings(
+        AI_HTTP_BASE_URL="https://ai.example/v1",
+        AI_HTTP_API_KEY="test-key",
+        SPEAKING_FOLLOWUP_AI_CALL_MODE="http",
+        SPEAKING_FOLLOWUP_AI_MODEL="gpt-5.4-mini",
+    )
+    def test_p1_work_study_followup_persists_http_generation_provenance(self):
+        from apps.speaking.services import complete_turn
+        from apps.accounts.models import CustomUser
+
+        class FakeResult:
+            text = '{"follow_up":"How does your internship help your studies?"}'
+            elapsed_seconds = 0.12
+            model = "gpt-5.4-mini"
+            usage = {"input_tokens": 21, "output_tokens": 9}
+
+        class FakeProvider:
+            def __init__(self, config=None):
+                self.config = config
+
+            def complete_chat(self, *args, **kwargs):
+                return FakeResult()
+
+        user = CustomUser.objects.create_user(username="test-p1-followup-http-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-p1-followup-http-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t2"},
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=0,
+            part="p1",
+            question="Do you work or do you study?",
+            metadata={
+                "prompt": {
+                    "topic": "intro",
+                    "question": "Do you work or do you study?",
+                    "flow": "intro",
+                    "role": "work_study",
+                    "counts_toward_total": True,
+                }
+            },
+        )
+
+        with (
+            patch("apps.speaking.services.HttpApiProvider", return_value=FakeProvider()) as http_provider,
+            patch("apps.speaking.services.run_codex") as run_codex,
+        ):
+            result = complete_turn(
+                user,
+                "test-p1-followup-http-attempt",
+                "t2",
+                {"transcript_raw": "I study software engineering and do an internship at a tech company."},
+            )
+
+        http_provider.assert_called_once()
+        run_codex.assert_not_called()
+        follow_up = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
+        prompt = follow_up.metadata["prompt"]
+        self.assertEqual(prompt["backend"], "http_api")
+        self.assertEqual(prompt["generation_status"], "ready")
+        self.assertEqual(prompt["provider"], "openai_compatible_http")
+        self.assertEqual(prompt["model"], "gpt-5.4-mini")
+        self.assertEqual(prompt["usage"], {"input_tokens": 21, "output_tokens": 9})
+        self.assertEqual(prompt["latency_ms"], 120)
+        self.assertEqual(result["next_turn"]["prompt"]["provider"], "openai_compatible_http")
+        self.assertEqual(result["next_turn"]["prompt"]["model"], "gpt-5.4-mini")
+        self.assertEqual(result["next_turn"]["examiner_tts"]["status"], "pending")
 
     def test_p1_work_study_followup_inserts_even_without_transcript(self):
         from apps.speaking.services import complete_turn
