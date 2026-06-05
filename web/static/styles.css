@@ -2529,7 +2529,7 @@ body.theme-dark .spelling-drill-panel {
   --sd-good: #15803d;
   --sd-bad: #dc2626;
   --sd-warn: #b45309;
-  --sd-spell-face: 840 clamp(24px, 2.7vw, 34px)/1.08 inherit;
+  --sd-spell-face: 860 clamp(32px, 4vw, 50px)/1.05 inherit;
   --sd-shadow: var(--shadow-xs);
   height: 100% !important;
   min-height: 0 !important;
@@ -3591,7 +3591,7 @@ body.theme-dark .spelling-drill-panel {
   max-height: 100% !important;
   align-self: start !important;
   display: grid !important;
-  grid-template-rows: 40px minmax(126px, 1fr) 146px 58px !important;
+  grid-template-rows: 40px minmax(126px, 1fr) 176px 58px !important;
   gap: 12px !important;
   padding: 18px !important;
   border: 1px solid var(--sd-line) !important;
@@ -3755,7 +3755,7 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .nr-form {
-  grid-template-rows: 66px 20px 38px !important;
+  grid-template-rows: 82px 18px 38px !important;
   align-items: center !important;
   padding: 0 !important;
 }
@@ -3770,7 +3770,7 @@ body.theme-dark .spelling-drill-panel {
 
 .nr-input {
   width: 100% !important;
-  min-height: 62px !important;
+  min-height: 76px !important;
   border: 2px solid color-mix(in srgb, var(--sd-accent) 36%, var(--sd-line)) !important;
   border-radius: var(--radius-md) !important;
   background: var(--sd-card-soft) !important;
@@ -3793,13 +3793,13 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .nr-result-slot {
-  grid-template-rows: 66px 20px 38px !important;
+  grid-template-rows: 82px 18px 38px !important;
   align-items: center !important;
 }
 
 .nr-inline-answer {
-  min-height: 62px !important;
-  height: 62px !important;
+  min-height: 76px !important;
+  height: 76px !important;
   padding: 0 18px !important;
   display: grid !important;
   place-items: center !important;
@@ -3845,6 +3845,11 @@ body.theme-dark .spelling-drill-panel {
 .nr-letter.is-bad {
   text-decoration: line-through !important;
   text-decoration-thickness: 2px !important;
+}
+
+.nr-letter.is-miss {
+  color: color-mix(in srgb, var(--sd-ink) 72%, transparent) !important;
+  opacity: 1 !important;
 }
 
 .nr-answer-tag {
@@ -3991,7 +3996,7 @@ body.theme-dark .spelling-drill-panel {
   }
 
   .nr-card {
-    grid-template-rows: 40px minmax(112px, 1fr) 146px 74px !important;
+    grid-template-rows: 40px minmax(112px, 1fr) 176px 74px !important;
     gap: 8px !important;
     padding: 14px !important;
   }
@@ -4057,20 +4062,20 @@ body.theme-dark .spelling-drill-panel {
   }
 
   .nr-form {
-    grid-template-rows: 58px 16px 34px !important;
+    grid-template-rows: 68px 12px 34px !important;
   }
 
   .nr-input {
-    min-height: 56px !important;
+    min-height: 64px !important;
   }
 
   .nr-result-slot {
-    grid-template-rows: 58px 16px 34px !important;
+    grid-template-rows: 68px 12px 34px !important;
   }
 
   .nr-inline-answer {
-    min-height: 56px !important;
-    height: 56px !important;
+    min-height: 64px !important;
+    height: 64px !important;
     padding: 0 14px !important;
   }
 
