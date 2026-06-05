@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from apps.common.models import UserOwnedModel
 
@@ -109,6 +110,9 @@ class SpellingDrillWord(UserOwnedModel):
     attempt_count = models.PositiveIntegerField(default=0)
     correct_count = models.PositiveIntegerField(default=0)
     current_streak = models.PositiveIntegerField(default=0)
+    review_stage = models.PositiveIntegerField(default=0)
+    due_at = models.DateTimeField(default=timezone.now)
+    lapses = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.ACTIVE)
     first_seen_at = models.DateTimeField()
     last_seen_at = models.DateTimeField()
@@ -123,6 +127,7 @@ class SpellingDrillWord(UserOwnedModel):
         indexes = [
             models.Index(fields=["user", "status", "last_practiced_at"]),
             models.Index(fields=["user", "updated_at"]),
+            models.Index(fields=["user", "status", "due_at"], name="writing_sp_usr_st_due_idx"),
         ]
 
     def __str__(self) -> str:

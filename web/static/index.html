@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260603-spelling-drill">
+    <link rel="stylesheet" href="/styles.css?v=20260605-srs">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -506,9 +506,9 @@
               <div class="language-book-actions spelling-drill-actions">
                 <span id="spellingDrillStats">Loading...</span>
                 <div class="spelling-scope-switch" role="group" aria-label="错词范围">
-                  <button type="button" class="is-active" data-spelling-scope="active" aria-pressed="true">待练</button>
+                  <button type="button" class="is-active" data-spelling-scope="due" aria-pressed="true">今日复习</button>
+                  <button type="button" data-spelling-scope="active" aria-pressed="false">全部练习</button>
                   <button type="button" data-spelling-scope="mastered" aria-pressed="false">已掌握</button>
-                  <button type="button" data-spelling-scope="all" aria-pressed="false">全部</button>
                 </div>
               </div>
             </header>
@@ -1183,7 +1183,7 @@
     <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
     <script src="/corpus-markdown-editor.js?v=20260530-corpus-markdown-editor"></script>
     <script src="/corpus-takeaway.js?v=20260602-p2-corpus-layout-fix"></script>
-    <script src="/spelling-drill.js?v=20260603-spelling-drill"></script>
+    <script src="/spelling-drill.js?v=20260605-srs"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>

@@ -38,6 +38,7 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "writing-prompt-picker.js": "text/javascript; charset=utf-8",
         "corpus-markdown-editor.js": "text/javascript; charset=utf-8",
         "corpus-takeaway.js": "text/javascript; charset=utf-8",
+        "spelling-drill.js": "text/javascript; charset=utf-8",
         "candidate-profile.js": "text/javascript; charset=utf-8",
         "realtime-pcm-uplink.js": "text/javascript; charset=utf-8",
         "speaking-audio-preprocessor-runtime.js": "text/javascript; charset=utf-8",

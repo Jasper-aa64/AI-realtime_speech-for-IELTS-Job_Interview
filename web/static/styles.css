@@ -353,7 +353,7 @@ body.font-popular .font-option.active {
 }
 
 #topbarBackCorpusBtn {
-  margin-left: -32px;
+  margin-left: 0;
 }
 
 .topbar-back-button svg {
@@ -1700,8 +1700,18 @@ h1 {
 .spelling-drill-layout {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+  grid-template-columns: 240px minmax(360px, 1fr);
   gap: 16px;
+}
+
+.spelling-drill-layout .spelling-practice-card {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.spelling-drill-layout .spelling-word-list {
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .spelling-practice-card,
@@ -1905,6 +1915,215 @@ h1 {
   gap: 6px;
   color: var(--muted);
   text-align: center;
+}
+
+.spelling-hint-display {
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  letter-spacing: 5px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.spelling-hint-bar {
+  min-height: 30px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.spelling-hint-link {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  padding: 4px 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: unset;
+}
+
+.spelling-hint-link:hover {
+  color: var(--accent-dark);
+}
+
+.spell-diff-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 5px 0;
+}
+
+.spell-diff-row > span:first-child {
+  flex: 0 0 auto;
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.spell-diff {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.dl-ok {
+  color: #166534;
+}
+
+.dl-err {
+  color: #991b1b;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dl-miss {
+  color: #9ca3af;
+}
+
+.spell-correct-word {
+  font-size: 17px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 1px;
+  color: var(--ink);
+}
+
+.spell-explanation {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: inherit;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+/* SRS session progress bar */
+.spelling-session-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.session-progress-bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.session-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #0f766e;
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+
+.requeue-badge {
+  font-style: normal;
+  color: #d97706;
+  font-size: 11px;
+}
+
+/* Session done / empty screen */
+.spelling-session-done {
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  min-height: 320px;
+  text-align: center;
+  padding: 24px;
+}
+
+.session-done-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.spelling-session-done strong {
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.spelling-session-done span {
+  color: var(--muted);
+  font-size: 14px;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.spelling-done-next-btn {
+  margin-top: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.spelling-done-next-btn:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+/* Example sentence */
+.spell-example {
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+  border-radius: 8px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.spell-example span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.spell-example q {
+  display: block;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.55;
+  quotes: none;
+  font-style: italic;
+}
+
+/* Due badge in word list */
+.due-badge {
+  color: #d97706 !important;
+}
+
+/* Next-due note in result */
+.spell-next-due {
+  margin: 6px 0 0;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* No-gloss fallback label */
+.spell-no-gloss {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
 }
 
 .language-takeaway-trigger {

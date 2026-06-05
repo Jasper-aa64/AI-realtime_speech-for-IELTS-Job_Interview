@@ -125,28 +125,35 @@ class SpellingDrillTests(TestCase):
         self.assertEqual(word.attempt_count, 5)
         self.assertEqual(word.correct_count, 4)
 
-    def test_attempt_marks_mastered_after_four_correct_streak(self):
+    def test_attempt_srs_scheduling_correct_and_wrong(self):
         self.create_score(
             answer="This app is confortable.",
             analysis_payload={"inline_annotations": [{"type": "spelling", "original": "confortable", "suggestion": "comfortable", "explanation": "拼写错误"}]},
         )
         harvest_spelling_words(self.user)
         word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
+        self.assertEqual(word.review_stage, 0)
 
+        # Wrong attempt: stage resets to 0, lapses increments
         wrong = record_spelling_attempt(self.user, word.word_id, "comfortble")
         self.assertFalse(wrong["correct"])
         self.assertEqual(wrong["correct_spelling"], "comfortable")
         word.refresh_from_db()
         self.assertEqual(word.current_streak, 0)
+        self.assertEqual(word.review_stage, 0)
+        self.assertEqual(word.lapses, 1)
+        self.assertIn("next_due_human", wrong)
 
-        for typed in [" Comfortable ", "comfortable", "COMFORTABLE", "comfortable"]:
+        # Six correct answers → stage 6 → mastered
+        for typed in [" Comfortable ", "comfortable", "COMFORTABLE", "comfortable", "comfortable", "comfortable"]:
             result = record_spelling_attempt(self.user, word.word_id, typed)
         word.refresh_from_db()
         self.assertTrue(result["correct"])
-        self.assertEqual(word.current_streak, 4)
+        self.assertEqual(word.review_stage, 6)
         self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
-        self.assertEqual(word.attempt_count, 5)
-        self.assertEqual(word.correct_count, 4)
+        self.assertEqual(word.attempt_count, 7)  # 1 wrong + 6 correct
+        self.assertEqual(word.correct_count, 6)
+        self.assertIn("next_due_human", result)
 
     def test_update_edit_gloss_reset_master_and_delete(self):
         self.create_score(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from django.db import transaction
@@ -16,8 +17,32 @@ from .report_services import looks_like_single_word_spelling_fix, spelling_terms
 from .validation import WritingError
 
 
-SPELLING_MASTERED_STREAK = 4
 SPELLING_WORD_RE = re.compile(r"^[A-Za-z][A-Za-z'\-]*$")
+
+# SRS Leitner box intervals: index = new_stage - 1
+SRS_STAGE_INTERVALS: list[timedelta] = [
+    timedelta(minutes=10),  # stage 0→1
+    timedelta(days=1),       # stage 1→2
+    timedelta(days=2),       # stage 2→3
+    timedelta(days=4),       # stage 3→4
+    timedelta(days=7),       # stage 4→5
+    timedelta(days=15),      # stage 5→6 (graduation)
+]
+SRS_MAX_STAGE = len(SRS_STAGE_INTERVALS)  # 6
+SRS_LAPSE_INTERVAL = timedelta(minutes=10)
+
+
+def due_human(due_at, now=None) -> str:
+    if now is None:
+        now = timezone.now()
+    seconds = (due_at - now).total_seconds()
+    if seconds <= 60:
+        return "马上"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} 分钟后"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)} 小时后"
+    return f"{int(seconds // 86400)} 天后"
 
 
 @dataclass(frozen=True)
@@ -268,6 +293,9 @@ def harvest_spelling_words(user) -> int:
 
 
 def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
+    now = timezone.now()
+    due = word.due_at if word.due_at else now
+    is_due = due <= now and word.status == SpellingDrillWord.Status.ACTIVE
     return {
         "word_id": word.word_id,
         "correct_spelling": word.correct_spelling,
@@ -279,36 +307,50 @@ def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
         "attempt_count": word.attempt_count,
         "correct_count": word.correct_count,
         "current_streak": word.current_streak,
+        "review_stage": word.review_stage,
+        "lapses": word.lapses,
+        "due_at": due.isoformat(),
+        "is_due": is_due,
         "status": word.status,
         "last_practiced_at": word.last_practiced_at.isoformat() if word.last_practiced_at else None,
     }
 
 
-def spelling_drill_library(user, *, scope: str = "active") -> dict[str, Any]:
-    scope = str(scope or "active").strip().lower()
-    if scope not in {"active", "mastered", "all"}:
+def spelling_drill_library(user, *, scope: str = "due") -> dict[str, Any]:
+    scope = str(scope or "due").strip().lower()
+    if scope not in {"due", "active", "mastered", "all"}:
         raise WritingError("Unknown spelling drill scope")
-    # TODO: Future scoring completion can call harvest incrementally once the scoring pipeline owns a stable hook.
     harvest_spelling_words(user)
+    now = timezone.now()
     queryset = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
-    if scope != "all":
-        queryset = queryset.filter(status=scope)
-    items = [spelling_word_payload(word) for word in queryset.order_by("status", "last_practiced_at", "-occurrence_count", "normalized")[:500]]
-    visible_words = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
-    total = visible_words.count()
-    active = SpellingDrillWord.objects.filter(user=user, status=SpellingDrillWord.Status.ACTIVE).count()
-    mastered = SpellingDrillWord.objects.filter(user=user, status=SpellingDrillWord.Status.MASTERED).count()
-    attempt_totals = visible_words.aggregate(attempts=Sum("attempt_count"), correct=Sum("correct_count"))
+    if scope == "due":
+        queryset = queryset.filter(
+            status=SpellingDrillWord.Status.ACTIVE, due_at__lte=now
+        ).order_by("due_at")
+    elif scope == "active":
+        queryset = queryset.filter(status=SpellingDrillWord.Status.ACTIVE).order_by("due_at", "-occurrence_count")
+    elif scope == "mastered":
+        queryset = queryset.filter(status=SpellingDrillWord.Status.MASTERED).order_by("-updated_at")
+    else:
+        queryset = queryset.order_by("status", "due_at", "-occurrence_count")
+    items = [spelling_word_payload(word) for word in queryset[:500]]
+    visible = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
+    total = visible.count()
+    active_count = visible.filter(status=SpellingDrillWord.Status.ACTIVE).count()
+    due_count = visible.filter(status=SpellingDrillWord.Status.ACTIVE, due_at__lte=now).count()
+    mastered_count = visible.filter(status=SpellingDrillWord.Status.MASTERED).count()
+    attempt_totals = visible.aggregate(attempts=Sum("attempt_count"), correct=Sum("correct_count"))
     attempts = int(attempt_totals.get("attempts") or 0)
-    correct = int(attempt_totals.get("correct") or 0)
+    correct_total = int(attempt_totals.get("correct") or 0)
     return {
         "items": items,
         "count": len(items),
         "stats": {
             "total": total,
-            "active": active,
-            "mastered": mastered,
-            "accuracy": (correct / attempts) if attempts else 0,
+            "active": active_count,
+            "due": due_count,
+            "mastered": mastered_count,
+            "accuracy": (correct_total / attempts) if attempts else 0,
         },
     }
 
@@ -329,22 +371,37 @@ def record_spelling_attempt(user, word_id: str, typed: Any) -> dict[str, Any]:
         if not word:
             raise WritingError("Spelling drill word not found")
         is_correct = typed_text == word.normalized
+        now = timezone.now()
         word.attempt_count += 1
-        word.last_practiced_at = timezone.now()
+        word.last_practiced_at = now
         if is_correct:
             word.correct_count += 1
             word.current_streak += 1
-            if word.current_streak >= SPELLING_MASTERED_STREAK:
+            new_stage = min(word.review_stage + 1, SRS_MAX_STAGE)
+            word.review_stage = new_stage
+            if new_stage >= SRS_MAX_STAGE:
                 word.status = SpellingDrillWord.Status.MASTERED
+                word.due_at = now + timedelta(days=90)
+            else:
+                word.due_at = now + SRS_STAGE_INTERVALS[new_stage - 1]
         else:
             word.current_streak = 0
-        word.save(update_fields=["attempt_count", "correct_count", "current_streak", "status", "last_practiced_at", "updated_at"])
+            word.lapses += 1
+            word.review_stage = 0
+            word.due_at = now + SRS_LAPSE_INTERVAL
+        word.save(update_fields=[
+            "attempt_count", "correct_count", "current_streak",
+            "review_stage", "due_at", "lapses", "status",
+            "last_practiced_at", "updated_at",
+        ])
     return {
         "correct": is_correct,
         "correct_spelling": "" if is_correct else word.correct_spelling,
         "current_streak": word.current_streak,
+        "review_stage": word.review_stage,
         "status": word.status,
         "explanation": "" if is_correct else word.explanation,
+        "next_due_human": due_human(word.due_at, now),
     }
 
 
@@ -360,7 +417,10 @@ def update_spelling_word(user, word_id: str, payload: dict[str, Any]) -> dict[st
         elif action == "reset":
             word.status = SpellingDrillWord.Status.ACTIVE
             word.current_streak = 0
-            update_fields = ["status", "current_streak", "updated_at"]
+            word.review_stage = 0
+            word.lapses = 0
+            word.due_at = timezone.now()
+            update_fields = ["status", "current_streak", "review_stage", "lapses", "due_at", "updated_at"]
         elif action == "edit_gloss":
             word.chinese_gloss = str(payload.get("chinese_gloss") or "").strip()[:200]
             metadata = dict(word.metadata or {})

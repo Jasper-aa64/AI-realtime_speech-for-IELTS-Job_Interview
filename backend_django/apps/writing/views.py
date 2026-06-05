@@ -60,7 +60,7 @@ def spelling_words(request):
     if auth_error:
         return auth_error
     try:
-        return JsonResponse(spelling_drill_library(request.user, scope=request.GET.get("scope") or "active"))
+        return JsonResponse(spelling_drill_library(request.user, scope=request.GET.get("scope") or "due"))
     except WritingError as exc:
         return writing_error(exc)
 
