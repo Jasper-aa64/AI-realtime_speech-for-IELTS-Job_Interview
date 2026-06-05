@@ -196,10 +196,12 @@
       if (result.correct) {
         return `
           <div class="nr-slot nr-result-slot is-correct">
-            <div class="nr-answer">
-              <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
-              <p class="nr-answer-correct nr-answer-correct--placeholder" aria-hidden="true">&nbsp;</p>
+            <div class="nr-inline-answer" aria-live="polite">
+              <p class="nr-answer-line">${letterDiff(correctSpell, correctSpell)}</p>
             </div>
+            <p class="nr-inline-correct nr-inline-correct--placeholder" aria-hidden="true">
+              已判定
+            </p>
             <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
           </div>
         `;
@@ -210,13 +212,14 @@
       // so it will appear again later. Progress only counts on correct.
       return `
         <div class="nr-slot nr-result-slot is-wrong">
-          <div class="nr-answer">
+          <div class="nr-inline-answer" aria-live="polite">
             <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
-            <p class="nr-answer-correct">
-              <span class="nr-answer-tag">正解</span>
-              <span class="nr-answer-word">${escapeHtml(correctSpell)}</span>
-            </p>
           </div>
+          <p class="nr-inline-correct">
+            <span class="nr-answer-tag">正解</span>
+            <span class="nr-answer-word">${escapeHtml(correctSpell)}</span>
+            <span class="nr-answer-note">· 稍后重练</span>
+          </p>
           <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
         </div>
       `;
