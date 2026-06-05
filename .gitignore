@@ -49,3 +49,9 @@ media/
 # Generated WebAssembly artifacts
 web/static/wasm/audio_core_wasm.js
 web/static/wasm/audio_core_wasm.wasm
+
+.env
+*.key
+*.crt
+*.win-bak-*
+*.bak.*
