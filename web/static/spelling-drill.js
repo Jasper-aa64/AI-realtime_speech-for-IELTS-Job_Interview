@@ -1,499 +1,608 @@
+/*
+ * Spelling Drill — Nocturne Reader edition.
+ * State machine: loading | empty | drill | done | library
+ * Single container (#spellingPracticeCard). No split layout.
+ *
+ * KEY DESIGN:
+ *  - S() patches the existing state.spellingDrill object (app.js pre-creates it)
+ *  - renderDrill() does PARTIAL in-place DOM updates for same-word state changes
+ *    (submit answer, retry, hint) → no card animation replay, no progress jump
+ *  - Full card rebuild only on new word (gotoNext) → animation plays once, intentionally
+ */
 (function () {
   "use strict";
 
   function createSpellingDrillController(options) {
-    const {
-      state,
-      $,
-      escapeHtml,
-      api,
-      showConfirmDelete,
-    } = options || {};
-
+    const { state, $, escapeHtml, api, showConfirmDelete } = options || {};
     if (!state || typeof $ !== "function" || typeof api !== "function") {
       throw new Error("Spelling drill controller requires shared app state and helpers.");
     }
 
-    function drillState() {
-      if (!state.spellingDrill) {
-        state.spellingDrill = {
-          items: [],
-          stats: {},
-          scope: "due",
-          loaded: false,
-          loadingPromise: null,
-          currentIndex: 0,
-          result: null,
-          hintLevel: 0,
-          // SRS session queue
-          queue: [],
-          queuePos: 0,
-          requeueMap: {},
-          doneCount: 0,
-          queueInitialLen: 0,
-        };
+    // ─── State ───────────────────────────────────────────────────────
+    // app.js pre-creates state.spellingDrill with a minimal shape.
+    // S() patches in all fields our controller needs, once, via _drillReady flag.
+    function S() {
+      const sd = state.spellingDrill;
+      if (!sd._drillReady) {
+        sd.view           = "drill";   // "drill" | "library"
+        sd.phase          = "idle";    // "idle" | "loading" | "ready"
+        sd.scope          = "due";     // always open on today's due queue
+        sd.items          = Array.isArray(sd.items) ? sd.items : [];
+        sd.stats          = sd.stats  || {};
+        sd.queue          = [];
+        sd.queuePos       = 0;
+        sd.requeueMap     = {};
+        sd.doneCount      = 0;
+        sd.queueInitialLen= 0;
+        sd.result         = null;
+        sd.retryTyped     = null;      // last rewrite attempt after a wrong
+        sd.retryCorrect   = false;     // whether the rewrite matched
+        sd.hintLevel      = 0;
+        sd.loadingPromise = sd.loadingPromise || null;
+        sd._drillReady    = true;
       }
-      return state.spellingDrill;
+      return sd;
     }
 
-    function currentItems() {
-      return drillState().items || [];
+    const root     = () => $("spellingPracticeCard");
+    const sideList = () => $("spellingDrillList");
+
+    function currentWord() {
+      const s = S();
+      return s.queue[s.queuePos] || null;
     }
 
-    function currentQueueWord() {
-      const local = drillState();
-      return local.queue[local.queuePos] || null;
-    }
-
-    function isQueueDone() {
-      const local = drillState();
-      return local.queue.length > 0 && local.queuePos >= local.queue.length;
-    }
-
-    function isQueueEmpty() {
-      return drillState().queue.length === 0 && drillState().loaded;
-    }
-
-    function statText(payload) {
-      const stats = payload?.stats || drillState().stats || {};
-      const due = Number(stats.due || 0);
-      const active = Number(stats.active || 0);
-      const mastered = Number(stats.mastered || 0);
-      const accuracy = Math.round(Number(stats.accuracy || 0) * 100);
-      return `${due} 个待复习 · ${active} 个学中 · ${mastered} 个已掌握 · 正确率 ${accuracy}%`;
-    }
-
+    // ─── Helpers ─────────────────────────────────────────────────────
     function wrongFormsText(word) {
       const forms = Array.isArray(word?.wrong_forms) ? word.wrong_forms.filter(Boolean) : [];
-      return forms.length ? forms.join(" / ") : "暂无错拼记录";
-    }
-
-    function getHintDisplay(word) {
-      const level = drillState().hintLevel || 0;
-      const correct = String(word?.correct_spelling || "");
-      if (!correct) return "";
-      return correct.split("").map((ch, i) =>
-        (level > 0 && i === 0) ? escapeHtml(ch) : "_"
-      ).join(" ");
+      return forms.length ? forms.join(" · ") : "—";
     }
 
     function letterDiff(typed, correct) {
-      const t = (typed || "").toLowerCase();
-      const c = (correct || "").toLowerCase();
-      const maxLen = Math.max(t.length, c.length);
+      const t  = typed   || "";
+      const c  = correct || "";
+      const lc = c.toLowerCase();
+      const lt = t.toLowerCase();
+      const mx = Math.max(t.length, c.length);
       let html = "";
-      for (let i = 0; i < maxLen; i++) {
-        if (i < typed.length) {
-          const isOk = i < c.length && t[i] === c[i];
-          html += `<span class="${isOk ? "dl-ok" : "dl-err"}">${escapeHtml(typed[i])}</span>`;
+      for (let i = 0; i < mx; i++) {
+        if (i < t.length) {
+          const ok = i < c.length && lt[i] === lc[i];
+          html += `<span class="nr-letter ${ok ? "is-ok" : "is-bad"}">${escapeHtml(t[i])}</span>`;
         } else {
-          html += `<span class="dl-miss">_</span>`;
+          html += `<span class="nr-letter is-miss">${escapeHtml(c[i])}</span>`;
         }
       }
       return html;
     }
 
-    function stageLabel(word) {
-      if (!word) return "";
-      if (word.status === "mastered") return "已掌握";
-      const stage = Number(word.review_stage || 0);
-      return `阶段 ${stage}/6`;
+    function setStatus(msg, isError = false) {
+      const el = $("spellingDrillStatus");
+      if (!el) return;
+      el.textContent = msg || "";
+      el.classList.toggle("error", Boolean(isError));
     }
 
-    function exampleHtml(word) {
-      const examples = Array.isArray(word?.examples) ? word.examples : [];
-      const snippet = examples.find((e) => e && e.snippet)?.snippet || "";
-      if (!snippet) return "";
-      return `
-        <div class="spell-example">
-          <span>你的作文例句</span>
-          <q>${escapeHtml(snippet)}</q>
-        </div>
+    function setHeaderStats() {
+      const el = $("spellingDrillStats");
+      if (!el) return;
+      const s   = S().stats || {};
+      const due = Number(s.due     || 0);
+      const act = Number(s.active  || 0);
+      const mst = Number(s.mastered|| 0);
+      const acc = Math.round(Number(s.accuracy || 0) * 100);
+      el.innerHTML = `
+        <span class="nr-stat"><b>${due}</b>待复习</span>
+        <span class="nr-stat-dot">·</span>
+        <span class="nr-stat"><b>${act}</b>学中</span>
+        <span class="nr-stat-dot">·</span>
+        <span class="nr-stat"><b>${mst}</b>已掌握</span>
+        <span class="nr-stat-dot">·</span>
+        <span class="nr-stat"><b>${acc}%</b>正确率</span>
       `;
     }
 
-    function setStatus(message, isError = false) {
-      const status = $("spellingDrillStatus");
-      if (!status) return;
-      status.textContent = message || "";
-      status.classList.toggle("error", Boolean(isError));
-    }
-
-    async function fetchSpellingWords(scope = drillState().scope || "due", options = {}) {
-      if (options.force) drillState().loadingPromise = null;
-      drillState().scope = scope;
-      if (!drillState().loadingPromise) {
-        drillState().loadingPromise = api(`/api/writing/spelling-words?scope=${encodeURIComponent(scope)}`)
-          .finally(() => {
-            drillState().loadingPromise = null;
-          });
-      }
-      return drillState().loadingPromise;
-    }
-
-    function applySpellingPayload(payload, options = {}) {
-      const local = drillState();
-      local.items = payload.items || [];
-      local.stats = payload.stats || {};
-      local.loaded = true;
-      local.currentIndex = Math.min(local.currentIndex || 0, Math.max(0, local.items.length - 1));
-      local.result = null;
-      local.hintLevel = 0;
-      if (options.force || !local.queue.length) {
-        local.queue = [...local.items];
-        local.queuePos = 0;
-        local.requeueMap = {};
-        local.doneCount = 0;
-        local.queueInitialLen = local.items.length;
-      }
-    }
-
-    async function loadSpellingDrill(options = {}) {
-      const local = drillState();
-      const stats = $("spellingDrillStats");
-      const list = $("spellingDrillList");
-      if (!local.loaded || options.force) {
-        if (stats) stats.textContent = "Loading...";
-        if (list) list.innerHTML = '<p class="language-book-empty muted">正在从已评分作文里整理拼写错词...</p>';
-      }
-      try {
-        const payload = await fetchSpellingWords(local.scope || "due", options);
-        applySpellingPayload(payload, options);
-        renderSpellingDrill();
-      } catch (error) {
-        if (stats) stats.textContent = "加载失败";
-        if (list) list.innerHTML = `<p class="language-book-empty error">${escapeHtml(error.message || String(error))}</p>`;
-      }
-    }
-
-    function renderScopeButtons() {
-      document.querySelectorAll("[data-spelling-scope]").forEach((button) => {
-        const active = button.dataset.spellingScope === (drillState().scope || "due");
-        button.classList.toggle("is-active", active);
-        button.setAttribute("aria-pressed", active ? "true" : "false");
+    function syncScopeTabs() {
+      document.querySelectorAll("[data-spelling-scope]").forEach((btn) => {
+        const on = btn.dataset.spellingScope === S().scope;
+        btn.classList.toggle("is-active", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
       });
     }
 
-    function renderSpellingList() {
-      const list = $("spellingDrillList");
-      if (!list) return;
-      const items = currentItems();
-      if (!items.length) {
-        const emptyMsg = drillState().scope === "due"
-          ? "今日复习已全部完成，或暂无到期词汇。"
-          : drillState().scope === "mastered" ? "还没有已掌握的词。" : "这个范围里还没有词汇。";
-        list.innerHTML = `<p class="language-book-empty muted">${emptyMsg}</p>`;
-        return;
+    // ─── Data ────────────────────────────────────────────────────────
+    async function fetchWords(scope, { force = false } = {}) {
+      const s = S();
+      s.scope = scope;
+      if (force) s.loadingPromise = null;
+      if (!s.loadingPromise) {
+        s.loadingPromise = api(`/api/writing/spelling-words?scope=${encodeURIComponent(scope)}`)
+          .finally(() => { s.loadingPromise = null; });
       }
-      list.innerHTML = items.map((word, index) => {
-        const isDue = word.is_due;
-        const stage = Number(word.review_stage || 0);
-        const dueLabel = word.status === "mastered" ? "已掌握"
-          : isDue ? `待复习·阶段${stage}`
-          : `阶段${stage}`;
-        return `
-          <article class="spelling-word-card ${index === drillState().currentIndex ? "is-current" : ""}" data-spelling-word="${escapeHtml(word.word_id)}">
-            <button type="button" class="spelling-word-main" data-spelling-select="${escapeHtml(word.word_id)}">
-              <span class="spelling-word-title">
-                <strong>${escapeHtml(word.correct_spelling)}</strong>
-                <em class="${isDue ? "due-badge" : ""}">${escapeHtml(dueLabel)}</em>
-              </span>
-              <span class="spelling-word-wrong">曾写成：${escapeHtml(wrongFormsText(word))}</span>
-              <span class="spelling-word-meta">${escapeHtml(word.chinese_gloss || "暂无中文释义")} · 出现 ${Number(word.occurrence_count || 0)} 次</span>
-            </button>
-            <div class="spelling-word-actions">
-              <button type="button" data-spelling-master="${escapeHtml(word.word_id)}">掌握</button>
-              <button type="button" class="danger" data-spelling-delete="${escapeHtml(word.word_id)}">移出</button>
-            </div>
-          </article>
-        `;
-      }).join("");
+      return s.loadingPromise;
     }
 
-    function renderPracticeCard() {
-      const card = $("spellingPracticeCard");
-      if (!card) return;
-
-      // Queue-done screen
-      if (isQueueDone()) {
-        const local = drillState();
-        card.innerHTML = `
-          <div class="spelling-session-done">
-            <div class="session-done-icon">✓</div>
-            <strong>本轮复习完成！</strong>
-            <span>共完成 ${local.doneCount} 个词，下次见～</span>
-            <button type="button" class="spelling-done-next-btn" data-spelling-load-due>刷新队列</button>
-          </div>
-        `;
-        return;
+    function ingest(payload, { resetQueue = true } = {}) {
+      const s = S();
+      s.items = payload.items || [];
+      s.stats = payload.stats || {};
+      s.phase = "ready";
+      if (resetQueue) {
+        s.queue          = [...s.items];
+        s.queuePos       = 0;
+        s.requeueMap     = {};
+        s.doneCount      = 0;
+        s.queueInitialLen= s.items.length;
+        s.result         = null;
+        s.retryTyped     = null;
+        s.retryCorrect   = false;
+        s.hintLevel      = 0;
       }
+    }
 
-      // No-due-words screen
-      if (isQueueEmpty() && drillState().scope === "due") {
-        card.innerHTML = `
-          <div class="spelling-session-done">
-            <div class="session-done-icon">🎉</div>
-            <strong>今日复习已清空</strong>
-            <span>所有词汇都按计划安排好了，暂时没有到期词。</span>
-            <button type="button" class="spelling-done-next-btn" data-spelling-scope="active">提前练（全部词）</button>
-          </div>
-        `;
-        return;
+    async function load({ force = false, resetQueue = true, _pivoted = false } = {}) {
+      const s  = S();
+      s.phase  = "loading";
+      render();
+      try {
+        const payload = await fetchWords(s.scope, { force });
+        ingest(payload, { resetQueue });
+      } catch (err) {
+        s.phase = "ready";
+        setStatus(err.message || String(err), true);
       }
+      render();
+    }
 
-      const word = currentQueueWord();
-      if (!word) {
-        card.innerHTML = `
-          <div class="spelling-practice-empty">
-            <strong>没有可训练的错词</strong>
-            <span>完成作文评分后，页面会自动从拼写批注里整理错词。</span>
-          </div>
-        `;
-        return;
-      }
+    // ─── Render helpers ───────────────────────────────────────────────
+    // buildPromptHtml / buildInputHtml are called both in full rebuild
+    // and in partial (in-place) updates so the card doesn't re-animate.
 
-      const local = drillState();
-      const result = local.result;
-      const progressTotal = Math.max(local.queueInitialLen, 1);
-      const progressDone = local.doneCount;
-      const progressPct = Math.round((progressDone / progressTotal) * 100);
-      const requeueCount = local.requeueMap[word.word_id] || 0;
-
-      const wrongResultHtml = result && !result.correct ? `
-        <div class="spell-diff-row">
-          <span>你写的：</span>
-          <span class="spell-diff">${letterDiff(result._typed || "", result.correct_spelling || word.correct_spelling)}</span>
+    function buildPromptHtml(word, s) {
+      const gloss       = word.chinese_gloss || "";
+      const letterCount = String(word.correct_spelling || "").replace(/[^A-Za-z]/g, "").length;
+      const fallback    = letterCount > 0 ? `回忆这个 ${letterCount} 字母的词` : "回忆这个词";
+      return `
+        <p class="nr-gloss${gloss ? "" : " is-fallback"}">${escapeHtml(gloss || fallback)}</p>
+        <div class="nr-wrong-pill">
+          <span class="nr-wrong-tag">曾误作</span>
+          <span class="nr-wrong-text">${escapeHtml(wrongFormsText(word))}</span>
         </div>
-        <div class="spell-diff-row">
-          <span>正确：</span>
-          <strong class="spell-correct-word">${escapeHtml(result.correct_spelling || word.correct_spelling)}</strong>
-        </div>
-        ${(result.explanation || word.explanation) ? `<p class="spell-explanation">${escapeHtml(result.explanation || word.explanation)}</p>` : ""}
-      ` : "";
-
-      const resultHtmlFull = result ? `
-        <div class="spelling-attempt-result ${result.correct ? "is-correct" : "is-wrong"}">
-          <strong>${result.correct ? "拼对了" : "这次拼错了"}</strong>
-          ${result.correct
-            ? `<span>阶段 ${result.review_stage || 0}/6 · ${escapeHtml(result.next_due_human || "")}</span>`
-            : wrongResultHtml}
-          ${result.next_due_human && !result.correct ? `<p class="spell-next-due">10 分钟后会再考你</p>` : ""}
-        </div>
-      ` : "";
-
-      const gloss = word.chinese_gloss || "";
-      const hasGloss = Boolean(gloss);
-
-      card.innerHTML = `
-        <div class="spelling-session-progress">
-          <div class="session-progress-bar">
-            <div class="session-progress-fill" style="width:${progressPct}%"></div>
-          </div>
-          <span>${progressDone} / ${progressTotal}${requeueCount > 0 ? ` <em class="requeue-badge">重练 ×${requeueCount}</em>` : ""}</span>
-        </div>
-        <div class="spelling-practice-head">
-          <div>
-            <span class="corpus-page-kicker">Spelling Drill</span>
-            <h3>${hasGloss ? escapeHtml(gloss) : escapeHtml(word.correct_spelling)}</h3>
-            ${!hasGloss ? '<span class="spell-no-gloss">（根据错拼回忆正确单词）</span>' : ""}
-          </div>
-          <span class="spelling-progress-pill">${escapeHtml(stageLabel(word))}</span>
-        </div>
-        <div class="spelling-prompt-box">
-          <span>你之前写成</span>
-          <strong>${escapeHtml(wrongFormsText(word))}</strong>
-          <div class="spelling-hint-display">${getHintDisplay(word)}</div>
-        </div>
-        ${drillState().hintLevel === 0 ? '<div class="spelling-hint-bar"><button type="button" class="spelling-hint-link" data-spelling-hint>显示首字母</button></div>' : '<div class="spelling-hint-bar"></div>'}
-        ${exampleHtml(word)}
-        <form id="spellingAttemptForm" class="spelling-attempt-form">
-          <label for="spellingTypedInput">重新拼写</label>
-          <div>
-            <input id="spellingTypedInput" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="输入正确拼写，Enter 提交">
-            <button type="submit">判分</button>
-          </div>
-        </form>
-        <div class="spelling-practice-actions">
-          <button type="button" data-spelling-next>下一词</button>
-          <button type="button" data-spelling-reset-word="${escapeHtml(word.word_id)}">重练</button>
-        </div>
-        ${resultHtmlFull}
+        ${s.hintLevel > 0
+          ? `<p class="nr-hint-letter">首字母 <b>${escapeHtml(String(word.correct_spelling || "").charAt(0))}</b></p>`
+          : ""}
       `;
-      $("spellingTypedInput")?.focus();
     }
 
-    function renderSpellingDrill() {
-      const payload = { stats: drillState().stats };
-      const stats = $("spellingDrillStats");
-      if (stats) stats.textContent = statText(payload);
-      renderScopeButtons();
-      renderSpellingList();
-      renderPracticeCard();
-    }
+    function buildInputHtml(word, result, s) {
+      const correctSpell = result
+        ? (result.correct_spelling || word.correct_spelling || "")
+        : "";
 
-    function selectWord(wordId) {
-      const index = currentItems().findIndex((word) => word.word_id === wordId);
-      if (index < 0) return;
-      drillState().currentIndex = index;
-      // Also seek queue to this word if present
-      const local = drillState();
-      const queueIdx = local.queue.findIndex((w) => w.word_id === wordId);
-      if (queueIdx >= 0 && queueIdx >= local.queuePos) {
-        local.queuePos = queueIdx;
+      // ── State A: waiting for first input ──
+      if (!result) {
+        return `
+          <form id="spellingAttemptForm" class="nr-slot nr-form" autocomplete="off">
+            <input id="spellingTypedInput" class="nr-input" type="text"
+              autocomplete="off" autocapitalize="none" spellcheck="false"
+              placeholder="敲下正确拼写，回车判定">
+            <span class="nr-form-spacer" aria-hidden="true"></span>
+          </form>
+        `;
       }
-      local.result = null;
-      local.hintLevel = 0;
-      renderSpellingDrill();
-    }
 
-    function nextWord() {
-      const local = drillState();
-      local.queuePos += 1;
-      local.result = null;
-      local.hintLevel = 0;
-      // Sync currentIndex to list view
-      const word = currentQueueWord();
-      if (word) {
-        const idx = currentItems().findIndex((w) => w.word_id === word.word_id);
-        if (idx >= 0) local.currentIndex = idx;
+      // ── State B: correct — show green diff, wait for Enter ──
+      if (result.correct) {
+        return `
+          <div class="nr-slot nr-answer is-correct">
+            <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
+            <p class="nr-answer-correct nr-answer-correct--placeholder" aria-hidden="true">&nbsp;</p>
+            <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
+          </div>
+        `;
       }
-      renderSpellingDrill();
+
+      // ── Wrong: show diff + 正解 + next button.
+      // Word is already pushed back into the queue by submitAttempt,
+      // so it will appear again later. Progress only counts on correct.
+      return `
+        <div class="nr-slot nr-answer is-wrong">
+          <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
+          <p class="nr-answer-correct">
+            <span class="nr-answer-tag">正解</span>
+            <span class="nr-answer-word">${escapeHtml(correctSpell)}</span>
+          </p>
+          <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
+        </div>
+      `;
     }
 
-    async function submitAttempt(event) {
-      event?.preventDefault();
-      const word = currentQueueWord();
+    function focusInputArea(result, s) {
+      if (!result) {
+        $("spellingTypedInput")?.focus();
+      } else {
+        // Both correct and wrong states show the continue button
+        root().querySelector("[data-spelling-continue]")?.focus();
+      }
+    }
+
+    // ─── Render ──────────────────────────────────────────────────────
+    function render() {
+      setHeaderStats();
+      syncScopeTabs();
+      const s    = S();
+      const list = sideList();
+      if (list) list.hidden = s.view !== "library";
+      const card = root();
+      if (!card) return;
+      card.hidden = s.view !== "drill";
+
+      if (s.view === "library") { renderLibrary(); return; }
+      if (s.phase === "loading") return renderLoading();
+      if (!s.items.length)       return renderEmpty();
+      if (s.queuePos >= s.queue.length) return renderDone();
+      renderDrill();
+    }
+
+    function renderLoading() {
+      root().innerHTML = `
+        <div class="nr-stage nr-stage-loading">
+          <div class="nr-spinner" aria-hidden="true"><span></span><span></span><span></span></div>
+          <p class="nr-meta">正在翻开错词本…</p>
+        </div>
+      `;
+    }
+
+    function renderEmpty() {
+      const s     = S();
+      const isDue = s.scope === "due";
+      root().innerHTML = `
+        <div class="nr-stage nr-stage-empty">
+          <svg class="nr-empty-mark" viewBox="0 0 80 80" aria-hidden="true">
+            <circle cx="40" cy="40" r="34" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.35"/>
+            <path d="M24 40 L36 52 L58 28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <h3 class="nr-empty-title">${
+            isDue ? "今夜已无待复习"
+            : s.scope === "mastered" ? "尚无已掌握的词"
+            : "错词本空着"
+          }</h3>
+          <p class="nr-empty-sub">${
+            isDue ? "所有词都已按计划排好，明天再来。"
+            : s.scope === "mastered" ? "把一个词从生疏背到第六阶，它就会出现在这里。"
+            : "去作文里写写错字，我会替你收集起来。"
+          }</p>
+          <div class="nr-empty-actions">
+            ${isDue ? `<button class="nr-btn nr-btn-primary" data-spelling-scope="active">提前练（全部词）</button>` : ""}
+            <button class="nr-btn nr-btn-ghost" data-open-library>翻看词库</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDone() {
+      const s = S();
+      root().innerHTML = `
+        <div class="nr-stage nr-stage-done">
+          <div class="nr-done-seal">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+              <circle cx="60" cy="60" r="46" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.45"/>
+              <path d="M40 62 L54 76 L82 46" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 class="nr-done-title">本轮收笔</h3>
+          <p class="nr-done-meta">
+            复习 <b>${s.doneCount}</b> 词 · 重练 <b>${Object.values(s.requeueMap).reduce((a, b) => a + b, 0)}</b> 次
+          </p>
+          <div class="nr-empty-actions">
+            <button class="nr-btn nr-btn-primary" data-spelling-reload>再来一轮</button>
+            <button class="nr-btn nr-btn-ghost" data-open-library>翻看词库</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDrill() {
+      const s      = S();
+      const word   = currentWord();
+      if (!word) return renderEmpty();
+
+      const result = s.result;
+      const pct    = Math.round((s.doneCount / Math.max(s.queueInitialLen, 1)) * 100);
+      const reqs   = s.requeueMap[word.word_id] || 0;
+      const progressTextHtml = `<b>${s.doneCount}</b><span>/${s.queueInitialLen}</span>${reqs > 0 ? ` <em class="nr-requeue">·重 ${reqs}</em>` : ""}`;
+
+      // ── Partial in-place update (same word, state changed) ──────────
+      // Avoids card animation replay and lets progress-fill CSS transition work.
+      const existingCard = root().querySelector(`[data-drill-word]`);
+      const sameWord = existingCard &&
+        existingCard.dataset.drillWord === String(word.word_id);
+
+      if (sameWord) {
+        // Update progress bar (CSS transition animates width smoothly)
+        const fill = existingCard.querySelector(".nr-progress-fill");
+        const txt  = existingCard.querySelector(".nr-progress-text");
+        if (fill) fill.style.width = pct + "%";
+        if (txt)  txt.innerHTML = progressTextHtml;
+
+        // Append hint letter without touching .nr-gloss (avoids re-animation)
+        if (s.hintLevel > 0) {
+          const promptEl = existingCard.querySelector(".nr-prompt");
+          if (promptEl && !promptEl.querySelector(".nr-hint-letter")) {
+            const hintP = document.createElement("p");
+            hintP.className = "nr-hint-letter";
+            hintP.innerHTML = `首字母 <b>${escapeHtml(String(word.correct_spelling || "").charAt(0))}</b>`;
+            promptEl.appendChild(hintP);
+          }
+        }
+
+        // Update only the input/answer area
+        const bodyEl = existingCard.querySelector(".nr-drill-body");
+        if (bodyEl) {
+          bodyEl.innerHTML = buildInputHtml(word, result, s);
+          focusInputArea(result, s);
+          return;
+        }
+      }
+
+      // ── Full rebuild (new word, or first paint) ──────────────────────
+      const stage     = Number(word.review_stage || 0);
+      const stageDots = Array.from({ length: 6 }, (_, i) =>
+        `<span class="nr-stage-dot ${i < stage ? "is-on" : ""}"></span>`
+      ).join("");
+
+      root().innerHTML = `
+        <div class="nr-card" data-drill-card data-drill-word="${escapeHtml(String(word.word_id))}">
+          <header class="nr-card-head">
+            <div class="nr-progress">
+              <div class="nr-progress-track">
+                <div class="nr-progress-fill" style="width:${pct}%"></div>
+              </div>
+              <span class="nr-progress-text">${progressTextHtml}</span>
+            </div>
+            <button type="button" class="nr-lib-btn" data-open-library>
+              <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14">
+                <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+                  d="M4 5h12a3 3 0 013 3v11H7a3 3 0 01-3-3V5zM4 5v11M16 8h0M16 12h0M16 16h0"/>
+              </svg>
+              词库
+            </button>
+          </header>
+
+          <div class="nr-prompt">${buildPromptHtml(word, s)}</div>
+
+          <div class="nr-drill-body">${buildInputHtml(word, result, s)}</div>
+
+          <div class="nr-meta-row">
+            <div class="nr-stage-track">
+              ${stageDots}
+              <span class="nr-stage-text">阶段 ${stage}/6</span>
+            </div>
+            <div class="nr-tools">
+              ${s.hintLevel === 0
+                ? `<button class="nr-tool" data-spelling-hint>首字母</button>`
+                : ""}
+              <button class="nr-tool" data-spelling-skip>跳过</button>
+              <button class="nr-tool" data-spelling-reset-word="${escapeHtml(String(word.word_id))}">重置进度</button>
+            </div>
+          </div>
+        </div>
+      `;
+      focusInputArea(result, s);
+    }
+
+    function renderLibrary() {
+      const s     = S();
+      const items = s.items || [];
+      const groups = [];
+      if (items.length) {
+        const due      = items.filter((w) => w.is_due && w.status !== "mastered");
+        const active   = items.filter((w) => !w.is_due && w.status !== "mastered");
+        const mastered = items.filter((w) => w.status === "mastered");
+        if (due.length)      groups.push({ title: "待复习", items: due });
+        if (active.length)   groups.push({ title: "学中",   items: active });
+        if (mastered.length) groups.push({ title: "已掌握", items: mastered });
+      }
+
+      const groupHtml = groups.length ? groups.map((g) => `
+        <section class="nr-lib-group">
+          <h4 class="nr-lib-group-title"><span>${escapeHtml(g.title)}</span><em>${g.items.length}</em></h4>
+          <ul class="nr-lib-list">
+            ${g.items.map((w) => {
+              const stage = Number(w.review_stage || 0);
+              return `
+                <li class="nr-lib-item" data-spelling-word="${escapeHtml(w.word_id)}">
+                  <div class="nr-lib-main">
+                    <strong class="nr-lib-word">${escapeHtml(w.correct_spelling)}</strong>
+                    <span class="nr-lib-gloss">${escapeHtml(w.chinese_gloss || "—")}</span>
+                    <span class="nr-lib-wrong">误：${escapeHtml(wrongFormsText(w))}</span>
+                  </div>
+                  <div class="nr-lib-side">
+                    <span class="nr-lib-stage">阶 ${stage}</span>
+                    <button class="nr-lib-act" data-spelling-master="${escapeHtml(w.word_id)}" title="标为已掌握">✓</button>
+                    <button class="nr-lib-act is-danger" data-spelling-delete="${escapeHtml(w.word_id)}" title="移出错词本">×</button>
+                  </div>
+                </li>
+              `;
+            }).join("")}
+          </ul>
+        </section>
+      `).join("") : `<p class="nr-lib-empty">这个范围里还没有词。</p>`;
+
+      sideList().innerHTML = `
+        <header class="nr-lib-head">
+          <button class="nr-lib-back" data-close-library>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/>
+            </svg>
+            回练习
+          </button>
+          <span class="nr-lib-title">错词本 · ${escapeHtml(
+            ({ due: "今日待复习", active: "全部学中", mastered: "已掌握" })[s.scope] || s.scope
+          )}</span>
+        </header>
+        ${groupHtml}
+      `;
+    }
+
+    // ─── Actions ─────────────────────────────────────────────────────
+    function gotoNext() {
+      const s = S();
+      s.queuePos    += 1;
+      s.result       = null;
+      s.retryTyped   = null;
+      s.retryCorrect = false;
+      s.hintLevel    = 0;
+      render();
+    }
+
+    async function submitAttempt(e) {
+      e?.preventDefault();
+      const word  = currentWord();
       const input = $("spellingTypedInput");
       const typed = input?.value || "";
-      if (!word || !typed.trim()) {
-        setStatus("先输入你认为正确的拼写。", true);
-        return;
-      }
+      if (!word || !typed.trim()) { setStatus("先输入拼写。", true); return; }
+      setStatus("");
       try {
-        const result = await api(`/api/writing/spelling-words/${encodeURIComponent(word.word_id)}/attempt`, { typed });
-        const storedResult = { ...result, _typed: typed };
-        drillState().result = storedResult;
-
-        // Update word in queue + items
+        const result = await api(
+          `/api/writing/spelling-words/${encodeURIComponent(word.word_id)}/attempt`,
+          { typed }
+        );
+        const stored = { ...result, _typed: typed };
+        const s = S();
+        s.result = stored;
         Object.assign(word, {
           current_streak: result.current_streak,
-          review_stage: result.review_stage ?? word.review_stage,
-          status: result.status,
-          attempt_count: Number(word.attempt_count || 0) + 1,
-          correct_count: Number(word.correct_count || 0) + (result.correct ? 1 : 0),
+          review_stage:   result.review_stage ?? word.review_stage,
+          status:         result.status,
+          attempt_count:  Number(word.attempt_count || 0) + 1,
+          correct_count:  Number(word.correct_count || 0) + (result.correct ? 1 : 0),
         });
-        const itemsWord = currentItems().find((w) => w.word_id === word.word_id);
-        if (itemsWord) Object.assign(itemsWord, word);
-
-        const local = drillState();
+        const iw = s.items.find((w) => w.word_id === word.word_id);
+        if (iw) Object.assign(iw, word);
         if (result.correct) {
-          local.doneCount += 1;
-          setStatus(result.status === "mastered" ? "恭喜！这个词已毕业，进入已掌握名单。" : "");
+          s.doneCount += 1;
         } else {
-          // Re-queue: push to end of session queue
-          const requeueCount = (local.requeueMap[word.word_id] || 0) + 1;
-          local.requeueMap[word.word_id] = requeueCount;
-          local.queue.push({ ...word });
-          setStatus("");
+          // Insert immediately after current position so the same word
+          // appears on the very next card, not buried at the end.
+          s.requeueMap[word.word_id] = (s.requeueMap[word.word_id] || 0) + 1;
+          s.queue.splice(s.queuePos + 1, 0, { ...word });
         }
-
-        renderSpellingDrill();
-        if (result.correct) {
-          window.setTimeout(() => {
-            if (drillState().result === storedResult) nextWord();
-          }, 800);
-        }
-      } catch (error) {
-        setStatus(error.message || String(error), true);
+        render();
+        // No auto-advance: user must press Enter on the continue button.
+      } catch (err) {
+        setStatus(err.message || String(err), true);
       }
+    }
+
+    function submitRetry() {
+      const word  = currentWord();
+      const input = $("spellingRetryInput");
+      const typed = (input?.value || "").trim();
+      if (!word || !typed) return;
+      const s       = S();
+      const correct = String(word.correct_spelling || "").toLowerCase();
+      s.retryTyped  = typed;
+      s.retryCorrect= typed.toLowerCase() === correct;
+      render();
     }
 
     async function updateWord(wordId, payload) {
-      const result = await api(`/api/writing/spelling-words/${encodeURIComponent(wordId)}`, payload, { method: "PATCH" });
-      const index = currentItems().findIndex((word) => word.word_id === wordId);
-      if (index >= 0) currentItems()[index] = result;
-      const local = drillState();
-      const qi = local.queue.findIndex((w) => w.word_id === wordId);
-      if (qi >= 0) local.queue[qi] = result;
-      local.result = null;
-      local.hintLevel = 0;
-      renderSpellingDrill();
-      return result;
+      const result = await api(
+        `/api/writing/spelling-words/${encodeURIComponent(wordId)}`,
+        payload,
+        { method: "PATCH" }
+      );
+      const s   = S();
+      const idx = s.items.findIndex((w) => w.word_id === wordId);
+      if (idx >= 0) s.items[idx] = result;
+      const qi = s.queue.findIndex((w) => w.word_id === wordId);
+      if (qi >= 0) s.queue[qi] = result;
+      s.result   = null;
+      s.hintLevel= 0;
+      render();
     }
 
     async function deleteWord(wordId) {
       await api(`/api/writing/spelling-words/${encodeURIComponent(wordId)}`, null, { method: "DELETE" });
-      drillState().items = currentItems().filter((word) => word.word_id !== wordId);
-      const local = drillState();
-      local.queue = local.queue.filter((w) => w.word_id !== wordId);
-      local.queuePos = Math.min(local.queuePos, Math.max(0, local.queue.length - 1));
-      local.result = null;
-      local.hintLevel = 0;
-      renderSpellingDrill();
+      const s   = S();
+      s.items = s.items.filter((w) => w.word_id !== wordId);
+      s.queue = s.queue.filter((w) => w.word_id !== wordId);
+      s.queuePos = Math.min(s.queuePos, Math.max(0, s.queue.length));
+      s.result = null;
+      render();
     }
 
+    // ─── Events ──────────────────────────────────────────────────────
     function bindSpellingDrillEvents() {
-      document.querySelectorAll("[data-spelling-scope]").forEach((button) => {
-        button.addEventListener("click", () => {
-          const scope = button.dataset.spellingScope || "due";
-          drillState().scope = scope;
-          drillState().currentIndex = 0;
-          loadSpellingDrill({ force: true });
+      // Scope tabs (header bar)
+      document.querySelectorAll("[data-spelling-scope]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          S().scope = btn.dataset.spellingScope || "due";
+          S().view  = "drill";
+          load({ force: true, resetQueue: true });
         });
       });
-      $("spellingDrillList")?.addEventListener("click", (event) => {
-        const select = event.target.closest("[data-spelling-select]");
-        if (select) {
-          selectWord(select.dataset.spellingSelect || "");
+
+      // Card: form submit — only handles the main attempt form
+      root()?.addEventListener("submit", (e) => {
+        submitAttempt(e);
+      });
+
+
+      // Card: button clicks
+      root()?.addEventListener("click", (e) => {
+        const t = e.target;
+        if (t.closest("[data-spelling-hint]")) {
+          S().hintLevel = 1; render(); return;
+        }
+        if (t.closest("[data-spelling-skip]"))     { gotoNext(); return; }
+        if (t.closest("[data-spelling-continue]")) { gotoNext(); return; }
+        if (t.closest("[data-open-library]"))      { S().view = "library"; render(); return; }
+        if (t.closest("[data-spelling-reload]"))   { load({ force: true, resetQueue: true }); return; }
+        const scopeBtn = t.closest("[data-spelling-scope]");
+        if (scopeBtn) {
+          S().scope = scopeBtn.dataset.spellingScope;
+          load({ force: true, resetQueue: true });
           return;
         }
-        const master = event.target.closest("[data-spelling-master]");
-        if (master) {
-          updateWord(master.dataset.spellingMaster || "", { action: "master" }).catch((error) => setStatus(error.message || String(error), true));
+        const resetWord = t.closest("[data-spelling-reset-word]");
+        if (resetWord) {
+          updateWord(resetWord.dataset.spellingResetWord, { action: "reset" })
+            .catch((err) => setStatus(err.message, true));
           return;
-        }
-        const remove = event.target.closest("[data-spelling-delete]");
-        if (remove) {
-          const wordId = remove.dataset.spellingDelete || "";
-          const runDelete = () => deleteWord(wordId).catch((error) => setStatus(error.message || String(error), true));
-          if (typeof showConfirmDelete === "function") {
-            showConfirmDelete("确定把这个拼写错词移出错词库吗？", runDelete);
-          } else if (window.confirm("确定把这个拼写错词移出错词库吗？")) {
-            runDelete();
-          }
         }
       });
-      $("spellingPracticeCard")?.addEventListener("submit", submitAttempt);
-      $("spellingPracticeCard")?.addEventListener("click", (event) => {
-        if (event.target.closest("[data-spelling-hint]")) {
-          drillState().hintLevel = Math.min(1, (drillState().hintLevel || 0) + 1);
-          renderPracticeCard();
+
+      // Library: back + actions
+      sideList()?.addEventListener("click", (e) => {
+        const t = e.target;
+        if (t.closest("[data-close-library]")) { S().view = "drill"; render(); return; }
+        const m = t.closest("[data-spelling-master]");
+        if (m) {
+          updateWord(m.dataset.spellingMaster, { action: "master" })
+            .catch((err) => setStatus(err.message, true));
           return;
         }
-        if (event.target.closest("[data-spelling-next]")) {
-          nextWord();
+        const d = t.closest("[data-spelling-delete]");
+        if (d) {
+          const id  = d.dataset.spellingDelete;
+          const run = () => deleteWord(id).catch((err) => setStatus(err.message, true));
+          if (typeof showConfirmDelete === "function")
+            showConfirmDelete("把这个词从错词本里移走吗？", run);
+          else if (window.confirm("把这个词从错词本里移走吗？")) run();
           return;
-        }
-        if (event.target.closest("[data-spelling-load-due]")) {
-          drillState().scope = "due";
-          loadSpellingDrill({ force: true });
-          return;
-        }
-        const reset = event.target.closest("[data-spelling-reset-word]");
-        if (reset) {
-          updateWord(reset.dataset.spellingResetWord || "", { action: "reset" }).catch((error) => setStatus(error.message || String(error), true));
         }
       });
     }
 
     return {
-      loadSpellingDrill,
-      renderSpellingDrill,
+      loadSpellingDrill: load,
+      renderSpellingDrill: render,
       bindSpellingDrillEvents,
     };
   }
 
-  window.IELTSSpellingDrill = {
-    createSpellingDrillController,
-  };
+  window.IELTSSpellingDrill = { createSpellingDrillController };
 })();

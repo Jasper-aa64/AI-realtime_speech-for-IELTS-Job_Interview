@@ -1652,479 +1652,868 @@ h1 {
   --corpus-card-accent: #0f766e;
 }
 
-.spelling-drill-shell {
-  grid-template-rows: auto auto minmax(0, 1fr);
-}
+/* ═════════════════════════════════════════════════════════════════════
+   Spelling Drill — Nocturne Reader edition
+   Deep night green × warm cream × terracotta accent.
+   ═════════════════════════════════════════════════════════════════════ */
 
-.spelling-drill-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400;9..144,600;9..144,800;9..144,900&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Caveat:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap");
 
-.spelling-scope-switch {
-  display: inline-flex;
-  gap: 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #fff;
-  padding: 4px;
-}
+.spelling-drill-panel {
+  /* ── Light defaults (clean white / ink) ─────────────────────────── */
+  --nr-bg:       #ffffff;
+  --nr-bg-2:     #f4f4f5;
+  --nr-ink:      #1a2430;
+  --nr-ink-dim:  rgba(26, 36, 48, 0.60);
+  --nr-ink-mute: rgba(26, 36, 48, 0.35);
+  --nr-line:     rgba(26, 36, 48, 0.10);
+  --nr-clay:     #3b7dd8;
+  --nr-clay-soft:#6099e4;
+  --nr-sage:     #2d7a55;
+  --nr-rose:     #c0392b;
+  --nr-noise-opacity: 0.04;
+  --nr-noise-blend: multiply;
+  --nr-halo-1: transparent;
+  --nr-halo-2: transparent;
 
-.spelling-scope-switch button {
-  min-height: 34px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  padding: 0 13px;
-  font-size: 13px;
-  font-weight: 820;
-}
+  --nr-serif-display: "Fraunces", "Songti SC", "Source Han Serif SC", Georgia, serif;
+  --nr-serif-body:    "Newsreader", "Songti SC", "Source Han Serif SC", Georgia, serif;
+  --nr-hand:          "Caveat", "Newsreader", "Songti SC", "Source Han Serif SC", cursive;
+  --nr-mono:          "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-.spelling-scope-switch button.is-active {
-  background: var(--ink);
-  color: #fff;
-}
-
-.spelling-drill-status {
-  min-height: 18px;
-  color: var(--accent-dark);
-  font-size: 13px;
-  font-weight: 760;
-}
-
-.spelling-drill-status.error {
-  color: var(--danger);
-}
-
-.spelling-drill-layout {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 240px minmax(360px, 1fr);
-  gap: 16px;
-}
-
-.spelling-drill-layout .spelling-practice-card {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.spelling-drill-layout .spelling-word-list {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.spelling-practice-card,
-.spelling-word-card {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
-}
-
-.spelling-practice-card {
-  min-height: 360px;
-  align-self: start;
-  padding: 18px;
-}
-
-.spelling-practice-head,
-.spelling-word-title,
-.spelling-word-actions,
-.spelling-practice-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.spelling-practice-head h3 {
-  margin: 4px 0 0;
-  color: var(--ink);
-  font-size: 24px;
-  line-height: 1.2;
-}
-
-.spelling-progress-pill {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: color-mix(in srgb, #0f766e 10%, #fff);
-  color: #0f766e;
-  padding: 7px 11px;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.spelling-prompt-box {
-  margin: 18px 0;
-  border: 1px solid color-mix(in srgb, #0f766e 18%, var(--line));
-  border-radius: 8px;
-  background: color-mix(in srgb, #0f766e 5%, #fff);
-  padding: 16px;
-}
-
-.spelling-prompt-box span,
-.spelling-prompt-box small,
-.spelling-word-wrong,
-.spelling-word-meta {
-  display: block;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.spelling-prompt-box strong {
-  display: block;
-  margin: 5px 0;
-  color: var(--ink);
-  font-size: 22px;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.spelling-attempt-form {
-  display: grid;
-  gap: 8px;
-}
-
-.spelling-attempt-form label {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 820;
-}
-
-.spelling-attempt-form > div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.spelling-attempt-form input {
-  min-height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0 12px;
-  color: var(--ink);
-  font-size: 16px;
-}
-
-.spelling-attempt-form button,
-.spelling-practice-actions button,
-.spelling-word-actions button {
-  min-height: 38px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink);
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 820;
-}
-
-.spelling-attempt-form button {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.spelling-practice-actions {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-
-.spelling-attempt-result {
-  margin-top: 16px;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.spelling-attempt-result strong,
-.spelling-attempt-result span,
-.spelling-attempt-result p {
-  display: block;
-  margin: 0;
-}
-
-.spelling-attempt-result.is-correct {
-  background: rgba(34, 197, 94, 0.1);
-  color: #166534;
-}
-
-.spelling-attempt-result.is-wrong {
-  background: rgba(239, 68, 68, 0.1);
-  color: #991b1b;
-}
-
-.spelling-word-list {
-  min-height: 0;
-  overflow-y: auto;
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  padding: 2px 2px 16px;
-}
-
-.spelling-word-card {
-  padding: 12px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.spelling-word-card.is-current {
-  border-color: color-mix(in srgb, #0f766e 55%, var(--line));
-}
-
-.spelling-word-main {
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  padding: 0;
-  text-align: left;
-}
-
-.spelling-word-title strong {
-  font-size: 17px;
-  overflow-wrap: anywhere;
-}
-
-.spelling-word-title em {
-  flex: 0 0 auto;
-  color: #0f766e;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 850;
-}
-
-.spelling-word-actions {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 7px;
-}
-
-.spelling-word-actions button.danger {
-  color: var(--danger);
-}
-
-.spelling-practice-empty {
-  display: grid;
-  place-content: center;
-  min-height: 300px;
-  gap: 6px;
-  color: var(--muted);
-  text-align: center;
-}
-
-.spelling-hint-display {
-  margin-top: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 15px;
-  letter-spacing: 5px;
-  color: var(--muted);
-  word-break: break-all;
-}
-
-.spelling-hint-bar {
-  min-height: 30px;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-}
-
-.spelling-hint-link {
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font-size: 13px;
-  padding: 4px 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  min-height: unset;
-}
-
-.spelling-hint-link:hover {
-  color: var(--accent-dark);
-}
-
-.spell-diff-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 5px 0;
-}
-
-.spell-diff-row > span:first-child {
-  flex: 0 0 auto;
-  color: inherit;
-  font-size: 12px;
-  opacity: 0.75;
-}
-
-.spell-diff {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 1px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 2px;
-}
-
-.dl-ok {
-  color: #166534;
-}
-
-.dl-err {
-  color: #991b1b;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.dl-miss {
-  color: #9ca3af;
-}
-
-.spell-correct-word {
-  font-size: 17px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 1px;
-  color: var(--ink);
-}
-
-.spell-explanation {
-  margin: 8px 0 0;
-  font-size: 13px;
-  color: inherit;
-  opacity: 0.8;
-  line-height: 1.5;
-}
-
-/* SRS session progress bar */
-.spelling-session-progress {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.session-progress-bar {
-  flex: 1;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--line);
+  background: var(--nr-bg);
+  color: var(--nr-ink);
+  position: relative;
   overflow: hidden;
 }
 
-.session-progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: #0f766e;
-  transition: width 0.4s ease;
-  min-width: 0;
+/* ── Dark variant (driven by global body.theme-dark) ─────────────── */
+body.theme-dark .spelling-drill-panel {
+  --nr-bg:       #0d1b1e;
+  --nr-bg-2:     #122428;
+  --nr-ink:      #f5ede0;
+  --nr-ink-dim:  rgba(245, 237, 224, 0.62);
+  --nr-ink-mute: rgba(245, 237, 224, 0.38);
+  --nr-line:     rgba(245, 237, 224, 0.14);
+  --nr-clay:     #d97757;
+  --nr-clay-soft:#e9a98a;
+  --nr-sage:     #94c5a6;
+  --nr-rose:     #e26d6d;
+  --nr-noise-opacity: 0.22;
+  --nr-noise-blend: overlay;
+  --nr-halo-1: rgba(217, 119, 87, 0.16);
+  --nr-halo-2: rgba(148, 197, 166, 0.08);
+}
+body.theme-dark .spelling-drill-panel {
+  background: var(--nr-bg) !important;
 }
 
-.requeue-badge {
-  font-style: normal;
-  color: #d97706;
-  font-size: 11px;
+/* Paper-grain noise + lamp halo. Pure CSS, no images. */
+.spelling-drill-panel::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(900px 520px at 22% -10%, var(--nr-halo-1), transparent 60%),
+    radial-gradient(700px 600px at 110% 12%, var(--nr-halo-2), transparent 60%);
+  z-index: 0;
+}
+.spelling-drill-panel::after {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  opacity: var(--nr-noise-opacity);
+  mix-blend-mode: var(--nr-noise-blend);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.25  0 0 0 0 0.2  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 180px 180px;
+  z-index: 0;
 }
 
-/* Session done / empty screen */
-.spelling-session-done {
+.spelling-drill-panel > * { position: relative; z-index: 1; }
+
+/* ── Full-height layout via pure GRID STRETCH ──────────────────────
+   No percentage-height chains, no flex:1 fragility. Every level is a
+   grid whose child stretches to fill. Parent (.language-takeaway-panel)
+   already has a definite height, so 1fr tracks resolve cleanly. */
+.spelling-drill-panel {
+  height: 100%;                   /* fill the definite-height parent (888px block) */
   display: grid;
-  place-content: center;
-  gap: 10px;
-  min-height: 320px;
-  text-align: center;
-  padding: 24px;
+  grid-template-rows: 1fr;        /* shell stretches to fill the panel */
+  min-height: 0;
+}
+.spelling-drill-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;   /* row0 = header, row1 = card area */
+  justify-items: center;          /* center content horizontally */
+  /* align-items defaults to STRETCH → card fills row1 vertically */
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 28px 24px 40px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  gap: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--nr-ink-mute) transparent;
+}
+.spelling-drill-shell::-webkit-scrollbar { width: 8px; }
+.spelling-drill-shell::-webkit-scrollbar-track { background: transparent; }
+.spelling-drill-shell::-webkit-scrollbar-thumb {
+  background: var(--nr-line);
+  border-radius: 999px;
+}
+.spelling-drill-shell::-webkit-scrollbar-thumb:hover { background: var(--nr-ink-mute); }
+.spelling-drill-shell > * {
+  width: 100%;
+  max-width: 760px;
 }
 
-.session-done-icon {
+/* Card container: grid row1, stretches. Holds .nr-card / .nr-stage. */
+#spellingPracticeCard {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr;        /* single child stretches to fill */
+}
+
+/* Library list: same stretching row when library view is active */
+#spellingDrillList {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* CRITICAL: id-level display rules above override the `hidden` attribute's
+   UA display:none. Restore hiding explicitly so view-switching works. */
+#spellingPracticeCard[hidden],
+#spellingDrillList[hidden] {
+  display: none !important;
+}
+
+/* Head: title + scope tabs */
+.spelling-drill-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.spelling-drill-head > div:first-child h2 {
+  font-family: var(--nr-serif-display);
+  font-weight: 900;
+  font-variation-settings: "SOFT" 50, "opsz" 96;
+  font-size: 26px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--nr-ink);
+  margin: 0 0 4px;
+}
+.spelling-drill-head > div:first-child h2::after {
+  /* Hand-drawn underline */
+  content: "";
+  display: block;
+  width: 58px;
+  height: 6px;
+  margin-top: 4px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 86 8'><path d='M2 5 Q 18 1, 34 4 T 66 4 T 84 3' fill='none' stroke='%23d97757' stroke-width='2' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat;
+}
+.spelling-drill-head > div:first-child p {
+  font-family: var(--nr-serif-body);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--nr-ink-dim);
+  margin: 0;
+  max-width: 36ch;
+}
+
+.spelling-drill-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+#spellingDrillStats {
+  font-family: var(--nr-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--nr-ink-mute);
+  text-transform: uppercase;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.nr-stat b {
+  color: var(--nr-ink);
+  font-weight: 600;
+  margin-right: 2px;
+}
+.nr-stat-dot { color: var(--nr-ink-mute); }
+
+/* Scope tabs */
+.spelling-scope-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--nr-line);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.spelling-scope-switch button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--nr-ink-dim);
+  font-family: var(--nr-serif-body);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  min-height: 32px;
+  transition: color .2s ease, background .2s ease;
+}
+.spelling-scope-switch button:hover { color: var(--nr-ink); }
+.spelling-scope-switch button.is-active {
+  background: var(--nr-ink);
+  color: var(--nr-bg);
+  font-weight: 600;
+}
+
+.spelling-drill-status {
+  font-family: var(--nr-serif-body);
+  font-size: 13px;
+  color: var(--nr-ink-dim);
+  min-height: 18px;
+  font-style: italic;
+}
+.spelling-drill-status.error { color: var(--nr-rose); font-style: normal; }
+
+/* Layout — no split. Card centred, library overlays. */
+.spelling-drill-layout {
+  display: block;
+  position: relative;
+  min-height: 0;
+}
+.spelling-practice-card,
+.spelling-word-list {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.spelling-word-list[hidden],
+.spelling-practice-card[hidden] { display: none; }
+
+/* ─── Drill card ─────────────────────────────────────────────────── */
+.nr-card {
+  /* Grid distributes the 4 sections across the full height:
+     row0 head (top) · row1 prompt (1fr, fills middle) · row2 body · row3 meta (bottom) */
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+}
+@keyframes nr-card-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.nr-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.nr-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nr-progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--nr-line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.nr-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--nr-clay-soft), var(--nr-clay));
+  border-radius: 999px;
+  transition: width .5s cubic-bezier(.2,.7,.2,1);
+  min-width: 6px;
+  /* Clay is now blue in light mode; dark mode keeps its own clay vars */
+}
+.nr-progress-text {
+  font-family: var(--nr-mono);
+  font-size: 11px;
+  color: var(--nr-ink-dim);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.nr-progress-text b { color: var(--nr-ink); font-weight: 600; }
+.nr-requeue { color: var(--nr-clay); font-style: normal; margin-left: 4px; }
+
+.nr-lib-btn {
+  appearance: none;
+  border: 1px solid var(--nr-line);
+  background: transparent;
+  color: var(--nr-ink-dim);
+  font-family: var(--nr-serif-body);
+  font-size: 12px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  transition: color .2s, border-color .2s;
+}
+.nr-lib-btn:hover { color: var(--nr-ink); border-color: var(--nr-ink-dim); }
+
+/* Prompt — the hero */
+/* Prompt grows to fill the middle — centers word + pill vertically */
+.nr-prompt {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0;
+  padding: 20px 0;
+  gap: 12px;
+}
+.nr-gloss {
+  font-family: var(--nr-serif-display);
+  font-weight: 800;
+  font-variation-settings: "SOFT" 30, "opsz" 144;
+  font-size: clamp(30px, 5.2vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  color: var(--nr-ink);
+  margin: 0 0 8px;
+  animation: nr-gloss-in .5s cubic-bezier(.2,.7,.2,1) both .08s;
+}
+@keyframes nr-gloss-in {
+  from { opacity: 0; transform: translateY(8px); letter-spacing: 0; }
+  to   { opacity: 1; transform: translateY(0); letter-spacing: -0.015em; }
+}
+
+.nr-wrong-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 14px 5px;
+  border: 1px dashed rgba(176, 69, 69, 0.5);
+  border-radius: 999px;
+  background: rgba(176, 69, 69, 0.06);
+  margin-bottom: 6px;
+}
+.nr-wrong-tag {
+  font-family: var(--nr-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nr-rose);
+  opacity: 0.85;
+}
+.nr-wrong-text {
+  font-family: var(--nr-hand);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--nr-ink);
+  text-decoration: line-through;
+  text-decoration-color: var(--nr-rose);
+  text-decoration-thickness: 2px;
+  letter-spacing: 0.5px;
+}
+
+/* Optional first-letter hint (only shown after user clicks "首字母") */
+.nr-hint-letter {
+  font-family: var(--nr-serif-body);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--nr-ink-dim);
+  margin: 12px 0 0;
+}
+.nr-hint-letter b {
+  font-family: var(--nr-hand);
+  font-style: normal;
+  font-size: 26px;
+  color: var(--nr-clay);
+  margin-left: 6px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  vertical-align: -2px;
+}
+
+/* Fallback prompt when no Chinese gloss — reads as a hint, NEVER leaks the word */
+.nr-gloss.is-fallback {
+  font-family: var(--nr-serif-body);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(18px, 3vw, 24px);
+  color: var(--nr-ink-dim);
+  letter-spacing: 0;
+}
+
+/* Stable slot — input and answer use the exact same dimensions so siblings
+   below (stage dots, tools) never shift when Enter is pressed. */
+.nr-slot {
+  margin: 4px auto 0;
+  max-width: 460px;
+  width: 100%;
+  min-height: 144px;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  justify-items: center;
+  row-gap: 8px;
+  text-align: center;
+}
+
+.nr-form { padding: 4px 6px; }
+.nr-form-spacer {
+  /* Reserves the vertical slot the answer block will later occupy */
+  display: block;
+  height: 70px;
+  width: 1px;
+}
+.nr-input {
+  width: 100%;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1.5px solid var(--nr-ink-mute);
+  color: var(--nr-ink);
+  font-family: var(--nr-hand);
   font-size: 40px;
+  font-weight: 500;
+  padding: 4px 6px 8px;
+  letter-spacing: 0.5px;
+  text-align: center;
+  transition: border-color .25s ease;
+  caret-color: var(--nr-clay);
+  outline: none;
+  line-height: 1.2;
+  grid-row: 1;
+}
+.nr-input::placeholder {
+  color: var(--nr-ink-mute);
+  font-family: var(--nr-serif-body);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-size: 15px;
+}
+.nr-input:focus { border-bottom-color: var(--nr-clay); }
+.nr-input:focus::placeholder { opacity: 0.5; }
+
+/* Meta row: stage + tools */
+.nr-drill-body {
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.nr-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-top: auto;   /* push to bottom of flex card */
+  padding-top: 14px;
+  border-top: 1px solid var(--nr-line);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.nr-stage-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--nr-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nr-ink-mute);
+}
+.nr-stage-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--nr-ink-mute);
+}
+.nr-stage-dot.is-on {
+  background: var(--nr-sage);
+  border-color: var(--nr-sage);
+}
+.nr-stage-text { margin-left: 6px; }
+
+.nr-tools {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.nr-tool {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--nr-ink-dim);
+  font-family: var(--nr-serif-body);
+  font-size: 12px;
+  font-style: italic;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  min-height: 28px;
+  transition: color .2s, background .2s;
+}
+.nr-tool:hover { color: var(--nr-ink); background: rgba(245, 237, 224, 0.06); }
+
+/* Inline answer — drops into the same .nr-slot the input occupied. */
+.nr-answer {
+  border-bottom: 1.5px solid var(--nr-line);
+  padding: 4px 6px 14px;
+  animation: nr-answer-in .35s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes nr-answer-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.nr-answer-line {
+  font-family: var(--nr-hand);
+  font-size: 40px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+  margin: 0;
+  text-align: center;
+  word-break: break-all;
+  grid-row: 1;
+  width: 100%;
+}
+.nr-answer.is-correct .nr-answer-line { color: var(--nr-sage); }
+.nr-answer.is-wrong   .nr-answer-line { color: var(--nr-rose); }
+
+/* Per-letter colour (overrides parent line colour) */
+.nr-letter { display: inline-block; }
+.nr-letter.is-ok  { color: var(--nr-sage); }
+.nr-letter.is-bad {
+  color: var(--nr-rose);
+  text-decoration: underline wavy;
+  text-decoration-color: var(--nr-rose);
+  text-underline-offset: 6px;
+  text-decoration-thickness: 1.5px;
+}
+.nr-letter.is-miss {
+  color: var(--nr-ink-mute);
+  opacity: 0.55;
+}
+
+.nr-answer-correct {
+  font-family: var(--nr-serif-body);
+  font-size: 14px;
+  color: var(--nr-ink-dim);
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  grid-row: 2;
+  min-height: 32px;
+}
+.nr-answer-correct--placeholder { visibility: hidden; }
+
+/* ── Wrong-state retry group ──────────────────────────────────────── */
+/* Container that stacks the original wrong answer + retry input/result */
+.nr-answer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Retry input form inside the wrong-state group */
+.nr-retry-form {
+  padding: 2px 6px;
+  border-top: 1px dashed var(--nr-line);
+  padding-top: 8px;
+}
+/* Retry answer line (same Caveat size as main answer line, but separated) */
+.nr-retry-line {
+  font-family: var(--nr-hand);
+  font-size: clamp(28px, 4.5vw, 40px);
+  line-height: 1.25;
+  padding: 6px 6px 2px;
+  border-top: 1px dashed var(--nr-line);
+}
+.nr-answer-tag {
+  font-family: var(--nr-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--nr-ink-mute);
+}
+.nr-answer-word {
+  font-family: var(--nr-hand);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--nr-sage);
+  letter-spacing: 0.3px;
   line-height: 1;
 }
 
-.spelling-session-done strong {
-  font-size: 18px;
-  color: var(--ink);
-}
-
-.spelling-session-done span {
-  color: var(--muted);
-  font-size: 14px;
-  max-width: 280px;
-  margin: 0 auto;
-}
-
-.spelling-done-next-btn {
-  margin-top: 8px;
-  padding: 10px 20px;
-  border-radius: 8px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
+.nr-next-btn {
+  appearance: none;
+  margin: 0;
+  grid-row: 3;
+  background: transparent;
+  border: 1px solid var(--nr-ink-mute);
+  color: var(--nr-ink);
+  font-family: var(--nr-serif-body);
+  font-size: 13px;
+  padding: 8px 18px;
+  border-radius: 999px;
   cursor: pointer;
-  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  transition: background .2s, border-color .2s, color .2s;
 }
-
-.spelling-done-next-btn:hover {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
-}
-
-/* Example sentence */
-.spell-example {
-  margin: 12px 0;
-  padding: 10px 14px;
-  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
-  border-radius: 8px;
-  border-left: 3px solid color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
-.spell-example span {
-  display: block;
+.nr-next-btn:hover { background: var(--nr-ink); color: var(--nr-bg); border-color: var(--nr-ink); }
+.nr-next-btn:focus-visible { outline: 2px solid var(--nr-clay); outline-offset: 3px; }
+.nr-next-btn kbd {
+  font-family: var(--nr-mono);
   font-size: 11px;
-  color: var(--muted);
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  opacity: 0.7;
 }
 
-.spell-example q {
-  display: block;
-  font-size: 13px;
-  color: var(--ink);
-  line-height: 1.55;
-  quotes: none;
+/* ─── Loading / empty / done stages ──────────────────────────────── */
+.nr-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex: 1;           /* fills #spellingPracticeCard when shown */
+  min-height: 320px;
+  gap: 14px;
+  padding: 24px;
+}
+.nr-spinner {
+  display: inline-flex;
+  gap: 6px;
+}
+.nr-spinner span {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--nr-clay);
+  animation: nr-bounce 1s infinite ease-in-out;
+}
+.nr-spinner span:nth-child(2) { animation-delay: .15s; }
+.nr-spinner span:nth-child(3) { animation-delay: .3s; }
+@keyframes nr-bounce {
+  0%, 80%, 100% { transform: scale(.5); opacity: .4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+.nr-meta {
+  font-family: var(--nr-serif-body);
   font-style: italic;
+  color: var(--nr-ink-dim);
+  font-size: 14px;
 }
 
-/* Due badge in word list */
-.due-badge {
-  color: #d97706 !important;
+.nr-empty-mark, .nr-done-seal svg {
+  color: var(--nr-clay-soft);
+  width: 88px;
+  height: 88px;
 }
-
-/* Next-due note in result */
-.spell-next-due {
-  margin: 6px 0 0;
-  font-size: 12px;
-  opacity: 0.75;
+.nr-empty-title, .nr-done-title {
+  font-family: var(--nr-serif-display);
+  font-weight: 700;
+  font-size: 26px;
+  margin: 4px 0 0;
+  color: var(--nr-ink);
 }
+.nr-empty-sub, .nr-done-meta {
+  font-family: var(--nr-serif-body);
+  font-size: 14px;
+  color: var(--nr-ink-dim);
+  max-width: 28em;
+}
+.nr-done-meta b { color: var(--nr-ink); font-weight: 600; }
 
-/* No-gloss fallback label */
-.spell-no-gloss {
-  display: block;
+.nr-empty-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.nr-btn {
+  appearance: none;
+  border: 0;
+  font-family: var(--nr-serif-body);
+  font-size: 14px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  min-height: 38px;
+  transition: transform .2s, background .2s, color .2s;
+}
+.nr-btn-primary {
+  background: var(--nr-clay);
+  color: var(--nr-bg);
+  font-weight: 600;
+}
+.nr-btn-primary:hover { background: var(--nr-clay-soft); transform: translateY(-1px); }
+.nr-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--nr-line);
+  color: var(--nr-ink-dim);
+}
+.nr-btn-ghost:hover { color: var(--nr-ink); border-color: var(--nr-ink-dim); }
+
+/* ─── Library overlay ────────────────────────────────────────────── */
+.spelling-word-list {
+  position: relative;
+  animation: nr-card-in .35s cubic-bezier(.2,.7,.2,1) both;
+}
+.nr-lib-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--nr-line);
+}
+.nr-lib-back {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--nr-line);
+  color: var(--nr-ink-dim);
+  font-family: var(--nr-serif-body);
   font-size: 13px;
-  color: var(--muted);
-  margin-top: 2px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  transition: color .2s, border-color .2s;
 }
+.nr-lib-back:hover { color: var(--nr-ink); border-color: var(--nr-ink-dim); }
+.nr-lib-title {
+  font-family: var(--nr-serif-display);
+  font-size: 18px;
+  color: var(--nr-ink);
+  font-weight: 600;
+}
+.nr-lib-group { margin-bottom: 28px; }
+.nr-lib-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--nr-mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--nr-ink-mute);
+  margin: 0 0 12px;
+  font-weight: 500;
+}
+.nr-lib-group-title em {
+  font-family: var(--nr-serif-body);
+  font-style: normal;
+  font-size: 11px;
+  color: var(--nr-ink-dim);
+}
+.nr-lib-list { list-style: none; margin: 0; padding: 0; }
+.nr-lib-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--nr-line);
+}
+.nr-lib-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.nr-lib-word {
+  font-family: var(--nr-hand);
+  font-weight: 600;
+  font-size: 26px;
+  color: var(--nr-ink);
+  letter-spacing: 0.3px;
+  line-height: 1.1;
+}
+.nr-lib-gloss {
+  font-family: var(--nr-serif-body);
+  font-size: 13px;
+  color: var(--nr-ink-dim);
+}
+.nr-lib-wrong {
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  color: var(--nr-ink-mute);
+  text-decoration: line-through;
+  text-decoration-color: rgba(226, 109, 109, 0.6);
+  text-decoration-thickness: 1.5px;
+  letter-spacing: 0.2px;
+}
+.nr-lib-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nr-lib-stage {
+  font-family: var(--nr-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--nr-ink-mute);
+  margin-right: 6px;
+}
+.nr-lib-act {
+  appearance: none;
+  border: 1px solid var(--nr-line);
+  background: transparent;
+  color: var(--nr-ink-dim);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: color .2s, border-color .2s, background .2s;
+}
+.nr-lib-act:hover { color: var(--nr-ink); border-color: var(--nr-ink-dim); }
+.nr-lib-act.is-danger:hover { color: var(--nr-rose); border-color: var(--nr-rose); }
+.nr-lib-empty {
+  font-family: var(--nr-serif-body);
+  font-style: italic;
+  color: var(--nr-ink-dim);
+  text-align: center;
+  padding: 80px 16px;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .spelling-drill-shell { padding: 20px 16px 40px; gap: 18px; }
+  .spelling-drill-head > div:first-child h2 { font-size: 30px; }
+  .nr-gloss { font-size: clamp(34px, 9vw, 48px); }
+  .nr-mask-char { font-size: 18px; min-width: 14px; }
+  .nr-input { font-size: 18px; }
+  .nr-card-head { margin-bottom: 22px; }
+}
+
 
 .language-takeaway-trigger {
   position: fixed;
@@ -3699,10 +4088,10 @@ h1 {
 
 .writing-shell {
   display: grid;
-  grid-template-columns: minmax(0, 2.35fr) minmax(230px, 270px);
+  grid-template-columns: minmax(0, 2.35fr) minmax(240px, 280px);
   grid-template-areas:
     "editor result";
-  gap: 16px;
+  gap: 20px;
   align-items: start;
   min-height: 0;
   height: auto;
@@ -3731,8 +4120,8 @@ h1 {
   grid-area: editor;
   display: grid;
   grid-template-rows: auto auto auto;
-  gap: 12px;
-  padding: 18px 20px 18px;
+  gap: 16px;
+  padding: 22px 24px 24px;
   height: auto;
   max-height: calc(100vh - 76px - var(--safe-top) - var(--safe-bottom));
   overflow-y: auto;
@@ -5482,12 +5871,21 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   margin-bottom: 8px;
 }
 
+/* ── Label + frame-hint header row ─────────────────────────── */
+.writing-answer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .writing-answer-label {
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
-  margin-bottom: -8px;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .writing-answer {
@@ -16528,3 +16926,119 @@ body:not(.theme-dark).font-popular .font-option.active {
   border-color: rgba(59, 130, 246, 0.30) !important;
   color: #172f45 !important;
 }
+
+/* ─── Writing frame hint + custom-frame modal ─────────────────────── */
+.writing-frame-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  justify-content: flex-end;
+}
+.writing-frame-hint-lead {
+  font-weight: 600;
+  color: var(--ink);
+  margin-right: 2px;
+}
+.writing-frame-hint-dot { color: var(--muted); opacity: 0.6; }
+.writing-frame-cmd {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  color: var(--accent, #0f766e);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: unset;
+}
+.writing-frame-cmd code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  background: color-mix(in srgb, var(--accent, #0f766e) 10%, transparent);
+  border-radius: 4px;
+  color: inherit;
+}
+.writing-frame-cmd:hover { color: var(--accent-dark, #0d6460); text-decoration: underline; text-underline-offset: 3px; }
+.writing-frame-cmd:hover code { background: color-mix(in srgb, var(--accent, #0f766e) 18%, transparent); }
+
+/* Modal */
+.writing-frame-modal-card { max-width: 640px; width: min(92vw, 640px); }
+.writing-frame-modal-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.writing-frame-modal-body {
+  padding: 8px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.writing-frame-modal-help {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.writing-frame-modal-help code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 1px 5px;
+  background: color-mix(in srgb, var(--accent, #0f766e) 10%, transparent);
+  border-radius: 4px;
+  color: var(--accent, #0f766e);
+}
+.writing-frame-editor {
+  width: 100%;
+  min-height: 320px;
+  padding: 14px 16px;
+  font-family: "Source Han Serif SC", "Newsreader", Georgia, "Songti SC", serif;
+  font-size: 14px;
+  line-height: 1.7;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  resize: vertical;
+  background: var(--panel);
+  color: var(--ink);
+  outline: none;
+}
+.writing-frame-editor:focus { border-color: var(--accent, #0f766e); }
+.writing-frame-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.writing-frame-modal-actions button {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--accent, #0f766e);
+  background: var(--accent, #0f766e);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+.writing-frame-modal-actions button.ghost {
+  background: transparent;
+  color: var(--accent, #0f766e);
+}
+.writing-frame-modal-actions button:hover { background: var(--accent-dark, #0d6460); border-color: var(--accent-dark, #0d6460); color: #fff; }
+.writing-frame-modal-actions button.ghost:hover { color: #fff; }
+.writing-frame-modal-status {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.writing-frame-modal-status.error { color: #b91c1c; }

@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260605-srs">
+    <link rel="stylesheet" href="/styles.css?v=20260606-libhide">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -446,7 +446,7 @@
               <a class="corpus-home-card spelling-drill-home-card" data-corpus-home-target="spellingDrill" href="?view=spellingDrill">
                 <span class="corpus-card-mark">SP</span>
                 <strong>拼写错词训练</strong>
-                <small>从作文批改里的 spelling 批注自动整理错词，逐词背写到连对 4 次。</small>
+                <small>从作文批改里的 spelling 批注自动整理错词，按间隔重复推送复习。</small>
               </a>
             </div>
           </div>
@@ -500,8 +500,8 @@
           <div class="language-book-shell spelling-drill-shell">
             <header class="language-book-head spelling-drill-head">
               <div>
-                <h2>拼写错词训练</h2>
-                <p>遮住正确拼写，根据中文提示和错拼记录重新敲一遍。</p>
+                <h2>拼写练习</h2>
+                <p>夜读模式 · 根据中文与误拼回忆正确写法。</p>
               </div>
               <div class="language-book-actions spelling-drill-actions">
                 <span id="spellingDrillStats">Loading...</span>
@@ -697,7 +697,19 @@
                 <p id="writingPromptText">正在加载写作题库...</p>
                 <div id="writingPromptImage" class="writing-prompt-image hidden"></div>
               </div>
-              <label class="writing-answer-label" for="writingAnswer">Your answer</label>
+              <div class="writing-answer-header">
+                <label class="writing-answer-label" for="writingAnswer">Your answer</label>
+                <div class="writing-frame-hint" id="writingFrameHint">
+                  <span class="writing-frame-hint-lead">不知道怎么下笔？</span>
+                  <button type="button" class="writing-frame-cmd" data-frame-cmd="frame">
+                    使用 <code>/frame</code> 填充作文框架
+                  </button>
+                  <span class="writing-frame-hint-dot">·</span>
+                  <button type="button" class="writing-frame-cmd" data-frame-cmd="myframe">
+                    使用 <code>/myframe</code> 自定义此类题框架
+                  </button>
+                </div>
+              </div>
               <textarea id="writingAnswer" class="writing-answer" spellcheck="true" placeholder="Write your IELTS answer here. 保存免费，AI 评分与辅导会消耗 token。"></textarea>
             </article>
 
@@ -807,6 +819,34 @@
             </div>
             <div id="agentAssistantStatus" class="agent-assistant-status">可以直接粘 OCR 题干，不需要完全准确。</div>
             <div id="agentAssistantResults" class="agent-assistant-results"></div>
+          </article>
+        </div>
+
+        <div id="writingFrameModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="writingFrameModalTitle">
+          <div class="modal-backdrop" data-writing-frame-close></div>
+          <article class="modal-card writing-frame-modal-card">
+            <header class="modal-head">
+              <div>
+                <span class="section-label">My framework</span>
+                <h2 id="writingFrameModalTitle">自定义此类题的作文框架</h2>
+                <p id="writingFrameModalSub" class="writing-frame-modal-sub"></p>
+              </div>
+              <button id="writingFrameCloseBtn" class="icon-button" type="button" aria-label="关闭框架编辑" data-writing-frame-close>
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
+            </header>
+            <div class="writing-frame-modal-body">
+              <p class="writing-frame-modal-help">下面是这类题的默认框架。改成你顺手的版本后点保存，之后只要这类题用 <code>/frame</code> 都会先填这个版本。</p>
+              <textarea id="writingFrameEditor" class="writing-frame-editor" spellcheck="false" rows="16"></textarea>
+              <div class="writing-frame-modal-actions">
+                <button id="writingFrameResetBtn" type="button" class="ghost">恢复默认</button>
+                <button id="writingFrameSaveBtn" type="button">保存框架</button>
+                <span id="writingFrameSaveStatus" class="writing-frame-modal-status" aria-live="polite"></span>
+              </div>
+            </div>
           </article>
         </div>
 
@@ -1183,7 +1223,7 @@
     <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
     <script src="/corpus-markdown-editor.js?v=20260530-corpus-markdown-editor"></script>
     <script src="/corpus-takeaway.js?v=20260602-p2-corpus-layout-fix"></script>
-    <script src="/spelling-drill.js?v=20260605-srs"></script>
+    <script src="/spelling-drill.js?v=20260606-libhide"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
@@ -1191,6 +1231,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260603-spelling-drill"></script>
+    <script src="/app.js?v=20260606-libhide"></script>
   </body>
 </html>

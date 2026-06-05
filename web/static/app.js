@@ -87,9 +87,10 @@ const state = {
     revealedEntryIds: new Set(),
   },
   spellingDrill: {
+    _drillReady: false,
     items: [],
     stats: {},
-    scope: "active",
+    scope: "due",
     loaded: false,
     loadingPromise: null,
     currentIndex: 0,
@@ -803,6 +804,7 @@ function clearUserScopedCaches() {
   state.writingTakeaway.loaded = false;
   state.writingTakeaway.loadingPromise = null;
   state.writingTakeaway.revealedEntryIds.clear();
+  state.spellingDrill._drillReady = false;  // force S() re-init on next visit
   state.spellingDrill.items = [];
   state.spellingDrill.stats = {};
   state.spellingDrill.loaded = false;
@@ -4280,6 +4282,288 @@ function closeWritingParagraphModal() {
 function ensureWritingParagraphsBeforeScore(answer, taskType) {
   if (writingParagraphs(answer).length >= 2) return true;
   showWritingParagraphModal(writingParagraphGuidance(taskType));
+  return false;
+}
+
+// ─── Writing frames (essay scaffolds) ──────────────────────────────
+// /frame  → fills the textarea with a category-specific scaffold
+// /myframe → opens a modal to customize this category's scaffold (saved to localStorage)
+const WRITING_FRAME_DEFAULTS = {
+  // ── Task 1 Academic ────────────────────────────────────────────
+  "task1_academic:line_graph": [
+    "Introduction",
+    "[改写题目：图展示了 X 在 Y 时期内的 Z 变化]",
+    "",
+    "Overview",
+    "[概览：2-3 个最显著的整体趋势，不写具体数据]",
+    "",
+    "Body 1",
+    "[细节一：选一组数据（最高/起点）+ 给出关键数值与时间点]",
+    "",
+    "Body 2",
+    "[细节二：选另一组（对比/终点）+ 数值对比 + 转折]",
+  ].join("\n"),
+  "task1_academic:bar_chart": [
+    "Introduction",
+    "[改写题目：柱状图展示了 X 在 Y 范围内 Z 的分布]",
+    "",
+    "Overview",
+    "[概览：最高 / 最低 / 总体格局，2-3 句]",
+    "",
+    "Body 1",
+    "[细节一：领先组的数据 + 对比]",
+    "",
+    "Body 2",
+    "[细节二：剩余组的数据 + 排序 / 占比]",
+  ].join("\n"),
+  "task1_academic:pie_chart": [
+    "Introduction",
+    "[改写题目：饼图展示了 X 的占比构成]",
+    "",
+    "Overview",
+    "[概览：最大份额 + 最小份额 + 整体结构]",
+    "",
+    "Body 1",
+    "[细节一：占比靠前的几项 + 具体百分比]",
+    "",
+    "Body 2",
+    "[细节二：占比较小的几项 + 对比 / 合计]",
+  ].join("\n"),
+  "task1_academic:table": [
+    "Introduction",
+    "[改写题目：表格展示了 X 在不同维度上的数据]",
+    "",
+    "Overview",
+    "[概览：抓住表中最突出的 2-3 条规律]",
+    "",
+    "Body 1",
+    "[细节一：按行 / 按列选一组展开]",
+    "",
+    "Body 2",
+    "[细节二：另一维度对比 + 极值]",
+  ].join("\n"),
+  "task1_academic:map": [
+    "Introduction",
+    "[改写题目：图展示了 X 地点在 Y 年与 Z 年之间的变化]",
+    "",
+    "Overview",
+    "[概览：整体上发生了哪些大的变化（新增 / 拆除 / 扩建）]",
+    "",
+    "Body 1",
+    "[细节一：早期布局 — 主要建筑、道路、自然要素的位置]",
+    "",
+    "Body 2",
+    "[细节二：后期变化 — what was added / removed / replaced，方位词要丰富]",
+  ].join("\n"),
+  "task1_academic:process": [
+    "Introduction",
+    "[改写题目：流程图展示了 X 的制作 / 形成过程，共 N 步]",
+    "",
+    "Overview",
+    "[概览：起点 → 终点 + 关键的中间阶段]",
+    "",
+    "Body 1",
+    "[第一阶段：前几个步骤，注意被动语态 + 顺序连接词]",
+    "",
+    "Body 2",
+    "[第二阶段：后几个步骤，强调最终产物]",
+  ].join("\n"),
+  "task1_academic:mixed": [
+    "Introduction",
+    "[改写题目：图组展示了 X 与 Y 的两类信息]",
+    "",
+    "Overview",
+    "[概览：两图各自的主要规律，简洁两句]",
+    "",
+    "Body 1",
+    "[图一细节：选关键趋势 / 极值]",
+    "",
+    "Body 2",
+    "[图二细节：选关键趋势 / 极值 + 与图一的呼应]",
+  ].join("\n"),
+
+  // ── Task 2 ─────────────────────────────────────────────────────
+  "task2:opinion": [
+    "Introduction",
+    "[改写题目背景 + 明确表态：totally / partially agree / disagree]",
+    "",
+    "Body 1",
+    "[核心理由 1：观点句 + 解释 + 具体例子]",
+    "",
+    "Body 2",
+    "[核心理由 2：观点句 + 解释 + 例子，或让步段]",
+    "",
+    "Conclusion",
+    "[重申立场，呼应开头，不引入新观点]",
+  ].join("\n"),
+  "task2:discussion": [
+    "Introduction",
+    "[改写题目 + 表明会讨论双方 + 给出自己的倾向]",
+    "",
+    "Body 1",
+    "[第一种观点：陈述 + 解释为什么有人这么认为 + 例子]",
+    "",
+    "Body 2",
+    "[第二种观点：陈述 + 解释 + 例子 + 你为什么更倾向这一方]",
+    "",
+    "Conclusion",
+    "[总结双方 + 重申自己的立场]",
+  ].join("\n"),
+  "task2:problem_solution": [
+    "Introduction",
+    "[改写题目 + 概述问题严重性 + 预告会分析原因 / 影响和解决方法]",
+    "",
+    "Body 1",
+    "[问题原因 / 后果：1-2 句解释 + 例子]",
+    "",
+    "Body 2",
+    "[解决方案：1-2 个具体措施 + 谁来执行 + 预期效果]",
+    "",
+    "Conclusion",
+    "[重申问题可解 + 呼应主旨]",
+  ].join("\n"),
+  "task2:advantages_disadvantages": [
+    "Introduction",
+    "[改写题目 + 表明会权衡优劣 + 整体判断 (advantages outweigh / drawbacks outweigh)]",
+    "",
+    "Body 1",
+    "[优点：核心优点 + 解释 + 例子]",
+    "",
+    "Body 2",
+    "[缺点：核心缺点 + 解释 + 例子 + 为什么仍然 优 / 劣]",
+    "",
+    "Conclusion",
+    "[重申你的判断，简短有力]",
+  ].join("\n"),
+  "task2:two_part": [
+    "Introduction",
+    "[改写题目 + 预告会分别回答两个问题]",
+    "",
+    "Body 1",
+    "[回答第一个问题：明确立场 + 1-2 个理由 + 例子]",
+    "",
+    "Body 2",
+    "[回答第二个问题：明确立场 + 1-2 个理由 + 例子]",
+    "",
+    "Conclusion",
+    "[简短总结两个回答的核心]",
+  ].join("\n"),
+};
+
+const WRITING_FRAME_FALLBACK = {
+  task1_academic: WRITING_FRAME_DEFAULTS["task1_academic:line_graph"],
+  task2: WRITING_FRAME_DEFAULTS["task2:opinion"],
+};
+
+function currentWritingFrameKey() {
+  const prompt = state.writing.prompt || {};
+  const taskType = prompt.task_type || state.writing.taskType || "task2";
+  const category = (prompt.category || "").trim();
+  return { taskType, category, key: `${taskType}:${category}` };
+}
+
+function writingFrameDefaultFor(taskType, category) {
+  const fullKey = `${taskType}:${category}`;
+  return WRITING_FRAME_DEFAULTS[fullKey]
+    || WRITING_FRAME_FALLBACK[taskType]
+    || WRITING_FRAME_FALLBACK.task2;
+}
+
+function writingFrameCustomFor(taskType, category) {
+  try {
+    return window.localStorage.getItem(`writingFrame:${taskType}:${category}`) || null;
+  } catch { return null; }
+}
+
+function writingFrameFor(taskType, category) {
+  return writingFrameCustomFor(taskType, category) || writingFrameDefaultFor(taskType, category);
+}
+
+function applyWritingFrame() {
+  const answer = $("writingAnswer");
+  if (!answer) return;
+  const { taskType, category } = currentWritingFrameKey();
+  const frame = writingFrameFor(taskType, category);
+  const existing = answer.value.trim();
+  // Only auto-fill when empty or value is exactly a slash command — never overwrite real work.
+  if (existing && !/^\/(frame|myframe)\b/i.test(existing)) {
+    const ok = window.confirm("已有作文内容，确定要替换为框架模板吗？");
+    if (!ok) { answer.focus(); return; }
+  }
+  answer.value = frame + "\n\n";
+  // Move caret to end and notify the rest of the app
+  answer.focus();
+  answer.setSelectionRange(answer.value.length, answer.value.length);
+  answer.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function openWritingFrameEditor() {
+  const { taskType, category, key } = currentWritingFrameKey();
+  if (!state.writing.prompt) {
+    window.alert("先选一道题，才能为这类题型定制框架。");
+    return;
+  }
+  const sub = $("writingFrameModalSub");
+  if (sub) {
+    const label = `${writingTaskLabel(taskType)}${category ? " · " + writingCategoryLabel(category) : ""}`;
+    sub.textContent = `当前类型：${label}（保存的框架仅作用于这一类）`;
+  }
+  const editor = $("writingFrameEditor");
+  if (editor) editor.value = writingFrameFor(taskType, category);
+  const status = $("writingFrameSaveStatus");
+  if (status) status.textContent = "";
+  editor?.dataset && (editor.dataset.frameKey = key);
+  $("writingFrameModal")?.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  setTimeout(() => editor?.focus(), 50);
+}
+
+function closeWritingFrameEditor() {
+  $("writingFrameModal")?.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+  $("writingAnswer")?.focus();
+}
+
+function saveWritingFrame() {
+  const editor = $("writingFrameEditor");
+  const key = editor?.dataset.frameKey;
+  if (!editor || !key) return;
+  try {
+    window.localStorage.setItem(`writingFrame:${key}`, editor.value);
+    const status = $("writingFrameSaveStatus");
+    if (status) {
+      status.textContent = "已保存";
+      status.classList.remove("error");
+      setTimeout(() => { if (status) status.textContent = ""; }, 1800);
+    }
+  } catch (err) {
+    const status = $("writingFrameSaveStatus");
+    if (status) { status.textContent = "保存失败：" + (err.message || err); status.classList.add("error"); }
+  }
+}
+
+function resetWritingFrame() {
+  const editor = $("writingFrameEditor");
+  const key = editor?.dataset.frameKey;
+  if (!editor || !key) return;
+  try { window.localStorage.removeItem(`writingFrame:${key}`); } catch {}
+  const [taskType, category] = key.split(":");
+  editor.value = writingFrameDefaultFor(taskType, category || "");
+  const status = $("writingFrameSaveStatus");
+  if (status) { status.textContent = "已恢复默认"; status.classList.remove("error"); }
+}
+
+function handleWritingFrameSlashCommand() {
+  const answer = $("writingAnswer");
+  if (!answer) return false;
+  const v = answer.value.trim().toLowerCase();
+  if (v === "/frame") { applyWritingFrame(); return true; }
+  if (v === "/myframe") {
+    answer.value = "";
+    answer.dispatchEvent(new Event("input", { bubbles: true }));
+    openWritingFrameEditor();
+    return true;
+  }
   return false;
 }
 
@@ -8270,9 +8554,23 @@ function bindEvents() {
   document.addEventListener("click", handleWritingReportEditClick);
   document.addEventListener("auxclick", handleWritingReportEditClick);
   $("writingAnswer")?.addEventListener("input", () => {
+    // Slash commands resolve before we mark the doc dirty.
+    if (handleWritingFrameSlashCommand()) return;
     state.writing.dirty = true;
     updateWritingWordCount({ preserveScroll: true });
     text("writingSaveStatus", "未保存的修改");
+  });
+  document.querySelectorAll("[data-frame-cmd]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.frameCmd === "frame") applyWritingFrame();
+      else if (btn.dataset.frameCmd === "myframe") openWritingFrameEditor();
+    });
+  });
+  $("writingFrameSaveBtn")?.addEventListener("click", saveWritingFrame);
+  $("writingFrameResetBtn")?.addEventListener("click", resetWritingFrame);
+  $("writingFrameCloseBtn")?.addEventListener("click", closeWritingFrameEditor);
+  document.querySelectorAll("[data-writing-frame-close]").forEach((el) => {
+    el.addEventListener("click", closeWritingFrameEditor);
   });
   $("writingAnswer")?.addEventListener("input", () => {
     if (currentWritingWordCount() > 20) state.writing.autosaveEnabled = true;
