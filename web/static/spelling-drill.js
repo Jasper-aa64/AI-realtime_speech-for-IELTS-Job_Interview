@@ -187,6 +187,7 @@
               autocomplete="off" autocapitalize="none" spellcheck="false"
               placeholder="敲下正确拼写，回车判定">
             <span class="nr-form-spacer" aria-hidden="true"></span>
+            <span class="nr-button-spacer" aria-hidden="true"></span>
           </form>
         `;
       }
@@ -194,9 +195,11 @@
       // ── State B: correct — show green diff, wait for Enter ──
       if (result.correct) {
         return `
-          <div class="nr-slot nr-answer is-correct">
-            <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
-            <p class="nr-answer-correct nr-answer-correct--placeholder" aria-hidden="true">&nbsp;</p>
+          <div class="nr-slot nr-result-slot is-correct">
+            <div class="nr-answer">
+              <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
+              <p class="nr-answer-correct nr-answer-correct--placeholder" aria-hidden="true">&nbsp;</p>
+            </div>
             <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
           </div>
         `;
@@ -206,12 +209,14 @@
       // Word is already pushed back into the queue by submitAttempt,
       // so it will appear again later. Progress only counts on correct.
       return `
-        <div class="nr-slot nr-answer is-wrong">
-          <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
-          <p class="nr-answer-correct">
-            <span class="nr-answer-tag">正解</span>
-            <span class="nr-answer-word">${escapeHtml(correctSpell)}</span>
-          </p>
+        <div class="nr-slot nr-result-slot is-wrong">
+          <div class="nr-answer">
+            <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
+            <p class="nr-answer-correct">
+              <span class="nr-answer-tag">正解</span>
+              <span class="nr-answer-word">${escapeHtml(correctSpell)}</span>
+            </p>
+          </div>
           <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
         </div>
       `;
