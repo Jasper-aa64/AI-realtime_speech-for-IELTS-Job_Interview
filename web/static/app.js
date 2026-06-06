@@ -33,6 +33,7 @@ const state = {
   abortingAttemptId: null,
   practiceViewBeforeSettings: null,
   darkMode: false,
+  uiLanguage: "zh",
   p3Topics: [],
   p3SelectedTopic: "",
   p3Intensity: "normal",
@@ -215,17 +216,221 @@ const state = {
 };
 
 const VIEW_STORAGE_KEY = "ielts-view";
+const UI_LANGUAGE_STORAGE_KEY = "ielts-ui-language";
 const FULL_NAME_STORAGE_KEY = "ielts-full-name";
 const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
 const QUESTION_BANK_SCOPE_STORAGE_KEY = "ielts-speaking-question-bank-scope";
 const QUESTION_BANK_SCOPES = new Set(["current", "new", "retained", "archive", "all"]);
+const PRACTICE_VIEWS = new Set(["mock", "p1", "p2", "p3"]);
+const SPEAKING_PART_VIEWS = new Set(["p1", "p2", "p3", "mock"]);
+const STANDALONE_CORPUS_VIEWS = new Set(["p1Corpus", "p2Corpus"]);
+const WRITING_TASK_TYPES = new Set(["task1_academic", "task2"]);
 const WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT = 2;
 const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 9;
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
+const UI_LANGUAGES = new Set(["zh", "en"]);
+const RECORD_CONTROL_DISABLED_STATUSES = new Set(["loading", "examiner_loading", "examiner_playing", "processing", "scoring", "turn_saved"]);
+const PRACTICE_BUSY_STATUSES = new Set(["preparing", "recording", "processing", "scoring"]);
+const TURN_RENDER_BUSY_STATUSES = new Set(["examiner_loading", "examiner_playing", "preparing", "recording", "processing"]);
+const RECOVERABLE_PRACTICE_ERROR_STATUSES = new Set(["recording", "preparing"]);
+const EXAMINER_TTS_PENDING_STATUSES = new Set(["pending", "warming", "generating"]);
+const AI_TASK_ACTIVE_STATUSES = new Set(["pending", "running"]);
+const AI_TASK_TERMINAL_STATUSES = new Set(["succeeded", "fallback", "failed", "cancelled"]);
+const AI_TASK_COMPLETED_WITH_RESULT_STATUSES = new Set(["fallback", "succeeded"]);
+const uiTranslations = {
+  zh: {
+    "app.title": "IELTS Studio",
+    "action.back": "返回",
+    "action.account": "账户",
+    "action.questionAssistant": "题库助手",
+    "writing.taskType": "Writing task type",
+    "writing.selectPrompt": "选择写作题目",
+    "writing.openBank": "打开题库",
+    "writing.random": "随机换题",
+    "nav.home": "首页",
+    "nav.mock": "Mock",
+    "nav.p1": "P1",
+    "nav.p2": "P2",
+    "nav.p3": "P3",
+    "nav.speakingReports": "口语报告",
+    "nav.dailyWriting": "每日写作",
+    "nav.writingReports": "写作报告",
+    "nav.corpus": "语料库",
+    "nav.takeaway": "Takeaway",
+    "nav.writingTakeaway": "写作积累",
+    "nav.spellingDrill": "拼写错词训练",
+    "nav.appearance": "Appearance",
+    "nav.lockHint": "流程进行中，先点右侧叉号结束，再切换左侧模式。",
+    "home.kicker": "IELTS Study Workspace",
+    "home.title": "口语、写作和语料，一张工作台搞定。",
+    "home.subtitle": "从真题练习到 AI 反馈，再到语料复用和拼写复习，把 IELTS 训练压进一个清晰的闭环。",
+    "home.cta.speaking": "开始口语练习",
+    "home.cta.writing": "写一篇作文",
+    "home.spotlight.kicker": "Today",
+    "home.spotlight.title": "先练输入，再沉淀表达",
+    "home.spotlight.desc": "口语题库、写作报告、Takeaway 和拼写错词会互相回流，形成你自己的表达资产。",
+    "home.speaking.title": "口语训练",
+    "home.p1.title": "P1 短问短答",
+    "home.p1.desc": "练直答、原因和具体细节。",
+    "home.p2.title": "P2 Cue Card",
+    "home.p2.desc": "准备 1 分钟后完成长回答。",
+    "home.p3.title": "P3 深入讨论",
+    "home.p3.desc": "围绕话题练观点、原因和对比。",
+    "home.mock.title": "完整 Mock",
+    "home.mock.desc": "P1、P2、P3 串联模拟。",
+    "home.writing.title": "写作闭环",
+    "home.writing.practice": "每日写作",
+    "home.writing.practiceDesc": "选题、写作、保存，再交给 AI 评分。",
+    "home.writing.reports": "写作报告",
+    "home.writing.reportsDesc": "查看批改、Band 7 改写和错词反馈。",
+    "home.corpus.title": "语料与复习",
+    "home.corpus.library": "语料库",
+    "home.corpus.libraryDesc": "管理 P1、P2、Takeaway 和写作积累。",
+    "home.corpus.takeaway": "写作积累",
+    "home.corpus.takeawayDesc": "沉淀可复用句型和观点表达。",
+    "home.corpus.spelling": "拼写错词训练",
+    "home.corpus.spellingDesc": "把作文错词加入间隔复习。",
+    "account.kicker": "账户",
+    "account.title": "个人资料与训练",
+    "account.profileEyebrow": "Profile",
+    "account.profileTitle": "口语身份资料",
+    "account.profileLoading": "正在读取账号资料...",
+    "account.nameChinese": "中文名",
+    "account.nameEnglish": "英文名",
+    "account.saveProfile": "保存资料",
+    "account.changePassword": "修改密码",
+    "account.logout": "退出登录",
+    "account.detailsGuest": "登录后可同步个人资料和账号安全设置。",
+    "account.currentUser": "当前登录账号：",
+    "account.guestLocal": "当前未登录，姓名仍会保存在本机。",
+    "account.backendOffline": "后端暂不可用，姓名仍会保存在本机。",
+    "account.securityStrong": "请使用强密码，并定期更换。",
+    "account.securityLogin": "登录后可修改密码。",
+    "bank.eyebrow": "Question Bank",
+    "bank.title": "题库选择",
+    "bank.loading": "正在读取当前题库...",
+    "bank.scopeAria": "选择口语题库范围",
+    "bank.current": "当前考季",
+    "bank.new": "新题",
+    "bank.retained": "保留题",
+    "bank.archive": "历史考季",
+    "bank.all": "全部题库",
+    "bank.defaultLabel": "当季全部",
+    "bank.followups": "P3 参考追问",
+    "settings.darkMode": "深色外观",
+    "settings.darkModeAria": "切换深色外观",
+    "settings.language": "界面语言",
+    "settings.languageAria": "选择界面语言",
+    "settings.aiSource": "AI 评分来源",
+    "wallet.eyebrow": "Wallet",
+    "wallet.title": "钱包",
+    "wallet.recharge": "充值",
+    "wallet.available": "可用余额",
+    "wallet.loading": "加载中",
+    "wallet.reading": "读取中",
+    "wallet.hint": "AI 功能按实际用量结算，余额需大于 ¥0.30。",
+    "security.title": "修改密码",
+    "security.subtitle": "修改登录密码，保持账号安全。",
+  },
+  en: {
+    "app.title": "IELTS Studio",
+    "action.back": "Back",
+    "action.account": "Account",
+    "action.questionAssistant": "Question Assistant",
+    "writing.taskType": "Writing task type",
+    "writing.selectPrompt": "Choose writing prompt",
+    "writing.openBank": "Open bank",
+    "writing.random": "Random prompt",
+    "nav.home": "Home",
+    "nav.mock": "Mock",
+    "nav.p1": "P1",
+    "nav.p2": "P2",
+    "nav.p3": "P3",
+    "nav.speakingReports": "Speaking Reports",
+    "nav.dailyWriting": "Daily Writing",
+    "nav.writingReports": "Writing Reports",
+    "nav.corpus": "Corpus",
+    "nav.takeaway": "Takeaway",
+    "nav.writingTakeaway": "Writing Bank",
+    "nav.spellingDrill": "Spelling Drill",
+    "nav.appearance": "Appearance",
+    "nav.lockHint": "A practice flow is active. Use the close button on the right before switching modes.",
+    "home.kicker": "IELTS Study Workspace",
+    "home.title": "Speaking, writing, and corpus work in one desk.",
+    "home.subtitle": "Move from real prompts to AI feedback, reusable language, and spelling review in one focused IELTS workflow.",
+    "home.cta.speaking": "Start speaking",
+    "home.cta.writing": "Write an essay",
+    "home.spotlight.kicker": "Today",
+    "home.spotlight.title": "Practice first, then bank the language",
+    "home.spotlight.desc": "Speaking prompts, writing reports, takeaway notes, and spelling drills feed back into your own expression library.",
+    "home.speaking.title": "Speaking practice",
+    "home.p1.title": "P1 Short Answers",
+    "home.p1.desc": "Practice direct answers, reasons, and details.",
+    "home.p2.title": "P2 Cue Card",
+    "home.p2.desc": "Prepare for one minute, then give a long turn.",
+    "home.p3.title": "P3 Discussion",
+    "home.p3.desc": "Practice opinions, reasons, comparisons, and follow-ups.",
+    "home.mock.title": "Full Mock",
+    "home.mock.desc": "Run P1, P2, and P3 as a full speaking test.",
+    "home.writing.title": "Writing loop",
+    "home.writing.practice": "Daily Writing",
+    "home.writing.practiceDesc": "Choose a prompt, write, save, then score with AI.",
+    "home.writing.reports": "Writing Reports",
+    "home.writing.reportsDesc": "Review corrections, Band 7 rewrites, and spelling feedback.",
+    "home.corpus.title": "Corpus & review",
+    "home.corpus.library": "Corpus",
+    "home.corpus.libraryDesc": "Manage P1, P2, Takeaway, and writing banks.",
+    "home.corpus.takeaway": "Writing Bank",
+    "home.corpus.takeawayDesc": "Save reusable sentence patterns and ideas.",
+    "home.corpus.spelling": "Spelling Drill",
+    "home.corpus.spellingDesc": "Review spelling mistakes from writing reports.",
+    "account.kicker": "Account",
+    "account.title": "Profile & Training",
+    "account.profileEyebrow": "Profile",
+    "account.profileTitle": "Speaking profile",
+    "account.profileLoading": "Loading account profile...",
+    "account.nameChinese": "Chinese name",
+    "account.nameEnglish": "English name",
+    "account.saveProfile": "Save profile",
+    "account.changePassword": "Change password",
+    "account.logout": "Sign out",
+    "account.detailsGuest": "Sign in to sync profile and account settings.",
+    "account.currentUser": "Signed in as: ",
+    "account.guestLocal": "Not signed in. Names are still saved locally.",
+    "account.backendOffline": "Backend unavailable. Names are still saved locally.",
+    "account.securityStrong": "Use a strong password and update it regularly.",
+    "account.securityLogin": "Sign in to change your password.",
+    "bank.eyebrow": "Question Bank",
+    "bank.title": "Question bank",
+    "bank.loading": "Loading current question bank...",
+    "bank.scopeAria": "Choose speaking question bank scope",
+    "bank.current": "Current season",
+    "bank.new": "New topics",
+    "bank.retained": "Retained",
+    "bank.archive": "Past seasons",
+    "bank.all": "All banks",
+    "bank.defaultLabel": "Current bank",
+    "bank.followups": "P3 follow-ups",
+    "settings.darkMode": "Dark mode",
+    "settings.darkModeAria": "Toggle dark mode",
+    "settings.language": "Interface language",
+    "settings.languageAria": "Choose interface language",
+    "settings.aiSource": "AI scoring source",
+    "wallet.eyebrow": "Wallet",
+    "wallet.title": "Wallet",
+    "wallet.recharge": "Recharge",
+    "wallet.available": "Available balance",
+    "wallet.loading": "Loading",
+    "wallet.reading": "Loading",
+    "wallet.hint": "AI features are usage-based. Balance must stay above ¥0.30.",
+    "security.title": "Change password",
+    "security.subtitle": "Update your login password to keep the account secure.",
+  },
+};
 const viewCopy = {
-  home: ["首页", "选择今天要练的口语模式。"],
+  home: ["首页", "口语、写作和语料复习的综合训练工作台。"],
   mock: ["Mock", "完整模拟 P1、P2 和 P3 的口语考试流程。"],
   p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
   p2: ["Part 2", "Cue card, one-minute preparation, then a long turn."],
@@ -245,11 +450,184 @@ const viewCopy = {
   accountProfile: ["账户", "管理个人资料和账号设置。"],
   accountSecurity: ["账号安全", "修改密码并管理账号安全设置。"],
 };
+const viewCopyEn = {
+  home: ["Home", "A focused workspace for speaking, writing, and corpus review."],
+  mock: ["Mock", "Run a full P1, P2, and P3 speaking exam flow."],
+  p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
+  p2: ["Part 2", "Cue card, one-minute preparation, then a long turn."],
+  p3: ["Part 3", "Practice explanation, comparison, future trends, and social-level discussion."],
+  corpus: ["Corpus", "Manage prepared speaking material and language takeaways."],
+  p1Corpus: ["My P1 Corpus", "Prepare grouped Part 1 answers and reuse them in AI feedback."],
+  p2Corpus: ["My P2 Story Bank", "Prepare reusable Part 2 story materials and link them during preparation."],
+  takeawayBook: ["Takeaway", "Review saved language takeaways with hidden English recall."],
+  writingTakeawayBook: ["Writing Bank", "Review saved writing phrases and reusable argument material."],
+  spellingDrill: ["Spelling Drill", "Rewrite spelling mistakes from scored writing reports until they are mastered."],
+  history: ["Speaking Reports", ""],
+  writing: ["", ""],
+  writingReports: ["Writing Reports", ""],
+  login: ["Sign in", "Sign in to access your reports, wallet, and personalized training."],
+  register: ["Create account", "Create an account to save your practice history and access personalized features."],
+  forgotPassword: ["Reset password", "Reset your password via email if configured."],
+  accountProfile: ["Account", "Manage profile and account settings."],
+  accountSecurity: ["Account security", "Change password and manage account security."],
+};
+
+function normalizeUiLanguage(value) {
+  return UI_LANGUAGES.has(value) ? value : "zh";
+}
+
+function currentUiLanguage() {
+  return normalizeUiLanguage(state.uiLanguage);
+}
+
+function t(key, fallback = "") {
+  const lang = currentUiLanguage();
+  return uiTranslations[lang]?.[key] ?? uiTranslations.zh?.[key] ?? fallback ?? key;
+}
+
+function viewCopyFor(view) {
+  const langCopy = currentUiLanguage() === "en" ? viewCopyEn : viewCopy;
+  return langCopy[view] || viewCopy[view] || viewCopy.home;
+}
+
+function isKnownView(view) {
+  return Boolean(viewCopy[view]);
+}
+
+function viewTitleFor(view) {
+  return viewCopyFor(view)[0];
+}
+
+function viewSubtitleFor(view) {
+  return viewCopyFor(view)[1];
+}
+
+function practiceReadyText(view) {
+  return view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewTitleFor(view)} ready`;
+}
+
+function isPracticeView(view) {
+  return PRACTICE_VIEWS.has(view);
+}
+
+function isStandaloneCorpusView(view) {
+  return STANDALONE_CORPUS_VIEWS.has(view);
+}
+
+function isKnownWritingTaskType(value) {
+  return WRITING_TASK_TYPES.has(value);
+}
+
+function isSpeakingPartView(part) {
+  return SPEAKING_PART_VIEWS.has(part);
+}
+
+function isRecordControlDisabledStatus(status) {
+  return RECORD_CONTROL_DISABLED_STATUSES.has(String(status || ""));
+}
+
+function isPracticeBusyStatus(status) {
+  return PRACTICE_BUSY_STATUSES.has(String(status || ""));
+}
+
+function isTurnRenderBusyStatus(status) {
+  return TURN_RENDER_BUSY_STATUSES.has(String(status || ""));
+}
+
+function isRecoverablePracticeErrorStatus(status) {
+  return RECOVERABLE_PRACTICE_ERROR_STATUSES.has(String(status || ""));
+}
+
+function isPendingExaminerTtsStatus(status) {
+  return EXAMINER_TTS_PENDING_STATUSES.has(String(status || ""));
+}
+
+function isAiTaskActiveStatus(status) {
+  return AI_TASK_ACTIVE_STATUSES.has(String(status || ""));
+}
+
+function isAiTaskTerminalStatus(status) {
+  return AI_TASK_TERMINAL_STATUSES.has(String(status || ""));
+}
+
+function isAiTaskCompletedWithResultStatus(status) {
+  return AI_TASK_COMPLETED_WITH_RESULT_STATUSES.has(String(status || ""));
+}
+
+function applyStaticTranslations(root = document) {
+  root.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.dataset.i18n, el.textContent || "");
+  });
+  root.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    const value = t(el.dataset.i18nTitle, el.getAttribute("title") || "");
+    el.setAttribute("title", value);
+  });
+  root.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    const value = t(el.dataset.i18nAria, el.getAttribute("aria-label") || "");
+    el.setAttribute("aria-label", value);
+  });
+  root.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.setAttribute("placeholder", t(el.dataset.i18nPlaceholder, el.getAttribute("placeholder") || ""));
+  });
+}
+
+function updateLanguageControls() {
+  const lang = currentUiLanguage();
+  document.querySelectorAll("[data-ui-language-option]").forEach((button) => {
+    const active = normalizeUiLanguage(button.dataset.uiLanguageOption) === lang;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function refreshLocalizedChrome() {
+  applyStaticTranslations();
+  updateLanguageControls();
+  const copy = viewCopyFor(state.view);
+  text("viewTitle", copy[0]);
+  text("viewSubtitle", copy[1]);
+  renderQuestionBankSelector(state.account.questionBankSummary);
+  renderAccountStatus();
+}
+
+function applyUiLanguage(value, options = {}) {
+  const lang = normalizeUiLanguage(value);
+  state.uiLanguage = lang;
+  document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
+  document.title = t("app.title", "IELTS Studio");
+  document.body.dataset.uiLang = lang;
+  if (!options.skipPersist) {
+    try {
+      localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, lang);
+    } catch (_error) {
+      // Local preference only; failing to persist should not block the app.
+    }
+  }
+  refreshLocalizedChrome();
+  window.IELTS_I18N = {
+    language: lang,
+    t,
+    setLanguage: (nextLanguage) => applyUiLanguage(nextLanguage),
+  };
+  window.dispatchEvent(new CustomEvent("ielts:ui-language-change", { detail: { language: lang } }));
+}
+
+function loadUiLanguage() {
+  let stored = "zh";
+  try {
+    stored = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY) || "zh";
+  } catch (_error) {
+    stored = "zh";
+  }
+  applyUiLanguage(stored, { skipPersist: true });
+}
 
 const authViews = new Set(["login", "register", "forgotPassword"]);
 const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill", "accountProfile", "accountSecurity"]);
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
+const corpusBackButtonViews = new Set(["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
+const workspaceHeaderHiddenViews = new Set(["history", "writing", "writingReports", ...corpusViews, ...authViews, ...accountViews]);
 const agentAssistantViews = new Set(["writing", "writingReports", "writingTakeawayBook"]);
 
 const EXAMINER_AUDIO_LOAD_TIMEOUT_MS = 15000;
@@ -1064,7 +1442,7 @@ function ensureCorpusMarkdownEditorReady(textareaId) {
 }
 
 function guestVisibleView(view) {
-  return viewCopy[view] && !authViews.has(view) && !protectedViews.has(view) ? view : null;
+  return isKnownView(view) && !authViews.has(view) && !protectedViews.has(view) ? view : null;
 }
 
 function lastGuestVisibleHistoryView() {
@@ -1088,7 +1466,7 @@ function rememberAuthSource(candidate) {
 }
 
 function switchView(view, options = {}) {
-  if (!viewCopy[view]) view = "home";
+  if (!isKnownView(view)) view = "home";
   if (protectedViews.has(view) && !state.account.authenticated && !options.skipAuthGate) {
     state.account.returnView = view;
     rememberAuthSource(options.fromView);
@@ -1101,10 +1479,10 @@ function switchView(view, options = {}) {
     return;
   }
   if (view === "p1Corpus") {
-    state.p1Corpus.previousPracticeView = ["mock", "p1", "p2", "p3"].includes(state.view) ? state.view : "p1";
+    state.p1Corpus.previousPracticeView = isPracticeView(state.view) ? state.view : "p1";
   }
   if (view === "p2Corpus") {
-    state.p2Corpus.previousPracticeView = ["mock", "p1", "p2", "p3"].includes(state.view) ? state.view : "p2";
+    state.p2Corpus.previousPracticeView = isPracticeView(state.view) ? state.view : "p2";
   }
   if (authViews.has(view) && !options.skipHistory) {
     rememberAuthSource(options.fromView);
@@ -1115,14 +1493,14 @@ function switchView(view, options = {}) {
     }
   }
   if (view === state.view && !options.force) return;
-  if (state.practiceLocked && ["mock", "p1", "p2", "p3"].includes(state.view) && ["accountProfile", "accountSecurity"].includes(view) && options.preservePractice) {
+  if (state.practiceLocked && isPracticeView(state.view) && accountViews.has(view) && options.preservePractice) {
     showPracticeOverlay(view);
     return;
   }
-  const shouldTrackHistory = !options.skipHistory && view !== "login" && view !== "register" && view !== "forgotPassword";
+  const shouldTrackHistory = !options.skipHistory && !authViews.has(view);
   if (shouldTrackHistory) {
     const currentView = state.view;
-    if (currentView && currentView !== view && currentView !== "login" && currentView !== "register" && currentView !== "forgotPassword") {
+    if (currentView && currentView !== view && !authViews.has(currentView)) {
       const lastHistoryView = state.viewHistory[state.viewHistory.length - 1];
       if (lastHistoryView !== currentView) state.viewHistory.push(currentView);
       if (state.viewHistory.length > 8) state.viewHistory.shift();
@@ -1154,13 +1532,14 @@ function switchView(view, options = {}) {
     button.classList.toggle("tone-p3", button.dataset.view === "p3");
   });
   $(".shell")?.classList.toggle("auth-shell", authViews.has(view));
+  document.body.classList.toggle("view-home", view === "home");
   document.body.classList.toggle("view-writing", view === "writing");
-  $(".shell")?.classList.toggle("account-shell", ["accountProfile", "accountSecurity"].includes(view));
-  $(".workspace")?.classList.toggle("corpus-workspace", ["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"].includes(view));
-  $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"].includes(view));
-  $("#accountBackBtn")?.classList.toggle("hidden", !["accountProfile", "accountSecurity"].includes(view));
+  $(".shell")?.classList.toggle("account-shell", accountViews.has(view));
+  $(".workspace")?.classList.toggle("corpus-workspace", corpusViews.has(view));
+  $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !corpusBackButtonViews.has(view));
+  $("#accountBackBtn")?.classList.toggle("hidden", !accountViews.has(view));
   $("#homePanel")?.classList.toggle("hidden", view !== "home");
-  $("#practicePanel").classList.toggle("hidden", !["mock", "p1", "p2", "p3"].includes(view));
+  $("#practicePanel").classList.toggle("hidden", !isPracticeView(view));
   $("#practicePanel")?.classList.toggle("p3-launch-mode", view === "p3" && !state.practiceLocked);
   $("#corpusPanel")?.classList.toggle("hidden", view !== "corpus");
   $("#p1CorpusPanel")?.classList.toggle("hidden", view !== "p1Corpus");
@@ -1179,12 +1558,13 @@ function switchView(view, options = {}) {
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
-  const hideWorkspaceHeader = view === "history" || view === "writing" || view === "writingReports" || view === "corpus" || view === "p1Corpus" || view === "p2Corpus" || view === "takeawayBook" || view === "writingTakeawayBook" || view === "spellingDrill" || authViews.has(view) || view === "accountProfile" || view === "accountSecurity";
+  const hideWorkspaceHeader = workspaceHeaderHiddenViews.has(view);
   $(".topbar").classList.toggle("hidden", hideWorkspaceHeader);
   $("#viewTitleBlock").classList.toggle("hidden", hideWorkspaceHeader);
   $("#writingTopbarActions")?.classList.toggle("hidden", view !== "writing");
-  text("viewTitle", viewCopy[view][0]);
-  text("viewSubtitle", viewCopy[view][1]);
+  const currentViewCopy = viewCopyFor(view);
+  text("viewTitle", currentViewCopy[0]);
+  text("viewSubtitle", currentViewCopy[1]);
   if (view === "history") loadHistory();
   if (view === "corpus") loadCorpusHome();
   if (view === "takeawayBook") loadLanguageTakeaways();
@@ -1211,9 +1591,9 @@ function switchView(view, options = {}) {
   }
   if (view === "p3") syncP3LaunchPanel();
   $("#examStatusText")?.classList.remove("hidden");
-  $("#exitPractice")?.classList.toggle("hidden", !state.practiceLocked || !["mock", "p1", "p2", "p3"].includes(view));
+  $("#exitPractice")?.classList.toggle("hidden", !state.practiceLocked || !isPracticeView(view));
   updateAgentAssistantVisibility(view);
-  if (["mock", "p1", "p2", "p3"].includes(view)) {
+  if (isPracticeView(view)) {
     if (hasPendingSpeakingAnalysisForView(view)) {
       restorePendingSpeakingAnalysisView(view);
     } else {
@@ -1302,7 +1682,7 @@ function isWritingEntryScored(entry = {}) {
 function applyRouteState(route) {
   if (route.speakingReportId) state.activeHistoryId = route.speakingReportId;
   if (route.writingReportId) state.writing.activeReportId = route.writingReportId;
-  if (["task1_academic", "task2"].includes(route.writingTask)) state.writing.taskType = route.writingTask;
+  if (isKnownWritingTaskType(route.writingTask)) state.writing.taskType = route.writingTask;
   state.writing.requestedPromptId = route.writingPromptId || "";
   state.writing.requestedEntryId = route.writingEntryId || "";
 }
@@ -1319,7 +1699,7 @@ function restoreRouteFromLocation() {
 }
 
 function openCorpusWindow(view) {
-  if (!["p1Corpus", "p2Corpus"].includes(view)) return;
+  if (!isStandaloneCorpusView(view)) return;
   const url = new URL(window.location.href);
   url.searchParams.set("view", view);
   const opened = window.open(url.toString(), "_blank");
@@ -1379,7 +1759,7 @@ function prepareLoginView(message = "") {
 }
 
 function showPracticeOverlay(view = "accountProfile") {
-  const practiceView = ["mock", "p1", "p2", "p3"].includes(state.view) ? state.view : (state.practiceViewBeforeSettings || "mock");
+  const practiceView = isPracticeView(state.view) ? state.view : (state.practiceViewBeforeSettings || "mock");
   state.practiceViewBeforeSettings = practiceView;
   state.view = view;
   document.querySelectorAll(".nav-button").forEach((button) => {
@@ -1402,8 +1782,8 @@ function showPracticeOverlay(view = "accountProfile") {
   $(".workspace").classList.remove("history-workspace", "writing-workspace");
   $(".topbar").classList.remove("hidden");
   $("#viewTitleBlock").classList.remove("hidden");
-  text("viewTitle", viewCopy[view][0]);
-  text("viewSubtitle", viewCopy[view][1]);
+  text("viewTitle", viewTitleFor(view));
+  text("viewSubtitle", viewSubtitleFor(view));
   if (view === "accountProfile") loadAccountProfile();
   if (view === "accountSecurity") loadAccount();
   updateAgentAssistantVisibility(view);
@@ -1429,8 +1809,8 @@ function returnFromSettings() {
   $("#accountSecurityPanel")?.classList.add("hidden");
   $("#practicePanel").classList.remove("hidden");
   $(".shell")?.classList.remove("auth-shell", "account-shell");
-  text("viewTitle", viewCopy[practiceView][0]);
-  text("viewSubtitle", viewCopy[practiceView][1]);
+  text("viewTitle", viewTitleFor(practiceView));
+  text("viewSubtitle", viewSubtitleFor(practiceView));
   updateAgentAssistantVisibility(practiceView);
   updateSidebarLock();
 }
@@ -1474,7 +1854,7 @@ function resetPracticeSurface() {
   state.speaking.examinerTtsRefreshPromises.clear();
   clearExaminerAudioPreloads();
   const summaryPanel = $("#summaryPanel");
-  const isPracticeMode = ["mock", "p1", "p2", "p3"].includes(state.view);
+  const isPracticeMode = isPracticeView(state.view);
   $(".exam-status")?.classList.toggle("hidden", !isPracticeMode || state.view === "p3");
   $("#examStatusText")?.classList.toggle("hidden", state.view === "p2");
   $("#candidateAudio")?.classList.add("hidden");
@@ -1502,7 +1882,7 @@ function resetPracticeSurface() {
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("#exitPractice")?.classList.add("hidden");
   updateSidebarLock();
-  text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
+  text("progressTrack", practiceReadyText(state.view));
   text("phaseLabel", "Ready");
   text("timerValue", "00:00");
   $("#phaseMeter").style.width = "0%";
@@ -1535,7 +1915,7 @@ function restorePendingSpeakingAnalysisView(view = state.view) {
   $("#practiceGrid")?.classList.remove("hidden", "practice-enter");
   $("#summaryPanel")?.classList.add("hidden");
   $("#exitPractice")?.classList.add("hidden");
-  text("progressTrack", view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[view][0]} ready`);
+  text("progressTrack", practiceReadyText(view));
   text("phaseLabel", "Analyzing");
   text("timerValue", "00:00");
   $("#phaseMeter").style.width = "100%";
@@ -1548,14 +1928,14 @@ function restorePendingSpeakingAnalysisView(view = state.view) {
 }
 
 function navigatePracticeMode(mode) {
-  if (!["mock", "p1", "p2", "p3"].includes(mode)) return;
+  if (!isPracticeView(mode)) return;
   switchView(mode, { force: true });
 }
 
 function setRecordButton(status, title, hint) {
   state.status = status;
   $("#recordControl").className = `record-control ${status}`;
-  $("#recordControl").disabled = ["loading", "examiner_loading", "examiner_playing", "processing", "scoring", "turn_saved"].includes(status);
+  $("#recordControl").disabled = isRecordControlDisabledStatus(status);
   text("recordTitle", title);
   text("recordHint", hint);
   // Timer color based on status
@@ -1717,7 +2097,7 @@ function renderTurn(turn) {
   const isFollowUp = turn.prompt?.role === "follow_up";
   const isIntro = turn.counts_toward_total === false;
   if (turn.part === "p3") $("p3TopicPanel").classList.add("hidden");
-  text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
+  text("progressTrack", practiceReadyText(state.view));
   text("phaseLabel", turnProgressLabel(turn));
   text("promptKicker", isP2 ? "Cue card" : (isIntro ? "Intro" : "Question"));
   text("followUp", "");
@@ -2181,7 +2561,7 @@ function turnRequiresSynchronousComplete(turn, nextTurn) {
 }
 
 function isPendingExaminerTts(tts) {
-  return ["pending", "warming", "generating"].includes(String(tts?.status || ""));
+  return isPendingExaminerTtsStatus(tts?.status);
 }
 
 function wait(ms) {
@@ -2282,7 +2662,7 @@ function beginPreparationWithoutExaminerAudio(sessionId, turn, reason = "no-exam
 function setExaminerLoadingUi(turn) {
   setRecordButton("examiner_loading", "Preparing", examinerLoadingHint(turn));
   const progress = turnProgressLabel(turn);
-  text("progressTrack", state.view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewCopy[state.view][0]} ready`);
+  text("progressTrack", practiceReadyText(state.view));
   text("phaseLabel", `${progress} -> Preparing examiner`);
   text("timerValue", "00:00");
   $("phaseMeter").style.width = "0%";
@@ -2408,7 +2788,7 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
   if (!isActivePracticeSession(sessionId)) return;
   if (!state.currentTurn) return;
   clearAutoNextTimeout();
-  if (["preparing", "recording", "processing", "scoring"].includes(state.status)) {
+  if (isPracticeBusyStatus(state.status)) {
     traceExaminerAudio("playback:begin-blocked-by-status", {
       status: state.status,
       turnId: state.currentTurn.id,
@@ -2533,7 +2913,7 @@ function scheduleExaminerPhase(sessionId, turnId = state.currentTurn?.id, delayM
       && activePlayback.turnId === (expectedTurnId || state.currentTurn?.id || "")
       && activePlayback.promise
     ) return;
-    if (["preparing", "recording", "processing", "scoring"].includes(state.status)) {
+    if (isPracticeBusyStatus(state.status)) {
       traceExaminerAudio("playback:scheduled-begin-status-skipped", {
         expectedTurnId,
         currentTurnId: state.currentTurn?.id || "",
@@ -3017,7 +3397,7 @@ function handleTurnCompletionResult(attempt, turn, completePayload) {
   if (completePayload?.next_turn && state.currentTurn?.id === completePayload.next_turn.id) {
     state.currentTurn = completePayload.next_turn;
     state.attempt = mergeCompletedTurnPayload(state.attempt, completePayload.next_turn);
-    if (["examiner_loading", "examiner_playing", "preparing", "recording", "processing"].includes(state.status)) {
+    if (isTurnRenderBusyStatus(state.status)) {
       traceExaminerAudio("render-turn-background-complete-skipped", {
         completedTurnId: turn?.id || "",
         nextTurnId: completePayload.next_turn.id || "",
@@ -3402,7 +3782,7 @@ async function scoreAttempt() {
   if (selector) selector.disabled = true;
   state.speaking.pendingAnalysis = {
     attemptId,
-    view: ["mock", "p1", "p2", "p3"].includes(state.view) ? state.view : null,
+    view: isPracticeView(state.view) ? state.view : null,
     attempt: state.attempt,
   };
   state.practiceLocked = false;
@@ -3428,7 +3808,7 @@ async function scoreAttempt() {
     state.historyDetailCache.set(scored.id, scored);
     await loadHistory(false);
     if (isCurrentAttempt) state.status = "summary";
-    if (isCurrentAttempt && ["mock", "p1", "p2", "p3"].includes(state.view)) {
+    if (isCurrentAttempt && isPracticeView(state.view)) {
       setRecordButton("summary", "Start Again", "Record another section.");
       text("recordStatus", "Section report is ready.");
       text("phaseLabel", "Scored");
@@ -3437,7 +3817,7 @@ async function scoreAttempt() {
     showSpeakingScoreCompleteModal(scored);
   } catch (error) {
     if (state.speaking.pendingAnalysis?.attemptId === attemptId) state.speaking.pendingAnalysis = null;
-    if (state.attempt?.id === attemptId && ["mock", "p1", "p2", "p3"].includes(state.view)) {
+    if (state.attempt?.id === attemptId && isPracticeView(state.view)) {
       state.status = "analysis_failed";
       setRecordButton("analysis_failed", "Retry Analysis", "AI analysis failed. Try generating the report again.");
       text("recordStatus", error?.message || "AI analysis failed. Try again.");
@@ -3487,7 +3867,7 @@ function startSpeakingScorePolling(taskId, attemptId) {
         return;
       }
       if (state.speaking.pendingAnalysis?.attemptId === attemptId) state.speaking.pendingAnalysis = null;
-      if (state.attempt?.id === attemptId && ["mock", "p1", "p2", "p3"].includes(state.view)) {
+      if (state.attempt?.id === attemptId && isPracticeView(state.view)) {
         state.status = "analysis_failed";
         setRecordButton("analysis_failed", "Retry Analysis", "AI analysis failed. Try generating the report again.");
         text("recordStatus", speakingTaskStatusText(task));
@@ -3933,7 +4313,7 @@ function renderHistoryList(items, options = {}) {
   }
   $("historyList").innerHTML = items.map((item) => {
     const part = (item.mode || item.part || "").toLowerCase();
-    const tagClass = ["p1", "p2", "p3", "mock"].includes(part) ? part : "";
+    const tagClass = isSpeakingPartView(part) ? part : "";
     const toneClass = part === "mock" ? "tone-mock" : `tone-${tagClass || "neutral"}`;
     return `
     <div class="history-item-wrap">
@@ -5504,23 +5884,6 @@ function writingReportDetailHtml(entry) {
   const promptFallback = promptText ? null : writingReportPromptFallback(entry);
   const promptDisplayText = promptText || promptFallback?.body || "The original writing prompt was not included in this saved report.";
   const answerText = String(entry.answer || "").trim();
-  const profile = entry?.writing_profile || null;
-  const profileIssues = Array.isArray(profile?.top_issues) ? profile.top_issues : [];
-  const profileEvidence = Array.isArray(profile?.recent_evidence) ? profile.recent_evidence : [];
-  const profileBlock = profile ? `
-    <div class="detail-section writing-profile-card">
-      <div class="writing-profile-card-head">
-        <div>
-          <span class="section-label">Personalized profile</span>
-          <h3>个性化画像</h3>
-        </div>
-        <strong>${escapeHtml(profile.total_scored ?? 0)} 次评分</strong>
-      </div>
-      <p>${escapeHtml(profile.primary_focus_text || "画像会随着更多真实作文评分逐步稳定。")}</p>
-      ${profileIssues.length ? `<div class="writing-profile-tags">${profileIssues.map((item) => `<span>${escapeHtml(item.label || item.tag)} · ${escapeHtml(item.count ?? 0)}</span>`).join("")}</div>` : ""}
-      ${profileEvidence.length ? `<ul class="writing-profile-evidence">${profileEvidence.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
-    </div>
-  ` : "";
   const promptCard = `
     <div class="writing-prompt-card writing-report-prompt-card">
       <span class="writing-pill">${escapeHtml(writingTaskLabel(entry.task_type))}</span>
@@ -5582,7 +5945,6 @@ function writingReportDetailHtml(entry) {
     </div>
     ${promptCard}
     ${score.structure_advice_only ? writingStructureAdviceHtml(score, entry) : writingParagraphReviewHtml(entry, score, paragraphReviews)}
-    ${profileBlock}
   ` : `
     <div class="detail-card writing-saved-report-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
       <div class="writing-saved-report-head">
@@ -5591,15 +5953,22 @@ function writingReportDetailHtml(entry) {
           <h2>${escapeHtml(displayTitle || `${taskSubline} 已保存`)}</h2>
           <p>${escapeHtml(taskSubline)} · ${escapeHtml(entry.word_count ?? 0)} words · ${escapeHtml(entry.display_time || entry.practice_date || "")}</p>
         </div>
-        <strong>未评分</strong>
+        <strong><span>Draft</span>未评分</strong>
       </div>
-      <div class="writing-saved-report-body">
-        <section>
-          <h3>下一步</h3>
-          <p>这篇作文已经保存并计入签到。需要 AI 反馈时，先回到编辑页检查内容，再重新生成报告。</p>
+      <div class="writing-draft-flow" aria-label="未评分作文处理步骤">
+        <span class="is-done"><strong>1</strong>正文已保存</span>
+        <span><strong>2</strong>回编辑页检查</span>
+        <span><strong>3</strong>发起 AI 评分</span>
+      </div>
+      <div class="writing-saved-report-body writing-draft-summary">
+        <section class="writing-draft-primary">
+          <span>下一步</span>
+          <h3>继续编辑并生成报告</h3>
+          <p>这篇作文已经保存。需要反馈时，回到编辑页检查题目、正文和字数，然后重新发起 AI 评分与辅导。</p>
         </section>
         <section>
-          <h3>当前状态</h3>
+          <span>当前状态</span>
+          <h3>${answerText ? "正文可用" : "正文为空"}</h3>
           <p>${answerText ? "已保存正文，可以继续修改或发起评分。" : "这篇记录目前没有正文内容，建议先补全文本再评分。"}</p>
         </section>
       </div>
@@ -6073,11 +6442,11 @@ async function saveWritingEntry(keepPending = false, options = {}) {
 }
 
 function isWritingTaskActive(task) {
-  return Boolean(task && ["pending", "running"].includes(String(task.status || "")));
+  return Boolean(task && isAiTaskActiveStatus(task.status));
 }
 
 function isWritingTaskTerminal(task) {
-  return Boolean(task && ["succeeded", "fallback", "failed", "cancelled"].includes(String(task.status || "")));
+  return Boolean(task && isAiTaskTerminalStatus(task.status));
 }
 
 function writingTaskStatusTitle(task) {
@@ -6121,11 +6490,11 @@ function speakingScoreNotificationKey(attempt) {
 }
 
 function isSpeakingTaskActive(task) {
-  return Boolean(task && ["pending", "running"].includes(String(task.status || "")));
+  return Boolean(task && isAiTaskActiveStatus(task.status));
 }
 
 function isSpeakingTaskTerminal(task) {
-  return Boolean(task && ["succeeded", "failed", "fallback", "cancelled"].includes(String(task.status || "")));
+  return Boolean(task && isAiTaskTerminalStatus(task.status));
 }
 
 function speakingTaskStatusTitle(task) {
@@ -6405,7 +6774,7 @@ function startWritingScorePolling(entryId, options = {}) {
       }
       await loadWritingSummary();
       const task = entry.ai_task || null;
-      if (entry.score || (task && ["fallback", "succeeded"].includes(String(task.status || "")))) {
+      if (entry.score || (task && isAiTaskCompletedWithResultStatus(task.status))) {
         clearWritingScorePolling();
         setWritingPending(false);
         if (notifyOnComplete) showWritingScoreCompleteModal(entry, task);
@@ -7806,7 +8175,7 @@ function recoverActivePracticeAfterError(error) {
     hasAudio: Boolean(state.currentTurn.examiner_tts?.audio_url),
     message,
   });
-  if (["recording", "preparing"].includes(state.status)) {
+  if (isRecoverablePracticeErrorStatus(state.status)) {
     text("recordStatus", message || "Temporary issue detected; continuing the current question.");
     return true;
   }
@@ -7871,8 +8240,8 @@ function renderAccountStatus(message = "", isError = false) {
   const details = $("accountProfileDetails");
   const securityStatus = $("securityStatus");
   const fallback = state.account.authenticated
-    ? `当前登录账号：${state.account.user?.username || ""}`
-    : (state.account.backendAvailable ? "当前未登录，姓名仍会保存在本机。" : "后端暂不可用，姓名仍会保存在本机。");
+    ? `${t("account.currentUser")}${state.account.user?.username || ""}`
+    : (state.account.backendAvailable ? t("account.guestLocal") : t("account.backendOffline"));
 
   if (status) {
     status.textContent = message || fallback;
@@ -7885,13 +8254,18 @@ function renderAccountStatus(message = "", isError = false) {
       const phone = user.phone_number ? ` · ${user.phone_number}` : "";
       details.textContent = `${user.username || "当前账号"}${phone}`;
     } else {
-      details.textContent = "登录后可同步个人资料和账号安全设置。";
+      details.textContent = t("account.detailsGuest");
     }
   }
   if (!message && securityStatus && !securityStatus.textContent.trim()) {
-    securityStatus.textContent = state.account.authenticated ? "请使用强密码，并定期更换。" : "登录后可修改密码。";
+    securityStatus.textContent = state.account.authenticated ? t("account.securityStrong") : t("account.securityLogin");
     securityStatus.classList.remove("error");
   }
+}
+
+function questionBankScopeLabel(scope, fallback = "") {
+  const key = `bank.${normalizeQuestionBankScope(scope)}`;
+  return t(key, fallback || scope);
 }
 
 function formatSeasonLabel(value) {
@@ -7925,11 +8299,11 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
   const options = Array.isArray(summary?.bank_scope_options) && summary.bank_scope_options.length
     ? summary.bank_scope_options
     : [
-        { scope: "current", label: "当前考季" },
-        { scope: "new", label: "新题" },
-        { scope: "retained", label: "保留题" },
-        { scope: "archive", label: "历史考季" },
-        { scope: "all", label: "全部题库" },
+        { scope: "current", label: t("bank.current") },
+        { scope: "new", label: t("bank.new") },
+        { scope: "retained", label: t("bank.retained") },
+        { scope: "archive", label: t("bank.archive") },
+        { scope: "all", label: t("bank.all") },
       ];
   const seasonPill = $("accountBankSeasonPill");
   if (seasonPill) {
@@ -7937,13 +8311,13 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
   }
   const status = $("accountBankStatus");
   if (status) {
-    const label = summary?.active_scope_label || options.find((item) => item.scope === activeScope)?.label || "当季全部";
+    const label = questionBankScopeLabel(activeScope, summary?.active_scope_label || options.find((item) => item.scope === activeScope)?.label || t("bank.defaultLabel"));
     const part1 = Number(summary?.part1_count || 0);
     const part2 = Number(summary?.part2_count || 0);
     const p3 = Number(summary?.part3_follow_up_count || 0);
     status.textContent = summary
-      ? `${label}：${part1} P1 · ${part2} P2${p3 ? ` · ${p3} P3 参考追问` : ""}`
-      : "正在读取当前题库...";
+      ? `${label}：${part1} P1 · ${part2} P2${p3 ? ` · ${p3} ${t("bank.followups")}` : ""}`
+      : t("bank.loading");
     status.classList.remove("error");
   }
   const optionRoot = $("accountBankScopeOptions");
@@ -7954,7 +8328,7 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
         ? `<small>${Number(item.part1_count || 0)} P1 · ${Number(item.part2_count || 0)} P2</small>`
         : "";
       return `<button type="button" data-bank-scope="${escapeHtml(scope)}" class="${scope === activeScope ? "is-active" : ""}" aria-pressed="${scope === activeScope ? "true" : "false"}">
-        <span class="account-bank-option-label">${escapeHtml(item.label || scope)}</span>
+        <span class="account-bank-option-label">${escapeHtml(questionBankScopeLabel(scope, item.label || scope))}</span>
         ${countText}
       </button>`;
     }).join("");
@@ -7973,7 +8347,7 @@ function renderQuestionBankSelectorError(error) {
 function resetAccountProfileLoadingUi() {
   const status = $("accountProfileStatus");
   if (status) {
-    status.textContent = "正在读取账号资料...";
+    status.textContent = t("account.profileLoading");
     status.classList.remove("error");
   }
   const walletStatus = $("walletStatus");
@@ -7984,10 +8358,10 @@ function resetAccountProfileLoadingUi() {
       <article class="wallet-balance-card">
         <div class="wallet-balance-main">
           <span class="wallet-balance-label">可用余额</span>
-          <strong class="wallet-balance-amount">加载中</strong>
+          <strong class="wallet-balance-amount">${escapeHtml(t("wallet.loading"))}</strong>
         </div>
-        <span class="wallet-balance-status">读取中</span>
-        <p class="wallet-balance-hint">AI 功能按实际用量结算，余额需大于 ¥0.30。</p>
+        <span class="wallet-balance-status">${escapeHtml(t("wallet.reading"))}</span>
+        <p class="wallet-balance-hint">${escapeHtml(t("wallet.hint"))}</p>
       </article>
     `;
   }
@@ -8291,6 +8665,9 @@ function bindEvents() {
   $("fullNameInput")?.addEventListener("blur", flushCandidateNameSave);
   $("englishNameInput")?.addEventListener("blur", flushCandidateNameSave);
   $("darkModeToggle")?.addEventListener("change", (event) => applyDarkMode(event.target.checked));
+  document.querySelectorAll("[data-ui-language-option]").forEach((button) => {
+    button.addEventListener("click", () => applyUiLanguage(button.dataset.uiLanguageOption));
+  });
   $("accountBankScopeOptions")?.addEventListener("click", (event) => {
     const button = event.target?.closest?.("[data-bank-scope]");
     if (!button) return;
@@ -9650,6 +10027,7 @@ async function doRecharge() {
 }
 
 async function init() {
+  loadUiLanguage();
   loadFontStyle();
   loadDarkMode();
   loadCandidateNames();
@@ -9676,7 +10054,7 @@ async function init() {
   applyRouteState(route);
   const urlView = route.view;
   let savedView = urlView || "home";
-  if (!viewCopy[savedView]) savedView = "home";
+  if (!isKnownView(savedView)) savedView = "home";
   switchView(savedView, { skipPersist: Boolean(urlView), skipUrl: true });
   document.body.classList.remove("app-booting");
   scheduleAuthenticatedPrefetch();

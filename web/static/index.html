@@ -17,19 +17,19 @@
     <div class="shell">
       <!-- Global top bar for user and settings -->
       <div class="global-topbar">
-        <button id="topbarBackCorpusBtn" class="topbar-back-button hidden" type="button" title="返回" aria-label="返回">
+        <button id="topbarBackCorpusBtn" class="topbar-back-button hidden" type="button" title="返回" aria-label="返回" data-i18n-title="action.back" data-i18n-aria="action.back">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M15 18l-6-6 6-6"></path>
             <path d="M9 12h11"></path>
           </svg>
-          <span>返回</span>
+          <span data-i18n="action.back">返回</span>
         </button>
-        <button type="button" id="accountBackBtn" class="account-back-button hidden" title="返回" aria-label="返回">
+        <button type="button" id="accountBackBtn" class="account-back-button hidden" title="返回" aria-label="返回" data-i18n-title="action.back" data-i18n-aria="action.back">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M15 18l-6-6 6-6"></path>
             <path d="M9 12h11"></path>
           </svg>
-          <span>返回</span>
+          <span data-i18n="action.back">返回</span>
         </button>
         <div id="writingTopbarActions" class="topbar-actions writing-topbar-actions hidden" aria-label="Writing controls">
           <div class="writing-task-switch" role="group" aria-label="Writing task type">
@@ -38,75 +38,75 @@
           </div>
           <button id="writingPromptPickerBtn" class="writing-picker-button" type="button">
             <span class="writing-picker-copy">
-              <strong id="writingPromptPickerTitle">选择写作题目</strong>
+              <strong id="writingPromptPickerTitle" data-i18n="writing.selectPrompt">选择写作题目</strong>
             </span>
-            <span id="writingPromptPickerMeta" class="writing-picker-chip">打开题库</span>
+            <span id="writingPromptPickerMeta" class="writing-picker-chip" data-i18n="writing.openBank">打开题库</span>
             <svg class="writing-picker-chevron" aria-hidden="true" viewBox="0 0 24 24">
               <path d="M9 6l6 6-6 6"></path>
             </svg>
           </button>
-          <button id="writingRandomBtn" class="topbar-random-button" type="button" title="换一道随机题">
+          <button id="writingRandomBtn" class="topbar-random-button" type="button" title="换一道随机题" data-i18n-title="writing.random">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M20 11a8 8 0 0 0-14.4-4.8L4 8"></path>
               <path d="M4 4v4h4"></path>
               <path d="M4 13a8 8 0 0 0 14.4 4.8L20 16"></path>
               <path d="M20 20v-4h-4"></path>
             </svg>
-                <span>随机换题</span>
+                <span data-i18n="writing.random">随机换题</span>
           </button>
         </div>
         <div class="global-topbar-spacer"></div>
         <div class="global-topbar-actions">
-          <button class="avatar-settings-button" data-view="account" title="Account">
+          <button class="avatar-settings-button" data-view="account" title="Account" data-i18n-title="action.account">
             <span class="user-avatar" id="userAvatarDesktop">J</span>
           </button>
         </div>
       </div>
 
-      <button id="agentAssistantBtn" class="agent-assistant-trigger floating-agent-assistant-trigger" type="button" title="题库助手" aria-label="题库助手">
+      <button id="agentAssistantBtn" class="agent-assistant-trigger floating-agent-assistant-trigger" type="button" title="题库助手" aria-label="题库助手" data-i18n-title="action.questionAssistant" data-i18n-aria="action.questionAssistant">
         <svg aria-hidden="true" viewBox="0 0 24 24">
           <path d="M12 3l1.9 4.8L19 10l-5.1 2.2L12 17l-1.9-4.8L5 10l5.1-2.2L12 3z"></path>
           <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"></path>
         </svg>
-        <span>题库助手</span>
+        <span data-i18n="action.questionAssistant">题库助手</span>
       </button>
 
       <aside class="nav" aria-label="IELTS practice navigation">
         <div class="nav-top">
           <div class="nav-top-left">
-            <div class="brand">IELTS Studio</div>
+            <div class="brand" data-i18n="app.title">IELTS Studio</div>
             <div class="status" id="bankStatus">Loading bank...</div>
           </div>
           <div class="nav-top-right">
             <div class="nav-user-mobile">
-              <button class="avatar-settings-button" data-view="account" title="Account">
+              <button class="avatar-settings-button" data-view="account" title="Account" data-i18n-title="action.account">
                 <span class="user-avatar" id="userAvatar">J</span>
               </button>
             </div>
           </div>
-          <div id="navLockHint" class="nav-lock-hint hidden">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
+          <div id="navLockHint" class="nav-lock-hint hidden" data-i18n="nav.lockHint">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
           <nav class="nav-primary" aria-label="Practice modes">
-            <a class="nav-button active" data-view="home" href="?view=home">首页</a>
+            <a class="nav-button active" data-view="home" href="?view=home" data-i18n="nav.home">首页</a>
             <a class="nav-button" data-view="mock" href="?view=mock">Mock</a>
             <a class="nav-button" data-view="p1" href="?view=p1">P1</a>
             <a class="nav-button" data-view="p2" href="?view=p2">P2</a>
             <a class="nav-button" data-view="p3" href="?view=p3">P3</a>
-            <a class="nav-button" data-view="history" href="?view=history">口语报告</a>
+            <a class="nav-button" data-view="history" href="?view=history" data-i18n="nav.speakingReports">口语报告</a>
             <div class="nav-divider" aria-hidden="true"></div>
-            <a class="nav-button" data-view="writing" href="?view=writing">每日写作</a>
-            <a class="nav-button" data-view="writingReports" href="?view=writingReports">写作报告</a>
+            <a class="nav-button" data-view="writing" href="?view=writing" data-i18n="nav.dailyWriting">每日写作</a>
+            <a class="nav-button" data-view="writingReports" href="?view=writingReports" data-i18n="nav.writingReports">写作报告</a>
           </nav>
         </div>
         <div class="nav-bottom">
           <nav class="nav-secondary" aria-label="Libraries">
-            <a class="nav-button" data-view="corpus" href="?view=corpus">语料库</a>
+            <a class="nav-button" data-view="corpus" href="?view=corpus" data-i18n="nav.corpus">语料库</a>
             <a class="nav-button" data-view="takeawayBook" href="?view=takeawayBook">Takeaway</a>
-            <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook">写作积累</a>
-            <a class="nav-button" data-view="spellingDrill" href="?view=spellingDrill">拼写错词训练</a>
+            <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook" data-i18n="nav.writingTakeaway">写作积累</a>
+            <a class="nav-button" data-view="spellingDrill" href="?view=spellingDrill" data-i18n="nav.spellingDrill">拼写错词训练</a>
           </nav>
           <div class="nav-divider" aria-hidden="true"></div>
           <div class="font-tool" aria-label="Appearance style">
-            <div class="font-tool-label">Appearance</div>
+            <div class="font-tool-label" data-i18n="nav.appearance">Appearance</div>
             <div class="font-options" role="group" aria-label="Appearance options">
               <button type="button" class="font-option active" data-font-style="default" title="Helpful & efficient">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
@@ -135,36 +135,96 @@
           <span id="busyText"></span>
         </div>
 
-        <section id="homePanel" class="panel home-panel" aria-label="首页">
-          <div class="home-hero">
-            <div class="home-copy">
-              <div class="section-label">IELTS Speaking Studio</div>
-              <h2>选择一个入口，直接开始练习。</h2>
-              <p>首页只负责进入练习。P1、P2、P3 可以单独训练，Mock 会按完整考试流程串起来。</p>
+        <section id="homePanel" class="panel home-panel home-v2-panel" aria-label="首页">
+          <div class="home-v2-hero">
+            <div class="home-v2-copy">
+              <div class="home-v2-eyebrow" data-i18n="home.kicker">IELTS Study Workspace</div>
+              <h2 data-i18n="home.title">口语、写作和语料，一张工作台搞定。</h2>
+              <p data-i18n="home.subtitle">从真题练习到 AI 反馈，再到语料复用和拼写复习，把 IELTS 训练压进一个清晰的闭环。</p>
+              <div class="home-v2-actions" aria-label="快速开始">
+                <a class="home-v2-primary" data-home-mode="p1" href="?view=p1" data-i18n="home.cta.speaking">开始口语练习</a>
+                <a class="home-v2-secondary" href="?view=writing" data-i18n="home.cta.writing">写一篇作文</a>
+              </div>
+            </div>
+            <div class="home-v2-spotlight" aria-label="今日训练重点">
+              <span data-i18n="home.spotlight.kicker">Today</span>
+              <strong data-i18n="home.spotlight.title">先练输入，再沉淀表达</strong>
+              <p data-i18n="home.spotlight.desc">口语题库、写作报告、Takeaway 和拼写错词会互相回流，形成你自己的表达资产。</p>
             </div>
           </div>
 
-          <div class="home-practice-grid" aria-label="Speaking practice entries">
-            <a class="home-practice-card tone-p1" data-home-mode="p1" href="?view=p1">
-              <span class="home-card-kicker">Part 1</span>
-              <strong>P1 短问短答</strong>
-              <small>练直答、原因和具体细节。</small>
-            </a>
-            <a class="home-practice-card tone-p2" data-home-mode="p2" href="?view=p2">
-              <span class="home-card-kicker">Part 2</span>
-              <strong>P2 Cue Card</strong>
-              <small>准备 1 分钟后完成长回答。</small>
-            </a>
-            <a class="home-practice-card tone-p3" data-home-mode="p3" href="?view=p3">
-              <span class="home-card-kicker">Part 3</span>
-              <strong>P3 深入讨论</strong>
-              <small>围绕话题练观点、原因和对比。</small>
-            </a>
-            <a id="startFullMockBtn" class="home-practice-card tone-mock" data-home-mode="mock" href="?view=mock">
-              <span class="home-card-kicker">Full Mock</span>
-              <strong>完整 Mock</strong>
-              <small>P1、P2、P3 串联模拟。</small>
-            </a>
+          <div class="home-v2-modules" aria-label="训练入口">
+            <section class="home-v2-module home-v2-module-speaking">
+              <div class="home-v2-module-head">
+                <span>Speaking</span>
+                <strong data-i18n="home.speaking.title">口语训练</strong>
+              </div>
+              <div class="home-v2-link-grid four">
+                <a class="home-v2-link tone-p1" data-home-mode="p1" href="?view=p1">
+                  <span>Part 1</span>
+                  <strong data-i18n="home.p1.title">P1 短问短答</strong>
+                  <small data-i18n="home.p1.desc">练直答、原因和具体细节。</small>
+                </a>
+                <a class="home-v2-link tone-p2" data-home-mode="p2" href="?view=p2">
+                  <span>Part 2</span>
+                  <strong data-i18n="home.p2.title">P2 Cue Card</strong>
+                  <small data-i18n="home.p2.desc">准备 1 分钟后完成长回答。</small>
+                </a>
+                <a class="home-v2-link tone-p3" data-home-mode="p3" href="?view=p3">
+                  <span>Part 3</span>
+                  <strong data-i18n="home.p3.title">P3 深入讨论</strong>
+                  <small data-i18n="home.p3.desc">围绕话题练观点、原因和对比。</small>
+                </a>
+                <a id="startFullMockBtn" class="home-v2-link tone-mock" data-home-mode="mock" href="?view=mock">
+                  <span>Mock</span>
+                  <strong data-i18n="home.mock.title">完整 Mock</strong>
+                  <small data-i18n="home.mock.desc">P1、P2、P3 串联模拟。</small>
+                </a>
+              </div>
+            </section>
+
+            <section class="home-v2-module home-v2-module-writing">
+              <div class="home-v2-module-head">
+                <span>Writing</span>
+                <strong data-i18n="home.writing.title">写作闭环</strong>
+              </div>
+              <div class="home-v2-link-grid two">
+                <a class="home-v2-link tone-writing" href="?view=writing">
+                  <span>Task 1 / Task 2</span>
+                  <strong data-i18n="home.writing.practice">每日写作</strong>
+                  <small data-i18n="home.writing.practiceDesc">选题、写作、保存，再交给 AI 评分。</small>
+                </a>
+                <a class="home-v2-link tone-report" href="?view=writingReports">
+                  <span>Reports</span>
+                  <strong data-i18n="home.writing.reports">写作报告</strong>
+                  <small data-i18n="home.writing.reportsDesc">查看批改、Band 7 改写和错词反馈。</small>
+                </a>
+              </div>
+            </section>
+
+            <section class="home-v2-module home-v2-module-corpus">
+              <div class="home-v2-module-head">
+                <span>Corpus</span>
+                <strong data-i18n="home.corpus.title">语料与复习</strong>
+              </div>
+              <div class="home-v2-link-grid three">
+                <a class="home-v2-link tone-corpus" href="?view=corpus">
+                  <span>Library</span>
+                  <strong data-i18n="home.corpus.library">语料库</strong>
+                  <small data-i18n="home.corpus.libraryDesc">管理 P1、P2、Takeaway 和写作积累。</small>
+                </a>
+                <a class="home-v2-link tone-takeaway" href="?view=writingTakeawayBook">
+                  <span>Takeaway</span>
+                  <strong data-i18n="home.corpus.takeaway">写作积累</strong>
+                  <small data-i18n="home.corpus.takeawayDesc">沉淀可复用句型和观点表达。</small>
+                </a>
+                <a class="home-v2-link tone-spelling" href="?view=spellingDrill">
+                  <span>Drill</span>
+                  <strong data-i18n="home.corpus.spelling">拼写错词训练</strong>
+                  <small data-i18n="home.corpus.spellingDesc">把作文错词加入间隔复习。</small>
+                </a>
+              </div>
+            </section>
           </div>
         </section>
 
@@ -1069,64 +1129,71 @@
           <div class="account-dashboard">
             <header class="account-page-header">
               <div class="account-page-copy">
-                <p class="account-page-kicker">账户</p>
-                <h1>个人资料与训练</h1>
-                <p id="accountProfileDetails" class="muted">登录后可同步个人资料和账号安全设置。</p>
+                <p class="account-page-kicker" data-i18n="account.kicker">账户</p>
+                <h1 data-i18n="account.title">个人资料与训练</h1>
+                <p id="accountProfileDetails" class="muted" data-i18n="account.detailsGuest">登录后可同步个人资料和账号安全设置。</p>
               </div>
               <div class="account-page-actions">
-                <button type="button" id="profileSecurityBtn" class="account-action-button account-action-button-secondary">修改密码</button>
-                <button type="button" id="profileLogoutBtn" class="account-action-button account-action-button-ghost">退出登录</button>
+                <button type="button" id="profileSecurityBtn" class="account-action-button account-action-button-secondary" data-i18n="account.changePassword">修改密码</button>
+                <button type="button" id="profileLogoutBtn" class="account-action-button account-action-button-ghost" data-i18n="account.logout">退出登录</button>
               </div>
             </header>
             <div class="account-dashboard-grid">
               <article class="settings-card auth-card account-profile-card">
                 <div class="account-card-head">
                   <div>
-                    <span class="account-card-eyebrow">Profile</span>
-                    <h2>口语身份资料</h2>
-                    <p id="accountProfileStatus" class="account-card-subtitle">正在读取账号资料...</p>
+                    <span class="account-card-eyebrow" data-i18n="account.profileEyebrow">Profile</span>
+                    <h2 data-i18n="account.profileTitle">口语身份资料</h2>
+                    <p id="accountProfileStatus" class="account-card-subtitle" data-i18n="account.profileLoading">正在读取账号资料...</p>
                   </div>
                   <span class="account-card-mark" aria-hidden="true">ID</span>
                 </div>
                 <div class="account-profile-body">
                   <div id="settingsNameFields" class="settings-name-fields account-name-fields" aria-label="Candidate names">
                     <label>
-                      <span>中文名</span>
+                      <span data-i18n="account.nameChinese">中文名</span>
                       <input id="fullNameInput" value="LiHua" autocomplete="name">
                     </label>
                     <label>
-                      <span>英文名</span>
+                      <span data-i18n="account.nameEnglish">英文名</span>
                       <input id="englishNameInput" value="Jasper" autocomplete="nickname">
                     </label>
                   </div>
-                  <button type="button" id="profileSaveBtn" class="account-action-button account-action-button-primary">保存资料</button>
+                  <button type="button" id="profileSaveBtn" class="account-action-button account-action-button-primary" data-i18n="account.saveProfile">保存资料</button>
                 </div>
                 <section class="account-bank-selector" aria-labelledby="accountBankSelectorTitle">
                   <div class="account-bank-selector-head">
                     <div>
-                      <span class="account-card-eyebrow">Question Bank</span>
-                      <h3 id="accountBankSelectorTitle">题库选择</h3>
+                      <span class="account-card-eyebrow" data-i18n="bank.eyebrow">Question Bank</span>
+                      <h3 id="accountBankSelectorTitle" data-i18n="bank.title">题库选择</h3>
                     </div>
                     <span id="accountBankSeasonPill" class="account-bank-season">读取中</span>
                   </div>
-                  <p id="accountBankStatus" class="account-card-subtitle" aria-live="polite">正在读取当前题库...</p>
-                  <div id="accountBankScopeOptions" class="account-bank-options" role="radiogroup" aria-label="选择口语题库范围">
-                    <button type="button" data-bank-scope="current" class="is-active"><span>当前考季</span></button>
-                    <button type="button" data-bank-scope="new"><span>新题</span></button>
-                    <button type="button" data-bank-scope="retained"><span>保留题</span></button>
-                    <button type="button" data-bank-scope="archive"><span>历史考季</span></button>
-                    <button type="button" data-bank-scope="all"><span>全部题库</span></button>
+                  <p id="accountBankStatus" class="account-card-subtitle" aria-live="polite" data-i18n="bank.loading">正在读取当前题库...</p>
+                  <div id="accountBankScopeOptions" class="account-bank-options" role="radiogroup" aria-label="选择口语题库范围" data-i18n-aria="bank.scopeAria">
+                    <button type="button" data-bank-scope="current" class="is-active"><span data-i18n="bank.current">当前考季</span></button>
+                    <button type="button" data-bank-scope="new"><span data-i18n="bank.new">新题</span></button>
+                    <button type="button" data-bank-scope="retained"><span data-i18n="bank.retained">保留题</span></button>
+                    <button type="button" data-bank-scope="archive"><span data-i18n="bank.archive">历史考季</span></button>
+                    <button type="button" data-bank-scope="all"><span data-i18n="bank.all">全部题库</span></button>
                   </div>
                 </section>
                 <div class="account-card-footer">
                   <label class="account-theme-toggle" for="darkModeToggle">
-                    <span>深色外观</span>
-                    <input id="darkModeToggle" type="checkbox" aria-label="切换深色外观">
+                    <span data-i18n="settings.darkMode">深色外观</span>
+                    <input id="darkModeToggle" type="checkbox" aria-label="切换深色外观" data-i18n-aria="settings.darkModeAria">
                     <i aria-hidden="true"></i>
                   </label>
+                  <div class="account-language-row">
+                    <span class="account-language-label" data-i18n="settings.language">界面语言</span>
+                    <div class="account-language-options" role="group" aria-label="选择界面语言" data-i18n-aria="settings.languageAria">
+                      <button type="button" data-ui-language-option="zh" class="is-active" aria-pressed="true">中文</button>
+                      <button type="button" data-ui-language-option="en" aria-pressed="false">English</button>
+                    </div>
+                  </div>
                   <div class="account-ai-source-row">
-                    <label class="account-ai-source-label" for="aiSourceSelect">AI 评分来源</label>
-                    <select id="aiSourceSelect" class="account-ai-source-select" aria-label="AI 评分来源">
+                    <label class="account-ai-source-label" for="aiSourceSelect" data-i18n="settings.aiSource">AI 评分来源</label>
+                    <select id="aiSourceSelect" class="account-ai-source-select" aria-label="AI 评分来源" data-i18n-aria="settings.aiSource">
                       <option value="gpt">GPT（默认）</option>
                       <option value="claude_cli">Claude</option>
                     </select>
@@ -1136,13 +1203,13 @@
               <article class="settings-card account-wallet-card">
                 <div class="account-card-head account-wallet-head">
                   <div>
-                    <span class="account-card-eyebrow">Wallet</span>
-                    <h2>钱包</h2>
+                    <span class="account-card-eyebrow" data-i18n="wallet.eyebrow">Wallet</span>
+                    <h2 data-i18n="wallet.title">钱包</h2>
                   </div>
-                  <button type="button" id="openRechargeBtn" class="confirm-recharge-btn account-action-button account-action-button-accent">充值</button>
+                  <button type="button" id="openRechargeBtn" class="confirm-recharge-btn account-action-button account-action-button-accent" data-i18n="wallet.recharge">充值</button>
                 </div>
                 <div id="walletStatus" class="account-balance-panel is-loading">
-                  <div><span>可用余额</span><strong>加载中</strong></div>
+                  <div><span data-i18n="wallet.available">可用余额</span><strong data-i18n="wallet.loading">加载中</strong></div>
                 </div>
                 <div id="ledgerList" class="settings-list account-ledger-list" aria-live="polite">
                   <div class="account-skeleton-row"></div>
@@ -1158,8 +1225,8 @@
           <article class="settings-card auth-card account-security-card">
             <div class="settings-card-head account-security-card-head">
               <div>
-                <h2>修改密码</h2>
-                <p class="muted">修改登录密码，保持账号安全。</p>
+                <h2 data-i18n="security.title">修改密码</h2>
+                <p class="muted" data-i18n="security.subtitle">修改登录密码，保持账号安全。</p>
               </div>
               <button type="button" id="securityCloseBtn" class="icon-button" title="关闭" aria-label="关闭">
                 <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -1231,6 +1298,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260607-p3-ai-plan-generation"></script>
+    <script src="/app.js?v=20260607-refactor-smell-cleanup"></script>
   </body>
 </html>

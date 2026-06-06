@@ -155,6 +155,11 @@ await api("/api/score", {
   static/local questions, show fallback/bank status instead of styling it as a
   successful AI generation.
 - Keep mode navigation explicit: Mock, P1, P2, P3, History, Settings.
+- Keep repeated view names and workflow statuses centralized as named sets or
+  small predicate helpers near the top of `web/static/app.js`. Avoid scattering
+  literal arrays such as `["mock", "p1", "p2", "p3"]` or repeated AI task /
+  recording status lists across event handlers; those lists drift quickly when
+  a state is added or renamed.
 - Keep P2 layout stable after start: cue card fixed at top and recorder position
   unchanged while Listening/Preparing/Recording/Saving changes state.
 - Guard late async continuations after abort so save/score responses cannot
