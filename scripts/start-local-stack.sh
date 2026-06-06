@@ -104,10 +104,8 @@ start_django() {
     return 0
   fi
   echo "Starting Django at http://$DJANGO_HOST:$DJANGO_PORT"
-  (
-    cd "$ROOT_DIR"
-    exec "$PYTHON" backend_django/manage.py runserver "$DJANGO_HOST:$DJANGO_PORT" --noreload
-  ) >"$RUNLOG_DIR/django.out.log" 2>"$RUNLOG_DIR/django.err.log" &
+  nohup "$PYTHON" "$ROOT_DIR/backend_django/manage.py" runserver "$DJANGO_HOST:$DJANGO_PORT" --noreload \
+    >"$RUNLOG_DIR/django.out.log" 2>"$RUNLOG_DIR/django.err.log" &
 }
 
 start_worker() {
@@ -120,13 +118,11 @@ start_worker() {
     echo "Warning: AI_HTTP_* is incomplete; worker may fall back to Codex/fallback." >&2
   fi
   echo "Starting AI worker"
-  (
-    cd "$ROOT_DIR"
-    exec "$PYTHON" backend_django/manage.py run_ai_worker \
-      --interval-seconds 2 \
-      --idle-interval-seconds 5 \
-      --stop-file "$STOP_FILE"
-  ) >"$RUNLOG_DIR/ai-worker.out.log" 2>"$RUNLOG_DIR/ai-worker.err.log" &
+  nohup "$PYTHON" "$ROOT_DIR/backend_django/manage.py" run_ai_worker \
+    --interval-seconds 2 \
+    --idle-interval-seconds 5 \
+    --stop-file "$STOP_FILE" \
+    >"$RUNLOG_DIR/ai-worker.out.log" 2>"$RUNLOG_DIR/ai-worker.err.log" &
 }
 
 start_tunnel() {
