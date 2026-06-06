@@ -5,10 +5,11 @@ from django.db import transaction
 from apps.billing.models import CodexUsageEvent, WalletReservation
 from apps.billing.services import (
     BillingError,
+    DEFAULT_AI_START_MIN_BALANCE_U,
     DEFAULT_USAGE_MODEL,
     DEFAULT_USAGE_PROVIDER,
     release_reservation,
-    reserve_usage,
+    require_ai_start_balance,
     settle_usage,
 )
 
@@ -67,7 +68,7 @@ def create_billable_ai_task(
     *,
     user,
     task_type: str,
-    reserved_u: int,
+    reserved_u: int = 0,
     idempotency_key: str,
     provider: str | None = None,
     model: str = "",
@@ -78,6 +79,7 @@ def create_billable_ai_task(
     request_payload: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
     max_attempts: int = 3,
+    minimum_balance_u: int = DEFAULT_AI_START_MIN_BALANCE_U,
 ) -> tuple[AITask, bool]:
     idempotency_key = clean_text(idempotency_key)
     if not idempotency_key:
@@ -85,9 +87,9 @@ def create_billable_ai_task(
     try:
         reserved_u = int(reserved_u)
     except (TypeError, ValueError) as exc:
-        raise AIOrchestrationError("reserved_u must be a positive integer") from exc
-    if reserved_u <= 0:
-        raise AIOrchestrationError("reserved_u must be a positive integer")
+        raise AIOrchestrationError("reserved_u must be a non-negative integer") from exc
+    if reserved_u < 0:
+        raise AIOrchestrationError("reserved_u must be a non-negative integer")
 
     existing = AITask.objects.select_for_update().filter(idempotency_key=idempotency_key).first()
     if existing:
@@ -97,10 +99,15 @@ def create_billable_ai_task(
 
     call_id = clean_text(call_id) or generated_call_id(user, idempotency_key, task_type, related_type, related_id)
     try:
-        reserve_usage(user, call_id, reserved_u)
+        start_balance = require_ai_start_balance(user, minimum_balance_u)
     except BillingError as exc:
         raise AIOrchestrationError(str(exc)) from exc
-    reservation = WalletReservation.objects.select_for_update().get(call_id=call_id)
+    task_metadata = {
+        **(metadata or {}),
+        "billing_policy": "balance_gate_then_usage_settlement",
+        "minimum_balance_u": start_balance["minimum_u"],
+        "minimum_balance_rmb": start_balance["minimum_rmb"],
+    }
     task, created = create_ai_task(
         user=user,
         task_type=task_type,
@@ -112,9 +119,9 @@ def create_billable_ai_task(
         call_id=call_id,
         prompt_version=prompt_version,
         request_payload=request_payload,
-        metadata=metadata,
+        metadata=task_metadata,
         max_attempts=max_attempts,
-        billing_reservation=reservation,
+        billing_reservation=None,
     )
     return task, created
 

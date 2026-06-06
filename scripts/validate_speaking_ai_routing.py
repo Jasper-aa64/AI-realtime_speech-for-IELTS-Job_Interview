@@ -95,7 +95,7 @@ def main() -> int:
         choices=("quick", "all", "p1", "p3", "p3-from-p2", "stream", "report", "band7"),
         help="quick=p1,p3,stream. all also runs report and Band 7/coaching, which costs more tokens.",
     )
-    parser.add_argument("--model", default="", help="Optional SPEAKING_AI_MODEL override, e.g. gpt-5.4-mini.")
+    parser.add_argument("--model", default="", help="Optional SPEAKING_AI_MODEL override, e.g. gpt-5.5.")
     parser.add_argument("--mode", default="http", choices=("http", "chain", "codex", "fallback"), help="Speaking AI route.")
     parser.add_argument("--json", action="store_true", help="Emit compact JSON only.")
     args = parser.parse_args()

@@ -19,11 +19,23 @@ class CustomUser(AbstractUser):
 
 
 class UserProfile(models.Model):
+    REPORT_AI_SOURCE_GPT = "gpt"
+    REPORT_AI_SOURCE_CLAUDE_CLI = "claude_cli"
+    REPORT_AI_SOURCE_CHOICES = [
+        (REPORT_AI_SOURCE_GPT, "GPT (默认)"),
+        (REPORT_AI_SOURCE_CLAUDE_CLI, "Claude CLI"),
+    ]
+
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="profile")
     full_name = models.CharField(max_length=120, blank=True, default="LiHua")
     english_name = models.CharField(max_length=120, blank=True, default="Jasper")
     target_band = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     timezone = models.CharField(max_length=64, default="Asia/Shanghai")
+    report_ai_source = models.CharField(
+        max_length=32,
+        choices=REPORT_AI_SOURCE_CHOICES,
+        default=REPORT_AI_SOURCE_GPT,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

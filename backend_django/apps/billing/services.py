@@ -12,6 +12,7 @@ from .models import CodexUsageEvent, MICRO_RMB_PER_RMB, PriceSnapshot, TokenWall
 
 
 DEFAULT_INITIAL_GRANT_U = 5 * MICRO_RMB_PER_RMB
+DEFAULT_AI_START_MIN_BALANCE_U = 300_000
 DEFAULT_USAGE_PROVIDER = "codex"
 DEFAULT_USAGE_MODEL = "codex-cli"
 DEFAULT_PRICE_SNAPSHOT = {
@@ -127,8 +128,11 @@ def wallet_payload(user) -> dict[str, Any]:
         "username": user.get_username(),
         "balance_u": wallet.balance_u,
         "reserved_u": wallet.reserved_u,
+        "ai_start_min_balance_u": DEFAULT_AI_START_MIN_BALANCE_U,
         "balance_rmb": round(wallet.balance_u / MICRO_RMB_PER_RMB, 6),
         "reserved_rmb": round(wallet.reserved_u / MICRO_RMB_PER_RMB, 6),
+        "ai_start_min_balance_rmb": round(DEFAULT_AI_START_MIN_BALANCE_U / MICRO_RMB_PER_RMB, 6),
+        "ai_start_allowed": wallet.balance_u > DEFAULT_AI_START_MIN_BALANCE_U,
         "entries": [ledger_entry_payload(entry) for entry in entries],
     }
 
@@ -275,6 +279,20 @@ def capture_usage(
     if update_fields:
         event.save(update_fields=[*update_fields, "updated_at"])
     return event
+
+
+@transaction.atomic
+def require_ai_start_balance(user, minimum_u: int = DEFAULT_AI_START_MIN_BALANCE_U) -> dict[str, Any]:
+    minimum_u = non_negative_int(minimum_u, "minimum_u")
+    wallet = TokenWallet.objects.select_for_update().get(user=ensure_wallet(user).user)
+    if wallet.balance_u <= minimum_u:
+        raise BillingError("余额不足，需保持余额大于 ¥0.30 才能使用 AI 功能。")
+    return {
+        "balance_u": wallet.balance_u,
+        "balance_rmb": round(wallet.balance_u / MICRO_RMB_PER_RMB, 6),
+        "minimum_u": minimum_u,
+        "minimum_rmb": round(minimum_u / MICRO_RMB_PER_RMB, 6),
+    }
 
 
 @transaction.atomic

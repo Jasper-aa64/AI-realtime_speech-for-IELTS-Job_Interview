@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260606-p3-dialog-context-zone">
+    <link rel="stylesheet" href="/styles.css?v=20260606-corpus-workspace-redesign">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -220,31 +220,12 @@
           <div class="phase-meter"><span id="phaseMeter"></span></div>
 
           <div id="p3TopicPanel" class="p3-topic-panel hidden">
-            <div class="p3-topic-head">
-              <div class="p3-topic-copy">
-                <label>Part 3 Discussion Lab</label>
-                <h2>P3 深入讨论训练</h2>
-                <p>先把来源、训练能力和强度定好，再生成一套追问计划。重点练抽象讨论、解释观点、对比让步和社会层面的展开。</p>
-              </div>
-              <div class="p3-exam-brief" aria-label="Part 3 training target">
-                <span>4-5 min</span>
-                <strong>从个人经历上升到 general / abstract discussion</strong>
-                <small>练 explain opinions · analyse · discuss · speculate</small>
-              </div>
-            </div>
-            <div class="p3-flow-steps" aria-label="Part 3 flow">
-              <span class="active">1 选择来源</span>
-              <span>2 选择能力</span>
-              <span>3 生成追问</span>
-              <span>4 开始录音</span>
-            </div>
             <div class="p3-topic-body">
               <div class="p3-mode-row">
                 <div class="p3-launch-label">训练强度</div>
                 <div class="p3-mode-switch" role="group" aria-label="Part 3 mode">
                   <button type="button" class="p3-mode-option active" data-p3-intensity="normal">标准练习</button>
                   <button type="button" class="p3-mode-option" data-p3-intensity="high">追问压力</button>
-                  <button type="button" class="p3-mode-option" data-p3-intensity="drill">专项快练</button>
                 </div>
                 <div class="p3-mode-help" id="p3ModeHelp" aria-live="polite">
                   每轮一个主问题，适合先稳住回答节奏。
@@ -253,43 +234,36 @@
               <section class="p3-launch-section p3-source-section">
                 <div class="p3-launch-label">训练来源</div>
                 <div class="p3-source-grid" role="group" aria-label="Part 3 source">
-                  <button type="button" class="p3-source-option active" data-p3-source="topic"><strong>按话题练</strong><small>从常见 IELTS 话题抽 P3 问题</small></button>
-                  <button type="button" class="p3-source-option" data-p3-source="p2_report"><strong>根据 P2 报告</strong><small>把刚才的长回答延伸成讨论</small></button>
-                  <button type="button" class="p3-source-option" data-p3-source="p2_corpus"><strong>根据 P2 素材</strong><small>围绕串题素材准备追问</small></button>
-                  <button type="button" class="p3-source-option" data-p3-source="custom"><strong>自定义主题</strong><small>输入想练的抽象话题</small></button>
+                  <button type="button" class="p3-source-option active" data-p3-source="bank">
+                    <strong>神奇题库固定追问</strong>
+                    <small>选择 P2 题卡，练它自带的 3 道 P3 追问。</small>
+                  </button>
+                  <button type="button" class="p3-source-option" data-p3-source="p2_report">
+                    <strong>根据 P2 报告</strong>
+                    <small>基于刚才长回答，由 AI 生成 Part 3 讨论题。</small>
+                  </button>
+                  <button type="button" class="p3-source-option" data-p3-source="custom">
+                    <strong>自定义主题</strong>
+                    <small>输入想练的抽象话题，由 AI 生成追问。</small>
+                  </button>
                 </div>
-              </section>
-              <section class="p3-launch-section" id="p3TopicSourceSection">
-                <div class="p3-launch-label">推荐话题</div>
-                <div id="p3TopicChips" class="topic-chips" aria-label="Suggested Part 3 topics"></div>
               </section>
               <section class="p3-launch-section hidden" id="p3CustomThemeSection">
-                <label class="p3-launch-label" for="p3CustomThemeInput">自定义主题</label>
-                <input id="p3CustomThemeInput" class="p3-custom-input" type="text" placeholder="例如：public transport, online learning, family businesses">
+                <div class="p3-launch-label">自定义主题</div>
+                <input id="p3CustomThemeInput" class="p3-custom-input" type="text" placeholder="例如：public responsibility, technology habits, city life" autocomplete="off">
               </section>
               <section class="p3-launch-section hidden" id="p3SourceContextSection">
-                <div class="p3-launch-label">来源上下文</div>
                 <div id="p3SourceContext" class="p3-source-context"></div>
-              </section>
-              <section class="p3-launch-section">
-                <div class="p3-launch-label">训练目标</div>
-                <div class="p3-focus-grid" role="group" aria-label="Part 3 focus">
-                  <button type="button" class="p3-focus-option" data-p3-focus="abstract_discussion"><strong>抽象讨论</strong><small>从个人例子上升到社会层面</small></button>
-                  <button type="button" class="p3-focus-option" data-p3-focus="cause_effect"><strong>原因影响</strong><small>解释 why / result / priority</small></button>
-                  <button type="button" class="p3-focus-option active" data-p3-focus="comparison_concession"><strong>对比让步</strong><small>比较群体并承认反方观点</small></button>
-                  <button type="button" class="p3-focus-option" data-p3-focus="future_trends"><strong>未来趋势</strong><small>预测变化和限制条件</small></button>
-                  <button type="button" class="p3-focus-option" data-p3-focus="policy_society"><strong>社会政策</strong><small>讨论责任、规则和公共影响</small></button>
-                </div>
               </section>
               <section class="p3-plan-preview" id="p3PlanPreview" aria-live="polite">
                 <div class="p3-plan-empty">
-                  <strong>还没有生成训练计划</strong>
-                  <span>选择来源和目标后，先生成计划；系统会列出题型、追问方向和回答动作。</span>
+                  <strong>先选择训练来源</strong>
+                  <span>神奇题库会载入题卡固定追问；P2 报告和自定义主题会调用真实 AI 生成。</span>
                 </div>
               </section>
               <div class="p3-start-row">
                 <span id="p3PlanStatus" class="p3-plan-status"></span>
-                <button id="p3GeneratePlanButton" class="p3-generate-button" type="button">生成 P3 训练计划</button>
+                <button id="p3GeneratePlanButton" class="p3-generate-button" type="button">载入固定追问</button>
                 <button id="p3StartButton" class="p3-start-button" type="button" disabled>按计划开始练习</button>
               </div>
             </div>
@@ -330,6 +304,21 @@
           <section id="summaryPanel" class="summary-panel hidden" aria-live="polite"></section>
           <div id="summaryOverlay" class="summary-panel-overlay hidden"></div>
         </section>
+
+        <div id="p3BankPickerModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="p3BankPickerTitle">
+          <div class="modal-backdrop" data-p3-bank-picker-close></div>
+          <article class="modal-card p3-bank-picker-modal-card">
+            <header class="modal-head">
+              <div>
+                <span class="modal-eyebrow">P2 Question Bank</span>
+                <h2 id="p3BankPickerTitle">选择 P2 题卡</h2>
+                <p>只展示已经维护固定 P3 追问的题卡。选择后将练这张题卡对应的追问。</p>
+              </div>
+              <button class="icon-button" type="button" aria-label="关闭题卡选择" data-p3-bank-picker-close>×</button>
+            </header>
+            <div id="p3BankPickerList" class="p3-bank-picker-list" aria-label="可选 P2 题卡"></div>
+          </article>
+        </div>
 
         <section id="p1CorpusPanel" class="p1-corpus-panel hidden" aria-label="我的 P1语料库">
           <div class="p1-corpus-shell">
@@ -419,34 +408,44 @@
               <div class="corpus-home-head-copy">
                 <span class="corpus-page-kicker">Corpus Workspace</span>
                 <h2>语料库</h2>
-                <p>集中管理 P1 短答、P2 串题素材和日常摘录的表达。</p>
+                <p>把口语素材、写作摘录和错词复习放在同一个工作台里。</p>
               </div>
             </header>
             <div class="corpus-home-grid">
               <a class="corpus-home-card corpus-card-p1" data-corpus-home-target="p1Corpus" href="?view=p1Corpus">
                 <span class="corpus-card-mark">P1</span>
-                <strong>我的 P1语料库</strong>
-                <small>按题组整理每道短问题准备的语料。</small>
+                <span class="corpus-card-type">Speaking corpus</span>
+                <strong>我的 P1 语料库</strong>
+                <small>按话题整理短答素材，练习时可直接调出对应语料。</small>
+                <span class="corpus-card-cta">进入</span>
               </a>
               <a class="corpus-home-card corpus-card-p2" data-corpus-home-target="p2Corpus" href="?view=p2Corpus">
                 <span class="corpus-card-mark">P2</span>
-                <strong>我准备的P2串题素材库</strong>
-                <small>人物、地点、事件、物品和特殊题素材。</small>
+                <span class="corpus-card-type">Cue-card system</span>
+                <strong>P2串题+P3追问</strong>
+                <small>维护 P2 串题正文，并给每张素材补好可复用的 P3 追问。</small>
+                <span class="corpus-card-cta">进入</span>
               </a>
               <a class="corpus-home-card language-card" data-corpus-home-target="takeawayBook" href="?view=takeawayBook">
                 <span class="corpus-card-mark">LT</span>
+                <span class="corpus-card-type">Phrase recall</span>
                 <strong>Takeaway</strong>
                 <small>复习平时摘录的单词和短语，需要自测时再遮住英文。</small>
+                <span class="corpus-card-cta">复习</span>
               </a>
               <a class="corpus-home-card writing-takeaway-card" data-corpus-home-target="writingTakeawayBook" href="?view=writingTakeawayBook">
                 <span class="corpus-card-mark">WT</span>
+                <span class="corpus-card-type">Writing bank</span>
                 <strong>写作积累</strong>
                 <small>集中复习写作中摘下来的表达、句型和可复用论证素材。</small>
+                <span class="corpus-card-cta">复习</span>
               </a>
               <a class="corpus-home-card spelling-drill-home-card" data-corpus-home-target="spellingDrill" href="?view=spellingDrill">
                 <span class="corpus-card-mark">SP</span>
+                <span class="corpus-card-type">Spelling SRS</span>
                 <strong>拼写错词训练</strong>
                 <small>从作文批改里的 spelling 批注自动整理错词，按间隔重复推送复习。</small>
+                <span class="corpus-card-cta">训练</span>
               </a>
             </div>
           </div>
@@ -543,6 +542,10 @@
               </div>
               <button id="saveP2CorpusBtn" type="button">保存素材</button>
             </header>
+            <div id="p2BankCorpusContext" class="p2-bank-corpus-context hidden" aria-label="题库题卡">
+              <span>题库题卡</span>
+              <strong id="p2BankCorpusQuestion"></strong>
+            </div>
             <div class="p2-corpus-form-grid">
               <label>
                 <span class="p1-corpus-label">分类</span>
@@ -559,7 +562,7 @@
                 <input id="p2CorpusTitle" type="text" placeholder="例如：热心的大学老师 / 一次失败后重来的项目">
               </label>
             </div>
-            <label class="p1-corpus-label" for="p2CorpusText">串题素材</label>
+            <label id="p2CorpusTextLabel" class="p1-corpus-label" for="p2CorpusText">串题素材</label>
             <textarea id="p2CorpusText" class="p1-corpus-textarea" spellcheck="true"></textarea>
             <div class="p1-corpus-dialog-actions">
               <span id="p2CorpusSaveStatus"></span>
@@ -1121,6 +1124,13 @@
                     <input id="darkModeToggle" type="checkbox" aria-label="切换深色外观">
                     <i aria-hidden="true"></i>
                   </label>
+                  <div class="account-ai-source-row">
+                    <label class="account-ai-source-label" for="aiSourceSelect">AI 评分来源</label>
+                    <select id="aiSourceSelect" class="account-ai-source-select" aria-label="AI 评分来源">
+                      <option value="gpt">GPT（默认）</option>
+                      <option value="claude_cli">Claude</option>
+                    </select>
+                  </div>
                 </div>
               </article>
               <article class="settings-card account-wallet-card">
@@ -1128,19 +1138,11 @@
                   <div>
                     <span class="account-card-eyebrow">Wallet</span>
                     <h2>钱包</h2>
-                    <p class="muted">查看余额、预留金额和最近流水。</p>
                   </div>
                   <button type="button" id="openRechargeBtn" class="confirm-recharge-btn account-action-button account-action-button-accent">充值</button>
                 </div>
                 <div id="walletStatus" class="account-balance-panel is-loading">
-                  <div>
-                    <span>余额</span>
-                    <strong>加载中</strong>
-                  </div>
-                  <div>
-                    <span>预留</span>
-                    <strong>--</strong>
-                  </div>
+                  <div><span>可用余额</span><strong>加载中</strong></div>
                 </div>
                 <div id="ledgerList" class="settings-list account-ledger-list" aria-live="polite">
                   <div class="account-skeleton-row"></div>
@@ -1220,7 +1222,7 @@
     <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
     <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
     <script src="/corpus-markdown-editor.js?v=20260606-single-editor-source"></script>
-    <script src="/corpus-takeaway.js?v=20260606-p2-p3-single-editor"></script>
+    <script src="/corpus-takeaway.js?v=20260606-corpus-workspace-redesign"></script>
     <script src="/spelling-drill.js?v=20260606-spelling-srs-day4"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
@@ -1229,6 +1231,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260606-p2-bank-actions-v1"></script>
+    <script src="/app.js?v=20260606-corpus-workspace-redesign"></script>
   </body>
 </html>

@@ -400,6 +400,12 @@ def attempt_score_view(request, attempt_id: str):
     except SpeakingError as exc:
         msg = str(exc)
         lower_msg = msg.lower()
+        if msg == "ai_quota_exhausted":
+            return JsonResponse({
+                "error": "ai_quota_exhausted",
+                "error_code": "ai_quota_exhausted",
+                "contact": "18728445038",
+            }, status=402)
         if "not found" in lower_msg:
             status = 404
         elif "ai analysis failed" in lower_msg or "ai report regeneration failed" in lower_msg:
@@ -451,7 +457,10 @@ def p3_view(request):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
-    return JsonResponse(p3_fallback(_json_payload(request)))
+    result = p3_fallback(_json_payload(request))
+    if str(result.get("status") or "") == "failed":
+        return JsonResponse(result, status=502)
+    return JsonResponse(result)
 
 
 @require_http_methods(["POST"])

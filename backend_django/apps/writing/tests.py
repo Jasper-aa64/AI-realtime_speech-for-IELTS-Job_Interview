@@ -12,7 +12,7 @@ from django.utils import timezone
 from apps.ai.models import AITask
 from apps.ai.orchestration import cancel_billable_ai_task
 from apps.ai.services import claim_ai_task
-from apps.billing.models import TokenWallet, WalletLedgerEntry, WalletReservation
+from apps.billing.models import TokenWallet, WalletLedgerEntry
 from apps.billing.services import DEFAULT_INITIAL_GRANT_U
 from apps.writing.models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
 from apps.writing.services import WRITING_TASK_LABELS, WritingError, complete_score_task, fallback_score_task
@@ -506,7 +506,7 @@ class WritingApiTests(TestCase):
         self.assertEqual(scored["status"], WritingEntry.Status.SCORED)
         self.assertEqual(scored["score"]["backend"], "fallback")
         self.assertIn("AI \u8bc4\u5206\u751f\u6210\u5931\u8d25", scored["score"]["feedback_markdown"])
-        self.assertEqual(scored["writing_profile"]["total_scored"], 1)
+        self.assertEqual(scored["writing_profile"]["total_scored"], 0)
 
         summary_after_score = self.client.get("/api/writing/summary?month=2026-05").json()
         self.assertEqual(summary_after_score["stats"]["scored_entries"], 1)
@@ -852,7 +852,7 @@ class WritingApiTests(TestCase):
         self.assertEqual(task["status"], AITask.Status.PENDING)
         self.assertEqual(task["related_type"], "writing_entry")
         self.assertEqual(task["related_id"], save["id"])
-        self.assertEqual(task["billing"]["reservation_id"], WalletReservation.objects.get(user=self.user).reservation_id)
+        self.assertIsNone(task["billing"]["reservation_id"])
 
         duplicate = self.client.post(
             f"/api/writing/entries/{save['id']}/score-task",
@@ -863,9 +863,8 @@ class WritingApiTests(TestCase):
         self.assertFalse(duplicate.json()["created"])
         self.assertEqual(duplicate.json()["task"]["id"], task["id"])
         wallet = TokenWallet.objects.get(user=self.user)
-        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U - 300_000)
-        self.assertEqual(wallet.reserved_u, 300_000)
-        self.assertEqual(WalletReservation.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(wallet.reserved_u, 0)
 
         detail = self.client.get(f"/api/writing/entries/{save['id']}")
         self.assertEqual(detail.status_code, 200)
@@ -1055,10 +1054,9 @@ class WritingApiTests(TestCase):
             ai_task_status=AITask.Status.SUCCEEDED,
             score_backend="ai",
         )
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.SETTLED)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
+        self.assertLess(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
         repeated = complete_score_task(
             task_payload["id"],
             {
@@ -1167,8 +1165,6 @@ class WritingApiTests(TestCase):
             ai_task_status=AITask.Status.FALLBACK,
             score_backend="fallback",
         )
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)

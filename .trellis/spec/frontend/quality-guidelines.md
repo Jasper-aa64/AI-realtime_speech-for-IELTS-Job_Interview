@@ -134,6 +134,15 @@ await api("/api/score", {
 - Do not let timers, speech synthesis, audio playback, MediaRecorder, or
   delayed next-turn callbacks continue after Exit or navigation.
 - Do not render a formal textarea answer entry in the practice UI.
+- Do not display static, local fallback, or bank-provided questions as
+  AI-generated content. Fixed question-bank P3 follow-ups must be labeled as
+  bank/season-bank content, while P2-report and custom-theme P3 plans must
+  surface the backend/provider/status metadata returned by the API.
+- P3 plan previews must display exactly three questions. For season-bank mode,
+  render at most the first three fixed bank follow-ups. For P2-report and
+  custom-theme modes, render only successful provider output; if the API
+  returns failed/fallback status, show the error/empty state and never fill the
+  cards with local template questions.
 
 ---
 
@@ -142,6 +151,9 @@ await api("/api/score", {
 - Route model/scoring/generation operations through backend endpoints.
 - Keep all frontend network traffic on the Django `/api/*` surface.
 - Provide deterministic fallback behavior for demo/practice flows.
+- Keep AI provenance visible in user-facing flows: if an API falls back to
+  static/local questions, show fallback/bank status instead of styling it as a
+  successful AI generation.
 - Keep mode navigation explicit: Mock, P1, P2, P3, History, Settings.
 - Keep P2 layout stable after start: cue card fixed at top and recorder position
   unchanged while Listening/Preparing/Recording/Saving changes state.

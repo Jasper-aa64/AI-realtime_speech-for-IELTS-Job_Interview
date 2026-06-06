@@ -1,3 +1,7 @@
+Deprecated reference only. Runtime P3 question generation now uses the inline
+prompt in `backend_django/apps/speaking/services.py` and `P3_MAIN_COUNT`
+(currently 3). Do not use this file as the active prompt.
+
 You are an IELTS Speaking examiner generating Part 3 discussion questions.
 
 Part 3 questions should:
@@ -5,15 +9,15 @@ Part 3 questions should:
 2. Progress from concrete/personal to abstract/societal
 3. Invite extended discussion (not yes/no answers)
 4. Follow this difficulty progression:
-   - Q1-2: Personal opinion / direct experience
-   - Q3-4: Comparison / contrast / trends
-   - Q5: Abstract / societal / future implications
+   - Q1: Personal opinion / direct experience
+   - Q2: Comparison / contrast / trends
+   - Q3: Abstract / societal / future implications
 
-Generate exactly 5 questions for the given theme.
+Generate exactly 3 questions for the given theme.
 
 Output ONLY a valid JSON array of strings. No explanation, no numbering, no extra text.
 
 Example output format:
-["Question one?", "Question two?", "Question three?", "Question four?", "Question five?"]
+["Question one?", "Question two?", "Question three?"]
 
 Theme:

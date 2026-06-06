@@ -114,11 +114,27 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(payload["cue_card"]["status"], "retained")
 
     def test_start_creates_p3_attempt(self):
-        response = self.client.post(
-            "/api/attempts/start",
-            data={"mode": "p3", "theme": "technology", "p3_intensity": "normal"},
-            content_type="application/json",
-        )
+        from apps.speaking import services as speaking_services
+
+        cue = {
+            "title": "Describe useful technology",
+            "season": "2026-may-august",
+            "p3_theme": "technology",
+            "p3_follow_ups": [
+                "How has technology changed people's daily lives?",
+                "Do older and younger people use technology differently?",
+                "What problems can new technology create?",
+            ],
+        }
+        bank = MagicMock()
+        bank.p2 = [cue]
+        bank.part2_for_scope.return_value = [cue]
+        with patch.object(speaking_services, "get_question_bank", return_value=bank):
+            response = self.client.post(
+                "/api/attempts/start",
+                data={"mode": "p3", "theme": "technology", "p3_intensity": "normal"},
+                content_type="application/json",
+            )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["mode"], "p3")
@@ -128,7 +144,8 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(payload["p3_focus"], "comparison_concession")
         self.assertIn("p3_plan", payload)
         self.assertEqual(payload["p3_plan"]["theme"], "technology")
-        self.assertEqual(len(payload["p3_plan"]["questions"]), 5)
+        self.assertEqual(payload["p3_generation_backend"], "season_bank")
+        self.assertEqual(len(payload["p3_plan"]["questions"]), 3)
         self.assertIn("target_moves", payload["p3_plan"]["questions"][0])
 
     def test_start_p3_uses_current_season_p2_follow_ups_when_theme_matches(self):
@@ -1946,22 +1963,58 @@ class DjangoOnlyRuntimeSurfaceTests(TestCase):
         self.assertEqual(styles.status_code, 200)
         self.assertIn("text/css", styles["Content-Type"])
 
-    def test_p3_fallback_requires_login_and_returns_questions(self):
+    def test_p3_questions_require_real_ai_or_fixed_bank_questions(self):
         self.client.logout()
         unauthorized = self.client.post("/api/p3/questions", data={"theme": "technology"}, content_type="application/json")
         self.assertEqual(unauthorized.status_code, 401)
 
         self.client.force_login(self.user)
         response = self.client.post("/api/p3/questions", data={"theme": "technology"}, content_type="application/json")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 502)
         payload = response.json()
-        self.assertEqual(payload["backend"], "fallback")
-        self.assertEqual(len(payload["questions"]), 5)
-        self.assertIn("follow_up", payload)
+        self.assertEqual(payload["backend"], "failed")
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["questions"], [])
+        self.assertIn("error", payload)
         self.assertIn("plan", payload)
         self.assertEqual(payload["plan"]["focus"], "comparison_concession")
-        self.assertEqual(payload["structured_questions"][0]["type"], "comparison_concession")
-        self.assertIn("target_moves", payload["structured_questions"][0])
+
+    @override_settings(AI_HTTP_BASE_URL="https://ai.example/v1", AI_HTTP_API_KEY="test-key", AI_HTTP_MODEL="legacy-model")
+    def test_p3_custom_questions_use_http_provider_output(self):
+        class ProviderResult:
+            text = json.dumps({
+                "questions": [
+                    "Why do people have different opinions about technology?",
+                    "How has technology changed daily communication?",
+                    "Do you think technology will become more important in the future?",
+                ],
+                "follow_up": "What is one risk people should pay attention to?",
+            })
+            model = "gpt-5.4-mini"
+            usage = {"input_tokens": 80, "output_tokens": 40}
+
+        class Provider:
+            def __init__(self, config=None):
+                self.config = config
+
+            def complete_chat(self, *args, **kwargs):
+                return ProviderResult()
+
+        with patch("apps.speaking.services.HttpApiProvider", Provider):
+            response = self.client.post(
+                "/api/p3/questions",
+                data={"source": "custom", "theme": "technology"},
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["backend"], "http_api")
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(len(payload["questions"]), 3)
+        self.assertEqual(payload["plan"]["source"]["type"], "custom")
+        self.assertEqual(payload["plan"]["model"], "gpt-5.4-mini")
+        self.assertEqual(payload["plan"]["usage"]["output_tokens"], 40)
 
     def test_p3_follow_up_uses_same_fallback_contract(self):
         response = self.client.post(

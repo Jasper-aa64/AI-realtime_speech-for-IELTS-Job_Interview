@@ -252,7 +252,7 @@ class AITaskApiTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_create_billable_task_api_reserves_wallet(self):
+    def test_create_billable_task_api_checks_balance_without_reservation(self):
         created = self.client.post(
             "/api/ai/tasks/",
             data={
@@ -266,11 +266,13 @@ class AITaskApiTests(TestCase):
         )
 
         self.assertEqual(created.status_code, 201)
-        self.assertEqual(created.json()["task"]["billing"]["reservation_id"], WalletReservation.objects.get(user=self.user).reservation_id)
+        self.assertIsNone(created.json()["task"]["billing"]["reservation_id"])
         wallet = TokenWallet.objects.get(user=self.user)
-        self.assertEqual(wallet.reserved_u, 250_000)
+        self.assertEqual(wallet.reserved_u, 0)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(WalletReservation.objects.filter(user=self.user).count(), 0)
 
-    def test_owner_can_cancel_pending_billable_task_and_release_reservation(self):
+    def test_owner_can_cancel_pending_billable_task_without_reservation(self):
         task, _created = create_billable_ai_task(
             user=self.user,
             task_type="writing_score",
@@ -287,13 +289,12 @@ class AITaskApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], task.task_id)
         self.assertEqual(response.json()["status"], AITask.Status.CANCELLED)
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        self.assertIsNone(task.billing_reservation_id)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
 
-    def test_running_billable_task_cancel_returns_conflict_and_keeps_reservation(self):
+    def test_running_billable_task_cancel_returns_conflict_without_reservation(self):
         task, _created = create_billable_ai_task(
             user=self.user,
             task_type="writing_score",
@@ -313,11 +314,10 @@ class AITaskApiTests(TestCase):
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.RUNNING)
         self.assertEqual(task.worker_id, "api-running-worker")
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RESERVED)
+        self.assertIsNone(task.billing_reservation_id)
         wallet = TokenWallet.objects.get(user=self.user)
-        self.assertEqual(wallet.reserved_u, 250_000)
-        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U - 250_000)
+        self.assertEqual(wallet.reserved_u, 0)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
 
     def test_running_non_billable_task_cancel_returns_conflict(self):
         task, _created = create_ai_task(user=self.user, task_type="speaking_report", idempotency_key="api-cancel-running-non-billable")
@@ -350,7 +350,7 @@ class AIBillableTaskOrchestrationTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="billable-ai-user", password="test-pass")
 
-    def test_create_billable_task_reserves_wallet_once(self):
+    def test_create_billable_task_checks_balance_without_reserving_wallet(self):
         task, created = create_billable_ai_task(
             user=self.user,
             task_type="writing_score",
@@ -369,12 +369,14 @@ class AIBillableTaskOrchestrationTests(TestCase):
         self.assertTrue(created)
         self.assertFalse(duplicate_created)
         self.assertEqual(task.pk, duplicate.pk)
-        self.assertEqual(task.billing_reservation.status, WalletReservation.Status.RESERVED)
+        self.assertIsNone(task.billing_reservation_id)
+        self.assertEqual(task.metadata["billing_policy"], "balance_gate_then_usage_settlement")
+        self.assertEqual(task.metadata["minimum_balance_u"], 300_000)
         wallet = TokenWallet.objects.get(user=self.user)
-        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U - 500_000)
-        self.assertEqual(wallet.reserved_u, 500_000)
-        self.assertEqual(WalletReservation.objects.filter(user=self.user).count(), 1)
-        self.assertEqual(WalletLedgerEntry.objects.filter(user=self.user, entry_type=WalletLedgerEntry.EntryType.RESERVE).count(), 1)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(wallet.reserved_u, 0)
+        self.assertEqual(WalletReservation.objects.filter(user=self.user).count(), 0)
+        self.assertEqual(WalletLedgerEntry.objects.filter(user=self.user, entry_type=WalletLedgerEntry.EntryType.RESERVE).count(), 0)
 
     def test_billable_task_rejects_cross_user_idempotency(self):
         create_billable_ai_task(user=self.user, task_type="writing_score", reserved_u=100_000, idempotency_key="shared-billable-key")
@@ -383,7 +385,7 @@ class AIBillableTaskOrchestrationTests(TestCase):
         with self.assertRaises(AIOrchestrationError):
             create_billable_ai_task(user=other, task_type="writing_score", reserved_u=100_000, idempotency_key="shared-billable-key")
 
-    def test_succeed_billable_task_settles_reservation_and_links_usage(self):
+    def test_succeed_billable_task_settles_usage_and_links_usage(self):
         task, _created = create_billable_ai_task(
             user=self.user,
             task_type="writing_score",
@@ -398,43 +400,41 @@ class AIBillableTaskOrchestrationTests(TestCase):
         self.assertEqual(succeeded.result_payload["overall_band"], 6.0)
         self.assertEqual(succeeded.result_payload["billing"]["status"], "settled")
         self.assertIsNotNone(succeeded.usage)
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.SETTLED)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
-        self.assertGreater(wallet.balance_u, DEFAULT_INITIAL_GRANT_U - 500_000)
+        self.assertLess(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(WalletReservation.objects.filter(user=self.user).count(), 0)
 
-    def test_fallback_billable_task_releases_reservation(self):
+    def test_fallback_billable_task_does_not_charge_without_reservation(self):
         task, _created = create_billable_ai_task(user=self.user, task_type="writing_score", reserved_u=300_000, idempotency_key="billable-fallback")
 
         fallback = fallback_billable_ai_task(task.task_id, "provider unavailable", {"feedback_markdown": "AI 评分生成失败，以下是系统默认建议。"})
 
         self.assertEqual(fallback.status, AITask.Status.FALLBACK)
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(WalletReservation.objects.filter(user=self.user).count(), 0)
 
-    def test_retryable_failure_keeps_reservation_until_terminal_failure(self):
+    def test_retryable_failure_does_not_charge_without_reservation(self):
         task, _created = create_billable_ai_task(user=self.user, task_type="speaking_report", reserved_u=300_000, idempotency_key="billable-retry", max_attempts=1)
         claim_ai_task(task.task_id, worker_id="worker-1")
 
         failed = fail_billable_ai_task(task.task_id, "provider timeout", error_code="timeout", retryable=True)
 
         self.assertEqual(failed.status, AITask.Status.FAILED)
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
 
-    def test_billable_task_rejects_invalid_reservation(self):
-        ensure_wallet(self.user)
+    def test_billable_task_rejects_insufficient_start_balance(self):
+        wallet = ensure_wallet(self.user)
+        wallet.balance_u = 300_000
+        wallet.save(update_fields=["balance_u", "updated_at"])
         with self.assertRaises(AIOrchestrationError):
-            create_billable_ai_task(user=self.user, task_type="writing_score", reserved_u=0, idempotency_key="bad-reserve")
+            create_billable_ai_task(user=self.user, task_type="writing_score", reserved_u=0, idempotency_key="bad-balance")
 
-    def test_stale_running_task_max_attempt_failure_releases_reservation(self):
+    def test_stale_running_task_max_attempt_failure_does_not_charge_without_reservation(self):
         task, _created = create_billable_ai_task(
             user=self.user,
             task_type="writing_score",
@@ -449,18 +449,16 @@ class AIBillableTaskOrchestrationTests(TestCase):
 
         self.assertEqual(len(recovered), 1)
         self.assertEqual(recovered[0].status, AITask.Status.FAILED)
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
         self.assertEqual(
             WalletLedgerEntry.objects.filter(user=self.user, call_id=task.call_id, entry_type=WalletLedgerEntry.EntryType.RELEASE).count(),
-            1,
+            0,
         )
         self.assertEqual(recover_stale_ai_tasks(60), [])
 
-    def test_cancel_pending_billable_task_releases_reservation(self):
+    def test_cancel_pending_billable_task_without_reservation(self):
         task, _created = create_billable_ai_task(
             user=self.user,
             task_type="writing_score",
@@ -472,8 +470,6 @@ class AIBillableTaskOrchestrationTests(TestCase):
 
         self.assertEqual(cancelled.status, AITask.Status.CANCELLED)
         self.assertEqual(cancelled.error_code, "cancelled")
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
         wallet = TokenWallet.objects.get(user=self.user)
         self.assertEqual(wallet.reserved_u, 0)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
@@ -482,7 +478,7 @@ class AIBillableTaskOrchestrationTests(TestCase):
         self.assertEqual(repeated.status, AITask.Status.CANCELLED)
         self.assertEqual(
             WalletLedgerEntry.objects.filter(user=self.user, call_id=task.call_id, entry_type=WalletLedgerEntry.EntryType.RELEASE).count(),
-            1,
+            0,
         )
 
     def test_cancel_running_billable_task_is_not_allowed(self):
@@ -499,11 +495,10 @@ class AIBillableTaskOrchestrationTests(TestCase):
 
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.RUNNING)
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RESERVED)
+        self.assertIsNone(task.billing_reservation_id)
         wallet = TokenWallet.objects.get(user=self.user)
-        self.assertEqual(wallet.reserved_u, 300_000)
-        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U - 300_000)
+        self.assertEqual(wallet.reserved_u, 0)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
 
     def test_cancel_owned_running_billable_task_propagates_conflict_without_release(self):
         task, _created = create_billable_ai_task(
@@ -520,11 +515,10 @@ class AIBillableTaskOrchestrationTests(TestCase):
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.RUNNING)
         self.assertEqual(task.worker_id, "worker-2")
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RESERVED)
+        self.assertIsNone(task.billing_reservation_id)
         wallet = TokenWallet.objects.get(user=self.user)
-        self.assertEqual(wallet.reserved_u, 300_000)
-        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U - 300_000)
+        self.assertEqual(wallet.reserved_u, 0)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
 
     def test_cancelling_already_terminal_billable_task_is_safe(self):
         task, _created = create_billable_ai_task(
@@ -540,7 +534,7 @@ class AIBillableTaskOrchestrationTests(TestCase):
         self.assertEqual(cancelled.status, AITask.Status.FALLBACK)
         self.assertEqual(
             WalletLedgerEntry.objects.filter(user=self.user, call_id=task.call_id, entry_type=WalletLedgerEntry.EntryType.RELEASE).count(),
-            1,
+            0,
         )
 
     def test_cancelled_billable_task_ignores_late_success_callback(self):
@@ -602,8 +596,10 @@ class AIProviderAdapterTests(TestCase):
         self.assertEqual(applied.task.status, AITask.Status.PENDING)
         self.assertEqual(applied.task.error_code, "provider_timeout")
         self.assertIsNotNone(applied.task.available_at)
-        reservation = WalletReservation.objects.get(pk=applied.task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RESERVED)
+        self.assertIsNone(applied.task.billing_reservation_id)
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(wallet.reserved_u, 0)
         self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
 
     def test_apply_provider_run_result_returns_failed_summary_for_terminal_failure(self):
@@ -641,8 +637,10 @@ class AIProviderAdapterTests(TestCase):
         self.assertEqual(applied.summary_status, AITask.Status.FAILED)
         self.assertEqual(applied.task.status, AITask.Status.FAILED)
         self.assertEqual(applied.task.error_code, "provider_rejected")
-        reservation = WalletReservation.objects.get(pk=applied.task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        self.assertIsNone(applied.task.billing_reservation_id)
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(wallet.reserved_u, 0)
         self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
 
 
@@ -719,8 +717,7 @@ class AIWorkerCommandTests(TestCase):
         self.assertIn("Codex writing report generation failed", task.error_message)
         self.assertEqual(task.worker_id, "test-worker")
         self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        self.assertIsNone(task.billing_reservation_id)
         wallet = TokenWallet.objects.get(user=user)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
         self.assertEqual(wallet.reserved_u, 0)
@@ -1121,8 +1118,7 @@ class AIWorkerCommandTests(TestCase):
         self.assertIsNone(task.usage)
         self.assertEqual(task.fallback_reason, "mock success adapter is disabled by configuration; using local fallback")
         self.assertTrue(WritingScore.objects.filter(entry=entry, source="fallback").exists())
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        self.assertIsNone(task.billing_reservation_id)
         wallet = TokenWallet.objects.get(user=user)
         self.assertEqual(wallet.reserved_u, 0)
         self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
@@ -1198,10 +1194,10 @@ class AIWorkerCommandTests(TestCase):
         profile = WritingLearnerProfile.objects.get(user=user)
         self.assertEqual(profile.total_scored, 1)
 
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.SETTLED)
         wallet = TokenWallet.objects.get(user=user)
         self.assertEqual(wallet.reserved_u, 0)
+        self.assertLess(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(WalletReservation.objects.filter(user=user).count(), 0)
 
         repeated = complete_score_task(task.task_id, {"score": task.result_payload["score"], "usage": task.usage.raw_usage})
         self.assertEqual(repeated["ai_task"]["status"], AITask.Status.SUCCEEDED)
@@ -1343,8 +1339,7 @@ class AIWorkerCommandTests(TestCase):
         unsupported.refresh_from_db()
         self.assertEqual(unsupported.status, AITask.Status.FAILED)
         self.assertEqual(unsupported.error_code, "unsupported_task_type")
-        unsupported_reservation = WalletReservation.objects.get(pk=unsupported.billing_reservation_id)
-        self.assertEqual(unsupported_reservation.status, WalletReservation.Status.RELEASED)
+        self.assertIsNone(unsupported.billing_reservation_id)
 
         supported = AITask.objects.get(task_id=created["task"]["id"])
         self.assertEqual(supported.status, AITask.Status.FAILED)
@@ -1478,8 +1473,9 @@ class AIWorkerCommandTests(TestCase):
         task = AITask.objects.get(task_id=created["task"]["id"])
         self.assertEqual(task.status, AITask.Status.SUCCEEDED)
         self.assertTrue(WritingScore.objects.filter(entry=entry, source="ai").exists())
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.SETTLED)
+        self.assertIsNone(task.billing_reservation_id)
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertLess(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
 
     def test_run_ai_tasks_completes_fallback_when_cancel_attempt_happens_after_claim(self):
         user = get_user_model().objects.create_user(username="worker-fallback-cancel-race-user", password="test-pass")
@@ -1528,8 +1524,9 @@ class AIWorkerCommandTests(TestCase):
         task = AITask.objects.get(task_id=created["task"]["id"])
         self.assertEqual(task.status, AITask.Status.FAILED)
         self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
-        reservation = WalletReservation.objects.get(pk=task.billing_reservation_id)
-        self.assertEqual(reservation.status, WalletReservation.Status.RELEASED)
+        self.assertIsNone(task.billing_reservation_id)
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertEqual(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
 
     def test_run_ai_worker_processes_one_pending_writing_score_loop(self):
         user, entry, created = self.create_writing_score_task(

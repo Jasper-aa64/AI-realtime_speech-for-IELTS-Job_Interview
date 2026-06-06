@@ -14,7 +14,7 @@ from .models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingS
 from .validation import WRITING_TASK_TYPES, WritingEntryDeleted, WritingError, normalize_task_type, paragraph_guidance, validate_answer_paragraphs, word_count, writing_entry_is_scored, writing_paragraphs
 
 
-DEFAULT_WRITING_SCORE_RESERVATION_U = 1_000_000
+DEFAULT_WRITING_SCORE_RESERVATION_U = 0
 
 
 from .prompt_services import (
@@ -210,10 +210,6 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
     if not entry.answer.strip():
         raise WritingError("Write an answer before requesting AI scoring.")
     validate_answer_paragraphs(entry.task_type, entry.answer)
-    try:
-        reserved_u = int(payload.get("reserved_u") or DEFAULT_WRITING_SCORE_RESERVATION_U)
-    except (TypeError, ValueError) as exc:
-        raise WritingError("reserved_u must be a positive integer") from exc
     answer_hash = hashlib.sha1(entry.answer.encode("utf-8")).hexdigest()[:16]
     idempotency_key = f"writing_score:{entry.entry_id}:{answer_hash}"
     prompt_chart_facts = entry.prompt.chart_facts if entry.prompt_id and isinstance(entry.prompt.chart_facts, dict) else {}
@@ -222,7 +218,7 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
         task, created = create_billable_ai_task(
             user=user,
             task_type="writing_score",
-            reserved_u=reserved_u,
+            reserved_u=DEFAULT_WRITING_SCORE_RESERVATION_U,
             idempotency_key=idempotency_key,
             provider=payload.get("provider"),
             model=str(payload.get("model") or ""),
@@ -477,6 +473,18 @@ def infer_primary_focus(tag_counts: dict[str, int]) -> str:
 
 
 def update_profile(entry: WritingEntry, score: dict[str, Any]) -> dict[str, Any]:
+    if score.get("backend") == "fallback":
+        score["profile_tags"] = profile_tags(entry, score)
+        score["personalization_note"] = "本次使用系统默认评分，未计入你的写作画像。"
+        existing_profile = WritingLearnerProfile.objects.filter(user=entry.user).first()
+        return profile_snapshot(existing_profile) or {
+            "total_scored": 0,
+            "average_overall_band": None,
+            "primary_focus": "insufficient_data",
+            "primary_focus_text": "还需要真实 AI 评分作文来形成稳定画像。",
+            "top_tags": [],
+            "recent_evidence": [],
+        }
     profile, _created = WritingLearnerProfile.objects.get_or_create(user=entry.user)
     previous_total = profile.total_scored
     new_total = previous_total + 1
@@ -530,7 +538,9 @@ def score_entry(user, entry_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     entry.save(update_fields=["answer", "word_count", "updated_at"])
     score["writing_profile"] = update_profile(entry, score)
     entry.refresh_from_db()
-    return entry_payload(entry)
+    payload = entry_payload(entry)
+    payload["writing_profile"] = score["writing_profile"]
+    return payload
 
 
 def normalize_score_payload(entry: WritingEntry, payload: dict[str, Any]) -> dict[str, Any]:

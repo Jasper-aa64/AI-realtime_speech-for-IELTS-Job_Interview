@@ -29,7 +29,7 @@ import sqlite3
 import sys
 
 db = sys.argv[1]
-preferred = ("Aiaps1", "Aiapis")
+preferred = ("Aiapis", "Aiaps1")
 conn = sqlite3.connect(db)
 rows = conn.execute(
     "select name, settings_config from providers where app_type='codex'"
@@ -57,10 +57,6 @@ base_match = re.search(r'base_url\s*=\s*"([^"]+)"', toml_text)
 model_match = re.search(r'model\s*=\s*"([^"]+)"', toml_text)
 base_url = base_match.group(1).strip() if base_match else ""
 model = (model_match.group(1).strip() if model_match else "") or "gpt-5.4-mini"
-
-# The project defaults to the cheaper fast model for product AI calls even when
-# the Codex provider profile itself uses another model.
-model = "gpt-5.4-mini"
 
 if not (api_key and base_url):
     raise SystemExit(0)

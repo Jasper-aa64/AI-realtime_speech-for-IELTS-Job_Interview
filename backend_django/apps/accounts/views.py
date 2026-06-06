@@ -61,6 +61,7 @@ def user_payload(user) -> dict:
             "english_name": profile.english_name,
             "target_band": str(profile.target_band) if profile.target_band is not None else None,
             "timezone": profile.timezone,
+            "report_ai_source": profile.report_ai_source or "gpt",
         },
     }
 
@@ -213,6 +214,11 @@ def me(request):
                 setattr(profile, field, str(payload.get(field) or ""))
         if "target_band" in payload:
             profile.target_band = payload.get("target_band") or None
+        if "report_ai_source" in payload:
+            from .models import UserProfile as _UP
+            raw_source = str(payload.get("report_ai_source") or "gpt").strip()
+            valid_sources = {c[0] for c in _UP.REPORT_AI_SOURCE_CHOICES}
+            profile.report_ai_source = raw_source if raw_source in valid_sources else "gpt"
         profile.save()
 
     return JsonResponse({"authenticated": True, "user": user_payload(request.user)})

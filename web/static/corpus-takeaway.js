@@ -21,6 +21,7 @@
       api,
       showConfirmDelete,
       switchView,
+      startPractice,
       openCorpusWindow,
       renderP2CorpusPrepPanel,
       ensureCorpusMarkdownEditorReady,
@@ -110,15 +111,14 @@
         const saved = questions.filter((item) => item.corpus_text).length;
         const progress = questions.length ? Math.round((saved / questions.length) * 100) : 0;
         return `
-          <article class="p1-topic-card">
+          <article class="p1-topic-card" data-p1-progress="${progress}">
             <header>
               <div>
                 <h3>${escapeHtml(topic.label || topic.topic)}</h3>
-                <small>${saved ? `已保存 ${saved}` : "未开始"}</small>
               </div>
               <span class="p1-topic-count">${saved}/${questions.length}</span>
             </header>
-            <div class="p1-topic-progress" aria-hidden="true"><span style="width: ${progress}%"></span></div>
+            <div class="p1-topic-progress" aria-label="完成进度 ${progress}%" data-progress="${progress}"><span style="width: ${progress}%"></span></div>
             <div class="p1-topic-question-list">
               ${questions.map((item, index) => `
                 <button type="button" class="${item.corpus_text ? "has-corpus" : ""}" data-p1-corpus-question="${escapeHtml(item.question_id)}">
@@ -369,24 +369,68 @@
     function updateP3CorpusPeekButton(turn = state.currentTurn) {
       const button = $("peekP3CorpusBtn");
       if (!button) return;
-      const hasFollowUps = Boolean(String(state.p3PracticeSource?.p3FollowUpText || "").trim());
-      const visible = state.view === "p3" && turn?.part === "p3" && hasFollowUps;
+      const prompt = turn?.prompt || {};
+      const source = String(prompt.source || state.p3PracticeSource?.sourceType || "").trim();
+      const hasCorpusTarget = Boolean(
+        prompt.p3_bank_followup_id
+        || prompt.p2_corpus_entry_id
+        || state.p3PracticeSource?.p2CorpusEntryId
+        || state.p3PracticeSource?.p3FollowUpText
+        || source === "season_bank"
+        || source === "bank"
+        || source === "p2_report"
+        || source === "p2_corpus"
+      );
+      const visible = state.view === "p3" && turn?.part === "p3" && hasCorpusTarget;
       button.classList.toggle("hidden", !visible);
       button.classList.toggle("has-corpus", visible);
-      button.title = visible ? "查看这次 P3 参考的追问素材" : "没有关联的 P3 追问素材";
+      button.title = visible ? "查看这次 P3 关联的已保存语料" : "没有关联的 P3 追问素材";
     }
 
-    function openP3CorpusPeek() {
-      const source = state.p3PracticeSource || {};
-      const followUps = String(source.p3FollowUpText || "").trim();
-      if (!followUps) return;
-      text("p3CorpusPeekMeta", source.title || "P3 FOLLOW-UP MATERIAL");
-      text("p3CorpusPeekTitle", "相关 P3 追问");
+    async function p3CorpusPeekMaterialForTurn(turn = state.currentTurn) {
+      const prompt = turn?.prompt || {};
+      const source = String(prompt.source || state.p3PracticeSource?.sourceType || "").trim();
+      const p2QuestionId = String(prompt.p2_question_id || prompt.cue_id || "").trim();
+      const followupId = String(prompt.p3_bank_followup_id || prompt.followup_id || "").trim();
+      if ((source === "season_bank" || source === "bank") && p2QuestionId && followupId) {
+        const payload = await api(`/api/p3-bank-corpus/${encodeURIComponent(p2QuestionId)}`);
+        const item = (payload.items || []).find((entry) => entry.followup_id === followupId);
+        return {
+          meta: payload.question || state.p3PracticeSource?.title || "题库 P3 追问",
+          title: item?.followup_question || prompt.followup_question || prompt.question || "相关 P3 追问",
+          body: String(item?.corpus_text || "").trim(),
+          empty: "这道题库 P3 追问还没有保存语料。点击报告里的“编辑语料库”或题卡里的 P3 按钮补充。",
+        };
+      }
+      const entryId = String(prompt.p2_corpus_entry_id || state.p3PracticeSource?.p2CorpusEntryId || "").trim();
+      if ((source === "p2_report" || source === "p2_corpus" || entryId) && entryId) {
+        await ensureP2CorpusLoaded();
+        const entry = findP2CorpusEntry(entryId);
+        return {
+          meta: entry?.title || state.p3PracticeSource?.title || "P2 素材",
+          title: "素材里的 P3 追问",
+          body: String(entry?.p3_follow_up_text || "").trim(),
+          empty: "这条 P2 素材还没有保存 P3 追问语料。打开素材卡的 P3 按钮补充后，这里会显示。",
+        };
+      }
+      const fallback = String(state.p3PracticeSource?.p3FollowUpText || "").trim();
+      return {
+        meta: state.p3PracticeSource?.title || "P3 FOLLOW-UP MATERIAL",
+        title: "相关 P3 追问",
+        body: fallback,
+        empty: "这次 P3 没有关联到已保存语料。",
+      };
+    }
+
+    async function openP3CorpusPeek() {
+      const source = await p3CorpusPeekMaterialForTurn();
+      text("p3CorpusPeekMeta", source.meta || "P3 FOLLOW-UP MATERIAL");
+      text("p3CorpusPeekTitle", source.title || "相关 P3 追问");
       const body = $("p3CorpusPeekBody");
       if (body) body.innerHTML = `
         <section class="p2-corpus-peek-section">
-          <h4>相关 P3 追问</h4>
-          <div>${renderMarkdown(followUps)}</div>
+          <h4>${escapeHtml(source.title || "相关 P3 追问")}</h4>
+          <div>${source.body ? renderMarkdown(source.body) : `<p class="muted">${escapeHtml(source.empty || "还没有保存语料。")}</p>`}</div>
         </section>
       `;
       $("p3CorpusPeekDialog")?.classList.remove("hidden");
@@ -671,6 +715,38 @@
       if (!container) return;
       const categories = state.p2Corpus.categories || [];
       const currentCards = state.p2Corpus.currentPart2Cards || [];
+      const P2_CAT_META = {
+        place:   { label: "地点", color: "#059669", order: 1 },
+        special: { label: "特殊", color: "#db2777", order: 2 },
+        person:  { label: "人物", color: "#7c3aed", order: 3 },
+        event:   { label: "事件", color: "#d97706", order: 4 },
+        object:  { label: "物品", color: "#0284c7", order: 5 },
+      };
+      const normalizeSeasonalCategory = (value) => {
+        const raw = String(value || "").trim();
+        const aliases = {
+          "地点": "place",
+          "特殊": "special",
+          "人物": "person",
+          "事件": "event",
+          "物品": "object",
+        };
+        return aliases[raw] || raw || "special";
+      };
+      const presentCats = [...new Set(currentCards.map((c) => normalizeSeasonalCategory(c.category)))].sort((a, b) => {
+        const aOrder = P2_CAT_META[a]?.order ?? 99;
+        const bOrder = P2_CAT_META[b]?.order ?? 99;
+        return aOrder === bOrder ? a.localeCompare(b) : aOrder - bOrder;
+      });
+      const activeSeasonalFilter = presentCats.includes(state.p2Corpus.seasonalFilter)
+        ? state.p2Corpus.seasonalFilter
+        : "all";
+      if (state.p2Corpus.seasonalFilter !== activeSeasonalFilter) {
+        state.p2Corpus.seasonalFilter = activeSeasonalFilter;
+      }
+      const visibleCurrentCards = activeSeasonalFilter === "all"
+        ? currentCards
+        : currentCards.filter((item) => normalizeSeasonalCategory(item.category) === activeSeasonalFilter);
       if (!categories.length && !currentCards.length) {
         container.innerHTML = '<p class="muted">还没有 P2 素材分类。</p>';
         return;
@@ -702,7 +778,7 @@
           `;
         }).join("");
         return `
-          <article class="p2-topic-card p2-category-entry-card" style="--p2-material-row-count: ${Math.max(items.length, 1)}">
+          <article class="p2-topic-card p2-category-entry-card" data-category="${escapeHtml(category.category || "special")}" style="--p2-material-row-count: ${Math.max(items.length, 1)}">
             <header>
               <h3>${escapeHtml(category.label || category.category)}</h3>
               <span class="p2-topic-count">${category.material_count ?? (category.items || []).length}</span>
@@ -717,25 +793,44 @@
           </article>
         `;
       }).join("");
-      const cardHtml = currentCards.map((item) => {
+      const filterBarHtml = presentCats.length > 1
+        ? `<div class="p2-cat-filter-bar" role="group" aria-label="按分类筛选">
+            <button type="button" class="p2-cat-filter-btn${activeSeasonalFilter === "all" ? " active" : ""}" data-cat-filter="all">全部 <span>${currentCards.length}</span></button>
+            ${presentCats.map((cat) => {
+              const meta = P2_CAT_META[cat] || { label: cat, color: "#64748b" };
+              const cnt = currentCards.filter((c) => normalizeSeasonalCategory(c.category) === cat).length;
+              return `<button type="button" class="p2-cat-filter-btn${activeSeasonalFilter === cat ? " active" : ""}" data-cat-filter="${escapeHtml(cat)}" style="--filter-color:${escapeHtml(meta.color)}">${escapeHtml(meta.label)} <span>${cnt}</span></button>`;
+            }).join("")}
+          </div>`
+        : "";
+      const cardHtml = visibleCurrentCards.map((item) => {
         const statusLabel = item.status === "new" ? "新题" : item.status === "retained" ? "保留题" : item.status || "";
         const cardId = p2BankQuestionId(item);
+        const cat = normalizeSeasonalCategory(item.category);
+        const cueTitle = p2CleanCueTitle(item);
+        const cueHtml = p2CueQuestionHtml(item);
         return `
           <article
             class="p2-seasonal-card"
             data-p2-bank-card-id="${escapeHtml(cardId)}"
-            data-p2-bank-card-title="${escapeHtml(item.cue_title || item.title || "未命名题卡")}"
-            data-p2-bank-card-category="${escapeHtml(item.category || "special")}"
-            data-p2-bank-card-label="${escapeHtml(item.label || item.category || "P2")}"
+            data-p2-bank-card-title="${escapeHtml(cueTitle)}"
+            data-p2-bank-card-category="${escapeHtml(cat)}"
+            data-p2-bank-card-label="${escapeHtml(item.label || cat || "P2")}"
           >
             <header>
               <div>
-                <span class="p2-seasonal-card-kicker">${escapeHtml(item.label || item.category || "P2")}${statusLabel ? ` · ${escapeHtml(statusLabel)}` : ""}</span>
-                <h3>${escapeHtml(item.cue_title || item.title || "未命名题卡")}</h3>
+                <span class="p2-seasonal-card-kicker">${escapeHtml(item.label || cat || "P2")}${statusLabel ? ` · ${escapeHtml(statusLabel)}` : ""}</span>
+                <h3>${escapeHtml(cueTitle)}</h3>
               </div>
               <span class="p2-seasonal-card-state${item.has_material ? " is-ready" : ""}">${item.has_material ? "正文已填" : "正文待填"}</span>
             </header>
-            ${p2CueQuestionHtml(item)}
+            <div class="p2-seasonal-body">
+              ${cueHtml}
+              <button type="button" class="p2-seasonal-practice-btn" data-p2-bank-start="${escapeHtml(cardId)}" title="直接用这道题开始 P2 练习">
+                <span class="p2-seasonal-practice-icon" aria-hidden="true"></span>
+                <span>直接<br>练习</span>
+              </button>
+            </div>
             <footer>
               <button type="button" class="p2-seasonal-action primary" data-p2-corpus-card-material="${escapeHtml(cardId)}">正文</button>
               <button type="button" class="p2-seasonal-action${item.has_p3_follow_up ? " is-ready" : ""}" data-p2-corpus-card-p3="${escapeHtml(cardId)}">P3 追问</button>
@@ -755,8 +850,9 @@
             </div>
             <span>${currentCards.length} 张题卡</span>
           </header>
-          <div class="p2-seasonal-card-grid">
-            ${cardHtml || '<p class="muted">当前范围没有 P2 题卡。</p>'}
+          ${filterBarHtml}
+          <div class="p2-seasonal-card-grid" id="p2SeasonalCardGrid">
+            ${cardHtml || '<p class="muted">当前分类没有 P2 题卡。</p>'}
           </div>
         </section>
       `;
@@ -1297,6 +1393,31 @@
       return String(entry.cue_id || entry.question_id || entry.canonical_entry_id || entry.entry_id || "").trim();
     }
 
+    function p2NormalizedCueText(value) {
+      return String(value || "").replace(/\s+/g, " ").trim();
+    }
+
+    function p2CleanCueTitle(entry = {}) {
+      const raw = p2NormalizedCueText(entry.cue_title || entry.title || entry.question || entry.linked_question || "");
+      if (!raw) return "未命名题卡";
+      const fragments = [
+        ...(Array.isArray(entry.bullets) ? entry.bullets : []),
+        entry.rounding,
+      ]
+        .map(p2NormalizedCueText)
+        .filter((fragment) => fragment.length > 3)
+        .sort((a, b) => b.length - a.length);
+      let boundary = -1;
+      fragments.forEach((fragment) => {
+        const index = raw.indexOf(fragment);
+        if (index > 0 && (boundary === -1 || index < boundary)) boundary = index;
+      });
+      const explainIndex = raw.search(/\s+And explain\b/);
+      if (explainIndex > 0 && (boundary === -1 || explainIndex < boundary)) boundary = explainIndex;
+      const title = boundary > 0 ? raw.slice(0, boundary).trim() : raw;
+      return title || raw || "未命名题卡";
+    }
+
     function p2BankEntryFromElement(element) {
       const card = element?.closest?.("[data-p2-bank-card-id]");
       const cardId = card?.dataset?.p2BankCardId || element?.dataset?.p2CorpusCardMaterial || element?.dataset?.p2CorpusCardP3 || "";
@@ -1345,8 +1466,14 @@
       }
       const category = entry.category || "person";
       state.p2Corpus.activeEntry = { ...entry, category };
+      $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.remove("is-bank-editor");
+      $("p2BankCorpusContext")?.classList.add("hidden");
+      text("p2BankCorpusQuestion", "");
       text("p2CorpusDialogCategory", (entry.label || category).toString());
       text("p2CorpusDialogTitle", entry.entry_id ? "编辑 P2 素材" : "新增 P2 素材");
+      text("p2CorpusTextLabel", "串题素材");
+      const saveButton = $("saveP2CorpusBtn");
+      if (saveButton) saveButton.textContent = "保存素材";
       if ($("p2CorpusCategory")) $("p2CorpusCategory").value = category;
       if ($("p2CorpusTitle")) $("p2CorpusTitle").value = entry.title || "";
       setCorpusMarkdownValue("p2CorpusText", entry.material_text || "");
@@ -1363,19 +1490,27 @@
       const questionId = p2BankQuestionId(entry);
       if (!questionId) return;
       const payload = await api(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`);
+      const title = p2CleanCueTitle({ ...entry, question: payload.question });
       const activeEntry = {
         ...entry,
         ...payload,
         is_bank_card: true,
         entry_id: entry.entry_id || payload.question_id || questionId,
         cue_id: payload.question_id || entry.cue_id || questionId,
-        title: entry.cue_title || entry.title || payload.question || "P2 题卡",
+        title,
+        cue_title: title,
         material_text: payload.corpus_text || entry.material_text || "",
         linked_question: payload.question || entry.linked_question || "",
       };
       state.p2Corpus.activeEntry = activeEntry;
+      $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.add("is-bank-editor");
+      $("p2BankCorpusContext")?.classList.remove("hidden");
+      text("p2BankCorpusQuestion", activeEntry.title || activeEntry.linked_question || "P2 题卡");
       text("p2CorpusDialogCategory", "题库正文");
-      text("p2CorpusDialogTitle", activeEntry.title ? `编辑题库正文：${activeEntry.title}` : "编辑题库正文");
+      text("p2CorpusDialogTitle", "编辑题库正文");
+      text("p2CorpusTextLabel", "正文");
+      const saveButton = $("saveP2CorpusBtn");
+      if (saveButton) saveButton.textContent = "保存正文";
       if ($("p2CorpusCategory")) $("p2CorpusCategory").value = "special";
       if ($("p2CorpusTitle")) $("p2CorpusTitle").value = activeEntry.title || "";
       setCorpusMarkdownValue("p2CorpusText", activeEntry.material_text || "");
@@ -1390,6 +1525,8 @@
 
     function closeP2CorpusEditor() {
       $("p2CorpusDialog")?.classList.add("hidden");
+      $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.remove("is-bank-editor");
+      $("p2BankCorpusContext")?.classList.add("hidden");
       state.p2Corpus.activeEntry = null;
     }
 
@@ -1407,7 +1544,7 @@
     function p2P3FollowUpMarkdownTemplate(entry = {}, selectedQuestions = null) {
       const questions = Array.isArray(selectedQuestions) ? selectedQuestions : p2OfficialFollowUpQuestions(entry);
       if (!questions.length) return "";
-      const title = String(entry.cue_title || entry.title || "P2 题卡").trim();
+      const title = p2CleanCueTitle(entry);
       const lines = [
         `## ${title} 相关 P3 追问`,
         "",
@@ -1424,7 +1561,7 @@
     }
 
     function p2BankP3MarkdownTemplate(entry = {}, items = []) {
-      const title = String(entry.cue_title || entry.title || entry.question || "P2 题卡").trim();
+      const title = p2CleanCueTitle(entry);
       const validItems = (Array.isArray(items) ? items : [])
         .filter((item) => String(item?.followup_question || "").trim());
       if (!validItems.length) return "";
@@ -1612,14 +1749,16 @@
       const questionId = p2BankQuestionId(entry);
       if (!questionId) return;
       const payload = await api(`/api/p3-bank-corpus/${encodeURIComponent(questionId)}`);
+      const title = p2CleanCueTitle({ ...entry, question: payload.question });
       state.p2Corpus.activeP3Entry = null;
       state.p2Corpus.activeBankP3Entry = {
         ...entry,
         is_bank_card: true,
         question_id: payload.p2_question_id || questionId,
-        title: entry.cue_title || entry.title || payload.question || "P2 题卡",
+        title,
+        cue_title: title,
         items: payload.items || [],
-        selectedFollowupId: payload.items?.[0]?.followup_id || "",
+        selectedFollowupId: entry.selectedFollowupId || payload.items?.[0]?.followup_id || "",
       };
       text("p2CorpusP3DialogCategory", entry.label ? `题库素材 · ${entry.label}` : "题库素材");
       text("p2CorpusP3DialogTitle", state.p2Corpus.activeBankP3Entry.title ? `编辑题库 P3：${state.p2Corpus.activeBankP3Entry.title}` : "编辑题库 P3 追问");
@@ -1670,6 +1809,17 @@
       const entry = state.p2Corpus.activeEntry || {};
       const editorReady = isCorpusEditorReady("p2CorpusText");
       const materialText = editorReady ? getCorpusMarkdownValue("p2CorpusText").trim() : "";
+      if (entry.is_bank_card) {
+        closeP2CorpusEditor();
+        if (materialText) {
+          saveP2BankCorpusEntry({
+            entry,
+            materialText,
+            silent: true,
+          }).catch(() => null);
+        }
+        return;
+      }
       const title = $("p2CorpusTitle")?.value || "";
       const category = $("p2CorpusCategory")?.value || entry.category || "person";
       closeP2CorpusEditor();
@@ -1755,6 +1905,32 @@
     }
 
     document.addEventListener("click", (event) => {
+      // Category filter bar
+      const filterBtn = event.target.closest("[data-cat-filter]");
+      if (filterBtn) {
+        event.preventDefault();
+        state.p2Corpus.seasonalFilter = filterBtn.dataset.catFilter || "all";
+        renderP2CorpusTopics();
+        return;
+      }
+      // Direct practice button
+      const practiceBtn = event.target.closest("[data-p2-bank-start]");
+      if (practiceBtn) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const cueId = practiceBtn.dataset.p2BankStart || "";
+        if (cueId && typeof startPractice === "function") {
+          state.p2Corpus.pinnedCueId = cueId;
+          switchView("p2", { force: true });
+          // Brief delay to let view switch settle, then auto-start practice
+          window.setTimeout(() => {
+            if (state.p2Corpus.pinnedCueId === cueId) {
+              startPractice();
+            }
+          }, 120);
+        }
+        return;
+      }
       const cardMaterialButton = event.target.closest("[data-p2-corpus-card-material]");
       if (cardMaterialButton) {
         event.preventDefault();

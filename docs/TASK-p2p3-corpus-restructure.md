@@ -9,7 +9,7 @@
 - 视图:`backend_django/apps/speaking/views.py` —— `p1_corpus_view`(L104)、`p2_corpus_view`(L117)、`p2_corpus_detail_view`(L130)、`p3_view`(L411)、`p3_follow_up_view`(L419)。
 - 路由:`backend_django/config/urls.py` —— `api/p1-corpus`(L65)、`api/p2-corpus[/<entry_id>]`(L66-67)、`api/p3/questions`(L60)、`api/p3/follow-up`(L61)。
 - 题库种子:`data/ielts/part2/<season>_topics.json`(每题含 `title/bullets/rounding/p3_theme/p3_follow_ups`,当前 3 条/题)。
-- P3 生成 prompt:`data/ielts/prompts/p3_question_gen.md`(现 "exactly 5")。
+- P3 生成 prompt:`services.py` 内联 prompt 使用 `P3_MAIN_COUNT`(当前用户拍板 = 3);`data/ielts/prompts/p3_question_gen.md` 已标为废弃参考,不再被代码读取。
 - 前端:`web/static/index.html`(P3 来源 L256-259、强度 L245-247;P2 库页面、peek 按钮)、`web/static/app.js`(P3 来源 L259-263 及 plan 逻辑)。
 - **污染 bug 现场**:定位"编辑题库题卡 → 写进 `P2CorpusEntry`(个人库 A)"的代码路径,这是阶段 1 要切断的根。
 
@@ -59,13 +59,13 @@ done:本地起服务,编辑题卡正文/P3 后**个人库 A 区无新条目**;�
 ## 阶段 3 · P3 练习:来源(3)/强度(2)收敛 + 报告提示
 **目标:P3 来源只剩 3 个(默认神奇题库)、强度只剩 2 个;练习中提示与报告编辑语料按来源接对数据。**
 
-> ⚠️ **当前状态核实(2026-06-06):后端大部分已做,前端一行未动 = 界面没变的根因。**
+> ✅ **当前状态核实(2026-06-06):阶段 3 主体已补齐,剩余按阶段 4 收口验证。**
 > - ✅ 后端 `_normalize_p3_intensity` 已只收 `{normal, high}`(`services.py:810`,drill 已删)。
 > - ✅ 后端 `_p3_source_type` 默认已是 `bank`(`services.py:815-827`)。
-> - ✅ `P3_MAIN_COUNT = 4`(`services.py:606`)。
+> - ✅ `P3_MAIN_COUNT = 3`(`services.py:693`,用户最新拍板)。
 > - ✅ bank 走 `season_bank`:前端传 `p3_follow_ups` 数组即直接用、不 AI 生成(`services.py:1182-1197`)。
-> - ❌ **前端 `index.html`/`app.js` 完全没改**:仍显示 4 来源(topic/p2_report/p2_corpus/custom)、3 强度(含 drill)、推荐话题 chips、"5 个主问题"文案 → 用户根本点不到 bank。**这是本阶段主体。**
-> - ❌ 后端收尾两处见下 §3.B。
+> - ✅ 前端来源收敛为 `bank`/`p2_report`/`custom`,强度收敛为 `normal`/`high`,默认 `bank`;`app.js` 已补 P2 题卡选择器、固定追问 payload、报告/黄色提示来源路由。
+> - ✅ 后端收尾见 §3.B/阶段 4,bank 不再按 `P3_MAIN_COUNT` 强制截断。
 
 ### 3.A 前端(主体,`web/static/index.html` + `app.js`)
 1. **训练强度**(`index.html:245-247`):删 `data-p3-intensity="drill"`(专项快练)按钮;只留 `normal`/`high`。清理 `app.js` 中 drill 相关文案(`349`、`8622` 等)。
@@ -73,17 +73,17 @@ done:本地起服务,编辑题卡正文/P3 后**个人库 A 区无新条目**;�
    - 删 `data-p3-source="topic"`(按话题练)、删 `data-p3-source="p2_corpus"`(根据 P2 素材)两个按钮。
    - 新增 `data-p3-source="bank"`(**根据神奇题库**,小字如"照搬题库该题的 P3 追问"),并设为 **default active**;`app.js:40` 默认 `p3SourceType` 由 `"topic"`→`"bank"`,`app.js:1135` 同步。
    - 保留 `p2_report`、`custom`。
-3. **P2 题库题选择器**(替换"推荐话题"区,`index.html:262-265` `#p3TopicSourceSection`/`#p3TopicChips`):
-   - bank 模式下,把"推荐话题"chips 区**改成按考季列 56 道 P2 题的选择器**(数据走 `api/question-bank/summary`/`sample` 或题库接口);选中一道 → 取该题 `p3_follow_ups` 放进启动 payload。
+3. **P2 题库题选择器**(替换"推荐话题"区,`index.html:262-265` `#p3BankPickerModal`/`#p3BankPickerList`):
+   - bank 模式下,列出当前考季带固定 P3 追问的 P2 题卡;选中一道 → 取该题 `p3_follow_ups` 放进启动 payload。
    - 选题后,plan 调用传 `{ source: "bank", p3_follow_ups: [...该题追问...] }`(后端 `services.py:1182` 收 `p3_follow_ups` 即走 season_bank)。
    - `p2_report`/`custom` 不显示该选择器(沿用各自上下文/自定义输入框)。
-4. **文案**:把"5 个主问题…"提示(`index.html` 顶部 P3 区域)改为与实际一致(4 题;bank 为题库实际条数)。
+4. **文案**:把旧"5 个主问题…"提示改为与实际一致(`P3_MAIN_COUNT`,当前 3 题;bank 为题库实际条数)。
 5. **练习中提示(黄色按钮)**:P3 练习过程补上 P1/P2 已有的提示按钮(SPEC §6b 缺口),复用 `peekP3CorpusBtn`,数据源按 §3.C 来源规则。
 
 ### 3.B 后端收尾(`services.py`)
-1. **bank 不得补满/截断**:`build_p3_plan`(约 `1179`)对 `season_bank` 来源,问题数 = 传入 `p3_follow_ups` 实际条数,**跳过 1219-1220 的 fallback 补满**与 `[:question_count]` 截断(`1192`)。"有几条用几条"。仅 `p2_report`/`custom` 用 `P3_MAIN_COUNT=4`。
+1. **bank 不得补满/截断**:`build_p3_plan`(约 `1179`)对 `season_bank` 来源,问题数 = 传入 `p3_follow_ups` 实际条数,**跳过 1219-1220 的 fallback 补满**与 `[:question_count]` 截断(`1192`)。"有几条用几条"。仅 `p2_report`/`custom` 用 `P3_MAIN_COUNT`(当前 = 3,用户拍板)。
 2. **清死代码**:`1179` 的 `P3_DRILL_COUNT if intensity=="drill"` 分支(intensity 已不会是 drill;`P3_DRILL_COUNT` 可能已未定义)→ 直接用 `P3_MAIN_COUNT`。`_p3_source_type` 里 `topic`/`p2_corpus` 旧分支前端下线后可保留兼容或清理(任选,别报错)。
-3. **生成 prompt 文案**:`services.py:1269` 的 "exactly 5" 与 `data/ielts/prompts/p3_question_gen.md` 的 "exactly 5" → "4"(仅 `p2_report`/`custom` 生成用)。
+3. **生成 prompt 文案**:`services.py` 内联 prompt 已用 `exactly {P3_MAIN_COUNT}`(现自动 = 3),无需再改。`data/ielts/prompts/p3_question_gen.md` 已标为弃用参考,不再被代码读取。
 
 ### 3.C 练习中提示 + 报告编辑语料(来源路由)
    - 来源 `bank` → 提示/报告编辑语料 = 该 P2 题的 P3 追问语料(`P3BankFollowupCorpusEntry`,阶段 1),交互类 P1。
@@ -93,11 +93,45 @@ done:本地起服务,编辑题卡正文/P3 后**个人库 A 区无新条目**;�
 
 测试 + 自查:
 - P3 来源接口/前端只暴露 3 个,默认 `bank`;`bank` 返回条数 = 题库实际。
-- `p2_report`/`custom` 生成恰 4 题。
+- `p2_report`/`custom` 生成恰 `P3_MAIN_COUNT` 题(当前 3)。
 - 强度仅 2 个;`high` 对每个回答追问。
 - 提示数据源按来源正确切换(后端可加单测覆盖 `bank` 取 `P3BankFollowupCorpusEntry`、`p2_report` 取 A 的 P3)。
 
 done:三来源/两强度全链路本地可走;check/test 绿。
+
+---
+
+## 阶段 4 · 收尾修正(2026-06-06 复核,给 Codex)
+> 复核结论:UI 收敛层(来源 3/强度 2/56 题选择器/黄按钮)已到位。剩 3 处未达标,本阶段收口。
+> ⚠️ **`P3_MAIN_COUNT=3` 是用户最新拍板,保持不动**;SPEC 已同步(原写 4 作废)。所有"生成 4 题"措辞按 `P3_MAIN_COUNT` 理解。
+
+### 4.1 bank 上游截断(隐藏 bug)—— `services.py:1284`
+- 现状:`build_p3_plan` 里 `cue_questions = [...][:question_count]`,`question_count=P3_MAIN_COUNT=3`。当前题库恰 3 条/题被掩盖,但题库该题 >3 条时 bank 会被砍。
+- 改:**bank/season_bank 来源不走 `[:question_count]`**。把截断改成"仅非 bank 来源才切片",对齐下游 turn-builder `1688-1691` 已有的 `fixed_bank_questions` 逻辑。"有几条用几条"。
+- 验:构造一道 4 条 `p3_follow_ups` 的 bank 题 → plan 返回 4 题、不被砍到 3;`p2_report`/`custom` 仍 = `P3_MAIN_COUNT`。
+
+### 4.2 P3 报告「编辑语料库」按钮缺失(主体)—— §6b
+- 根因:报告行 `corpusButton` 走 `p1CorpusTargetForTurn`(`app.js:7435`),该函数 `turn.part!=="p1"` 直接 `return null` → **P3 报告永远没有编辑入口**。
+- 还缺数据线索:P3 的 bank turn 当前 metadata 只有 `source`+`plan_question_id`("q1"…),**没带 `followup_id` / `p2_question_id` / `p2_corpus_entry_id`**,报告拿不到能定位语料的 key(`services.py:1696-1730`)。
+- 实现(后端先铺线索,前端再接按钮):
+  1. **后端透传**(`services.py` turn-builder ~`1696`):bank 主 turn 的 metadata 增补 `followup_id`、`p2_question_id`(来自前端传入的 bank 卡 `question_id` + 每条追问的稳定 `followup_id`,前端需在 `app.js:1697` 的 payload 里把 `p3_follow_ups` 升级为带 `followup_id` 的结构,或另传 `p3_bank_question_id` + `p3_followup_ids[]`)。`p2_report` 来源把已链接的 `p2_corpus_entry_id`(已在 `plan.source`,`1345`)透到 turn。
+  2. **前端按来源路由**(`app.js`):新增 `p3CorpusTargetForTurn(turn, attempt)`,在 `turnReportRow`(`7464`)对 `turn.part==="p3"` 调它,产出"编辑语料库"按钮:
+     - `source==="bank"/"season_bank"` → 复用题库 P3 编辑器 `openP2CorpusP3Editor`(`corpus-takeaway.js:1607`)/`api/p3-bank-corpus/item/<followup_id>`(`1842`),按 turn 的 `followup_id` 直接打开**同一条** `P3BankFollowupCorpusEntry`(与 P2 库页面题卡「P3 追问」同一份,不另建)。
+     - `source==="p2_report"` 且该次 P2 报告**链接过素材**(turn 带 `p2_corpus_entry_id`)→ 复用素材卡右侧 P3 按钮路径(`data-p2-corpus-p3`,`corpus-takeaway.js:730`),编辑**同一** `P2CorpusEntry` 的 P3,不另建。
+     - `source==="p2_report"` **未链接** / `source==="custom"` / 其它 → 按钮存在但点击**弹提示**("本次没有可编辑的语料库/未链接素材"),不报错、不静默。
+- 验:bank 练完报告每行有「编辑语料库」→ 打开的正是该追问那条、与库页面同源;p2_report 链接素材时编辑的是素材卡那条;未链接/custom 弹提示。
+
+### 4.3 黄色提示按钮数据源(部分实现,按 §6 收口)—— `corpus-takeaway.js:369-394`
+- 现状:`openP3CorpusPeek` 只渲染 `state.p3PracticeSource.p3FollowUpText`(本次传入的追问**题面**),**没读用户保存的语料、不按来源区分**。
+- 改:复用 4.2 铺好的 turn 线索,让黄按钮提示内容按 §6 切换数据源:
+  - bank → 读该 `followup_id` 的 `P3BankFollowupCorpusEntry.corpus_text`(无则提示"这道题还没保存语料",同 P1 行为)。
+  - p2_report 链接素材 → 读该 `P2CorpusEntry` 的 P3 语料。
+  - custom / 未链接 → 维持通用(或隐藏按钮),不报错。
+- 验:bank 模式黄按钮显示的是**已保存语料**而非题面;未保存时给"还没保存"提示。
+
+### 红线沿用 + done
+- 不写入个人库 A;不另建语料条目(报告按钮编辑的必须是库页面同一条);不引 CDN/不泄露 key;**禁止 git commit**。
+- done:4.1 bank 不再被截断;4.2 三种来源的 P3 报告「编辑语料库」按 §6b 正确路由(含未链接弹提示);4.3 黄按钮读保存语料;`check`/`makemigrations --check` 绿,新增/改动逻辑有单测;`apps.speaking` 既有红测(AI provider routing)与本阶段无关、不在本阶段范围。
 
 ---
 

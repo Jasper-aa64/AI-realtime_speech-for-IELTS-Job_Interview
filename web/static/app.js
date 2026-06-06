@@ -37,9 +37,11 @@ const state = {
   p3SelectedTopic: "",
   p3Intensity: "normal",
   p3Focus: "comparison_concession",
-  p3SourceType: "topic",
+  p3SourceType: "bank",
+  p3SelectedBankCardId: "",
   p3CustomTheme: "",
   p3Plan: null,
+  p3PlanError: "",
   p3PlanLoading: false,
   p3PracticeSource: null,
   p3CorpusSourceEntryId: "",
@@ -257,9 +259,9 @@ const EXAMINER_TTS_REFRESH_WAIT_MS = 4200;
 const EXAMINER_TTS_REFRESH_INTERVAL_MS = 550;
 const CORPUS_PEEK_WINDOW_MARGIN = 16;
 const P3_SOURCE_LABELS = {
-  topic: "按话题练",
+  bank: "神奇题库固定追问",
+  season_bank: "神奇题库固定追问",
   p2_report: "根据 P2 报告",
-  p2_corpus: "根据 P2 素材",
   custom: "自定义主题",
   p2_answer: "根据 P2 回答",
 };
@@ -344,9 +346,8 @@ const P3_TARGET_MOVES = {
   policy_society: ["public role", "individual role", "trade-off"],
 };
 const P3_INTENSITY_HELP = {
-  normal: "5 个主问题，重点把每题说成“观点 + 原因 + 例子/对比 + 影响”。",
+  normal: "每轮 3 个主问题，重点把每题说成“观点 + 原因 + 例子/对比 + 影响”。",
   high: "每个主问题后追加追问，训练临场承接和更深一层解释。",
-  drill: "只练 3 道同一能力点，适合快速补一个短板。",
 };
 const corpusPeekDrag = {
   dialogId: "",
@@ -1132,7 +1133,7 @@ function switchView(view, options = {}) {
   if (view === "p3" && !options.keepP3Source) {
     state.p3PracticeSource = null;
     state.p3CorpusSourceEntryId = "";
-    state.p3SourceType = "topic";
+    state.p3SourceType = "bank";
     state.p3Plan = null;
   }
   state.view = view;
@@ -1632,13 +1633,12 @@ async function startPractice() {
       requestOptions: { signal: state.startAbortController.signal },
     });
     if (state.startRequestId !== requestId || state.practiceSessionId !== sessionId || state.abortingAttemptId === "__loading__") return;
-    const balance = Number(wallet.balance_rmb || 0);
-    if (balance <= 0) {
+    if (!walletAiStartAllowed(wallet)) {
       state.practiceLocked = false;
       $("#exitPractice")?.classList.add("hidden");
       updateSidebarLock();
       setRecordButton("idle", "Start", "余额不足，请先充值。");
-      alert("余额不足，请先充值后再开始练习。");
+      showInsufficientBalanceDialog(walletAiStartThreshold(wallet));
       switchView("accountProfile", { force: true });
       return;
     }
@@ -1673,6 +1673,8 @@ async function startPractice() {
       ...(mode === "p3" && p3Source?.attemptId ? { p2_attempt_id: p3Source.attemptId } : {}),
       ...(mode === "p3" && p3Source?.p2CorpusEntryId ? { p2_corpus_entry_id: p3Source.p2CorpusEntryId } : {}),
       ...(mode === "p3" && p3Source?.p3FollowUpText ? { p3_follow_up_text: p3Source.p3FollowUpText } : {}),
+      ...(mode === "p3" && p3Source?.p2QuestionId ? { p2_question_id: p3Source.p2QuestionId } : {}),
+      ...(mode === "p3" && Array.isArray(p3Source?.p3FollowUps) && p3Source.p3FollowUps.length ? { p3_follow_ups: p3Source.p3FollowUps } : {}),
     }, { signal: state.startAbortController.signal });
     if (state.startRequestId !== requestId || state.practiceSessionId !== sessionId || state.abortingAttemptId === "__loading__") {
       if (attempt?.id) api(`/api/attempts/${attempt.id}/abort`, {}).catch(() => null);
@@ -4168,15 +4170,113 @@ function renderWritingAnnotatedText(textValue, annotations = []) {
   return html;
 }
 
+function parseWritingSpellingSummary(value = "") {
+  const groups = [];
+  let current = null;
+  const genericTitles = new Set(["拼写纠错", "拼写纠正", "spelling corrections", "spelling correction"]);
+  const isGenericTitle = (title = "") => genericTitles.has(String(title || "").trim().toLowerCase());
+  const inferredGroupTitle = (wrong = "", correct = "") => {
+    const left = String(wrong || "").trim();
+    const right = String(correct || "").trim();
+    const lowerLeft = left.toLowerCase();
+    const lowerRight = right.toLowerCase();
+    const sortedLeft = lowerLeft.split("").sort().join("");
+    const sortedRight = lowerRight.split("").sort().join("");
+    const editDistance = (a, b) => {
+      const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+      for (let i = 1; i <= a.length; i += 1) {
+        const currentRow = [i];
+        for (let j = 1; j <= b.length; j += 1) {
+          currentRow[j] = a[i - 1] === b[j - 1]
+            ? previous[j - 1]
+            : Math.min(previous[j - 1], previous[j], currentRow[j - 1]) + 1;
+        }
+        previous.splice(0, previous.length, ...currentRow);
+      }
+      return previous[b.length];
+    };
+    if (left && right && lowerLeft === lowerRight && left !== right) return "大小写类错误";
+    if (sortedLeft === sortedRight || editDistance(lowerLeft, lowerRight) <= 2) return "字母顺序 / 字母遗漏类错误";
+    return "词形记忆混淆类错误";
+  };
+  const ensureGroup = (title = "拼写纠错") => {
+    const existing = groups.find((group) => group.title === title);
+    if (existing) {
+      current = existing;
+      return current;
+    }
+    if (!current || current.title !== title) {
+      current = { title, items: [] };
+      groups.push(current);
+    }
+    return current;
+  };
+  String(value || "").split(/\r?\n/).forEach((rawLine) => {
+    const line = String(rawLine || "").trim();
+    if (!line) return;
+    const plain = line
+      .replace(/^#{1,6}\s*/, "")
+      .replace(/^\*\*(.*)\*\*$/, "$1")
+      .trim();
+    const entry = plain
+      .replace(/^[-*]\s+/, "")
+      .replace(/^\d+[.)、]\s*/, "")
+      .trim();
+    const match = entry.match(/`?([A-Za-z][A-Za-z'-]*)`?\s*(?:->|→)\s*(?:正确\s*[:：]\s*)?`?([A-Za-z][A-Za-z'-]*)`?\s*(?:[（(]([^）)]*)[）)])?/);
+    if (match) {
+      const targetGroup = current && !isGenericTitle(current.title)
+        ? current
+        : ensureGroup(inferredGroupTitle(match[1], match[2]));
+      targetGroup.items.push({
+        wrong: match[1],
+        correct: match[2],
+        note: String(match[3] || "").trim(),
+      });
+      return;
+    }
+    if (!entry.includes("->") && !entry.includes("→")) {
+      current = isGenericTitle(entry) ? null : ensureGroup(entry);
+    }
+  });
+  return groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => item.wrong && item.correct) }))
+    .filter((group) => group.items.length);
+}
+
+function writingSpellingCardsHtml(spelling = "") {
+  const groups = parseWritingSpellingSummary(spelling);
+  if (!groups.length) return "";
+  return `
+    <div class="writing-spelling-corrections">
+      ${groups.map((group) => `
+        <section class="writing-spelling-correction-group">
+          <h4>${escapeHtml(group.title)}</h4>
+          <div class="writing-spelling-correction-list">
+            ${group.items.map((item) => `
+              <article class="writing-spelling-correction-row">
+                <span class="writing-spelling-token writing-spelling-token-wrong">${escapeHtml(item.wrong)}</span>
+                <span class="writing-spelling-correction-arrow" aria-hidden="true">→</span>
+                <span class="writing-spelling-token writing-spelling-token-correct">${escapeHtml(item.correct)}</span>
+                ${item.note ? `<span class="writing-spelling-note">${escapeHtml(item.note)}</span>` : `<span class="writing-spelling-note" aria-hidden="true">&nbsp;</span>`}
+              </article>
+            `).join("")}
+          </div>
+        </section>
+      `).join("")}
+    </div>
+  `;
+}
+
 function writingSpellingSummaryHtml(score = {}) {
   const spelling = String(score.spelling_correction_summary || "").trim();
   if (!spelling) return "";
+  const cardsHtml = writingSpellingCardsHtml(spelling);
   return `
     <div class="detail-card writing-language-summary-card writing-spelling-summary-card">
       <section>
         <span class="section-label">Spelling corrections</span>
         <h3>拼写纠错</h3>
-        <div class="coaching-content">${renderMarkdown(spelling)}</div>
+        ${cardsHtml || `<div class="coaching-content">${renderMarkdown(spelling)}</div>`}
       </section>
     </div>
   `;
@@ -6359,8 +6459,8 @@ async function scoreWritingEntry() {
     }
     try {
       const wallet = await fetchWalletPayload({ maxAgeMs: 30000 });
-      if (Number(wallet.balance_rmb || 0) <= 0) {
-        alert("余额不足，请先充值后再使用 AI 评分与辅导。");
+      if (!walletAiStartAllowed(wallet)) {
+        showInsufficientBalanceDialog(walletAiStartThreshold(wallet));
         switchView("accountProfile");
         return;
       }
@@ -6561,15 +6661,18 @@ function renderDetail(attempt, updateView = true, options = {}) {
   document.querySelectorAll("[data-regenerate-transcript]").forEach((button) => {
     button.addEventListener("click", () => regenerateTurnTranscript(button));
   });
-  document.querySelectorAll("[data-edit-p1-corpus]").forEach((button) => {
-    button.addEventListener("click", () => openP1CorpusEditor({
-      question_id: button.dataset.questionId || "",
+  document.querySelectorAll("[data-edit-turn-corpus]").forEach((button) => {
+    button.addEventListener("click", () => openReportCorpusTarget({
+      kind: button.dataset.corpusKind || "",
+      questionId: button.dataset.questionId || "",
       topic: button.dataset.topic || "general",
       question: button.dataset.question || "",
-      display_question: button.dataset.displayQuestion || button.dataset.question || "",
-      corpus_text: "",
-      last_ai_answer: button.dataset.aiAnswer || "",
-    }));
+      displayQuestion: button.dataset.displayQuestion || button.dataset.question || "",
+      aiAnswer: button.dataset.aiAnswer || "",
+      p2QuestionId: button.dataset.p2QuestionId || "",
+      followupId: button.dataset.followupId || "",
+      entryId: button.dataset.p2CorpusEntryId || "",
+    }).catch(showError));
   });
   document.querySelectorAll("[data-start-p3-from-p2]").forEach((button) => {
     button.addEventListener("click", () => startP3FromP2Report(button.dataset.startP3FromP2 || "").catch(showError));
@@ -6997,6 +7100,129 @@ function p3CorpusSourceOptions() {
   return options;
 }
 
+function p2BankQuestionId(entry = {}) {
+  return String(entry.cue_id || entry.question_id || entry.canonical_entry_id || entry.entry_id || "").trim();
+}
+
+function p2BankCardTitle(entry = {}) {
+  return String(entry.cue_title || entry.title || entry.question || entry.linked_question || "P2 题卡").replace(/\s+/g, " ").trim();
+}
+
+function p2BankCardFollowUps(entry = {}) {
+  const seen = new Set();
+  return (entry.p3_follow_ups || [])
+    .map((item) => String(item || "").replace(/\s+/g, " ").trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
+function p3BankCardsWithFollowUps() {
+  return (state.p2Corpus.currentPart2Cards || [])
+    .filter((item) => p2BankQuestionId(item) && p2BankCardFollowUps(item).length);
+}
+
+function selectedP3BankCard() {
+  const cards = p3BankCardsWithFollowUps();
+  if (!cards.length) return null;
+  const selectedId = String(state.p3SelectedBankCardId || "").trim();
+  if (!selectedId) return null;
+  return cards.find((item) => p2BankQuestionId(item) === selectedId) || null;
+}
+
+function setSelectedP3BankCard(entry) {
+  if (!entry) {
+    state.p3SelectedBankCardId = "";
+    state.p3PracticeSource = null;
+    state.p3SelectedTopic = "";
+    return null;
+  }
+  const questionId = p2BankQuestionId(entry);
+  const title = p2BankCardTitle(entry);
+  const followUps = p2BankCardFollowUps(entry);
+  state.p3SelectedBankCardId = questionId;
+  state.p3PracticeSource = {
+    sourceType: "bank",
+    title,
+    theme: title,
+    p2QuestionId: questionId,
+    p3FollowUps: followUps,
+    categoryLabel: entry.label || entry.category || "",
+  };
+  state.p3SelectedTopic = title;
+  return state.p3PracticeSource;
+}
+
+async function ensureSelectedP3BankCard() {
+  if (!state.p2Corpus.loaded) await ensureP2CorpusLoaded();
+  const card = selectedP3BankCard();
+  if (!card) {
+    setSelectedP3BankCard(null);
+    return null;
+  }
+  return setSelectedP3BankCard(card);
+}
+
+function p3BankCardPreviewHtml(entry) {
+  const title = p2BankCardTitle(entry);
+  const followUps = p2BankCardFollowUps(entry);
+  const bullets = (entry.bullets || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  return `
+    <article class="p3-bank-picker-card${p2BankQuestionId(entry) === state.p3SelectedBankCardId ? " active" : ""}" tabindex="0" role="button" data-p3-bank-card="${escapeHtml(p2BankQuestionId(entry))}">
+      <div class="p3-bank-card-top">
+        <span>${escapeHtml(entry.label || entry.category || "P2")}</span>
+        <em>${escapeHtml(followUps.length)} 追问题</em>
+      </div>
+      <strong>${escapeHtml(title)}</strong>
+      ${bullets ? `<ul>${bullets}</ul>` : ""}
+    </article>
+  `;
+}
+
+function p3SelectedBankCardHtml(entry) {
+  const title = p2BankCardTitle(entry);
+  const followUps = p2BankCardFollowUps(entry);
+  const bullets = (entry.bullets || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  return `
+    <article class="p3-bank-picker-card p3-bank-context-card active" tabindex="0" role="button" data-p3-bank-picker-open>
+      <div class="p3-bank-card-top">
+        <span>${escapeHtml(entry.label || entry.category || "P2")}</span>
+        <em>${escapeHtml(followUps.length)} 追问题 · 点击切换题卡</em>
+      </div>
+      <strong>${escapeHtml(title)}</strong>
+      ${bullets ? `<ul>${bullets}</ul>` : ""}
+    </article>
+  `;
+}
+
+async function renderP3BankPicker() {
+  await ensureP2CorpusLoaded();
+  const list = $("#p3BankPickerList");
+  if (!list) return;
+  const cards = p3BankCardsWithFollowUps();
+  if (!cards.length) {
+    list.innerHTML = `
+      <div class="p3-context-note p3-context-warning">
+        <strong>当前题库还没有固定 P3 追问</strong>
+        <span>请先在 P2 题卡库维护题卡追问，或切换到 P2 报告/自定义主题让 AI 生成。</span>
+      </div>
+    `;
+    return;
+  }
+  list.innerHTML = cards.map(p3BankCardPreviewHtml).join("");
+}
+
+async function openP3BankPicker() {
+  await renderP3BankPicker();
+  $("p3BankPickerModal")?.classList.remove("hidden");
+}
+
+function closeP3BankPicker() {
+  $("p3BankPickerModal")?.classList.add("hidden");
+}
+
 function setP3SourceFromCorpusEntry(entry) {
   if (!entry) {
     state.p3PracticeSource = null;
@@ -7350,6 +7576,70 @@ function p1CorpusTargetForTurn(turn, attempt) {
   };
 }
 
+function p3CorpusTargetForTurn(turn) {
+  if (turn?.part !== "p3") return null;
+  const prompt = turn.prompt || {};
+  const source = String(prompt.source || "").trim();
+  const p2QuestionId = String(prompt.p2_question_id || prompt.cue_id || "").trim();
+  const followupId = String(prompt.p3_bank_followup_id || prompt.followup_id || "").trim();
+  const p2CorpusEntryId = String(prompt.p2_corpus_entry_id || "").trim();
+  if ((source === "bank" || source === "season_bank") && p2QuestionId && followupId) {
+    return {
+      kind: "p3_bank",
+      p2QuestionId,
+      followupId,
+      displayQuestion: turn.question || prompt.followup_question || "",
+    };
+  }
+  if ((source === "p2_report" || source === "p2_corpus") && p2CorpusEntryId) {
+    return {
+      kind: "p2_corpus_p3",
+      entryId: p2CorpusEntryId,
+      displayQuestion: turn.question || "",
+    };
+  }
+  return {
+    kind: "p3_unlinked",
+    displayQuestion: turn.question || "",
+  };
+}
+
+function corpusTargetForTurn(turn, attempt) {
+  const p1Target = p1CorpusTargetForTurn(turn, attempt);
+  if (p1Target) return { kind: "p1", ...p1Target };
+  return p3CorpusTargetForTurn(turn);
+}
+
+async function openReportCorpusTarget(target) {
+  if (!target) return;
+  if (target.kind === "p1") {
+    await openP1CorpusEditor({
+      question_id: target.questionId || "",
+      topic: target.topic || "general",
+      question: target.question || "",
+      display_question: target.displayQuestion || target.question || "",
+      corpus_text: "",
+      last_ai_answer: target.aiAnswer || "",
+    });
+    return;
+  }
+  if (target.kind === "p3_bank") {
+    await ensureP2CorpusLoaded();
+    const card = (state.p2Corpus.currentPart2Cards || []).find((item) => p2BankQuestionId(item) === target.p2QuestionId);
+    if (!card) throw new Error("没有找到这道题卡，先刷新题库后再编辑 P3 追问。");
+    await openP2CorpusP3Editor({ ...card, selectedFollowupId: target.followupId });
+    return;
+  }
+  if (target.kind === "p2_corpus_p3") {
+    await ensureP2CorpusLoaded();
+    const entry = findP2CorpusEntry(target.entryId);
+    if (!entry) throw new Error("没有找到这条已链接的 P2 素材。");
+    await openP2CorpusP3Editor(entry);
+    return;
+  }
+  throw new Error("这次 P3 没有关联到可编辑语料。神奇题库题卡可编辑固定追问；P2 报告模式需要先链接个人 P2 素材。");
+}
+
 function turnReportGroup(attemptId, turn, attempt, isP2 = false) {
   const groupClass = isP2 ? "turn-report-group p2-turn-group" : "turn-report-group p1-p3-turn-group";
   return `<tbody class="${groupClass}">${turnReportRow(attemptId, turn, attempt, isP2)}</tbody>`;
@@ -7363,15 +7653,19 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const modelAudioControl = modelAudio.audio_url
     ? `<audio controls preload="none" src="${escapeHtml(modelAudio.audio_url)}"></audio>`
     : '<p class="audio-warning">Server model-answer audio unavailable.</p>';
-  const corpusTarget = p1CorpusTargetForTurn(turn, attempt);
+  const corpusTarget = corpusTargetForTurn(turn, attempt);
   const corpusButton = corpusTarget
     ? `<button type="button" class="ghost corpus-edit-button"
-        data-edit-p1-corpus="1"
-        data-question-id="${escapeHtml(corpusTarget.questionId)}"
-        data-topic="${escapeHtml(corpusTarget.topic)}"
-        data-question="${escapeHtml(corpusTarget.question)}"
-        data-display-question="${escapeHtml(corpusTarget.displayQuestion || corpusTarget.question)}"
-        data-ai-answer="${escapeHtml(band7Markdown || band7 || "")}">编辑语料库</button>`
+        data-edit-turn-corpus="1"
+        data-corpus-kind="${escapeHtml(corpusTarget.kind || "")}"
+        data-question-id="${escapeHtml(corpusTarget.questionId || "")}"
+        data-topic="${escapeHtml(corpusTarget.topic || "general")}"
+        data-question="${escapeHtml(corpusTarget.question || "")}"
+        data-display-question="${escapeHtml(corpusTarget.displayQuestion || corpusTarget.question || "")}"
+        data-ai-answer="${escapeHtml(band7Markdown || band7 || "")}"
+        data-p2-question-id="${escapeHtml(corpusTarget.p2QuestionId || "")}"
+        data-followup-id="${escapeHtml(corpusTarget.followupId || "")}"
+        data-p2-corpus-entry-id="${escapeHtml(corpusTarget.entryId || "")}">编辑语料库</button>`
     : "";
   const coachingRow = shouldRenderTurnCoaching(turn)
     ? `<tr class="p1-p3-coaching-row">
@@ -7687,14 +7981,14 @@ function resetAccountProfileLoadingUi() {
     walletStatus.classList.remove("is-error");
     walletStatus.classList.add("is-loading");
     walletStatus.innerHTML = `
-      <div>
-        <span>余额</span>
-        <strong>加载中</strong>
-      </div>
-      <div>
-        <span>预留</span>
-        <strong>--</strong>
-      </div>
+      <article class="wallet-balance-card">
+        <div class="wallet-balance-main">
+          <span class="wallet-balance-label">可用余额</span>
+          <strong class="wallet-balance-amount">加载中</strong>
+        </div>
+        <span class="wallet-balance-status">读取中</span>
+        <p class="wallet-balance-hint">AI 功能按实际用量结算，余额需大于 ¥0.30。</p>
+      </article>
     `;
   }
   const ledgerList = $("ledgerList");
@@ -8029,7 +8323,7 @@ function bindEvents() {
   $("securityLogoutBtn")?.addEventListener("click", logoutAccount);
   $("peekP1CorpusBtn")?.addEventListener("click", openP1CorpusPeek);
   $("peekP2CorpusBtn")?.addEventListener("click", openP2CorpusPeek);
-  $("peekP3CorpusBtn")?.addEventListener("click", openP3CorpusPeek);
+  $("peekP3CorpusBtn")?.addEventListener("click", () => openP3CorpusPeek().catch(showError));
   $("closeP1CorpusPeekBtn")?.addEventListener("click", closeP1CorpusPeek);
   $("closeP2CorpusPeek")?.addEventListener("click", closeP2CorpusPeek);
   $("closeP3CorpusPeek")?.addEventListener("click", closeP3CorpusPeek);
@@ -8038,6 +8332,19 @@ function bindEvents() {
   });
   $("p3CorpusPeekDialog")?.addEventListener("click", (event) => {
     if (event.target?.id === "p3CorpusPeekDialog") closeP3CorpusPeek();
+  });
+  $("p3BankPickerModal")?.addEventListener("click", (event) => {
+    if (event.target?.closest?.("[data-p3-bank-picker-close]")) {
+      closeP3BankPicker();
+      return;
+    }
+    const cardButton = event.target?.closest?.("[data-p3-bank-card]");
+    if (!cardButton) return;
+    const card = p3BankCardsWithFollowUps().find((item) => p2BankQuestionId(item) === cardButton.dataset.p3BankCard);
+    if (!card) return;
+    setSelectedP3BankCard(card);
+    closeP3BankPicker();
+    clearP3Plan("已切换 P2 题卡，重新载入固定追问后生效。");
   });
   bindCorpusPeekDrag("p2CorpusPeekDialog");
   bindCorpusPeekDrag("p3CorpusPeekDialog");
@@ -8421,16 +8728,14 @@ function bindEvents() {
   $("p3StartButton")?.addEventListener("click", () => startPractice());
   document.querySelectorAll("[data-p3-source]").forEach((button) => {
     button.addEventListener("click", () => {
-      const source = button.dataset.p3Source || "topic";
+      const source = button.dataset.p3Source || "bank";
       state.p3SourceType = source;
-      if (source !== "p2_report" && source !== "p2_corpus") state.p3PracticeSource = null;
-      if (source !== "p2_corpus") state.p3CorpusSourceEntryId = "";
-      if (source === "p2_corpus") {
-        ensureP2CorpusLoaded().then(() => {
-          const entry = p3CorpusSourceOptions().find((item) => item.entry_id === state.p3CorpusSourceEntryId) || p3CorpusSourceOptions()[0];
-          if (entry) setP3SourceFromCorpusEntry(entry);
-          clearP3Plan(entry ? "已选择 P2 素材，生成计划后会基于这条素材追问。" : "先到 P2 素材库保存一条素材。");
-        });
+      if (source !== "p2_report" && source !== "bank") state.p3PracticeSource = null;
+      state.p3CorpusSourceEntryId = "";
+      if (source === "bank") {
+        ensureSelectedP3BankCard()
+          .then((selected) => clearP3Plan(selected ? "已选择题卡，载入固定追问后开始练习。" : "先选择一张带固定 P3 追问的 P2 题卡。"))
+          .catch(showError);
       } else {
         clearP3Plan(source === "p2_report" ? "从 P2 报告页进入时会自动带入本次回答。" : "");
       }
@@ -8457,7 +8762,7 @@ function bindEvents() {
     if (!chip) return;
     state.p3PracticeSource = null;
     state.p3CorpusSourceEntryId = "";
-    state.p3SourceType = "topic";
+    state.p3SourceType = "bank";
     state.p3SelectedTopic = chip.dataset.p3Topic || "";
     document.querySelectorAll("#p3TopicChips .topic-chip").forEach((c) => {
       c.classList.toggle("active", c === chip);
@@ -8604,7 +8909,7 @@ function p3FocusLabel(value) {
 }
 
 function p3SourceLabel(value) {
-  return P3_SOURCE_LABELS[value] || P3_SOURCE_LABELS.topic;
+  return P3_SOURCE_LABELS[value] || P3_SOURCE_LABELS.bank;
 }
 
 function p3QuestionTypeLabel(value) {
@@ -8619,12 +8924,12 @@ function p3IntensityLabel(value) {
   return {
     normal: "标准练习",
     high: "追问压力",
-    drill: "专项快练",
   }[value] || "标准练习";
 }
 
 function currentP3Theme() {
   if (state.p3SourceType === "custom") return String($("#p3CustomThemeInput")?.value || state.p3CustomTheme || "").trim();
+  if (state.p3SourceType === "bank") return String(selectedP3BankCard()?.title || state.p3PracticeSource?.theme || state.p3SelectedTopic || "").trim();
   return String(state.p3PracticeSource?.theme || state.p3SelectedTopic || state.p3CustomTheme || "").trim();
 }
 
@@ -8682,6 +8987,36 @@ function renderP3SourceContext(message = "") {
   if (!section || !target) return;
   const sourceType = state.p3SourceType;
   const source = state.p3PracticeSource || {};
+  if (sourceType === "bank" || sourceType === "season_bank") {
+    section.classList.remove("hidden");
+    const card = selectedP3BankCard();
+    if (!card) {
+      target.innerHTML = `
+        <button type="button" class="p3-bank-entry p3-bank-entry-select" data-p3-bank-picker-open>
+          <span class="p3-bank-entry-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h7M8 12h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          <strong>选择一张 P2 题卡</strong>
+          <span>题卡带有固定维护的 P3 追问，选中后即可载入训练计划。</span>
+        </button>
+      `;
+    } else {
+      target.innerHTML = `
+        <div class="p3-context-grid p3-context-grid-single">
+          ${p3SelectedBankCardHtml(card)}
+        </div>
+      `;
+    }
+    target.querySelectorAll("[data-p3-bank-picker-open]").forEach((entry) => {
+      entry.addEventListener("click", () => openP3BankPicker().catch(showError));
+      entry.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openP3BankPicker().catch(showError);
+      });
+    });
+    return;
+  }
   if (sourceType === "p2_report") {
     section.classList.remove("hidden");
     if (source.sourceType === "p2_report") {
@@ -8704,22 +9039,13 @@ function renderP3SourceContext(message = "") {
     }
     return;
   }
-  if (sourceType === "p2_corpus") {
-    section.classList.remove("hidden");
-    target.innerHTML = p3CorpusContextHtml();
-    $("p3CorpusSourceSelect")?.addEventListener("change", (event) => {
-      const entry = p3CorpusSourceOptions().find((item) => item.entry_id === event.target.value);
-      setP3SourceFromCorpusEntry(entry);
-      clearP3Plan("已切换 P2 素材，重新生成计划后生效。");
-    });
-    return;
-  }
   section.classList.toggle("hidden", !message);
   target.innerHTML = message ? `<div class="p3-context-note"><span>${escapeHtml(message)}</span></div>` : "";
 }
 
 function clearP3Plan(message = "") {
   state.p3Plan = null;
+  state.p3PlanError = "";
   state.p3PlanLoading = false;
   renderP3PlanPreview();
   syncP3LaunchPanel(message);
@@ -8727,22 +9053,33 @@ function clearP3Plan(message = "") {
 
 function p3PlanPayload() {
   const source = state.p3PracticeSource || {};
+  const sourceType = state.p3SourceType === "season_bank" ? "bank" : state.p3SourceType;
   const theme = currentP3Theme() || "society and daily life";
+  const bankCard = sourceType === "bank" ? selectedP3BankCard() : null;
+  const bankFollowUps = bankCard ? p2BankCardFollowUps(bankCard) : [];
   return {
     theme,
     p3_intensity: state.p3Intensity,
     p3_focus: state.p3Focus,
-    source: source.sourceType || state.p3SourceType,
-    ...(source.answer ? { prior_answer: source.answer } : {}),
-    ...(source.attemptId ? { p2_attempt_id: source.attemptId } : {}),
-    ...(source.p2CorpusEntryId ? { p2_corpus_entry_id: source.p2CorpusEntryId } : {}),
-    ...(source.p3FollowUpText ? { p3_follow_up_text: source.p3FollowUpText } : {}),
+    source: sourceType,
+    ...(bankCard ? {
+      source: "bank",
+      p2_question_id: p2BankQuestionId(bankCard),
+      p3_follow_ups: bankFollowUps,
+      p3_theme: bankCard.p3_theme || theme,
+      season: bankCard.season || "",
+    } : {}),
+    ...(sourceType === "p2_report" && source.answer ? { prior_answer: source.answer } : {}),
+    ...(sourceType === "p2_report" && source.attemptId ? { p2_attempt_id: source.attemptId } : {}),
+    ...(sourceType === "p2_report" && source.p2CorpusEntryId ? { p2_corpus_entry_id: source.p2CorpusEntryId } : {}),
+    ...(sourceType === "p2_report" && source.p3FollowUpText ? { p3_follow_up_text: source.p3FollowUpText } : {}),
   };
 }
 
 function syncP3LaunchPanel(message = "") {
   document.querySelectorAll("[data-p3-source]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.p3Source === state.p3SourceType);
+    const activeSource = state.p3SourceType === "season_bank" ? "bank" : state.p3SourceType;
+    button.classList.toggle("active", button.dataset.p3Source === activeSource);
   });
   document.querySelectorAll("[data-p3-focus]").forEach((button) => {
     button.classList.toggle("active", button.dataset.p3Focus === state.p3Focus);
@@ -8753,21 +9090,22 @@ function syncP3LaunchPanel(message = "") {
   const switchEl = document.querySelector(".p3-mode-switch");
   if (switchEl) {
     switchEl.classList.toggle("high-intensity", state.p3Intensity === "high");
-    switchEl.classList.toggle("drill-intensity", state.p3Intensity === "drill");
   }
-  $("#p3TopicSourceSection")?.classList.toggle("hidden", state.p3SourceType !== "topic");
   $("#p3CustomThemeSection")?.classList.toggle("hidden", state.p3SourceType !== "custom");
   renderP3SourceContext(message);
   const customInput = $("#p3CustomThemeInput");
   if (customInput && customInput.value !== state.p3CustomTheme) customInput.value = state.p3CustomTheme || "";
   text("p3ModeHelp", P3_INTENSITY_HELP[state.p3Intensity] || P3_INTENSITY_HELP.normal);
-  text("p3PlanStatus", message || (state.p3Plan ? `已生成：${p3SourceLabel(state.p3Plan.source?.type || state.p3SourceType)} · ${p3FocusLabel(state.p3Plan.focus || state.p3Focus)} · ${p3IntensityLabel(state.p3Plan.intensity || state.p3Intensity)}` : ""));
+  text("p3PlanStatus", message || state.p3PlanError || (state.p3Plan ? `已生成：${p3SourceLabel(state.p3Plan.source?.type || state.p3SourceType)} · ${p3FocusLabel(state.p3Plan.focus || state.p3Focus)} · ${p3IntensityLabel(state.p3Plan.intensity || state.p3Intensity)}` : ""));
   const startButton = $("#p3StartButton");
   if (startButton) startButton.disabled = !state.p3Plan || state.p3PlanLoading;
   const generateButton = $("#p3GeneratePlanButton");
   if (generateButton) {
     generateButton.disabled = state.p3PlanLoading;
-    generateButton.textContent = state.p3PlanLoading ? "正在生成计划..." : (state.p3Plan ? "重新生成计划" : "生成 P3 训练计划");
+    const idleText = state.p3SourceType === "bank"
+      ? (state.p3Plan ? "重新载入追问" : "载入固定追问")
+      : (state.p3Plan ? "重新生成追问" : "生成 P3 追问");
+    generateButton.textContent = state.p3PlanLoading ? "正在准备追问..." : idleText;
   }
 }
 
@@ -8779,6 +9117,16 @@ function renderP3PlanPreview() {
     return;
   }
   const plan = state.p3Plan;
+  if (state.p3PlanError) {
+    panel.innerHTML = `
+      <div class="p3-plan-empty p3-plan-error">
+        <strong>AI 生成失败</strong>
+        <span>${escapeHtml(state.p3PlanError)}</span>
+        <small>请确认 Aiapis/HTTP provider 已配置并可用，然后重新生成。不会用本地假题冒充 AI 输出。</small>
+      </div>
+    `;
+    return;
+  }
   const questions = Array.isArray(plan?.questions) ? plan.questions : [];
   if (!plan || !questions.length) {
     panel.innerHTML = `
@@ -8796,10 +9144,6 @@ function renderP3PlanPreview() {
         <span>${escapeHtml(p3SourceLabel(plan.source?.type || state.p3SourceType))} · ${escapeHtml(p3FocusLabel(plan.focus || state.p3Focus))} · ${escapeHtml(p3IntensityLabel(plan.intensity || state.p3Intensity))}</span>
       </div>
       <small>${escapeHtml(questions.length)} 个主问题${(plan.intensity || state.p3Intensity) === "high" ? " + 即时追问" : ""}</small>
-    </div>
-    <div class="p3-plan-coachline">
-      <strong>回答目标</strong>
-      <span>每题不要只表态，至少完成“观点 → 原因 → 例子/对比 → 更大影响”。</span>
     </div>
     <div class="p3-plan-list">
       ${questions.map((item, index) => `
@@ -8820,18 +9164,17 @@ function renderP3PlanPreview() {
 
 async function generateP3Plan(options = {}) {
   if (state.p3PlanLoading) return;
+  state.p3PlanError = "";
+  if (state.p3SourceType === "bank") {
+    const source = await ensureSelectedP3BankCard();
+    if (!source?.p3FollowUps?.length) {
+      clearP3Plan("先选择一张带固定 P3 追问的 P2 题卡。");
+      return;
+    }
+  }
   if (state.p3SourceType === "p2_report" && state.p3PracticeSource?.sourceType !== "p2_report") {
     clearP3Plan("请先从一份 P2 报告进入，系统才能带入那次回答作为 P3 上下文。");
     return;
-  }
-  if (state.p3SourceType === "p2_corpus") {
-    if (!state.p2Corpus.loaded) await ensureP2CorpusLoaded();
-    const entry = p3CorpusSourceOptions().find((item) => item.entry_id === state.p3CorpusSourceEntryId) || p3CorpusSourceOptions()[0];
-    setP3SourceFromCorpusEntry(entry);
-    if (!state.p3PracticeSource?.answer) {
-      clearP3Plan("先选择一条有正文的 P2 素材。");
-      return;
-    }
   }
   if (state.p3SourceType === "custom") {
     state.p3CustomTheme = String($("#p3CustomThemeInput")?.value || "").trim();
@@ -8846,7 +9189,7 @@ async function generateP3Plan(options = {}) {
   syncP3LaunchPanel("正在生成计划...");
   try {
     const payload = await api("/api/p3/questions", p3PlanPayload());
-    state.p3Plan = payload.plan || {
+    const nextPlan = payload.plan || {
       theme: currentP3Theme(),
       focus: state.p3Focus,
       intensity: state.p3Intensity,
@@ -8870,15 +9213,26 @@ async function generateP3Plan(options = {}) {
       backend: payload.backend || "fallback",
       status: payload.status || "fallback",
     };
+    const questions = Array.isArray(nextPlan.questions) ? nextPlan.questions : [];
+    const sourceType = nextPlan.source?.type === "season_bank" ? "bank" : (nextPlan.source?.type || state.p3SourceType);
+    const requiresAi = sourceType === "p2_report" || sourceType === "custom";
+    if (requiresAi && (nextPlan.status !== "ready" || questions.length < 3)) {
+      throw new Error(nextPlan.error || payload.error || "AI 没有返回 3 道可用的 P3 追问。");
+    }
+    if (!requiresAi && !questions.length) {
+      throw new Error(nextPlan.error || payload.error || "没有可用的固定 P3 追问。");
+    }
+    state.p3Plan = nextPlan;
     state.p3Intensity = state.p3Plan.intensity || state.p3Intensity;
     state.p3Focus = state.p3Plan.focus || state.p3Focus;
-    state.p3SourceType = state.p3Plan.source?.type || state.p3SourceType;
+    state.p3SourceType = state.p3Plan.source?.type === "season_bank" ? "bank" : (state.p3Plan.source?.type || state.p3SourceType);
     renderP3PlanPreview();
     syncP3LaunchPanel(options.fromP2 ? "已根据这次 P2 生成训练计划，确认后再开始。" : "计划已生成，确认后可以开始。");
   } catch (error) {
     state.p3Plan = null;
+    state.p3PlanError = error instanceof Error ? error.message : "生成计划失败。";
     renderP3PlanPreview();
-    syncP3LaunchPanel(error instanceof Error ? error.message : "生成计划失败。");
+    syncP3LaunchPanel(state.p3PlanError);
   } finally {
     state.p3PlanLoading = false;
     renderP3PlanPreview();
@@ -8887,8 +9241,14 @@ async function generateP3Plan(options = {}) {
 }
 
 function renderP3TopicChips(topics) {
+  const target = $("p3TopicChips");
+  if (!target) {
+    state.p3Topics = topics.slice(0, 8);
+    syncP3LaunchPanel();
+    return;
+  }
   state.p3Topics = topics.slice(0, 8);
-  $("p3TopicChips").innerHTML = state.p3Topics.map((topic) => (
+  target.innerHTML = state.p3Topics.map((topic) => (
     `<button type="button" class="topic-chip${state.p3SelectedTopic === topic ? " active" : ""}" data-p3-topic="${escapeHtml(topic)}">${escapeHtml(topic.replaceAll("_", " "))}</button>`
   )).join("");
   if (state.p3Topics.length && !state.p3SelectedTopic) {
@@ -9137,28 +9497,36 @@ async function loadWallet() {
   try {
     const wallet = await fetchWalletPayload({ force: true });
     const balance = Number(wallet.balance_rmb || 0).toFixed(2);
-    const reserved = Number(wallet.reserved_rmb || 0).toFixed(2);
+    const threshold = walletAiStartThreshold(wallet);
+    const allowed = walletAiStartAllowed(wallet);
     const walletStatus = $("walletStatus");
     if (walletStatus) {
       walletStatus.classList.remove("is-loading", "is-error");
       walletStatus.innerHTML = `
-        <div>
-          <span>余额</span>
-          <strong>¥${escapeHtml(balance)}</strong>
-        </div>
-        <div>
-          <span>预留</span>
-          <strong>¥${escapeHtml(reserved)}</strong>
-        </div>
+        <article class="wallet-balance-card ${allowed ? "is-ready" : "is-blocked"}">
+          <div class="wallet-balance-main">
+            <span class="wallet-balance-label">可用余额</span>
+            <strong class="wallet-balance-amount">¥${escapeHtml(balance)}</strong>
+          </div>
+          <span class="wallet-balance-status ${allowed ? "is-ok" : "is-warn"}">${allowed ? "AI 可用" : "余额不足"}</span>
+          <p class="wallet-balance-hint">${
+            allowed
+              ? `按实际用量结算；余额需保持大于 ¥${escapeHtml(threshold.toFixed(2))}。`
+              : `余额需大于 ¥${escapeHtml(threshold.toFixed(2))} 才能使用 AI 功能，请先充值。`
+          }</p>
+        </article>
       `;
     }
     const entries = wallet.entries || [];
-    $("ledgerList").innerHTML = entries.length
+    const ledgerList = $("ledgerList");
+    if (ledgerList) ledgerList.innerHTML = entries.length
       ? entries.slice(0, 10).map((entry) => {
-          const label = entry.entry_type === "reserve" ? "预留" : entry.entry_type === "settle" ? "结算" : entry.entry_type;
+          const amount = Number(entry.amount_rmb || 0);
+          const label = walletLedgerLabel(entry.entry_type);
+          const amountClass = amount > 0 ? "is-positive" : "is-negative";
           return `<div class="settings-list-row account-ledger-row">
             <strong>${escapeHtml(label)}</strong>
-            <span>¥${Number(entry.amount_rmb || 0).toFixed(2)}</span>
+            <span class="${amountClass}">¥${amount.toFixed(2)}</span>
             <small>${escapeHtml(formatCompactDateTime(entry.created_at || "") || entry.metadata?.reason || "")}</small>
           </div>`;
         }).join("")
@@ -9168,10 +9536,61 @@ async function loadWallet() {
     if (walletStatus) {
       walletStatus.classList.remove("is-loading");
       walletStatus.classList.add("is-error");
-      walletStatus.innerHTML = `<div><span>钱包加载失败</span><strong>${escapeHtml(error.message)}</strong></div>`;
+      walletStatus.innerHTML = `<article class="wallet-balance-card is-blocked"><div class="wallet-balance-main"><span class="wallet-balance-label">钱包加载失败</span><strong class="wallet-balance-amount">${escapeHtml(error.message)}</strong></div></article>`;
     }
-    $("ledgerList").innerHTML = '<p class="account-empty-state">钱包流水暂时不可用。</p>';
+    const ledgerList = $("ledgerList");
+    if (ledgerList) ledgerList.innerHTML = '<p class="account-empty-state">钱包流水暂时不可用。</p>';
   }
+}
+
+function walletAiStartThreshold(wallet) {
+  return Number(wallet?.ai_start_min_balance_rmb ?? 0.3) || 0.3;
+}
+
+function walletAiStartAllowed(wallet) {
+  if (typeof wallet?.ai_start_allowed === "boolean") return wallet.ai_start_allowed;
+  return Number(wallet?.balance_rmb || 0) > walletAiStartThreshold(wallet);
+}
+
+function walletLedgerLabel(type) {
+  const labels = {
+    grant: "初始赠额",
+    recharge: "充值",
+    reserve: "历史预留",
+    release: "余额释放",
+    settle: "用量结算",
+  };
+  return labels[type] || type || "钱包流水";
+}
+
+function showInsufficientBalanceDialog(threshold = 0.3) {
+  document.querySelector(".insufficient-balance-dialog-overlay")?.remove();
+  const safeThreshold = Number(threshold || 0.3).toFixed(2);
+  const overlay = document.createElement("div");
+  overlay.className = "insufficient-balance-dialog-overlay";
+  overlay.innerHTML = `
+    <article class="insufficient-balance-dialog" role="dialog" aria-modal="true" aria-labelledby="insufficientBalanceTitle">
+      <div class="insufficient-balance-icon">¥</div>
+      <div class="insufficient-balance-copy">
+        <span>Wallet</span>
+        <h3 id="insufficientBalanceTitle">余额不足</h3>
+        <p>余额需大于 ¥${escapeHtml(safeThreshold)} 才能使用 AI 功能。充值后即可继续。</p>
+      </div>
+      <div class="insufficient-balance-actions">
+        <button type="button" class="recharge-dialog-cancel" data-balance-dialog-close>稍后</button>
+        <button type="button" class="recharge-dialog-confirm" data-balance-dialog-recharge>去充值</button>
+      </div>
+    </article>
+  `;
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay || event.target?.hasAttribute("data-balance-dialog-close")) close();
+  });
+  overlay.querySelector("[data-balance-dialog-recharge]")?.addEventListener("click", () => {
+    close();
+    openRechargeDialog();
+  });
+  document.body.appendChild(overlay);
 }
 
 function openRechargeDialog() {

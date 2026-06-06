@@ -50,11 +50,13 @@ from .corpus_services import (
     p1_question_id,
     p1_topic_label,
     p2_bank_corpus_payload,
+    p2_bank_topic_for_question_id,
     p2_corpus_entry_payload,
     p2_corpus_extra,
     p2_corpus_for_selection,
     p2_corpus_library,
     p2_entry_id,
+    p3_bank_followup_id,
     p3_bank_followup_list,
     prepared_corpus_for_turns,
     question_bank_sample,
@@ -371,6 +373,91 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45) -> tuple[str, dict[s
     raise last_error or RuntimeError(f"codex returned no usable output for {call_id}")
 
 
+# ── Claude CLI runner ─────────────────────────────────────────────────────────
+
+CLAUDE_CLI_PATH = shutil.which("claude") or "/Users/mac/.local/bin/claude"
+CLAUDE_CLI_QUOTA_PHRASES = ("limit reached", "quota", "rate limit", "overloaded", "capacity")
+
+
+class ClaudeCliQuotaError(RuntimeError):
+    """Raised when Claude CLI reports quota/rate-limit exhaustion."""
+
+
+def run_claude_cli(prompt: str, call_id: str, timeout: int = 180) -> tuple[str, dict[str, Any] | None]:
+    """Call Claude CLI with -p and return (text_output, usage_dict).
+
+    Uses --output-format json so we get structured output including api_error_status.
+    Raises ClaudeCliQuotaError on detected quota exhaustion.
+    Raises RuntimeError on other failures.
+    """
+    cli = CLAUDE_CLI_PATH
+    if not (shutil.which(cli) or Path(cli).exists()):
+        raise RuntimeError(f"claude CLI not found at {cli}")
+
+    try:
+        result = subprocess.run(
+            [cli, "-p", prompt, "--output-format", "json"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"claude CLI timed out after {timeout}s for {call_id}")
+    except Exception as exc:
+        raise RuntimeError(f"claude CLI subprocess error for {call_id}: {exc}") from exc
+
+    raw_stdout = (result.stdout or "").strip()
+    raw_stderr = (result.stderr or "").strip()
+
+    # Detect quota errors in stderr first (fastest path)
+    combined_err = (raw_stderr + " " + raw_stdout).lower()
+    if any(phrase in combined_err for phrase in CLAUDE_CLI_QUOTA_PHRASES):
+        raise ClaudeCliQuotaError(
+            f"Claude CLI quota exhausted for {call_id}: {raw_stderr[:200] or raw_stdout[:200]}"
+        )
+
+    # Parse JSON output
+    try:
+        parsed = json.loads(raw_stdout)
+    except json.JSONDecodeError:
+        # Non-JSON stdout — might still be valid text output (plain mode)
+        if raw_stdout:
+            return raw_stdout, None
+        raise RuntimeError(
+            f"claude CLI returned empty output for {call_id}. stderr: {raw_stderr[:300]}"
+        )
+
+    # Check structured error
+    api_error = parsed.get("api_error_status")
+    if api_error:
+        err_str = str(api_error).lower()
+        if any(phrase in err_str for phrase in CLAUDE_CLI_QUOTA_PHRASES):
+            raise ClaudeCliQuotaError(f"Claude CLI API error (quota) for {call_id}: {api_error}")
+        raise RuntimeError(f"Claude CLI API error for {call_id}: {api_error}")
+
+    if parsed.get("is_error"):
+        raise RuntimeError(f"Claude CLI reported error for {call_id}: {parsed}")
+
+    text = str(parsed.get("result") or "").strip()
+    if not text:
+        raise RuntimeError(f"Claude CLI returned empty result for {call_id}")
+
+    # Build usage summary
+    raw_usage = parsed.get("usage") or {}
+    usage: dict[str, Any] | None = None
+    if raw_usage:
+        usage = {
+            "input_tokens": raw_usage.get("input_tokens", 0),
+            "output_tokens": raw_usage.get("output_tokens", 0),
+            "cost_usd": parsed.get("total_cost_usd"),
+            "provider": "claude_cli",
+        }
+
+    return text, usage
+
+
 # --- Overall Review ---
 
 
@@ -603,7 +690,7 @@ P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT = 8
 P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT = 12
 SPEAKING_REPORT_HTTP_TIMEOUT = 60
 SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT = 90
-P3_MAIN_COUNT = 4
+P3_MAIN_COUNT = 3
 P3_TURN_COUNT = 8
 DEFAULT_FULL_NAME = "LiHua"
 DEFAULT_ENGLISH_NAME = "Jasper"
@@ -802,6 +889,17 @@ def _fallback_p3(theme: str, count: int = P3_MAIN_COUNT) -> dict[str, Any]:
     return {"questions": questions[:count], "follow_up": follow_up}
 
 
+def _failed_p3_plan(theme: str, source_type: str, error: str) -> dict[str, Any]:
+    return {
+        "questions": [],
+        "follow_up": "",
+        "backend": "failed",
+        "status": "failed",
+        "error": error,
+        "source_type": source_type,
+    }
+
+
 def _normalize_p3_focus(value: str | None) -> str:
     focus = str(value or "").strip().lower()
     return focus if focus in P3_FOCUS_OPTIONS else "comparison_concession"
@@ -817,8 +915,6 @@ def _p3_source_type(payload: dict[str, Any], source_hint: str = "") -> str:
     if source == "season_bank":
         return "bank"
     if source in {"bank", "p2_report", "custom", "p2_answer"}:
-        return source
-    if source in {"topic", "p2_corpus"}:
         return source
     if str(payload.get("p2_corpus_entry_id") or "").strip():
         return "p2_corpus"
@@ -1176,7 +1272,8 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     theme = theme or "society and daily life"
     focus = _normalize_p3_focus(str(payload.get("p3_focus") or payload.get("focus") or ""))
     intensity = _normalize_p3_intensity(str(payload.get("p3_intensity") or payload.get("intensity") or ""))
-    question_count = P3_DRILL_COUNT if intensity == "drill" else P3_MAIN_COUNT
+    question_count = P3_MAIN_COUNT
+    requested_source = _p3_source_type(payload)
     prior_answer = clean_report_text(str(payload.get("prior_answer") or ""))[:4000]
     p3_follow_up_text = clean_markdown_text(str(payload.get("p3_follow_up_text") or ""))[:8000]
     provided_follow_ups = payload.get("p3_follow_ups")
@@ -1189,7 +1286,7 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
 
     if cue_questions:
         raw_plan = {
-            "questions": cue_questions[:question_count],
+            "questions": cue_questions,
             "follow_up": _p3_follow_up_for_type(_p3_question_type_for_index(0, focus)),
             "backend": "season_bank",
             "status": "ready",
@@ -1210,14 +1307,24 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             f"p3_from_p2_{hashlib.sha1(prior_answer.encode('utf-8')).hexdigest()[:16]}",
         )
         source_type = _p3_source_type(payload, "p2_report")
+    elif requested_source == "custom":
+        raw_plan = _generate_p3_from_theme(
+            theme,
+            f"p3_custom_{hashlib.sha1(theme.encode('utf-8')).hexdigest()[:16]}",
+        )
+        source_type = "custom"
     else:
-        raw_plan = {**_fallback_p3(theme, question_count), "backend": "fallback", "status": "fallback"}
-        source_type = _p3_source_type(payload, "topic")
+        raw_plan = _failed_p3_plan(
+            theme,
+            requested_source or "bank",
+            "No fixed P3 question-bank follow-ups were provided, and no AI generation source was selected.",
+        )
+        source_type = requested_source or "bank"
 
-    questions = [str(q).strip() for q in raw_plan.get("questions", []) if str(q).strip()][:question_count]
-    fallback_questions = _fallback_p3(theme, P3_MAIN_COUNT)["questions"]
-    while len(questions) < question_count:
-        questions.append(fallback_questions[len(questions) % len(fallback_questions)])
+    fixed_bank_questions = source_type == "season_bank"
+    questions = [str(q).strip() for q in raw_plan.get("questions", []) if str(q).strip()]
+    if not fixed_bank_questions:
+        questions = questions[:question_count]
 
     structured_questions = _structured_p3_questions(questions, source_type, focus)
     first_type = structured_questions[0]["type"] if structured_questions else _p3_question_type_for_index(0, focus)
@@ -1235,6 +1342,7 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "type": source_type,
             "theme": theme,
             "p2_attempt_id": clean_report_text(str(payload.get("p2_attempt_id") or "")),
+            "p2_question_id": clean_report_text(str(payload.get("p2_question_id") or payload.get("cue_id") or "")),
             "p2_corpus_entry_id": clean_report_text(str(payload.get("p2_corpus_entry_id") or "")),
             "season": clean_report_text(str(payload.get("season") or "")),
         },
@@ -1244,6 +1352,8 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         "backend": str(raw_plan.get("backend") or "fallback"),
         "status": str(raw_plan.get("status") or "fallback"),
         "question_count": len(structured_questions),
+        **({"model": str(raw_plan.get("model"))} if raw_plan.get("model") else {}),
+        **({"usage": raw_plan.get("usage")} if raw_plan.get("usage") else {}),
         **({"error": str(raw_plan.get("error"))} if raw_plan.get("error") else {}),
     }
 
@@ -1260,14 +1370,38 @@ def _p3_questions_from_material(value: str, count: int = P3_MAIN_COUNT) -> list[
     return questions
 
 
+def _p3_questions_from_ai_payload(payload: dict[str, Any], count: int = P3_MAIN_COUNT) -> list[str]:
+    """Normalize model P3 output without inventing local fallback questions."""
+    raw_questions = payload.get("questions")
+    if not isinstance(raw_questions, list):
+        return []
+    questions: list[str] = []
+    for item in raw_questions:
+        if isinstance(item, dict):
+            item = item.get("question") or item.get("text") or item.get("prompt") or ""
+        question = clean_report_text(str(item))[:260]
+        if not question or ("?" not in question and "？" not in question):
+            continue
+        questions.append(question)
+        if len(questions) >= count:
+            break
+    return questions
+
+
 def _generate_p3_from_p2_answer(theme: str, prior_answer: str, call_id: str) -> dict[str, Any]:
-    fallback = _fallback_p3(theme, P3_MAIN_COUNT)
     answer = clean_report_text(prior_answer)[:4000]
     if not answer:
-        return {**fallback, "backend": "fallback", "status": "fallback"}
-    prompt = f"""Return JSON only with keys questions and follow_up.
-questions must be an array of exactly 5 natural IELTS Speaking Part 3 examiner questions.
-follow_up must be one concise examiner follow-up question.
+        return _failed_p3_plan(theme, "p2_report", "P2 answer is required before generating AI P3 questions.")
+    prompt = f"""Return ONLY this JSON shape:
+{{
+  "questions": ["question 1?", "question 2?", "question 3?"],
+  "follow_up": "one concise examiner follow-up question?"
+}}
+
+Hard rules:
+- The questions array MUST contain exactly {P3_MAIN_COUNT} items.
+- Do NOT create Q4, Q5, extra questions, bullet lists, explanations, labels, markdown, or commentary.
+- Each question must be a natural IELTS Speaking Part 3 examiner question.
 
 Generate Part 3 questions based on this Part 2 response. The questions should extend the candidate's ideas into broader social discussion, comparison, reasons, consequences, and future trends.
 
@@ -1283,11 +1417,11 @@ Candidate Part 2 answer:
         if _mode_allows_http("followup"):
             result = _speaking_http_provider("followup", timeout_seconds=45).complete_chat(
                 [
-                    {"role": "system", "content": "You are an IELTS Speaking Part 3 examiner. Return JSON only."},
+                    {"role": "system", "content": f"You are an IELTS Speaking Part 3 examiner. Return JSON only, with exactly {P3_MAIN_COUNT} questions and no extra text."},
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=420,
-                temperature=0.25,
+                temperature=0.15,
                 timeout_seconds=45,
                 stream=True,
             )
@@ -1303,12 +1437,12 @@ Candidate Part 2 answer:
         else:
             raise RuntimeError(f"speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
         payload = extract_json_object_with_keys(output, {"questions", "follow_up"})
-        questions = [clean_report_text(str(item)) for item in payload.get("questions", []) if clean_report_text(str(item))][:P3_MAIN_COUNT]
+        questions = _p3_questions_from_ai_payload(payload, P3_MAIN_COUNT)
         if len(questions) < P3_MAIN_COUNT:
             raise RuntimeError("P3 generation returned too few questions")
-        follow_up = clean_report_text(str(payload.get("follow_up") or fallback["follow_up"]))
+        follow_up = clean_report_text(str(payload.get("follow_up") or ""))
         if not follow_up or "?" not in follow_up:
-            follow_up = fallback["follow_up"]
+            follow_up = _p3_follow_up_for_type(_p3_question_type_for_index(0, "comparison_concession"))
         return {
             "questions": questions,
             "follow_up": follow_up,
@@ -1317,8 +1451,70 @@ Candidate Part 2 answer:
             **({"model": provider_model} if provider_model else {}),
             **({"usage": usage} if usage else {}),
         }
-    except Exception as exc:  # noqa: BLE001 - P3 generation must fall back cleanly
-        return {**fallback, "backend": "fallback", "status": "fallback", "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - caller must expose real AI failure, not fake questions
+        return _failed_p3_plan(theme, "p2_report", str(exc))
+
+
+def _generate_p3_from_theme(theme: str, call_id: str) -> dict[str, Any]:
+    clean_theme = clean_report_text(theme)[:500] or "society and daily life"
+    prompt = f"""Return ONLY this JSON shape:
+{{
+  "questions": ["question 1?", "question 2?", "question 3?"],
+  "follow_up": "one concise examiner follow-up question?"
+}}
+
+Hard rules:
+- The questions array MUST contain exactly {P3_MAIN_COUNT} items.
+- Do NOT create Q4, Q5, extra questions, bullet lists, explanations, labels, markdown, or commentary.
+- Each question must be a natural IELTS Speaking Part 3 examiner question.
+
+Generate IELTS Speaking Part 3 questions for this custom discussion theme. The questions should move from opinion to reasons, comparison, social impact, and future development. Do not write answers.
+
+Theme:
+{clean_theme}
+"""
+    try:
+        if _mode_is_fallback_only("followup"):
+            raise RuntimeError("speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback")
+        if _mode_allows_http("followup"):
+            result = _speaking_http_provider("followup", timeout_seconds=45).complete_chat(
+                [
+                    {"role": "system", "content": f"You are an IELTS Speaking Part 3 examiner. Return JSON only, with exactly {P3_MAIN_COUNT} questions and no extra text."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=360,
+                temperature=0.15,
+                timeout_seconds=45,
+                stream=True,
+            )
+            output = result.text
+            backend = "http_api"
+            provider_model = result.model
+            usage = getattr(result, "usage", None) or {}
+        elif _mode_allows_codex("followup"):
+            output, _usage = run_codex(prompt, f"{call_id}_p3_custom", timeout=45)
+            backend = "codex"
+            provider_model = ""
+            usage = _usage or {}
+        else:
+            raise RuntimeError(f"speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
+        payload = extract_json_object_with_keys(output, {"questions", "follow_up"})
+        questions = _p3_questions_from_ai_payload(payload, P3_MAIN_COUNT)
+        if len(questions) < P3_MAIN_COUNT:
+            raise RuntimeError("P3 custom generation returned too few questions")
+        follow_up = clean_report_text(str(payload.get("follow_up") or ""))
+        if not follow_up or "?" not in follow_up:
+            follow_up = _p3_follow_up_for_type(_p3_question_type_for_index(0, "comparison_concession"))
+        return {
+            "questions": questions,
+            "follow_up": follow_up,
+            "backend": backend,
+            "status": "ready",
+            **({"model": provider_model} if provider_model else {}),
+            **({"usage": usage} if usage else {}),
+        }
+    except Exception as exc:  # noqa: BLE001 - caller must expose real AI failure, not fake questions
+        return _failed_p3_plan(clean_theme, "custom", str(exc))
 
 
 def _timers_for_part(part: str) -> dict[str, Any]:
@@ -1452,6 +1648,8 @@ def _build_p3_turns(
     plan_payload: dict[str, Any] | None = None,
     season_bank_follow_ups: list[str] | None = None,
     season: str = "",
+    p2_question_id: str = "",
+    p2_corpus_entry_id: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     focus = _normalize_p3_focus(focus)
     intensity = _normalize_p3_intensity(intensity)
@@ -1467,9 +1665,21 @@ def _build_p3_turns(
                 "p3_follow_ups": season_bank_follow_ups or [],
                 "source": source_type,
                 "season": season,
+                "p2_question_id": p2_question_id,
+                "p2_corpus_entry_id": p2_corpus_entry_id,
             }
         )
     plan_questions = plan.get("questions", [])
+    plan_source = plan.get("source") if isinstance(plan.get("source"), dict) else {}
+    plan_source_type = str(plan_source.get("type") or source_type or "")
+    bank_p2_question_id = clean_report_text(str(
+        plan_source.get("p2_question_id")
+        or plan_source.get("cue_id")
+        or plan_source.get("question_id")
+        or p2_question_id
+        or ""
+    ))
+    linked_p2_corpus_entry_id = clean_report_text(str(plan_source.get("p2_corpus_entry_id") or p2_corpus_entry_id or ""))
     structured_questions: list[dict[str, Any]] = []
     if plan_questions and isinstance(plan_questions[0], dict):
         for index, item in enumerate(plan_questions):
@@ -1477,39 +1687,39 @@ def _build_p3_turns(
             if not question:
                 continue
             question_type = str(item.get("type") or _p3_question_type_for_index(index, focus))
+            item_source = str(item.get("source") or plan_source_type or source_type or "topic")
+            p2_question_id = clean_report_text(str(item.get("p2_question_id") or bank_p2_question_id))
+            followup_id = clean_report_text(str(item.get("followup_id") or ""))
+            if not followup_id and item_source in {"season_bank", "bank"} and p2_question_id:
+                followup_id = p3_bank_followup_id(p2_question_id, question, index)
             structured_questions.append(
                 {
                     "id": str(item.get("id") or f"q{index + 1}"),
                     "type": question_type,
                     "question": question,
                     "target_moves": item.get("target_moves") or P3_TYPE_TARGET_MOVES.get(question_type, []),
-                    "source": str(item.get("source") or plan.get("source", {}).get("type") or source_type or "topic"),
+                    "source": item_source,
+                    "p2_question_id": p2_question_id,
+                    "followup_id": followup_id,
                 }
             )
     else:
         text_questions = [str(q).strip() for q in plan_questions if str(q).strip()]
         structured_questions = _structured_p3_questions(text_questions, source_type or "topic", focus)
+        if (plan_source_type or source_type) in {"season_bank", "bank"} and bank_p2_question_id:
+            for index, item in enumerate(structured_questions):
+                item["p2_question_id"] = bank_p2_question_id
+                item["followup_id"] = p3_bank_followup_id(bank_p2_question_id, item["question"], index)
 
-    question_count = P3_DRILL_COUNT if intensity == "drill" else P3_MAIN_COUNT
-    fallback_questions = _fallback_p3(theme, P3_MAIN_COUNT)["questions"]
-    while len(structured_questions) < question_count:
-        index = len(structured_questions)
-        question_type = _p3_question_type_for_index(index, focus)
-        structured_questions.append(
-            {
-                "id": f"q{index + 1}",
-                "type": question_type,
-                "question": fallback_questions[index % len(fallback_questions)],
-                "target_moves": P3_TYPE_TARGET_MOVES.get(question_type, P3_TYPE_TARGET_MOVES["opinion_justify"]),
-                "source": source_type or "topic",
-            }
-        )
-    structured_questions = structured_questions[:question_count]
+    source = str(plan.get("source", {}).get("type") if isinstance(plan.get("source"), dict) else "")
+    source = source or source_type or ("p2_answer" if prior_answer.strip() else "bank")
+    fixed_bank_questions = source in {"season_bank", "bank"} and bool(structured_questions)
+    question_count = len(structured_questions) if fixed_bank_questions else P3_MAIN_COUNT
+    if not fixed_bank_questions:
+        structured_questions = structured_questions[:question_count]
 
     use_follow_ups = intensity == "high"
-    total = P3_TURN_COUNT if use_follow_ups else len(structured_questions)
-    source = str(plan.get("source", {}).get("type") if isinstance(plan.get("source"), dict) else "")
-    source = source or source_type or ("p2_answer" if prior_answer.strip() else "topic")
+    total = len(structured_questions) * 2 if use_follow_ups else len(structured_questions)
     turns: list[dict[str, Any]] = []
     for main_index, item in enumerate(structured_questions):
         question = item["question"]
@@ -1526,6 +1736,10 @@ def _build_p3_turns(
                 "question_type": item.get("type"),
                 "target_moves": item.get("target_moves", []),
                 "plan_question_id": item.get("id"),
+                "p2_question_id": item.get("p2_question_id") or "",
+                "p2_corpus_entry_id": linked_p2_corpus_entry_id,
+                "p3_bank_followup_id": item.get("followup_id") or "",
+                "followup_question": question,
             },
         )
         turns.append(main_turn)
@@ -1545,6 +1759,10 @@ def _build_p3_turns(
                     "question_type": item.get("type"),
                     "target_moves": ["respond directly", "add evidence", "extend the idea"],
                     "plan_question_id": f"{item.get('id', f'q{main_index + 1}')}-follow",
+                    "p2_question_id": item.get("p2_question_id") or "",
+                    "p2_corpus_entry_id": linked_p2_corpus_entry_id,
+                    "p3_bank_followup_id": item.get("followup_id") or "",
+                    "followup_question": question,
                 },
             )
             turns.append(follow_turn)
@@ -1601,7 +1819,11 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
         turns = _build_p1_turns(P1_TURN_COUNT, question_bank_scope=question_bank_scope)
         return "p1", "Part 1 practice", turns, None, metadata
     if mode == "p2":
-        cue = _sample_p2_cue(question_bank_scope)
+        p2_cue_id = str(payload.get("p2_cue_id") or "").strip()
+        if p2_cue_id:
+            cue = p2_bank_topic_for_question_id(p2_cue_id) or _sample_p2_cue(question_bank_scope)
+        else:
+            cue = _sample_p2_cue(question_bank_scope)
         turns = [_create_turn("p2", 0, 1, _cue_to_text(cue), cue, cue)]
         return "p2", str(cue.get("title", "Part 2 practice")), turns, cue, metadata
     if mode == "p3":
@@ -1632,6 +1854,8 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
             plan_payload,
             payload.get("p3_follow_ups") if isinstance(payload.get("p3_follow_ups"), list) else None,
             str(payload.get("season") or ""),
+            clean_report_text(str(payload.get("p2_question_id") or payload.get("cue_id") or "")),
+            p2_corpus_entry_id,
         )
         if p2_corpus_entry_id:
             metadata["p2_corpus_entry_id"] = p2_corpus_entry_id
@@ -2617,7 +2841,7 @@ def _word_count(text: str) -> int:
     return len([word for word in text.replace("\n", " ").split(" ") if word.strip()])
 
 
-def score_with_codex(transcript: str, question: str, part: str, call_id: str) -> dict[str, Any]:
+def score_with_codex(transcript: str, question: str, part: str, call_id: str, ai_source: str = "gpt") -> dict[str, Any]:
     """Score transcript using Codex CLI with full part-specific guidance.
 
     Raises RuntimeError if the model output is invalid or missing required fields.
@@ -2694,6 +2918,25 @@ Overall Review 写法要求：
         if _mode_is_fallback_only("report"):
             last_error = RuntimeError("speaking report provider disabled by SPEAKING_AI_CALL_MODE=fallback")
             continue
+
+        # ── Claude CLI path ──────────────────────────────────────────────────
+        if ai_source == "claude_cli":
+            try:
+                output, usage = run_claude_cli(prompt, f"{call_id}_claude_p{index}", timeout=SPEAKING_REPORT_HTTP_TIMEOUT)
+                payload = extract_json_object_with_keys(
+                    output,
+                    {"fluency_coherence", "lexical_resource", "grammatical_range"},
+                )
+                provider_backend = "claude_cli"
+                provider_model = "claude"
+                break
+            except ClaudeCliQuotaError:
+                raise  # propagate immediately — caller wraps in SpeakingError
+            except Exception as exc:
+                last_error = exc
+                continue  # try compact prompt on next iteration
+
+        # ── GPT / HTTP path ──────────────────────────────────────────────────
         if _mode_allows_http("report"):
             try:
                 result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT).complete_chat(
@@ -3856,8 +4099,13 @@ def build_turn_feedback(
     else:
         result["ai_coaching"] = ""
 
-    # Status fields
-    result["feedback_generation_backend"] = "codex" if generated else "fallback"
+    # Status fields. Keep provenance precise: batch report feedback can come
+    # from the HTTP provider, while direct regeneration still returns a plain
+    # generated dict from the Codex path.
+    generated_backend = clean_report_text(str(generated.get("generation_backend") or generated.get("backend") or ""))
+    if generated and generated_backend not in {"http_api", "codex"}:
+        generated_backend = "codex"
+    result["feedback_generation_backend"] = generated_backend if generated else "fallback"
     if "feedback_generation_status" not in result:
         result["feedback_generation_status"] = "ready" if generated else "fallback"
 
@@ -3885,7 +4133,7 @@ def mark_missing_turn_feedback_pending(turns: list[SpeakingTurn]) -> None:
         if not transcript or is_p1_name_intro_turn(turn):
             continue
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-        if metadata.get("feedback_generation_backend") == "codex" and metadata.get("feedback_generation_status") == "ready":
+        if metadata.get("feedback_generation_backend") in {"codex", "http_api"} and metadata.get("feedback_generation_status") == "ready":
             continue
         metadata.update(
             {
@@ -3908,7 +4156,7 @@ def mark_missing_turn_feedback_pending(turns: list[SpeakingTurn]) -> None:
 def _turn_feedback_ready(turn: SpeakingTurn) -> bool:
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
     return (
-        metadata.get("feedback_generation_backend") == "codex"
+        metadata.get("feedback_generation_backend") in {"codex", "http_api"}
         and metadata.get("feedback_generation_status") == "ready"
         and bool(clean_report_text(metadata.get("band7_version") or metadata.get("band7_markdown") or ""))
     )
@@ -4027,9 +4275,17 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     if not transcript.strip():
         raise SpeakingError("Missing transcript")
 
+    # Resolve per-user AI source preference
     try:
-        score = score_with_codex(transcript, questions_text, part, call_id)
+        _ai_source = (getattr(user, "profile", None) and user.profile.report_ai_source) or "gpt"
+    except Exception:
+        _ai_source = "gpt"
+
+    try:
+        score = score_with_codex(transcript, questions_text, part, call_id, ai_source=_ai_source)
         score = calibrate_realistic_score(score, questions_text, transcript, part)
+    except ClaudeCliQuotaError as exc:
+        raise SpeakingError("ai_quota_exhausted") from exc
     except Exception as exc:
         mark_attempt_analysis_failed(attempt, exc, call_id)
         raise SpeakingError(f"AI analysis failed: {exc}") from exc
@@ -4280,9 +4536,10 @@ def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, A
     metadata["feedback_regenerated_at"] = timezone.now().isoformat()
 
     # Track regeneration source
-    if feedback.get("feedback_generation_backend") == "codex":
-        metadata["band7_source"] = "codex_regenerated"
-        metadata["ai_coaching_source"] = "codex_regenerated"
+    feedback_backend = str(feedback.get("feedback_generation_backend") or "")
+    if feedback_backend in {"codex", "http_api"}:
+        metadata["band7_source"] = f"{feedback_backend}_regenerated"
+        metadata["ai_coaching_source"] = f"{feedback_backend}_regenerated"
     else:
         metadata["band7_source"] = "fallback_regenerated"
         metadata["ai_coaching_source"] = "fallback_regenerated"
@@ -4362,9 +4619,17 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     if not transcript.strip():
         raise SpeakingError("Missing transcript")
 
+    # Resolve per-user AI source preference
     try:
-        score = score_with_codex(transcript, questions_text, part, call_id)
+        _ai_source = (getattr(user, "profile", None) and user.profile.report_ai_source) or "gpt"
+    except Exception:
+        _ai_source = "gpt"
+
+    try:
+        score = score_with_codex(transcript, questions_text, part, call_id, ai_source=_ai_source)
         score = calibrate_realistic_score(score, questions_text, transcript, part)
+    except ClaudeCliQuotaError as exc:
+        raise SpeakingError("ai_quota_exhausted") from exc
     except Exception as exc:
         mark_attempt_analysis_failed(attempt, exc, call_id)
         raise SpeakingError(f"AI report regeneration failed: {exc}") from exc
@@ -4561,6 +4826,7 @@ def p3_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         "follow_up": follow_up,
         "backend": plan["backend"],
         "status": plan["status"],
+        **({"error": plan["error"]} if plan.get("error") else {}),
         "plan": plan,
     }
 

@@ -759,16 +759,14 @@ def _apply_writing_score_result(task: AITask, result: ProviderRunResult) -> Appl
         try:
             complete_score_task(task.task_id, payload)
         except WritingEntryDeleted:
-            if task.billing_reservation_id:
-                fallback_billable_ai_task(task.task_id, "Writing entry was deleted before scoring completed.", {"entry_id": task.related_id})
+            fallback_billable_ai_task(task.task_id, "Writing entry was deleted before scoring completed.", {"entry_id": task.related_id})
             return _refreshed_task_result(task, AITask.Status.FALLBACK)
         return _refreshed_task_result(task, AITask.Status.SUCCEEDED)
     if result.outcome == ProviderRunOutcome.FALLBACK:
         try:
             fallback_score_task(task.task_id, result.reason or DEFAULT_FALLBACK_REASON)
         except WritingEntryDeleted:
-            if task.billing_reservation_id:
-                fallback_billable_ai_task(task.task_id, "Writing entry was deleted before scoring completed.", {"entry_id": task.related_id})
+            fallback_billable_ai_task(task.task_id, "Writing entry was deleted before scoring completed.", {"entry_id": task.related_id})
             return _refreshed_task_result(task, AITask.Status.FALLBACK)
         return _refreshed_task_result(task, AITask.Status.FALLBACK)
     if result.outcome == ProviderRunOutcome.SKIPPED:
