@@ -49,14 +49,18 @@ from .corpus_services import (
     p1_corpus_library,
     p1_question_id,
     p1_topic_label,
+    p2_bank_corpus_payload,
     p2_corpus_entry_payload,
     p2_corpus_extra,
     p2_corpus_for_selection,
     p2_corpus_library,
     p2_entry_id,
+    p3_bank_followup_list,
     prepared_corpus_for_turns,
     question_bank_sample,
     question_bank_summary,
+    save_p2_bank_corpus,
+    save_p3_bank_followup_corpus,
     save_language_takeaway,
     save_p1_corpus,
     save_p2_corpus,
@@ -599,9 +603,8 @@ P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT = 8
 P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT = 12
 SPEAKING_REPORT_HTTP_TIMEOUT = 60
 SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT = 90
-P3_MAIN_COUNT = 5
-P3_TURN_COUNT = 10
-P3_DRILL_COUNT = 3
+P3_MAIN_COUNT = 4
+P3_TURN_COUNT = 8
 DEFAULT_FULL_NAME = "LiHua"
 DEFAULT_ENGLISH_NAME = "Jasper"
 
@@ -806,18 +809,22 @@ def _normalize_p3_focus(value: str | None) -> str:
 
 def _normalize_p3_intensity(value: str | None) -> str:
     intensity = str(value or "").strip().lower()
-    return intensity if intensity in {"normal", "high", "drill"} else "high"
+    return intensity if intensity in {"normal", "high"} else "normal"
 
 
 def _p3_source_type(payload: dict[str, Any], source_hint: str = "") -> str:
     source = str(payload.get("source") or payload.get("p3_source_type") or source_hint or "").strip().lower()
-    if source in {"p2_report", "p2_corpus", "custom", "topic", "p2_answer"}:
+    if source == "season_bank":
+        return "bank"
+    if source in {"bank", "p2_report", "custom", "p2_answer"}:
+        return source
+    if source in {"topic", "p2_corpus"}:
         return source
     if str(payload.get("p2_corpus_entry_id") or "").strip():
         return "p2_corpus"
     if str(payload.get("prior_answer") or "").strip():
         return "p2_report"
-    return "topic"
+    return "bank"
 
 
 def _p3_question_type_for_index(index: int, focus: str) -> str:
@@ -3252,9 +3259,9 @@ Task:
 prepared_corpus usage:
 - Some P2 turns include prepared_corpus from the learner's P2 串题素材库 only when the learner explicitly linked a material during preparation.
 - P1 语料库 content is not passed into this prompt.
-- If prepared_corpus is present and relevant to the cue card, use it as preferred personal material for the Band 7 version and coaching.
-- If prepared_corpus is present, ai_coaching must include concrete guidance on how to use that material as a reusable 串题素材: which parts fit this cue card, what to keep, what to adjust, and how to adapt it for nearby P2 topics.
-- Do not copy it blindly, do not invent facts beyond it, and do not let it override the candidate_transcript when they clearly answered differently this time.
+- When prepared_corpus is present and relevant to the P2 cue card, build the Band 7 version on top of the prepared material: reuse it as much as possible with minimal changes to its storyline, ideas, and reusable chunks, then combine it with what the candidate actually said this time so the answer still directly fits this exact cue card.
+- Do not throw the material away and write a fresh unrelated answer; do not invent facts beyond the prepared material plus the candidate_transcript.
+- When prepared_corpus is present, the coaching should also help the learner reuse it as 串题素材 — for example how to keep most of it and stretch the same material onto this cue card and nearby P2 topics. Decide the angle, wording, and depth yourself; do not follow a fixed checklist, fixed labels, or a template.
 
 display_transcript constraints:
 - Keep the candidate's original wording and expression. Do not upgrade vocabulary, grammar, ideas, or logic.
@@ -3951,12 +3958,14 @@ def generate_turn_feedback_for_report(
         return
 
     try:
+        prepared_corpus_by_turn = prepared_corpus_for_turns(attempt.user, pending_turns)
         generated_by_turn = turn_feedback_batch_with_codex(
             pending_turns,
             attempt,
             target_band_label(attempt),
             learning_profile,
             f"{call_id}_turn_feedback_batch",
+            prepared_corpus_by_turn=prepared_corpus_by_turn,
         )
     except Exception as exc:
         _mark_turn_feedback_failed(pending_turns, exc)

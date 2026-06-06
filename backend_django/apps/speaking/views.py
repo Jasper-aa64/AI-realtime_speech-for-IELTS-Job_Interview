@@ -20,14 +20,18 @@ from .services import (
     p3_fallback,
     p3_follow_up_fallback,
     p1_corpus_library,
+    p2_bank_corpus_payload,
     p2_corpus_library,
+    p3_bank_followup_list,
     question_bank_sample,
     question_bank_summary,
     regenerate_turn_feedback,
     regenerate_turn_transcript,
     replay_queue,
     save_p1_corpus,
+    save_p2_bank_corpus,
     save_p2_corpus,
+    save_p3_bank_followup_corpus,
     save_language_takeaway,
     save_writing_takeaway,
     score_attempt,
@@ -135,6 +139,41 @@ def p2_corpus_detail_view(request, entry_id: str):
         return JsonResponse(delete_p2_corpus(request.user, entry_id))
     except SpeakingError as exc:
         return JsonResponse({"error": str(exc)}, status=404)
+
+
+@require_http_methods(["GET", "POST", "PUT", "PATCH"])
+def p2_bank_corpus_detail_view(request, question_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        if request.method == "GET":
+            return JsonResponse(p2_bank_corpus_payload(request.user, question_id))
+        return JsonResponse(save_p2_bank_corpus(request.user, question_id, _json_payload(request)))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["GET"])
+def p3_bank_corpus_view(request, p2_question_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(p3_bank_followup_list(request.user, p2_question_id))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["POST", "PUT", "PATCH"])
+def p3_bank_corpus_item_view(request, followup_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(save_p3_bank_followup_corpus(request.user, followup_id, _json_payload(request)))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
 
 
 @require_http_methods(["GET", "POST"])

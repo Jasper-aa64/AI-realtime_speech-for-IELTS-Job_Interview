@@ -175,6 +175,48 @@ class P2CorpusEntry(UserOwnedModel):
         return f"{self.user_id}:{self.category}:{self.title}"
 
 
+class P2BankCorpusEntry(UserOwnedModel):
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="p2_bank_corpus_entries")
+    question_id = models.CharField(max_length=160)
+    question = models.TextField()
+    corpus_text = models.TextField(blank=True)
+    last_ai_answer = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "question_id"], name="unique_p2_bank_corpus_question_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "updated_at"], name="speak_p2bank_user_upd_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.question_id}"
+
+
+class P3BankFollowupCorpusEntry(UserOwnedModel):
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="p3_bank_followup_corpus_entries")
+    p2_question_id = models.CharField(max_length=160)
+    followup_id = models.CharField(max_length=200)
+    followup_question = models.TextField()
+    corpus_text = models.TextField(blank=True)
+    last_ai_answer = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "followup_id"], name="unique_p3_bank_followup_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "p2_question_id"], name="speaking_p3bank_user_p2_idx"),
+            models.Index(fields=["user", "updated_at"], name="speak_p3bank_user_upd_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.followup_id}"
+
+
 class LanguageTakeawayEntry(UserOwnedModel):
     user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="language_takeaway_entries")
     entry_id = models.CharField(max_length=160)

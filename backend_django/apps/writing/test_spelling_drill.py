@@ -134,7 +134,7 @@ class SpellingDrillTests(TestCase):
         word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
         self.assertEqual(word.review_stage, 0)
 
-        # Wrong attempt: stage resets to 0, lapses increments
+        # Wrong attempt: stage resets to 0, lapses increments, and the word returns tomorrow.
         wrong = record_spelling_attempt(self.user, word.word_id, "comfortble")
         self.assertFalse(wrong["correct"])
         self.assertEqual(wrong["correct_spelling"], "comfortable")
@@ -142,17 +142,18 @@ class SpellingDrillTests(TestCase):
         self.assertEqual(word.current_streak, 0)
         self.assertEqual(word.review_stage, 0)
         self.assertEqual(word.lapses, 1)
+        self.assertEqual(wrong["next_due_human"], "明天")
         self.assertIn("next_due_human", wrong)
 
-        # Six correct answers → stage 6 → mastered
-        for typed in [" Comfortable ", "comfortable", "COMFORTABLE", "comfortable", "comfortable", "comfortable"]:
+        # Four correct answers → stage 4 → mastered
+        for typed in [" Comfortable ", "comfortable", "COMFORTABLE", "comfortable"]:
             result = record_spelling_attempt(self.user, word.word_id, typed)
         word.refresh_from_db()
         self.assertTrue(result["correct"])
-        self.assertEqual(word.review_stage, 6)
+        self.assertEqual(word.review_stage, 4)
         self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
-        self.assertEqual(word.attempt_count, 7)  # 1 wrong + 6 correct
-        self.assertEqual(word.correct_count, 6)
+        self.assertEqual(word.attempt_count, 5)  # 1 wrong + 4 correct
+        self.assertEqual(word.correct_count, 4)
         self.assertIn("next_due_human", result)
 
     def test_update_edit_gloss_reset_master_and_delete(self):

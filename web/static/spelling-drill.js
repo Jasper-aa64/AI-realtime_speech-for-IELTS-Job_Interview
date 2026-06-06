@@ -37,7 +37,6 @@
         sd.result         = null;
         sd.retryTyped     = null;      // last rewrite attempt after a wrong
         sd.retryCorrect   = false;     // whether the rewrite matched
-        sd.hintLevel      = 0;
         sd.loadingPromise = sd.loadingPromise || null;
         sd._drillReady    = true;
       }
@@ -136,7 +135,6 @@
         s.result         = null;
         s.retryTyped     = null;
         s.retryCorrect   = false;
-        s.hintLevel      = 0;
       }
     }
 
@@ -168,9 +166,6 @@
           <span class="nr-wrong-tag">曾误作</span>
           <span class="nr-wrong-text">${escapeHtml(wrongFormsText(word))}</span>
         </div>
-        ${s.hintLevel > 0
-          ? `<p class="nr-hint-letter">首字母 <b>${escapeHtml(String(word.correct_spelling || "").charAt(0))}</b></p>`
-          : ""}
       `;
     }
 
@@ -197,10 +192,10 @@
         return `
           <div class="nr-slot nr-result-slot is-correct">
             <div class="nr-inline-answer" aria-live="polite">
-              <p class="nr-answer-line">${letterDiff(correctSpell, correctSpell)}</p>
+              <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
             </div>
             <p class="nr-inline-correct nr-inline-correct--placeholder" aria-hidden="true">
-              已判定
+              <span class="nr-answer-word" data-label="正解">${escapeHtml(correctSpell)}</span>
             </p>
             <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
           </div>
@@ -216,9 +211,7 @@
             <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
           </div>
           <p class="nr-inline-correct">
-            <span class="nr-answer-tag">正解</span>
-            <span class="nr-answer-word">${escapeHtml(correctSpell)}</span>
-            <span class="nr-answer-note">· 稍后重练</span>
+            <span class="nr-answer-word" data-label="正解">${escapeHtml(correctSpell)}</span>
           </p>
           <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
         </div>
@@ -334,17 +327,6 @@
         if (fill) fill.style.width = pct + "%";
         if (txt)  txt.innerHTML = progressTextHtml;
 
-        // Append hint letter without touching .nr-gloss (avoids re-animation)
-        if (s.hintLevel > 0) {
-          const promptEl = existingCard.querySelector(".nr-prompt");
-          if (promptEl && !promptEl.querySelector(".nr-hint-letter")) {
-            const hintP = document.createElement("p");
-            hintP.className = "nr-hint-letter";
-            hintP.innerHTML = `首字母 <b>${escapeHtml(String(word.correct_spelling || "").charAt(0))}</b>`;
-            promptEl.appendChild(hintP);
-          }
-        }
-
         // Update only the input/answer area
         const bodyEl = existingCard.querySelector(".nr-drill-body");
         if (bodyEl) {
@@ -356,7 +338,8 @@
 
       // ── Full rebuild (new word, or first paint) ──────────────────────
       const stage     = Number(word.review_stage || 0);
-      const stageDots = Array.from({ length: 6 }, (_, i) =>
+      const maxStage = 4;
+      const stageDots = Array.from({ length: maxStage }, (_, i) =>
         `<span class="nr-stage-dot ${i < stage ? "is-on" : ""}"></span>`
       ).join("");
 
@@ -385,14 +368,7 @@
           <div class="nr-meta-row">
             <div class="nr-stage-track">
               ${stageDots}
-              <span class="nr-stage-text">阶段 ${stage}/6</span>
-            </div>
-            <div class="nr-tools">
-              ${s.hintLevel === 0
-                ? `<button class="nr-tool" data-spelling-hint>首字母</button>`
-                : ""}
-              <button class="nr-tool" data-spelling-skip>跳过</button>
-              <button class="nr-tool" data-spelling-reset-word="${escapeHtml(String(word.word_id))}">重置进度</button>
+              <span class="nr-stage-text">阶段 ${stage}/${maxStage}</span>
             </div>
           </div>
         </div>
@@ -450,7 +426,9 @@
             ({ due: "今日待复习", active: "全部学中", mastered: "已掌握" })[s.scope] || s.scope
           )}</span>
         </header>
-        ${groupHtml}
+        <div class="nr-lib-body">
+          ${groupHtml}
+        </div>
       `;
     }
 
@@ -461,7 +439,6 @@
       s.result       = null;
       s.retryTyped   = null;
       s.retryCorrect = false;
-      s.hintLevel    = 0;
       render();
     }
 
@@ -528,7 +505,6 @@
       const qi = s.queue.findIndex((w) => w.word_id === wordId);
       if (qi >= 0) s.queue[qi] = result;
       s.result   = null;
-      s.hintLevel= 0;
       render();
     }
 
@@ -562,10 +538,6 @@
       // Card: button clicks
       root()?.addEventListener("click", (e) => {
         const t = e.target;
-        if (t.closest("[data-spelling-hint]")) {
-          S().hintLevel = 1; render(); return;
-        }
-        if (t.closest("[data-spelling-skip]"))     { gotoNext(); return; }
         if (t.closest("[data-spelling-continue]")) { gotoNext(); return; }
         if (t.closest("[data-open-library]"))      { S().view = "library"; render(); return; }
         if (t.closest("[data-spelling-reload]"))   { load({ force: true, resetQueue: true }); return; }
@@ -573,12 +545,6 @@
         if (scopeBtn) {
           S().scope = scopeBtn.dataset.spellingScope;
           load({ force: true, resetQueue: true });
-          return;
-        }
-        const resetWord = t.closest("[data-spelling-reset-word]");
-        if (resetWord) {
-          updateWord(resetWord.dataset.spellingResetWord, { action: "reset" })
-            .catch((err) => setStatus(err.message, true));
           return;
         }
       });

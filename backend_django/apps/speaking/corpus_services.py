@@ -23,7 +23,14 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .exceptions import SpeakingError
-from .models import LanguageTakeawayEntry, P1CorpusEntry, P2CorpusEntry, SpeakingTurn
+from .models import (
+    LanguageTakeawayEntry,
+    P1CorpusEntry,
+    P2BankCorpusEntry,
+    P2CorpusEntry,
+    P3BankFollowupCorpusEntry,
+    SpeakingTurn,
+)
 from .text_utils import clean_markdown_text, clean_report_text
 
 
@@ -552,7 +559,160 @@ def p2_corpus_entry_payload(entry: P2CorpusEntry) -> dict[str, Any]:
     }
 
 
-def p2_topic_card_payload(topic: dict[str, Any], entry: P2CorpusEntry | None = None) -> dict[str, Any]:
+def p3_bank_followup_id(p2_question_id: str, followup_question: str, index: int) -> str:
+    normalized = stable_question_text(f"{p2_question_id}\n{index}\n{followup_question}")
+    digest = hashlib.md5(normalized.encode("utf-8")).hexdigest()[:16]
+    return f"p3bank:{digest}"
+
+
+def _p2_cue_id_from_any(question_id: str) -> str:
+    value = clean_report_text(str(question_id or ""))
+    if value.startswith("p2:"):
+        return f"p2cue:{value[3:]}"
+    return value
+
+
+def p2_bank_topic_for_question_id(question_id: str) -> dict[str, Any] | None:
+    cue_id = _p2_cue_id_from_any(question_id)
+    if not cue_id:
+        return None
+    bank = get_question_bank()
+    for topic in bank.all_p2:
+        topic_cue_id = str(topic.get("cue_id") or p2_cue_id(topic))
+        topic_entry_id = str(topic.get("canonical_entry_id") or p2_canonical_entry_id(topic))
+        if cue_id in {topic_cue_id, topic_entry_id, str(topic.get("title") or "")}:
+            return topic
+    return None
+
+
+def p2_bank_question_text(topic: dict[str, Any] | None, fallback: str = "") -> str:
+    if topic:
+        title = clean_report_text(str(topic.get("title") or ""))
+        bullets = [clean_report_text(str(item)) for item in topic.get("bullets") or [] if clean_report_text(str(item))]
+        rounding = clean_report_text(str(topic.get("rounding") or ""))
+        return p2_cue_identity_text({"title": title, "bullets": bullets, "rounding": rounding})
+    return clean_report_text(str(fallback or ""))
+
+
+def p2_bank_corpus_payload(user, question_id: str) -> dict[str, Any]:
+    cue_id = _p2_cue_id_from_any(question_id)
+    topic = p2_bank_topic_for_question_id(cue_id)
+    question = p2_bank_question_text(topic, cue_id)
+    entry = P2BankCorpusEntry.objects.filter(user=user, question_id=cue_id).first()
+    return {
+        "question_id": cue_id,
+        "question": entry.question if entry else question,
+        "corpus_text": entry.corpus_text if entry else "",
+        "last_ai_answer": entry.last_ai_answer if entry else "",
+        "metadata": entry.metadata if entry and isinstance(entry.metadata, dict) else {},
+        "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M") if entry else "",
+    }
+
+
+def save_p2_bank_corpus(user, question_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    cue_id = _p2_cue_id_from_any(question_id)
+    if not cue_id:
+        raise SpeakingError("P2 question id is required.")
+    topic = p2_bank_topic_for_question_id(cue_id)
+    question = clean_report_text(str(payload.get("question") or ""))[:2000] or p2_bank_question_text(topic, cue_id)
+    corpus_text = clean_markdown_text(str(payload.get("corpus_text") or payload.get("material_text") or ""))[:12000]
+    last_ai_answer = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:12000]
+    entry, _ = P2BankCorpusEntry.objects.update_or_create(
+        user=user,
+        question_id=cue_id,
+        defaults={
+            "question": question,
+            "corpus_text": corpus_text,
+            "last_ai_answer": last_ai_answer,
+            "metadata": payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        },
+    )
+    return p2_bank_corpus_payload(user, entry.question_id)
+
+
+def p3_bank_followup_list(user, p2_question_id: str) -> dict[str, Any]:
+    cue_id = _p2_cue_id_from_any(p2_question_id)
+    topic = p2_bank_topic_for_question_id(cue_id)
+    questions = [
+        clean_report_text(str(item))[:260]
+        for item in (topic or {}).get("p3_follow_ups", [])
+        if clean_report_text(str(item))
+    ]
+    saved = {
+        entry.followup_id: entry
+        for entry in P3BankFollowupCorpusEntry.objects.filter(user=user, p2_question_id=cue_id)
+    }
+    items: list[dict[str, Any]] = []
+    for index, question in enumerate(questions):
+        followup_id = p3_bank_followup_id(cue_id, question, index)
+        entry = saved.get(followup_id)
+        items.append(
+            {
+                "p2_question_id": cue_id,
+                "followup_id": followup_id,
+                "followup_question": entry.followup_question if entry else question,
+                "corpus_text": entry.corpus_text if entry else "",
+                "last_ai_answer": entry.last_ai_answer if entry else "",
+                "metadata": entry.metadata if entry and isinstance(entry.metadata, dict) else {},
+                "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M") if entry else "",
+            }
+        )
+    return {
+        "p2_question_id": cue_id,
+        "question": p2_bank_question_text(topic, cue_id),
+        "items": items,
+        "count": len(items),
+    }
+
+
+def save_p3_bank_followup_corpus(user, followup_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    followup_key = clean_report_text(str(followup_id or payload.get("followup_id") or ""))
+    if not followup_key:
+        raise SpeakingError("P3 follow-up id is required.")
+    p2_question_id = _p2_cue_id_from_any(str(payload.get("p2_question_id") or ""))
+    followup_question = clean_report_text(str(payload.get("followup_question") or ""))[:1000]
+    if not p2_question_id or not followup_question:
+        for topic in get_question_bank().all_p2:
+            cue_id = str(topic.get("cue_id") or p2_cue_id(topic))
+            for index, question in enumerate(topic.get("p3_follow_ups") or []):
+                normalized_question = clean_report_text(str(question))[:260]
+                if p3_bank_followup_id(cue_id, normalized_question, index) == followup_key:
+                    p2_question_id = cue_id
+                    followup_question = normalized_question
+                    break
+            if p2_question_id and followup_question:
+                break
+    if not p2_question_id or not followup_question:
+        raise SpeakingError("P3 follow-up question not found.")
+    corpus_text = clean_markdown_text(str(payload.get("corpus_text") or ""))[:12000]
+    last_ai_answer = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:12000]
+    entry, _ = P3BankFollowupCorpusEntry.objects.update_or_create(
+        user=user,
+        followup_id=followup_key,
+        defaults={
+            "p2_question_id": p2_question_id,
+            "followup_question": followup_question,
+            "corpus_text": corpus_text,
+            "last_ai_answer": last_ai_answer,
+            "metadata": payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        },
+    )
+    return {
+        "p2_question_id": entry.p2_question_id,
+        "followup_id": entry.followup_id,
+        "followup_question": entry.followup_question,
+        "corpus_text": entry.corpus_text,
+        "last_ai_answer": entry.last_ai_answer,
+        "metadata": entry.metadata if isinstance(entry.metadata, dict) else {},
+        "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def p2_topic_card_payload(
+    topic: dict[str, Any],
+    bank_entry: P2BankCorpusEntry | None = None,
+    p3_entries_by_id: dict[str, P3BankFollowupCorpusEntry] | None = None,
+) -> dict[str, Any]:
     category = p2_topic_category(topic)
     cue_id = str(topic.get("cue_id") or p2_cue_id(topic))
     entry_id = str(topic.get("canonical_entry_id") or p2_canonical_entry_id(topic))
@@ -565,22 +725,26 @@ def p2_topic_card_payload(topic: dict[str, Any], entry: P2CorpusEntry | None = N
         if clean_report_text(str(item))
     ]
     linked_question = p2_cue_identity_text({"title": title, "bullets": bullets, "rounding": rounding})
-    extra = p2_corpus_extra(entry) if entry else {"p3_follow_up_text": ""}
-    resolved_category = entry.category if entry else category
+    p3_entries_by_id = p3_entries_by_id or {}
+    p3_saved_count = 0
+    for index, question in enumerate(p3_follow_ups):
+        followup_id = p3_bank_followup_id(cue_id, question, index)
+        if p3_entries_by_id.get(followup_id) and p3_entries_by_id[followup_id].corpus_text.strip():
+            p3_saved_count += 1
     return {
-        "entry_id": entry.entry_id if entry else entry_id,
+        "entry_id": entry_id,
         "canonical_entry_id": entry_id,
         "cue_id": cue_id,
-        "category": resolved_category,
-        "label": p2_category_label(resolved_category),
-        "title": entry.title if entry else title,
+        "category": category,
+        "label": p2_category_label(category),
+        "title": title,
         "cue_title": title,
         "bullets": bullets,
         "rounding": rounding,
-        "linked_question": entry.linked_question if entry and entry.linked_question else linked_question,
-        "material_text": entry.material_text if entry else "",
-        "p3_follow_up_text": extra["p3_follow_up_text"],
-        "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M") if entry else "",
+        "linked_question": linked_question,
+        "material_text": bank_entry.corpus_text if bank_entry else "",
+        "p3_follow_up_text": "",
+        "updated_at": timezone.localtime(bank_entry.updated_at).strftime("%Y-%m-%d %H:%M") if bank_entry else "",
         "season": str(topic.get("season") or ""),
         "status": str(topic.get("status") or ""),
         "region": str(topic.get("region") or ""),
@@ -589,8 +753,9 @@ def p2_topic_card_payload(topic: dict[str, Any], entry: P2CorpusEntry | None = N
         "p3_theme": str(topic.get("p3_theme") or ""),
         "p3_follow_ups": p3_follow_ups,
         "p3_follow_up_count": len(p3_follow_ups),
-        "has_material": bool(entry and entry.material_text.strip()),
-        "has_p3_follow_up": bool(extra["p3_follow_up_text"].strip()),
+        "p3_follow_up_saved_count": p3_saved_count,
+        "has_material": bool(bank_entry and bank_entry.corpus_text.strip()),
+        "has_p3_follow_up": p3_saved_count > 0,
     }
 
 
@@ -621,8 +786,21 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
     bank = get_question_bank()
     selected_topics = bank.part2_for_scope(normalized_scope)
     current_part2_categories = p2_current_topic_categories(selected_topics)
+    topic_cue_ids = [str(topic.get("cue_id") or p2_cue_id(topic)) for topic in selected_topics]
+    bank_entries_by_question_id = {
+        entry.question_id: entry
+        for entry in P2BankCorpusEntry.objects.filter(user=user, question_id__in=topic_cue_ids)
+    }
+    p3_entries_by_id = {
+        entry.followup_id: entry
+        for entry in P3BankFollowupCorpusEntry.objects.filter(user=user, p2_question_id__in=topic_cue_ids)
+    }
     current_part2_cards = [
-        p2_topic_card_payload(topic, entries_by_id.get(str(topic.get("canonical_entry_id") or p2_canonical_entry_id(topic))))
+        p2_topic_card_payload(
+            topic,
+            bank_entries_by_question_id.get(str(topic.get("cue_id") or p2_cue_id(topic))),
+            p3_entries_by_id,
+        )
         for topic in selected_topics
     ]
     return {

@@ -117,7 +117,7 @@ def main() -> int:
         configured_model = provider.config.model
     except Exception as exc:  # noqa: BLE001 - report missing env without exposing secrets
         config_error = str(exc)
-        configured_model = os.environ.get("SPEAKING_AI_MODEL") or os.environ.get("AI_HTTP_MODEL") or "gpt-5.4-mini"
+        configured_model = os.environ.get("SPEAKING_AI_MODEL") or "gpt-5.4-mini"
 
     requested: list[str]
     if args.cases == "quick":

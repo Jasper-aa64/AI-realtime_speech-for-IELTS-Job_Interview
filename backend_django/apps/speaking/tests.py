@@ -7,7 +7,17 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.conf import settings
 
-from apps.speaking.models import LanguageTakeawayEntry, P1CorpusEntry, P2CorpusEntry, SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
+from apps.speaking.models import (
+    LanguageTakeawayEntry,
+    P1CorpusEntry,
+    P2BankCorpusEntry,
+    P2CorpusEntry,
+    P3BankFollowupCorpusEntry,
+    SpeakingAttempt,
+    SpeakingReport,
+    SpeakingTrainingObservation,
+    SpeakingTurn,
+)
 
 
 class AttemptStartApiTests(TestCase):
@@ -620,50 +630,58 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(counts["person"], 1)
         self.assertEqual(counts["place"], 0)
 
-    def test_p2_corpus_library_merges_current_season_card_with_saved_entry(self):
+    def test_p2_bank_corpus_updates_current_season_card_without_polluting_personal_library(self):
         library = self.client.get("/api/p2-corpus").json()
         card = library["current_part2_cards"][0]
-        save_response = self.client.post(
-            "/api/p2-corpus",
+        before_personal_count = P2CorpusEntry.objects.filter(user=self.user).count()
+
+        save_response = self.client.put(
+            f"/api/p2-bank-corpus/{card['cue_id']}",
             data={
-                "entry_id": card["entry_id"],
-                "category": card["category"],
-                "title": card["title"],
-                "material_text": "I can use one prepared story for this cue card.",
-                "p3_follow_up_text": "How do people usually prepare for this kind of topic?",
-                "linked_question": card["linked_question"],
+                "question": card["linked_question"],
+                "corpus_text": "I can use one prepared story for this cue card.",
             },
             content_type="application/json",
         )
         self.assertEqual(save_response.status_code, 200)
+        self.assertEqual(P2CorpusEntry.objects.filter(user=self.user).count(), before_personal_count)
+        self.assertEqual(P2BankCorpusEntry.objects.filter(user=self.user, question_id=card["cue_id"]).count(), 1)
 
         updated = self.client.get("/api/p2-corpus").json()
         updated_card = next(item for item in updated["current_part2_cards"] if item["entry_id"] == card["entry_id"])
         self.assertTrue(updated_card["has_material"])
-        self.assertTrue(updated_card["has_p3_follow_up"])
         self.assertEqual(updated_card["material_text"], "I can use one prepared story for this cue card.")
-        self.assertEqual(updated_card["p3_follow_up_text"], "How do people usually prepare for this kind of topic?")
+        self.assertFalse(updated_card["has_p3_follow_up"])
 
-    def test_p2_corpus_can_save_p3_follow_up_before_main_material(self):
+    def test_p3_bank_followup_corpus_uses_question_bank_followups_without_polluting_personal_library(self):
         library = self.client.get("/api/p2-corpus").json()
-        card = library["current_part2_cards"][0]
-        response = self.client.post(
-            "/api/p2-corpus",
+        card = next(item for item in library["current_part2_cards"] if item.get("p3_follow_ups"))
+        before_personal_count = P2CorpusEntry.objects.filter(user=self.user).count()
+
+        list_response = self.client.get(f"/api/p3-bank-corpus/{card['cue_id']}")
+        self.assertEqual(list_response.status_code, 200)
+        followups = list_response.json()["items"]
+        self.assertEqual(len(followups), len(card["p3_follow_ups"]))
+        self.assertGreater(len(followups), 0)
+
+        first = followups[0]
+        save_response = self.client.put(
+            f"/api/p3-bank-corpus/item/{first['followup_id']}",
             data={
-                "entry_id": card["entry_id"],
-                "category": card["category"],
-                "title": card["title"],
-                "material_text": "",
-                "p3_follow_up_text": "Work, public places, and habits.",
-                "linked_question": card["linked_question"],
+                "p2_question_id": card["cue_id"],
+                "followup_question": first["followup_question"],
+                "corpus_text": "I can discuss work, public places, and habits.",
             },
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 200)
-        saved = response.json()
-        self.assertEqual(saved["entry_id"], card["entry_id"])
-        self.assertEqual(saved["material_text"], "")
-        self.assertEqual(saved["p3_follow_up_text"], "Work, public places, and habits.")
+        self.assertEqual(save_response.status_code, 200)
+        self.assertEqual(P2CorpusEntry.objects.filter(user=self.user).count(), before_personal_count)
+        self.assertEqual(P3BankFollowupCorpusEntry.objects.filter(user=self.user, followup_id=first["followup_id"]).count(), 1)
+
+        updated = self.client.get("/api/p2-corpus").json()
+        updated_card = next(item for item in updated["current_part2_cards"] if item["entry_id"] == card["entry_id"])
+        self.assertTrue(updated_card["has_p3_follow_up"])
+        self.assertEqual(updated_card["p3_follow_up_saved_count"], 1)
 
     def test_p2_corpus_library_respects_scope(self):
         response = self.client.get("/api/p2-corpus?scope=archive")
@@ -2599,6 +2617,56 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertIn("t1", result)
         self.assertIn("JSON 和 trellis", result["t1"]["ai_coaching"])
         self.assertIn("语法错误纠正", result["t1"]["ai_coaching"])
+
+    def test_report_turn_feedback_passes_linked_p2_prepared_corpus_to_batch(self):
+        from apps.speaking.services import generate_turn_feedback_for_report
+
+        user = get_user_model().objects.create_user(username="report-p2-corpus", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="report-p2-corpus-attempt",
+            mode="p2",
+            part="p2",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+        )
+        corpus = P2CorpusEntry.objects.create(
+            user=user,
+            entry_id="kind-teacher-material",
+            category=P2CorpusEntry.Category.PERSON,
+            title="A kind teacher",
+            material_text="My high school English teacher encouraged me before a speech competition.",
+            linked_question="Describe a person who encouraged you.",
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p2",
+            question="Describe a person who helped you.",
+            transcript_raw="I talked about my teacher because she helped me with English.",
+            transcript_cleaned="I talked about my teacher because she helped me with English.",
+            metadata={"status": "completed", "p2_corpus_link": {"entry_id": corpus.entry_id}},
+        )
+        generated = {
+            "t1": {
+                "display_transcript": "I talked about my teacher because she helped me with English.",
+                "band7_version": "I would describe my high school English teacher, who encouraged me and helped me become more confident.",
+                "ai_coaching": "可以保留老师鼓励你的主线，再把帮助英语的细节贴合题目。\n\n语法错误纠正：无",
+            }
+        }
+
+        with (
+            patch("apps.speaking.services.turn_feedback_batch_with_codex", return_value=generated) as batch,
+            patch("apps.speaking.services.volcengine_tts", return_value={"status": "pending"}),
+        ):
+            generate_turn_feedback_for_report(attempt, [turn], {}, "report_p2_corpus")
+
+        batch.assert_called_once()
+        prepared_corpus_by_turn = batch.call_args.kwargs["prepared_corpus_by_turn"]
+        self.assertIn("t1", prepared_corpus_by_turn)
+        self.assertIn("A kind teacher", prepared_corpus_by_turn["t1"])
+        self.assertIn("speech competition", prepared_corpus_by_turn["t1"])
 
     def test_complete_turn_sets_pending_not_fallback(self):
         """complete_turn should set feedback_generation_status to pending, not fallback."""

@@ -58,6 +58,7 @@ const state = {
     loadingPromise: null,
     activeEntry: null,
     activeP3Entry: null,
+    activeBankP3Entry: null,
     previousPracticeView: "p2",
     selectedEntryId: "",
     saving: false,
@@ -8089,20 +8090,6 @@ function bindEvents() {
       event.preventDefault();
       event.stopPropagation();
       openP2CorpusP3Editor(findP2CorpusEntry(p3Button.dataset.p2CorpusP3 || ""));
-      return;
-    }
-    const cardMaterialButton = event.target.closest("[data-p2-corpus-card-material]");
-    if (cardMaterialButton) {
-      event.preventDefault();
-      event.stopPropagation();
-      openP2CorpusEditor(findP2CorpusEntry(cardMaterialButton.dataset.p2CorpusCardMaterial || ""));
-      return;
-    }
-    const cardP3Button = event.target.closest("[data-p2-corpus-card-p3]");
-    if (cardP3Button) {
-      event.preventDefault();
-      event.stopPropagation();
-      openP2CorpusP3Editor(findP2CorpusEntry(cardP3Button.dataset.p2CorpusCardP3 || ""));
       return;
     }
     const existing = event.target.closest("[data-p2-corpus-entry]");

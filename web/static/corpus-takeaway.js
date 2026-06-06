@@ -461,13 +461,23 @@
         if (!isCorpusEditorReady("p2CorpusText")) return;
         const materialText = getCorpusMarkdownValue("p2CorpusText").trim();
         if (!materialText) return;
+        if (p2Entry.is_bank_card) {
+          const questionId = p2BankQuestionId(p2Entry);
+          if (!questionId) return;
+          sendKeepaliveJson(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`, {
+            question: p2Entry.linked_question || p2Entry.question || "",
+            corpus_text: materialText,
+            source: "p2_bank_corpus_editor",
+          });
+          return;
+        }
         sendKeepaliveJson("/api/p2-corpus", {
           entry_id: p2Entry.entry_id || "",
           category: $("p2CorpusCategory")?.value || p2Entry.category || "person",
           title: $("p2CorpusTitle")?.value || "",
           material_text: materialText,
           p3_follow_up_text: p2Entry.p3_follow_up_text || "",
-          linked_question: $("p2CorpusLinkedQuestion")?.value || "",
+          linked_question: p2Entry.linked_question || "",
           source: "p2_corpus_editor",
         });
       }
@@ -692,7 +702,7 @@
           `;
         }).join("");
         return `
-          <article class="p2-topic-card p2-category-entry-card">
+          <article class="p2-topic-card p2-category-entry-card" style="--p2-material-row-count: ${Math.max(items.length, 1)}">
             <header>
               <h3>${escapeHtml(category.label || category.category)}</h3>
               <span class="p2-topic-count">${category.material_count ?? (category.items || []).length}</span>
@@ -709,8 +719,15 @@
       }).join("");
       const cardHtml = currentCards.map((item) => {
         const statusLabel = item.status === "new" ? "新题" : item.status === "retained" ? "保留题" : item.status || "";
+        const cardId = p2BankQuestionId(item);
         return `
-          <article class="p2-seasonal-card">
+          <article
+            class="p2-seasonal-card"
+            data-p2-bank-card-id="${escapeHtml(cardId)}"
+            data-p2-bank-card-title="${escapeHtml(item.cue_title || item.title || "未命名题卡")}"
+            data-p2-bank-card-category="${escapeHtml(item.category || "special")}"
+            data-p2-bank-card-label="${escapeHtml(item.label || item.category || "P2")}"
+          >
             <header>
               <div>
                 <span class="p2-seasonal-card-kicker">${escapeHtml(item.label || item.category || "P2")}${statusLabel ? ` · ${escapeHtml(statusLabel)}` : ""}</span>
@@ -720,8 +737,8 @@
             </header>
             ${p2CueQuestionHtml(item)}
             <footer>
-              <button type="button" class="p2-seasonal-action primary" data-p2-corpus-card-material="${escapeHtml(item.entry_id)}">正文</button>
-              <button type="button" class="p2-seasonal-action${item.has_p3_follow_up ? " is-ready" : ""}" data-p2-corpus-card-p3="${escapeHtml(item.entry_id)}">P3 追问</button>
+              <button type="button" class="p2-seasonal-action primary" data-p2-corpus-card-material="${escapeHtml(cardId)}">正文</button>
+              <button type="button" class="p2-seasonal-action${item.has_p3_follow_up ? " is-ready" : ""}" data-p2-corpus-card-p3="${escapeHtml(cardId)}">P3 追问</button>
             </footer>
           </article>
         `;
@@ -1266,20 +1283,44 @@
     }
 
     function findP2CorpusEntry(entryId) {
+      const targetId = String(entryId || "").trim();
       for (const category of state.p2Corpus.categories || []) {
-        const found = (category.items || []).find((item) => item.entry_id === entryId);
+        const found = (category.items || []).find((item) => String(item.entry_id || "").trim() === targetId);
         if (found) return { ...found, label: category.label || found.label };
       }
-      const card = (state.p2Corpus.currentPart2Cards || []).find((item) => item.entry_id === entryId);
+      const card = (state.p2Corpus.currentPart2Cards || []).find((item) => p2BankQuestionId(item) === targetId);
       if (card) return { ...card };
       return null;
     }
 
+    function p2BankQuestionId(entry = {}) {
+      return String(entry.cue_id || entry.question_id || entry.canonical_entry_id || entry.entry_id || "").trim();
+    }
+
+    function p2BankEntryFromElement(element) {
+      const card = element?.closest?.("[data-p2-bank-card-id]");
+      const cardId = card?.dataset?.p2BankCardId || element?.dataset?.p2CorpusCardMaterial || element?.dataset?.p2CorpusCardP3 || "";
+      return {
+        entry_id: cardId,
+        cue_id: cardId,
+        canonical_entry_id: cardId,
+        source_type: "bank",
+        category: card?.dataset?.p2BankCardCategory || "special",
+        label: card?.dataset?.p2BankCardLabel || "P2",
+        title: card?.dataset?.p2BankCardTitle || "P2 题卡",
+        cue_title: card?.dataset?.p2BankCardTitle || "P2 题卡",
+      };
+    }
+
+    function isP2BankCard(entry = {}) {
+      return Boolean(entry?.cue_id || entry?.canonical_entry_id || entry?.p3_follow_up_count !== undefined || entry?.source_type === "bank");
+    }
+
     function p2CueQuestionHtml(item) {
       const bullets = (item.bullets || []).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("");
+      if (!bullets && !item.rounding) return "";
       return `
         <div class="p2-seasonal-cue">
-          <strong>${escapeHtml(item.cue_title || item.title || "未命名题卡")}</strong>
           ${bullets ? `<ul>${bullets}</ul>` : ""}
           ${item.rounding ? `<p>${escapeHtml(item.rounding)}</p>` : ""}
         </div>
@@ -1296,6 +1337,12 @@
     }
 
     function openP2CorpusEditor(entry = {}) {
+      if (isP2BankCard(entry)) {
+        openP2BankCorpusEditor(entry).catch((error) => {
+          text("p2CorpusSaveStatus", error.message || String(error));
+        });
+        return;
+      }
       const category = entry.category || "person";
       state.p2Corpus.activeEntry = { ...entry, category };
       text("p2CorpusDialogCategory", (entry.label || category).toString());
@@ -1303,7 +1350,6 @@
       if ($("p2CorpusCategory")) $("p2CorpusCategory").value = category;
       if ($("p2CorpusTitle")) $("p2CorpusTitle").value = entry.title || "";
       setCorpusMarkdownValue("p2CorpusText", entry.material_text || "");
-      if ($("p2CorpusLinkedQuestion")) $("p2CorpusLinkedQuestion").value = entry.linked_question || "";
       text("p2CorpusSaveStatus", "");
       $("p2CorpusDialog")?.classList.remove("hidden");
       if (!isCorpusEditorReady("p2CorpusText")) setCorpusEditorLoading("p2CorpusText", true);
@@ -1311,6 +1357,35 @@
         if (!editor) setCorpusEditorLoading("p2CorpusText", false);
       });
       setTimeout(() => $("p2CorpusTitle")?.focus(), 0);
+    }
+
+    async function openP2BankCorpusEditor(entry = {}) {
+      const questionId = p2BankQuestionId(entry);
+      if (!questionId) return;
+      const payload = await api(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`);
+      const activeEntry = {
+        ...entry,
+        ...payload,
+        is_bank_card: true,
+        entry_id: entry.entry_id || payload.question_id || questionId,
+        cue_id: payload.question_id || entry.cue_id || questionId,
+        title: entry.cue_title || entry.title || payload.question || "P2 题卡",
+        material_text: payload.corpus_text || entry.material_text || "",
+        linked_question: payload.question || entry.linked_question || "",
+      };
+      state.p2Corpus.activeEntry = activeEntry;
+      text("p2CorpusDialogCategory", "题库正文");
+      text("p2CorpusDialogTitle", activeEntry.title ? `编辑题库正文：${activeEntry.title}` : "编辑题库正文");
+      if ($("p2CorpusCategory")) $("p2CorpusCategory").value = "special";
+      if ($("p2CorpusTitle")) $("p2CorpusTitle").value = activeEntry.title || "";
+      setCorpusMarkdownValue("p2CorpusText", activeEntry.material_text || "");
+      text("p2CorpusSaveStatus", "");
+      $("p2CorpusDialog")?.classList.remove("hidden");
+      if (!isCorpusEditorReady("p2CorpusText")) setCorpusEditorLoading("p2CorpusText", true);
+      ensureCorpusMarkdownEditorReady("p2CorpusText").then((editor) => {
+        if (!editor) setCorpusEditorLoading("p2CorpusText", false);
+        setTimeout(() => editor?.focus?.() || $("p2CorpusText")?.focus(), 0);
+      });
     }
 
     function closeP2CorpusEditor() {
@@ -1348,9 +1423,31 @@
       return lines.join("\n").trim();
     }
 
+    function p2BankP3MarkdownTemplate(entry = {}, items = []) {
+      const title = String(entry.cue_title || entry.title || entry.question || "P2 题卡").trim();
+      const validItems = (Array.isArray(items) ? items : [])
+        .filter((item) => String(item?.followup_question || "").trim());
+      if (!validItems.length) return "";
+      const lines = [
+        `## ${title} 相关 P3 追问`,
+        "",
+      ];
+      validItems.forEach((item, index) => {
+        const question = String(item.followup_question || "").trim();
+        const answer = String(item.corpus_text || "").trim();
+        lines.push(`### ${index + 1}. ${question}`);
+        lines.push("");
+        lines.push(answer || "- 我的回答：");
+        lines.push("");
+      });
+      return lines.join("\n").trim();
+    }
+
     function updateP2CorpusP3QuestionSource(entry = {}) {
       const questions = p2OfficialFollowUpQuestions(entry);
-      text("p2CorpusP3QuestionSourceStatus", questions.length ? `题库追问 ${questions.length} 道` : "这张题卡暂无题库 P3 追问");
+      if ($("p2CorpusP3QuestionSourceStatus")) {
+        text("p2CorpusP3QuestionSourceStatus", questions.length ? `题库追问 ${questions.length} 道` : "这张题卡暂无题库 P3 追问");
+      }
       const pickerButton = $("openP2CorpusP3QuestionPickerBtn");
       if (pickerButton) {
         pickerButton.disabled = !questions.length;
@@ -1415,12 +1512,22 @@
     }
 
     function openP2CorpusP3Editor(entry = {}) {
+      if (isP2BankCard(entry)) {
+        openP2BankP3Editor(entry).catch((error) => {
+          text("p2CorpusP3SaveStatus", error.message || String(error));
+        });
+        return;
+      }
       if (!entry?.entry_id) return;
       const category = entry.category || "person";
       state.p2Corpus.activeP3Entry = { ...entry, category };
+      state.p2Corpus.activeBankP3Entry = null;
       text("p2CorpusP3DialogCategory", (entry.label || category).toString());
       text("p2CorpusP3DialogTitle", entry.title ? `相关 P3 追问：${entry.title}` : "编辑相关 P3 追问");
       updateP2CorpusP3QuestionSource(state.p2Corpus.activeP3Entry);
+      $("p2BankP3EntryList")?.classList.add("hidden");
+      $("p2CorpusP3FollowUpLabel")?.classList.remove("hidden");
+      document.querySelector(".p2-p3-source-tools")?.classList.remove("hidden");
       const initialText = entry.p3_follow_up_text || p2P3FollowUpMarkdownTemplate(entry);
       setCorpusMarkdownValue("p2CorpusP3FollowUp", initialText);
       text("p2CorpusP3SaveStatus", entry.p3_follow_up_text ? "" : (initialText ? "已放入题库追问，可直接补充回答。" : "这张题卡暂无题库 P3 追问，可手动添加。"));
@@ -1433,10 +1540,129 @@
       });
     }
 
+    function syncActiveP2BankP3Draft() {
+      const entry = state.p2Corpus.activeBankP3Entry;
+      if (!entry) return;
+      const followupId = entry.selectedFollowupId || "";
+      if (!followupId) return;
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      const target = items.find((item) => item.followup_id === followupId);
+      if (!target) return;
+      target.corpus_text = isCorpusEditorReady("p2CorpusP3FollowUp")
+        ? getCorpusMarkdownValue("p2CorpusP3FollowUp").trim()
+        : ($("p2CorpusP3FollowUp")?.value || "").trim();
+    }
+
+    function p2BankP3ItemStatus(item = {}) {
+      return String(item.corpus_text || "").trim() ? "已填" : "待填";
+    }
+
+    function activeP2BankP3Item(entry = state.p2Corpus.activeBankP3Entry || {}) {
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      if (!items.length) return null;
+      const selectedId = entry.selectedFollowupId || items[0]?.followup_id || "";
+      return items.find((item) => item.followup_id === selectedId) || items[0] || null;
+    }
+
+    function renderP2BankP3Entries(payload = {}) {
+      const list = $("p2BankP3EntryList");
+      if (!list) return;
+      const activeEntry = state.p2Corpus.activeBankP3Entry || {};
+      const items = payload.items || activeEntry.items || [];
+      if (!items.length) {
+        list.innerHTML = '<p class="p2-bank-p3-empty">这张 P2 题卡暂时没有题库 P3 追问。</p>';
+        setCorpusMarkdownValue("p2CorpusP3FollowUp", "");
+        return;
+      }
+      const selectedId = activeEntry.selectedFollowupId || items[0]?.followup_id || "";
+      const selected = items.find((item) => item.followup_id === selectedId) || items[0];
+      if (activeEntry) {
+        activeEntry.selectedFollowupId = selected?.followup_id || "";
+        activeEntry.items = items;
+      }
+      const listHtml = items.map((item, index) => {
+        const selectedClass = item.followup_id === selected?.followup_id ? " is-active" : "";
+        const savedClass = String(item.corpus_text || "").trim() ? " is-ready" : "";
+        return `
+          <button
+            type="button"
+            class="p2-bank-p3-question-button${selectedClass}${savedClass}"
+            data-p2-bank-p3-select="${escapeHtml(item.followup_id)}"
+          >
+            <strong>Q${index + 1}</strong>
+            <span>${escapeHtml(item.followup_question || "P3 追问")}</span>
+            <em>${escapeHtml(p2BankP3ItemStatus(item))}</em>
+          </button>
+        `;
+      }).join("");
+      list.innerHTML = `
+        <div class="p2-bank-p3-question-list" aria-label="题库 P3 追问列表">
+          ${listHtml}
+        </div>
+        <div class="p2-bank-p3-active-question">
+          <span>当前题库追问</span>
+          <strong>${escapeHtml(selected?.followup_question || "P3 追问")}</strong>
+        </div>
+      `;
+      if ($("p2CorpusP3FollowUpLabel")) $("p2CorpusP3FollowUpLabel").textContent = "回答正文";
+      setCorpusMarkdownValue("p2CorpusP3FollowUp", selected?.corpus_text || "");
+    }
+
+    async function openP2BankP3Editor(entry = {}) {
+      const questionId = p2BankQuestionId(entry);
+      if (!questionId) return;
+      const payload = await api(`/api/p3-bank-corpus/${encodeURIComponent(questionId)}`);
+      state.p2Corpus.activeP3Entry = null;
+      state.p2Corpus.activeBankP3Entry = {
+        ...entry,
+        is_bank_card: true,
+        question_id: payload.p2_question_id || questionId,
+        title: entry.cue_title || entry.title || payload.question || "P2 题卡",
+        items: payload.items || [],
+        selectedFollowupId: payload.items?.[0]?.followup_id || "",
+      };
+      text("p2CorpusP3DialogCategory", entry.label ? `题库素材 · ${entry.label}` : "题库素材");
+      text("p2CorpusP3DialogTitle", state.p2Corpus.activeBankP3Entry.title ? `编辑题库 P3：${state.p2Corpus.activeBankP3Entry.title}` : "编辑题库 P3 追问");
+      if ($("p2CorpusP3QuestionSourceStatus")) {
+        text("p2CorpusP3QuestionSourceStatus", payload.count ? `题库追问 ${payload.count} 道` : "暂无题库追问");
+      }
+      document.querySelector(".p2-p3-source-tools")?.classList.add("hidden");
+      $("p2BankP3EntryList")?.classList.remove("hidden");
+      $("p2CorpusP3FollowUpLabel")?.classList.remove("hidden");
+      renderP2BankP3Entries(payload);
+      text("p2CorpusP3SaveStatus", payload.count ? "" : "这张题卡暂无题库 P3 追问。");
+      closeP2CorpusP3QuestionPicker();
+      $("p2CorpusP3Dialog")?.classList.remove("hidden");
+      if (!isCorpusEditorReady("p2CorpusP3FollowUp")) setCorpusEditorLoading("p2CorpusP3FollowUp", true);
+      ensureCorpusMarkdownEditorReady("p2CorpusP3FollowUp").then((editor) => {
+        if (!editor) setCorpusEditorLoading("p2CorpusP3FollowUp", false);
+        const selected = activeP2BankP3Item(state.p2Corpus.activeBankP3Entry);
+        setCorpusMarkdownValue("p2CorpusP3FollowUp", selected?.corpus_text || "");
+        setTimeout(() => editor?.focus?.() || $("p2CorpusP3FollowUp")?.focus(), 0);
+      });
+    }
+
+    function selectP2BankP3Question(followupId) {
+      if (!followupId || !state.p2Corpus.activeBankP3Entry) return;
+      syncActiveP2BankP3Draft();
+      state.p2Corpus.activeBankP3Entry.selectedFollowupId = followupId;
+      renderP2BankP3Entries({ items: state.p2Corpus.activeBankP3Entry.items || [] });
+      setTimeout(() => {
+        ensureCorpusMarkdownEditorReady("p2CorpusP3FollowUp")
+          .then((editor) => editor?.focus?.() || $("p2CorpusP3FollowUp")?.focus?.())
+          .catch(() => $("p2CorpusP3FollowUp")?.focus?.());
+      }, 0);
+    }
+
     function closeP2CorpusP3Editor() {
       $("p2CorpusP3Dialog")?.classList.add("hidden");
       closeP2CorpusP3QuestionPicker();
       state.p2Corpus.activeP3Entry = null;
+      state.p2Corpus.activeBankP3Entry = null;
+      $("p2BankP3EntryList")?.classList.add("hidden");
+      $("p2CorpusP3FollowUpLabel")?.classList.remove("hidden");
+      if ($("p2CorpusP3FollowUpLabel")) $("p2CorpusP3FollowUpLabel").textContent = "相关 P3 追问";
+      document.querySelector(".p2-p3-source-tools")?.classList.remove("hidden");
     }
 
     async function saveAndCloseP2CorpusEditor() {
@@ -1446,11 +1672,10 @@
       const materialText = editorReady ? getCorpusMarkdownValue("p2CorpusText").trim() : "";
       const title = $("p2CorpusTitle")?.value || "";
       const category = $("p2CorpusCategory")?.value || entry.category || "person";
-      const linkedQuestion = $("p2CorpusLinkedQuestion")?.value || "";
       closeP2CorpusEditor();
       if (materialText) {
         saveP2CorpusEntry({
-          entry: { ...entry, category, title, linked_question: linkedQuestion },
+          entry: { ...entry, category, title },
           materialText,
           silent: true,
         }).catch(() => null);
@@ -1459,6 +1684,13 @@
 
     async function saveAndCloseP2CorpusP3Editor() {
       if (!$("p2CorpusP3Dialog") || $("p2CorpusP3Dialog").classList.contains("hidden")) return;
+      if (state.p2Corpus.activeBankP3Entry) {
+        const entry = state.p2Corpus.activeBankP3Entry;
+        syncActiveP2BankP3Draft();
+        closeP2CorpusP3Editor();
+        saveP2BankP3Entries({ entry, silent: true }).catch(() => null);
+        return;
+      }
       const entry = state.p2Corpus.activeP3Entry || {};
       const editorReady = isCorpusEditorReady("p2CorpusP3FollowUp");
       const p3FollowUpText = editorReady ? getCorpusMarkdownValue("p2CorpusP3FollowUp").trim() : "";
@@ -1474,9 +1706,93 @@
       }
     }
 
+    async function saveP2BankP3Entries(options = {}) {
+      const entry = options.entry || state.p2Corpus.activeBankP3Entry || {};
+      const questionId = p2BankQuestionId(entry);
+      if (!questionId) {
+        text("p2CorpusP3SaveStatus", "缺少题卡 ID，无法保存。");
+        return;
+      }
+      syncActiveP2BankP3Draft();
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      if (!items.length) {
+        text("p2CorpusP3SaveStatus", "没有可保存的题库追问。");
+        return;
+      }
+      state.p2Corpus.saving = true;
+      const button = $("saveP2CorpusP3Btn");
+      const original = button?.textContent || "保存追问";
+      if (button && !options.silent) {
+        button.disabled = true;
+        button.textContent = "保存中...";
+      }
+      if (!options.silent) text("p2CorpusP3SaveStatus", "");
+      try {
+        const drafts = items.map((item) => ({
+          followup_id: item.followup_id || "",
+          followup_question: item.followup_question || "",
+          corpus_text: item.corpus_text || "",
+        }));
+        await Promise.all(drafts.map((draft) => api(`/api/p3-bank-corpus/item/${encodeURIComponent(draft.followup_id || "")}`, {
+          p2_question_id: questionId,
+          followup_question: draft.followup_question || "",
+          corpus_text: draft.corpus_text || "",
+          source: "p3_bank_corpus_editor",
+        })));
+        if (!options.silent) text("p2CorpusP3SaveStatus", "已保存题库 P3 追问");
+        await loadP2Corpus({ force: true });
+        if (options.closeOnSuccess) closeP2CorpusP3Editor();
+      } catch (error) {
+        if (!options.silent) text("p2CorpusP3SaveStatus", error.message || String(error));
+        if (options.closeOnError) closeP2CorpusP3Editor();
+      } finally {
+        state.p2Corpus.saving = false;
+        if (button && !options.silent) {
+          button.disabled = false;
+          button.textContent = original;
+        }
+      }
+    }
+
+    document.addEventListener("click", (event) => {
+      const cardMaterialButton = event.target.closest("[data-p2-corpus-card-material]");
+      if (cardMaterialButton) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openP2BankCorpusEditor(p2BankEntryFromElement(cardMaterialButton)).catch((error) => {
+          text("p2CorpusSaveStatus", error.message || String(error));
+        });
+        return;
+      }
+      const cardP3Button = event.target.closest("[data-p2-corpus-card-p3]");
+      if (cardP3Button) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openP2BankP3Editor(p2BankEntryFromElement(cardP3Button)).catch((error) => {
+          text("p2CorpusP3SaveStatus", error.message || String(error));
+        });
+        return;
+      }
+      const bankP3Button = event.target.closest("[data-p2-bank-p3-select]");
+      if (!bankP3Button) return;
+      if ($("p2CorpusP3Dialog")?.classList.contains("hidden")) return;
+      event.preventDefault();
+      selectP2BankP3Question(bankP3Button.dataset.p2BankP3Select || "");
+    }, true);
+
+    $("p2BankP3EntryList")?.addEventListener("click", (event) => {
+      const bankP3Button = event.target.closest("[data-p2-bank-p3-select]");
+      if (!bankP3Button) return;
+      event.preventDefault();
+      selectP2BankP3Question(bankP3Button.dataset.p2BankP3Select || "");
+    });
+
     async function saveP2CorpusEntry(options = {}) {
       const entry = options.entry || state.p2Corpus.activeEntry || {};
       if (state.p2Corpus.saving) return;
+      if (entry.is_bank_card) {
+        return saveP2BankCorpusEntry({ ...options, entry });
+      }
       const hasExplicitP3Text = typeof options.p3FollowUpText === "string";
       if (!options.materialText && !hasExplicitP3Text && !isCorpusEditorReady("p2CorpusText")) {
         text("p2CorpusSaveStatus", "编辑器还没加载完成，请等一秒再保存。");
@@ -1491,7 +1807,7 @@
       const p3DialogOpen = !$("p2CorpusP3Dialog")?.classList.contains("hidden");
       const nextCategory = (options.category ?? (materialDialogOpen ? $("p2CorpusCategory")?.value : "")) || entry.category || "person";
       const nextTitle = (options.title ?? (materialDialogOpen ? $("p2CorpusTitle")?.value : "")) || entry.title || "";
-      const nextLinkedQuestion = (options.linkedQuestion ?? (materialDialogOpen ? $("p2CorpusLinkedQuestion")?.value : "")) || entry.linked_question || "";
+      const nextLinkedQuestion = options.linkedQuestion ?? entry.linked_question ?? "";
       const nextP3FollowUpText = options.p3FollowUpText ?? (p3DialogOpen ? getCorpusMarkdownValue("p2CorpusP3FollowUp") : entry.p3_follow_up_text || "");
       if (!nextMaterialText && !String(nextP3FollowUpText || "").trim()) {
         if (!options.silent) text("p2CorpusSaveStatus", "内容为空，未保存。");
@@ -1517,6 +1833,49 @@
         if (!options.silent) text("p2CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
         await loadP2Corpus();
         state.p2Corpus.selectedEntryId ||= saved.entry_id;
+        if (options.closeOnSuccess) closeP2CorpusEditor();
+      } catch (error) {
+        if (!options.silent) text("p2CorpusSaveStatus", error.message || String(error));
+        if (options.closeOnError) closeP2CorpusEditor();
+      } finally {
+        state.p2Corpus.saving = false;
+        if (button && !options.silent) {
+          button.disabled = false;
+          button.textContent = original;
+        }
+      }
+    }
+
+    async function saveP2BankCorpusEntry(options = {}) {
+      const entry = options.entry || state.p2Corpus.activeEntry || {};
+      const questionId = p2BankQuestionId(entry);
+      if (!questionId) {
+        text("p2CorpusSaveStatus", "缺少题卡 ID，无法保存。");
+        return;
+      }
+      if (!options.materialText && !isCorpusEditorReady("p2CorpusText")) {
+        text("p2CorpusSaveStatus", "编辑器还没加载完成，请等一秒再保存。");
+        if (options.closeOnError) closeP2CorpusEditor();
+        return;
+      }
+      state.p2Corpus.saving = true;
+      const button = $("saveP2CorpusBtn");
+      const original = button?.textContent || "保存素材";
+      const nextMaterialText = (options.materialText ?? getCorpusMarkdownValue("p2CorpusText")).trim();
+      if (button && !options.silent) {
+        button.disabled = true;
+        button.textContent = "保存中...";
+      }
+      if (!options.silent) text("p2CorpusSaveStatus", "");
+      try {
+        const saved = await api(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`, {
+          question: entry.linked_question || entry.question || "",
+          corpus_text: nextMaterialText,
+          last_ai_answer: entry.last_ai_answer || "",
+          source: "p2_bank_corpus_editor",
+        });
+        if (!options.silent) text("p2CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
+        await loadP2Corpus({ force: true });
         if (options.closeOnSuccess) closeP2CorpusEditor();
       } catch (error) {
         if (!options.silent) text("p2CorpusSaveStatus", error.message || String(error));

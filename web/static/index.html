@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260606-spelling-inline-v5">
+    <link rel="stylesheet" href="/styles.css?v=20260606-p3-dialog-context-zone">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -561,8 +561,6 @@
             </div>
             <label class="p1-corpus-label" for="p2CorpusText">串题素材</label>
             <textarea id="p2CorpusText" class="p1-corpus-textarea" spellcheck="true"></textarea>
-            <label class="p1-corpus-label" for="p2CorpusLinkedQuestion">特殊题目对应题干（可选）</label>
-            <textarea id="p2CorpusLinkedQuestion" class="p1-corpus-textarea p2-linked-question" spellcheck="true"></textarea>
             <div class="p1-corpus-dialog-actions">
               <span id="p2CorpusSaveStatus"></span>
             </div>
@@ -578,28 +576,28 @@
               </div>
               <button id="saveP2CorpusP3Btn" type="button">保存追问</button>
             </header>
-            <label class="p1-corpus-label" for="p2CorpusP3FollowUp">相关 P3 追问</label>
-            <div class="p2-p3-source-tools">
-              <div>
-                <strong>题库 P3 追问</strong>
-                <span id="p2CorpusP3QuestionSourceStatus">暂无题库追问</span>
-              </div>
-              <button id="openP2CorpusP3QuestionPickerBtn" type="button">选择题库追问</button>
-            </div>
-            <div id="p2CorpusP3QuestionPicker" class="p2-p3-question-picker hidden" role="dialog" aria-label="选择题库 P3 追问">
-              <header>
+            <div class="p2-corpus-p3-context">
+              <div class="p2-p3-source-tools">
                 <div>
-                  <strong>选择要放入语料库的 P3 追问</strong>
-                  <span>来自当前 P2 题卡，不限制题目数量。</span>
+                  <strong>题库 P3 追问</strong>
+                  <span id="p2CorpusP3QuestionSourceStatus">暂无题库追问</span>
                 </div>
-                <button id="closeP2CorpusP3QuestionPickerBtn" type="button" aria-label="关闭题库追问选择">关闭</button>
-              </header>
-              <div id="p2CorpusP3QuestionList" class="p2-p3-question-list"></div>
-              <footer>
-                <span id="p2CorpusP3QuestionPickerStatus"></span>
-                <button id="insertP2CorpusP3QuestionsBtn" type="button">插入选中追问</button>
-              </footer>
+                <button id="openP2CorpusP3QuestionPickerBtn" type="button">选择题库追问</button>
+              </div>
+              <div id="p2CorpusP3QuestionPicker" class="p2-p3-question-picker hidden" role="dialog" aria-label="选择题库 P3 追问">
+                <header>
+                  <strong>选择追问</strong>
+                  <button id="closeP2CorpusP3QuestionPickerBtn" type="button" aria-label="关闭">×</button>
+                </header>
+                <div id="p2CorpusP3QuestionList" class="p2-p3-question-list"></div>
+                <footer>
+                  <span id="p2CorpusP3QuestionPickerStatus"></span>
+                  <button id="insertP2CorpusP3QuestionsBtn" type="button">插入所选追问</button>
+                </footer>
+              </div>
+              <div id="p2BankP3EntryList" class="p2-bank-p3-entry-list hidden"></div>
             </div>
+            <label id="p2CorpusP3FollowUpLabel" class="p1-corpus-label" for="p2CorpusP3FollowUp">相关 P3 追问</label>
             <textarea id="p2CorpusP3FollowUp" class="p1-corpus-textarea p2-p3-follow-up" spellcheck="true"></textarea>
             <div class="p1-corpus-dialog-actions">
               <span id="p2CorpusP3SaveStatus"></span>
@@ -1221,9 +1219,9 @@
     <script src="/writing-image-preload.js?v=20260530-writing-image-preload"></script>
     <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
     <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
-    <script src="/corpus-markdown-editor.js?v=20260530-corpus-markdown-editor"></script>
-    <script src="/corpus-takeaway.js?v=20260602-p2-corpus-layout-fix"></script>
-    <script src="/spelling-drill.js?v=20260606-spelling-inline-v5"></script>
+    <script src="/corpus-markdown-editor.js?v=20260606-single-editor-source"></script>
+    <script src="/corpus-takeaway.js?v=20260606-p2-p3-single-editor"></script>
+    <script src="/spelling-drill.js?v=20260606-spelling-srs-day4"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
@@ -1231,6 +1229,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260606-spelling-inline-v5"></script>
+    <script src="/app.js?v=20260606-p2-bank-actions-v1"></script>
   </body>
 </html>

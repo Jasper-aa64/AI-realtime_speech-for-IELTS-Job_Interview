@@ -21,15 +21,13 @@ SPELLING_WORD_RE = re.compile(r"^[A-Za-z][A-Za-z'\-]*$")
 
 # SRS Leitner box intervals: index = new_stage - 1
 SRS_STAGE_INTERVALS: list[timedelta] = [
-    timedelta(minutes=10),  # stage 0→1
-    timedelta(days=1),       # stage 1→2
-    timedelta(days=2),       # stage 2→3
-    timedelta(days=4),       # stage 3→4
-    timedelta(days=7),       # stage 4→5
-    timedelta(days=15),      # stage 5→6 (graduation)
+    timedelta(days=1),  # stage 0→1
+    timedelta(days=2),  # stage 1→2
+    timedelta(days=4),  # stage 2→3
+    timedelta(days=7),  # stage 3→4 (graduation)
 ]
-SRS_MAX_STAGE = len(SRS_STAGE_INTERVALS)  # 6
-SRS_LAPSE_INTERVAL = timedelta(minutes=10)
+SRS_MAX_STAGE = len(SRS_STAGE_INTERVALS)  # 4
+SRS_LAPSE_INTERVAL = timedelta(days=1)
 
 
 def due_human(due_at, now=None) -> str:
@@ -42,6 +40,8 @@ def due_human(due_at, now=None) -> str:
         return f"{int(seconds // 60)} 分钟后"
     if seconds < 86400:
         return f"{int(seconds // 3600)} 小时后"
+    if seconds < 2 * 86400:
+        return "明天"
     return f"{int(seconds // 86400)} 天后"
 
 

@@ -124,7 +124,15 @@
       if (existing) return Promise.resolve(existing);
       return ensureVditorLoaded()
         .then(() => ensureCorpusMarkdownEditor(textareaId))
-        .catch(() => null);
+        .catch(() => {
+          const textarea = $(textareaId);
+          if (textarea) {
+            textarea.classList.remove("hidden");
+            textarea.style.removeProperty("display");
+            delete textarea.dataset.markdownEditorSource;
+          }
+          return null;
+        });
     }
 
     function getCorpusMarkdownValue(textareaId) {
@@ -180,7 +188,9 @@
       if (!textarea || !window.Vditor) return null;
       const mount = document.createElement("div");
       mount.className = "corpus-live-editor";
+      textarea.dataset.markdownEditorSource = "true";
       textarea.classList.add("hidden");
+      textarea.style.display = "none";
       textarea.insertAdjacentElement("afterend", mount);
       let editor;
       editor = new Vditor(mount, {
