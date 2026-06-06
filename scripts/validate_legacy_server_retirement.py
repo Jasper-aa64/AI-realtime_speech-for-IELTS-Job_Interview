@@ -65,8 +65,9 @@ def ensure_django_backend_has_no_legacy_imports() -> None:
 def ensure_windows_launcher_is_django_only() -> None:
     start_script = read_text("scripts/windows/start-ielts-stack.ps1")
     require("ielts_server.py" not in start_script, "Windows start script still references legacy server")
-    require("DjangoPort" in start_script, "Windows start script lost Django port configuration")
-    require("--url\", \"http://127.0.0.1:$DjangoPort" in start_script, "Cloudflare quick tunnel is not pointed at Django")
+    require("[int]$Port" in start_script, "Windows start script lost Django port configuration")
+    require("config.asgi:application" in start_script, "Windows start script is not pointed at Django ASGI")
+    require("-p\", $Port" in start_script, "Windows start script does not pass the configured Django port")
 
 
 def ensure_django_url_surface_exists() -> None:
