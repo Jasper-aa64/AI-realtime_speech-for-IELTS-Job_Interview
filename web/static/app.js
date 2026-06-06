@@ -299,7 +299,6 @@ const uiTranslations = {
     "account.profileLoading": "正在读取账号资料...",
     "account.nameChinese": "中文名",
     "account.nameEnglish": "英文名",
-    "account.saveProfile": "保存资料",
     "account.changePassword": "修改密码",
     "account.logout": "退出登录",
     "account.detailsGuest": "登录后可同步个人资料和账号安全设置。",
@@ -393,7 +392,6 @@ const uiTranslations = {
     "account.profileLoading": "Loading account profile...",
     "account.nameChinese": "Chinese name",
     "account.nameEnglish": "English name",
-    "account.saveProfile": "Save profile",
     "account.changePassword": "Change password",
     "account.logout": "Sign out",
     "account.detailsGuest": "Sign in to sync profile and account settings.",
@@ -8683,7 +8681,6 @@ function bindEvents() {
   $("authRequiredLoginBtn")?.addEventListener("click", () => switchView("login", { force: true, skipAuthGate: true }));
   $("authRequiredBackBtn")?.addEventListener("click", () => switchView("mock"));
   $("profileLogoutBtn")?.addEventListener("click", logoutAccount);
-  $("profileSaveBtn")?.addEventListener("click", () => saveCandidateNames(true).catch((error) => renderAccountStatus(error.message, true)));
   $("profileSecurityBtn")?.addEventListener("click", () => {
     $("accountSecurityPanel")?.classList.remove("hidden");
     loadAccount();

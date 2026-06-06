@@ -9698,9 +9698,9 @@ body.theme-dark.font-popular .p3-bank-entry-icon {
   background: var(--surface, #fff);
   padding: 15px 16px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 148px minmax(0, 1fr);
   align-items: start;
-  gap: 12px;
+  gap: 10px 18px;
   box-shadow: 0 4px 12px rgba(20, 40, 48, 0.04);
 }
 
@@ -9732,11 +9732,15 @@ body.theme-dark.font-popular .p3-bank-entry-icon {
 }
 
 .p3-plan-card p {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
   margin: 0;
   color: var(--ink);
   font-size: 15px;
   font-weight: 700;
   line-height: 1.45;
+  text-align: left;
 }
 
 .p3-plan-coachline {
@@ -9764,6 +9768,8 @@ body.theme-dark.font-popular .p3-bank-entry-icon {
 }
 
 .p3-target-moves {
+  grid-column: 2;
+  grid-row: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -10174,6 +10180,16 @@ body.view-p3 .p3-topic-head {
   .p3-plan-coachline {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .p3-plan-card {
+    grid-template-columns: 1fr;
+  }
+
+  .p3-plan-card p,
+  .p3-target-moves {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .p3-start-row {
@@ -21165,29 +21181,29 @@ body.theme-dark.font-popular .topic-chip.active {
 }
 
 #accountProfilePanel .account-dashboard {
-  width: min(1480px, calc(100vw - 72px));
-  height: 100%;
+  width: min(1220px, calc(100vw - 72px));
+  height: auto;
   min-height: 0;
   margin: 0 auto;
-  padding: 18px 0 22px;
+  padding: 18px 0 28px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 18px;
+  grid-template-rows: auto auto;
+  gap: 16px;
 }
 
 #accountProfilePanel .account-page-header {
   width: 100%;
-  min-height: 98px;
-  padding: 20px 24px;
+  min-height: 76px;
+  padding: 14px 20px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 20px;
   border: 1px solid rgba(126, 139, 153, 0.18);
-  border-radius: 22px;
+  border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(251, 253, 255, 0.92));
-  box-shadow: 0 18px 42px rgba(30, 41, 59, 0.07);
+  box-shadow: 0 10px 26px rgba(30, 41, 59, 0.06);
 }
 
 #accountProfilePanel .account-page-copy {
@@ -21212,8 +21228,8 @@ body.theme-dark.font-popular .topic-chip.active {
 
 #accountProfilePanel .account-page-copy h1 {
   margin: 0;
-  font-size: clamp(34px, 3.2vw, 52px);
-  line-height: 1;
+  font-size: clamp(28px, 2.2vw, 36px);
+  line-height: 1.08;
   letter-spacing: 0;
 }
 
@@ -21243,22 +21259,22 @@ body.theme-dark.font-popular .topic-chip.active {
   width: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(560px, 1.04fr) minmax(420px, 0.96fr);
-  gap: 20px;
-  align-items: stretch;
-  overflow: hidden;
+  grid-template-columns: minmax(520px, 1fr) minmax(420px, 1fr);
+  gap: 18px;
+  align-items: start;
+  overflow: visible;
 }
 
 #accountProfilePanel .account-profile-card,
 #accountProfilePanel .account-wallet-card {
-  height: 100%;
+  height: auto;
   min-height: 0;
-  padding: 22px 24px;
+  padding: 20px 22px;
   border: 1px solid rgba(126, 139, 153, 0.20);
-  border-radius: 22px;
+  border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(251, 253, 255, 0.94));
-  box-shadow: 0 18px 48px rgba(30, 41, 59, 0.08);
+  box-shadow: 0 12px 34px rgba(30, 41, 59, 0.07);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -21290,9 +21306,9 @@ body.theme-dark.font-popular .topic-chip.active {
 #accountProfilePanel .account-profile-body {
   min-height: 74px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 142px;
-  gap: 16px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
 }
 
 #accountProfilePanel .account-name-fields {
@@ -21311,14 +21327,6 @@ body.theme-dark.font-popular .topic-chip.active {
   padding: 0 14px;
   border-radius: 14px;
   font-size: 17px;
-}
-
-#accountProfilePanel .account-profile-body .account-action-button {
-  width: 142px;
-  min-width: 142px;
-  min-height: 48px;
-  margin: 0;
-  border-radius: 14px;
 }
 
 #accountProfilePanel .account-bank-selector {
@@ -21431,8 +21439,9 @@ body.theme-dark.font-popular .topic-chip.active {
 }
 
 #accountProfilePanel .account-ledger-list {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 360px;
   overflow-y: auto;
   display: grid;
   align-content: start;
