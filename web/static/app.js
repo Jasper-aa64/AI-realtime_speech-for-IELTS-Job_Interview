@@ -64,6 +64,7 @@ const state = {
     activeBankP3Entry: null,
     previousPracticeView: "p2",
     selectedEntryId: "",
+    pinnedCueId: "",
     saving: false,
   },
   languageTakeaway: {
@@ -325,13 +326,52 @@ const uiTranslations = {
     "settings.language": "界面语言",
     "settings.languageAria": "选择界面语言",
     "settings.aiSource": "AI 评分来源",
+    "settings.aiSource.gpt": "GPT（默认）",
+    "settings.aiSource.claude": "Claude",
+    "p1.corpusButton": "我的 P1 语料库",
+    "p2.corpusButton": "我的 P2 串题素材库",
+    "p2Corpus.aria": "我的 P2 串题素材库",
+    "p2Corpus.kicker": "Part 2 语料库",
+    "p2Corpus.title": "P2 串题素材库",
+    "p2Corpus.subtitle": "按分类管理可复用素材，并单独维护相关 P3 追问。",
+    "common.loading": "加载中...",
+    "bank.generic": "题库",
+    "bank.currentSeason": "当前考季",
+    "bank.statusLine": "{season} · {scope} · {p1} P1 · {p2} P2 · {p3} P3 参考追问",
+    "bank.statusLineNoP3": "{season} · {scope} · {p1} P1 · {p2} P2",
+    "bank.loadFailed": "题库读取失败，练习会继续使用默认当季题库。",
     "wallet.eyebrow": "钱包",
     "wallet.title": "钱包",
     "wallet.recharge": "充值",
+    "wallet.topUpKicker": "钱包充值",
+    "wallet.topUpTitle": "充值",
+    "wallet.topUpSubtitle": "选择预设金额，或输入自定义金额。",
+    "wallet.amountLabel": "充值金额：",
+    "wallet.amountPlaceholder": "输入金额",
+    "wallet.cancel": "取消",
+    "wallet.confirmRecharge": "确认充值",
     "wallet.available": "可用余额",
     "wallet.loading": "加载中",
     "wallet.reading": "读取中",
     "wallet.hint": "AI 功能按实际用量结算，余额需大于 ¥0.30。",
+    "wallet.aiReady": "AI 可用",
+    "wallet.lowBalance": "余额不足",
+    "wallet.readyHint": "按实际用量结算；余额需保持大于 ¥{threshold}。",
+    "wallet.blockedHint": "余额需大于 ¥{threshold} 才能使用 AI 功能，请先充值。",
+    "wallet.rechargeRequiredShort": "余额不足，请先充值。",
+    "wallet.emptyLedger": "暂无流水。",
+    "wallet.loadFailed": "钱包加载失败",
+    "wallet.ledgerUnavailable": "钱包流水暂时不可用。",
+    "wallet.ledger.grant": "初始赠额",
+    "wallet.ledger.recharge": "充值",
+    "wallet.ledger.reserve": "历史预留",
+    "wallet.ledger.release": "余额释放",
+    "wallet.ledger.settle": "用量结算",
+    "wallet.ledger.default": "钱包流水",
+    "wallet.insufficientTitle": "余额不足",
+    "wallet.insufficientBody": "余额需大于 ¥{threshold} 才能使用 AI 功能。充值后即可继续。",
+    "wallet.later": "稍后",
+    "wallet.goRecharge": "去充值",
     "security.title": "修改密码",
     "security.subtitle": "修改登录密码，保持账号安全。",
   },
@@ -420,29 +460,68 @@ const uiTranslations = {
     "settings.language": "Interface language",
     "settings.languageAria": "Choose interface language",
     "settings.aiSource": "AI scoring source",
+    "settings.aiSource.gpt": "GPT (default)",
+    "settings.aiSource.claude": "Claude",
+    "p1.corpusButton": "My P1 Corpus",
+    "p2.corpusButton": "My P2 Story Bank",
+    "p2Corpus.aria": "My P2 Story Bank",
+    "p2Corpus.kicker": "Part 2 Library",
+    "p2Corpus.title": "My P2 Story Bank",
+    "p2Corpus.subtitle": "Organize reusable story material and maintain related P3 follow-ups separately.",
+    "common.loading": "Loading...",
+    "bank.generic": "Bank",
+    "bank.currentSeason": "Current season",
+    "bank.statusLine": "{season} · {scope} · {p1} P1 · {p2} P2 · {p3} P3 follow-ups",
+    "bank.statusLineNoP3": "{season} · {scope} · {p1} P1 · {p2} P2",
+    "bank.loadFailed": "Could not load the question bank. Practice will continue with the default current bank.",
     "wallet.eyebrow": "Wallet",
     "wallet.title": "Wallet",
     "wallet.recharge": "Recharge",
+    "wallet.topUpKicker": "Wallet top-up",
+    "wallet.topUpTitle": "Recharge",
+    "wallet.topUpSubtitle": "Choose a preset amount or enter a custom amount.",
+    "wallet.amountLabel": "Top-up amount:",
+    "wallet.amountPlaceholder": "Enter amount",
+    "wallet.cancel": "Cancel",
+    "wallet.confirmRecharge": "Confirm recharge",
     "wallet.available": "Available balance",
     "wallet.loading": "Loading",
     "wallet.reading": "Loading",
     "wallet.hint": "AI features are usage-based. Balance must stay above ¥0.30.",
+    "wallet.aiReady": "AI ready",
+    "wallet.lowBalance": "Low balance",
+    "wallet.readyHint": "Charged by actual usage; keep balance above ¥{threshold}.",
+    "wallet.blockedHint": "Balance must be above ¥{threshold} to use AI features. Please recharge first.",
+    "wallet.rechargeRequiredShort": "Low balance. Please recharge first.",
+    "wallet.emptyLedger": "No wallet activity yet.",
+    "wallet.loadFailed": "Wallet failed to load",
+    "wallet.ledgerUnavailable": "Wallet activity is temporarily unavailable.",
+    "wallet.ledger.grant": "Initial credit",
+    "wallet.ledger.recharge": "Recharge",
+    "wallet.ledger.reserve": "Historical reserve",
+    "wallet.ledger.release": "Balance release",
+    "wallet.ledger.settle": "Usage settlement",
+    "wallet.ledger.default": "Wallet activity",
+    "wallet.insufficientTitle": "Low balance",
+    "wallet.insufficientBody": "Balance must be above ¥{threshold} to use AI features. Recharge to continue.",
+    "wallet.later": "Later",
+    "wallet.goRecharge": "Recharge",
     "security.title": "Change password",
     "security.subtitle": "Update your login password to keep the account secure.",
   },
 };
 const viewCopy = {
   home: ["首页", "口语、写作和语料复习的综合训练工作台。"],
-  mock: ["Mock", "完整模拟 P1、P2 和 P3 的口语考试流程。"],
-  p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
-  p2: ["Part 2", "Cue card, one-minute preparation, then a long turn."],
-  p3: ["Part 3", "练观点解释、对比让步、未来趋势和社会层面的深入讨论。"],
-  corpus: ["语料库", "Manage prepared speaking material and language takeaways."],
-  p1Corpus: ["我的 P1语料库", "Prepare grouped Part 1 answers and reuse them in AI feedback."],
-  p2Corpus: ["我准备的P2串题素材库", "Prepare reusable Part 2 story materials and link them during preparation."],
-  takeawayBook: ["Takeaway", "Review saved language takeaways with hidden English recall."],
-  writingTakeawayBook: ["写作积累", "Review saved writing phrases and reusable argument material."],
-  spellingDrill: ["拼写错词训练", "Rewrite spelling mistakes from scored writing reports until they are mastered."],
+  mock: ["Mock 模考", "完整模拟 P1、P2 和 P3 的口语考试流程。"],
+  p1: ["Part 1 短问短答", "练习 IELTS 风格的短问短答流程。"],
+  p2: ["Part 2 题卡", "题卡准备 1 分钟，然后完成一段长回答。"],
+  p3: ["Part 3 深入讨论", "练观点解释、对比让步、未来趋势和社会层面的深入讨论。"],
+  corpus: ["语料库", "管理口语素材、写作积累和可复用表达。"],
+  p1Corpus: ["我的 P1 语料库", "按话题整理 Part 1 答案，并在 AI 反馈中复用。"],
+  p2Corpus: ["我的 P2 串题素材库", "准备可复用的 Part 2 故事素材，并在练习中链接使用。"],
+  takeawayBook: ["Takeaway", "复习已保存表达，遮住英文进行回忆。"],
+  writingTakeawayBook: ["写作积累", "复习已保存的写作短语和论证素材。"],
+  spellingDrill: ["拼写错词训练", "重写作文批改中的拼写错词，直到掌握。"],
   history: ["口语报告", ""],
   writing: ["", ""],
   writingReports: ["写作报告", ""],
@@ -487,6 +566,12 @@ function t(key, fallback = "") {
   return uiTranslations[lang]?.[key] ?? uiTranslations.zh?.[key] ?? fallback ?? key;
 }
 
+function tf(key, values = {}, fallback = "") {
+  return String(t(key, fallback)).replace(/\{(\w+)\}/g, (_match, name) => {
+    return Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : "";
+  });
+}
+
 function viewCopyFor(view) {
   const langCopy = currentUiLanguage() === "en" ? viewCopyEn : viewCopy;
   return langCopy[view] || viewCopy[view] || viewCopy.home;
@@ -505,7 +590,8 @@ function viewSubtitleFor(view) {
 }
 
 function practiceReadyText(view) {
-  return view === "mock" ? "Mock practice: P1 -> P2 -> P3" : `${viewTitleFor(view)} ready`;
+  if (view === "mock") return currentUiLanguage() === "en" ? "Mock practice: P1 -> P2 -> P3" : "Mock 模考：P1 → P2 → P3";
+  return currentUiLanguage() === "en" ? `${viewTitleFor(view)} ready` : `${viewTitleFor(view)} 准备就绪`;
 }
 
 function isPracticeView(view) {
@@ -589,7 +675,11 @@ function refreshLocalizedChrome() {
   text("viewTitle", copy[0]);
   text("viewSubtitle", copy[1]);
   renderQuestionBankSelector(state.account.questionBankSummary);
+  renderNavigationBankStatus(state.account.questionBankSummary);
   renderAccountStatus();
+  if (state.wallet.loaded && state.wallet.payload) {
+    renderWalletPayload(state.wallet.payload);
+  }
 }
 
 function applyUiLanguage(value, options = {}) {
@@ -639,8 +729,8 @@ const EXAMINER_TTS_REFRESH_WAIT_MS = 4200;
 const EXAMINER_TTS_REFRESH_INTERVAL_MS = 550;
 const CORPUS_PEEK_WINDOW_MARGIN = 16;
 const P3_SOURCE_LABELS = {
-  bank: "神奇题库固定追问",
-  season_bank: "神奇题库固定追问",
+  bank: "题库固定追问",
+  season_bank: "题库固定追问",
   p2_report: "根据 P2 报告",
   custom: "自定义主题",
   p2_answer: "根据 P2 回答",
@@ -1143,6 +1233,7 @@ const corpusTakeawayController = window.IELTSCorpusTakeaway?.createCorpusTakeawa
   api,
   showConfirmDelete,
   switchView,
+  startPractice,
   openCorpusWindow,
   renderP2CorpusPrepPanel,
   ensureCorpusMarkdownEditorReady,
@@ -2019,7 +2110,7 @@ async function startPractice() {
       state.practiceLocked = false;
       $("#exitPractice")?.classList.add("hidden");
       updateSidebarLock();
-      setRecordButton("idle", "Start", "余额不足，请先充值。");
+      setRecordButton("idle", "Start", t("wallet.rechargeRequiredShort"));
       showInsufficientBalanceDialog(walletAiStartThreshold(wallet));
       switchView("accountProfile", { force: true });
       return;
@@ -2038,6 +2129,7 @@ async function startPractice() {
   setRecordButton("loading", "Loading...", "Preparing exam section.");
   try {
     const p3Source = mode === "p3" ? state.p3PracticeSource : null;
+    const p2PinnedCueId = mode === "p2" ? String(state.p2Corpus.pinnedCueId || "").trim() : "";
     const theme = mode === "p3" ? currentP3Theme() : "";
     const names = candidateNames();
     const attempt = await api("/api/attempts/start", {
@@ -2046,6 +2138,7 @@ async function startPractice() {
       candidate: names.englishName,
       full_name: names.fullName,
       english_name: names.englishName,
+      ...(mode === "p2" && p2PinnedCueId ? { p2_cue_id: p2PinnedCueId } : {}),
       ...(mode === "p3" ? { p3_intensity: state.p3Intensity } : {}),
       ...(mode === "p3" ? { p3_focus: state.p3Focus } : {}),
       ...(mode === "p3" && state.p3Plan ? { p3_plan: state.p3Plan } : {}),
@@ -2062,6 +2155,7 @@ async function startPractice() {
       if (attempt?.id) api(`/api/attempts/${attempt.id}/abort`, {}).catch(() => null);
       return;
     }
+    if (mode === "p2") state.p2Corpus.pinnedCueId = "";
     state.attempt = attempt;
     state.currentTurn = attempt.turns[0];
     $("#summaryPanel").classList.add("hidden");
@@ -4774,162 +4868,114 @@ function ensureWritingParagraphsBeforeScore(answer, taskType) {
 const WRITING_FRAME_DEFAULTS = {
   // ── Task 1 Academic ────────────────────────────────────────────
   "task1_academic:line_graph": [
-    "Introduction",
-    "[改写题目：图展示了 X 在 Y 时期内的 Z 变化]",
+    "The line graph compares [items/groups] in terms of [measurement] over the period from [start year] to [end year].",
     "",
-    "Overview",
-    "[概览：2-3 个最显著的整体趋势，不写具体数据]",
+    "Overall, [main trend 1] changed the most noticeably, while [main trend 2] remained comparatively stable. It is also clear that [highest/lowest group] finished the period as the most significant feature of the graph.",
     "",
-    "Body 1",
-    "[细节一：选一组数据（最高/起点）+ 给出关键数值与时间点]",
+    "At the beginning of the period, [group A] stood at approximately [number], compared with [number] for [group B]. Over the next [time span], [group A] [rose/fell/fluctuated] to [number], whereas [group B] [changed in a different way], reaching [number].",
     "",
-    "Body 2",
-    "[细节二：选另一组（对比/终点）+ 数值对比 + 转折]",
+    "The remaining figures show a different pattern. [Group C] [increased/decreased] from [number] to [number], and [group D] ended at about [number]. By [final year], the gap between [two key groups] had [widened/narrowed] to around [number], making this the clearest comparison in the data.",
   ].join("\n"),
   "task1_academic:bar_chart": [
-    "Introduction",
-    "[改写题目：柱状图展示了 X 在 Y 范围内 Z 的分布]",
+    "The bar chart shows the figures for [categories] in relation to [measurement] in [place/year].",
     "",
-    "Overview",
-    "[概览：最高 / 最低 / 总体格局，2-3 句]",
+    "Overall, [category/group] recorded the highest figure, whereas [category/group] was the lowest. Another clear feature is that [major comparison or pattern across groups].",
     "",
-    "Body 1",
-    "[细节一：领先组的数据 + 对比]",
+    "Looking first at the larger figures, [category A] reached [number], which was [higher/lower] than [category B] at [number]. [Category C] also performed strongly, with a figure of roughly [number].",
     "",
-    "Body 2",
-    "[细节二：剩余组的数据 + 排序 / 占比]",
+    "By contrast, the lower figures were seen in [category D] and [category E], at [number] and [number] respectively. This means that [largest category] was about [comparison] as high as [smallest category], showing a clear difference between the top and bottom groups.",
   ].join("\n"),
   "task1_academic:pie_chart": [
-    "Introduction",
-    "[改写题目：饼图展示了 X 的占比构成]",
+    "The pie chart illustrates how [total/market/spending] was divided among [categories] in [year/place].",
     "",
-    "Overview",
-    "[概览：最大份额 + 最小份额 + 整体结构]",
+    "Overall, [largest category] made up the largest proportion, while [smallest category] accounted for the smallest share. The chart also shows that [combined pattern, such as two categories dominating the total].",
     "",
-    "Body 1",
-    "[细节一：占比靠前的几项 + 具体百分比]",
+    "[Largest category] represented [percentage] of the total, followed by [second category] at [percentage]. Together, these two categories accounted for [combined percentage], which was more than half of the whole figure.",
     "",
-    "Body 2",
-    "[细节二：占比较小的几项 + 对比 / 合计]",
+    "The remaining shares were smaller. [Category C] stood at [percentage], while [category D] and [category E] made up [percentage] and [percentage] respectively. In particular, [smallest category] was only about [comparison] of [largest category], highlighting the imbalance in the distribution.",
   ].join("\n"),
   "task1_academic:table": [
-    "Introduction",
-    "[改写题目：表格展示了 X 在不同维度上的数据]",
+    "The table compares [items/groups] across [criteria] in [year/place/period].",
     "",
-    "Overview",
-    "[概览：抓住表中最突出的 2-3 条规律]",
+    "Overall, [group/item] performed best in [criterion], whereas [group/item] had the weakest result in [criterion]. A further noticeable pattern is that [general comparison across rows or columns].",
     "",
-    "Body 1",
-    "[细节一：按行 / 按列选一组展开]",
+    "In terms of [criterion 1], [group A] recorded [number], which was [higher/lower] than [group B] at [number]. [Group C] was close behind, with [number], while [group D] had a much lower figure of [number].",
     "",
-    "Body 2",
-    "[细节二：另一维度对比 + 极值]",
+    "For [criterion 2], the pattern was [similar/different]. [Group/item] reached [number], the highest figure in this column, compared with only [number] for [group/item]. These figures suggest that [main conclusion from the table].",
   ].join("\n"),
   "task1_academic:map": [
-    "Introduction",
-    "[改写题目：图展示了 X 地点在 Y 年与 Z 年之间的变化]",
+    "The maps show how [place] changed between [year 1] and [year 2].",
     "",
-    "Overview",
-    "[概览：整体上发生了哪些大的变化（新增 / 拆除 / 扩建）]",
+    "Overall, the area became [more developed/more modern/more residential], with the most important changes being [major addition] and [major removal/replacement]. However, [feature that stayed the same] remained largely unchanged.",
     "",
-    "Body 1",
-    "[细节一：早期布局 — 主要建筑、道路、自然要素的位置]",
+    "In [year 1], [main feature] was located in the [north/south/east/west] of the area, while [second feature] stood [near/opposite/beside] it. There was also [road/river/open space/building] in the [position], which shaped the original layout.",
     "",
-    "Body 2",
-    "[细节二：后期变化 — what was added / removed / replaced，方位词要丰富]",
+    "By [year 2], [old feature] had been replaced by [new feature], and [new facility] had been added in the [position]. In addition, [road/building/open area] was [extended/removed/relocated], making the site [clear final description].",
   ].join("\n"),
   "task1_academic:process": [
-    "Introduction",
-    "[改写题目：流程图展示了 X 的制作 / 形成过程，共 N 步]",
+    "The diagram illustrates the process by which [product/result] is [made/produced/formed].",
     "",
-    "Overview",
-    "[概览：起点 → 终点 + 关键的中间阶段]",
+    "Overall, this is a [linear/cyclical] process with [number] main stages, beginning with [first stage] and ending with [final stage]. The most important part of the process is [key transformation].",
     "",
-    "Body 1",
-    "[第一阶段：前几个步骤，注意被动语态 + 顺序连接词]",
+    "At the first stage, [raw material/input] is [collected/placed/prepared] and then [processed] by [machine/person/natural force]. After this, it is [heated/cooled/mixed/transported] to [next stage], where [specific action] takes place.",
     "",
-    "Body 2",
-    "[第二阶段：后几个步骤，强调最终产物]",
+    "In the later stages, [intermediate product] is [treated/combined/shaped] before being [sent/stored/packaged]. Finally, [final product/result] is produced and is ready for [use/distribution/next cycle].",
   ].join("\n"),
   "task1_academic:mixed": [
-    "Introduction",
-    "[改写题目：图组展示了 X 与 Y 的两类信息]",
+    "The charts provide information about [topic], showing both [chart 1 focus] and [chart 2 focus].",
     "",
-    "Overview",
-    "[概览：两图各自的主要规律，简洁两句]",
+    "Overall, [main pattern from chart 1] is the most noticeable feature, while [main pattern from chart 2] also stands out. Taken together, the two charts suggest that [combined insight].",
     "",
-    "Body 1",
-    "[图一细节：选关键趋势 / 极值]",
+    "In the first chart, [category/group] had the highest figure at [number], whereas [category/group] was much lower at [number]. Another important comparison is that [specific comparison].",
     "",
-    "Body 2",
-    "[图二细节：选关键趋势 / 极值 + 与图一的呼应]",
+    "The second chart shows that [main figure/pattern]. [Category/group] accounted for [number/percentage], compared with [number/percentage] for [another category]. This partly explains why [connection between the two charts].",
   ].join("\n"),
 
   // ── Task 2 ─────────────────────────────────────────────────────
   "task2:opinion": [
-    "Introduction",
-    "[改写题目背景 + 明确表态：totally / partially agree / disagree]",
+    "Some people believe that [main idea in the question]. I [completely/partly] agree with this view, mainly because [reason 1] and [reason 2].",
     "",
-    "Body 1",
-    "[核心理由 1：观点句 + 解释 + 具体例子]",
+    "Firstly, [reason 1 as a clear topic sentence]. This is because [explain the logic in simple terms]. If [people/governments/schools/companies] [do something], they are more likely to [result]. For example, [one concrete example]. Therefore, [link this example back to your opinion].",
     "",
-    "Body 2",
-    "[核心理由 2：观点句 + 解释 + 例子，或让步段]",
+    "Secondly, [reason 2]. Although some people may argue that [opposite idea], this view is less convincing because [weakness of the opposite idea]. In real life, [short example or common situation], so [your position] is more practical and more reasonable.",
     "",
-    "Conclusion",
-    "[重申立场，呼应开头，不引入新观点]",
+    "In conclusion, I believe that [repeat your position in different words]. The main reasons are that [reason 1 in short] and [reason 2 in short].",
   ].join("\n"),
   "task2:discussion": [
-    "Introduction",
-    "[改写题目 + 表明会讨论双方 + 给出自己的倾向]",
+    "People have different views about [topic]. Some argue that [view A], while others believe that [view B]. I think [your own view] is more reasonable.",
     "",
-    "Body 1",
-    "[第一种观点：陈述 + 解释为什么有人这么认为 + 例子]",
+    "On the one hand, supporters of [view A] may have a valid point. They believe that [reason for view A], because [explanation]. For example, [example that makes this side sound fair]. This is why some people see [view A] as a practical solution.",
     "",
-    "Body 2",
-    "[第二种观点：陈述 + 解释 + 例子 + 你为什么更倾向这一方]",
+    "On the other hand, I side more with [view B / your view]. The main reason is that [reason for your preferred side]. This means that [explain impact]. For instance, [example]. Compared with the first view, this approach deals better with [deeper problem or long-term need].",
     "",
-    "Conclusion",
-    "[总结双方 + 重申自己的立场]",
+    "In conclusion, both views have some logic, but I believe [your preferred view] is stronger. This is because [final reason linked directly to the question].",
   ].join("\n"),
   "task2:problem_solution": [
-    "Introduction",
-    "[改写题目 + 概述问题严重性 + 预告会分析原因 / 影响和解决方法]",
+    "[Problem from the question] has become increasingly common in many places. The main reasons are [cause 1] and [cause 2], and the problem can be reduced by [solution 1] and [solution 2].",
     "",
-    "Body 1",
-    "[问题原因 / 后果：1-2 句解释 + 例子]",
+    "One major cause is [cause 1]. When [people/companies/governments] [action], it often leads to [negative result], because [explanation]. Another cause is [cause 2]. For example, [specific example showing how the problem happens]. As a result, [state the wider consequence].",
     "",
-    "Body 2",
-    "[解决方案：1-2 个具体措施 + 谁来执行 + 预期效果]",
+    "To deal with this issue, [actor] should first [solution 1]. This would help because [expected effect]. In addition, [actor] could [solution 2], especially by [specific method]. If these measures are used together, [realistic improvement] would be more likely.",
     "",
-    "Conclusion",
-    "[重申问题可解 + 呼应主旨]",
+    "In conclusion, [problem] is mainly caused by [cause 1] and [cause 2]. However, it can be improved if [solution 1] and [solution 2] are carried out consistently.",
   ].join("\n"),
   "task2:advantages_disadvantages": [
-    "Introduction",
-    "[改写题目 + 表明会权衡优劣 + 整体判断 (advantages outweigh / drawbacks outweigh)]",
+    "[Topic] has both advantages and disadvantages. Although it may cause [main drawback], I believe the benefits are more important because [main benefit].",
     "",
-    "Body 1",
-    "[优点：核心优点 + 解释 + 例子]",
+    "The main advantage is that [advantage]. This matters because [explanation], and it can help [people/society/businesses/students] to [positive result]. For example, [specific example]. This shows that [topic] can bring real value, not just convenience.",
     "",
-    "Body 2",
-    "[缺点：核心缺点 + 解释 + 例子 + 为什么仍然 优 / 劣]",
+    "However, there are also disadvantages. The most serious one is [disadvantage], which may lead to [negative result]. For instance, [example]. Even so, this problem can often be controlled by [solution/condition], while the benefits are broader and more lasting.",
     "",
-    "Conclusion",
-    "[重申你的判断，简短有力]",
+    "In conclusion, despite [main drawback], I think the advantages of [topic] outweigh the disadvantages. The key reason is that [final reason linked to the question].",
   ].join("\n"),
   "task2:two_part": [
-    "Introduction",
-    "[改写题目 + 预告会分别回答两个问题]",
+    "[Topic from the question] raises two issues: [question 1 in your words] and [question 2 in your words]. In my view, [short answer to question 1], and [short answer to question 2].",
     "",
-    "Body 1",
-    "[回答第一个问题：明确立场 + 1-2 个理由 + 例子]",
+    "Regarding the first issue, [answer to question 1]. This is because [reason], and it often leads to [effect]. For example, [specific example]. Therefore, [mini conclusion for question 1].",
     "",
-    "Body 2",
-    "[回答第二个问题：明确立场 + 1-2 个理由 + 例子]",
+    "As for the second issue, [answer to question 2]. The most important reason is that [reason]. If [condition], then [result]. For example, [example], which shows that [mini conclusion for question 2].",
     "",
-    "Conclusion",
-    "[简短总结两个回答的核心]",
+    "In conclusion, [summary answer to question 1], while [summary answer to question 2]. Overall, [final idea that connects both answers].",
   ].join("\n"),
 };
 
@@ -8009,7 +8055,7 @@ async function openReportCorpusTarget(target) {
     await openP2CorpusP3Editor(entry);
     return;
   }
-  throw new Error("这次 P3 没有关联到可编辑语料。神奇题库题卡可编辑固定追问；P2 报告模式需要先链接个人 P2 素材。");
+  throw new Error("这次 P3 没有关联到可编辑语料。题库题卡可编辑固定追问；P2 报告模式需要先链接个人 P2 素材。");
 }
 
 function turnReportGroup(attemptId, turn, attempt, isP2 = false) {
@@ -8255,7 +8301,7 @@ function renderAccountStatus(message = "", isError = false) {
     if (state.account.authenticated) {
       const user = state.account.user || {};
       const phone = user.phone_number ? ` · ${user.phone_number}` : "";
-      details.textContent = `${user.username || "当前账号"}${phone}`;
+      details.textContent = `${user.username || t("account.currentUser").replace(/[:：]\s*$/, "")}${phone}`;
     } else {
       details.textContent = t("account.detailsGuest");
     }
@@ -8273,9 +8319,10 @@ function questionBankScopeLabel(scope, fallback = "") {
 
 function formatSeasonLabel(value) {
   const textValue = String(value || "").trim();
-  if (!textValue) return "当前考季";
+  if (!textValue) return t("bank.currentSeason");
   const match = textValue.match(/^(\d{4})-([a-z]+)-([a-z]+)$/i);
   if (match) {
+    if (currentUiLanguage() === "en") return textValue.replace(/-/g, " ");
     const monthMap = {
       january: "1月",
       february: "2月",
@@ -8318,8 +8365,9 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
     const part1 = Number(summary?.part1_count || 0);
     const part2 = Number(summary?.part2_count || 0);
     const p3 = Number(summary?.part3_follow_up_count || 0);
+    const separator = currentUiLanguage() === "en" ? ": " : "：";
     status.textContent = summary
-      ? `${label}：${part1} P1 · ${part2} P2${p3 ? ` · ${p3} ${t("bank.followups")}` : ""}`
+      ? `${label}${separator}${part1} P1 · ${part2} P2${p3 ? ` · ${p3} ${t("bank.followups")}` : ""}`
       : t("bank.loading");
     status.classList.remove("error");
   }
@@ -8366,11 +8414,21 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
   }
 }
 
+function renderNavigationBankStatus(summary = state.account.questionBankSummary) {
+  if (!summary) return;
+  const season = formatSeasonLabel(summary.active_season);
+  const scope = questionBankScopeLabel(summary.active_scope, summary.active_scope_label || t("bank.generic"));
+  const p1 = Number(summary.part1_count || 0);
+  const p2 = Number(summary.part2_count || 0);
+  const p3 = Number(summary.part3_follow_up_count || 0);
+  text("bankStatus", tf(p3 ? "bank.statusLine" : "bank.statusLineNoP3", { season, scope, p1, p2, p3 }));
+}
+
 function renderQuestionBankSelectorError(error) {
   renderQuestionBankSelector(state.account.questionBankSummary);
   const status = $("accountBankStatus");
   if (status) {
-    status.textContent = error?.message || "题库读取失败，练习会继续使用默认当季题库。";
+    status.textContent = error?.message || t("bank.loadFailed");
     status.classList.add("error");
   }
 }
@@ -8388,7 +8446,7 @@ function resetAccountProfileLoadingUi() {
     walletStatus.innerHTML = `
       <article class="wallet-balance-card">
         <div class="wallet-balance-main">
-          <span class="wallet-balance-label">可用余额</span>
+          <span class="wallet-balance-label">${escapeHtml(t("wallet.available"))}</span>
           <strong class="wallet-balance-amount">${escapeHtml(t("wallet.loading"))}</strong>
         </div>
         <span class="wallet-balance-status">${escapeHtml(t("wallet.reading"))}</span>
@@ -9528,12 +9586,14 @@ function syncP3LaunchPanel(message = "") {
 function renderP3PlanPreview() {
   const panel = $("#p3PlanPreview");
   if (!panel) return;
-  if (state.p3PlanLoading) {
+  const plan = state.p3Plan;
+  const hasExistingPlan = Boolean(plan && Array.isArray(plan.questions) && plan.questions.length);
+  panel.classList.toggle("is-refreshing", Boolean(state.p3PlanLoading && hasExistingPlan));
+  if (state.p3PlanLoading && !hasExistingPlan) {
     panel.innerHTML = centeredLoadingHtml("正在生成 P3 训练计划", "系统正在整理题型、追问方向和回答动作。");
     return;
   }
-  const plan = state.p3Plan;
-  if (state.p3PlanError) {
+  if (state.p3PlanError && !hasExistingPlan) {
     panel.innerHTML = `
       <div class="p3-plan-empty p3-plan-error">
         <strong>AI 生成失败</strong>
@@ -9575,6 +9635,11 @@ function renderP3PlanPreview() {
         </article>
       `).join("")}
     </div>
+    ${state.p3PlanLoading ? `
+      <div class="p3-plan-refresh-overlay" aria-hidden="true">
+        <span>正在重新载入追问...</span>
+      </div>
+    ` : ""}
   `;
 }
 
@@ -9645,7 +9710,6 @@ async function generateP3Plan(options = {}) {
     renderP3PlanPreview();
     syncP3LaunchPanel(options.fromP2 ? "已根据这次 P2 生成训练计划，确认后再开始。" : "计划已生成，确认后可以开始。");
   } catch (error) {
-    state.p3Plan = null;
     state.p3PlanError = error instanceof Error ? error.message : "生成计划失败。";
     renderP3PlanPreview();
     syncP3LaunchPanel(state.p3PlanError);
@@ -9876,8 +9940,7 @@ async function selectQuestionBankScope(scope) {
   try {
     const summary = await loadQuestionBankSummary({ force: true, scope: normalized });
     renderQuestionBankSelector(summary);
-    const seasonLabel = summary.active_season ? summary.active_season.replace(/-/g, " ") : "current season";
-    text("bankStatus", `${seasonLabel} · ${summary.active_scope_label || "题库"} · ${summary.part1_count} P1 · ${summary.part2_count} P2 · P3 follows P2`);
+    renderNavigationBankStatus(summary);
     renderP3TopicChips(summary.part2_themes || []);
   } catch (error) {
     renderQuestionBankSelectorError(error);
@@ -9909,53 +9972,54 @@ async function fetchWalletPayload(options = {}) {
   return state.wallet.loadingPromise;
 }
 
+function renderWalletPayload(wallet) {
+  const balance = Number(wallet?.balance_rmb || 0).toFixed(2);
+  const threshold = walletAiStartThreshold(wallet);
+  const thresholdText = threshold.toFixed(2);
+  const allowed = walletAiStartAllowed(wallet);
+  const walletStatus = $("walletStatus");
+  if (walletStatus) {
+    walletStatus.classList.remove("is-loading", "is-error");
+    walletStatus.innerHTML = `
+      <article class="wallet-balance-card ${allowed ? "is-ready" : "is-blocked"}">
+        <div class="wallet-balance-main">
+          <span class="wallet-balance-label">${escapeHtml(t("wallet.available"))}</span>
+          <strong class="wallet-balance-amount">¥${escapeHtml(balance)}</strong>
+        </div>
+        <span class="wallet-balance-status ${allowed ? "is-ok" : "is-warn"}">${escapeHtml(allowed ? t("wallet.aiReady") : t("wallet.lowBalance"))}</span>
+        <p class="wallet-balance-hint">${escapeHtml(tf(allowed ? "wallet.readyHint" : "wallet.blockedHint", { threshold: thresholdText }))}</p>
+      </article>
+    `;
+  }
+  const entries = wallet?.entries || [];
+  const ledgerList = $("ledgerList");
+  if (ledgerList) ledgerList.innerHTML = entries.length
+    ? entries.slice(0, 10).map((entry) => {
+        const amount = Number(entry.amount_rmb || 0);
+        const label = walletLedgerLabel(entry.entry_type);
+        const amountClass = amount > 0 ? "is-positive" : "is-negative";
+        return `<div class="settings-list-row account-ledger-row">
+          <strong>${escapeHtml(label)}</strong>
+          <span class="${amountClass}">¥${amount.toFixed(2)}</span>
+          <small>${escapeHtml(formatCompactDateTime(entry.created_at || "") || entry.metadata?.reason || "")}</small>
+        </div>`;
+      }).join("")
+    : `<p class="account-empty-state">${escapeHtml(t("wallet.emptyLedger"))}</p>`;
+}
+
 async function loadWallet() {
   try {
     const wallet = await fetchWalletPayload({ force: true });
-    const balance = Number(wallet.balance_rmb || 0).toFixed(2);
-    const threshold = walletAiStartThreshold(wallet);
-    const allowed = walletAiStartAllowed(wallet);
-    const walletStatus = $("walletStatus");
-    if (walletStatus) {
-      walletStatus.classList.remove("is-loading", "is-error");
-      walletStatus.innerHTML = `
-        <article class="wallet-balance-card ${allowed ? "is-ready" : "is-blocked"}">
-          <div class="wallet-balance-main">
-            <span class="wallet-balance-label">可用余额</span>
-            <strong class="wallet-balance-amount">¥${escapeHtml(balance)}</strong>
-          </div>
-          <span class="wallet-balance-status ${allowed ? "is-ok" : "is-warn"}">${allowed ? "AI 可用" : "余额不足"}</span>
-          <p class="wallet-balance-hint">${
-            allowed
-              ? `按实际用量结算；余额需保持大于 ¥${escapeHtml(threshold.toFixed(2))}。`
-              : `余额需大于 ¥${escapeHtml(threshold.toFixed(2))} 才能使用 AI 功能，请先充值。`
-          }</p>
-        </article>
-      `;
-    }
-    const entries = wallet.entries || [];
-    const ledgerList = $("ledgerList");
-    if (ledgerList) ledgerList.innerHTML = entries.length
-      ? entries.slice(0, 10).map((entry) => {
-          const amount = Number(entry.amount_rmb || 0);
-          const label = walletLedgerLabel(entry.entry_type);
-          const amountClass = amount > 0 ? "is-positive" : "is-negative";
-          return `<div class="settings-list-row account-ledger-row">
-            <strong>${escapeHtml(label)}</strong>
-            <span class="${amountClass}">¥${amount.toFixed(2)}</span>
-            <small>${escapeHtml(formatCompactDateTime(entry.created_at || "") || entry.metadata?.reason || "")}</small>
-          </div>`;
-        }).join("")
-      : '<p class="account-empty-state">暂无流水。</p>';
+    renderWalletPayload(wallet);
   } catch (error) {
     const walletStatus = $("walletStatus");
     if (walletStatus) {
       walletStatus.classList.remove("is-loading");
       walletStatus.classList.add("is-error");
-      walletStatus.innerHTML = `<article class="wallet-balance-card is-blocked"><div class="wallet-balance-main"><span class="wallet-balance-label">钱包加载失败</span><strong class="wallet-balance-amount">${escapeHtml(error.message)}</strong></div></article>`;
+      walletStatus.innerHTML = `<article class="wallet-balance-card is-blocked"><div class="wallet-balance-main"><span class="wallet-balance-label">${escapeHtml(t("wallet.loadFailed"))}</span><strong class="wallet-balance-amount">${escapeHtml(error.message)}</strong></div></article>`;
     }
     const ledgerList = $("ledgerList");
-    if (ledgerList) ledgerList.innerHTML = '<p class="account-empty-state">钱包流水暂时不可用。</p>';
+    if (ledgerList) ledgerList.innerHTML = `<p class="account-empty-state">${escapeHtml(t("wallet.ledgerUnavailable"))}</p>`;
   }
 }
 
@@ -9970,13 +10034,13 @@ function walletAiStartAllowed(wallet) {
 
 function walletLedgerLabel(type) {
   const labels = {
-    grant: "初始赠额",
-    recharge: "充值",
-    reserve: "历史预留",
-    release: "余额释放",
-    settle: "用量结算",
+    grant: t("wallet.ledger.grant"),
+    recharge: t("wallet.ledger.recharge"),
+    reserve: t("wallet.ledger.reserve"),
+    release: t("wallet.ledger.release"),
+    settle: t("wallet.ledger.settle"),
   };
-  return labels[type] || type || "钱包流水";
+  return labels[type] || type || t("wallet.ledger.default");
 }
 
 function showInsufficientBalanceDialog(threshold = 0.3) {
@@ -9988,13 +10052,13 @@ function showInsufficientBalanceDialog(threshold = 0.3) {
     <article class="insufficient-balance-dialog" role="dialog" aria-modal="true" aria-labelledby="insufficientBalanceTitle">
       <div class="insufficient-balance-icon">¥</div>
       <div class="insufficient-balance-copy">
-        <span>Wallet</span>
-        <h3 id="insufficientBalanceTitle">余额不足</h3>
-        <p>余额需大于 ¥${escapeHtml(safeThreshold)} 才能使用 AI 功能。充值后即可继续。</p>
+        <span>${escapeHtml(t("wallet.title"))}</span>
+        <h3 id="insufficientBalanceTitle">${escapeHtml(t("wallet.insufficientTitle"))}</h3>
+        <p>${escapeHtml(tf("wallet.insufficientBody", { threshold: safeThreshold }))}</p>
       </div>
       <div class="insufficient-balance-actions">
-        <button type="button" class="recharge-dialog-cancel" data-balance-dialog-close>稍后</button>
-        <button type="button" class="recharge-dialog-confirm" data-balance-dialog-recharge>去充值</button>
+        <button type="button" class="recharge-dialog-cancel" data-balance-dialog-close>${escapeHtml(t("wallet.later"))}</button>
+        <button type="button" class="recharge-dialog-confirm" data-balance-dialog-recharge>${escapeHtml(t("wallet.goRecharge"))}</button>
       </div>
     </article>
   `;
@@ -10094,13 +10158,12 @@ async function init() {
   const urlView = route.view;
   let savedView = urlView || "home";
   if (!isKnownView(savedView)) savedView = "home";
-  switchView(savedView, { skipPersist: Boolean(urlView), skipUrl: true });
+  switchView(savedView, { force: true, skipPersist: Boolean(urlView), skipUrl: true });
   document.body.classList.remove("app-booting");
   scheduleAuthenticatedPrefetch();
   try {
     const summary = await loadQuestionBankSummary({ force: true });
-    const seasonLabel = summary.active_season ? summary.active_season.replace(/-/g, " ") : "current season";
-    text("bankStatus", `${seasonLabel} · ${summary.active_scope_label || "题库"} · ${summary.part1_count} P1 · ${summary.part2_count} P2 · P3 follows P2`);
+    renderNavigationBankStatus(summary);
     renderQuestionBankSelector(summary);
     renderP3TopicChips(summary.part2_themes || []);
   } catch (error) {

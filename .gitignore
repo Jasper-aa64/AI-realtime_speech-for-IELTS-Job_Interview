@@ -55,3 +55,8 @@ web/static/wasm/audio_core_wasm.wasm
 *.crt
 *.win-bak-*
 *.bak.*
+
+# Local assistant/tooling and course materials
+.claude/skills/ui-ux-pro-max/
+.codex/skills/
+软件构造/

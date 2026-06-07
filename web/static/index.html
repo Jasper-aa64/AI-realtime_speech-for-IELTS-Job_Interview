@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260607-account-compact-layout">
+    <link rel="stylesheet" href="/styles.css?v=20260607-p2p3-corpus-restructure">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -135,94 +135,62 @@
           <span id="busyText"></span>
         </div>
 
-        <section id="homePanel" class="panel home-panel home-v2-panel" aria-label="首页">
-          <div class="home-v2-hero">
-            <div class="home-v2-copy">
-              <div class="home-v2-eyebrow" data-i18n="home.kicker">IELTS Study Workspace</div>
-              <h2 data-i18n="home.title">口语、写作和语料，一张工作台搞定。</h2>
-              <p data-i18n="home.subtitle">从真题练习到 AI 反馈，再到语料复用和拼写复习，把 IELTS 训练压进一个清晰的闭环。</p>
-              <div class="home-v2-actions" aria-label="快速开始">
-                <a class="home-v2-primary" data-home-mode="p1" href="?view=p1" data-i18n="home.cta.speaking">开始口语练习</a>
-                <a class="home-v2-secondary" href="?view=writing" data-i18n="home.cta.writing">写一篇作文</a>
+        <section id="homePanel" class="panel home-panel home-v3-panel" aria-label="首页">
+          <div class="home-v3-hero">
+            <div class="home-v3-copy">
+              <div class="home-v3-eyebrow">IELTS Study Workspace</div>
+              <h2>先练真题，再沉淀成自己的表达库。</h2>
+              <p>口语、写作、报告、语料和拼写复习串成一条路线；每天从一个入口开始，不再在一堆卡片里找功能。</p>
+              <div class="home-v3-actions" aria-label="快速开始">
+                <a class="home-v3-primary" data-home-mode="p1" href="?view=p1">开始口语练习</a>
+                <a class="home-v3-secondary" href="?view=writing">写一篇作文</a>
               </div>
             </div>
-            <div class="home-v2-spotlight" aria-label="今日训练重点">
-              <span data-i18n="home.spotlight.kicker">Today</span>
-              <strong data-i18n="home.spotlight.title">先练输入，再沉淀表达</strong>
-              <p data-i18n="home.spotlight.desc">口语题库、写作报告、Takeaway 和拼写错词会互相回流，形成你自己的表达资产。</p>
-            </div>
+
+            <aside class="home-v3-today" aria-label="今日训练顺序">
+              <span>Today</span>
+              <ol>
+                <li><strong>输入</strong><small>P1 / P2 / P3 真题练习</small></li>
+                <li><strong>反馈</strong><small>口语报告与写作批改</small></li>
+                <li><strong>复用</strong><small>语料、Takeaway、拼写错词</small></li>
+              </ol>
+            </aside>
           </div>
 
-          <div class="home-v2-modules" aria-label="训练入口">
-            <section class="home-v2-module home-v2-module-speaking">
-              <div class="home-v2-module-head">
+          <div class="home-v3-workbench" aria-label="训练工作流">
+            <section class="home-v3-lane">
+              <div class="home-v3-lane-head">
                 <span>Speaking</span>
-                <strong data-i18n="home.speaking.title">口语训练</strong>
+                <strong>口语训练</strong>
               </div>
-              <div class="home-v2-link-grid four">
-                <a class="home-v2-link tone-p1" data-home-mode="p1" href="?view=p1">
-                  <span>Part 1</span>
-                  <strong data-i18n="home.p1.title">P1 短问短答</strong>
-                  <small data-i18n="home.p1.desc">练直答、原因和具体细节。</small>
-                </a>
-                <a class="home-v2-link tone-p2" data-home-mode="p2" href="?view=p2">
-                  <span>Part 2</span>
-                  <strong data-i18n="home.p2.title">P2 Cue Card</strong>
-                  <small data-i18n="home.p2.desc">准备 1 分钟后完成长回答。</small>
-                </a>
-                <a class="home-v2-link tone-p3" data-home-mode="p3" href="?view=p3">
-                  <span>Part 3</span>
-                  <strong data-i18n="home.p3.title">P3 深入讨论</strong>
-                  <small data-i18n="home.p3.desc">围绕话题练观点、原因和对比。</small>
-                </a>
-                <a id="startFullMockBtn" class="home-v2-link tone-mock" data-home-mode="mock" href="?view=mock">
-                  <span>Mock</span>
-                  <strong data-i18n="home.mock.title">完整 Mock</strong>
-                  <small data-i18n="home.mock.desc">P1、P2、P3 串联模拟。</small>
-                </a>
+              <div class="home-v3-links">
+                <a data-home-mode="p1" href="?view=p1"><b>P1</b><span>短问短答</span></a>
+                <a data-home-mode="p2" href="?view=p2"><b>P2</b><span>Cue Card</span></a>
+                <a data-home-mode="p3" href="?view=p3"><b>P3</b><span>深入讨论</span></a>
+                <a id="startFullMockBtn" data-home-mode="mock" href="?view=mock"><b>Mock</b><span>完整模拟</span></a>
               </div>
             </section>
 
-            <section class="home-v2-module home-v2-module-writing">
-              <div class="home-v2-module-head">
+            <section class="home-v3-lane">
+              <div class="home-v3-lane-head">
                 <span>Writing</span>
-                <strong data-i18n="home.writing.title">写作闭环</strong>
+                <strong>写作闭环</strong>
               </div>
-              <div class="home-v2-link-grid two">
-                <a class="home-v2-link tone-writing" href="?view=writing">
-                  <span>Task 1 / Task 2</span>
-                  <strong data-i18n="home.writing.practice">每日写作</strong>
-                  <small data-i18n="home.writing.practiceDesc">选题、写作、保存，再交给 AI 评分。</small>
-                </a>
-                <a class="home-v2-link tone-report" href="?view=writingReports">
-                  <span>Reports</span>
-                  <strong data-i18n="home.writing.reports">写作报告</strong>
-                  <small data-i18n="home.writing.reportsDesc">查看批改、Band 7 改写和错词反馈。</small>
-                </a>
+              <div class="home-v3-links">
+                <a href="?view=writing"><b>Task</b><span>每日写作</span></a>
+                <a href="?view=writingReports"><b>Report</b><span>批改报告</span></a>
               </div>
             </section>
 
-            <section class="home-v2-module home-v2-module-corpus">
-              <div class="home-v2-module-head">
-                <span>Corpus</span>
-                <strong data-i18n="home.corpus.title">语料与复习</strong>
+            <section class="home-v3-lane">
+              <div class="home-v3-lane-head">
+                <span>Review</span>
+                <strong>语料与复习</strong>
               </div>
-              <div class="home-v2-link-grid three">
-                <a class="home-v2-link tone-corpus" href="?view=corpus">
-                  <span>Library</span>
-                  <strong data-i18n="home.corpus.library">语料库</strong>
-                  <small data-i18n="home.corpus.libraryDesc">管理 P1、P2、Takeaway 和写作积累。</small>
-                </a>
-                <a class="home-v2-link tone-takeaway" href="?view=writingTakeawayBook">
-                  <span>Takeaway</span>
-                  <strong data-i18n="home.corpus.takeaway">写作积累</strong>
-                  <small data-i18n="home.corpus.takeawayDesc">沉淀可复用句型和观点表达。</small>
-                </a>
-                <a class="home-v2-link tone-spelling" href="?view=spellingDrill">
-                  <span>Drill</span>
-                  <strong data-i18n="home.corpus.spelling">拼写错词训练</strong>
-                  <small data-i18n="home.corpus.spellingDesc">把作文错词加入间隔复习。</small>
-                </a>
+              <div class="home-v3-links">
+                <a href="?view=corpus"><b>Corpus</b><span>语料库</span></a>
+                <a href="?view=writingTakeawayBook"><b>Takeaway</b><span>写作积累</span></a>
+                <a href="?view=spellingDrill"><b>Drill</b><span>拼写错词</span></a>
               </div>
             </section>
           </div>
@@ -263,7 +231,7 @@
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
                 </svg>
-                <span>我的 P1语料库</span>
+                <span data-i18n="p1.corpusButton">我的 P1 语料库</span>
               </button>
               <button id="openP2CorpusBtn" class="corpus-entry-button p2-corpus-entry hidden" type="button">
                 <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -271,7 +239,7 @@
                   <path d="M10 22h4"></path>
                   <path d="M12 2a7 7 0 0 0-4 12.7c.7.5 1 1.1 1 1.8V17h6v-.5c0-.7.3-1.3 1-1.8A7 7 0 0 0 12 2z"></path>
                 </svg>
-                <span>我准备的P2串题素材库</span>
+                <span data-i18n="p2.corpusButton">我的 P2 串题素材库</span>
               </button>
             </div>
           </div>
@@ -295,7 +263,7 @@
                 <div class="p3-launch-label">训练来源</div>
                 <div class="p3-source-grid" role="group" aria-label="Part 3 source">
                   <button type="button" class="p3-source-option active" data-p3-source="bank">
-                    <strong>神奇题库固定追问</strong>
+                    <strong>题库固定追问</strong>
                     <small>选择 P2 题卡，练它自带的 3 道 P3 追问。</small>
                   </button>
                   <button type="button" class="p3-source-option" data-p3-source="p2_report">
@@ -318,7 +286,7 @@
               <section class="p3-plan-preview" id="p3PlanPreview" aria-live="polite">
                 <div class="p3-plan-empty">
                   <strong>先选择训练来源</strong>
-                  <span>神奇题库会载入题卡固定追问；P2 报告和自定义主题会调用真实 AI 生成。</span>
+                  <span>题库会载入题卡固定追问；P2 报告和自定义主题会调用真实 AI 生成。</span>
                 </div>
               </section>
               <div class="p3-start-row">
@@ -579,15 +547,15 @@
           </div>
         </section>
 
-        <section id="p2CorpusPanel" class="p2-corpus-panel hidden" aria-label="我准备的P2串题素材库">
+        <section id="p2CorpusPanel" class="p2-corpus-panel hidden" aria-label="我的 P2 串题素材库" data-i18n-aria="p2Corpus.aria">
           <div class="p2-corpus-shell">
             <header class="p2-corpus-head">
               <div class="p2-corpus-head-copy">
-                <span class="corpus-page-kicker">Part 2 Library</span>
-                <h2>P2 串题素材库</h2>
-                <p>按分类管理可复用素材，并单独维护相关 P3 追问。</p>
+                <span class="corpus-page-kicker" data-i18n="p2Corpus.kicker">Part 2 语料库</span>
+                <h2 data-i18n="p2Corpus.title">P2 串题素材库</h2>
+                <p data-i18n="p2Corpus.subtitle">按分类管理可复用素材，并单独维护相关 P3 追问。</p>
               </div>
-              <span id="p2CorpusStats" class="corpus-page-stat p2-corpus-stat">Loading...</span>
+              <span id="p2CorpusStats" class="corpus-page-stat p2-corpus-stat" data-i18n="common.loading">加载中...</span>
             </header>
             <div id="p2CorpusTopics" class="p2-corpus-topics"></div>
           </div>
@@ -602,10 +570,6 @@
               </div>
               <button id="saveP2CorpusBtn" type="button">保存素材</button>
             </header>
-            <div id="p2BankCorpusContext" class="p2-bank-corpus-context hidden" aria-label="题库题卡">
-              <span>题库题卡</span>
-              <strong id="p2BankCorpusQuestion"></strong>
-            </div>
             <div class="p2-corpus-form-grid">
               <label>
                 <span class="p1-corpus-label">分类</span>
@@ -1193,8 +1157,8 @@
                   <div class="account-ai-source-row">
                     <label class="account-ai-source-label" for="aiSourceSelect" data-i18n="settings.aiSource">AI 评分来源</label>
                     <select id="aiSourceSelect" class="account-ai-source-select" aria-label="AI 评分来源" data-i18n-aria="settings.aiSource">
-                      <option value="gpt">GPT（默认）</option>
-                      <option value="claude_cli">Claude</option>
+                      <option value="gpt" data-i18n="settings.aiSource.gpt">GPT（默认）</option>
+                      <option value="claude_cli" data-i18n="settings.aiSource.claude">Claude</option>
                     </select>
                   </div>
                 </div>
@@ -1257,9 +1221,9 @@
         <div id="rechargeDialog" class="recharge-dialog-overlay hidden">
           <div class="recharge-dialog">
             <div class="recharge-dialog-head">
-              <span>Wallet top-up</span>
-              <h3>充值</h3>
-              <p>选择预设金额，或输入自定义金额。</p>
+              <span data-i18n="wallet.topUpKicker">钱包充值</span>
+              <h3 data-i18n="wallet.topUpTitle">充值</h3>
+              <p data-i18n="wallet.topUpSubtitle">选择预设金额，或输入自定义金额。</p>
             </div>
             <div class="recharge-buttons">
               <button type="button" class="recharge-btn" data-amount="1">¥1</button>
@@ -1269,15 +1233,15 @@
               <button type="button" class="recharge-btn" data-amount="50">¥50</button>
             </div>
             <div class="recharge-custom">
-              <input type="number" id="rechargeAmount" placeholder="输入金额" min="0.01" step="0.01">
+              <input type="number" id="rechargeAmount" placeholder="输入金额" data-i18n-placeholder="wallet.amountPlaceholder" min="0.01" step="0.01">
             </div>
             <div class="recharge-preview">
-              <span>充值金额:</span>
+              <span data-i18n="wallet.amountLabel">充值金额：</span>
               <strong id="rechargePreview">¥0.00</strong>
             </div>
             <div class="recharge-dialog-buttons">
-              <button type="button" id="cancelRechargeBtn" class="recharge-dialog-cancel">取消</button>
-              <button type="button" id="confirmRechargeBtn" class="recharge-dialog-confirm" disabled>确认充值</button>
+              <button type="button" id="cancelRechargeBtn" class="recharge-dialog-cancel" data-i18n="wallet.cancel">取消</button>
+              <button type="button" id="confirmRechargeBtn" class="recharge-dialog-confirm" disabled data-i18n="wallet.confirmRecharge">确认充值</button>
             </div>
           </div>
         </div>
@@ -1288,7 +1252,7 @@
     <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
     <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
     <script src="/corpus-markdown-editor.js?v=20260606-single-editor-source"></script>
-    <script src="/corpus-takeaway.js?v=20260606-corpus-workspace-redesign"></script>
+    <script src="/corpus-takeaway.js?v=20260607-p2p3-corpus-restructure"></script>
     <script src="/spelling-drill.js?v=20260606-spelling-srs-day4"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
@@ -1297,6 +1261,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260607-account-compact-layout"></script>
+    <script src="/app.js?v=20260607-p2p3-corpus-restructure"></script>
   </body>
 </html>

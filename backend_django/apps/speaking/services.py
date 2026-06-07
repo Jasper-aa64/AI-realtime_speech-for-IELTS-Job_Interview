@@ -1321,7 +1321,7 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         )
         source_type = requested_source or "bank"
 
-    fixed_bank_questions = source_type == "season_bank"
+    fixed_bank_questions = source_type in {"season_bank", "bank"}
     questions = [str(q).strip() for q in raw_plan.get("questions", []) if str(q).strip()]
     if not fixed_bank_questions:
         questions = questions[:question_count]

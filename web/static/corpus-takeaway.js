@@ -328,10 +328,14 @@
     function updateP2CorpusPeekButton(turn = state.currentTurn) {
       const button = $("peekP2CorpusBtn");
       if (!button) return;
-      const visible = state.view === "p2" && turn?.part === "p2" && Boolean(state.p2Corpus.selectedEntryId);
+      const inP2Turn = state.view === "p2" && turn?.part === "p2";
+      const visible = inP2Turn && Boolean(state.p2Corpus.selectedEntryId);
       const entry = visible ? currentP2CorpusEntry() : null;
-      button.classList.toggle("hidden", !visible);
+      button.classList.toggle("hidden", !inP2Turn);
+      button.classList.toggle("is-empty-slot", inP2Turn && !visible);
       button.classList.toggle("has-corpus", Boolean(entry));
+      button.disabled = !visible;
+      button.setAttribute("aria-hidden", visible ? "false" : "true");
       button.title = entry ? "查看已链接素材" : "已选择素材，正在加载内容";
       if (visible && !entry && !state.p2Corpus.loaded) {
         ensureP2CorpusLoaded().then(() => updateP2CorpusPeekButton(state.currentTurn));
@@ -1467,8 +1471,6 @@
       const category = entry.category || "person";
       state.p2Corpus.activeEntry = { ...entry, category };
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.remove("is-bank-editor");
-      $("p2BankCorpusContext")?.classList.add("hidden");
-      text("p2BankCorpusQuestion", "");
       text("p2CorpusDialogCategory", (entry.label || category).toString());
       text("p2CorpusDialogTitle", entry.entry_id ? "编辑 P2 素材" : "新增 P2 素材");
       text("p2CorpusTextLabel", "串题素材");
@@ -1504,10 +1506,9 @@
       };
       state.p2Corpus.activeEntry = activeEntry;
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.add("is-bank-editor");
-      $("p2BankCorpusContext")?.classList.remove("hidden");
-      text("p2BankCorpusQuestion", activeEntry.title || activeEntry.linked_question || "P2 题卡");
+      const titleText = activeEntry.title || activeEntry.linked_question || "P2 题卡";
       text("p2CorpusDialogCategory", "题库正文");
-      text("p2CorpusDialogTitle", "编辑题库正文");
+      text("p2CorpusDialogTitle", `编辑题库正文：${titleText}`);
       text("p2CorpusTextLabel", "正文");
       const saveButton = $("saveP2CorpusBtn");
       if (saveButton) saveButton.textContent = "保存正文";
@@ -1526,7 +1527,6 @@
     function closeP2CorpusEditor() {
       $("p2CorpusDialog")?.classList.add("hidden");
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.remove("is-bank-editor");
-      $("p2BankCorpusContext")?.classList.add("hidden");
       state.p2Corpus.activeEntry = null;
     }
 
