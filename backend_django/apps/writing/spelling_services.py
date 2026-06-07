@@ -19,15 +19,36 @@ from .validation import WritingError
 
 SPELLING_WORD_RE = re.compile(r"^[A-Za-z][A-Za-z'\-]*$")
 
-# SRS Leitner box intervals: index = new_stage - 1
-SRS_STAGE_INTERVALS: list[timedelta] = [
-    timedelta(days=1),  # stage 0→1
-    timedelta(days=2),  # stage 1→2
-    timedelta(days=4),  # stage 2→3
-    timedelta(days=7),  # stage 3→4 (graduation)
+# SRS Leitner box intervals in review days. A review day refreshes at 04:00
+# local time, so items are grouped into stable daily batches instead of
+# reappearing exactly 24 hours after the previous answer.
+SRS_DAY_ROLLOVER_HOUR = 4
+SRS_STAGE_INTERVAL_DAYS: list[int] = [
+    1,  # stage 0→1
+    2,  # stage 1→2
+    4,  # stage 2→3
+    7,  # stage 3→4 (graduation)
 ]
-SRS_MAX_STAGE = len(SRS_STAGE_INTERVALS)  # 4
-SRS_LAPSE_INTERVAL = timedelta(days=1)
+SRS_MAX_STAGE = len(SRS_STAGE_INTERVAL_DAYS)  # 4
+SRS_LAPSE_INTERVAL_DAYS = 1
+
+
+def review_day_start(value=None):
+    current = timezone.localtime(value or timezone.now())
+    start = current.replace(
+        hour=SRS_DAY_ROLLOVER_HOUR,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    if current < start:
+        start -= timedelta(days=1)
+    return start
+
+
+def next_review_refresh(days: int, value=None):
+    interval = max(0, int(days or 0))
+    return review_day_start(value) + timedelta(days=interval)
 
 
 def due_human(due_at, now=None) -> str:
@@ -36,12 +57,17 @@ def due_human(due_at, now=None) -> str:
     seconds = (due_at - now).total_seconds()
     if seconds <= 60:
         return "马上"
+    due_local = timezone.localtime(due_at)
+    now_local = timezone.localtime(now)
+    day_delta = (due_local.date() - now_local.date()).days
+    if day_delta == 1:
+        return "明天"
+    if day_delta > 1:
+        return f"{day_delta} 天后"
     if seconds < 3600:
         return f"{int(seconds // 60)} 分钟后"
     if seconds < 86400:
         return f"{int(seconds // 3600)} 小时后"
-    if seconds < 2 * 86400:
-        return "明天"
     return f"{int(seconds // 86400)} 天后"
 
 
@@ -381,14 +407,14 @@ def record_spelling_attempt(user, word_id: str, typed: Any) -> dict[str, Any]:
             word.review_stage = new_stage
             if new_stage >= SRS_MAX_STAGE:
                 word.status = SpellingDrillWord.Status.MASTERED
-                word.due_at = now + timedelta(days=90)
+                word.due_at = next_review_refresh(90, now)
             else:
-                word.due_at = now + SRS_STAGE_INTERVALS[new_stage - 1]
+                word.due_at = next_review_refresh(SRS_STAGE_INTERVAL_DAYS[new_stage - 1], now)
         else:
             word.current_streak = 0
             word.lapses += 1
             word.review_stage = 0
-            word.due_at = now + SRS_LAPSE_INTERVAL
+            word.due_at = next_review_refresh(SRS_LAPSE_INTERVAL_DAYS, now)
         word.save(update_fields=[
             "attempt_count", "correct_count", "current_streak",
             "review_stage", "due_at", "lapses", "status",

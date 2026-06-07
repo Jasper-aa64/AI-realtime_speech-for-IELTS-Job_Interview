@@ -1,5 +1,7 @@
 import json
 import uuid
+from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
@@ -45,6 +47,12 @@ class SpellingDrillTests(TestCase):
             source="ai",
             analysis_payload=analysis_payload,
             scored_at=timezone.now(),
+        )
+
+    def aware_at(self, year: int, month: int, day: int, hour: int, minute: int = 0):
+        return timezone.make_aware(
+            datetime(year, month, day, hour, minute),
+            timezone.get_current_timezone(),
         )
 
     def test_harvest_collects_inline_and_summary_words(self):
@@ -134,8 +142,11 @@ class SpellingDrillTests(TestCase):
         word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
         self.assertEqual(word.review_stage, 0)
 
-        # Wrong attempt: stage resets to 0, lapses increments, and the word returns tomorrow.
-        wrong = record_spelling_attempt(self.user, word.word_id, "comfortble")
+        # Wrong attempt: stage resets to 0, lapses increments, and the word
+        # returns on the next 04:00 review refresh, not 24 hours later.
+        now = self.aware_at(2026, 6, 7, 10, 30)
+        with patch("apps.writing.spelling_services.timezone.now", return_value=now):
+            wrong = record_spelling_attempt(self.user, word.word_id, "comfortble")
         self.assertFalse(wrong["correct"])
         self.assertEqual(wrong["correct_spelling"], "comfortable")
         word.refresh_from_db()
@@ -143,6 +154,10 @@ class SpellingDrillTests(TestCase):
         self.assertEqual(word.review_stage, 0)
         self.assertEqual(word.lapses, 1)
         self.assertEqual(wrong["next_due_human"], "明天")
+        self.assertEqual(
+            timezone.localtime(word.due_at),
+            timezone.localtime(now).replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=1),
+        )
         self.assertIn("next_due_human", wrong)
 
         # Four correct answers → stage 4 → mastered
@@ -155,6 +170,24 @@ class SpellingDrillTests(TestCase):
         self.assertEqual(word.attempt_count, 5)  # 1 wrong + 4 correct
         self.assertEqual(word.correct_count, 4)
         self.assertIn("next_due_human", result)
+
+    def test_wrong_attempt_before_four_am_returns_at_same_calendar_day_refresh(self):
+        self.create_score(
+            answer="This app is confortable.",
+            analysis_payload={"inline_annotations": [{"type": "spelling", "original": "confortable", "suggestion": "comfortable"}]},
+        )
+        harvest_spelling_words(self.user)
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
+        now = self.aware_at(2026, 6, 7, 3, 30)
+
+        with patch("apps.writing.spelling_services.timezone.now", return_value=now):
+            record_spelling_attempt(self.user, word.word_id, "comfortble")
+
+        word.refresh_from_db()
+        self.assertEqual(
+            timezone.localtime(word.due_at),
+            timezone.localtime(now).replace(hour=4, minute=0, second=0, microsecond=0),
+        )
 
     def test_update_edit_gloss_reset_master_and_delete(self):
         self.create_score(
