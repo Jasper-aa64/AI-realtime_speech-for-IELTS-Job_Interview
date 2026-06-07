@@ -307,7 +307,7 @@ const uiTranslations = {
     "account.backendOffline": "后端暂不可用，姓名仍会保存在本机。",
     "account.securityStrong": "请使用强密码，并定期更换。",
     "account.securityLogin": "登录后可修改密码。",
-    "bank.eyebrow": "Question Bank",
+    "bank.eyebrow": "题库",
     "bank.title": "题库选择",
     "bank.loading": "正在读取当前题库...",
     "bank.scopeAria": "选择口语题库范围",
@@ -316,6 +316,8 @@ const uiTranslations = {
     "bank.retained": "保留题",
     "bank.archive": "历史考季",
     "bank.all": "全部题库",
+    "bank.currentGroup": "当季范围",
+    "bank.archiveSelect": "选择历史考季",
     "bank.defaultLabel": "当季全部",
     "bank.followups": "P3 参考追问",
     "settings.darkMode": "深色外观",
@@ -323,7 +325,7 @@ const uiTranslations = {
     "settings.language": "界面语言",
     "settings.languageAria": "选择界面语言",
     "settings.aiSource": "AI 评分来源",
-    "wallet.eyebrow": "Wallet",
+    "wallet.eyebrow": "钱包",
     "wallet.title": "钱包",
     "wallet.recharge": "充值",
     "wallet.available": "可用余额",
@@ -409,6 +411,8 @@ const uiTranslations = {
     "bank.retained": "Retained",
     "bank.archive": "Past seasons",
     "bank.all": "All banks",
+    "bank.currentGroup": "Current-season scopes",
+    "bank.archiveSelect": "Choose past season",
     "bank.defaultLabel": "Current bank",
     "bank.followups": "P3 follow-ups",
     "settings.darkMode": "Dark mode",
@@ -625,7 +629,7 @@ const protectedViews = new Set(["history", "writing", "writingReports", "corpus"
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 const corpusBackButtonViews = new Set(["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
-const workspaceHeaderHiddenViews = new Set(["history", "writing", "writingReports", ...corpusViews, ...authViews, ...accountViews]);
+const workspaceHeaderHiddenViews = new Set(["home", "history", "writing", "writingReports", ...corpusViews, ...authViews, ...accountViews]);
 const agentAssistantViews = new Set(["writing", "writingReports", "writingTakeawayBook"]);
 
 const EXAMINER_AUDIO_LOAD_TIMEOUT_MS = 15000;
@@ -8321,16 +8325,44 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
   }
   const optionRoot = $("accountBankScopeOptions");
   if (optionRoot) {
-    optionRoot.innerHTML = options.map((item) => {
-      const scope = normalizeQuestionBankScope(item.scope);
+    const optionByScope = new Map(options.map((item) => [normalizeQuestionBankScope(item.scope), item]));
+    const optionButton = (scopeName, className = "") => {
+      const scope = normalizeQuestionBankScope(scopeName);
+      const item = optionByScope.get(scope) || { scope, label: questionBankScopeLabel(scope) };
       const countText = Number.isFinite(Number(item.part1_count)) || Number.isFinite(Number(item.part2_count))
         ? `<small>${Number(item.part1_count || 0)} P1 · ${Number(item.part2_count || 0)} P2</small>`
         : "";
-      return `<button type="button" data-bank-scope="${escapeHtml(scope)}" class="${scope === activeScope ? "is-active" : ""}" aria-pressed="${scope === activeScope ? "true" : "false"}">
+      const classes = [className, scope === activeScope ? "is-active" : ""].filter(Boolean).join(" ");
+      return `<button type="button" data-bank-scope="${escapeHtml(scope)}" class="${escapeHtml(classes)}" aria-pressed="${scope === activeScope ? "true" : "false"}">
         <span class="account-bank-option-label">${escapeHtml(questionBankScopeLabel(scope, item.label || scope))}</span>
         ${countText}
       </button>`;
-    }).join("");
+    };
+    const archiveItem = optionByScope.get("archive") || { scope: "archive", label: t("bank.archive") };
+    const archiveCount = Number.isFinite(Number(archiveItem.part1_count)) || Number.isFinite(Number(archiveItem.part2_count))
+      ? `${Number(archiveItem.part1_count || 0)} P1 · ${Number(archiveItem.part2_count || 0)} P2`
+      : "";
+    optionRoot.innerHTML = `
+      <div class="account-bank-primary">
+        ${optionButton("current", "account-bank-current")}
+      </div>
+      <div class="account-bank-current-scopes" aria-label="${escapeHtml(t("bank.currentGroup"))}">
+        ${optionButton("new")}
+        ${optionButton("retained")}
+      </div>
+      <div class="account-bank-secondary">
+        <label class="account-bank-archive-control">
+          <span>${escapeHtml(t("bank.archive"))}</span>
+          <select id="accountBankArchiveSelect" data-bank-scope-select aria-label="${escapeHtml(t("bank.archiveSelect"))}">
+            <option value="">${escapeHtml(t("bank.archiveSelect"))}</option>
+            <option value="archive" ${activeScope === "archive" ? "selected" : ""}>
+              ${escapeHtml(questionBankScopeLabel("archive", archiveItem.label || "archive"))}${archiveCount ? ` · ${escapeHtml(archiveCount)}` : ""}
+            </option>
+          </select>
+        </label>
+        ${optionButton("all", "account-bank-all")}
+      </div>
+    `;
   }
 }
 
@@ -8671,6 +8703,11 @@ function bindEvents() {
     const button = event.target?.closest?.("[data-bank-scope]");
     if (!button) return;
     selectQuestionBankScope(button.dataset.bankScope).catch(renderQuestionBankSelectorError);
+  });
+  $("accountBankScopeOptions")?.addEventListener("change", (event) => {
+    const select = event.target?.closest?.("[data-bank-scope-select]");
+    if (!select || !select.value) return;
+    selectQuestionBankScope(select.value).catch(renderQuestionBankSelectorError);
   });
   $("loginSubmitBtn")?.addEventListener("click", submitLogin);
   $("registerSubmitBtn")?.addEventListener("click", submitRegister);

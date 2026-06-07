@@ -22171,12 +22171,69 @@ body.theme-dark.view-home .workspace {
 }
 
 #accountProfilePanel .account-bank-options {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
 }
 
 #accountProfilePanel .account-bank-options button {
   min-height: 50px;
   padding: 8px 10px;
+}
+
+#accountProfilePanel .account-bank-primary,
+#accountProfilePanel .account-bank-current-scopes,
+#accountProfilePanel .account-bank-secondary {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+#accountProfilePanel .account-bank-current-scopes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#accountProfilePanel .account-bank-secondary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+#accountProfilePanel .account-bank-options .account-bank-current {
+  min-height: 56px;
+  padding-inline: 14px;
+}
+
+#accountProfilePanel .account-bank-options .account-bank-all {
+  min-height: 48px;
+}
+
+#accountProfilePanel .account-bank-archive-control {
+  min-width: 0;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid rgba(126, 139, 153, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #5d6879;
+  font-size: 12.5px;
+  font-weight: 850;
+}
+
+#accountProfilePanel .account-bank-archive-control select {
+  min-width: 0;
+  width: 100%;
+  height: 34px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #182033;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
 }
 
 #accountProfilePanel .account-wallet-card {
@@ -22235,6 +22292,204 @@ body.theme-dark.view-home .workspace {
   }
 
   #accountProfilePanel .account-bank-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #accountProfilePanel .account-bank-current-scopes,
+  #accountProfilePanel .account-bank-secondary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Home canonical workspace layout.
+   Home is a standalone dashboard, not the standard sidebar workspace. Keep this
+   block at the end so older home/sidebar media-query rules cannot resurrect the
+   second "首页 + sidebar" layout. */
+body.view-home {
+  overflow-x: hidden;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 14% 8%, rgba(79, 125, 243, 0.10), transparent 32%),
+    radial-gradient(circle at 88% 4%, rgba(47, 128, 109, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(243, 246, 250, 0.98));
+}
+
+body.view-home .nav {
+  display: none !important;
+}
+
+body.view-home .global-topbar {
+  display: flex !important;
+  align-items: center;
+  left: 0;
+  right: 0;
+  height: 64px;
+  padding: max(8px, var(--safe-top)) max(24px, calc(24px + var(--safe-right))) 8px max(24px, calc(24px + var(--safe-left)));
+}
+
+body.view-home .global-topbar .topbar-back-button,
+body.view-home .global-topbar .writing-topbar-actions,
+body.view-home .global-topbar .global-topbar-spacer {
+  display: none !important;
+}
+
+body.view-home .global-topbar-actions {
+  margin-left: auto;
+}
+
+body.view-home .workspace,
+body.view-home .workspace:has(#homePanel:not(.hidden)) {
+  margin-left: 0 !important;
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
+  display: block;
+  overflow: visible;
+  padding: calc(96px + var(--safe-top)) clamp(18px, 3vw, 36px) calc(56px + var(--safe-bottom));
+  background: transparent;
+}
+
+body.view-home .topbar,
+body.view-home #viewTitleBlock,
+body.view-home .busy-bar.hidden {
+  display: none !important;
+}
+
+body.view-home .home-v2-panel {
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  display: grid;
+  gap: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+body.view-home .home-v2-hero {
+  min-height: 342px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 470px);
+  gap: clamp(22px, 4vw, 64px);
+  align-items: stretch;
+  padding: clamp(30px, 4vw, 54px);
+  border-radius: 22px;
+}
+
+body.view-home .home-v2-copy {
+  max-width: 860px;
+  align-content: center;
+}
+
+body.view-home .home-v2-copy h2 {
+  max-width: 900px;
+  font-size: clamp(46px, 5vw, 82px);
+  line-height: 1.02;
+}
+
+body.view-home .home-v2-copy p {
+  max-width: 820px;
+  font-size: clamp(16px, 1.35vw, 20px);
+}
+
+body.view-home .home-v2-spotlight {
+  min-height: 100%;
+  padding: clamp(24px, 3vw, 42px);
+}
+
+body.view-home .home-v2-spotlight strong {
+  font-size: clamp(24px, 2.2vw, 34px);
+}
+
+body.view-home .home-v2-modules {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 24px;
+}
+
+body.view-home .home-v2-module {
+  padding: clamp(22px, 2.5vw, 32px);
+  border-radius: 22px;
+}
+
+body.view-home .home-v2-module-speaking {
+  grid-column: 1 / -1;
+}
+
+body.view-home .home-v2-module-writing,
+body.view-home .home-v2-module-corpus {
+  grid-column: span 6;
+}
+
+body.view-home .home-v2-link-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body.view-home .home-v2-link-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.view-home .home-v2-link-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body.view-home .home-v2-link {
+  min-height: 142px;
+  padding: 22px;
+}
+
+body.view-home .home-v2-link strong {
+  font-size: clamp(18px, 1.5vw, 24px);
+}
+
+body.view-home .home-v2-link small {
+  font-size: clamp(14px, 1vw, 16px);
+}
+
+body.theme-dark.view-home {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(79, 125, 243, 0.16), transparent 32%),
+    radial-gradient(circle at 88% 4%, rgba(47, 128, 109, 0.16), transparent 28%),
+    linear-gradient(180deg, #0f151c, #111923);
+}
+
+body.theme-dark.view-home .workspace {
+  background: transparent !important;
+}
+
+@media (max-width: 1180px) {
+  body.view-home .home-v2-hero {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  body.view-home .home-v2-link-grid.four,
+  body.view-home .home-v2-link-grid.three {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  body.view-home .workspace,
+  body.view-home .workspace:has(#homePanel:not(.hidden)) {
+    padding: calc(76px + var(--safe-top)) 14px calc(28px + var(--safe-bottom));
+  }
+
+  body.view-home .home-v2-modules {
+    grid-template-columns: 1fr;
+  }
+
+  body.view-home .home-v2-module-speaking,
+  body.view-home .home-v2-module-writing,
+  body.view-home .home-v2-module-corpus {
+    grid-column: 1 / -1;
+  }
+
+  body.view-home .home-v2-link-grid.two,
+  body.view-home .home-v2-link-grid.three,
+  body.view-home .home-v2-link-grid.four {
+    grid-template-columns: 1fr;
   }
 }
