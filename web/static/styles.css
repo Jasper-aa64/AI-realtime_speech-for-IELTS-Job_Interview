@@ -22094,18 +22094,18 @@ body.theme-dark.view-home .workspace {
 }
 
 #accountProfilePanel .account-dashboard {
-  width: min(100%, 1240px);
+  width: min(100%, 1120px);
   min-height: 0;
   margin: 0 auto;
-  padding: 52px 0 24px;
-  gap: 16px;
+  padding: 34px 0 20px;
+  gap: 12px;
   overflow: visible;
 }
 
 #accountProfilePanel .account-page-header {
-  min-height: 92px;
-  padding: 18px 22px;
-  border-radius: 18px;
+  min-height: 68px;
+  padding: 12px 18px;
+  border-radius: 16px;
 }
 
 #accountProfilePanel .account-page-copy {
@@ -22119,7 +22119,7 @@ body.theme-dark.view-home .workspace {
 }
 
 #accountProfilePanel .account-page-copy h1 {
-  font-size: clamp(32px, 3vw, 44px);
+  font-size: clamp(28px, 2.4vw, 36px);
   line-height: 1.02;
 }
 
@@ -22128,9 +22128,9 @@ body.theme-dark.view-home .workspace {
 }
 
 #accountProfilePanel .account-page-actions .account-action-button {
-  min-width: 108px;
-  min-height: 40px;
-  padding: 0 16px;
+  min-width: 104px;
+  min-height: 36px;
+  padding: 0 14px;
 }
 
 #accountProfilePanel .account-dashboard-grid {
@@ -22138,7 +22138,7 @@ body.theme-dark.view-home .workspace {
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
   align-items: stretch;
   overflow: visible;
 }
@@ -22149,16 +22149,16 @@ body.theme-dark.view-home .workspace {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding: 22px;
+  padding: 18px;
   overflow: hidden;
 }
 
 #accountProfilePanel .account-card-head {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 #accountProfilePanel .account-card-head h2 {
-  font-size: 25px;
+  font-size: 22px;
 }
 
 #accountProfilePanel .account-profile-body {
@@ -22166,8 +22166,8 @@ body.theme-dark.view-home .workspace {
 }
 
 #accountProfilePanel .account-bank-selector {
-  margin-top: 16px;
-  padding: 14px;
+  margin-top: 14px;
+  padding: 12px;
 }
 
 #accountProfilePanel .account-bank-options {
@@ -22241,22 +22241,22 @@ body.theme-dark.view-home .workspace {
 }
 
 #accountProfilePanel .wallet-balance-card {
-  min-height: 118px;
-  padding: 18px;
+  min-height: 104px;
+  padding: 16px;
 }
 
 #accountProfilePanel .wallet-balance-amount {
-  font-size: clamp(38px, 3vw, 50px);
+  font-size: clamp(34px, 2.8vw, 44px);
 }
 
 #accountProfilePanel .account-ledger-list {
-  max-height: 330px;
+  max-height: 300px;
   overflow-y: auto;
 }
 
 #accountProfilePanel .account-ledger-row {
-  min-height: 66px;
-  padding: 12px 14px;
+  min-height: 60px;
+  padding: 10px 12px;
 }
 
 @media (max-width: 900px) {
