@@ -3439,14 +3439,15 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .spelling-drill-shell {
-  width: min(1040px, 100%) !important;
+  width: 100% !important;
+  max-width: none !important;
   height: 100% !important;
   min-height: 0 !important;
   margin: 0 auto !important;
-  padding: 18px 22px 22px !important;
+  padding: 0 18px 20px !important;
   display: grid !important;
-  grid-template-rows: auto 0 minmax(0, 1fr) !important;
-  gap: 12px !important;
+  grid-template-rows: 54px 0 minmax(0, 1fr) !important;
+  gap: 10px !important;
   overflow: hidden !important;
   background: transparent !important;
   border: 0 !important;
@@ -3459,23 +3460,31 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .spelling-drill-head {
-  min-height: 72px !important;
-  padding: 12px 16px !important;
+  min-height: 54px !important;
+  padding: 8px 14px !important;
   display: grid !important;
-  grid-template-columns: minmax(180px, 1fr) auto !important;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, auto) !important;
   align-items: center !important;
-  gap: 14px !important;
+  gap: 16px !important;
   border: 1px solid var(--sd-line) !important;
-  border-radius: var(--radius-lg) !important;
+  border-radius: 16px !important;
   background: var(--sd-card) !important;
   box-shadow: var(--shadow-xs) !important;
+}
+
+.spelling-drill-head > div:first-child {
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
 }
 
 .spelling-drill-head > div:first-child h2 {
   margin: 0 !important;
   color: var(--sd-ink) !important;
-  font: 820 24px/1.12 inherit !important;
+  font: 820 22px/1.12 inherit !important;
   letter-spacing: 0 !important;
+  white-space: nowrap !important;
 }
 
 .spelling-drill-head > div:first-child h2::after {
@@ -3484,10 +3493,7 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .spelling-drill-head > div:first-child p {
-  margin: 4px 0 0 !important;
-  max-width: 42ch !important;
-  color: var(--sd-muted) !important;
-  font: 500 13px/1.35 inherit !important;
+  display: none !important;
 }
 
 .spelling-drill-actions {
@@ -3496,16 +3502,22 @@ body.theme-dark .spelling-drill-panel {
   justify-content: flex-end !important;
   gap: 10px !important;
   min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
 }
 
 #spellingDrillStats {
   display: flex !important;
   align-items: center !important;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
   justify-content: flex-end !important;
   gap: 6px !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  overflow: hidden !important;
   color: var(--sd-muted) !important;
   font: 720 13px/1.2 inherit !important;
+  white-space: nowrap !important;
 }
 
 #spellingDrillStats .nr-stat b {
@@ -3521,6 +3533,7 @@ body.theme-dark .spelling-drill-panel {
 
 .spelling-scope-switch {
   display: inline-flex !important;
+  flex: 0 0 auto !important;
   gap: 4px !important;
   padding: 3px !important;
   border: 1px solid var(--sd-line) !important;
@@ -3586,12 +3599,12 @@ body.theme-dark .spelling-drill-panel {
 
 .nr-card {
   width: 100% !important;
-  height: auto !important;
-  min-height: min(560px, 100%) !important;
+  height: 100% !important;
+  min-height: 0 !important;
   max-height: 100% !important;
-  align-self: start !important;
+  align-self: stretch !important;
   display: grid !important;
-  grid-template-rows: 40px minmax(126px, 1fr) 146px 58px !important;
+  grid-template-rows: 40px minmax(170px, 1fr) minmax(150px, 0.78fr) 54px !important;
   gap: 12px !important;
   padding: 18px !important;
   border: 1px solid var(--sd-line) !important;
@@ -3937,13 +3950,13 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .nr-stage {
-  min-height: 340px !important;
+  min-height: 100% !important;
   display: grid !important;
   place-items: center !important;
-  align-content: center !important;
+  align-content: start !important;
   justify-items: center !important;
   gap: 12px !important;
-  padding: 24px !important;
+  padding: 68px 24px 24px !important;
   text-align: center !important;
   border: 1px solid var(--sd-line) !important;
   border-radius: var(--radius-lg) !important;
@@ -3954,7 +3967,7 @@ body.theme-dark .spelling-drill-panel {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
-  justify-content: center !important;
+  justify-content: flex-start !important;
   gap: 10px !important;
 }
 
@@ -4022,7 +4035,7 @@ body.theme-dark .spelling-drill-panel {
   .workspace.corpus-workspace:has(#spellingDrillPanel:not(.hidden)) {
     height: calc(100dvh - 56px) !important;
     min-height: 0 !important;
-    padding-top: 10px !important;
+    padding-top: 6px !important;
     padding-bottom: 8px !important;
     overflow: hidden !important;
   }
@@ -4051,6 +4064,7 @@ body.theme-dark .spelling-drill-panel {
     justify-content: space-between !important;
     flex-wrap: wrap !important;
     gap: 8px !important;
+    overflow: visible !important;
   }
 
   #spellingDrillStats {
@@ -21859,12 +21873,33 @@ body.view-home .workspace {
     radial-gradient(circle at 14% 10%, rgba(79, 125, 243, 0.10), transparent 30%),
     radial-gradient(circle at 88% 4%, rgba(47, 128, 109, 0.12), transparent 28%),
     linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(243, 246, 250, 0.98));
-  height: 100vh;
-  height: 100dvh;
-  overflow-x: hidden;
-  overflow-y: scroll;
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
   align-content: start;
   grid-template-rows: auto auto auto;
+  padding-bottom: calc(48px + var(--safe-bottom));
+}
+
+.workspace:has(#homePanel:not(.hidden)) {
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
+  align-content: start;
+  grid-template-rows: auto auto auto;
+  padding-bottom: calc(48px + var(--safe-bottom));
+}
+
+html:has(#homePanel:not(.hidden)),
+body:has(#homePanel:not(.hidden)),
+.shell:has(#homePanel:not(.hidden)) {
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body.view-home .topbar {
@@ -21890,6 +21925,7 @@ body.view-home .page-title p {
 body.view-home .home-v2-panel {
   width: min(100%, 1440px);
   margin-inline: auto;
+  overflow: visible;
 }
 
 body.view-home .home-v2-hero {
@@ -22020,5 +22056,171 @@ body.theme-dark.view-home .workspace {
   .home-v2-primary,
   .home-v2-secondary {
     width: 100%;
+  }
+}
+
+/* Account page compact recovery: keep the page readable without cropping the
+   wallet column or turning the header/cards into oversized hero panels. */
+.shell.account-shell {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+.shell.account-shell .workspace {
+  margin-left: 0;
+  height: auto;
+  min-height: 100vh;
+  padding: calc(18px + var(--safe-top)) clamp(18px, 3vw, 40px) calc(28px + var(--safe-bottom));
+  overflow: auto !important;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+#accountProfilePanel.auth-panel,
+#accountProfilePanel.auth-panel:not(.hidden) {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+#accountProfilePanel .account-dashboard {
+  width: min(100%, 1360px);
+  min-height: 0;
+  margin: 0 auto;
+  padding: 64px 0 24px;
+  gap: 16px;
+  overflow: visible;
+}
+
+#accountProfilePanel .account-page-header {
+  min-height: 92px;
+  padding: 18px 22px;
+  border-radius: 18px;
+}
+
+#accountProfilePanel .account-page-copy {
+  gap: 5px;
+}
+
+#accountProfilePanel .account-page-kicker {
+  min-height: 22px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+#accountProfilePanel .account-page-copy h1 {
+  font-size: clamp(32px, 3vw, 44px);
+  line-height: 1.02;
+}
+
+#accountProfilePanel .account-page-copy .muted {
+  font-size: 15px;
+}
+
+#accountProfilePanel .account-page-actions .account-action-button {
+  min-width: 108px;
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+#accountProfilePanel .account-dashboard-grid {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  overflow: visible;
+}
+
+#accountProfilePanel .account-profile-card,
+#accountProfilePanel .account-wallet-card {
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 22px;
+  overflow: hidden;
+}
+
+#accountProfilePanel .account-card-head {
+  margin-bottom: 14px;
+}
+
+#accountProfilePanel .account-card-head h2 {
+  font-size: 25px;
+}
+
+#accountProfilePanel .account-profile-body {
+  min-height: 0;
+}
+
+#accountProfilePanel .account-bank-selector {
+  margin-top: 16px;
+  padding: 14px;
+}
+
+#accountProfilePanel .account-bank-options {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+#accountProfilePanel .account-bank-options button {
+  min-height: 50px;
+  padding: 8px 10px;
+}
+
+#accountProfilePanel .account-wallet-card {
+  gap: 0;
+}
+
+#accountProfilePanel .wallet-balance-card {
+  min-height: 118px;
+  padding: 18px;
+}
+
+#accountProfilePanel .wallet-balance-amount {
+  font-size: clamp(38px, 3vw, 50px);
+}
+
+#accountProfilePanel .account-ledger-list {
+  max-height: 430px;
+  overflow-y: auto;
+}
+
+#accountProfilePanel .account-ledger-row {
+  min-height: 66px;
+  padding: 12px 14px;
+}
+
+@media (max-width: 1180px) {
+  #accountProfilePanel .account-dashboard {
+    width: min(100%, 920px);
+    padding-top: 56px;
+  }
+
+  #accountProfilePanel .account-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  #accountProfilePanel .account-dashboard {
+    padding-top: 48px;
+  }
+
+  #accountProfilePanel .account-page-header {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    padding: 16px;
+  }
+
+  #accountProfilePanel .account-page-copy h1 {
+    font-size: 30px;
+  }
+
+  #accountProfilePanel .account-bank-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
