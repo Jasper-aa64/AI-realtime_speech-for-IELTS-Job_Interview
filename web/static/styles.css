@@ -22090,7 +22090,7 @@ body.theme-dark.view-home .workspace {
 }
 
 #accountProfilePanel .account-dashboard {
-  width: min(100%, 1120px);
+  width: min(100%, 1240px);
   min-height: 0;
   margin: 0 auto;
   padding: 52px 0 24px;
@@ -22133,16 +22133,16 @@ body.theme-dark.view-home .workspace {
   width: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.86fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
   overflow: visible;
 }
 
 #accountProfilePanel .account-profile-card,
 #accountProfilePanel .account-wallet-card {
   width: 100%;
-  height: auto;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 22px;
@@ -22189,7 +22189,7 @@ body.theme-dark.view-home .workspace {
 }
 
 #accountProfilePanel .account-ledger-list {
-  max-height: 430px;
+  max-height: 330px;
   overflow-y: auto;
 }
 
@@ -22198,7 +22198,7 @@ body.theme-dark.view-home .workspace {
   padding: 12px 14px;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 900px) {
   #accountProfilePanel .account-dashboard {
     width: min(100%, 920px);
     padding-top: 56px;
