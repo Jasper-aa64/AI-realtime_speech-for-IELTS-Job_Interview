@@ -3950,13 +3950,15 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .nr-stage {
+  width: 100% !important;
   min-height: 100% !important;
+  height: 100% !important;
   display: grid !important;
   place-items: center !important;
-  align-content: start !important;
+  place-content: center !important;
   justify-items: center !important;
   gap: 12px !important;
-  padding: 68px 24px 24px !important;
+  padding: 24px !important;
   text-align: center !important;
   border: 1px solid var(--sd-line) !important;
   border-radius: var(--radius-lg) !important;
@@ -3964,11 +3966,13 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .nr-stage-empty {
-  display: flex !important;
-  flex-direction: column !important;
+  display: grid !important;
   align-items: center !important;
-  justify-content: flex-start !important;
+  justify-content: center !important;
+  align-content: center !important;
+  justify-items: center !important;
   gap: 10px !important;
+  transform: translateY(-18px) !important;
 }
 
 .nr-stage-empty .nr-empty-mark {
