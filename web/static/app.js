@@ -7509,6 +7509,7 @@ function setSelectedP3BankCard(entry) {
   const questionId = p2BankQuestionId(entry);
   const title = p2BankCardTitle(entry);
   const followUps = p2BankCardFollowUps(entry);
+  state.p3SourceType = "bank";
   state.p3SelectedBankCardId = questionId;
   state.p3PracticeSource = {
     sourceType: "bank",
@@ -8718,7 +8719,7 @@ function bindEvents() {
     if (!card) return;
     setSelectedP3BankCard(card);
     closeP3BankPicker();
-    clearP3Plan("已切换 P2 题卡，重新载入固定追问后生效。");
+    generateP3Plan().catch(showError);
   });
   bindCorpusPeekDrag("p2CorpusPeekDialog");
   bindCorpusPeekDrag("p3CorpusPeekDialog");
@@ -9108,7 +9109,11 @@ function bindEvents() {
       state.p3CorpusSourceEntryId = "";
       if (source === "bank") {
         ensureSelectedP3BankCard()
-          .then((selected) => clearP3Plan(selected ? "已选择题卡，载入固定追问后开始练习。" : "先选择一张带固定 P3 追问的 P2 题卡。"))
+          .then((selected) => {
+            if (selected) return generateP3Plan();
+            clearP3Plan("先选择一张带固定 P3 追问的 P2 题卡。");
+            return null;
+          })
           .catch(showError);
       } else {
         clearP3Plan(source === "p2_report" ? "从 P2 报告页进入时会自动带入本次回答。" : "");
