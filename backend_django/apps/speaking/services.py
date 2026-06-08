@@ -2930,11 +2930,12 @@ Overall Review 写法要求：
                 provider_backend = "claude_cli"
                 provider_model = "claude"
                 break
-            except ClaudeCliQuotaError:
-                raise  # propagate immediately — caller wraps in SpeakingError
             except Exception as exc:
                 last_error = exc
-                continue  # try compact prompt on next iteration
+                # Claude CLI is an optional user preference, not a hard stop for
+                # durable reports. If HTTP/Codex is available, continue through
+                # the normal provider chain instead of leaving the report stuck
+                # in analysis_failed after a Claude API/403/quota issue.
 
         # ── GPT / HTTP path ──────────────────────────────────────────────────
         if _mode_allows_http("report"):
@@ -3819,6 +3820,10 @@ def turn_display_transcript(turn: SpeakingTurn) -> str:
     return (metadata.get("display_transcript") or turn.transcript_cleaned or turn.transcript_raw or "").strip()
 
 
+def scoring_turns_have_answer_text(turns: list[SpeakingTurn]) -> bool:
+    return any(turn_display_transcript(turn).strip() for turn in turns if turn_counts_for_scoring(turn))
+
+
 def p1_name_answer(full_name: str | None, english_name: str | None) -> str:
     """Generate P1 name answer from profile."""
     full = clean_report_text(str(full_name or DEFAULT_FULL_NAME)) or DEFAULT_FULL_NAME
@@ -4272,7 +4277,7 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
         f"Q{index + 1}: {turn.question}\nA: {turn_display_transcript(turn)}"
         for index, turn in enumerate(scoring_turns)
     )
-    if not transcript.strip():
+    if not scoring_turns_have_answer_text(scoring_turns):
         raise SpeakingError("Missing transcript")
 
     # Resolve per-user AI source preference
@@ -4419,6 +4424,9 @@ def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] |
     incomplete = [turn for turn in turns if _turn_status(turn) != "completed"]
     if incomplete:
         raise SpeakingError("Complete all speaking turns before generating the section report.")
+    scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
+    if not scoring_turns_have_answer_text(scoring_turns):
+        raise SpeakingError("录音已保存，但没有拿到文字稿；请先重新转写录音或重录。")
 
     transcript_hash = hashlib.sha1(
         "\n".join(f"{turn.turn_id}:{turn.transcript_cleaned or turn.transcript_raw}" for turn in turns).encode("utf-8")
@@ -4437,12 +4445,14 @@ def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] |
         }
     if latest_task and latest_task.status in {AITask.Status.FAILED, AITask.Status.FALLBACK, AITask.Status.CANCELLED}:
         idempotency_key = f"{idempotency_key}:retry:{uuid.uuid4().hex[:8]}"
+    requested_provider = str(payload.get("provider") or "").strip()
+    requested_model = str(payload.get("model") or "").strip()
     task, created = create_ai_task(
         user=user,
         task_type="speaking_report",
         idempotency_key=idempotency_key,
-        provider=payload.get("provider"),
-        model=str(payload.get("model") or ""),
+        provider="codex",
+        model="",
         related_type="speaking_attempt",
         related_id=attempt.attempt_id,
         call_id=f"speaking_report_{attempt.attempt_id}",
@@ -4453,8 +4463,14 @@ def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] |
             "part": attempt.part,
             "title": attempt.title,
             "transcript_hash": transcript_hash,
+            "requested_provider": requested_provider,
+            "requested_model": requested_model,
         },
-        metadata={"source": "speaking_report_task"},
+        metadata={
+            "source": "speaking_report_task",
+            "requested_provider": requested_provider,
+            "requested_model": requested_model,
+        },
         max_attempts=int(payload.get("max_attempts") or 1),
     )
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}

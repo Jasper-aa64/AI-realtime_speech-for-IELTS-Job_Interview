@@ -14,72 +14,9 @@ else
   PYTHON="${PYTHON:-python3}"
 fi
 
-load_aiapis_env_from_cc_switch() {
-  if [[ -n "${AI_HTTP_BASE_URL:-}" && -n "${AI_HTTP_API_KEY:-}" && -n "${AI_HTTP_MODEL:-}" ]]; then
-    return 0
-  fi
-
-  local db="${CC_SWITCH_DB:-$HOME/.cc-switch/cc-switch.db}"
-  [[ -f "$db" ]] || return 0
-
-  "$PYTHON" - "$db" <<'PY'
-import json
-import re
-import sqlite3
-import sys
-
-db = sys.argv[1]
-preferred = ("Aiapis", "Aiaps1")
-conn = sqlite3.connect(db)
-rows = conn.execute(
-    "select name, settings_config from providers where app_type='codex'"
-).fetchall()
-
-by_name = {name: raw for name, raw in rows}
-selected = None
-for name in preferred:
-    if name in by_name:
-        selected = (name, by_name[name])
-        break
-if selected is None:
-    for name, raw in rows:
-        if "aiapis" in name.lower() or "aiapis" in raw.lower():
-            selected = (name, raw)
-            break
-if selected is None:
-    raise SystemExit(0)
-
-name, raw = selected
-config = json.loads(raw)
-api_key = (config.get("auth") or {}).get("OPENAI_API_KEY", "").strip()
-toml_text = str(config.get("config") or "")
-base_match = re.search(r'base_url\s*=\s*"([^"]+)"', toml_text)
-model_match = re.search(r'model\s*=\s*"([^"]+)"', toml_text)
-base_url = base_match.group(1).strip() if base_match else ""
-model = (model_match.group(1).strip() if model_match else "") or "gpt-5.4-mini"
-
-if not (api_key and base_url):
-    raise SystemExit(0)
-
-def sh_quote(value: str) -> str:
-    return "'" + value.replace("'", "'\"'\"'") + "'"
-
-print(f"export AI_HTTP_BASE_URL={sh_quote(base_url)}")
-print(f"export AI_HTTP_API_KEY={sh_quote(api_key)}")
-print(f"export AI_HTTP_MODEL={sh_quote(model)}")
-PY
-}
-
-AIAPIS_EXPORTS="$(load_aiapis_env_from_cc_switch || true)"
-if [[ -n "$AIAPIS_EXPORTS" ]]; then
-  # shellcheck disable=SC1090
-  eval "$AIAPIS_EXPORTS"
-fi
-
-export AI_HTTP_TIMEOUT_SECONDS="${AI_HTTP_TIMEOUT_SECONDS:-60}"
-export SPEAKING_AI_CALL_MODE="${SPEAKING_AI_CALL_MODE:-chain}"
-export SPEAKING_AI_MODEL="${SPEAKING_AI_MODEL:-gpt-5.4-mini}"
-export DJANGO_ALLOWED_HOSTS="${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}"
+# shellcheck source=scripts/local-stack-env.sh
+source "$ROOT_DIR/scripts/local-stack-env.sh"
+load_local_stack_env
 
 port_is_open() {
   "$PYTHON" - "$DJANGO_HOST" "$DJANGO_PORT" <<'PY'
@@ -104,7 +41,7 @@ start_django() {
     return 0
   fi
   echo "Starting Django at http://$DJANGO_HOST:$DJANGO_PORT"
-  nohup "$PYTHON" "$ROOT_DIR/backend_django/manage.py" runserver "$DJANGO_HOST:$DJANGO_PORT" --noreload \
+  nohup "$PYTHON" "$ROOT_DIR/scripts/run_local_stack_process.py" django \
     >"$RUNLOG_DIR/django.out.log" 2>"$RUNLOG_DIR/django.err.log" &
 }
 
@@ -118,10 +55,7 @@ start_worker() {
     echo "Warning: AI_HTTP_* is incomplete; worker may fall back to Codex/fallback." >&2
   fi
   echo "Starting AI worker"
-  nohup "$PYTHON" "$ROOT_DIR/backend_django/manage.py" run_ai_worker \
-    --interval-seconds 2 \
-    --idle-interval-seconds 5 \
-    --stop-file "$STOP_FILE" \
+  nohup "$PYTHON" "$ROOT_DIR/scripts/run_local_stack_process.py" worker \
     >"$RUNLOG_DIR/ai-worker.out.log" 2>"$RUNLOG_DIR/ai-worker.err.log" &
 }
 

@@ -66,6 +66,45 @@ class SpeakingAiProviderRoutingTests(SimpleTestCase):
         self.assertEqual(captured["model"], "gpt-5.4-mini")
         run_codex.assert_not_called()
 
+    def test_speaking_report_claude_preference_falls_back_to_http(self):
+        payload = {
+            "fluency_coherence": 6,
+            "lexical_resource": 6,
+            "grammatical_range": 6,
+            "overall_band": 6,
+            "feedback": "HTTP fallback after Claude failure.",
+            "overall_review": {
+                "markdown": "### 总体点评\nHTTP fallback worked.\n\n### 复盘重点\nKeep developing answers.",
+                "comment": "HTTP fallback worked.",
+                "review_points": ["Keep developing answers."],
+            },
+        }
+        captured = {}
+
+        def fake_provider(config=None):
+            return _JsonProvider(json.dumps(payload), captured, config=config)
+
+        with patch(
+            "apps.speaking.services.run_claude_cli",
+            side_effect=RuntimeError("Claude CLI API error for score-test: 403"),
+        ) as run_claude_cli, patch("apps.speaking.services.HttpApiProvider", side_effect=fake_provider), patch(
+            "apps.speaking.services.run_codex"
+        ) as run_codex:
+            result = services.score_with_codex(
+                "Q1: Describe a device.\nA: I would like to own a tablet because it is useful for study.",
+                "Q1: Describe a device.",
+                "p2",
+                "score-claude-fallback",
+                ai_source="claude_cli",
+            )
+
+        self.assertEqual(result["backend"], "http_api")
+        self.assertEqual(result["generation_backend"], "http_api")
+        self.assertEqual(result["model"], "gpt-5.4-mini")
+        self.assertEqual(captured["model"], "gpt-5.4-mini")
+        run_claude_cli.assert_called_once()
+        run_codex.assert_not_called()
+
     @override_settings(SPEAKING_REPORT_AI_CALL_MODE="codex")
     def test_speaking_report_can_force_codex_mode(self):
         payload = {

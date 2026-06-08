@@ -82,6 +82,7 @@ feedback["band7_version"] = model_payload["band7_version"]
 | [Error Handling](./error-handling.md) | Error types, handling strategies | AI task lifecycle filled |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | AI task lifecycle filled |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [Local Stack Startup](./local-stack-startup.md) | Django/AI worker startup and liveness checks | Filled |
 
 ---
 

@@ -2403,6 +2403,43 @@ class CodexValidationTests(TestCase):
         self.assertEqual(task.related_id, attempt.attempt_id)
         self.assertEqual(task.request_payload["attempt_id"], attempt.attempt_id)
 
+    def test_speaking_report_task_keeps_worker_adapter_when_http_requested(self):
+        from apps.ai.models import AITask
+        from apps.speaking.services import score_attempt
+
+        user, attempt, _turn = self.create_ready_attempt(
+            username="score-attempt-http-request-user",
+            attempt_id="score-attempt-http-request",
+        )
+
+        result = score_attempt(user, attempt.attempt_id, {"provider": "http", "model": "gpt-5.4-mini"})
+
+        task = AITask.objects.get(task_id=result["ai_task"]["id"])
+        self.assertEqual(task.provider, "codex")
+        self.assertEqual(task.model, "")
+        self.assertEqual(task.request_payload["requested_provider"], "http")
+        self.assertEqual(task.request_payload["requested_model"], "gpt-5.4-mini")
+        self.assertEqual(task.metadata["requested_provider"], "http")
+
+    def test_score_attempt_rejects_empty_answer_transcripts_before_queueing(self):
+        from apps.ai.models import AITask
+        from apps.speaking.services import SpeakingError, score_attempt
+
+        user, attempt, turn = self.create_ready_attempt(
+            username="score-attempt-empty-transcript-user",
+            attempt_id="score-attempt-empty-transcript",
+        )
+        turn.transcript_raw = ""
+        turn.transcript_cleaned = ""
+        turn.metadata = {"status": "completed", "display_transcript": ""}
+        turn.save(update_fields=["transcript_raw", "transcript_cleaned", "metadata"])
+
+        with self.assertRaises(SpeakingError) as ctx:
+            score_attempt(user, attempt.attempt_id)
+
+        self.assertIn("没有拿到文字稿", str(ctx.exception))
+        self.assertFalse(AITask.objects.filter(related_id=attempt.attempt_id, task_type="speaking_report").exists())
+
     def test_model_answer_tts_cache_key_changes_when_band7_text_changes(self):
         from apps.speaking.services import build_turn_feedback
 
