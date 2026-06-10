@@ -31,6 +31,7 @@ SRS_STAGE_INTERVAL_DAYS: list[int] = [
 ]
 SRS_MAX_STAGE = len(SRS_STAGE_INTERVAL_DAYS)  # 4
 SRS_LAPSE_INTERVAL_DAYS = 1
+SRS_MASTERED_INTERVAL_DAYS: list[int] = [7, 14, 30, 60, 90]
 
 
 def review_day_start(value=None):
@@ -49,6 +50,31 @@ def review_day_start(value=None):
 def next_review_refresh(days: int, value=None):
     interval = max(0, int(days or 0))
     return review_day_start(value) + timedelta(days=interval)
+
+
+def current_review_batch_cutoff(value=None):
+    return review_day_start(value)
+
+
+def is_due_for_current_batch(word: SpellingDrillWord, *, now=None) -> bool:
+    if word.status not in {SpellingDrillWord.Status.ACTIVE, SpellingDrillWord.Status.MASTERED}:
+        return False
+    due = word.due_at or timezone.now()
+    return due <= current_review_batch_cutoff(now)
+
+
+def mastered_review_level(word: SpellingDrillWord) -> int:
+    metadata = word.metadata if isinstance(word.metadata, dict) else {}
+    try:
+        return max(0, int(metadata.get("mastered_review_level") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_mastered_review_level(word: SpellingDrillWord, level: int) -> None:
+    metadata = dict(word.metadata or {})
+    metadata["mastered_review_level"] = max(0, int(level or 0))
+    word.metadata = metadata
 
 
 def due_human(due_at, now=None) -> str:
@@ -311,6 +337,7 @@ def harvest_spelling_words(user) -> int:
                     word_id=spelling_word_id(normalized),
                     normalized=normalized,
                     first_seen_at=now,
+                    due_at=next_review_refresh(1, now),
                     status=SpellingDrillWord.Status.ACTIVE,
                     **defaults,
                 )
@@ -321,7 +348,7 @@ def harvest_spelling_words(user) -> int:
 def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
     now = timezone.now()
     due = word.due_at if word.due_at else now
-    is_due = due <= now and word.status == SpellingDrillWord.Status.ACTIVE
+    is_due = is_due_for_current_batch(word, now=now)
     return {
         "word_id": word.word_id,
         "correct_spelling": word.correct_spelling,
@@ -334,6 +361,7 @@ def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
         "correct_count": word.correct_count,
         "current_streak": word.current_streak,
         "review_stage": word.review_stage,
+        "max_stage": SRS_MAX_STAGE,
         "lapses": word.lapses,
         "due_at": due.isoformat(),
         "is_due": is_due,
@@ -348,11 +376,13 @@ def spelling_drill_library(user, *, scope: str = "due") -> dict[str, Any]:
         raise WritingError("Unknown spelling drill scope")
     harvest_spelling_words(user)
     now = timezone.now()
+    batch_cutoff = current_review_batch_cutoff(now)
     queryset = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
     if scope == "due":
         queryset = queryset.filter(
-            status=SpellingDrillWord.Status.ACTIVE, due_at__lte=now
-        ).order_by("due_at")
+            status__in=[SpellingDrillWord.Status.ACTIVE, SpellingDrillWord.Status.MASTERED],
+            due_at__lte=batch_cutoff,
+        ).order_by("due_at", "-occurrence_count")
     elif scope == "active":
         queryset = queryset.filter(status=SpellingDrillWord.Status.ACTIVE).order_by("due_at", "-occurrence_count")
     elif scope == "mastered":
@@ -363,7 +393,10 @@ def spelling_drill_library(user, *, scope: str = "due") -> dict[str, Any]:
     visible = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
     total = visible.count()
     active_count = visible.filter(status=SpellingDrillWord.Status.ACTIVE).count()
-    due_count = visible.filter(status=SpellingDrillWord.Status.ACTIVE, due_at__lte=now).count()
+    due_count = visible.filter(
+        status__in=[SpellingDrillWord.Status.ACTIVE, SpellingDrillWord.Status.MASTERED],
+        due_at__lte=batch_cutoff,
+    ).count()
     mastered_count = visible.filter(status=SpellingDrillWord.Status.MASTERED).count()
     attempt_totals = visible.aggregate(attempts=Sum("attempt_count"), correct=Sum("correct_count"))
     attempts = int(attempt_totals.get("attempts") or 0)
@@ -377,6 +410,7 @@ def spelling_drill_library(user, *, scope: str = "due") -> dict[str, Any]:
             "due": due_count,
             "mastered": mastered_count,
             "accuracy": (correct_total / attempts) if attempts else 0,
+            "review_day_start": batch_cutoff.isoformat(),
         },
     }
 
@@ -403,22 +437,32 @@ def record_spelling_attempt(user, word_id: str, typed: Any) -> dict[str, Any]:
         if is_correct:
             word.correct_count += 1
             word.current_streak += 1
-            new_stage = min(word.review_stage + 1, SRS_MAX_STAGE)
-            word.review_stage = new_stage
-            if new_stage >= SRS_MAX_STAGE:
+            if word.status == SpellingDrillWord.Status.MASTERED:
+                level = min(mastered_review_level(word) + 1, len(SRS_MASTERED_INTERVAL_DAYS) - 1)
+                set_mastered_review_level(word, level)
+                word.review_stage = SRS_MAX_STAGE
                 word.status = SpellingDrillWord.Status.MASTERED
-                word.due_at = next_review_refresh(90, now)
+                word.due_at = next_review_refresh(SRS_MASTERED_INTERVAL_DAYS[level], now)
             else:
-                word.due_at = next_review_refresh(SRS_STAGE_INTERVAL_DAYS[new_stage - 1], now)
+                new_stage = min(word.review_stage + 1, SRS_MAX_STAGE)
+                word.review_stage = new_stage
+                if new_stage >= SRS_MAX_STAGE:
+                    word.status = SpellingDrillWord.Status.MASTERED
+                    set_mastered_review_level(word, 0)
+                    word.due_at = next_review_refresh(SRS_MASTERED_INTERVAL_DAYS[0], now)
+                else:
+                    word.due_at = next_review_refresh(SRS_STAGE_INTERVAL_DAYS[new_stage - 1], now)
         else:
             word.current_streak = 0
             word.lapses += 1
             word.review_stage = 0
+            word.status = SpellingDrillWord.Status.ACTIVE
+            set_mastered_review_level(word, 0)
             word.due_at = next_review_refresh(SRS_LAPSE_INTERVAL_DAYS, now)
         word.save(update_fields=[
             "attempt_count", "correct_count", "current_streak",
             "review_stage", "due_at", "lapses", "status",
-            "last_practiced_at", "updated_at",
+            "last_practiced_at", "metadata", "updated_at",
         ])
     return {
         "correct": is_correct,

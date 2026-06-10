@@ -1254,54 +1254,135 @@ h1 {
     var(--bg);
 }
 
+/* ── Corpus home shell ─────────────────────────────── */
 .corpus-home-shell {
   display: grid;
-  grid-template-rows: auto auto;
   align-content: start;
-  gap: 18px;
-  height: 100%;
-  padding: 24px 28px 30px;
+  gap: 14px;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 28px 28px 32px;
 }
 
-.corpus-home-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.78);
-  padding: 18px 20px;
-  box-shadow: var(--shadow-xs);
-}
-
-.corpus-home-head-copy {
+/* compact kicker + title + subtitle row */
+.corpus-home-kicker-bar {
   display: grid;
-  gap: 6px;
-  min-width: 0;
+  gap: 4px;
+  padding: 0 2px;
 }
 
-.corpus-home-head h2 {
+.corpus-home-title {
   margin: 0;
-  color: #0f172a;
-  font-size: 28px;
-  line-height: 1.12;
+  color: var(--ink);
+  font-size: 26px;
   font-weight: 820;
+  line-height: 1.1;
   letter-spacing: 0;
 }
 
-.corpus-home-head p {
+.corpus-home-sub {
   margin: 0;
   color: var(--muted);
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-.corpus-home-grid {
+/* P1 + P2 two-column cards */
+.corpus-top-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(190px, 1fr));
-  align-items: start;
+  grid-template-columns: 1fr 1fr;
   gap: 14px;
+}
+
+.corpus-top-cards .corpus-home-card {
+  min-height: 128px;
+}
+
+/* ── Review lane (LT / WT / SP) ─────────────────────── */
+.corpus-review-lane {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.22fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 20px 22px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow-xs);
+}
+
+.corpus-review-lane-head span {
+  display: block;
+  color: var(--accent-dark, #2f806d);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.corpus-review-lane-head strong {
+  display: block;
+  color: var(--ink);
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: clamp(18px, 1.6vw, 24px);
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.corpus-review-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid rgba(126, 139, 153, 0.16);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.corpus-review-link {
+  min-height: 78px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 14px 18px;
+  color: #182033;
+  text-decoration: none;
+  background: #fff;
+  transition: background 140ms ease;
+}
+
+.corpus-review-link + .corpus-review-link {
+  border-left: 1px solid rgba(126, 139, 153, 0.12);
+}
+
+.corpus-review-link:hover {
+  background: rgba(47, 128, 109, 0.055);
+}
+
+.corpus-review-link:focus-visible {
+  outline: 3px solid rgba(47, 128, 109, 0.28);
+  outline-offset: -2px;
+}
+
+.corpus-review-link b {
+  color: #2f806d;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.corpus-review-link span {
+  font-size: 17px;
+  font-weight: 820;
+  color: #172033;
+}
+
+.corpus-review-link small {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .corpus-home-card {
@@ -15716,6 +15797,55 @@ body.theme-dark .account-weak-card {
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
 }
 
+/* Corpus review lane — dark mode */
+body.theme-dark .corpus-review-lane {
+  background: linear-gradient(180deg, rgba(19, 27, 36, 0.98), rgba(13, 20, 29, 0.98));
+  border-color: rgba(148, 163, 184, 0.20);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
+}
+
+body.theme-dark .corpus-review-lane-head span {
+  color: #4ade80;
+}
+
+body.theme-dark .corpus-review-lane-head strong {
+  color: #e2e8f0;
+}
+
+body.theme-dark .corpus-review-links {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+body.theme-dark .corpus-review-link {
+  background: transparent;
+  color: #e2e8f0;
+}
+
+body.theme-dark .corpus-review-link + .corpus-review-link {
+  border-left-color: rgba(255, 255, 255, 0.09);
+}
+
+body.theme-dark .corpus-review-link:hover {
+  background: rgba(74, 222, 128, 0.07);
+}
+
+body.theme-dark .corpus-review-link b {
+  color: #4ade80;
+}
+
+body.theme-dark .corpus-review-link span {
+  color: #e2e8f0;
+}
+
+body.theme-dark .corpus-home-title {
+  color: #e2e8f0;
+}
+
+body.theme-dark .corpus-home-sub {
+  color: rgba(226, 232, 240, 0.54);
+}
+
 body.theme-dark .home-hero,
 body.theme-dark .prompt-pane,
 body.theme-dark .recorder-pane,
@@ -24570,6 +24700,12 @@ body.theme-dark.view-home .workspace {
   background: transparent !important;
 }
 
+/* home-panel 本身也要透明，否则内容区底部漏出白背景 */
+body.theme-dark.view-home .home-panel,
+body.theme-dark.view-home .home-v3-panel {
+  background: transparent !important;
+}
+
 body.theme-dark.view-home .home-v3-hero,
 body.theme-dark.view-home .home-v3-workbench {
   background:
@@ -26949,4 +27085,130 @@ body.theme-dark.view-home .sketch-flow-arrow-head {
   .language-takeaway-card-wrap.is-review-due .language-takeaway-card {
     animation: none;
   }
+}
+
+/* Corpus home fixed workspace: title, P1/P2 row, then compact review lane. */
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) {
+  box-sizing: border-box;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(56px + var(--safe-top)) clamp(16px, 2vw, 26px) calc(18px + var(--safe-bottom));
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-panel {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: clamp(12px, 1.4vw, 18px);
+  overflow: hidden;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-kicker-bar {
+  display: grid;
+  gap: 4px;
+  padding: 0 2px;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-title {
+  display: block;
+  margin: 0;
+  color: #172033;
+  font-size: 26px;
+  font-weight: 860;
+  line-height: 1.12;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-sub {
+  max-width: none;
+  margin: 0;
+  color: color-mix(in srgb, var(--muted) 86%, #111827);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-top-cards {
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: clamp(14px, 1.6vw, 22px);
+  align-items: stretch;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-card-p1,
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-card-p2 {
+  flex: 1 1 0;
+  width: 50%;
+  min-height: 270px;
+  height: clamp(270px, 36vh, 360px);
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-lane {
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: minmax(118px, 0.18fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-link {
+  min-height: 64px;
+  padding: 10px 14px;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-title {
+  color: #f3f4f6;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-sub {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+/* Final dark home background guard: later sketchbook light rules use !important. */
+html:has(body.theme-dark.view-home) {
+  min-height: 100%;
+  background: #0c1219 !important;
+}
+
+body.theme-dark.view-home,
+body.theme-dark.view-home .shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 14% 8%, rgba(72, 112, 164, 0.12), transparent 30%),
+    radial-gradient(circle at 84% 10%, rgba(47, 128, 109, 0.10), transparent 28%),
+    linear-gradient(180deg, #0f151c 0%, #0c1219 100%) !important;
+}
+
+body.theme-dark.view-home .workspace,
+body.theme-dark.view-home .workspace:has(#homePanel:not(.hidden)) {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(47, 128, 109, 0.08), transparent 34%),
+    linear-gradient(180deg, #111923 0%, #0c1219 100%) !important;
+}
+
+body.theme-dark.view-home .global-topbar {
+  background:
+    linear-gradient(180deg, rgba(12, 18, 25, 0.94), rgba(12, 18, 25, 0.76)) !important;
+}
+
+body.theme-dark.view-home .home-panel,
+body.theme-dark.view-home .home-v3-panel {
+  background: transparent !important;
 }

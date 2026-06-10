@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260610-dark-takeaway-hover">
+    <link rel="stylesheet" href="/styles.css?v=20260610-home-dark-bg">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -104,7 +104,7 @@
             <a class="nav-button" data-view="corpus" href="?view=corpus" data-i18n="nav.corpus">语料库</a>
             <a class="nav-button" data-view="takeawayBook" href="?view=takeawayBook">Takeaway<span id="languageTakeawayDueDot" class="nav-review-dot hidden" aria-label="Takeaway 有到期复习"></span></a>
             <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook"><span data-i18n="nav.writingTakeaway">写作积累</span><span id="writingTakeawayDueDot" class="nav-review-dot hidden" aria-label="写作积累有到期复习"></span></a>
-            <a class="nav-button" data-view="spellingDrill" href="?view=spellingDrill" data-i18n="nav.spellingDrill">拼写错词训练</a>
+            <a class="nav-button" data-view="spellingDrill" href="?view=spellingDrill"><span data-i18n="nav.spellingDrill">拼写错词训练</span><span id="spellingDrillDueDot" class="nav-review-dot hidden" aria-label="拼写错词训练有到期复习"></span></a>
           </nav>
           <div class="nav-divider" aria-hidden="true"></div>
           <div class="font-tool" aria-label="Appearance style">
@@ -460,14 +460,12 @@
 
         <section id="corpusPanel" class="panel corpus-home-panel hidden" aria-label="语料库">
           <div class="corpus-home-shell">
-            <header class="corpus-home-head">
-              <div class="corpus-home-head-copy">
-                <span class="corpus-page-kicker">Corpus Workspace</span>
-                <h2>语料库</h2>
-                <p>把口语素材、写作摘录和错词复习放在同一个工作台里。</p>
-              </div>
-            </header>
-            <div class="corpus-home-grid">
+            <div class="corpus-home-kicker-bar">
+              <span class="corpus-page-kicker">Corpus Workspace</span>
+              <h2 class="corpus-home-title">语料库</h2>
+              <p class="corpus-home-sub">把口语素材、写作摘录和错词复习放在同一个工作台里。</p>
+            </div>
+            <div class="corpus-top-cards">
               <a class="corpus-home-card corpus-card-p1" data-corpus-home-target="p1Corpus" href="?view=p1Corpus">
                 <span class="corpus-card-mark">P1</span>
                 <span class="corpus-card-type">Speaking corpus</span>
@@ -482,27 +480,29 @@
                 <small>维护 P2 串题正文，并给每张素材补好可复用的 P3 追问。</small>
                 <span class="corpus-card-cta">进入</span>
               </a>
-              <a class="corpus-home-card language-card" data-corpus-home-target="takeawayBook" href="?view=takeawayBook">
-                <span class="corpus-card-mark">LT</span>
-                <span class="corpus-card-type">Phrase recall</span>
-                <strong>Takeaway</strong>
-                <small>复习平时摘录的单词和短语，需要自测时再遮住英文。</small>
-                <span class="corpus-card-cta">复习</span>
-              </a>
-              <a class="corpus-home-card writing-takeaway-card" data-corpus-home-target="writingTakeawayBook" href="?view=writingTakeawayBook">
-                <span class="corpus-card-mark">WT</span>
-                <span class="corpus-card-type">Writing bank</span>
-                <strong>写作积累</strong>
-                <small>集中复习写作中摘下来的表达、句型和可复用论证素材。</small>
-                <span class="corpus-card-cta">复习</span>
-              </a>
-              <a class="corpus-home-card spelling-drill-home-card" data-corpus-home-target="spellingDrill" href="?view=spellingDrill">
-                <span class="corpus-card-mark">SP</span>
-                <span class="corpus-card-type">Spelling SRS</span>
-                <strong>拼写错词训练</strong>
-                <small>从作文批改里的 spelling 批注自动整理错词，按间隔重复推送复习。</small>
-                <span class="corpus-card-cta">训练</span>
-              </a>
+            </div>
+            <div class="corpus-review-lane">
+              <div class="corpus-review-lane-head">
+                <span>Review</span>
+                <strong>语料与复习</strong>
+              </div>
+              <div class="corpus-review-links">
+                <a class="corpus-review-link" data-corpus-home-target="takeawayBook" href="?view=takeawayBook">
+                  <b>LT</b>
+                  <span>Takeaway</span>
+                  <small>单词与短语摘录</small>
+                </a>
+                <a class="corpus-review-link" data-corpus-home-target="writingTakeawayBook" href="?view=writingTakeawayBook">
+                  <b>WT</b>
+                  <span>写作积累</span>
+                  <small>表达与论证素材</small>
+                </a>
+                <a class="corpus-review-link" data-corpus-home-target="spellingDrill" href="?view=spellingDrill">
+                  <b>SP</b>
+                  <span>拼写错词</span>
+                  <small>Spelling SRS</small>
+                </a>
+              </div>
             </div>
           </div>
         </section>
@@ -1334,8 +1334,8 @@
     <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
     <script src="/writing-prompt-picker.js?v=20260610-writing-picker-switch-1"></script>
     <script src="/corpus-markdown-editor.js?v=20260606-single-editor-source"></script>
-    <script src="/corpus-takeaway.js?v=20260610-takeaway-reveal-no-jump"></script>
-    <script src="/spelling-drill.js?v=20260609-spelling-fixed-layout"></script>
+    <script src="/corpus-takeaway.js?v=20260610-takeaway-daily-batch"></script>
+    <script src="/spelling-drill.js?v=20260610-spelling-daily-batch"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
@@ -1343,6 +1343,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260610-record-colors-1"></script>
+    <script src="/app.js?v=20260610-spelling-daily-batch"></script>
   </body>
 </html>

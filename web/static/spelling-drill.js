@@ -101,6 +101,17 @@
       `;
     }
 
+    function updateDueDot() {
+      const s = S();
+      const due = s.scope === "due" && s.queueInitialLen
+        ? Math.max(0, Number(s.queueInitialLen || 0) - Number(s.doneCount || 0))
+        : Number(s.stats?.due || 0);
+      const dot = $("spellingDrillDueDot");
+      if (!dot) return;
+      dot.classList.toggle("hidden", due <= 0);
+      dot.setAttribute("data-count", String(due));
+    }
+
     function syncScopeTabs() {
       document.querySelectorAll("[data-spelling-scope]").forEach((btn) => {
         const on = btn.dataset.spellingScope === S().scope;
@@ -243,6 +254,7 @@
     // ─── Render ──────────────────────────────────────────────────────
     function render() {
       setHeaderStats();
+      updateDueDot();
       syncScopeTabs();
       const s    = S();
       const list = sideList();
@@ -394,9 +406,9 @@
       const items = s.items || [];
       const groups = [];
       if (items.length) {
-        const due      = items.filter((w) => w.is_due && w.status !== "mastered");
+        const due      = items.filter((w) => w.is_due);
         const active   = items.filter((w) => !w.is_due && w.status !== "mastered");
-        const mastered = items.filter((w) => w.status === "mastered");
+        const mastered = items.filter((w) => !w.is_due && w.status === "mastered");
         if (due.length)      groups.push({ title: "待复习", items: due });
         if (active.length)   groups.push({ title: "学中",   items: active });
         if (mastered.length) groups.push({ title: "已掌握", items: mastered });

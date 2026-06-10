@@ -1452,6 +1452,7 @@ function scheduleAuthenticatedPrefetch() {
   scheduleIdleTask(() => prefetchWritingReports(token), 1300);
   scheduleIdleTask(() => prefetchLanguageTakeaways(token), 1800);
   scheduleIdleTask(() => prefetchWritingTakeaways(token), 1800);
+  scheduleIdleTask(() => prefetchSpellingDrill(token), 2200);
   scheduleIdleTask(() => prefetchP1Corpus(token), 4200);
   scheduleIdleTask(() => prefetchP2Corpus(token), 5400);
   scheduleIdleTask(() => prefetchCorpusEditor(token), 6500);
@@ -1874,6 +1875,23 @@ function applyWritingTakeawaysPayload(payload) {
   state.writingTakeaway.items = payload.items || [];
   state.writingTakeaway.loaded = true;
   updateTakeawayReviewDots();
+}
+
+function updateSpellingDrillDueDot(stats = state.spellingDrill?.stats || {}) {
+  const due = Number(stats?.due || 0);
+  const dot = $("spellingDrillDueDot");
+  if (!dot) return;
+  dot.classList.toggle("hidden", due <= 0);
+  dot.setAttribute("data-count", String(due));
+}
+
+async function prefetchSpellingDrill(token) {
+  const payload = await api("/api/writing/spelling-words?scope=due");
+  if (!prefetchCanApply(token)) return;
+  state.spellingDrill.items = payload.items || [];
+  state.spellingDrill.stats = payload.stats || {};
+  state.spellingDrill.loaded = true;
+  updateSpellingDrillDueDot(payload.stats || {});
 }
 
 async function fetchHistoryDetail(attemptId) {
@@ -8428,7 +8446,9 @@ async function loadCorpusHome(...args) {
 }
 
 async function loadSpellingDrill(...args) {
-  return spellingDrillController.loadSpellingDrill(...args);
+  const result = await spellingDrillController.loadSpellingDrill(...args);
+  updateSpellingDrillDueDot(state.spellingDrill?.stats || {});
+  return result;
 }
 
 function renderSpellingDrill(...args) {

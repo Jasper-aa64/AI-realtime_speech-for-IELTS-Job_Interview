@@ -113,7 +113,32 @@
       button.setAttribute("aria-expanded", willOpen ? "true" : "false");
     }
 
+    function reviewDayDate(date = new Date()) {
+      const current = new Date(date);
+      const start = new Date(current);
+      start.setHours(4, 0, 0, 0);
+      if (current < start) start.setDate(start.getDate() - 1);
+      return start;
+    }
+
     function todayKey(date = new Date()) {
+      const reviewDay = reviewDayDate(date);
+      const year = reviewDay.getFullYear();
+      const month = String(reviewDay.getMonth() + 1).padStart(2, "0");
+      const day = String(reviewDay.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function nextReviewDayKey(date = new Date()) {
+      const next = reviewDayDate(date);
+      next.setDate(next.getDate() + 1);
+      const year = next.getFullYear();
+      const month = String(next.getMonth() + 1).padStart(2, "0");
+      const day = String(next.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function calendarDayKey(date = new Date()) {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
@@ -121,9 +146,9 @@
     }
 
     function addDaysKey(days, date = new Date()) {
-      const next = new Date(date);
+      const next = reviewDayDate(date);
       next.setDate(next.getDate() + Number(days || 0));
-      return todayKey(next);
+      return calendarDayKey(next);
     }
 
     function takeawayReviewStorageKey(kind = "language") {
@@ -186,7 +211,7 @@
         seen.add(id);
         if (!records[id]) {
           records[id] = {
-            due: todayKey(),
+            due: nextReviewDayKey(),
             reps: 0,
             interval: 0,
             ease: 2.5,
@@ -197,6 +222,7 @@
         }
       });
       Object.keys(records).forEach((id) => {
+        if (id.startsWith("__")) return;
         if (!seen.has(id)) {
           delete records[id];
           changed = true;
@@ -206,14 +232,41 @@
       return records;
     }
 
+    function takeawayDailyBatchRecord(records) {
+      const raw = records.__daily_batch;
+      if (raw && typeof raw === "object" && Array.isArray(raw.ids)) return raw;
+      return { day: "", ids: [] };
+    }
+
     function dueTakeawayEntries(kind = "language") {
       const records = ensureTakeawayReviewRecords(kind);
       const today = todayKey();
-      return takeawayItemsForKind(kind)
+      const items = takeawayItemsForKind(kind);
+      const itemMap = new Map(items.map((item) => [String(item.entry_id || "").trim(), item]));
+      const batch = takeawayDailyBatchRecord(records);
+      if (batch.day === today) {
+        return batch.ids
+          .map((id) => itemMap.get(String(id || "").trim()))
+          .filter((item) => {
+            const id = String(item?.entry_id || "").trim();
+            const record = records[id] || {};
+            return item && id && String(record.due || today) <= today && String(record.last || "") !== today;
+          });
+      }
+      const reviewedTodayIds = Object.entries(records)
+        .filter(([id, record]) => !id.startsWith("__") && record && typeof record === "object" && String(record.last || "") === today)
+        .map(([id]) => id)
+        .slice(0, TAKEAWAY_DAILY_REVIEW_LIMIT);
+      if (reviewedTodayIds.length) {
+        records.__daily_batch = { day: today, ids: reviewedTodayIds };
+        saveTakeawayReviewState(kind, records);
+        return [];
+      }
+      const dueItems = items
         .filter((item) => {
           const id = String(item.entry_id || "").trim();
           const record = records[id] || {};
-          return id && String(record.due || today) <= today;
+          return id && String(record.due || today) <= today && String(record.last || "") !== today;
         })
         .sort((a, b) => {
           const left = records[a.entry_id] || {};
@@ -221,6 +274,9 @@
           return String(left.due || today).localeCompare(String(right.due || today));
         })
         .slice(0, TAKEAWAY_DAILY_REVIEW_LIMIT);
+      records.__daily_batch = { day: today, ids: dueItems.map((item) => item.entry_id) };
+      saveTakeawayReviewState(kind, records);
+      return dueItems;
     }
 
     function updateTakeawayReviewDots() {

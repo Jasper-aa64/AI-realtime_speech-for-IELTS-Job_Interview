@@ -189,6 +189,63 @@ class SpellingDrillTests(TestCase):
             timezone.localtime(now).replace(hour=4, minute=0, second=0, microsecond=0),
         )
 
+    def test_due_scope_is_frozen_to_four_am_batch(self):
+        now = self.aware_at(2026, 6, 7, 10, 30)
+        with patch("apps.writing.spelling_services.timezone.now", return_value=now):
+            self.create_score(
+                answer="This app is confortable.",
+                analysis_payload={"inline_annotations": [{"type": "spelling", "original": "confortable", "suggestion": "comfortable"}]},
+            )
+            harvest_spelling_words(self.user)
+            today = spelling_drill_library(self.user, scope="due")
+
+        self.assertEqual(today["count"], 0)
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
+        self.assertGreater(timezone.localtime(word.due_at), timezone.localtime(now).replace(hour=4, minute=0, second=0, microsecond=0))
+
+        next_batch = self.aware_at(2026, 6, 8, 4, 1)
+        with patch("apps.writing.spelling_services.timezone.now", return_value=next_batch):
+            tomorrow = spelling_drill_library(self.user, scope="due")
+        self.assertEqual(tomorrow["count"], 1)
+        self.assertEqual(tomorrow["items"][0]["correct_spelling"], "comfortable")
+
+    def test_mastered_words_follow_srs_and_lapse_back_to_active(self):
+        self.create_score(
+            answer="I watched vidios online.",
+            analysis_payload={"spelling_correction_summary": "- vidios -> 正确：videos（视频）"},
+        )
+        harvest_spelling_words(self.user)
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="videos")
+        word.status = SpellingDrillWord.Status.MASTERED
+        word.review_stage = 4
+        due_time = self.aware_at(2026, 6, 7, 4, 0)
+        word.due_at = due_time
+        word.metadata = {"mastered_review_level": 0}
+        word.save(update_fields=["status", "review_stage", "due_at", "metadata", "updated_at"])
+
+        review_time = self.aware_at(2026, 6, 7, 10, 30)
+        with patch("apps.writing.spelling_services.timezone.now", return_value=review_time):
+            library = spelling_drill_library(self.user, scope="due")
+            correct = record_spelling_attempt(self.user, word.word_id, "videos")
+        self.assertEqual(library["count"], 1)
+        self.assertTrue(correct["correct"])
+        word.refresh_from_db()
+        self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
+        self.assertEqual(word.review_stage, 4)
+        self.assertEqual(word.metadata["mastered_review_level"], 1)
+        self.assertEqual(
+            timezone.localtime(word.due_at),
+            timezone.localtime(review_time).replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=14),
+        )
+
+        with patch("apps.writing.spelling_services.timezone.now", return_value=review_time):
+            wrong = record_spelling_attempt(self.user, word.word_id, "vidios")
+        self.assertFalse(wrong["correct"])
+        word.refresh_from_db()
+        self.assertEqual(word.status, SpellingDrillWord.Status.ACTIVE)
+        self.assertEqual(word.review_stage, 0)
+        self.assertEqual(word.metadata["mastered_review_level"], 0)
+
     def test_update_edit_gloss_reset_master_and_delete(self):
         self.create_score(
             answer="I watched vidios online.",
