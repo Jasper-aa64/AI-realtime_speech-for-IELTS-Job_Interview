@@ -32,13 +32,13 @@
       "source": "cambridge_ielts_public_reference",
       "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-2-task-1/",
       "sort_order": 12,
-      "image_url": "/assets/writing/task1/cambridge/20/test_2_task_1.png",
-      "source_image_url": "https://engnovate.com/wp-content/uploads/2025/07/Cambridge-IELTS-20-Academic-Writing-Test-2-1.png"
+      "image_url": "/assets/writing/task1/cambridge/20/test_2_task_1.jpg",
+      "source_image_url": "https://www.jumpinto.com/resource/exam/ielts/image/a20/a20t2w1.jpg"
     },
     {
       "id": "cambridge-20-test-3-task-1",
       "title": "Cambridge IELTS 20 Test 3 Task 1",
-      "category": "bar_chart",
+      "category": "mixed",
       "source_book": 20,
       "source_test": 3,
       "source_question": 1,
@@ -62,8 +62,8 @@
       "source": "cambridge_ielts_public_reference",
       "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-4-task-1/",
       "sort_order": 14,
-      "image_url": "/assets/writing/task1/cambridge/20/test_4_task_1.png",
-      "source_image_url": "https://engnovate.com/wp-content/uploads/2025/07/Cambridge-IELTS-20-Academic-Writing-Test-4-1.png"
+      "image_url": "/assets/writing/task1/cambridge/20/test_4_task_1.jpg",
+      "source_image_url": "https://www.nzche.ac.nz/zh/thinkin-samples-process-diagram"
     }
   ]
 }

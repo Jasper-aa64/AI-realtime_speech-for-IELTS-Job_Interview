@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_STOP_FILE = "/tmp/ielts-ai-worker.stop"
-PREFERRED_CC_SWITCH_PROVIDERS = ("Aiapis", "Aiaps1")
+PREFERRED_CC_SWITCH_PROVIDERS = ("Aiapis2", "Aiapis", "Aiaps1")
 
 
 def _load_aiapis_from_cc_switch() -> None:
@@ -69,9 +69,22 @@ def _load_aiapis_from_cc_switch() -> None:
 
 def _load_common_env() -> None:
     _load_aiapis_from_cc_switch()
+    current_path = os.environ.get("PATH", "")
+    extra_paths = ["/opt/homebrew/bin", "/usr/local/bin"]
+    additions = [path for path in extra_paths if path not in current_path.split(":")]
+    if additions:
+        os.environ["PATH"] = ":".join(additions + ([current_path] if current_path else ["/usr/bin:/bin"]))
     os.environ.setdefault("AI_HTTP_TIMEOUT_SECONDS", "60")
     os.environ.setdefault("SPEAKING_AI_CALL_MODE", "chain")
-    os.environ.setdefault("SPEAKING_AI_MODEL", "gpt-5.4-mini")
+    # Reuse the HTTP model loaded from aiapis; fall back to gpt-5.5 then the old default.
+    os.environ.setdefault(
+        "SPEAKING_AI_MODEL",
+        os.environ.get("AI_HTTP_MODEL") or "gpt-5.5",
+    )
+    if (ROOT_DIR / "config" / "default_config.json").exists():
+        os.environ.setdefault("VOLCENGINE_ASR_ENABLED", "1")
+    if Path("/opt/homebrew/bin/ffmpeg").exists():
+        os.environ.setdefault("VOLCENGINE_ASR_FFMPEG", "/opt/homebrew/bin/ffmpeg")
     os.environ.setdefault("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
     os.environ.setdefault("PYTHONUNBUFFERED", "1")
 

@@ -25,7 +25,7 @@ import sqlite3
 import sys
 
 db = sys.argv[1]
-preferred = ("Aiapis", "Aiaps1")
+preferred = ("Aiapis2", "Aiapis", "Aiaps1")
 conn = sqlite3.connect(db)
 rows = conn.execute(
     "select name, settings_config from providers where app_type='codex'"
@@ -76,7 +76,15 @@ load_local_stack_env() {
 
   export AI_HTTP_TIMEOUT_SECONDS="${AI_HTTP_TIMEOUT_SECONDS:-60}"
   export SPEAKING_AI_CALL_MODE="${SPEAKING_AI_CALL_MODE:-chain}"
-  export SPEAKING_AI_MODEL="${SPEAKING_AI_MODEL:-gpt-5.4-mini}"
+  # If aiapis loaded a specific model, reuse it for speaking AI too.
+  export SPEAKING_AI_MODEL="${SPEAKING_AI_MODEL:-${AI_HTTP_MODEL:-gpt-5.5}}"
+  if [[ -f "${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/config/default_config.json" ]]; then
+    export VOLCENGINE_ASR_ENABLED="${VOLCENGINE_ASR_ENABLED:-1}"
+  fi
+  export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH:-/usr/bin:/bin}"
+  if [[ -x /opt/homebrew/bin/ffmpeg ]]; then
+    export VOLCENGINE_ASR_FFMPEG="${VOLCENGINE_ASR_FFMPEG:-/opt/homebrew/bin/ffmpeg}"
+  fi
   export DJANGO_ALLOWED_HOSTS="${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}"
   export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 }

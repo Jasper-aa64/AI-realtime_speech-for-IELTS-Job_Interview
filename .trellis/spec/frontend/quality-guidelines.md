@@ -189,6 +189,18 @@ await api("/api/score", {
   `/api/language-takeaways*` and `/api/writing-takeaways*` detail endpoints for
   edit/delete actions. Do not let shared card-menu UI route writing-scoped rows
   through the ordinary Takeaway endpoint, or vice versa.
+- Sketchbook / pencil-draft themed UI must stay academic and restrained. Use
+  warm paper surfaces, low-saturation graphite/brown/teal lines, subtle dashed
+  connectors, serif-led typography, and light hand-drawn irregularity. Do not
+  use cartoon illustrations, dense filtered cartoon images, childish clay/bubble
+  styling, pure black-and-white poster treatment, or overly detailed generated
+  scenes that read like a cartoon with a pencil filter.
+- For pencil-draft imagery, the target is an academic notebook/process sketch:
+  sparse graphite linework, visible paper warmth, a few muted accent marks, and
+  workflow clarity. Avoid character-led illustrations, cute mascots, heavy
+  texture filters, glossy vector-card composition, or highly rendered scenes.
+  If an image reads like a cartoon that was post-processed into pencil, reject
+  it and simplify the concept before regenerating.
 - Writing prompt highlight deletion must be driven by the highlight index and
   pointer coordinates captured on `pointerdown`. A click on an existing
   highlight may produce selection/range churn before `pointerup`, and

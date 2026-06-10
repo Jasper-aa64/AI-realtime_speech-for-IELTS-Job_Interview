@@ -50,6 +50,7 @@ Current AI task endpoints use these response contracts:
 | Claimed task has no registered provider runner | Adapter returns `skipped`/unsupported | Worker records batch item `skipped`, terminal-fails the task with `error_code=unsupported_task_type`, and releases any billable reservation |
 | `writing_score` requests `provider=mock_success` while `AI_ALLOW_MOCK_SUCCESS` is disabled | Provider config resolves to fallback | Worker records normal `fallback`, writes the deterministic fallback score, and releases any reserved wallet balance |
 | `writing_score` requests an unknown or disabled provider | Provider config resolves to fallback | Worker records normal `fallback`; do not crash or leak secret configuration values |
+| HTTP provider drops the connection for `writing_score` (`http_api_provider_request_failed`) | Adapter returns retryable failure | Worker requeues the task to `pending`, preserves any billable reservation, keeps the error text for diagnostics, and does not create a failed/fallback `WritingScore` before retry budget is exhausted |
 | Claimed provider run returns retryable failure | Worker uses `fail_ai_task` / `fail_billable_ai_task` with `retryable=True` | Task returns to `pending`; reservation stays reserved |
 | Claimed provider run returns terminal failure | Worker uses `fail_ai_task` / `fail_billable_ai_task` with `retryable=False` | Task becomes `failed`; billable reservation releases |
 | Stale recovery timeout <= 0 | `stale_running_task_ids` raises `AITaskError` | Caller must reject/fix config |

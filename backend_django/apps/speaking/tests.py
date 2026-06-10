@@ -670,6 +670,40 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(updated_card["material_text"], "I can use one prepared story for this cue card.")
         self.assertFalse(updated_card["has_p3_follow_up"])
 
+    def test_p2_bank_brainstorm_idea_preserves_existing_bank_material(self):
+        library = self.client.get("/api/p2-corpus").json()
+        card = library["current_part2_cards"][0]
+
+        self.client.put(
+            f"/api/p2-bank-corpus/{card['cue_id']}",
+            data={
+                "question": card["linked_question"],
+                "corpus_text": "A quiet university library story.",
+                "last_ai_answer": "A polished answer about the library.",
+            },
+            content_type="application/json",
+        )
+        save_response = self.client.patch(
+            f"/api/p2-bank-corpus/{card['cue_id']}",
+            data={
+                "question": card["linked_question"],
+                "metadata": {"brainstorm_idea": "library + final exam week + coding notes"},
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(save_response.status_code, 200)
+        saved_payload = save_response.json()
+        self.assertEqual(saved_payload["corpus_text"], "A quiet university library story.")
+        self.assertEqual(saved_payload["last_ai_answer"], "A polished answer about the library.")
+        self.assertEqual(saved_payload["brainstorm_idea"], "library + final exam week + coding notes")
+
+        updated = self.client.get("/api/p2-corpus").json()
+        updated_card = next(item for item in updated["current_part2_cards"] if item["entry_id"] == card["entry_id"])
+        self.assertTrue(updated_card["has_material"])
+        self.assertTrue(updated_card["has_brainstorm_idea"])
+        self.assertEqual(updated_card["material_text"], "A quiet university library story.")
+        self.assertEqual(updated_card["brainstorm_idea"], "library + final exam week + coding notes")
+
     def test_p3_bank_followup_corpus_uses_question_bank_followups_without_polluting_personal_library(self):
         library = self.client.get("/api/p2-corpus").json()
         card = next(item for item in library["current_part2_cards"] if item.get("p3_follow_ups"))
@@ -2288,6 +2322,7 @@ class CodexValidationTests(TestCase):
         self.assertNotEqual(result["follow_up"], current_question)
         self.assertIn("long-term effect", result["follow_up"])
 
+    @override_settings(SPEAKING_REPORT_AI_CALL_MODE="codex")
     def test_score_attempt_uses_scorer_overall_review_without_second_review_codex_call(self):
         from apps.speaking.services import score_attempt_sync
 
@@ -2345,6 +2380,12 @@ class CodexValidationTests(TestCase):
         self.assertEqual(report.report_payload["report_generation_status"], "ready")
         self.assertEqual(report.report_payload["turns"][0]["feedback_generation_status"], "ready")
         self.assertIn("software engineering", report.report_payload["turns"][0]["band7_version"])
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.SCORED)
+        self.assertEqual(attempt.metadata["analysis_status"], "ready")
+        self.assertEqual(attempt.metadata["analysis_backend"], "codex")
+        self.assertEqual(attempt.metadata["analysis_error"], "")
+        self.assertEqual(attempt.metadata["report_generation_status"], "ready")
 
     def test_score_attempt_returns_existing_report_without_regenerating(self):
         from apps.speaking.services import score_attempt
@@ -2468,6 +2509,7 @@ class CodexValidationTests(TestCase):
         self.assertTrue(first_key.startswith(f"{attempt.attempt_id}_{turn.turn_id}_band7_"))
         self.assertTrue(second_key.startswith(f"{attempt.attempt_id}_{turn.turn_id}_band7_"))
 
+    @override_settings(SPEAKING_REPORT_AI_CALL_MODE="codex")
     def test_score_attempt_marks_analysis_failed_without_publishing_report_when_codex_fails(self):
         from apps.speaking.services import SpeakingError, score_attempt_sync
 
@@ -3319,11 +3361,55 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertEqual(follow_up.metadata["prompt"]["generation_status"], "fallback")
         self.assertIn("codex timeout", follow_up.metadata["prompt"]["generation_error"])
         self.assertEqual(follow_up.metadata["examiner_tts"]["status"], "pending")
+
+    def test_p1_stream_pending_followup_does_not_show_fallback_question_before_stream_finishes(self):
+        from apps.speaking.services import complete_turn
+        from apps.accounts.models import CustomUser
+
+        user = CustomUser.objects.create_user(username="test-p1-stream-pending-followup", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-p1-stream-pending-followup",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t2"},
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=0,
+            part="p1",
+            question="Do you work or do you study?",
+            metadata={
+                "prompt": {
+                    "topic": "intro",
+                    "question": "Do you work or do you study?",
+                    "flow": "intro",
+                    "role": "work_study",
+                    "counts_toward_total": True,
+                }
+            },
+        )
+
+        result = complete_turn(
+            user,
+            "test-p1-stream-pending-followup",
+            "t2",
+            {"transcript_raw": "", "stream_follow_up": True},
+        )
+
+        follow_up = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
+        self.assertEqual(follow_up.question, "")
+        self.assertEqual(follow_up.metadata["prompt"]["question"], "")
+        self.assertEqual(follow_up.metadata["prompt"]["backend"], "stream_pending")
+        self.assertEqual(follow_up.metadata["prompt"]["generation_status"], "pending")
+        self.assertEqual(result["next_turn"]["id"], "t2_followup")
+        self.assertEqual(result["next_turn"]["question"], "")
         self.assertEqual(result["next_turn"]["id"], "t2_followup")
         self.assertEqual(result["next_turn"]["examiner_tts"]["status"], "pending")
         self.assertEqual(result["attempt"]["current_turn"], "t2_followup")
-        shifted_turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t3")
-        self.assertEqual(shifted_turn.sequence, 2)
         attempt.refresh_from_db()
         self.assertEqual(attempt.status, SpeakingAttempt.Status.STARTED)
         self.assertEqual(attempt.metadata["current_turn"], "t2_followup")

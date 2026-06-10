@@ -54,11 +54,30 @@ WRITING_CATEGORY_LABELS = {
     "advantages_disadvantages": "\u5229\u5f0a\u7c7b",
     "two_part": "\u53cc\u95ee\u9898\u7c7b",
 }
+WRITING_TASK2_PROMPT_PATTERN_LABELS = {
+    "agree_to_what_extent": "To what extent do you agree or disagree?",
+    "discussion_opinion": "Discuss both views and give your own opinion.",
+    "positive_negative_do_you_think": "a positive or a negative development?",
+    "advantages_outweigh": "Do the advantages outweigh the disadvantages?",
+    "problem_solution": "Why / What reasons / solutions?",
+    "two_question": "\u53cc\u95ee\u9898",
+    "other": "\u5176\u4ed6\u95ee\u6cd5",
+}
+WRITING_TASK2_PROMPT_PATTERN_ORDER = [
+    "agree_to_what_extent",
+    "discussion_opinion",
+    "positive_negative_do_you_think",
+    "advantages_outweigh",
+    "problem_solution",
+    "two_question",
+    "other",
+]
 _agent_fts_available: bool | None = None
 
 _seed_prompt_sync_lock = threading.Lock()
 _seed_prompt_sync_done = False
-_seed_prompt_min_loaded_count = 50
+_seed_prompt_sync_signature = ""
+_seed_prompt_marker_id = "cambridge-20-test-1-task-2"
 _agent_prompt_snapshot_lock = threading.Lock()
 _agent_prompt_snapshot_cache: dict[str, tuple[str, str, list[WritingPrompt]]] = {}
 _agent_fts_cache_lock = threading.Lock()
@@ -105,6 +124,18 @@ def seed_prompt_files(task_type: str) -> list[Path]:
     return files
 
 
+def seed_prompt_signature() -> str:
+    parts: list[str] = []
+    for task_type in sorted(WRITING_TASK_TYPES):
+        for path in seed_prompt_files(task_type):
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            parts.append(f"{path.relative_to(data_writing_dir())}:{stat.st_mtime_ns}:{stat.st_size}")
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()
+
+
 def writing_prompt_sort_key(prompt: WritingPrompt) -> tuple:
     task_rank = 0 if prompt.task_type == WritingPrompt.TaskType.TASK1_ACADEMIC else 1
     has_no_book = prompt.source_book is None
@@ -144,6 +175,119 @@ def normalize_category(value: str | None) -> str:
         "mixed-graph": "mixed",
     }
     return aliases.get(category, category)
+
+
+def normalize_task2_prompt_pattern(value: str | None) -> str:
+    pattern = str(value or "").strip().lower()
+    if pattern in {"", "all", "*"}:
+        return ""
+    aliases = {
+        "discussion": "discussion_opinion",
+        "discuss_both_views": "discussion_opinion",
+        "both_views": "discussion_opinion",
+        "value_arguments": "discussion_opinion",
+        "value_arguments_in_favour": "discussion_opinion",
+        "opinion": "agree_to_what_extent",
+        "agree": "agree_to_what_extent",
+        "agree_disagree": "agree_to_what_extent",
+        "agree_disagree_opinion": "agree_to_what_extent",
+        "agree_do_you_agree": "agree_to_what_extent",
+        "do_you_agree": "agree_to_what_extent",
+        "positive_negative": "positive_negative_do_you_think",
+        "positive_negative_development": "positive_negative_do_you_think",
+        "positive_negative_has_this_become": "positive_negative_do_you_think",
+        "advantages_outweigh_disadvantages": "advantages_outweigh",
+        "advantage_outweigh": "advantages_outweigh",
+        "benefits_outweigh": "advantages_outweigh",
+        "benefits_outweigh_disadvantages": "advantages_outweigh",
+        "advantages_disadvantages": "advantages_outweigh",
+        "advantages": "advantages_outweigh",
+        "adv_disadv": "advantages_outweigh",
+        "problem": "problem_solution",
+        "problems_solutions": "problem_solution",
+        "cause_solution": "problem_solution",
+        "causes_solutions": "problem_solution",
+        "cause_effect": "problem_solution",
+        "causes_effects": "problem_solution",
+        "reasons_solutions": "problem_solution",
+        "why_solutions": "problem_solution",
+        "why_positive_negative": "problem_solution",
+        "two_part": "two_question",
+        "two_questions": "two_question",
+    }
+    return aliases.get(pattern, pattern)
+
+
+def task2_prompt_pattern(prompt_text: str) -> str:
+    text = re.sub(r"\s+", " ", str(prompt_text or "").strip().lower())
+    if not text:
+        return "other"
+    if re.search(r"discuss\s*&\s*give (?:your|our)(?: own)? opinions?", text):
+        return "discussion_opinion"
+    if re.search(r"discuss both(?: (?:these|the|those))?(?: (?:views?|sides?))?(?: and)?(?: give)? (?:your|our)(?: own)? (?:opinions?|view)", text):
+        return "discussion_opinion"
+    if re.search(r"what is the value\b.*\bwhat are the arguments in favour\b", text):
+        return "discussion_opinion"
+    if re.search(r"to what exten[td] do(?: you)? agree (?:or|of) disagree(?: with (?:this|the) (?:statement|opinion|view))?", text):
+        return "agree_to_what_extent"
+    if re.search(r"to what exten[td] do you think\b", text):
+        return "agree_to_what_extent"
+    if re.search(r"do you agree or disagree", text):
+        return "agree_to_what_extent"
+    if re.search(r"\bbenefits?\b.*\boutweigh\b.*\b(?:disadvantages?|drawbacks?)\b", text):
+        return "advantages_outweigh"
+    if re.search(r"\badvantages?\b.*\boutweigh\b.*\b(?:disadvantages?|drawbacks?)\b", text):
+        return "advantages_outweigh"
+    if re.search(r"\b(?:disadvantages?|drawbacks?)\b.*\boutweigh\b.*\b(?:advantages?|benefits?)\b", text):
+        return "advantages_outweigh"
+    if re.search(r"\bnegative effects?\b.*\boutweigh\b.*\bpositive effects?\b", text):
+        return "advantages_outweigh"
+    if re.search(r"\b(?:advantages?|benefits?)\b.*\bor\b.*\b(?:disadvantages?|drawbacks?)\b", text):
+        return "advantages_outweigh"
+    has_reason_question = bool(re.search(r"\b(?:why|what (?:do you think )?(?:are )?(?:the )?(?:reasons?|causes?|problems?)|how (?:can|could)|what can|what could|what should|what (?:are )?(?:the )?(?:solutions?|measures?))\b", text))
+    has_reason_question = has_reason_question or bool(re.search(r"\bwhat factors? contribute\b", text))
+    has_second_question = text.count("?") >= 2
+    has_solution_question = bool(re.search(r"\b(?:solutions?|measures?|solve|solved|what can|what could|how can|how could|how to|what should|ways to|encourage|research)\b", text))
+    has_effect_question = bool(re.search(r"\b(?:effects?|impact|affect|positive|negative|disadvantages?|advantages?|how realistic)\b", text))
+    if has_reason_question and has_second_question and (has_solution_question or has_effect_question):
+        return "problem_solution"
+    if re.search(r"\bwhy\b", text) and re.search(r"\b(?:effects?|impact|affect|positive|negative)\b", text):
+        return "problem_solution"
+    do_you_think_positive_negative_patterns = [
+        r"(?:do you think|whether|is|are|ls) (?:this|it|that|these|they|the (?:trend|development|change|situation|effect|impact))?(?: is| are)?(?: a)? positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)?",
+        r"(?:do you think|whether) (?:the|this|that) (?:trend|development|change|situation|effect|impact) (?:is|are) (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)?",
+    ]
+    if any(re.search(pattern, text) for pattern in do_you_think_positive_negative_patterns):
+        return "positive_negative_do_you_think"
+    has_become_patterns = [
+        r"has (?:this|it|that|the (?:trend|development|change|situation|effect|impact)) become (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)",
+        r"is (?:this|it|that|the (?:trend|development|change|situation|effect|impact)) (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)",
+    ]
+    if any(re.search(pattern, text) for pattern in has_become_patterns):
+        return "positive_negative_do_you_think"
+    if "advantages and disadvantages" in text or "benefits and drawbacks" in text or ("what are the advantages" in text and "disadvantages" in text):
+        return "advantages_outweigh"
+    if (
+        ("problem" in text or "problems" in text)
+        and ("solution" in text or "solutions" in text or "measure" in text or "measures" in text or "solve" in text or "solved" in text)
+    ) or (
+        ("cause" in text or "causes" in text or "reasons" in text)
+        and ("solution" in text or "solutions" in text or "measure" in text or "measures" in text or "solve" in text or "solved" in text)
+    ):
+        return "problem_solution"
+    if ("cause" in text or "causes" in text or "reasons" in text) and ("effect" in text or "effects" in text or "affect" in text or "impact" in text):
+        return "problem_solution"
+    return "other"
+
+
+def task2_prompt_pattern_payload(pattern: str) -> dict[str, str]:
+    key = normalize_task2_prompt_pattern(pattern) or "other"
+    if key not in WRITING_TASK2_PROMPT_PATTERN_LABELS:
+        key = "other"
+    return {
+        "prompt_pattern": key,
+        "prompt_pattern_label": WRITING_TASK2_PROMPT_PATTERN_LABELS[key],
+    }
 
 
 def cambridge_source_label(task_type: str, source_book: int | None, source_test: int | None, source_question: int | None) -> str:
@@ -250,7 +394,7 @@ def prompt_practice_statuses(user, prompts: list[WritingPrompt]) -> dict[str, st
 
 def prompt_payload(prompt: WritingPrompt, practice_status: str | None = None) -> dict[str, Any]:
     source_label = prompt_source_label(prompt)
-    return {
+    payload = {
         "id": prompt.prompt_id,
         "task_type": prompt.task_type,
         "task_label": WRITING_TASK_LABELS.get(prompt.task_type, "Writing"),
@@ -265,6 +409,9 @@ def prompt_payload(prompt: WritingPrompt, practice_status: str | None = None) ->
         "source_label": source_label,
         "sort_order": prompt.sort_order,
     } | prompt_status_payload(practice_status)
+    if prompt.task_type == WritingPrompt.TaskType.TASK2:
+        payload |= task2_prompt_pattern_payload(task2_prompt_pattern(prompt.prompt))
+    return payload
 
 
 def agent_search_text(prompt: WritingPrompt) -> str:
@@ -632,6 +779,13 @@ def agent_search_score(query: str, prompt: WritingPrompt) -> float:
     return float(agent_search_score_details(query, prompt)["score"])
 
 
+def agent_task_type_intent_bonus(prompt: WritingPrompt, query_concepts: list[str]) -> float:
+    concept_set = set(query_concepts or [])
+    if prompt.task_type == WritingPrompt.TaskType.TASK1_ACADEMIC and concept_set & {"task1_visual", "task1_change", "reading_writing_task1"}:
+        return 0.18
+    return 0.0
+
+
 def prompt_deep_link(request, prompt: WritingPrompt) -> str:
     path = f"/?view=writing&task={prompt.task_type}&prompt={prompt.prompt_id}"
     forwarded_host = str(request.META.get("HTTP_X_FORWARDED_HOST") or "").strip()
@@ -687,7 +841,7 @@ def agent_find_writing_prompts(query: str, request, task_type: str | None = None
     scored: list[tuple[float, dict[str, Any], WritingPrompt]] = []
     for prompt in candidate_prompts:
         scores = agent_search_score_details(query, prompt, query_terms, fts_scores.get(prompt.prompt_id, 0.0), query_concept_names)
-        score = float(scores["score"])
+        score = min(1.0, float(scores["score"]) + agent_task_type_intent_bonus(prompt, query_concept_names))
         if score > 0.1:
             scored.append((score, scores, prompt))
     scored.sort(key=lambda item: (-item[0], writing_prompt_sort_key(item[2])))
@@ -719,22 +873,21 @@ def agent_find_writing_prompts(query: str, request, task_type: str | None = None
 
 
 def sync_seed_prompts() -> None:
-    global _seed_prompt_sync_done
-    active_prompt_count = WritingPrompt.objects.filter(is_active=True).count()
-    if active_prompt_count >= _seed_prompt_min_loaded_count:
-        _seed_prompt_sync_done = True
-        return
-    if _seed_prompt_sync_done and active_prompt_count >= _seed_prompt_min_loaded_count:
+    global _seed_prompt_sync_done, _seed_prompt_sync_signature
+    signature = seed_prompt_signature()
+    seed_marker_exists = WritingPrompt.objects.filter(prompt_id=_seed_prompt_marker_id, is_active=True).exists()
+    if _seed_prompt_sync_done and _seed_prompt_sync_signature == signature and seed_marker_exists:
         return
     with _seed_prompt_sync_lock:
-        active_prompt_count = WritingPrompt.objects.filter(is_active=True).count()
-        if active_prompt_count >= _seed_prompt_min_loaded_count:
-            _seed_prompt_sync_done = True
-            return
-        if _seed_prompt_sync_done and active_prompt_count >= _seed_prompt_min_loaded_count:
+        signature = seed_prompt_signature()
+        seed_marker_exists = WritingPrompt.objects.filter(prompt_id=_seed_prompt_marker_id, is_active=True).exists()
+        if _seed_prompt_sync_done and _seed_prompt_sync_signature == signature and seed_marker_exists:
             return
         _sync_seed_prompts_locked()
         _seed_prompt_sync_done = True
+        _seed_prompt_sync_signature = signature
+        with _agent_prompt_snapshot_lock:
+            _agent_prompt_snapshot_cache.clear()
 
 
 def _sync_seed_prompts_locked() -> None:
@@ -797,7 +950,31 @@ def prompt_categories(task_type: str | None = None) -> list[dict[str, Any]]:
     return [{"category": key, "label": WRITING_CATEGORY_LABELS.get(key, key.replace("_", " ").title()), "count": counts[key]} for key in sorted(counts)]
 
 
-def list_prompts(task_type: str | None = None, category: str | None = None, user=None) -> list[dict[str, Any]]:
+def prompt_patterns(task_type: str | None = None, category: str | None = None) -> list[dict[str, Any]]:
+    sync_seed_prompts()
+    selected_task_type = normalize_task_type(task_type) if task_type else ""
+    if selected_task_type and selected_task_type != WritingPrompt.TaskType.TASK2:
+        return []
+    queryset = WritingPrompt.objects.filter(task_type=WritingPrompt.TaskType.TASK2, is_active=True)
+    normalized_category = normalize_category(category)
+    if normalized_category:
+        queryset = queryset.filter(category=normalized_category)
+    counts: dict[str, int] = {}
+    for prompt_text in queryset.values_list("prompt", flat=True):
+        pattern = task2_prompt_pattern(prompt_text)
+        counts[pattern] = counts.get(pattern, 0) + 1
+    return [
+        {
+            "pattern": key,
+            "label": WRITING_TASK2_PROMPT_PATTERN_LABELS.get(key, key.replace("_", " ").title()),
+            "count": counts[key],
+        }
+        for key in WRITING_TASK2_PROMPT_PATTERN_ORDER
+        if counts.get(key)
+    ]
+
+
+def list_prompts(task_type: str | None = None, category: str | None = None, user=None, prompt_pattern: str | None = None) -> list[dict[str, Any]]:
     sync_seed_prompts()
     queryset = WritingPrompt.objects.filter(is_active=True)
     if task_type:
@@ -806,6 +983,13 @@ def list_prompts(task_type: str | None = None, category: str | None = None, user
     if normalized_category:
         queryset = queryset.filter(category=normalized_category)
     prompts = sorted(queryset, key=writing_prompt_sort_key)
+    normalized_pattern = normalize_task2_prompt_pattern(prompt_pattern)
+    if normalized_pattern:
+        prompts = [
+            prompt for prompt in prompts
+            if prompt.task_type == WritingPrompt.TaskType.TASK2
+            and task2_prompt_pattern(prompt.prompt) == normalized_pattern
+        ]
     statuses = prompt_practice_statuses(user, prompts)
     return [prompt_payload(prompt, statuses.get(prompt.prompt_id)) for prompt in prompts]
 
@@ -815,7 +999,7 @@ def next_default_task_type(date_value=None) -> str:
     return WritingPrompt.TaskType.TASK1_ACADEMIC if today.toordinal() % 2 == 0 else WritingPrompt.TaskType.TASK2
 
 
-def random_prompt(user, task_type: str | None = None, category: str | None = None) -> dict[str, Any]:
+def random_prompt(user, task_type: str | None = None, category: str | None = None, prompt_pattern: str | None = None) -> dict[str, Any]:
     selected_type = normalize_task_type(task_type) if task_type else next_default_task_type()
     sync_seed_prompts()
     queryset = WritingPrompt.objects.filter(task_type=selected_type, is_active=True)
@@ -823,6 +1007,13 @@ def random_prompt(user, task_type: str | None = None, category: str | None = Non
     if normalized_category:
         queryset = queryset.filter(category=normalized_category)
     prompts = sorted(queryset, key=writing_prompt_sort_key)
+    normalized_pattern = normalize_task2_prompt_pattern(prompt_pattern)
+    if normalized_pattern:
+        prompts = [
+            prompt for prompt in prompts
+            if prompt.task_type == WritingPrompt.TaskType.TASK2
+            and task2_prompt_pattern(prompt.prompt) == normalized_pattern
+        ]
     if not prompts:
         raise WritingError(f"No writing prompts available for {selected_type}")
     cambridge_prompts = [prompt for prompt in prompts if prompt.source_book and prompt.source_test]

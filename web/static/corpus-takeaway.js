@@ -39,6 +39,40 @@
     }
 
     const CORPUS_PEEK_WINDOW_MARGIN = Number(corpusPeekWindowMargin) || 16;
+    const EXPRESSION_REPLACEMENT_STORAGE_KEY = "ielts-expression-replacements";
+    const TAKEAWAY_SRS_STORAGE_KEY = "ielts-takeaway-srs";
+    const TAKEAWAY_DAILY_REVIEW_LIMIT = 20;
+    const DEFAULT_EXPRESSION_REPLACEMENTS = [
+      ["important", "vital / crucial / essential / significant / critical / indispensable / of great importance"],
+      ["important for", "be essential for / be crucial for / be vital for / be indispensable to / contribute to / play a key role in / play a vital role in"],
+      ["help", "assist / facilitate / contribute to / promote / support / enable"],
+      ["cause", "lead to / result in / give rise to / contribute to / bring about / trigger"],
+      ["improve", "enhance / boost / strengthen / upgrade / promote"],
+      ["provide", "offer / supply / equip ... with / furnish ... with / make available"],
+      ["many", "numerous / a large number of / a considerable number of / a substantial number of"],
+      ["more and more", "an increasing number of / a growing number of / an increasing proportion of / a growing trend of"],
+      ["think", "believe / argue / maintain / contend / hold the view that"],
+      ["need", "require / demand / call for / necessitate / rely on / depend on / be essential for"],
+      ["be important", "play a vital role in / play a crucial role in / play a key role in / serve as a cornerstone of / be fundamental to"],
+      ["good", "beneficial / advantageous / favourable / positive"],
+      ["bad", "detrimental / harmful / adverse / undesirable / negative"],
+      ["show", "demonstrate / illustrate / indicate / reveal / highlight"],
+      ["get", "obtain / acquire / gain / secure"],
+      ["make", "create / generate / establish / develop / produce"],
+      ["increase", "rise / grow / climb / expand / surge"],
+      ["decrease", "decline / reduce / diminish / drop / fall"],
+      ["solve", "address / tackle / overcome / alleviate / mitigate"],
+      ["change", "alter / transform / modify / reshape / revolutionise"],
+      ["important reason", "key reason / major factor / primary driver / main contributor"],
+      ["people", "individuals / residents / citizens / members of society"],
+      ["job", "employment / occupation / career opportunity / position"],
+      ["money", "income / earnings / financial resources / wealth"],
+      ["problem", "issue / challenge / concern / obstacle"],
+    ].map(([source, replacements]) => ({
+      id: `default:${source}`,
+      source,
+      replacements,
+    }));
     const DOTS_ICON = `
       <svg aria-hidden="true" viewBox="0 0 24 24">
         <path d="M12 6.5h.01"></path>
@@ -77,6 +111,296 @@
       closeCorpusCardActionMenus(menu);
       menu.classList.toggle("hidden", !willOpen);
       button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    }
+
+    function todayKey(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function addDaysKey(days, date = new Date()) {
+      const next = new Date(date);
+      next.setDate(next.getDate() + Number(days || 0));
+      return todayKey(next);
+    }
+
+    function takeawayReviewStorageKey(kind = "language") {
+      return `${TAKEAWAY_SRS_STORAGE_KEY}:${kind === "writing" ? "writing" : "language"}`;
+    }
+
+    function takeawayReviewState(kind = "language") {
+      try {
+        const raw = window.localStorage?.getItem(takeawayReviewStorageKey(kind));
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (parsed && typeof parsed === "object") return parsed;
+      } catch (_error) {
+        // Ignore malformed localStorage and rebuild review state lazily.
+      }
+      return {};
+    }
+
+    function saveTakeawayReviewState(kind, value) {
+      try {
+        window.localStorage?.setItem(takeawayReviewStorageKey(kind), JSON.stringify(value || {}));
+      } catch (_error) {
+        // Review scheduling is local and best-effort.
+      }
+    }
+
+    function takeawayItemsForKind(kind = "language") {
+      return kind === "writing" ? (state.writingTakeaway.items || []) : (state.languageTakeaway.items || []);
+    }
+
+    function takeawayReviewSession(kind = "language") {
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      if (!target.reviewSession) target.reviewSession = { active: false, ids: [], reviewedIds: new Set() };
+      if (!(target.reviewSession.reviewedIds instanceof Set)) {
+        target.reviewSession.reviewedIds = new Set(target.reviewSession.reviewedIds || []);
+      }
+      return target.reviewSession;
+    }
+
+    function setTakeawayReviewToast(kind = "language", message = "", options = {}) {
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      window.clearTimeout(target.reviewToastTimer);
+      target.reviewToast = String(message || "");
+      if (target.reviewToast) {
+        target.reviewToastTimer = window.setTimeout(() => {
+          target.reviewToast = "";
+          renderTakeawayReviewSurfaces(kind);
+        }, 1800);
+      }
+      if (options.render) renderTakeawayReviewSurfaces(kind);
+    }
+
+    function ensureTakeawayReviewRecords(kind = "language") {
+      const records = takeawayReviewState(kind);
+      const items = takeawayItemsForKind(kind);
+      let changed = false;
+      const seen = new Set();
+      items.forEach((item) => {
+        const id = String(item.entry_id || "").trim();
+        if (!id) return;
+        seen.add(id);
+        if (!records[id]) {
+          records[id] = {
+            due: todayKey(),
+            reps: 0,
+            interval: 0,
+            ease: 2.5,
+            last: "",
+            lapses: 0,
+          };
+          changed = true;
+        }
+      });
+      Object.keys(records).forEach((id) => {
+        if (!seen.has(id)) {
+          delete records[id];
+          changed = true;
+        }
+      });
+      if (changed) saveTakeawayReviewState(kind, records);
+      return records;
+    }
+
+    function dueTakeawayEntries(kind = "language") {
+      const records = ensureTakeawayReviewRecords(kind);
+      const today = todayKey();
+      return takeawayItemsForKind(kind)
+        .filter((item) => {
+          const id = String(item.entry_id || "").trim();
+          const record = records[id] || {};
+          return id && String(record.due || today) <= today;
+        })
+        .sort((a, b) => {
+          const left = records[a.entry_id] || {};
+          const right = records[b.entry_id] || {};
+          return String(left.due || today).localeCompare(String(right.due || today));
+        })
+        .slice(0, TAKEAWAY_DAILY_REVIEW_LIMIT);
+    }
+
+    function updateTakeawayReviewDots() {
+      const languageDue = dueTakeawayEntries("language").length;
+      const writingDue = dueTakeawayEntries("writing").length;
+      $("languageTakeawayDueDot")?.classList.toggle("hidden", languageDue <= 0);
+      $("writingTakeawayDueDot")?.classList.toggle("hidden", writingDue <= 0);
+      $("languageTakeawayDueDot")?.setAttribute("data-count", String(languageDue));
+      $("writingTakeawayDueDot")?.setAttribute("data-count", String(writingDue));
+    }
+
+    function reviewPanelId(kind = "language") {
+      return kind === "writing" ? "writingTakeawayReviewPanel" : "languageTakeawayReviewPanel";
+    }
+
+    function renderTakeawayReviewPanel(kind = "language") {
+      const panel = $(reviewPanelId(kind));
+      if (!panel) return;
+      const due = dueTakeawayEntries(kind);
+      const session = takeawayReviewSession(kind);
+      const reviewed = session.reviewedIds?.size || 0;
+      const activeTotal = session.ids?.length || due.length;
+      const currentId = String(session.currentId || "").trim();
+      const currentItem = currentId
+        ? takeawayItemsForKind(kind).find((item) => item.entry_id === currentId)
+        : null;
+      const targetState = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      panel.classList.toggle("hidden", state.view !== (kind === "writing" ? "writingTakeawayBook" : "takeawayBook"));
+      panel.classList.toggle("is-active", Boolean(session.active));
+      panel.innerHTML = `
+        ${session.active ? `
+          <button type="button" class="icon-exit-button takeaway-review-exit" data-takeaway-review-exit="${kind}" aria-label="结束复习" title="结束复习">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M7 7l10 10M17 7L7 17"></path>
+            </svg>
+          </button>
+        ` : ""}
+        <div class="takeaway-review-copy">
+          <span>${kind === "writing" ? "Writing Bank Recall" : "Takeaway Recall"}</span>
+          <strong>${session.active ? `复习中 ${reviewed}/${activeTotal}` : (due.length ? `今天到期 ${due.length} 条` : "今天没有到期提醒")}</strong>
+          <small>${session.active ? (currentItem ? `当前：${escapeHtml(currentItem.chinese_text || currentItem.source_text || "已选中")}` : "点一张被遮住的卡片查看英文，再用 A / D 记录。") : `每天最多 ${TAKEAWAY_DAILY_REVIEW_LIMIT} 条，按记忆曲线推送。`}</small>
+        </div>
+        ${session.active ? `
+          <div class="takeaway-review-panel-actions" aria-label="复习反馈">
+            <button type="button" class="takeaway-review-grade is-mastered ${currentId ? "" : "needs-card"}" data-takeaway-review-panel-grade="mastered" data-takeaway-review-kind="${kind}" aria-disabled="${currentId ? "false" : "true"}">A<span>已掌握</span></button>
+            <button type="button" class="takeaway-review-grade is-again ${currentId ? "" : "needs-card"}" data-takeaway-review-panel-grade="again" data-takeaway-review-kind="${kind}" aria-disabled="${currentId ? "false" : "true"}">D<span>记错了</span></button>
+          </div>
+        ` : `
+          <button type="button" class="takeaway-review-start" data-takeaway-review-start="${kind}" ${due.length ? "" : "disabled"}>
+            开始
+          </button>
+        `}
+        <div class="takeaway-review-toast ${targetState.reviewToast ? "is-visible" : ""}" role="status">${escapeHtml(targetState.reviewToast || "")}</div>
+      `;
+    }
+
+    function renderTakeawayReviewSurfaces(kind = "language") {
+      updateTakeawayReviewDots();
+      renderTakeawayReviewPanel(kind);
+    }
+
+    function startTakeawayReview(kind = "language") {
+      const due = dueTakeawayEntries(kind);
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      target.hideEnglish = true;
+      target.revealedEntryIds.clear();
+      target.reviewSession = {
+        active: true,
+        ids: due.map((item) => item.entry_id),
+        reviewedIds: new Set(),
+        currentId: "",
+        previousHideEnglish: Boolean(target.hideEnglish),
+      };
+      setTakeawayReviewToast(kind, "先点一张被遮住的卡片，露出英文后再按 A / D。");
+      if (kind === "writing") {
+        renderWritingTakeawayToggle();
+        renderWritingTakeaways();
+      } else {
+        renderLanguageTakeawayToggle();
+        renderLanguageTakeaways();
+      }
+      renderTakeawayReviewSurfaces(kind);
+    }
+
+    function endTakeawayReview(kind = "language", message = "已结束复习。") {
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      const session = takeawayReviewSession(kind);
+      const previousHideEnglish = Boolean(session.previousHideEnglish);
+      target.hideEnglish = previousHideEnglish;
+      target.revealedEntryIds.clear();
+      target.reviewSession = {
+        active: false,
+        ids: [],
+        reviewedIds: new Set(),
+        currentId: "",
+        previousHideEnglish,
+      };
+      setTakeawayReviewToast(kind, message);
+      if (kind === "writing") {
+        renderWritingTakeawayToggle();
+        renderWritingTakeaways();
+      } else {
+        renderLanguageTakeawayToggle();
+        renderLanguageTakeaways();
+      }
+      renderTakeawayReviewSurfaces(kind);
+      return true;
+    }
+
+    function isTakeawayReviewEntry(kind, entryId) {
+      const session = takeawayReviewSession(kind);
+      return Boolean(session.active && session.ids.includes(entryId) && !session.reviewedIds.has(entryId));
+    }
+
+    function selectTakeawayReviewEntry(kind, entryId) {
+      const id = String(entryId || "").trim();
+      if (!isTakeawayReviewEntry(kind, id)) return false;
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      const session = takeawayReviewSession(kind);
+      if (session.currentId && session.currentId !== id) {
+        setTakeawayReviewToast(kind, "先用 A / D 记录当前这张，再看下一条。");
+        renderTakeawayReviewSurfaces(kind);
+        return true;
+      }
+      session.currentId = id;
+      target.revealedEntryIds.add(id);
+      const item = takeawayItemsForKind(kind).find((entry) => entry.entry_id === id);
+      speakLanguageTakeaway(item?.source_text || "");
+      setTakeawayReviewToast(kind, "");
+      updateTakeawayCardReveal(kind, id, { current: true });
+      renderTakeawayReviewSurfaces(kind);
+      return true;
+    }
+
+    function takeawayReviewFeedback(kind, entryId = "", result) {
+      const session = takeawayReviewSession(kind);
+      const id = String(entryId || session.currentId || "").trim();
+      if (!id) {
+        setTakeawayReviewToast(kind, "先点一张被遮住的卡片，露出英文后再按 A / D。");
+        renderTakeawayReviewSurfaces(kind);
+        return false;
+      }
+      const records = ensureTakeawayReviewRecords(kind);
+      const record = records[id] || {};
+      const currentEase = Number(record.ease || 2.5);
+      const currentInterval = Number(record.interval || 0);
+      const reps = Number(record.reps || 0);
+      if (result === "again") {
+        record.reps = 0;
+        record.interval = 1;
+        record.ease = Math.max(1.3, currentEase - 0.22);
+        record.lapses = Number(record.lapses || 0) + 1;
+        record.due = addDaysKey(1);
+      } else {
+        const nextReps = reps + 1;
+        const nextInterval = nextReps <= 1
+          ? 1
+          : (nextReps === 2 ? 3 : Math.max(5, Math.round(Math.max(currentInterval, 3) * currentEase)));
+        record.reps = nextReps;
+        record.interval = Math.min(nextInterval, 90);
+        record.ease = Math.min(3.1, currentEase + 0.08);
+        record.due = addDaysKey(record.interval);
+      }
+      record.last = todayKey();
+      records[id] = record;
+      saveTakeawayReviewState(kind, records);
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      session.reviewedIds.add(id);
+      session.currentId = "";
+      target.revealedEntryIds.delete(id);
+      if ((session.reviewedIds.size || 0) >= (session.ids.length || 0)) {
+        endTakeawayReview(kind, "今日复习完成。");
+        return true;
+      } else {
+        setTakeawayReviewToast(kind, result === "again" ? "已记为 D，明天再复习。" : "已记为 A，间隔已延长。");
+      }
+      if (kind === "writing") renderWritingTakeaways();
+      else renderLanguageTakeaways();
+      renderTakeawayReviewSurfaces(kind);
+      return true;
     }
 
     async function loadP1Corpus() {
@@ -755,6 +1079,7 @@
         container.innerHTML = '<p class="muted">还没有 P2 素材分类。</p>';
         return;
       }
+      const brainstormCount = currentCards.filter((item) => String(item.brainstorm_idea || "").trim()).length;
       const categoryHtml = categories.map((category) => {
         const items = category.items || [];
         const materialRows = items.map((item, index) => {
@@ -797,6 +1122,21 @@
           </article>
         `;
       }).join("");
+      const brainstormCardHtml = `
+        <article class="p2-topic-card p2-category-entry-card p2-brainstorm-entry-card" data-category="brainstorm">
+          <header>
+            <h3>串题灵感 Brainstorm</h3>
+            <span class="p2-topic-count">${brainstormCount}/${currentCards.length || 0}</span>
+          </header>
+          <button type="button" class="p2-brainstorm-open-card" data-p2-brainstorm-open>
+            <span class="p2-brainstorm-card-mark" aria-hidden="true">B</span>
+            <span class="p2-brainstorm-card-copy">
+              <strong>按题干快速记一句灵感</strong>
+              <span>适合先放关键词、人物关系、地点、经历碎片，之后再整理成正式素材。</span>
+            </span>
+          </button>
+        </article>
+      `;
       const filterBarHtml = presentCats.length > 1
         ? `<div class="p2-cat-filter-bar" role="group" aria-label="按分类筛选">
             <button type="button" class="p2-cat-filter-btn${activeSeasonalFilter === "all" ? " active" : ""}" data-cat-filter="all">全部 <span>${currentCards.length}</span></button>
@@ -845,6 +1185,7 @@
       container.innerHTML = `
         <section class="p2-category-entry-grid" aria-label="P2 分类入口">
           ${categoryHtml}
+          ${brainstormCardHtml}
         </section>
         <section class="p2-seasonal-card-section" aria-label="当季 P2 题卡">
           <header class="p2-seasonal-section-head">
@@ -871,6 +1212,7 @@
         renderLanguageTakeawayToggle();
         renderLanguageTakeaways();
         if (stats) stats.textContent = `${state.languageTakeaway.items.length} 条`;
+        renderTakeawayReviewSurfaces("language");
         return;
       } else {
         if (stats) stats.textContent = "Loading...";
@@ -882,10 +1224,88 @@
         if (stats) stats.textContent = `${payload.count || 0} 条`;
         renderLanguageTakeawayToggle();
         renderLanguageTakeaways();
+        renderTakeawayReviewSurfaces("language");
       } catch (error) {
         if (stats) stats.textContent = "加载失败";
         if (list) list.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
       }
+    }
+
+    function takeawaySourceHtml(sourceText = "") {
+      const raw = String(sourceText || "").trim();
+      const arrowMatch = raw.match(/^(.*?)\s*(?:→|->|=>|—>)\s*(.+)$/);
+      if (!arrowMatch) {
+        return `<strong class="takeaway-source takeaway-source-plain"><span>${escapeHtml(raw)}</span></strong>`;
+      }
+      const key = arrowMatch[1].trim();
+      const rest = arrowMatch[2].trim();
+      const values = rest
+        .split(/\s*\/\s*/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+      return `
+        <strong class="takeaway-source takeaway-source-replacement">
+          <span class="takeaway-source-key">${escapeHtml(key)}</span>
+          <span class="takeaway-source-arrow">→</span>
+          <span class="takeaway-source-values">
+            ${values.length
+              ? values.map((value) => `<span class="takeaway-source-value">${escapeHtml(value)}</span>`).join("")
+              : `<span class="takeaway-source-value">${escapeHtml(rest)}</span>`}
+          </span>
+        </strong>
+      `;
+    }
+
+    function renderTakeawayMasonry(list, cards) {
+      if (!list) return;
+      if (!cards.length) {
+        list.innerHTML = "";
+        return;
+      }
+      list.innerHTML = `
+        <div class="language-takeaway-column" data-takeaway-column="0"></div>
+        <div class="language-takeaway-column" data-takeaway-column="1"></div>
+      `;
+      const columns = Array.from(list.querySelectorAll(".language-takeaway-column"));
+      const measure = document.createElement("div");
+      measure.className = "language-takeaway-measure";
+      measure.setAttribute("aria-hidden", "true");
+      list.appendChild(measure);
+      const nodes = cards.map((card) => {
+        const template = document.createElement("template");
+        template.innerHTML = card.html.trim();
+        const node = template.content.firstElementChild;
+        if (node) measure.appendChild(node);
+        return node;
+      }).filter(Boolean);
+      const heights = nodes.map((node) => Math.max(1, node.getBoundingClientRect().height));
+      const order = nodes.map((node, index) => ({ node, height: heights[index], index }))
+        .sort((left, right) => right.height - left.height || left.index - right.index);
+      const columnHeights = [0, 0];
+      const gap = 10;
+      order.forEach(({ node, height }) => {
+        const target = columnHeights[0] <= columnHeights[1] ? 0 : 1;
+        columns[target].appendChild(node);
+        columnHeights[target] += height + gap;
+      });
+      measure.remove();
+    }
+
+    function updateTakeawayCardReveal(kind, entryId, options = {}) {
+      const id = String(entryId || "").trim();
+      if (!id) return;
+      const list = $(kind === "writing" ? "writingTakeawayList" : "languageTakeawayList");
+      const selector = kind === "writing" ? "[data-writing-takeaway-entry]" : "[data-takeaway-entry]";
+      const button = Array.from(list?.querySelectorAll(selector) || []).find((candidate) => {
+        return kind === "writing"
+          ? candidate.dataset.writingTakeawayEntry === id
+          : candidate.dataset.takeawayEntry === id;
+      });
+      const wrap = button?.closest(".language-takeaway-card-wrap");
+      if (!wrap) return;
+      wrap.classList.remove("is-concealed");
+      wrap.classList.add("is-revealed");
+      wrap.classList.toggle("is-review-current", Boolean(options.current));
     }
 
     function renderLanguageTakeaways() {
@@ -894,14 +1314,22 @@
       const items = state.languageTakeaway.items || [];
       const hiddenMode = state.languageTakeaway.hideEnglish;
       const revealed = state.languageTakeaway.revealedEntryIds;
+      const session = takeawayReviewSession("language");
+      const dueIds = new Set(dueTakeawayEntries("language").map((item) => item.entry_id));
       if (!items.length) {
         list.innerHTML = '<p class="muted language-book-empty">还没有摘录。平时选中单词或短语，点击“译”就可以加入这里。</p>';
         return;
       }
-      list.innerHTML = items.map((item) => `
-        <div class="language-takeaway-card-wrap ${hiddenMode && !revealed.has(item.entry_id) ? "is-concealed" : "is-revealed"}">
+      const cards = items.map((item) => {
+        const isReviewTarget = isTakeawayReviewEntry("language", item.entry_id);
+        const isDue = dueIds.has(item.entry_id);
+        const shouldConceal = (session.active ? isReviewTarget : hiddenMode) && !revealed.has(item.entry_id);
+        const isCurrent = session.active && session.currentId === item.entry_id;
+        return {
+          html: `
+        <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""}">
           <button type="button" class="language-takeaway-card" data-takeaway-entry="${escapeHtml(item.entry_id)}">
-            <strong class="takeaway-source">${escapeHtml(item.source_text)}</strong>
+            ${takeawaySourceHtml(item.source_text)}
             <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
           </button>
           ${corpusCardActionMenuHtml({
@@ -911,7 +1339,10 @@
             entryId: item.entry_id,
           })}
         </div>
-      `).join("");
+      `,
+        };
+      });
+      renderTakeawayMasonry(list, cards);
     }
 
     function renderLanguageTakeawayToggle() {
@@ -937,6 +1368,7 @@
       if (state.languageTakeaway.hideEnglish) state.languageTakeaway.revealedEntryIds.clear();
       renderLanguageTakeawayToggle();
       renderLanguageTakeaways();
+      renderTakeawayReviewSurfaces("language");
     }
 
     function speakLanguageTakeaway(textValue) {
@@ -954,7 +1386,7 @@
       if (!item) return;
       state.languageTakeaway.revealedEntryIds.add(entryId);
       speakLanguageTakeaway(item.source_text);
-      renderLanguageTakeaways();
+      updateTakeawayCardReveal("language", entryId);
     }
 
     async function deleteLanguageTakeawayEntry(entryId) {
@@ -965,6 +1397,7 @@
         state.languageTakeaway.revealedEntryIds.delete(entryId);
         renderLanguageTakeaways();
         text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+        renderTakeawayReviewSurfaces("language");
       });
     }
 
@@ -1231,6 +1664,7 @@
         state.languageTakeaway.revealedEntryIds.add(saved.entry_id);
         renderLanguageTakeaways();
         text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+        renderTakeawayReviewSurfaces("language");
         hideLanguageTakeawayPopup();
       } catch (error) {
         setLanguageTakeawayStatus(error.message || "保存失败");
@@ -1260,6 +1694,7 @@
         state.writingTakeaway.revealedEntryIds.add(saved.entry_id);
         renderWritingTakeaways();
         text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
+        renderTakeawayReviewSurfaces("writing");
         hideLanguageTakeawayPopup();
       } catch (error) {
         setLanguageTakeawayStatus(error.message || "保存失败");
@@ -1279,6 +1714,27 @@
       return `${base}/${encodeURIComponent(entryId)}`;
     }
 
+    function defaultTakeawayContextLabel(kind) {
+      return kind === "writing" ? "写作积累" : "Takeaway";
+    }
+
+    function openNewTakeawayEditor(kind = "language") {
+      closeCorpusCardActionMenus();
+      state.languageTakeaway.activeEdit = {
+        kind,
+        entryId: "",
+        originalSourceText: "",
+        originalChineseText: "",
+      };
+      text("takeawayEditDialogType", defaultTakeawayContextLabel(kind));
+      text("takeawayEditDialogTitle", kind === "writing" ? "添加写作积累" : "添加 Takeaway");
+      if ($("takeawayEditSource")) $("takeawayEditSource").value = "";
+      if ($("takeawayEditChinese")) $("takeawayEditChinese").value = "";
+      text("takeawayEditStatus", "");
+      $("takeawayEditDialog")?.classList.remove("hidden");
+      setTimeout(() => $("takeawayEditSource")?.focus(), 0);
+    }
+
     function openTakeawayEditor(kind, entryId) {
       const entry = findTakeawayEntry(kind, entryId);
       if (!entry) return;
@@ -1296,6 +1752,151 @@
       text("takeawayEditStatus", "");
       $("takeawayEditDialog")?.classList.remove("hidden");
       setTimeout(() => $("takeawayEditSource")?.focus(), 0);
+    }
+
+    function expressionReplacementStorageKey(kind = "writing") {
+      return `${EXPRESSION_REPLACEMENT_STORAGE_KEY}:${kind === "language" ? "language" : "writing"}`;
+    }
+
+    function normalizeExpressionReplacementItem(item, index = 0) {
+      const source = String(item?.source || "").trim();
+      const replacements = String(item?.replacements || "").trim();
+      if (!source && !replacements) return null;
+      return {
+        id: String(item?.id || `custom:${Date.now()}:${index}`),
+        source,
+        replacements,
+      };
+    }
+
+    function loadExpressionReplacements(kind = "writing") {
+      try {
+        const raw = window.localStorage?.getItem(expressionReplacementStorageKey(kind));
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(parsed)) {
+          return parsed.map(normalizeExpressionReplacementItem).filter(Boolean);
+        }
+      } catch (_error) {
+        // Ignore malformed localStorage and fall back to defaults.
+      }
+      return DEFAULT_EXPRESSION_REPLACEMENTS.map((item) => ({ ...item }));
+    }
+
+    function saveExpressionReplacements(kind, items) {
+      try {
+        window.localStorage?.setItem(expressionReplacementStorageKey(kind), JSON.stringify(items || []));
+      } catch (_error) {
+        // Local custom replacements are best-effort.
+      }
+    }
+
+    function activeExpressionReplacementKind() {
+      return $("expressionReplacementDialog")?.dataset.kind || "writing";
+    }
+
+    function renderExpressionReplacements(kind = activeExpressionReplacementKind()) {
+      const list = $("expressionReplacementList");
+      if (!list) return;
+      const items = loadExpressionReplacements(kind);
+      list.innerHTML = items.map((item) => `
+        <article class="expression-replacement-row" data-expression-replacement-id="${escapeHtml(item.id)}">
+          <div class="expression-replacement-copy">
+            <strong>${escapeHtml(item.source || "未命名表达")}</strong>
+            <p>${escapeHtml(item.replacements || "还没有替换表达")}</p>
+          </div>
+          <button type="button" class="expression-replacement-edit" data-expression-replacement-edit="${escapeHtml(item.id)}">编辑</button>
+          <button type="button" class="expression-replacement-delete" data-expression-replacement-delete="${escapeHtml(item.id)}">删除</button>
+        </article>
+      `).join("");
+    }
+
+    function renderExpressionReplacementEditRow(item) {
+      const list = $("expressionReplacementList");
+      if (!list || !item) return;
+      const row = list.querySelector(`[data-expression-replacement-id="${CSS.escape(item.id)}"]`);
+      if (!row) return;
+      row.classList.add("is-editing");
+      row.innerHTML = `
+        <label class="expression-replacement-field">
+          <span>原表达</span>
+          <input data-expression-replacement-source value="${escapeHtml(item.source || "")}" spellcheck="true">
+        </label>
+        <label class="expression-replacement-field">
+          <span>替换表达</span>
+          <textarea data-expression-replacement-values spellcheck="true">${escapeHtml(item.replacements || "")}</textarea>
+        </label>
+        <div class="expression-replacement-edit-actions">
+          <button type="button" class="expression-replacement-edit" data-expression-replacement-save="${escapeHtml(item.id)}">保存</button>
+          <button type="button" class="expression-replacement-delete" data-expression-replacement-cancel>取消</button>
+        </div>
+      `;
+      setTimeout(() => row.querySelector("[data-expression-replacement-source]")?.focus(), 0);
+    }
+
+    function openExpressionReplacementDialog(kind = "writing") {
+      const dialog = $("expressionReplacementDialog");
+      if (!dialog) return;
+      dialog.dataset.kind = kind === "language" ? "language" : "writing";
+      text("expressionReplacementType", kind === "language" ? "Takeaway" : "写作积累");
+      renderExpressionReplacements(dialog.dataset.kind);
+      dialog.classList.remove("hidden");
+    }
+
+    function closeExpressionReplacementDialog() {
+      $("expressionReplacementDialog")?.classList.add("hidden");
+    }
+
+    function addExpressionReplacement() {
+      const item = {
+        id: `custom:${Date.now()}`,
+        source: "",
+        replacements: "",
+      };
+      const list = $("expressionReplacementList");
+      if (!list) return;
+      if (list.querySelector(".expression-replacement-row.is-editing")) {
+        renderExpressionReplacements(activeExpressionReplacementKind());
+      }
+      list.insertAdjacentHTML("afterbegin", `
+        <article class="expression-replacement-row" data-expression-replacement-id="${escapeHtml(item.id)}"></article>
+      `);
+      setTimeout(() => {
+        const row = document.querySelector(`[data-expression-replacement-id="${CSS.escape(item.id)}"]`);
+        row?.scrollIntoView({ block: "nearest" });
+        renderExpressionReplacementEditRow(item);
+      }, 0);
+    }
+
+    function editExpressionReplacement(itemId) {
+      const kind = activeExpressionReplacementKind();
+      const items = loadExpressionReplacements(kind);
+      const item = items.find((entry) => entry.id === itemId);
+      if (!item) return;
+      renderExpressionReplacementEditRow(item);
+    }
+
+    function saveExpressionReplacementEdit(itemId) {
+      const kind = activeExpressionReplacementKind();
+      const row = $("expressionReplacementList")?.querySelector(`[data-expression-replacement-id="${CSS.escape(itemId)}"]`);
+      if (!row) return;
+      const items = loadExpressionReplacements(kind);
+      let item = items.find((entry) => entry.id === itemId);
+      if (!item) {
+        item = { id: itemId, source: "", replacements: "" };
+        items.unshift(item);
+      }
+      item.source = String(row.querySelector("[data-expression-replacement-source]")?.value || "").trim();
+      item.replacements = String(row.querySelector("[data-expression-replacement-values]")?.value || "").trim();
+      const cleaned = items.map(normalizeExpressionReplacementItem).filter(Boolean);
+      saveExpressionReplacements(kind, cleaned);
+      renderExpressionReplacements(kind);
+    }
+
+    function deleteExpressionReplacement(itemId) {
+      const kind = activeExpressionReplacementKind();
+      const items = loadExpressionReplacements(kind).filter((item) => item.id !== itemId);
+      saveExpressionReplacements(kind, items);
+      renderExpressionReplacements(kind);
     }
 
     function takeawayEditorValues() {
@@ -1339,16 +1940,18 @@
         state.writingTakeaway.revealedEntryIds.add(saved.entry_id);
         renderWritingTakeaways();
         text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
+        renderTakeawayReviewSurfaces("writing");
       } else {
         state.languageTakeaway.revealedEntryIds.add(saved.entry_id);
         renderLanguageTakeaways();
         text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+        renderTakeawayReviewSurfaces("language");
       }
     }
 
     async function saveTakeawayEditor() {
       const active = state.languageTakeaway.activeEdit;
-      if (!active?.entryId || state.languageTakeaway.editing) return false;
+      if (!active || state.languageTakeaway.editing) return false;
       const { sourceText, chineseText } = takeawayEditorValues();
       if (!sourceText) {
         text("takeawayEditStatus", "原文为空，未保存。");
@@ -1363,10 +1966,16 @@
       }
       text("takeawayEditStatus", "");
       try {
-        const saved = await api(takeawayEditEndpoint(active.kind, active.entryId), {
+        const endpoint = active.entryId
+          ? takeawayEditEndpoint(active.kind, active.entryId)
+          : (active.kind === "writing" ? "/api/writing-takeaways" : "/api/language-takeaways");
+        const saved = await api(endpoint, {
           source_text: sourceText,
           chinese_text: chineseText,
-        }, { method: "POST" });
+          context_url: window.location.href,
+          context_label: defaultTakeawayContextLabel(active.kind),
+          source: active.kind === "writing" ? "writing_takeaway" : "language_takeaway",
+        }, { method: active.entryId ? "PATCH" : "POST" });
         replaceTakeawayEntry(active.kind, saved);
         closeTakeawayEditor();
         return true;
@@ -1435,6 +2044,148 @@
         title: card?.dataset?.p2BankCardTitle || "P2 题卡",
         cue_title: card?.dataset?.p2BankCardTitle || "P2 题卡",
       };
+    }
+
+    function p2BrainstormCueText(entry = {}) {
+      return String(entry.linked_question || entry.question || p2CleanCueTitle(entry) || "").trim();
+    }
+
+    function p2BrainstormRows() {
+      return (state.p2Corpus.currentPart2Cards || [])
+        .map((item, index) => ({ ...item, _rowIndex: index + 1 }))
+        .filter((item) => p2BankQuestionId(item));
+    }
+
+    function p2BrainstormEntryForQuestion(questionId) {
+      const targetId = String(questionId || "").trim();
+      return (state.p2Corpus.currentPart2Cards || []).find((item) => p2BankQuestionId(item) === targetId) || {};
+    }
+
+    function p2BrainstormInputChanged(input) {
+      if (!input) return false;
+      const entry = p2BrainstormEntryForQuestion(input.dataset.p2BrainstormInput || "");
+      return String(entry.brainstorm_idea || "").trim() !== String(input.value || "").trim();
+    }
+
+    function renderP2BrainstormRows() {
+      const list = $("p2BrainstormList");
+      if (!list) return;
+      const rows = p2BrainstormRows();
+      if (!rows.length) {
+        list.innerHTML = '<p class="muted">还没有加载到 P2 题卡。</p>';
+        return;
+      }
+      list.innerHTML = rows.map((item) => {
+        const questionId = p2BankQuestionId(item);
+        const idea = String(item.brainstorm_idea || "").trim();
+        const stem = escapeHtml(p2CleanCueTitle(item));
+        const hasCue = (Array.isArray(item.bullets) && item.bullets.length > 0) || String(item.rounding || "").trim();
+        const detailHtml = hasCue ? p2CueQuestionHtml(item) : "";
+        return `
+          <div class="p2-brainstorm-row" data-p2-brainstorm-row="${escapeHtml(questionId)}">
+            <div
+              class="p2-brainstorm-left${hasCue ? " is-clickable" : ""}"
+              ${hasCue ? `data-p2-brainstorm-toggle="${escapeHtml(questionId)}" role="button" tabindex="0" aria-expanded="false"` : ""}
+            >
+              <div class="p2-brainstorm-question">
+                <span class="p2-brainstorm-index">${item._rowIndex}</span>
+                <span class="p2-brainstorm-stem">${stem}</span>
+              </div>
+              ${hasCue ? `<div class="p2-brainstorm-cue-detail" data-p2-brainstorm-detail="${escapeHtml(questionId)}" hidden>${detailHtml}</div>` : ""}
+            </div>
+            <input
+              class="p2-brainstorm-input"
+              data-p2-brainstorm-input="${escapeHtml(questionId)}"
+              type="text"
+              value="${escapeHtml(idea)}"
+              placeholder="一句灵感：人物 / 地点 / 经历 / 可串题角度"
+              autocomplete="off"
+            >
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function openP2BrainstormDialog() {
+      if (!state.p2Corpus.loaded) {
+        text("p2BrainstormStatus", "正在加载题卡...");
+        await loadP2Corpus({ force: true });
+      }
+      renderP2BrainstormRows();
+      const count = (state.p2Corpus.currentPart2Cards || []).filter((item) => String(item.brainstorm_idea || "").trim()).length;
+      text("p2BrainstormStatus", count ? `已填写 ${count} 条灵感` : "");
+      $("p2BrainstormDialog")?.classList.remove("hidden");
+      setTimeout(() => $("p2BrainstormList")?.querySelector(".p2-brainstorm-input")?.focus(), 0);
+    }
+
+    function closeP2BrainstormDialog() {
+      $("p2BrainstormDialog")?.classList.add("hidden");
+      text("p2BrainstormStatus", "");
+    }
+
+    function updateP2BrainstormCardLocal(questionId, idea) {
+      const targetId = String(questionId || "").trim();
+      state.p2Corpus.currentPart2Cards = (state.p2Corpus.currentPart2Cards || []).map((item) => {
+        if (p2BankQuestionId(item) !== targetId) return item;
+        return {
+          ...item,
+          brainstorm_idea: idea,
+          has_brainstorm_idea: Boolean(String(idea || "").trim()),
+        };
+      });
+    }
+
+    async function saveP2BrainstormIdea(questionId, idea, options = {}) {
+      const targetId = String(questionId || "").trim();
+      if (!targetId) return null;
+      const entry = p2BrainstormEntryForQuestion(targetId);
+      const nextIdea = String(idea || "").trim();
+      const saved = await api(`/api/p2-bank-corpus/${encodeURIComponent(targetId)}`, {
+        question: entry.linked_question || entry.question || p2BrainstormCueText(entry),
+        metadata: { brainstorm_idea: nextIdea },
+        source: "p2_brainstorm",
+      }, { method: "PATCH" });
+      updateP2BrainstormCardLocal(targetId, saved.brainstorm_idea ?? nextIdea);
+      if (!options.silent) {
+        const count = (state.p2Corpus.currentPart2Cards || []).filter((item) => String(item.brainstorm_idea || "").trim()).length;
+        text("p2BrainstormStatus", `已保存 · ${count} 条灵感`);
+        renderP2CorpusTopics();
+      }
+      return saved;
+    }
+
+    async function saveP2BrainstormAll(options = {}) {
+      if (state.p2Corpus.brainstormSaving) return;
+      const inputs = Array.from(document.querySelectorAll("[data-p2-brainstorm-input]"))
+        .filter(p2BrainstormInputChanged);
+      if (!inputs.length) return;
+      state.p2Corpus.brainstormSaving = true;
+      const button = $("saveP2BrainstormBtn");
+      const original = button?.textContent || "保存灵感";
+      if (button) {
+        button.disabled = true;
+        button.textContent = "保存中...";
+      }
+      text("p2BrainstormStatus", "正在保存...");
+      try {
+        // SQLite 不支持并发写入，逐条顺序保存避免 "database is locked" 500 错误
+        for (const input of inputs) {
+          await saveP2BrainstormIdea(input.dataset.p2BrainstormInput || "", input.value || "", { silent: true });
+        }
+        renderP2BrainstormRows();
+        renderP2CorpusTopics();
+        const count = (state.p2Corpus.currentPart2Cards || []).filter((item) => String(item.brainstorm_idea || "").trim()).length;
+        text("p2BrainstormStatus", `已保存 ${inputs.length} 处修改 · 共 ${count} 条灵感`);
+        if (options.closeOnSuccess) closeP2BrainstormDialog();
+      } catch (error) {
+        text("p2BrainstormStatus", error.message || String(error));
+      } finally {
+        state.p2Corpus.brainstormSaving = false;
+        if (button) {
+          button.disabled = false;
+          button.textContent = original;
+        }
+      }
     }
 
     function isP2BankCard(entry = {}) {
@@ -1905,6 +2656,15 @@
     }
 
     document.addEventListener("click", (event) => {
+      const brainstormOpenButton = event.target.closest("[data-p2-brainstorm-open]");
+      if (brainstormOpenButton) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openP2BrainstormDialog().catch((error) => {
+          text("p2BrainstormStatus", error.message || String(error));
+        });
+        return;
+      }
       // Category filter bar
       const filterBtn = event.target.closest("[data-cat-filter]");
       if (filterBtn) {
@@ -1955,6 +2715,102 @@
       event.preventDefault();
       selectP2BankP3Question(bankP3Button.dataset.p2BankP3Select || "");
     }, true);
+
+    $("p2BrainstormDialog")?.addEventListener("pointerdown", (event) => {
+      if (event.target === $("p2BrainstormDialog")) closeP2BrainstormDialog();
+    });
+
+    $("p2BrainstormDialog")?.addEventListener("click", (event) => {
+      if (event.target.closest("#p2BrainstormList")) return;
+      if (event.target.closest("#saveP2BrainstormBtn")) return;
+      closeP2BrainstormDetails();
+    });
+
+    let p2BrainstormActiveDetailId = "";
+
+    function setP2BrainstormActiveDetail(questionId = "") {
+      const list = $("p2BrainstormList");
+      if (!list) return;
+      const activeId = String(questionId || "").trim();
+      p2BrainstormActiveDetailId = activeId;
+      list.querySelectorAll("[data-p2-brainstorm-toggle]").forEach((trigger) => {
+        const expanded = Boolean(activeId && trigger.dataset.p2BrainstormToggle === activeId);
+        trigger.setAttribute("aria-expanded", String(expanded));
+        trigger.classList.toggle("is-expanded", expanded);
+      });
+      list.querySelectorAll("[data-p2-brainstorm-detail]").forEach((detail) => {
+        detail.hidden = !(activeId && detail.dataset.p2BrainstormDetail === activeId);
+      });
+    }
+
+    function closeP2BrainstormDetails() {
+      setP2BrainstormActiveDetail("");
+    }
+
+    function openP2BrainstormDetail(trigger) {
+      if (!trigger) return;
+      const qid = trigger.dataset.p2BrainstormToggle;
+      const detail = $("p2BrainstormList").querySelector(`[data-p2-brainstorm-detail="${CSS.escape(qid)}"]`);
+      if (!detail) return;
+      if (p2BrainstormActiveDetailId === qid) {
+        closeP2BrainstormDetails();
+        return;
+      }
+      setP2BrainstormActiveDetail(qid);
+    }
+
+    $("p2BrainstormList")?.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("[data-p2-brainstorm-input]")) {
+        closeP2BrainstormDetails();
+        return;
+      }
+      const trigger = event.target.closest("[data-p2-brainstorm-toggle]");
+      if (trigger) return;
+      closeP2BrainstormDetails();
+    });
+
+    $("p2BrainstormList")?.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-p2-brainstorm-toggle]");
+      if (!trigger) return;
+      openP2BrainstormDetail(trigger);
+    });
+
+    $("p2BrainstormList")?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeP2BrainstormDetails();
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const trigger = event.target.closest("[data-p2-brainstorm-toggle]");
+      if (!trigger) return;
+      event.preventDefault();
+      openP2BrainstormDetail(trigger);
+    });
+
+    $("p2BrainstormList")?.addEventListener("focusout", (event) => {
+      const input = event.target.closest("[data-p2-brainstorm-input]");
+      if (!input) return;
+      if (state.p2Corpus.brainstormSaving || state.p2Corpus.brainstormSuppressBlurSave) return;
+      const questionId = input.dataset.p2BrainstormInput || "";
+      if (!p2BrainstormInputChanged(input)) return;
+      saveP2BrainstormIdea(questionId, input.value || "").catch((error) => {
+        text("p2BrainstormStatus", error.message || String(error));
+      });
+    });
+
+    $("saveP2BrainstormBtn")?.addEventListener("pointerdown", () => {
+      state.p2Corpus.brainstormSuppressBlurSave = true;
+      window.setTimeout(() => {
+        state.p2Corpus.brainstormSuppressBlurSave = false;
+      }, 350);
+    });
+
+    $("saveP2BrainstormBtn")?.addEventListener("click", () => {
+      state.p2Corpus.brainstormSuppressBlurSave = false;
+      saveP2BrainstormAll().catch((error) => {
+        text("p2BrainstormStatus", error.message || String(error));
+      });
+    });
 
     $("p2BankP3EntryList")?.addEventListener("click", (event) => {
       const bankP3Button = event.target.closest("[data-p2-bank-p3-select]");
@@ -2094,6 +2950,7 @@
         renderWritingTakeawayToggle();
         renderWritingTakeaways();
         if (stats) stats.textContent = `${state.writingTakeaway.items.length} 条`;
+        renderTakeawayReviewSurfaces("writing");
         return;
       } else {
         if (stats) stats.textContent = "Loading...";
@@ -2105,6 +2962,7 @@
         if (stats) stats.textContent = `${payload.count || 0} 条`;
         renderWritingTakeawayToggle();
         renderWritingTakeaways();
+        renderTakeawayReviewSurfaces("writing");
       } catch (error) {
         if (stats) stats.textContent = "加载失败";
         if (list) list.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
@@ -2117,14 +2975,22 @@
       const items = state.writingTakeaway.items || [];
       const hiddenMode = state.writingTakeaway.hideEnglish;
       const revealed = state.writingTakeaway.revealedEntryIds;
+      const session = takeawayReviewSession("writing");
+      const dueIds = new Set(dueTakeawayEntries("writing").map((item) => item.entry_id));
       if (!items.length) {
         list.innerHTML = '<p class="muted language-book-empty">还没有写作积累。写作文或看报告时划选表达，点击“加入写作积累”即可保存到这里。</p>';
         return;
       }
-      list.innerHTML = items.map((item) => `
-        <div class="language-takeaway-card-wrap ${hiddenMode && !revealed.has(item.entry_id) ? "is-concealed" : "is-revealed"}">
+      const cards = items.map((item) => {
+        const isReviewTarget = isTakeawayReviewEntry("writing", item.entry_id);
+        const isDue = dueIds.has(item.entry_id);
+        const shouldConceal = (session.active ? isReviewTarget : hiddenMode) && !revealed.has(item.entry_id);
+        const isCurrent = session.active && session.currentId === item.entry_id;
+        return {
+          html: `
+        <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""}">
           <button type="button" class="language-takeaway-card writing-takeaway-item" data-writing-takeaway-entry="${escapeHtml(item.entry_id)}">
-            <strong class="takeaway-source">${escapeHtml(item.source_text)}</strong>
+            ${takeawaySourceHtml(item.source_text)}
             <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
           </button>
           ${corpusCardActionMenuHtml({
@@ -2134,7 +3000,10 @@
             entryId: item.entry_id,
           })}
         </div>
-      `).join("");
+      `,
+        };
+      });
+      renderTakeawayMasonry(list, cards);
     }
 
     function renderWritingTakeawayToggle() {
@@ -2160,6 +3029,7 @@
       if (state.writingTakeaway.hideEnglish) state.writingTakeaway.revealedEntryIds.clear();
       renderWritingTakeawayToggle();
       renderWritingTakeaways();
+      renderTakeawayReviewSurfaces("writing");
     }
 
     function revealAndSpeakWritingTakeaway(entryId) {
@@ -2167,7 +3037,7 @@
       if (!item) return;
       state.writingTakeaway.revealedEntryIds.add(entryId);
       speakLanguageTakeaway(item.source_text);
-      renderWritingTakeaways();
+      updateTakeawayCardReveal("writing", entryId);
     }
 
     async function deleteWritingTakeawayEntry(entryId) {
@@ -2178,6 +3048,7 @@
         state.writingTakeaway.revealedEntryIds.delete(entryId);
         renderWritingTakeaways();
         text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
+        renderTakeawayReviewSurfaces("writing");
       });
     }
 
@@ -2225,6 +3096,11 @@
       renderLanguageTakeaways,
       renderLanguageTakeawayToggle,
       toggleLanguageTakeawayHiddenMode,
+      startTakeawayReview,
+      endTakeawayReview,
+      selectTakeawayReviewEntry,
+      takeawayReviewFeedback,
+      updateTakeawayReviewDots,
       speakLanguageTakeaway,
       revealAndSpeakLanguageTakeaway,
       deleteLanguageTakeawayEntry,
@@ -2244,9 +3120,16 @@
       translateLanguageTakeawaySource,
       saveLanguageTakeaway,
       saveWritingTakeaway,
+      openNewTakeawayEditor,
       openTakeawayEditor,
       closeTakeawayEditor,
       saveTakeawayEditor,
+      openExpressionReplacementDialog,
+      closeExpressionReplacementDialog,
+      addExpressionReplacement,
+      editExpressionReplacement,
+      saveExpressionReplacementEdit,
+      deleteExpressionReplacement,
       findP2CorpusEntry,
       openP2CorpusLibrary,
       openP2CorpusEditor,
@@ -2260,6 +3143,7 @@
       saveAndCloseP2CorpusP3Editor,
       saveP2CorpusEntry,
       deleteP2CorpusEntry,
+      openP2BrainstormDialog,
       loadWritingTakeaways,
       renderWritingTakeaways,
       renderWritingTakeawayToggle,

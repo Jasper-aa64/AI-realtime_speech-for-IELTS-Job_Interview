@@ -116,24 +116,16 @@ class StreamingFollowUpTests(TestCase):
         self.assertEqual(follow_up_turn.question, "How could this affect families in the future?")
         self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "http_api_stream")
         self.assertEqual(follow_up_turn.metadata["prompt"]["provider"], "openai_compatible_http")
-        self.assertEqual(follow_up_turn.metadata["prompt"]["model"], "gpt-5.4-mini")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["model"], "legacy-model")
         self.assertEqual(follow_up_turn.metadata["prompt"]["usage"], {"input_tokens": 18, "output_tokens": 8})
         self.assertIn("latency_ms", follow_up_turn.metadata["prompt"])
         self.assertEqual(follow_up_turn.metadata["examiner_tts"]["status"], "ready")
 
-    def test_follow_up_stream_emits_fallback_when_http_provider_fails(self):
+    def test_p3_follow_up_stream_emits_failed_without_fallback_when_http_provider_fails(self):
         _attempt, main_turn, follow_up_turn = self.create_p3_attempt()
         with (
             patch("apps.speaking.services.HttpApiProvider", side_effect=RuntimeError("provider unavailable")),
-            patch(
-                "apps.speaking.services._generate_streamed_follow_up_tts",
-                return_value={
-                    "provider": "volcengine",
-                    "status": "ready",
-                    "audio_url": "/api/tts-audio/examiner/stream-p3-attempt_t2_followup_examiner.mp3",
-                    "content_type": "audio/mpeg",
-                },
-            ) as generate_tts,
+            patch("apps.speaking.services._generate_streamed_follow_up_tts") as generate_tts,
         ):
             response = self.client.get(
                 f"/api/attempts/stream-p3-attempt/turns/{main_turn.turn_id}/follow-up-stream"
@@ -141,14 +133,17 @@ class StreamingFollowUpTests(TestCase):
             payloads = _sse_payloads(response)
 
         self.assertEqual(response.status_code, 200)
-        generate_tts.assert_called_once()
-        fallback = next(payload for payload in payloads if payload["event"] == "fallback")
-        self.assertEqual(fallback["backend"], "fallback")
-        self.assertIn("tts_ready", [payload["event"] for payload in payloads])
+        generate_tts.assert_not_called()
+        failed = next(payload for payload in payloads if payload["event"] == "failed")
+        self.assertEqual(failed["backend"], "stream_failed")
+        self.assertNotIn("fallback", [payload["event"] for payload in payloads])
+        self.assertNotIn("tts_ready", [payload["event"] for payload in payloads])
         follow_up_turn.refresh_from_db()
-        self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "fallback")
+        self.assertEqual(follow_up_turn.question, "")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "stream_failed")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["generation_status"], "failed")
 
-    def test_follow_up_stream_falls_back_when_transcript_missing(self):
+    def test_p3_follow_up_stream_missing_transcript_stays_failed_without_hardcoded_question(self):
         _attempt, main_turn, follow_up_turn = self.create_p3_attempt()
         main_turn.transcript_raw = ""
         main_turn.transcript_cleaned = ""
@@ -173,13 +168,16 @@ class StreamingFollowUpTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         provider.assert_not_called()
-        generate_tts.assert_called_once()
-        fallback = next(payload for payload in payloads if payload["event"] == "fallback")
-        self.assertEqual(fallback["backend"], "fallback")
-        self.assertIn("missing_transcript", fallback["error"])
-        self.assertIn("tts_ready", [payload["event"] for payload in payloads])
+        generate_tts.assert_not_called()
+        failed = next(payload for payload in payloads if payload["event"] == "failed")
+        self.assertEqual(failed["backend"], "stream_failed")
+        self.assertIn("missing_transcript", failed["error"])
+        self.assertNotIn("fallback", [payload["event"] for payload in payloads])
+        self.assertNotIn("tts_ready", [payload["event"] for payload in payloads])
         follow_up_turn.refresh_from_db()
-        self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "fallback")
+        self.assertEqual(follow_up_turn.question, "")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "stream_failed")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["generation_status"], "failed")
 
     def test_turn_complete_stream_follow_up_marks_p1_follow_up_pending(self):
         attempt = SpeakingAttempt.objects.create(
@@ -335,7 +333,58 @@ class StreamingFollowUpTests(TestCase):
         self.assertEqual(follow_up.question, "How does your internship help your studies?")
         self.assertEqual(follow_up.metadata["prompt"]["backend"], "http_api_stream")
         self.assertEqual(follow_up.metadata["prompt"]["provider"], "openai_compatible_http")
-        self.assertEqual(follow_up.metadata["prompt"]["model"], "gpt-5.4-mini")
+        self.assertEqual(follow_up.metadata["prompt"]["model"], "legacy-model")
         self.assertEqual(follow_up.metadata["prompt"]["usage"], {"input_tokens": 16, "output_tokens": 7})
         self.assertIn("latency_ms", follow_up.metadata["prompt"])
         self.assertEqual(follow_up.metadata["examiner_tts"]["status"], "ready")
+
+    def test_p1_follow_up_stream_failure_does_not_show_fallback_question(self):
+        SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="stream-p1-failure-attempt",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t2"},
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=SpeakingAttempt.objects.get(attempt_id="stream-p1-failure-attempt"),
+            turn_id="t2",
+            sequence=1,
+            part="p1",
+            question="Do you work or do you study?",
+            transcript_raw="",
+            transcript_cleaned="",
+            metadata={
+                "prompt": {
+                    "topic": "intro",
+                    "question": "Do you work or do you study?",
+                    "flow": "intro",
+                    "role": "work_study",
+                    "counts_toward_total": True,
+                },
+                "display_index": 1,
+            },
+        )
+        with (
+            patch("apps.speaking.services.HttpApiProvider", side_effect=RuntimeError("provider unavailable")),
+            patch("apps.speaking.services._generate_streamed_follow_up_tts") as generate_tts,
+        ):
+            response = self.client.get(
+                "/api/attempts/stream-p1-failure-attempt/turns/t2/follow-up-stream"
+            )
+            payloads = _sse_payloads(response)
+
+        self.assertEqual(response.status_code, 200)
+        generate_tts.assert_not_called()
+        failed = next(payload for payload in payloads if payload["event"] == "failed")
+        self.assertEqual(failed["backend"], "stream_failed")
+        self.assertNotIn("Can you tell me a little more about what you do now?", json.dumps(payloads))
+        self.assertNotIn("What do you enjoy most about your work or studies?", json.dumps(payloads))
+        follow_up = SpeakingTurn.objects.get(attempt__attempt_id="stream-p1-failure-attempt", turn_id="t2_followup")
+        self.assertEqual(follow_up.question, "")
+        self.assertEqual(follow_up.metadata["prompt"]["question"], "")
+        self.assertEqual(follow_up.metadata["prompt"]["backend"], "stream_failed")
+        self.assertEqual(follow_up.metadata["prompt"]["generation_status"], "failed")

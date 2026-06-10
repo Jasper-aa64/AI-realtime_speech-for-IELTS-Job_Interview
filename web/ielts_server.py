@@ -167,6 +167,26 @@ WRITING_CATEGORY_LABELS = {
     "advantages_disadvantages": "\u5229\u5f0a\u7c7b",
     "two_part": "\u53cc\u95ee\u9898\u7c7b",
 }
+WRITING_TASK2_PROMPT_PATTERN_LABELS = {
+    "agree_to_what_extent": "To what extent do you agree or disagree?",
+    "discussion_opinion": "Discuss both views and give your own opinion.",
+    "positive_negative_do_you_think": "a positive or a negative development?",
+    "advantages_outweigh": "Do the advantages outweigh the disadvantages?",
+    "problem_solution": "Why / What reasons / solutions?",
+    "value_arguments": "What is the value / arguments in favour?",
+    "two_question": "\u53cc\u95ee\u9898",
+    "other": "\u5176\u4ed6\u95ee\u6cd5",
+}
+WRITING_TASK2_PROMPT_PATTERN_ORDER = [
+    "agree_to_what_extent",
+    "discussion_opinion",
+    "positive_negative_do_you_think",
+    "advantages_outweigh",
+    "problem_solution",
+    "value_arguments",
+    "two_question",
+    "other",
+]
 
 
 def clamp_band(value: float | int | None) -> float:
@@ -1407,12 +1427,18 @@ class AppState:
             "today_entry": today_entry,
         }
 
-    def random_writing_prompt(self, task_type: str | None = None, category: str | None = None) -> dict[str, Any]:
+    def random_writing_prompt(self, task_type: str | None = None, category: str | None = None, prompt_pattern: str | None = None) -> dict[str, Any]:
         selected_type = normalize_writing_task_type(task_type) if task_type else next_default_writing_task_type()
         prompts = self.writing_bank.list(selected_type)
         selected_category = str(category or "").strip()
         if selected_category:
             prompts = [prompt for prompt in prompts if prompt.get("category") == selected_category]
+        selected_pattern = normalize_writing_task2_prompt_pattern(prompt_pattern)
+        if selected_type == "task2" and selected_pattern:
+            prompts = [
+                prompt for prompt in prompts
+                if writing_task2_prompt_pattern(str(prompt.get("prompt") or "")) == selected_pattern
+            ]
         if not prompts:
             raise ValueError(f"No writing prompts available for {selected_type}")
         cambridge_prompts = [prompt for prompt in prompts if prompt.get("source_book") and prompt.get("source_test")]
@@ -1513,6 +1539,110 @@ def normalize_writing_category(value: Any) -> str:
         "mixed-graph": "mixed",
     }
     return aliases.get(category, category)
+
+
+def normalize_writing_task2_prompt_pattern(value: Any) -> str:
+    pattern = clean_report_text(str(value or "")).strip().lower()
+    if pattern in {"", "all", "*"}:
+        return ""
+    aliases = {
+        "discussion": "discussion_opinion",
+        "discuss_both_views": "discussion_opinion",
+        "both_views": "discussion_opinion",
+        "opinion": "agree_to_what_extent",
+        "agree": "agree_to_what_extent",
+        "agree_disagree": "agree_to_what_extent",
+        "agree_do_you_agree": "agree_to_what_extent",
+        "do_you_agree": "agree_to_what_extent",
+        "positive_negative": "positive_negative_do_you_think",
+        "positive_negative_development": "positive_negative_do_you_think",
+        "positive_negative_has_this_become": "positive_negative_do_you_think",
+        "advantages_outweigh_disadvantages": "advantages_outweigh",
+        "benefits_outweigh": "advantages_outweigh",
+        "benefits_outweigh_disadvantages": "advantages_outweigh",
+        "advantages_disadvantages": "advantages_outweigh",
+        "adv_disadv": "advantages_outweigh",
+        "problem": "problem_solution",
+        "problems_solutions": "problem_solution",
+        "cause_solution": "problem_solution",
+        "cause_effect": "problem_solution",
+        "causes_effects": "problem_solution",
+        "reasons_solutions": "problem_solution",
+        "why_solutions": "problem_solution",
+        "why_positive_negative": "problem_solution",
+        "value_arguments": "value_arguments",
+        "value_arguments_in_favour": "value_arguments",
+        "two_part": "two_question",
+        "two_questions": "two_question",
+    }
+    return aliases.get(pattern, pattern)
+
+
+def writing_task2_prompt_pattern(prompt_text: str) -> str:
+    text = re.sub(r"\s+", " ", str(prompt_text or "").strip().lower())
+    if not text:
+        return "other"
+    if re.search(r"discuss\s*&\s*give (?:your|our)(?: own)? opinions?", text):
+        return "discussion_opinion"
+    if re.search(r"discuss both(?: (?:these|the|those))?(?: (?:views?|sides?))?(?: and)?(?: give)? (?:your|our)(?: own)? (?:opinions?|view)", text):
+        return "discussion_opinion"
+    if re.search(r"to what exten[td] do(?: you)? agree (?:or|of) disagree(?: with (?:this|the) (?:statement|opinion|view))?", text):
+        return "agree_to_what_extent"
+    if re.search(r"to what exten[td] do you think\b", text):
+        return "agree_to_what_extent"
+    if re.search(r"do you agree or disagree", text):
+        return "agree_to_what_extent"
+    if re.search(r"\bbenefits?\b.*\boutweigh\b.*\b(?:disadvantages?|drawbacks?)\b", text):
+        return "advantages_outweigh"
+    if re.search(r"\badvantages?\b.*\boutweigh\b.*\b(?:disadvantages?|drawbacks?)\b", text):
+        return "advantages_outweigh"
+    if re.search(r"\b(?:disadvantages?|drawbacks?)\b.*\boutweigh\b.*\b(?:advantages?|benefits?)\b", text):
+        return "advantages_outweigh"
+    if re.search(r"\bnegative effects?\b.*\boutweigh\b.*\bpositive effects?\b", text):
+        return "advantages_outweigh"
+    if re.search(r"\b(?:advantages?|benefits?)\b.*\bor\b.*\b(?:disadvantages?|drawbacks?)\b", text):
+        return "advantages_outweigh"
+    if re.search(r"what is the value\b.*\bwhat are the arguments in favour\b", text):
+        return "value_arguments"
+    has_reason_question = bool(re.search(r"\b(?:why|what (?:are )?(?:the )?(?:reasons?|causes?)|how (?:can|could)|what can|what could|what should|what (?:are )?(?:the )?(?:solutions?|measures?))\b", text))
+    has_reason_question = has_reason_question or bool(re.search(r"\bwhat factors? contribute\b", text))
+    has_second_question = text.count("?") >= 2
+    has_solution_question = bool(re.search(r"\b(?:solutions?|measures?|solve|solved|what can|what could|how can|how could|how to|what should|ways to|encourage|research)\b", text))
+    has_effect_question = bool(re.search(r"\b(?:effects?|impact|affect|positive|negative|disadvantages?|advantages?|how realistic)\b", text))
+    if has_reason_question and has_second_question and (has_solution_question or has_effect_question):
+        return "problem_solution"
+    if re.search(r"\bwhy\b", text) and re.search(r"\b(?:effects?|impact|affect|positive|negative)\b", text):
+        return "problem_solution"
+    positive_negative_patterns = [
+        r"(?:do you think|whether|is|are|ls) (?:this|it|that|these|they|the (?:trend|development|change|situation|effect|impact))?(?: is| are)?(?: a)? positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)?",
+        r"(?:do you think|whether) (?:the|this|that) (?:trend|development|change|situation|effect|impact) (?:is|are) (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)?",
+    ]
+    if any(re.search(pattern, text) for pattern in positive_negative_patterns):
+        return "positive_negative_do_you_think"
+    has_become_patterns = [
+        r"has (?:this|it|that|the (?:trend|development|change|situation|effect|impact)) become (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)",
+        r"is (?:this|it|that|the (?:trend|development|change|situation|effect|impact)) (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)",
+    ]
+    if any(re.search(pattern, text) for pattern in has_become_patterns):
+        return "positive_negative_do_you_think"
+    if "advantages and disadvantages" in text or "benefits and drawbacks" in text or ("what are the advantages" in text and "disadvantages" in text):
+        return "advantages_outweigh"
+    mentions_solution = bool(re.search(r"solutions?|solved?|solve", text))
+    if ((re.search(r"problems?", text) and mentions_solution) or (re.search(r"causes?|reasons?", text) and mentions_solution)):
+        return "problem_solution"
+    if re.search(r"causes?|reasons?", text) and re.search(r"effects?|affect|impact", text):
+        return "problem_solution"
+    return "other"
+
+
+def writing_task2_prompt_pattern_payload(prompt_text: str) -> dict[str, str]:
+    pattern = writing_task2_prompt_pattern(prompt_text)
+    if pattern not in WRITING_TASK2_PROMPT_PATTERN_LABELS:
+        pattern = "other"
+    return {
+        "prompt_pattern": pattern,
+        "prompt_pattern_label": WRITING_TASK2_PROMPT_PATTERN_LABELS[pattern],
+    }
 
 
 def cambridge_source_label(task_type: str, source_book: int | None, source_test: int | None, source_question: int | None) -> str:
@@ -1627,8 +1757,7 @@ class WritingPromptBank:
                     source_question = positive_int(raw_item.get("source_question") or raw_item.get("question_number"))
                     source = clean_report_text(str(raw_item.get("source") or file_source or "")) or "local"
                     raw_source_label = clean_report_text(str(raw_item.get("source_label") or ""))
-                    items.append(
-                        {
+                    item = {
                             "id": safe_slug(prompt_id),
                             "task_type": item_task_type,
                             "task_label": WRITING_TASK_LABELS[item_task_type],
@@ -1643,7 +1772,9 @@ class WritingPromptBank:
                             "source_label": raw_source_label or cambridge_source_label(item_task_type, source_book, source_test, source_question),
                             "sort_order": positive_int(raw_item.get("sort_order")) or index + 1,
                         }
-                    )
+                    if item_task_type == "task2":
+                        item.update(writing_task2_prompt_pattern_payload(prompt))
+                    items.append(item)
             def sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
                 source = str(item.get("source") or "")
                 if item.get("source_book"):
@@ -1697,6 +1828,24 @@ class WritingPromptBank:
                 continue
             counts[category] = counts.get(category, 0) + 1
         return [{"category": key, "label": WRITING_CATEGORY_LABELS.get(key, key.replace("_", " ").title()), "count": counts[key]} for key in sorted(counts)]
+
+    def prompt_patterns(self, task_type: str | None = None) -> list[dict[str, Any]]:
+        selected = normalize_writing_task_type(task_type) if task_type else "task2"
+        if selected != "task2":
+            return []
+        counts: dict[str, int] = {}
+        for prompt in self.list("task2"):
+            pattern = writing_task2_prompt_pattern(str(prompt.get("prompt") or ""))
+            counts[pattern] = counts.get(pattern, 0) + 1
+        return [
+            {
+                "pattern": key,
+                "label": WRITING_TASK2_PROMPT_PATTERN_LABELS.get(key, key.replace("_", " ").title()),
+                "count": counts[key],
+            }
+            for key in WRITING_TASK2_PROMPT_PATTERN_ORDER
+            if counts.get(key)
+        ]
 
     def catalog_slots(self, task_type: str | None = None) -> list[dict[str, Any]]:
         selected = normalize_writing_task_type(task_type) if task_type else ""
@@ -2962,7 +3111,42 @@ def extract_codex_json_events(stdout: str, raw_path: Path | None = None) -> tupl
     return final_text or str(stdout or ""), usage
 
 
+def _run_http_api(prompt: str, timeout: float = 60.0) -> str:
+    """Call an OpenAI-compatible HTTP endpoint when AI_HTTP_* env vars are set."""
+    base_url = os.environ.get("AI_HTTP_BASE_URL", "").rstrip("/")
+    api_key  = os.environ.get("AI_HTTP_API_KEY", "")
+    model    = os.environ.get("AI_HTTP_MODEL", "")
+    if not (base_url and api_key and model):
+        raise RuntimeError("AI_HTTP_* not fully configured")
+    endpoint = base_url if base_url.endswith("/chat/completions") else f"{base_url}/chat/completions"
+    body = json.dumps({
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        endpoint,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        data = json.loads(resp.read().decode("utf-8"))
+    return str(data["choices"][0]["message"]["content"])
+
+
 def run_codex(prompt: str, call_id: str, billing: BillingStore | None = None) -> tuple[str, dict[str, Any] | None]:
+    # Prefer HTTP API provider when configured (avoids codex CLI quota issues).
+    if os.environ.get("IELTS_WEB_DISABLE_CODEX") != "1":
+        try:
+            output = _run_http_api(prompt)
+            return output, None
+        except Exception:
+            pass  # fall through to codex CLI below
+
     if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
         raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
     codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
@@ -4720,12 +4904,19 @@ class IELTSHandler(SimpleHTTPRequestHandler):
                 params = parse_qs(parsed_url.query)
                 task_type = (params.get("task_type") or [""])[0] or None
                 category = (params.get("category") or [""])[0].strip()
+                prompt_pattern = normalize_writing_task2_prompt_pattern((params.get("prompt_pattern") or [""])[0])
                 items = self.state.writing_bank.list(task_type)
                 if category:
                     items = [item for item in items if item.get("category") == category]
+                if normalize_writing_task_type(task_type or "task1_academic") == "task2" and prompt_pattern:
+                    items = [
+                        item for item in items
+                        if writing_task2_prompt_pattern(str(item.get("prompt") or "")) == prompt_pattern
+                    ]
                 self.send_json({
                     "items": items,
                     "categories": self.state.writing_bank.categories(task_type),
+                    "prompt_patterns": self.state.writing_bank.prompt_patterns(task_type),
                     "catalog": self.state.writing_bank.catalog_slots(task_type),
                 })
                 return
@@ -4958,7 +5149,8 @@ class IELTSHandler(SimpleHTTPRequestHandler):
     def handle_writing_random_prompt(self, payload: dict[str, Any]) -> None:
         task_type = str(payload.get("task_type") or "").strip() or None
         category = str(payload.get("category") or "").strip() or None
-        self.send_json(self.state.random_writing_prompt(task_type, category))
+        prompt_pattern = str(payload.get("prompt_pattern") or "").strip() or None
+        self.send_json(self.state.random_writing_prompt(task_type, category, prompt_pattern))
 
     def handle_writing_entry_save(self, payload: dict[str, Any]) -> None:
         answer = str(payload.get("answer") or "")

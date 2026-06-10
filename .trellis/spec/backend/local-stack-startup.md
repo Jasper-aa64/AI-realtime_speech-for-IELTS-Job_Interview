@@ -72,6 +72,8 @@ IELTS_PUBLIC=1 scripts/start-local-stack.sh
   - `AI_HTTP_TIMEOUT_SECONDS`
   - `SPEAKING_AI_CALL_MODE`
   - `SPEAKING_AI_MODEL`
+  - `VOLCENGINE_ASR_ENABLED`
+  - `VOLCENGINE_ASR_FFMPEG`
 - `speaking_report` AI tasks must keep the worker adapter provider as `codex`.
   Do not create queued speaking-report tasks with `provider=http` or
   `provider=claude`: the async worker dispatches this task type through the
@@ -113,6 +115,7 @@ Without `--noproxy '*'`, local checks may return unrelated proxy errors such as
 | Two or more `run_ai_worker` processes | Worker duplication | Stop extra workers; keep one |
 | Django works but AI tasks stay queued | Worker missing or wrong env | Start `run_ai_worker` and verify process |
 | Worker has no `AI_HTTP_*` | AI may fall back to Codex/fallback | Inject provider env before live AI validation |
+| ASR says `ffmpeg is not installed or VOLCENGINE_ASR_FFMPEG is not configured` | Django/worker PATH does not expose ffmpeg to server-side audio transcription | Add `/opt/homebrew/bin:/usr/local/bin` to the process PATH and set `VOLCENGINE_ASR_FFMPEG=/opt/homebrew/bin/ffmpeg` when that binary exists |
 | `speaking_report` task fails with `http provider is not enabled for speaking reports` | The queued task was misrouted as `provider=http` | Keep task.provider=`codex`; store HTTP preference in payload metadata |
 | Attempt saves audio but no report appears | The turns may have empty transcripts | Check turn transcript fields; configure ASR or re-record rather than scoring empty text |
 | `.runlogs/*.log` are empty | No useful proof either way | Use `ps`, `lsof`, and foreground command behavior |

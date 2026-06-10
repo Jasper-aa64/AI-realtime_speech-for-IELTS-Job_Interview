@@ -34,6 +34,9 @@ SEARCH_ALIASES = {
     "charged": "charge",
     "cities": "city",
     "families": "family",
+    "parents": "parent",
+    "teenagers": "teenager",
+    "youths": "youth",
     "museums": "museum",
     "musem": "museum",
     "museumes": "museum",
@@ -43,6 +46,29 @@ SEARCH_ALIASES = {
     "goverment": "government",
     "controll": "control",
     "controlling": "control",
+    "activities": "activity",
+    "news": "news",
+    "species": "species",
+    "driverless": "driverless",
+    "business": "business",
+    "vehicles": "vehicle",
+    "flights": "flight",
+    "travelling": "travel",
+    "traveling": "travel",
+    "tourists": "tourist",
+    "languages": "language",
+    "cultures": "culture",
+    "buildings": "building",
+    "houses": "house",
+    "homes": "home",
+    "taxes": "tax",
+    "advertisements": "advertisement",
+    "criminals": "criminal",
+    "residents": "resident",
+    "inhabitants": "inhabitant",
+    "neighbourhoods": "neighborhood",
+    "neighborhoods": "neighborhood",
+    "universities": "university",
 }
 SEARCH_STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "do", "does", "for", "from", "have", "in", "is", "it", "of", "on", "or", "should", "that", "the", "their", "they", "to", "with",
@@ -96,25 +122,150 @@ QUERY_EXPANSIONS = {
         "work", "job", "career", "employer", "employee", "company", "business", "salary", "profession",
         "工作", "职业", "雇主", "员工", "公司", "企业", "商业", "工资", "薪水", "薪资", "收入",
     ],
+    "leisure_holiday": [
+        "weekend", "weekends", "working week", "shorter working week", "longer weekend", "holiday", "holidays",
+        "summer holiday", "summer holidays", "school holiday", "school holidays", "vacation", "break", "leisure",
+        "leisure time", "outdoor activities", "hiking", "climbing", "rest", "relax", "relaxing",
+        "周末", "周六", "周日", "双休", "休息日", "工作周", "工作日", "假期", "暑假", "寒假", "学校假期", "放假", "休假", "休闲", "空闲时间", "户外活动",
+    ],
+    "decision_choice": [
+        "decision", "decisions", "choice", "choices", "choose", "choosing", "difficult decision", "hard decision",
+        "important decision", "too many choices",
+        "决定", "选择", "抉择", "艰难的决定", "困难的决定", "重要决定", "难选",
+    ],
+    "lateness_delay": [
+        "late", "being late", "delay", "delayed", "miss", "missed", "punctual", "punctuality", "on time",
+        "迟到", "晚到", "延误", "耽误", "错过", "准时", "守时", "迟到的经历",
+    ],
     "transport": [
-        "transport", "traffic", "car", "road", "railway", "train", "flight", "travel",
-        "交通", "汽车", "道路", "铁路", "火车", "飞机", "旅行", "旅游",
+        "transport", "transportation", "traffic", "traffic congestion", "car", "road", "railway", "train", "flight", "fly",
+        "air travel", "public transport", "vehicle", "driverless", "commute", "commuting", "travel",
+        "交通", "公共交通", "拥堵", "堵车", "汽车", "道路", "铁路", "火车", "飞机", "飞行", "航空", "通勤", "无人驾驶", "旅行", "旅游", "出行",
+    ],
+    "air_travel_pollution": [
+        "air travel", "flight", "flights", "fly", "flying", "stop flying", "reduce flying", "air pollution", "fuel resources",
+        "environmental benefits", "aviation", "airline",
+        "航空", "飞行", "飞机", "航空旅行", "航空污染", "减少飞行", "停止飞行", "燃料", "燃料资源", "环境收益", "航班",
     ],
     "society": [
-        "society", "social", "community", "people", "individual", "family", "culture", "global",
-        "社会", "社区", "个人", "人们", "家庭", "文化", "全球",
+        "society", "social", "community", "individual", "public", "relationship",
+        "社会", "社区", "个人", "人们", "公众", "人际关系",
     ],
     "crime": [
         "crime", "criminal", "punishment", "prison", "police", "lawbreaking", "robbery",
         "犯罪", "罪犯", "惩罚", "监狱", "警察",
     ],
     "media": [
-        "media", "advertising", "advertisement", "television", "tv", "news", "newspaper", "social media",
-        "媒体", "广告", "电视", "新闻", "报纸", "社交媒体",
+        "media", "advertising", "advertisement", "television", "tv", "news", "newspaper", "social media", "internet news",
+        "媒体", "广告", "电视", "新闻", "报纸", "社交媒体", "短视频", "网络媒体",
     ],
     "population": [
-        "population", "people", "resident", "residents", "inhabitant", "inhabitants",
+        "population", "resident", "residents", "inhabitant", "inhabitants",
         "人口", "居民",
+    ],
+    "city_housing": [
+        "home", "owning a home", "own home", "rent", "renting", "rented", "housing", "house", "building", "apartment", "flat",
+        "city", "cities", "urban", "rural", "countryside", "village", "town", "neighborhood", "neighbourhood", "living abroad", "migration", "move to cities",
+        "住房", "房屋", "房子", "买房", "租房", "房租", "拥有住房", "租住", "居住", "住宅", "家", "房价", "公寓", "建筑", "城市", "城镇", "农村", "乡村", "村庄", "社区", "邻里", "搬到城市", "城市化", "移民", "住在国外",
+    ],
+    "money_economy": [
+        "money", "save money", "saving money", "cost", "fee", "charge", "income", "salary", "tax", "taxes", "fund", "funding",
+        "public money", "government spending", "price", "expensive", "afford", "economic", "economy", "financial",
+        "钱", "存钱", "储蓄", "费用", "成本", "收费", "收入", "工资", "税", "税收", "资金", "政府支出", "公共资金", "价格", "昂贵", "负担", "经济", "金融",
+    ],
+    "public_services": [
+        "public service", "public services", "healthcare", "education", "transport", "infrastructure", "museum", "library",
+        "government", "law", "policy", "responsibility", "public money", "free of charge",
+        "公共服务", "公共设施", "医疗服务", "教育服务", "基础设施", "博物馆", "图书馆", "政府", "政策", "责任", "公共资金", "免费服务",
+    ],
+    "family_age": [
+        "family", "parent", "parents", "child", "children", "teenager", "young people", "old people", "elderly", "ageing", "aging",
+        "retire", "retirement", "generation", "household", "family meal", "parenting",
+        "家庭", "父母", "家长", "孩子", "儿童", "青少年", "年轻人", "老人", "老年人", "老龄化", "退休", "代际", "一代人", "家庭聚餐", "育儿",
+    ],
+    "ageing_population": [
+        "ageing population", "aging population", "elderly people", "older people", "living longer", "retire", "retirement",
+        "老龄化", "人口老龄化", "老龄社会", "老年人口", "老年人", "老人", "养老", "退休", "长寿",
+    ],
+    "culture_language": [
+        "culture", "cultural", "language", "foreign language", "languages die out", "fewer languages", "music", "art", "museum", "gallery",
+        "tradition", "traditional", "national", "local culture", "global culture",
+        "文化", "语言", "外语", "语言消亡", "少数语言", "语言灭绝", "音乐", "艺术", "博物馆", "美术馆", "传统", "国家", "本地文化", "全球文化",
+    ],
+    "tourism_globalization": [
+        "tourism", "tourist", "tourists", "travel", "foreign", "international", "global", "globalisation", "globalization",
+        "global fashion", "global food", "imported food", "supermarket", "abroad", "countries", "world",
+        "旅游", "游客", "旅行", "外国", "国际", "全球", "全球化", "全球时尚", "进口食物", "进口食品", "超市", "国外", "世界",
+    ],
+    "sports_outdoors": [
+        "sport", "sports", "exercise", "fitness", "outdoor", "outdoor activities", "hiking", "climbing", "team sport",
+        "physical activity", "athlete", "competition",
+        "运动", "体育", "锻炼", "健身", "户外", "户外活动", "徒步", "爬山", "登山", "团队运动", "身体活动", "运动员", "比赛",
+    ],
+    "animals_nature": [
+        "species", "loss of species", "extinction", "extinct", "endangered", "animal", "animals", "wildlife", "natural environment", "nature", "zoo", "plant", "plants", "forest",
+        "物种", "物种灭绝", "灭绝", "濒危", "动物", "野生动物", "自然环境", "自然", "动物园", "植物", "森林", "动植物",
+    ],
+    "shopping_consumption": [
+        "shopping", "consumer", "consumers", "buy", "purchase", "product", "products", "goods", "supermarket", "fashion",
+        "advertising", "brand", "new products",
+        "购物", "消费者", "消费", "购买", "产品", "商品", "超市", "时尚", "广告", "品牌", "新产品",
+    ],
+    "science_information": [
+        "science", "aim of science", "scientific", "scientific research", "research", "information", "knowledge", "share information",
+        "knowledge sharing", "academic", "business information", "technology research",
+        "科学", "科学目标", "科学目的", "科研", "科学研究", "研究", "信息", "知识", "信息共享", "知识共享", "学术", "商业信息", "科研信息",
+    ],
+    "science_aim": [
+        "aim of science", "important aim of science", "science should improve people's lives", "improve people's lives",
+        "科学目标", "科学目的", "科学的目标", "科学的目的", "科学改善生活", "科学改善人们生活",
+    ],
+    "reading_books": [
+        "read", "reading", "write", "writing", "book", "books", "printed book", "printed books", "newspaper", "newspapers",
+        "literacy", "illiterate", "illiteracy", "adult education", "digital era", "electronically",
+        "阅读", "读书", "写作", "书", "书籍", "纸质书", "印刷书", "报纸", "读写", "读写能力", "文盲", "扫盲", "成人教育", "电子书", "数字时代",
+    ],
+    "competition_cooperation": [
+        "competition", "compete", "competing", "cooperate", "cooperation", "collaboration", "teamwork", "competitive",
+        "university places", "major competitions",
+        "竞争", "合作", "协作", "团队合作", "互相竞争", "大学名额竞争", "比赛竞争", "竞争合作",
+    ],
+    "building_history": [
+        "history of the house", "history of the building", "house history", "building history", "old building", "historic building", "historical building",
+        "房屋历史", "建筑历史", "老建筑", "历史建筑", "房子历史", "建筑物历史", "古建筑", "历史遗迹",
+    ],
+    "relationship_communication": [
+        "relationship", "relationships", "communication", "communicate", "face-to-face", "face to face", "contact",
+        "social problems", "practical problems", "meeting", "meetings",
+        "人际关系", "关系", "沟通", "交流", "面对面", "面对面交流", "联系", "社交问题", "实际问题", "会议", "见面",
+    ],
+    "gender_equality": [
+        "gender", "men", "women", "male", "female", "equality", "equal", "girls", "boys",
+        "性别", "男女", "男性", "女性", "男人", "女人", "男孩", "女孩", "男女平等", "性别平等", "性别差异",
+    ],
+    "medical_treatment": [
+        "medicine", "medical", "doctor", "treatment", "treatments", "alternative medicine", "alternative medicines",
+        "hospital", "health problems", "therapy", "therapies",
+        "医疗", "药物", "医生", "治疗", "替代疗法", "替代医疗", "医院", "健康问题", "疗法", "看医生",
+    ],
+    "driverless_vehicle": [
+        "driverless", "driverless vehicle", "driverless vehicles", "driverless car", "driverless cars", "buses and trucks", "passenger", "passengers",
+        "无人驾驶", "自动驾驶", "无人车", "无人驾驶汽车", "无人驾驶车辆", "乘客", "公交车", "卡车",
+    ],
+    "sugar_obesity": [
+        "sugar", "sugary", "sugary products", "food and drink", "drink products", "obesity", "overweight", "diet",
+        "processed food", "consume less sugar",
+        "糖", "含糖", "含糖食品", "含糖饮料", "食品饮料", "肥胖", "超重", "饮食", "加工食品", "少吃糖",
+    ],
+    "community_charity": [
+        "community", "community service", "charity", "volunteer", "voluntary", "unpaid", "neighbourhood", "neighborhood",
+        "public property", "cleaning parks",
+        "社区", "社区服务", "公益", "慈善", "志愿者", "义工", "无偿", "邻里", "公共财产", "清理公园",
+    ],
+    "reading_writing_task1": [
+        "rent", "weekly rent", "apartment", "apartments", "international students", "students", "production", "consumption",
+        "water consumption", "energy use", "waste disposal", "exports",
+        "房租", "租金", "周租金", "公寓", "国际学生", "学生人数", "产量", "消费量", "用水量", "能源使用", "废物处理", "出口",
     ],
     "task1_change": [
         "increase", "decrease", "rise", "fall", "trend", "compare", "comparison", "proportion", "percentage",
@@ -129,7 +280,7 @@ QUERY_EXPANSIONS = {
         "博物馆", "美术馆", "游客", "参观者",
     ],
 }
-QUERY_EXPANSION_LIMIT = 48
+QUERY_EXPANSION_LIMIT = 96
 CHINESE_SINGLE_TERM_BLOCKS = {
     "水": ["薪水"],
 }

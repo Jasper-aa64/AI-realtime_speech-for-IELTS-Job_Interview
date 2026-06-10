@@ -32,6 +32,9 @@ from apps.writing.services import WritingEntryDeleted, complete_score_task, fall
 DEFAULT_FALLBACK_REASON = "local fallback worker: real AI provider is not connected yet"
 SUMMARY_STATUS_SKIPPED = "skipped"
 CODEX_REASONING_EFFORT = "medium"
+RETRYABLE_PROVIDER_ERROR_CODES = {
+    "http_api_provider_request_failed",
+}
 
 
 class ProviderRunOutcome:
@@ -258,6 +261,16 @@ class CodexCliClient:
 
         config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
         cwd = self.cwd or str(Path(settings.BASE_DIR).parent)
+        # Ensure node is findable: the AI worker may run with a minimal PATH
+        # (/usr/bin:/bin only), but codex is a Node.js script whose shebang
+        # needs 'node' on PATH.  Prepend homebrew + /usr/local/bin so
+        # #!/usr/bin/env node resolves even without a full shell environment.
+        _sub_env = os.environ.copy()
+        _extra_paths = ["/opt/homebrew/bin", "/usr/local/bin"]
+        _cur_path = _sub_env.get("PATH", "")
+        _additions = ":".join(p for p in _extra_paths if p not in _cur_path.split(":"))
+        if _additions:
+            _sub_env["PATH"] = _additions + (":" + _cur_path if _cur_path else "")
         last_error: RuntimeError | None = None
         for _attempt in range(max(1, int(max_attempts or 1))):
             try:
@@ -271,6 +284,7 @@ class CodexCliClient:
                     timeout=timeout,
                     check=True,
                     cwd=cwd,
+                    env=_sub_env,
                 )
                 output, usage, has_real_content = extract_codex_json_events(result.stdout)
             except subprocess.TimeoutExpired:
@@ -333,6 +347,13 @@ class AiTaskTemplate(BaseProviderAdapter):
 
     def _on_failure(self, exc: Exception, task: AITask, request_payload: dict[str, Any]) -> ProviderRunResult:
         error_code = exc.error_code if isinstance(exc, ProviderExecutionError) else self.failure_error_code
+        if error_code in RETRYABLE_PROVIDER_ERROR_CODES:
+            return ProviderRunResult.retryable_failure(
+                self._failure_message(exc),
+                error_code=error_code,
+                retry_delay_seconds=30,
+                metadata=_route_metadata(self.adapter_name, self.route),
+            )
         return ProviderRunResult.terminal_failure(
             self._failure_message(exc),
             error_code=error_code,
@@ -748,6 +769,7 @@ def _apply_speaking_report_result(task: AITask, result: ProviderRunResult) -> Ap
         return _refreshed_task_result(task, AITask.Status.SUCCEEDED)
     if result.outcome == ProviderRunOutcome.RETRYABLE_FAILURE:
         return _apply_failure_result(task, result, retryable=True)
+    _mark_speaking_report_attempt_failed(task, result)
     return _apply_terminal_failure_for_claimed_task(task, result)
 
 
@@ -816,6 +838,21 @@ def _apply_failure_result(
 def _refreshed_task_result(task: AITask, summary_status: str) -> AppliedProviderRunResult:
     task.refresh_from_db()
     return AppliedProviderRunResult(task=task, summary_status=summary_status)
+
+
+def _mark_speaking_report_attempt_failed(task: AITask, result: ProviderRunResult) -> None:
+    from apps.speaking.models import SpeakingAttempt
+    from apps.speaking.services import mark_attempt_analysis_failed
+
+    attempt = (
+        SpeakingAttempt.objects.select_related("user")
+        .filter(user=task.user, attempt_id=str(task.related_id or "").strip())
+        .first()
+    )
+    if not attempt:
+        return
+    error = result.error_message or result.reason or "Speaking report generation failed"
+    mark_attempt_analysis_failed(attempt, RuntimeError(error), task.call_id or task.task_id)
 
 
 def _route_metadata(adapter_name: str, route: ProviderRoute | None) -> dict[str, Any]:

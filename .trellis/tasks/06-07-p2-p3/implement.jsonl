@@ -1,0 +1,6 @@
+{"path":"backend_django/apps/speaking/services.py","reason":"收口 bank P3 追问不截断与后端 metadata 路由。"}
+{"path":"web/static/app.js","reason":"收口 P3 报告编辑语料三路由、UI 文案、缓存配套。"}
+{"path":"web/static/corpus-takeaway.js","reason":"收口黄色提示按钮来源路由。"}
+{"path":"web/static/index.html","reason":"统一静态资源缓存串与 P3 UI 入口。"}
+{"path":"web/static/styles.css","reason":"收口 P3 单列全宽排版与相关 UI 样式。"}
+{"path":".gitignore","reason":"忽略本地工具/课程资料资产，防止误提交。"}

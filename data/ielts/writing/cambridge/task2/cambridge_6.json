@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://www.ieltsessaybank.com/cambridge-ielts-67/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 6,
+  "prompts": [
+    {
+      "id": "cambridge-6-test-1-task-2",
+      "title": "Cambridge IELTS 6 Test 1 Task 2",
+      "category": "opinion",
+      "source_book": 6,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅6-1 Task 2",
+      "prompt": "Today, the high sales of popular consumer goods reflect the power of advertising and not the real needs of the society in which they are sold. To what extent do you agree or disagree? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/today-the-high-sales-of-popular-consumer-goods/",
+      "sort_order": 151
+    },
+    {
+      "id": "cambridge-6-test-2-task-2",
+      "title": "Cambridge IELTS 6 Test 2 Task 2",
+      "category": "discussion",
+      "source_book": 6,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅6-2 Task 2",
+      "prompt": "Successful sports professionals can earn a great deal more money than people in other important professions. Some people think this is fully justified while others think it is unfair. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/successful-sports-professionals/",
+      "sort_order": 152
+    },
+    {
+      "id": "cambridge-6-test-3-task-2",
+      "title": "Cambridge IELTS 6 Test 3 Task 2",
+      "category": "discussion",
+      "source_book": 6,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅6-3 Task 2",
+      "prompt": "Some people believe that visitors to other countries should follow local customs and behaviour. Others disagree and think that the host country should welcome cultural differences. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/some-people-believe-that-visitors-to-other-countries/",
+      "sort_order": 153
+    },
+    {
+      "id": "cambridge-6-test-4-task-2",
+      "title": "Cambridge IELTS 6 Test 4 Task 2",
+      "category": "discussion",
+      "source_book": 6,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅6-4 Task 2",
+      "prompt": "Some people prefer to spend their lives doing the same things and avoiding change. Others, however, think that change is always a good thing. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/some-people-prefer-to-spend-their-lives-doing-the-same-things/",
+      "sort_order": 154
+    }
+  ]
+}

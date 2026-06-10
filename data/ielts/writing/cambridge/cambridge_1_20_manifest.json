@@ -29,7 +29,7 @@
       "source_book": 20,
       "source_test": 2,
       "source_question": 1,
-      "expected_image_url": "/assets/writing/task1/cambridge/20/test_2_task_1.png",
+      "expected_image_url": "/assets/writing/task1/cambridge/20/test_2_task_1.jpg",
       "material_status": "missing_authorized_material"
     },
     {
@@ -67,7 +67,7 @@
       "source_book": 20,
       "source_test": 4,
       "source_question": 1,
-      "expected_image_url": "/assets/writing/task1/cambridge/20/test_4_task_1.png",
+      "expected_image_url": "/assets/writing/task1/cambridge/20/test_4_task_1.jpg",
       "material_status": "missing_authorized_material"
     },
     {

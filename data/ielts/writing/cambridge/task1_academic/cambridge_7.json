@@ -12,7 +12,7 @@
       "source_book": 7,
       "source_test": 1,
       "source_question": 1,
-      "source_label": "??7-1 Task 1",
+      "source_label": "剑雅7-1 Task 1",
       "prompt": "The table below gives information on consumer spending on different items in five different countries in 2002. Summarise the information by selecting and reporting the main features, and make comparisons where relevant. Write at least 150 words. Percentage of national consumer expenditure by category – 2002",
       "source": "cambridge_ielts_public_reference",
       "source_url": "https://msslearning.com/cambridge-ielts-7-academic-writing-test-1/",
@@ -21,19 +21,49 @@
       "source_image_url": "https://msslearning.com/wp-content/uploads/2023/12/Cambridge-IELTS-7-Academic-Writing-Test-1-The-table-below-gives-information-on-consumer-spending-on-different-items-in-five-different-countries-in-2002.png"
     },
     {
+      "id": "cambridge-7-test-2-task-1",
+      "title": "Cambridge IELTS 7 Test 2 Task 1",
+      "category": "line_graph",
+      "source_book": 7,
+      "source_test": 2,
+      "source_question": 1,
+      "source_label": "剑雅7-2 Task 1",
+      "prompt": "The graph below shows the consumption of fish and some different kinds of meat in a European country between 1979 and 2004. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ielts-blog.com/ielts-writing-samples/ielts-reports-band-7/ielts-report-topic-line-graph-describing-the-consumption-of-fish-and-meat/",
+      "sort_order": 142,
+      "image_url": "/assets/writing/task1/cambridge/7/test_2_task_1.jpg",
+      "source_image_url": "https://www.ielts-blog.com/reports/graph-fish-meat-consumption.jpg"
+    },
+    {
       "id": "cambridge-7-test-3-task-1",
       "title": "Cambridge IELTS 7 Test 3 Task 1",
-      "category": "line_graph",
+      "category": "bar_chart",
       "source_book": 7,
       "source_test": 3,
       "source_question": 1,
-      "source_label": "??7-3 Task 1",
+      "source_label": "剑雅7-3 Task 1",
       "prompt": "The chart below shows information about changes in average house prices in five different cities between 1990 and 2002 compared with the average house prices in1989. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
       "source": "cambridge_ielts_public_reference",
       "source_url": "https://msslearning.com/cambridge-ielts-7-academic-writing-test-3/",
       "sort_order": 143,
       "image_url": "/assets/writing/task1/cambridge/7/test_3_task_1.png",
       "source_image_url": "https://msslearning.com/wp-content/uploads/2023/12/Cambridge-IELTS-7-Academic-Writing-Test-3-information-about-changes-in-average-house-prices-in-five-different-cities-between-1990-and-2002-compared-with-the-average-house-prices-in1989.png"
+    },
+    {
+      "id": "cambridge-7-test-4-task-1",
+      "title": "Cambridge IELTS 7 Test 4 Task 1",
+      "category": "pie_chart",
+      "source_book": 7,
+      "source_test": 4,
+      "source_question": 1,
+      "source_label": "剑雅7-4 Task 1",
+      "prompt": "The pie charts below show units of electricity production by fuel source in Australia and France in 1980 and 2000. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.jumpinto.com/ielts/practice/academic/7/4/writing/1",
+      "sort_order": 144,
+      "image_url": "/assets/writing/task1/cambridge/7/test_4_task_1.jpg",
+      "source_image_url": "https://www.jumpinto.com/resource/exam/ielts/image/a7/a7t4w1.jpg"
     }
   ]
 }

@@ -12,11 +12,24 @@
       "source_book": 7,
       "source_test": 1,
       "source_question": 2,
-      "source_label": "??7-1 Task 2",
+      "source_label": "剑雅7-1 Task 2",
       "prompt": "It is generally believed that some people are born with certain talents, for instance for sport or music, and others are not. However, it is sometimes claimed that any child can be taught to become a good sports person or musician. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
       "source": "cambridge_ielts_public_reference",
       "source_url": "https://msslearning.com/cambridge-ielts-7-academic-writing-test-1/",
       "sort_order": 141
+    },
+    {
+      "id": "cambridge-7-test-2-task-2",
+      "title": "Cambridge IELTS 7 Test 2 Task 2",
+      "category": "discussion",
+      "source_book": 7,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅7-2 Task 2",
+      "prompt": "Some people believe that there should be fixed punishments for each type of crime. Others, however, argue that the circumstances of an individual crime, and the motivation for committing it, should always be taken into account when deciding on the punishment. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/some-people-believe-that-there-should-be-fixed-punishments-for-each-type-of-crime/",
+      "sort_order": 142
     },
     {
       "id": "cambridge-7-test-3-task-2",
@@ -25,11 +38,24 @@
       "source_book": 7,
       "source_test": 3,
       "source_question": 2,
-      "source_label": "??7-3 Task 2",
+      "source_label": "剑雅7-3 Task 2",
       "prompt": "As most people spend a major part of their adult life at work, job satisfaction is an important element of individual wellbeing. What factors contribute to job satisfaction? How realistic is the expectation of job satisfaction for all workers? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
       "source": "cambridge_ielts_public_reference",
       "source_url": "https://msslearning.com/cambridge-ielts-7-academic-writing-test-3/",
       "sort_order": 143
+    },
+    {
+      "id": "cambridge-7-test-4-task-2",
+      "title": "Cambridge IELTS 7 Test 4 Task 2",
+      "category": "discussion",
+      "source_book": 7,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅7-4 Task 2",
+      "prompt": "Some people think that universities should provide graduates with the knowledge and skills needed in the workplace. Others think that the true function of a university should be to give access to knowledge for its own sake, regardless of whether the course is useful to an employer. What, in your opinion, should be the main function of a university? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/cambridge-ielts-7/",
+      "sort_order": 144
     }
   ]
 }

@@ -31,6 +31,7 @@ const state = {
   historyDetailCache: new Map(),
   historyDetailPromises: new Map(),
   abortingAttemptId: null,
+  userExitedPractice: false,
   practiceViewBeforeSettings: null,
   darkMode: false,
   uiLanguage: "zh",
@@ -62,6 +63,8 @@ const state = {
     activeEntry: null,
     activeP3Entry: null,
     activeBankP3Entry: null,
+    brainstormSaving: false,
+    brainstormSuppressBlurSave: false,
     previousPracticeView: "p2",
     selectedEntryId: "",
     pinnedCueId: "",
@@ -129,6 +132,8 @@ const state = {
     autosaveEnabled: false,
     autosaveSaving: false,
     autosaveQueued: false,
+    autosaveFrameBaselineText: "",
+    autosaveFrameBaselineWordCount: 0,
     entry: null,
     requestedEntryId: "",
     dirty: false,
@@ -147,6 +152,7 @@ const state = {
     scoreCompletionNotifiedIds: new Set(),
     pickerTaskType: "task1_academic",
     promptCategories: {},
+    promptPatterns: {},
     promptCatalog: {},
     promptLoadingPromises: {},
     promptImagePreloads: new Set(),
@@ -160,6 +166,9 @@ const state = {
       task1_academic: "",
       task2: "",
     },
+    pickerPromptPatternFilters: {
+      task2: "",
+    },
     pickerSourceFilters: {
       task1_academic: "cambridge",
       task2: "cambridge",
@@ -169,11 +178,13 @@ const state = {
     query: "",
     results: [],
     loading: false,
+    context: "writing",
   },
   speaking: {
     pendingAnalysis: null,
     pendingTurnCompletions: new Map(),
     turnCompletionErrors: new Map(),
+    retryCompletion: null,
     scorePollTimer: null,
     scorePollingTaskId: null,
     scoreCompletionModalAttempt: null,
@@ -235,11 +246,17 @@ const UI_LANGUAGES = new Set(["zh", "en"]);
 const RECORD_CONTROL_DISABLED_STATUSES = new Set(["loading", "examiner_loading", "examiner_playing", "processing", "scoring", "turn_saved"]);
 const PRACTICE_BUSY_STATUSES = new Set(["preparing", "recording", "processing", "scoring"]);
 const TURN_RENDER_BUSY_STATUSES = new Set(["examiner_loading", "examiner_playing", "preparing", "recording", "processing"]);
-const RECOVERABLE_PRACTICE_ERROR_STATUSES = new Set(["recording", "preparing"]);
+const RECOVERABLE_PRACTICE_ERROR_STATUSES = new Set(["recording", "preparing", "processing", "turn_saved", "completion_failed"]);
 const EXAMINER_TTS_PENDING_STATUSES = new Set(["pending", "warming", "generating"]);
 const AI_TASK_ACTIVE_STATUSES = new Set(["pending", "running"]);
 const AI_TASK_TERMINAL_STATUSES = new Set(["succeeded", "fallback", "failed", "cancelled"]);
 const AI_TASK_COMPLETED_WITH_RESULT_STATUSES = new Set(["fallback", "succeeded"]);
+const STREAM_PENDING_FOLLOW_UP_PLACEHOLDER = "Generating follow-up question...";
+const STREAM_PENDING_FOLLOW_UP_PLACEHOLDERS = new Set([
+  "",
+  STREAM_PENDING_FOLLOW_UP_PLACEHOLDER,
+  "正在生成追问...",
+]);
 const uiTranslations = {
   zh: {
     "app.title": "IELTS Studio",
@@ -642,6 +659,22 @@ function isAiTaskCompletedWithResultStatus(status) {
   return AI_TASK_COMPLETED_WITH_RESULT_STATUSES.has(String(status || ""));
 }
 
+function isEditableShortcutTarget(target) {
+  const element = target?.nodeType === Node.TEXT_NODE ? target.parentElement : target;
+  if (!element) return false;
+  const tagName = String(element.tagName || "").toLowerCase();
+  return Boolean(
+    element.isContentEditable
+      || ["input", "textarea", "select"].includes(tagName)
+      || element.closest?.("[contenteditable='true'], .toastui-editor-contents, .toastui-editor-ww-container, .vditor, .ProseMirror")
+  );
+}
+
+function isTakeawayReviewActiveForKind(kind) {
+  const panel = kind === "writing" ? $("writingTakeawayReviewPanel") : $("languageTakeawayReviewPanel");
+  return Boolean(panel && !panel.classList.contains("hidden") && panel.classList.contains("is-active"));
+}
+
 function applyStaticTranslations(root = document) {
   root.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(el.dataset.i18n, el.textContent || "");
@@ -719,8 +752,9 @@ const protectedViews = new Set(["history", "writing", "writingReports", "corpus"
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 const corpusBackButtonViews = new Set(["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
+const topPinnedViews = new Set(["home", "corpus", "p1Corpus", "p2Corpus"]);
 const workspaceHeaderHiddenViews = new Set(["home", "history", "writing", "writingReports", ...corpusViews, ...authViews, ...accountViews]);
-const agentAssistantViews = new Set(["writing", "writingReports", "writingTakeawayBook"]);
+const agentAssistantViews = new Set(["writing"]);
 
 const EXAMINER_AUDIO_LOAD_TIMEOUT_MS = 15000;
 const EXAMINER_AUDIO_INPUT_RELEASE_TIMEOUT_MS = 1800;
@@ -999,20 +1033,99 @@ function getWritingPromptRangeAtPoint(clientX, clientY) {
   return currentWritingPromptHighlightState().find((range) => textOffset >= range.start && textOffset <= range.end) || null;
 }
 
+function renderWritingPromptSliceWithHighlights(text, ranges = [], start = 0, end = text.length) {
+  const safeStart = Math.max(0, Math.min(start, text.length));
+  const safeEnd = Math.max(safeStart, Math.min(end, text.length));
+  const visibleRanges = normalizeWritingPromptHighlightRanges(ranges, text)
+    .map((range, index) => ({ ...range, index }))
+    .filter((range) => range.end > safeStart && range.start < safeEnd);
+  if (!visibleRanges.length) return escapeHtml(text.slice(safeStart, safeEnd)).replace(/\n/g, "<br>");
+  let output = "";
+  let cursor = safeStart;
+  visibleRanges.forEach((range) => {
+    const rangeStart = Math.max(range.start, safeStart);
+    const rangeEnd = Math.min(range.end, safeEnd);
+    output += escapeHtml(text.slice(cursor, rangeStart)).replace(/\n/g, "<br>");
+    output += `<mark class="writing-highlight-mark" data-writing-highlight-index="${range.index}" tabindex="0" role="button" aria-label="删除这条题目高亮">${escapeHtml(text.slice(rangeStart, rangeEnd)).replace(/\n/g, "<br>")}</mark>`;
+    cursor = rangeEnd;
+  });
+  output += escapeHtml(text.slice(cursor, safeEnd)).replace(/\n/g, "<br>");
+  return output;
+}
+
+function task2FixedQuestionRanges(textValue = "") {
+  const text = String(textValue || "");
+  const patterns = [
+    /to what exten[td] do(?: you)? agree (?:or|of) disagree(?: with (?:this|the) (?:statement|opinion|view))?\?/gi,
+    /to what exten[td] do you think[^?]*\?/gi,
+    /do you agree or disagree\?/gi,
+    /(?:do you think|whether|is|are|ls) (?:this|it|that|these|they|the (?:trend|development|change|situation|effect|impact))?(?: is| are)?(?: a)? positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)?\?/gi,
+    /(?:do you think|whether) (?:the|this|that) (?:trend|development|change|situation|effect|impact) (?:is|are) (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)?\?/gi,
+    /has (?:this|it|that|the (?:trend|development|change|situation|effect|impact)) become (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)\?/gi,
+    /discuss\s*&\s*give (?:your|our)(?: own)? opinions?\.?/gi,
+    /discuss both(?: (?:these|the|those))?(?: (?:views?|sides?))?(?: and)?(?: give)? (?:your|our)(?: own)? (?:opinions?|view)\.?/gi,
+    /what is the value[^?]*\?[^?]*what are the arguments in favour[^?]*\?/gi,
+    /to what exten[td]\s+do (?:the )?(?:advantages?|benefits?)[^?]*\boutweigh\b[^?]*\b(?:disadvantages?|drawbacks?)\b[^?]*\?/gi,
+    /do you think [^?]*\bbenefits?\b[^?]*\boutweigh\b[^?]*\b(?:disadvantages?|drawbacks?)\b[^?]*\?/gi,
+    /do (?:the )?benefits?[^?]*\boutweigh\b[^?]*\b(?:disadvantages?|drawbacks?)\b[^?]*\?/gi,
+    /do you think [^?]*\badvantages?\b[^?]*\boutweigh\b[^?]*\b(?:disadvantages?|drawbacks?)\b[^?]*\?/gi,
+    /do (?:the )?advantages?[^?]*\boutweigh\b[^?]*\b(?:disadvantages?|drawbacks?)\b[^?]*\?/gi,
+    /\bnegative effects?\b[^?]*\boutweigh\b[^?]*\bpositive effects?\b[^?]*\?/gi,
+    /\b(?:advantages?|benefits?)\b[^?]*\bor\b[^?]*\b(?:disadvantages?|drawbacks?)\b[^?]*\?/gi,
+    /what are the advantages and disadvantages(?: of this)?\?/gi,
+    /what are the benefits and drawbacks(?: of this)?\?/gi,
+    /what is the value[^?]*\?[^?]*what are the arguments in favour[^?]*\?/gi,
+    /what factors? contribute[^?]*\?[^?]*how realistic[^?]*\?/gi,
+    /(?:why|what (?:do you think )?(?:are )?(?:the )?(?:reasons?|causes?|problems?))[^?]*(?:how (?:can|could)|what can|what could|what should|what (?:are )?(?:the )?(?:solutions?|measures?)|solutions?|measures?|solve|research|encourage|positive|negative|effects?|impact|affect|advantages?|disadvantages?)[^?]*\?/gi,
+    /what (?:problems?|causes?)[^?]*\?[^?]*(?:solutions?|measures|solve)[^?]*\?/gi,
+    /why is this (?:the case|happening)\?[^?]*(?:solutions?|measures|solve|positive|negative)[^?]*\?/gi,
+    /what (?:are )?(?:the )?(?:causes?|reasons?)[^?]*\?[^?]*(?:effects?|impact|affect)[^?]*\?/gi,
+    /(?:what|why|how)[^?]*\?[^?]*(?:what|why|how|do you think)[^?]*\?/gi,
+  ];
+  const ranges = [];
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match = pattern.exec(text);
+    while (match) {
+      ranges.push({ start: match.index, end: match.index + match[0].length });
+      match = pattern.exec(text);
+    }
+  }
+  return ranges
+    .sort((a, b) => a.start - b.start || b.end - a.end)
+    .filter((range, index, sorted) => !sorted.slice(0, index).some((prev) => range.start >= prev.start && range.end <= prev.end));
+}
+
+function task2FixedQuestionDisplayLabel(questionText = "") {
+  const text = String(questionText || "").replace(/\s+/g, " ").trim();
+  return text;
+}
+
+function renderTask2PromptTextWithHighlights(textValue, ranges = []) {
+  const text = String(textValue || "");
+  const fixedRanges = task2FixedQuestionRanges(text);
+  if (!fixedRanges.length) return renderWritingPromptTextWithHighlights(text, ranges);
+  let output = "";
+  let cursor = 0;
+  fixedRanges.forEach((range) => {
+    if (range.start > cursor) {
+      output += `<span class="writing-prompt-segment writing-prompt-context">${renderWritingPromptSliceWithHighlights(text, ranges, cursor, range.start)}</span>`;
+    }
+    output += `<strong class="writing-prompt-segment writing-prompt-fixed-question">${escapeHtml(task2FixedQuestionDisplayLabel(text.slice(range.start, range.end)))}</strong>`;
+    cursor = range.end;
+  });
+  if (cursor < text.length) {
+    output += `<span class="writing-prompt-segment writing-prompt-context">${renderWritingPromptSliceWithHighlights(text, ranges, cursor, text.length)}</span>`;
+  }
+  return `<span class="writing-prompt-text-structured">${output}</span>`;
+}
+
 function renderWritingPromptTextWithHighlights(textValue, ranges = []) {
   const text = String(textValue || "");
   const normalized = normalizeWritingPromptHighlightRanges(ranges, text);
   if (!text) return "";
   if (!normalized.length) return escapeHtml(text).replace(/\n/g, "<br>");
-  let output = "";
-  let cursor = 0;
-  normalized.forEach((range, index) => {
-    output += escapeHtml(text.slice(cursor, range.start)).replace(/\n/g, "<br>");
-    output += `<mark class="writing-highlight-mark" data-writing-highlight-index="${index}" tabindex="0" role="button" aria-label="删除这条题目高亮">${escapeHtml(text.slice(range.start, range.end)).replace(/\n/g, "<br>")}</mark>`;
-    cursor = range.end;
-  });
-  output += escapeHtml(text.slice(cursor)).replace(/\n/g, "<br>");
-  return output;
+  return renderWritingPromptSliceWithHighlights(text, normalized, 0, text.length);
 }
 
 function deletePendingWritingPromptHighlight() {
@@ -1066,8 +1179,13 @@ async function persistWritingPromptHighlights() {
   return entry;
 }
 
-function setBusy(message) {
-  $("#busyBar").classList.toggle("hidden", !message);
+let busyDepth = 0;
+
+function setBusy(message, options = {}) {
+  if (options.forceClear) busyDepth = 0;
+  const bar = $("#busyBar");
+  if (!bar) return;
+  bar.classList.toggle("hidden", !message);
   text("busyText", message || "");
 }
 
@@ -1114,11 +1232,13 @@ function loadCandidateNames(...args) {
 }
 
 async function withBusy(message, action) {
+  busyDepth += 1;
   setBusy(message);
   try {
     return await action();
   } finally {
-    setBusy("");
+    busyDepth = Math.max(0, busyDepth - 1);
+    if (busyDepth === 0) setBusy("");
   }
 }
 
@@ -1171,7 +1291,10 @@ const writingPromptPickerController = window.IELTSWritingPromptPicker?.createWri
   writingUsablePromptsForSource,
   resolveWritingPickerSource,
   inferWritingCategories,
+  inferWritingPromptPatterns,
   writingCategoryLabel,
+  writingPromptPatternLabel,
+  withWritingPromptPattern,
   setWritingSwitchState,
   showWritingError,
   api,
@@ -1327,8 +1450,8 @@ function scheduleAuthenticatedPrefetch() {
   prefetchFixedExaminerTts(token);
   scheduleIdleTask(() => prefetchSpeakingHistory(token), 550);
   scheduleIdleTask(() => prefetchWritingReports(token), 1300);
-  scheduleIdleTask(() => prefetchLanguageTakeaways(token), 2200);
-  scheduleIdleTask(() => prefetchWritingTakeaways(token), 3000);
+  scheduleIdleTask(() => prefetchLanguageTakeaways(token), 1800);
+  scheduleIdleTask(() => prefetchWritingTakeaways(token), 1800);
   scheduleIdleTask(() => prefetchP1Corpus(token), 4200);
   scheduleIdleTask(() => prefetchP2Corpus(token), 5400);
   scheduleIdleTask(() => prefetchCorpusEditor(token), 6500);
@@ -1475,6 +1598,7 @@ async function prefetchLanguageTakeaways(token) {
   const payload = await fetchLanguageTakeawaysPayload();
   if (!prefetchCanApply(token)) return;
   applyLanguageTakeawaysPayload(payload);
+  updateTakeawayReviewDots();
   if (state.view === "takeawayBook") {
     const stats = $("languageTakeawayStats");
     if (stats) stats.textContent = `${payload.count || 0} 条`;
@@ -1496,6 +1620,7 @@ async function fetchLanguageTakeawaysPayload() {
 function applyLanguageTakeawaysPayload(payload) {
   state.languageTakeaway.items = payload.items || [];
   state.languageTakeaway.loaded = true;
+  updateTakeawayReviewDots();
 }
 
 async function prefetchSpeakingHistory(token) {
@@ -1556,6 +1681,15 @@ function authSourceView(candidate) {
 
 function rememberAuthSource(candidate) {
   state.account.fromView = authSourceView(candidate);
+}
+
+function setWritingActionPanelCollapsed(collapsed) {
+  const panel = $("writingActionPanel");
+  const toggle = $("writingActionPanelToggle");
+  if (!panel || !toggle) return;
+  panel.classList.toggle("is-collapsed", collapsed);
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  toggle.setAttribute("aria-label", collapsed ? "展开评分操作" : "折叠评分操作");
 }
 
 function switchView(view, options = {}) {
@@ -1627,6 +1761,8 @@ function switchView(view, options = {}) {
   $(".shell")?.classList.toggle("auth-shell", authViews.has(view));
   document.body.classList.toggle("view-home", view === "home");
   document.body.classList.toggle("view-writing", view === "writing");
+  document.body.classList.toggle("view-takeawayBook", view === "takeawayBook");
+  document.body.classList.toggle("view-writingTakeawayBook", view === "writingTakeawayBook");
   $(".shell")?.classList.toggle("account-shell", accountViews.has(view));
   $(".workspace")?.classList.toggle("corpus-workspace", corpusViews.has(view));
   $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !corpusBackButtonViews.has(view));
@@ -1639,6 +1775,8 @@ function switchView(view, options = {}) {
   $("#p2CorpusPanel")?.classList.toggle("hidden", view !== "p2Corpus");
   $("#takeawayBookPanel")?.classList.toggle("hidden", view !== "takeawayBook");
   $("#writingTakeawayBookPanel")?.classList.toggle("hidden", view !== "writingTakeawayBook");
+  $("#languageTakeawayReviewPanel")?.classList.toggle("hidden", view !== "takeawayBook");
+  $("#writingTakeawayReviewPanel")?.classList.toggle("hidden", view !== "writingTakeawayBook");
   $("#spellingDrillPanel")?.classList.toggle("hidden", view !== "spellingDrill");
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
@@ -1663,7 +1801,10 @@ function switchView(view, options = {}) {
   if (view === "takeawayBook") loadLanguageTakeaways();
   if (view === "writingTakeawayBook") loadWritingTakeaways();
   if (view === "spellingDrill") loadSpellingDrill();
-  if (view === "writing") loadWriting();
+  if (view === "writing") {
+    setWritingActionPanelCollapsed(false);
+    loadWriting();
+  }
   if (view === "writingReports") loadWritingReports();
   if (view === "p1Corpus") loadP1Corpus();
   if (view === "p2Corpus") loadP2Corpus({ force: true });
@@ -1732,6 +1873,7 @@ async function fetchWritingTakeawaysPayload() {
 function applyWritingTakeawaysPayload(payload) {
   state.writingTakeaway.items = payload.items || [];
   state.writingTakeaway.loaded = true;
+  updateTakeawayReviewDots();
 }
 
 async function fetchHistoryDetail(attemptId) {
@@ -1849,6 +1991,24 @@ function prepareLoginView(message = "") {
     status.textContent = "";
     status.classList.remove("error");
   }
+}
+
+function accountErrorMessage(error, fallback = "操作失败") {
+  const errors = error?.errors || error?.payload?.errors || {};
+  const messages = Object.values(errors)
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  const raw = messages[0] || error?.message || fallback;
+  const translations = {
+    "Login failed": "登录失败",
+    "Invalid username or password": "用户名或密码不正确。",
+    "Username and password are required": "请输入账号和密码。",
+    "Registration failed": "注册失败",
+    "Password change failed": "修改密码失败",
+    "Please enter username and password.": "请输入账号和密码。",
+  };
+  return translations[raw] || raw;
 }
 
 function showPracticeOverlay(view = "accountProfile") {
@@ -2025,7 +2185,30 @@ function navigatePracticeMode(mode) {
   switchView(mode, { force: true });
 }
 
+function captureNavScrollState() {
+  const nav = document.querySelector(".nav");
+  if (!nav) return null;
+  const maxScrollTop = Math.max(0, nav.scrollHeight - nav.clientHeight);
+  return {
+    top: nav.scrollTop,
+    atBottom: maxScrollTop > 0 && nav.scrollTop >= maxScrollTop - 2,
+  };
+}
+
+function restoreNavScrollState(snapshot) {
+  if (!snapshot) return;
+  const nav = document.querySelector(".nav");
+  if (!nav) return;
+  const apply = () => {
+    const maxScrollTop = Math.max(0, nav.scrollHeight - nav.clientHeight);
+    nav.scrollTop = snapshot.atBottom ? maxScrollTop : Math.min(snapshot.top, maxScrollTop);
+  };
+  apply();
+  requestAnimationFrame(apply);
+}
+
 function setRecordButton(status, title, hint) {
+  const navScroll = captureNavScrollState();
   state.status = status;
   $("#recordControl").className = `record-control ${status}`;
   $("#recordControl").disabled = isRecordControlDisabledStatus(status);
@@ -2052,6 +2235,7 @@ function setRecordButton(status, title, hint) {
     if (timerEl) timerEl.style.color = "";
   }
   updateSidebarLock();
+  restoreNavScrollState(navScroll);
 }
 
 function setPromptHtml(html, size = "medium") {
@@ -2078,6 +2262,7 @@ async function startPractice() {
   state.practiceSessionId = sessionId;
   state.startAbortController?.abort();
   state.startAbortController = new AbortController();
+  state.userExitedPractice = false;
   if (!state.account.authenticated) {
     state.account.returnView = state.view;
     switchView("login", {
@@ -2213,6 +2398,16 @@ function renderTurn(turn) {
     return;
   }
   $("p2CorpusPrepPanel")?.classList.add("hidden");
+  if (isStreamFollowUpFailed(turn)) {
+    setPromptHtml('<span class="prompt-followup-tag">Follow-up question</span><p>追问生成失败。点击下方按钮重新生成，不会重开整场练习。</p>', "short");
+    text("recordStatus", "追问生成失败，可以重新生成。");
+    return;
+  }
+  if (isWaitingForStreamedFollowUpText(turn)) {
+    setPromptHtml('<span class="prompt-followup-tag">Follow-up question</span><p>正在生成追问...</p>', "short");
+    text("recordStatus", "正在生成追问...");
+    return;
+  }
   setPromptHtml(`${isFollowUp ? '<span class="prompt-followup-tag">Follow-up question</span>' : ""}<p>${escapeHtml(turn.question)}</p>`, promptSize(turn.question));
 }
 
@@ -2720,9 +2915,9 @@ function isActivePracticeSession(sessionId) {
 }
 
 function examinerLoadingHint(turn) {
-  if (turn?.prompt?.role === "follow_up") return "Preparing follow-up...";
-  if (turn?.counts_toward_total === false) return "Preparing identity question...";
-  return "Preparing examiner audio...";
+  if (turn?.prompt?.role === "follow_up") return "正在准备追问...";
+  if (turn?.counts_toward_total === false) return "正在准备身份题...";
+  return "正在准备考官音频...";
 }
 
 function examinerListeningStatus(turn) {
@@ -2783,7 +2978,7 @@ function currentExaminerTurnStillMatches(sessionId, turnId, playback) {
 async function playExaminerTurn(turn, sessionId = state.practiceSessionId) {
   if (!isActivePracticeSession(sessionId) || !turn) return false;
   if (isWaitingForStreamedFollowUpText(turn)) {
-    text("recordStatus", "Examiner follow-up is still generating...");
+    text("recordStatus", "正在生成追问...");
     traceExaminerAudio("playback:stream-pending-follow-up-blocked", {
       turnId: turn.id,
       hasQuestion: hasUsableTurnQuestion(turn),
@@ -3181,13 +3376,14 @@ async function getSpeakingAudioStream() {
   if (initialSelection.device) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia(speakingAudioConstraintsForDevice(initialSelection.device));
+      const activeTrack = activeTrackDeviceInfo(stream);
       exposeSpeakingInputDevice({
         ...captureDeviceDiagnostics(initialSelection.device, {
           source: "preferred-enumerated-device",
           bluetoothInputsPresent,
-          avoidBrowserDictation: bluetoothInputsPresent,
+          avoidBrowserDictation: activeTrack.bluetoothLike,
         }),
-        activeTrack: activeTrackDeviceInfo(stream),
+        activeTrack,
       });
       return stream;
     } catch (error) {
@@ -3213,14 +3409,15 @@ async function getSpeakingAudioStream() {
     if (preferred) {
       baselineStream.getTracks().forEach((track) => track.stop());
       const stream = await navigator.mediaDevices.getUserMedia(speakingAudioConstraintsForDevice(preferred));
+      const activeTrack = activeTrackDeviceInfo(stream);
       exposeSpeakingInputDevice({
         ...captureDeviceDiagnostics(preferred, {
           source: "preferred-after-permission",
           bluetoothInputsPresent: true,
           avoidedBluetoothInput: baselineTrack.label || true,
-          avoidBrowserDictation: true,
+          avoidBrowserDictation: activeTrack.bluetoothLike,
         }),
-        activeTrack: activeTrackDeviceInfo(stream),
+        activeTrack,
       });
       return stream;
     }
@@ -3233,7 +3430,7 @@ async function getSpeakingAudioStream() {
     virtualLike: baselineTrack.virtualLike,
     source: "browser-default",
     bluetoothInputsPresent,
-    avoidBrowserDictation: bluetoothInputsPresent || baselineTrack.bluetoothLike,
+    avoidBrowserDictation: baselineTrack.bluetoothLike,
     activeTrack: baselineTrack,
   });
   return baselineStream;
@@ -3472,6 +3669,25 @@ function registerPendingTurnCompletion(attempt, turn, promise) {
   });
 }
 
+function handleTurnCompletionFailure(error, context = {}) {
+  const attemptId = context.attempt?.id || state.attempt?.id || "";
+  if (state.abortingAttemptId === attemptId) return;
+  const message = error instanceof Error ? error.message : String(error || "");
+  state.speaking.turnCompletionErrors.set(
+    pendingTurnCompletionKey(attemptId, context.turn?.id || state.speaking.retryCompletion?.turn?.id || ""),
+    error,
+  );
+  setBusy("");
+  setDictationStatus("", "");
+  $("summaryPanel")?.classList.add("hidden");
+  if (context.localNextTurn && state.currentTurn?.id === context.localNextTurn.id) {
+    text("recordStatus", `后台保存本题失败：${message || "请重试保存。"}`);
+    return;
+  }
+  setRecordButton("completion_failed", "重新保存", "本题保存失败，点击重新保存。");
+  text("recordStatus", message ? `本题保存失败：${message}` : "本题保存失败，请重新保存。");
+}
+
 async function waitForPendingTurnCompletions(attemptId) {
   const pending = [...state.speaking.pendingTurnCompletions.entries()]
     .filter(([key]) => key.startsWith(`${attemptId}:`))
@@ -3508,10 +3724,24 @@ function handleTurnCompletionResult(attempt, turn, completePayload) {
 
 function shouldStreamFollowUpTurn(turn) {
   const prompt = turn?.prompt || {};
-  return prompt.backend === "stream_pending" || prompt.generation_status === "pending";
+  return ["stream_pending", "stream_failed"].includes(prompt.backend)
+    || ["pending", "failed"].includes(prompt.generation_status);
+}
+
+function isStreamFollowUpFailed(turn) {
+  const prompt = turn?.prompt || {};
+  return prompt.backend === "stream_failed" || prompt.generation_status === "failed";
 }
 
 function hasUsableTurnQuestion(turn) {
+  if (shouldStreamFollowUpTurn(turn)) {
+    const promptQuestion = String(turn?.prompt?.question || "").trim();
+    const question = String(turn?.question || turn?.examiner_text || turn?.text || "").trim();
+    return Boolean(
+      (promptQuestion && !STREAM_PENDING_FOLLOW_UP_PLACEHOLDERS.has(promptQuestion))
+      || (question && !STREAM_PENDING_FOLLOW_UP_PLACEHOLDERS.has(question)),
+    );
+  }
   return Boolean(String(
     turn?.question ||
     turn?.prompt?.question ||
@@ -3522,7 +3752,7 @@ function hasUsableTurnQuestion(turn) {
 }
 
 function isWaitingForStreamedFollowUpText(turn) {
-  return shouldStreamFollowUpTurn(turn) && !hasUsableTurnQuestion(turn);
+  return shouldStreamFollowUpTurn(turn) && !isStreamFollowUpFailed(turn) && !hasUsableTurnQuestion(turn);
 }
 
 function mergeStreamingFollowUpTurn(nextTurn, patch) {
@@ -3542,6 +3772,12 @@ function mergeStreamingFollowUpTurn(nextTurn, patch) {
     examiner_text: patch.examiner_text ?? turnPatch.examiner_text ?? question,
     ...(patch.examiner_tts ? { examiner_tts: patch.examiner_tts } : {}),
   };
+}
+
+function sourceTurnForStreamedFollowUp(attempt, followUpTurn) {
+  const afterTurnId = followUpTurn?.prompt?.after_turn;
+  if (!afterTurnId) return null;
+  return (attempt?.turns || []).find((item) => item.id === afterTurnId) || null;
 }
 
 function parseSseEventBlock(block) {
@@ -3598,6 +3834,7 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
   let streamedText = "";
   let examinerStarted = false;
   let ttsWaitPromise = null;
+  let streamResolvedQuestion = false;
   const streamStartedAt = Date.now();
   recordRealtimePhaseMetric({
     followUpStreamStartedAt: streamStartedAt,
@@ -3628,6 +3865,11 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
   };
   const waitForFollowUpAudioThenStart = async (reason = "tts-refresh") => {
     if (examinerStarted || !isActivePracticeSession(sessionId) || state.currentTurn?.id !== currentNextTurn.id) return;
+    if (isStreamFollowUpFailed(currentNextTurn)) {
+      setRecordButton("follow_up_failed", "重新生成追问", "追问生成失败，点击重试。");
+      text("recordStatus", "追问生成失败，可以重新生成。");
+      return;
+    }
     if (ttsWaitPromise) return ttsWaitPromise;
     ttsWaitPromise = (async () => {
       const currentTts = currentNextTurn.examiner_tts || {};
@@ -3635,7 +3877,7 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         startExaminerOnce();
         return;
       }
-      text("recordStatus", "Follow-up text is ready. Preparing examiner audio...");
+      text("recordStatus", "追问已生成，正在准备考官音频...");
       traceExaminerAudio("follow-up-tts:wait-start", {
         reason,
         turnId: currentNextTurn.id,
@@ -3657,11 +3899,11 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         audioUrl: refreshedTts.audio_url || "",
       });
       if (refreshedTts.audio_url) {
-        text("recordStatus", "Examiner audio is ready.");
+        text("recordStatus", "考官音频已准备好。");
         startExaminerOnce();
         return;
       }
-      text("recordStatus", "Follow-up audio is unavailable. Prepare your answer directly.");
+      text("recordStatus", "追问音频暂不可用，可以直接准备回答。");
       startPreparationWithoutAudioOnce(`${reason}-no-audio`);
     })().finally(() => {
       ttsWaitPromise = null;
@@ -3676,7 +3918,7 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
     renderTurn(currentNextTurn);
   };
 
-  text("recordStatus", "Examiner is generating the follow-up...");
+  text("recordStatus", "正在生成追问...");
   const response = await fetch(`/api/attempts/${encodeURIComponent(attempt.id)}/turns/${encodeURIComponent(completedTurn.id)}/follow-up-stream`, {
     method: "GET",
     credentials: "same-origin",
@@ -3696,11 +3938,12 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
           });
         }
         applyTurnPatch({ text: streamedText });
-        text("recordStatus", "Examiner follow-up is appearing...");
+        text("recordStatus", "追问正在生成...");
       }
       return;
     }
     if (payload.event === "question_complete") {
+      streamResolvedQuestion = true;
       streamedText = payload.text || streamedText;
       const questionCompleteAt = Date.now();
       recordRealtimePhaseMetric({
@@ -3710,7 +3953,7 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         followUpBackend: payload.backend || "",
       });
       applyTurnPatch({ text: streamedText, turn: payload.turn });
-      text("recordStatus", "Question ready. Preparing examiner audio...");
+      text("recordStatus", "追问已生成，正在准备考官音频...");
       waitForFollowUpAudioThenStart("question-complete");
       return;
     }
@@ -3722,7 +3965,7 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         followUpTtsReadyAfterStreamMs: realtimeMetricElapsed("followUpStreamStartedAt", "followUpTtsReadyAt"),
       });
       applyTurnPatch({ examiner_tts: payload.examiner_tts || { audio_url: payload.audio_url, status: "ready", provider: "volcengine" } });
-      text("recordStatus", "Examiner audio is ready.");
+      text("recordStatus", "考官音频已准备好。");
       startExaminerOnce();
       return;
     }
@@ -3732,11 +3975,12 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         followUpTtsStatus: "timeout",
       });
       applyTurnPatch({ examiner_tts: payload.examiner_tts || { provider: "volcengine", status: "pending", audio_url: null } });
-      text("recordStatus", "Examiner audio is still generating. Waiting briefly...");
+      text("recordStatus", "考官音频仍在生成，稍等一下...");
       waitForFollowUpAudioThenStart("tts-timeout");
       return;
     }
     if (payload.event === "fallback") {
+      streamResolvedQuestion = true;
       streamedText = payload.text || streamedText || currentNextTurn.question || "";
       const fallbackAt = Date.now();
       recordRealtimePhaseMetric({
@@ -3745,12 +3989,28 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         followUpBackend: "fallback",
       });
       applyTurnPatch({ text: streamedText, turn: payload.turn });
-      text("recordStatus", "Follow-up generated through fallback. Preparing examiner audio...");
+      text("recordStatus", "追问已生成，正在准备考官音频...");
       waitForFollowUpAudioThenStart("fallback");
+      return;
+    }
+    if (payload.event === "failed") {
+      recordRealtimePhaseMetric({
+        followUpFailedAt: Date.now(),
+        followUpBackend: payload.backend || "stream_failed",
+      });
+      applyTurnPatch({ turn: payload.turn || {}, prompt: payload.turn?.prompt || {} });
+      setRecordButton("follow_up_failed", "重新生成追问", "追问生成失败，点击重试。");
+      text("recordStatus", payload.error ? `追问生成失败：${payload.error}` : "追问生成失败，可以重新生成。");
       return;
     }
     if (payload.event === "done") {
       if (payload.turn) applyTurnPatch({ turn: payload.turn });
+      if (isStreamFollowUpFailed(currentNextTurn)) {
+        setRecordButton("follow_up_failed", "重新生成追问", "追问生成失败，点击重试。");
+        text("recordStatus", "追问生成失败，可以重新生成。");
+        return;
+      }
+      if (hasUsableTurnQuestion(currentNextTurn)) streamResolvedQuestion = true;
       if ((currentNextTurn.examiner_tts || {}).audio_url) {
         startExaminerOnce();
       } else {
@@ -3760,22 +4020,48 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
   });
   if ((currentNextTurn.examiner_tts || {}).audio_url) {
     startExaminerOnce();
+  } else if (isStreamFollowUpFailed(currentNextTurn)) {
+    setRecordButton("follow_up_failed", "重新生成追问", "追问生成失败，点击重试。");
+    text("recordStatus", "追问生成失败，可以重新生成。");
+  } else if (!streamResolvedQuestion && isWaitingForStreamedFollowUpText(currentNextTurn)) {
+    setRecordButton("turn_saved", "Next", "正在等待追问生成。");
+    text("recordStatus", "正在生成追问...");
   } else {
     await waitForFollowUpAudioThenStart("stream-ended");
   }
   return true;
 }
 
-async function finalizeTurn(mimeType) {
-  const attempt = state.attempt;
-  const turn = state.currentTurn;
+async function finalizeTurn(mimeType, retrySnapshot = null) {
+  const attempt = retrySnapshot?.attempt || state.attempt;
+  const turn = retrySnapshot?.turn || state.currentTurn;
   if (!attempt || !turn) return;
-  await waitForFinalDictation();
-  const audioPreprocessingMetrics = await waitForSpeakingAudioPreprocessorTurnMetrics();
-  const realtimeAsrMetrics = realtimePcmUplinkController.metrics();
+  if (!retrySnapshot) {
+    await waitForFinalDictation();
+    setDictationStatus("", "");
+  }
+  const audioPreprocessingMetrics = retrySnapshot?.audioPreprocessingMetrics || await waitForSpeakingAudioPreprocessorTurnMetrics();
+  const realtimeAsrMetrics = retrySnapshot?.realtimeAsrMetrics || realtimePcmUplinkController.metrics();
   if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
-  const blob = new Blob(state.audioChunks, { type: mimeType });
-  setRecordButton("processing", "Saving", "Uploading answer audio...");
+  const audioChunks = retrySnapshot?.audioChunks?.slice() || state.audioChunks.slice();
+  const blob = new Blob(audioChunks, { type: mimeType });
+  const transcriptSnapshot = retrySnapshot?.transcript ?? state.transcript;
+  const transcriptStatusSnapshot = retrySnapshot?.transcriptStatus || state.transcriptStatus;
+  const transcriptSourceSnapshot = retrySnapshot?.transcriptSource || state.transcriptSource || "browser_dictation";
+  const p2CorpusEntrySnapshot = retrySnapshot?.p2CorpusEntryId || state.p2Corpus.selectedEntryId;
+  state.speaking.retryCompletion = {
+    attempt,
+    turn,
+    mimeType,
+    audioChunks,
+    audioPreprocessingMetrics,
+    realtimeAsrMetrics,
+    transcript: transcriptSnapshot,
+    transcriptStatus: transcriptStatusSnapshot,
+    transcriptSource: transcriptSourceSnapshot,
+    p2CorpusEntryId: p2CorpusEntrySnapshot,
+  };
+  setRecordButton("processing", "Saving", "正在上传回答音频...");
   try {
     const token = await ensureCsrfToken();
     const uploadHeaders = { "Content-Type": mimeType.split(";")[0] };
@@ -3790,14 +4076,10 @@ async function finalizeTurn(mimeType) {
     const payload = body ? JSON.parse(body) : {};
     if (!upload.ok) throw new Error(payload.error || "Audio upload failed");
     const completionStatus = isP1WorkStudyIdentityTurn(turn)
-      ? "Generating follow-up..."
-      : "Saving turn...";
+      ? "正在生成追问..."
+      : "正在保存本题...";
     const localNextTurn = localNextTurnAfter(turn, attempt);
     const requiresSyncComplete = turnRequiresSynchronousComplete(turn, localNextTurn);
-    const transcriptSnapshot = state.transcript;
-    const transcriptStatusSnapshot = state.transcriptStatus;
-    const transcriptSourceSnapshot = state.transcriptSource || "browser_dictation";
-    const p2CorpusEntrySnapshot = state.p2Corpus.selectedEntryId;
     recordRealtimePhaseMetric({ turnCompleteStartedAt: Date.now() });
     const completeRequest = (streamFollowUp = false) => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
       turn,
@@ -3822,15 +4104,21 @@ async function finalizeTurn(mimeType) {
       });
       state.currentTurn = localNextTurn;
       renderTurn(localNextTurn);
-      setRecordButton("turn_saved", "Next", "Moving to the next question.");
-      text("recordStatus", "Audio uploaded. Saving transcript in the background.");
+      setRecordButton("turn_saved", "Next", "正在进入下一题。");
+      text("recordStatus", "音频已上传，正在后台保存转写。");
       scheduleExaminerPhase(sessionId, localNextTurn.id, 200);
       const completion = completeRequest()
-        .then((completePayload) => handleTurnCompletionResult(attempt, turn, completePayload))
+        .then((completePayload) => {
+          if (state.speaking.retryCompletion?.turn?.id === turn.id) {
+            state.speaking.retryCompletion = null;
+            state.audioChunks = [];
+          }
+          state.speaking.turnCompletionErrors.delete(pendingTurnCompletionKey(attempt.id, turn.id));
+          handleTurnCompletionResult(attempt, turn, completePayload);
+        })
         .catch((error) => {
           if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
-          state.speaking.turnCompletionErrors.set(pendingTurnCompletionKey(attempt.id, turn.id), error);
-          showError(error);
+          handleTurnCompletionFailure(error, { attempt, turn, localNextTurn });
         });
       registerPendingTurnCompletion(attempt, turn, completion);
       return;
@@ -3843,32 +4131,74 @@ async function finalizeTurn(mimeType) {
       turnCompleteAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "turnCompleteReturnedAt"),
     });
     if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+    state.speaking.turnCompletionErrors.delete(pendingTurnCompletionKey(attempt.id, turn.id));
     state.attempt = completePayload.attempt;
     if (completePayload.next_turn) {
       const sessionId = state.practiceSessionId;
       state.currentTurn = completePayload.next_turn;
       renderTurn(completePayload.next_turn);
-      setRecordButton("turn_saved", "Next", "Moving to the next question.");
+      setRecordButton("turn_saved", "Next", "正在进入下一题。");
       clearAutoNextTimeout();
       if (shouldStreamFollowUpTurn(completePayload.next_turn)) {
-        text("recordStatus", "Question saved. Streaming examiner follow-up...");
+        text("recordStatus", "本题已保存，正在生成追问...");
         streamFollowUpForCompletedTurn(attempt, turn, completePayload.next_turn, sessionId)
           .catch((error) => {
             if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+            const message = error instanceof Error ? error.message : String(error || "");
+            traceExaminerAudio("follow-up-stream:error-recovered", {
+              turnId: completePayload.next_turn.id,
+              message,
+            });
+            if (isStreamFollowUpFailed(state.currentTurn)) {
+              setRecordButton("follow_up_failed", "重新生成追问", "追问生成失败，点击重试。");
+              text("recordStatus", "追问生成失败，可以重新生成。");
+              return;
+            }
+            if (isWaitingForStreamedFollowUpText(state.currentTurn)) {
+              setRecordButton("turn_saved", "Next", "正在等待追问生成。");
+              text("recordStatus", "追问仍在生成，请稍等。");
+              return;
+            }
+            if (hasUsableTurnQuestion(state.currentTurn)) {
+              text("recordStatus", "追问已保留，正在准备下一步。");
+              scheduleExaminerPhase(sessionId, state.currentTurn.id, 650);
+              return;
+            }
             showError(error);
-            scheduleExaminerPhase(sessionId, completePayload.next_turn.id, 650);
           });
       } else {
-        text("recordStatus", "Question saved. The next examiner prompt will start automatically.");
+        text("recordStatus", "本题已保存，下一题会自动开始。");
         scheduleExaminerPhase(sessionId, completePayload.next_turn.id, 650);
       }
     } else {
       state.currentTurn = null;
+      state.speaking.retryCompletion = null;
       await scoreAttempt();
     }
+    state.speaking.retryCompletion = null;
   } finally {
-    state.audioChunks = [];
+    if (!state.speaking.retryCompletion) state.audioChunks = [];
   }
+}
+
+async function retryTurnCompletion() {
+  const retry = state.speaking.retryCompletion;
+  if (!retry?.attempt || !retry?.turn || !retry?.audioChunks?.length) {
+    setRecordButton("ready", "Try Again", "上次保存失败，请重新开始。");
+    text("recordStatus", "没有可重新保存的录音，请重新开始。");
+    return;
+  }
+  state.attempt = retry.attempt;
+  state.currentTurn = retry.turn;
+  state.audioChunks = retry.audioChunks.slice();
+  state.transcript = retry.transcript || "";
+  state.transcriptFinal = retry.transcript || "";
+  state.transcriptInterim = "";
+  state.transcriptStatus = retry.transcriptStatus || (retry.transcript ? "captured" : "missing");
+  state.transcriptSource = retry.transcriptSource || "browser_dictation";
+  state.p2Corpus.selectedEntryId = retry.p2CorpusEntryId || state.p2Corpus.selectedEntryId || "";
+  renderTurn(retry.turn);
+  await finalizeTurn(retry.mimeType || "audio/webm", retry);
 }
 
 async function scoreAttempt() {
@@ -3899,6 +4229,14 @@ async function scoreAttempt() {
       startSpeakingScorePolling(task.id, attemptId);
       return;
     }
+    if (task && isSpeakingTaskTerminal(task)) {
+      handleSpeakingAnalysisFailure(new Error(speakingTaskStatusText(task)), attemptId, { task });
+      return;
+    }
+    if (scored.status === "analysis_pending" && !scored.ielts_score) {
+      handleSpeakingAnalysisFailure(new Error("口语分析任务没有进入后台队列，请重试分析。"), attemptId, { task });
+      return;
+    }
     const isCurrentAttempt = state.attempt?.id === attemptId;
     if (isCurrentAttempt) state.attempt = scored;
     state.historyDetailCache.set(scored.id, scored);
@@ -3913,14 +4251,66 @@ async function scoreAttempt() {
     showSpeakingScoreCompleteModal(scored);
   } catch (error) {
     if (state.speaking.pendingAnalysis?.attemptId === attemptId) state.speaking.pendingAnalysis = null;
-    if (state.attempt?.id === attemptId && isPracticeView(state.view)) {
-      state.status = "analysis_failed";
-      setRecordButton("analysis_failed", "Retry Analysis", "AI analysis failed. Try generating the report again.");
-      text("recordStatus", error?.message || "AI analysis failed. Try again.");
-      text("phaseLabel", "Analysis failed");
+    if (error?.status === 401) {
+      showError(error);
+      return;
     }
-    showError(error);
+    if (state.speaking.retryCompletion?.attempt?.id === attemptId) {
+      state.currentTurn = state.speaking.retryCompletion.turn;
+      renderTurn(state.currentTurn);
+      handleTurnCompletionFailure(error, {
+        attempt: state.speaking.retryCompletion.attempt,
+        turn: state.speaking.retryCompletion.turn,
+      });
+      return;
+    }
+    handleSpeakingAnalysisFailure(error, attemptId);
   }
+}
+
+function speakingAnalysisFailureMessage(error, task = null) {
+  const rawMessage = task ? speakingTaskStatusText(task) : (error instanceof Error ? error.message : String(error || ""));
+  const message = String(rawMessage || "").trim();
+  if (
+    message.includes("没有拿到文字稿")
+    || message.includes("没有文字稿")
+    || message.includes("Missing transcript")
+    || message.includes("服务端 ASR")
+    || message.includes("ASR")
+  ) {
+    return "录音已保存，但没有拿到可评分的文字稿。请先开启或修复 ASR/浏览器转写，再重试分析。";
+  }
+  return message || "AI 分析没有生成报告，可以重试分析。";
+}
+
+function handleSpeakingAnalysisFailure(error, attemptId = state.attempt?.id || "", options = {}) {
+  if (state.userExitedPractice || state.abortingAttemptId === attemptId) {
+    setBusy("");
+    return;
+  }
+  clearSpeakingScorePolling();
+  if (state.speaking.pendingAnalysis?.attemptId === attemptId) state.speaking.pendingAnalysis = null;
+  const isCurrentAttempt = !attemptId || state.attempt?.id === attemptId;
+  const message = speakingAnalysisFailureMessage(error, options.task || null);
+  setBusy("");
+  setDictationStatus("", "");
+  if (isCurrentAttempt && isPracticeView(state.view)) {
+    state.status = "analysis_failed";
+    state.currentTurn = null;
+    state.practiceLocked = false;
+    updateSidebarLock();
+    $("exitPractice")?.classList.add("hidden");
+    setRecordButton("analysis_failed", "重新分析", "本次录音已保存，点击重新生成报告。");
+    text("recordStatus", message);
+    text("phaseLabel", "分析失败");
+    $("summaryPanel")?.classList.remove("hidden");
+    const panel = $("summaryPanel");
+    if (panel) {
+      panel.innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
+    }
+    return;
+  }
+  showError(error);
 }
 
 function clearSpeakingScorePolling() {
@@ -3963,17 +4353,15 @@ function startSpeakingScorePolling(taskId, attemptId) {
         return;
       }
       if (state.speaking.pendingAnalysis?.attemptId === attemptId) state.speaking.pendingAnalysis = null;
-      if (state.attempt?.id === attemptId && isPracticeView(state.view)) {
-        state.status = "analysis_failed";
-        setRecordButton("analysis_failed", "Retry Analysis", "AI analysis failed. Try generating the report again.");
-        text("recordStatus", speakingTaskStatusText(task));
-        text("phaseLabel", "Analysis failed");
-      }
-      showError(new Error(speakingTaskStatusText(task)));
+      handleSpeakingAnalysisFailure(new Error(speakingTaskStatusText(task)), attemptId, { task });
     } catch (error) {
       clearSpeakingScorePolling();
       if (state.speaking.pendingAnalysis?.attemptId === attemptId) state.speaking.pendingAnalysis = null;
-      showError(error);
+      if (error?.status === 401) {
+        showError(error);
+        return;
+      }
+      handleSpeakingAnalysisFailure(error, attemptId);
     }
   };
   poll();
@@ -4342,6 +4730,7 @@ function setWritingPageLoading(isLoading, title = "正在加载每日写作", de
 }
 
 async function loadHistory(showBusy = true) {
+  const navScroll = captureNavScrollState();
   const action = async () => {
     if (state.historyItems.length) renderHistoryList(state.historyItems, { refreshActive: true });
     const payload = await api("/api/history");
@@ -4360,6 +4749,7 @@ async function loadHistory(showBusy = true) {
     return await action();
   } finally {
     panel?.classList.remove("is-loading");
+    restoreNavScrollState(navScroll);
   }
 }
 
@@ -4536,9 +4926,7 @@ function showConfirmDelete(message, onConfirm) {
 }
 
 function currentWritingWordCount() {
-  const value = $("writingAnswer")?.value || "";
-  const matches = value.match(/[A-Za-z]+(?:[-'][A-Za-z]+)?|\d+(?:\.\d+)?/g);
-  return matches ? matches.length : 0;
+  return writingWordCountForValue($("writingAnswer")?.value || "");
 }
 
 function writingParagraphs(value) {
@@ -4733,7 +5121,7 @@ function writingSpellingCardsHtml(spelling = "") {
                 <span class="writing-spelling-token writing-spelling-token-wrong">${escapeHtml(item.wrong)}</span>
                 <span class="writing-spelling-correction-arrow" aria-hidden="true">→</span>
                 <span class="writing-spelling-token writing-spelling-token-correct">${escapeHtml(item.correct)}</span>
-                ${item.note ? `<span class="writing-spelling-note">${escapeHtml(item.note)}</span>` : `<span class="writing-spelling-note" aria-hidden="true">&nbsp;</span>`}
+                ${item.note ? `<div class="writing-spelling-note">${escapeHtml(item.note)}</div>` : ""}
               </article>
             `).join("")}
           </div>
@@ -4863,8 +5251,8 @@ function ensureWritingParagraphsBeforeScore(answer, taskType) {
 }
 
 // ─── Writing frames (essay scaffolds) ──────────────────────────────
-// /frame  → fills the textarea with a category-specific scaffold
-// /myframe → opens a modal to customize this category's scaffold (saved to localStorage)
+// /frame  → fills the textarea with a fixed-question-pattern scaffold
+// /myframe → opens a modal to customize this pattern's scaffold (saved to localStorage)
 const WRITING_FRAME_DEFAULTS = {
   // ── Task 1 Academic ────────────────────────────────────────────
   "task1_academic:line_graph": [
@@ -4932,7 +5320,7 @@ const WRITING_FRAME_DEFAULTS = {
   ].join("\n"),
 
   // ── Task 2 ─────────────────────────────────────────────────────
-  "task2:opinion": [
+  "task2:agree_disagree": [
     "Some people believe that [main idea in the question]. I [completely/partly] agree with this view, mainly because [reason 1] and [reason 2].",
     "",
     "Firstly, [reason 1 as a clear topic sentence]. This is because [explain the logic in simple terms]. If [people/governments/schools/companies] [do something], they are more likely to [result]. For example, [one concrete example]. Therefore, [link this example back to your opinion].",
@@ -4941,7 +5329,7 @@ const WRITING_FRAME_DEFAULTS = {
     "",
     "In conclusion, I believe that [repeat your position in different words]. The main reasons are that [reason 1 in short] and [reason 2 in short].",
   ].join("\n"),
-  "task2:discussion": [
+  "task2:discussion_opinion": [
     "People have different views about [topic]. Some argue that [view A], while others believe that [view B]. I think [your own view] is more reasonable.",
     "",
     "On the one hand, supporters of [view A] may have a valid point. They believe that [reason for view A], because [explanation]. For example, [example that makes this side sound fair]. This is why some people see [view A] as a practical solution.",
@@ -4949,6 +5337,15 @@ const WRITING_FRAME_DEFAULTS = {
     "On the other hand, I side more with [view B / your view]. The main reason is that [reason for your preferred side]. This means that [explain impact]. For instance, [example]. Compared with the first view, this approach deals better with [deeper problem or long-term need].",
     "",
     "In conclusion, both views have some logic, but I believe [your preferred view] is stronger. This is because [final reason linked directly to the question].",
+  ].join("\n"),
+  "task2:positive_negative": [
+    "[Development from the question] has become increasingly common. In my view, this is mainly a [positive/negative] development because [reason 1] and [reason 2].",
+    "",
+    "The first reason is that [reason 1]. This matters because [explanation of the impact]. For example, [specific example]. This shows that the change can [positive/negative result] in a practical way.",
+    "",
+    "Another important point is [reason 2]. Although some people may worry that [opposite concern], this concern is less important because [your response]. In many cases, [condition/example], so the overall effect is still [positive/negative].",
+    "",
+    "In conclusion, I believe this is a [positive/negative] development. The main reason is that [final reason linked directly to the change in the question].",
   ].join("\n"),
   "task2:problem_solution": [
     "[Problem from the question] has become increasingly common in many places. The main reasons are [cause 1] and [cause 2], and the problem can be reduced by [solution 1] and [solution 2].",
@@ -4959,6 +5356,15 @@ const WRITING_FRAME_DEFAULTS = {
     "",
     "In conclusion, [problem] is mainly caused by [cause 1] and [cause 2]. However, it can be improved if [solution 1] and [solution 2] are carried out consistently.",
   ].join("\n"),
+  "task2:causes_effects": [
+    "[Trend/problem from the question] has become increasingly common. This is mainly caused by [cause 1] and [cause 2], and it can lead to [effect 1] as well as [effect 2].",
+    "",
+    "One major cause is [cause 1]. This happens because [explanation]. Another reason is [cause 2], especially when [specific situation]. For example, [example showing the cause clearly].",
+    "",
+    "This trend can have several effects. The first is [effect 1], because [explanation of consequence]. It may also lead to [effect 2]. In the long term, this could affect [people/society/the economy/the environment] by [specific impact].",
+    "",
+    "In conclusion, [trend/problem] is mainly caused by [cause 1] and [cause 2], and its most important effects are [effect 1] and [effect 2].",
+  ].join("\n"),
   "task2:advantages_disadvantages": [
     "[Topic] has both advantages and disadvantages. Although it may cause [main drawback], I believe the benefits are more important because [main benefit].",
     "",
@@ -4968,7 +5374,16 @@ const WRITING_FRAME_DEFAULTS = {
     "",
     "In conclusion, despite [main drawback], I think the advantages of [topic] outweigh the disadvantages. The key reason is that [final reason linked to the question].",
   ].join("\n"),
-  "task2:two_part": [
+  "task2:advantages_outweigh": [
+    "[Topic] has both advantages and disadvantages, but I believe the advantages outweigh the disadvantages because [main benefit] is more significant than [main drawback].",
+    "",
+    "The main advantage is that [advantage]. This is important because [explanation], and it can help [people/society/businesses/students] to [positive result]. For example, [specific example].",
+    "",
+    "Admittedly, there are some disadvantages. The most obvious one is [disadvantage], which may cause [negative result]. However, this problem can often be reduced by [solution/condition], while the benefits are broader and more lasting.",
+    "",
+    "In conclusion, although [main drawback] should not be ignored, I think the advantages outweigh the disadvantages because [final reason].",
+  ].join("\n"),
+  "task2:two_question": [
     "[Topic from the question] raises two issues: [question 1 in your words] and [question 2 in your words]. In my view, [short answer to question 1], and [short answer to question 2].",
     "",
     "Regarding the first issue, [answer to question 1]. This is because [reason], and it often leads to [effect]. For example, [specific example]. Therefore, [mini conclusion for question 1].",
@@ -4977,42 +5392,71 @@ const WRITING_FRAME_DEFAULTS = {
     "",
     "In conclusion, [summary answer to question 1], while [summary answer to question 2]. Overall, [final idea that connects both answers].",
   ].join("\n"),
+  "task2:other": [
+    "[Topic from the question] is an important issue. My answer is that [your clear position/answer], mainly because [reason 1] and [reason 2].",
+    "",
+    "The first point is [reason 1]. This is important because [explanation]. For example, [specific example]. This shows that [link back to the question].",
+    "",
+    "Another point is [reason 2]. Although some people may argue that [opposite idea], I think [your response] because [reason]. In practice, [short real-life example or condition].",
+    "",
+    "In conclusion, I believe [summary of your answer]. The strongest reason is that [final link to the exact question wording].",
+  ].join("\n"),
 };
 
 const WRITING_FRAME_FALLBACK = {
   task1_academic: WRITING_FRAME_DEFAULTS["task1_academic:line_graph"],
-  task2: WRITING_FRAME_DEFAULTS["task2:opinion"],
+  task2: WRITING_FRAME_DEFAULTS["task2:agree_disagree"],
 };
 
 function currentWritingFrameKey() {
   const prompt = state.writing.prompt || {};
   const taskType = prompt.task_type || state.writing.taskType || "task2";
   const category = (prompt.category || "").trim();
-  return { taskType, category, key: `${taskType}:${category}` };
+  const promptPattern = taskType === "task2" ? String(prompt.prompt_pattern || "").trim() : "";
+  const frameType = promptPattern || category;
+  return { taskType, category, promptPattern, frameType, key: `${taskType}:${frameType}` };
 }
 
-function writingFrameDefaultFor(taskType, category) {
-  const fullKey = `${taskType}:${category}`;
+function writingFrameDefaultFor(taskType, frameType) {
+  const fullKey = `${taskType}:${frameType}`;
   return WRITING_FRAME_DEFAULTS[fullKey]
     || WRITING_FRAME_FALLBACK[taskType]
     || WRITING_FRAME_FALLBACK.task2;
 }
 
-function writingFrameCustomFor(taskType, category) {
+const WRITING_FRAME_LEGACY_KEYS = {
+  "task2:agree_disagree": ["task2:opinion"],
+  "task2:discussion_opinion": ["task2:discussion"],
+  "task2:advantages_outweigh": ["task2:advantages_disadvantages"],
+  "task2:problem_solution": ["task2:causes_effects", "task2:positive_negative"],
+  "task2:two_question": ["task2:two_part"],
+};
+
+function writingFrameCustomForKey(key) {
   try {
-    return window.localStorage.getItem(`writingFrame:${taskType}:${category}`) || null;
+    const direct = window.localStorage.getItem(`writingFrame:${key}`);
+    if (direct) return direct;
+    for (const legacyKey of WRITING_FRAME_LEGACY_KEYS[key] || []) {
+      const legacy = window.localStorage.getItem(`writingFrame:${legacyKey}`);
+      if (legacy) {
+        window.localStorage.setItem(`writingFrame:${key}`, legacy);
+        return legacy;
+      }
+    }
+    return null;
   } catch { return null; }
 }
 
-function writingFrameFor(taskType, category) {
-  return writingFrameCustomFor(taskType, category) || writingFrameDefaultFor(taskType, category);
+function writingFrameFor(taskType, frameType) {
+  const key = `${taskType}:${frameType}`;
+  return writingFrameCustomForKey(key) || writingFrameDefaultFor(taskType, frameType);
 }
 
 function applyWritingFrame() {
   const answer = $("writingAnswer");
   if (!answer) return;
-  const { taskType, category } = currentWritingFrameKey();
-  const frame = writingFrameFor(taskType, category);
+  const { taskType, frameType } = currentWritingFrameKey();
+  const frame = writingFrameFor(taskType, frameType);
   const existing = answer.value.trim();
   // Only auto-fill when empty or value is exactly a slash command — never overwrite real work.
   if (existing && !/^\/(frame|myframe)\b/i.test(existing)) {
@@ -5020,6 +5464,11 @@ function applyWritingFrame() {
     if (!ok) { answer.focus(); return; }
   }
   answer.value = frame + "\n\n";
+  state.writing.autosaveFrameBaselineText = answer.value;
+  state.writing.autosaveFrameBaselineWordCount = writingWordCountForValue(answer.value);
+  state.writing.autosaveEnabled = false;
+  state.writing.autosaveQueued = false;
+  clearWritingAutosaveTimer();
   // Move caret to end and notify the rest of the app
   answer.focus();
   answer.setSelectionRange(answer.value.length, answer.value.length);
@@ -5027,18 +5476,21 @@ function applyWritingFrame() {
 }
 
 function openWritingFrameEditor() {
-  const { taskType, category, key } = currentWritingFrameKey();
+  const { taskType, category, promptPattern, frameType, key } = currentWritingFrameKey();
   if (!state.writing.prompt) {
     window.alert("先选一道题，才能为这类题型定制框架。");
     return;
   }
   const sub = $("writingFrameModalSub");
   if (sub) {
-    const label = `${writingTaskLabel(taskType)}${category ? " · " + writingCategoryLabel(category) : ""}`;
-    sub.textContent = `当前类型：${label}（保存的框架仅作用于这一类）`;
+    const typeLabel = taskType === "task2"
+      ? writingPromptPatternLabel(promptPattern || frameType)
+      : writingCategoryLabel(category);
+    const label = `${writingTaskLabel(taskType)}${typeLabel ? " · " + typeLabel : ""}`;
+    sub.textContent = `当前类型：${label}（保存的框架仅作用于这一种固定问法/图表类型）`;
   }
   const editor = $("writingFrameEditor");
-  if (editor) editor.value = writingFrameFor(taskType, category);
+  if (editor) editor.value = writingFrameFor(taskType, frameType);
   const status = $("writingFrameSaveStatus");
   if (status) status.textContent = "";
   editor?.dataset && (editor.dataset.frameKey = key);
@@ -5053,10 +5505,27 @@ function closeWritingFrameEditor() {
   $("writingAnswer")?.focus();
 }
 
+function savedWritingFrameValue(key) {
+  if (!key) return "";
+  try {
+    const direct = window.localStorage.getItem(`writingFrame:${key}`);
+    if (direct !== null) return direct;
+  } catch {}
+  const [taskType, frameType] = String(key).split(":");
+  return writingFrameDefaultFor(taskType, frameType || "");
+}
+
+function writingFrameEditorHasUnsavedChanges() {
+  const editor = $("writingFrameEditor");
+  const key = editor?.dataset.frameKey;
+  if (!editor || !key) return false;
+  return editor.value !== savedWritingFrameValue(key);
+}
+
 function saveWritingFrame() {
   const editor = $("writingFrameEditor");
   const key = editor?.dataset.frameKey;
-  if (!editor || !key) return;
+  if (!editor || !key) return false;
   try {
     window.localStorage.setItem(`writingFrame:${key}`, editor.value);
     const status = $("writingFrameSaveStatus");
@@ -5065,10 +5534,17 @@ function saveWritingFrame() {
       status.classList.remove("error");
       setTimeout(() => { if (status) status.textContent = ""; }, 1800);
     }
+    return true;
   } catch (err) {
     const status = $("writingFrameSaveStatus");
     if (status) { status.textContent = "保存失败：" + (err.message || err); status.classList.add("error"); }
+    return false;
   }
+}
+
+function closeWritingFrameEditorSavingChanges() {
+  if (writingFrameEditorHasUnsavedChanges() && !saveWritingFrame()) return;
+  closeWritingFrameEditor();
 }
 
 function resetWritingFrame() {
@@ -5076,8 +5552,8 @@ function resetWritingFrame() {
   const key = editor?.dataset.frameKey;
   if (!editor || !key) return;
   try { window.localStorage.removeItem(`writingFrame:${key}`); } catch {}
-  const [taskType, category] = key.split(":");
-  editor.value = writingFrameDefaultFor(taskType, category || "");
+  const [taskType, frameType] = key.split(":");
+  editor.value = writingFrameDefaultFor(taskType, frameType || "");
   const status = $("writingFrameSaveStatus");
   if (status) { status.textContent = "已恢复默认"; status.classList.remove("error"); }
 }
@@ -5130,6 +5606,43 @@ function updateWritingWordCount(options = {}) {
   autoResizeWritingAnswer(options);
 }
 
+const WRITING_AUTOSAVE_MIN_WORDS = 20;
+const WRITING_FRAME_AUTOSAVE_ADDED_WORDS = 35;
+
+function writingWordCountForValue(value = "") {
+  const matches = String(value || "").match(/[A-Za-z]+(?:[-'][A-Za-z]+)?|\d+(?:\.\d+)?/g);
+  return matches ? matches.length : 0;
+}
+
+function resetWritingFrameAutosaveBaseline() {
+  state.writing.autosaveFrameBaselineText = "";
+  state.writing.autosaveFrameBaselineWordCount = 0;
+}
+
+function writingFrameAddedWordCount() {
+  const answerValue = $("writingAnswer")?.value || "";
+  const baselineText = state.writing.autosaveFrameBaselineText || "";
+  if (!baselineText) return 0;
+  if (!answerValue.startsWith(baselineText.trimEnd())) {
+    resetWritingFrameAutosaveBaseline();
+    return 0;
+  }
+  return Math.max(0, writingWordCountForValue(answerValue) - Number(state.writing.autosaveFrameBaselineWordCount || 0));
+}
+
+function writingAutosaveReady() {
+  const answerValue = $("writingAnswer")?.value || "";
+  const count = writingWordCountForValue(answerValue);
+  const baselineText = state.writing.autosaveFrameBaselineText || "";
+  if (!baselineText) return count > WRITING_AUTOSAVE_MIN_WORDS;
+  return writingFrameAddedWordCount() >= WRITING_FRAME_AUTOSAVE_ADDED_WORDS;
+}
+
+function writingAutosaveStatusText() {
+  if (state.writing.autosaveEnabled) return "等待自动保存...";
+  return "未保存的修改";
+}
+
 function clearWritingAutosaveTimer() {
   if (state.writing.autosaveTimer) {
     clearTimeout(state.writing.autosaveTimer);
@@ -5138,8 +5651,7 @@ function clearWritingAutosaveTimer() {
 }
 
 function maybeScheduleWritingAutosave() {
-  const count = currentWritingWordCount();
-  if (count > 20) state.writing.autosaveEnabled = true;
+  if (writingAutosaveReady()) state.writing.autosaveEnabled = true;
   if (!state.writing.autosaveEnabled || !state.writing.dirty || !state.writing.prompt) return;
   if (state.writing.scorePollingEntryId) return;
   clearWritingAutosaveTimer();
@@ -5203,6 +5715,75 @@ function writingCategoryLabel(category = "") {
   };
   const key = String(category || "").trim();
   return labels[key] || key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Writing";
+}
+
+function writingPromptPatternLabel(pattern = "") {
+  const labels = {
+    agree_to_what_extent: "To what extent do you agree or disagree?",
+    discussion_opinion: "Discuss both views and give your own opinion.",
+    positive_negative_do_you_think: "a positive or a negative development?",
+    advantages_outweigh: "Do the advantages outweigh the disadvantages?",
+    problem_solution: "Why / What reasons / solutions?",
+    two_question: "双问题",
+    other: "其他问法",
+  };
+  const key = String(pattern || "").trim();
+  return labels[key] || key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "问法";
+}
+
+function task2PromptPatternForText(promptText = "") {
+  const text = String(promptText || "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!text) return "other";
+  if (/discuss\s*&\s*give (?:your|our)(?: own)? opinions?/.test(text)) return "discussion_opinion";
+  if (/discuss both(?: (?:these|the|those))?(?: (?:views?|sides?))?(?: and)?(?: give)? (?:your|our)(?: own)? (?:opinions?|view)/.test(text)) return "discussion_opinion";
+  if (/what is the value\b.*\bwhat are the arguments in favour\b/.test(text)) return "discussion_opinion";
+  if (/to what exten[td] do(?: you)? agree (?:or|of) disagree(?: with (?:this|the) (?:statement|opinion|view))?/.test(text)) return "agree_to_what_extent";
+  if (/to what exten[td] do you think\b/.test(text)) return "agree_to_what_extent";
+  if (/do you agree or disagree/.test(text)) return "agree_to_what_extent";
+  if (/\bbenefits?\b.*\boutweigh\b.*\b(?:disadvantages?|drawbacks?)\b/.test(text)) return "advantages_outweigh";
+  if (/\badvantages?\b.*\boutweigh\b.*\b(?:disadvantages?|drawbacks?)\b/.test(text)) return "advantages_outweigh";
+  if (/\b(?:disadvantages?|drawbacks?)\b.*\boutweigh\b.*\b(?:advantages?|benefits?)\b/.test(text)) return "advantages_outweigh";
+  if (/\bnegative effects?\b.*\boutweigh\b.*\bpositive effects?\b/.test(text)) return "advantages_outweigh";
+  if (/\b(?:advantages?|benefits?)\b.*\bor\b.*\b(?:disadvantages?|drawbacks?)\b/.test(text)) return "advantages_outweigh";
+  const hasReasonQuestion = /\b(?:why|what (?:do you think )?(?:are )?(?:the )?(?:reasons?|causes?|problems?)|what factors? contribute|how (?:can|could)|what can|what could|what should|what (?:are )?(?:the )?(?:solutions?|measures?))\b/.test(text);
+  const hasSecondQuestion = (text.match(/\?/g) || []).length >= 2;
+  const hasSolutionQuestion = /\b(?:solutions?|measures?|solve|solved|what can|what could|how can|how could|how to|what should|ways to|encourage|research)\b/.test(text);
+  const hasEffectQuestion = /\b(?:effects?|impact|affect|positive|negative|disadvantages?|advantages?|how realistic)\b/.test(text);
+  if (hasReasonQuestion && hasSecondQuestion && (hasSolutionQuestion || hasEffectQuestion)) return "problem_solution";
+  if (/\bwhy\b/.test(text) && /\b(?:effects?|impact|affect|positive|negative)\b/.test(text)) return "problem_solution";
+  const positiveNegativePatterns = [
+    /(?:do you think|whether|is|are|ls) (?:this|it|that|these|they|the (?:trend|development|change|situation|effect|impact))?(?: is| are)?(?: a)? positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)?/,
+    /(?:do you think|whether) (?:the|this|that) (?:trend|development|change|situation|effect|impact) (?:is|are) (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)?/,
+  ];
+  if (positiveNegativePatterns.some((pattern) => pattern.test(text))) return "positive_negative_do_you_think";
+  const hasBecomePatterns = [
+    /has (?:this|it|that|the (?:trend|development|change|situation|effect|impact)) become (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)/,
+    /is (?:this|it|that|the (?:trend|development|change|situation|effect|impact)) (?:a )?positive (?:or )?(?:a )?negative (?:development|trend|change|situation|effects?|impacts?|characteristic)/,
+  ];
+  if (hasBecomePatterns.some((pattern) => pattern.test(text))) return "positive_negative_do_you_think";
+  if (text.includes("advantages and disadvantages") || text.includes("benefits and drawbacks") || (text.includes("what are the advantages") && text.includes("disadvantages"))) {
+    return "advantages_outweigh";
+  }
+  const mentionsSolution = /solutions?|measures?|solved?|solve/.test(text);
+  if (((/problems?/.test(text)) && mentionsSolution) || ((/causes?|reasons?/.test(text)) && mentionsSolution)) {
+    return "problem_solution";
+  }
+  if ((/causes?|reasons?/.test(text)) && (/effects?|affect|impact/.test(text))) return "problem_solution";
+  return "other";
+}
+
+function withWritingPromptPattern(prompt = {}) {
+  if (!prompt || prompt.task_type !== "task2") return prompt;
+  const currentPattern = String(prompt.prompt_pattern || "").trim();
+  const pattern = task2PromptPatternForText(prompt.prompt);
+  const label = currentPattern === "causes_effects"
+    ? writingPromptPatternLabel(pattern)
+    : writingPromptPatternLabel(pattern);
+  return { ...prompt, prompt_pattern: pattern, prompt_pattern_label: label };
+}
+
+function normalizeWritingPrompts(taskType, prompts = [], catalog = []) {
+  return attachWritingDisplayLabels(taskType, prompts, catalog).map(withWritingPromptPattern);
 }
 
 const CAMBRIDGE_TASK2_TOPIC_TITLES = {
@@ -5623,7 +6204,7 @@ async function loadRequestedWritingEntry() {
   await recoverWritingEntry(entry);
   syncWritingScorePolling(entry, { switchOnComplete: false });
   syncUrlForCurrentState({ replace: true });
-  text("writingSaveStatus", "已打开这篇作文。修改分段后，再点击 AI 评分与辅导重新生成报告。");
+  text("writingSaveStatus", "已载入");
   $("writingAnswer")?.focus();
   return true;
 }
@@ -5654,15 +6235,20 @@ async function loadQuickWritingPrompt(taskType) {
   if (cachedPrompt) return cachedPrompt;
   return api("/api/writing/prompts/random", {
     task_type: normalized,
-    category: state.writing.pickerCategoryFilters[normalized] || "",
+    category: "",
+    prompt_pattern: state.writing.pickerPromptPatternFilters?.[normalized] || "",
   });
 }
 
 async function loadWritingPrompts(taskType) {
   const normalized = taskType || "task1_academic";
   if (state.writing.prompts[normalized]?.length) {
+    state.writing.prompts[normalized] = normalizeWritingPrompts(normalized, state.writing.prompts[normalized], state.writing.promptCatalog[normalized] || []);
     if (!state.writing.promptCategories[normalized]?.length) {
       state.writing.promptCategories[normalized] = inferWritingCategories(state.writing.prompts[normalized]);
+    }
+    if (normalized === "task2") {
+      state.writing.promptPatterns[normalized] = inferWritingPromptPatterns(state.writing.prompts[normalized]);
     }
     return state.writing.prompts[normalized];
   }
@@ -5670,8 +6256,11 @@ async function loadWritingPrompts(taskType) {
     state.writing.promptLoadingPromises[normalized] = api(`/api/writing/prompts?task_type=${encodeURIComponent(normalized)}`)
       .then((payload) => {
         state.writing.promptCatalog[normalized] = payload.catalog || [];
-        state.writing.prompts[normalized] = attachWritingDisplayLabels(normalized, payload.items || [], state.writing.promptCatalog[normalized]);
+        state.writing.prompts[normalized] = normalizeWritingPrompts(normalized, payload.items || [], state.writing.promptCatalog[normalized]);
         state.writing.promptCategories[normalized] = payload.categories || inferWritingCategories(state.writing.prompts[normalized]);
+        state.writing.promptPatterns[normalized] = normalized === "task2"
+          ? inferWritingPromptPatterns(state.writing.prompts[normalized])
+          : (payload.prompt_patterns || []);
         return state.writing.prompts[normalized];
       })
       .finally(() => {
@@ -5699,6 +6288,31 @@ function inferWritingCategories(prompts = []) {
   return Array.from(counts.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([category, count]) => ({ category, label: writingCategoryLabel(category), count }));
+}
+
+function inferWritingPromptPatterns(prompts = []) {
+  const counts = new Map();
+  for (const prompt of prompts) {
+    const rawPattern = String(prompt.prompt_pattern || "").trim();
+    const pattern = rawPattern === "two_question" ? "other" : rawPattern;
+    if (!pattern) continue;
+    counts.set(pattern, (counts.get(pattern) || 0) + 1);
+  }
+  const order = [
+    "agree_to_what_extent",
+    "discussion_opinion",
+    "positive_negative_do_you_think",
+    "advantages_outweigh",
+    "problem_solution",
+    "other",
+  ];
+  return Array.from(counts.entries())
+    .sort(([a], [b]) => {
+      const rankA = order.indexOf(a);
+      const rankB = order.indexOf(b);
+      return (rankA === -1 ? 999 : rankA) - (rankB === -1 ? 999 : rankB) || a.localeCompare(b);
+    })
+    .map(([pattern, count]) => ({ pattern, label: writingPromptPatternLabel(pattern), count }));
 }
 
 async function loadWritingSummary(render = true) {
@@ -6107,6 +6721,7 @@ function setWritingPrompt(prompt, clearAnswer = true, options = {}) {
   clearWritingAutosaveTimer();
   state.writing.autosaveEnabled = false;
   state.writing.autosaveQueued = false;
+  resetWritingFrameAutosaveBaseline();
   state.writing.prompt = prompt;
   state.writing.taskType = prompt.task_type || state.writing.taskType;
   if (prompt?.task_type === "task1_academic" && prompt.image_url) {
@@ -6158,7 +6773,9 @@ function renderWritingSurface() {
   }
   const promptText = prompt?.prompt || "\u8bf7\u9009\u62e9\u4e00\u9053\u9898\uff0c\u6216\u70b9\u51fb\u968f\u673a\u9898\u5f00\u59cb\u3002";
   const highlightRanges = writingPromptHighlightKey(prompt) ? currentWritingPromptHighlightState() : [];
-  $("writingPromptText").innerHTML = renderWritingPromptTextWithHighlights(promptText, highlightRanges);
+  $("writingPromptText").innerHTML = taskType === "task2"
+    ? renderTask2PromptTextWithHighlights(promptText, highlightRanges)
+    : renderWritingPromptTextWithHighlights(promptText, highlightRanges);
   hideWritingHighlightMenu();
 
   // Render Task 1 image if available
@@ -6296,6 +6913,17 @@ function isShiftSpaceShortcut(event) {
 }
 
 function handleGlobalKeydown(event) {
+  const reviewKey = String(event.key || "").toLowerCase();
+  if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && (reviewKey === "a" || reviewKey === "d")) {
+    const kind = state.view === "writingTakeawayBook" ? "writing" : (state.view === "takeawayBook" ? "language" : "");
+    if (kind && isTakeawayReviewActiveForKind(kind) && !isEditableShortcutTarget(event.target)) {
+      event.preventDefault();
+      event.stopPropagation();
+      takeawayReviewFeedback(kind, "", reviewKey === "d" ? "again" : "mastered");
+      return;
+    }
+  }
+
   if (isShiftSpaceShortcut(event) && canToggleWritingImageViewer()) {
     event.preventDefault();
     event.stopPropagation();
@@ -6462,6 +7090,7 @@ async function saveWritingEntry(keepPending = false, options = {}) {
     const changedAfterRequest = currentAnswer !== answer || currentHighlights !== startedHighlights;
     state.writing.entry = changedAfterRequest ? { ...entry, answer: currentAnswer } : entry;
     state.writing.dirty = changedAfterRequest;
+    if (!changedAfterRequest) resetWritingFrameAutosaveBaseline();
     if (savingExistingUnscoredEntry && String(entry?.id || "") === previousEntryId && !isWritingEntryScored(entry)) {
       syncWritingReportEntryCache(entry);
       renderVisibleWritingReport(entry);
@@ -6799,7 +7428,8 @@ async function recoverWritingEntry(entry) {
   }
   if ($("writingAnswer")) $("writingAnswer").value = entry.answer || "";
   state.writing.dirty = false;
-  state.writing.autosaveEnabled = currentWritingWordCount() > 20;
+  resetWritingFrameAutosaveBaseline();
+  state.writing.autosaveEnabled = writingAutosaveReady();
   state.writing.autosaveQueued = false;
   clearWritingAutosaveTimer();
   renderWritingSurface();
@@ -6887,6 +7517,10 @@ async function scoreWritingEntry() {
     try {
       const result = await withBusy("AI 评分任务已提交...", () => api(`/api/writing/entries/${entry.id}/score-task`, {}));
       const savedEntry = result.entry || entry;
+      // Clear entry-level dedup so the completion/failure modal can show even if this
+      // entry had a previous (failed) attempt whose notification was already displayed.
+      const _savedEntryId = String(savedEntry.id || "").trim();
+      if (_savedEntryId) state.writing.scoreCompletionNotifiedIds.delete(_savedEntryId);
       state.writing.entry = savedEntry;
       state.writing.dirty = false;
       renderWritingSurface();
@@ -6914,7 +7548,7 @@ async function scoreWritingEntry() {
 async function openWritingEntry(entryId) {
   if (!entryId) return;
   if (state.writing.dirty && !window.confirm("当前作文还没有保存，确定要打开历史记录吗？")) return;
-  const entry = await withBusy("Loading writing entry...", () => api(`/api/writing/entries/${entryId}`));
+  const entry = await withBusy("正在打开作文...", () => api(`/api/writing/entries/${entryId}`));
   await recoverWritingEntry(entry);
   syncWritingScorePolling(entry, { switchOnComplete: false });
   await loadWritingSummary();
@@ -6927,11 +7561,12 @@ async function editWritingReportEntry(entryId) {
   const requestId = state.writing.reportEditRequestId + 1;
   state.writing.reportEditRequestId = requestId;
   state.writing.reportEditLoading = true;
-  text("writingSaveStatus", cachedEntry && isWritingEntryScored(cachedEntry) ? "正在复制这篇作文..." : "正在加载这篇作文...");
+  const editBusyMessage = cachedEntry && isWritingEntryScored(cachedEntry) ? "正在复制为新版草稿..." : "正在打开作文...";
+  text("writingSaveStatus", editBusyMessage);
   try {
     const source = cachedEntry && isWritingEntryScored(cachedEntry)
       ? cachedEntry
-      : await withBusy("正在加载这篇作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
+      : await withBusy("正在打开作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
     if (state.writing.reportEditRequestId !== requestId) return;
     syncWritingReportEntryCache(source);
     state.writing.activeReportDetail = source;
@@ -6948,7 +7583,7 @@ async function editWritingReportEntry(entryId) {
       $("writingAnswer")?.focus();
       return;
     }
-    const clone = await withBusy("正在复制作文...", () => cloneWritingEntryForRevision(entryId));
+    const clone = await withBusy("正在复制为新版草稿...", () => cloneWritingEntryForRevision(entryId));
     if (state.writing.reportEditRequestId !== requestId) return;
     state.writing.requestedEntryId = "";
     state.writing.requestedPromptId = "";
@@ -6974,20 +7609,35 @@ async function editWritingReportEntry(entryId) {
 async function editWritingReportEntryInNewTab(entryId, entryHint = null) {
   if (!entryId) return;
   let targetWindow = null;
+  const newTabBusyMessage = entryHint && isWritingEntryScored(entryHint) ? "正在复制为新版草稿..." : "正在打开作文...";
   try {
     targetWindow = window.open("about:blank", "_blank");
     if (targetWindow) {
       targetWindow.opener = null;
-      targetWindow.document.title = "正在复制作文...";
-      targetWindow.document.body.innerHTML = "<p>正在复制作文，请稍候...</p>";
+      targetWindow.document.title = "正在准备作文";
+      targetWindow.document.body.innerHTML = `<!doctype html>
+        <html lang="zh-CN">
+          <head>
+            <meta charset="utf-8">
+            <title>正在准备作文</title>
+            <style>
+              body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f7f8;color:#0d0d0d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+              .card{display:flex;align-items:center;gap:12px;border:1px solid #ececf1;border-radius:12px;background:#fff;padding:16px 18px;box-shadow:0 14px 38px rgba(15,23,42,.08);font-size:15px;font-weight:700}
+              .spinner{width:18px;height:18px;border:3px solid #dbe3ea;border-top-color:#10a37f;border-radius:50%;animation:spin .8s linear infinite}
+              @keyframes spin{to{transform:rotate(360deg)}}
+            </style>
+          </head>
+          <body><div class="card"><span class="spinner"></span><span>${escapeHtml(newTabBusyMessage)}</span></div></body>
+        </html>`;
     }
   } catch (_error) {
     targetWindow = null;
   }
   try {
-    const source = entryHint && isWritingEntryScored(entryHint)
-      ? entryHint
-      : await withBusy("正在加载这篇作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
+    const source = await withBusy(newTabBusyMessage, async () => {
+      if (entryHint && isWritingEntryScored(entryHint)) return entryHint;
+      return api(`/api/writing/entries/${encodeURIComponent(entryId)}`);
+    });
     syncWritingReportEntryCache(source);
     if (!isWritingEntryScored(source)) {
       const url = writingEntryEditUrl(source);
@@ -7001,7 +7651,7 @@ async function editWritingReportEntryInNewTab(entryId, entryHint = null) {
       }
       return;
     }
-    const clone = await withBusy("正在复制作文...", () => cloneWritingEntryForRevision(entryId));
+    const clone = await withBusy("正在复制为新版草稿...", () => cloneWritingEntryForRevision(entryId));
     const url = writingEntryEditUrl(clone);
     if (targetWindow && !targetWindow.closed) {
       targetWindow.location.replace(url);
@@ -7142,7 +7792,7 @@ function overallReviewSection(review = {}, attempt = null) {
   if (!markdown && !comment && !points.length) return "";
   const isP2 = attempt && (attempt.mode === "p2" || attempt.part === "p2");
   const action = isP2
-    ? `<button type="button" class="p2-report-p3-button" data-start-p3-from-p2="${escapeHtml(attempt.id || "")}">生成 P3 训练计划</button>`
+    ? `<button type="button" class="p2-report-p3-button" data-start-p3-from-p2="${escapeHtml(attempt.id || "")}">根据本次P2回答练习P3</button>`
     : "";
   const body = markdown ? renderMarkdown(markdown) : `
     ${comment ? `<h4>总体点评</h4><p>${escapeHtml(comment)}</p>` : ""}
@@ -7769,6 +8419,10 @@ function renderP2CorpusTopics(...args) {
   return corpusTakeawayController.renderP2CorpusTopics(...args);
 }
 
+async function openP2BrainstormDialog(...args) {
+  return corpusTakeawayController.openP2BrainstormDialog(...args);
+}
+
 async function loadCorpusHome(...args) {
   return corpusTakeawayController.loadCorpusHome(...args);
 }
@@ -7795,6 +8449,26 @@ function renderLanguageTakeawayToggle(...args) {
 
 function toggleLanguageTakeawayHiddenMode(...args) {
   return corpusTakeawayController.toggleLanguageTakeawayHiddenMode(...args);
+}
+
+function startTakeawayReview(...args) {
+  return corpusTakeawayController.startTakeawayReview(...args);
+}
+
+function endTakeawayReview(...args) {
+  return corpusTakeawayController.endTakeawayReview(...args);
+}
+
+function selectTakeawayReviewEntry(...args) {
+  return corpusTakeawayController.selectTakeawayReviewEntry(...args);
+}
+
+function takeawayReviewFeedback(...args) {
+  return corpusTakeawayController.takeawayReviewFeedback(...args);
+}
+
+function updateTakeawayReviewDots(...args) {
+  return corpusTakeawayController.updateTakeawayReviewDots(...args);
 }
 
 function speakLanguageTakeaway(...args) {
@@ -7873,6 +8547,10 @@ async function saveWritingTakeaway(...args) {
   return corpusTakeawayController.saveWritingTakeaway(...args);
 }
 
+function openNewTakeawayEditor(...args) {
+  return corpusTakeawayController.openNewTakeawayEditor(...args);
+}
+
 function openTakeawayEditor(...args) {
   return corpusTakeawayController.openTakeawayEditor(...args);
 }
@@ -7883,6 +8561,30 @@ function closeTakeawayEditor(...args) {
 
 async function saveTakeawayEditor(...args) {
   return corpusTakeawayController.saveTakeawayEditor(...args);
+}
+
+function openExpressionReplacementDialog(...args) {
+  return corpusTakeawayController.openExpressionReplacementDialog(...args);
+}
+
+function closeExpressionReplacementDialog(...args) {
+  return corpusTakeawayController.closeExpressionReplacementDialog(...args);
+}
+
+function addExpressionReplacement(...args) {
+  return corpusTakeawayController.addExpressionReplacement(...args);
+}
+
+function editExpressionReplacement(...args) {
+  return corpusTakeawayController.editExpressionReplacement(...args);
+}
+
+function saveExpressionReplacementEdit(...args) {
+  return corpusTakeawayController.saveExpressionReplacementEdit(...args);
+}
+
+function deleteExpressionReplacement(...args) {
+  return corpusTakeawayController.deleteExpressionReplacement(...args);
 }
 
 function findP2CorpusEntry(...args) {
@@ -8187,6 +8889,7 @@ function stopAllRuntime(label = "Ready") {
 
 async function exitPractice() {
   const attemptId = state.attempt?.id;
+  state.userExitedPractice = true;
   state.startRequestId += 1;
   state.practiceSessionId += 1;
   state.startAbortController?.abort();
@@ -8197,6 +8900,8 @@ async function exitPractice() {
     state.abortingAttemptId = attemptId || "__loading__";
     state.cancelRecording = true;
     stopRecording();
+    stopAllRuntime("Ready");
+    exitSessionId = state.practiceSessionId;
   } else {
     stopAllRuntime("Ready");
     state.abortingAttemptId = attemptId || "__loading__";
@@ -8212,10 +8917,12 @@ async function exitPractice() {
 }
 
 function recoverActivePracticeAfterError(error) {
+  if (state.userExitedPractice || state.abortingAttemptId) return true;
   const sessionId = state.practiceSessionId;
   if (!isActivePracticeSession(sessionId) || !state.currentTurn) return false;
   const message = error instanceof Error ? error.message : String(error || "");
   setBusy("");
+  setDictationStatus("", "");
   $("summaryPanel")?.classList.add("hidden");
   traceExaminerAudio("practice:error-recover", {
     status: state.status,
@@ -8225,29 +8932,43 @@ function recoverActivePracticeAfterError(error) {
     message,
   });
   if (isRecoverablePracticeErrorStatus(state.status)) {
-    text("recordStatus", message || "Temporary issue detected; continuing the current question.");
+    if (state.status === "processing" && state.speaking.retryCompletion) {
+      setRecordButton("completion_failed", "重新保存", "本题保存失败，点击重新保存。");
+      text("recordStatus", message ? `本题保存失败：${message}` : "本题保存失败，请重新保存。");
+      return true;
+    }
+    text("recordStatus", message || "检测到临时问题，当前题会继续保留。");
     return true;
   }
   if (isWaitingForStreamedFollowUpText(state.currentTurn)) {
-    setRecordButton("turn_saved", "Next", "Waiting for the examiner follow-up.");
-    text("recordStatus", "Examiner follow-up is still generating...");
+    setRecordButton("turn_saved", "Next", "正在等待追问生成。");
+    text("recordStatus", "正在生成追问...");
+    return true;
+  }
+  if (shouldStreamFollowUpTurn(state.currentTurn)) {
+    setRecordButton("turn_saved", "Next", "正在准备追问。");
+    text("recordStatus", message || "追问正在准备中，请稍等。");
     return true;
   }
   if (hasUsableTurnQuestion(state.currentTurn)) {
     if (state.currentTurn.examiner_tts?.audio_url) {
-      setRecordButton("ready", "Continue", "Continue the current examiner question.");
-      text("recordStatus", "Temporary issue detected. Continue the current question.");
+      setRecordButton("ready", "Continue", "继续当前题。");
+      text("recordStatus", "检测到临时问题，可以继续当前题。");
     } else {
       beginPreparationWithoutExaminerAudio(sessionId, state.currentTurn, "error-recovery-no-audio");
     }
     return true;
   }
-  setRecordButton("turn_saved", "Next", "Waiting for the next examiner question.");
-  text("recordStatus", message || "Temporary issue detected while preparing the next question.");
+  setRecordButton("turn_saved", "Next", "正在等待下一题。");
+  text("recordStatus", message || "准备下一题时遇到临时问题。");
   return true;
 }
 
 function showError(error) {
+  if (state.userExitedPractice || state.abortingAttemptId) {
+    setBusy("");
+    return;
+  }
   if (error?.status === 401) {
     state.account.authenticated = false;
     state.account.user = null;
@@ -8262,8 +8983,8 @@ function showError(error) {
   const message = error instanceof Error ? error.message : String(error);
   if (recoverActivePracticeAfterError(error)) return;
   setBusy("");
-  setRecordButton("ready", "Try Again", "The last attempt failed. Start again when ready.");
-  text("recordStatus", "Something went wrong. Please try again.");
+  setRecordButton("ready", "Try Again", "上次尝试失败，准备好后重新开始。");
+  text("recordStatus", "出现问题，请重试。");
   $("summaryPanel").classList.remove("hidden");
   $("summaryPanel").innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
 }
@@ -8416,12 +9137,14 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
 
 function renderNavigationBankStatus(summary = state.account.questionBankSummary) {
   if (!summary) return;
+  const navScroll = captureNavScrollState();
   const season = formatSeasonLabel(summary.active_season);
   const scope = questionBankScopeLabel(summary.active_scope, summary.active_scope_label || t("bank.generic"));
   const p1 = Number(summary.part1_count || 0);
   const p2 = Number(summary.part2_count || 0);
   const p3 = Number(summary.part3_follow_up_count || 0);
   text("bankStatus", tf(p3 ? "bank.statusLine" : "bank.statusLineNoP3", { season, scope, p1, p2, p3 }));
+  restoreNavScrollState(navScroll);
 }
 
 function renderQuestionBankSelectorError(error) {
@@ -8520,7 +9243,7 @@ async function submitLogin() {
   } catch (error) {
     state.account.backendAvailable = Boolean(error.status && error.status < 500);
     if (statusEl) {
-      statusEl.textContent = error.message || "Login failed";
+      statusEl.textContent = accountErrorMessage(error, "登录失败");
       statusEl.classList.add("error");
     }
   } finally {
@@ -8553,7 +9276,7 @@ async function submitRegister() {
     englishName: ($("registerEnglishName")?.value || DEFAULT_ENGLISH_NAME).trim() || DEFAULT_ENGLISH_NAME,
   };
   try {
-    const result = await withBusy("Creating account...", () => api("/api/accounts/register/", {
+    const result = await withBusy("正在创建账号...", () => api("/api/accounts/register/", {
       username,
       password,
       password_confirm: passwordConfirm,
@@ -8603,7 +9326,7 @@ async function submitPasswordChange() {
     return;
   }
   try {
-    await withBusy("Changing password...", () => api("/api/accounts/password/change/", {
+    await withBusy("正在修改密码...", () => api("/api/accounts/password/change/", {
       current_password: currentPassword,
       new_password: newPassword,
       new_password_confirm: newPasswordConfirm,
@@ -8627,7 +9350,7 @@ async function submitPasswordChange() {
 
 async function logoutAccount() {
   try {
-    await withBusy("Signing out...", () => api("/api/accounts/logout/", {}));
+    await withBusy("正在退出登录...", () => api("/api/accounts/logout/", {}));
   } catch (_error) {
     // Keep UI usable even if backend session expired
   }
@@ -8887,6 +9610,38 @@ function bindEvents() {
   spellingDrillController.bindSpellingDrillEvents();
   $("languageTakeawayHideToggle")?.addEventListener("click", toggleLanguageTakeawayHiddenMode);
   $("writingTakeawayHideToggle")?.addEventListener("click", toggleWritingTakeawayHiddenMode);
+  $("addLanguageTakeawayBtn")?.addEventListener("click", () => openNewTakeawayEditor("language"));
+  $("addWritingTakeawayBtn")?.addEventListener("click", () => openNewTakeawayEditor("writing"));
+  $("languageReplacementBtn")?.addEventListener("click", () => openExpressionReplacementDialog("language"));
+  $("writingReplacementBtn")?.addEventListener("click", () => openExpressionReplacementDialog("writing"));
+  $("closeExpressionReplacementBtn")?.addEventListener("click", closeExpressionReplacementDialog);
+  $("addExpressionReplacementBtn")?.addEventListener("click", addExpressionReplacement);
+  $("expressionReplacementDialog")?.addEventListener("click", (event) => {
+    if (event.target.id === "expressionReplacementDialog") {
+      closeExpressionReplacementDialog();
+      return;
+    }
+    const editButton = event.target.closest("[data-expression-replacement-edit]");
+    if (editButton) {
+      editExpressionReplacement(editButton.dataset.expressionReplacementEdit || "");
+      return;
+    }
+    const saveButton = event.target.closest("[data-expression-replacement-save]");
+    if (saveButton) {
+      saveExpressionReplacementEdit(saveButton.dataset.expressionReplacementSave || "");
+      return;
+    }
+    const cancelButton = event.target.closest("[data-expression-replacement-cancel]");
+    if (cancelButton) {
+      const kind = $("expressionReplacementDialog")?.dataset.kind || "writing";
+      openExpressionReplacementDialog(kind);
+      return;
+    }
+    const deleteButton = event.target.closest("[data-expression-replacement-delete]");
+    if (deleteButton) {
+      deleteExpressionReplacement(deleteButton.dataset.expressionReplacementDelete || "");
+    }
+  });
   $("languageTakeawayList")?.addEventListener("click", (event) => {
     const menuButton = event.target.closest("[data-takeaway-menu]");
     if (menuButton) {
@@ -8913,6 +9668,7 @@ function bindEvents() {
     }
     const card = event.target.closest("[data-takeaway-entry]");
     if (!card) return;
+    if (selectTakeawayReviewEntry("language", card.dataset.takeawayEntry || "")) return;
     revealAndSpeakLanguageTakeaway(card.dataset.takeawayEntry || "");
   });
   $("writingTakeawayList")?.addEventListener("click", (event) => {
@@ -8941,6 +9697,7 @@ function bindEvents() {
     }
     const card = event.target.closest("[data-writing-takeaway-entry]");
     if (!card) return;
+    if (selectTakeawayReviewEntry("writing", card.dataset.writingTakeawayEntry || "")) return;
     revealAndSpeakWritingTakeaway(card.dataset.writingTakeawayEntry || "");
   });
   document.addEventListener("selectionchange", () => {
@@ -8951,6 +9708,32 @@ function bindEvents() {
   document.addEventListener("pointerdown", (event) => {
     if (event.target.closest("[data-corpus-card-menu]") || event.target.closest("[data-corpus-card-action-menu]")) return;
     closeCorpusCardActionMenus();
+  });
+  document.addEventListener("click", (event) => {
+    const gradeButton = event.target.closest("[data-takeaway-review-panel-grade]");
+    if (gradeButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      takeawayReviewFeedback(
+        gradeButton.dataset.takeawayReviewKind || (state.view === "writingTakeawayBook" ? "writing" : "language"),
+        "",
+        gradeButton.dataset.takeawayReviewPanelGrade === "again" ? "again" : "mastered",
+      );
+      return;
+    }
+    const startButton = event.target.closest("[data-takeaway-review-start]");
+    if (startButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      startTakeawayReview(startButton.dataset.takeawayReviewStart || (state.view === "writingTakeawayBook" ? "writing" : "language"));
+      return;
+    }
+    const exitButton = event.target.closest("[data-takeaway-review-exit]");
+    if (exitButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      endTakeawayReview(exitButton.dataset.takeawayReviewExit || (state.view === "writingTakeawayBook" ? "writing" : "language"));
+    }
   });
   document.addEventListener("pointerdown", (event) => {
     const popup = $("languageTakeawayPopup");
@@ -9178,6 +9961,36 @@ function bindEvents() {
       } else {
         scoreAttempt().catch(showError);
       }
+    } else if (state.status === "follow_up_failed") {
+      const sessionId = state.practiceSessionId;
+      const failedTurn = state.currentTurn;
+      const sourceTurn = sourceTurnForStreamedFollowUp(state.attempt, failedTurn);
+      if (!isActivePracticeSession(sessionId) || !failedTurn || !sourceTurn) return;
+      const retryTurn = {
+        ...failedTurn,
+        question: "",
+        examiner_text: "",
+        prompt: {
+          ...(failedTurn.prompt || {}),
+          question: "",
+          backend: "stream_pending",
+          generation_status: "pending",
+          generation_error: "",
+        },
+        examiner_tts: { provider: "volcengine", status: "pending", audio_url: null },
+      };
+      state.currentTurn = retryTurn;
+      state.attempt = mergeCompletedTurnPayload(state.attempt, retryTurn);
+      renderTurn(retryTurn);
+      setRecordButton("turn_saved", "Next", "正在重新生成追问。");
+      text("recordStatus", "正在重新生成追问...");
+      streamFollowUpForCompletedTurn(state.attempt, sourceTurn, retryTurn, sessionId).catch((error) => {
+        if (state.abortingAttemptId === state.attempt?.id || !isActivePracticeSession(sessionId)) return;
+        setRecordButton("follow_up_failed", "重新生成追问", "追问生成失败，点击重试。");
+        text("recordStatus", error?.message ? `追问生成失败：${error.message}` : "追问生成失败，可以重新生成。");
+      });
+    } else if (state.status === "completion_failed") {
+      retryTurnCompletion().catch(showError);
     } else if (state.status === "idle" || state.status === "ready" || state.status === "summary") {
       if (state.currentTurn && state.status === "ready") {
         beginExaminerPhase(state.practiceSessionId);
@@ -9269,6 +10082,8 @@ function bindEvents() {
     button.addEventListener("click", closeWritingPromptPicker);
   });
   $("agentAssistantBtn")?.addEventListener("click", openAgentAssistant);
+  $("p1CorpusAgentBtn")?.addEventListener("click", () => openAgentAssistant("p1Corpus"));
+  $("p2CorpusAgentBtn")?.addEventListener("click", () => openAgentAssistant("p2Corpus"));
   $("agentAssistantForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runAgentAssistantSearch();
@@ -9303,6 +10118,17 @@ function bindEvents() {
   $("writingSaveBtn")?.addEventListener("click", () => saveWritingEntry().catch(showWritingError));
   $("writingScoreBtn")?.addEventListener("click", () => scoreWritingEntry().catch(showWritingError));
   $("writingRefreshBtn")?.addEventListener("click", () => loadWriting().catch(showWritingError));
+  // Writing action panel collapse toggle
+  (function initWritingActionPanel() {
+    const panel = $("writingActionPanel");
+    const toggle = $("writingActionPanelToggle");
+    if (!panel || !toggle) return;
+    setWritingActionPanelCollapsed(false);
+    toggle.addEventListener("click", () => {
+      const next = !panel.classList.contains("is-collapsed");
+      setWritingActionPanelCollapsed(next);
+    });
+  })();
   const handleWritingReportEditClick = (event) => {
     const button = event.target.closest("[data-writing-report-edit]");
     if (!button) return;
@@ -9334,13 +10160,12 @@ function bindEvents() {
   });
   $("writingFrameSaveBtn")?.addEventListener("click", saveWritingFrame);
   $("writingFrameResetBtn")?.addEventListener("click", resetWritingFrame);
-  $("writingFrameCloseBtn")?.addEventListener("click", closeWritingFrameEditor);
   document.querySelectorAll("[data-writing-frame-close]").forEach((el) => {
-    el.addEventListener("click", closeWritingFrameEditor);
+    el.addEventListener("click", closeWritingFrameEditorSavingChanges);
   });
   $("writingAnswer")?.addEventListener("input", () => {
-    if (currentWritingWordCount() > 20) state.writing.autosaveEnabled = true;
-    text("writingSaveStatus", state.writing.autosaveEnabled ? "等待自动保存..." : "未保存的修改");
+    if (writingAutosaveReady()) state.writing.autosaveEnabled = true;
+    text("writingSaveStatus", writingAutosaveStatusText());
     maybeScheduleWritingAutosave();
   });
   $("writingCalendar")?.addEventListener("click", (event) => {
@@ -9462,25 +10287,20 @@ function renderP3SourceContext(message = "") {
   const sourceType = state.p3SourceType;
   const source = state.p3PracticeSource || {};
   if (sourceType === "bank" || sourceType === "season_bank") {
-    section.classList.remove("hidden");
     const card = selectedP3BankCard();
     if (!card) {
-      target.innerHTML = `
-        <button type="button" class="p3-bank-entry p3-bank-entry-select" data-p3-bank-picker-open>
-          <span class="p3-bank-entry-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h7M8 12h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </span>
-          <strong>选择一张 P2 题卡</strong>
-          <span>题卡带有固定维护的 P3 追问，选中后即可载入训练计划。</span>
-        </button>
-      `;
-    } else {
-      target.innerHTML = `
-        <div class="p3-context-grid p3-context-grid-single">
-          ${p3SelectedBankCardHtml(card)}
-        </div>
-      `;
+      // No card yet — CTA lives in the right-column plan preview; hide left section
+      section.classList.add("hidden");
+      target.innerHTML = "";
+      return;
     }
+    // Card selected — show compact selected-card strip in left column
+    section.classList.remove("hidden");
+    target.innerHTML = `
+      <div class="p3-context-grid p3-context-grid-single">
+        ${p3SelectedBankCardHtml(card)}
+      </div>
+    `;
     target.querySelectorAll("[data-p3-bank-picker-open]").forEach((entry) => {
       entry.addEventListener("click", () => openP3BankPicker().catch(showError));
       entry.addEventListener("keydown", (event) => {
@@ -9507,7 +10327,7 @@ function renderP3SourceContext(message = "") {
       target.innerHTML = `
         <div class="p3-context-note p3-context-warning">
           <strong>需要从 P2 报告进入</strong>
-          <span>打开一份 P2 口语报告，点击“生成 P3 训练计划”，这里才会自动带入那次 P2 的题目、回答和分数上下文。</span>
+          <span>打开一份 P2 口语报告，点击“根据本次P2回答练习P3”，这里才会自动带入那次 P2 的题目、回答和分数上下文。</span>
         </div>
       `;
     }
@@ -9605,6 +10425,27 @@ function renderP3PlanPreview() {
   }
   const questions = Array.isArray(plan?.questions) ? plan.questions : [];
   if (!plan || !questions.length) {
+    // Bank mode: right-column is the primary card-picker entry point
+    if (state.p3SourceType === "bank" || state.p3SourceType === "season_bank") {
+      panel.innerHTML = `
+        <div class="p3-bank-entry">
+          <div class="p3-bank-entry-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M8 8h7M8 12h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <strong>选择一张 P2 题卡</strong>
+          <span>练题卡固定维护的 P3 追问，不走 AI 生成，每次一样。</span>
+          <button class="p3-bank-entry-btn" type="button" data-p3-bank-picker-open>
+            浏览题卡
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      `;
+      panel.querySelector("[data-p3-bank-picker-open]")?.addEventListener("click", () => openP3BankPicker().catch(showError));
+      return;
+    }
     panel.innerHTML = `
       <div class="p3-plan-empty">
         <strong>还没有生成训练计划</strong>
@@ -9762,51 +10603,252 @@ async function deleteWritingTakeawayEntry(...args) {
   return corpusTakeawayController.deleteWritingTakeawayEntry(...args);
 }
 
+const AGENT_ASSISTANT_COPY = {
+  writing: {
+    title: "写作题库助手",
+    subtitle: "输入中文描述、OCR 片段或关键词，助手会在写作题库里定位题目。",
+    label: "你要找什么写作题？",
+    placeholder: "例如：水资源免费 / 科技影响学习 / 人口柱状图",
+    status: "可以直接粘 OCR 题干，也可以用中文说大概意思。",
+    loadingTitle: "正在查找写作题库",
+    loadingBody: "正在检索 Task 1 / Task 2 题目。",
+    empty: "还没有结果。输入题干片段、主题词或剑雅编号后点击查找。",
+    examples: [
+      ["水资源免费", "水资源免费"],
+      ["科技影响学习", "科技影响学习"],
+      ["Task 1 人口图表", "人口 图表 Task 1"],
+    ],
+  },
+  p1Corpus: {
+    title: "P1 题库助手",
+    subtitle: "输入中文话题、英文题干或关键词，助手会定位到 P1 语料库里的具体问题。",
+    label: "你要找什么 P1 问题？",
+    placeholder: "例如：家人 / 学习 / 住在哪里 / full name",
+    status: "支持中文关键词和英文题干模糊搜索。",
+    loadingTitle: "正在查找 P1 题库",
+    loadingBody: "正在匹配话题分组和短问题。",
+    empty: "没有找到明显匹配。可以换一个中文话题词或英文题干片段。",
+    examples: [
+      ["学习/实习", "学习 实习"],
+      ["住在哪里", "住在哪里 live"],
+      ["兴趣爱好", "兴趣 爱好 hobby"],
+    ],
+  },
+  p2Corpus: {
+    title: "P2 题库助手",
+    subtitle: "输入中文语义、英文题干或素材关键词，助手会定位到 P2 题卡、素材或 Brainstorm 灵感行。",
+    label: "你要找什么 P2 题？",
+    placeholder: "例如：艰难的决定 / 迟到的经历 / crowded place",
+    status: "支持模糊搜索，也能跳到串题灵感 Brainstorm 对应行。",
+    loadingTitle: "正在查找 P2 题库",
+    loadingBody: "正在匹配当季题卡、已保存素材和 Brainstorm 列表。",
+    empty: "没有找到明显匹配。可以输入中文场景，例如“艰难的决定”“迟到的经历”。",
+    examples: [
+      ["艰难的决定", "艰难的决定"],
+      ["迟到的经历", "迟到的经历"],
+      ["读写的地方", "读写的地方"],
+    ],
+  },
+};
+
+const AGENT_QUERY_EXPANSIONS = [
+  ["艰难的决定", "困难的决定", "重要决定", "难选", "选择", "decision", "difficult decision", "hard decision", "important decision", "choice", "choose"],
+  ["迟到的经历", "迟到", "晚到", "耽误", "延误", "错过", "late", "being late", "was late", "delayed", "missed", "punctual", "on time"],
+  ["拥挤的地方", "人多的地方", "crowded place", "busy place", "many people"],
+  ["读写的地方", "学习的地方", "安静的地方", "place where you read and write", "study place", "library", "cafe"],
+  ["家人", "家庭", "父母", "family", "parents", "relative"],
+  ["学习", "学校", "大学", "专业", "实习", "study", "school", "university", "major", "internship"],
+  ["工作", "职业", "公司", "work", "job", "company", "career"],
+  ["兴趣", "爱好", "运动", "音乐", "hobby", "sport", "music", "free time"],
+  ["旅行", "假期", "旅游", "holiday", "travel", "trip", "visited"],
+  ["地点", "城市", "家乡", "place", "city", "hometown", "live"],
+];
+
+function agentAssistantContext() {
+  return AGENT_ASSISTANT_COPY[state.agentAssistant.context] ? state.agentAssistant.context : "writing";
+}
+
+function agentAssistantCopy() {
+  return AGENT_ASSISTANT_COPY[agentAssistantContext()];
+}
+
+function agentSearchNormalize(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[_\-–—/]+/g, " ")
+    .replace(/[^\p{L}\p{N}\u4e00-\u9fff]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function agentSearchTokens(value = "") {
+  const normalized = agentSearchNormalize(value);
+  const englishTokens = normalized.match(/[a-z0-9]+/g) || [];
+  const chineseText = (normalized.match(/[\u4e00-\u9fff]+/g) || []).join("");
+  const chineseTokens = [];
+  for (let index = 0; index < chineseText.length; index += 1) {
+    chineseTokens.push(chineseText.slice(index, index + 1));
+    if (index + 2 <= chineseText.length) chineseTokens.push(chineseText.slice(index, index + 2));
+    if (index + 3 <= chineseText.length) chineseTokens.push(chineseText.slice(index, index + 3));
+    if (index + 4 <= chineseText.length) chineseTokens.push(chineseText.slice(index, index + 4));
+  }
+  return [...new Set([...englishTokens, ...chineseTokens].filter((token) => token.length > 1 || /[\u4e00-\u9fff]/.test(token)))];
+}
+
+function agentExpandQuery(query = "") {
+  const raw = String(query || "").trim();
+  const terms = [raw];
+  const normalized = agentSearchNormalize(raw);
+  AGENT_QUERY_EXPANSIONS.forEach((group) => {
+    const matched = group.some((term) => normalized.includes(agentSearchNormalize(term)));
+    if (matched) terms.push(...group);
+  });
+  return [...new Set(terms.flatMap((term) => [term, ...agentSearchTokens(term)]).map((term) => String(term || "").trim()).filter(Boolean))];
+}
+
+function agentAssistantScore(query, candidateText) {
+  const textValue = agentSearchNormalize(candidateText);
+  if (!textValue) return 0;
+  const expanded = agentExpandQuery(query);
+  const tokens = [...new Set(expanded.flatMap(agentSearchTokens))];
+  let score = 0;
+  expanded.forEach((term) => {
+    const normalizedTerm = agentSearchNormalize(term);
+    if (!normalizedTerm) return;
+    if (textValue.includes(normalizedTerm)) score += normalizedTerm.length > 8 ? 0.32 : 0.22;
+  });
+  const matchedTokens = tokens.filter((token) => textValue.includes(token));
+  if (tokens.length) score += Math.min(0.5, matchedTokens.length / Math.max(tokens.length, 1));
+  const queryCompact = agentSearchNormalize(query).replace(/\s+/g, "");
+  const textCompact = textValue.replace(/\s+/g, "");
+  if (queryCompact && textCompact.includes(queryCompact)) score += 0.35;
+  return Math.min(1, score);
+}
+
+function agentAssistantReasons(query, candidateText, fallback = "语义相关") {
+  const textValue = agentSearchNormalize(candidateText);
+  const reasons = agentExpandQuery(query)
+    .filter((term) => {
+      const normalizedTerm = agentSearchNormalize(term);
+      return normalizedTerm && textValue.includes(normalizedTerm);
+    })
+    .slice(0, 4);
+  return reasons.length ? reasons : [fallback];
+}
+
+function p2AgentQuestionId(entry = {}) {
+  return String(entry.cue_id || entry.question_id || entry.canonical_entry_id || entry.entry_id || "").trim();
+}
+
+function p2AgentCueTitle(entry = {}) {
+  const raw = String(entry.cue_title || entry.title || entry.question || entry.linked_question || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "未命名题卡";
+  const fragments = [
+    ...(Array.isArray(entry.bullets) ? entry.bullets : []),
+    entry.rounding,
+  ].map((item) => String(item || "").replace(/\s+/g, " ").trim()).filter(Boolean).sort((a, b) => b.length - a.length);
+  let boundary = -1;
+  fragments.forEach((fragment) => {
+    const index = raw.indexOf(fragment);
+    if (index > 0 && (boundary === -1 || index < boundary)) boundary = index;
+  });
+  return (boundary > 0 ? raw.slice(0, boundary) : raw).replace(/\s+/g, " ").trim() || "未命名题卡";
+}
+
+function p2AgentCueText(entry = {}) {
+  return [
+    p2AgentCueTitle(entry),
+    entry.question,
+    entry.linked_question,
+    ...(Array.isArray(entry.bullets) ? entry.bullets : []),
+    entry.rounding,
+    entry.brainstorm_idea,
+  ].filter(Boolean).join(" ");
+}
+
 function agentAssistantResultUrl(prompt) {
   return prompt.url || writingPromptDeepLink(prompt);
 }
 
-function agentAssistantMatchLabel(prompt = {}) {
+function agentAssistantMatchLabel(item = {}) {
+  const prompt = item.prompt || item;
   const labels = {
     semantic: "语义相关",
     keyword: "关键词匹配",
     source: "来源匹配",
+    bm25: "全文匹配",
+    fuzzy: "模糊匹配",
+    p1: "P1 题库",
+    p2_card: "P2 题卡",
+    p2_material: "P2 素材",
   };
-  return labels[prompt.match_type] || "相关匹配";
+  return labels[item.match_type] || labels[prompt.match_type] || "相关匹配";
+}
+
+function agentAssistantResultTitle(item) {
+  if (item.kind === "p1") return item.title || item.question || "P1 问题";
+  if (item.kind === "p2_card") return item.title || "P2 题卡";
+  if (item.kind === "p2_material") return item.title || "P2 素材";
+  const prompt = item.prompt || item;
+  return prompt.title || writingPromptPickerTitle(prompt) || "Writing prompt";
+}
+
+function agentAssistantResultMeta(item) {
+  if (item.kind === "p1") return [item.topicLabel || "P1", "短答题"].filter(Boolean).join(" · ");
+  if (item.kind === "p2_card") return [item.categoryLabel || "当季 P2 题卡", item.brainstormIdea ? "已写 Brainstorm" : "可写 Brainstorm"].join(" · ");
+  if (item.kind === "p2_material") return [item.categoryLabel || "P2 素材", item.hasP3 ? "P3 已填" : "P3 待填"].join(" · ");
+  const prompt = item.prompt || item;
+  const source = prompt.source_label || writingPromptPickerTitle(prompt) || writingTaskLabel(prompt.task_type);
+  return `${source} · ${writingCategoryLabel(prompt.category) || prompt.category || "未分类"}`;
+}
+
+function agentAssistantResultBody(item) {
+  if (item.kind === "p1") return item.question || "";
+  if (item.kind === "p2_card") return item.prompt || "";
+  if (item.kind === "p2_material") return item.preview || "";
+  const prompt = item.prompt || item;
+  return prompt.prompt || "";
 }
 
 function renderAgentAssistantResults() {
   const target = $("agentAssistantResults");
   if (!target) return;
+  const copy = agentAssistantCopy();
   if (state.agentAssistant.loading) {
-    target.innerHTML = centeredLoadingHtml("正在查找题库", "正在检索剑雅、机经和本地写作题。");
+    target.innerHTML = centeredLoadingHtml(copy.loadingTitle, copy.loadingBody);
     return;
   }
   const results = state.agentAssistant.results || [];
   if (!results.length) {
-    target.innerHTML = '<div class="agent-result-empty">还没有结果。输入题干片段、主题词或剑雅编号后点击查找。</div>';
+    target.innerHTML = `<div class="agent-result-empty">${escapeHtml(copy.empty)}</div>`;
     return;
   }
-  target.innerHTML = results.map((item) => {
+  target.innerHTML = results.map((item, index) => {
     const prompt = item.prompt || item;
-    const url = agentAssistantResultUrl(prompt);
-    const source = prompt.source_label || writingPromptPickerTitle(prompt) || writingTaskLabel(prompt.task_type);
     const score = Number(item.score ?? prompt.match_score ?? 0);
     const reasons = item.reasons || prompt.match_reasons || [];
+    const url = item.kind ? "" : agentAssistantResultUrl(prompt);
+    const actionHtml = item.kind === "p2_card"
+      ? `<button type="button" class="agent-result-open" data-agent-result-index="${index}" data-agent-action="p2-card">跳到题卡</button>
+         <button type="button" class="agent-result-secondary" data-agent-result-index="${index}" data-agent-action="p2-brainstorm">跳到 Brainstorm</button>`
+      : item.kind
+        ? `<button type="button" class="agent-result-open" data-agent-result-index="${index}" data-agent-action="${escapeHtml(item.kind)}">跳转定位</button>`
+        : `<button type="button" class="agent-result-open" data-agent-prompt-id="${escapeHtml(prompt.id)}" data-agent-task-type="${escapeHtml(prompt.task_type || "task2")}">打开题目</button>
+           <a class="agent-result-link" href="${escapeHtml(url)}" data-agent-prompt-link="${escapeHtml(prompt.id)}">${escapeHtml(url)}</a>`;
     return `
       <article class="agent-result-card">
         <div class="agent-result-top">
           <div>
-            <strong>${escapeHtml(prompt.title || source || "Writing prompt")}</strong>
-            <span>${escapeHtml(source)} · ${escapeHtml(writingCategoryLabel(prompt.category) || prompt.category || "未分类")}</span>
+            <strong>${escapeHtml(agentAssistantResultTitle(item))}</strong>
+            <span>${escapeHtml(agentAssistantResultMeta(item))}</span>
           </div>
-          <em class="agent-result-score">${escapeHtml(agentAssistantMatchLabel(prompt))} · ${Math.round(score * 100)}%</em>
+          <em class="agent-result-score">${escapeHtml(agentAssistantMatchLabel(item))} · ${Math.round(score * 100)}%</em>
         </div>
-        ${reasons.length ? `<div class="agent-result-reasons">${reasons.slice(0, 3).map((reason) => `<span>${escapeHtml(reason)}</span>`).join("")}</div>` : ""}
-        <p class="agent-result-prompt">${escapeHtml(prompt.prompt || "")}</p>
-        <div class="agent-result-actions">
-          <button type="button" class="agent-result-open" data-agent-prompt-id="${escapeHtml(prompt.id)}" data-agent-task-type="${escapeHtml(prompt.task_type || "task2")}">打开题目</button>
-          <a class="agent-result-link" href="${escapeHtml(url)}" data-agent-prompt-link="${escapeHtml(prompt.id)}">${escapeHtml(url)}</a>
+        ${reasons.length ? `<div class="agent-result-reasons">${reasons.slice(0, 4).map((reason) => `<span>${escapeHtml(reason)}</span>`).join("")}</div>` : ""}
+        <p class="agent-result-prompt">${escapeHtml(agentAssistantResultBody(item))}</p>
+        <div class="agent-result-actions${item.kind === "p2_card" ? " has-two-actions" : ""}">
+          ${actionHtml}
         </div>
       </article>
     `;
@@ -9816,13 +10858,51 @@ function renderAgentAssistantResults() {
       openAgentAssistantPrompt(button.dataset.agentPromptId || "", button.dataset.agentTaskType || "task2");
     });
   });
+  target.querySelectorAll("[data-agent-result-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = (state.agentAssistant.results || [])[Number(button.dataset.agentResultIndex || -1)];
+      jumpToAgentAssistantResult(item, button.dataset.agentAction || "");
+    });
+  });
 }
 
 function setAgentAssistantStatus(message) {
   text("agentAssistantStatus", message);
 }
 
-function openAgentAssistant() {
+function setAgentAssistantContext(context = state.view || "writing") {
+  const nextContext = AGENT_ASSISTANT_COPY[context] ? context : "writing";
+  if (state.agentAssistant.context !== nextContext) {
+    state.agentAssistant.context = nextContext;
+    state.agentAssistant.results = [];
+    state.agentAssistant.query = "";
+    if ($("agentAssistantQuery")) $("agentAssistantQuery").value = "";
+  }
+  const copy = agentAssistantCopy();
+  text("agentAssistantTitle", copy.title);
+  text("agentAssistantSubtitle", copy.subtitle);
+  const label = document.querySelector('label[for="agentAssistantQuery"]');
+  if (label) label.textContent = copy.label;
+  const input = $("agentAssistantQuery");
+  if (input) input.placeholder = copy.placeholder;
+  const examples = $("agentAssistantExamples");
+  if (examples) {
+    examples.innerHTML = copy.examples.map(([labelText, query]) => (
+      `<button type="button" data-agent-assistant-example="${escapeHtml(query)}">${escapeHtml(labelText)}</button>`
+    )).join("");
+    examples.querySelectorAll("[data-agent-assistant-example]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if ($("agentAssistantQuery")) $("agentAssistantQuery").value = button.dataset.agentAssistantExample || "";
+        runAgentAssistantSearch(button.dataset.agentAssistantExample || "");
+      });
+    });
+  }
+  setAgentAssistantStatus(copy.status);
+}
+
+function openAgentAssistant(eventOrContext) {
+  const context = typeof eventOrContext === "string" ? eventOrContext : state.view;
+  setAgentAssistantContext(context);
   $("agentAssistantModal")?.classList.remove("hidden");
   document.body.classList.add("modal-open");
   renderAgentAssistantResults();
@@ -9839,19 +10919,42 @@ async function runAgentAssistantSearch(queryValue = $("agentAssistantQuery")?.va
   state.agentAssistant.query = query;
   if (!query) {
     state.agentAssistant.results = [];
-    setAgentAssistantStatus("先输入一句自然语言、OCR 题干或关键词。");
+    setAgentAssistantStatus(`先输入一句自然语言、题干片段或关键词。`);
     renderAgentAssistantResults();
     return;
   }
+  const context = agentAssistantContext();
   state.agentAssistant.loading = true;
   setAgentAssistantStatus("正在语义检索题库...");
   renderAgentAssistantResults();
+  try {
+    if (context === "p1Corpus") {
+      state.agentAssistant.results = await searchP1AgentAssistant(query);
+      setAgentAssistantStatus(state.agentAssistant.results.length ? `找到 ${state.agentAssistant.results.length} 个 P1 候选` : agentAssistantCopy().empty);
+      return;
+    }
+    if (context === "p2Corpus") {
+      state.agentAssistant.results = await searchP2AgentAssistant(query);
+      setAgentAssistantStatus(state.agentAssistant.results.length ? `找到 ${state.agentAssistant.results.length} 个 P2 候选，可跳到题卡或 Brainstorm` : agentAssistantCopy().empty);
+      return;
+    }
+    await runWritingAgentAssistantSearch(query);
+  } catch (error) {
+    state.agentAssistant.results = [];
+    setAgentAssistantStatus(error instanceof Error ? error.message : "查找失败。");
+  } finally {
+    state.agentAssistant.loading = false;
+    renderAgentAssistantResults();
+  }
+}
+
+async function runWritingAgentAssistantSearch(query) {
   try {
     const search = await api(`/api/agent/writing/prompts/search?q=${encodeURIComponent(query)}&limit=8`);
     state.agentAssistant.results = (search.items || []).map((prompt) => ({
       prompt,
       score: Number(prompt.match_score || 0),
-      reasons: prompt.match_reasons || [],
+      reasons: prompt.match_reasons || prompt.matched_terms || [],
     }));
     setAgentAssistantStatus(
       state.agentAssistant.results.length
@@ -9859,33 +10962,164 @@ async function runAgentAssistantSearch(queryValue = $("agentAssistantQuery")?.va
         : "没有找到明显匹配。可以换成更短的关键词或粘贴完整题干。"
     );
   } catch (error) {
-    try {
-      const taskTypes = ["task1_academic", "task2"];
-      await Promise.all(taskTypes.map((taskType) => loadWritingPrompts(taskType)));
-      const prompts = taskTypes.flatMap((taskType) => state.writing.prompts[taskType] || []);
-      const matches = prompts
-        .map((prompt) => ({
-          prompt,
-          score: agentAssistantScore(query, [
-            prompt.title,
-            prompt.source_label,
-            prompt.category,
-            prompt.prompt,
-          ].join(" ")),
-          reasons: ["本地关键词兜底"],
-        }))
-        .filter((item) => item.score > 0.12)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 8);
-      state.agentAssistant.results = matches;
-      setAgentAssistantStatus(matches.length ? `找到 ${matches.length} 个候选 · 后端不可用，已使用本地关键词兜底` : "没有找到明显匹配。可以换成更短的关键词再试。");
-    } catch (_fallbackError) {
-      state.agentAssistant.results = [];
-      setAgentAssistantStatus(error instanceof Error ? error.message : "查找失败。");
+    const taskTypes = ["task1_academic", "task2"];
+    await Promise.all(taskTypes.map((taskType) => loadWritingPrompts(taskType)));
+    const prompts = taskTypes.flatMap((taskType) => state.writing.prompts[taskType] || []);
+    const matches = prompts
+      .map((prompt) => ({
+        prompt,
+        score: agentAssistantScore(query, [
+          prompt.title,
+          prompt.source_label,
+          prompt.category,
+          prompt.prompt,
+        ].join(" ")),
+        reasons: agentAssistantReasons(query, [prompt.title, prompt.prompt].join(" "), "本地关键词兜底"),
+      }))
+      .filter((item) => item.score > 0.12)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+    state.agentAssistant.results = matches;
+    setAgentAssistantStatus(matches.length ? `找到 ${matches.length} 个候选 · 后端不可用，已使用本地语义兜底` : (error instanceof Error ? error.message : "没有找到明显匹配。"));
+  }
+}
+
+async function searchP1AgentAssistant(query) {
+  if (!state.p1Corpus.loaded) await loadP1Corpus();
+  return (state.p1Corpus.topics || []).flatMap((topic) => (
+    (topic.questions || []).map((item) => {
+      const candidateText = [
+        topic.label,
+        topic.topic,
+        item.question,
+        item.question_id,
+        item.storage_question_id,
+        item.legacy_question_id,
+        item.corpus_text,
+        item.band7_version,
+        item.ai_answer,
+      ].join(" ");
+      return {
+        kind: "p1",
+        id: item.question_id || item.storage_question_id || item.legacy_question_id,
+        questionId: item.question_id || item.storage_question_id || item.legacy_question_id,
+        title: item.question,
+        question: item.question,
+        topicLabel: topic.label || topic.topic || "P1",
+        score: agentAssistantScore(query, candidateText),
+        match_type: "p1",
+        reasons: agentAssistantReasons(query, candidateText, "P1 题库"),
+      };
+    })
+  ))
+    .filter((item) => item.questionId && item.score > 0.1)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12);
+}
+
+async function searchP2AgentAssistant(query) {
+  if (!state.p2Corpus.loaded) await loadP2Corpus();
+  const materialResults = (state.p2Corpus.categories || []).flatMap((category) => (
+    (category.items || []).map((item) => {
+      const candidateText = [
+        category.label,
+        category.category,
+        item.title,
+        item.material_text,
+        item.linked_question,
+        item.p3_follow_up_text,
+      ].join(" ");
+      return {
+        kind: "p2_material",
+        id: item.entry_id,
+        entryId: item.entry_id,
+        title: item.title || "未命名素材",
+        categoryLabel: category.label || category.category || "P2 素材",
+        hasP3: Boolean(String(item.p3_follow_up_text || "").trim()),
+        preview: item.material_text || item.linked_question || item.p3_follow_up_text || "",
+        score: agentAssistantScore(query, candidateText),
+        match_type: "p2_material",
+        reasons: agentAssistantReasons(query, candidateText, "P2 素材"),
+      };
+    })
+  ));
+  const cardResults = (state.p2Corpus.currentPart2Cards || []).map((item) => {
+    const questionId = p2AgentQuestionId(item);
+    const candidateText = [
+      item.label,
+      item.category,
+      item.status,
+      p2AgentCueText(item),
+      item.brainstorm_idea,
+    ].join(" ");
+    return {
+      kind: "p2_card",
+      id: questionId,
+      questionId,
+      title: p2AgentCueTitle(item),
+      categoryLabel: item.label || item.category || "P2 题卡",
+      brainstormIdea: String(item.brainstorm_idea || "").trim(),
+      prompt: p2AgentCueText(item),
+      score: agentAssistantScore(query, candidateText),
+      match_type: "p2_card",
+      reasons: agentAssistantReasons(query, candidateText, "P2 题卡"),
+    };
+  });
+  return [...cardResults, ...materialResults]
+    .filter((item) => item.id && item.score > 0.1)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12);
+}
+
+function flashAgentTarget(element) {
+  if (!element) return;
+  element.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+  element.classList.remove("agent-jump-highlight");
+  void element.offsetWidth;
+  element.classList.add("agent-jump-highlight");
+  window.setTimeout(() => element.classList.remove("agent-jump-highlight"), 2600);
+}
+
+async function jumpToAgentAssistantResult(item, action = "") {
+  if (!item) return;
+  closeAgentAssistant();
+  if (item.kind === "p1") {
+    switchView("p1Corpus", { force: true });
+    if (!state.p1Corpus.loaded) await loadP1Corpus();
+    renderP1CorpusTopics();
+    window.setTimeout(() => {
+      const el = document.querySelector(`[data-p1-corpus-question="${CSS.escape(item.questionId || item.id || "")}"]`);
+      flashAgentTarget(el);
+    }, 60);
+    return;
+  }
+  if (item.kind === "p2_material") {
+    switchView("p2Corpus", { force: true });
+    if (!state.p2Corpus.loaded) await loadP2Corpus();
+    renderP2CorpusTopics();
+    window.setTimeout(() => {
+      const el = document.querySelector(`[data-p2-corpus-entry="${CSS.escape(item.entryId || item.id || "")}"]`);
+      flashAgentTarget(el?.closest(".p2-material-row") || el);
+    }, 60);
+    return;
+  }
+  if (item.kind === "p2_card") {
+    switchView("p2Corpus", { force: true });
+    if (!state.p2Corpus.loaded) await loadP2Corpus();
+    renderP2CorpusTopics();
+    if (action === "p2-brainstorm") {
+      await openP2BrainstormDialog();
+      window.setTimeout(() => {
+        const row = document.querySelector(`[data-p2-brainstorm-row="${CSS.escape(item.questionId || item.id || "")}"]`);
+        flashAgentTarget(row);
+        row?.querySelector("[data-p2-brainstorm-input]")?.focus();
+      }, 80);
+      return;
     }
-  } finally {
-    state.agentAssistant.loading = false;
-    renderAgentAssistantResults();
+    window.setTimeout(() => {
+      const el = document.querySelector(`[data-p2-bank-card-id="${CSS.escape(item.questionId || item.id || "")}"]`);
+      flashAgentTarget(el);
+    }, 60);
   }
 }
 

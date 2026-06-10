@@ -8,7 +8,7 @@
     {
       "id": "cambridge-11-test-1-task-1",
       "title": "Cambridge IELTS 11 Test 1 Task 1",
-      "category": "bar_chart",
+      "category": "pie_chart",
       "source_book": 11,
       "source_test": 1,
       "source_question": 1,
@@ -23,7 +23,7 @@
     {
       "id": "cambridge-11-test-2-task-1",
       "title": "Cambridge IELTS 11 Test 2 Task 1",
-      "category": "bar_chart",
+      "category": "pie_chart",
       "source_book": 11,
       "source_test": 2,
       "source_question": 1,
@@ -49,6 +49,21 @@
       "sort_order": 103,
       "image_url": "/assets/writing/task1/cambridge/11/test_3_task_1.png",
       "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-11-academic-writing-test-3-1.png"
+    },
+    {
+      "id": "cambridge-11-test-4-task-1",
+      "title": "Cambridge IELTS 11 Test 4 Task 1",
+      "category": "mixed",
+      "source_book": 11,
+      "source_test": 4,
+      "source_question": 1,
+      "source_label": "剑雅11-4 Task 1",
+      "prompt": "The table below shows the numbers of visitors to Ashdown Museum during the year before and the year after it was refurbished. The charts show the result of surveys asking visitors how satisfied they were with their visit, during the same two periods. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-11-academic-writing-test-4-task-1/",
+      "sort_order": 104,
+      "image_url": "/assets/writing/task1/cambridge/11/test_4_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-11-academic-writing-test-4-1.png"
     }
   ]
 }

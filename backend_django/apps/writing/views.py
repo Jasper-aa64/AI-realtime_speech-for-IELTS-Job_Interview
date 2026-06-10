@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .spelling_services import delete_spelling_word, record_spelling_attempt, spelling_drill_library, update_spelling_word
-from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, random_prompt, save_entry, score_entry, writing_reports, writing_summary
+from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, prompt_patterns, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
 def read_json_body(request) -> dict:
@@ -99,8 +99,9 @@ def prompts(request):
     try:
         task_type = request.GET.get("task_type")
         return JsonResponse({
-            "items": list_prompts(task_type, request.GET.get("category"), request.user),
+            "items": list_prompts(task_type, request.GET.get("category"), request.user, request.GET.get("prompt_pattern")),
             "categories": prompt_categories(task_type),
+            "prompt_patterns": prompt_patterns(task_type, request.GET.get("category")),
             "catalog": cambridge_catalog(task_type),
         })
     except WritingError as exc:
@@ -139,6 +140,7 @@ def random_prompt_view(request):
             request.user,
             str(payload.get("task_type") or "").strip() or None,
             str(payload.get("category") or "").strip() or None,
+            str(payload.get("prompt_pattern") or "").strip() or None,
         ))
     except WritingError as exc:
         return writing_error(exc)

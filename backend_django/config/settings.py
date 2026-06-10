@@ -157,6 +157,11 @@ AI_ALLOW_MOCK_SUCCESS = env_flag("AI_ALLOW_MOCK_SUCCESS", default=False)
 AI_PROVIDER_ENABLE_CODEX = env_flag("AI_PROVIDER_ENABLE_CODEX", default=True)
 AI_PROVIDER_ENABLE_OPENAI = env_flag("AI_PROVIDER_ENABLE_OPENAI", default=False)
 AI_PROVIDER_ENABLE_CLAUDE = env_flag("AI_PROVIDER_ENABLE_CLAUDE", default=False)
+# HTTP provider endpoint — read from environment; never hardcode secrets here.
+AI_HTTP_BASE_URL = str(os.environ.get("AI_HTTP_BASE_URL", "")).strip()
+AI_HTTP_API_KEY = str(os.environ.get("AI_HTTP_API_KEY", "")).strip()
+AI_HTTP_MODEL = str(os.environ.get("AI_HTTP_MODEL", "")).strip()
+AI_HTTP_TIMEOUT_SECONDS = str(os.environ.get("AI_HTTP_TIMEOUT_SECONDS", "")).strip()
 # Placeholder env-var names for future integrations. Keep only the names here,
 # never the secret values.
 AI_PROVIDER_SECRET_ENV_NAMES = {

@@ -1,0 +1,61 @@
+{
+  "task_type": "task2",
+  "source": "cambridge_ielts_public_reference",
+  "source_url": "https://www.ieltsessaybank.com/category/ielts-5-task-2/",
+  "license_note": "Publicly visible Cambridge IELTS writing reference pages imported with source attribution for local study use; images are preserved as published, without watermark removal.",
+  "book": 5,
+  "prompts": [
+    {
+      "id": "cambridge-5-test-1-task-2",
+      "title": "Cambridge IELTS 5 Test 1 Task 2",
+      "category": "opinion",
+      "source_book": 5,
+      "source_test": 1,
+      "source_question": 2,
+      "source_label": "剑雅5-1 Task 2",
+      "prompt": "Universities should accept equal numbers of male and female students in every subject. To what extent do you agree or disagree? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/universities-should-accept-equal-numbers-of-male-and-female/",
+      "sort_order": 161
+    },
+    {
+      "id": "cambridge-5-test-2-task-2",
+      "title": "Cambridge IELTS 5 Test 2 Task 2",
+      "category": "advantages_disadvantages",
+      "source_book": 5,
+      "source_test": 2,
+      "source_question": 2,
+      "source_label": "剑雅5-2 Task 2",
+      "prompt": "In some countries young people are encouraged to work or travel for a year between finishing high school and starting university studies. Discuss the advantages and disadvantages for young people who decide to do this. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/in-some-countries-young-people-are-encouraged-to-work-or-travel/",
+      "sort_order": 162
+    },
+    {
+      "id": "cambridge-5-test-3-task-2",
+      "title": "Cambridge IELTS 5 Test 3 Task 2",
+      "category": "opinion",
+      "source_book": 5,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅5-3 Task 2",
+      "prompt": "Research indicates that the characteristics we are born with have much more influence on our personality and development than any experiences we may have in life. Which do you consider to be the major influence? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/research-indicates-that-the-characteristics/",
+      "sort_order": 163
+    },
+    {
+      "id": "cambridge-5-test-4-task-2",
+      "title": "Cambridge IELTS 5 Test 4 Task 2",
+      "category": "discussion",
+      "source_book": 5,
+      "source_test": 4,
+      "source_question": 2,
+      "source_label": "剑雅5-4 Task 2",
+      "prompt": "Some people think that a sense of competition in children should be encouraged. Others believe that children who are taught to co-operate rather than compete become more useful adults. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://www.ieltsessaybank.com/a-sense-of-competition-in-children-should-be-encouraged/",
+      "sort_order": 164
+    }
+  ]
+}

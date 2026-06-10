@@ -30,6 +30,7 @@ from .prompt_services import (
     normalize_category,
     positive_int,
     prompt_categories,
+    prompt_patterns,
     prompt_payload,
     prompt_practice_statuses,
     prompt_source_label,
@@ -212,6 +213,13 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
     validate_answer_paragraphs(entry.task_type, entry.answer)
     answer_hash = hashlib.sha1(entry.answer.encode("utf-8")).hexdigest()[:16]
     idempotency_key = f"writing_score:{entry.entry_id}:{answer_hash}"
+    # If a previous task with the same key failed, remove it so the user can retry.
+    # Only block re-submission when the previous task succeeded (same content already scored).
+    AITask.objects.filter(
+        user=user,
+        idempotency_key=idempotency_key,
+        status=AITask.Status.FAILED,
+    ).delete()
     prompt_chart_facts = entry.prompt.chart_facts if entry.prompt_id and isinstance(entry.prompt.chart_facts, dict) else {}
     prompt_chart_facts_status = entry.prompt.chart_facts_status if entry.prompt_id else "none"
     try:

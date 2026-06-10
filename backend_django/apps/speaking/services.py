@@ -740,6 +740,7 @@ def speaking_ai_http_model(kind: str = "speaking") -> str:
     return (
         _setting_or_env(f"SPEAKING_{key}_AI_MODEL")
         or _setting_or_env("SPEAKING_AI_MODEL")
+        or _setting_or_env("AI_HTTP_MODEL")   # share the same endpoint model as writing/other AI tasks
         or SPEAKING_AI_DEFAULT_HTTP_MODEL
     )
 
@@ -2119,6 +2120,13 @@ def _extract_p1_identity_follow_up_output(output: str) -> str:
 
 
 def _p1_identity_follow_up_prompt(answer: str) -> str:
+    if not answer.strip():
+        return """Return JSON only with top-level key follow_up.
+Do not include Markdown, explanation, or code fences.
+
+You are an IELTS Speaking Part 1 examiner. Write one natural, varied follow-up question about the candidate's work or current studies.
+Keep it short, conversational, and suitable for Part 1. Do not repeat the same question each time.
+"""
     return f"""Return JSON only with top-level key follow_up.
 Do not repeat the input. Do not include Markdown, explanation, or code fences.
 
@@ -2133,13 +2141,8 @@ Candidate answer:
 
 def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, Any]:
     fallback = _fallback_p1_identity_follow_up(answer)
-    if not answer.strip():
-        return {
-            "follow_up": fallback,
-            "backend": "fallback",
-            "status": "fallback",
-            "error": "missing_candidate_answer",
-        }
+    # Note: empty transcript is allowed — a generic prompt is used so AI can still
+    # generate a varied P1 work/study follow-up (P1 practice mode skips recording).
     prompt = _p1_identity_follow_up_prompt(answer)
     http_error = ""
     if _mode_is_fallback_only("followup"):
@@ -2226,7 +2229,7 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
 
     result = (
         {
-            "follow_up": _fallback_p1_identity_follow_up(transcript),
+            "follow_up": "",
             "backend": "stream_pending",
             "status": "pending",
         }
@@ -2243,7 +2246,7 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
         "p1",
         completed_turn.sequence + 1,
         attempt.turns.count() + 1,
-        follow_up,
+        follow_up or "Generating follow-up question...",
         {
             "topic": "intro",
             "question": follow_up,
@@ -2558,7 +2561,35 @@ def _sse_payload(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+_P1_GENERIC_FOLLOW_UP_ANGLES = [
+    "how long they have been in their current role or program",
+    "what they find most challenging about their work or studies",
+    "what skills they have gained",
+    "whether they would recommend their career or field to others",
+    "how they first became interested in their work or subject",
+    "what their typical day looks like",
+    "their plans after finishing their current role or degree",
+    "what they like least about their work or studies",
+    "how their work or studies affect their daily life",
+    "whether they prefer working or studying",
+]
+
+
+def _p1_generic_follow_up_angle() -> str:
+    """Pick a question angle that varies across calls (rotates by wall-clock minute)."""
+    import time
+    return _P1_GENERIC_FOLLOW_UP_ANGLES[int(time.time() // 60) % len(_P1_GENERIC_FOLLOW_UP_ANGLES)]
+
+
 def _p1_identity_stream_prompt(answer: str) -> str:
+    if not answer.strip():
+        angle = _p1_generic_follow_up_angle()
+        return (
+            "You are an IELTS Speaking Part 1 examiner.\n"
+            f"Write exactly one short, conversational follow-up question asking about {angle}.\n"
+            "Suitable for IELTS Part 1. Output one line only — just the question, no labels or quotes.\n\n"
+            "One follow-up question:\n"
+        )
     return f"""You are an IELTS Speaking Part 1 examiner.
 Write exactly one natural follow-up question based on the candidate's previous answer.
 Use the candidate's real identity details. Do not invent facts.
@@ -2589,8 +2620,12 @@ def _follow_up_stream_context(attempt: SpeakingAttempt, source_turn: SpeakingTur
             "rejected_questions": (),
             "extract": _extract_p1_identity_follow_up_output,
             "system": "You are an IELTS Speaking Part 1 examiner. Return only one concise follow-up question.",
-            "skip_provider": not bool(transcript),
-            "skip_reason": "missing_transcript" if not transcript else "",
+            # P1 practice mode does not record audio, so transcript is often empty.
+            # A generic prompt is used in that case — never skip the provider for P1.
+            # Use higher temperature when there's no transcript so each call yields a different angle.
+            "skip_provider": False,
+            "skip_reason": "",
+            "temperature": 0.2 if transcript else 0.8,
         }
 
     prompt = source_metadata.get("prompt") if isinstance(source_metadata.get("prompt"), dict) else {}
@@ -2687,6 +2722,56 @@ def _save_streamed_follow_up(
     return metadata
 
 
+def _mark_streamed_follow_up_failed(
+    attempt: SpeakingAttempt,
+    source_turn: SpeakingTurn,
+    target_turn: SpeakingTurn,
+    error: str,
+    *,
+    question_type: str = "",
+) -> dict[str, Any]:
+    metadata = target_turn.metadata if isinstance(target_turn.metadata, dict) else {}
+    prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
+    clean_error = clean_report_text(error)[:220]
+    updated_prompt = {
+        **prompt,
+        "question": "",
+        "source": "streaming_follow_up",
+        "adapted_from_turn": source_turn.turn_id,
+        "backend": "stream_failed",
+        "generation_status": "failed",
+        "generation_error": clean_error,
+    }
+    metadata = {
+        **metadata,
+        "prompt": updated_prompt,
+        "examiner_text": "",
+        "examiner_tts": {
+            "provider": "volcengine",
+            "status": "not_started",
+            "audio_url": None,
+            "message": "Follow-up generation failed before a finalized question was available.",
+        },
+        "streaming_follow_up": True,
+        "streaming_follow_up_backend": "stream_failed",
+        "streaming_follow_up_status": "failed",
+        "streaming_follow_up_error": clean_error,
+    }
+    if question_type:
+        metadata["p3_dynamic_follow_up"] = True
+        metadata["p3_dynamic_follow_up_backend"] = "stream_failed"
+        metadata["p3_dynamic_follow_up_status"] = "failed"
+    target_turn.question = ""
+    target_turn.metadata = metadata
+    target_turn.save(update_fields=["question", "metadata", "updated_at"])
+
+    attempt_metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    attempt_metadata["current_turn"] = target_turn.turn_id
+    attempt.metadata = attempt_metadata
+    attempt.save(update_fields=["metadata", "updated_at"])
+    return metadata
+
+
 def _generate_streamed_follow_up_tts(attempt: SpeakingAttempt, target_turn: SpeakingTurn) -> dict[str, Any]:
     target_turn.refresh_from_db()
     metadata = target_turn.metadata if isinstance(target_turn.metadata, dict) else {}
@@ -2733,8 +2818,8 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
                     {"role": "system", "content": context["system"]},
                     {"role": "user", "content": context["prompt"]},
                 ],
-                max_tokens=32,
-                temperature=0.2,
+                max_tokens=40,
+                temperature=float(context.get("temperature") or 0.2),
                 timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
                 on_usage=lambda value: usage.update(value),
             ):
@@ -2767,38 +2852,20 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
                 "turn": _turn_payload(target_turn),
             })
         except Exception as exc:  # noqa: BLE001 - streaming endpoint must keep the practice flow usable
-            fallback = str(context["fallback"])
             error = str(exc)
-            _save_streamed_follow_up(
+            _mark_streamed_follow_up_failed(
                 attempt,
                 source_turn,
                 target_turn,
-                fallback,
-                backend="fallback",
-                status="fallback",
                 error=error,
                 question_type=str(context.get("question_type") or ""),
             )
             yield _sse_payload({
-                "event": "fallback",
-                "text": fallback,
-                "backend": "fallback",
+                "event": "failed",
+                "backend": "stream_failed",
                 "error": clean_report_text(error)[:220],
                 "turn": _turn_payload(target_turn),
             })
-            try:
-                tts = _generate_streamed_follow_up_tts(attempt, target_turn)
-            except Exception as tts_exc:  # noqa: BLE001 - fallback text must still remain usable
-                tts = {
-                    "provider": "volcengine",
-                    "status": "failed",
-                    "audio_url": None,
-                    "error": clean_report_text(str(tts_exc))[:220],
-                }
-            if tts.get("audio_url"):
-                yield _sse_payload({"event": "tts_ready", "audio_url": tts["audio_url"], "examiner_tts": tts})
-            else:
-                yield _sse_payload({"event": "tts_timeout", "examiner_tts": tts})
             target_turn.refresh_from_db()
             yield _sse_payload({"event": "done", "turn": _turn_payload(target_turn)})
             return
@@ -3692,6 +3759,28 @@ def mark_attempt_analysis_failed(attempt: SpeakingAttempt, exc: Exception, call_
         attempt.save(update_fields=["metadata", "updated_at"])
 
 
+def mark_attempt_analysis_ready(attempt: SpeakingAttempt, score: dict[str, Any], call_id: str) -> None:
+    """Persist successful AI-analysis state so polling never shows stale queued/failed status."""
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    backend = str(score.get("generation_backend") or score.get("backend") or "codex")
+    status = str(score.get("generation_status") or ("ready" if backend in {"codex", "http_api", "claude_cli"} else "fallback"))
+    metadata.update(
+        {
+            "analysis_status": "ready",
+            "analysis_backend": backend,
+            "analysis_error": "",
+            "analysis_call_id": call_id,
+            "analysis_ready_at": timezone.now().isoformat(),
+            "score_generation_backend": backend,
+            "score_generation_status": status,
+            "score_generation_error": str(score.get("fallback_reason") or ""),
+            "report_generation_backend": str(score.get("backend") or backend),
+            "report_generation_status": "ready" if status == "ready" else status,
+        }
+    )
+    attempt.metadata = metadata
+
+
 def _criteria_feedback(score: dict[str, Any], transcript: str) -> dict[str, Any]:
     """Build criteria feedback based on score and transcript.
 
@@ -4298,6 +4387,7 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     criteria = _criteria_feedback(score, transcript)
 
     attempt.status = SpeakingAttempt.Status.SCORED
+    mark_attempt_analysis_ready(attempt, score, call_id)
     attempt.metadata = {
         **(attempt.metadata if isinstance(attempt.metadata, dict) else {}),
         "current_turn": None,
@@ -4652,8 +4742,9 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
 
     criteria = _criteria_feedback(score, transcript)
 
+    mark_attempt_analysis_ready(attempt, score, call_id)
     attempt.updated_at = timezone.now()
-    attempt.save(update_fields=["updated_at"])
+    attempt.save(update_fields=["metadata", "updated_at"])
     attempt.refresh_from_db()
 
     learning_profile = build_learning_profile(user, attempt)

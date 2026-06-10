@@ -8,7 +8,7 @@
     {
       "id": "cambridge-14-test-1-task-1",
       "title": "Cambridge IELTS 14 Test 1 Task 1",
-      "category": "bar_chart",
+      "category": "pie_chart",
       "source_book": 14,
       "source_test": 1,
       "source_question": 1,
@@ -23,7 +23,7 @@
     {
       "id": "cambridge-14-test-2-task-1",
       "title": "Cambridge IELTS 14 Test 2 Task 1",
-      "category": "table",
+      "category": "mixed",
       "source_book": 14,
       "source_test": 2,
       "source_question": 1,

@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260607-p2p3-corpus-restructure">
+    <link rel="stylesheet" href="/styles.css?v=20260610-dark-takeaway-hover">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -57,6 +57,8 @@
         </div>
         <div class="global-topbar-spacer"></div>
         <div class="global-topbar-actions">
+          <div id="languageTakeawayReviewPanel" class="takeaway-review-panel topbar-review-panel hidden" aria-live="polite"></div>
+          <div id="writingTakeawayReviewPanel" class="takeaway-review-panel topbar-review-panel hidden" aria-live="polite"></div>
           <button class="avatar-settings-button" data-view="account" title="Account" data-i18n-title="action.account">
             <span class="user-avatar" id="userAvatarDesktop">J</span>
           </button>
@@ -100,8 +102,8 @@
         <div class="nav-bottom">
           <nav class="nav-secondary" aria-label="Libraries">
             <a class="nav-button" data-view="corpus" href="?view=corpus" data-i18n="nav.corpus">语料库</a>
-            <a class="nav-button" data-view="takeawayBook" href="?view=takeawayBook">Takeaway</a>
-            <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook" data-i18n="nav.writingTakeaway">写作积累</a>
+            <a class="nav-button" data-view="takeawayBook" href="?view=takeawayBook">Takeaway<span id="languageTakeawayDueDot" class="nav-review-dot hidden" aria-label="Takeaway 有到期复习"></span></a>
+            <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook"><span data-i18n="nav.writingTakeaway">写作积累</span><span id="writingTakeawayDueDot" class="nav-review-dot hidden" aria-label="写作积累有到期复习"></span></a>
             <a class="nav-button" data-view="spellingDrill" href="?view=spellingDrill" data-i18n="nav.spellingDrill">拼写错词训练</a>
           </nav>
           <div class="nav-divider" aria-hidden="true"></div>
@@ -131,29 +133,46 @@
         </header>
 
         <div id="busyBar" class="busy-bar hidden" role="status" aria-live="polite">
-          <span class="spinner"></span>
-          <span id="busyText"></span>
+          <div class="busy-bar-card">
+            <span class="spinner"></span>
+            <span id="busyText"></span>
+          </div>
         </div>
 
         <section id="homePanel" class="panel home-panel home-v3-panel" aria-label="首页">
           <div class="home-v3-hero">
             <div class="home-v3-copy">
-              <div class="home-v3-eyebrow">IELTS Study Workspace</div>
-              <h2>先练真题，再沉淀成自己的表达库。</h2>
-              <p>口语、写作、报告、语料和拼写复习串成一条路线；每天从一个入口开始，不再在一堆卡片里找功能。</p>
+              <div class="home-v3-eyebrow">IELTS Sketchbook</div>
+              <h2 class="home-v3-route-title">
+                <span>练习真题</span>
+                <svg aria-hidden="true" viewBox="0 0 42 38">
+                  <path d="M21 4v24"></path>
+                  <path d="M10 18l11 11 11-11"></path>
+                </svg>
+                <span>沉淀成自己的语料库</span>
+              </h2>
               <div class="home-v3-actions" aria-label="快速开始">
                 <a class="home-v3-primary" data-home-mode="p1" href="?view=p1">开始口语练习</a>
                 <a class="home-v3-secondary" href="?view=writing">写一篇作文</a>
               </div>
             </div>
 
-            <aside class="home-v3-today" aria-label="今日训练顺序">
-              <span>Today</span>
-              <ol>
-                <li><strong>输入</strong><small>P1 / P2 / P3 真题练习</small></li>
-                <li><strong>反馈</strong><small>口语报告与写作批改</small></li>
-                <li><strong>复用</strong><small>语料、Takeaway、拼写错词</small></li>
-              </ol>
+            <aside class="home-v3-today sketch-flow-board" aria-label="今日训练流程">
+              <img src="/assets/home/sketch-workflow.webp" alt="铅笔稿风格的 IELTS 学习流程草图">
+              <div class="sketch-flow-overlay" aria-hidden="true">
+                <span>Today</span>
+                <svg class="sketch-flow-arrows" viewBox="0 0 760 430" preserveAspectRatio="none" aria-hidden="true">
+                  <path class="sketch-flow-arrow-main" d="M318 166 C415 154 500 188 548 244"></path>
+                  <path class="sketch-flow-arrow-main" d="M518 306 C487 355 404 372 314 350"></path>
+                  <path class="sketch-flow-arrow-head" d="M538 208 C542 226 548 239 566 248"></path>
+                  <path class="sketch-flow-arrow-head" d="M518 228 C536 231 551 238 566 248"></path>
+                  <path class="sketch-flow-arrow-head" d="M358 333 C338 338 323 344 309 358"></path>
+                  <path class="sketch-flow-arrow-head" d="M354 370 C337 365 323 362 309 358"></path>
+                </svg>
+                <div class="sketch-flow-step step-1"><b>1</b><strong>输入</strong><small>P1 / P2 / P3 真题练习</small></div>
+                <div class="sketch-flow-step step-2"><b>2</b><strong>反馈</strong><small>口语报告与写作批改</small></div>
+                <div class="sketch-flow-step step-3"><b>3</b><strong>复用</strong><small>语料、Takeaway、拼写错词</small></div>
+              </div>
             </aside>
           </div>
 
@@ -356,7 +375,16 @@
                 <h2>P1 短答语料库</h2>
                 <p>按话题管理短问题答案，快速检查哪些题目已经准备好。</p>
               </div>
-              <span id="p1CorpusStats" class="corpus-page-stat">Loading...</span>
+              <div class="corpus-head-actions">
+                <button id="p1CorpusAgentBtn" class="agent-assistant-trigger corpus-agent-button" type="button" title="题库助手" aria-label="P1 题库助手">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path>
+                    <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  <span>题库助手</span>
+                </button>
+                <span id="p1CorpusStats" class="corpus-page-stat">Loading...</span>
+              </div>
             </header>
             <div id="p1CorpusTopics" class="p1-corpus-topics"></div>
           </div>
@@ -488,6 +516,8 @@
               </div>
               <div class="language-book-actions">
                 <span id="languageTakeawayStats">Loading...</span>
+                <button id="addLanguageTakeawayBtn" class="language-action-button" type="button">添加</button>
+                <button id="languageReplacementBtn" class="language-action-button secondary" type="button">表达替换</button>
                 <button id="languageTakeawayHideToggle" class="language-hide-toggle" type="button" aria-pressed="false">
                   <svg aria-hidden="true" viewBox="0 0 24 24">
                     <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
@@ -510,6 +540,8 @@
               </div>
               <div class="language-book-actions">
                 <span id="writingTakeawayStats">Loading...</span>
+                <button id="addWritingTakeawayBtn" class="language-action-button" type="button">添加</button>
+                <button id="writingReplacementBtn" class="language-action-button secondary" type="button">表达替换</button>
                 <button id="writingTakeawayHideToggle" class="language-hide-toggle" type="button" aria-pressed="false">
                   <svg aria-hidden="true" viewBox="0 0 24 24">
                     <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
@@ -555,7 +587,16 @@
                 <h2 data-i18n="p2Corpus.title">P2 串题素材库</h2>
                 <p data-i18n="p2Corpus.subtitle">按分类管理可复用素材，并单独维护相关 P3 追问。</p>
               </div>
-              <span id="p2CorpusStats" class="corpus-page-stat p2-corpus-stat" data-i18n="common.loading">加载中...</span>
+              <div class="corpus-head-actions">
+                <button id="p2CorpusAgentBtn" class="agent-assistant-trigger corpus-agent-button" type="button" title="题库助手" aria-label="P2 题库助手">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path>
+                    <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  <span>题库助手</span>
+                </button>
+                <span id="p2CorpusStats" class="corpus-page-stat p2-corpus-stat" data-i18n="common.loading">加载中...</span>
+              </div>
             </header>
             <div id="p2CorpusTopics" class="p2-corpus-topics"></div>
           </div>
@@ -632,8 +673,25 @@
           </div>
         </div>
 
+        <div id="p2BrainstormDialog" class="p1-corpus-dialog p2-brainstorm-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="p2BrainstormDialogTitle">
+          <div class="p1-corpus-dialog-card p2-brainstorm-dialog-card" data-corpus-dialog-card>
+            <header class="p1-corpus-dialog-head p2-brainstorm-dialog-head">
+              <div>
+                <span>Part 2 串题灵感</span>
+                <h3 id="p2BrainstormDialogTitle">Brainstorm</h3>
+              </div>
+              <button id="saveP2BrainstormBtn" type="button">保存灵感</button>
+            </header>
+            <p class="p2-brainstorm-dialog-subtitle">每道题先记一句能串到其他题的细碎素材。这里不会覆盖正式 P2 正文。</p>
+            <div id="p2BrainstormList" class="p2-brainstorm-list"></div>
+            <div class="p1-corpus-dialog-actions p2-brainstorm-actions">
+              <span id="p2BrainstormStatus"></span>
+            </div>
+          </div>
+        </div>
+
         <section id="historyPanel" class="panel hidden">
-          <div class="history-rail-shell">
+          <div class="history-rail-shell speaking-report-rail-shell">
             <div class="history-rail-head">
               <div>
                 <strong>Reports</strong>
@@ -710,6 +768,21 @@
             </div>
           </div>
         </div>
+        <div id="expressionReplacementDialog" class="p1-corpus-dialog expression-replacement-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="expressionReplacementTitle">
+          <div class="p1-corpus-dialog-card expression-replacement-card">
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="expressionReplacementType">写作积累</span>
+                <h3 id="expressionReplacementTitle">表达替换</h3>
+              </div>
+              <div class="expression-replacement-head-actions">
+                <button id="addExpressionReplacementBtn" type="button" class="ghost">添加</button>
+                <button id="closeExpressionReplacementBtn" type="button">完成</button>
+              </div>
+            </header>
+            <div id="expressionReplacementList" class="expression-replacement-list"></div>
+          </div>
+        </div>
 
         <section id="writingPanel" class="panel writing-panel hidden">
           <div class="writing-shell">
@@ -773,17 +846,23 @@
                     <p id="writingInlineWaitText">正在分析题目、你的作文和 IELTS 写作评分标准。</p>
                   </div>
                 </div>
-                <div class="writing-footer-row">
-                  <div class="writing-status-line">
-                    <strong id="writingWordCount">0 words</strong>
-                    <span id="writingSaveStatus">未保存</span>
-                  </div>
-                  <div class="writing-submit-row">
-                    <button id="writingSaveBtn" class="ghost" type="button">保存</button>
-                    <button id="writingScoreBtn" type="button">AI 评分与辅导</button>
+                <div class="writing-status-line">
+                  <strong id="writingWordCount">0 words</strong>
+                  <span id="writingSaveStatus">未保存</span>
+                </div>
+                <div id="writingActionPanel" class="writing-action-panel">
+                  <button id="writingActionPanelToggle" class="writing-action-panel-toggle" type="button" aria-expanded="true" aria-controls="writingActionPanelBody" aria-label="折叠评分操作">
+                    <svg class="wap-chevron" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10l4-4 4 4"/></svg>
+                  </button>
+                  <div id="writingActionPanelBody" class="writing-action-panel-body">
+                    <div class="wap-inner">
+                      <div class="writing-submit-row">
+                        <button id="writingSaveBtn" class="ghost" type="button">保存</button>
+                        <button id="writingScoreBtn" type="button">AI 评分与辅导</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <p class="writing-profile-note">每次 AI 评分与辅导都会记录你的写作表现，用于后续提供更个性化的辅导。请尽量提交自己的真实作文，不要使用 AI 范文或他人文章，这样画像和建议才更准确。</p>
               </div>
             </aside>
           </div>
@@ -809,9 +888,17 @@
                 <button type="button" class="writing-task-option active" data-writing-picker-task="task1_academic">Task 1</button>
                 <button type="button" class="writing-task-option" data-writing-picker-task="task2">Task 2</button>
               </div>
+              <div id="writingPromptPatternPanel" class="writing-prompt-pattern-panel hidden">
+                <button id="writingPromptPatternToggle" class="writing-prompt-pattern-panel-head" type="button" aria-expanded="false" aria-controls="writingPromptPatternFilters">
+                  <span id="writingPromptFilterLabel"></span>
+                  <strong id="writingPromptCurrentPattern">全部问法</strong>
+                  <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"></path></svg>
+                </button>
+                <div id="writingPromptPatternFilters" class="writing-prompt-pattern-filters" role="group" aria-label="Task 2 fixed question wording filter"></div>
+              </div>
               <div class="writing-prompt-filter-wrap">
                 <div id="writingPromptSourceFilters" class="writing-prompt-source-filters" role="group" aria-label="Writing prompt source filter"></div>
-                <div id="writingPromptTypeFilters" class="writing-prompt-type-filters" role="group" aria-label="Writing question type filter"></div>
+                <div id="writingPromptTypeFilters" class="writing-prompt-type-filters hidden" role="group" aria-label="Writing question type filter"></div>
                 <p id="writingPromptModalHint">Task 1 题目会显示对应图表；选择后再开始写作。</p>
               </div>
             </div>
@@ -826,7 +913,7 @@
               <div>
                 <span class="section-label">Question Bank Agent</span>
                 <h2 id="agentAssistantTitle">题库助手</h2>
-                <p>输入自然语言、OCR 片段或关键词，助手会在写作题库里定位题目并给出跳转链接。</p>
+                <p id="agentAssistantSubtitle">输入自然语言、OCR 片段或关键词，助手会在写作题库里定位题目并给出跳转链接。</p>
               </div>
               <button type="button" class="icon-button" data-agent-assistant-close aria-label="关闭题库助手">×</button>
             </header>
@@ -837,7 +924,7 @@
                 <button type="submit">查找</button>
               </div>
             </form>
-            <div class="agent-assistant-examples" aria-label="Example searches">
+            <div id="agentAssistantExamples" class="agent-assistant-examples" aria-label="Example searches">
               <button type="button" data-agent-assistant-example="computer Internet children study schools teachers">电脑和学校教育</button>
               <button type="button" data-agent-assistant-example="剑雅20 Task 2 education">剑雅20 教育</button>
               <button type="button" data-agent-assistant-example="bar chart population task 1">Task 1 人口图表</button>
@@ -864,13 +951,8 @@
               </button>
             </header>
             <div class="writing-frame-modal-body">
-              <p class="writing-frame-modal-help">下面是这类题的默认框架。改成你顺手的版本后点保存，之后只要这类题用 <code>/frame</code> 都会先填这个版本。</p>
+              <p class="writing-frame-modal-help">下面是这类题的默认框架。改成你顺手的版本后关闭窗口会自动保存，之后这类题用 <code>/frame</code> 会先填这个版本。</p>
               <textarea id="writingFrameEditor" class="writing-frame-editor" spellcheck="false" rows="16"></textarea>
-              <div class="writing-frame-modal-actions">
-                <button id="writingFrameResetBtn" type="button" class="ghost">恢复默认</button>
-                <button id="writingFrameSaveBtn" type="button">保存框架</button>
-                <span id="writingFrameSaveStatus" class="writing-frame-modal-status" aria-live="polite"></span>
-              </div>
             </div>
           </article>
         </div>
@@ -950,8 +1032,8 @@
           <div class="history-rail-shell writing-report-rail-shell">
             <div class="history-rail-head">
               <div>
-                <strong>Writing Reports</strong>
-                <span>横向滑动查看历史</span>
+                <strong>Reports</strong>
+                <span>横向滑动</span>
               </div>
               <div class="history-rail-actions" aria-label="Writing report rail controls">
                 <button type="button" id="writingReportRailPrev" class="history-rail-nav" aria-label="Previous writing report">
@@ -1250,10 +1332,10 @@
     <script src="/shared-ui.js?v=20260530-front-dom-utils"></script>
     <script src="/writing-image-preload.js?v=20260530-writing-image-preload"></script>
     <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
-    <script src="/writing-prompt-picker.js?v=20260530-writing-prompt-picker"></script>
+    <script src="/writing-prompt-picker.js?v=20260610-writing-picker-switch-1"></script>
     <script src="/corpus-markdown-editor.js?v=20260606-single-editor-source"></script>
-    <script src="/corpus-takeaway.js?v=20260607-p2p3-corpus-restructure"></script>
-    <script src="/spelling-drill.js?v=20260606-spelling-srs-day4"></script>
+    <script src="/corpus-takeaway.js?v=20260610-takeaway-reveal-no-jump"></script>
+    <script src="/spelling-drill.js?v=20260609-spelling-fixed-layout"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
@@ -1261,6 +1343,6 @@
     <script src="/api-client.js?v=20260530-front-api-client"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260607-p2p3-corpus-restructure"></script>
+    <script src="/app.js?v=20260610-record-colors-1"></script>
   </body>
 </html>

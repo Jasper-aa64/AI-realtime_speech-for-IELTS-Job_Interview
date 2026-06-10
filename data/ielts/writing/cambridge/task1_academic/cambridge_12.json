@@ -6,6 +6,21 @@
   "book": 12,
   "prompts": [
     {
+      "id": "cambridge-12-test-1-task-1",
+      "title": "Cambridge IELTS 12 Test 1 Task 1",
+      "category": "bar_chart",
+      "source_book": 12,
+      "source_test": 1,
+      "source_question": 1,
+      "source_label": "剑雅12-1 Task 1",
+      "prompt": "The bar chart below shows the percentage of Australian men and women in different age groups who did regular physical activity in 2010. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+      "source": "cambridge_ielts_public_reference",
+      "source_url": "https://engnovate.com/ielts-writing-tests/cambridge-ielts-12-academic-writing-test-1-task-1/",
+      "sort_order": 91,
+      "image_url": "/assets/writing/task1/cambridge/12/test_1_task_1.png",
+      "source_image_url": "https://engnovate.com/wp-content/uploads/2023/08/cambridge-ielts-12-academic-writing-test-1-1.png"
+    },
+    {
       "id": "cambridge-12-test-2-task-1",
       "title": "Cambridge IELTS 12 Test 2 Task 1",
       "category": "map",

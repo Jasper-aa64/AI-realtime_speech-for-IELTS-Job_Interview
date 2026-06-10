@@ -1,0 +1,4 @@
+{"path":".trellis/spec/backend/index.md","reason":"后端验收约束：AI fallback metadata、报告 payload 禁止项。"}
+{"path":".trellis/spec/frontend/index.md","reason":"前端验收约束：报告 UI 与全局设置位置约定。"}
+{"path":"docs/SPEC-p2p3-bank-corpus-restructure.md","reason":"P2/P3 语料重构的需求边界与验收清单。"}
+{"path":"docs/TASK-p2p3-corpus-restructure.md","reason":"阶段 4 收口任务与路由要求。"}

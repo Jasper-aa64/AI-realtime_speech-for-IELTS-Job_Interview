@@ -156,12 +156,22 @@
     // buildPromptHtml / buildInputHtml are called both in full rebuild
     // and in partial (in-place) updates so the card doesn't re-animate.
 
+    // Split chinese_gloss on "；" (or ";") — first part is the Chinese meaning,
+    // everything after is a spelling note (e.g. "high 的比较级需要保留 h 后的结构").
+    function splitGloss(gloss) {
+      const raw  = gloss || "";
+      const idx  = raw.search(/[；;]/);
+      if (idx < 0) return { chinese: raw, note: "" };
+      return { chinese: raw.slice(0, idx).trim(), note: raw.slice(idx + 1).trim() };
+    }
+
     function buildPromptHtml(word, s) {
-      const gloss       = word.chinese_gloss || "";
+      const { chinese, note: _note } = splitGloss(word.chinese_gloss);
       const letterCount = String(word.correct_spelling || "").replace(/[^A-Za-z]/g, "").length;
       const fallback    = letterCount > 0 ? `回忆这个 ${letterCount} 字母的词` : "回忆这个词";
+      // Only show the Chinese meaning; the spelling note is revealed after Enter.
       return `
-        <p class="nr-gloss${gloss ? "" : " is-fallback"}">${escapeHtml(gloss || fallback)}</p>
+        <p class="nr-gloss${chinese ? "" : " is-fallback"}">${escapeHtml(chinese || fallback)}</p>
         <div class="nr-wrong-pill">
           <span class="nr-wrong-tag">曾误作</span>
           <span class="nr-wrong-text">${escapeHtml(wrongFormsText(word))}</span>
@@ -175,9 +185,11 @@
         : "";
 
       // ── State A: waiting for first input ──
+      // No spelling note here; it only appears after the user presses Enter.
       if (!result) {
         return `
           <form id="spellingAttemptForm" class="nr-slot nr-form" autocomplete="off">
+            <span class="nr-note-slot nr-note-slot--placeholder" aria-hidden="true"></span>
             <input id="spellingTypedInput" class="nr-input" type="text"
               autocomplete="off" autocapitalize="none" spellcheck="false"
               placeholder="敲下正确拼写，回车判定">
@@ -187,26 +199,27 @@
         `;
       }
 
-      // ── State B: correct — show green diff, wait for Enter ──
-      if (result.correct) {
-        return `
-          <div class="nr-slot nr-result-slot is-correct">
-            <div class="nr-inline-answer" aria-live="polite">
-              <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
-            </div>
-            <p class="nr-inline-correct nr-inline-correct--placeholder" aria-hidden="true">
-              <span class="nr-answer-word" data-label="正解">${escapeHtml(correctSpell)}</span>
-            </p>
-            <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
-          </div>
-        `;
-      }
+      // Extract spelling note (the part after "；" in the gloss) for post-Enter reveal.
+      const { note } = splitGloss(word.chinese_gloss);
+      const noteHtml = note
+        ? `<p class="nr-note-slot nr-spell-note" aria-label="拼写提示">${escapeHtml(note)}</p>`
+        : `<p class="nr-note-slot nr-note-slot--placeholder" aria-hidden="true"></p>`;
 
-      // ── Wrong: show diff + 正解 + next button.
-      // Word is already pushed back into the queue by submitAttempt,
-      // so it will appear again later. Progress only counts on correct.
-      return `
+      // ── State B: correct — show green diff, wait for Enter ──
+      return result.correct ? `
+        <div class="nr-slot nr-result-slot is-correct">
+          ${noteHtml}
+          <div class="nr-inline-answer" aria-live="polite">
+            <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
+          </div>
+          <p class="nr-inline-correct nr-inline-correct--placeholder" aria-hidden="true">
+            <span class="nr-answer-word" data-label="正解">${escapeHtml(correctSpell)}</span>
+          </p>
+          <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
+        </div>
+      ` : `
         <div class="nr-slot nr-result-slot is-wrong">
+          ${noteHtml}
           <div class="nr-inline-answer" aria-live="polite">
             <p class="nr-answer-line">${letterDiff(result._typed || "", correctSpell)}</p>
           </div>

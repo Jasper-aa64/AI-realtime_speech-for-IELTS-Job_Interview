@@ -599,12 +599,14 @@ def p2_bank_corpus_payload(user, question_id: str) -> dict[str, Any]:
     topic = p2_bank_topic_for_question_id(cue_id)
     question = p2_bank_question_text(topic, cue_id)
     entry = P2BankCorpusEntry.objects.filter(user=user, question_id=cue_id).first()
+    metadata = entry.metadata if entry and isinstance(entry.metadata, dict) else {}
     return {
         "question_id": cue_id,
         "question": entry.question if entry else question,
         "corpus_text": entry.corpus_text if entry else "",
         "last_ai_answer": entry.last_ai_answer if entry else "",
-        "metadata": entry.metadata if entry and isinstance(entry.metadata, dict) else {},
+        "metadata": metadata,
+        "brainstorm_idea": clean_report_text(str(metadata.get("brainstorm_idea") or "")),
         "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M") if entry else "",
     }
 
@@ -614,18 +616,30 @@ def save_p2_bank_corpus(user, question_id: str, payload: dict[str, Any]) -> dict
     if not cue_id:
         raise SpeakingError("P2 question id is required.")
     topic = p2_bank_topic_for_question_id(cue_id)
-    question = clean_report_text(str(payload.get("question") or ""))[:2000] or p2_bank_question_text(topic, cue_id)
-    corpus_text = clean_markdown_text(str(payload.get("corpus_text") or payload.get("material_text") or ""))[:12000]
-    last_ai_answer = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:12000]
+    existing = P2BankCorpusEntry.objects.filter(user=user, question_id=cue_id).first()
+    question = clean_report_text(str(payload.get("question") or ""))[:2000] or (existing.question if existing else "") or p2_bank_question_text(topic, cue_id)
+    metadata = dict(existing.metadata) if existing and isinstance(existing.metadata, dict) else {}
+    if isinstance(payload.get("metadata"), dict):
+        metadata.update(payload["metadata"])
+    if "brainstorm_idea" in payload:
+        metadata["brainstorm_idea"] = clean_report_text(str(payload.get("brainstorm_idea") or ""))[:1000]
+    if "brainstorm_idea" in metadata:
+        metadata["brainstorm_idea"] = clean_report_text(str(metadata.get("brainstorm_idea") or ""))[:1000]
+
+    defaults = {
+        "question": question,
+        "corpus_text": existing.corpus_text if existing else "",
+        "last_ai_answer": existing.last_ai_answer if existing else "",
+        "metadata": metadata,
+    }
+    if "corpus_text" in payload or "material_text" in payload:
+        defaults["corpus_text"] = clean_markdown_text(str(payload.get("corpus_text") or payload.get("material_text") or ""))[:12000]
+    if "last_ai_answer" in payload:
+        defaults["last_ai_answer"] = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:12000]
     entry, _ = P2BankCorpusEntry.objects.update_or_create(
         user=user,
         question_id=cue_id,
-        defaults={
-            "question": question,
-            "corpus_text": corpus_text,
-            "last_ai_answer": last_ai_answer,
-            "metadata": payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
-        },
+        defaults=defaults,
     )
     return p2_bank_corpus_payload(user, entry.question_id)
 
@@ -726,6 +740,8 @@ def p2_topic_card_payload(
     ]
     linked_question = p2_cue_identity_text({"title": title, "bullets": bullets, "rounding": rounding})
     p3_entries_by_id = p3_entries_by_id or {}
+    metadata = bank_entry.metadata if bank_entry and isinstance(bank_entry.metadata, dict) else {}
+    brainstorm_idea = clean_report_text(str(metadata.get("brainstorm_idea") or ""))
     p3_saved_count = 0
     for index, question in enumerate(p3_follow_ups):
         followup_id = p3_bank_followup_id(cue_id, question, index)
@@ -743,6 +759,8 @@ def p2_topic_card_payload(
         "rounding": rounding,
         "linked_question": linked_question,
         "material_text": bank_entry.corpus_text if bank_entry else "",
+        "brainstorm_idea": brainstorm_idea,
+        "has_brainstorm_idea": bool(brainstorm_idea),
         "p3_follow_up_text": "",
         "updated_at": timezone.localtime(bank_entry.updated_at).strftime("%Y-%m-%d %H:%M") if bank_entry else "",
         "season": str(topic.get("season") or ""),

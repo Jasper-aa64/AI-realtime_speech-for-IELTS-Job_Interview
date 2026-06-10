@@ -984,6 +984,43 @@ class AIWorkerCommandTests(TestCase):
         self.assertEqual(score.billing_metadata["input_tokens"], 900)
         self.assertEqual(score.analysis_payload["overall_review"], http_payload["overall_review"])
 
+    @override_settings(
+        AI_HTTP_BASE_URL="https://ai.example/v1",
+        AI_HTTP_API_KEY="test-key",
+        AI_HTTP_MODEL="gpt-5.4-mini",
+    )
+    def test_run_ai_tasks_requeues_http_writing_score_when_connection_drops(self):
+        from apps.ai.http_provider import HttpApiProviderError
+
+        _user, entry, created = self.create_writing_score_task(
+            username="worker-http-retry-user",
+            prompt_id="worker-http-retry-prompt",
+        )
+
+        class FailingHttpProvider:
+            def complete_chat(self, _messages, **_kwargs):
+                raise HttpApiProviderError(
+                    "HTTP AI provider request failed: Remote end closed connection without response",
+                    error_code="http_api_provider_request_failed",
+                )
+
+        out = StringIO()
+        with patch("apps.ai.provider_adapters.HttpApiProvider", return_value=FailingHttpProvider()):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "http-retry-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["items"][0]["task_id"], created["task"]["id"])
+        self.assertEqual(summary["items"][0]["task_type"], "writing_score")
+        self.assertEqual(summary["items"][0]["status"], AITask.Status.PENDING)
+        self.assertIn("Remote end closed connection", summary["items"][0]["error"])
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.PENDING)
+        self.assertEqual(task.error_code, "http_api_provider_request_failed")
+        self.assertIn("Remote end closed connection", task.error_message)
+        self.assertEqual(task.attempt_count, 1)
+        self.assertIsNotNone(task.available_at)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
+
     def test_run_ai_tasks_processes_pending_speaking_report(self):
         from apps.speaking.models import SpeakingAttempt, SpeakingTurn
 
@@ -1035,6 +1072,53 @@ class AIWorkerCommandTests(TestCase):
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.SUCCEEDED)
         self.assertEqual(task.result_payload["attempt"], report_payload)
+
+    def test_run_ai_tasks_marks_speaking_attempt_failed_when_report_generation_fails(self):
+        from apps.speaking.models import SpeakingAttempt, SpeakingTurn
+
+        user = get_user_model().objects.create_user(username="worker-speaking-fail-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="worker-speaking-fail-attempt",
+            mode="p2",
+            part="p2",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+            title="Part 2 practice",
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p2",
+            question="Describe a program or app on your computer or phone.",
+            transcript_raw="I use a calendar app every day.",
+            transcript_cleaned="I use a calendar app every day.",
+            metadata={"status": "completed"},
+        )
+        task, _created = create_ai_task(
+            user=user,
+            task_type="speaking_report",
+            idempotency_key="worker-speaking-report-fail",
+            related_type="speaking_attempt",
+            related_id=attempt.attempt_id,
+            request_payload={"attempt_id": attempt.attempt_id},
+        )
+        out = StringIO()
+
+        with patch("apps.speaking.services.score_attempt_sync", side_effect=RuntimeError("provider connection dropped")):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "speaking-fail-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["items"][0]["task_id"], task.task_id)
+        self.assertEqual(summary["items"][0]["task_type"], "speaking_report")
+        self.assertEqual(summary["items"][0]["status"], AITask.Status.FAILED)
+        task.refresh_from_db()
+        self.assertEqual(task.status, AITask.Status.FAILED)
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
+        self.assertEqual(attempt.metadata["analysis_status"], "failed")
+        self.assertIn("provider connection dropped", attempt.metadata["analysis_error"])
 
     def test_run_ai_tasks_fails_when_codex_output_is_invalid(self):
         user = get_user_model().objects.create_user(username="worker-codex-invalid-user", password="test-pass")

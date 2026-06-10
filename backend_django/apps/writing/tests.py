@@ -2,6 +2,7 @@ import json
 import time
 import uuid
 from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -1324,6 +1325,443 @@ class WritingApiTests(TestCase):
         self.assertTrue(all(item["task_type"] == WritingPrompt.TaskType.TASK2 for item in task2_payload["items"]))
         self.assertTrue(all(item["category"] == "opinion" for item in task2_payload["items"]))
 
+    def test_cambridge_task1_seed_bank_is_complete_and_visually_classified(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        seed_root = repo_root / "data" / "ielts" / "writing" / "cambridge" / "task1_academic"
+        static_root = repo_root / "web" / "static"
+        prompts = {}
+        for path in seed_root.glob("cambridge_*.json"):
+            payload = json.loads(path.read_text())
+            for prompt in payload["prompts"]:
+                prompts[prompt["id"]] = prompt
+
+        expected_ids = {
+            f"cambridge-{book}-test-{test}-task-1"
+            for book in range(7, 21)
+            for test in range(1, 5)
+        }
+        self.assertEqual(set(prompts), expected_ids)
+
+        expected_categories = {
+            "cambridge-7-test-1-task-1": "table",
+            "cambridge-7-test-2-task-1": "line_graph",
+            "cambridge-7-test-3-task-1": "bar_chart",
+            "cambridge-7-test-4-task-1": "pie_chart",
+            "cambridge-8-test-1-task-1": "mixed",
+            "cambridge-8-test-2-task-1": "pie_chart",
+            "cambridge-8-test-3-task-1": "process",
+            "cambridge-8-test-4-task-1": "line_graph",
+            "cambridge-9-test-2-task-1": "bar_chart",
+            "cambridge-9-test-3-task-1": "pie_chart",
+            "cambridge-10-test-1-task-1": "pie_chart",
+            "cambridge-11-test-1-task-1": "pie_chart",
+            "cambridge-11-test-2-task-1": "pie_chart",
+            "cambridge-11-test-4-task-1": "mixed",
+            "cambridge-12-test-1-task-1": "bar_chart",
+            "cambridge-13-test-1-task-1": "map",
+            "cambridge-13-test-2-task-1": "bar_chart",
+            "cambridge-13-test-3-task-1": "bar_chart",
+            "cambridge-13-test-4-task-1": "map",
+            "cambridge-14-test-1-task-1": "pie_chart",
+            "cambridge-14-test-2-task-1": "mixed",
+            "cambridge-15-test-4-task-1": "mixed",
+            "cambridge-16-test-1-task-1": "line_graph",
+            "cambridge-19-test-4-task-1": "mixed",
+            "cambridge-20-test-3-task-1": "mixed",
+        }
+        for prompt_id, expected_category in expected_categories.items():
+            self.assertEqual(prompts[prompt_id]["category"], expected_category, prompt_id)
+
+        for prompt_id, prompt in prompts.items():
+            self.assertEqual(prompt["source_label"], f"剑雅{prompt['source_book']}-{prompt['source_test']} Task 1")
+            image_url = prompt.get("image_url")
+            self.assertTrue(image_url, prompt_id)
+            self.assertTrue((static_root / image_url.removeprefix("/")).exists(), prompt_id)
+
+    def test_cambridge_task2_seed_bank_is_complete_from_book_5(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        seed_root = repo_root / "data" / "ielts" / "writing" / "cambridge" / "task2"
+        prompts = {}
+        for path in seed_root.glob("cambridge_*.json"):
+            payload = json.loads(path.read_text())
+            for prompt in payload["prompts"]:
+                prompts[prompt["id"]] = prompt
+
+        expected_ids = {
+            f"cambridge-{book}-test-{test}-task-2"
+            for book in range(5, 21)
+            for test in range(1, 5)
+        }
+        self.assertEqual({prompt_id for prompt_id in prompts if "-task-2" in prompt_id}, expected_ids)
+
+        for book in range(5, 21):
+            for test in range(1, 5):
+                prompt_id = f"cambridge-{book}-test-{test}-task-2"
+                prompt = prompts[prompt_id]
+                self.assertEqual(prompt["source_book"], book)
+                self.assertEqual(prompt["source_test"], test)
+                self.assertEqual(prompt["source_question"], 2)
+                self.assertEqual(prompt["source_label"], f"剑雅{book}-{test} Task 2")
+                self.assertGreater(len(prompt["prompt"]), 80)
+                self.assertNotIn("??", prompt["source_label"])
+                self.assertNotIn("Write at least 250 words", prompt["prompt"])
+                self.assertTrue(prompt.get("source_url"))
+
+    def test_seed_prompt_sync_uses_file_signature_not_loaded_count(self):
+        from apps.writing import prompt_services
+        from apps.writing.prompt_services import sync_seed_prompts
+
+        prompt_services._seed_prompt_sync_done = True
+        prompt_services._seed_prompt_sync_signature = "stale-signature"
+        for index in range(60):
+            self.create_prompt(
+                prompt_id=f"already-loaded-{index}",
+                task_type=WritingPrompt.TaskType.TASK2,
+                title=f"Loaded {index}",
+                prompt=f"Existing writing prompt {index}. Do you agree or disagree?",
+                category="opinion",
+                source="local_seed",
+            )
+
+        sync_seed_prompts()
+
+        self.assertTrue(WritingPrompt.objects.filter(prompt_id="cambridge-5-test-1-task-2").exists())
+        self.assertNotEqual(prompt_services._seed_prompt_sync_signature, "stale-signature")
+
+    def test_task2_prompt_bank_filters_by_fixed_question_pattern(self):
+        self.create_prompt(
+            prompt_id="task2-pattern-discussion",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Discussion Pattern",
+            prompt="Some people think public money should be spent on parks, while others think it should be spent on roads.\n\nDiscuss both views and give your own opinion.",
+            category="discussion",
+            source="cambridge_ielts_authorized_import",
+            source_book=20,
+            source_test=1,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-discussion-singular-view",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Information Sharing",
+            prompt="Some people believe that it is good to share as much information as possible. Others believe that some information is too important to be shared freely.\n\nDiscuss both these view and give your own opinion.",
+            category="discussion",
+            source="cambridge_ielts_authorized_import",
+            source_book=12,
+            source_test=1,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-discussion-sides",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Education Purpose",
+            prompt="Some people believe the purpose of education is to prepare individuals to be useful to society. Others say the purpose of education is to achieve personal ambitions.\n\nDiscuss both sides and give your opinion.",
+            category="discussion",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-discussion-short",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Printed Books",
+            prompt="Some people think that printed books are no longer needed in a digital era. Others think that printed books will still play an important role.\n\nDiscuss both and give your own opinion.",
+            category="discussion",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-positive-negative",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Positive Negative Pattern",
+            prompt="More people now work remotely than in the past.\n\nDo you think this is a positive or a negative development?",
+            category="two_part",
+            source="cambridge_ielts_authorized_import",
+            source_book=20,
+            source_test=2,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-positive-negative-no-second-article",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Global Food",
+            prompt="In many countries nowadays, consumers can go to a supermarket and buy food produced all over the world.\n\nDo you think this is a positive or negative development? Give reasons for your answer.",
+            category="opinion",
+            source="cambridge_ielts_authorized_import",
+            source_book=19,
+            source_test=4,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-positive-negative-with-first-question",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Children And Smartphones",
+            prompt="Some children spend hours every day on their smartphones.\n\nWhy is this the case? Do you think this is a positive or a negative development?",
+            category="two_part",
+            source="cambridge_ielts_authorized_import",
+            source_book=17,
+            source_test=2,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-positive-negative-has-this-become",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Technology And Relationships",
+            prompt="Nowadays the way many people interact with each other has changed because of technology.\n\nIn what ways has technology affected the types of relationships people make? Has this become a positive or negative development?",
+            category="two_part",
+            source="cambridge_ielts_authorized_import",
+            source_book=8,
+            source_test=2,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-positive-negative-missing-words",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Western Clothing",
+            prompt="In many countries, people wear more western-style clothes than their traditional clothes.\n\nWhy is this the case? ls this a positive negative development?",
+            category="two_part",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-positive-negative-situation",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Advertising",
+            prompt="People are surrounded by advertising. Why might this be the case? Do you think this is a positive or negative situation?",
+            category="two_part",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-agree",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Agree Pattern",
+            prompt="Schools should teach financial skills to all students.\n\nTo what extent do you agree or disagree?",
+            category="opinion",
+            source="cambridge_ielts_authorized_import",
+            source_book=20,
+            source_test=3,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-agree-typo",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Music",
+            prompt="Some people say that music is a good way of bringing people of different cultures and ages together.\n\nTo what extent do you agree of disagree with this opinion?",
+            category="opinion",
+            source="cambridge_ielts_authorized_import",
+            source_book=14,
+            source_test=3,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-agree-extend-typo",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Children And Advertising",
+            prompt="Some people think advertising aimed at children should be banned.\n\nTo what extend do agree or disagree?",
+            category="opinion",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-benefits-outweigh",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Environmental Benefits",
+            prompt="Some people believe new transport systems can reduce pollution. Do you think the environmental benefits of this development outweigh the disadvantages for individuals and businesses?",
+            category="advantages_disadvantages",
+            source="cambridge_ielts_authorized_import",
+            source_book=20,
+            source_test=4,
+            source_question=2,
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-benefits-outweigh-drawbacks",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Knowledge Online",
+            prompt="In the past, people stored knowledge in books. Nowadays, it is stored on the Internet.\n\nDo the benefits of this development outweigh the drawbacks?",
+            category="advantages_disadvantages",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-negative-effect-outweigh",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Reading Online",
+            prompt="More people read news online instead of in newspapers.\n\nDo you think the negative effect of such trend outweigh the positive effect?",
+            category="advantages_disadvantages",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-extent-advantages-outweigh",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Ageing Population",
+            prompt="In many countries, people are now living longer than ever before. Some people say an ageing population creates problems for governments. Other people think there are benefits if society has more elderly people. To what extent do the advantages of having an ageing population outweigh the disadvantages?",
+            category="advantages_disadvantages",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-reasons-research",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="House History",
+            prompt="In some countries, more and more people are becoming interested in finding out about the history of the house or building they live in.\n\nWhat are the reasons for this? How can people research this?",
+            category="two_part",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-causes-effects",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Time Away From Family",
+            prompt="People in many countries spend more and more time far away from their families.\n\nWhy does this happen and what effects will it have on them and their families?",
+            category="causes_effects",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-health-causes-measures",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Health And Fitness",
+            prompt="In some countries the average weight of people is increasing and their levels of health and fitness are decreasing. What do you think are the causes of these problems and what measures could be taken to solve them?",
+            category="two_part",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-value-arguments",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="School Holidays",
+            prompt="In many countries, primary and secondary schools close for two months or more in the summer holidays.\n\nWhat is the value of long school holidays? What are the arguments in favour of shorter school holidays?",
+            category="two_part",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-extent-think",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Recycling Laws",
+            prompt="Some people claim that not enough of the waste from homes is recycled.\n\nTo what extent do you think laws are needed to make people recycle more of their waste?",
+            category="opinion",
+            source="local_seed",
+        )
+        self.create_prompt(
+            prompt_id="task2-pattern-factors-realistic",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Job Satisfaction",
+            prompt="As most people spend a major part of their adult life at work, job satisfaction is an important element of individual wellbeing.\n\nWhat factors contribute to job satisfaction? How realistic is the expectation of job satisfaction for all workers?",
+            category="two_part",
+            source="local_seed",
+        )
+
+        discussion = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=discussion_opinion")
+        self.assertEqual(discussion.status_code, 200)
+        discussion_payload = discussion.json()
+        discussion_ids = {item["id"] for item in discussion_payload["items"]}
+        self.assertIn("task2-pattern-discussion", discussion_ids)
+        self.assertIn("task2-pattern-discussion-singular-view", discussion_ids)
+        self.assertIn("task2-pattern-discussion-sides", discussion_ids)
+        self.assertIn("task2-pattern-discussion-short", discussion_ids)
+        self.assertIn("task2-pattern-value-arguments", discussion_ids)
+        self.assertNotIn("task2-pattern-positive-negative", discussion_ids)
+        self.assertTrue(all(item["prompt_pattern"] == "discussion_opinion" for item in discussion_payload["items"]))
+        self.assertIn("prompt_patterns", discussion_payload)
+        self.assertNotIn("value_arguments", {item["pattern"] for item in discussion_payload["prompt_patterns"]})
+
+        problem_solution = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=problem_solution")
+        self.assertEqual(problem_solution.status_code, 200)
+        problem_solution_payload = problem_solution.json()
+        problem_solution_ids = {item["id"] for item in problem_solution_payload["items"]}
+        self.assertIn("task2-pattern-positive-negative-with-first-question", problem_solution_ids)
+        self.assertIn("task2-pattern-positive-negative-missing-words", problem_solution_ids)
+        self.assertIn("task2-pattern-positive-negative-situation", problem_solution_ids)
+        self.assertIn("task2-pattern-reasons-research", problem_solution_ids)
+        self.assertIn("task2-pattern-causes-effects", problem_solution_ids)
+        self.assertIn("task2-pattern-health-causes-measures", problem_solution_ids)
+        self.assertIn("task2-pattern-factors-realistic", problem_solution_ids)
+        self.assertTrue(all(item["prompt_pattern"] == "problem_solution" for item in problem_solution_payload["items"]))
+        self.assertTrue(all(item["prompt_pattern_label"] == "Why / What reasons / solutions?" for item in problem_solution_payload["items"]))
+
+        causes_effects_alias = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=causes_effects")
+        self.assertEqual(causes_effects_alias.status_code, 200)
+        self.assertIn("task2-pattern-causes-effects", {item["id"] for item in causes_effects_alias.json()["items"]})
+        self.assertTrue(all(item["prompt_pattern"] == "problem_solution" for item in causes_effects_alias.json()["items"]))
+
+        positive_negative = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=positive_negative_do_you_think")
+        self.assertEqual(positive_negative.status_code, 200)
+        positive_payload = positive_negative.json()
+        positive_ids = {item["id"] for item in positive_payload["items"]}
+        self.assertIn("task2-pattern-positive-negative", positive_ids)
+        self.assertIn("task2-pattern-positive-negative-no-second-article", positive_ids)
+        self.assertIn("task2-pattern-positive-negative-has-this-become", positive_ids)
+        self.assertNotIn("task2-pattern-positive-negative-with-first-question", positive_ids)
+        self.assertNotIn("task2-pattern-positive-negative-missing-words", positive_ids)
+        self.assertNotIn("task2-pattern-positive-negative-situation", positive_ids)
+        self.assertNotIn("task2-pattern-discussion", positive_ids)
+        self.assertTrue(all(item["prompt_pattern"] == "positive_negative_do_you_think" for item in positive_payload["items"]))
+        self.assertTrue(all(item["prompt_pattern_label"] for item in positive_payload["items"]))
+        self.assertTrue(all(item["prompt_pattern_label"] == "a positive or a negative development?" for item in positive_payload["items"]))
+
+        has_this_become = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=positive_negative_has_this_become")
+        self.assertEqual(has_this_become.status_code, 200)
+        self.assertIn("task2-pattern-positive-negative-has-this-become", {item["id"] for item in has_this_become.json()["items"]})
+        self.assertTrue(all(item["prompt_pattern"] == "positive_negative_do_you_think" for item in has_this_become.json()["items"]))
+
+        benefits = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=benefits_outweigh_disadvantages")
+        self.assertEqual(benefits.status_code, 200)
+        benefits_payload = benefits.json()
+        benefits_items = {item["id"]: item for item in benefits_payload["items"]}
+        self.assertIn("task2-pattern-benefits-outweigh", benefits_items)
+        self.assertIn("task2-pattern-benefits-outweigh-drawbacks", benefits_items)
+        self.assertIn("task2-pattern-negative-effect-outweigh", benefits_items)
+        self.assertIn("task2-pattern-extent-advantages-outweigh", benefits_items)
+        self.assertEqual(benefits_items["task2-pattern-benefits-outweigh"]["prompt_pattern"], "advantages_outweigh")
+        self.assertEqual(benefits_items["task2-pattern-benefits-outweigh"]["prompt_pattern_label"], "Do the advantages outweigh the disadvantages?")
+
+        agree = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=agree_to_what_extent")
+        self.assertEqual(agree.status_code, 200)
+        agree_items = {item["id"]: item for item in agree.json()["items"]}
+        self.assertIn("task2-pattern-agree", agree_items)
+        self.assertIn("task2-pattern-agree-typo", agree_items)
+        self.assertIn("task2-pattern-agree-extend-typo", agree_items)
+        self.assertIn("task2-pattern-extent-think", agree_items)
+        self.assertTrue(all(item["prompt_pattern"] == "agree_to_what_extent" for item in agree_items.values()))
+
+        agree_alias = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=agree_do_you_agree")
+        self.assertEqual(agree_alias.status_code, 200)
+        self.assertEqual({item["id"] for item in agree_alias.json()["items"]}, set(agree_items))
+
+        value_arguments = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=value_arguments")
+        self.assertEqual(value_arguments.status_code, 200)
+        value_arguments_payload = value_arguments.json()
+        self.assertIn("task2-pattern-value-arguments", {item["id"] for item in value_arguments_payload["items"]})
+        self.assertTrue(all(item["prompt_pattern"] == "discussion_opinion" for item in value_arguments_payload["items"]))
+        self.assertTrue(all(item["prompt_pattern_label"] == "Discuss both views and give your own opinion." for item in value_arguments_payload["items"]))
+
+        random_response = self.client.post(
+            "/api/writing/prompts/random",
+            data={"task_type": "task2", "prompt_pattern": "problem_solution"},
+            content_type="application/json",
+        )
+        self.assertEqual(random_response.status_code, 200)
+        self.assertEqual(random_response.json()["prompt_pattern"], "problem_solution")
+
+    def test_cambridge_task2_why_reason_solution_patterns_are_not_split_by_old_categories(self):
+        from apps.writing.prompt_services import sync_seed_prompts
+
+        sync_seed_prompts()
+        response = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=problem_solution")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        ids = {item["id"] for item in payload["items"]}
+        expected_cambridge_ids = {
+            "cambridge-7-test-3-task-2",
+            "cambridge-8-test-4-task-2",
+            "cambridge-13-test-4-task-2",
+            "cambridge-14-test-4-task-2",
+            "cambridge-15-test-1-task-2",
+            "cambridge-16-test-1-task-2",
+            "cambridge-16-test-2-task-2",
+            "cambridge-17-test-2-task-2",
+        }
+        self.assertTrue(expected_cambridge_ids <= ids)
+        cambridge_items = [item for item in payload["items"] if item["id"] in expected_cambridge_ids]
+        self.assertEqual(len(cambridge_items), len(expected_cambridge_ids))
+        self.assertTrue(all(item["prompt_pattern"] == "problem_solution" for item in cambridge_items))
+        self.assertTrue(all(item["prompt_pattern_label"] == "Why / What reasons / solutions?" for item in cambridge_items))
+
+        positive_response = self.client.get("/api/writing/prompts?task_type=task2&prompt_pattern=positive_negative_do_you_think")
+        self.assertEqual(positive_response.status_code, 200)
+        positive_ids = {item["id"] for item in positive_response.json()["items"]}
+        self.assertFalse(expected_cambridge_ids & positive_ids)
+
     def test_invalid_writing_requests_return_json_errors(self):
         bad_prompt_type = self.client.get("/api/writing/prompts?task_type=unknown")
         self.assertEqual(bad_prompt_type.status_code, 400)
@@ -1506,6 +1944,299 @@ class WritingApiTests(TestCase):
         self.assertIn("population", item["matched_terms"])
         self.assertTrue({"table", "graph", "chart"} & set(item["matched_terms"]))
 
+    def test_agent_prompt_search_chinese_decision_query_matches_choices(self):
+        target = self.create_prompt(
+            prompt_id="cambridge-13-test-2-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Too Many Choices",
+            prompt="In many countries, people now have more choices than ever before. To what extent do you agree or disagree?",
+            category="opinion",
+            source_book=13,
+            source_test=2,
+            source_question=2,
+            source="cambridge",
+        )
+        self.create_prompt(
+            prompt_id="traffic-filler",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Traffic",
+            prompt="Some people think traffic should be reduced by public transport.",
+            category="opinion",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "艰难的决定", "task_type": "task2", "limit": "3"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["items"][0]
+        self.assertEqual(item["id"], target.prompt_id)
+        self.assertIn("choice", item["matched_terms"])
+        self.assertIn("decision_choice", item["matched_concepts"])
+
+    def test_agent_prompt_search_chinese_late_query_matches_delay(self):
+        target = self.create_prompt(
+            prompt_id="delay-punctuality-task2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Punctuality",
+            prompt="Some people think being late is unacceptable, while others believe delays are sometimes unavoidable. Discuss both views and give your opinion.",
+            category="discussion",
+        )
+        self.create_prompt(
+            prompt_id="water-filler",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Water",
+            prompt="Access to clean water is a basic human right.",
+            category="opinion",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "迟到的经历", "task_type": "task2", "limit": "3"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["items"][0]
+        self.assertEqual(item["id"], target.prompt_id)
+        self.assertIn("late", item["matched_terms"])
+        self.assertIn("lateness_delay", item["matched_concepts"])
+
+    def test_agent_prompt_search_chinese_weekend_query_matches_weekend_and_holiday_prompts(self):
+        weekend_prompt = self.create_prompt(
+            prompt_id="cambridge-19-test-2-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Shorter Working Week",
+            prompt="The working week should be shorter and workers should have a longer weekend. Do you agree or disagree?",
+            category="opinion",
+            source_book=19,
+            source_test=2,
+            source_question=2,
+            source="cambridge",
+        )
+        holiday_prompt = self.create_prompt(
+            prompt_id="cambridge-20-test-2-task-2",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="School Holidays",
+            prompt="In many countries, primary and secondary schools close for two months or more in the summer holidays. What is the value of long school holidays? What are the arguments in favour of shorter school holidays?",
+            category="two_part",
+            source_book=20,
+            source_test=2,
+            source_question=2,
+            source="cambridge",
+        )
+        self.create_prompt(
+            prompt_id="water-filler-weekend-query",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Water",
+            prompt="Access to clean water is a basic human right.",
+            category="opinion",
+        )
+
+        response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "周末", "task_type": "task2", "limit": "5"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        ids = [item["id"] for item in payload["items"]]
+        self.assertIn(weekend_prompt.prompt_id, ids)
+        self.assertIn(holiday_prompt.prompt_id, ids)
+        top_ids = ids[:2]
+        self.assertTrue(any(item_id in top_ids for item_id in {weekend_prompt.prompt_id, "reported-cn-task2-2021-04-17-17"}))
+        weekend_item = next(item for item in payload["items"] if item["id"] == weekend_prompt.prompt_id)
+        self.assertIn("weekend", weekend_item["matched_terms"])
+        self.assertIn("leisure_holiday", weekend_item["matched_concepts"])
+
+    def test_agent_prompt_search_chinese_topic_audit_covers_cambridge_themes(self):
+        fixtures = [
+            (
+                "住房",
+                "cambridge-15-test-1-task-2",
+                "Home Ownership",
+                "In some countries, owning a home rather than renting one is very important for people.",
+                "city_housing",
+            ),
+            (
+                "房屋历史",
+                "cambridge-16-test-1-task-2",
+                "Building History",
+                "People are becoming interested in finding out about the history of the house or building they live in.",
+                "building_history",
+            ),
+            (
+                "物种灭绝",
+                "cambridge-14-test-2-task-2",
+                "Species Loss",
+                "The main environmental problem of our time is the loss of particular species of plants and animals.",
+                "animals_nature",
+            ),
+            (
+                "外语",
+                "cambridge-11-test-3-task-2",
+                "Foreign Languages",
+                "Some people say that the only reason for learning a foreign language is to travel to or work in a foreign country.",
+                "culture_language",
+            ),
+            (
+                "语言消亡",
+                "cambridge-9-test-4-task-2",
+                "Language Loss",
+                "Every year several languages die out. Some people think life will be easier if there are fewer languages.",
+                "culture_language",
+            ),
+            (
+                "全球时尚",
+                "cambridge-20-test-4-task-2",
+                "Global Fashion",
+                "Many aspects of the way people dress today are influenced by global fashion trends.",
+                "tourism_globalization",
+            ),
+            (
+                "信息共享",
+                "cambridge-12-test-1-task-2",
+                "Information Sharing",
+                "It is good to share as much information as possible in scientific research, business and the academic world.",
+                "science_information",
+            ),
+            (
+                "科学目标",
+                "cambridge-18-test-1-task-2",
+                "Science Aim",
+                "The most important aim of science should be to improve people's lives.",
+                "science_aim",
+            ),
+            (
+                "竞争合作",
+                "cambridge-19-test-1-task-2",
+                "Competition And Cooperation",
+                "Competition at work, at school and in daily life is a good thing, while others believe we should cooperate more.",
+                "competition_cooperation",
+            ),
+            (
+                "纸质书",
+                "cambridge-15-test-2-task-2",
+                "Printed Books",
+                "Nobody will buy printed books or newspapers because they will be able to read everything online.",
+                "reading_books",
+            ),
+            (
+                "老龄化",
+                "cambridge-18-test-4-task-2",
+                "Ageing Population",
+                "An ageing population creates problems for governments, while others think there are benefits if society has more elderly people.",
+                "ageing_population",
+            ),
+            (
+                "无人驾驶",
+                "cambridge-16-test-4-task-2",
+                "Driverless Vehicles",
+                "In the future all cars, buses and trucks will be driverless and passengers will travel inside these vehicles.",
+                "driverless_vehicle",
+            ),
+            (
+                "糖",
+                "cambridge-16-test-3-task-2",
+                "Sugary Products",
+                "Manufactured food and drink products contain high levels of sugar and sugary products should be made more expensive.",
+                "sugar_obesity",
+            ),
+            (
+                "替代疗法",
+                "cambridge-17-test-4-task-2",
+                "Alternative Medicine",
+                "People with health problems are trying alternative medicines and treatments instead of visiting their usual doctor.",
+                "medical_treatment",
+            ),
+            (
+                "社区服务",
+                "cambridge-9-test-2-task-2",
+                "Community Service",
+                "Unpaid community service should be a compulsory part of high school programmes, for example working for a charity.",
+                "community_charity",
+            ),
+            (
+                "航空污染",
+                "cambridge-20-test-3-task-2",
+                "Air Travel",
+                "Some people have decided to reduce the number of times they fly every year or to stop flying altogether because of environmental benefits.",
+                "air_travel_pollution",
+            ),
+        ]
+        for index, (_, prompt_id, title, prompt, _) in enumerate(fixtures, start=1):
+            self.create_prompt(
+                prompt_id=prompt_id,
+                task_type=WritingPrompt.TaskType.TASK2,
+                title=title,
+                prompt=prompt,
+                category="opinion",
+                source_book=20 if "20" in prompt_id else None,
+                source_test=index,
+                source_question=2,
+                source="cambridge",
+            )
+
+        for query, expected_id, _, _, expected_concept in fixtures:
+            with self.subTest(query=query):
+                response = self.client.get(
+                    "/api/agent/writing/prompts/search",
+                    {"q": query, "task_type": "task2", "limit": "8"},
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                ids = [item["id"] for item in payload["items"]]
+                self.assertIn(expected_id, ids)
+                matched = next(item for item in payload["items"] if item["id"] == expected_id)
+                self.assertGreater(matched["match_score"], 0.18)
+                self.assertIn(expected_concept, matched["matched_concepts"])
+
+    def test_agent_prompt_search_chinese_task1_compound_queries_prefer_visual_prompts(self):
+        rent_chart = self.create_prompt(
+            prompt_id="reported-task1-weekly-rent",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="Weekly rent chart",
+            prompt="The chart shows the average weekly rent for houses and apartments in three cities.",
+            category="bar_chart",
+            source="reported_actual_engopen",
+        )
+        student_table = self.create_prompt(
+            prompt_id="reported-task1-international-students",
+            task_type=WritingPrompt.TaskType.TASK1_ACADEMIC,
+            title="International students table",
+            prompt="The table shows the number of international students from different countries studying in Canada and the USA.",
+            category="table",
+            source="reported_actual_engopen",
+        )
+        self.create_prompt(
+            prompt_id="task2-international-student-filler",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="International students",
+            prompt="Some people think international students should work after graduation.",
+            category="opinion",
+        )
+
+        rent_response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "房租图表", "limit": "5"},
+        )
+        self.assertEqual(rent_response.status_code, 200)
+        rent_payload = rent_response.json()
+        self.assertEqual(rent_payload["items"][0]["task_type"], WritingPrompt.TaskType.TASK1_ACADEMIC)
+        self.assertTrue(
+            rent_chart.prompt_id in [item["id"] for item in rent_payload["items"]]
+            or "rent" in " ".join(rent_payload["items"][0]["matched_terms"])
+        )
+
+        student_response = self.client.get(
+            "/api/agent/writing/prompts/search",
+            {"q": "国际学生表格", "limit": "5"},
+        )
+        self.assertEqual(student_response.status_code, 200)
+        student_payload = student_response.json()
+        self.assertEqual(student_payload["items"][0]["task_type"], WritingPrompt.TaskType.TASK1_ACADEMIC)
+        self.assertTrue({"student", "table", "graph", "chart"} & set(student_payload["items"][0]["matched_terms"]))
+
     def test_agent_prompt_search_keeps_small_bank_fast(self):
         target = self.create_prompt(
             prompt_id="cambridge-20-test-1-task-2",
@@ -1608,7 +2339,7 @@ class WritingApiTests(TestCase):
         self.assertEqual(water_response.status_code, 200)
         water_item = water_response.json()["items"][0]
         self.assertIn("water", water_item["matched_concepts"])
-        self.assertIn("government", water_item["matched_concepts"])
+        self.assertIn("public_services", water_item["matched_concepts"])
         self.assertIn("water", water_item["prompt"].lower())
 
     def test_agent_prompt_search_does_not_treat_salary_as_water(self):
