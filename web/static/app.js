@@ -118,7 +118,7 @@ const state = {
   activeExaminerAudioPlayer: null,
   examinerPlayback: null,
   writing: {
-    taskType: "task1_academic",
+    taskType: "task2",
     prompts: {},
     prompt: null,
     requestedPromptId: "",
@@ -259,6 +259,27 @@ const STANDALONE_CORPUS_VIEWS = new Set(["p1Corpus", "p2Corpus"]);
 const WRITING_TASK_TYPES = new Set(["task1_academic", "task2"]);
 const WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT = 6;
 const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 18;
+const TAKEAWAY_BACKGROUND_ASSETS = [
+  "/assets/takeaway/pencil-paper-study-bg.webp",
+  "/assets/takeaway/pencil-card-paper-light.webp",
+  "/assets/takeaway/pencil-card-paper-dark.webp",
+];
+const DEFAULT_TASK2_PROMPT = {
+  id: "cambridge-20-test-1-task-2",
+  task_type: "task2",
+  title: "Cambridge IELTS 20 Test 1 Task 2",
+  category: "opinion",
+  prompt_pattern: "agree_to_what_extent",
+  prompt_pattern_label: "To what extent do you agree or disagree?",
+  source: "cambridge_ielts_public_reference",
+  source_book: 20,
+  source_test: 1,
+  source_question: 2,
+  source_label: "\u5251\u96c520-1 Task 2",
+  prompt: "Access to clean water is a basic human right. Therefore, every home should have a water supply that is provided free of charge. Do you agree or disagree? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+  source_url: "https://engnovate.com/ielts-writing-tests/cambridge-ielts-20-academic-writing-test-1-task-2/",
+  sort_order: 11,
+};
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
@@ -1459,6 +1480,17 @@ function prefetchCanApply(token) {
   return state.account.authenticated && state.prefetch.token === token;
 }
 
+function prefetchTakeawayBackgroundAssets() {
+  if (typeof Image !== "function") return;
+  for (const url of TAKEAWAY_BACKGROUND_ASSETS) {
+    if (!url) continue;
+    const image = new Image();
+    image.decoding = "async";
+    image.loading = "eager";
+    image.src = url;
+  }
+}
+
 function clearUserScopedCaches() {
   state.historyItems = [];
   state.historyDetailCache.clear();
@@ -1520,15 +1552,16 @@ function scheduleAuthenticatedPrefetch() {
   state.prefetch.token += 1;
   const token = state.prefetch.token;
   prefetchFixedExaminerTts(token);
+  scheduleIdleTask(() => prefetchTakeawayBackgroundAssets(), 450);
   scheduleIdleTask(() => prefetchSpeakingHistory(token), 550);
   scheduleIdleTask(() => prefetchWritingReports(token), 1300);
   scheduleIdleTask(() => prefetchLanguageTakeaways(token), 1800);
   scheduleIdleTask(() => prefetchWritingTakeaways(token), 1800);
+  scheduleIdleTask(() => prefetchWritingPrompts(token), 1800);
   scheduleIdleTask(() => prefetchSpellingDrill(token), 2200);
   scheduleIdleTask(() => prefetchCorpusEditor(token), 800);
   scheduleIdleTask(() => prefetchP1Corpus(token), 4200);
   scheduleIdleTask(() => prefetchP2Corpus(token), 5400);
-  scheduleIdleTask(() => prefetchWritingPrompts(token), 8200);
 }
 
 function normalizeQuestionBankScope(scope) {
@@ -1876,8 +1909,14 @@ function switchView(view, options = {}) {
   updatePracticeHeaderProgress();
   if (view === "history") loadHistory();
   if (view === "corpus") loadCorpusHome();
-  if (view === "takeawayBook") loadLanguageTakeaways();
-  if (view === "writingTakeawayBook") loadWritingTakeaways();
+  if (view === "takeawayBook") {
+    prefetchTakeawayBackgroundAssets();
+    loadLanguageTakeaways();
+  }
+  if (view === "writingTakeawayBook") {
+    prefetchTakeawayBackgroundAssets();
+    loadWritingTakeaways();
+  }
   if (view === "spellingDrill") loadSpellingDrill({ force: false, resetQueue: true });
   if (view === "writing") {
     setWritingActionPanelCollapsed(false);
@@ -6560,6 +6599,47 @@ function normalizeWritingPrompts(taskType, prompts = [], catalog = []) {
   return attachWritingDisplayLabels(taskType, prompts, catalog).map(withWritingPromptPattern);
 }
 
+function defaultTask2Prompt() {
+  return withWritingPromptPattern({ ...DEFAULT_TASK2_PROMPT });
+}
+
+function ensureImmediateTask2Prompt(options = {}) {
+  if (state.writing.taskType !== "task2" || state.writing.prompt || state.writing.entry) return false;
+  setWritingPrompt(defaultTask2Prompt(), false, {
+    replaceUrl: Boolean(options.replaceUrl),
+    skipUrl: Boolean(options.skipUrl),
+  });
+  text("writingSaveStatus", "\u9898\u5e93\u540e\u53f0\u51c6\u5907\u4e2d\uff0c\u53ef\u4ee5\u5148\u5199 Clean Water\u3002");
+  return true;
+}
+
+function warmWritingPromptBank(taskType, options = {}) {
+  const normalized = taskType || state.writing.taskType || "task1_academic";
+  return loadWritingPrompts(normalized)
+    .then((prompts) => {
+      if (
+        normalized === "task2"
+        && state.writing.prompt?.id === DEFAULT_TASK2_PROMPT.id
+        && !state.writing.entry
+        && !state.writing.dirty
+      ) {
+        const officialPrompt = prompts.find((prompt) => prompt.id === DEFAULT_TASK2_PROMPT.id);
+        if (officialPrompt) {
+          setWritingPrompt(officialPrompt, false, { replaceUrl: true });
+        }
+      }
+      if (normalized === "task1_academic") {
+        warmWritingPromptThumbnails(prompts, { hintLimit: options.hintLimit || 12 });
+      }
+      return prompts;
+    })
+    .catch((error) => {
+      if (options.showError) showWritingError(error);
+      else text("writingSaveStatus", error?.message || "\u5199\u4f5c\u9898\u5e93\u7a0d\u540e\u5237\u65b0\u3002");
+      return [];
+    });
+}
+
 const CAMBRIDGE_TASK2_TOPIC_TITLES = {
   "cambridge-7-test-1-task-2": "Talent And Training",
   "cambridge-7-test-3-task-2": "Job Satisfaction",
@@ -6925,7 +7005,15 @@ async function loadWriting() {
     return;
   }
   const firstLoad = !state.writing.prompt && !state.writing.entry;
-  if (firstLoad) setWritingPageLoading(true);
+  const canShowInstantTask2 = firstLoad
+    && state.writing.taskType === "task2"
+    && !state.writing.requestedEntryId
+    && !state.writing.requestedPromptId;
+  if (canShowInstantTask2) {
+    ensureImmediateTask2Prompt({ replaceUrl: true });
+  } else if (firstLoad) {
+    setWritingPageLoading(true);
+  }
   try {
     const summaryPromise = loadWritingSummary(false);
     if (await loadRequestedWritingEntry()) {
@@ -6933,9 +7021,9 @@ async function loadWriting() {
       summaryPromise.catch((error) => {
         text("writingSaveStatus", error?.message || "签到信息稍后刷新。");
       });
-      scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType).then((prompts) => warmWritingPromptThumbnails(prompts)), 80);
+      scheduleIdleTask(() => warmWritingPromptBank(state.writing.taskType), 80);
       const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
-      scheduleIdleTask(() => loadWritingPrompts(alternateTaskType).then((prompts) => warmWritingPromptThumbnails(prompts)), 1200);
+      scheduleIdleTask(() => warmWritingPromptBank(alternateTaskType), 1200);
       return;
     }
     const routePrompt = await resolveRequestedWritingPrompt();
@@ -6972,9 +7060,9 @@ async function loadWriting() {
     }).catch((error) => {
       text("writingSaveStatus", error?.message || "签到信息稍后刷新。");
     });
-    scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType).then((prompts) => warmWritingPromptThumbnails(prompts)), 80);
+    scheduleIdleTask(() => warmWritingPromptBank(state.writing.taskType), 80);
     const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
-    scheduleIdleTask(() => loadWritingPrompts(alternateTaskType).then((prompts) => warmWritingPromptThumbnails(prompts)), 1200);
+    scheduleIdleTask(() => warmWritingPromptBank(alternateTaskType), 1200);
   } catch (error) {
     showWritingError(error);
   } finally {
@@ -7062,17 +7150,14 @@ async function loadWritingPrompts(taskType) {
 }
 
 async function prefetchWritingPrompts(token) {
-  await loadWritingPrompts(state.writing.taskType || "task1_academic").catch(() => []);
+  await Promise.all([
+    loadWritingPrompts("task2").catch(() => []),
+    loadWritingPrompts("task1_academic").catch(() => []),
+  ]);
   if (!prefetchCanApply(token)) return;
   loadWritingPrompts("task1_academic")
     .then((prompts) => warmWritingPromptThumbnails(prompts, { hintLimit: 12 }))
     .catch(() => []);
-  const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
-  scheduleIdleTask(() => {
-    loadWritingPrompts(alternateTaskType)
-      .then((prompts) => warmWritingPromptThumbnails(prompts))
-      .catch(() => []);
-  }, 1200);
   scheduleIdleTask(() => warmLoadedTask1PromptThumbnails({ hintLimit: 12 }), 1500);
 }
 
@@ -11096,8 +11181,13 @@ function bindEvents() {
       state.writing.prompt = null;
       state.writing.dirty = false;
       if ($("writingAnswer")) $("writingAnswer").value = "";
-      // Over a public tunnel the prompt list fetch takes seconds; show a
-      // loading surface immediately instead of leaving the old task visible.
+      if (taskType === "task2") {
+        ensureImmediateTask2Prompt({ replaceUrl: true });
+        withPending(button, async () => {
+          await warmWritingPromptBank(taskType, { showError: true });
+        });
+        return;
+      }
       text("writingPromptType", writingTaskLabel(taskType));
       text("writingPromptTitle", "");
       text("writingPromptPickerTitle", "正在加载题库…");
@@ -11111,7 +11201,7 @@ function bindEvents() {
         `;
       }
       await withPending(button, async () => {
-        await loadWritingPrompts(taskType).catch(showWritingError);
+        await warmWritingPromptBank(taskType, { showError: true });
       });
       const prompts = state.writing.prompts[taskType] || [];
       if (prompts.length) setWritingPrompt(prompts[0], true);

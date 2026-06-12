@@ -8,6 +8,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
     <link rel="icon" href="/assets/brand/ielts-pencil-mark.svg?v=20260612-brand-icon-1" type="image/svg+xml">
+    <link rel="preload" href="/assets/takeaway/pencil-paper-study-bg.webp" as="image" type="image/webp">
+    <link rel="preload" href="/assets/takeaway/pencil-card-paper-light.webp" as="image" type="image/webp">
+    <link rel="preload" href="/assets/takeaway/pencil-card-paper-dark.webp" as="image" type="image/webp">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
@@ -34,8 +37,8 @@
         </button>
         <div id="writingTopbarActions" class="topbar-actions writing-topbar-actions hidden" aria-label="Writing controls">
           <div class="writing-task-switch" role="group" aria-label="Writing task type">
-            <button type="button" class="writing-task-option active" data-writing-task="task1_academic">Task 1</button>
-            <button type="button" class="writing-task-option" data-writing-task="task2">Task 2</button>
+            <button type="button" class="writing-task-option" data-writing-task="task1_academic">Task 1</button>
+            <button type="button" class="writing-task-option active" data-writing-task="task2">Task 2</button>
           </div>
           <button id="writingPromptPickerBtn" class="writing-picker-button" type="button">
             <span class="writing-picker-copy">
@@ -817,10 +820,10 @@
             <article class="writing-editor-card">
               <div class="writing-prompt-card">
                 <div>
-                  <span id="writingPromptType" class="writing-pill">Task 1 Academic</span>
-                  <h2 id="writingPromptTitle">选择一道题开始</h2>
+                  <span id="writingPromptType" class="writing-pill">Task 2</span>
+                  <h2 id="writingPromptTitle">Clean Water</h2>
                 </div>
-                <p id="writingPromptText">正在加载写作题库...</p>
+                <p id="writingPromptText">Access to clean water is a basic human right. Therefore, every home should have a water supply that is provided free of charge. Do you agree or disagree? Give reasons for your answer and include any relevant examples from your own knowledge or experience.</p>
                 <div id="writingPromptImage" class="writing-prompt-image hidden"></div>
               </div>
               <div class="writing-answer-header">
@@ -912,9 +915,9 @@
               </button>
             </header>
             <div class="writing-prompt-modal-toolbar">
-              <div class="writing-task-switch" data-active-task="task1" role="group" aria-label="Writing prompt modal task type">
-                <button type="button" class="writing-task-option active" data-writing-picker-task="task1_academic">Task 1</button>
-                <button type="button" class="writing-task-option" data-writing-picker-task="task2">Task 2</button>
+              <div class="writing-task-switch" data-active-task="task2" role="group" aria-label="Writing prompt modal task type">
+                <button type="button" class="writing-task-option" data-writing-picker-task="task1_academic">Task 1</button>
+                <button type="button" class="writing-task-option active" data-writing-picker-task="task2">Task 2</button>
               </div>
               <div id="writingPromptPatternPanel" class="writing-prompt-pattern-panel hidden">
                 <button id="writingPromptPatternToggle" class="writing-prompt-pattern-panel-head" type="button" aria-expanded="false" aria-controls="writingPromptPatternFilters">
@@ -1397,6 +1400,6 @@
     <script src="/api-client.js?v=20260612-server-sequence-prefetch-1"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260612-report-delete-brand-contrast-1"></script>
+    <script src="/app.js?v=20260612-task2-takeaway-preload-1"></script>
   </body>
 </html>
