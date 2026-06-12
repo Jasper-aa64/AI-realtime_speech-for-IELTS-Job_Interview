@@ -6292,10 +6292,11 @@ function applyWritingFrame() {
   answer.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function migrateLocalWritingFrameToServer(key) {
+async function migrateLocalWritingFrameToServer(key) {
   const local = localWritingFrameValue(key);
-  if (!local || writingFrameTemplates.has(key)) return;
-  saveWritingFrameTemplateToServer(key, local).catch(() => null);
+  if (!local || writingFrameTemplates.has(key)) return false;
+  await saveWritingFrameTemplateToServer(key, local);
+  return true;
 }
 
 async function openWritingFrameEditor() {
@@ -6314,9 +6315,22 @@ async function openWritingFrameEditor() {
   }
   try {
     await loadWritingFrameTemplates();
-    migrateLocalWritingFrameToServer(key);
-  } catch {
+    const migrated = await migrateLocalWritingFrameToServer(key);
+    if (migrated) {
+      const status = $("writingFrameSaveStatus");
+      if (status) {
+        status.textContent = "已同步本机旧框架";
+        status.classList.remove("error");
+        setTimeout(() => { if (status) status.textContent = ""; }, 1800);
+      }
+    }
+  } catch (error) {
     // LocalStorage remains a fallback if the user is offline or the session expires.
+    const status = $("writingFrameSaveStatus");
+    if (status) {
+      status.textContent = "本机有旧框架，但同步到账号失败；保存前请确认已登录。";
+      status.classList.add("error");
+    }
   }
   const editor = $("writingFrameEditor");
   if (editor) editor.value = writingFrameFor(taskType, frameType);
@@ -6356,7 +6370,6 @@ async function saveWritingFrame() {
   if (!editor || !key) return false;
   const status = $("writingFrameSaveStatus");
   try {
-    writeLocalWritingFrameValue(key, editor.value);
     if (status) {
       status.textContent = "正在保存…";
       status.classList.remove("error");
@@ -6369,7 +6382,11 @@ async function saveWritingFrame() {
     }
     return true;
   } catch (err) {
-    if (status) { status.textContent = "已暂存本机，同步失败：" + (err.message || err); status.classList.add("error"); }
+    writeLocalWritingFrameValue(key, editor.value);
+    if (status) {
+      status.textContent = "服务器同步失败，已留在本机草稿；请重新登录或刷新后再保存。";
+      status.classList.add("error");
+    }
     return false;
   }
 }
