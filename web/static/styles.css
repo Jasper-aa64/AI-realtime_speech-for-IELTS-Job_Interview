@@ -6391,12 +6391,56 @@ body.theme-dark .spelling-drill-panel {
   height: 38px;
   display: inline-grid;
   place-items: center;
-  border-radius: 12px;
-  background: #fff;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.95), transparent 34%),
+    linear-gradient(145deg, #fff 0%, color-mix(in srgb, var(--cat-light) 68%, #fff) 100%);
   color: var(--cat-color);
   border: 1px solid color-mix(in srgb, var(--cat-color) 18%, transparent);
   font-weight: 900;
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--cat-color) 10%, transparent);
+  box-shadow:
+    0 10px 22px color-mix(in srgb, var(--cat-color) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.p2-brainstorm-icon {
+  width: 26px;
+  height: 26px;
+  display: block;
+  overflow: visible;
+}
+
+.p2-brainstorm-icon-bulb {
+  fill: color-mix(in srgb, var(--cat-color) 16%, #fff);
+  stroke: var(--cat-color);
+  stroke-width: 1.9;
+  stroke-linejoin: round;
+}
+
+.p2-brainstorm-icon-base,
+.p2-brainstorm-icon-spark,
+.p2-brainstorm-icon-link {
+  fill: none;
+  stroke: color-mix(in srgb, var(--cat-color) 86%, #111827);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.p2-brainstorm-icon-spark {
+  stroke-width: 1.55;
+  opacity: 0.72;
+}
+
+.p2-brainstorm-icon-node {
+  fill: var(--cat-color);
+  stroke: #fff;
+  stroke-width: 1.2;
+}
+
+.p2-brainstorm-icon-link {
+  stroke-width: 1.45;
+  opacity: 0.72;
 }
 
 .p2-brainstorm-card-copy {
@@ -18069,6 +18113,31 @@ body.theme-dark .p2-brainstorm-index {
   background: var(--dark-primary-soft);
   border-color: var(--dark-primary-border);
   color: var(--dark-primary-text);
+}
+
+body.theme-dark .p2-brainstorm-card-mark {
+  background:
+    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.12), transparent 34%),
+    linear-gradient(145deg, rgba(34, 46, 58, 0.96), rgba(21, 29, 38, 0.98));
+  box-shadow:
+    0 12px 24px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .p2-brainstorm-icon-bulb {
+  fill: rgba(129, 140, 248, 0.18);
+  stroke: var(--dark-primary-text);
+}
+
+body.theme-dark .p2-brainstorm-icon-base,
+body.theme-dark .p2-brainstorm-icon-spark,
+body.theme-dark .p2-brainstorm-icon-link {
+  stroke: var(--dark-primary-text);
+}
+
+body.theme-dark .p2-brainstorm-icon-node {
+  fill: var(--dark-primary-text);
+  stroke: rgba(15, 23, 42, 0.95);
 }
 
 body.theme-dark .p2-topic-material-list button.has-corpus strong {

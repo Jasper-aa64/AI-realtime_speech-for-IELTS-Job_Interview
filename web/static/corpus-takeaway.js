@@ -1504,7 +1504,16 @@
             <span class="p2-topic-count">${brainstormCount}/${currentCards.length || 0}</span>
           </header>
           <button type="button" class="p2-brainstorm-open-card" data-p2-brainstorm-open>
-            <span class="p2-brainstorm-card-mark" aria-hidden="true">B</span>
+            <span class="p2-brainstorm-card-mark" aria-hidden="true">
+              <svg class="p2-brainstorm-icon" viewBox="0 0 32 32" focusable="false">
+                <path class="p2-brainstorm-icon-bulb" d="M16 5.5c-4.1 0-7.4 3.2-7.4 7.2 0 2.7 1.5 4.7 3.4 6.1.8.6 1.3 1.5 1.4 2.5h5.2c.1-1 .6-1.9 1.4-2.5 1.9-1.4 3.4-3.4 3.4-6.1 0-4-3.3-7.2-7.4-7.2Z"/>
+                <path class="p2-brainstorm-icon-base" d="M13.3 24h5.4M14 27h4"/>
+                <path class="p2-brainstorm-icon-spark" d="M4.8 15.8h3.1M24.1 15.8h3.1M7.2 7.2l2.2 2.2M24.8 7.2l-2.2 2.2M16 2.8v2.7"/>
+                <circle class="p2-brainstorm-icon-node" cx="8" cy="23.8" r="1.8"/>
+                <circle class="p2-brainstorm-icon-node" cx="24" cy="23.8" r="1.8"/>
+                <path class="p2-brainstorm-icon-link" d="M9.7 23.4c1.9-.5 3.2-1.2 4-2.1M22.3 23.4c-1.9-.5-3.2-1.2-4-2.1"/>
+              </svg>
+            </span>
             <span class="p2-brainstorm-card-copy">
               <strong>按题干快速记一句灵感</strong>
               <span>适合先放关键词、人物关系、地点、经历碎片，之后再整理成正式素材。</span>
