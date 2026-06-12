@@ -655,6 +655,34 @@
       ].map((value) => String(value || "").trim()).filter(Boolean);
     }
 
+    function markP1CorpusEntryCleared(entry) {
+      const storage = p1CorpusStorageEntry(entry || {});
+      const ids = p1CorpusEntryIds({
+        question_id: storage.question_id,
+        storage_question_id: entry?.storage_question_id,
+        legacy_question_id: entry?.legacy_question_id,
+      });
+      ids.forEach((id) => state.p1Corpus.clearedQuestionIds?.add?.(id));
+      const localEntry = ids.map((id) => findP1CorpusEntry(id)).find(Boolean);
+      if (localEntry) {
+        localEntry.corpus_text = "";
+        localEntry.last_ai_answer = "";
+        localEntry.updated_at = "";
+      }
+      if (state.p1Corpus.activeEntry) {
+        state.p1Corpus.activeEntry = {
+          ...state.p1Corpus.activeEntry,
+          corpus_text: "",
+          last_ai_answer: "",
+          band7_version: "",
+          aiAnswer: "",
+        };
+      }
+      renderP1CorpusTopics();
+      updateP1CorpusPeekButton(state.currentTurn);
+      state.p1Corpus.loadingPromise = null;
+    }
+
     function normalizeP1CorpusQuestionText(value) {
       return String(value || "")
         .toLowerCase()
@@ -1005,10 +1033,7 @@
         const headers = { "Content-Type": "application/json" };
         const csrfToken = getCsrfToken();
         if (csrfToken) headers["X-CSRFToken"] = csrfToken;
-        navigator.sendBeacon?.(
-          path,
-          new Blob([JSON.stringify(payload)], { type: "application/json" }),
-        ) || fetch(path, {
+        fetch(path, {
           method: "POST",
           credentials: "same-origin",
           headers,
@@ -1018,6 +1043,26 @@
       } catch (_error) {
         // Best-effort autosave during unload.
       }
+    }
+
+    function p1CorpusSavePayload(entry, corpusText) {
+      const storage = p1CorpusStorageEntry(entry);
+      const payload = {
+        question_id: storage.question_id,
+        topic: storage.topic,
+        question: storage.question,
+        corpus_text: String(corpusText || "").trim(),
+        source: "report_or_library",
+      };
+      const referenceAnswer = entry?.last_ai_answer || entry?.band7_version || entry?.aiAnswer || "";
+      if (referenceAnswer && payload.corpus_text) payload.last_ai_answer = referenceAnswer;
+      return payload;
+    }
+
+    function sendP1CorpusClearKeepalive(entry) {
+      const payload = p1CorpusSavePayload(entry, "");
+      if (!payload.question || !payload.question_id) return;
+      sendKeepaliveJson("/api/p1-corpus", payload);
     }
 
     function autosaveOpenCorpusEditors() {
@@ -1093,6 +1138,21 @@
       let preparedEntry = { ...entry, ...storage };
       const openedQuestionId = storage.question_id || "";
       const openedQuestion = storage.question || preparedEntry.question || preparedEntry.display_question || "";
+      const openedIds = p1CorpusEntryIds({
+        question_id: storage.question_id,
+        storage_question_id: preparedEntry.storage_question_id,
+        legacy_question_id: preparedEntry.legacy_question_id,
+      });
+      const wasCleared = openedIds.some((id) => state.p1Corpus.clearedQuestionIds?.has?.(id));
+      if (wasCleared) {
+        preparedEntry = {
+          ...preparedEntry,
+          corpus_text: "",
+          last_ai_answer: "",
+          band7_version: "",
+          aiAnswer: "",
+        };
+      }
       state.p1Corpus.activeEntry = preparedEntry;
       const initialTopic = preparedEntry.topic || preparedEntry.prompt?.topic || "";
       const initialQuestion = preparedEntry.display_question || preparedEntry.question || "";
@@ -1107,9 +1167,9 @@
         aiBox.dataset.markdownSource = initialAiAnswer || "";
         aiBox.innerHTML = initialAiAnswer ? renderSpokenAnswerMarkdown(initialAiAnswer) : "";
       }
-      text("p1CorpusSaveStatus", preparedEntry.corpus_text ? "" : "正在查找已保存语料...");
+      text("p1CorpusSaveStatus", preparedEntry.corpus_text || wasCleared ? "" : "正在查找已保存语料...");
       $("p1CorpusDialog")?.classList.remove("hidden");
-      if (!preparedEntry.corpus_text) {
+      if (!preparedEntry.corpus_text && !wasCleared) {
         setCorpusEditorLoading("p1CorpusText", true, {
           title: "正在查找已保存语料",
           detail: "没有找到也可以直接开始编辑。",
@@ -1120,7 +1180,7 @@
         if (!editor) setCorpusEditorLoading("p1CorpusText", false);
         setTimeout(() => editor?.focus?.() || $("p1CorpusText")?.focus(), 0);
       });
-      if ((storage.question_id || storage.question || preparedEntry.display_question) && !preparedEntry.corpus_text) {
+      if ((storage.question_id || storage.question || preparedEntry.display_question) && !preparedEntry.corpus_text && !wasCleared) {
         let refreshedCorpus = false;
         if (!(state.p1Corpus.topics || []).length) {
           try {
@@ -1198,46 +1258,58 @@
       const entry = state.p1Corpus.activeEntry;
       const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
       if (entry && !corpusText) {
-        const storage = p1CorpusStorageEntry(entry);
-        const localEntry = findP1CorpusEntry(storage.question_id || "");
-        if (localEntry) {
-          localEntry.corpus_text = "";
-          localEntry.last_ai_answer = "";
-          renderP1CorpusTopics();
-          updateP1CorpusPeekButton(state.currentTurn);
-        }
+        markP1CorpusEntryCleared(entry);
+        sendP1CorpusClearKeepalive(entry);
       }
       closeP1CorpusEditor();
-      if (entry) saveP1CorpusEntry({ entry, corpusText, silent: true }).catch(() => null);
+      if (entry) {
+        saveP1CorpusEntry({ entry, corpusText, silent: true })
+          .catch((error) => {
+            console.error(error);
+            text("p1CorpusSaveStatus", error?.message || "清空保存失败，请重试。");
+          });
+      }
     }
 
     async function saveP1CorpusEntry(options = {}) {
       const entry = options.entry || state.p1Corpus.activeEntry;
       if (!entry) return;
-      if (state.p1Corpus.saving) return;
+      const nextCorpusText = (options.corpusText ?? getCorpusMarkdownValue("p1CorpusText")).trim();
+      if (state.p1Corpus.saving) {
+        if (!nextCorpusText) {
+          await state.p1Corpus.savingPromise?.catch(() => null);
+          return saveP1CorpusEntry(options);
+        }
+        return;
+      }
       state.p1Corpus.saving = true;
       const button = $("saveP1CorpusBtn");
       const original = button?.textContent || "保存语料";
-      const nextCorpusText = (options.corpusText ?? getCorpusMarkdownValue("p1CorpusText")).trim();
       if (button && !options.silent) {
         button.disabled = true;
         button.textContent = "保存中...";
       }
       if (!options.silent) text("p1CorpusSaveStatus", "");
+      const savePromise = (async () => {
       try {
         const storage = p1CorpusStorageEntry(entry);
-        const payload = {
-          question_id: storage.question_id,
-          topic: storage.topic,
-          question: storage.question,
-          corpus_text: nextCorpusText,
-          source: "report_or_library",
-        };
-        const referenceAnswer = entry.last_ai_answer || entry.band7_version || entry.aiAnswer || "";
-        if (referenceAnswer) payload.last_ai_answer = referenceAnswer;
+        const payload = p1CorpusSavePayload(entry, nextCorpusText);
+        if (nextCorpusText) {
+          p1CorpusEntryIds({
+            question_id: storage.question_id,
+            storage_question_id: entry.storage_question_id,
+            legacy_question_id: entry.legacy_question_id,
+          }).forEach((id) => state.p1Corpus.clearedQuestionIds?.delete?.(id));
+        }
         const saved = await api("/api/p1-corpus", payload);
         if (!String(saved.corpus_text || "").trim()) {
           saved.last_ai_answer = "";
+          markP1CorpusEntryCleared({
+            ...entry,
+            ...saved,
+            storage_question_id: storage.question_id,
+            legacy_question_id: entry.legacy_question_id,
+          });
         }
         if (!options.silent) text("p1CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
         const updated = upsertP1CorpusEntry(saved);
@@ -1253,7 +1325,7 @@
           state.p1Corpus.activeEntry = {
             ...activeEntry,
             corpus_text: (updated || saved)?.corpus_text ?? nextCorpusText,
-            last_ai_answer: (updated || saved)?.last_ai_answer || activeEntry.last_ai_answer || "",
+            last_ai_answer: (updated || saved)?.last_ai_answer || "",
             updated_at: (updated || saved)?.updated_at || activeEntry.updated_at || "",
             display_question: activeEntry.display_question || activeEntry.question || saved.question || "",
           };
@@ -1263,24 +1335,22 @@
         if (options.closeOnSuccess) closeP1CorpusEditor();
       } catch (error) {
         if (String(error?.message || error || "").includes("Corpus text is empty") && !nextCorpusText) {
-          const localEntry = findP1CorpusEntry(storage.question_id || "");
-          if (localEntry) {
-            localEntry.corpus_text = "";
-            localEntry.last_ai_answer = "";
-          }
-          renderP1CorpusTopics();
-          updateP1CorpusPeekButton(state.currentTurn);
+          markP1CorpusEntryCleared(entry);
           return;
         }
         if (!options.silent) text("p1CorpusSaveStatus", error.message || String(error));
         if (options.closeOnError) closeP1CorpusEditor();
       } finally {
         state.p1Corpus.saving = false;
+        state.p1Corpus.savingPromise = null;
         if (button && !options.silent) {
           button.disabled = false;
           button.textContent = original;
         }
       }
+      })();
+      state.p1Corpus.savingPromise = savePromise;
+      return savePromise;
     }
 
     async function loadP2Corpus(options = {}) {

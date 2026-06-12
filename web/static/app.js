@@ -55,6 +55,8 @@ const state = {
     activeEntry: null,
     previousPracticeView: "p1",
     saving: false,
+    savingPromise: null,
+    clearedQuestionIds: new Set(),
   },
   p2Corpus: {
     categories: [],
@@ -1515,6 +1517,8 @@ function clearUserScopedCaches() {
   state.p1Corpus.topics = [];
   state.p1Corpus.loaded = false;
   state.p1Corpus.loadingPromise = null;
+  state.p1Corpus.savingPromise = null;
+  state.p1Corpus.clearedQuestionIds.clear();
   state.p2Corpus.categories = [];
   state.p2Corpus.currentPart2Cards = [];
   state.p2Corpus.loaded = false;
@@ -1661,6 +1665,19 @@ async function fetchP2CorpusPayload(options = {}) {
 
 function applyP1CorpusPayload(payload) {
   state.p1Corpus.topics = payload.topics || [];
+  for (const topic of state.p1Corpus.topics) {
+    for (const question of topic.questions || []) {
+      const ids = [
+        question.question_id,
+        question.storage_question_id,
+        question.legacy_question_id,
+      ].map((value) => String(value || "").trim()).filter(Boolean);
+      if (ids.some((id) => state.p1Corpus.clearedQuestionIds.has(id))) {
+        question.corpus_text = "";
+        question.last_ai_answer = "";
+      }
+    }
+  }
   state.p1Corpus.loaded = true;
   const stats = $("p1CorpusStats");
   if (stats) {
@@ -10957,7 +10974,7 @@ function bindEvents() {
   });
   $("saveP1CorpusBtn")?.addEventListener("click", (event) => {
     event.preventDefault();
-    saveAndCloseP1CorpusEditor().catch(() => null);
+    saveAndCloseP1CorpusEditor().catch(showError);
   });
   $("copyP1AiAnswerBtn")?.addEventListener("click", async () => {
     const box = $("p1CorpusAiAnswer");
