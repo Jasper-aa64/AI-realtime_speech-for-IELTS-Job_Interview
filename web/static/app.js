@@ -5185,6 +5185,57 @@ function visibleWritingReportItems(items = state.writing.reportEntries) {
   return items.filter((item) => writingReportPart(item) === filter);
 }
 
+function restoreSpeakingHistoryAfterDeleteFailure(snapshot) {
+  state.historyItems = snapshot.items;
+  state.activeHistoryId = snapshot.activeId;
+  if (snapshot.cachedDetail) state.historyDetailCache.set(snapshot.attemptId, snapshot.cachedDetail);
+  renderHistoryList(state.historyItems);
+}
+
+function optimisticallyRemoveSpeakingReport(attemptId) {
+  const snapshot = {
+    attemptId,
+    items: state.historyItems.slice(),
+    activeId: state.activeHistoryId,
+    cachedDetail: state.historyDetailCache.get(attemptId) || null,
+  };
+  state.historyItems = state.historyItems.filter((item) => item.id !== attemptId);
+  state.historyDetailCache.delete(attemptId);
+  if (state.activeHistoryId === attemptId) {
+    const visible = visibleSpeakingHistoryItems(state.historyItems);
+    state.activeHistoryId = visible[0]?.id || state.historyItems[0]?.id || null;
+  }
+  renderHistoryList(state.historyItems);
+  return snapshot;
+}
+
+function restoreWritingReportsAfterDeleteFailure(snapshot) {
+  state.writing.reportEntries = snapshot.items;
+  state.writing.activeReportId = snapshot.activeId;
+  state.writing.activeReportDetail = snapshot.activeDetail;
+  if (snapshot.cachedDetail) state.writing.reportDetailCache.set(snapshot.entryId, snapshot.cachedDetail);
+  renderWritingReports(state.writing.reportEntries).catch(showError);
+}
+
+function optimisticallyRemoveWritingReport(entryId) {
+  const snapshot = {
+    entryId,
+    items: state.writing.reportEntries.slice(),
+    activeId: state.writing.activeReportId,
+    activeDetail: state.writing.activeReportDetail,
+    cachedDetail: state.writing.reportDetailCache.get(entryId) || null,
+  };
+  state.writing.reportDetailCache.delete(entryId);
+  state.writing.reportEntries = state.writing.reportEntries.filter((item) => item.id !== entryId);
+  if (state.writing.activeReportId === entryId) {
+    const visible = visibleWritingReportItems(state.writing.reportEntries);
+    state.writing.activeReportId = visible[0]?.id || state.writing.reportEntries[0]?.id || null;
+    state.writing.activeReportDetail = null;
+  }
+  renderWritingReports(state.writing.reportEntries).catch(showError);
+  return snapshot;
+}
+
 function closeSpeakingReportFilterMenu() {
   const button = $("speakingReportFilterBtn");
   const menu = $("speakingReportFilterMenu");
@@ -5488,15 +5539,11 @@ function closeHistoryItemMenu() {
 
 function showDeleteConfirm(attemptId) {
   showConfirmDelete("确定要删除这条练习记录吗？", async () => {
+    const snapshot = optimisticallyRemoveSpeakingReport(attemptId);
     try {
-      if (state.activeHistoryId === attemptId) {
-        $("detailPanel").innerHTML = centeredLoadingHtml("正在删除报告", "删除完成后会自动刷新列表。");
-      }
       await api(`/api/history/${attemptId}`, null, { method: "DELETE" });
-      if (state.activeHistoryId === attemptId) state.activeHistoryId = null;
-      state.historyDetailCache.delete(attemptId);
-      await loadHistory(false);
     } catch (err) {
+      restoreSpeakingHistoryAfterDeleteFailure(snapshot);
       showError(err);
     }
   });
@@ -7270,29 +7317,17 @@ function showWritingReportItemMenu(anchor, entryId) {
 
 async function deleteWritingReport(entryId) {
   if (!entryId) return;
+  const snapshot = optimisticallyRemoveWritingReport(entryId);
   try {
-    if (state.writing.activeReportId === entryId) {
-      $("writingReportDetail").innerHTML = centeredLoadingHtml("正在删除写作报告", "删除完成后会自动刷新列表。");
-    }
     await api(`/api/writing/entries/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
-    state.writing.reportDetailCache.delete(entryId);
-    state.writing.reportEntries = state.writing.reportEntries.filter((item) => item.id !== entryId);
-    if (state.writing.activeReportId === entryId) {
-      state.writing.activeReportId = state.writing.reportEntries[0]?.id || null;
-      state.writing.activeReportDetail = null;
-    }
     if (state.writing.entry?.id === entryId) {
       state.writing.entry = null;
       state.writing.dirty = false;
       loadWritingSummary(false).catch(() => null);
       renderWritingSurface();
     }
-    if (!state.writing.reportEntries.length) {
-      await loadWritingReports(false);
-      return;
-    }
-    await renderWritingReports(state.writing.reportEntries);
   } catch (error) {
+    restoreWritingReportsAfterDeleteFailure(snapshot);
     showError(error);
   }
 }

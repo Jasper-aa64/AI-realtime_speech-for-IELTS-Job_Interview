@@ -659,7 +659,18 @@ button:active {
   flex: 0 0 26px;
   border-radius: 7px;
   display: block;
+  padding: 3px;
+  background: linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(232, 224, 210, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.62);
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+body.theme-dark .brand-mark,
+body.theme-dark.font-academic .brand-mark,
+body.theme-dark.font-popular .brand-mark {
+  background: linear-gradient(180deg, #fffdf6, #e9dfcf);
+  border-color: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18), 0 8px 18px rgba(0, 0, 0, 0.28);
 }
 
 .status, .muted {
