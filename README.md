@@ -4,6 +4,12 @@
 
 ![IELTS Studio home](docs/readme-assets/hero-device.jpg)
 
+## Public Preview
+
+- Current public URL: https://jerusalem-competitors-formats-higher.trycloudflare.com
+- Local service URL: http://127.0.0.1:8767/
+- Note: this uses a Cloudflare quick tunnel, so the URL may change if the tunnel process restarts.
+
 ## Product Screens
 
 ### Speaking Practice
