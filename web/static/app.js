@@ -1665,6 +1665,7 @@ async function fetchP2CorpusPayload(options = {}) {
 }
 
 function applyP1CorpusPayload(payload) {
+  corpusTakeawayController?.hydrateP1CorpusClearedIds?.();
   state.p1Corpus.topics = payload.topics || [];
   for (const topic of state.p1Corpus.topics) {
     for (const question of topic.questions || []) {

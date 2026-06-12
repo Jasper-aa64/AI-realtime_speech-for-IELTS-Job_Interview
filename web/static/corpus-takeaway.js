@@ -44,6 +44,7 @@
     const EXPRESSION_REPLACEMENT_STORAGE_KEY = "ielts-expression-replacements";
     const TAKEAWAY_SRS_STORAGE_KEY = "ielts-takeaway-srs";
     const TAKEAWAY_DAILY_REVIEW_LIMIT = 20;
+    const P1_CORPUS_CLEARED_STORAGE_KEY = "ielts-p1-corpus-cleared";
     const DEFAULT_EXPRESSION_REPLACEMENTS = [
       ["important", "vital / crucial / essential / significant / critical / indispensable / of great importance"],
       ["important for", "be essential for / be crucial for / be vital for / be indispensable to / contribute to / play a key role in / play a vital role in"],
@@ -656,7 +657,39 @@
       ].map((value) => String(value || "").trim()).filter(Boolean);
     }
 
+    function p1CorpusClearedStorageKey() {
+      const userKey = state.account?.user?.id || state.account?.user?.username || "anonymous";
+      return `${P1_CORPUS_CLEARED_STORAGE_KEY}:${userKey}`;
+    }
+
+    function loadP1CorpusClearedIds() {
+      try {
+        const raw = window.localStorage?.getItem(p1CorpusClearedStorageKey());
+        const ids = JSON.parse(raw || "[]");
+        return new Set(Array.isArray(ids) ? ids.map((id) => String(id || "").trim()).filter(Boolean) : []);
+      } catch (_error) {
+        return new Set();
+      }
+    }
+
+    function persistP1CorpusClearedIds() {
+      try {
+        window.localStorage?.setItem(
+          p1CorpusClearedStorageKey(),
+          JSON.stringify(Array.from(state.p1Corpus.clearedQuestionIds || [])),
+        );
+      } catch (_error) {
+        // Local tombstones are a best-effort guard against stale server reads.
+      }
+    }
+
+    function hydrateP1CorpusClearedIds() {
+      if (state.p1Corpus.clearedQuestionIds?.size) return;
+      state.p1Corpus.clearedQuestionIds = loadP1CorpusClearedIds();
+    }
+
     function markP1CorpusEntryCleared(entry) {
+      hydrateP1CorpusClearedIds();
       const storage = p1CorpusStorageEntry(entry || {});
       const ids = p1CorpusEntryIds({
         question_id: storage.question_id,
@@ -664,6 +697,7 @@
         legacy_question_id: entry?.legacy_question_id,
       });
       ids.forEach((id) => state.p1Corpus.clearedQuestionIds?.add?.(id));
+      persistP1CorpusClearedIds();
       const localEntry = ids.map((id) => findP1CorpusEntry(id)).find(Boolean);
       if (localEntry) {
         localEntry.corpus_text = "";
@@ -1029,25 +1063,8 @@
       return saved;
     }
 
-    async function sendKeepaliveJson(path, payload) {
-      try {
-        const headers = { "Content-Type": "application/json" };
-        const csrfToken = getCsrfToken() || await ensureCsrfToken?.();
-        if (!csrfToken) {
-          await api(path, payload);
-          return;
-        }
-        if (csrfToken) headers["X-CSRFToken"] = csrfToken;
-        fetch(path, {
-          method: "POST",
-          credentials: "same-origin",
-          headers,
-          body: JSON.stringify(payload),
-          keepalive: true,
-        }).catch(() => null);
-      } catch (_error) {
-        // Best-effort autosave during unload.
-      }
+    function sendKeepaliveJson(path, payload) {
+      return api(path, payload, { keepalive: true });
     }
 
     function p1CorpusSavePayload(entry, corpusText) {
@@ -1067,7 +1084,9 @@
     async function sendP1CorpusClearKeepalive(entry) {
       const payload = p1CorpusSavePayload(entry, "");
       if (!payload.question || !payload.question_id) return;
-      await sendKeepaliveJson("/api/p1-corpus", payload);
+      const saved = await sendKeepaliveJson("/api/p1-corpus", payload);
+      markP1CorpusEntryCleared({ ...entry, ...saved });
+      return saved;
     }
 
     function autosaveOpenCorpusEditors() {
@@ -1083,7 +1102,7 @@
           corpus_text: corpusText,
           last_ai_answer: p1Entry.last_ai_answer || p1Entry.band7_version || p1Entry.aiAnswer || "",
           source: "report_or_library",
-        });
+        }).catch(() => null);
       }
       const p2Entry = state.p2Corpus.activeEntry;
       if (p2Entry && !$("#p2CorpusDialog")?.classList.contains("hidden")) {
@@ -1097,7 +1116,7 @@
             corpus_text: materialText,
             metadata: { brainstorm_idea: $("p2CorpusBrainstormIdea")?.value || p2Entry.brainstorm_idea || "" },
             source: "p2_bank_corpus_editor",
-          });
+          }).catch(() => null);
           return;
         }
         sendKeepaliveJson("/api/p2-corpus", {
@@ -1108,7 +1127,7 @@
           p3_follow_up_text: p2Entry.p3_follow_up_text || "",
           linked_question: p2Entry.linked_question || "",
           source: "p2_corpus_editor",
-        });
+        }).catch(() => null);
       }
       const p2P3Entry = state.p2Corpus.activeP3Entry;
       if (p2P3Entry && !$("#p2CorpusP3Dialog")?.classList.contains("hidden")) {
@@ -1122,7 +1141,7 @@
           p3_follow_up_text: getCorpusMarkdownValue("p2CorpusP3FollowUp").trim(),
           linked_question: p2P3Entry.linked_question || "",
           source: "p2_corpus_p3_editor",
-        });
+        }).catch(() => null);
       }
     }
 
@@ -1265,7 +1284,14 @@
       const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
       if (entry && !corpusText) {
         markP1CorpusEntryCleared(entry);
-        await sendP1CorpusClearKeepalive(entry);
+        closeP1CorpusEditor();
+        state.p1Corpus.savingPromise?.catch(() => null)
+          .then(() => sendP1CorpusClearKeepalive(entry))
+          .catch((error) => {
+            console.error(error);
+            text("p1CorpusSaveStatus", error?.message || "清空保存失败，请重试。");
+          });
+        return;
       }
       closeP1CorpusEditor();
       if (entry) {
@@ -1306,6 +1332,7 @@
             storage_question_id: entry.storage_question_id,
             legacy_question_id: entry.legacy_question_id,
           }).forEach((id) => state.p1Corpus.clearedQuestionIds?.delete?.(id));
+          persistP1CorpusClearedIds();
         }
         const saved = await api("/api/p1-corpus", payload);
         if (!String(saved.corpus_text || "").trim()) {
@@ -4143,6 +4170,7 @@
       closeP1CorpusEditor,
       saveAndCloseP1CorpusEditor,
       saveP1CorpusEntry,
+      hydrateP1CorpusClearedIds,
       loadP2Corpus,
       renderP2CorpusTopics,
       loadCorpusHome,

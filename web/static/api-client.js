@@ -29,6 +29,7 @@
       headers: { ...(requestOptions.headers || {}) },
     };
     if (requestOptions.signal) options.signal = requestOptions.signal;
+    if (requestOptions.keepalive) options.keepalive = true;
     if (body !== null) {
       options.headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(body);
