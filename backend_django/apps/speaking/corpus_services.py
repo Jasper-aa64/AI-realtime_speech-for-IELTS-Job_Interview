@@ -24,6 +24,7 @@ from django.utils import timezone
 
 from .exceptions import SpeakingError
 from .models import (
+    ExpressionReplacementEntry,
     LanguageTakeawayEntry,
     P1CorpusEntry,
     P2BankCorpusEntry,
@@ -434,9 +435,8 @@ def save_p1_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
     submitted_question_id = clean_report_text(str(payload.get("question_id") or ""))
     question_id = p1_question_id(topic, question)
     corpus_text = clean_markdown_text(str(payload.get("corpus_text") or ""))[:8000]
-    if not corpus_text.strip():
-        raise SpeakingError("Corpus text is empty.")
-    last_ai_answer = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:8000]
+    has_last_ai_answer = "last_ai_answer" in payload
+    last_ai_answer = clean_markdown_text(str(payload.get("last_ai_answer") or ""))[:8000] if has_last_ai_answer else None
     entry = P1CorpusEntry.objects.filter(user=user, question_id=question_id).first()
     if not entry and submitted_question_id and submitted_question_id != question_id:
         submitted_entry = P1CorpusEntry.objects.filter(user=user, question_id=submitted_question_id).first()
@@ -449,7 +449,10 @@ def save_p1_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
     entry.topic = topic
     entry.question = question
     entry.corpus_text = corpus_text
-    entry.last_ai_answer = last_ai_answer
+    if has_last_ai_answer:
+        entry.last_ai_answer = last_ai_answer or ""
+    if not corpus_text.strip():
+        entry.last_ai_answer = ""
     entry.metadata = {
         "saved_from": clean_report_text(str(payload.get("source") or "p1_corpus")),
         "legacy_question_id": submitted_question_id if submitted_question_id and submitted_question_id != question_id else "",
@@ -845,8 +848,6 @@ def save_p2_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
     title = clean_report_text(str(payload.get("title") or "未命名素材"))[:200] or "未命名素材"
     material_text = clean_markdown_text(str(payload.get("material_text") or ""))[:12000]
     p3_follow_up_text = clean_markdown_text(str(payload.get("p3_follow_up_text") or ""))[:8000]
-    if not material_text.strip() and not p3_follow_up_text.strip():
-        raise SpeakingError("P2 material text is empty.")
     linked_question = clean_report_text(str(payload.get("linked_question") or ""))[:1000]
     entry_id = clean_report_text(str(payload.get("entry_id") or "")) or p2_entry_id(category, title, linked_question)
     metadata = {
@@ -906,10 +907,104 @@ def normalize_takeaway_review_kind(kind: str | None) -> str:
     return value
 
 
+def expression_replacement_payload(entry: ExpressionReplacementEntry) -> dict[str, Any]:
+    return {
+        "item_id": entry.item_id,
+        "id": entry.item_id,
+        "source": entry.source,
+        "replacements": entry.replacements,
+        "updated_at": timezone.localtime(entry.updated_at).isoformat() if entry.updated_at else "",
+    }
+
+
+def expression_replacement_list(user, kind: str) -> dict[str, Any]:
+    value = normalize_takeaway_review_kind(kind)
+    rows = ExpressionReplacementEntry.objects.filter(user=user, kind=value).order_by("created_at", "id")
+    items = [expression_replacement_payload(row) for row in rows]
+    return {"kind": value, "items": items, "count": len(items)}
+
+
+def save_expression_replacement(user, kind: str, item_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    value = normalize_takeaway_review_kind(kind)
+    clean_item_id = str(item_id or "").strip()
+    if not clean_item_id:
+        raise SpeakingError("Expression replacement item_id is required")
+    if len(clean_item_id) > 160:
+        raise SpeakingError("Expression replacement item_id is too long")
+    source = str((payload or {}).get("source") or "").strip()
+    replacements = str((payload or {}).get("replacements") or "").strip()
+    if not source and not replacements:
+        raise SpeakingError("Expression replacement content is required")
+    row, _created = ExpressionReplacementEntry.objects.update_or_create(
+        user=user,
+        kind=value,
+        item_id=clean_item_id,
+        defaults={"source": source, "replacements": replacements},
+    )
+    return expression_replacement_payload(row)
+
+
+def delete_expression_replacement(user, kind: str, item_id: str) -> dict[str, Any]:
+    value = normalize_takeaway_review_kind(kind)
+    clean_item_id = str(item_id or "").strip()
+    ExpressionReplacementEntry.objects.filter(user=user, kind=value, item_id=clean_item_id).delete()
+    return {"ok": True, "item_id": clean_item_id}
+
+
 def takeaway_review_state_payload(user, kind: str) -> dict[str, Any]:
     value = normalize_takeaway_review_kind(kind)
     row = TakeawayReviewState.objects.filter(user=user, kind=value).first()
     return row.state if row and isinstance(row.state, dict) else {}
+
+
+def _review_record_last(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("last") or "")
+    return ""
+
+
+def _review_record_reps(value: Any) -> int:
+    if not isinstance(value, dict):
+        return 0
+    raw = value.get("reps") or 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _prefer_review_record(current: Any, incoming: Any) -> Any:
+    if not isinstance(current, dict):
+        return incoming
+    if not isinstance(incoming, dict):
+        return current
+    current_last = _review_record_last(current)
+    incoming_last = _review_record_last(incoming)
+    if incoming_last > current_last:
+        return incoming
+    if incoming_last < current_last:
+        return current
+    return incoming if _review_record_reps(incoming) > _review_record_reps(current) else current
+
+
+def _prefer_daily_batch(current: Any, incoming: Any) -> Any:
+    if not isinstance(current, dict):
+        return incoming
+    if not isinstance(incoming, dict):
+        return current
+    return incoming if str(incoming.get("day") or "") >= str(current.get("day") or "") else current
+
+
+def merge_takeaway_review_state(current: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(current or {})
+    for key, value in (incoming or {}).items():
+        if key == "__daily_batch":
+            merged[key] = _prefer_daily_batch(merged.get(key), value)
+        elif key.startswith("__"):
+            merged[key] = value
+        else:
+            merged[key] = _prefer_review_record(merged.get(key), value)
+    return merged
 
 
 def save_takeaway_review_state(user, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -917,11 +1012,12 @@ def save_takeaway_review_state(user, kind: str, payload: dict[str, Any]) -> dict
     state = payload.get("state") if isinstance(payload, dict) else {}
     if not isinstance(state, dict):
         raise SpeakingError("Invalid takeaway review state")
-    row, _created = TakeawayReviewState.objects.update_or_create(
-        user=user,
-        kind=value,
-        defaults={"state": state},
-    )
+    row = TakeawayReviewState.objects.filter(user=user, kind=value).first()
+    if row:
+        row.state = merge_takeaway_review_state(row.state if isinstance(row.state, dict) else {}, state)
+        row.save(update_fields=["state", "updated_at"])
+    else:
+        row = TakeawayReviewState.objects.create(user=user, kind=value, state=state)
     return {
         "kind": value,
         "review_state": row.state if isinstance(row.state, dict) else {},

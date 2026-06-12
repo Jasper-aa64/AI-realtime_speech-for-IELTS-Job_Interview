@@ -7,11 +7,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
+    <link rel="icon" href="/assets/brand/ielts-pencil-mark.svg?v=20260612-brand-icon-1" type="image/svg+xml">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260612-public-perf-3">
+    <link rel="stylesheet" href="/styles.css?v=20260612-brand-icon-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -76,7 +77,10 @@
       <aside class="nav" aria-label="IELTS practice navigation">
         <div class="nav-top">
           <div class="nav-top-left">
-            <div class="brand" data-i18n="app.title">IELTS Studio</div>
+            <div class="brand">
+              <img class="brand-mark" src="/assets/brand/ielts-pencil-mark.svg?v=20260612-brand-icon-1" alt="" aria-hidden="true">
+              <span data-i18n="app.title">IELTS Studio</span>
+            </div>
             <div class="status" id="bankStatus">Loading bank...</div>
           </div>
           <div class="nav-top-right">
@@ -162,13 +166,15 @@
               <img src="/assets/home/sketch-workflow.webp" alt="铅笔稿风格的 IELTS 学习流程草图">
               <div class="sketch-flow-overlay" aria-hidden="true">
                 <span>Today</span>
-                <svg class="sketch-flow-arrows" viewBox="0 0 760 430" preserveAspectRatio="none" aria-hidden="true">
-                  <path class="sketch-flow-arrow-main" d="M318 166 C415 154 500 188 548 244"></path>
-                  <path class="sketch-flow-arrow-main" d="M518 306 C487 355 404 372 314 350"></path>
-                  <path class="sketch-flow-arrow-head" d="M538 208 C542 226 548 239 566 248"></path>
-                  <path class="sketch-flow-arrow-head" d="M518 228 C536 231 551 238 566 248"></path>
-                  <path class="sketch-flow-arrow-head" d="M358 333 C338 338 323 344 309 358"></path>
-                  <path class="sketch-flow-arrow-head" d="M354 370 C337 365 323 362 309 358"></path>
+                <svg class="sketch-flow-connectors" viewBox="0 0 760 430" preserveAspectRatio="none" aria-hidden="true">
+                  <defs>
+                    <marker id="sketchFlowConnectorHead" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="strokeWidth">
+                      <path d="M0 0 L9 4.5 L0 9 Z"></path>
+                    </marker>
+                  </defs>
+                  <path class="sketch-flow-connector connector-1" d="M332 172 C410 160 482 181 540 226"></path>
+                  <path class="sketch-flow-connector connector-2" d="M542 300 C486 346 405 362 318 344"></path>
+                  <path class="sketch-flow-connector connector-3" d="M226 328 C202 282 213 235 252 199"></path>
                 </svg>
                 <div class="sketch-flow-step step-1"><b>1</b><strong>输入</strong><small>P1 / P2 / P3 真题练习</small></div>
                 <div class="sketch-flow-step step-2"><b>2</b><strong>反馈</strong><small>口语报告与写作批改</small></div>
@@ -628,6 +634,10 @@
                 <input id="p2CorpusTitle" type="text" placeholder="例如：热心的大学老师 / 一次失败后重来的项目">
               </label>
             </div>
+            <label id="p2CorpusBrainstormField" class="p2-bank-brainstorm-field hidden" for="p2CorpusBrainstormIdea">
+              <span class="p1-corpus-label">串题灵感</span>
+              <input id="p2CorpusBrainstormIdea" type="text" placeholder="一句灵感：人物 / 地点 / 经历 / 可串题角度" autocomplete="off">
+            </label>
             <label id="p2CorpusTextLabel" class="p1-corpus-label" for="p2CorpusText">串题素材</label>
             <textarea id="p2CorpusText" class="p1-corpus-textarea" spellcheck="true"></textarea>
             <div class="p1-corpus-dialog-actions">
@@ -745,7 +755,7 @@
         </div>
         <div id="writingImageViewer" class="writing-image-viewer hidden" role="dialog" aria-modal="true" aria-label="查看写作图片">
           <img id="writingImageViewerImg" src="" alt="Task 1 chart enlarged">
-          <div class="writing-image-viewer-hint">Shift + Space / Space + Shift 打开或关闭预览</div>
+          <div class="writing-image-viewer-hint">Shift + Space 打开或关闭预览</div>
         </div>
         <div id="languageTakeawayPopup" class="language-takeaway-popup hidden" role="dialog" aria-label="Language Takeaway">
           <header id="languageTakeawayPopupHandle">
@@ -797,6 +807,7 @@
                 <button id="closeExpressionReplacementBtn" type="button">完成</button>
               </div>
             </header>
+            <p id="expressionReplacementStatus" class="expression-replacement-status" aria-live="polite"></p>
             <div id="expressionReplacementList" class="expression-replacement-list"></div>
           </div>
         </div>
@@ -1373,11 +1384,11 @@
       </main>
     </div>
     <script src="/shared-ui.js?v=20260612-writing-takeaway-optimistic-1"></script>
-    <script src="/writing-image-preload.js?v=20260612-public-perf-3"></script>
+    <script src="/writing-image-preload.js?v=20260612-thumb-warm-fix-1"></script>
     <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
-    <script src="/writing-prompt-picker.js?v=20260612-public-perf-3"></script>
-    <script src="/corpus-markdown-editor.js?v=20260606-single-editor-source"></script>
-    <script src="/corpus-takeaway.js?v=20260612-writing-takeaway-optimistic-1"></script>
+    <script src="/writing-prompt-picker.js?v=20260612-thumb-warm-fix-1"></script>
+    <script src="/corpus-markdown-editor.js?v=20260612-p1-md-empty-close-fix-1"></script>
+    <script src="/corpus-takeaway.js?v=20260612-p1-md-empty-close-fix-1"></script>
     <script src="/spelling-drill.js?v=20260612-writing-takeaway-optimistic-1"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
@@ -1386,6 +1397,6 @@
     <script src="/api-client.js?v=20260612-server-sequence-prefetch-1"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260612-writing-takeaway-optimistic-1"></script>
+    <script src="/app.js?v=20260612-p1-md-empty-close-fix-1"></script>
   </body>
 </html>

@@ -7,11 +7,13 @@ from .services import (
     abort_attempt,
     complete_turn,
     delete_attempt,
+    delete_expression_replacement,
     delete_language_takeaway,
     delete_p2_corpus,
     delete_writing_takeaway,
     detail,
     examiner_tts_status,
+    expression_replacement_list,
     get_turn_audio_path,
     history,
     caiyun_translate_text,
@@ -32,6 +34,7 @@ from .services import (
     save_p2_bank_corpus,
     save_p2_corpus,
     save_p3_bank_followup_corpus,
+    save_expression_replacement,
     save_language_takeaway,
     save_writing_takeaway,
     save_takeaway_review_state,
@@ -236,6 +239,30 @@ def takeaway_review_state_view(request, kind: str):
         return auth_error
     try:
         return JsonResponse(save_takeaway_review_state(request.user, kind, _json_payload(request)))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["GET"])
+def expression_replacements_view(request, kind: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(expression_replacement_list(request.user, kind))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["PUT", "DELETE"])
+def expression_replacement_detail_view(request, kind: str, item_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        if request.method == "DELETE":
+            return JsonResponse(delete_expression_replacement(request.user, kind, item_id))
+        return JsonResponse(save_expression_replacement(request.user, kind, item_id, _json_payload(request)))
     except SpeakingError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 

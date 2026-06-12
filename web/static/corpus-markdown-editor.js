@@ -16,7 +16,6 @@
 
     const corpusMarkdownEditors = {};
     const dynamicScriptPromises = {};
-
     function ensureStylesheetLoaded(href) {
       if ([...document.styleSheets].some((sheet) => sheet.href === href)) return Promise.resolve();
       if ([...document.querySelectorAll('link[rel="stylesheet"]')].some((link) => link.href === href)) return Promise.resolve();
@@ -73,43 +72,16 @@
     function warmCorpusMarkdownEditor() {
       if (state.prefetch.corpusEditorWarmed) return Promise.resolve();
       if (state.prefetch.corpusEditorWarmPromise) return state.prefetch.corpusEditorWarmPromise;
-      state.prefetch.corpusEditorWarmPromise = ensureVditorLoaded().then(() => new Promise((resolve) => {
-        const host = document.createElement("div");
-        host.className = "editor-prewarm-host";
-        document.body.appendChild(host);
-        let editor;
-        let settled = false;
-        const cleanup = () => {
-          if (settled) return;
-          settled = true;
-          window.setTimeout(() => {
-            try {
-              editor?.destroy?.();
-            } catch (_error) {
-              // Best effort; this hidden editor only warms Vditor internals.
-            }
-            host.remove();
-            state.prefetch.corpusEditorWarmed = true;
-            state.prefetch.corpusEditorWarmPromise = null;
-            resolve();
-          }, 0);
-        };
-        try {
-          editor = new Vditor(host, {
-            value: "",
-            mode: "ir",
-            height: 120,
-            cache: { enable: false },
-            toolbar: [],
-            after: cleanup,
-          });
-          window.setTimeout(cleanup, 1800);
-        } catch (_error) {
-          cleanup();
-        }
-      })).catch(() => {
-        state.prefetch.corpusEditorWarmPromise = null;
-      });
+      state.prefetch.corpusEditorWarmPromise = ensureVditorLoaded()
+        .then(() => {
+          state.prefetch.corpusEditorWarmed = true;
+        })
+        .catch(() => {
+          state.prefetch.corpusEditorWarmed = false;
+        })
+        .finally(() => {
+          state.prefetch.corpusEditorWarmPromise = null;
+        });
       return state.prefetch.corpusEditorWarmPromise;
     }
 
@@ -121,18 +93,19 @@
 
     function ensureCorpusMarkdownEditorReady(textareaId) {
       const existing = corpusMarkdownEditors[textareaId];
-      if (existing) return Promise.resolve(existing);
+      if (existing) {
+        if (existing._corpusReady) activateCorpusMarkdownEditor(textareaId, existing);
+        return Promise.resolve(existing);
+      }
+      const textarea = $(textareaId);
+      if (textarea) {
+        textarea.classList.remove("hidden");
+        textarea.style.removeProperty("display");
+        delete textarea.dataset.markdownEditorSource;
+      }
       return ensureVditorLoaded()
         .then(() => ensureCorpusMarkdownEditor(textareaId))
-        .catch(() => {
-          const textarea = $(textareaId);
-          if (textarea) {
-            textarea.classList.remove("hidden");
-            textarea.style.removeProperty("display");
-            delete textarea.dataset.markdownEditorSource;
-          }
-          return null;
-        });
+        .catch(() => null);
     }
 
     function getCorpusMarkdownValue(textareaId) {
@@ -142,13 +115,24 @@
     }
 
     function isCorpusEditorReady(textareaId) {
-      const editor = corpusMarkdownEditors[textareaId];
-      return !editor || !!editor._corpusReady;
+      return Boolean($(textareaId));
     }
 
-    function setCorpusEditorLoading(textareaId, isLoading) {
+    function ensureCorpusEditorFrame(textarea) {
+      if (!textarea) return null;
+      const existing = textarea.closest(".corpus-editor-frame");
+      if (existing) return existing;
+      const frame = document.createElement("div");
+      frame.className = "corpus-editor-frame";
+      textarea.parentNode?.insertBefore(frame, textarea);
+      frame.appendChild(textarea);
+      return frame;
+    }
+
+    function setCorpusEditorLoading(textareaId, isLoading, options = {}) {
       const textarea = $(textareaId);
       if (!textarea) return;
+      const frame = ensureCorpusEditorFrame(textarea);
       const loadingId = `${textareaId}Loading`;
       let loading = document.getElementById(loadingId);
       if (isLoading && !loading) {
@@ -159,12 +143,18 @@
           <div>
             <span class="spinner"></span>
             <div>
-              <strong>正在打开编辑器</strong>
-              <span>首次加载 Markdown 编辑器需要几秒。</span>
+              <strong data-corpus-editor-loading-title>正在加载内容</strong>
+              <span data-corpus-editor-loading-detail>正在加载内容，请稍候。</span>
             </div>
           </div>
         `;
-        textarea.insertAdjacentElement("afterend", loading);
+        (frame || textarea.parentElement)?.appendChild(loading);
+      }
+      if (loading && isLoading) {
+        const title = loading.querySelector("[data-corpus-editor-loading-title]");
+        const detail = loading.querySelector("[data-corpus-editor-loading-detail]");
+        if (title) title.textContent = options.title || "正在加载内容";
+        if (detail) detail.textContent = options.detail || "窗口已打开，内容马上出现。";
       }
       loading?.classList.toggle("hidden", !isLoading);
     }
@@ -172,29 +162,42 @@
     function setCorpusMarkdownValue(textareaId, value) {
       const textarea = $(textareaId);
       if (textarea) textarea.value = value || "";
-      const editor = ensureCorpusMarkdownEditor(textareaId);
+      const editor = corpusMarkdownEditors[textareaId];
       if (editor) {
         if (editor._corpusReady) {
           editor.setValue(value || "", true);
+          activateCorpusMarkdownEditor(textareaId, editor);
         } else {
           editor._pendingCorpusValue = value || "";
         }
       }
+      setCorpusEditorLoading(textareaId, false);
+    }
+
+    function activateCorpusMarkdownEditor(textareaId, editor = corpusMarkdownEditors[textareaId]) {
+      const textarea = $(textareaId);
+      if (!textarea || !editor?._corpusReady) return;
+      const mount = editor._corpusMount || textarea.closest(".corpus-editor-frame")?.querySelector(".corpus-live-editor");
+      mount?.classList.remove("hidden");
+      textarea.dataset.markdownEditorSource = "true";
+      textarea.classList.add("hidden");
+      textarea.style.display = "none";
+      setCorpusEditorLoading(textareaId, false);
+      window.requestAnimationFrame?.(() => window.dispatchEvent(new Event("resize")));
     }
 
     function ensureCorpusMarkdownEditor(textareaId) {
       if (corpusMarkdownEditors[textareaId]) return corpusMarkdownEditors[textareaId];
       const textarea = $(textareaId);
       if (!textarea || !window.Vditor) return null;
+      const frame = ensureCorpusEditorFrame(textarea);
       const mount = document.createElement("div");
-      mount.className = "corpus-live-editor";
-      textarea.dataset.markdownEditorSource = "true";
-      textarea.classList.add("hidden");
-      textarea.style.display = "none";
-      textarea.insertAdjacentElement("afterend", mount);
+      mount.className = "corpus-live-editor hidden";
+      (frame || textarea.parentElement)?.appendChild(mount);
+      const valueAtCreate = textarea.value || "";
       let editor;
       editor = new Vditor(mount, {
-        value: textarea.value || "",
+        value: valueAtCreate,
         mode: "ir",
         height: "100%",
         cache: { enable: false },
@@ -218,15 +221,21 @@
         },
         after() {
           editor._corpusReady = true;
-          setCorpusEditorLoading(textareaId, false);
           if (editor._pendingCorpusValue !== undefined) {
-            editor.setValue(editor._pendingCorpusValue || "", true);
-            textarea.value = editor._pendingCorpusValue || "";
+            const pendingValue = editor._pendingCorpusValue || "";
+            const userEditedTextarea = textarea.value !== (editor._corpusValueAtCreate || "");
+            const nextValue = userEditedTextarea ? textarea.value : pendingValue;
+            editor.setValue(nextValue || "", true);
+            textarea.value = nextValue || "";
             delete editor._pendingCorpusValue;
           }
+          if (!textarea.offsetParent && textarea.closest(".hidden")) return;
+          activateCorpusMarkdownEditor(textareaId, editor);
         },
       });
       editor._corpusReady = false;
+      editor._corpusMount = mount;
+      editor._corpusValueAtCreate = valueAtCreate;
       corpusMarkdownEditors[textareaId] = editor;
       return editor;
     }

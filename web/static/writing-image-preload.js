@@ -67,8 +67,9 @@
       return effectiveType !== "slow-2g" && effectiveType !== "2g";
     }
 
-    function canWarm() {
-      return state.view === "writing" && document.visibilityState !== "hidden";
+    function canWarm(options = {}) {
+      if (document.visibilityState === "hidden") return false;
+      return options.anyView || state.view === "writing";
     }
 
     function scheduleNearby(prompt) {
@@ -102,13 +103,22 @@
       }
     }
 
-    function drain() {
+    function drain(options = {}) {
       if (state.writing.promptImagePreloadScheduled) return;
       if (!state.writing.promptImagePreloadQueue.length) return;
       state.writing.promptImagePreloadScheduled = true;
       scheduleIdleTask(() => {
         state.writing.promptImagePreloadScheduled = false;
-        if (!canWarm()) return;
+        if (!canWarm(options)) {
+          if (document.visibilityState === "hidden") {
+            const resume = () => {
+              document.removeEventListener("visibilitychange", resume);
+              drain(options);
+            };
+            document.addEventListener("visibilitychange", resume, { once: true });
+          }
+          return;
+        }
         while (state.writing.promptImagePreloadActive < imagePreloadLimit && state.writing.promptImagePreloadQueue.length) {
           const url = state.writing.promptImagePreloadQueue.shift();
           state.writing.promptImagePreloadQueued.delete(url);
@@ -118,14 +128,41 @@
           const promise = state.writing.promptImagePreloadPromises.get(url) || Promise.resolve();
           promise.finally(() => {
             state.writing.promptImagePreloadActive = Math.max(0, state.writing.promptImagePreloadActive - 1);
-            drain();
+            drain(options);
           });
           if (!started) {
             state.writing.promptImagePreloadActive = Math.max(0, state.writing.promptImagePreloadActive - 1);
           }
         }
-        if (state.writing.promptImagePreloadQueue.length) drain();
+        if (state.writing.promptImagePreloadQueue.length) drain(options);
       }, 250);
+    }
+
+    // Warm every prompt thumbnail in the background (low priority, throttled
+    // by drain) so the picker grid is already populated when it opens.
+    function warmAll(prompts = []) {
+      if (!canUseBackgroundPreload()) return;
+      queue(prompts);
+      drain({ anyView: true });
+    }
+
+    function prefetchHints(prompts = [], options = {}) {
+      if (!canUseBackgroundPreload()) return 0;
+      const limit = Number.isFinite(Number(options.limit)) ? Math.max(0, Number(options.limit)) : 12;
+      let added = 0;
+      imageUrls(prompts).slice(0, limit).forEach((imageUrl) => {
+        const href = thumbUrlFor(imageUrl);
+        const exists = Array.from(document.head.querySelectorAll('link[rel="prefetch"][as="image"]'))
+          .some((link) => link.getAttribute("href") === href);
+        if (!href || exists) return;
+        const link = document.createElement("link");
+        link.rel = "prefetch";
+        link.as = "image";
+        link.href = href;
+        document.head.appendChild(link);
+        added += 1;
+      });
+      return added;
     }
 
     async function ensureReady(url) {
@@ -140,7 +177,9 @@
       drainWritingPromptImagePreloadQueue: drain,
       ensureWritingPromptImageReady: ensureReady,
       primeWritingPromptImage: prime,
+      prefetchWritingPromptImageHints: prefetchHints,
       scheduleNearbyWritingPromptImagePreload: scheduleNearby,
+      warmAllWritingPromptImages: warmAll,
     };
   }
 

@@ -387,7 +387,10 @@
       "p3_follow_ups": [
         "What sports do people like watching in your country?",
         "Why do some people prefer watching sports to playing sports?",
-        "Do sports events bring people together?"
+        "Do sports events bring people together?",
+        "Why do people enjoy watching sports matches?",
+        "What is the difference between watching sports live and on TV?",
+        "Can sports matches influence national pride?"
       ]
     },
     {
@@ -580,22 +583,6 @@
         "What kinds of local news do people care about?",
         "Do young people pay attention to local news?",
         "How has social media changed the way people get news?"
-      ]
-    },
-    {
-      "title": "Describe a time when you watched a sports match",
-      "status": "new",
-      "bullets": [
-        "What sport it was",
-        "Where you watched it",
-        "Who you watched it with"
-      ],
-      "rounding": "And explain how you felt while watching this match.",
-      "p3_theme": "sports_events_and_spectators",
-      "p3_follow_ups": [
-        "Why do people enjoy watching sports matches?",
-        "What is the difference between watching sports live and on TV?",
-        "Can sports matches influence national pride?"
       ]
     },
     {
@@ -908,6 +895,7 @@
     "New Oriental public list names 17 Part 2&3 new-topic directions for 2026 May-August.",
     "New Channel public page confirms the May-August season bank is active and China-relevant.",
     "Koolearn current-season practice pages were used as a secondary topic-signal check where available.",
-    "Cathoven's April 2026 May-August cue-card bank was used to cross-check missing P2/P3 topic directions; only topic prompts and follow-up directions were added, not sample answers."
+    "Cathoven's April 2026 May-August cue-card bank was used to cross-check missing P2/P3 topic directions; only topic prompts and follow-up directions were added, not sample answers.",
+    "Merged duplicate P2 sports-watching cards: kept \"Describe a sport you enjoyed watching\" and folded in P3 prompts from \"Describe a time when you watched a sports match\"."
   ]
 }

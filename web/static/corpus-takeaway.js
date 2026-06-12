@@ -77,9 +77,15 @@
     const activeSpeechUtterances = [];
     let speechSequenceToken = 0;
     let suppressNextSpeechCancelError = false;
-    let takeawayServerAudio = null;
-    let takeawayAudioContext = null;
-    let takeawayAudioSource = null;
+    const expressionReplacementState = {
+      language: { items: null, loading: false, promise: null, synced: false },
+      writing: { items: null, loading: false, promise: null, synced: false },
+    };
+    const p2BankCorpusCache = new Map();
+    const p2BankP3Cache = new Map();
+    let p1CorpusEditorLoadToken = 0;
+    let p2BankCorpusLoadToken = 0;
+    let p2BankP3LoadToken = 0;
     const DOTS_ICON = `
       <svg aria-hidden="true" viewBox="0 0 24 24">
         <path d="M12 6.5h.01"></path>
@@ -1017,7 +1023,6 @@
     function autosaveOpenCorpusEditors() {
       const p1Entry = state.p1Corpus.activeEntry;
       if (p1Entry && !$("#p1CorpusDialog")?.classList.contains("hidden")) {
-        if (!isCorpusEditorReady("p1CorpusText")) return;
         const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
         if (!corpusText) return;
         const storage = p1CorpusStorageEntry(p1Entry);
@@ -1032,7 +1037,6 @@
       }
       const p2Entry = state.p2Corpus.activeEntry;
       if (p2Entry && !$("#p2CorpusDialog")?.classList.contains("hidden")) {
-        if (!isCorpusEditorReady("p2CorpusText")) return;
         const materialText = getCorpusMarkdownValue("p2CorpusText").trim();
         if (!materialText) return;
         if (p2Entry.is_bank_card) {
@@ -1041,6 +1045,7 @@
           sendKeepaliveJson(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`, {
             question: p2Entry.linked_question || p2Entry.question || "",
             corpus_text: materialText,
+            metadata: { brainstorm_idea: $("p2CorpusBrainstormIdea")?.value || p2Entry.brainstorm_idea || "" },
             source: "p2_bank_corpus_editor",
           });
           return;
@@ -1057,7 +1062,6 @@
       }
       const p2P3Entry = state.p2Corpus.activeP3Entry;
       if (p2P3Entry && !$("#p2CorpusP3Dialog")?.classList.contains("hidden")) {
-        if (!isCorpusEditorReady("p2CorpusP3FollowUp")) return;
         const materialText = String(p2P3Entry.material_text || "").trim();
         if (!materialText) return;
         sendKeepaliveJson("/api/p2-corpus", {
@@ -1081,10 +1085,41 @@
       openCorpusWindow("p1Corpus");
     }
 
-    async function openP1CorpusEditor(entry) {
+    async function openP1CorpusEditor(entry, options = {}) {
       if (!entry) return;
+      const showReferenceAnswer = options.showReferenceAnswer === true;
+      const token = ++p1CorpusEditorLoadToken;
       const storage = p1CorpusStorageEntry(entry);
       let preparedEntry = { ...entry, ...storage };
+      const openedQuestionId = storage.question_id || "";
+      const openedQuestion = storage.question || preparedEntry.question || preparedEntry.display_question || "";
+      state.p1Corpus.activeEntry = preparedEntry;
+      const initialTopic = preparedEntry.topic || preparedEntry.prompt?.topic || "";
+      const initialQuestion = preparedEntry.display_question || preparedEntry.question || "";
+      const initialAiAnswer = showReferenceAnswer ? (preparedEntry.last_ai_answer || preparedEntry.band7_version || preparedEntry.aiAnswer || "") : "";
+      text("p1CorpusDialogTopic", initialTopic ? initialTopic.replaceAll("_", " ").toUpperCase() : "PART 1");
+      text("p1CorpusDialogTitle", initialQuestion);
+      setCorpusMarkdownValue("p1CorpusText", preparedEntry.corpus_text || "");
+      const aiBox = $("p1CorpusAiAnswer");
+      const aiWrap = aiBox?.closest(".p1-corpus-ai-box");
+      aiWrap?.classList.toggle("hidden", !initialAiAnswer);
+      if (aiBox) {
+        aiBox.dataset.markdownSource = initialAiAnswer || "";
+        aiBox.innerHTML = initialAiAnswer ? renderSpokenAnswerMarkdown(initialAiAnswer) : "";
+      }
+      text("p1CorpusSaveStatus", preparedEntry.corpus_text ? "" : "正在查找已保存语料...");
+      $("p1CorpusDialog")?.classList.remove("hidden");
+      if (!preparedEntry.corpus_text) {
+        setCorpusEditorLoading("p1CorpusText", true, {
+          title: "正在查找已保存语料",
+          detail: "没有找到也可以直接开始编辑。",
+        });
+      }
+      ensureCorpusMarkdownEditorReady("p1CorpusText").then((editor) => {
+        if (token !== p1CorpusEditorLoadToken) return;
+        if (!editor) setCorpusEditorLoading("p1CorpusText", false);
+        setTimeout(() => editor?.focus?.() || $("p1CorpusText")?.focus(), 0);
+      });
       if ((storage.question_id || storage.question || preparedEntry.display_question) && !preparedEntry.corpus_text) {
         let refreshedCorpus = false;
         if (!(state.p1Corpus.topics || []).length) {
@@ -1118,35 +1153,42 @@
           preparedEntry = {
             ...preparedEntry,
             corpus_text: existing.corpus_text || "",
-            last_ai_answer: preparedEntry.last_ai_answer || existing.last_ai_answer || "",
+            last_ai_answer: showReferenceAnswer ? (preparedEntry.last_ai_answer || existing.last_ai_answer || "") : "",
           };
         }
       }
+      if (token !== p1CorpusEditorLoadToken) return;
+      if (!$("p1CorpusDialog") || $("p1CorpusDialog").classList.contains("hidden")) return;
+      const activeStorage = p1CorpusStorageEntry(state.p1Corpus.activeEntry || {});
+      const activeQuestionId = activeStorage.question_id || "";
+      const activeQuestion = activeStorage.question || state.p1Corpus.activeEntry?.question || state.p1Corpus.activeEntry?.display_question || "";
+      const sameQuestionId = openedQuestionId && activeQuestionId && openedQuestionId === activeQuestionId;
+      const sameQuestionText = !openedQuestionId && !activeQuestionId && openedQuestion && activeQuestion && openedQuestion === activeQuestion;
+      if (!sameQuestionId && !sameQuestionText && (openedQuestionId || activeQuestionId || openedQuestion || activeQuestion)) return;
       state.p1Corpus.activeEntry = preparedEntry;
       entry = preparedEntry;
       const topic = entry.topic || entry.prompt?.topic || "";
       const question = entry.display_question || entry.question || "";
-      const aiAnswer = entry.last_ai_answer || entry.band7_version || entry.aiAnswer || "";
+      const aiAnswer = showReferenceAnswer ? (entry.last_ai_answer || entry.band7_version || entry.aiAnswer || "") : "";
       text("p1CorpusDialogTopic", topic ? topic.replaceAll("_", " ").toUpperCase() : "PART 1");
       text("p1CorpusDialogTitle", question);
-      setCorpusMarkdownValue("p1CorpusText", entry.corpus_text || "");
-      const aiBox = $("p1CorpusAiAnswer");
-      const aiWrap = aiBox?.closest(".p1-corpus-ai-box");
-      aiWrap?.classList.toggle("hidden", !aiAnswer);
-      if (aiBox) {
-        aiBox.dataset.markdownSource = aiAnswer || "";
-        aiBox.innerHTML = aiAnswer ? renderSpokenAnswerMarkdown(aiAnswer) : "";
+      setCorpusEditorLoading("p1CorpusText", false);
+      const currentDraft = getCorpusMarkdownValue("p1CorpusText").trim();
+      if (String(entry.corpus_text || "").trim() && !currentDraft) {
+        setCorpusMarkdownValue("p1CorpusText", entry.corpus_text || "");
+      }
+      const aiBoxFinal = $("p1CorpusAiAnswer");
+      const aiWrapFinal = aiBoxFinal?.closest(".p1-corpus-ai-box");
+      aiWrapFinal?.classList.toggle("hidden", !aiAnswer);
+      if (aiBoxFinal) {
+        aiBoxFinal.dataset.markdownSource = aiAnswer || "";
+        aiBoxFinal.innerHTML = aiAnswer ? renderSpokenAnswerMarkdown(aiAnswer) : "";
       }
       text("p1CorpusSaveStatus", "");
-      $("p1CorpusDialog")?.classList.remove("hidden");
-      if (!isCorpusEditorReady("p1CorpusText")) setCorpusEditorLoading("p1CorpusText", true);
-      ensureCorpusMarkdownEditorReady("p1CorpusText").then((editor) => {
-        if (!editor) setCorpusEditorLoading("p1CorpusText", false);
-        setTimeout(() => editor?.focus?.() || $("p1CorpusText")?.focus(), 0);
-      });
     }
 
     function closeP1CorpusEditor() {
+      p1CorpusEditorLoadToken += 1;
       $("p1CorpusDialog")?.classList.add("hidden");
       state.p1Corpus.activeEntry = null;
     }
@@ -1154,31 +1196,29 @@
     async function saveAndCloseP1CorpusEditor() {
       if (!$("p1CorpusDialog") || $("p1CorpusDialog").classList.contains("hidden")) return;
       const entry = state.p1Corpus.activeEntry;
-      const editorReady = isCorpusEditorReady("p1CorpusText");
-      const corpusText = editorReady ? getCorpusMarkdownValue("p1CorpusText").trim() : "";
+      const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
+      if (entry && !corpusText) {
+        const storage = p1CorpusStorageEntry(entry);
+        const localEntry = findP1CorpusEntry(storage.question_id || "");
+        if (localEntry) {
+          localEntry.corpus_text = "";
+          localEntry.last_ai_answer = "";
+          renderP1CorpusTopics();
+          updateP1CorpusPeekButton(state.currentTurn);
+        }
+      }
       closeP1CorpusEditor();
-      if (entry && corpusText) saveP1CorpusEntry({ entry, corpusText, silent: true }).catch(() => null);
+      if (entry) saveP1CorpusEntry({ entry, corpusText, silent: true }).catch(() => null);
     }
 
     async function saveP1CorpusEntry(options = {}) {
       const entry = options.entry || state.p1Corpus.activeEntry;
       if (!entry) return;
       if (state.p1Corpus.saving) return;
-      if (!options.corpusText && !isCorpusEditorReady("p1CorpusText")) {
-        text("p1CorpusSaveStatus", "编辑器还没加载完成，请等一秒再保存。");
-        if (options.closeOnError) closeP1CorpusEditor();
-        return;
-      }
       state.p1Corpus.saving = true;
       const button = $("saveP1CorpusBtn");
       const original = button?.textContent || "保存语料";
       const nextCorpusText = (options.corpusText ?? getCorpusMarkdownValue("p1CorpusText")).trim();
-      if (!nextCorpusText) {
-        if (!options.silent) text("p1CorpusSaveStatus", "内容为空，未保存。");
-        state.p1Corpus.saving = false;
-        if (options.closeOnEmpty) closeP1CorpusEditor();
-        return;
-      }
       if (button && !options.silent) {
         button.disabled = true;
         button.textContent = "保存中...";
@@ -1186,21 +1226,33 @@
       if (!options.silent) text("p1CorpusSaveStatus", "");
       try {
         const storage = p1CorpusStorageEntry(entry);
-        const saved = await api("/api/p1-corpus", {
+        const payload = {
           question_id: storage.question_id,
           topic: storage.topic,
           question: storage.question,
           corpus_text: nextCorpusText,
-          last_ai_answer: entry.last_ai_answer || entry.band7_version || entry.aiAnswer || "",
           source: "report_or_library",
-        });
+        };
+        const referenceAnswer = entry.last_ai_answer || entry.band7_version || entry.aiAnswer || "";
+        if (referenceAnswer) payload.last_ai_answer = referenceAnswer;
+        const saved = await api("/api/p1-corpus", payload);
+        if (!String(saved.corpus_text || "").trim()) {
+          saved.last_ai_answer = "";
+        }
         if (!options.silent) text("p1CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
         const updated = upsertP1CorpusEntry(saved);
+        const storageQuestionId = storage.question_id || saved.question_id || "";
+        const localEntry = storageQuestionId ? findP1CorpusEntry(storageQuestionId) : null;
+        if (localEntry) {
+          localEntry.corpus_text = saved.corpus_text ?? nextCorpusText;
+          localEntry.last_ai_answer = saved.last_ai_answer || "";
+          localEntry.updated_at = saved.updated_at || localEntry.updated_at || "";
+        }
         if (state.p1Corpus.activeEntry) {
           const activeEntry = state.p1Corpus.activeEntry || {};
           state.p1Corpus.activeEntry = {
             ...activeEntry,
-            corpus_text: (updated || saved)?.corpus_text || nextCorpusText,
+            corpus_text: (updated || saved)?.corpus_text ?? nextCorpusText,
             last_ai_answer: (updated || saved)?.last_ai_answer || activeEntry.last_ai_answer || "",
             updated_at: (updated || saved)?.updated_at || activeEntry.updated_at || "",
             display_question: activeEntry.display_question || activeEntry.question || saved.question || "",
@@ -1210,6 +1262,16 @@
         updateP1CorpusPeekButton(state.currentTurn);
         if (options.closeOnSuccess) closeP1CorpusEditor();
       } catch (error) {
+        if (String(error?.message || error || "").includes("Corpus text is empty") && !nextCorpusText) {
+          const localEntry = findP1CorpusEntry(storage.question_id || "");
+          if (localEntry) {
+            localEntry.corpus_text = "";
+            localEntry.last_ai_answer = "";
+          }
+          renderP1CorpusTopics();
+          updateP1CorpusPeekButton(state.currentTurn);
+          return;
+        }
         if (!options.silent) text("p1CorpusSaveStatus", error.message || String(error));
         if (options.closeOnError) closeP1CorpusEditor();
       } finally {
@@ -1226,7 +1288,10 @@
       const container = $("p2CorpusTopics");
       if (state.p2Corpus.loaded) {
         renderP2CorpusTopics();
-        if (stats) stats.textContent = `${state.p2Corpus.categories.length} 个分类 · 刷新中`;
+        if (stats) {
+          stats.classList.add("is-refreshing");
+          stats.setAttribute("aria-busy", "true");
+        }
       } else {
         if (stats) stats.textContent = "Loading...";
         if (container) container.innerHTML = '<p class="muted">正在加载 P2 素材库...</p>';
@@ -1237,6 +1302,11 @@
       } catch (error) {
         if (container) container.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
         if (stats) stats.textContent = "加载失败";
+      } finally {
+        if (stats) {
+          stats.classList.remove("is-refreshing");
+          stats.removeAttribute("aria-busy");
+        }
       }
     }
 
@@ -1667,102 +1737,6 @@
       return suppressNextSpeechCancelError && (value === "canceled" || value === "cancelled" || value === "interrupted");
     }
 
-    function serverTtsTextFor(value) {
-      const replacement = replacementTextForSpeech(value);
-      if (replacement) return replacement.join(". ");
-      return String(value || "").trim();
-    }
-
-    function unlockTakeawayAudio() {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) return null;
-      try {
-        if (!takeawayAudioContext) takeawayAudioContext = new AudioContextClass();
-        if (takeawayAudioContext.state === "suspended") {
-          takeawayAudioContext.resume().catch(() => {});
-        }
-        return takeawayAudioContext;
-      } catch (_error) {
-        return null;
-      }
-    }
-
-    function stopTakeawayServerAudio() {
-      if (takeawayAudioSource) {
-        try {
-          takeawayAudioSource.stop(0);
-        } catch (_error) {}
-        takeawayAudioSource = null;
-      }
-      if (takeawayServerAudio) {
-        takeawayServerAudio.pause();
-        takeawayServerAudio = null;
-      }
-    }
-
-    async function playAudioUrlWithUnlockedContext(audioUrl, kind = "language") {
-      const stableAudioUrl = `${audioUrl}${String(audioUrl).includes("?") ? "&" : "?"}stable=1`;
-      const context = unlockTakeawayAudio();
-      if (context) {
-        const response = await fetch(stableAudioUrl, { credentials: "same-origin" });
-        if (!response.ok) throw new Error(`音频加载失败：${response.status}`);
-        const audioBuffer = await response.arrayBuffer();
-        let decoded = null;
-        try {
-          decoded = await context.decodeAudioData(audioBuffer.slice(0));
-        } catch (error) {
-          throw new Error(`音频解码失败：${error.message || error}`);
-        }
-        if (context.state === "suspended") await context.resume();
-        stopTakeawayServerAudio();
-        const source = context.createBufferSource();
-        source.buffer = decoded;
-        source.connect(context.destination);
-        takeawayAudioSource = source;
-        source.onended = () => {
-          if (takeawayAudioSource === source) takeawayAudioSource = null;
-          setTakeawaySpeechStatus(kind, "");
-        };
-        setTakeawaySpeechStatus(kind, "正在播放服务器语音…", { clear: false });
-        source.start(0);
-        return;
-      }
-
-      stopTakeawayServerAudio();
-      const audio = new Audio(stableAudioUrl);
-      audio.preload = "auto";
-      takeawayServerAudio = audio;
-      audio.onplay = () => setTakeawaySpeechStatus(kind, "正在播放服务器语音…", { clear: false });
-      audio.onended = () => {
-        if (takeawayServerAudio === audio) takeawayServerAudio = null;
-        setTakeawaySpeechStatus(kind, "");
-      };
-      audio.onerror = () => setTakeawaySpeechStatus(kind, "服务器语音播放失败：音频元素加载错误。", { error: true, clear: false });
-      try {
-        await audio.play();
-      } catch (error) {
-        throw new Error(`浏览器拒绝播放服务器语音：${error.message || error}`);
-      }
-    }
-
-    async function playServerTakeawayTts(textValue, kind = "language") {
-      const source = serverTtsTextFor(textValue);
-      if (!source) return;
-      unlockTakeawayAudio();
-      setTakeawaySpeechStatus(kind, "正在准备服务器语音…", { clear: false });
-      const payload = await api("/api/tts", {
-        text: source,
-        role: "model",
-        voice: "en_female_sarah",
-        server_fallback: true,
-      });
-      if (!payload?.audio_url) {
-        const detail = payload?.error || payload?.message || payload?.status || "no audio_url";
-        throw new Error(`服务器语音不可用：${detail}`);
-      }
-      await playAudioUrlWithUnlockedContext(payload.audio_url, kind);
-    }
-
     function speakWithBrowserTts(textValue, options = {}) {
       const value = String(textValue || "").trim();
       if (!value) return { ok: false, reason: "empty" };
@@ -1793,27 +1767,14 @@
       };
       activeSpeechUtterances.push(utterance);
 
-      const speakNow = () => {
-        if (token !== speechSequenceToken) return;
-        synth.resume?.();
-        synth.speak(utterance);
-      };
-
-      speakNow();
       window.setTimeout(() => {
         if (token !== speechSequenceToken) return;
-        if (!started && !synth.speaking) {
-          options.onNoStart?.(voice);
-          return;
-        }
-        if (synth.speaking || synth.pending) return;
-        synth.resume?.();
         synth.speak(utterance);
-      }, Number(options.retryDelayMs ?? 140));
+      }, Number(options.startDelayMs ?? 80));
       window.setTimeout(() => {
         if (token !== speechSequenceToken || started) return;
         options.onNoStart?.(voice);
-      }, Number(options.noStartDelayMs ?? 900));
+      }, Number(options.noStartDelayMs ?? 1200));
       return { ok: true, reason: "queued", voice };
     }
 
@@ -1858,12 +1819,14 @@
           if (!isIgnoredSpeechError(error)) options.onError?.(error);
           continueSequence();
         };
-        synth.resume?.();
-        synth.speak(utterance);
+        window.setTimeout(() => {
+          if (token !== speechSequenceToken) return;
+          synth.speak(utterance);
+        }, index === 0 ? Number(options.startDelayMs ?? 80) : 0);
         window.setTimeout(() => {
           if (token !== speechSequenceToken || started || index !== 0) return;
           options.onNoStart?.(utterance._takeawayVoice || null);
-        }, Number(options.noStartDelayMs ?? 900));
+        }, Number(options.noStartDelayMs ?? 1200));
       };
       speakAt(0);
       return { ok: true, reason: "queued", voice: utterances[0]?._takeawayVoice || null };
@@ -1890,19 +1853,11 @@
     function speakLanguageTakeaway(textValue, options = {}) {
       const kind = options.kind === "writing" ? "writing" : "language";
       const voiceLabel = (voice) => voice?.name ? `：${voice.name}` : "：系统默认声音";
-      unlockTakeawayAudio();
-      const startServerFallback = (reason = "") => {
-        setTakeawaySpeechStatus(kind, reason ? `浏览器朗读未启动，正在切换服务器语音…` : "正在切换服务器语音…", { clear: false });
-        playServerTakeawayTts(textValue, kind).catch((serverError) => {
-          const detail = reason ? `${reason}；` : "";
-          setTakeawaySpeechStatus(kind, `${detail}服务器语音失败：${serverError.message || serverError}`, { error: true, clear: false });
-        });
-      };
       const callbacks = {
         onStart: (voice) => setTakeawaySpeechStatus(kind, `正在朗读${voiceLabel(voice)}`),
         onEnd: () => setTakeawaySpeechStatus(kind, ""),
-        onNoStart: (_voice) => startServerFallback("浏览器朗读未启动"),
-        onError: (error) => startServerFallback(`浏览器朗读失败：${error}`),
+        onNoStart: (voice) => setTakeawaySpeechStatus(kind, `浏览器朗读未启动${voiceLabel(voice)}，请换浏览器声音或检查标签页音量`, { error: true, clear: false }),
+        onError: (error) => setTakeawaySpeechStatus(kind, `浏览器朗读失败：${error}`, { error: true, clear: false }),
       };
       const sequence = replacementTextForSpeech(textValue);
       const result = sequence
@@ -1911,7 +1866,7 @@
       if (result?.ok) {
         setTakeawaySpeechStatus(kind, `正在启动浏览器朗读${voiceLabel(result.voice)}`, { clear: false });
       } else if (result?.reason === "unsupported") {
-        startServerFallback("当前浏览器不支持本地朗读");
+        setTakeawaySpeechStatus(kind, "当前浏览器不支持本地朗读", { error: true, clear: false });
       } else {
         setTakeawaySpeechStatus(kind, "没有可朗读的英文", { error: true });
       }
@@ -2308,13 +2263,17 @@
       const replacements = String(item?.replacements || "").trim();
       if (!source && !replacements) return null;
       return {
-        id: String(item?.id || `custom:${Date.now()}:${index}`),
+        id: String(item?.id || item?.item_id || `custom:${Date.now()}:${index}`),
         source,
         replacements,
       };
     }
 
-    function loadExpressionReplacements(kind = "writing") {
+    function defaultExpressionReplacements() {
+      return DEFAULT_EXPRESSION_REPLACEMENTS.map((item) => ({ ...item }));
+    }
+
+    function loadLocalExpressionReplacements(kind = "writing") {
       try {
         const raw = window.localStorage?.getItem(expressionReplacementStorageKey(kind));
         const parsed = raw ? JSON.parse(raw) : null;
@@ -2324,15 +2283,103 @@
       } catch (_error) {
         // Ignore malformed localStorage and fall back to defaults.
       }
-      return DEFAULT_EXPRESSION_REPLACEMENTS.map((item) => ({ ...item }));
+      return [];
+    }
+
+    function expressionReplacementItems(kind = "writing") {
+      const value = kind === "language" ? "language" : "writing";
+      const cached = expressionReplacementState[value]?.items;
+      if (Array.isArray(cached)) return cached;
+      const local = loadLocalExpressionReplacements(value);
+      return local.length ? local : defaultExpressionReplacements();
     }
 
     function saveExpressionReplacements(kind, items) {
+      const value = kind === "language" ? "language" : "writing";
+      expressionReplacementState[value].items = (items || []).map(normalizeExpressionReplacementItem).filter(Boolean);
       try {
-        window.localStorage?.setItem(expressionReplacementStorageKey(kind), JSON.stringify(items || []));
+        window.localStorage?.setItem(expressionReplacementStorageKey(value), JSON.stringify(expressionReplacementState[value].items || []));
       } catch (_error) {
         // Local custom replacements are best-effort.
       }
+    }
+
+    function setExpressionReplacementStatus(message = "", options = {}) {
+      const el = $("expressionReplacementStatus");
+      if (!el) return;
+      el.textContent = message;
+      el.classList.toggle("is-error", Boolean(options.error));
+    }
+
+    function expressionReplacementEndpoint(kind = "writing", itemId = "") {
+      const value = kind === "language" ? "language" : "writing";
+      const base = `/api/expression-replacements/${value}`;
+      return itemId ? `${base}/${encodeURIComponent(itemId)}` : base;
+    }
+
+    function mergeExpressionReplacementItems(serverItems = [], localItems = []) {
+      const merged = [];
+      const seen = new Set();
+      defaultExpressionReplacements().forEach((item) => {
+        const normalized = normalizeExpressionReplacementItem(item);
+        if (!normalized || seen.has(normalized.id)) return;
+        seen.add(normalized.id);
+        merged.push(normalized);
+      });
+      serverItems.forEach((item) => {
+        const normalized = normalizeExpressionReplacementItem(item);
+        if (!normalized || seen.has(normalized.id)) return;
+        seen.add(normalized.id);
+        merged.push(normalized);
+      });
+      localItems.forEach((item) => {
+        const normalized = normalizeExpressionReplacementItem(item);
+        if (!normalized || seen.has(normalized.id)) return;
+        seen.add(normalized.id);
+        merged.push(normalized);
+      });
+      return merged;
+    }
+
+    async function migrateLocalExpressionReplacements(kind, serverItems, localItems) {
+      const serverIds = new Set((serverItems || []).map((item) => item.id));
+      const missing = (localItems || []).filter((item) => !serverIds.has(item.id));
+      await Promise.all(missing.map((item) => api(expressionReplacementEndpoint(kind, item.id), {
+        source: item.source,
+        replacements: item.replacements,
+      }, { method: "PUT" }).catch(() => null)));
+    }
+
+    async function syncExpressionReplacements(kind = "writing", options = {}) {
+      const value = kind === "language" ? "language" : "writing";
+      const stateForKind = expressionReplacementState[value];
+      if (stateForKind.promise && !options.force) return stateForKind.promise;
+      const localItems = loadLocalExpressionReplacements(value);
+      stateForKind.loading = true;
+      const promise = api(expressionReplacementEndpoint(value), null, { method: "GET" })
+        .then(async (payload) => {
+          const serverItems = Array.isArray(payload?.items)
+            ? payload.items.map(normalizeExpressionReplacementItem).filter(Boolean)
+            : [];
+          if (localItems.length) await migrateLocalExpressionReplacements(value, serverItems, localItems);
+          const items = mergeExpressionReplacementItems(serverItems, localItems);
+          saveExpressionReplacements(value, items);
+          stateForKind.synced = true;
+          return items;
+        })
+        .catch((error) => {
+          const fallback = localItems.length ? localItems : defaultExpressionReplacements();
+          saveExpressionReplacements(value, fallback);
+          stateForKind.synced = false;
+          setExpressionReplacementStatus(`未同步，仅本地：${error.message || error}`, { error: true });
+          return fallback;
+        })
+        .finally(() => {
+          stateForKind.loading = false;
+          stateForKind.promise = null;
+        });
+      stateForKind.promise = promise;
+      return promise;
     }
 
     function activeExpressionReplacementKind() {
@@ -2342,7 +2389,13 @@
     function renderExpressionReplacements(kind = activeExpressionReplacementKind()) {
       const list = $("expressionReplacementList");
       if (!list) return;
-      const items = loadExpressionReplacements(kind);
+      const value = kind === "language" ? "language" : "writing";
+      const stateForKind = expressionReplacementState[value];
+      const items = expressionReplacementItems(value);
+      if (stateForKind.loading && !items.length) {
+        list.innerHTML = '<p class="muted">正在同步表达替换...</p>';
+        return;
+      }
       list.innerHTML = items.map((item) => `
         <article class="expression-replacement-row" data-expression-replacement-id="${escapeHtml(item.id)}">
           <div class="expression-replacement-copy">
@@ -2427,8 +2480,15 @@
       if (!dialog) return;
       dialog.dataset.kind = kind === "language" ? "language" : "writing";
       text("expressionReplacementType", kind === "language" ? "Takeaway" : "写作积累");
+      setExpressionReplacementStatus("");
       renderExpressionReplacements(dialog.dataset.kind);
       dialog.classList.remove("hidden");
+      syncExpressionReplacements(dialog.dataset.kind).then(() => {
+        if ($("expressionReplacementDialog")?.dataset.kind === dialog.dataset.kind) {
+          setExpressionReplacementStatus("");
+          renderExpressionReplacements(dialog.dataset.kind);
+        }
+      });
     }
 
     function closeExpressionReplacementDialog() {
@@ -2458,17 +2518,17 @@
 
     function editExpressionReplacement(itemId) {
       const kind = activeExpressionReplacementKind();
-      const items = loadExpressionReplacements(kind);
+      const items = expressionReplacementItems(kind);
       const item = items.find((entry) => entry.id === itemId);
       if (!item) return;
       renderExpressionReplacementEditRow(item);
     }
 
-    function saveExpressionReplacementEdit(itemId) {
+    async function saveExpressionReplacementEdit(itemId) {
       const kind = activeExpressionReplacementKind();
       const row = $("expressionReplacementList")?.querySelector(`[data-expression-replacement-id="${CSS.escape(itemId)}"]`);
       if (!row) return;
-      const items = loadExpressionReplacements(kind);
+      const items = expressionReplacementItems(kind);
       let item = items.find((entry) => entry.id === itemId);
       if (!item) {
         item = { id: itemId, source: "", replacements: "" };
@@ -2481,34 +2541,38 @@
       const cleaned = items.map(normalizeExpressionReplacementItem).filter(Boolean);
       saveExpressionReplacements(kind, cleaned);
       renderExpressionReplacements(kind);
+      setExpressionReplacementStatus("正在同步...");
+      try {
+        const saved = await api(expressionReplacementEndpoint(kind, item.id), {
+          source: item.source,
+          replacements: item.replacements,
+        }, { method: "PUT" });
+        const current = expressionReplacementItems(kind).filter((entry) => entry.id !== item.id);
+        saveExpressionReplacements(kind, [normalizeExpressionReplacementItem(saved), ...current].filter(Boolean));
+        setExpressionReplacementStatus("");
+        renderExpressionReplacements(kind);
+      } catch (error) {
+        setExpressionReplacementStatus(`未同步，仅本地：${error.message || error}`, { error: true });
+      }
     }
 
     function speakExpressionReplacement(itemId) {
       const kind = activeExpressionReplacementKind();
-      const item = loadExpressionReplacements(kind).find((entry) => entry.id === itemId);
+      const item = expressionReplacementItems(kind).find((entry) => entry.id === itemId);
       if (!item) return;
       const voiceLabel = (voice) => voice?.name ? `：${voice.name}` : "：系统默认声音";
-      const replacementText = `${item.source} → ${item.replacements || ""}`;
-      unlockTakeawayAudio();
-      const startServerFallback = (reason = "") => {
-        setTakeawaySpeechStatus(kind, "浏览器朗读未启动，正在切换服务器语音…", { clear: false });
-        playServerTakeawayTts(replacementText, kind).catch((serverError) => {
-          const detail = reason ? `${reason}；` : "";
-          setTakeawaySpeechStatus(kind, `${detail}服务器语音失败：${serverError.message || serverError}`, { error: true, clear: false });
-        });
-      };
       const result = speakPhraseSequence([item.source, ...splitExpressionReplacementValues(item.replacements || "")], {
         onStart: (voice) => setTakeawaySpeechStatus(kind, `正在朗读${voiceLabel(voice)}`),
-        onNoStart: () => startServerFallback("浏览器朗读未启动"),
-        onError: (error) => startServerFallback(`浏览器朗读失败：${error}`),
+        onNoStart: (voice) => setTakeawaySpeechStatus(kind, `浏览器朗读未启动${voiceLabel(voice)}，请换浏览器声音或检查标签页音量`, { error: true, clear: false }),
+        onError: (error) => setTakeawaySpeechStatus(kind, `浏览器朗读失败：${error}`, { error: true, clear: false }),
       });
       if (result?.ok) setTakeawaySpeechStatus(kind, `正在启动浏览器朗读${voiceLabel(result.voice)}`, { clear: false });
-      else startServerFallback("当前浏览器不支持本地朗读");
+      else setTakeawaySpeechStatus(kind, "当前浏览器不支持本地朗读", { error: true, clear: false });
     }
 
     async function addExpressionReplacementToTakeaway(itemId, button = null) {
       const kind = activeExpressionReplacementKind();
-      const item = loadExpressionReplacements(kind).find((entry) => entry.id === itemId);
+      const item = expressionReplacementItems(kind).find((entry) => entry.id === itemId);
       if (!item || !String(item.source || "").trim()) return;
       const replacements = uniqueReplacementValues(splitExpressionReplacementValues(item.replacements || ""));
       if (!replacements.length) return;
@@ -2558,11 +2622,18 @@
       });
     }
 
-    function deleteExpressionReplacement(itemId) {
+    async function deleteExpressionReplacement(itemId) {
       const kind = activeExpressionReplacementKind();
-      const items = loadExpressionReplacements(kind).filter((item) => item.id !== itemId);
+      const items = expressionReplacementItems(kind).filter((item) => item.id !== itemId);
       saveExpressionReplacements(kind, items);
       renderExpressionReplacements(kind);
+      setExpressionReplacementStatus("正在同步...");
+      try {
+        await api(expressionReplacementEndpoint(kind, itemId), null, { method: "DELETE" });
+        setExpressionReplacementStatus("");
+      } catch (error) {
+        setExpressionReplacementStatus(`未同步，仅本地：${error.message || error}`, { error: true });
+      }
     }
 
     function takeawayEditorValues() {
@@ -2719,6 +2790,35 @@
 
     function p2BrainstormCueText(entry = {}) {
       return String(entry.linked_question || entry.question || p2CleanCueTitle(entry) || "").trim();
+    }
+
+    function fetchP2BankCorpusPayload(questionId) {
+      const key = String(questionId || "").trim();
+      if (!key) return Promise.resolve(null);
+      if (!p2BankCorpusCache.has(key)) {
+        p2BankCorpusCache.set(key, api(`/api/p2-bank-corpus/${encodeURIComponent(key)}`));
+      }
+      return p2BankCorpusCache.get(key);
+    }
+
+    function fetchP2BankP3Payload(questionId) {
+      const key = String(questionId || "").trim();
+      if (!key) return Promise.resolve(null);
+      if (!p2BankP3Cache.has(key)) {
+        p2BankP3Cache.set(key, api(`/api/p3-bank-corpus/${encodeURIComponent(key)}`));
+      }
+      return p2BankP3Cache.get(key);
+    }
+
+    function warmP2BankEditorPayload(entry = {}) {
+      const questionId = p2BankQuestionId(entry);
+      if (!questionId) return;
+      fetchP2BankCorpusPayload(questionId).catch(() => {
+        p2BankCorpusCache.delete(questionId);
+      });
+      fetchP2BankP3Payload(questionId).catch(() => {
+        p2BankP3Cache.delete(questionId);
+      });
     }
 
     function p2BrainstormRows() {
@@ -2885,7 +2985,7 @@
       }
     }
 
-    // 把当前 Brainstorm 窗口里填好的灵感导出成发给 AI 的纯文本（读 DOM 实时值，含未保存的修改）。
+    // 把当前 Brainstorm 窗口导出成发给 AI 的纯文本（读 DOM 实时值，含未保存的修改和空灵感原题）。
     async function copyP2BrainstormAll() {
       const rows = Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row"));
       const blocks = [];
@@ -2893,17 +2993,17 @@
         const index = (row.querySelector(".p2-brainstorm-index")?.textContent || "").trim();
         const stem = (row.querySelector(".p2-brainstorm-stem")?.textContent || "").trim();
         const idea = (row.querySelector("[data-p2-brainstorm-input]")?.value || "").trim();
-        if (!idea) return;
+        if (!stem && !idea) return;
         const heading = [index ? `${index}.` : "", stem].filter(Boolean).join(" ").trim();
         blocks.push(heading ? `${heading}\n灵感：${idea}` : `灵感：${idea}`);
       });
       if (!blocks.length) {
-        text("p2BrainstormStatus", "还没有填写灵感，先写几条再复制。");
+        text("p2BrainstormStatus", "没有可复制的题卡。");
         return;
       }
       const payload = blocks.join("\n\n");
       const ok = await copyPlainTextToClipboard(payload);
-      text("p2BrainstormStatus", ok ? `已复制 ${blocks.length} 条灵感，可直接粘贴给 AI。` : "复制失败，请手动选择文字复制。");
+      text("p2BrainstormStatus", ok ? `已复制 ${blocks.length} 道题（含未填写灵感的原题），可直接粘贴给 AI。` : "复制失败，请手动选择文字复制。");
     }
 
     function isP2BankCard(entry = {}) {
@@ -2940,6 +3040,7 @@
       const category = entry.category || "person";
       state.p2Corpus.activeEntry = { ...entry, category };
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.remove("is-bank-editor");
+      $("p2CorpusBrainstormField")?.classList.add("hidden");
       text("p2CorpusDialogCategory", (entry.label || category).toString());
       text("p2CorpusDialogTitle", entry.entry_id ? "编辑 P2 素材" : "新增 P2 素材");
       text("p2CorpusTextLabel", "串题素材");
@@ -2947,6 +3048,7 @@
       if (saveButton) saveButton.textContent = "保存素材";
       if ($("p2CorpusCategory")) $("p2CorpusCategory").value = category;
       if ($("p2CorpusTitle")) $("p2CorpusTitle").value = entry.title || "";
+      if ($("p2CorpusBrainstormIdea")) $("p2CorpusBrainstormIdea").value = "";
       setCorpusMarkdownValue("p2CorpusText", entry.material_text || "");
       text("p2CorpusSaveStatus", "");
       $("p2CorpusDialog")?.classList.remove("hidden");
@@ -2957,10 +3059,60 @@
       setTimeout(() => $("p2CorpusTitle")?.focus(), 0);
     }
 
+    function showP2BankCorpusEditorLoading(entry = {}) {
+      const questionId = p2BankQuestionId(entry);
+      const titleText = p2CleanCueTitle(entry) || entry.title || "P2 题卡";
+      state.p2Corpus.activeEntry = {
+        ...entry,
+        is_bank_card: true,
+        entry_id: entry.entry_id || questionId,
+        cue_id: entry.cue_id || questionId,
+        title: titleText,
+        cue_title: titleText,
+      };
+      $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.add("is-bank-editor");
+      $("p2CorpusBrainstormField")?.classList.remove("hidden");
+      text("p2CorpusDialogCategory", "题库正文");
+      text("p2CorpusDialogTitle", `编辑题库正文：${titleText}`);
+      text("p2CorpusTextLabel", "正文");
+      const saveButton = $("saveP2CorpusBtn");
+      if (saveButton) {
+        saveButton.textContent = "保存正文";
+        saveButton.disabled = true;
+      }
+      if ($("p2CorpusCategory")) $("p2CorpusCategory").value = "special";
+      if ($("p2CorpusTitle")) $("p2CorpusTitle").value = titleText;
+      if ($("p2CorpusBrainstormIdea")) {
+        $("p2CorpusBrainstormIdea").value = "";
+        $("p2CorpusBrainstormIdea").disabled = true;
+      }
+      setCorpusMarkdownValue("p2CorpusText", "");
+      setCorpusEditorLoading("p2CorpusText", true, {
+        title: "正在加载题库正文",
+        detail: "窗口已打开，正文马上出现。",
+      });
+      text("p2CorpusSaveStatus", "正在加载题库正文...");
+      $("p2CorpusDialog")?.classList.remove("hidden");
+    }
+
     async function openP2BankCorpusEditor(entry = {}) {
       const questionId = p2BankQuestionId(entry);
       if (!questionId) return;
-      const payload = await api(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`);
+      const token = ++p2BankCorpusLoadToken;
+      showP2BankCorpusEditorLoading(entry);
+      let payload;
+      try {
+        payload = await fetchP2BankCorpusPayload(questionId);
+      } catch (error) {
+        if (token === p2BankCorpusLoadToken) {
+          text("p2CorpusSaveStatus", error.message || String(error));
+          if ($("saveP2CorpusBtn")) $("saveP2CorpusBtn").disabled = false;
+          if ($("p2CorpusBrainstormIdea")) $("p2CorpusBrainstormIdea").disabled = false;
+          setCorpusEditorLoading("p2CorpusText", false);
+        }
+        throw error;
+      }
+      if (token !== p2BankCorpusLoadToken) return;
       const title = p2CleanCueTitle({ ...entry, question: payload.question });
       const activeEntry = {
         ...entry,
@@ -2972,9 +3124,11 @@
         cue_title: title,
         material_text: payload.corpus_text || entry.material_text || "",
         linked_question: payload.question || entry.linked_question || "",
+        brainstorm_idea: payload.brainstorm_idea ?? entry.brainstorm_idea ?? "",
       };
       state.p2Corpus.activeEntry = activeEntry;
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.add("is-bank-editor");
+      $("p2CorpusBrainstormField")?.classList.remove("hidden");
       const titleText = activeEntry.title || activeEntry.linked_question || "P2 题卡";
       text("p2CorpusDialogCategory", "题库正文");
       text("p2CorpusDialogTitle", `编辑题库正文：${titleText}`);
@@ -2983,10 +3137,21 @@
       if (saveButton) saveButton.textContent = "保存正文";
       if ($("p2CorpusCategory")) $("p2CorpusCategory").value = "special";
       if ($("p2CorpusTitle")) $("p2CorpusTitle").value = activeEntry.title || "";
+      if ($("p2CorpusBrainstormIdea")) {
+        $("p2CorpusBrainstormIdea").disabled = false;
+        $("p2CorpusBrainstormIdea").value = activeEntry.brainstorm_idea || "";
+      }
+      setCorpusEditorLoading("p2CorpusText", false);
       setCorpusMarkdownValue("p2CorpusText", activeEntry.material_text || "");
       text("p2CorpusSaveStatus", "");
+      if (saveButton) saveButton.disabled = false;
       $("p2CorpusDialog")?.classList.remove("hidden");
-      if (!isCorpusEditorReady("p2CorpusText")) setCorpusEditorLoading("p2CorpusText", true);
+      if (!isCorpusEditorReady("p2CorpusText")) {
+        setCorpusEditorLoading("p2CorpusText", true, {
+          title: "正在准备正文",
+          detail: "编辑区已打开，内容马上可编辑。",
+        });
+      }
       ensureCorpusMarkdownEditorReady("p2CorpusText").then((editor) => {
         if (!editor) setCorpusEditorLoading("p2CorpusText", false);
         setTimeout(() => editor?.focus?.() || $("p2CorpusText")?.focus(), 0);
@@ -2996,6 +3161,9 @@
     function closeP2CorpusEditor() {
       $("p2CorpusDialog")?.classList.add("hidden");
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.remove("is-bank-editor");
+      $("p2CorpusBrainstormField")?.classList.add("hidden");
+      if ($("p2CorpusBrainstormIdea")) $("p2CorpusBrainstormIdea").disabled = false;
+      if ($("saveP2CorpusBtn")) $("saveP2CorpusBtn").disabled = false;
       state.p2Corpus.activeEntry = null;
     }
 
@@ -3214,10 +3382,64 @@
       setCorpusMarkdownValue("p2CorpusP3FollowUp", selected?.corpus_text || "");
     }
 
+    function showP2BankP3EditorLoading(entry = {}) {
+      const questionId = p2BankQuestionId(entry);
+      const title = p2CleanCueTitle(entry) || entry.title || "P2 题卡";
+      state.p2Corpus.activeP3Entry = null;
+      state.p2Corpus.activeBankP3Entry = {
+        ...entry,
+        is_bank_card: true,
+        question_id: questionId,
+        title,
+        cue_title: title,
+        items: [],
+        selectedFollowupId: "",
+      };
+      text("p2CorpusP3DialogCategory", entry.label ? `题库素材 · ${entry.label}` : "题库素材");
+      text("p2CorpusP3DialogTitle", title ? `编辑题库 P3：${title}` : "编辑题库 P3 追问");
+      if ($("p2CorpusP3QuestionSourceStatus")) text("p2CorpusP3QuestionSourceStatus", "正在加载题库追问...");
+      document.querySelector(".p2-p3-source-tools")?.classList.add("hidden");
+      $("p2BankP3EntryList")?.classList.remove("hidden");
+      if ($("p2BankP3EntryList")) {
+        $("p2BankP3EntryList").innerHTML = `
+          <div class="p2-bank-p3-loading">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        `;
+      }
+      $("p2CorpusP3FollowUpLabel")?.classList.remove("hidden");
+      if ($("p2CorpusP3FollowUpLabel")) $("p2CorpusP3FollowUpLabel").textContent = "回答正文";
+      setCorpusMarkdownValue("p2CorpusP3FollowUp", "");
+      setCorpusEditorLoading("p2CorpusP3FollowUp", true, {
+        title: "正在加载 P3 追问",
+        detail: "窗口已打开，追问和正文马上出现。",
+      });
+      text("p2CorpusP3SaveStatus", "正在加载 P3 追问...");
+      closeP2CorpusP3QuestionPicker();
+      const saveButton = $("saveP2CorpusP3Btn");
+      if (saveButton) saveButton.disabled = true;
+      $("p2CorpusP3Dialog")?.classList.remove("hidden");
+    }
+
     async function openP2BankP3Editor(entry = {}) {
       const questionId = p2BankQuestionId(entry);
       if (!questionId) return;
-      const payload = await api(`/api/p3-bank-corpus/${encodeURIComponent(questionId)}`);
+      const token = ++p2BankP3LoadToken;
+      showP2BankP3EditorLoading(entry);
+      let payload;
+      try {
+        payload = await fetchP2BankP3Payload(questionId);
+      } catch (error) {
+        if (token === p2BankP3LoadToken) {
+          text("p2CorpusP3SaveStatus", error.message || String(error));
+          if ($("saveP2CorpusP3Btn")) $("saveP2CorpusP3Btn").disabled = false;
+          setCorpusEditorLoading("p2CorpusP3FollowUp", false);
+        }
+        throw error;
+      }
+      if (token !== p2BankP3LoadToken) return;
       const title = p2CleanCueTitle({ ...entry, question: payload.question });
       state.p2Corpus.activeP3Entry = null;
       state.p2Corpus.activeBankP3Entry = {
@@ -3237,11 +3459,18 @@
       document.querySelector(".p2-p3-source-tools")?.classList.add("hidden");
       $("p2BankP3EntryList")?.classList.remove("hidden");
       $("p2CorpusP3FollowUpLabel")?.classList.remove("hidden");
+      setCorpusEditorLoading("p2CorpusP3FollowUp", false);
       renderP2BankP3Entries(payload);
       text("p2CorpusP3SaveStatus", payload.count ? "" : "这张题卡暂无题库 P3 追问。");
       closeP2CorpusP3QuestionPicker();
+      if ($("saveP2CorpusP3Btn")) $("saveP2CorpusP3Btn").disabled = false;
       $("p2CorpusP3Dialog")?.classList.remove("hidden");
-      if (!isCorpusEditorReady("p2CorpusP3FollowUp")) setCorpusEditorLoading("p2CorpusP3FollowUp", true);
+      if (!isCorpusEditorReady("p2CorpusP3FollowUp")) {
+        setCorpusEditorLoading("p2CorpusP3FollowUp", true, {
+          title: "正在准备 P3 追问",
+          detail: "编辑区已打开，内容马上可编辑。",
+        });
+      }
       ensureCorpusMarkdownEditorReady("p2CorpusP3FollowUp").then((editor) => {
         if (!editor) setCorpusEditorLoading("p2CorpusP3FollowUp", false);
         const selected = activeP2BankP3Item(state.p2Corpus.activeBankP3Entry);
@@ -3267,6 +3496,7 @@
       closeP2CorpusP3QuestionPicker();
       state.p2Corpus.activeP3Entry = null;
       state.p2Corpus.activeBankP3Entry = null;
+      if ($("saveP2CorpusP3Btn")) $("saveP2CorpusP3Btn").disabled = false;
       $("p2BankP3EntryList")?.classList.add("hidden");
       $("p2CorpusP3FollowUpLabel")?.classList.remove("hidden");
       if ($("p2CorpusP3FollowUpLabel")) $("p2CorpusP3FollowUpLabel").textContent = "相关 P3 追问";
@@ -3276,14 +3506,15 @@
     async function saveAndCloseP2CorpusEditor() {
       if (!$("p2CorpusDialog") || $("p2CorpusDialog").classList.contains("hidden")) return;
       const entry = state.p2Corpus.activeEntry || {};
-      const editorReady = isCorpusEditorReady("p2CorpusText");
-      const materialText = editorReady ? getCorpusMarkdownValue("p2CorpusText").trim() : "";
+      const materialText = getCorpusMarkdownValue("p2CorpusText").trim();
       if (entry.is_bank_card) {
+        const brainstormIdea = $("p2CorpusBrainstormIdea")?.value || "";
         closeP2CorpusEditor();
-        if (materialText) {
+        if (materialText || brainstormIdea.trim() !== String(entry.brainstorm_idea || "").trim()) {
           saveP2BankCorpusEntry({
             entry,
             materialText,
+            brainstormIdea,
             silent: true,
           }).catch(() => null);
         }
@@ -3311,8 +3542,7 @@
         return;
       }
       const entry = state.p2Corpus.activeP3Entry || {};
-      const editorReady = isCorpusEditorReady("p2CorpusP3FollowUp");
-      const p3FollowUpText = editorReady ? getCorpusMarkdownValue("p2CorpusP3FollowUp").trim() : "";
+      const p3FollowUpText = getCorpusMarkdownValue("p2CorpusP3FollowUp").trim();
       closeP2CorpusP3Editor();
       if (entry.entry_id && p3FollowUpText) {
         saveP2CorpusEntry({
@@ -3358,6 +3588,7 @@
           corpus_text: draft.corpus_text || "",
           source: "p3_bank_corpus_editor",
         })));
+        p2BankP3Cache.delete(questionId);
         if (!options.silent) text("p2CorpusP3SaveStatus", "已保存题库 P3 追问");
         await loadP2Corpus({ force: true });
         if (options.closeOnSuccess) closeP2CorpusP3Editor();
@@ -3413,7 +3644,7 @@
       if (cardMaterialButton) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        openP2BankCorpusEditor(p2BankEntryFromElement(cardMaterialButton)).catch((error) => {
+        withPending(cardMaterialButton, () => openP2BankCorpusEditor(p2BankEntryFromElement(cardMaterialButton)), { busyText: "加载中" }).catch((error) => {
           text("p2CorpusSaveStatus", error.message || String(error));
         });
         return;
@@ -3422,7 +3653,7 @@
       if (cardP3Button) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        openP2BankP3Editor(p2BankEntryFromElement(cardP3Button)).catch((error) => {
+        withPending(cardP3Button, () => openP2BankP3Editor(p2BankEntryFromElement(cardP3Button)), { busyText: "加载中" }).catch((error) => {
           text("p2CorpusP3SaveStatus", error.message || String(error));
         });
         return;
@@ -3505,6 +3736,20 @@
       openP2BrainstormDetail(trigger);
     });
 
+    const warmP2BankCardFromElement = (element) => {
+      const trigger = element?.closest?.("[data-p2-corpus-card-material], [data-p2-corpus-card-p3]");
+      if (!trigger) return;
+      warmP2BankEditorPayload(p2BankEntryFromElement(trigger));
+    };
+
+    document.addEventListener("pointerover", (event) => {
+      warmP2BankCardFromElement(event.target);
+    }, true);
+
+    document.addEventListener("focusin", (event) => {
+      warmP2BankCardFromElement(event.target);
+    }, true);
+
     $("p2BrainstormList")?.addEventListener("focusout", (event) => {
       const input = event.target.closest("[data-p2-brainstorm-input]");
       if (!input) return;
@@ -3548,12 +3793,6 @@
       if (state.p2Corpus.saving) return;
       if (entry.is_bank_card) {
         return saveP2BankCorpusEntry({ ...options, entry });
-      }
-      const hasExplicitP3Text = typeof options.p3FollowUpText === "string";
-      if (!options.materialText && !hasExplicitP3Text && !isCorpusEditorReady("p2CorpusText")) {
-        text("p2CorpusSaveStatus", "编辑器还没加载完成，请等一秒再保存。");
-        if (options.closeOnError) closeP2CorpusEditor();
-        return;
       }
       state.p2Corpus.saving = true;
       const button = $("saveP2CorpusBtn");
@@ -3609,15 +3848,11 @@
         text("p2CorpusSaveStatus", "缺少题卡 ID，无法保存。");
         return;
       }
-      if (!options.materialText && !isCorpusEditorReady("p2CorpusText")) {
-        text("p2CorpusSaveStatus", "编辑器还没加载完成，请等一秒再保存。");
-        if (options.closeOnError) closeP2CorpusEditor();
-        return;
-      }
       state.p2Corpus.saving = true;
       const button = $("saveP2CorpusBtn");
       const original = button?.textContent || "保存素材";
       const nextMaterialText = (options.materialText ?? getCorpusMarkdownValue("p2CorpusText")).trim();
+      const nextBrainstormIdea = options.brainstormIdea ?? ($("p2CorpusBrainstormIdea")?.value || entry.brainstorm_idea || "");
       if (button && !options.silent) {
         button.disabled = true;
         button.textContent = "保存中...";
@@ -3628,8 +3863,11 @@
           question: entry.linked_question || entry.question || "",
           corpus_text: nextMaterialText,
           last_ai_answer: entry.last_ai_answer || "",
+          metadata: { brainstorm_idea: nextBrainstormIdea },
           source: "p2_bank_corpus_editor",
         });
+        updateP2BrainstormCardLocal(questionId, saved.brainstorm_idea ?? nextBrainstormIdea);
+        p2BankCorpusCache.delete(questionId);
         if (!options.silent) text("p2CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
         await loadP2Corpus({ force: true });
         if (options.closeOnSuccess) closeP2CorpusEditor();

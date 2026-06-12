@@ -257,8 +257,8 @@ const WRITING_REPORT_FILTER_LABELS = {
 };
 const STANDALONE_CORPUS_VIEWS = new Set(["p1Corpus", "p2Corpus"]);
 const WRITING_TASK_TYPES = new Set(["task1_academic", "task2"]);
-const WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT = 2;
-const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 9;
+const WRITING_PROMPT_BACKGROUND_IMAGE_PRELOAD_LIMIT = 6;
+const WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT = 18;
 const DEFAULT_FULL_NAME = "LiHua";
 const DEFAULT_ENGLISH_NAME = "Jasper";
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
@@ -1340,7 +1340,9 @@ const {
   drainWritingPromptImagePreloadQueue,
   ensureWritingPromptImageReady,
   primeWritingPromptImage,
+  prefetchWritingPromptImageHints,
   scheduleNearbyWritingPromptImagePreload,
+  warmAllWritingPromptImages,
 } = writingPromptImagePreloader;
 
 const writingPromptPickerController = window.IELTSWritingPromptPicker?.createWritingPromptPickerController?.({
@@ -1366,6 +1368,7 @@ const writingPromptPickerController = window.IELTSWritingPromptPicker?.createWri
   showWritingError,
   api,
   ensureWritingPromptImageReady,
+  warmWritingPromptThumbnails,
   setWritingPrompt,
   eagerImageCount: WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT,
 });
@@ -1522,9 +1525,9 @@ function scheduleAuthenticatedPrefetch() {
   scheduleIdleTask(() => prefetchLanguageTakeaways(token), 1800);
   scheduleIdleTask(() => prefetchWritingTakeaways(token), 1800);
   scheduleIdleTask(() => prefetchSpellingDrill(token), 2200);
+  scheduleIdleTask(() => prefetchCorpusEditor(token), 800);
   scheduleIdleTask(() => prefetchP1Corpus(token), 4200);
   scheduleIdleTask(() => prefetchP2Corpus(token), 5400);
-  scheduleIdleTask(() => prefetchCorpusEditor(token), 6500);
   scheduleIdleTask(() => prefetchWritingPrompts(token), 8200);
 }
 
@@ -1645,6 +1648,8 @@ function applyP2CorpusPayload(payload) {
     const season = payload.active_season ? `${payload.active_season.replace(/-/g, " ")} · ` : "";
     const scope = payload.active_scope_label ? `${payload.active_scope_label} · ` : "";
     stats.textContent = `${season}${scope}${payload.current_part2_count || 0} 道 P2 题 · ${payload.category_count || 5} 个素材分类 · 已保存 ${payload.material_count || 0}`;
+    stats.classList.remove("is-refreshing");
+    stats.removeAttribute("aria-busy");
   }
   if (state.view === "p2Corpus") renderP2CorpusTopics();
   renderP2CorpusPrepPanel();
@@ -1880,7 +1885,10 @@ function switchView(view, options = {}) {
   }
   if (view === "writingReports") loadWritingReports();
   if (view === "p1Corpus") loadP1Corpus();
-  if (view === "p2Corpus") loadP2Corpus({ force: true });
+  if (view === "p2Corpus") {
+    loadP2Corpus({ force: true });
+    scheduleIdleTask(() => prefetchCorpusEditor(state.prefetch.token), 300);
+  }
   if (view === "accountProfile") loadAccountProfile();
   if (view === "accountSecurity") loadAccount();
   if (view !== "accountSecurity") $("#accountSecurityPanel")?.classList.add("hidden");
@@ -6778,6 +6786,19 @@ function writingCatalogMissingSlots(taskType, selectedCategory = "") {
     .filter((slot, index) => index >= promptCount && !assignedCatalogIds.has(slot.id));
 }
 
+function warmWritingPromptThumbnails(prompts = [], options = {}) {
+  const task1Prompts = (prompts || []).filter((prompt) => prompt?.task_type === "task1_academic" && prompt?.image_url);
+  if (!task1Prompts.length) return;
+  if (options.prefetchHints !== false) {
+    prefetchWritingPromptImageHints?.(task1Prompts, { limit: Number(options.hintLimit || 12) });
+  }
+  warmAllWritingPromptImages?.(task1Prompts);
+}
+
+function warmLoadedTask1PromptThumbnails(options = {}) {
+  warmWritingPromptThumbnails(state.writing.prompts.task1_academic || [], options);
+}
+
 function writingPromptSourceKey(prompt = {}) {
   const source = String(prompt.source || "").trim();
   const id = String(prompt.id || prompt.display_catalog_id || "").trim();
@@ -6865,9 +6886,9 @@ async function loadWriting() {
       summaryPromise.catch((error) => {
         text("writingSaveStatus", error?.message || "签到信息稍后刷新。");
       });
-      scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType), 80);
+      scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType).then((prompts) => warmWritingPromptThumbnails(prompts)), 80);
       const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
-      scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 2600);
+      scheduleIdleTask(() => loadWritingPrompts(alternateTaskType).then((prompts) => warmWritingPromptThumbnails(prompts)), 1200);
       return;
     }
     const routePrompt = await resolveRequestedWritingPrompt();
@@ -6904,9 +6925,9 @@ async function loadWriting() {
     }).catch((error) => {
       text("writingSaveStatus", error?.message || "签到信息稍后刷新。");
     });
-    scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType), 80);
+    scheduleIdleTask(() => loadWritingPrompts(state.writing.taskType).then((prompts) => warmWritingPromptThumbnails(prompts)), 80);
     const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
-    scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 2600);
+    scheduleIdleTask(() => loadWritingPrompts(alternateTaskType).then((prompts) => warmWritingPromptThumbnails(prompts)), 1200);
   } catch (error) {
     showWritingError(error);
   } finally {
@@ -6980,6 +7001,9 @@ async function loadWritingPrompts(taskType) {
         state.writing.promptPatterns[normalized] = normalized === "task2"
           ? inferWritingPromptPatterns(state.writing.prompts[normalized])
           : (payload.prompt_patterns || []);
+        if (normalized === "task1_academic") {
+          prefetchWritingPromptImageHints?.(state.writing.prompts[normalized] || [], { limit: 12 });
+        }
         return state.writing.prompts[normalized];
       })
       .finally(() => {
@@ -6993,8 +7017,16 @@ async function loadWritingPrompts(taskType) {
 async function prefetchWritingPrompts(token) {
   await loadWritingPrompts(state.writing.taskType || "task1_academic").catch(() => []);
   if (!prefetchCanApply(token)) return;
+  loadWritingPrompts("task1_academic")
+    .then((prompts) => warmWritingPromptThumbnails(prompts, { hintLimit: 12 }))
+    .catch(() => []);
   const alternateTaskType = state.writing.taskType === "task1_academic" ? "task2" : "task1_academic";
-  scheduleIdleTask(() => loadWritingPrompts(alternateTaskType), 5200);
+  scheduleIdleTask(() => {
+    loadWritingPrompts(alternateTaskType)
+      .then((prompts) => warmWritingPromptThumbnails(prompts))
+      .catch(() => []);
+  }, 1200);
+  scheduleIdleTask(() => warmLoadedTask1PromptThumbnails({ hintLimit: 12 }), 1500);
 }
 
 function inferWritingCategories(prompts = []) {
@@ -7522,23 +7554,33 @@ function renderWritingSurface() {
       primeWritingPromptImage(imageUrl);
       if (imageContainer.dataset.imageUrl !== imageUrl || imageContainer.classList.contains("image-error")) {
         imageContainer.dataset.imageUrl = imageUrl;
+        // Thumbnail first (tiny, usually cached) so the user sees the chart
+        // instantly; the full-res original loads at LOW fetch priority so it
+        // cannot starve concurrent API calls on the shared h2 connection.
+        const thumbUrl = imageUrl.startsWith("/assets/")
+          ? `/assets/thumbs/${imageUrl.slice("/assets/".length)}.webp`
+          : "";
         imageContainer.innerHTML = `
+          ${thumbUrl ? `<img class="writing-prompt-image-thumb" src="${escapeHtml(thumbUrl)}" alt="" aria-hidden="true" decoding="async" fetchpriority="high"
+            onload="this.parentElement.classList.add('thumb-ready')"
+            onerror="this.parentElement.classList.remove('has-thumb'); this.remove();">` : ""}
           <div class="writing-prompt-image-loading" aria-hidden="true">
             <span></span>
             <strong>图表加载中</strong>
           </div>
-          <img src="${escapeHtml(imageUrl)}" alt="Task 1 chart" loading="eager" decoding="async" fetchpriority="high" data-writing-image-preview
+          <img src="${escapeHtml(imageUrl)}" alt="Task 1 chart" loading="eager" decoding="async" fetchpriority="low" data-writing-image-preview
             onload="this.parentElement.classList.add('image-ready')"
             onerror="this.parentElement.classList.add('image-error'); this.remove();">
         `;
-        imageContainer.classList.remove("image-ready", "image-error");
+        imageContainer.classList.remove("image-ready", "image-error", "thumb-ready");
+        imageContainer.classList.toggle("has-thumb", Boolean(thumbUrl));
       }
       imageContainer.classList.remove("hidden");
       scheduleNearbyWritingPromptImagePreload(prompt);
     } else {
       imageContainer.innerHTML = "";
       imageContainer.dataset.imageUrl = "";
-      imageContainer.classList.remove("image-ready", "image-error");
+      imageContainer.classList.remove("image-ready", "image-error", "thumb-ready", "has-thumb");
       imageContainer.classList.add("hidden");
     }
   }
@@ -9119,8 +9161,8 @@ function isCorpusEditorReady(textareaId) {
   return corpusMarkdownEditorController.isCorpusEditorReady(textareaId);
 }
 
-function setCorpusEditorLoading(textareaId, isLoading) {
-  return corpusMarkdownEditorController.setCorpusEditorLoading(textareaId, isLoading);
+function setCorpusEditorLoading(textareaId, isLoading, options) {
+  return corpusMarkdownEditorController.setCorpusEditorLoading(textareaId, isLoading, options);
 }
 
 function setCorpusMarkdownValue(textareaId, value) {
@@ -9503,7 +9545,7 @@ async function openReportCorpusTarget(target) {
       display_question: target.displayQuestion || target.question || "",
       corpus_text: "",
       last_ai_answer: target.aiAnswer || "",
-    });
+    }, { showReferenceAnswer: true });
     return;
   }
   if (target.kind === "p3_bank") {
@@ -10429,16 +10471,16 @@ function bindEvents() {
     if (p3Button) {
       event.preventDefault();
       event.stopPropagation();
-      openP2CorpusP3Editor(findP2CorpusEntry(p3Button.dataset.p2CorpusP3 || ""));
+      withPending(p3Button, () => openP2CorpusP3Editor(findP2CorpusEntry(p3Button.dataset.p2CorpusP3 || "")), { busyText: "加载中..." }).catch(showError);
       return;
     }
     const existing = event.target.closest("[data-p2-corpus-entry]");
     if (existing) {
-      openP2CorpusEditor(findP2CorpusEntry(existing.dataset.p2CorpusEntry || ""));
+      withPending(existing, () => openP2CorpusEditor(findP2CorpusEntry(existing.dataset.p2CorpusEntry || "")), { busyText: "加载中..." }).catch(showError);
       return;
     }
     const created = event.target.closest("[data-p2-corpus-new]");
-    if (created) openP2CorpusEditor({ category: created.dataset.p2CorpusNew || "person" });
+    if (created) withPending(created, () => openP2CorpusEditor({ category: created.dataset.p2CorpusNew || "person" }), { busyText: "打开中..." }).catch(showError);
   });
   document.querySelectorAll("[data-corpus-home-target]").forEach((button) => {
     button.addEventListener("click", (event) => {
@@ -10492,7 +10534,7 @@ function bindEvents() {
     }
     const saveButton = event.target.closest("[data-expression-replacement-save]");
     if (saveButton) {
-      saveExpressionReplacementEdit(saveButton.dataset.expressionReplacementSave || "");
+      withPending(saveButton, () => saveExpressionReplacementEdit(saveButton.dataset.expressionReplacementSave || ""), { busyText: "保存中..." }).catch(showError);
       return;
     }
     const cancelButton = event.target.closest("[data-expression-replacement-cancel]");
@@ -10503,7 +10545,7 @@ function bindEvents() {
     }
     const deleteButton = event.target.closest("[data-expression-replacement-delete]");
     if (deleteButton) {
-      deleteExpressionReplacement(deleteButton.dataset.expressionReplacementDelete || "");
+      withPending(deleteButton, () => deleteExpressionReplacement(deleteButton.dataset.expressionReplacementDelete || ""), { busyText: "删除中..." }).catch(showError);
     }
   });
   $("expressionReplacementDialog")?.addEventListener("keydown", (event) => {
@@ -10794,7 +10836,8 @@ function bindEvents() {
     state.languageTakeaway.dragging = false;
   });
   $("saveP1CorpusBtn")?.addEventListener("click", (event) => {
-    withPending(event.currentTarget, saveAndCloseP1CorpusEditor, { busyText: "保存中..." }).catch(() => null);
+    event.preventDefault();
+    saveAndCloseP1CorpusEditor().catch(() => null);
   });
   $("copyP1AiAnswerBtn")?.addEventListener("click", async () => {
     const box = $("p1CorpusAiAnswer");
@@ -11018,7 +11061,23 @@ function bindEvents() {
       state.writing.prompt = null;
       state.writing.dirty = false;
       if ($("writingAnswer")) $("writingAnswer").value = "";
-      await loadWritingPrompts(taskType).catch(showWritingError);
+      // Over a public tunnel the prompt list fetch takes seconds; show a
+      // loading surface immediately instead of leaving the old task visible.
+      text("writingPromptType", writingTaskLabel(taskType));
+      text("writingPromptTitle", "");
+      text("writingPromptPickerTitle", "正在加载题库…");
+      $("writingPromptImage")?.classList.add("hidden");
+      const promptTextEl = $("writingPromptText");
+      if (promptTextEl) {
+        promptTextEl.innerHTML = `
+          <span class="writing-task-switch-loading" role="status" aria-live="polite">
+            <span class="spinner"></span>正在加载${escapeHtml(writingTaskLabel(taskType))}题库…
+          </span>
+        `;
+      }
+      await withPending(button, async () => {
+        await loadWritingPrompts(taskType).catch(showWritingError);
+      });
       const prompts = state.writing.prompts[taskType] || [];
       if (prompts.length) setWritingPrompt(prompts[0], true);
       renderWritingSurface();
@@ -12381,6 +12440,7 @@ async function init() {
   switchView(savedView, { force: true, skipPersist: Boolean(urlView), skipUrl: true });
   document.body.classList.remove("app-booting");
   scheduleAuthenticatedPrefetch();
+  scheduleIdleTask(() => prefetchCorpusEditor(state.prefetch.token), 900);
   resumeSpeakingAnalysisFromStorage().catch(() => {});
   try {
     const summary = await loadQuestionBankSummary({ force: true });

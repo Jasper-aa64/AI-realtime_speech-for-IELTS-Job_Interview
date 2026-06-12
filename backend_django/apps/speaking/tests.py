@@ -8,6 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.conf import settings
 
 from apps.speaking.models import (
+    ExpressionReplacementEntry,
     LanguageTakeawayEntry,
     P1CorpusEntry,
     P2BankCorpusEntry,
@@ -566,6 +567,43 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(saved["corpus_text"], "My prepared answer.")
         self.assertTrue(P1CorpusEntry.objects.filter(user=self.user, question_id=first_question["question_id"]).exists())
 
+    def test_p1_corpus_save_allows_clearing_prepared_answer(self):
+        library = self.client.get("/api/p1-corpus").json()
+        first_question = library["topics"][0]["questions"][0]
+        P1CorpusEntry.objects.create(
+            user=self.user,
+            question_id=first_question["question_id"],
+            topic=first_question["topic"],
+            question=first_question["question"],
+            corpus_text="Old prepared answer.",
+            last_ai_answer="Report-only reference.",
+        )
+
+        response = self.client.post(
+            "/api/p1-corpus",
+            data={
+                "question_id": first_question["question_id"],
+                "topic": first_question["topic"],
+                "question": first_question["question"],
+                "corpus_text": "",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["corpus_text"], "")
+        entry = P1CorpusEntry.objects.get(user=self.user, question_id=first_question["question_id"])
+        self.assertEqual(entry.corpus_text, "")
+        self.assertEqual(entry.last_ai_answer, "")
+        refreshed = self.client.get("/api/p1-corpus").json()
+        refreshed_question = next(
+            item
+            for topic in refreshed["topics"]
+            for item in topic["questions"]
+            if item["question_id"] == first_question["question_id"]
+        )
+        self.assertEqual(refreshed_question["corpus_text"], "")
+
     def test_p1_corpus_reuses_legacy_topic_bound_entry_by_canonical_question(self):
         from apps.speaking.corpus_services import legacy_p1_question_id, p1_question_id
 
@@ -954,6 +992,70 @@ class QuestionBankApiTests(TestCase):
         other_library = self.client.get("/api/language-takeaways")
         self.assertEqual(other_library.status_code, 200)
         self.assertEqual(other_library.json()["review_state"], {})
+
+    def test_takeaway_review_state_put_merges_newer_entry_records(self):
+        first = {
+            "__daily_batch": {"day": "2026-06-12", "ids": ["old"], "completedDay": "2026-06-12"},
+            "shared": {"due": "2026-06-13", "last": "2026-06-12", "reps": 1},
+            "old-only": {"due": "2026-06-13", "last": "2026-06-12", "reps": 2},
+        }
+        second = {
+            "__daily_batch": {"day": "2026-06-13", "ids": ["new"], "completedDay": ""},
+            "shared": {"due": "2026-06-14", "last": "2026-06-11", "reps": 9},
+            "new-only": {"due": "2026-06-14", "last": "2026-06-13", "reps": 1},
+        }
+        self.client.post("/api/takeaway-review-state/language", data={"state": first}, content_type="application/json")
+
+        response = self.client.post(
+            "/api/takeaway-review-state/language",
+            data={"state": second},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        merged = response.json()["review_state"]
+        self.assertEqual(merged["__daily_batch"]["day"], "2026-06-13")
+        self.assertEqual(merged["shared"]["last"], "2026-06-12")
+        self.assertEqual(merged["shared"]["reps"], 1)
+        self.assertIn("old-only", merged)
+        self.assertIn("new-only", merged)
+
+    def test_expression_replacement_entries_are_persisted_per_user(self):
+        other_user = get_user_model().objects.create_user(username="other-expression-user", password="test-pass")
+        ExpressionReplacementEntry.objects.create(
+            user=other_user,
+            kind="writing",
+            item_id="custom:important",
+            source="important",
+            replacements="vital / crucial",
+        )
+
+        self.client.logout()
+        response = self.client.get("/api/expression-replacements/writing")
+        self.assertEqual(response.status_code, 401)
+        self.client.force_login(self.user)
+
+        response = self.client.put(
+            "/api/expression-replacements/writing/custom:important",
+            data=json.dumps({"source": "important", "replacements": "vital / crucial / essential"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["item_id"], "custom:important")
+        self.assertEqual(response.json()["replacements"], "vital / crucial / essential")
+
+        response = self.client.get("/api/expression-replacements/writing")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["source"], "important")
+        self.assertEqual(items[0]["replacements"], "vital / crucial / essential")
+        self.assertEqual(ExpressionReplacementEntry.objects.filter(user=other_user).count(), 1)
+
+        response = self.client.delete("/api/expression-replacements/writing/custom:important")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True, "item_id": "custom:important"})
+        self.assertFalse(ExpressionReplacementEntry.objects.filter(user=self.user, item_id="custom:important").exists())
 
     def test_language_takeaway_list_excludes_writing_takeaways(self):
         LanguageTakeawayEntry.objects.create(

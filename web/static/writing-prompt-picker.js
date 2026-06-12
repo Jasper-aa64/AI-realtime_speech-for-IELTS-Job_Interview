@@ -25,6 +25,7 @@
       showWritingError,
       api,
       ensureWritingPromptImageReady,
+      warmWritingPromptThumbnails,
       setWritingPrompt,
       eagerImageCount,
     } = options || {};
@@ -38,6 +39,15 @@
       $("writingPromptPatternButton")?.setAttribute("aria-expanded", "false");
     }
 
+    // Await one painted frame so the loading skeleton becomes visible before
+    // the heavy synchronous render of hundreds of prompt cards. A bare await
+    // only yields a microtask, which runs before paint and keeps the UI frozen.
+    function nextPaint() {
+      return new Promise((resolve) => {
+        window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
+      });
+    }
+
     function open(taskType = state.writing.taskType || "task1_academic") {
       state.writing.pickerTaskType = taskType;
       $("writingPromptModal")?.classList.remove("hidden");
@@ -48,13 +58,25 @@
         grid.innerHTML = centeredLoadingHtml("正在加载写作题库", "题目和 Task 1 图表正在准备。");
       }
       renderShell(taskType);
-      loadWritingPrompts(taskType)
-        .then(() => render())
+      nextPaint()
+        .then(() => loadWritingPrompts(taskType))
+        .then((prompts) => {
+          if (taskType === "task1_academic") warmWritingPromptThumbnails?.(prompts, { hintLimit: 18 });
+          render();
+        })
         .catch(renderError);
     }
 
     function promptWithPattern(prompt) {
-      return typeof withWritingPromptPattern === "function" ? withWritingPromptPattern(prompt) : prompt;
+      if (!prompt || typeof withWritingPromptPattern !== "function") return prompt;
+      // withWritingPromptPattern spread-copies and re-runs pattern regexes on
+      // every call, and each render walks every prompt of every source for the
+      // filter counts. The source text never changes, so compute once per
+      // prompt object and reuse the wrapped copy (keeps __previewHtml warm too).
+      if (!prompt.__withPattern) {
+        prompt.__withPattern = withWritingPromptPattern(prompt);
+      }
+      return prompt.__withPattern;
     }
 
     function task2UsablePromptsForSource(taskType, source) {
@@ -161,6 +183,15 @@
       return `${escaped.slice(0, index)}<strong class="writing-prompt-card-fixed-line">${fixedEscaped}</strong>${escaped.slice(index + needle.length)}`;
     }
 
+    // fixedQuestionDisplayText runs ~30 regexes per prompt; cache the result
+    // on the prompt object so re-renders (tab/filter switches) stay cheap.
+    function cachedPromptPreviewHtml(prompt) {
+      if (typeof prompt.__previewHtml !== "string") {
+        prompt.__previewHtml = promptPreviewHtml(prompt);
+      }
+      return prompt.__previewHtml;
+    }
+
     function close() {
       $("writingPromptModal")?.classList.add("hidden");
       document.body.classList.remove("modal-open");
@@ -210,7 +241,7 @@
           <span class="writing-prompt-choice-body">
             <strong>${escapeHtml(choiceTitle)}</strong>
             ${choiceMeta ? `<small class="writing-prompt-choice-subtitle">${escapeHtml(choiceMeta)}</small>` : ""}
-            <span class="writing-prompt-preview">${isTask1 ? escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "") : promptPreviewHtml(prompt)}</span>
+            <span class="writing-prompt-preview">${isTask1 ? escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "") : cachedPromptPreviewHtml(prompt)}</span>
           </span>
         </button>
       `;
@@ -258,6 +289,11 @@
       grid.querySelectorAll("[data-writing-prompt-choice]").forEach((button) => {
         button.querySelectorAll(".writing-prompt-choice-image img").forEach((image) => {
           image.addEventListener("error", () => handlePromptThumbError(image));
+          if (image.complete && image.naturalWidth > 0) {
+            image.classList.add("is-loaded");
+          } else {
+            image.addEventListener("load", () => image.classList.add("is-loaded"), { once: true });
+          }
         });
         button.addEventListener("click", () => {
           if (state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) return;
@@ -458,7 +494,9 @@
         grid.classList.add("is-loading");
         grid.innerHTML = centeredLoadingHtml("正在加载写作题库", "题目和 Task 1 图表正在准备。");
       }
-      await loadWritingPrompts(taskType).catch(renderError);
+      await nextPaint();
+      const prompts = await loadWritingPrompts(taskType).catch(renderError);
+      if (taskType === "task1_academic") warmWritingPromptThumbnails?.(prompts || [], { hintLimit: 18 });
       render();
     }
 

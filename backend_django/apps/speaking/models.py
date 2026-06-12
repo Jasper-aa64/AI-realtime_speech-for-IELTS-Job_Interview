@@ -258,5 +258,29 @@ class TakeawayReviewState(UserOwnedModel):
             models.Index(fields=["user", "updated_at"], name="speaking_trs_user_updated_idx"),
         ]
 
+
+class ExpressionReplacementEntry(UserOwnedModel):
+    class Kind(models.TextChoices):
+        LANGUAGE = "language", "Language"
+        WRITING = "writing", "Writing"
+
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="expression_replacement_entries")
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    item_id = models.CharField(max_length=160)
+    source = models.TextField(blank=True)
+    replacements = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "kind", "item_id"], name="unique_expression_replacement_per_user_kind"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "kind"], name="speaking_expr_user_kind_idx"),
+            models.Index(fields=["user", "updated_at"], name="speaking_expr_user_updated_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.kind}:{self.source[:40]}"
+
     def __str__(self) -> str:
         return f"takeaway review:{self.user_id}:{self.kind}"
