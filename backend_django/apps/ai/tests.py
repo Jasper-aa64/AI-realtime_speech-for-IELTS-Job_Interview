@@ -1021,6 +1021,41 @@ class AIWorkerCommandTests(TestCase):
         self.assertIsNotNone(task.available_at)
         self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
 
+    @override_settings(
+        AI_HTTP_BASE_URL="https://ai.example/v1",
+        AI_HTTP_API_KEY="test-key",
+        AI_HTTP_MODEL="gpt-5.4-mini",
+    )
+    def test_run_ai_tasks_requeues_http_writing_score_on_provider_502(self):
+        from apps.ai.http_provider import HttpApiProviderError
+
+        _user, entry, created = self.create_writing_score_task(
+            username="worker-http-502-user",
+            prompt_id="worker-http-502-prompt",
+        )
+
+        class FailingHttpProvider:
+            def complete_chat(self, _messages, **_kwargs):
+                raise HttpApiProviderError(
+                    "HTTP AI provider returned 502: upstream unavailable",
+                    error_code="http_api_provider_http_error",
+                    status_code=502,
+                )
+
+        out = StringIO()
+        with patch("apps.ai.provider_adapters.HttpApiProvider", return_value=FailingHttpProvider()):
+            call_command("run_ai_tasks", "--limit", "5", "--worker-id", "http-502-worker", stdout=out)
+
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["items"][0]["task_id"], created["task"]["id"])
+        self.assertEqual(summary["items"][0]["status"], AITask.Status.PENDING)
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual(task.status, AITask.Status.PENDING)
+        self.assertEqual(task.error_code, "http_api_provider_http_error")
+        self.assertIn("502", task.error_message)
+        self.assertIsNotNone(task.available_at)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
+
     def test_run_ai_tasks_processes_pending_speaking_report(self):
         from apps.speaking.models import SpeakingAttempt, SpeakingTurn
 

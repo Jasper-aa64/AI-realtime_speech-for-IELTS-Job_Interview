@@ -134,6 +134,23 @@ class SpellingDrillWord(UserOwnedModel):
         return f"spelling drill:{self.normalized}:{self.user_id}"
 
 
+class SpellingDrillDailyBatch(UserOwnedModel):
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="spelling_drill_daily_batches")
+    review_day = models.DateField()
+    word_ids = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "review_day"], name="unique_spelling_daily_batch_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "review_day"], name="writing_sp_batch_user_day_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"spelling batch:{self.user_id}:{self.review_day}"
+
+
 class WritingLearnerProfile(UserOwnedModel):
     user = models.OneToOneField("accounts.CustomUser", on_delete=models.CASCADE, related_name="writing_learner_profile")
     total_scored = models.PositiveIntegerField(default=0)
@@ -154,3 +171,21 @@ class WritingLearnerProfile(UserOwnedModel):
 
     def __str__(self) -> str:
         return f"writing profile:{self.user_id}"
+
+
+class WritingFrameTemplate(UserOwnedModel):
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="writing_frame_templates")
+    frame_key = models.CharField(max_length=120)
+    template_text = models.TextField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "frame_key"], name="unique_writing_frame_template_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "frame_key"], name="writing_frame_user_key_idx"),
+            models.Index(fields=["user", "updated_at"], name="writing_frame_user_updated_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"writing frame:{self.user_id}:{self.frame_key}"

@@ -22,7 +22,22 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-local-ielts-mi
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = [host for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if host]
-CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin]
+
+
+def csrf_origin_for_host(host: str) -> str:
+    value = str(host or "").strip()
+    if not value or value in {"127.0.0.1", "localhost"} or value.startswith("127."):
+        return ""
+    if value.startswith(("http://", "https://")):
+        return value
+    return f"https://{value}"
+
+
+_explicit_csrf_trusted_origins = [
+    origin for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin
+]
+_allowed_host_csrf_origins = [origin for origin in (csrf_origin_for_host(host) for host in ALLOWED_HOSTS) if origin]
+CSRF_TRUSTED_ORIGINS = sorted({*_explicit_csrf_trusted_origins, *_allowed_host_csrf_origins})
 
 
 # Application definition
@@ -45,6 +60,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'django.middleware.gzip.GZipMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

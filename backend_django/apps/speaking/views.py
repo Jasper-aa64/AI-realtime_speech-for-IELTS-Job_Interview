@@ -34,6 +34,7 @@ from .services import (
     save_p3_bank_followup_corpus,
     save_language_takeaway,
     save_writing_takeaway,
+    save_takeaway_review_state,
     score_attempt,
     start_attempt,
     stream_follow_up_sse_events,
@@ -226,6 +227,17 @@ def writing_takeaway_detail_view(request, entry_id: str):
         return JsonResponse(delete_writing_takeaway(request.user, entry_id))
     except SpeakingError as exc:
         return JsonResponse({"error": str(exc)}, status=404 if "not found" in str(exc).lower() else 400)
+
+
+@require_http_methods(["POST"])
+def takeaway_review_state_view(request, kind: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(save_takeaway_review_state(request.user, kind, _json_payload(request)))
+    except SpeakingError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
 
 
 @require_http_methods(["POST"])

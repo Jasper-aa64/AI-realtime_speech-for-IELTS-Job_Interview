@@ -1,8 +1,18 @@
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 
+from config.settings import csrf_origin_for_host
+
 
 class HealthEndpointTests(TestCase):
+    def test_csrf_origin_for_host_trusts_public_https_hosts(self):
+        self.assertEqual(
+            csrf_origin_for_host("fiscal-mechanics-vintage-alternative.trycloudflare.com"),
+            "https://fiscal-mechanics-vintage-alternative.trycloudflare.com",
+        )
+        self.assertEqual(csrf_origin_for_host("127.0.0.1"), "")
+        self.assertEqual(csrf_origin_for_host("localhost"), "")
+
     def test_health_endpoint_returns_database_status(self):
         response = Client().get("/api/health/")
 

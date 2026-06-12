@@ -33,8 +33,10 @@ DEFAULT_FALLBACK_REASON = "local fallback worker: real AI provider is not connec
 SUMMARY_STATUS_SKIPPED = "skipped"
 CODEX_REASONING_EFFORT = "medium"
 RETRYABLE_PROVIDER_ERROR_CODES = {
+    "http_api_provider_http_error",
     "http_api_provider_request_failed",
 }
+RETRYABLE_HTTP_PROVIDER_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 
 
 class ProviderRunOutcome:
@@ -347,7 +349,7 @@ class AiTaskTemplate(BaseProviderAdapter):
 
     def _on_failure(self, exc: Exception, task: AITask, request_payload: dict[str, Any]) -> ProviderRunResult:
         error_code = exc.error_code if isinstance(exc, ProviderExecutionError) else self.failure_error_code
-        if error_code in RETRYABLE_PROVIDER_ERROR_CODES:
+        if self._is_retryable_failure(exc, error_code):
             return ProviderRunResult.retryable_failure(
                 self._failure_message(exc),
                 error_code=error_code,
@@ -362,6 +364,12 @@ class AiTaskTemplate(BaseProviderAdapter):
 
     def _failure_message(self, exc: Exception) -> str:
         return str(exc)
+
+    def _is_retryable_failure(self, exc: Exception, error_code: str) -> bool:
+        if error_code == "http_api_provider_http_error":
+            status_code = getattr(exc, "status_code", None)
+            return status_code in RETRYABLE_HTTP_PROVIDER_STATUS_CODES
+        return error_code in RETRYABLE_PROVIDER_ERROR_CODES
 
 
 class CodexWritingScoreAdapter(AiTaskTemplate):
@@ -565,7 +573,9 @@ class HttpWritingScoreAdapter(CodexWritingScoreAdapter):
                 stream=True,
             )
         except HttpApiProviderError as exc:
-            raise ProviderExecutionError(str(exc), error_code=exc.error_code) from exc
+            wrapped = ProviderExecutionError(str(exc), error_code=exc.error_code)
+            wrapped.status_code = exc.status_code
+            raise wrapped from exc
         return extract_json_object(result.text), result.usage or {}
 
     def _failure_message(self, exc: Exception) -> str:

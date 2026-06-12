@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "django",
+      "runtimeExecutable": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.venv-django/bin/python",
+      "runtimeArgs": ["/Users/mac/Desktop/IE/IELTS_speaking_monitor/backend_django/manage.py", "runserver", "127.0.0.1:8767", "--noreload"],
+      "port": 8767
+    }
+  ]
+}

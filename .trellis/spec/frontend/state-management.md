@@ -48,4 +48,52 @@ Questions to answer:
 
 <!-- State management mistakes your team has made -->
 
-(To be filled by the team)
+### Takeaway Daily Recall Uses 4 AM Review Days
+
+Takeaway and Writing Bank recall are localStorage-backed SRS queues. Their
+"today" boundary is 04:00, matching the spelling drill. New or newly-discovered
+entries must be due on the current review day, not tomorrow; otherwise the
+sidebar daily reminder can disappear immediately after saving material.
+
+If the current day's local batch was previously marked completed with zero
+items, adding or first discovering a due entry must reopen today's batch and
+include that entry. Do not leave `__daily_batch.completedDay === today` blocking
+new due items.
+
+Wrong:
+
+```js
+records[id] = { due: nextReviewDayKey(), reps: 0 };
+```
+
+Correct:
+
+```js
+records[id] = { due: todayKey(), reps: 0 };
+markTakeawayEntryDueToday("writing", saved.entry_id);
+```
+
+### Speaking Follow-Up State Must Respect Empty Answers
+
+When a P1 work/study identity question (`Do you work or do you study?`) completes
+with an empty transcript, the UI must not show "正在生成追问..." and must not start
+follow-up streaming. Use the backend `follow_up_skipped` response to show a clear
+message such as `没有检测到回答，已跳过追问。`, then move to the next available turn
+or scoring state.
+
+Wrong:
+
+```js
+setRecordButton("processing", "Saving", "正在生成追问...");
+streamFollowUpForCompletedTurn(...);
+```
+
+Correct:
+
+```js
+if (completePayload.follow_up_skipped) {
+  text("recordStatus", completePayload.follow_up_skipped.message);
+} else if (shouldStreamFollowUpTurn(completePayload.next_turn)) {
+  streamFollowUpForCompletedTurn(...);
+}
+```

@@ -54,8 +54,16 @@ def frontend_asset(request, asset_path: str = "index.html"):
     if not path.exists():
         raise Http404("Static asset not found")
     response = FileResponse(open(path, "rb"), content_type=allowed[normalized])
-    response["Cache-Control"] = "no-store"
+    response["Cache-Control"] = frontend_cache_control(request, is_index=normalized == "index.html")
     return response
+
+
+def frontend_cache_control(request, *, is_index: bool = False) -> str:
+    if is_index:
+        return "no-store"
+    if request.GET.get("v"):
+        return "public, max-age=31536000, immutable"
+    return "no-cache"
 
 
 @require_GET
@@ -66,7 +74,9 @@ def frontend_static_asset(request, asset_path: str):
     path = settings.BASE_DIR.parent / "web" / "static" / "assets" / normalized
     if not path.exists() or not path.is_file():
         raise Http404("Static asset not found")
-    return FileResponse(open(path, "rb"))
+    response = FileResponse(open(path, "rb"))
+    response["Cache-Control"] = "public, max-age=86400"
+    return response
 
 
 @require_GET
@@ -82,7 +92,9 @@ def frontend_wasm_asset(request, asset_path: str):
         ".js": "text/javascript; charset=utf-8",
         ".wasm": "application/wasm",
     }
-    return FileResponse(open(path, "rb"), content_type=content_types.get(path.suffix))
+    response = FileResponse(open(path, "rb"), content_type=content_types.get(path.suffix))
+    response["Cache-Control"] = "public, max-age=86400"
+    return response
 
 
 @require_GET
@@ -102,5 +114,5 @@ def frontend_vendor_asset(request, asset_path: str):
         ".js": "text/javascript; charset=utf-8",
     }
     response = FileResponse(open(path, "rb"), content_type=content_types.get(path.suffix))
-    response["Cache-Control"] = "no-store"
+    response["Cache-Control"] = frontend_cache_control(request)
     return response

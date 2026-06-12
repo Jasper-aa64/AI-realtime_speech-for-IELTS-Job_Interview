@@ -35,7 +35,28 @@ finally:
 PY
 }
 
+ensure_migrations() {
+  echo "Checking Django migrations"
+  if "$PYTHON" "$ROOT_DIR/backend_django/manage.py" migrate --check >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "Applying pending Django migrations"
+  "$PYTHON" "$ROOT_DIR/backend_django/manage.py" migrate
+}
+
+ensure_image_thumbnails() {
+  if [[ ! -x "$ROOT_DIR/scripts/generate_image_thumbs.sh" ]]; then
+    return 0
+  fi
+  echo "Checking writing image thumbnails"
+  if ! "$ROOT_DIR/scripts/generate_image_thumbs.sh"; then
+    echo "Warning: writing image thumbnail generation failed; continuing startup." >&2
+  fi
+}
+
 start_django() {
+  ensure_image_thumbnails
+  ensure_migrations
   if port_is_open; then
     echo "Django already listening at http://$DJANGO_HOST:$DJANGO_PORT"
     return 0

@@ -6,14 +6,14 @@
  * KEY DESIGN:
  *  - S() patches the existing state.spellingDrill object (app.js pre-creates it)
  *  - renderDrill() does PARTIAL in-place DOM updates for same-word state changes
- *    (submit answer, retry, hint) → no card animation replay, no progress jump
+ *    (submit answer, hint) → no card animation replay, no progress jump
  *  - Full card rebuild only on new word (gotoNext) → animation plays once, intentionally
  */
 (function () {
   "use strict";
 
   function createSpellingDrillController(options) {
-    const { state, $, escapeHtml, api, showConfirmDelete } = options || {};
+    const { state, $, escapeHtml, api, showConfirmDelete, withPending } = options || {};
     if (!state || typeof $ !== "function" || typeof api !== "function") {
       throw new Error("Spelling drill controller requires shared app state and helpers.");
     }
@@ -32,12 +32,12 @@
         sd.queue          = [];
         sd.queuePos       = 0;
         sd.requeueMap     = {};
+        sd.completedWordIds = new Set();
         sd.doneCount      = 0;
         sd.queueInitialLen= 0;
         sd.result         = null;
-        sd.retryTyped     = null;      // last rewrite attempt after a wrong
-        sd.retryCorrect   = false;     // whether the rewrite matched
         sd.loadingPromise = sd.loadingPromise || null;
+        sd.submitSeq      = Number(sd.submitSeq || 0);
         sd._drillReady    = true;
       }
       return sd;
@@ -49,6 +49,40 @@
     function currentWord() {
       const s = S();
       return s.queue[s.queuePos] || null;
+    }
+
+    function normalizeTyped(value) {
+      return String(value || "").trim().toLowerCase();
+    }
+
+    function isReviewCopy(word) {
+      return Boolean(word && word._sessionReview === true);
+    }
+
+    function shouldCountCorrectAnswer(word) {
+      return !isReviewCopy(word) || word?._sessionReviewKind === "final";
+    }
+
+    function cloneForSessionReview(word) {
+      return {
+        ...word,
+        _sessionReview: true,
+        _sessionReviewKind: "final",
+        _reviewCopyId: `${word.word_id}:review:${Date.now()}:${Math.random().toString(16).slice(2)}`,
+      };
+    }
+
+    function cloneForImmediateRetry(word) {
+      return {
+        ...word,
+        _sessionReview: true,
+        _sessionReviewKind: "immediate",
+        _reviewCopyId: `${word.word_id}:retry:${Date.now()}:${Math.random().toString(16).slice(2)}`,
+      };
+    }
+
+    function wordRenderKey(word) {
+      return String(word?._reviewCopyId || word?.word_id || "");
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────
@@ -141,21 +175,28 @@
         s.queue          = [...s.items];
         s.queuePos       = 0;
         s.requeueMap     = {};
+        s.completedWordIds = new Set();
         s.doneCount      = 0;
         s.queueInitialLen= s.items.length;
         s.result         = null;
-        s.retryTyped     = null;
-        s.retryCorrect   = false;
       }
     }
 
     async function load({ force = false, resetQueue = true, _pivoted = false } = {}) {
       const s  = S();
-      s.phase  = "loading";
-      render();
+      const canRenderCached = !force && resetQueue && Array.isArray(s.items) && s.items.length > 0;
+      if (canRenderCached) {
+        ingest({ items: s.items, stats: s.stats || {} }, { resetQueue: true });
+        render();
+        setStatus("正在同步最新错词本…");
+      } else {
+        s.phase  = "loading";
+        render();
+      }
       try {
         const payload = await fetchWords(s.scope, { force });
         ingest(payload, { resetQueue });
+        setStatus("");
       } catch (err) {
         s.phase = "ready";
         setStatus(err.message || String(err), true);
@@ -217,7 +258,7 @@
         : `<p class="nr-note-slot nr-note-slot--placeholder" aria-hidden="true"></p>`;
 
       // ── State B: correct — show green diff, wait for Enter ──
-      return result.correct ? `
+      if (result.correct) return `
         <div class="nr-slot nr-result-slot is-correct">
           ${noteHtml}
           <div class="nr-inline-answer" aria-live="polite">
@@ -228,7 +269,9 @@
           </p>
           <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
         </div>
-      ` : `
+      `;
+
+      return `
         <div class="nr-slot nr-result-slot is-wrong">
           ${noteHtml}
           <div class="nr-inline-answer" aria-live="polite">
@@ -265,7 +308,7 @@
 
       if (s.view === "library") { renderLibrary(); return; }
       if (s.phase === "loading") return renderLoading();
-      if (!s.items.length)       return renderEmpty();
+      if (!s.queue.length)       return renderEmpty();
       if (s.queuePos >= s.queue.length) return renderDone();
       renderDrill();
     }
@@ -343,7 +386,7 @@
       // Avoids card animation replay and lets progress-fill CSS transition work.
       const existingCard = root().querySelector(`[data-drill-word]`);
       const sameWord = existingCard &&
-        existingCard.dataset.drillWord === String(word.word_id);
+        existingCard.dataset.drillWord === wordRenderKey(word);
 
       if (sameWord) {
         // Update progress bar (CSS transition animates width smoothly)
@@ -369,7 +412,7 @@
       ).join("");
 
       root().innerHTML = `
-        <div class="nr-card" data-drill-card data-drill-word="${escapeHtml(String(word.word_id))}">
+        <div class="nr-card" data-drill-card data-drill-word="${escapeHtml(wordRenderKey(word))}">
           <header class="nr-card-head">
             <div class="nr-progress">
               <div class="nr-progress-track">
@@ -458,13 +501,107 @@
     }
 
     // ─── Actions ─────────────────────────────────────────────────────
+    function markWordCompleted(word) {
+      const s = S();
+      const id = String(word?.word_id || "");
+      if (!id || s.completedWordIds?.has(id)) return;
+      s.completedWordIds.add(id);
+      s.doneCount += 1;
+    }
+
     function gotoNext() {
       const s = S();
       s.queuePos    += 1;
       s.result       = null;
-      s.retryTyped   = null;
-      s.retryCorrect = false;
       render();
+    }
+
+    function scheduleWrongWordReview(word) {
+      const s = S();
+      if (!word || s.result?._queuedForReview) return;
+      s.queue.splice(s.queuePos + 1, 0, cloneForImmediateRetry(word));
+      const hasFinalReview = s.queue.some((item, index) =>
+        index > s.queuePos &&
+        String(item?.word_id || "") === String(word.word_id || "") &&
+        item?._sessionReviewKind === "final"
+      );
+      if (!hasFinalReview) {
+        s.queue.push(cloneForSessionReview(word));
+      }
+      if (s.result) s.result._queuedForReview = true;
+    }
+
+    function localAttemptResult(word, typed, correct) {
+      const currentStreak = Number(word?.current_streak || 0);
+      return {
+        correct,
+        correct_spelling: correct ? "" : (word?.correct_spelling || ""),
+        current_streak: correct ? currentStreak + 1 : 0,
+        review_stage: word?.review_stage,
+        status: word?.status,
+        explanation: correct ? "" : word?.explanation,
+        next_due_human: word?.next_due_human || "",
+        _typed: typed,
+      };
+    }
+
+    function mergeAttemptResultIntoWord(word, result, { countAttempt = false } = {}) {
+      if (!word || !result) return;
+      Object.assign(word, {
+        current_streak: result.current_streak ?? word.current_streak,
+        review_stage:   result.review_stage ?? word.review_stage,
+        status:         result.status ?? word.status,
+      });
+      if (countAttempt) {
+        word.attempt_count = Number(word.attempt_count || 0) + 1;
+        word.correct_count = Number(word.correct_count || 0) + (result.correct ? 1 : 0);
+      }
+      const s = S();
+      const iw = s.items.find((w) => w.word_id === word.word_id);
+      if (iw) Object.assign(iw, word);
+    }
+
+    function applyAttemptResult(word, result, typed, { syncWord = false } = {}) {
+      const s = S();
+      const stored = { ...result, _typed: typed };
+      s.result = stored;
+      if (syncWord) {
+        mergeAttemptResultIntoWord(word, result, { countAttempt: true });
+      }
+      if (result.correct) {
+        if (shouldCountCorrectAnswer(word)) {
+          markWordCompleted(word);
+        }
+      } else {
+        s.requeueMap[word.word_id] = (s.requeueMap[word.word_id] || 0) + 1;
+        scheduleWrongWordReview(word);
+      }
+      render();
+    }
+
+    function syncServerAttemptResult(word, localResult, typed, seq, renderKey) {
+      api(
+        `/api/writing/spelling-words/${encodeURIComponent(word.word_id)}/attempt`,
+        { typed }
+      ).then((serverResult) => {
+        const s = S();
+        const queuedFlag = s.result?._queuedForReview;
+        mergeAttemptResultIntoWord(word, serverResult, { countAttempt: false });
+        if (seq !== s.submitSeq) return;
+        const stillSameCard = wordRenderKey(currentWord()) === renderKey;
+        if (!stillSameCard || !s.result || s.result._typed !== typed) return;
+        s.result = {
+          ...s.result,
+          ...serverResult,
+          _typed: typed,
+          _queuedForReview: queuedFlag || s.result._queuedForReview,
+        };
+        render();
+      }).catch((_err) => {
+        if (seq === S().submitSeq) {
+          setStatus("同步失败，本次结果可能未记录。", true);
+        }
+      });
     }
 
     async function submitAttempt(e) {
@@ -474,48 +611,17 @@
       const typed = input?.value || "";
       if (!word || !typed.trim()) { setStatus("先输入拼写。", true); return; }
       setStatus("");
-      try {
-        const result = await api(
-          `/api/writing/spelling-words/${encodeURIComponent(word.word_id)}/attempt`,
-          { typed }
-        );
-        const stored = { ...result, _typed: typed };
-        const s = S();
-        s.result = stored;
-        Object.assign(word, {
-          current_streak: result.current_streak,
-          review_stage:   result.review_stage ?? word.review_stage,
-          status:         result.status,
-          attempt_count:  Number(word.attempt_count || 0) + 1,
-          correct_count:  Number(word.correct_count || 0) + (result.correct ? 1 : 0),
-        });
-        const iw = s.items.find((w) => w.word_id === word.word_id);
-        if (iw) Object.assign(iw, word);
-        if (result.correct) {
-          s.doneCount += 1;
-        } else {
-          // Insert immediately after current position so the same word
-          // appears on the very next card, not buried at the end.
-          s.requeueMap[word.word_id] = (s.requeueMap[word.word_id] || 0) + 1;
-          s.queue.splice(s.queuePos + 1, 0, { ...word });
-        }
-        render();
-        // No auto-advance: user must press Enter on the continue button.
-      } catch (err) {
-        setStatus(err.message || String(err), true);
+      const s = S();
+      const reviewCopy = isReviewCopy(word);
+      const localCorrect = normalizeTyped(typed) === normalizeTyped(word.correct_spelling || word.normalized || "");
+      const result = localAttemptResult(word, typed, localCorrect);
+      const seq = ++s.submitSeq;
+      const renderKey = wordRenderKey(word);
+      applyAttemptResult(word, result, typed, { syncWord: !reviewCopy });
+      if (!reviewCopy) {
+        syncServerAttemptResult(word, result, typed, seq, renderKey);
       }
-    }
-
-    function submitRetry() {
-      const word  = currentWord();
-      const input = $("spellingRetryInput");
-      const typed = (input?.value || "").trim();
-      if (!word || !typed) return;
-      const s       = S();
-      const correct = String(word.correct_spelling || "").toLowerCase();
-      s.retryTyped  = typed;
-      s.retryCorrect= typed.toLowerCase() === correct;
-      render();
+      // No auto-advance: user must press Enter on the continue button.
     }
 
     async function updateWord(wordId, payload) {
@@ -527,8 +633,7 @@
       const s   = S();
       const idx = s.items.findIndex((w) => w.word_id === wordId);
       if (idx >= 0) s.items[idx] = result;
-      const qi = s.queue.findIndex((w) => w.word_id === wordId);
-      if (qi >= 0) s.queue[qi] = result;
+      s.queue = s.queue.map((w) => w.word_id === wordId ? { ...result, _sessionReview: w._sessionReview === true } : w);
       s.result   = null;
       render();
     }
@@ -538,6 +643,8 @@
       const s   = S();
       s.items = s.items.filter((w) => w.word_id !== wordId);
       s.queue = s.queue.filter((w) => w.word_id !== wordId);
+      s.completedWordIds?.delete(wordId);
+      s.doneCount = Math.min(s.doneCount, s.completedWordIds?.size || s.doneCount);
       s.queuePos = Math.min(s.queuePos, Math.max(0, s.queue.length));
       s.result = null;
       render();
@@ -556,7 +663,10 @@
 
       // Card: form submit — only handles the main attempt form
       root()?.addEventListener("submit", (e) => {
-        submitAttempt(e);
+        const form = e.target;
+        if (form?.id === "spellingAttemptForm") {
+          submitAttempt(e);
+        }
       });
 
 
@@ -580,14 +690,19 @@
         if (t.closest("[data-close-library]")) { S().view = "drill"; render(); return; }
         const m = t.closest("[data-spelling-master]");
         if (m) {
-          updateWord(m.dataset.spellingMaster, { action: "master" })
+          const run = () => updateWord(m.dataset.spellingMaster, { action: "master" });
+          (withPending ? withPending(m, run, { busyText: "..." }) : run())
             .catch((err) => setStatus(err.message, true));
           return;
         }
         const d = t.closest("[data-spelling-delete]");
         if (d) {
           const id  = d.dataset.spellingDelete;
-          const run = () => deleteWord(id).catch((err) => setStatus(err.message, true));
+          const run = () => {
+            const task = () => deleteWord(id);
+            return (withPending ? withPending(d, task, { busyText: "..." }) : task())
+              .catch((err) => setStatus(err.message, true));
+          };
           if (typeof showConfirmDelete === "function")
             showConfirmDelete("把这个词从错词本里移走吗？", run);
           else if (window.confirm("把这个词从错词本里移走吗？")) run();

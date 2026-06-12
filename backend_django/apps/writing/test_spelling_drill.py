@@ -7,10 +7,12 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.utils import timezone
 
-from apps.writing.models import SpellingDrillWord, WritingEntry, WritingPrompt, WritingScore
+from apps.writing.models import SpellingDrillDailyBatch, SpellingDrillWord, WritingEntry, WritingPrompt, WritingScore
 from apps.writing.spelling_services import (
+    SRS_REVIEW_TIMEZONE,
     harvest_spelling_words,
     record_spelling_attempt,
+    review_day_start,
     spelling_drill_library,
     update_spelling_word,
 )
@@ -54,6 +56,9 @@ class SpellingDrillTests(TestCase):
             datetime(year, month, day, hour, minute),
             timezone.get_current_timezone(),
         )
+
+    def review_local(self, value):
+        return timezone.localtime(value, SRS_REVIEW_TIMEZONE)
 
     def test_harvest_collects_inline_and_summary_words(self):
         self.create_score(
@@ -155,8 +160,8 @@ class SpellingDrillTests(TestCase):
         self.assertEqual(word.lapses, 1)
         self.assertEqual(wrong["next_due_human"], "明天")
         self.assertEqual(
-            timezone.localtime(word.due_at),
-            timezone.localtime(now).replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=1),
+            self.review_local(word.due_at),
+            self.review_local(now).replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=1),
         )
         self.assertIn("next_due_human", wrong)
 
@@ -178,16 +183,24 @@ class SpellingDrillTests(TestCase):
         )
         harvest_spelling_words(self.user)
         word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
-        now = self.aware_at(2026, 6, 7, 3, 30)
+        now = self.aware_at(2026, 6, 6, 19, 30)
 
         with patch("apps.writing.spelling_services.timezone.now", return_value=now):
             record_spelling_attempt(self.user, word.word_id, "comfortble")
 
         word.refresh_from_db()
         self.assertEqual(
-            timezone.localtime(word.due_at),
-            timezone.localtime(now).replace(hour=4, minute=0, second=0, microsecond=0),
+            self.review_local(word.due_at),
+            self.review_local(now).replace(hour=4, minute=0, second=0, microsecond=0),
         )
+
+    def test_review_day_uses_china_four_am_not_utc_four_am(self):
+        before_china_refresh = self.aware_at(2026, 6, 11, 19, 30)
+        after_china_refresh = self.aware_at(2026, 6, 11, 20, 30)
+
+        self.assertEqual(review_day_start(before_china_refresh).date().isoformat(), "2026-06-11")
+        self.assertEqual(review_day_start(after_china_refresh).date().isoformat(), "2026-06-12")
+        self.assertEqual(review_day_start(after_china_refresh).hour, 4)
 
     def test_due_scope_is_frozen_to_four_am_batch(self):
         now = self.aware_at(2026, 6, 7, 10, 30)
@@ -208,6 +221,95 @@ class SpellingDrillTests(TestCase):
             tomorrow = spelling_drill_library(self.user, scope="due")
         self.assertEqual(tomorrow["count"], 1)
         self.assertEqual(tomorrow["items"][0]["correct_spelling"], "comfortable")
+
+    def test_due_scope_freezes_existing_batch_and_excludes_same_day_harvest(self):
+        now = self.aware_at(2026, 6, 7, 10, 30)
+        with patch("apps.writing.spelling_services.timezone.now", return_value=now):
+            old_word = SpellingDrillWord.objects.create(
+                user=self.user,
+                word_id="sp:old",
+                correct_spelling="comfortable",
+                normalized="comfortable",
+                wrong_forms=["confortable"],
+                first_seen_at=now - timedelta(days=3),
+                last_seen_at=now - timedelta(days=3),
+                due_at=now.replace(hour=4, minute=0, second=0, microsecond=0),
+                status=SpellingDrillWord.Status.ACTIVE,
+            )
+            first = spelling_drill_library(self.user, scope="due")
+            self.create_score(
+                answer="I watched many vidios online.",
+                analysis_payload={"spelling_correction_summary": "- vidios -> 正确：videos（视频）"},
+            )
+            harvest_spelling_words(self.user)
+            second = spelling_drill_library(self.user, scope="due")
+
+        self.assertEqual([item["word_id"] for item in first["items"]], [old_word.word_id])
+        self.assertEqual([item["word_id"] for item in second["items"]], [old_word.word_id])
+        self.assertEqual(second["stats"]["due"], 1)
+        self.assertTrue(SpellingDrillWord.objects.filter(user=self.user, normalized="videos").exists())
+
+        next_batch = self.aware_at(2026, 6, 8, 4, 1)
+        with patch("apps.writing.spelling_services.timezone.now", return_value=next_batch):
+            tomorrow = spelling_drill_library(self.user, scope="due")
+
+        tomorrow_words = {item["correct_spelling"] for item in tomorrow["items"]}
+        self.assertIn("videos", tomorrow_words)
+
+    def test_attempt_removes_word_from_today_batch_without_second_wave(self):
+        now = self.aware_at(2026, 6, 7, 10, 30)
+        with patch("apps.writing.spelling_services.timezone.now", return_value=now):
+            word = SpellingDrillWord.objects.create(
+                user=self.user,
+                word_id="sp:due",
+                correct_spelling="comfortable",
+                normalized="comfortable",
+                wrong_forms=["confortable"],
+                first_seen_at=now - timedelta(days=3),
+                last_seen_at=now - timedelta(days=3),
+                due_at=now.replace(hour=4, minute=0, second=0, microsecond=0),
+                status=SpellingDrillWord.Status.ACTIVE,
+            )
+            before = spelling_drill_library(self.user, scope="due")
+            result = record_spelling_attempt(self.user, word.word_id, "comfortble")
+            after = spelling_drill_library(self.user, scope="due")
+
+        self.assertEqual(before["stats"]["due"], 1)
+        self.assertFalse(result["correct"])
+        self.assertEqual(after["items"], [])
+        self.assertEqual(after["stats"]["due"], 0)
+        word.refresh_from_db()
+        self.assertEqual(word.status, SpellingDrillWord.Status.ACTIVE)
+        self.assertEqual(word.review_stage, 0)
+        self.assertEqual(
+            self.review_local(word.due_at),
+            self.review_local(now).replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=1),
+        )
+        batch = SpellingDrillDailyBatch.objects.get(user=self.user, review_day=now.date())
+        self.assertEqual(batch.word_ids, [word.word_id])
+
+    def test_empty_today_batch_reopens_when_due_words_exist_after_timezone_fix(self):
+        now = self.aware_at(2026, 6, 11, 23, 30)
+        word = SpellingDrillWord.objects.create(
+            user=self.user,
+            word_id="sp:late",
+            correct_spelling="probability",
+            normalized="probability",
+            wrong_forms=["probablity"],
+            first_seen_at=now - timedelta(days=3),
+            last_seen_at=now - timedelta(days=3),
+            due_at=now.replace(hour=4, minute=0, second=0, microsecond=0),
+            status=SpellingDrillWord.Status.ACTIVE,
+        )
+        SpellingDrillDailyBatch.objects.create(user=self.user, review_day=review_day_start(now).date(), word_ids=[])
+
+        with patch("apps.writing.spelling_services.timezone.now", return_value=now):
+            library = spelling_drill_library(self.user, scope="due")
+
+        self.assertEqual(library["stats"]["due"], 1)
+        self.assertEqual(library["items"][0]["word_id"], word.word_id)
+        batch = SpellingDrillDailyBatch.objects.get(user=self.user, review_day=review_day_start(now).date())
+        self.assertEqual(batch.word_ids, [word.word_id])
 
     def test_mastered_words_follow_srs_and_lapse_back_to_active(self):
         self.create_score(
@@ -234,8 +336,8 @@ class SpellingDrillTests(TestCase):
         self.assertEqual(word.review_stage, 4)
         self.assertEqual(word.metadata["mastered_review_level"], 1)
         self.assertEqual(
-            timezone.localtime(word.due_at),
-            timezone.localtime(review_time).replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=14),
+            self.review_local(word.due_at),
+            self.review_local(review_time).replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=14),
         )
 
         with patch("apps.writing.spelling_services.timezone.now", return_value=review_time):

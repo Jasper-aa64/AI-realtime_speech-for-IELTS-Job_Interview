@@ -238,3 +238,25 @@ class LanguageTakeawayEntry(UserOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.user_id}:{self.source_text[:40]}"
+
+
+class TakeawayReviewState(UserOwnedModel):
+    class Kind(models.TextChoices):
+        LANGUAGE = "language", "Language"
+        WRITING = "writing", "Writing"
+
+    user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="takeaway_review_states")
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    state = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "kind"], name="unique_takeaway_review_state_per_user_kind"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "kind"], name="speaking_trs_user_kind_idx"),
+            models.Index(fields=["user", "updated_at"], name="speaking_trs_user_updated_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"takeaway review:{self.user_id}:{self.kind}"

@@ -11,7 +11,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260610-home-dark-bg">
+    <link rel="stylesheet" href="/styles.css?v=20260612-public-perf-3">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -130,6 +130,7 @@
             <h1 id="viewTitle">首页</h1>
             <p id="viewSubtitle">选择今天要练的口语模式。</p>
           </div>
+          <div id="practiceHeaderProgress" class="practice-header-progress hidden" aria-live="polite"></div>
         </header>
 
         <div id="busyBar" class="busy-bar hidden" role="status" aria-live="polite">
@@ -373,7 +374,6 @@
               <div class="p1-corpus-head-copy">
                 <span class="corpus-page-kicker">Part 1 Library</span>
                 <h2>P1 短答语料库</h2>
-                <p>按话题管理短问题答案，快速检查哪些题目已经准备好。</p>
               </div>
               <div class="corpus-head-actions">
                 <button id="p1CorpusAgentBtn" class="agent-assistant-trigger corpus-agent-button" type="button" title="题库助手" aria-label="P1 题库助手">
@@ -526,6 +526,7 @@
                   <span>遮住英文</span>
                 </button>
               </div>
+              <span id="languageTakeawaySpeechStatus" class="takeaway-speech-status" aria-live="polite"></span>
             </header>
             <div id="languageTakeawayList" class="language-takeaway-list"></div>
           </div>
@@ -550,6 +551,7 @@
                   <span>遮住英文</span>
                 </button>
               </div>
+              <span id="writingTakeawaySpeechStatus" class="takeaway-speech-status" aria-live="polite"></span>
             </header>
             <div id="writingTakeawayList" class="language-takeaway-list"></div>
           </div>
@@ -585,7 +587,6 @@
               <div class="p2-corpus-head-copy">
                 <span class="corpus-page-kicker" data-i18n="p2Corpus.kicker">Part 2 语料库</span>
                 <h2 data-i18n="p2Corpus.title">P2 串题素材库</h2>
-                <p data-i18n="p2Corpus.subtitle">按分类管理可复用素材，并单独维护相关 P3 追问。</p>
               </div>
               <div class="corpus-head-actions">
                 <button id="p2CorpusAgentBtn" class="agent-assistant-trigger corpus-agent-button" type="button" title="题库助手" aria-label="P2 题库助手">
@@ -680,7 +681,10 @@
                 <span>Part 2 串题灵感</span>
                 <h3 id="p2BrainstormDialogTitle">Brainstorm</h3>
               </div>
-              <button id="saveP2BrainstormBtn" type="button">保存灵感</button>
+              <div class="p2-brainstorm-head-actions">
+                <button id="copyP2BrainstormBtn" type="button" class="ghost">复制全部</button>
+                <button id="saveP2BrainstormBtn" type="button">保存灵感</button>
+              </div>
             </header>
             <p class="p2-brainstorm-dialog-subtitle">每道题先记一句能串到其他题的细碎素材。这里不会覆盖正式 P2 正文。</p>
             <div id="p2BrainstormList" class="p2-brainstorm-list"></div>
@@ -696,6 +700,19 @@
               <div>
                 <strong>Reports</strong>
                 <span>横向滑动</span>
+              </div>
+              <div class="report-filter speaking-report-filter report-filter-compact">
+                <button type="button" id="speakingReportFilterBtn" class="report-filter-button" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="speakingReportFilterLabel">全部</span>
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"></path></svg>
+                </button>
+                <div id="speakingReportFilterMenu" class="report-filter-menu hidden" role="listbox" aria-label="筛选口语报告">
+                  <button type="button" data-speaking-report-filter="all" role="option" aria-selected="true">全部</button>
+                  <button type="button" data-speaking-report-filter="p1" role="option" aria-selected="false">P1</button>
+                  <button type="button" data-speaking-report-filter="p2" role="option" aria-selected="false">P2</button>
+                  <button type="button" data-speaking-report-filter="p3" role="option" aria-selected="false">P3</button>
+                  <button type="button" data-speaking-report-filter="mock" role="option" aria-selected="false">Mock</button>
+                </div>
               </div>
               <div class="history-rail-actions" aria-label="Report rail controls">
                 <button type="button" id="historyRailPrev" class="history-rail-nav" aria-label="Previous report">
@@ -1035,6 +1052,19 @@
                 <strong>Reports</strong>
                 <span>横向滑动</span>
               </div>
+              <div class="report-filter writing-report-filter report-filter-compact">
+                <button type="button" id="writingReportFilterBtn" class="report-filter-button" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="writingReportFilterLabel">全部</span>
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"></path></svg>
+                </button>
+                <div id="writingReportFilterMenu" class="report-filter-menu hidden" role="listbox" aria-label="筛选写作报告">
+                  <button type="button" data-writing-report-filter="all" role="option" aria-selected="true">全部</button>
+                  <button type="button" data-writing-report-filter="t1" role="option" aria-selected="false">T1</button>
+                  <button type="button" data-writing-report-filter="t2" role="option" aria-selected="false">T2</button>
+                  <button type="button" data-writing-report-filter="scored" role="option" aria-selected="false">已评分</button>
+                  <button type="button" data-writing-report-filter="unscored" role="option" aria-selected="false">未评分</button>
+                </div>
+              </div>
               <div class="history-rail-actions" aria-label="Writing report rail controls">
                 <button type="button" id="writingReportRailPrev" class="history-rail-nav" aria-label="Previous writing report">
                   <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
@@ -1206,23 +1236,15 @@
                     </label>
                   </div>
                 </div>
-                <section class="account-bank-selector" aria-labelledby="accountBankSelectorTitle">
-                  <div class="account-bank-selector-head">
-                    <div>
-                      <span class="account-card-eyebrow" data-i18n="bank.eyebrow">Question Bank</span>
-                      <h3 id="accountBankSelectorTitle" data-i18n="bank.title">题库选择</h3>
-                    </div>
-                    <span id="accountBankSeasonPill" class="account-bank-season">读取中</span>
-                  </div>
-                  <p id="accountBankStatus" class="account-card-subtitle" aria-live="polite" data-i18n="bank.loading">正在读取当前题库...</p>
-                  <div id="accountBankScopeOptions" class="account-bank-options" role="radiogroup" aria-label="选择口语题库范围" data-i18n-aria="bank.scopeAria">
-                    <button type="button" data-bank-scope="current" class="is-active"><span data-i18n="bank.current">当前考季</span></button>
-                    <button type="button" data-bank-scope="new"><span data-i18n="bank.new">新题</span></button>
-                    <button type="button" data-bank-scope="retained"><span data-i18n="bank.retained">保留题</span></button>
-                    <button type="button" data-bank-scope="archive"><span data-i18n="bank.archive">历史考季</span></button>
-                    <button type="button" data-bank-scope="all"><span data-i18n="bank.all">全部题库</span></button>
-                  </div>
-                </section>
+                <button type="button" id="openBankSelectorBtn" class="account-bank-trigger" aria-haspopup="dialog" aria-controls="bankSelectorDialog">
+                  <span class="account-bank-trigger-copy">
+                    <span class="account-bank-trigger-kicker" data-i18n="bank.title">题库选择</span>
+                    <span class="account-bank-trigger-title" data-i18n="bank.current">当前考季</span>
+                    <span id="accountBankTriggerSummary" class="account-bank-trigger-summary" aria-live="polite" data-i18n="bank.loading">正在读取当前题库...</span>
+                  </span>
+                  <span id="accountBankTriggerSeason" class="account-bank-season">读取中</span>
+                  <span class="account-bank-trigger-chevron" aria-hidden="true">›</span>
+                </button>
                 <div class="account-card-footer">
                   <label class="account-theme-toggle" for="darkModeToggle">
                     <span data-i18n="settings.darkMode">深色外观</span>
@@ -1251,7 +1273,6 @@
                     <span class="account-card-eyebrow" data-i18n="wallet.eyebrow">Wallet</span>
                     <h2 data-i18n="wallet.title">钱包</h2>
                   </div>
-                  <button type="button" id="openRechargeBtn" class="confirm-recharge-btn account-action-button account-action-button-accent" data-i18n="wallet.recharge">充值</button>
                 </div>
                 <div id="walletStatus" class="account-balance-panel is-loading">
                   <div><span data-i18n="wallet.available">可用余额</span><strong data-i18n="wallet.loading">加载中</strong></div>
@@ -1262,6 +1283,28 @@
                   <div class="account-skeleton-row"></div>
                 </div>
               </article>
+            </div>
+          </div>
+
+          <div id="bankSelectorDialog" class="bank-selector-dialog hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="accountBankSelectorTitle">
+            <div class="bank-selector-dialog-card" data-bank-dialog-card>
+              <header class="bank-selector-dialog-head">
+                <div>
+                  <span class="account-card-eyebrow" data-i18n="bank.eyebrow">Question Bank</span>
+                  <h3 id="accountBankSelectorTitle" data-i18n="bank.title">题库选择</h3>
+                </div>
+                <div class="bank-selector-dialog-head-actions">
+                  <span id="accountBankSeasonPill" class="account-bank-season">读取中</span>
+                </div>
+              </header>
+              <p id="accountBankStatus" class="account-card-subtitle" aria-live="polite" data-i18n="bank.loading">正在读取当前题库...</p>
+              <div id="accountBankScopeOptions" class="account-bank-options" role="radiogroup" aria-label="选择口语题库范围" data-i18n-aria="bank.scopeAria">
+                <button type="button" data-bank-scope="current" class="is-active"><span data-i18n="bank.current">当前考季</span></button>
+                <button type="button" data-bank-scope="new"><span data-i18n="bank.new">新题</span></button>
+                <button type="button" data-bank-scope="retained"><span data-i18n="bank.retained">保留题</span></button>
+                <button type="button" data-bank-scope="archive"><span data-i18n="bank.archive">历史考季</span></button>
+                <button type="button" data-bank-scope="all"><span data-i18n="bank.all">全部题库</span></button>
+              </div>
             </div>
           </div>
         </section>
@@ -1329,20 +1372,20 @@
         </div>
       </main>
     </div>
-    <script src="/shared-ui.js?v=20260530-front-dom-utils"></script>
-    <script src="/writing-image-preload.js?v=20260530-writing-image-preload"></script>
+    <script src="/shared-ui.js?v=20260612-writing-takeaway-optimistic-1"></script>
+    <script src="/writing-image-preload.js?v=20260612-public-perf-3"></script>
     <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
-    <script src="/writing-prompt-picker.js?v=20260610-writing-picker-switch-1"></script>
+    <script src="/writing-prompt-picker.js?v=20260612-public-perf-3"></script>
     <script src="/corpus-markdown-editor.js?v=20260606-single-editor-source"></script>
-    <script src="/corpus-takeaway.js?v=20260610-takeaway-daily-batch"></script>
-    <script src="/spelling-drill.js?v=20260610-spelling-daily-batch"></script>
+    <script src="/corpus-takeaway.js?v=20260612-writing-takeaway-optimistic-1"></script>
+    <script src="/spelling-drill.js?v=20260612-writing-takeaway-optimistic-1"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
-    <script src="/api-client.js?v=20260530-front-api-client"></script>
+    <script src="/api-client.js?v=20260612-server-sequence-prefetch-1"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260610-spelling-daily-batch"></script>
+    <script src="/app.js?v=20260612-writing-takeaway-optimistic-1"></script>
   </body>
 </html>

@@ -17,9 +17,16 @@
         .filter(Boolean);
     }
 
+    function thumbUrlFor(imageUrl = "") {
+      const raw = String(imageUrl || "").trim();
+      if (!raw.startsWith("/assets/")) return raw;
+      return `/assets/thumbs/${raw.slice("/assets/".length)}.webp`;
+    }
+
     function prime(url, primeOptions = {}) {
       const imageUrl = String(url || "").trim();
       if (!imageUrl || state.writing.promptImagePreloads.has(imageUrl)) return false;
+      const preloadUrl = thumbUrlFor(imageUrl);
       state.writing.promptImagePreloads.add(imageUrl);
       const image = new Image();
       image.decoding = "async";
@@ -36,7 +43,7 @@
         return result;
       });
       state.writing.promptImagePreloadPromises.set(imageUrl, promise);
-      image.src = imageUrl;
+      image.src = preloadUrl;
       return true;
     }
 

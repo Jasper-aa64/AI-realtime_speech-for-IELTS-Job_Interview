@@ -166,6 +166,31 @@
       document.body.classList.remove("modal-open");
     }
 
+    function thumbUrlFor(imageUrl = "") {
+      const raw = String(imageUrl || "").trim();
+      if (!raw.startsWith("/assets/")) return raw;
+      return `/assets/thumbs/${raw.slice("/assets/".length)}.webp`;
+    }
+
+    function promptChoiceImageHtml(prompt, imageLoading, imagePriority) {
+      const originalUrl = String(prompt?.image_url || "").trim();
+      if (!originalUrl) return "Task 1 chart";
+      const thumbUrl = thumbUrlFor(originalUrl);
+      return `<img src="${escapeHtml(thumbUrl)}" data-original-src="${escapeHtml(originalUrl)}" alt="" loading="${imageLoading}" decoding="async" fetchpriority="${imagePriority}">`;
+    }
+
+    function handlePromptThumbError(image) {
+      const wrap = image?.closest?.(".writing-prompt-choice-image");
+      const originalUrl = image?.dataset?.originalSrc || "";
+      if (originalUrl && image?.dataset?.thumbFallback !== "true" && image.src !== originalUrl) {
+        image.dataset.thumbFallback = "true";
+        image.src = originalUrl;
+        return;
+      }
+      wrap?.classList.add("placeholder");
+      image?.remove();
+    }
+
     function choiceHtml(prompt, active = false, index = 0) {
       const isTask1 = prompt.task_type === "task1_academic";
       const isCambridgePrompt = writingPromptSourceKey(prompt) === "cambridge";
@@ -177,7 +202,7 @@
       const imageLoading = loadImmediately ? "eager" : "lazy";
       const imagePriority = loadImmediately ? "auto" : "low";
       const imageHtml = isTask1
-        ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${prompt.image_url ? `<img src="${escapeHtml(prompt.image_url)}" alt="" loading="${imageLoading}" decoding="async" fetchpriority="${imagePriority}" onerror="this.closest('.writing-prompt-choice-image').classList.add('placeholder'); this.remove();">` : "Task 1 chart"}</span>`
+        ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${promptChoiceImageHtml(prompt, imageLoading, imagePriority)}</span>`
         : "";
       return `
         <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
@@ -231,6 +256,9 @@
         ...missingSlots.map((slot) => catalogSlotHtml(slot)),
       ].join("");
       grid.querySelectorAll("[data-writing-prompt-choice]").forEach((button) => {
+        button.querySelectorAll(".writing-prompt-choice-image img").forEach((image) => {
+          image.addEventListener("error", () => handlePromptThumbError(image));
+        });
         button.addEventListener("click", () => {
           if (state.writing.dirty && !window.confirm("当前作文还没有保存，确定要换题吗？")) return;
           const prompt = prompts.find((item) => item.id === button.dataset.writingPromptChoice);

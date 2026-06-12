@@ -20,6 +20,7 @@ load_aiapis_env_from_cc_switch() {
 
   "$python_bin" - "$db" <<'PY'
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -50,9 +51,8 @@ config = json.loads(raw)
 api_key = (config.get("auth") or {}).get("OPENAI_API_KEY", "").strip()
 toml_text = str(config.get("config") or "")
 base_match = re.search(r'base_url\s*=\s*"([^"]+)"', toml_text)
-model_match = re.search(r'model\s*=\s*"([^"]+)"', toml_text)
 base_url = base_match.group(1).strip() if base_match else ""
-model = (model_match.group(1).strip() if model_match else "") or "gpt-5.4-mini"
+model = os.environ.get("AI_HTTP_PREFERRED_MODEL", "").strip() or "gpt-5.4-mini"
 
 if not (api_key and base_url):
     raise SystemExit(0)
@@ -77,7 +77,7 @@ load_local_stack_env() {
   export AI_HTTP_TIMEOUT_SECONDS="${AI_HTTP_TIMEOUT_SECONDS:-60}"
   export SPEAKING_AI_CALL_MODE="${SPEAKING_AI_CALL_MODE:-chain}"
   # If aiapis loaded a specific model, reuse it for speaking AI too.
-  export SPEAKING_AI_MODEL="${SPEAKING_AI_MODEL:-${AI_HTTP_MODEL:-gpt-5.5}}"
+  export SPEAKING_AI_MODEL="${SPEAKING_AI_MODEL:-${AI_HTTP_MODEL:-gpt-5.4-mini}}"
   if [[ -f "${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/config/default_config.json" ]]; then
     export VOLCENGINE_ASR_ENABLED="${VOLCENGINE_ASR_ENABLED:-1}"
   fi

@@ -21,7 +21,7 @@
     csrfToken = null;
   }
 
-  async function api(path, body = null, requestOptions = {}) {
+  async function requestJson(path, body, requestOptions, csrfRetry) {
     const method = requestOptions.method || (body !== null ? "POST" : "GET");
     const options = {
       method,
@@ -38,6 +38,11 @@
       if (token) options.headers["X-CSRFToken"] = token;
     }
     const response = await fetch(path, options);
+    if (response.status === 403 && method !== "GET" && csrfRetry) {
+      resetCsrfToken();
+      await ensureCsrfToken();
+      return requestJson(path, body, requestOptions, false);
+    }
     const raw = await response.text();
     let payload = null;
     if (raw) {
@@ -57,6 +62,10 @@
       throw error;
     }
     return payload;
+  }
+
+  async function api(path, body = null, requestOptions = {}) {
+    return requestJson(path, body, requestOptions, true);
   }
 
   window.IELTSApiClient = {

@@ -6,7 +6,7 @@ from django.test import TestCase
 
 from apps.accounts.models import CustomUser
 from apps.speaking.models import SpeakingAttempt, SpeakingTurn
-from apps.speaking.services import complete_turn
+from apps.speaking.services import _examiner_tts_text_hash, complete_turn
 
 
 class ExaminerTtsRefreshTests(TestCase):
@@ -56,13 +56,82 @@ class ExaminerTtsRefreshTests(TestCase):
             payload["examiner_tts"]["audio_url"],
             "/api/tts-audio/examiner/tts-refresh-attempt_t2_followup_examiner.mp3",
         )
+        expected_cache_key = (
+            "tts-refresh-attempt_t2_followup_examiner_"
+            f"{_examiner_tts_text_hash('How does your internship connect with your studies?')}"
+        )
         mock_tts.assert_called_once_with(
             "How does your internship connect with your studies?",
             role="examiner",
-            cache_key="tts-refresh-attempt_t2_followup_examiner",
+            cache_key=expected_cache_key,
         )
         turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
         self.assertEqual(turn.metadata["examiner_tts"]["status"], "ready")
+        self.assertEqual(turn.metadata["examiner_tts"]["cache_key"], expected_cache_key)
+        self.assertEqual(
+            turn.metadata["examiner_tts"]["text_hash"],
+            _examiner_tts_text_hash("How does your internship connect with your studies?"),
+        )
+
+    def test_examiner_tts_refresh_regenerates_when_ready_audio_belongs_to_old_follow_up_text(self):
+        owner = CustomUser.objects.create_user(username="tts-p3-stale-owner", password="pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=owner,
+            attempt_id="tts-p3-stale-attempt",
+            mode="p3",
+            part="p3",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        old_text = "Could you give a specific example?"
+        new_text = "How could this affect traditional schools?"
+        SpeakingTurn.objects.create(
+            user=owner,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=1,
+            part="p3",
+            question=new_text,
+            metadata={
+                "prompt": {
+                    "role": "follow_up",
+                    "question": new_text,
+                    "backend": "http_api_stream",
+                    "generation_status": "ready",
+                },
+                "examiner_text": new_text,
+                "examiner_tts": {
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/old-default.mp3",
+                    "content_type": "audio/mpeg",
+                    "cache_key": f"tts-p3-stale-attempt_t2_examiner_{_examiner_tts_text_hash(old_text)}",
+                    "text_hash": _examiner_tts_text_hash(old_text),
+                },
+            },
+        )
+
+        self.client.force_login(owner)
+        with (
+            patch("apps.speaking.services._cached_tts_url", return_value=None),
+            patch(
+                "apps.speaking.services.volcengine_tts",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/new-generated.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ) as mock_tts,
+        ):
+            response = self.client.get("/api/attempts/tts-p3-stale-attempt/turns/t2/examiner-tts")
+
+        self.assertEqual(response.status_code, 200)
+        expected_cache_key = f"tts-p3-stale-attempt_t2_examiner_{_examiner_tts_text_hash(new_text)}"
+        payload = response.json()
+        self.assertEqual(payload["examiner_tts"]["audio_url"], "/api/tts-audio/examiner/new-generated.mp3")
+        self.assertEqual(payload["examiner_tts"]["cache_key"], expected_cache_key)
+        self.assertEqual(payload["examiner_tts"]["text_hash"], _examiner_tts_text_hash(new_text))
+        mock_tts.assert_called_once_with(new_text, role="examiner", cache_key=expected_cache_key)
 
     def test_examiner_tts_refresh_does_not_generate_for_stream_pending_follow_up(self):
         owner = CustomUser.objects.create_user(username="tts-stream-owner", password="pass")

@@ -30,6 +30,7 @@ from .models import (
     P2CorpusEntry,
     P3BankFollowupCorpusEntry,
     SpeakingTurn,
+    TakeawayReviewState,
 )
 from .text_utils import clean_markdown_text, clean_report_text
 
@@ -898,12 +899,42 @@ def language_takeaway_queryset(user):
     )
 
 
+def normalize_takeaway_review_kind(kind: str | None) -> str:
+    value = str(kind or "").strip().lower()
+    if value not in {"language", "writing"}:
+        raise SpeakingError("Invalid takeaway review kind")
+    return value
+
+
+def takeaway_review_state_payload(user, kind: str) -> dict[str, Any]:
+    value = normalize_takeaway_review_kind(kind)
+    row = TakeawayReviewState.objects.filter(user=user, kind=value).first()
+    return row.state if row and isinstance(row.state, dict) else {}
+
+
+def save_takeaway_review_state(user, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+    value = normalize_takeaway_review_kind(kind)
+    state = payload.get("state") if isinstance(payload, dict) else {}
+    if not isinstance(state, dict):
+        raise SpeakingError("Invalid takeaway review state")
+    row, _created = TakeawayReviewState.objects.update_or_create(
+        user=user,
+        kind=value,
+        defaults={"state": state},
+    )
+    return {
+        "kind": value,
+        "review_state": row.state if isinstance(row.state, dict) else {},
+        "updated_at": timezone.localtime(row.updated_at).isoformat() if row.updated_at else "",
+    }
+
+
 def language_takeaway_library(user) -> dict[str, Any]:
     entries = [
         language_takeaway_payload(entry)
         for entry in language_takeaway_queryset(user).order_by("-updated_at")[:300]
     ]
-    return {"items": entries, "count": len(entries)}
+    return {"items": entries, "count": len(entries), "review_state": takeaway_review_state_payload(user, "language")}
 
 
 def writing_takeaway_library(user) -> dict[str, Any]:
@@ -914,7 +945,7 @@ def writing_takeaway_library(user) -> dict[str, Any]:
             metadata__saved_from="writing_takeaway",
         ).order_by("-updated_at")[:300]
     ]
-    return {"items": entries, "count": len(entries)}
+    return {"items": entries, "count": len(entries), "review_state": takeaway_review_state_payload(user, "writing")}
 
 
 LOCAL_TAKEAWAY_PHRASE_TRANSLATIONS = {

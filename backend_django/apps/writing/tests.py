@@ -15,7 +15,7 @@ from apps.ai.orchestration import cancel_billable_ai_task
 from apps.ai.services import claim_ai_task
 from apps.billing.models import TokenWallet, WalletLedgerEntry
 from apps.billing.services import DEFAULT_INITIAL_GRANT_U
-from apps.writing.models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
+from apps.writing.models import WritingEntry, WritingFrameTemplate, WritingLearnerProfile, WritingPrompt, WritingScore
 from apps.writing.services import WRITING_TASK_LABELS, WritingError, complete_score_task, fallback_score_task
 
 
@@ -178,6 +178,34 @@ class WritingApiTests(TestCase):
             WritingEntry.objects.filter(pk=entry.pk).update(updated_at=updated_at)
             entry.refresh_from_db()
         return entry
+
+    def test_writing_frames_are_persisted_per_user(self):
+        other_user = get_user_model().objects.create_user(username="other-frame-user", password="test-pass")
+        WritingFrameTemplate.objects.create(
+            user=other_user,
+            frame_key="task2:agree_disagree",
+            template_text="Other user's frame",
+        )
+
+        response = self.client.put(
+            "/api/writing/frames",
+            data=json.dumps({
+                "frame_key": "task2:agree_disagree",
+                "template_text": "My custom public-cloud frame",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["template_text"], "My custom public-cloud frame")
+
+        response = self.client.get("/api/writing/frames")
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["frame_key"], "task2:agree_disagree")
+        self.assertEqual(items[0]["template_text"], "My custom public-cloud frame")
+        self.assertTrue(items[0]["updated_at"])
+        self.assertEqual(WritingFrameTemplate.objects.filter(user=other_user).count(), 1)
 
     def assert_entry_detail_contract(
         self,

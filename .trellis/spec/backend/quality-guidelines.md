@@ -87,6 +87,11 @@ def normalize_user_visible_text(...):
 **Required**:
 - Do not expose provider keys in logs, task metadata, API responses, or benchmark output.
 - Fallback output must be marked as fallback and must not masquerade as successful AI output.
+- P1 work/study identity follow-ups require a non-empty candidate answer after
+  ASR/client transcript cleanup. If no answer is detected, do not call HTTP,
+  Codex, or local fallback, and do not create a follow-up turn. Return explicit
+  `follow_up_skipped.reason=missing_candidate_answer` so the frontend can tell
+  the learner instead of pretending a generic examiner question was generated.
 - Static/bank-provided P3 questions must be marked as bank or season-bank
   content and must not masquerade as model-generated output. Conversely, P2
   report and custom-theme P3 plans that claim to be AI-generated must preserve
@@ -115,10 +120,40 @@ def normalize_user_visible_text(...):
 **Why**: Follow-up text generation and TTS synthesis are two separate latency sources. Keeping TTS out of `/complete` prevents the save flow from blocking, but returning a permanently pending TTS state makes the examiner silently skip the spoken prompt.
 
 **Required**:
-- Pending/generated follow-up TTS must reuse the existing server TTS cache key for the attempt and turn.
+- Pending/generated follow-up TTS must be text-bound: dynamic/non-fixed examiner cache keys include a stable hash of the current `examiner_text`, and persisted `examiner_tts` metadata stores `text_hash`/`cache_key`. If a P1/P3 follow-up question changes from a placeholder/default to generated text, any ready audio whose `text_hash` does not match the current text is stale and must be regenerated instead of returned.
+- P3 high-intensity follow-up turns must not be created with hardcoded/default examiner questions. Before AI generation succeeds, the follow-up turn question and `examiner_text` stay empty, `examiner_tts.status` stays `not_started`/`pending`, and no server TTS is generated. Only a finalized AI-generated follow-up may receive server TTS.
 - The frontend may wait only a bounded short window for refreshed TTS, then continue safely.
 - If server TTS fails, the payload must keep explicit fallback metadata instead of silently reintroducing browser TTS as the normal path.
 - Owner scoping must be enforced for any TTS refresh endpoint.
+
+### Convention: Spelling Drill review days use China 04:00 boundaries
+
+**What**: Spelling Drill SRS batches must compute review days in
+`Asia/Shanghai` at 04:00, regardless of Django's global `TIME_ZONE`.
+
+**Why**: The local app runs with `TIME_ZONE='UTC'`. Using
+`timezone.localtime()` without an explicit review timezone makes "04:00" mean
+04:00 UTC, which is 12:00 in China and hides morning review dots.
+
+**Required**:
+- `review_day_start()`, `review_day_key()`, `next_review_refresh()`,
+  `is_due_for_current_batch()`, and `due_human()` must use the same explicit
+  review timezone.
+- Existing empty daily batches may be reopened only when the current review
+  boundary says there are due words. Do not create a second wave after a user
+  has already completed a non-empty batch for that review day.
+- Tests must assert both the China 04:00 boundary and the "empty batch reopens
+  with due words" recovery case.
+
+**Wrong**:
+```python
+current = timezone.localtime(value or timezone.now())
+```
+
+**Correct**:
+```python
+current = timezone.localtime(value or timezone.now(), SRS_REVIEW_TIMEZONE)
+```
 
 ## Scenario: IELTS Speaking CLI Simulator
 

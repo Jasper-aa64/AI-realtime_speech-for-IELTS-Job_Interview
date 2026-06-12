@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
+from .models import WritingFrameTemplate
 from .spelling_services import delete_spelling_word, record_spelling_attempt, spelling_drill_library, update_spelling_word
 from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, prompt_patterns, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
@@ -32,6 +33,14 @@ def writing_error(exc: WritingError, status: int = 400) -> JsonResponse:
     return JsonResponse(payload, status=status)
 
 
+def _frame_payload(row: WritingFrameTemplate) -> dict:
+    return {
+        "frame_key": row.frame_key,
+        "template_text": row.template_text,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else "",
+    }
+
+
 @require_GET
 def summary(request):
     auth_error = require_user(request)
@@ -52,6 +61,40 @@ def reports(request):
         return JsonResponse(writing_reports(request.user, request.GET))
     except WritingError as exc:
         return writing_error(exc)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT"])
+def writing_frames(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    if request.method == "GET":
+        rows = WritingFrameTemplate.objects.filter(user=request.user).order_by("frame_key")
+        return JsonResponse({"items": [_frame_payload(row) for row in rows]})
+    payload = read_json_body(request)
+    frame_key = str(payload.get("frame_key") or "").strip()
+    template_text = str(payload.get("template_text") or "")
+    if not frame_key:
+        return JsonResponse({"error": "frame_key required", "message": "frame_key required"}, status=400)
+    if len(frame_key) > 120:
+        return JsonResponse({"error": "frame_key too long", "message": "frame_key too long"}, status=400)
+    row, _created = WritingFrameTemplate.objects.update_or_create(
+        user=request.user,
+        frame_key=frame_key,
+        defaults={"template_text": template_text},
+    )
+    return JsonResponse(_frame_payload(row))
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def writing_frame_detail(request, frame_key: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    WritingFrameTemplate.objects.filter(user=request.user, frame_key=str(frame_key or "").strip()).delete()
+    return JsonResponse({"ok": True, "frame_key": frame_key})
 
 
 @require_GET

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -22,6 +23,12 @@ def tts_fallback(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     text = str(payload.get("text") or "").strip()
     if not text:
         return {"provider": "none", "status": "empty_text", "audio_url": None, "message": "No text to synthesize."}
+    if payload.get("server_fallback") is True:
+        role = str(payload.get("role") or "model")
+        voice = str(payload.get("voice") or "en_female_sarah")
+        cache_hash = hashlib.sha1(text.encode("utf-8")).hexdigest()[:24]
+        cache_key = str(payload.get("cache_key") or f"takeaway_{cache_hash}")
+        return volcengine_tts(text, voice=voice, role=role, cache_key=cache_key)
     return {
         "provider": "browser",
         "status": "fallback",

@@ -27,6 +27,30 @@
     document.getElementById(id).textContent = value;
   }
 
+  async function withPending(el, fn, options = {}) {
+    const target = el && typeof el.closest === "function" ? el : null;
+    if (target?.classList?.contains("is-busy")) return undefined;
+    const busyText = options.busyText || "";
+    const originalDisabled = target ? Boolean(target.disabled) : false;
+    const originalHtml = target ? target.innerHTML : "";
+    if (target) {
+      target.disabled = true;
+      target.classList.add("is-busy");
+      target.setAttribute("aria-busy", "true");
+      if (busyText) target.innerHTML = `<span>${escapeHtml(busyText)}</span>`;
+    }
+    try {
+      return await fn();
+    } finally {
+      if (target) {
+        target.disabled = originalDisabled;
+        target.classList.remove("is-busy");
+        target.removeAttribute("aria-busy");
+        if (busyText) target.innerHTML = originalHtml;
+      }
+    }
+  }
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -189,5 +213,6 @@
     renderMarkdown,
     renderSpokenAnswerMarkdown,
     text,
+    withPending,
   };
 })();

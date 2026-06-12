@@ -32,6 +32,7 @@
       getCsrfToken,
       viewCopy,
       corpusPeekWindowMargin,
+      withPending,
     } = options || {};
 
     if (!state || typeof $ !== "function" || typeof api !== "function") {
@@ -73,6 +74,12 @@
       source,
       replacements,
     }));
+    const activeSpeechUtterances = [];
+    let speechSequenceToken = 0;
+    let suppressNextSpeechCancelError = false;
+    let takeawayServerAudio = null;
+    let takeawayAudioContext = null;
+    let takeawayAudioSource = null;
     const DOTS_ICON = `
       <svg aria-hidden="true" viewBox="0 0 24 24">
         <path d="M12 6.5h.01"></path>
@@ -172,10 +179,43 @@
       } catch (_error) {
         // Review scheduling is local and best-effort.
       }
+      syncTakeawayReviewState(kind, value);
+    }
+
+    function hasTakeawayReviewData(value) {
+      return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length);
+    }
+
+    function applyRemoteTakeawayReviewState(kind, value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return;
+      if (!hasTakeawayReviewData(value)) {
+        const local = takeawayReviewState(kind);
+        if (hasTakeawayReviewData(local)) syncTakeawayReviewState(kind, local);
+        return;
+      }
+      try {
+        window.localStorage?.setItem(takeawayReviewStorageKey(kind), JSON.stringify(value));
+      } catch (_error) {
+        // Server state still wins for the current payload even if local cache fails.
+      }
+    }
+
+    function syncTakeawayReviewState(kind, value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return;
+      api(`/api/takeaway-review-state/${kind === "writing" ? "writing" : "language"}`, { state: value })
+        .catch((error) => {
+          setTakeawayReviewToast(kind, "复习状态同步失败，刷新后会重试。", { render: state.view === (kind === "writing" ? "writingTakeawayBook" : "takeawayBook") });
+          console.warn("Takeaway review state sync failed", error);
+        });
     }
 
     function takeawayItemsForKind(kind = "language") {
       return kind === "writing" ? (state.writingTakeaway.items || []) : (state.languageTakeaway.items || []);
+    }
+
+    function takeawayKindLoaded(kind = "language") {
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      return Boolean(target?.loaded);
     }
 
     function takeawayReviewSession(kind = "language") {
@@ -211,7 +251,7 @@
         seen.add(id);
         if (!records[id]) {
           records[id] = {
-            due: nextReviewDayKey(),
+            due: todayKey(),
             reps: 0,
             interval: 0,
             ease: 2.5,
@@ -221,50 +261,62 @@
           changed = true;
         }
       });
-      Object.keys(records).forEach((id) => {
-        if (id.startsWith("__")) return;
-        if (!seen.has(id)) {
-          delete records[id];
-          changed = true;
+      if (takeawayKindLoaded(kind) && items.length > 0) {
+        Object.keys(records).forEach((id) => {
+          if (id.startsWith("__")) return;
+          if (!seen.has(id)) {
+            delete records[id];
+            changed = true;
+          }
+        });
+      }
+      if (changed) {
+        const today = todayKey();
+        const freshDueIds = items
+          .map((item) => String(item.entry_id || "").trim())
+          .filter((id) => id && String(records[id]?.due || "") <= today && String(records[id]?.last || "") !== today)
+          .slice(0, TAKEAWAY_DAILY_REVIEW_LIMIT);
+        const batch = takeawayDailyBatchRecord(records);
+        if (freshDueIds.length && batch.day !== today) {
+          records.__daily_batch = { day: today, ids: freshDueIds, completedDay: "" };
         }
-      });
+      }
       if (changed) saveTakeawayReviewState(kind, records);
       return records;
+    }
+
+    function markTakeawayEntryDueToday(kind = "language", entryId = "") {
+      const id = String(entryId || "").trim();
+      if (!id) return;
+      const records = ensureTakeawayReviewRecords(kind);
+      const today = todayKey();
+      const record = records[id] || {};
+      records[id] = {
+        due: today,
+        reps: Number(record.reps || 0),
+        interval: Number(record.interval || 0),
+        ease: Number(record.ease || 2.5) || 2.5,
+        last: "",
+        lapses: Number(record.lapses || 0),
+      };
+      const batch = takeawayDailyBatchRecord(records);
+      if (batch.day === today) {
+        const ids = Array.from(new Set([...(batch.ids || []).map((value) => String(value || "").trim()).filter(Boolean), id]));
+        records.__daily_batch = { day: today, ids, completedDay: "", locked: false };
+      }
+      saveTakeawayReviewState(kind, records);
     }
 
     function takeawayDailyBatchRecord(records) {
       const raw = records.__daily_batch;
       if (raw && typeof raw === "object" && Array.isArray(raw.ids)) return raw;
-      return { day: "", ids: [] };
+      return { day: "", ids: [], completedDay: "", locked: false };
     }
 
-    function dueTakeawayEntries(kind = "language") {
-      const records = ensureTakeawayReviewRecords(kind);
-      const today = todayKey();
-      const items = takeawayItemsForKind(kind);
-      const itemMap = new Map(items.map((item) => [String(item.entry_id || "").trim(), item]));
-      const batch = takeawayDailyBatchRecord(records);
-      if (batch.day === today) {
-        return batch.ids
-          .map((id) => itemMap.get(String(id || "").trim()))
-          .filter((item) => {
-            const id = String(item?.entry_id || "").trim();
-            const record = records[id] || {};
-            return item && id && String(record.due || today) <= today && String(record.last || "") !== today;
-          });
-      }
-      const reviewedTodayIds = Object.entries(records)
-        .filter(([id, record]) => !id.startsWith("__") && record && typeof record === "object" && String(record.last || "") === today)
-        .map(([id]) => id)
-        .slice(0, TAKEAWAY_DAILY_REVIEW_LIMIT);
-      if (reviewedTodayIds.length) {
-        records.__daily_batch = { day: today, ids: reviewedTodayIds };
-        saveTakeawayReviewState(kind, records);
-        return [];
-      }
-      const dueItems = items
+    function currentDueTakeawayItems(items, records, today) {
+      return items
         .filter((item) => {
-          const id = String(item.entry_id || "").trim();
+          const id = String(item?.entry_id || "").trim();
           const record = records[id] || {};
           return id && String(record.due || today) <= today && String(record.last || "") !== today;
         })
@@ -274,18 +326,75 @@
           return String(left.due || today).localeCompare(String(right.due || today));
         })
         .slice(0, TAKEAWAY_DAILY_REVIEW_LIMIT);
-      records.__daily_batch = { day: today, ids: dueItems.map((item) => item.entry_id) };
+    }
+
+    function dueTakeawayEntries(kind = "language") {
+      const records = ensureTakeawayReviewRecords(kind);
+      const today = todayKey();
+      const items = takeawayItemsForKind(kind);
+      const itemMap = new Map(items.map((item) => [String(item.entry_id || "").trim(), item]));
+      const batch = takeawayDailyBatchRecord(records);
+      const allDueItems = currentDueTakeawayItems(items, records, today);
+      const reviewedTodayIds = Object.entries(records)
+        .filter(([id, record]) => !id.startsWith("__") && record && typeof record === "object" && String(record.last || "") === today)
+        .map(([id]) => id);
+      if (batch.completedDay === today) {
+        if (!batch.locked && !batch.ids.length && allDueItems.length) {
+          records.__daily_batch = { day: today, ids: allDueItems.map((item) => item.entry_id), completedDay: "" };
+          saveTakeawayReviewState(kind, records);
+          return allDueItems;
+        }
+        return [];
+      }
+      if (batch.day === today) {
+        const due = batch.ids
+          .map((id) => itemMap.get(String(id || "").trim()))
+          .filter((item) => {
+            const id = String(item?.entry_id || "").trim();
+            const record = records[id] || {};
+            return item && id && String(record.due || today) <= today && String(record.last || "") !== today;
+          });
+        const batchedIds = new Set(batch.ids.map((id) => String(id || "").trim()).filter(Boolean));
+        const hasReviewedInsideBatch = reviewedTodayIds.some((id) => batchedIds.has(id));
+        if (reviewedTodayIds.length && batch.ids.length && !hasReviewedInsideBatch) {
+          records.__daily_batch = { ...batch, completedDay: today, locked: true };
+          saveTakeawayReviewState(kind, records);
+          return [];
+        }
+        const extraDue = allDueItems.filter((item) => !batchedIds.has(String(item.entry_id || "").trim()));
+        if (extraDue.length && !due.length && !batch.ids.length) {
+          records.__daily_batch = { day: today, ids: extraDue.map((item) => item.entry_id), completedDay: "" };
+          saveTakeawayReviewState(kind, records);
+          return extraDue;
+        }
+        if (!due.length && batch.ids.length) {
+          records.__daily_batch = { ...batch, completedDay: today, locked: true };
+          saveTakeawayReviewState(kind, records);
+        }
+        return due;
+      }
+      if (reviewedTodayIds.length) {
+        records.__daily_batch = { day: today, ids: reviewedTodayIds.slice(0, TAKEAWAY_DAILY_REVIEW_LIMIT), completedDay: today, locked: true };
+        saveTakeawayReviewState(kind, records);
+        return [];
+      }
+      const dueItems = allDueItems;
+      records.__daily_batch = { day: today, ids: dueItems.map((item) => item.entry_id), completedDay: dueItems.length ? "" : today };
       saveTakeawayReviewState(kind, records);
       return dueItems;
     }
 
     function updateTakeawayReviewDots() {
-      const languageDue = dueTakeawayEntries("language").length;
-      const writingDue = dueTakeawayEntries("writing").length;
-      $("languageTakeawayDueDot")?.classList.toggle("hidden", languageDue <= 0);
-      $("writingTakeawayDueDot")?.classList.toggle("hidden", writingDue <= 0);
-      $("languageTakeawayDueDot")?.setAttribute("data-count", String(languageDue));
-      $("writingTakeawayDueDot")?.setAttribute("data-count", String(writingDue));
+      if (takeawayKindLoaded("language")) {
+        const languageDue = dueTakeawayEntries("language").length;
+        $("languageTakeawayDueDot")?.classList.toggle("hidden", languageDue <= 0);
+        $("languageTakeawayDueDot")?.setAttribute("data-count", String(languageDue));
+      }
+      if (takeawayKindLoaded("writing")) {
+        const writingDue = dueTakeawayEntries("writing").length;
+        $("writingTakeawayDueDot")?.classList.toggle("hidden", writingDue <= 0);
+        $("writingTakeawayDueDot")?.setAttribute("data-count", String(writingDue));
+      }
     }
 
     function reviewPanelId(kind = "language") {
@@ -327,6 +436,7 @@
         ` : `
           <button type="button" class="takeaway-review-start" data-takeaway-review-start="${kind}" ${due.length ? "" : "disabled"}>
             开始
+            ${due.length ? `<span class="takeaway-review-start-badge" aria-hidden="true">${due.length}</span>` : ""}
           </button>
         `}
         <div class="takeaway-review-toast ${targetState.reviewToast ? "is-visible" : ""}" role="status">${escapeHtml(targetState.reviewToast || "")}</div>
@@ -403,8 +513,6 @@
       }
       session.currentId = id;
       target.revealedEntryIds.add(id);
-      const item = takeawayItemsForKind(kind).find((entry) => entry.entry_id === id);
-      speakLanguageTakeaway(item?.source_text || "");
       setTakeawayReviewToast(kind, "");
       updateTakeawayCardReveal(kind, id, { current: true });
       renderTakeawayReviewSurfaces(kind);
@@ -448,6 +556,13 @@
       session.currentId = "";
       target.revealedEntryIds.delete(id);
       if ((session.reviewedIds.size || 0) >= (session.ids.length || 0)) {
+        records.__daily_batch = {
+          day: todayKey(),
+          ids: (session.ids || []).map((value) => String(value || "").trim()).filter(Boolean),
+          completedDay: todayKey(),
+          locked: true,
+        };
+        saveTakeawayReviewState(kind, records);
         endTakeawayReview(kind, "今日复习完成。");
         return true;
       } else {
@@ -806,10 +921,9 @@
       };
     }
 
-    async function openP3CorpusPeek() {
-      const source = await p3CorpusPeekMaterialForTurn();
-      text("p3CorpusPeekMeta", source.meta || "P3 FOLLOW-UP MATERIAL");
-      text("p3CorpusPeekTitle", source.title || "相关 P3 追问");
+    let p3CorpusPeekRequestSeq = 0;
+
+    function renderP3CorpusPeekSource(source) {
       const body = $("p3CorpusPeekBody");
       if (body) body.innerHTML = `
         <section class="p2-corpus-peek-section">
@@ -817,8 +931,40 @@
           <div>${source.body ? renderMarkdown(source.body) : `<p class="muted">${escapeHtml(source.empty || "还没有保存语料。")}</p>`}</div>
         </section>
       `;
+    }
+
+    async function openP3CorpusPeek() {
+      const seq = ++p3CorpusPeekRequestSeq;
+      text("p3CorpusPeekMeta", "P3 FOLLOW-UP MATERIAL");
+      text("p3CorpusPeekTitle", "相关 P3 追问");
+      const body = $("p3CorpusPeekBody");
+      if (body) body.innerHTML = `
+        <section class="p2-corpus-peek-section p2-corpus-peek-loading" aria-live="polite">
+          <h4>正在加载语料…</h4>
+          <div class="corpus-peek-loading-lines" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+        </section>
+      `;
       $("p3CorpusPeekDialog")?.classList.remove("hidden");
       resetCorpusPeekWindowPosition("p3CorpusPeekDialog");
+      try {
+        const source = await p3CorpusPeekMaterialForTurn();
+        if (seq !== p3CorpusPeekRequestSeq) return;
+        text("p3CorpusPeekMeta", source.meta || "P3 FOLLOW-UP MATERIAL");
+        text("p3CorpusPeekTitle", source.title || "相关 P3 追问");
+        renderP3CorpusPeekSource(source);
+      } catch (err) {
+        if (seq !== p3CorpusPeekRequestSeq) return;
+        const errorText = err?.message || "加载失败";
+        if (body) body.innerHTML = `
+          <section class="p2-corpus-peek-section">
+            <h4>语料加载失败</h4>
+            <p class="muted">${escapeHtml(errorText)}</p>
+            <button type="button" class="corpus-peek-retry" data-p3-corpus-peek-retry>重试</button>
+          </section>
+        `;
+      }
     }
 
     function closeP3CorpusPeek() {
@@ -1289,27 +1435,69 @@
 
     function takeawaySourceHtml(sourceText = "") {
       const raw = String(sourceText || "").trim();
-      const arrowMatch = raw.match(/^(.*?)\s*(?:→|->|=>|—>)\s*(.+)$/);
-      if (!arrowMatch) {
+      const replacement = parseReplacementSource(raw);
+      if (!replacement) {
         return `<strong class="takeaway-source takeaway-source-plain"><span>${escapeHtml(raw)}</span></strong>`;
       }
-      const key = arrowMatch[1].trim();
-      const rest = arrowMatch[2].trim();
-      const values = rest
-        .split(/\s*\/\s*/)
-        .map((value) => value.trim())
-        .filter(Boolean);
       return `
         <strong class="takeaway-source takeaway-source-replacement">
-          <span class="takeaway-source-key">${escapeHtml(key)}</span>
+          <span class="takeaway-source-key">${escapeHtml(replacement.key)}</span>
           <span class="takeaway-source-arrow">→</span>
           <span class="takeaway-source-values">
-            ${values.length
-              ? values.map((value) => `<span class="takeaway-source-value">${escapeHtml(value)}</span>`).join("")
-              : `<span class="takeaway-source-value">${escapeHtml(rest)}</span>`}
+            ${replacement.values.length
+              ? replacement.values.map((value) => `<span class="takeaway-source-value">${escapeHtml(value)}</span>`).join("")
+              : `<span class="takeaway-source-value">${escapeHtml(replacement.rest)}</span>`}
           </span>
         </strong>
       `;
+    }
+
+    function takeawayChineseDisplayText(item = {}) {
+      const chinese = String(item.chinese_text || "").trim();
+      if (chinese) return chinese;
+      const replacement = parseReplacementSource(item.source_text || "");
+      if (replacement?.key) return `表达替换：${replacement.key}`;
+      return "未填写中文";
+    }
+
+    function parseReplacementSource(sourceText = "") {
+      const raw = String(sourceText || "").trim();
+      const arrowMatch = raw.match(/^(.*?)\s*(?:→|->|=>|—>)\s*(.+)$/);
+      if (!arrowMatch) return null;
+      const key = arrowMatch[1].trim();
+      const rest = arrowMatch[2].trim();
+      if (!key || !rest) return null;
+      return {
+        key,
+        rest,
+        values: splitExpressionReplacementValues(rest),
+      };
+    }
+
+    function splitExpressionReplacementValues(value = "") {
+      return String(value || "")
+        .split(/\s*(?:\/|,|，)\s*/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function uniqueReplacementValues(values = []) {
+      const seen = new Set();
+      const result = [];
+      values.forEach((value) => {
+        const textValue = String(value || "").trim();
+        const key = textValue.toLowerCase();
+        if (!textValue || seen.has(key)) return;
+        seen.add(key);
+        result.push(textValue);
+      });
+      return result;
+    }
+
+    function replacementTextForSpeech(sourceText = "") {
+      const replacement = parseReplacementSource(sourceText);
+      if (!replacement) return null;
+      return uniqueReplacementValues([replacement.key, ...replacement.values]);
     }
 
     function renderTakeawayMasonry(list, cards) {
@@ -1386,7 +1574,7 @@
         <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""}">
           <button type="button" class="language-takeaway-card" data-takeaway-entry="${escapeHtml(item.entry_id)}">
             ${takeawaySourceHtml(item.source_text)}
-            <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
+            <span class="takeaway-chinese">${escapeHtml(takeawayChineseDisplayText(item))}</span>
           </button>
           ${corpusCardActionMenuHtml({
             menuAttr: "data-takeaway-menu",
@@ -1427,33 +1615,332 @@
       renderTakeawayReviewSurfaces("language");
     }
 
-    function speakLanguageTakeaway(textValue) {
+    function preferredEnglishSpeechVoice() {
+      const synth = window.speechSynthesis;
+      const voices = typeof synth?.getVoices === "function" ? synth.getVoices() : [];
+      const englishVoices = voices.filter((voice) => /^en([-_]|$)/i.test(String(voice.lang || "")));
+      const localEnglishVoices = englishVoices.filter((voice) => voice.localService);
+      const preferredNames = [
+        "Google US English",
+        "Google UK English Female",
+        "Google UK English Male",
+        "Google English",
+        "Microsoft Jenny",
+        "Microsoft Aria",
+        "Microsoft Sonia",
+        "Alex",
+        "Karen",
+        "Daniel",
+        "Samantha",
+      ];
+      return preferredNames
+        .map((name) => englishVoices.find((voice) => String(voice.name || "").toLowerCase().includes(name.toLowerCase())))
+          .find(Boolean)
+        || localEnglishVoices.find((voice) => voice.default)
+        || englishVoices.find((voice) => voice.default)
+        || localEnglishVoices[0]
+        || englishVoices[0]
+        || null;
+    }
+
+    function prepareSpeechQueue(synth) {
+      activeSpeechUtterances.length = 0;
+      if (synth?.speaking || synth?.pending) {
+        suppressNextSpeechCancelError = true;
+        synth.cancel();
+        window.setTimeout(() => {
+          suppressNextSpeechCancelError = false;
+        }, 120);
+      }
+    }
+
+    function applySpeechVoice(utterance, options = {}) {
+      utterance.lang = options.lang || "en-US";
+      utterance.rate = Number(options.rate || 0.92);
+      const voice = preferredEnglishSpeechVoice();
+      if (voice) utterance.voice = voice;
+      return voice;
+    }
+
+    function isIgnoredSpeechError(error) {
+      const value = String(error || "").toLowerCase();
+      return suppressNextSpeechCancelError && (value === "canceled" || value === "cancelled" || value === "interrupted");
+    }
+
+    function serverTtsTextFor(value) {
+      const replacement = replacementTextForSpeech(value);
+      if (replacement) return replacement.join(". ");
+      return String(value || "").trim();
+    }
+
+    function unlockTakeawayAudio() {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+      try {
+        if (!takeawayAudioContext) takeawayAudioContext = new AudioContextClass();
+        if (takeawayAudioContext.state === "suspended") {
+          takeawayAudioContext.resume().catch(() => {});
+        }
+        return takeawayAudioContext;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function stopTakeawayServerAudio() {
+      if (takeawayAudioSource) {
+        try {
+          takeawayAudioSource.stop(0);
+        } catch (_error) {}
+        takeawayAudioSource = null;
+      }
+      if (takeawayServerAudio) {
+        takeawayServerAudio.pause();
+        takeawayServerAudio = null;
+      }
+    }
+
+    async function playAudioUrlWithUnlockedContext(audioUrl, kind = "language") {
+      const stableAudioUrl = `${audioUrl}${String(audioUrl).includes("?") ? "&" : "?"}stable=1`;
+      const context = unlockTakeawayAudio();
+      if (context) {
+        const response = await fetch(stableAudioUrl, { credentials: "same-origin" });
+        if (!response.ok) throw new Error(`音频加载失败：${response.status}`);
+        const audioBuffer = await response.arrayBuffer();
+        let decoded = null;
+        try {
+          decoded = await context.decodeAudioData(audioBuffer.slice(0));
+        } catch (error) {
+          throw new Error(`音频解码失败：${error.message || error}`);
+        }
+        if (context.state === "suspended") await context.resume();
+        stopTakeawayServerAudio();
+        const source = context.createBufferSource();
+        source.buffer = decoded;
+        source.connect(context.destination);
+        takeawayAudioSource = source;
+        source.onended = () => {
+          if (takeawayAudioSource === source) takeawayAudioSource = null;
+          setTakeawaySpeechStatus(kind, "");
+        };
+        setTakeawaySpeechStatus(kind, "正在播放服务器语音…", { clear: false });
+        source.start(0);
+        return;
+      }
+
+      stopTakeawayServerAudio();
+      const audio = new Audio(stableAudioUrl);
+      audio.preload = "auto";
+      takeawayServerAudio = audio;
+      audio.onplay = () => setTakeawaySpeechStatus(kind, "正在播放服务器语音…", { clear: false });
+      audio.onended = () => {
+        if (takeawayServerAudio === audio) takeawayServerAudio = null;
+        setTakeawaySpeechStatus(kind, "");
+      };
+      audio.onerror = () => setTakeawaySpeechStatus(kind, "服务器语音播放失败：音频元素加载错误。", { error: true, clear: false });
+      try {
+        await audio.play();
+      } catch (error) {
+        throw new Error(`浏览器拒绝播放服务器语音：${error.message || error}`);
+      }
+    }
+
+    async function playServerTakeawayTts(textValue, kind = "language") {
+      const source = serverTtsTextFor(textValue);
+      if (!source) return;
+      unlockTakeawayAudio();
+      setTakeawaySpeechStatus(kind, "正在准备服务器语音…", { clear: false });
+      const payload = await api("/api/tts", {
+        text: source,
+        role: "model",
+        voice: "en_female_sarah",
+        server_fallback: true,
+      });
+      if (!payload?.audio_url) {
+        const detail = payload?.error || payload?.message || payload?.status || "no audio_url";
+        throw new Error(`服务器语音不可用：${detail}`);
+      }
+      await playAudioUrlWithUnlockedContext(payload.audio_url, kind);
+    }
+
+    function speakWithBrowserTts(textValue, options = {}) {
       const value = String(textValue || "").trim();
-      if (!value || !window.speechSynthesis) return;
-      window.speechSynthesis.cancel();
+      if (!value) return { ok: false, reason: "empty" };
+      if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
+        return { ok: false, reason: "unsupported" };
+      }
+      const synth = window.speechSynthesis;
+      const token = ++speechSequenceToken;
+      prepareSpeechQueue(synth);
       const utterance = new SpeechSynthesisUtterance(value);
-      utterance.lang = "en-US";
-      utterance.rate = 0.86;
-      window.speechSynthesis.speak(utterance);
+      const voice = applySpeechVoice(utterance, options);
+      let started = false;
+      utterance.onstart = () => {
+        started = true;
+        options.onStart?.(voice);
+      };
+      utterance.onend = () => {
+        const index = activeSpeechUtterances.indexOf(utterance);
+        if (index >= 0) activeSpeechUtterances.splice(index, 1);
+        options.onEnd?.();
+      };
+      utterance.onerror = (event) => {
+        const index = activeSpeechUtterances.indexOf(utterance);
+        if (index >= 0) activeSpeechUtterances.splice(index, 1);
+        const error = event?.error || "unknown";
+        if (isIgnoredSpeechError(error)) return;
+        options.onError?.(error);
+      };
+      activeSpeechUtterances.push(utterance);
+
+      const speakNow = () => {
+        if (token !== speechSequenceToken) return;
+        synth.resume?.();
+        synth.speak(utterance);
+      };
+
+      speakNow();
+      window.setTimeout(() => {
+        if (token !== speechSequenceToken) return;
+        if (!started && !synth.speaking) {
+          options.onNoStart?.(voice);
+          return;
+        }
+        if (synth.speaking || synth.pending) return;
+        synth.resume?.();
+        synth.speak(utterance);
+      }, Number(options.retryDelayMs ?? 140));
+      window.setTimeout(() => {
+        if (token !== speechSequenceToken || started) return;
+        options.onNoStart?.(voice);
+      }, Number(options.noStartDelayMs ?? 900));
+      return { ok: true, reason: "queued", voice };
+    }
+
+    function speakPhraseSequence(phrases = [], options = {}) {
+      const values = uniqueReplacementValues(phrases).filter(Boolean);
+      if (!values.length) return { ok: false, reason: "empty" };
+      if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
+        return { ok: false, reason: "unsupported" };
+      }
+      const synth = window.speechSynthesis;
+      const token = ++speechSequenceToken;
+      const pauseMs = Number(options.pauseMs ?? 450);
+      prepareSpeechQueue(synth);
+      const utterances = values.map((value) => {
+        const utterance = new SpeechSynthesisUtterance(value);
+        const voice = applySpeechVoice(utterance, options);
+        utterance._takeawayVoice = voice;
+        activeSpeechUtterances.push(utterance);
+        return utterance;
+      });
+      const speakAt = (index) => {
+        if (token !== speechSequenceToken) return;
+        if (index >= utterances.length) return;
+        const utterance = utterances[index];
+        let started = false;
+        utterance.onstart = () => {
+          started = true;
+          if (index === 0) options.onStart?.(utterance._takeawayVoice || null);
+        };
+        const continueSequence = () => {
+          const utteranceIndex = activeSpeechUtterances.indexOf(utterance);
+          if (utteranceIndex >= 0) activeSpeechUtterances.splice(utteranceIndex, 1);
+          if (index >= utterances.length - 1) {
+            options.onEnd?.();
+            return;
+          }
+          window.setTimeout(() => speakAt(index + 1), pauseMs);
+        };
+        utterance.onend = continueSequence;
+        utterance.onerror = (event) => {
+          const error = event?.error || "unknown";
+          if (!isIgnoredSpeechError(error)) options.onError?.(error);
+          continueSequence();
+        };
+        synth.resume?.();
+        synth.speak(utterance);
+        window.setTimeout(() => {
+          if (token !== speechSequenceToken || started || index !== 0) return;
+          options.onNoStart?.(utterance._takeawayVoice || null);
+        }, Number(options.noStartDelayMs ?? 900));
+      };
+      speakAt(0);
+      return { ok: true, reason: "queued", voice: utterances[0]?._takeawayVoice || null };
+    }
+
+    function takeawaySpeechStatusId(kind = "language") {
+      return kind === "writing" ? "writingTakeawaySpeechStatus" : "languageTakeawaySpeechStatus";
+    }
+
+    function setTakeawaySpeechStatus(kind = "language", message = "", options = {}) {
+      const el = $(takeawaySpeechStatusId(kind));
+      if (!el) return;
+      el.textContent = message;
+      el.classList.toggle("is-error", Boolean(options.error));
+      if (message && options.clear !== false) {
+        window.clearTimeout(el._clearTimer);
+        el._clearTimer = window.setTimeout(() => {
+          el.textContent = "";
+          el.classList.remove("is-error");
+        }, Number(options.clearDelay || 2400));
+      }
+    }
+
+    function speakLanguageTakeaway(textValue, options = {}) {
+      const kind = options.kind === "writing" ? "writing" : "language";
+      const voiceLabel = (voice) => voice?.name ? `：${voice.name}` : "：系统默认声音";
+      unlockTakeawayAudio();
+      const startServerFallback = (reason = "") => {
+        setTakeawaySpeechStatus(kind, reason ? `浏览器朗读未启动，正在切换服务器语音…` : "正在切换服务器语音…", { clear: false });
+        playServerTakeawayTts(textValue, kind).catch((serverError) => {
+          const detail = reason ? `${reason}；` : "";
+          setTakeawaySpeechStatus(kind, `${detail}服务器语音失败：${serverError.message || serverError}`, { error: true, clear: false });
+        });
+      };
+      const callbacks = {
+        onStart: (voice) => setTakeawaySpeechStatus(kind, `正在朗读${voiceLabel(voice)}`),
+        onEnd: () => setTakeawaySpeechStatus(kind, ""),
+        onNoStart: (_voice) => startServerFallback("浏览器朗读未启动"),
+        onError: (error) => startServerFallback(`浏览器朗读失败：${error}`),
+      };
+      const sequence = replacementTextForSpeech(textValue);
+      const result = sequence
+        ? speakPhraseSequence(sequence, callbacks)
+        : speakWithBrowserTts(textValue, callbacks);
+      if (result?.ok) {
+        setTakeawaySpeechStatus(kind, `正在启动浏览器朗读${voiceLabel(result.voice)}`, { clear: false });
+      } else if (result?.reason === "unsupported") {
+        startServerFallback("当前浏览器不支持本地朗读");
+      } else {
+        setTakeawaySpeechStatus(kind, "没有可朗读的英文", { error: true });
+      }
+      return result;
     }
 
     function revealAndSpeakLanguageTakeaway(entryId) {
       const item = (state.languageTakeaway.items || []).find((entry) => entry.entry_id === entryId);
       if (!item) return;
       state.languageTakeaway.revealedEntryIds.add(entryId);
-      speakLanguageTakeaway(item.source_text);
+      speakLanguageTakeaway(item.source_text, { kind: "language" });
       updateTakeawayCardReveal("language", entryId);
     }
 
     async function deleteLanguageTakeawayEntry(entryId) {
       if (!entryId) return;
       showConfirmDelete("确定要删除这条生词吗？", async () => {
-        await api(`/api/language-takeaways/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
-        state.languageTakeaway.items = (state.languageTakeaway.items || []).filter((item) => item.entry_id !== entryId);
-        state.languageTakeaway.revealedEntryIds.delete(entryId);
-        renderLanguageTakeaways();
-        text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
-        renderTakeawayReviewSurfaces("language");
+        setTakeawaySpeechStatus("language", "正在删除…", { clear: false });
+        try {
+          await api(`/api/language-takeaways/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
+          state.languageTakeaway.items = (state.languageTakeaway.items || []).filter((item) => item.entry_id !== entryId);
+          state.languageTakeaway.revealedEntryIds.delete(entryId);
+          renderLanguageTakeaways();
+          text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+          renderTakeawayReviewSurfaces("language");
+          setTakeawaySpeechStatus("language", "");
+        } catch (error) {
+          setTakeawaySpeechStatus("language", error.message || "删除失败", { error: true, clear: false });
+        }
       });
     }
 
@@ -1718,6 +2205,7 @@
         if (existingIndex >= 0) state.languageTakeaway.items.splice(existingIndex, 1);
         state.languageTakeaway.items.unshift(saved);
         state.languageTakeaway.revealedEntryIds.add(saved.entry_id);
+        markTakeawayEntryDueToday("language", saved.entry_id);
         renderLanguageTakeaways();
         text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
         renderTakeawayReviewSurfaces("language");
@@ -1748,6 +2236,7 @@
         state.writingTakeaway.items.unshift(saved);
         state.writingTakeaway.loaded = true;
         state.writingTakeaway.revealedEntryIds.add(saved.entry_id);
+        markTakeawayEntryDueToday("writing", saved.entry_id);
         renderWritingTakeaways();
         text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
         renderTakeawayReviewSurfaces("writing");
@@ -1860,10 +2349,48 @@
             <strong>${escapeHtml(item.source || "未命名表达")}</strong>
             <p>${escapeHtml(item.replacements || "还没有替换表达")}</p>
           </div>
+          <button type="button" class="expression-replacement-add" data-expression-replacement-add="${escapeHtml(item.id)}" aria-label="加入${kind === "language" ? "Takeaway" : "写作积累"}">+</button>
+          <button type="button" class="expression-replacement-speak" data-expression-replacement-speak="${escapeHtml(item.id)}" aria-label="朗读替换表达">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M11 5 6 9H3v6h3l5 4V5z"></path>
+              <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+              <path d="M18.5 5.5a9 9 0 0 1 0 13"></path>
+            </svg>
+          </button>
           <button type="button" class="expression-replacement-edit" data-expression-replacement-edit="${escapeHtml(item.id)}">编辑</button>
           <button type="button" class="expression-replacement-delete" data-expression-replacement-delete="${escapeHtml(item.id)}">删除</button>
         </article>
       `).join("");
+    }
+
+    function expressionReplacementChipHtml(value) {
+      return `
+        <span class="expression-replacement-chip" data-expression-replacement-chip="${escapeHtml(value)}">
+          <span>${escapeHtml(value)}</span>
+          <button type="button" data-expression-replacement-chip-remove="${escapeHtml(value)}" aria-label="删除 ${escapeHtml(value)}">×</button>
+        </span>
+      `;
+    }
+
+    function expressionReplacementChipValues(row) {
+      return Array.from(row?.querySelectorAll("[data-expression-replacement-chip]") || [])
+        .map((chip) => chip.dataset.expressionReplacementChip || "")
+        .filter(Boolean);
+    }
+
+    function renderExpressionReplacementChips(row, values = []) {
+      const box = row?.querySelector("[data-expression-replacement-chip-list]");
+      if (!box) return;
+      box.innerHTML = uniqueReplacementValues(values).map(expressionReplacementChipHtml).join("");
+    }
+
+    function addExpressionReplacementChip(row, rawValue = "") {
+      const additions = splitExpressionReplacementValues(rawValue);
+      if (!row || !additions.length) return;
+      const values = uniqueReplacementValues([...expressionReplacementChipValues(row), ...additions]);
+      renderExpressionReplacementChips(row, values);
+      const input = row.querySelector("[data-expression-replacement-chip-input]");
+      if (input) input.value = "";
     }
 
     function renderExpressionReplacementEditRow(item) {
@@ -1879,7 +2406,13 @@
         </label>
         <label class="expression-replacement-field">
           <span>替换表达</span>
-          <textarea data-expression-replacement-values spellcheck="true">${escapeHtml(item.replacements || "")}</textarea>
+          <div class="expression-replacement-chip-editor">
+            <div class="expression-replacement-chip-list" data-expression-replacement-chip-list>
+              ${uniqueReplacementValues(splitExpressionReplacementValues(item.replacements || "")).map(expressionReplacementChipHtml).join("")}
+            </div>
+            <input data-expression-replacement-chip-input placeholder="输入一个替换词，按 Enter 添加" spellcheck="true">
+            <button type="button" class="expression-replacement-chip-add" data-expression-replacement-chip-add aria-label="添加替换表达">+</button>
+          </div>
         </label>
         <div class="expression-replacement-edit-actions">
           <button type="button" class="expression-replacement-edit" data-expression-replacement-save="${escapeHtml(item.id)}">保存</button>
@@ -1942,10 +2475,87 @@
         items.unshift(item);
       }
       item.source = String(row.querySelector("[data-expression-replacement-source]")?.value || "").trim();
-      item.replacements = String(row.querySelector("[data-expression-replacement-values]")?.value || "").trim();
+      const pendingInput = row.querySelector("[data-expression-replacement-chip-input]");
+      if (String(pendingInput?.value || "").trim()) addExpressionReplacementChip(row, pendingInput.value);
+      item.replacements = uniqueReplacementValues(expressionReplacementChipValues(row)).join(" / ");
       const cleaned = items.map(normalizeExpressionReplacementItem).filter(Boolean);
       saveExpressionReplacements(kind, cleaned);
       renderExpressionReplacements(kind);
+    }
+
+    function speakExpressionReplacement(itemId) {
+      const kind = activeExpressionReplacementKind();
+      const item = loadExpressionReplacements(kind).find((entry) => entry.id === itemId);
+      if (!item) return;
+      const voiceLabel = (voice) => voice?.name ? `：${voice.name}` : "：系统默认声音";
+      const replacementText = `${item.source} → ${item.replacements || ""}`;
+      unlockTakeawayAudio();
+      const startServerFallback = (reason = "") => {
+        setTakeawaySpeechStatus(kind, "浏览器朗读未启动，正在切换服务器语音…", { clear: false });
+        playServerTakeawayTts(replacementText, kind).catch((serverError) => {
+          const detail = reason ? `${reason}；` : "";
+          setTakeawaySpeechStatus(kind, `${detail}服务器语音失败：${serverError.message || serverError}`, { error: true, clear: false });
+        });
+      };
+      const result = speakPhraseSequence([item.source, ...splitExpressionReplacementValues(item.replacements || "")], {
+        onStart: (voice) => setTakeawaySpeechStatus(kind, `正在朗读${voiceLabel(voice)}`),
+        onNoStart: () => startServerFallback("浏览器朗读未启动"),
+        onError: (error) => startServerFallback(`浏览器朗读失败：${error}`),
+      });
+      if (result?.ok) setTakeawaySpeechStatus(kind, `正在启动浏览器朗读${voiceLabel(result.voice)}`, { clear: false });
+      else startServerFallback("当前浏览器不支持本地朗读");
+    }
+
+    async function addExpressionReplacementToTakeaway(itemId, button = null) {
+      const kind = activeExpressionReplacementKind();
+      const item = loadExpressionReplacements(kind).find((entry) => entry.id === itemId);
+      if (!item || !String(item.source || "").trim()) return;
+      const replacements = uniqueReplacementValues(splitExpressionReplacementValues(item.replacements || ""));
+      if (!replacements.length) return;
+      const sourceText = `${String(item.source || "").trim()} → ${replacements.join(" / ")}`;
+      const chineseText = `表达替换：${String(item.source || "").trim()}`;
+      const endpoint = kind === "language" ? "/api/language-takeaways" : "/api/writing-takeaways";
+      const run = async () => {
+        const listState = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+        const tempId = `pending-expression-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const pendingEntry = {
+          entry_id: tempId,
+          source_text: sourceText,
+          chinese_text: chineseText,
+          context_url: window.location.href,
+          context_label: kind === "language" ? "表达替换" : "写作表达替换",
+          source: "expression_replacement",
+        };
+        listState.items = [pendingEntry, ...(listState.items || [])];
+        listState.loaded = true;
+        refreshTakeawayList(kind, tempId);
+        const saved = await api(endpoint, {
+          source_text: sourceText,
+          chinese_text: chineseText,
+          context_url: window.location.href,
+          context_label: kind === "language" ? "表达替换" : "写作表达替换",
+          source: "expression_replacement",
+        });
+        listState.items = (listState.items || []).filter((entry) => entry.entry_id !== tempId);
+        if (kind === "writing") state.writingTakeaway.revealedEntryIds.delete(tempId);
+        else state.languageTakeaway.revealedEntryIds.delete(tempId);
+        replaceTakeawayEntry(kind, saved);
+        if (button) {
+          button.classList.add("is-added");
+          button.textContent = "✓";
+          window.setTimeout(() => {
+            button.classList.remove("is-added");
+            button.innerHTML = "+";
+          }, 900);
+        }
+      };
+      const task = withPending ? withPending(button, run) : run();
+      return task.catch((error) => {
+        const listState = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+        listState.items = (listState.items || []).filter((entry) => !String(entry.entry_id || "").startsWith("pending-expression-"));
+        refreshTakeawayList(kind);
+        throw error;
+      });
     }
 
     function deleteExpressionReplacement(itemId) {
@@ -1992,13 +2602,18 @@
       if (index >= 0) items.splice(index, 1, saved);
       else items.unshift(saved);
       listState.items = items;
+      markTakeawayEntryDueToday(kind, saved.entry_id);
+      refreshTakeawayList(kind, saved.entry_id);
+    }
+
+    function refreshTakeawayList(kind, revealEntryId = "") {
       if (kind === "writing") {
-        state.writingTakeaway.revealedEntryIds.add(saved.entry_id);
+        if (revealEntryId) state.writingTakeaway.revealedEntryIds.add(revealEntryId);
         renderWritingTakeaways();
         text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
         renderTakeawayReviewSurfaces("writing");
       } else {
-        state.languageTakeaway.revealedEntryIds.add(saved.entry_id);
+        if (revealEntryId) state.languageTakeaway.revealedEntryIds.add(revealEntryId);
         renderLanguageTakeaways();
         text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
         renderTakeawayReviewSurfaces("language");
@@ -2242,6 +2857,53 @@
           button.textContent = original;
         }
       }
+    }
+
+    async function copyPlainTextToClipboard(value) {
+      const textValue = String(value || "");
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(textValue);
+          return true;
+        }
+      } catch (_error) {
+        // Fall through to the legacy textarea path below.
+      }
+      try {
+        const area = document.createElement("textarea");
+        area.value = textValue;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(area);
+        return ok;
+      } catch (_error) {
+        return false;
+      }
+    }
+
+    // 把当前 Brainstorm 窗口里填好的灵感导出成发给 AI 的纯文本（读 DOM 实时值，含未保存的修改）。
+    async function copyP2BrainstormAll() {
+      const rows = Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row"));
+      const blocks = [];
+      rows.forEach((row) => {
+        const index = (row.querySelector(".p2-brainstorm-index")?.textContent || "").trim();
+        const stem = (row.querySelector(".p2-brainstorm-stem")?.textContent || "").trim();
+        const idea = (row.querySelector("[data-p2-brainstorm-input]")?.value || "").trim();
+        if (!idea) return;
+        const heading = [index ? `${index}.` : "", stem].filter(Boolean).join(" ").trim();
+        blocks.push(heading ? `${heading}\n灵感：${idea}` : `灵感：${idea}`);
+      });
+      if (!blocks.length) {
+        text("p2BrainstormStatus", "还没有填写灵感，先写几条再复制。");
+        return;
+      }
+      const payload = blocks.join("\n\n");
+      const ok = await copyPlainTextToClipboard(payload);
+      text("p2BrainstormStatus", ok ? `已复制 ${blocks.length} 条灵感，可直接粘贴给 AI。` : "复制失败，请手动选择文字复制。");
     }
 
     function isP2BankCard(entry = {}) {
@@ -2868,6 +3530,12 @@
       });
     });
 
+    $("copyP2BrainstormBtn")?.addEventListener("click", () => {
+      copyP2BrainstormAll().catch((error) => {
+        text("p2BrainstormStatus", error.message || String(error));
+      });
+    });
+
     $("p2BankP3EntryList")?.addEventListener("click", (event) => {
       const bankP3Button = event.target.closest("[data-p2-bank-p3-select]");
       if (!bankP3Button) return;
@@ -2980,22 +3648,28 @@
     async function deleteP2CorpusEntry(entryId) {
       if (!entryId) return;
       showConfirmDelete("确定要删除这条 P2 素材吗？", async () => {
-        await api(`/api/p2-corpus/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
-        state.p2Corpus.categories = (state.p2Corpus.categories || []).map((category) => ({
-          ...category,
-          items: (category.items || []).filter((item) => item.entry_id !== entryId),
-        }));
-        if (state.p2Corpus.selectedEntryId === entryId) state.p2Corpus.selectedEntryId = "";
-        if (state.p2Corpus.activeEntry?.entry_id === entryId) closeP2CorpusEditor();
-        if (state.p2Corpus.activeP3Entry?.entry_id === entryId) closeP2CorpusP3Editor();
-        renderP2CorpusTopics();
-        renderP2CorpusPrepPanel();
-        const stats = $("p2CorpusStats");
-        if (stats) {
-          const count = (state.p2Corpus.categories || []).reduce((total, category) => total + (category.items || []).length, 0);
-          stats.textContent = `${state.p2Corpus.categories.length || 5} 个分类 · 已保存 ${count}`;
+        text("p2CorpusSaveStatus", "正在删除...");
+        try {
+          await api(`/api/p2-corpus/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
+          state.p2Corpus.categories = (state.p2Corpus.categories || []).map((category) => ({
+            ...category,
+            items: (category.items || []).filter((item) => item.entry_id !== entryId),
+          }));
+          if (state.p2Corpus.selectedEntryId === entryId) state.p2Corpus.selectedEntryId = "";
+          if (state.p2Corpus.activeEntry?.entry_id === entryId) closeP2CorpusEditor();
+          if (state.p2Corpus.activeP3Entry?.entry_id === entryId) closeP2CorpusP3Editor();
+          renderP2CorpusTopics();
+          renderP2CorpusPrepPanel();
+          const stats = $("p2CorpusStats");
+          if (stats) {
+            const count = (state.p2Corpus.categories || []).reduce((total, category) => total + (category.items || []).length, 0);
+            stats.textContent = `${state.p2Corpus.categories.length || 5} 个分类 · 已保存 ${count}`;
+          }
+          text("p2CorpusSaveStatus", "");
+          fetchP2CorpusPayload().then(applyP2CorpusPayload).catch(() => null);
+        } catch (error) {
+          text("p2CorpusSaveStatus", error.message || "删除失败");
         }
-        fetchP2CorpusPayload().then(applyP2CorpusPayload).catch(() => null);
       });
     }
 
@@ -3047,7 +3721,7 @@
         <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""}">
           <button type="button" class="language-takeaway-card writing-takeaway-item" data-writing-takeaway-entry="${escapeHtml(item.entry_id)}">
             ${takeawaySourceHtml(item.source_text)}
-            <span class="takeaway-chinese">${escapeHtml(item.chinese_text || "未填写中文")}</span>
+            <span class="takeaway-chinese">${escapeHtml(takeawayChineseDisplayText(item))}</span>
           </button>
           ${corpusCardActionMenuHtml({
             menuAttr: "data-writing-takeaway-menu",
@@ -3092,19 +3766,29 @@
       const item = (state.writingTakeaway.items || []).find((entry) => entry.entry_id === entryId);
       if (!item) return;
       state.writingTakeaway.revealedEntryIds.add(entryId);
-      speakLanguageTakeaway(item.source_text);
+      speakLanguageTakeaway(item.source_text, { kind: "writing" });
       updateTakeawayCardReveal("writing", entryId);
     }
 
     async function deleteWritingTakeawayEntry(entryId) {
       if (!entryId) return;
       showConfirmDelete("确定要删除这条写作积累吗？", async () => {
-        await api(`/api/writing-takeaways/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
-        state.writingTakeaway.items = (state.writingTakeaway.items || []).filter((item) => item.entry_id !== entryId);
+        const previousItems = state.writingTakeaway.items || [];
+        const removed = previousItems.find((item) => item.entry_id === entryId);
+        state.writingTakeaway.items = previousItems.filter((item) => item.entry_id !== entryId);
         state.writingTakeaway.revealedEntryIds.delete(entryId);
-        renderWritingTakeaways();
-        text("writingTakeawayStats", `${state.writingTakeaway.items.length} 条`);
-        renderTakeawayReviewSurfaces("writing");
+        refreshTakeawayList("writing");
+        setTakeawaySpeechStatus("writing", "正在删除…", { clear: false });
+        try {
+          await api(`/api/writing-takeaways/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
+          setTakeawaySpeechStatus("writing", "");
+        } catch (error) {
+          if (removed) {
+            state.writingTakeaway.items = previousItems;
+            refreshTakeawayList("writing");
+          }
+          setTakeawaySpeechStatus("writing", error.message || "删除失败", { error: true, clear: false });
+        }
       });
     }
 
@@ -3157,6 +3841,7 @@
       selectTakeawayReviewEntry,
       takeawayReviewFeedback,
       updateTakeawayReviewDots,
+      applyRemoteTakeawayReviewState,
       speakLanguageTakeaway,
       revealAndSpeakLanguageTakeaway,
       deleteLanguageTakeawayEntry,
@@ -3185,6 +3870,9 @@
       addExpressionReplacement,
       editExpressionReplacement,
       saveExpressionReplacementEdit,
+      speakExpressionReplacement,
+      addExpressionReplacementToTakeaway,
+      addExpressionReplacementChip,
       deleteExpressionReplacement,
       findP2CorpusEntry,
       openP2CorpusLibrary,

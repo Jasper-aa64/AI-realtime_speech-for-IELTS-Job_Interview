@@ -16,9 +16,10 @@ DEFAULT_HTTP_TEMPERATURE = 0.2
 
 
 class HttpApiProviderError(RuntimeError):
-    def __init__(self, message: str, *, error_code: str = "http_api_provider_failed"):
+    def __init__(self, message: str, *, error_code: str = "http_api_provider_failed", status_code: int | None = None):
         super().__init__(message)
         self.error_code = error_code
+        self.status_code = status_code
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,7 @@ class HttpApiProvider:
 
     def __init__(self, config: HttpApiProviderConfig | None = None):
         self.config = config or load_http_api_provider_config()
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def complete_chat(
         self,
@@ -135,7 +137,7 @@ class HttpApiProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout_seconds or self.config.timeout_seconds) as response:
+            with self._opener.open(request, timeout=timeout_seconds or self.config.timeout_seconds) as response:
                 if stream:
                     text, usage = self._parse_stream_response(response)
                 else:
@@ -149,6 +151,7 @@ class HttpApiProvider:
             raise HttpApiProviderError(
                 f"HTTP AI provider returned {exc.code}: {_safe_error_detail(detail, extra_secrets=(self.config.api_key,))}",
                 error_code="http_api_provider_http_error",
+                status_code=exc.code,
             ) from exc
         except (TimeoutError, urllib.error.URLError, OSError) as exc:
             raise HttpApiProviderError(
@@ -196,7 +199,7 @@ class HttpApiProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout_seconds or self.config.timeout_seconds) as response:
+            with self._opener.open(request, timeout=timeout_seconds or self.config.timeout_seconds) as response:
                 yielded = False
                 for payload in self._iter_stream_payloads(response):
                     content, usage = self._stream_payload_content(payload, extra_secrets=(self.config.api_key,))
@@ -219,6 +222,7 @@ class HttpApiProvider:
             raise HttpApiProviderError(
                 f"HTTP AI provider returned {exc.code}: {_safe_error_detail(detail, extra_secrets=(self.config.api_key,))}",
                 error_code="http_api_provider_http_error",
+                status_code=exc.code,
             ) from exc
         except (TimeoutError, urllib.error.URLError, OSError) as exc:
             raise HttpApiProviderError(

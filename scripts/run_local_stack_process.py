@@ -56,9 +56,8 @@ def _load_aiapis_from_cc_switch() -> None:
     api_key = str((config.get("auth") or {}).get("OPENAI_API_KEY") or "").strip()
     toml_text = str(config.get("config") or "")
     base_match = re.search(r'base_url\s*=\s*"([^"]+)"', toml_text)
-    model_match = re.search(r'model\s*=\s*"([^"]+)"', toml_text)
     base_url = base_match.group(1).strip() if base_match else ""
-    model = (model_match.group(1).strip() if model_match else "") or "gpt-5.4-mini"
+    model = os.environ.get("AI_HTTP_PREFERRED_MODEL", "").strip() or "gpt-5.4-mini"
     if not (api_key and base_url):
         return
 
@@ -76,10 +75,10 @@ def _load_common_env() -> None:
         os.environ["PATH"] = ":".join(additions + ([current_path] if current_path else ["/usr/bin:/bin"]))
     os.environ.setdefault("AI_HTTP_TIMEOUT_SECONDS", "60")
     os.environ.setdefault("SPEAKING_AI_CALL_MODE", "chain")
-    # Reuse the HTTP model loaded from aiapis; fall back to gpt-5.5 then the old default.
+    # Reuse the HTTP model loaded from aiapis; otherwise prefer the fast GPT mini route.
     os.environ.setdefault(
         "SPEAKING_AI_MODEL",
-        os.environ.get("AI_HTTP_MODEL") or "gpt-5.5",
+        os.environ.get("AI_HTTP_MODEL") or "gpt-5.4-mini",
     )
     if (ROOT_DIR / "config" / "default_config.json").exists():
         os.environ.setdefault("VOLCENGINE_ASR_ENABLED", "1")

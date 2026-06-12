@@ -67,6 +67,7 @@ from .corpus_services import (
     save_p1_corpus,
     save_p2_corpus,
     save_writing_takeaway,
+    save_takeaway_review_state,
     takeaway_entry_id,
     update_language_takeaway,
     update_writing_takeaway,
@@ -673,6 +674,7 @@ def _model_band7_tts_cache_key(attempt_id: str, turn_id: str, band7_version: str
 
 P1_TURN_COUNT = 10
 SPEAKING_AI_DEFAULT_HTTP_MODEL = "gpt-5.4-mini"
+STREAM_PENDING_FOLLOW_UP_PLACEHOLDER = "Generating follow-up question..."
 SPEAKING_AI_CALL_MODE_CHAIN = "chain"
 SPEAKING_AI_CALL_MODE_HTTP = "http"
 SPEAKING_AI_CALL_MODE_CODEX = "codex"
@@ -740,7 +742,7 @@ def speaking_ai_http_model(kind: str = "speaking") -> str:
     return (
         _setting_or_env(f"SPEAKING_{key}_AI_MODEL")
         or _setting_or_env("SPEAKING_AI_MODEL")
-        or _setting_or_env("AI_HTTP_MODEL")   # share the same endpoint model as writing/other AI tasks
+        or _setting_or_env("AI_HTTP_PREFERRED_MODEL")
         or SPEAKING_AI_DEFAULT_HTTP_MODEL
     )
 
@@ -1745,15 +1747,14 @@ def _build_p3_turns(
         )
         turns.append(main_turn)
         if use_follow_ups:
-            follow_up = _p3_follow_up_for_type(str(item.get("type") or ""))
             follow_turn = _create_turn(
                 "p3",
                 len(turns),
                 total,
-                str(follow_up),
+                "",
                 {
                     "theme": theme,
-                    "question": str(follow_up),
+                    "question": "",
                     "role": "follow_up",
                     "after_main": main_index + 1,
                     "source": source,
@@ -1762,10 +1763,19 @@ def _build_p3_turns(
                     "plan_question_id": f"{item.get('id', f'q{main_index + 1}')}-follow",
                     "p2_question_id": item.get("p2_question_id") or "",
                     "p2_corpus_entry_id": linked_p2_corpus_entry_id,
-                    "p3_bank_followup_id": item.get("followup_id") or "",
+                    "backend": "pending_ai_follow_up",
+                    "generation_status": "pending",
+                    "p3_bank_followup_id": "",
                     "followup_question": question,
                 },
             )
+            follow_turn["examiner_text"] = ""
+            follow_turn["examiner_tts"] = {
+                "provider": "volcengine",
+                "status": "not_started",
+                "audio_url": None,
+                "message": "P3 follow-up question has not been generated yet.",
+            }
             turns.append(follow_turn)
     plan = {
         **plan,
@@ -1916,6 +1926,7 @@ def start_attempt(user, payload: dict[str, Any]) -> dict[str, Any]:
                 "cue_card": turn_data.get("cue_card"),
                 "timers": turn_data.get("timers"),
                 "examiner_text": turn_data.get("examiner_text"),
+                "examiner_tts": turn_data.get("examiner_tts"),
                 "examiner_behavior": turn_data.get("examiner_behavior"),
                 "display_index": turn_data.get("display_index"),
             },
@@ -2120,13 +2131,6 @@ def _extract_p1_identity_follow_up_output(output: str) -> str:
 
 
 def _p1_identity_follow_up_prompt(answer: str) -> str:
-    if not answer.strip():
-        return """Return JSON only with top-level key follow_up.
-Do not include Markdown, explanation, or code fences.
-
-You are an IELTS Speaking Part 1 examiner. Write one natural, varied follow-up question about the candidate's work or current studies.
-Keep it short, conversational, and suitable for Part 1. Do not repeat the same question each time.
-"""
     return f"""Return JSON only with top-level key follow_up.
 Do not repeat the input. Do not include Markdown, explanation, or code fences.
 
@@ -2141,8 +2145,13 @@ Candidate answer:
 
 def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, Any]:
     fallback = _fallback_p1_identity_follow_up(answer)
-    # Note: empty transcript is allowed — a generic prompt is used so AI can still
-    # generate a varied P1 work/study follow-up (P1 practice mode skips recording).
+    if not answer.strip():
+        return {
+            "follow_up": "",
+            "backend": "skipped",
+            "status": "skipped",
+            "error": "missing_candidate_answer",
+        }
     prompt = _p1_identity_follow_up_prompt(answer)
     http_error = ""
     if _mode_is_fallback_only("followup"):
@@ -2223,6 +2232,8 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
     if not _is_p1_work_study_turn(completed_turn):
         return None
     transcript = (completed_turn.transcript_cleaned or completed_turn.transcript_raw or "").strip()
+    if not transcript:
+        return None
     existing = attempt.turns.filter(metadata__prompt__after_turn=completed_turn.turn_id).first()
     if existing:
         return existing
@@ -2393,6 +2404,39 @@ def _sanitize_realtime_asr_metrics(value: Any) -> dict[str, Any] | None:
     }
 
 
+def _reopen_turn_for_rerecord(attempt: SpeakingAttempt, turn: SpeakingTurn) -> SpeakingTurn:
+    """Reset a just-completed turn back to a recordable state.
+
+    Used when an answer came back empty and there is nothing to build on (e.g. a
+    P3 main question whose follow-up cannot be generated). Clears the transcript,
+    marks the turn pending, and points the attempt back at it so the learner can
+    simply re-record this question instead of dead-ending on a follow-up that can
+    never be generated.
+    """
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    metadata = {
+        **metadata,
+        "status": "pending",
+        "transcript_status": "missing",
+        "transcript_markdown": "",
+        "feedback_generation_status": "pending",
+        "re_record_required": True,
+        "re_record_reason": "empty_answer",
+    }
+    turn.transcript_raw = ""
+    turn.transcript_cleaned = ""
+    turn.metadata = metadata
+    turn.save(update_fields=["transcript_raw", "transcript_cleaned", "metadata", "updated_at"])
+
+    attempt_metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    attempt_metadata["current_turn"] = turn.turn_id
+    attempt.metadata = attempt_metadata
+    if attempt.status != SpeakingAttempt.Status.STARTED:
+        attempt.status = SpeakingAttempt.Status.STARTED
+    attempt.save(update_fields=["metadata", "status", "updated_at"])
+    return turn
+
+
 def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     attempt = _load_attempt_for_user(user, attempt_id)
     if attempt.status == SpeakingAttempt.Status.ABORTED:
@@ -2447,6 +2491,7 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         transcript_status = "captured"
         source = str(server_asr.get("provider") or "volcengine_realtime_asr")
     cleaned = _clean_report_text(transcript)
+    p1_identity_follow_up_skipped = _is_p1_work_study_turn(turn) and not bool(cleaned.strip())
     duration = payload.get("duration_seconds")
 
     turn.transcript_raw = transcript
@@ -2480,6 +2525,40 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
     }
     turn.save()
 
+    # Source interception: a P3 main answer that came back empty cannot seed a
+    # dynamic follow-up (there is nothing to adapt from). Previously this
+    # dead-ended the practice at "追问生成失败" with a useless retry. Reopen the
+    # main turn for re-record ONLY when a follow-up actually follows it — that is
+    # the case the re-record was meant to rescue. P3 sets without a following
+    # follow_up turn (e.g. 3-main sessions) have nothing to dead-end, so an empty
+    # main must proceed and be scored as "为空" instead of trapping the learner
+    # in an inescapable re-record loop when dictation keeps coming back empty.
+    turn_prompt = turn.metadata.get("prompt") if isinstance(turn.metadata.get("prompt"), dict) else {}
+    if turn.part == "p3" and turn_prompt.get("role") == "main" and not cleaned.strip():
+        upcoming = (
+            attempt.turns.filter(sequence__gt=turn.sequence).order_by("sequence").first()
+        )
+        upcoming_role = ""
+        if upcoming is not None and isinstance(upcoming.metadata, dict):
+            upcoming_prompt = upcoming.metadata.get("prompt")
+            if isinstance(upcoming_prompt, dict):
+                upcoming_role = str(upcoming_prompt.get("role") or "")
+        follow_up_would_dead_end = (
+            upcoming is not None and upcoming.part == "p3" and upcoming_role == "follow_up"
+        )
+        if follow_up_would_dead_end:
+            reopened = _reopen_turn_for_rerecord(attempt, turn)
+            attempt.refresh_from_db()
+            total = attempt.turns.count()
+            return {
+                "attempt": _runtime_attempt_payload(attempt),
+                "turn": _turn_payload(reopened, total),
+                "next_turn": _turn_payload(reopened, total),
+                "re_record_required": True,
+                "re_record_reason": "empty_answer",
+                "re_record_message": "没有检测到你的回答，请重录这道题，开始后尽快开口。",
+            }
+
     stream_follow_up = bool(payload.get("stream_follow_up"))
     inserted_follow_up = _insert_p1_identity_follow_up(attempt, turn, stream_pending=stream_follow_up)
     turns = list(attempt.turns.all().order_by("sequence"))
@@ -2501,9 +2580,11 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
             question_type = str(turn_prompt.get("question_type") or next_prompt.get("question_type") or "")
             focus = str(attempt_metadata.get("p3_focus") or "")
             current_question = str(turn_prompt.get("question") or turn.question or "")
+            fallback_question = _dynamic_p3_follow_up(question_type, cleaned, focus)
             result = (
                 {
-                    "follow_up": _dynamic_p3_follow_up(question_type, cleaned, focus),
+                    "follow_up": STREAM_PENDING_FOLLOW_UP_PLACEHOLDER,
+                    "fallback_question": fallback_question,
                     "backend": "stream_pending",
                     "status": "pending",
                 }
@@ -2525,6 +2606,7 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
                 "adapted_from_turn": turn.turn_id,
                 "backend": result["backend"],
                 "generation_status": result["status"],
+                **({"fallback_question": result["fallback_question"]} if result.get("fallback_question") else {}),
                 **({"generation_error": result["error"]} if result.get("error") else {}),
                 **_follow_up_generation_provenance(result),
             }
@@ -2554,6 +2636,16 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
         "attempt": _runtime_attempt_payload(attempt),
         "turn": _turn_payload(turn, len(turns)),
         "next_turn": _turn_payload(next_turn, len(turns)) if next_turn else None,
+        **(
+            {
+                "follow_up_skipped": {
+                    "reason": "missing_candidate_answer",
+                    "message": "没有检测到回答，已跳过追问。",
+                }
+            }
+            if p1_identity_follow_up_skipped
+            else {}
+        ),
     }
 
 
@@ -2607,6 +2699,8 @@ def _follow_up_stream_context(attempt: SpeakingAttempt, source_turn: SpeakingTur
     transcript = clean_report_text(source_turn.transcript_cleaned or source_turn.transcript_raw)
 
     if _is_p1_work_study_turn(source_turn):
+        if not transcript:
+            raise SpeakingError("No answer was detected, so a follow-up question was skipped.")
         target = attempt.turns.filter(metadata__prompt__after_turn=source_turn.turn_id).first()
         if target is None:
             target = _insert_p1_identity_follow_up(attempt, source_turn, stream_pending=True)
@@ -2926,6 +3020,11 @@ def score_with_codex(transcript: str, question: str, part: str, call_id: str, ai
         )
 
     profile = build_scoring_learning_profile(transcript, part)
+    overall_review_profile = {
+        key: value
+        for key, value in profile.items()
+        if key != "primary_focus_text"
+    }
     overall_review_prompt = f"""
 
 同时生成 Overall Review & Practice Focus。
@@ -2935,19 +3034,19 @@ overall_review 必须是 object，包含：
 - review_points: 中文字符串数组
 
 Overall Review 写法要求：
-- markdown 必须直接写成旧版报告风格：以「### 总体点评」开头，然后写 2-3 段中文长点评；再写「### 复盘重点」，下面列出多条具体建议。
-- 第一部分「总体点评」：不要只写一句短总结，要像真人老师复盘整场练习，概括核心问题、突破方向，并结合学习画像给出针对性建议。
-- 第二部分「复盘重点」：不要限制为固定 3 条；根据本次表现列出足够具体、可执行的建议，每条可以包含解释和示范句。
+- markdown 必须直接写成旧版报告风格：以「### 总体点评」开头，写 1-2 段即可；再写「### 复盘重点」，下面列出 3-5 条具体建议。
+- 第一部分「总体点评」：必须引用本次转写中学员的真实原话，至少 1-2 处用中文引号标出具体片段，并围绕这些原话分析本次问题。不要写适用于任何人的通用建议。
+- 第二部分「复盘重点」：必须 3-5 条，不少于 3、不多于 5；每条 1-2 句，聚焦本次最关键问题。可以带一个简短示范句，但不要长篇展开。
 - 语气要具体、实用、有针对性，避免空泛评价
-- 可以稍长，不要限制内容，让建议充分展开
-- 必须结合学习画像进行个性化点评
+- 学习画像只作内部参考，严禁在输出里复述画像标签名（如 answer_development、short_answer、limited_development）或照搬通用结论句；不要写“你的学习画像里提到”这类话。
 - 不要输出类似“回答基本相关，但展开偏短”这种过短 fallback 文案
+- 如果练习部分是 p2，必须结合 cue card 与学员长回答的真实片段，指出内容组织、细节展开和可迁移到 P3 的讨论角度；不要只写“长回答不够展开”这类模板句。
 - 如果练习部分是 p3，必须围绕 Part 3 的抽象讨论能力复盘：观点是否明确、原因链是否完整、是否有对比/让步、是否能从个人例子上升到社会层面、追问是否承接新角度；复盘重点要给出可直接练的 discussion move 和示范句。
 
 本次成绩会由你在同一个 JSON 中给出。
 练习部分：{part}
-学习画像：
-{json.dumps(profile, ensure_ascii=False)}
+学习画像（仅供内部判断，不得原样复述）：
+{json.dumps(overall_review_profile, ensure_ascii=False)}
 """
 
     full_prompt = (
@@ -2955,6 +3054,8 @@ Overall Review 写法要求：
         + "\n\nReturn JSON only. The top-level object must contain numeric keys fluency_coherence, lexical_resource, "
         "grammatical_range, overall_band, string key feedback, and overall_review object "
         "with string keys markdown and comment plus array key review_points. Do not score pronunciation or reference pronunciation. "
+        "Transcript note: answers may come from ASR and may still contain a few machine mis-recognitions. "
+        "If a word is clearly an ASR error in context, do not count that word as a GRA/LR mistake; score real learner grammar, vocabulary, content, and fluency evidence. "
         + score_prompt_for_part(part)
         + overall_review_prompt
         + "\n\nPrompt(s):\n"
@@ -2967,13 +3068,17 @@ Overall Review 写法要求：
         "Return JSON only. The top-level object must contain numeric keys fluency_coherence, lexical_resource, grammatical_range, "
         "overall_band, string key feedback, and overall_review object with string key comment and array "
         "key review_points and optional string key markdown. Score this IELTS Speaking response using the official IELTS Speaking criteria. "
-        "Write a detailed Simplified Chinese overall_review.markdown in the old report style: ### 总体点评 with 2-3 substantial paragraphs, then ### 复盘重点 with concrete review points. "
+        "Write Simplified Chinese overall_review.markdown in the old report style: ### 总体点评 with 1-2 focused paragraphs that quote 1-2 exact learner transcript fragments as evidence, then ### 复盘重点 with 3-5 concrete review points. "
+        "Do not mention or repeat learning-profile tag names such as answer_development, short_answer, or limited_development. Each review point must be 1-2 sentences. "
         "Do not repeat the input. Do not include Markdown, explanation, or code fences. Do not score pronunciation from text. "
+        "Transcript note: ASR may leave obvious machine mis-recognitions; do not count clearly machine-heard words as learner GRA/LR mistakes. "
         + score_prompt_for_part(part)
         + "\n\nQuestion or cue card:\n"
         + (question.strip() or "(not provided)")
         + "\n\nTranscript:\n"
         + transcript
+        + "\n\nLearning profile for internal reference only; do not quote tag names or generic profile wording:\n"
+        + json.dumps(overall_review_profile, ensure_ascii=False)
         + "\n"
     )
 
@@ -3080,7 +3185,7 @@ Overall Review 写法要求：
         markdown = clean_markdown_text(str(overall_review.get("markdown") or ""))
         comment = clean_report_text(str(overall_review.get("comment") or ""))
         points = [clean_report_text(str(item)) for item in overall_review.get("review_points") or []]
-        points = [item for item in points if item][:4]
+        points = [item for item in points if item][:5]
         if markdown or comment or points:
             result_payload["overall_review"] = {
                 "comment": comment,
@@ -3247,7 +3352,197 @@ def build_p3_discussion_skills(attempt: SpeakingAttempt) -> dict[str, Any] | Non
             "连续补两句：一个 because 原因，一个 for example / whereas 支撑。",
             "最后加一句 wider impact：对社会、学校、家庭或年轻人意味着什么。",
         ],
+        "generation_backend": "heuristic",
+        "generation_status": "fallback",
     }
+
+
+def _p3_turn_context(attempt: SpeakingAttempt) -> list[dict[str, str]]:
+    turns = [turn for turn in attempt.turns.all().order_by("sequence") if turn.part == "p3" and turn_counts_for_scoring(turn)]
+    context: list[dict[str, str]] = []
+    for turn in turns:
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
+        role = str(prompt.get("role") or "main")
+        context.append(
+            {
+                "role": "follow_up" if role == "follow_up" else "main",
+                "question": clean_report_text(turn.question or ""),
+                "answer": clean_report_text(turn_display_transcript(turn)),
+            }
+        )
+    return context
+
+
+def _report_provider_json(
+    prompt: str,
+    required_keys: set[str],
+    call_id: str,
+    ai_source: str = "gpt",
+    *,
+    max_tokens: int = 1400,
+    temperature: float = 0.15,
+) -> tuple[dict[str, Any], str, str, dict[str, Any] | None]:
+    last_error: Exception | None = None
+
+    if _mode_is_fallback_only("report"):
+        raise RuntimeError("speaking report provider disabled by SPEAKING_AI_CALL_MODE=fallback")
+
+    if ai_source == "claude_cli":
+        try:
+            output, usage = run_claude_cli(prompt, f"{call_id}_claude", timeout=SPEAKING_REPORT_HTTP_TIMEOUT)
+            return extract_json_object_with_keys(output, required_keys), "claude_cli", "claude", usage
+        except Exception as exc:
+            last_error = exc
+
+    if _mode_allows_http("report"):
+        try:
+            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT).complete_chat(
+                [
+                    {"role": "system", "content": "You are an IELTS Speaking coach. Return JSON only."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT,
+                stream=True,
+            )
+            usage = getattr(result, "usage", None)
+            return extract_json_object_with_keys(result.text, required_keys), "http_api", result.model, usage
+        except Exception as exc:
+            last_error = exc
+
+    if _mode_allows_codex("report"):
+        try:
+            output, usage = run_codex(prompt, call_id, timeout=180)
+            return extract_json_object_with_keys(output, required_keys), "codex", "", usage
+        except Exception as exc:
+            last_error = exc
+
+    raise RuntimeError(str(last_error or "speaking report provider unavailable"))
+
+
+def enrich_p3_discussion_skills_with_ai(
+    attempt: SpeakingAttempt,
+    base_skills: dict[str, Any] | None,
+    score: dict[str, Any],
+    learning_profile: dict[str, Any],
+    call_id: str,
+    ai_source: str = "gpt",
+) -> dict[str, Any] | None:
+    """Use the report AI provider to write P3 skill text while preserving heuristic statuses."""
+    if not base_skills:
+        return base_skills
+    base_skills = json.loads(json.dumps(base_skills, ensure_ascii=False))
+    base_skills["generation_backend"] = "heuristic"
+    base_skills["generation_status"] = "fallback"
+    context = _p3_turn_context(attempt)
+    if not context:
+        return base_skills
+
+    dimension_contract = [
+        {
+            "key": item.get("key"),
+            "label": item.get("label"),
+            "status": item.get("status"),
+            "heuristic_evidence": item.get("evidence"),
+            "heuristic_next_action": item.get("next_action"),
+        }
+        for item in base_skills.get("dimensions", [])
+        if isinstance(item, dict) and item.get("key")
+    ]
+    prompt = f"""
+你是雅思口语 Part 3 教练。请根据学员本次真实 P3 回答，为「P3 Discussion Skills」生成个性化中文文本。
+
+硬性规则：
+- 只返回严格 JSON，不要 Markdown 代码块。
+- 不要新增、删除或重命名维度；dimensions 只能使用给定 key。
+- 不要改 status；status 已由程序按真实关键词命中计算。
+- 只写文本字段：summary、best_moment、fix_next、next_drill，以及每个维度的 evidence、next_action。
+- 内容必须针对学员原话和本次问题，具体、可执行，避免空泛套话。
+- next_drill 必须正好 3 条。
+- 如果学员回答很短，也要基于短答指出下一步练法，不要编造不存在的内容。
+
+返回 JSON 结构：
+{{
+  "summary": "...",
+  "best_moment": "...",
+  "fix_next": "...",
+  "next_drill": ["...", "...", "..."],
+  "dimensions": {{
+    "abstract_extension": {{"evidence": "...", "next_action": "..."}},
+    "reasoning": {{"evidence": "...", "next_action": "..."}},
+    "comparison_concession": {{"evidence": "...", "next_action": "..."}},
+    "specific_support": {{"evidence": "...", "next_action": "..."}},
+    "follow_up_handling": {{"evidence": "...", "next_action": "..."}}
+  }}
+}}
+
+维度状态和启发式证据：
+{json.dumps(dimension_contract, ensure_ascii=False)}
+
+本次 P3 问答：
+{json.dumps(context, ensure_ascii=False)}
+
+分数：
+{json.dumps(score, ensure_ascii=False)}
+
+学习画像：
+{json.dumps(learning_profile, ensure_ascii=False)}
+"""
+    try:
+        payload, backend, model, usage = _report_provider_json(
+            prompt,
+            {"summary", "best_moment", "fix_next", "next_drill", "dimensions"},
+            f"{call_id}_p3_discussion_skills",
+            ai_source=ai_source,
+            max_tokens=1500,
+            temperature=0.2,
+        )
+        dimensions_payload = payload.get("dimensions")
+        if not isinstance(dimensions_payload, dict):
+            raise ValueError("P3 skills AI payload dimensions must be an object")
+        base_keys = {str(item.get("key")) for item in base_skills.get("dimensions", []) if isinstance(item, dict)}
+        missing = base_keys - set(dimensions_payload.keys())
+        if missing:
+            raise ValueError(f"P3 skills AI payload missing dimensions: {', '.join(sorted(missing))}")
+
+        for key in ("summary", "best_moment", "fix_next"):
+            text_value = clean_report_text(str(payload.get(key) or ""))
+            if text_value:
+                base_skills[key] = text_value
+
+        drill_items = [clean_report_text(str(item)) for item in payload.get("next_drill") or []]
+        drill_items = [item for item in drill_items if item][:3]
+        if len(drill_items) == 3:
+            base_skills["next_drill"] = drill_items
+
+        for item in base_skills.get("dimensions", []):
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "")
+            enrich = dimensions_payload.get(key)
+            if not isinstance(enrich, dict):
+                continue
+            evidence = clean_report_text(str(enrich.get("evidence") or ""))
+            next_action = clean_report_text(str(enrich.get("next_action") or ""))
+            if evidence:
+                item["evidence"] = evidence
+            if next_action:
+                item["next_action"] = next_action
+
+        base_skills["generation_backend"] = backend
+        base_skills["generation_status"] = "ready"
+        if model:
+            base_skills["generation_model"] = model
+        if usage:
+            base_skills["billing_usage"] = usage
+        return base_skills
+    except Exception as exc:
+        base_skills["generation_backend"] = "heuristic"
+        base_skills["generation_status"] = "fallback"
+        base_skills["generation_error"] = clean_report_text(str(exc))[:240]
+        return base_skills
 
 
 def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_id: str) -> str:
@@ -3324,6 +3619,7 @@ def build_ai_coaching_with_codex(question: str, transcript: str, band7: str, par
 语法纠错只处理影响口语表达的语法或搭配问题；不要纠结句末标点、大小写或书面格式。
 不要点评和真实口语表现无关的内容，例如大小写、标点、转写显示格式、ASR 噪声或浏览器转写造成的拼写/格式问题。
 反例：如果 display_transcript 已经是 "at university"，不要说 raw transcript 里的 "at University" 不需要大写。
+如果转写里存在明显机器听错并已在 display_transcript 层纠正的词，不要把这些 ASR 纠正词写进语法或表达纠错；只纠正用户真实说出的语法、搭配和表达问题。
 
 Question:
 {question}
@@ -3401,6 +3697,28 @@ def coaching_prompt_constraints(part: str) -> str:
 最后保留「语法 & 表达纠正」部分；如无错误，写：无。"""
 
 
+DISPLAY_TRANSCRIPT_ASR_RULES = """display_transcript is an ASR-corrected transcript for display and scoring:
+- Fix confident ASR mis-recognition only when the ASR word is semantically unnatural in this exact question context and a phonetically similar correction is clearly natural.
+- Examples of confident ASR fixes: for a science question, "Songs plays a vital role" -> "Science plays a vital role"; "sync my teeth into" -> "sink my teeth into"; "I'm a big fellows long holidays" -> "I'm a big fan of long holidays"; "Do the future" -> "In the future".
+- Do not fix learner errors that the candidate probably really said. Keep grammar/collocation mistakes such as "I'm a university student major in software engineering" unchanged for coaching to correct.
+- If uncertain, keep the ASR word. Do not guess content, add ideas, upgrade vocabulary, improve grammar, or turn display_transcript into a Band 7 answer.
+- ASR-corrected words must not appear in ai_coaching as grammar/expression mistakes. ai_coaching must only correct learner errors that remain in display_transcript.
+- Do not mention or correct words that are absent from display_transcript, and do not bring removed ASR noise back into coaching.
+- Do not comment on capitalization, punctuation, written formatting, display formatting, ASR noise, or browser transcription artifacts."""
+
+DISPLAY_TRANSCRIPT_MARKDOWN_RULES = """Also produce display_transcript_markdown:
+- It must contain the same ASR-corrected wording as display_transcript.
+- Split it into short spoken sentences, one sentence per paragraph, separated by blank lines.
+- Do not add bullets, labels, quotes, or Markdown headings."""
+
+
+def display_transcript_markdown_from_payload(value: Any, display_transcript: str, part: str = "") -> str:
+    markdown = clean_markdown_text(str(value or ""))
+    if markdown:
+        return markdown
+    return spoken_markdown(display_transcript, part)
+
+
 def turn_feedback_with_codex(question: str, transcript: str, part: str, target: str, profile: dict[str, Any] | None, call_id: str, requires_ai_coaching: bool = True) -> dict[str, str]:
     """Generate Band 7 and AI coaching together using Codex CLI.
 
@@ -3408,28 +3726,23 @@ def turn_feedback_with_codex(question: str, transcript: str, part: str, target: 
 
     Raises RuntimeError if the output is invalid or missing required fields.
     """
-    prompt = f"""Return JSON only. The top-level object must contain keys display_transcript, band7_version and ai_coaching.
+    prompt = f"""Return JSON only. The top-level object must contain keys display_transcript, display_transcript_markdown, band7_version and ai_coaching.
 Do not repeat the input. Do not include Markdown outside string values, explanation, or code fences.
 
 Task:
-- First produce display_transcript: lightly format the ASR transcript for display only.
+- First produce display_transcript and display_transcript_markdown: correct confident ASR mis-recognitions while preserving the learner's actual wording and errors.
 - Then write one natural IELTS Speaking Band {target} spoken version based on display_transcript.
 - Write Chinese Markdown coaching for this same turn only if requires_ai_coaching is true.
 - Answer the exact examiner question directly and preserve the candidate's likely intent.
 - Reuse the candidate's concrete idea when it is relevant; improve cohesion, vocabulary, and grammar.
 - Do not include the original question, cue-card bullets, titles, labels, code fences, or logs.
 - Base band7_version and ai_coaching on display_transcript, not noisy candidate transcript.
-- display_transcript is only for noise cleanup and formatting.
-- Do not change the candidate's original meaning, answer direction, or level of detail when producing display_transcript.
-- Only fix obvious ASR noise: spacing, capitalization, punctuation, repeated fragments, and broken sentence boundaries.
-- If a word is uncertain, keep the original ASR word instead of guessing a better one.
-- Do not upgrade display_transcript into a better answer.
-- Do not mention or correct words that are absent from display_transcript.
-- ai_coaching must comment on the answer as represented by display_transcript.
-- Do not mention raw ASR noise or words removed during cleanup in coaching.
-- Do not comment on capitalization, punctuation, written formatting, display formatting, ASR noise, or browser transcription artifacts.
 - Bad example: if display_transcript says "at university", do not say the raw phrase "at University" should not be capitalized.
 - If requires_ai_coaching is false, set ai_coaching to an empty string.
+
+{DISPLAY_TRANSCRIPT_ASR_RULES}
+
+{DISPLAY_TRANSCRIPT_MARKDOWN_RULES}
 
 Band 7 version constraints:
 {model_answer_constraints(part)}
@@ -3458,23 +3771,20 @@ requires_ai_coaching:
 Learning profile:
 {json.dumps(profile or {})}
 """
-    compact_prompt = f"""Return JSON only. The top-level object must contain keys display_transcript, band7_version and ai_coaching.
+    compact_prompt = f"""Return JSON only. The top-level object must contain keys display_transcript, display_transcript_markdown, band7_version and ai_coaching.
 Do not repeat the input. Do not include Markdown outside string values, explanation, or code fences.
 
-First lightly format the ASR transcript as display_transcript, then write a natural IELTS Speaking Band {target} answer for the question.
+First produce display_transcript and display_transcript_markdown with confident ASR mis-recognition fixes only, then write a natural IELTS Speaking Band {target} answer for the question.
 If requires_ai_coaching is true, write Chinese coaching based only on display_transcript.
 If requires_ai_coaching is false, set ai_coaching to an empty string.
 In band7_version, use Markdown bold on 2-5 reusable upgraded phrases, not whole sentences.
 The coaching format is up to you, but when coaching is required it must include a final section named "语法错误纠正：".
 Do not use fixed labels or templates. Use the candidate's real meaning and do not invent facts.
-display_transcript is only for noise cleanup and formatting.
-Do not change the candidate's original meaning, answer direction, or level of detail when producing display_transcript.
-Only fix obvious ASR noise: spacing, capitalization, punctuation, repeated fragments, and broken sentence boundaries.
-If a word is uncertain, keep the original ASR word instead of guessing a better one.
-Do not upgrade display_transcript into a better answer.
-Do not mention or correct words that are absent from display_transcript.
-Do not comment on capitalization, punctuation, written formatting, display formatting, ASR noise, or browser transcription artifacts.
 Bad example: if display_transcript says "at university", do not say the raw phrase "at University" should not be capitalized.
+
+{DISPLAY_TRANSCRIPT_ASR_RULES}
+
+{DISPLAY_TRANSCRIPT_MARKDOWN_RULES}
 
 Question:
 {question}
@@ -3507,6 +3817,11 @@ requires_ai_coaching:
         raise RuntimeError(f"codex turn feedback missing ai_coaching for {call_id}")
 
     display_transcript = clean_report_text(str(payload.get("display_transcript") or ""))
+    display_transcript_markdown = display_transcript_markdown_from_payload(
+        payload.get("display_transcript_markdown"),
+        display_transcript,
+        part,
+    )
     band7 = clean_band7_output(str(band7_raw))
     coaching = clean_coaching_markdown_text(str(coaching_raw))
     if not clean_report_text(band7):
@@ -3517,7 +3832,13 @@ requires_ai_coaching:
     if requires_ai_coaching and not acceptable_coaching_markdown(coaching):
         raise RuntimeError("codex turn feedback did not include usable coaching with grammar correction")
 
-    return {"display_transcript": display_transcript, "band7_version": band7, "ai_coaching": coaching if requires_ai_coaching else "", "usage": usage}
+    return {
+        "display_transcript": display_transcript,
+        "display_transcript_markdown": display_transcript_markdown,
+        "band7_version": band7,
+        "ai_coaching": coaching if requires_ai_coaching else "",
+        "usage": usage,
+    }
 
 
 def turn_feedback_batch_with_codex(
@@ -3533,9 +3854,9 @@ def turn_feedback_batch_with_codex(
     for turn in turns:
         if is_p1_name_intro_turn(turn):
             continue
+        # Empty answers are still included so the AI writes a Band 7 model answer
+        # from the question alone; coaching is suppressed (requires_ai_coaching=no).
         transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
-        if not transcript:
-            continue
         items.append(
             {
                 "turn_id": turn.turn_id,
@@ -3557,10 +3878,10 @@ def turn_feedback_batch_with_codex(
     prompt = f"""Return JSON only. The top-level object must contain key turns.
 Do not repeat the input JSON. Do not include Markdown outside string values, explanation, or code fences.
 turns must be an array with one item for every input turn.
-Each item must contain string keys turn_id, display_transcript, band7_version, and ai_coaching.
+Each item must contain string keys turn_id, display_transcript, display_transcript_markdown, band7_version, and ai_coaching.
 
 Task:
-- For each turn, first produce display_transcript: lightly format the ASR transcript for display only.
+- For each turn, first produce display_transcript and display_transcript_markdown: correct confident ASR mis-recognitions while preserving the learner's actual wording and errors.
 - Then write one natural IELTS Speaking Band {target} spoken version based on that display_transcript.
 - Preserve the candidate's likely meaning and answer the exact examiner question directly.
 - Write Chinese coaching only when requires_ai_coaching is "yes".
@@ -3575,10 +3896,9 @@ prepared_corpus usage:
 - When prepared_corpus is present, the coaching should also help the learner reuse it as 串题素材 — for example how to keep most of it and stretch the same material onto this cue card and nearby P2 topics. Decide the angle, wording, and depth yourself; do not follow a fixed checklist, fixed labels, or a template.
 
 display_transcript constraints:
-- Keep the candidate's original wording and expression. Do not upgrade vocabulary, grammar, ideas, or logic.
-- Only fix obvious ASR formatting problems: spacing, capitalization, repeated filler fragments, and sentence breaks.
-- If a word is uncertain, keep the ASR word instead of guessing a better answer.
-- Do not turn it into a Band 7 answer.
+{DISPLAY_TRANSCRIPT_ASR_RULES}
+
+{DISPLAY_TRANSCRIPT_MARKDOWN_RULES}
 
 Use display_transcript as the source of truth:
 - band7_version and ai_coaching must be based on display_transcript, not noisy candidate_transcript.
@@ -3658,9 +3978,20 @@ Input turns:
             continue
         turn_id = clean_report_text(str(item.get("turn_id") or ""))
         display_transcript = clean_report_text(str(item.get("display_transcript") or ""))
+        source_item = next((source for source in items if source["turn_id"] == turn_id), {})
+        # Empty answers must stay empty: never let the model invent a transcript
+        # for a turn the learner did not actually answer.
+        if not source_item.get("candidate_transcript"):
+            display_transcript = ""
+        display_transcript_markdown = display_transcript_markdown_from_payload(
+            item.get("display_transcript_markdown"),
+            display_transcript,
+            source_item.get("part", ""),
+        )
+        if not source_item.get("candidate_transcript"):
+            display_transcript_markdown = ""
         band7 = clean_band7_output(str(item.get("band7_version") or ""))
         coaching = clean_coaching_markdown_text(str(item.get("ai_coaching") or ""))
-        source_item = next((source for source in items if source["turn_id"] == turn_id), {})
         requires_ai_coaching = source_item.get("requires_ai_coaching") != "no"
         if not turn_id or not clean_report_text(band7):
             continue
@@ -3676,6 +4007,7 @@ Input turns:
                 )
         by_id[turn_id] = {
             "display_transcript": display_transcript,
+            "display_transcript_markdown": display_transcript_markdown,
             "band7_version": band7,
             "ai_coaching": coaching if requires_ai_coaching else "",
             "usage": usage or {},
@@ -3683,8 +4015,16 @@ Input turns:
             **({"model": provider_model} if provider_model else {}),
         }
     if len(by_id) != len(items):
-        missing = [item["turn_id"] for item in items if item["turn_id"] not in by_id]
-        raise RuntimeError(f"codex batch turn feedback missing usable output for turns: {', '.join(missing)}")
+        # Only hard-fail when a turn the learner actually answered is missing usable
+        # output. An empty-answer turn that fails to get a model answer is tolerated
+        # (it stays without a Band 7 version) so it cannot sink the whole report.
+        required_missing = [
+            item["turn_id"]
+            for item in items
+            if item["turn_id"] not in by_id and item.get("candidate_transcript")
+        ]
+        if required_missing:
+            raise RuntimeError(f"codex batch turn feedback missing usable output for turns: {', '.join(required_missing)}")
     return by_id
 
 
@@ -3897,6 +4237,10 @@ def is_p1_work_study_intro_turn(turn: dict[str, Any] | SpeakingTurn) -> bool:
 
 
 def turn_needs_ai_coaching(turn: SpeakingTurn) -> bool:
+    # Empty answers get a Band 7 model answer but no coaching ("为空 → 本次不辅导").
+    transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+    if not transcript:
+        return False
     return not (is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn))
 
 
@@ -4162,7 +4506,11 @@ def build_turn_feedback(
     display_transcript = clean_report_text(generated.get("display_transcript") or "")
     if display_transcript:
         result["display_transcript"] = display_transcript
-        result["display_transcript_markdown"] = _spoken_markdown(display_transcript)
+        result["display_transcript_markdown"] = display_transcript_markdown_from_payload(
+            generated.get("display_transcript_markdown"),
+            display_transcript,
+            part,
+        )
 
     if result["band7_version"]:
         result["model_audio"] = volcengine_tts(
@@ -4293,7 +4641,6 @@ def generate_turn_feedback_for_report(
         turn
         for turn in scoring_turns
         if not is_p1_name_intro_turn(turn)
-        and (turn.transcript_cleaned or turn.transcript_raw or "").strip()
         and not _turn_feedback_ready(turn)
     ]
     if not pending_turns:
@@ -4361,13 +4708,19 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
+    if not scoring_turns_have_answer_text(scoring_turns):
+        raise SpeakingError("Missing transcript")
+
+    learning_profile = build_learning_profile(user, attempt)
+    generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
+    attempt.refresh_from_db()
+    turns = list(attempt.turns.all().order_by("sequence"))
+    scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
     questions_text = "\n".join(f"Q{i + 1}: {turn.question}" for i, turn in enumerate(scoring_turns))
     transcript = "\n".join(
         f"Q{index + 1}: {turn.question}\nA: {turn_display_transcript(turn)}"
         for index, turn in enumerate(scoring_turns)
     )
-    if not scoring_turns_have_answer_text(scoring_turns):
-        raise SpeakingError("Missing transcript")
 
     # Resolve per-user AI source preference
     try:
@@ -4394,8 +4747,6 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
         "scored_at": timezone.now().isoformat(),
     }
     attempt.save()
-    learning_profile = build_learning_profile(user, attempt)
-    generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
@@ -4405,6 +4756,14 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
 
     # Build personalized coaching
     personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
+    p3_discussion_skills = enrich_p3_discussion_skills_with_ai(
+        attempt,
+        build_p3_discussion_skills(attempt),
+        score,
+        learning_profile,
+        call_id,
+        ai_source=_ai_source,
+    )
 
     runtime.update(
         {
@@ -4430,7 +4789,7 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
             },
             "overall_review": overall_review,
             "personalized_coaching": personalized_coaching,
-            "p3_discussion_skills": build_p3_discussion_skills(attempt),
+            "p3_discussion_skills": p3_discussion_skills,
         }
     )
 
@@ -4717,13 +5076,19 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
+    if not scoring_turns_have_answer_text(scoring_turns):
+        raise SpeakingError("Missing transcript")
+
+    learning_profile = build_learning_profile(user, attempt)
+    generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
+    attempt.refresh_from_db()
+    turns = list(attempt.turns.all().order_by("sequence"))
+    scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
     questions_text = "\n".join(f"Q{i + 1}: {turn.question}" for i, turn in enumerate(scoring_turns))
     transcript = "\n".join(
         f"Q{index + 1}: {turn.question}\nA: {turn_display_transcript(turn)}"
         for index, turn in enumerate(scoring_turns)
     )
-    if not transcript.strip():
-        raise SpeakingError("Missing transcript")
 
     # Resolve per-user AI source preference
     try:
@@ -4746,10 +5111,6 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     attempt.updated_at = timezone.now()
     attempt.save(update_fields=["metadata", "updated_at"])
     attempt.refresh_from_db()
-
-    learning_profile = build_learning_profile(user, attempt)
-    generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
-    attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
 
@@ -4758,6 +5119,14 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
 
     # Build personalized coaching
     personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
+    p3_discussion_skills = enrich_p3_discussion_skills_with_ai(
+        attempt,
+        build_p3_discussion_skills(attempt),
+        score,
+        learning_profile,
+        call_id,
+        ai_source=_ai_source,
+    )
 
     runtime.update(
         {
@@ -4783,7 +5152,7 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
             },
             "overall_review": overall_review,
             "personalized_coaching": personalized_coaching,
-            "p3_discussion_skills": build_p3_discussion_skills(attempt),
+            "p3_discussion_skills": p3_discussion_skills,
             "regenerated_at": timezone.now().isoformat(),
         }
     )
@@ -4996,44 +5365,107 @@ def _warm_fixed_examiner_tts_item_background(item: dict[str, str]) -> None:
     threading.Thread(target=_warm_fixed_examiner_tts_item, args=(item,), daemon=True).start()
 
 
-def _examiner_tts_cache_key(attempt_id: str, turn_id: str) -> str:
-    return f"{attempt_id}_{turn_id}_examiner"
+def _examiner_tts_text_hash(examiner_text: str) -> str:
+    normalized = clean_report_text(examiner_text)
+    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
+
+
+def _examiner_tts_cache_key(attempt_id: str, turn_id: str, examiner_text: str) -> str:
+    return f"{attempt_id}_{turn_id}_examiner_{_examiner_tts_text_hash(examiner_text)}"
+
+
+def _examiner_tts_identity(examiner_text: str, cache_key: str) -> dict[str, str]:
+    return {
+        "text_hash": _examiner_tts_text_hash(examiner_text),
+        "cache_key": cache_key,
+        # Exact text this audio was synthesized for. The client compares this
+        # against the currently displayed question and refuses to play audio
+        # that does not match — so a streamed AI follow-up can never be voiced
+        # with a stale/template clip, regardless of any race or leftover payload.
+        "tts_source_text": clean_report_text(examiner_text),
+    }
+
+
+def _with_examiner_tts_identity(tts: dict[str, Any], examiner_text: str, cache_key: str) -> dict[str, Any]:
+    return {
+        **(tts or {}),
+        **_examiner_tts_identity(examiner_text, cache_key),
+    }
+
+
+def _examiner_tts_not_started(message: str = "Examiner text is not ready yet.") -> dict[str, Any]:
+    return {
+        "provider": "volcengine",
+        "status": "not_started",
+        "audio_url": None,
+        "message": message,
+    }
+
+
+def _examiner_tts_matches_text(tts: dict[str, Any], examiner_text: str) -> bool:
+    if not isinstance(tts, dict) or not examiner_text:
+        return False
+    fixed_item = _fixed_examiner_item_for_text(examiner_text)
+    if fixed_item and tts.get("cache_key") == fixed_item["key"]:
+        return True
+    return tts.get("text_hash") == _examiner_tts_text_hash(examiner_text)
 
 
 def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
     """Ensure turn has examiner TTS audio_url generated."""
     current = turn.get("examiner_tts") or {}
-    if current.get("audio_url") or current.get("status") not in (None, "pending"):
-        return
     examiner_text = str(turn.get("examiner_text") or turn.get("question") or "")
-    cache_key = _examiner_tts_cache_key(attempt_id, str(turn["id"]))
+    if not clean_report_text(examiner_text):
+        turn["examiner_tts"] = _examiner_tts_not_started()
+        return
+    if current.get("audio_url") or current.get("status") not in (None, "pending"):
+        if _examiner_tts_matches_text(current, examiner_text):
+            return
     try:
         fixed_item = _fixed_examiner_item_for_text(examiner_text)
         if fixed_item:
             cached_url = _cached_tts_url("examiner", fixed_item["key"])
             if cached_url:
-                turn["examiner_tts"] = {
-                    "provider": "volcengine",
-                    "status": "cached",
-                    "audio_url": cached_url,
-                    "content_type": "audio/mpeg",
-                }
+                turn["examiner_tts"] = _with_examiner_tts_identity(
+                    {
+                        "provider": "volcengine",
+                        "status": "cached",
+                        "audio_url": cached_url,
+                        "content_type": "audio/mpeg",
+                    },
+                    examiner_text,
+                    fixed_item["key"],
+                )
                 return
             _warm_fixed_examiner_tts_item_background(fixed_item)
-            turn["examiner_tts"] = _fixed_examiner_pending_state(fixed_item)
+            turn["examiner_tts"] = _with_examiner_tts_identity(
+                _fixed_examiner_pending_state(fixed_item),
+                examiner_text,
+                fixed_item["key"],
+            )
             return
-        turn["examiner_tts"] = volcengine_tts(
+        cache_key = _examiner_tts_cache_key(attempt_id, str(turn["id"]), examiner_text)
+        turn["examiner_tts"] = _with_examiner_tts_identity(
+            volcengine_tts(
+                examiner_text,
+                role="examiner",
+                cache_key=cache_key,
+            ),
             examiner_text,
-            role="examiner",
-            cache_key=cache_key,
+            cache_key,
         )
     except Exception as exc:
-        turn["examiner_tts"] = {
-            "provider": "volcengine",
-            "status": "fallback",
-            "audio_url": None,
-            "message": f"Server TTS unavailable; use browser fallback: {exc}",
-        }
+        cache_key = _examiner_tts_cache_key(attempt_id, str(turn["id"]), examiner_text)
+        turn["examiner_tts"] = _with_examiner_tts_identity(
+            {
+                "provider": "volcengine",
+                "status": "fallback",
+                "audio_url": None,
+                "message": f"Server TTS unavailable: {exc}",
+            },
+            examiner_text,
+            cache_key,
+        )
 
 
 def _cached_examiner_tts_for_turn(attempt_id: str, turn_id: str, examiner_text: str) -> dict[str, Any] | None:
@@ -5041,20 +5473,29 @@ def _cached_examiner_tts_for_turn(attempt_id: str, turn_id: str, examiner_text: 
     if fixed_item:
         cached_url = _cached_tts_url("examiner", fixed_item["key"])
         if cached_url:
-            return {
+            return _with_examiner_tts_identity(
+                {
+                    "provider": "volcengine",
+                    "status": "cached",
+                    "audio_url": cached_url,
+                    "content_type": "audio/mpeg",
+                },
+                examiner_text,
+                fixed_item["key"],
+            )
+    cache_key = _examiner_tts_cache_key(attempt_id, turn_id, examiner_text)
+    cached_url = _cached_tts_url("examiner", cache_key)
+    if cached_url:
+        return _with_examiner_tts_identity(
+            {
                 "provider": "volcengine",
                 "status": "cached",
                 "audio_url": cached_url,
                 "content_type": "audio/mpeg",
-            }
-    cached_url = _cached_tts_url("examiner", _examiner_tts_cache_key(attempt_id, turn_id))
-    if cached_url:
-        return {
-            "provider": "volcengine",
-            "status": "cached",
-            "audio_url": cached_url,
-            "content_type": "audio/mpeg",
-        }
+            },
+            examiner_text,
+            cache_key,
+        )
     return None
 
 
@@ -5101,13 +5542,27 @@ def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> No
         for db_turn in attempt.turns.filter(turn_id__in=turn_ids).order_by("sequence"):
             metadata = db_turn.metadata if isinstance(db_turn.metadata, dict) else {}
             current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
-            if current.get("audio_url") or current.get("status") not in (None, "pending"):
+            examiner_text = str(metadata.get("examiner_text") or db_turn.question)
+            if not clean_report_text(examiner_text):
+                metadata["examiner_tts"] = _examiner_tts_not_started()
+                db_turn.metadata = metadata
+                db_turn.save(update_fields=["metadata", "updated_at"])
                 continue
+            if (
+                (current.get("audio_url") or current.get("status") not in (None, "pending"))
+                and _examiner_tts_matches_text(current, examiner_text)
+            ):
+                continue
+            cache_key = (
+                (_fixed_examiner_item_for_text(examiner_text) or {}).get("key")
+                or _examiner_tts_cache_key(attempt_id, db_turn.turn_id, examiner_text)
+            )
             generating_state = {
                 **(current or {}),
                 "provider": "volcengine",
                 "status": "generating",
                 "audio_url": None,
+                **_examiner_tts_identity(examiner_text, cache_key),
             }
             metadata["examiner_tts"] = generating_state
             db_turn.metadata = metadata
@@ -5115,7 +5570,7 @@ def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> No
             turn_data = {
                 "id": db_turn.turn_id,
                 "question": db_turn.question,
-                "examiner_text": metadata.get("examiner_text") or db_turn.question,
+                "examiner_text": examiner_text,
                 "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
             }
             ensure_examiner_tts(attempt_id, turn_data)
@@ -5166,18 +5621,49 @@ def examiner_tts_status(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
             },
         }
     examiner_text = str(metadata.get("examiner_text") or turn.question)
+    if not clean_report_text(examiner_text):
+        tts = _examiner_tts_not_started()
+        metadata["examiner_tts"] = tts
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+        return {
+            "attempt_id": attempt.attempt_id,
+            "turn_id": turn.turn_id,
+            "examiner_tts": {
+                **tts,
+                "refresh_latency_ms": int((time.monotonic() - started) * 1000),
+            },
+        }
+    if tts and not _examiner_tts_matches_text(tts, examiner_text):
+        tts = {
+            "provider": "volcengine",
+            "status": "pending",
+            "audio_url": None,
+            **_examiner_tts_identity(
+                examiner_text,
+                (_fixed_examiner_item_for_text(examiner_text) or {}).get("key")
+                or _examiner_tts_cache_key(attempt.attempt_id, turn.turn_id, examiner_text),
+            ),
+        }
+        metadata["examiner_tts"] = tts
     cached_tts = _cached_examiner_tts_for_turn(attempt.attempt_id, turn.turn_id, examiner_text)
     if cached_tts:
         tts = cached_tts
         metadata["examiner_tts"] = tts
         turn.metadata = metadata
         turn.save(update_fields=["metadata", "updated_at"])
-    elif not tts.get("audio_url") and tts.get("status") in (None, "pending"):
+    elif not tts.get("audio_url"):
+        # Self-heal: regenerate whenever there is no audio yet, regardless of the
+        # last status. Background warming can leave a run of turns in "fallback"
+        # / "failed" / "generating" after a transient volcengine hiccup; without
+        # this, those turns would stay permanently silent because the old guard
+        # only retried "pending". ensure_examiner_tts is idempotent (returns the
+        # cached clip if it already exists).
         turn_data = {
             "id": turn.turn_id,
             "question": turn.question,
             "examiner_text": examiner_text,
-            "examiner_tts": tts,
+            "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None, **_examiner_tts_identity(examiner_text, (_fixed_examiner_item_for_text(examiner_text) or {}).get("key") or _examiner_tts_cache_key(attempt.attempt_id, turn.turn_id, examiner_text))},
         }
         ensure_examiner_tts(attempt.attempt_id, turn_data)
         tts = turn_data.get("examiner_tts") or tts

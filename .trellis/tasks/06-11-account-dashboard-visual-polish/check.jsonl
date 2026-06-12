@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify the visual-only change keeps frontend quality and dark-mode contracts."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Confirm account/settings controls remain in the expected global account surface."}

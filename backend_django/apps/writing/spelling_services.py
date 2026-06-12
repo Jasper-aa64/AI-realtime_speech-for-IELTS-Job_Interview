@@ -5,14 +5,15 @@ import re
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
 from apps.speaking.corpus_services import LOCAL_TAKEAWAY_WORD_TRANSLATIONS
 
-from .models import SpellingDrillWord, WritingScore
+from .models import SpellingDrillDailyBatch, SpellingDrillWord, WritingScore
 from .report_services import looks_like_single_word_spelling_fix, spelling_terms_from_summary
 from .validation import WritingError
 
@@ -23,6 +24,7 @@ SPELLING_WORD_RE = re.compile(r"^[A-Za-z][A-Za-z'\-]*$")
 # local time, so items are grouped into stable daily batches instead of
 # reappearing exactly 24 hours after the previous answer.
 SRS_DAY_ROLLOVER_HOUR = 4
+SRS_REVIEW_TIMEZONE = ZoneInfo("Asia/Shanghai")
 SRS_STAGE_INTERVAL_DAYS: list[int] = [
     1,  # stage 0→1
     2,  # stage 1→2
@@ -35,7 +37,7 @@ SRS_MASTERED_INTERVAL_DAYS: list[int] = [7, 14, 30, 60, 90]
 
 
 def review_day_start(value=None):
-    current = timezone.localtime(value or timezone.now())
+    current = timezone.localtime(value or timezone.now(), SRS_REVIEW_TIMEZONE)
     start = current.replace(
         hour=SRS_DAY_ROLLOVER_HOUR,
         minute=0,
@@ -56,11 +58,36 @@ def current_review_batch_cutoff(value=None):
     return review_day_start(value)
 
 
+def review_day_key(value=None):
+    return review_day_start(value).date()
+
+
+def effective_spelling_due_at(word: SpellingDrillWord):
+    due = word.due_at or timezone.now()
+    due_local = timezone.localtime(due, SRS_REVIEW_TIMEZONE)
+    if (
+        due_local.hour == SRS_DAY_ROLLOVER_HOUR + 8
+        and due_local.minute == 0
+        and due_local.second == 0
+        and due_local.microsecond == 0
+    ):
+        return due - timedelta(hours=8)
+    return due
+
+
 def is_due_for_current_batch(word: SpellingDrillWord, *, now=None) -> bool:
     if word.status not in {SpellingDrillWord.Status.ACTIVE, SpellingDrillWord.Status.MASTERED}:
         return False
-    due = word.due_at or timezone.now()
+    due = effective_spelling_due_at(word)
     return due <= current_review_batch_cutoff(now)
+
+
+def practiced_in_review_day(word: SpellingDrillWord, *, now=None) -> bool:
+    practiced = word.last_practiced_at
+    if not practiced:
+        return False
+    start = review_day_start(now)
+    return start <= timezone.localtime(practiced) < start + timedelta(days=1)
 
 
 def mastered_review_level(word: SpellingDrillWord) -> int:
@@ -83,8 +110,8 @@ def due_human(due_at, now=None) -> str:
     seconds = (due_at - now).total_seconds()
     if seconds <= 60:
         return "马上"
-    due_local = timezone.localtime(due_at)
-    now_local = timezone.localtime(now)
+    due_local = timezone.localtime(due_at, SRS_REVIEW_TIMEZONE)
+    now_local = timezone.localtime(now, SRS_REVIEW_TIMEZONE)
     day_delta = (due_local.date() - now_local.date()).days
     if day_delta == 1:
         return "明天"
@@ -348,7 +375,7 @@ def harvest_spelling_words(user) -> int:
 def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
     now = timezone.now()
     due = word.due_at if word.due_at else now
-    is_due = is_due_for_current_batch(word, now=now)
+    is_due = is_due_for_current_batch(word, now=now) and not practiced_in_review_day(word, now=now)
     return {
         "word_id": word.word_id,
         "correct_spelling": word.correct_spelling,
@@ -370,6 +397,64 @@ def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
     }
 
 
+def due_word_ids_for_cutoff(user, cutoff) -> list[str]:
+    candidates = list(
+        SpellingDrillWord.objects
+        .filter(
+            user=user,
+            status__in=[SpellingDrillWord.Status.ACTIVE, SpellingDrillWord.Status.MASTERED],
+            due_at__lte=cutoff + timedelta(hours=8),
+        )
+        .exclude(status=SpellingDrillWord.Status.DISMISSED)
+        .order_by("due_at", "-occurrence_count", "pk")
+    )
+    return [word.word_id for word in candidates if is_due_for_current_batch(word, now=cutoff)]
+
+
+def get_or_create_spelling_daily_batch(user, *, now=None) -> SpellingDrillDailyBatch:
+    now = now or timezone.now()
+    day = review_day_key(now)
+    cutoff = current_review_batch_cutoff(now)
+    with transaction.atomic():
+        batch = SpellingDrillDailyBatch.objects.select_for_update().filter(user=user, review_day=day).first()
+        if batch:
+            if not batch.word_ids:
+                word_ids = due_word_ids_for_cutoff(user, cutoff)
+                if word_ids:
+                    batch.word_ids = word_ids
+                    batch.save(update_fields=["word_ids", "updated_at"])
+            return batch
+        word_ids = due_word_ids_for_cutoff(user, cutoff)
+        try:
+            return SpellingDrillDailyBatch.objects.create(user=user, review_day=day, word_ids=word_ids)
+        except IntegrityError:
+            return SpellingDrillDailyBatch.objects.select_for_update().get(user=user, review_day=day)
+
+
+def spelling_daily_batch_remaining_words(user, *, now=None):
+    now = now or timezone.now()
+    batch = get_or_create_spelling_daily_batch(user, now=now)
+    word_ids = [str(word_id or "").strip() for word_id in (batch.word_ids or []) if str(word_id or "").strip()]
+    if not word_ids:
+        return SpellingDrillWord.objects.none(), batch
+    ordering = {word_id: index for index, word_id in enumerate(word_ids)}
+    words = list(
+        SpellingDrillWord.objects
+        .filter(
+            user=user,
+            word_id__in=word_ids,
+            status__in=[SpellingDrillWord.Status.ACTIVE, SpellingDrillWord.Status.MASTERED],
+        )
+        .exclude(status=SpellingDrillWord.Status.DISMISSED)
+    )
+    remaining = [
+        word for word in words
+        if is_due_for_current_batch(word, now=now) and not practiced_in_review_day(word, now=now)
+    ]
+    remaining.sort(key=lambda word: ordering.get(word.word_id, len(ordering)))
+    return remaining, batch
+
+
 def spelling_drill_library(user, *, scope: str = "due") -> dict[str, Any]:
     scope = str(scope or "due").strip().lower()
     if scope not in {"due", "active", "mastered", "all"}:
@@ -379,24 +464,21 @@ def spelling_drill_library(user, *, scope: str = "due") -> dict[str, Any]:
     batch_cutoff = current_review_batch_cutoff(now)
     queryset = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
     if scope == "due":
-        queryset = queryset.filter(
-            status__in=[SpellingDrillWord.Status.ACTIVE, SpellingDrillWord.Status.MASTERED],
-            due_at__lte=batch_cutoff,
-        ).order_by("due_at", "-occurrence_count")
+        remaining_words, batch = spelling_daily_batch_remaining_words(user, now=now)
+        items = [spelling_word_payload(word) for word in remaining_words[:500]]
     elif scope == "active":
         queryset = queryset.filter(status=SpellingDrillWord.Status.ACTIVE).order_by("due_at", "-occurrence_count")
+        items = [spelling_word_payload(word) for word in queryset[:500]]
     elif scope == "mastered":
         queryset = queryset.filter(status=SpellingDrillWord.Status.MASTERED).order_by("-updated_at")
+        items = [spelling_word_payload(word) for word in queryset[:500]]
     else:
         queryset = queryset.order_by("status", "due_at", "-occurrence_count")
-    items = [spelling_word_payload(word) for word in queryset[:500]]
+        items = [spelling_word_payload(word) for word in queryset[:500]]
     visible = SpellingDrillWord.objects.filter(user=user).exclude(status=SpellingDrillWord.Status.DISMISSED)
     total = visible.count()
     active_count = visible.filter(status=SpellingDrillWord.Status.ACTIVE).count()
-    due_count = visible.filter(
-        status__in=[SpellingDrillWord.Status.ACTIVE, SpellingDrillWord.Status.MASTERED],
-        due_at__lte=batch_cutoff,
-    ).count()
+    due_count = len(remaining_words) if scope == "due" else len(spelling_daily_batch_remaining_words(user, now=now)[0])
     mastered_count = visible.filter(status=SpellingDrillWord.Status.MASTERED).count()
     attempt_totals = visible.aggregate(attempts=Sum("attempt_count"), correct=Sum("correct_count"))
     attempts = int(attempt_totals.get("attempts") or 0)
