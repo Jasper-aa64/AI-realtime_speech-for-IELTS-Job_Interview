@@ -29,6 +29,7 @@
       isCorpusEditorReady,
       setCorpusEditorLoading,
       setCorpusMarkdownValue,
+      ensureCsrfToken,
       getCsrfToken,
       viewCopy,
       corpusPeekWindowMargin,
@@ -1028,10 +1029,14 @@
       return saved;
     }
 
-    function sendKeepaliveJson(path, payload) {
+    async function sendKeepaliveJson(path, payload) {
       try {
         const headers = { "Content-Type": "application/json" };
-        const csrfToken = getCsrfToken();
+        const csrfToken = getCsrfToken() || await ensureCsrfToken?.();
+        if (!csrfToken) {
+          await api(path, payload);
+          return;
+        }
         if (csrfToken) headers["X-CSRFToken"] = csrfToken;
         fetch(path, {
           method: "POST",
@@ -1059,10 +1064,10 @@
       return payload;
     }
 
-    function sendP1CorpusClearKeepalive(entry) {
+    async function sendP1CorpusClearKeepalive(entry) {
       const payload = p1CorpusSavePayload(entry, "");
       if (!payload.question || !payload.question_id) return;
-      sendKeepaliveJson("/api/p1-corpus", payload);
+      await sendKeepaliveJson("/api/p1-corpus", payload);
     }
 
     function autosaveOpenCorpusEditors() {
@@ -1132,6 +1137,7 @@
 
     async function openP1CorpusEditor(entry, options = {}) {
       if (!entry) return;
+      ensureCsrfToken?.().catch(() => null);
       const showReferenceAnswer = options.showReferenceAnswer === true;
       const token = ++p1CorpusEditorLoadToken;
       const storage = p1CorpusStorageEntry(entry);
@@ -1259,7 +1265,7 @@
       const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
       if (entry && !corpusText) {
         markP1CorpusEntryCleared(entry);
-        sendP1CorpusClearKeepalive(entry);
+        await sendP1CorpusClearKeepalive(entry);
       }
       closeP1CorpusEditor();
       if (entry) {

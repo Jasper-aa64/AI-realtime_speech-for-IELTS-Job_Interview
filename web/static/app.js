@@ -1457,6 +1457,7 @@ const corpusTakeawayController = window.IELTSCorpusTakeaway?.createCorpusTakeawa
   isCorpusEditorReady,
   setCorpusEditorLoading,
   setCorpusMarkdownValue,
+  ensureCsrfToken,
   getCsrfToken,
   viewCopy,
   corpusPeekWindowMargin: CORPUS_PEEK_WINDOW_MARGIN,
@@ -10392,7 +10393,7 @@ function bindEvents() {
     dialog.addEventListener("pointerdown", (event) => {
       if (event.target === dialog) {
         event.preventDefault();
-        closeEditor();
+        Promise.resolve(closeEditor()).catch(showError);
       }
     });
   };
