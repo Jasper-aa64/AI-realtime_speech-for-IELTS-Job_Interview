@@ -23288,7 +23288,7 @@ body.theme-dark.font-popular .mobile-font-options .font-option.active {
   min-height: 0;
   padding: 10px 34px 34px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
   overflow: hidden;
 }
@@ -23323,6 +23323,10 @@ body.theme-dark.font-popular .mobile-font-options .font-option.active {
   outline: none;
 }
 .writing-frame-editor:focus { border-color: var(--accent, #0f766e); }
+.writing-frame-modal-card.is-saving .writing-frame-editor {
+  opacity: 0.72;
+  pointer-events: none;
+}
 .writing-frame-modal-actions {
   display: flex;
   align-items: center;
@@ -23349,7 +23353,20 @@ body.theme-dark.font-popular .mobile-font-options .font-option.active {
 .writing-frame-modal-status {
   font-size: 12px;
   color: var(--muted);
-  margin-left: auto;
+  min-height: 18px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.writing-frame-modal-card.is-saving .writing-frame-modal-status::before {
+  content: "";
+  width: 0.85em;
+  height: 0.85em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: busy-spin 720ms linear infinite;
 }
 .writing-frame-modal-status.error { color: #b91c1c; }
 

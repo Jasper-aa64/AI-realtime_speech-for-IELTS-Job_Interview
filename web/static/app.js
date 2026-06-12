@@ -6183,6 +6183,7 @@ const WRITING_FRAME_LEGACY_KEYS = {
 const writingFrameTemplates = new Map();
 let writingFrameTemplatesLoaded = false;
 let writingFrameTemplatesPromise = null;
+let writingFrameCloseSaving = false;
 
 function localWritingFrameValue(key) {
   try {
@@ -6392,8 +6393,29 @@ async function saveWritingFrame() {
 }
 
 async function closeWritingFrameEditorSavingChanges() {
-  if (writingFrameEditorHasUnsavedChanges() && !await saveWritingFrame()) return;
-  closeWritingFrameEditor();
+  if (writingFrameCloseSaving) return;
+  const changed = writingFrameEditorHasUnsavedChanges();
+  if (!changed) {
+    closeWritingFrameEditor();
+    return;
+  }
+  writingFrameCloseSaving = true;
+  const modal = $("writingFrameModal");
+  const card = modal?.querySelector(".writing-frame-modal-card");
+  const status = $("writingFrameSaveStatus");
+  card?.classList.add("is-saving");
+  if (status) {
+    status.textContent = "正在保存…";
+    status.classList.remove("error");
+  }
+  try {
+    const ok = await saveWritingFrame();
+    if (!ok) return;
+    closeWritingFrameEditor();
+  } finally {
+    writingFrameCloseSaving = false;
+    card?.classList.remove("is-saving");
+  }
 }
 
 function resetWritingFrame() {
@@ -11349,7 +11371,10 @@ function bindEvents() {
   $("writingFrameSaveBtn")?.addEventListener("click", saveWritingFrame);
   $("writingFrameResetBtn")?.addEventListener("click", resetWritingFrame);
   document.querySelectorAll("[data-writing-frame-close]").forEach((el) => {
-    el.addEventListener("click", closeWritingFrameEditorSavingChanges);
+    el.addEventListener("click", (event) => {
+      event.preventDefault();
+      withPending(el, closeWritingFrameEditorSavingChanges, { busyText: el.id === "writingFrameCloseBtn" ? "保存中..." : "" }).catch(showError);
+    });
   });
   $("writingAnswer")?.addEventListener("input", () => {
     if (writingAutosaveReady()) state.writing.autosaveEnabled = true;

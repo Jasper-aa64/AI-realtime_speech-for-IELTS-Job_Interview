@@ -15,7 +15,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260612-brainstorm-icon-1">
+    <link rel="stylesheet" href="/styles.css?v=20260612-myframe-close-saving-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -983,6 +983,7 @@
             </header>
             <div class="writing-frame-modal-body">
               <p class="writing-frame-modal-help">下面是这类题的默认框架。改成你顺手的版本后关闭窗口会自动保存，之后这类题用 <code>/frame</code> 会先填这个版本。</p>
+              <p id="writingFrameSaveStatus" class="writing-frame-modal-status" role="status" aria-live="polite"></p>
               <textarea id="writingFrameEditor" class="writing-frame-editor" spellcheck="false" rows="16"></textarea>
             </div>
           </article>
@@ -1400,6 +1401,6 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260612-myframe-server-save-guard-1"></script>
+    <script src="/app.js?v=20260612-myframe-close-saving-1"></script>
   </body>
 </html>
