@@ -48,6 +48,7 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "appearance.js": "text/javascript; charset=utf-8",
         "view-router.js": "text/javascript; charset=utf-8",
         "app.js": "text/javascript; charset=utf-8",
+        "onboarding.js": "text/javascript; charset=utf-8",
         "styles.css": "text/css; charset=utf-8",
     }
     if normalized not in allowed:

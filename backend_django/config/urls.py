@@ -25,6 +25,7 @@ urlpatterns = [
     path("appearance.js", frontend_asset, {"asset_path": "appearance.js"}, name="frontend-appearance-js"),
     path("view-router.js", frontend_asset, {"asset_path": "view-router.js"}, name="frontend-view-router-js"),
     path("app.js", frontend_asset, {"asset_path": "app.js"}, name="frontend-app-js"),
+    path("onboarding.js", frontend_asset, {"asset_path": "onboarding.js"}, name="frontend-onboarding-js"),
     path("styles.css", frontend_asset, {"asset_path": "styles.css"}, name="frontend-styles-css"),
     path("assets/<path:asset_path>", frontend_static_asset, name="frontend-static-asset"),
     path("vendor/<path:asset_path>", frontend_vendor_asset, name="frontend-vendor-asset"),
