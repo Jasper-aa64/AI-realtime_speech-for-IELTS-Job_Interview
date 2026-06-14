@@ -545,7 +545,7 @@ class QuestionBankApiTests(TestCase):
         self.assertGreaterEqual(payload["part2_count"], 55)
         for topic in ("social_media", "study_or_work", "public_gardens_and_parks"):
             self.assertIn(topic, payload["part1_topics"])
-        for theme in ("medical_work_and_public_health", "traditional_customs_and_modern_life", "repairing_things_and_practical_skills"):
+        for theme in ("career_choices_and_job_values", "movies_and_cinema_culture", "technology_and_communication"):
             self.assertIn(theme, payload["part2_themes"])
 
     def test_question_bank_summary_returns_scope_options(self):
