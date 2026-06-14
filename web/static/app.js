@@ -2163,6 +2163,29 @@ async function fetchHistoryDetail(attemptId) {
   return state.historyDetailPromises.get(id);
 }
 
+// Warm the report-detail cache in the background so the panel renders instantly
+// on click. Fire-and-forget and idempotent: fetchHistoryDetail dedupes by id.
+function prefetchHistoryDetail(attemptId) {
+  const id = String(attemptId || "").trim();
+  if (!id || state.historyDetailCache.has(id) || state.historyDetailPromises.has(id)) return;
+  fetchHistoryDetail(id).catch(() => {});
+}
+
+// Schedule background prefetch of the most likely reports the user opens next.
+function prefetchVisibleHistoryDetails(items, limit = 4) {
+  const ids = (items || [])
+    .map((item) => String(item?.id || "").trim())
+    .filter((id) => id && !state.historyDetailCache.has(id))
+    .slice(0, limit);
+  if (!ids.length) return;
+  const run = () => ids.forEach(prefetchHistoryDetail);
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(run, { timeout: 1500 });
+  } else {
+    setTimeout(run, 200);
+  }
+}
+
 async function fetchWritingReportDetail(entryId) {
   const id = String(entryId || "").trim();
   if (!id) return null;
@@ -5983,6 +6006,7 @@ function renderHistoryList(items, options = {}) {
     </div>
   `;}).join("");
   list.querySelectorAll(".history-item").forEach((button) => {
+    button.addEventListener("pointerenter", () => prefetchHistoryDetail(button.dataset.attemptId), { once: true });
     button.addEventListener("click", async () => {
       if (state.activeHistoryId === button.dataset.attemptId) return;
       state.activeHistoryId = button.dataset.attemptId;
@@ -6018,6 +6042,7 @@ function renderHistoryList(items, options = {}) {
     syncUrlForCurrentState({ replace: true });
   }
   requestAnimationFrame(() => updateReportRailState("historyList"));
+  prefetchVisibleHistoryDetails(visibleItems);
   if (refreshActive && state.activeHistoryId) {
     const cached = state.historyDetailCache.get(state.activeHistoryId);
     if (cached) {

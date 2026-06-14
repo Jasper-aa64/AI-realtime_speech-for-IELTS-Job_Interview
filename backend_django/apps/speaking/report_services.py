@@ -50,9 +50,11 @@ def report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
             "feedback": attempt.report.feedback_summary,
         },
     )
-    payload.setdefault(
-        "turns",
-        [
+    # Only rebuild turns from the DB when the stored payload lacks them. Python
+    # evaluates setdefault's second argument eagerly, so a setdefault here would
+    # run this query + comprehension on every read even when "turns" is present.
+    if "turns" not in payload:
+        payload["turns"] = [
             {
                 "id": turn.turn_id,
                 "part": turn.part,
@@ -69,8 +71,7 @@ def report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
                 "ai_coaching": turn.metadata.get("ai_coaching", ""),
             }
             for turn in attempt.turns.all().order_by("sequence")
-        ],
-    )
+        ]
     normalize_p1_report_turn_corpus_keys(payload)
     return payload
 
