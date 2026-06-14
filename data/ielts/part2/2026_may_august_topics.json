@@ -7,6 +7,683 @@
   "source_url": "https://mtoutiao.xdf.cn/ielts/202605/15188096.html",
   "topics": [
     {
+      "title": "Describe a boring place",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "去过的无聊地方",
+      "source_card_update": "2026-05-14T11:18:05.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/033_new_or_current_P2P3_去过的无聊地方_320260503144059.jpg",
+      "bullets": [
+        "Where it is",
+        "Who you went there with",
+        "What you did there"
+      ],
+      "rounding": "And explain why you think it is a boring place.",
+      "p3_theme": "a_boring_place",
+      "p3_follow_ups": [
+        "Why do most children think education is boring?",
+        "Why aren't young people willing to listen to the experiences of older people?",
+        "What can people do when they feel bored?",
+        "Why are some teachers' classes boring? Are there any solutions?",
+        "Why do some young people feel bored when talking with old people?",
+        "Do most people think news about celebrities is boring?"
+      ]
+    },
+    {
+      "title": "Describe a challenging technological problem you faced",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "遇到的科技问题",
+      "source_card_update": "2026-05-19T16:06:07.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/019_new_or_current_P2P3_遇到的科技问题_320260512095739.jpg",
+      "bullets": [
+        "What the problem was",
+        "When and where you faced it",
+        "How challenging it was"
+      ],
+      "rounding": "And explain how you solved it.",
+      "p3_theme": "a_challenging_technological_problem_you_faced",
+      "p3_follow_ups": [
+        "What are the advantages and disadvantages of AI?",
+        "Do you think people today should learn about AI technology?",
+        "Should children learn to use AI?",
+        "How can AI help in our lives?",
+        "Do you think students are overly reliant on AI?",
+        "What can teachers do to stop students from relying too much on AI?"
+      ]
+    },
+    {
+      "title": "Describe a change that you made recently",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "近期改变",
+      "source_card_update": "2026-06-04T11:05:20.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/001_new_or_current_P2P3_近期改变_320260604104729.jpg",
+      "bullets": [
+        "What the change was",
+        "What caused the change",
+        "What you did for the change"
+      ],
+      "rounding": "And explain how you feel about the change.",
+      "p3_theme": "a_change_that_you_made_recently",
+      "p3_follow_ups": [
+        "Do you think it is good to change one's daily routine?",
+        "Do you think it is good to change jobs?",
+        "Is it good for people to get a job promotion?",
+        "Do people often make plans around their regular routines?",
+        "Who tend to change their daily routine more, young people or old people?"
+      ]
+    },
+    {
+      "title": "Describe a food that people eat on special occasions/events",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": " 特别场合的食物",
+      "source_card_update": "2026-05-19T16:20:28.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/021_new_or_current_P2P3_特别场合的食物_320260510165517.jpg",
+      "bullets": [
+        "What it is",
+        "What the special event/occasion is",
+        "How it is cooked/made",
+        "occasion/event"
+      ],
+      "rounding": "And explain why people eat it on that special.",
+      "p3_theme": "a_food_that_people_eat_on_special_occasions_events",
+      "p3_follow_ups": [
+        "Why are there special foods on special occasions or events?",
+        "What are the differences between everyday food and festival food?",
+        "Are there any differences between the food people eat today and the food people ate in the past?",
+        "Do people today prefer eating at home or in a restaurant?"
+      ]
+    },
+    {
+      "title": "Describe a friend from your childhood",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "发小",
+      "source_card_update": "2026-05-13T13:30:54.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/029_new_or_current_P2P3_发小_320220908180342.jpg",
+      "bullets": [
+        "Who he/she is",
+        "Where and how you met each other",
+        "What you often did together"
+      ],
+      "rounding": "And explain what made you like him/her.",
+      "p3_theme": "a_friend_from_your_childhood",
+      "p3_follow_ups": [
+        "Do you still keep in touch with your friends from childhood? Why or why not?",
+        "How important is childhood friendship to children?",
+        "What do you think of communicating via social media?",
+        "Do you think online communication through social media will replace face-to-face communication?",
+        "What's the difference between having younger friends and older friends?",
+        "Has technology changed people's friendships? How?"
+      ]
+    },
+    {
+      "title": "Describe a live sports event you watched and liked",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "喜欢的现场体育赛事",
+      "source_card_update": "2026-05-14T15:50:49.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/022_new_or_current_P2P3_喜欢的现场体育赛事_320260510163834.jpg",
+      "bullets": [
+        "What it was",
+        "When and where you watched it",
+        "Who you watched it with"
+      ],
+      "rounding": "And explain why you liked it.",
+      "p3_theme": "a_live_sports_event_you_watched_and_liked",
+      "p3_follow_ups": [
+        "Why do some people like to watch sports events?",
+        "Where do people normally watch sports events?",
+        "What are the advantages of watching sports events online?",
+        "What sports matches are suitable for children to attend?",
+        "Why do some people spend a lot going to other countries to watch sports events?",
+        "What sports games are popular in your country?"
+      ]
+    },
+    {
+      "title": "Describe a long-term goal/ambition you would like to achieve",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "长久目标/抱负",
+      "source_card_update": "2026-05-20T11:46:24.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/007_new_or_current_P2P3_长久目标-抱负_320260520113952.jpg",
+      "bullets": [
+        "How long you have had this goal/ambition",
+        "What it is",
+        "How you will achieve it"
+      ],
+      "rounding": "And explain why you set it.",
+      "p3_theme": "a_long_term_goal_ambition_you_would_like_to_achieve",
+      "p3_follow_ups": [
+        "Why should children have ambitions?",
+        "What do you think of people going after high positions?",
+        "Why are some young people keen on being fans of superstars?",
+        "Is it good for a person to be ambitious?",
+        "Do you think it is necessary to be ambitious when working in a team in a company?",
+        "Should parents support their children in pursuing their ambitions?"
+      ]
+    },
+    {
+      "title": "Describe a new law you would like to introduce in your country",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/030_new_or_current_P2P3_想颁布的新法律_320240417155859.jpg",
+      "source_card_topic": "想颁布的新法律",
+      "bullets": [
+        "What law it is",
+        "What changes this law brings",
+        "Whether this new law will be popular",
+        "How you came up with the new law"
+      ],
+      "rounding": "And explain how you feel about this new law.",
+      "p3_theme": "a_new_law_you_would_like_to_introduce_in_your_country",
+      "p3_follow_ups": [
+        "What rules should students follow at school?",
+        "Do people in your country usually obey the law?",
+        "What kinds of behavior are considered as good behavior?",
+        "Do you think children can learn about the law outside of school?",
+        "What are the benefits for people to obey rules?",
+        "How can parents teach children to obey rules?"
+      ],
+      "source_card_update": "2026-05-06T21:05:10.000+0800"
+    },
+    {
+      "title": "Describe a person who is good at learning and speaking new languages",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "擅长学习和说语言的人",
+      "source_card_update": "2026-05-14T16:20:58.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/020_new_or_current_P2P3_擅长学习和说语言的人_320260512095045.jpg",
+      "bullets": [
+        "How you got to know him/her",
+        "How he/she learns a new language",
+        "What languages he/she can speak"
+      ],
+      "rounding": "And explain how you feel about him/her.",
+      "p3_theme": "a_person_who_is_good_at_learning_and_speaking_new_languages",
+      "p3_follow_ups": [
+        "Are there many people who can speak foreign languages in your country?",
+        "Does speaking other languages help at work?",
+        "Do people learn any languages other than English?",
+        "Why is it easier for children to learn new things than for adults?",
+        "How do people learn new things?",
+        "What is the most important thing for learning a language well?"
+      ]
+    },
+    {
+      "title": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "喜欢在家/花园种植物的人",
+      "source_card_update": "2026-05-14T11:37:57.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/031_new_or_current_P2P3_喜欢在家-花园种植物的人_320260509145434.jpg",
+      "bullets": [
+        "Who this person is",
+        "What plants he/she grows",
+        "How he/she grows the plants"
+      ],
+      "rounding": "And explain why he/she loves growing plants.",
+      "p3_theme": "a_person_who_loves_to_grow_plants_e_g_vegetables_flowers_at_home_or_in_the_garde",
+      "p3_follow_ups": [
+        "What are the advantages of growing vegetables or flowers at home?",
+        "Do many people grow vegetables or flowers at home in your country?",
+        "Is it easy to grow plants at home?",
+        "Why do some people like to grow plants?",
+        "Why do some people prefer to grow their own fruits and vegetables instead of buying them from the market?",
+        "Do you think students should learn to grow plants?"
+      ]
+    },
+    {
+      "title": "Describe a person who met difficulties but succeeded",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "遇到困难终成功的人",
+      "source_card_update": "2026-05-23T16:02:02.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/005_new_or_current_P2P3_遇到困难终成功的人_.jpg",
+      "bullets": [
+        "Who this person is",
+        "What difficulties he met",
+        "How he overcame the difficulties"
+      ],
+      "rounding": "And explain how you feel about him.",
+      "p3_theme": "a_person_who_met_difficulties_but_succeeded",
+      "p3_follow_ups": [
+        "In your country, what industry is it easier to be successful in?",
+        "What's the difference between ordinary people and successful people?",
+        "What are the factors leading to people's success?"
+      ]
+    },
+    {
+      "title": "Describe a person who works in a successful company",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "在成功公司工作的人",
+      "source_card_update": "2026-05-10T17:43:50.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/027_new_or_current_P2P3_在成功公司工作的人_320260510174029.jpg",
+      "bullets": [
+        "Who he/she is",
+        "What he/she does in the company",
+        "What business the company does",
+        "company"
+      ],
+      "rounding": "And explain why you think it is a successful.",
+      "p3_theme": "a_person_who_works_in_a_successful_company",
+      "p3_follow_ups": [
+        "Do you think governments should provide financial support to companies?",
+        "Do you think companies should donate money to help society?",
+        "Do you think customer satisfaction is important for a company?"
+      ]
+    },
+    {
+      "title": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "想从事医疗行业的人",
+      "source_card_update": "2026-06-10T18:51:15.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/028_new_or_current_P2P3_想从事医疗行业的人_320260510161247.jpg",
+      "bullets": [
+        "1B LT S",
+        "When you knew him/her",
+        "When he/she started to think about that",
+        "What he/she would like to do",
+        "career"
+      ],
+      "rounding": "And explain why he/she would like to choose this.",
+      "p3_theme": "a_person_you_know_who_would_like_to_choose_a_career_in_the_medical_field_e_g_a_d",
+      "p3_follow_ups": [
+        "Do you think being a doctor is easy or difficult?",
+        "Do you think learning biology is interesting for children?",
+        "Why do some children want to become doctors?",
+        "Do you think governments should put a large amount of money into medical research?",
+        "Why is some doctors' pay high and others' low?",
+        "Do you think doctors should be paid more?"
+      ]
+    },
+    {
+      "title": "Describe a piece of local news that people are interested in",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "当地新闻",
+      "source_card_update": "2026-06-01T20:46:17.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/002_new_or_current_P2P3_当地新闻_320210506175604.jpg",
+      "bullets": [
+        "What it was about",
+        "Where you saw/heard it",
+        "Who was involved"
+      ],
+      "rounding": "And explain why people were interested in it.",
+      "p3_theme": "a_piece_of_local_news_that_people_are_interested_in",
+      "p3_follow_ups": [
+        "Do people read the newspaper where you live?",
+        "Do people prefer local or international news?",
+        "Do you think it's important to have a national identity?",
+        "How can people develop their national identity?"
+      ]
+    },
+    {
+      "title": "Describe a plan that you had to change recently",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "近期改变的计划",
+      "source_card_update": "2026-05-19T14:26:26.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/025_new_or_current_P2P3_近期改变的计划_320250125151335.jpg",
+      "bullets": [
+        "When this happened",
+        "What made you change the plan",
+        "What the new plan was"
+      ],
+      "rounding": "And how you felt about the change.",
+      "p3_theme": "a_plan_that_you_had_to_change_recently",
+      "p3_follow_ups": [
+        "Do people often change their plans?",
+        "Would you tell others if you change your plan?",
+        "Why do you think parents still make plans for their children nowadays?",
+        "How does technology help people make plans?",
+        "What kind of plans do people often make?",
+        "Do you think people like the process of making plans more, or the moment of carrying them out?"
+      ]
+    },
+    {
+      "title": "Describe a special day out that cost you little money/didn't cost you much",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "花费甚少的外出日",
+      "source_card_update": "2026-05-13T17:34:24.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/011_new_or_current_P2P3_花费甚少的外出日_320220507111056.jpg",
+      "bullets": [
+        "When the day was",
+        "Where you went",
+        "How much you spent"
+      ],
+      "rounding": "And explain how you feel about the day.",
+      "p3_theme": "a_special_day_out_that_cost_you_little_money_didn_t_cost_you_much",
+      "p3_follow_ups": [
+        "Do people like to spend their leisure time out in your country?",
+        "How do people spend their leisure time in your country?",
+        "How does technology affect the way people spend their leisure time?",
+        "Do you think only old people have time for leisure?",
+        "Why do people like to have days off?",
+        "Going out to have holidays is tiring. Why do people still want to do it?"
+      ]
+    },
+    {
+      "title": "Describe a story/book with animals in it",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "包含动物的故事或书",
+      "source_card_update": "2026-05-15T11:09:20.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/013_new_or_current_P2P3_包含动物的故事或书_320260515110320.jpg",
+      "bullets": [
+        "What animals are in it",
+        "What the story/book is about",
+        "Why you read the story/book"
+      ],
+      "rounding": "And explain what you think of this story/book.",
+      "p3_theme": "a_story_book_with_animals_in_it",
+      "p3_follow_ups": [
+        "Should schools teach children about animals?",
+        "Some people think pets should not be kept in cities. What do you think?",
+        "Many people regard pets as members of their family. What do you think?",
+        "Do many people keep pets in your country?",
+        "What are the advantages of keeping a pet?",
+        "Why do people always tell children stories with animals?"
+      ]
+    },
+    {
+      "title": "Describe a thing you did to learn another language",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "语言学习",
+      "source_card_update": "2026-05-11T15:28:06.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/015_new_or_current_P2P3_语言学习_320220110153558.jpg",
+      "bullets": [
+        "What language you learned",
+        "What you did",
+        "How it helped you learn the language"
+      ],
+      "rounding": "And how you felt about it.",
+      "p3_theme": "a_thing_you_did_to_learn_another_language",
+      "p3_follow_ups": [
+        "What difficulties do people face when learning a language?",
+        "Do you think language learning is important? Why?",
+        "Which is better, to study a language alone or to study it in a group? Why?",
+        "What's the best way to learn a language?",
+        "What are the advantages and disadvantages of learning a language?",
+        "Some people think that technology has made it unnecessary to learn languages. What do you think?"
+      ]
+    },
+    {
+      "title": "Describe a time when you changed an important opinion of yours",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "改变重要想法",
+      "source_card_update": "2026-05-22T22:11:25.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/004_new_or_current_P2P3_改变重要想法_320260522220729.jpg",
+      "bullets": [
+        "When you changed your opinion",
+        "ELIS",
+        "What the original opinion was",
+        "Why you changed it"
+      ],
+      "rounding": "And explain how you felt about the experience.",
+      "p3_theme": "a_time_when_you_changed_an_important_opinion_of_yours",
+      "p3_follow_ups": [
+        "When do most children begin to have their own opinions?",
+        "Whose opinions are more important to children, their parents' or teachers'?",
+        "Do children communicate more with teachers or with parents?",
+        "Who do young people like to share opinions with?"
+      ]
+    },
+    {
+      "title": "Describe a time when you got up early",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/032_new_or_current_P2P3_早起经历_320210901143903.jpg",
+      "source_card_topic": "早起经历",
+      "bullets": [
+        "When it was",
+        "What you did",
+        "Why you got up early"
+      ],
+      "rounding": "And how you felt about it.",
+      "p3_theme": "a_time_when_you_got_up_early",
+      "p3_follow_ups": [
+        "Do you know anyone who likes to get up early?",
+        "Why do people get up early?",
+        "What kinds of occasions need people to arrive early?",
+        "Why do some people like to stay up late?",
+        "Is it good to arrive early in any situation?",
+        "What kind of people like getting up early?"
+      ],
+      "source_card_update": "2026-05-14T11:30:34.000+0800"
+    },
+    {
+      "title": "Describe a time when you organized a happy event successfully",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "组织快乐活动",
+      "source_card_update": "2026-05-14T15:22:56.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/008_new_or_current_P2P3_组织快乐活动_320220114190505.jpg",
+      "bullets": [
+        "What the event was",
+        "How you prepared for it",
+        "Who helped you to organize it"
+      ],
+      "rounding": "And explain why you think it was a successful event.",
+      "p3_theme": "a_time_when_you_organized_a_happy_event_successfully",
+      "p3_follow_ups": [
+        "How can parents help children to be organized?",
+        "On what occasions do people need to be organized?",
+        "Does everything need to be well prepared?",
+        "Do people need others' help when organizing things?",
+        "How would you feel when you were not well prepared for something?",
+        "Do you prefer to prepare and organize an activity or just take part in an activity?"
+      ]
+    },
+    {
+      "title": "Describe a time when you were stuck in a traffic jam for a very long time",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "交通拥堵",
+      "source_card_update": "2026-05-15T15:04:41.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/006_new_or_current_P2P3_交通拥堵_320220519133843.jpg",
+      "bullets": [
+        "When it happened",
+        "Where you were stuck",
+        "What you did while waiting"
+      ],
+      "rounding": "And explain how you felt in the traffic jam.",
+      "p3_theme": "a_time_when_you_were_stuck_in_a_traffic_jam_for_a_very_long_time",
+      "p3_follow_ups": [
+        "How can we solve the traffic jam problem?",
+        "Do you think developing public transport can solve traffic jam problems?",
+        "Do you think the high ways will help reduce traffic jams?",
+        "What are good ways to manage traffic?",
+        "Do you like to use public transport?",
+        "Would you rather be in a car or a bus in a traffic jam?"
+      ]
+    },
+    {
+      "title": "Describe an advertisement with a famous person in it",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "名人出演的广告",
+      "source_card_update": "2026-05-13T13:50:34.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/018_new_or_current_P2P3_名人出演的广告_320260512124208.jpg",
+      "bullets": [
+        "Who the person is",
+        "Where you can see it",
+        "What the advertisement is about"
+      ],
+      "rounding": "And explain how you feel about the advertisement.",
+      "p3_theme": "an_advertisement_with_a_famous_person_in_it",
+      "p3_follow_ups": [
+        "What are the advantages and disadvantages of advertisements?",
+        "Why are many advertisements endorsed by celebrities? How useful are they?",
+        "What is the most important factor in an advertisement?",
+        "Why are some advertisements boring?",
+        "Is advertising important for a company? Why?",
+        "Which is more effective, online advertising or offline advertising?"
+      ]
+    },
+    {
+      "title": "Describe an environmental law you would like your country to introduce",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "想要颁布的环保法律",
+      "source_card_update": "2026-05-22T12:46:40.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/003_new_or_current_P2P3_想要颁布的环保法律_320210506172400.jpg",
+      "bullets": [
+        "What law it should be",
+        "Why people should follow the law",
+        "Whether the law will be popular"
+      ],
+      "rounding": "And explain how you feel about this law.",
+      "p3_theme": "an_environmental_law_you_would_like_your_country_to_introduce",
+      "p3_follow_ups": [
+        "How does technology affect the law?",
+        "What kinds of rules do schools in China have?",
+        "Will there be a law that is universally accepted?",
+        "What environmental laws does your country already have?"
+      ]
+    },
+    {
+      "title": "Describe an important decision that you made",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "重要决定",
+      "source_card_update": "2026-05-19T14:27:59.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/023_new_or_current_P2P3_重要决定_320230513170924.jpg",
+      "bullets": [
+        "What the decision was",
+        "How you made your decision",
+        "What the results of the decision were"
+      ],
+      "rounding": "And explain why it was important.",
+      "p3_theme": "an_important_decision_that_you_made",
+      "p3_follow_ups": [
+        "Do you think children sometimes have to make important decisions?",
+        "What important decisions do teenagers need to make after graduation?",
+        "Who can children turn to for help when making a decision?",
+        "Do you think advertisements can influence our decisions when shopping?",
+        "Do you think the influence of advertising is good?",
+        "How do people usually make important decisions?"
+      ]
+    },
+    {
+      "title": "Describe an important river/lake in your country",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "重要河流/湖泊",
+      "source_card_update": "2026-05-11T16:02:27.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/014_new_or_current_P2P3_重要河流-湖泊_10521.jpg",
+      "bullets": [
+        "Where it is located",
+        "How big/long it is",
+        "What it looks like"
+      ],
+      "rounding": "And explain why it is important.",
+      "p3_theme": "an_important_river_lake_in_your_country",
+      "p3_follow_ups": [
+        "Are rivers and lakes important to a country?",
+        "What are the popular water sports in your country?",
+        "Are rivers and lakes good for transport? Why?",
+        "How do rivers and lakes affect local tourism?",
+        "Do you think rivers and lakes attract tourists?",
+        "How can rivers and lakes benefit local people?"
+      ]
+    },
+    {
+      "title": "Describe an interesting video",
+      "status": "new",
+      "source": "ieltsbro_local_card_ocr",
+      "source_card_topic": "有趣视频",
+      "source_card_update": "2026-05-21T10:20:55.000+0800",
+      "source_url": ".firecrawl/ieltsbro-api/question-pics/034_new_or_current_P2P3_有趣视频_320260509122224.jpg",
+      "bullets": [
+        "When and where you watched it",
+        "What it is about",
+        "Why you watched it"
+      ],
+      "rounding": "And explain how you feel about it.",
+      "p3_theme": "an_interesting_video",
+      "p3_follow_ups": [
+        "What kind of videos do people in your country like to watch?",
+        "Which is more helpful, watching videos or reading books?",
+        "What skills can people learn from watching videos?",
+        "Are there any differences between the videos that young people and old people like to watch?",
+        "Are there any differences between the videos that young men and young women like to watch?",
+        "What makes a video go viral online?"
+      ]
+    },
+    {
+      "title": "Describe a TV or online program you enjoy watching",
+      "status": "new",
+      "bullets": [
+        "What it is",
+        "What it is about",
+        "Which country it is from",
+        "When you watch it"
+      ],
+      "rounding": "And explain why you enjoy watching it.",
+      "p3_theme": "tv_programs_and_online_media",
+      "p3_follow_ups": [
+        "What programs do people like to watch in your country?",
+        "Do people like watching foreign TV programs?",
+        "Can people acquire knowledge from watching TV programs?"
+      ]
+    },
+    {
+      "title": "Describe a bicycle, motorcycle, or car trip you would like to go on",
+      "status": "new",
+      "bullets": [
+        "Who you would like to go with",
+        "Where you would like to go",
+        "When you would like to go"
+      ],
+      "rounding": "And explain why you would like to travel this way.",
+      "p3_theme": "transport_and_environment",
+      "p3_follow_ups": [
+        "Which form of transport is most popular in your country?",
+        "How are urban and rural transport systems different?",
+        "Should people change how they travel to protect the environment?"
+      ]
+    },
+    {
+      "title": "Describe a boring place you have been to",
+      "status": "new",
+      "bullets": [
+        "Where it was",
+        "When you went there",
+        "Why you went there"
+      ],
+      "rounding": "And explain why you thought this place was boring.",
+      "p3_theme": "boring_places_and_public_spaces",
+      "p3_follow_ups": [
+        "What makes a place boring for visitors?",
+        "How can public places become more interesting?",
+        "Do people of different ages enjoy different kinds of places?"
+      ]
+    },
+    {
+      "title": "Describe a building you would like to visit",
+      "status": "new",
+      "bullets": [
+        "What building it is",
+        "Where it is",
+        "What you know about it"
+      ],
+      "rounding": "And explain why you would like to visit this building.",
+      "p3_theme": "architecture_and_travel",
+      "p3_follow_ups": [
+        "Why do people visit famous buildings?",
+        "What kinds of buildings attract tourists?",
+        "Is architecture important to a city's identity?"
+      ]
+    },
+    {
       "title": "Describe a crowded place you have been to",
       "status": "new",
       "bullets": [
@@ -20,198 +697,6 @@
         "What kinds of places are usually crowded in your country?",
         "Why do some people dislike going to crowded places?",
         "How can public places be managed better when there are too many people?"
-      ]
-    },
-    {
-      "title": "Describe a place where you read and write, apart from your home",
-      "status": "new",
-      "bullets": [
-        "Where it is",
-        "How often you go there",
-        "What you read or write there"
-      ],
-      "rounding": "And explain why this place is suitable for reading and writing.",
-      "p3_theme": "study_places_and_concentration",
-      "p3_follow_ups": [
-        "What kinds of places are suitable for reading and writing?",
-        "Why do some people find it difficult to concentrate at home?",
-        "Should cities provide more quiet public spaces for study and work?"
-      ]
-    },
-    {
-      "title": "Describe a long-term goal you would like to achieve",
-      "status": "new",
-      "bullets": [
-        "What the goal is",
-        "How long you have had this goal",
-        "What you need to do to achieve it"
-      ],
-      "rounding": "And explain why this goal is important to you.",
-      "p3_theme": "goals_and_self_development",
-      "p3_follow_ups": [
-        "Why do people set long-term goals?",
-        "What makes it difficult for people to keep working towards a goal?",
-        "Should schools teach students how to make future plans?"
-      ]
-    },
-    {
-      "title": "Describe an interesting old person you know",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "How you know this person",
-        "What you usually talk about"
-      ],
-      "rounding": "And explain why you think this person is interesting.",
-      "p3_theme": "older_people_and_generation_gap",
-      "p3_follow_ups": [
-        "What can young people learn from older people?",
-        "Why do some older people remain active and interesting?",
-        "How has the relationship between young and old people changed?"
-      ]
-    },
-    {
-      "title": "Describe a person who likes to make things by hand",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "What he or she makes",
-        "How you know about this skill"
-      ],
-      "rounding": "And explain why making things by hand is valuable.",
-      "p3_theme": "handmade_skills_and_creativity",
-      "p3_follow_ups": [
-        "Why do some people enjoy making things by hand?",
-        "Are handmade products more valuable than machine-made products?",
-        "Should children learn practical handcraft skills at school?"
-      ]
-    },
-    {
-      "title": "Describe a person who encouraged you to achieve a goal",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "What goal he or she encouraged you to achieve",
-        "What this person said or did"
-      ],
-      "rounding": "And explain how this encouragement helped you.",
-      "p3_theme": "encouragement_and_motivation",
-      "p3_follow_ups": [
-        "Why is encouragement important for young people?",
-        "Who usually encourages children in your country?",
-        "Can too much encouragement create pressure?"
-      ]
-    },
-    {
-      "title": "Describe a person who likes to read a lot",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "What this person likes to read",
-        "How often this person reads"
-      ],
-      "rounding": "And explain what you can learn from this person.",
-      "p3_theme": "reading_habits_and_learning",
-      "p3_follow_ups": [
-        "Why do some people enjoy reading more than others?",
-        "What kinds of books are popular among young people?",
-        "Has the Internet changed people's reading habits?"
-      ]
-    },
-    {
-      "title": "Describe a person who has strong opinions",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "What opinions this person has",
-        "How this person expresses opinions"
-      ],
-      "rounding": "And explain how you feel about this person.",
-      "p3_theme": "opinions_and_communication",
-      "p3_follow_ups": [
-        "Is it good for people to have strong opinions?",
-        "Why do people sometimes disagree strongly with each other?",
-        "How can people express opinions politely?"
-      ]
-    },
-    {
-      "title": "Describe a small business you would like to start",
-      "status": "new",
-      "bullets": [
-        "What business it would be",
-        "Where it would be",
-        "Who your customers would be"
-      ],
-      "rounding": "And explain why you would like to start this business.",
-      "p3_theme": "small_business_and_work",
-      "p3_follow_ups": [
-        "Why do some people want to start their own business?",
-        "What difficulties do small businesses usually face?",
-        "Should governments support young entrepreneurs?"
-      ]
-    },
-    {
-      "title": "Describe a time when you were late",
-      "status": "new",
-      "bullets": [
-        "When it happened",
-        "Where you were going",
-        "Why you were late"
-      ],
-      "rounding": "And explain what happened afterwards.",
-      "p3_theme": "punctuality_and_time_management",
-      "p3_follow_ups": [
-        "Why are some people often late?",
-        "Is punctuality important in your country?",
-        "How can people manage their time better?"
-      ]
-    },
-    {
-      "title": "Describe an activity you enjoyed in your free time when you were young",
-      "status": "new",
-      "bullets": [
-        "What the activity was",
-        "Where you did it",
-        "Who you did it with"
-      ],
-      "rounding": "And explain why you enjoyed it.",
-      "p3_theme": "childhood_free_time_and_play",
-      "p3_follow_ups": [
-        "What activities do children enjoy in their free time?",
-        "How are children's leisure activities different from the past?",
-        "Should parents control how children spend their free time?"
-      ]
-    },
-    {
-      "title": "Describe a time when you had a problem using a computer",
-      "status": "new",
-      "bullets": [
-        "What the problem was",
-        "When it happened",
-        "How you tried to solve it"
-      ],
-      "rounding": "And explain how you felt about this problem.",
-      "p3_theme": "computer_problems_and_digital_skills",
-      "p3_follow_ups": [
-        "What computer problems do people often have?",
-        "Why do some older people find technology difficult to use?",
-        "Should schools teach students more practical computer skills?"
-      ]
-    },
-    {
-      "title": "Describe a website you often visit",
-      "status": "new",
-      "bullets": [
-        "What the website is",
-        "How often you visit it",
-        "What you use it for"
-      ],
-      "rounding": "And explain why this website is useful to you.",
-      "p3_theme": "websites_and_online_services",
-      "p3_follow_ups": [
-        "What kinds of websites are popular in your country?",
-        "Why do people spend a lot of time on websites?",
-        "How can people judge whether information online is reliable?"
       ]
     },
     {
@@ -231,115 +716,35 @@
       ]
     },
     {
-      "title": "Describe a piece of good advice you received",
-      "status": "retained",
+      "title": "Describe a famous person you would like to meet",
+      "status": "new",
       "bullets": [
-        "What the advice was",
-        "Who gave it to you",
-        "When you received it"
+        "Who this person is",
+        "How you knew about this person",
+        "Where you would like to meet this person"
       ],
-      "rounding": "And explain why this advice was helpful.",
-      "p3_theme": "advice_and_life_choices",
+      "rounding": "And explain why you would like to meet this famous person.",
+      "p3_theme": "fame_and_public_influence",
       "p3_follow_ups": [
-        "Who do people usually ask for advice?",
-        "Why is some advice difficult to follow?",
-        "Is advice from older people always useful?"
+        "Why do some people become famous?",
+        "What are the disadvantages of being famous?",
+        "Do famous people influence young people?"
       ]
     },
     {
-      "title": "Describe an important rule at your school or workplace",
-      "status": "retained",
+      "title": "Describe a long-term goal you would like to achieve",
+      "status": "new",
       "bullets": [
-        "What the rule is",
-        "Who has to follow it",
-        "Why the rule exists"
+        "What the goal is",
+        "How long you have had this goal",
+        "What you need to do to achieve it"
       ],
-      "rounding": "And explain how you feel about this rule.",
-      "p3_theme": "rules_and_social_order",
+      "rounding": "And explain why this goal is important to you.",
+      "p3_theme": "goals_and_self_development",
       "p3_follow_ups": [
-        "Why do schools and workplaces need rules?",
-        "What rules do young people sometimes dislike?",
-        "Should rules be strict or flexible?"
-      ]
-    },
-    {
-      "title": "Describe a time when someone gave you something you really wanted",
-      "status": "retained",
-      "bullets": [
-        "What it was",
-        "Who gave it to you",
-        "Why you wanted it"
-      ],
-      "rounding": "And explain how you felt when you received it.",
-      "p3_theme": "gifts_and_appreciation",
-      "p3_follow_ups": [
-        "Why do people give gifts to others?",
-        "Is it better to give practical gifts or surprising gifts?",
-        "Do people in your country spend too much money on gifts?"
-      ]
-    },
-    {
-      "title": "Describe a time when you showed something new to another person",
-      "status": "retained",
-      "bullets": [
-        "What you showed",
-        "Who you showed it to",
-        "How you showed it"
-      ],
-      "rounding": "And explain how this person reacted.",
-      "p3_theme": "teaching_others_and_sharing_knowledge",
-      "p3_follow_ups": [
-        "Why do people enjoy teaching others new things?",
-        "What skills are useful to share with friends or family?",
-        "Is it easier to learn from people or from online videos?"
-      ]
-    },
-    {
-      "title": "Describe a time when you saw a lot of people smiling",
-      "status": "retained",
-      "bullets": [
-        "Where it was",
-        "Who the people were",
-        "Why they were smiling"
-      ],
-      "rounding": "And explain how you felt at that moment.",
-      "p3_theme": "happiness_and_public_events",
-      "p3_follow_ups": [
-        "What kinds of events make people smile?",
-        "Why is smiling important in social situations?",
-        "Do people smile more in public than in the past?"
-      ]
-    },
-    {
-      "title": "Describe a time when you made a promise to someone",
-      "status": "retained",
-      "bullets": [
-        "Who you made the promise to",
-        "What the promise was",
-        "Why you made it"
-      ],
-      "rounding": "And explain whether it was easy to keep this promise.",
-      "p3_theme": "promises_and_trust",
-      "p3_follow_ups": [
-        "Why is it important to keep promises?",
-        "What kinds of promises do people often make?",
-        "What should people do if they cannot keep a promise?"
-      ]
-    },
-    {
-      "title": "Describe a time when you helped a family member",
-      "status": "retained",
-      "bullets": [
-        "Who you helped",
-        "What problem this person had",
-        "What you did"
-      ],
-      "rounding": "And explain how you felt after helping this family member.",
-      "p3_theme": "family_help_and_responsibility",
-      "p3_follow_ups": [
-        "How do family members help each other in your country?",
-        "Should children help with family responsibilities?",
-        "Has family support changed in modern society?"
+        "Why do people set long-term goals?",
+        "What makes it difficult for people to keep working towards a goal?",
+        "Should schools teach students how to make future plans?"
       ]
     },
     {
@@ -359,6 +764,198 @@
       ]
     },
     {
+      "title": "Describe a perfect job you would like to have in the future",
+      "status": "new",
+      "bullets": [
+        "What the job is",
+        "How you found out about it",
+        "What you need to learn to get this job"
+      ],
+      "rounding": "And explain why you think this would be a perfect job for you.",
+      "p3_theme": "career_choices_and_job_values",
+      "p3_follow_ups": [
+        "What should young people consider when choosing a career?",
+        "Is salary the main reason people choose a job?",
+        "Why do some people regret their career choices later?"
+      ]
+    },
+    {
+      "title": "Describe a person who encouraged you to achieve a goal",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "What goal he or she encouraged you to achieve",
+        "What this person said or did"
+      ],
+      "rounding": "And explain how this encouragement helped you.",
+      "p3_theme": "encouragement_and_motivation",
+      "p3_follow_ups": [
+        "Why is encouragement important for young people?",
+        "Who usually encourages children in your country?",
+        "Can too much encouragement create pressure?"
+      ]
+    },
+    {
+      "title": "Describe a person who has strong opinions",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "What opinions this person has",
+        "How this person expresses opinions"
+      ],
+      "rounding": "And explain how you feel about this person.",
+      "p3_theme": "opinions_and_communication",
+      "p3_follow_ups": [
+        "Is it good for people to have strong opinions?",
+        "Why do people sometimes disagree strongly with each other?",
+        "How can people express opinions politely?"
+      ]
+    },
+    {
+      "title": "Describe a person who likes to make things by hand",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "What he or she makes",
+        "How you know about this skill"
+      ],
+      "rounding": "And explain why making things by hand is valuable.",
+      "p3_theme": "handmade_skills_and_creativity",
+      "p3_follow_ups": [
+        "Why do some people enjoy making things by hand?",
+        "Are handmade products more valuable than machine-made products?",
+        "Should children learn practical handcraft skills at school?"
+      ]
+    },
+    {
+      "title": "Describe a person who likes to read a lot",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "What this person likes to read",
+        "How often this person reads"
+      ],
+      "rounding": "And explain what you can learn from this person.",
+      "p3_theme": "reading_habits_and_learning",
+      "p3_follow_ups": [
+        "Why do some people enjoy reading more than others?",
+        "What kinds of books are popular among young people?",
+        "Has the Internet changed people's reading habits?"
+      ]
+    },
+    {
+      "title": "Describe a person who makes plans and is good at planning",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "How you know this person",
+        "What plans this person usually makes"
+      ],
+      "rounding": "And explain how you feel about this person.",
+      "p3_theme": "planning_and_future_choices",
+      "p3_follow_ups": [
+        "Is it important to plan ahead?",
+        "What activities do people need to plan carefully?",
+        "Should children plan their future careers early?"
+      ]
+    },
+    {
+      "title": "Describe a person who solved a problem in a smart way",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "What the problem was",
+        "How this person solved it"
+      ],
+      "rounding": "And explain why you think the solution was smart.",
+      "p3_theme": "problem_solving_and_intelligence",
+      "p3_follow_ups": [
+        "Are children born smart or do they learn to become smart?",
+        "How can schools help children become better problem solvers?",
+        "Why does modern society need different kinds of talents?"
+      ]
+    },
+    {
+      "title": "Describe a person you know who has chosen a career in the medical field",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "What medical work this person does",
+        "How you know about this person"
+      ],
+      "rounding": "And explain why you think this career is important.",
+      "p3_theme": "medical_work_and_public_health",
+      "p3_follow_ups": [
+        "Why do some people choose to work in medicine?",
+        "What qualities should medical workers have?",
+        "How important are doctors and nurses to society?"
+      ]
+    },
+    {
+      "title": "Describe a piece of good advice you received",
+      "status": "retained",
+      "bullets": [
+        "What the advice was",
+        "Who gave it to you",
+        "When you received it"
+      ],
+      "rounding": "And explain why this advice was helpful.",
+      "p3_theme": "advice_and_life_choices",
+      "p3_follow_ups": [
+        "Who do people usually ask for advice?",
+        "Why is some advice difficult to follow?",
+        "Is advice from older people always useful?"
+      ]
+    },
+    {
+      "title": "Describe a piece of local news that interested you",
+      "status": "new",
+      "bullets": [
+        "What the news was about",
+        "Where you heard or read it",
+        "Who was involved"
+      ],
+      "rounding": "And explain why this local news interested you.",
+      "p3_theme": "local_news_and_community_life",
+      "p3_follow_ups": [
+        "What kinds of local news do people care about?",
+        "Do young people pay attention to local news?",
+        "How has social media changed the way people get news?"
+      ]
+    },
+    {
+      "title": "Describe a piece of technology other than a phone that you would like to own",
+      "status": "new",
+      "bullets": [
+        "What it is",
+        "How much it costs",
+        "What you would use it for"
+      ],
+      "rounding": "And explain why you would like to own it.",
+      "p3_theme": "technology_and_communication",
+      "p3_follow_ups": [
+        "How has technology changed communication?",
+        "What technology do young people like to use?",
+        "What negative effects can technology have on relationships?"
+      ]
+    },
+    {
+      "title": "Describe a place where you read and write, apart from your home",
+      "status": "new",
+      "bullets": [
+        "Where it is",
+        "How often you go there",
+        "What you read or write there"
+      ],
+      "rounding": "And explain why this place is suitable for reading and writing.",
+      "p3_theme": "study_places_and_concentration",
+      "p3_follow_ups": [
+        "What kinds of places are suitable for reading and writing?",
+        "Why do some people find it difficult to concentrate at home?",
+        "Should cities provide more quiet public spaces for study and work?"
+      ]
+    },
+    {
       "title": "Describe a place you visited that was affected by pollution",
       "status": "retained",
       "bullets": [
@@ -372,6 +969,86 @@
         "What kinds of pollution are common in cities?",
         "Who should be responsible for reducing pollution?",
         "How can ordinary people help protect the environment?"
+      ]
+    },
+    {
+      "title": "Describe a place you would like to travel to",
+      "status": "new",
+      "bullets": [
+        "Where it is",
+        "How you would travel there",
+        "Who you would like to go with"
+      ],
+      "rounding": "And explain why you would like to travel to this place.",
+      "p3_theme": "travel_plans_and_destinations",
+      "p3_follow_ups": [
+        "Why do people like travelling to new places?",
+        "What should people prepare before travelling?",
+        "How has tourism affected local communities?"
+      ]
+    },
+    {
+      "title": "Describe a program or app on your computer or phone",
+      "status": "new",
+      "bullets": [
+        "What it is",
+        "When or how you use it",
+        "Where you found it"
+      ],
+      "rounding": "And explain how you feel about this program or app.",
+      "p3_theme": "apps_and_digital_life",
+      "p3_follow_ups": [
+        "What apps are popular in your country?",
+        "Why do some people dislike using apps?",
+        "Should parents limit children's use of apps and games?"
+      ]
+    },
+    {
+      "title": "Describe a quiet place you like to spend time in",
+      "status": "retained",
+      "bullets": [
+        "Where it is",
+        "How often you go there",
+        "What you do there"
+      ],
+      "rounding": "And explain why you like this quiet place.",
+      "p3_theme": "quiet_places_and_mental_rest",
+      "p3_follow_ups": [
+        "Why do people need quiet places?",
+        "Are cities becoming too noisy?",
+        "How can public places be designed to be more peaceful?"
+      ]
+    },
+    {
+      "title": "Describe a shopping mall",
+      "status": "new",
+      "bullets": [
+        "What its name is",
+        "Where it is",
+        "How often you visit it"
+      ],
+      "rounding": "And explain what you usually buy at this mall.",
+      "p3_theme": "shopping_malls_and_consumption",
+      "p3_follow_ups": [
+        "Why do people buy things they do not need?",
+        "Why are some people keen on shopping?",
+        "Where do people like to shop in your country?"
+      ]
+    },
+    {
+      "title": "Describe a small business you would like to start",
+      "status": "new",
+      "bullets": [
+        "What business it would be",
+        "Where it would be",
+        "Who your customers would be"
+      ],
+      "rounding": "And explain why you would like to start this business.",
+      "p3_theme": "small_business_and_work",
+      "p3_follow_ups": [
+        "Why do some people want to start their own business?",
+        "What difficulties do small businesses usually face?",
+        "Should governments support young entrepreneurs?"
       ]
     },
     {
@@ -394,54 +1071,6 @@
       ]
     },
     {
-      "title": "Describe an important traditional festival in your country",
-      "status": "retained",
-      "bullets": [
-        "What the festival is",
-        "When people celebrate it",
-        "What people usually do"
-      ],
-      "rounding": "And explain why this festival is important.",
-      "p3_theme": "festivals_and_cultural_traditions",
-      "p3_follow_ups": [
-        "Why are traditional festivals important?",
-        "How have festivals changed in modern society?",
-        "Should young people learn more about traditional festivals?"
-      ]
-    },
-    {
-      "title": "Describe a quiet place you like to spend time in",
-      "status": "retained",
-      "bullets": [
-        "Where it is",
-        "How often you go there",
-        "What you do there"
-      ],
-      "rounding": "And explain why you like this quiet place.",
-      "p3_theme": "quiet_places_and_mental_rest",
-      "p3_follow_ups": [
-        "Why do people need quiet places?",
-        "Are cities becoming too noisy?",
-        "How can public places be designed to be more peaceful?"
-      ]
-    },
-    {
-      "title": "Describe a person you know who has chosen a career in the medical field",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "What medical work this person does",
-        "How you know about this person"
-      ],
-      "rounding": "And explain why you think this career is important.",
-      "p3_theme": "medical_work_and_public_health",
-      "p3_follow_ups": [
-        "Why do some people choose to work in medicine?",
-        "What qualities should medical workers have?",
-        "How important are doctors and nurses to society?"
-      ]
-    },
-    {
       "title": "Describe a successful business person you admire",
       "status": "new",
       "bullets": [
@@ -455,22 +1084,6 @@
         "What qualities do successful business people usually have?",
         "Is success in business mostly about hard work or opportunity?",
         "Should business people have social responsibilities?"
-      ]
-    },
-    {
-      "title": "Describe a boring place you have been to",
-      "status": "new",
-      "bullets": [
-        "Where it was",
-        "When you went there",
-        "Why you went there"
-      ],
-      "rounding": "And explain why you thought this place was boring.",
-      "p3_theme": "boring_places_and_public_spaces",
-      "p3_follow_ups": [
-        "What makes a place boring for visitors?",
-        "How can public places become more interesting?",
-        "Do people of different ages enjoy different kinds of places?"
       ]
     },
     {
@@ -490,131 +1103,19 @@
       ]
     },
     {
-      "title": "Describe a building you would like to visit",
-      "status": "new",
+      "title": "Describe a time when someone gave you something you really wanted",
+      "status": "retained",
       "bullets": [
-        "What building it is",
-        "Where it is",
-        "What you know about it"
+        "What it was",
+        "Who gave it to you",
+        "Why you wanted it"
       ],
-      "rounding": "And explain why you would like to visit this building.",
-      "p3_theme": "architecture_and_travel",
+      "rounding": "And explain how you felt when you received it.",
+      "p3_theme": "gifts_and_appreciation",
       "p3_follow_ups": [
-        "Why do people visit famous buildings?",
-        "What kinds of buildings attract tourists?",
-        "Is architecture important to a city's identity?"
-      ]
-    },
-    {
-      "title": "Describe a place you would like to travel to",
-      "status": "new",
-      "bullets": [
-        "Where it is",
-        "How you would travel there",
-        "Who you would like to go with"
-      ],
-      "rounding": "And explain why you would like to travel to this place.",
-      "p3_theme": "travel_plans_and_destinations",
-      "p3_follow_ups": [
-        "Why do people like travelling to new places?",
-        "What should people prepare before travelling?",
-        "How has tourism affected local communities?"
-      ]
-    },
-    {
-      "title": "Describe some food you ate on a special occasion",
-      "status": "new",
-      "bullets": [
-        "What the food was",
-        "What the occasion was",
-        "Who you ate it with"
-      ],
-      "rounding": "And explain why this food was special to you.",
-      "p3_theme": "food_and_special_occasions",
-      "p3_follow_ups": [
-        "What foods are eaten on special occasions in your country?",
-        "Why is food important in celebrations?",
-        "Are traditional foods still popular among young people?"
-      ]
-    },
-    {
-      "title": "Describe a wild animal that you want to know more about",
-      "status": "new",
-      "bullets": [
-        "What animal it is",
-        "Where it lives",
-        "What you already know about it"
-      ],
-      "rounding": "And explain why you want to know more about this animal.",
-      "p3_theme": "animals_and_nature_education",
-      "p3_follow_ups": [
-        "Why are people interested in wild animals?",
-        "How can children learn about wildlife?",
-        "Should more be done to protect wild animals?"
-      ]
-    },
-    {
-      "title": "Describe a traditional object that you like",
-      "status": "new",
-      "bullets": [
-        "What the object is",
-        "Where you saw it",
-        "How people use it"
-      ],
-      "rounding": "And explain why you think this object is interesting or valuable.",
-      "p3_theme": "traditional_objects_and_culture",
-      "p3_follow_ups": [
-        "Why do people value traditional objects?",
-        "Are traditional objects still useful in modern life?",
-        "How can museums help preserve traditional culture?"
-      ]
-    },
-    {
-      "title": "Describe a piece of local news that interested you",
-      "status": "new",
-      "bullets": [
-        "What the news was about",
-        "Where you heard or read it",
-        "Who was involved"
-      ],
-      "rounding": "And explain why this local news interested you.",
-      "p3_theme": "local_news_and_community_life",
-      "p3_follow_ups": [
-        "What kinds of local news do people care about?",
-        "Do young people pay attention to local news?",
-        "How has social media changed the way people get news?"
-      ]
-    },
-    {
-      "title": "Describe an activity you tried for the first time",
-      "status": "new",
-      "bullets": [
-        "What the activity was",
-        "When and where you tried it",
-        "Who you tried it with"
-      ],
-      "rounding": "And explain whether you would like to do it again.",
-      "p3_theme": "new_activities_and_learning",
-      "p3_follow_ups": [
-        "Why do people like trying new activities?",
-        "Is it easier for children or adults to try new things?",
-        "What can people learn from new experiences?"
-      ]
-    },
-    {
-      "title": "Describe a time when you waited for something special to happen",
-      "status": "new",
-      "bullets": [
-        "What you were waiting for",
-        "How long you waited",
-        "Who you were with"
-      ],
-      "rounding": "And explain why this thing was special to you.",
-      "p3_theme": "waiting_and_expectations",
-      "p3_follow_ups": [
-        "Why do people sometimes have to wait for important events?",
-        "Is waiting easier now than in the past?",
-        "How can people become more patient?"
+        "Why do people give gifts to others?",
+        "Is it better to give practical gifts or surprising gifts?",
+        "Do people in your country spend too much money on gifts?"
       ]
     },
     {
@@ -631,38 +1132,6 @@
         "How important is electricity in daily life?",
         "What problems can happen when electricity stops suddenly?",
         "Should people learn how to deal with emergencies at home?"
-      ]
-    },
-    {
-      "title": "Describe a traditional custom in your country",
-      "status": "new",
-      "bullets": [
-        "What the custom is",
-        "When people follow it",
-        "Who usually takes part in it"
-      ],
-      "rounding": "And explain why this custom is important.",
-      "p3_theme": "traditional_customs_and_modern_life",
-      "p3_follow_ups": [
-        "Why do countries preserve traditional customs?",
-        "Are young people still interested in traditional customs?",
-        "How can traditions adapt to modern life?"
-      ]
-    },
-    {
-      "title": "Describe a time when you fixed something that was broken",
-      "status": "new",
-      "bullets": [
-        "What was broken",
-        "How you fixed it",
-        "Whether anyone helped you"
-      ],
-      "rounding": "And explain how you felt after fixing it.",
-      "p3_theme": "repairing_things_and_practical_skills",
-      "p3_follow_ups": [
-        "Why do some people prefer repairing things instead of replacing them?",
-        "Should children learn basic repair skills?",
-        "How has modern technology changed the way people repair things?"
       ]
     },
     {
@@ -698,99 +1167,19 @@
       ]
     },
     {
-      "title": "Describe a perfect job you would like to have in the future",
+      "title": "Describe a time when you fixed something that was broken",
       "status": "new",
       "bullets": [
-        "What the job is",
-        "How you found out about it",
-        "What you need to learn to get this job"
+        "What was broken",
+        "How you fixed it",
+        "Whether anyone helped you"
       ],
-      "rounding": "And explain why you think this would be a perfect job for you.",
-      "p3_theme": "career_choices_and_job_values",
+      "rounding": "And explain how you felt after fixing it.",
+      "p3_theme": "repairing_things_and_practical_skills",
       "p3_follow_ups": [
-        "What should young people consider when choosing a career?",
-        "Is salary the main reason people choose a job?",
-        "Why do some people regret their career choices later?"
-      ]
-    },
-    {
-      "title": "Describe a famous person you would like to meet",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "How you knew about this person",
-        "Where you would like to meet this person"
-      ],
-      "rounding": "And explain why you would like to meet this famous person.",
-      "p3_theme": "fame_and_public_influence",
-      "p3_follow_ups": [
-        "Why do some people become famous?",
-        "What are the disadvantages of being famous?",
-        "Do famous people influence young people?"
-      ]
-    },
-    {
-      "title": "Describe an occasion when you were not allowed to use your mobile phone",
-      "status": "new",
-      "bullets": [
-        "When it was",
-        "Where it was",
-        "Why you were not allowed to use your phone"
-      ],
-      "rounding": "And explain how you felt about this rule.",
-      "p3_theme": "mobile_phone_rules_and_manners",
-      "p3_follow_ups": [
-        "How do young and older people use mobile phones differently?",
-        "Should there be rules about phone use in public places?",
-        "What are examples of good phone manners?"
-      ]
-    },
-    {
-      "title": "Describe a program or app on your computer or phone",
-      "status": "new",
-      "bullets": [
-        "What it is",
-        "When or how you use it",
-        "Where you found it"
-      ],
-      "rounding": "And explain how you feel about this program or app.",
-      "p3_theme": "apps_and_digital_life",
-      "p3_follow_ups": [
-        "What apps are popular in your country?",
-        "Why do some people dislike using apps?",
-        "Should parents limit children's use of apps and games?"
-      ]
-    },
-    {
-      "title": "Describe a piece of technology other than a phone that you would like to own",
-      "status": "new",
-      "bullets": [
-        "What it is",
-        "How much it costs",
-        "What you would use it for"
-      ],
-      "rounding": "And explain why you would like to own it.",
-      "p3_theme": "technology_and_communication",
-      "p3_follow_ups": [
-        "How has technology changed communication?",
-        "What technology do young people like to use?",
-        "What negative effects can technology have on relationships?"
-      ]
-    },
-    {
-      "title": "Describe a person who makes plans and is good at planning",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "How you know this person",
-        "What plans this person usually makes"
-      ],
-      "rounding": "And explain how you feel about this person.",
-      "p3_theme": "planning_and_future_choices",
-      "p3_follow_ups": [
-        "Is it important to plan ahead?",
-        "What activities do people need to plan carefully?",
-        "Should children plan their future careers early?"
+        "Why do some people prefer repairing things instead of replacing them?",
+        "Should children learn basic repair skills?",
+        "How has modern technology changed the way people repair things?"
       ]
     },
     {
@@ -810,6 +1199,294 @@
       ]
     },
     {
+      "title": "Describe a time when you had a problem using a computer",
+      "status": "new",
+      "bullets": [
+        "What the problem was",
+        "When it happened",
+        "How you tried to solve it"
+      ],
+      "rounding": "And explain how you felt about this problem.",
+      "p3_theme": "computer_problems_and_digital_skills",
+      "p3_follow_ups": [
+        "What computer problems do people often have?",
+        "Why do some older people find technology difficult to use?",
+        "Should schools teach students more practical computer skills?"
+      ]
+    },
+    {
+      "title": "Describe a time when you helped a family member",
+      "status": "retained",
+      "bullets": [
+        "Who you helped",
+        "What problem this person had",
+        "What you did"
+      ],
+      "rounding": "And explain how you felt after helping this family member.",
+      "p3_theme": "family_help_and_responsibility",
+      "p3_follow_ups": [
+        "How do family members help each other in your country?",
+        "Should children help with family responsibilities?",
+        "Has family support changed in modern society?"
+      ]
+    },
+    {
+      "title": "Describe a time when you made a promise to someone",
+      "status": "retained",
+      "bullets": [
+        "Who you made the promise to",
+        "What the promise was",
+        "Why you made it"
+      ],
+      "rounding": "And explain whether it was easy to keep this promise.",
+      "p3_theme": "promises_and_trust",
+      "p3_follow_ups": [
+        "Why is it important to keep promises?",
+        "What kinds of promises do people often make?",
+        "What should people do if they cannot keep a promise?"
+      ]
+    },
+    {
+      "title": "Describe a time when you saw a lot of people smiling",
+      "status": "retained",
+      "bullets": [
+        "Where it was",
+        "Who the people were",
+        "Why they were smiling"
+      ],
+      "rounding": "And explain how you felt at that moment.",
+      "p3_theme": "happiness_and_public_events",
+      "p3_follow_ups": [
+        "What kinds of events make people smile?",
+        "Why is smiling important in social situations?",
+        "Do people smile more in public than in the past?"
+      ]
+    },
+    {
+      "title": "Describe a time when you showed something new to another person",
+      "status": "retained",
+      "bullets": [
+        "What you showed",
+        "Who you showed it to",
+        "How you showed it"
+      ],
+      "rounding": "And explain how this person reacted.",
+      "p3_theme": "teaching_others_and_sharing_knowledge",
+      "p3_follow_ups": [
+        "Why do people enjoy teaching others new things?",
+        "What skills are useful to share with friends or family?",
+        "Is it easier to learn from people or from online videos?"
+      ]
+    },
+    {
+      "title": "Describe a time when you waited for something special to happen",
+      "status": "new",
+      "bullets": [
+        "What you were waiting for",
+        "How long you waited",
+        "Who you were with"
+      ],
+      "rounding": "And explain why this thing was special to you.",
+      "p3_theme": "waiting_and_expectations",
+      "p3_follow_ups": [
+        "Why do people sometimes have to wait for important events?",
+        "Is waiting easier now than in the past?",
+        "How can people become more patient?"
+      ]
+    },
+    {
+      "title": "Describe a time when you were late",
+      "status": "new",
+      "bullets": [
+        "When it happened",
+        "Where you were going",
+        "Why you were late"
+      ],
+      "rounding": "And explain what happened afterwards.",
+      "p3_theme": "punctuality_and_time_management",
+      "p3_follow_ups": [
+        "Why are some people often late?",
+        "Is punctuality important in your country?",
+        "How can people manage their time better?"
+      ]
+    },
+    {
+      "title": "Describe a traditional custom in your country",
+      "status": "new",
+      "bullets": [
+        "What the custom is",
+        "When people follow it",
+        "Who usually takes part in it"
+      ],
+      "rounding": "And explain why this custom is important.",
+      "p3_theme": "traditional_customs_and_modern_life",
+      "p3_follow_ups": [
+        "Why do countries preserve traditional customs?",
+        "Are young people still interested in traditional customs?",
+        "How can traditions adapt to modern life?"
+      ]
+    },
+    {
+      "title": "Describe a traditional object that you like",
+      "status": "new",
+      "bullets": [
+        "What the object is",
+        "Where you saw it",
+        "How people use it"
+      ],
+      "rounding": "And explain why you think this object is interesting or valuable.",
+      "p3_theme": "traditional_objects_and_culture",
+      "p3_follow_ups": [
+        "Why do people value traditional objects?",
+        "Are traditional objects still useful in modern life?",
+        "How can museums help preserve traditional culture?"
+      ]
+    },
+    {
+      "title": "Describe a website you often visit",
+      "status": "new",
+      "bullets": [
+        "What the website is",
+        "How often you visit it",
+        "What you use it for"
+      ],
+      "rounding": "And explain why this website is useful to you.",
+      "p3_theme": "websites_and_online_services",
+      "p3_follow_ups": [
+        "What kinds of websites are popular in your country?",
+        "Why do people spend a lot of time on websites?",
+        "How can people judge whether information online is reliable?"
+      ]
+    },
+    {
+      "title": "Describe a wild animal that you want to know more about",
+      "status": "new",
+      "bullets": [
+        "What animal it is",
+        "Where it lives",
+        "What you already know about it"
+      ],
+      "rounding": "And explain why you want to know more about this animal.",
+      "p3_theme": "animals_and_nature_education",
+      "p3_follow_ups": [
+        "Why are people interested in wild animals?",
+        "How can children learn about wildlife?",
+        "Should more be done to protect wild animals?"
+      ]
+    },
+    {
+      "title": "Describe an activity you enjoyed in your free time when you were young",
+      "status": "new",
+      "bullets": [
+        "What the activity was",
+        "Where you did it",
+        "Who you did it with"
+      ],
+      "rounding": "And explain why you enjoyed it.",
+      "p3_theme": "childhood_free_time_and_play",
+      "p3_follow_ups": [
+        "What activities do children enjoy in their free time?",
+        "How are children's leisure activities different from the past?",
+        "Should parents control how children spend their free time?"
+      ]
+    },
+    {
+      "title": "Describe an activity you tried for the first time",
+      "status": "new",
+      "bullets": [
+        "What the activity was",
+        "When and where you tried it",
+        "Who you tried it with"
+      ],
+      "rounding": "And explain whether you would like to do it again.",
+      "p3_theme": "new_activities_and_learning",
+      "p3_follow_ups": [
+        "Why do people like trying new activities?",
+        "Is it easier for children or adults to try new things?",
+        "What can people learn from new experiences?"
+      ]
+    },
+    {
+      "title": "Describe an important rule at your school or workplace",
+      "status": "retained",
+      "bullets": [
+        "What the rule is",
+        "Who has to follow it",
+        "Why the rule exists"
+      ],
+      "rounding": "And explain how you feel about this rule.",
+      "p3_theme": "rules_and_social_order",
+      "p3_follow_ups": [
+        "Why do schools and workplaces need rules?",
+        "What rules do young people sometimes dislike?",
+        "Should rules be strict or flexible?"
+      ]
+    },
+    {
+      "title": "Describe an important traditional festival in your country",
+      "status": "retained",
+      "bullets": [
+        "What the festival is",
+        "When people celebrate it",
+        "What people usually do"
+      ],
+      "rounding": "And explain why this festival is important.",
+      "p3_theme": "festivals_and_cultural_traditions",
+      "p3_follow_ups": [
+        "Why are traditional festivals important?",
+        "How have festivals changed in modern society?",
+        "Should young people learn more about traditional festivals?"
+      ]
+    },
+    {
+      "title": "Describe an interesting old person you know",
+      "status": "new",
+      "bullets": [
+        "Who this person is",
+        "How you know this person",
+        "What you usually talk about"
+      ],
+      "rounding": "And explain why you think this person is interesting.",
+      "p3_theme": "older_people_and_generation_gap",
+      "p3_follow_ups": [
+        "What can young people learn from older people?",
+        "Why do some older people remain active and interesting?",
+        "How has the relationship between young and old people changed?"
+      ]
+    },
+    {
+      "title": "Describe an occasion when you were not allowed to use your mobile phone",
+      "status": "new",
+      "bullets": [
+        "When it was",
+        "Where it was",
+        "Why you were not allowed to use your phone"
+      ],
+      "rounding": "And explain how you felt about this rule.",
+      "p3_theme": "mobile_phone_rules_and_manners",
+      "p3_follow_ups": [
+        "How do young and older people use mobile phones differently?",
+        "Should there be rules about phone use in public places?",
+        "What are examples of good phone manners?"
+      ]
+    },
+    {
+      "title": "Describe some food you ate on a special occasion",
+      "status": "new",
+      "bullets": [
+        "What the food was",
+        "What the occasion was",
+        "Who you ate it with"
+      ],
+      "rounding": "And explain why this food was special to you.",
+      "p3_theme": "food_and_special_occasions",
+      "p3_follow_ups": [
+        "What foods are eaten on special occasions in your country?",
+        "Why is food important in celebrations?",
+        "Are traditional foods still popular among young people?"
+      ]
+    },
+    {
       "title": "Describe something important that has been kept in your family for a long time",
       "status": "new",
       "bullets": [
@@ -824,71 +1501,6 @@
         "Why do people keep old things?",
         "What kinds of things are kept in museums?"
       ]
-    },
-    {
-      "title": "Describe a shopping mall",
-      "status": "new",
-      "bullets": [
-        "What its name is",
-        "Where it is",
-        "How often you visit it"
-      ],
-      "rounding": "And explain what you usually buy at this mall.",
-      "p3_theme": "shopping_malls_and_consumption",
-      "p3_follow_ups": [
-        "Why do people buy things they do not need?",
-        "Why are some people keen on shopping?",
-        "Where do people like to shop in your country?"
-      ]
-    },
-    {
-      "title": "Describe a bicycle, motorcycle, or car trip you would like to go on",
-      "status": "new",
-      "bullets": [
-        "Who you would like to go with",
-        "Where you would like to go",
-        "When you would like to go"
-      ],
-      "rounding": "And explain why you would like to travel this way.",
-      "p3_theme": "transport_and_environment",
-      "p3_follow_ups": [
-        "Which form of transport is most popular in your country?",
-        "How are urban and rural transport systems different?",
-        "Should people change how they travel to protect the environment?"
-      ]
-    },
-    {
-      "title": "Describe a person who solved a problem in a smart way",
-      "status": "new",
-      "bullets": [
-        "Who this person is",
-        "What the problem was",
-        "How this person solved it"
-      ],
-      "rounding": "And explain why you think the solution was smart.",
-      "p3_theme": "problem_solving_and_intelligence",
-      "p3_follow_ups": [
-        "Are children born smart or do they learn to become smart?",
-        "How can schools help children become better problem solvers?",
-        "Why does modern society need different kinds of talents?"
-      ]
-    },
-    {
-      "title": "Describe a TV or online program you enjoy watching",
-      "status": "new",
-      "bullets": [
-        "What it is",
-        "What it is about",
-        "Which country it is from",
-        "When you watch it"
-      ],
-      "rounding": "And explain why you enjoy watching it.",
-      "p3_theme": "tv_programs_and_online_media",
-      "p3_follow_ups": [
-        "What programs do people like to watch in your country?",
-        "Do people like watching foreign TV programs?",
-        "Can people acquire knowledge from watching TV programs?"
-      ]
     }
   ],
   "source_notes": [
@@ -896,6 +1508,8 @@
     "New Channel public page confirms the May-August season bank is active and China-relevant.",
     "Koolearn current-season practice pages were used as a secondary topic-signal check where available.",
     "Cathoven's April 2026 May-August cue-card bank was used to cross-check missing P2/P3 topic directions; only topic prompts and follow-up directions were added, not sample answers.",
-    "Merged duplicate P2 sports-watching cards: kept \"Describe a sport you enjoyed watching\" and folded in P3 prompts from \"Describe a time when you watched a sports match\"."
+    "Merged duplicate P2 sports-watching cards: kept \"Describe a sport you enjoyed watching\" and folded in P3 prompts from \"Describe a time when you watched a sports match\".",
+    "IELTSBro local source cards under .firecrawl/ieltsbro-api/question-pics were used to add the new-law and got-up-early cue cards with all six visible Part 3 follow-ups from each card.",
+    "IELTSBro latest topic-card OCR cache (getDataV2 p23Update 2026-06-10T18:51:15+0800) was merged as source-backed P2/P3 seed topics; existing non-identical public-list topics were preserved as additional coverage."
   ]
 }

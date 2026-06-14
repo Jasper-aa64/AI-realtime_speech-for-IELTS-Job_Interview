@@ -45,15 +45,19 @@
     },
     {
       "topic": "history",
-      "question": "Do you like learning about history?"
+      "question": "Have you ever been to historical museums?"
     },
     {
       "topic": "history",
-      "question": "What historical period would you like to know more about?"
+      "question": "Do you like history?"
     },
     {
       "topic": "history",
-      "question": "How did you learn history when you were at school?"
+      "question": "When was the last time you read about history?"
+    },
+    {
+      "topic": "history",
+      "question": "Did you like history when you were young?"
     },
     {
       "topic": "sharing",
@@ -81,15 +85,19 @@
     },
     {
       "topic": "mirrors",
-      "question": "How often do you look in a mirror?"
+      "question": "Do you like looking at yourself in the mirror? How often?"
     },
     {
       "topic": "mirrors",
-      "question": "Do you usually buy mirrors for your home?"
+      "question": "Have you ever bought mirrors?"
     },
     {
       "topic": "mirrors",
-      "question": "Do you think mirrors are useful decorations?"
+      "question": "Do you usually take a mirror with you?"
+    },
+    {
+      "topic": "mirrors",
+      "question": "Would you use mirrors to decorate your room?"
     },
     {
       "topic": "meeting_places",
@@ -213,15 +221,19 @@
     },
     {
       "topic": "outer_space_and_stars",
-      "question": "Are you interested in stars and outer space?"
+      "question": "Have you ever learnt about outer space and stars?"
     },
     {
       "topic": "outer_space_and_stars",
-      "question": "Did you learn about space at school?"
+      "question": "Do you like science fiction movies? Why?"
     },
     {
       "topic": "outer_space_and_stars",
-      "question": "Would you like to travel to space?"
+      "question": "Do you want to know more about outer space?"
+    },
+    {
+      "topic": "outer_space_and_stars",
+      "question": "Do you want to go into outer space in the future?"
     },
     {
       "topic": "jewelry",
@@ -273,27 +285,43 @@
     },
     {
       "topic": "singing",
-      "question": "Do you like singing?"
+      "question": "Do you like singing? Why?"
     },
     {
       "topic": "singing",
-      "question": "When do you usually sing?"
+      "question": "Have you ever learnt how to sing?"
     },
     {
       "topic": "singing",
-      "question": "Did you learn to sing when you were a child?"
+      "question": "Who do you want to sing for?"
+    },
+    {
+      "topic": "singing",
+      "question": "Do you think singing can bring happiness to people?"
+    },
+    {
+      "topic": "singing",
+      "question": "Do you like listening to others singing?"
+    },
+    {
+      "topic": "singing",
+      "question": "Have you ever taken a singing class?"
     },
     {
       "topic": "tidiness",
-      "question": "Are you a tidy person?"
+      "question": "Do you like to keep things tidy?"
     },
     {
       "topic": "tidiness",
-      "question": "How do you keep your room or desk tidy?"
+      "question": "Did you keep your room tidy as a child?"
     },
     {
       "topic": "tidiness",
-      "question": "Do you think children should learn to be tidy?"
+      "question": "How do you keep your work or study space tidy?"
+    },
+    {
+      "topic": "tidiness",
+      "question": "Do you think that it is necessary to be tidy?"
     },
     {
       "topic": "watches",
@@ -301,59 +329,111 @@
     },
     {
       "topic": "watches",
-      "question": "Did you wear a watch when you were a child?"
+      "question": "Have you ever got a watch as a gift?"
     },
     {
       "topic": "watches",
-      "question": "Do people still need watches if they have mobile phones?"
+      "question": "Why do some people wear expensive watches?"
+    },
+    {
+      "topic": "watches",
+      "question": "Do you think it is important to wear a watch? Why?"
     },
     {
       "topic": "public_gardens_and_parks",
-      "question": "Do you often go to parks or public gardens?"
+      "question": "Did you like going to parks as a child?"
     },
     {
       "topic": "public_gardens_and_parks",
-      "question": "What do you usually do in a park?"
+      "question": "Do you still like going to parks now?"
     },
     {
       "topic": "public_gardens_and_parks",
-      "question": "Are parks important in the city where you live?"
+      "question": "Would you like to see more parks in your city?"
+    },
+    {
+      "topic": "public_gardens_and_parks",
+      "question": "Are there any parks you want to go to in the future?"
+    },
+    {
+      "topic": "public_gardens_and_parks",
+      "question": "Would you prefer to play in a personal garden or public garden?"
+    },
+    {
+      "topic": "public_gardens_and_parks",
+      "question": "How are the parks today different from those you visited as a kid?"
+    },
+    {
+      "topic": "public_gardens_and_parks",
+      "question": "What do you like to do when visiting a park?"
+    },
+    {
+      "topic": "public_gardens_and_parks",
+      "question": "Would you like to play in a public garden or park?"
     },
     {
       "topic": "websites",
-      "question": "What websites do you often visit?"
+      "question": "What kinds of websites do you often visit?"
     },
     {
       "topic": "websites",
-      "question": "Do you prefer using websites on a phone or on a computer?"
+      "question": "What is your favourite website?"
     },
     {
       "topic": "websites",
-      "question": "Have you ever learned something useful from a website?"
+      "question": "Are there any changes to the websites you often visit?"
+    },
+    {
+      "topic": "websites",
+      "question": "What kinds of websites are popular in your country?"
+    },
+    {
+      "topic": "websites",
+      "question": "Do you prefer getting information from websites or books?"
+    },
+    {
+      "topic": "websites",
+      "question": "Would you like to have your own website?"
+    },
+    {
+      "topic": "websites",
+      "question": "What have you learned from websites that help with your life or studies?"
     },
     {
       "topic": "ambition_and_dreams",
-      "question": "What was your dream when you were a child?"
+      "question": "What was your childhood dream?"
     },
     {
       "topic": "ambition_and_dreams",
-      "question": "Do you think it is important to have ambition?"
+      "question": "Are you the kind of person who sticks to dreams?"
     },
     {
       "topic": "ambition_and_dreams",
-      "question": "Has your dream changed as you have grown older?"
+      "question": "What is your dream job?"
+    },
+    {
+      "topic": "ambition_and_dreams",
+      "question": "Do you think you are an ambitious person?"
     },
     {
       "topic": "social_media",
-      "question": "Do you use social media?"
+      "question": "Have you ever posted anything on social media?"
     },
     {
       "topic": "social_media",
-      "question": "What do you usually do on social media?"
+      "question": "When did you start using social media?"
     },
     {
       "topic": "social_media",
-      "question": "Do you think people spend too much time on social media?"
+      "question": "Do you think you spend too much time on social media?"
+    },
+    {
+      "topic": "social_media",
+      "question": "Do your friends use social media?"
+    },
+    {
+      "topic": "social_media",
+      "question": "What do people often do on social media?"
     },
     {
       "topic": "talking_to_elderly_people",
@@ -369,7 +449,23 @@
     },
     {
       "topic": "cinema",
-      "question": "Do you like going to the cinema?"
+      "question": "What films do you like?"
+    },
+    {
+      "topic": "cinema",
+      "question": "Did you often watch films when you were a child?"
+    },
+    {
+      "topic": "cinema",
+      "question": "Did you ever go to the cinema alone as a child?"
+    },
+    {
+      "topic": "cinema",
+      "question": "Do you often go to the cinema with your friends?"
+    },
+    {
+      "topic": "cinema",
+      "question": "Do you think going to the cinema is a good way to spend time with friends?"
     },
     {
       "topic": "cinema",
@@ -377,7 +473,7 @@
     },
     {
       "topic": "cinema",
-      "question": "Do you prefer watching films at home or in a cinema?"
+      "question": "Do you prefer to watch films at home or in the cinema?"
     },
     {
       "topic": "headphones",
@@ -385,23 +481,39 @@
     },
     {
       "topic": "headphones",
-      "question": "When do you usually use headphones?"
+      "question": "What type of headphones do you use?"
     },
     {
       "topic": "headphones",
-      "question": "Do you think using headphones for a long time is a problem?"
+      "question": "When would you use headphones?"
+    },
+    {
+      "topic": "headphones",
+      "question": "In what conditions would you not use headphones?"
+    },
+    {
+      "topic": "headphones",
+      "question": "Is wearing headphones comfortable?"
     },
     {
       "topic": "old_buildings",
-      "question": "Are there any old buildings in your city?"
+      "question": "Have you ever seen old buildings in the city?"
     },
     {
       "topic": "old_buildings",
-      "question": "Do you like visiting old buildings?"
+      "question": "Do you think we should preserve old buildings in cities?"
     },
     {
       "topic": "old_buildings",
-      "question": "Should old buildings be protected?"
+      "question": "Do you prefer living in an old building or a modern house?"
+    },
+    {
+      "topic": "old_buildings",
+      "question": "Are there any old buildings you want to see in the future? Why?"
+    },
+    {
+      "topic": "evening_time",
+      "question": "Do you like the morning or evening?"
     },
     {
       "topic": "evening_time",
@@ -409,23 +521,43 @@
     },
     {
       "topic": "evening_time",
-      "question": "Do you prefer studying or relaxing in the evening?"
+      "question": "What did you do in the evening when you were little? Why?"
     },
     {
       "topic": "evening_time",
-      "question": "Has your evening routine changed recently?"
+      "question": "Are there any differences between what you do in the evening now and what you did in the past?"
+    },
+    {
+      "topic": "evening_time",
+      "question": "Do you spend your evenings doing the same things on both weekends and weekdays? Why?"
+    },
+    {
+      "topic": "evening_time",
+      "question": "What do you hate doing in the evening?"
     },
     {
       "topic": "cars",
-      "question": "Do you often travel by car?"
+      "question": "Did you enjoy traveling by car when you were a kid?"
     },
     {
       "topic": "cars",
-      "question": "Would you like to own a car in the future?"
+      "question": "What types of cars do you like?"
     },
     {
       "topic": "cars",
-      "question": "What kinds of cars are popular in your city?"
+      "question": "Do you prefer to be a driver or a passenger?"
+    },
+    {
+      "topic": "cars",
+      "question": "What do you usually do when there is a traffic jam?"
+    },
+    {
+      "topic": "cars",
+      "question": "Do you think car colours are important?"
+    },
+    {
+      "topic": "cars",
+      "question": "Will you buy an expensive car in the future?"
     },
     {
       "topic": "shopping",
@@ -433,35 +565,59 @@
     },
     {
       "topic": "shopping",
-      "question": "What do you usually buy when you go shopping?"
+      "question": "How often do you go shopping?"
     },
     {
       "topic": "shopping",
-      "question": "Do you prefer shopping online or in stores?"
+      "question": "Do you prefer online shopping or in-store shopping?"
+    },
+    {
+      "topic": "shopping",
+      "question": "Have you ever returned anything you bought online?"
     },
     {
       "topic": "clothes",
-      "question": "What kind of clothes do you usually wear?"
+      "question": "What kind of clothes do you like to wear?"
     },
     {
       "topic": "clothes",
-      "question": "Do you care about fashion?"
+      "question": "Do you prefer to wear comfortable and casual clothes or smart clothes?"
     },
     {
       "topic": "clothes",
-      "question": "Do you prefer comfortable clothes or formal clothes?"
+      "question": "Do you like wearing T-shirts?"
+    },
+    {
+      "topic": "clothes",
+      "question": "Do you spend a lot of time choosing clothes?"
+    },
+    {
+      "topic": "clothes",
+      "question": "Do you wear different styles of clothes on weekdays and weekends?"
+    },
+    {
+      "topic": "clothes",
+      "question": "What colour clothes do you like?"
     },
     {
       "topic": "jokes",
-      "question": "Do you like telling jokes?"
+      "question": "Are you good at telling jokes?"
     },
     {
       "topic": "jokes",
-      "question": "Do your friends often make you laugh?"
+      "question": "Do your friends like to jokes?"
     },
     {
       "topic": "jokes",
-      "question": "Are jokes important in daily life?"
+      "question": "Do you like to watch comedies?"
+    },
+    {
+      "topic": "jokes",
+      "question": "Have you ever watched a live show?"
+    },
+    {
+      "topic": "jokes",
+      "question": "Are comedy shows popular in your country?"
     },
     {
       "topic": "happy_things",
@@ -486,11 +642,132 @@
     {
       "topic": "holidays",
       "question": "What holiday would you like to have in the future?"
+    },
+    {
+      "topic": "art",
+      "question": "Do you like art?"
+    },
+    {
+      "topic": "art",
+      "question": "Do you like visiting art galleries?"
+    },
+    {
+      "topic": "art",
+      "question": "Do you want to be an artist?"
+    },
+    {
+      "topic": "art",
+      "question": "Do you like modern art or traditional art?"
+    },
+    {
+      "topic": "sports_programs",
+      "question": "Do you like watching sports programs on TV?"
+    },
+    {
+      "topic": "sports_programs",
+      "question": "Do you like to watch live sports games?"
+    },
+    {
+      "topic": "sports_programs",
+      "question": "Who do you like to watch sports games with?"
+    },
+    {
+      "topic": "sports_programs",
+      "question": "What kinds of games do you expect to watch in the future?"
+    },
+    {
+      "topic": "sports_programs",
+      "question": "Do you prefer to watch sports games alone or with a group of friends?"
+    },
+    {
+      "topic": "sports_programs",
+      "question": "Have you ever watched a sports game in a stadium?"
+    },
+    {
+      "topic": "morning_routines",
+      "question": "What do you do right after getting up in the morning?"
+    },
+    {
+      "topic": "morning_routines",
+      "question": "Is breakfast important?"
+    },
+    {
+      "topic": "morning_routines",
+      "question": "What is your morning routine?"
+    },
+    {
+      "topic": "morning_routines",
+      "question": "Do you like to get up early in the morning?"
+    },
+    {
+      "topic": "science",
+      "question": "Do you like science?"
+    },
+    {
+      "topic": "science",
+      "question": "When did you start to learn about science?"
+    },
+    {
+      "topic": "science",
+      "question": "Which science subject is interesting to you?"
+    },
+    {
+      "topic": "science",
+      "question": "What kinds of interesting things have you done with science?"
+    },
+    {
+      "topic": "science",
+      "question": "Do you like watching science TV programs?"
+    },
+    {
+      "topic": "science",
+      "question": "Do Chinese people often visit science museums?"
+    },
+    {
+      "topic": "teachers",
+      "question": "Do you have a favorite teacher?"
+    },
+    {
+      "topic": "teachers",
+      "question": "Do you want to be a teacher in the future?"
+    },
+    {
+      "topic": "teachers",
+      "question": "Do you have a teacher from your past that you still remember?"
+    },
+    {
+      "topic": "teachers",
+      "question": "Are you still in touch with your primary school teachers?"
+    },
+    {
+      "topic": "teachers",
+      "question": "In what way has your favourite teacher helped you?"
+    },
+    {
+      "topic": "teachers",
+      "question": "Do you like your primary school teachers more than your high school teachers?"
+    },
+    {
+      "topic": "music",
+      "question": "Do you prefer sad or happy music?"
+    },
+    {
+      "topic": "music",
+      "question": "Does happy music make you feel more excited?"
+    },
+    {
+      "topic": "music",
+      "question": "Have you taken any music classes?"
+    },
+    {
+      "topic": "music",
+      "question": "Do you listen to music while doing other things?"
     }
   ],
   "source_notes": [
     "Cross-checked against New Oriental public 2026 May-August speaking season list.",
     "Cross-checked against Koolearn current-season Part 1 practice list.",
-    "Xiaohongshu/Zhihu-style public prep signals are treated as unofficial coverage hints, not official IELTS publication."
+    "Xiaohongshu/Zhihu-style public prep signals are treated as unofficial coverage hints, not official IELTS publication.",
+    "IELTSBro latest topic-card OCR cache (getDataV2 p1Update 2026-05-22T18:31:54+0800) was used to expand the 24 current/new P1 topics to their full visible card question counts."
   ]
 }

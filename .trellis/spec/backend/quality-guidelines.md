@@ -34,6 +34,30 @@ routes with different behavior.
 - Do not start the retired server unless explicitly debugging with
   `IELTS_ALLOW_LEGACY_SERVER=1`.
 
+### Convention: Source-backed IELTS seed syncs need exact-text validation
+
+**What**: When bundled IELTS speaking seed JSON is updated from a cached source
+card or catalog, add a focused validator that checks the local source cache
+exists, parses the affected JSON files, asserts exact imported question text,
+rejects duplicate/empty seed items, and exercises the Django `QuestionBank`
+loader.
+
+**Why**: Count-only checks can pass while OCR/transcription drift changes the
+question text or silently drops a follow-up. The seed bank is read-only product
+content, so validation must prove the visible source-backed strings survived
+through storage and loader boundaries.
+
+**Example**:
+```bash
+.venv-django/bin/python scripts/validate_ieltsbro_seed_sync.py
+.venv-django/bin/python backend_django/manage.py check
+```
+
+**Required**: Preserve user-owned corpus DB/data when changing seed JSON. If an
+existing topic key is already used for saved corpus IDs, prefer preserving that
+key and updating only the source-backed question text unless the key itself is
+materially wrong.
+
 ### Convention: Split pure helpers out of monolithic services
 
 **What**: Keep `apps.speaking.services` and `apps.writing.services` as
