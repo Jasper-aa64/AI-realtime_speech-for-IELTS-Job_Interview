@@ -697,11 +697,13 @@ def _model_band7_tts_cache_key(attempt_id: str, turn_id: str, band7_version: str
 # --- Attempt Start ---
 
 P1_TURN_COUNT = 10
-# A P1 session serves whole topic groups (several connected questions on one
-# subject, like the real exam) until it has filled this window. Groups are never
-# split, so the actual count lands at/above the minimum and rarely past the max.
-P1_GROUP_MIN = 8
-P1_GROUP_MAX = 12
+# A P1 session mirrors the real exam: the examiner covers a few separate topic
+# "frames", asking a handful of questions on each — never one giant topic, and
+# never a single topic for the whole part. So we draw several DISTINCT topics and
+# a capped slice of each, instead of dumping a whole 18-question bank topic.
+P1_TOPICS_PER_SESSION = 3      # at least this many distinct topics per session
+P1_QUESTIONS_PER_TOPIC = 4     # typical questions drawn from one topic
+P1_QUESTIONS_PER_TOPIC_MAX = 6 # hard cap per topic (a topic never exceeds this)
 SPEAKING_AI_DEFAULT_HTTP_MODEL = "gpt-5.4-mini"
 STREAM_PENDING_FOLLOW_UP_PLACEHOLDER = "Generating follow-up question..."
 SPEAKING_AI_CALL_MODE_CHAIN = "chain"
@@ -1703,11 +1705,10 @@ def _weighted_topic_order(topic_names: list[str], counts: dict[str, int]) -> lis
     return order
 
 
-def _p3_question_practice_counts(user: Any) -> dict[str, int]:
-    """Per-question P3 practice counts for this user, keyed by normalized text.
-
-    Returns {} for anonymous users or on error, so selection falls back to plain
-    random. Mirrors the P1 helper but over historical P3 turns.
+def _question_practice_counts(user: Any, part: str) -> dict[str, int]:
+    """Per-question practice counts for this user within one part, keyed by
+    normalized text. Returns {} for anonymous users or on error, so selection
+    falls back to plain random.
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return {}
@@ -1715,13 +1716,49 @@ def _p3_question_practice_counts(user: Any) -> dict[str, int]:
         from .models import SpeakingTurn
 
         practiced = list(
-            SpeakingTurn.objects.filter(user=user, part="p3").values_list("question", flat=True)
+            SpeakingTurn.objects.filter(user=user, part=part).values_list("question", flat=True)
         )
     except Exception:
         return {}
     from collections import Counter
 
     return dict(Counter(_normalize_question_text(q) for q in practiced))
+
+
+def _p3_question_practice_counts(user: Any) -> dict[str, int]:
+    """Per-question P3 practice counts (thin wrapper over the generic helper)."""
+    return _question_practice_counts(user, "p3")
+
+
+def _select_least_practiced_items(
+    items: list[dict[str, Any]], count: int, counts: dict[str, int]
+) -> list[dict[str, Any]]:
+    """Pick `count` bank items favouring the least-practiced (weight 1/(n+1)),
+    then restore their original bank order so the questions still flow naturally.
+
+    This is the per-topic coverage guard: questions the user has never practised
+    carry count 0 (max weight) and are drawn first, so repeated sessions walk
+    through a topic's whole question list before any question repeats — no item
+    is ever starved. With no history it degrades to a plain sample.
+    """
+    if count >= len(items):
+        return list(items)
+    indexed = list(enumerate(items))
+    pool = list(indexed)
+    random.shuffle(pool)
+    chosen: list[tuple[int, dict[str, Any]]] = []
+    if not counts:
+        chosen = pool[:count]
+    else:
+        while pool and len(chosen) < count:
+            weights = [
+                1.0 / (counts.get(_normalize_question_text(str(it.get("question") or "")), 0) + 1)
+                for _, it in pool
+            ]
+            pick = random.choices(range(len(pool)), weights=weights, k=1)[0]
+            chosen.append(pool.pop(pick))
+    chosen.sort(key=lambda pair: pair[0])
+    return [it for _, it in chosen]
 
 
 def _select_p3_followups(followups: list[str], count: int, user: Any = None) -> list[str]:
@@ -1781,28 +1818,48 @@ def _build_p1_turns(
     topics: dict[str, list[dict[str, Any]]] = {}
     for item in ordinary_pool:
         topics.setdefault(str(item.get("topic") or "general"), []).append(item)
-    # Serve whole topic groups (questions kept together, in their original order)
-    # ordered least-practiced first, until the window is filled. A group is never
-    # split, so the candidate gets several connected questions on one subject like
-    # the real P1, instead of scattered one-offs.
+    # Mirror the real P1: cover several DISTINCT topics, a capped handful of
+    # questions each — never one giant topic, never a single topic for the whole
+    # part. Topics are ordered least-practiced first; within each topic the
+    # questions are also chosen least-practiced first, so a deep bank topic (e.g.
+    # 18 questions) is walked through across sessions instead of dumped at once,
+    # and no question is ever starved.
     topic_counts = _p1_topic_practice_counts(user, topics)
+    topic_order = _weighted_topic_order(list(topics), topic_counts)
+    available = len(topic_order)
+
+    # How many questions this session should serve, and across how many topics.
+    target_total = max(remaining_count, min(available, P1_TOPICS_PER_SESSION))
+    min_topics = min(available, P1_TOPICS_PER_SESSION)
+    # Enough topics that no topic has to exceed its per-topic cap.
+    n_by_cap = -(-target_total // P1_QUESTIONS_PER_TOPIC_MAX)  # ceil division
+    n_topics = min(available, max(min_topics, n_by_cap))
+    selected = topic_order[:n_topics]
+
+    # Distribute the target evenly across the selected topics (round-robin),
+    # capped per topic at the smaller of the topic size and the hard cap.
+    caps = [min(len(topics[t]), P1_QUESTIONS_PER_TOPIC_MAX) for t in selected]
+    quota = [0] * n_topics
+    target = min(target_total, sum(caps))
+    assigned = 0
+    while assigned < target:
+        progressed = False
+        for j in range(n_topics):
+            if quota[j] < caps[j]:
+                quota[j] += 1
+                assigned += 1
+                progressed = True
+                if assigned >= target:
+                    break
+        if not progressed:
+            break
+
+    question_counts = _question_practice_counts(user, "p1")
     ordinary_questions: list[dict[str, Any]] = []
-    for topic in _weighted_topic_order(list(topics), topic_counts):
-        if ordinary_questions and len(ordinary_questions) >= P1_GROUP_MIN:
-            break
-        items = topics[topic]
-        if len(items) > P1_GROUP_MAX:
-            # An oversized merged topic (e.g. an "area you live in" group with 20+
-            # questions) would swamp one session. Serve a contiguous slice capped at
-            # the window, rotated by how many times the topic was practiced so later
-            # sessions walk through the rest instead of repeating the same head.
-            start = (topic_counts.get(topic, 0) * P1_GROUP_MAX) % len(items)
-            rotated = items[start:] + items[:start]
-            ordinary_questions.extend(rotated[:P1_GROUP_MAX])
-        else:
-            ordinary_questions.extend(items)
-        if len(ordinary_questions) >= P1_GROUP_MAX:
-            break
+    for topic, want in zip(selected, quota):
+        if want <= 0:
+            continue
+        ordinary_questions.extend(_select_least_practiced_items(topics[topic], want, question_counts))
     turn_items = uncounted_intro_items + countable_intro_items + ordinary_questions
     # The counted length is dynamic now, so derive the displayed "of N" total from
     # the actual questions. display_total carried an offset over `total` at the call

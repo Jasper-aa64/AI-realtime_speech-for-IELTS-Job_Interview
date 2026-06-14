@@ -272,22 +272,24 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(payload["title"], "Full mock exam")
         p1_turns = [t for t in payload["turns"] if t["part"] == "p1"]
         p2_turns = [t for t in payload["turns"] if t["part"] == "p2"]
+        from collections import Counter
         from apps.speaking import services
-        countable_p1 = sum(1 for t in p1_turns if t.get("counts_toward_total", True))
-        # P1 now serves whole topic groups until a window is filled, so the exact
-        # count varies with the per-topic question depth of the bank rather than
-        # being pinned to a single number. Assert the window (intro + grouped body).
-        self.assertGreaterEqual(countable_p1, services.P1_GROUP_MIN)
-        self.assertLessEqual(countable_p1, services.P1_GROUP_MAX + 6)
-        # Whole-group serving: the body questions must arrive in contiguous runs by
-        # topic (no scattered one-offs), i.e. the number of topic switches is small.
+        # P1 now mirrors the real exam: several distinct topics, a capped handful of
+        # questions each (never one giant topic). The body questions arrive in
+        # contiguous runs by topic.
         body_topics = [
             t.get("prompt", {}).get("topic")
             for t in p1_turns
             if t.get("counts_toward_total", True) and t.get("prompt", {}).get("topic") != "intro"
         ]
+        topic_counts = Counter(body_topics)
+        # At least the per-session minimum number of distinct topics.
+        self.assertGreaterEqual(len(topic_counts), services.P1_TOPICS_PER_SESSION)
+        # No single topic exceeds the per-topic cap.
+        self.assertLessEqual(max(topic_counts.values()), services.P1_QUESTIONS_PER_TOPIC_MAX)
+        # Contiguous runs by topic: switches == distinct topics - 1.
         switches = sum(1 for a, b in zip(body_topics, body_topics[1:]) if a != b)
-        self.assertLessEqual(switches, len(set(body_topics)))
+        self.assertLessEqual(switches, len(topic_counts))
         self.assertEqual(len(p2_turns), 1)
         self.assertEqual(payload["p3_generation_status"], "pending_after_p2")
 
