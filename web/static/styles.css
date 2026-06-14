@@ -682,7 +682,7 @@ button:active {
   position: fixed;
   left: 0;
   top: 0;
-  width: 176px;
+  width: var(--sidebar-width);
   height: 100vh;
   height: 100dvh;
   overflow-y: auto;
@@ -695,6 +695,52 @@ button:active {
   gap: 16px;
   z-index: 100;
   -webkit-overflow-scrolling: touch;
+  transition: background var(--motion-base), color var(--motion-base), border-color var(--motion-base);
+}
+
+.nav-resize-handle {
+  position: fixed;
+  left: calc(var(--sidebar-width) - 4px);
+  top: 0;
+  width: 8px;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 160;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+
+.nav-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 34px);
+  left: 3px;
+  width: 2px;
+  height: 68px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  opacity: 0;
+  transition: opacity var(--motion-fast), transform var(--motion-fast);
+}
+
+.nav-resize-handle:hover::after,
+body.nav-resizing .nav-resize-handle::after {
+  opacity: 1;
+  transform: scaleX(1.35);
+}
+
+body.nav-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.nav-resizing .nav,
+body.nav-resizing .workspace,
+body.nav-resizing .global-topbar,
+body.nav-resizing .topbar,
+body.nav-resizing .writing-topbar-actions {
+  transition: none !important;
 }
 
 .nav-top,
@@ -11314,6 +11360,21 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   pointer-events: none;
 }
 
+.exam-actions .p2-corpus-peek-button.is-empty-slot {
+  opacity: 0.92;
+  filter: none;
+}
+
+.exam-actions .p1-corpus-peek-button.is-loading-slot {
+  opacity: 0.92;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.exam-actions .p1-corpus-peek-button.is-loading-slot svg {
+  opacity: 1;
+}
+
 .mobile-font-options {
   display: none;
 }
@@ -19798,12 +19859,8 @@ body.theme-dark.font-academic .history-item:hover {
 }
 
 @media (min-width: 981px) and (max-width: 1536px), (min-width: 981px) and (max-height: 820px) {
-  :root {
-    --sidebar-width: 156px;
-  }
-
   .nav {
-    width: 156px;
+    width: var(--sidebar-width);
     padding: calc(14px + var(--safe-top)) 10px calc(14px + var(--safe-bottom));
     gap: 12px;
   }
@@ -19835,6 +19892,31 @@ body.theme-dark.font-academic .history-item:hover {
     min-height: 36px;
     padding: 0 10px;
     font-size: 14px;
+  }
+
+  .nav-exam-group {
+    padding: 5px;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .nav-exam-group .nav-exam-lead {
+    min-height: 38px;
+    padding: 4px 10px;
+  }
+
+  .nav-exam-lead-title {
+    font-size: 14px;
+  }
+
+  .nav-exam-lead-sub {
+    font-size: 10px;
+  }
+
+  .nav-exam-group .nav-pgroup-item {
+    min-height: 30px;
+    padding: 0 4px;
+    font-size: 12px;
   }
 
   .nav-divider {
@@ -26893,14 +26975,14 @@ body.view-writingTakeawayBook .topbar-review-panel .takeaway-review-toast {
   z-index: 150;
   min-width: 0;
   width: max-content;
-  max-width: min(680px, calc(100vw - 48px));
-  padding: 7px 16px 8px;
+  max-width: min(760px, calc(100vw - 36px));
+  padding: 11px 22px 12px;
   border: 1px solid rgba(83, 66, 55, 0.24);
   border-radius: 999px;
   background: rgba(38, 31, 26, 0.84);
   color: #fff8ed;
-  font-size: 15px;
-  font-weight: 760;
+  font-size: 18px;
+  font-weight: 860;
   line-height: 1.35;
   letter-spacing: 0;
   box-shadow: 0 10px 28px rgba(38, 31, 26, 0.18);
@@ -30506,6 +30588,7 @@ body.view-writingTakeawayBook .topbar-review-panel {
   border: 1px solid rgba(127, 140, 141, 0.22);
   border-radius: 14px;
   background: rgba(127, 140, 141, 0.06);
+  min-width: 0;
 }
 .nav-exam-group .nav-button {
   border: 1px solid transparent;
@@ -30557,8 +30640,9 @@ body.view-writingTakeawayBook .topbar-review-panel {
 .nav-exam-group .nav-pgroup {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
+  min-width: 0;
   margin-top: 1px;
   padding-top: 7px;
   border-top: 1px solid rgba(127, 140, 141, 0.20);
@@ -30566,7 +30650,11 @@ body.view-writingTakeawayBook .topbar-review-panel {
 .nav-exam-group .nav-pgroup-item {
   justify-content: center;
   min-height: 33px;
-  padding: 0 6px;
+  min-width: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-radius: 9px;
   font-size: 13px;
   font-weight: 820;
@@ -30765,21 +30853,170 @@ body.font-popular:not(.theme-dark) .nav-exam-group .nav-exam-lead.active .nav-ex
 
 .language-book-head > div:first-child {
   flex: 0 1 auto !important;
+  min-width: 0 !important;
 }
 
 .language-book-actions {
   margin-left: auto !important;
-  order: 3 !important;
+  order: 2 !important;
+  flex-wrap: nowrap !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
 }
 
-.takeaway-speech-status {
-  order: 2 !important;
-  grid-column: auto !important;
-  flex: 0 0 auto !important;
+.language-book-head p {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
   min-height: 0 !important;
-  margin: 0 10px 0 6px !important;
-  padding: 0 !important;
-  align-self: center !important;
+  margin: 3px 0 0 !important;
+  padding-right: clamp(150px, 18vw, 260px) !important;
+}
+
+.language-book-head p > span:first-child {
+  display: block !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
   white-space: nowrap !important;
+}
+
+.language-book-head .takeaway-speech-status {
+  position: absolute !important;
+  top: 50% !important;
+  right: 0 !important;
+  transform: translateY(-50%) !important;
+  grid-column: auto !important;
+  width: clamp(150px, 18vw, 260px) !important;
+  max-width: clamp(150px, 18vw, 260px) !important;
+  height: 22px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  align-self: center !important;
+  overflow: hidden !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.42) !important;
+  color: color-mix(in srgb, var(--muted) 82%, var(--ink)) !important;
+  font-size: 13px !important;
+  font-weight: 720 !important;
+  line-height: 1 !important;
+  text-align: right !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+
+.language-book-head .takeaway-speech-status:empty {
+  visibility: hidden !important;
+}
+
+.language-book-head .takeaway-speech-status.is-error {
+  border-color: rgba(220, 38, 38, 0.20) !important;
+  background: rgba(220, 38, 38, 0.08) !important;
+  color: #b91c1c !important;
+}
+
+body.theme-dark .language-book-head .takeaway-speech-status {
+  background: rgba(15, 23, 42, 0.48) !important;
+  color: rgba(226, 232, 240, 0.78) !important;
+}
+
+body.theme-dark .language-book-head .takeaway-speech-status.is-error {
+  border-color: rgba(248, 113, 113, 0.24) !important;
+  background: rgba(127, 29, 29, 0.24) !important;
+  color: #fecaca !important;
+}
+
+/* 2026-06-14: sidebar/assistant controls/account source polish. */
+.nav {
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.nav-top,
+.nav-primary,
+.nav-bottom,
+.nav-secondary,
+.font-tool,
+.font-options {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.nav-button {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.nav-button > span:not(.nav-review-dot),
+.nav-exam-lead-title,
+.nav-exam-lead-sub,
+.brand strong,
+.nav .status {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.nav-review-dot {
+  right: 12px !important;
+}
+
+.nav-review-dot::after {
+  right: -12px !important;
+  top: -15px !important;
+}
+
+.font-options {
+  overflow: hidden !important;
+}
+
+.font-option {
+  min-width: 0 !important;
+}
+
+#accountProfilePanel .account-ai-source-row {
+  position: relative !important;
+}
+
+#accountProfilePanel .account-ai-source-select {
+  width: 100% !important;
+  min-height: 40px !important;
+  padding: 0 40px 0 14px !important;
+  border: 1px solid rgba(126, 139, 153, 0.22) !important;
+  border-radius: 12px !important;
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  color: #102033 !important;
+  font-size: 14px !important;
+  font-weight: 720 !important;
   line-height: 1.2 !important;
+  cursor: pointer !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.70), 0 8px 18px rgba(30, 41, 59, 0.06) !important;
+}
+
+#accountProfilePanel .account-ai-source-select:focus {
+  border-color: rgba(47, 111, 237, 0.42) !important;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12), 0 8px 18px rgba(30, 41, 59, 0.08) !important;
+  outline: none !important;
+}
+
+#accountProfilePanel .account-ai-source-select:disabled {
+  cursor: progress !important;
+  opacity: 0.72 !important;
+}
+
+body.theme-dark #accountProfilePanel .account-ai-source-select {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  background-color: rgba(30, 41, 59, 0.78) !important;
+  color: #f8fbff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 22px rgba(0, 0, 0, 0.22) !important;
 }

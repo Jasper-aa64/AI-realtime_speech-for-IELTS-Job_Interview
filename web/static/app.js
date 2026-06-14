@@ -1334,6 +1334,83 @@ function loadCandidateNames(...args) {
   return candidateProfile.loadCandidateNames(...args);
 }
 
+const SIDEBAR_WIDTH_STORAGE_KEY = "ielts-sidebar-width";
+const SIDEBAR_MIN_WIDTH = 152;
+const SIDEBAR_MAX_WIDTH = 196;
+const SIDEBAR_DEFAULT_WIDTH = 176;
+
+function clampSidebarWidth(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return SIDEBAR_DEFAULT_WIDTH;
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(numeric)));
+}
+
+function applySidebarWidth(width) {
+  const next = clampSidebarWidth(width);
+  document.documentElement.style.setProperty("--sidebar-width", `${next}px`);
+}
+
+function restoreSidebarPreferences() {
+  let width = SIDEBAR_DEFAULT_WIDTH;
+  try {
+    width = clampSidebarWidth(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) || SIDEBAR_DEFAULT_WIDTH);
+  } catch (_error) {
+    // Ignore storage errors.
+  }
+  applySidebarWidth(width);
+}
+
+function bindSidebarResize() {
+  restoreSidebarPreferences();
+  const handle = $("navResizeHandle");
+  let dragging = false;
+  let frame = 0;
+
+  const persistWidth = (width) => {
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(clampSidebarWidth(width)));
+    } catch (_error) {
+      // Best-effort preference only.
+    }
+  };
+  const setWidthFromPointer = (clientX, persist = false) => {
+    const width = clampSidebarWidth(clientX);
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      applySidebarWidth(width);
+      if (persist) persistWidth(width);
+      frame = 0;
+    });
+  };
+  const endDrag = (event) => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove("nav-resizing");
+    handle?.releasePointerCapture?.(event.pointerId);
+    setWidthFromPointer(event.clientX, true);
+  };
+
+  handle?.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if (window.matchMedia("(max-width: 820px)").matches) return;
+    dragging = true;
+    document.body.classList.add("nav-resizing");
+    handle.setPointerCapture?.(event.pointerId);
+    setWidthFromPointer(event.clientX);
+    event.preventDefault();
+  });
+  handle?.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    setWidthFromPointer(event.clientX);
+  });
+  handle?.addEventListener("pointerup", endDrag);
+  handle?.addEventListener("pointercancel", endDrag);
+  handle?.addEventListener("lostpointercapture", () => {
+    dragging = false;
+    document.body.classList.remove("nav-resizing");
+  });
+}
+
 async function withBusy(message, action) {
   busyDepth += 1;
   setBusy(message);
@@ -1885,6 +1962,11 @@ function switchView(view, options = {}) {
       if (state.viewHistory.length > 8) state.viewHistory.shift();
     }
   }
+  if (["takeawayBook", "writingTakeawayBook"].includes(state.view) || ["takeawayBook", "writingTakeawayBook"].includes(view)) {
+    interruptTakeawaySpeechPlayback();
+    setTakeawaySpeechStatus("language", "");
+    setTakeawaySpeechStatus("writing", "");
+  }
   stopAllRuntime("Ready");
   hideWritingHighlightMenu();
   if (view === "p3" && !options.keepP3Source) {
@@ -1963,7 +2045,12 @@ function switchView(view, options = {}) {
   if (view === "spellingDrill") loadSpellingDrill({ force: false, resetQueue: true });
   if (view === "writing") {
     setWritingActionPanelCollapsed(false);
-    loadWriting();
+    renderWritingSurface();
+    requestAnimationFrame(() => {
+      if (state.view === "writing") {
+        loadWriting().catch(showWritingError);
+      }
+    });
   }
   if (view === "writingReports") loadWritingReports();
   if (view === "p1Corpus") loadP1Corpus();
@@ -9813,6 +9900,22 @@ function endTakeawayReview(...args) {
   return corpusTakeawayController.endTakeawayReview(...args);
 }
 
+function setTakeawayReviewToast(...args) {
+  return corpusTakeawayController.setTakeawayReviewToast(...args);
+}
+
+function interruptTakeawaySpeechPlayback(...args) {
+  return corpusTakeawayController.interruptTakeawaySpeechPlayback(...args);
+}
+
+function setTakeawaySpeechStatus(...args) {
+  return corpusTakeawayController.setTakeawaySpeechStatus(...args);
+}
+
+function remindTakeawayReviewGate(kind) {
+  return setTakeawayReviewToast(kind, "先用 A / D 记录当前这张，再看下一条。", { render: true });
+}
+
 function selectTakeawayReviewEntry(...args) {
   return corpusTakeawayController.selectTakeawayReviewEntry(...args);
 }
@@ -10416,22 +10519,23 @@ function normalizeAiSource(value) {
   return String(value || "").trim() === "claude_cli" ? "claude_cli" : "gpt";
 }
 
+function syncAiSourceControls(value) {
+  const aiSource = normalizeAiSource(value);
+  const aiSourceSelect = $("aiSourceSelect");
+  if (aiSourceSelect) aiSourceSelect.value = aiSource;
+}
+
 function applyAccountProfileForm(user = state.account.user) {
   if (!user) return;
   applyCandidateNames(accountProfileNames(user));
-  const aiSourceSelect = $("aiSourceSelect");
-  if (aiSourceSelect) {
-    aiSourceSelect.value = normalizeAiSource(user.profile?.report_ai_source);
-  }
+  syncAiSourceControls(user.profile?.report_ai_source);
 }
 
 async function saveAiSourcePreference(value) {
   const aiSource = normalizeAiSource(value);
   const select = $("aiSourceSelect");
-  if (select) {
-    select.value = aiSource;
-    select.disabled = true;
-  }
+  syncAiSourceControls(aiSource);
+  if (select) select.disabled = true;
   try {
     const payload = await api("/api/accounts/me/", { report_ai_source: aiSource }, { method: "PATCH" });
     state.account.user = payload.user || state.account.user;
@@ -10883,6 +10987,7 @@ async function loadPasswordResetAvailability() {
 }
 
 function bindEvents() {
+  bindSidebarResize();
   const bindCorpusOverlayClose = (dialogId, closeEditor) => {
     const dialog = $(dialogId);
     if (!dialog) return;
@@ -10947,6 +11052,18 @@ function bindEvents() {
           return;
         }
         showNavLockHint(button);
+        return;
+      }
+      switchView(targetView);
+    });
+  });
+  document.querySelectorAll("a[data-view]:not(.nav-button)").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const targetView = link.dataset.view || "home";
+      if (!isKnownView(targetView) || isNewTabNavigationEvent(event)) return;
+      event.preventDefault();
+      if (state.practiceLocked && targetView !== state.view) {
+        showNavLockHint(link);
         return;
       }
       switchView(targetView);
@@ -11229,10 +11346,15 @@ function bindEvents() {
     const card = event.target.closest("[data-takeaway-entry]");
     if (!card) return;
     const entryId = card.dataset.takeawayEntry || "";
-    const didSelectReview = selectTakeawayReviewEntry("language", entryId);
-    if (didSelectReview) {
+    const reviewState = selectTakeawayReviewEntry("language", entryId);
+    if (reviewState === "selected") {
       const item = (state.languageTakeaway.items || []).find((entry) => entry.entry_id === entryId);
       speakLanguageTakeaway(item?.source_text || "", { kind: "language" });
+      return;
+    }
+    if (reviewState === "blocked") return;
+    if (isTakeawayReviewActiveForKind("language")) {
+      remindTakeawayReviewGate("language");
       return;
     }
     revealAndSpeakLanguageTakeaway(entryId);
@@ -11264,10 +11386,15 @@ function bindEvents() {
     const card = event.target.closest("[data-writing-takeaway-entry]");
     if (!card) return;
     const entryId = card.dataset.writingTakeawayEntry || "";
-    const didSelectReview = selectTakeawayReviewEntry("writing", entryId);
-    if (didSelectReview) {
+    const reviewState = selectTakeawayReviewEntry("writing", entryId);
+    if (reviewState === "selected") {
       const item = (state.writingTakeaway.items || []).find((entry) => entry.entry_id === entryId);
       speakLanguageTakeaway(item?.source_text || "", { kind: "writing" });
+      return;
+    }
+    if (reviewState === "blocked") return;
+    if (isTakeawayReviewActiveForKind("writing")) {
+      remindTakeawayReviewGate("writing");
       return;
     }
     revealAndSpeakWritingTakeaway(entryId);

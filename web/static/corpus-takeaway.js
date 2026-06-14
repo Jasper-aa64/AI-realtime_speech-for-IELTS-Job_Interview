@@ -635,6 +635,9 @@
     }
 
     function startTakeawayReview(kind = "language") {
+      interruptTakeawaySpeechPlayback();
+      setTakeawaySpeechStatus("language", "");
+      setTakeawaySpeechStatus("writing", "");
       const due = dueTakeawayEntries(kind);
       const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
       // Capture the reveal state BEFORE the session forces masking, so that
@@ -693,20 +696,20 @@
 
     function selectTakeawayReviewEntry(kind, entryId) {
       const id = String(entryId || "").trim();
-      if (!isTakeawayReviewEntry(kind, id)) return false;
+      if (!isTakeawayReviewEntry(kind, id)) return "inactive";
       const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
       const session = takeawayReviewSession(kind);
       if (session.currentId && session.currentId !== id) {
         setTakeawayReviewToast(kind, "先用 A / D 记录当前这张，再看下一条。");
         renderTakeawayReviewSurfaces(kind);
-        return true;
+        return "blocked";
       }
       session.currentId = id;
       target.revealedEntryIds.add(id);
       setTakeawayReviewToast(kind, "");
       updateTakeawayCardReveal(kind, id, { current: true });
       renderTakeawayReviewSurfaces(kind);
-      return true;
+      return "selected";
     }
 
     function takeawayReviewFeedback(kind, entryId = "", result) {
@@ -1102,22 +1105,29 @@
         bankButton.setAttribute("aria-label", "查看我为这道题准备的题库正文");
         if (!inP2Turn || !questionId) {
           bankButton.classList.add("hidden");
-          bankButton.classList.remove("has-corpus", "is-empty-slot");
+          bankButton.classList.remove("has-corpus", "is-empty-slot", "is-loading-slot");
           bankButton.disabled = true;
           bankButton.setAttribute("aria-hidden", "true");
         } else {
           bankButton.disabled = false;
+          bankButton.classList.remove("hidden", "has-corpus", "is-empty-slot", "is-loading-slot");
+          bankButton.setAttribute("aria-hidden", "false");
           fetchP2BankCorpusPayload(questionId)
             .then((payload) => {
               if (state.p2Corpus.activeTurnQuestionId !== questionId) return;
               const hasBody = Boolean(String(payload?.corpus_text || payload?.brainstorm_idea || "").trim());
-              bankButton.classList.toggle("hidden", !hasBody);
+              bankButton.classList.remove("is-loading-slot");
+              bankButton.classList.toggle("is-empty-slot", !hasBody);
               bankButton.classList.toggle("has-corpus", hasBody);
-              bankButton.setAttribute("aria-hidden", hasBody ? "false" : "true");
+              bankButton.disabled = false;
+              bankButton.setAttribute("aria-hidden", "false");
             })
             .catch(() => {
               if (state.p2Corpus.activeTurnQuestionId !== questionId) return;
-              bankButton.classList.add("hidden");
+              bankButton.classList.remove("is-loading-slot", "has-corpus");
+              bankButton.classList.add("is-empty-slot");
+              bankButton.disabled = false;
+              bankButton.setAttribute("aria-hidden", "false");
             });
         }
       }
@@ -2148,6 +2158,11 @@
           suppressNextSpeechCancelError = false;
         }, 120);
       }
+    }
+
+    function interruptTakeawaySpeechPlayback() {
+      speechSequenceToken += 1;
+      if (window.speechSynthesis) prepareSpeechQueue(window.speechSynthesis);
     }
 
     function applySpeechVoice(utterance, options = {}) {
@@ -4537,11 +4552,14 @@
       toggleLanguageTakeawayHiddenMode,
       startTakeawayReview,
       endTakeawayReview,
+      setTakeawayReviewToast,
+      interruptTakeawaySpeechPlayback,
       selectTakeawayReviewEntry,
       takeawayReviewFeedback,
       updateTakeawayReviewDots,
       applyRemoteTakeawayReviewState,
       speakLanguageTakeaway,
+      setTakeawaySpeechStatus,
       revealAndSpeakLanguageTakeaway,
       deleteLanguageTakeawayEntry,
       languageTakeawayTranslationStatus,

@@ -15,7 +15,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260614-p3cols-max3-1">
+    <link rel="stylesheet" href="/styles.css?v=20260614-sidebar-source-p2fix-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -137,6 +137,7 @@
           </div>
         </div>
       </aside>
+      <div id="navResizeHandle" class="nav-resize-handle" role="separator" aria-orientation="vertical" aria-label="调整侧边栏宽度" title="左右拖动调整侧边栏"></div>
 
       <main class="workspace">
         <header class="topbar">
@@ -168,7 +169,7 @@
               </h2>
               <div class="home-v3-actions" aria-label="快速开始">
                 <a class="home-v3-primary" data-home-mode="p1" href="?view=p1">开始口语练习</a>
-                <a class="home-v3-secondary" href="?view=writing">写一篇作文</a>
+                <a class="home-v3-secondary" data-view="writing" href="?view=writing">写一篇作文</a>
               </div>
             </div>
 
@@ -537,7 +538,10 @@
             <header class="language-book-head">
               <div>
                 <h2>Takeaway</h2>
-                <p>点击卡片播放英文；需要自测时可以遮住英文。</p>
+                <p>
+                  <span>点击卡片播放英文；需要自测时可以遮住英文。</span>
+                  <span id="languageTakeawaySpeechStatus" class="takeaway-speech-status" aria-live="polite"></span>
+                </p>
               </div>
               <div class="language-book-actions">
                 <span id="languageTakeawayStats">Loading...</span>
@@ -551,7 +555,6 @@
                   <span>遮住英文</span>
                 </button>
               </div>
-              <span id="languageTakeawaySpeechStatus" class="takeaway-speech-status" aria-live="polite"></span>
             </header>
             <div id="languageTakeawayList" class="language-takeaway-list"></div>
           </div>
@@ -562,7 +565,10 @@
             <header class="language-book-head">
               <div>
                 <h2>写作积累</h2>
-                <p>保存写作里值得复用的表达、句型和观点素材。</p>
+                <p>
+                  <span>保存写作里值得复用的表达、句型和观点素材。</span>
+                  <span id="writingTakeawaySpeechStatus" class="takeaway-speech-status" aria-live="polite"></span>
+                </p>
               </div>
               <div class="language-book-actions">
                 <span id="writingTakeawayStats">Loading...</span>
@@ -576,7 +582,6 @@
                   <span>遮住英文</span>
                 </button>
               </div>
-              <span id="writingTakeawaySpeechStatus" class="takeaway-speech-status" aria-live="polite"></span>
             </header>
             <div id="writingTakeawayList" class="language-takeaway-list"></div>
           </div>
@@ -1404,7 +1409,7 @@
     <script src="/writing-image-viewer.js?v=20260613-img-original-preload-1"></script>
     <script src="/writing-prompt-picker.js?v=20260614-img-ready-instant-1"></script>
     <script src="/corpus-markdown-editor.js?v=20260613-p2bank-instant-1"></script>
-    <script src="/corpus-takeaway.js?v=20260614-p2-bodypeek-split-1"></script>
+    <script src="/corpus-takeaway.js?v=20260614-sidebar-source-p2fix-1"></script>
     <script src="/spelling-drill.js?v=20260612-writing-takeaway-optimistic-1"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
@@ -1413,6 +1418,6 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260614-account-overlay-1"></script>
+    <script src="/app.js?v=20260614-sidebar-source-p2fix-1"></script>
   </body>
 </html>
