@@ -149,6 +149,40 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(len(payload["p3_plan"]["questions"]), 3)
         self.assertIn("target_moves", payload["p3_plan"]["questions"][0])
 
+    def test_start_p3_draws_three_from_an_oversized_bank_card(self):
+        """A card with more bank follow-ups than P3_MAIN_COUNT drills only a subset."""
+        from apps.speaking import services as speaking_services
+
+        followups = [
+            "Why do people give gifts to others?",
+            "Is it better to give practical gifts or surprising ones?",
+            "Do people in your country spend too much on gifts?",
+            "How has gift-giving changed compared with the past?",
+            "Should children be taught to give gifts?",
+            "Do men and women choose gifts differently?",
+        ]
+        cue = {
+            "title": "Describe a time when someone gave you something you really wanted",
+            "season": "2026-may-august",
+            "p3_theme": "gifts_and_giving",
+            "p3_follow_ups": followups,
+        }
+        bank = MagicMock()
+        bank.p2 = [cue]
+        bank.part2_for_scope.return_value = [cue]
+        with patch.object(speaking_services, "get_question_bank", return_value=bank):
+            response = self.client.post(
+                "/api/attempts/start",
+                data={"mode": "p3", "theme": "gifts_and_giving", "p3_intensity": "normal"},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["p3_generation_backend"], "season_bank")
+        plan_questions = [q["question"] for q in payload["p3_plan"]["questions"]]
+        self.assertEqual(len(plan_questions), speaking_services.P3_MAIN_COUNT)
+        self.assertTrue(set(plan_questions).issubset(set(followups)))
+
     def test_start_p3_uses_current_season_p2_follow_ups_when_theme_matches(self):
         from apps.speaking import services as speaking_services
 
@@ -238,8 +272,22 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(payload["title"], "Full mock exam")
         p1_turns = [t for t in payload["turns"] if t["part"] == "p1"]
         p2_turns = [t for t in payload["turns"] if t["part"] == "p2"]
+        from apps.speaking import services
         countable_p1 = sum(1 for t in p1_turns if t.get("counts_toward_total", True))
-        self.assertEqual(countable_p1, 10)
+        # P1 now serves whole topic groups until a window is filled, so the exact
+        # count varies with the per-topic question depth of the bank rather than
+        # being pinned to a single number. Assert the window (intro + grouped body).
+        self.assertGreaterEqual(countable_p1, services.P1_GROUP_MIN)
+        self.assertLessEqual(countable_p1, services.P1_GROUP_MAX + 6)
+        # Whole-group serving: the body questions must arrive in contiguous runs by
+        # topic (no scattered one-offs), i.e. the number of topic switches is small.
+        body_topics = [
+            t.get("prompt", {}).get("topic")
+            for t in p1_turns
+            if t.get("counts_toward_total", True) and t.get("prompt", {}).get("topic") != "intro"
+        ]
+        switches = sum(1 for a, b in zip(body_topics, body_topics[1:]) if a != b)
+        self.assertLessEqual(switches, len(set(body_topics)))
         self.assertEqual(len(p2_turns), 1)
         self.assertEqual(payload["p3_generation_status"], "pending_after_p2")
 
@@ -3311,8 +3359,13 @@ class TurnFeedbackValidationTests(TestCase):
             },
         )
 
-        # Mock codex to return valid scores
-        with patch("apps.speaking.services.run_codex") as mock_run:
+        # Mock codex to return valid Overall scores. Phase-1 per-turn feedback is
+        # mocked as a success so the report-integrity gate (abort if phase-1 fails)
+        # is satisfied; this test is specifically about the Overall regeneration
+        # repairing all-zero scores, not about per-turn feedback internals.
+        with patch("apps.speaking.services.run_codex") as mock_run, patch(
+            "apps.speaking.services.generate_turn_feedback_for_report", return_value=None
+        ):
             mock_run.return_value = (
                 '{"fluency_coherence": 6.0, "lexical_resource": 6.0, "grammatical_range": 6.0, "feedback": "Good work"}',
                 {"input_tokens": 100},

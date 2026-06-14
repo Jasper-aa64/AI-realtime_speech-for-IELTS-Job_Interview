@@ -697,6 +697,11 @@ def _model_band7_tts_cache_key(attempt_id: str, turn_id: str, band7_version: str
 # --- Attempt Start ---
 
 P1_TURN_COUNT = 10
+# A P1 session serves whole topic groups (several connected questions on one
+# subject, like the real exam) until it has filled this window. Groups are never
+# split, so the actual count lands at/above the minimum and rarely past the max.
+P1_GROUP_MIN = 8
+P1_GROUP_MAX = 12
 SPEAKING_AI_DEFAULT_HTTP_MODEL = "gpt-5.4-mini"
 STREAM_PENDING_FOLLOW_UP_PLACEHOLDER = "Generating follow-up question..."
 SPEAKING_AI_CALL_MODE_CHAIN = "chain"
@@ -1358,6 +1363,11 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         for item in provided_follow_ups
         if clean_report_text(str(item)) and ("?" in str(item) or "？" in str(item))
     ] if isinstance(provided_follow_ups, list) else []
+    # A bank card may hold more follow-ups than one session should drill. Draw
+    # `question_count` of them, least-practiced first, so each session is ~3
+    # questions and repeats rotate through the rest. (<=count is left untouched.)
+    if len(cue_questions) > question_count:
+        cue_questions = _select_p3_followups(cue_questions, question_count, payload.get("_user"))
     material_questions = _p3_questions_from_material(p3_follow_up_text, question_count)
 
     if cue_questions:
@@ -1638,10 +1648,112 @@ def _create_turn(
     }
 
 
+def _normalize_question_text(text: str) -> str:
+    return " ".join(str(text or "").lower().split())
+
+
+def _p1_topic_practice_counts(
+    user: Any, topics: dict[str, list[dict[str, Any]]]
+) -> dict[str, int]:
+    """Per-topic practice count for this user, summed over the topic's questions.
+
+    Counts come from the user's historical P1 turns (matched on question text),
+    so "least-practiced first" needs no extra schema. Returns {} when there is no
+    authenticated user or on any query error, which makes topic selection fall
+    back to plain random.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return {}
+    try:
+        from .models import SpeakingTurn
+
+        practiced = list(
+            SpeakingTurn.objects.filter(user=user, part="p1").values_list("question", flat=True)
+        )
+    except Exception:
+        return {}
+    from collections import Counter
+
+    practiced_counts = Counter(_normalize_question_text(q) for q in practiced)
+    topic_counts: dict[str, int] = {}
+    for topic, items in topics.items():
+        topic_counts[topic] = sum(
+            practiced_counts.get(_normalize_question_text(str(it.get("question") or "")), 0)
+            for it in items
+        )
+    return topic_counts
+
+
+def _weighted_topic_order(topic_names: list[str], counts: dict[str, int]) -> list[str]:
+    """Permutation of topics biased toward least-practiced (weight 1/(count+1)).
+
+    Unpractised topics are most likely to lead, but every ordering stays possible
+    so sessions are not identical. With no counts this is a plain shuffle.
+    """
+    pool = list(topic_names)
+    random.shuffle(pool)
+    if not counts:
+        return pool
+    order: list[str] = []
+    while pool:
+        weights = [1.0 / (counts.get(name, 0) + 1) for name in pool]
+        pick = random.choices(pool, weights=weights, k=1)[0]
+        order.append(pick)
+        pool.remove(pick)
+    return order
+
+
+def _p3_question_practice_counts(user: Any) -> dict[str, int]:
+    """Per-question P3 practice counts for this user, keyed by normalized text.
+
+    Returns {} for anonymous users or on error, so selection falls back to plain
+    random. Mirrors the P1 helper but over historical P3 turns.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return {}
+    try:
+        from .models import SpeakingTurn
+
+        practiced = list(
+            SpeakingTurn.objects.filter(user=user, part="p3").values_list("question", flat=True)
+        )
+    except Exception:
+        return {}
+    from collections import Counter
+
+    return dict(Counter(_normalize_question_text(q) for q in practiced))
+
+
+def _select_p3_followups(followups: list[str], count: int, user: Any = None) -> list[str]:
+    """Pick `count` follow-ups, least-practiced first (weight 1/(count+1)).
+
+    A card may carry more bank follow-ups (e.g. 6) than a session should drill;
+    this draws `count` of them favouring the ones the user has practised least, so
+    repeat sessions rotate through the rest. When there are at most `count`
+    follow-ups the list is returned unchanged (callers rely on the order).
+    """
+    items = [f for f in followups if str(f).strip()]
+    if len(items) <= count:
+        return items
+    counts = _p3_question_practice_counts(user)
+    pool = list(items)
+    random.shuffle(pool)
+    if not counts:
+        return pool[:count]
+    chosen: list[str] = []
+    while pool and len(chosen) < count:
+        weights = [1.0 / (counts.get(_normalize_question_text(q), 0) + 1) for q in pool]
+        pick = random.choices(pool, weights=weights, k=1)[0]
+        chosen.append(pick)
+        pool.remove(pick)
+    return chosen
+
+
 def _build_p1_turns(
     total: int = P1_TURN_COUNT,
     display_total: int | None = None,
     question_bank_scope: str | None = None,
+    user: Any = None,
 ) -> list[dict[str, Any]]:
     bank = get_question_bank()
     p1_bank = bank.part1_for_scope(question_bank_scope)
@@ -1669,17 +1781,35 @@ def _build_p1_turns(
     topics: dict[str, list[dict[str, Any]]] = {}
     for item in ordinary_pool:
         topics.setdefault(str(item.get("topic") or "general"), []).append(item)
+    # Serve whole topic groups (questions kept together, in their original order)
+    # ordered least-practiced first, until the window is filled. A group is never
+    # split, so the candidate gets several connected questions on one subject like
+    # the real P1, instead of scattered one-offs.
+    topic_counts = _p1_topic_practice_counts(user, topics)
     ordinary_questions: list[dict[str, Any]] = []
-    topic_names = list(topics)
-    random.shuffle(topic_names)
-    for topic in topic_names:
-        if len(ordinary_questions) >= remaining_count:
+    for topic in _weighted_topic_order(list(topics), topic_counts):
+        if ordinary_questions and len(ordinary_questions) >= P1_GROUP_MIN:
             break
-        topic_items = topics[topic][:]
-        random.shuffle(topic_items)
-        take = min(len(topic_items), remaining_count - len(ordinary_questions))
-        ordinary_questions.extend(topic_items[:take])
+        items = topics[topic]
+        if len(items) > P1_GROUP_MAX:
+            # An oversized merged topic (e.g. an "area you live in" group with 20+
+            # questions) would swamp one session. Serve a contiguous slice capped at
+            # the window, rotated by how many times the topic was practiced so later
+            # sessions walk through the rest instead of repeating the same head.
+            start = (topic_counts.get(topic, 0) * P1_GROUP_MAX) % len(items)
+            rotated = items[start:] + items[:start]
+            ordinary_questions.extend(rotated[:P1_GROUP_MAX])
+        else:
+            ordinary_questions.extend(items)
+        if len(ordinary_questions) >= P1_GROUP_MAX:
+            break
     turn_items = uncounted_intro_items + countable_intro_items + ordinary_questions
+    # The counted length is dynamic now, so derive the displayed "of N" total from
+    # the actual questions. display_total carried an offset over `total` at the call
+    # site (e.g. mock adds +1 for the upcoming P2 turn); preserve that offset.
+    display_offset = (display_total - total) if display_total is not None else 0
+    counted_total = len(countable_intro_items) + len(ordinary_questions)
+    effective_display_total = counted_total + display_offset
     turns: list[dict[str, Any]] = []
     display_index = 0
     for index, item in enumerate(turn_items):
@@ -1689,7 +1819,7 @@ def _build_p1_turns(
         turn = _create_turn(
             "p1",
             index,
-            display_total or total,
+            effective_display_total,
             item["question"],
             {
                 "topic": item["topic"],
@@ -1722,6 +1852,7 @@ def _build_p3_turns(
     season: str = "",
     p2_question_id: str = "",
     p2_corpus_entry_id: str = "",
+    user: Any = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     focus = _normalize_p3_focus(focus)
     intensity = _normalize_p3_intensity(intensity)
@@ -1739,6 +1870,7 @@ def _build_p3_turns(
                 "season": season,
                 "p2_question_id": p2_question_id,
                 "p2_corpus_entry_id": p2_corpus_entry_id,
+                "_user": user,
             }
         )
     plan_questions = plan.get("questions", [])
@@ -1883,7 +2015,7 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
     metadata: dict[str, Any] = {"question_bank_scope": question_bank_scope}
     if mode == "mock":
         cue = _sample_p2_cue(question_bank_scope)
-        p1_turns = _build_p1_turns(P1_TURN_COUNT, P1_TURN_COUNT + 1, question_bank_scope)
+        p1_turns = _build_p1_turns(P1_TURN_COUNT, P1_TURN_COUNT + 1, question_bank_scope, user=payload.get("_user"))
         p2_turn = _create_turn("p2", len(p1_turns), P1_TURN_COUNT + 1, _cue_to_text(cue), cue, cue)
         turns = p1_turns + [p2_turn]
         metadata = {
@@ -1896,7 +2028,7 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
             metadata["p3_follow_ups"] = cue["p3_follow_ups"]
         return "mock", "Full mock exam", turns, cue, metadata
     if mode == "p1":
-        turns = _build_p1_turns(P1_TURN_COUNT, question_bank_scope=question_bank_scope)
+        turns = _build_p1_turns(P1_TURN_COUNT, question_bank_scope=question_bank_scope, user=payload.get("_user"))
         return "p1", "Part 1 practice", turns, None, metadata
     if mode == "p2":
         p2_cue_id = str(payload.get("p2_cue_id") or "").strip()
@@ -1936,6 +2068,7 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
             str(payload.get("season") or ""),
             clean_report_text(str(payload.get("p2_question_id") or payload.get("cue_id") or "")),
             p2_corpus_entry_id,
+            user=payload.get("_user"),
         )
         if p2_corpus_entry_id:
             metadata["p2_corpus_entry_id"] = p2_corpus_entry_id
