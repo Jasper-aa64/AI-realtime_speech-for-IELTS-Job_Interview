@@ -2,7 +2,7 @@
 
 一个面向 IELTS 备考的 Speaking / Writing 练习工作台。仓库当前已经不是单纯的 C++ 课程实验，也不是旧版脚本式 Web Demo；主线已经演进为一个以 Django + 单页前端为核心、叠加 AI Provider、WASM 音频预处理和实时语音扩展的练习产品。
 
-![IELTS Studio home](docs/readme-assets/hero-device.jpg)
+<img width="2880" height="1500" alt="CleanShot 2026-06-14 at 20 19 32@2x" src="https://github.com/user-attachments/assets/790b4955-11fa-47c6-9d50-ac1dc44891ff" />
 
 ## Public Preview
 
