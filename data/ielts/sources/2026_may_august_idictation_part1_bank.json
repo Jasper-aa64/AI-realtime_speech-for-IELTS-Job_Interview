@@ -1,0 +1,309 @@
+{
+  "season": "2026-may-august",
+  "part": 1,
+  "source": "idictation.cn",
+  "source_label": "爱听写 / 神奇题库",
+  "source_url": "https://www.idictation.cn/",
+  "scraped_at": "2026-06-14",
+  "note": "Full current 2026 May-August Part 1 season bank scraped from idictation.cn (logged-in topic sweep). Authoritative base for the merged P1 retained/new seed files.",
+  "topics": {
+    "Clothing": [
+      "What kind of clothes do you like to wear?",
+      "Do you prefer to wear comfortable and casual clothes or formal clothes?",
+      "Do you like wearing T-shirts?",
+      "Do you spend a lot of time choosing clothes?",
+      "Do you wear clothes of different styles on weekdays and weekends?",
+      "What colour clothing do you like?"
+    ],
+    "Singing": [
+      "Did you like singing when you were a child?",
+      "Do you like singing now?",
+      "Do you enjoy singing in the car?",
+      "Do you like listening to other people sing?",
+      "Did you learn to sing when you were at school?"
+    ],
+    "Headphone": [
+      "Do you use headphones?",
+      "How often do you wear headphones?",
+      "Do you think headphones are useful?",
+      "Are headphones popular in your country?",
+      "In what situations should people not wear headphones?"
+    ],
+    "Telling Jokes": [
+      "Are you good at telling jokes?",
+      "Do your friends like to tell jokes?",
+      "Do you like to watch comedies?",
+      "Have you ever watched a live show?",
+      "Are comedy shows popular in your country?"
+    ],
+    "Mirrors": [
+      "Do you like looking at yourself in the mirror? How often?",
+      "Have you ever bought mirrors?",
+      "Do you usually take a mirror with you?",
+      "Would you use mirrors to decorate your room?"
+    ],
+    "Science": [
+      "Do you like science?",
+      "When did you start to learn about science?",
+      "Which science subject is interesting to you?",
+      "What kinds of interesting things have you done with science?",
+      "Do you like watching science TV programs?",
+      "Do Chinese people often visit science museums?"
+    ],
+    "Outer space and stars": [
+      "Have you ever learnt about outer space and stars?",
+      "Do you enjoy watching science-fiction films/movies set in space?",
+      "Do you want to know more about outer space?",
+      "Would you like to go into outer space in the future?"
+    ],
+    "Cars": [
+      "Did you enjoy traveling by car when you were a kid?",
+      "What types of cars do you like?",
+      "Do you prefer to be a driver or a passenger?",
+      "What do you usually do when there is a traffic jam?",
+      "Do you think car colours are important?"
+    ],
+    "Parks": [
+      "Did you like going to parks as a child?",
+      "Do you still like going to parks now?",
+      "Would you like to see more parks in your city?",
+      "Are there any parks you want to go to in the future?",
+      "Would you prefer to play in a personal garden or public garden?",
+      "How are the parks today different from those you visited as a kid?",
+      "What do you like to do when visiting a park?",
+      "Would you like to play in a public garden or park?"
+    ],
+    "Feeling bored": [
+      "Do you often feel bored?",
+      "Did you ever find school boring when you were a child?",
+      "What sort of things do you find most boring now?",
+      "What do you do to stop yourself feeling bored?",
+      "When would you feel bored?",
+      "What do you do when you feel bored?",
+      "Do you think childhood is boring or adulthood is boring?"
+    ],
+    "Shopping": [
+      "Do you like shopping?",
+      "How often do you go shopping?",
+      "Do you prefer online shopping or in-store shopping?",
+      "Do you compare prices when you shop? Why?",
+      "Is it difficult for you to make choices when you shop?",
+      "Do you think expensive products are always better than cheaper ones?",
+      "Have you ever returned anything you bought online?"
+    ],
+    "Watch": [
+      "Do you wear a watch?",
+      "Have you ever got a watch as a gift?",
+      "Why do some people wear expensive watches?",
+      "Do you think it is important to wear a watch? Why?"
+    ],
+    "Websites": [
+      "What kinds of websites do you often visit?",
+      "What is your favourite website?",
+      "Are there any changes to the websites you often visit?",
+      "What kinds of websites are popular in your country?",
+      "Do you prefer getting information from websites or books?",
+      "Would you like to have your own website?"
+    ],
+    "Tidiness": [
+      "Do you like to keep things tidy?",
+      "Did you use to keep your room tidy as a child?",
+      "Are you a tidy person now?",
+      "How do you keep your work or study space tidy?",
+      "Do you think that it is necessary to be tidy?",
+      "What do you think of those who don't care about tidiness?",
+      "What do you think of those who are overly concerned about tidiness?"
+    ],
+    "Music": [
+      "Do you like music?",
+      "What kinds of music do you listen to?",
+      "Do you prefer sad or happy music?",
+      "Does happy music make you feel more excited?",
+      "Have you taken any music classes?",
+      "Do you listen to music while doing other things?"
+    ],
+    "Social media": [
+      "Have you ever posted anything on social media?",
+      "When did you start using social media?",
+      "Do you think you spend too much time on social media?",
+      "Do your friends use social media?",
+      "What do people often do on social media?"
+    ],
+    "Teachers": [
+      "Do you have a favorite teacher?",
+      "Do you want to be a teacher in the future?",
+      "Do you have a teacher from your past that you still remember?",
+      "Are you still in touch with your primary school teachers?",
+      "In what way has your favourite teacher helped you?",
+      "Do you like your primary school teachers more than your high school teachers?"
+    ],
+    "Daily routine": [
+      "What is your daily study routine?",
+      "Have you ever changed your routine?",
+      "Do you think it is important to have a daily routine for your study?",
+      "What part of your day do you like best?",
+      "Do you often go to bed late or early?"
+    ],
+    "Life stages": [
+      "What did you often do with your friends in your childhood?",
+      "What do you think is the most important at the moment?",
+      "Do you have any plans for the next five years?",
+      "How do people remember each stage of their lives?",
+      "Do you enjoy being the age you are now?",
+      "At what age do you think people are the happiest?"
+    ],
+    "View": [
+      "Do you like taking pictures of different views?",
+      "Do you prefer views in urban areas or rural areas?",
+      "Do you prefer views in your own country or in other countries?",
+      "Have you ever seen an unforgettable and beautiful view or scenery?"
+    ],
+    "Scenery": [
+      "Do you look out the window at the scenery when travelling by bus or car?",
+      "Do you prefer the mountains or the sea?",
+      "Do you like to take pictures of the scenery?",
+      "What are the most beautiful sights you have seen while traveling?"
+    ],
+    "Childhood activities": [
+      "What are your favourite activities?",
+      "What were your favourite activities when you were a child?",
+      "Did you prefer to do activities alone or with a group of people when you were a child?",
+      "Are there any differences between the activities you liked when you were a child and those you like now?"
+    ],
+    "Building": [
+      "Are there tall buildings near your home?",
+      "Do you take photos of buildings?",
+      "Is there a building that you would like to visit?",
+      "Do you want to live in a tall building?"
+    ],
+    "Typing": [
+      "Do you prefer typing or handwriting?",
+      "Do you type on a desktop or laptop keyboard every day?",
+      "When did you learn how to type on a keyboard?",
+      "How do you improve your typing?"
+    ],
+    "Hobby": [
+      "Do you have any hobbies?",
+      "Did you have any hobbies when you were a child?",
+      "Do you have a hobby that you've had since childhood?",
+      "Do you have the same hobbies as your family members?"
+    ],
+    "Sports team": [
+      "Have you ever been part of a sports team?",
+      "Are team sports popular in your culture?",
+      "Do you like to watch team games? Why?",
+      "What are the differences between team sports and individual sports?"
+    ],
+    "Reading": [
+      "Do you like reading?",
+      "Do you prefer to read on paper or on a screen?",
+      "When do you need to read carefully, and when not?",
+      "Do you prefer scanning or detailed reading?"
+    ],
+    "Gifts": [
+      "Have you ever sent handmade gifts to others?",
+      "Have you ever received a great gift?",
+      "What do you consider when choosing a gift?",
+      "Do you think you are good at choosing gifts?",
+      "What gift have you received recently?"
+    ],
+    "Morning time": [
+      "Do you like getting up early in the morning?",
+      "What do you usually do in the morning?",
+      "What did you do in the morning when you were little? Why?",
+      "Are there any differences between what you do in the morning now and what you did in the past?",
+      "Do you spend your mornings doing the same things on both weekends and weekdays? Why?"
+    ],
+    "Walking": [
+      "Do you walk a lot?",
+      "Did you often go outside to have a walk when you were a child?",
+      "Why do people like to walk in parks?",
+      "Where would you like to take a long walk if you had the chance?",
+      "Where did you go for a walk lately?"
+    ],
+    "Food": [
+      "What is your favourite food?",
+      "What kind of food did you like when you were young?",
+      "Do you eat different foods at different times of the year?",
+      "Has your favourite food changed since you were a child?"
+    ],
+    "Pets and Animals": [
+      "What's your favorite animal? Why?",
+      "Have you ever had a pet before?",
+      "Where do you prefer to keep your pet, indoors or outdoors?",
+      "What is the most popular animal in China?"
+    ],
+    "The city you live in": [
+      "What city do you live in?",
+      "Do you like this city? Why?",
+      "How long have you lived in this city?",
+      "Are there big changes in this city?",
+      "Is this city your permanent residence?",
+      "Are there people of different ages living in this city?"
+    ],
+    "Home/Accommodation": [
+      "Do you live in a house or an apartment?",
+      "Do you prefer living in a house or an apartment?",
+      "Do you live with anyone else? Why/Why not?",
+      "Do you like the place you currently live in? Why/Why not?",
+      "What is your favourite room in your house/apartment?",
+      "Would you like to change anything in your house/apartment?",
+      "Would you like to move to a different house/apartment in the future?",
+      "What do you think makes a place comfortable to live in?",
+      "Can you describe the place where you live?",
+      "How long have you lived there?",
+      "Who do you live with?",
+      "Do you plan to live there for a long time?",
+      "What is the difference between where you are living now and where you have lived in the past?",
+      "What do you usually do in your flat?",
+      "Which room does your family spend most of the time in?",
+      "Are there transport facilities to your home that are very good?",
+      "What kinds of accommodation do you live in?",
+      "Please describe the room you live in?"
+    ],
+    "Hometown": [
+      "Where is your hometown?",
+      "What kind of place is it?",
+      "How long have you lived there?",
+      "What is one of the best things about living there?",
+      "Is there anything you dislike about it?",
+      "Do you know many people who live nearby?",
+      "Do you have any relatives who still live in your hometown? Why/Why not?",
+      "Do you often go back to visit your hometown? Why/Why not?",
+      "Can you describe your hometown a little bit?",
+      "Do you like it?",
+      "Did you like living there?",
+      "Do you think you'll continue living there for a long time?"
+    ],
+    "The area you live in": [
+      "Where are you living at the moment?",
+      "What kind of area is it?",
+      "How long have you lived there?",
+      "Do you know any of your neighbours?",
+      "What do you like about living there?",
+      "What changes have taken place in the area recently?",
+      "Would you like to change anything about your area? Why/Why not?",
+      "Would you like to continue living there in the future? Why/Why not?"
+    ],
+    "Work/studies": [
+      "Do you work or are you a student?",
+      "What do you do?",
+      "Why did you choose to do this type of work?",
+      "Do you like your job? Why/Why not?",
+      "What do you find the most interesting about the work you do? Why?",
+      "Will you need to do any more study for your job?",
+      "Where do you work?",
+      "Is it a good place to work?",
+      "Would you like the place where you work to make any changes?",
+      "What technology do you use at work?",
+      "What subjects are you studying?",
+      "Why did you choose to study this subject?",
+      "What do you like about your course?",
+      "What would you like to do after you finish your course?",
+      "Do you prefer to study in the mornings or in the afternoons?",
+      "Do you think you will miss being a student once you finish your studies? Why/why not?",
+      "What technology do you use when you study?",
+      "Are you enjoying your studies at the moment? Why/why not?"
+    ]
+  }
+}

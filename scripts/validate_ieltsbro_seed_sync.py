@@ -25,27 +25,59 @@ OPTIONAL_FIRECRAWL_FILES = [
     REPO_ROOT / ".firecrawl/ieltsbro-api/question-pics/032_new_or_current_P2P3_早起经历_320210901143903.jpg",
 ]
 
-EXPECTED_P1_QUESTIONS = {
+# Minimum question depth every current-season P1 topic must reach. The 2026-06-14
+# multi-source merge (idictation 神奇题库 base + distinct PDF/public-list top-ups)
+# exists precisely to give every topic real depth, so this is the core invariant.
+P1_MIN_TOPIC_DEPTH = 4
+
+# Stable anchor questions that must remain present in the named new-topic cards.
+# These survive the multi-source merge, so they are checked as a subset (must
+# contain), not as an exact ordered list.
+EXPECTED_P1_NEW_ANCHORS = {
     "headphones": [
         "Do you use headphones?",
-        "What type of headphones do you use?",
-        "When would you use headphones?",
-        "In what conditions would you not use headphones?",
         "Is wearing headphones comfortable?",
     ],
     "clothes": [
         "What kind of clothes do you like to wear?",
-        "Do you prefer to wear comfortable and casual clothes or smart clothes?",
         "Do you like wearing T-shirts?",
-        "Do you spend a lot of time choosing clothes?",
-        "Do you wear different styles of clothes on weekdays and weekends?",
-        "What colour clothes do you like?",
     ],
+}
+
+# Pinned post-merge per-topic counts in the file (regression guard). Source of
+# truth is the data file; update these together when the seed bank changes.
+EXPECTED_P1_NEW_COUNTS = {
+    "boring_things": 8,
+    "history": 4,
+    "mirrors": 4,
+    "outer_space_and_stars": 5,
+    "singing": 8,
+    "tidiness": 7,
+    "watches": 4,
+    "public_gardens_and_parks": 8,
+    "websites": 7,
+    "ambition_and_dreams": 4,
+    "social_media": 5,
+    "cinema": 7,
+    "headphones": 6,
+    "old_buildings": 4,
+    "evening_time": 6,
+    "cars": 6,
+    "shopping": 7,
+    "clothes": 6,
+    "jokes": 5,
+    "art": 4,
+    "sports_programs": 6,
+    "morning_routines": 4,
+    "science": 6,
+    "teachers": 6,
+    "music": 6,
+    "daily_routine": 5,
 }
 
 EXPECTED_P1_RETAINED_COUNTS = {
     "food": 4,
-    "pets_and_animals": 8,
+    "pets_and_animals": 7,
     "sports_team": 4,
     "hobby": 4,
     "morning_time": 5,
@@ -60,33 +92,29 @@ EXPECTED_P1_RETAINED_COUNTS = {
     "life_stages": 6,
     "free_time": 4,
     "memory": 4,
-    "crowded_places": 5,
-    "study_or_work": 22,
-    "home_and_accommodation": 17,
-    "hometown": 15,
-    "the_area_you_live_in": 7,
-    "the_city_you_live_in": 11,
+    "crowded_places": 6,
+    "study_or_work": 18,
+    "home_and_accommodation": 18,
+    "hometown": 12,
+    "the_area_you_live_in": 8,
+    "the_city_you_live_in": 8,
 }
 
+# The Django loader globally de-duplicates the "How long have you lived there?"
+# question shared across the three "where you live" topics, keeping the first
+# occurrence, so two location topics load one fewer item than the file holds.
 EXPECTED_P1_RETAINED_LOADER_COUNTS = {
     **EXPECTED_P1_RETAINED_COUNTS,
-    "study_or_work": 21,
+    "hometown": 11,
+    "the_area_you_live_in": 7,
 }
 
-EXPECTED_P1_RETAINED_EXAMPLES = {
-    "food": "What kind of food did you like when you were young?",
-    "pets_and_animals": "Should schools teach students knowledge about pets or animals?",
-    "morning_time": "Do you spend your mornings doing the same things on both weekends and weekdays? Why?",
-    "free_time": "Would you like to have more free time in the future?",
-    "study_or_work": "What requirements did you need to meet to get your current job?",
-    "home_and_accommodation": "What’s the difference between where you are living now and where you have lived in the past?",
-    "hometown": "Is your hometown a good place for young people to pursue their careers?",
-    "the_city_you_live_in": "Would you recommend your city to others?",
-}
-
+# Questions that legitimately recur across the three "where you live" topics in the
+# idictation (神奇题库) current-season bank — each topic genuinely asks it.
 EXPECTED_P1_RETAINED_DUPLICATES = {
-    ("life_stages", "What do you think is the most important at the moment?"),
-    ("study_or_work", "What do you think is the most important at the moment?"),
+    ("home_and_accommodation", "How long have you lived there?"),
+    ("hometown", "How long have you lived there?"),
+    ("the_area_you_live_in", "How long have you lived there?"),
 }
 
 EXPECTED_P2_FOLLOW_UPS = {
@@ -223,24 +251,24 @@ def assert_seed_requirements() -> None:
         if isinstance(item, dict):
             by_topic[str(item.get("topic") or "")].append(str(item.get("question") or ""))
 
-    for topic, expected_questions in EXPECTED_P1_QUESTIONS.items():
-        questions = [question for question in by_topic[topic] if question]
-        if questions != expected_questions:
-            raise AssertionError(f"P1 {topic} questions differ from IELTSBro source card: {questions}")
+    for topic, anchors in EXPECTED_P1_NEW_ANCHORS.items():
+        questions = {question for question in by_topic[topic] if question}
+        missing = [anchor for anchor in anchors if anchor not in questions]
+        if missing:
+            raise AssertionError(f"P1 new {topic} is missing anchor questions: {missing}")
+
+    new_counts = {topic: len(questions) for topic, questions in by_topic.items()}
+    if new_counts != EXPECTED_P1_NEW_COUNTS:
+        raise AssertionError(f"P1 new topic counts drifted from pinned merge: {new_counts}")
+    for topic, count in new_counts.items():
+        if count < P1_MIN_TOPIC_DEPTH:
+            raise AssertionError(f"P1 new topic {topic} has only {count} questions (min {P1_MIN_TOPIC_DEPTH})")
 
     p1_retained = read_json("data/ielts/part1/2026_may_august_retained_topics.json")
-    if p1_retained.get("source") != "ieltsbro_pdf_2026_0604":
-        raise AssertionError("P1 retained source must be ieltsbro_pdf_2026_0604")
-    if p1_retained.get("partial") is not False:
-        raise AssertionError("P1 retained partial flag must be false")
     retained_by_topic: dict[str, list[str]] = defaultdict(list)
     for item in p1_retained.get("questions") or []:
         if not isinstance(item, dict):
             raise AssertionError("P1 retained questions must be objects")
-        if item.get("source") != "ieltsbro_pdf_2026_0604":
-            raise AssertionError(f"P1 retained item has wrong source: {item}")
-        if item.get("partial") is not False:
-            raise AssertionError(f"P1 retained item must be partial=false: {item}")
         topic = str(item.get("topic") or "").strip()
         question = str(item.get("question") or "").strip()
         if not topic or not question:
@@ -248,10 +276,10 @@ def assert_seed_requirements() -> None:
         retained_by_topic[topic].append(question)
     retained_counts = {topic: len(questions) for topic, questions in retained_by_topic.items()}
     if retained_counts != EXPECTED_P1_RETAINED_COUNTS:
-        raise AssertionError(f"P1 retained topic counts differ from PDF source: {retained_counts}")
-    for topic, expected_question in EXPECTED_P1_RETAINED_EXAMPLES.items():
-        if expected_question not in retained_by_topic[topic]:
-            raise AssertionError(f"P1 retained {topic} missing PDF question: {expected_question}")
+        raise AssertionError(f"P1 retained topic counts drifted from pinned merge: {retained_counts}")
+    for topic, count in retained_counts.items():
+        if count < P1_MIN_TOPIC_DEPTH:
+            raise AssertionError(f"P1 retained topic {topic} has only {count} questions (min {P1_MIN_TOPIC_DEPTH})")
 
     p2 = read_json("data/ielts/part2/2026_may_august_topics.json")
     by_title = {
@@ -290,8 +318,7 @@ def assert_django_loader() -> None:
     p1_new_topics: dict[str, int] = defaultdict(int)
     for item in bank.part1_for_scope("new"):
         p1_new_topics[str(item.get("topic") or "")] += 1
-    for topic, expected_questions in EXPECTED_P1_QUESTIONS.items():
-        expected_count = len(expected_questions)
+    for topic, expected_count in EXPECTED_P1_NEW_COUNTS.items():
         if p1_new_topics[topic] != expected_count:
             raise AssertionError(f"Django loader sees P1 new {topic} count {p1_new_topics[topic]}, expected {expected_count}")
 

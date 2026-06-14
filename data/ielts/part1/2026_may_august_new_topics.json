@@ -3,45 +3,41 @@
   "part": 1,
   "status": "new",
   "region": "china_mainland",
-  "source": "compiled_from_mainland_china_public_speaking_season_lists_cross_checked",
+  "source": "merged_idictation_2026_season_and_mainland_china_public_lists",
   "source_url": "https://mtoutiao.xdf.cn/ielts/202605/15188096.html",
   "topic": "2026_may_august_new",
   "questions": [
     {
-      "topic": "collecting_things",
-      "question": "Did you collect anything when you were a child?"
+      "topic": "boring_things",
+      "question": "Do you often feel bored?"
     },
     {
-      "topic": "collecting_things",
-      "question": "Do you collect anything now?"
+      "topic": "boring_things",
+      "question": "Did you ever find school boring when you were a child?"
     },
     {
-      "topic": "collecting_things",
-      "question": "Why do some people enjoy collecting things?"
+      "topic": "boring_things",
+      "question": "What sort of things do you find most boring now?"
     },
     {
-      "topic": "perfume",
-      "question": "Do you use perfume?"
+      "topic": "boring_things",
+      "question": "What do you do to stop yourself feeling bored?"
     },
     {
-      "topic": "perfume",
-      "question": "Have you ever given perfume as a gift?"
+      "topic": "boring_things",
+      "question": "When would you feel bored?"
     },
     {
-      "topic": "perfume",
-      "question": "What kinds of smells do you like?"
+      "topic": "boring_things",
+      "question": "What do you do when you feel bored?"
+    },
+    {
+      "topic": "boring_things",
+      "question": "Do you think childhood is boring or adulthood is boring?"
     },
     {
       "topic": "boring_things",
       "question": "What kinds of things do you find boring?"
-    },
-    {
-      "topic": "boring_things",
-      "question": "What do you usually do when you feel bored?"
-    },
-    {
-      "topic": "boring_things",
-      "question": "Do you think school lessons are sometimes boring?"
     },
     {
       "topic": "history",
@@ -60,30 +56,6 @@
       "question": "Did you like history when you were young?"
     },
     {
-      "topic": "sharing",
-      "question": "Do you like sharing things with others?"
-    },
-    {
-      "topic": "sharing",
-      "question": "What do you usually share with your friends?"
-    },
-    {
-      "topic": "sharing",
-      "question": "Did your parents teach you to share when you were young?"
-    },
-    {
-      "topic": "mobile_phones",
-      "question": "How often do you use your mobile phone?"
-    },
-    {
-      "topic": "mobile_phones",
-      "question": "What do you mainly use your phone for?"
-    },
-    {
-      "topic": "mobile_phones",
-      "question": "Would you like to change your mobile phone?"
-    },
-    {
       "topic": "mirrors",
       "question": "Do you like looking at yourself in the mirror? How often?"
     },
@@ -100,132 +72,12 @@
       "question": "Would you use mirrors to decorate your room?"
     },
     {
-      "topic": "meeting_places",
-      "question": "Where do you usually meet your friends?"
-    },
-    {
-      "topic": "meeting_places",
-      "question": "Do you prefer meeting people at home or outside?"
-    },
-    {
-      "topic": "meeting_places",
-      "question": "What makes a place good for meeting friends?"
-    },
-    {
-      "topic": "advertisements",
-      "question": "Do you often see advertisements?"
-    },
-    {
-      "topic": "advertisements",
-      "question": "What kinds of advertisements do you dislike?"
-    },
-    {
-      "topic": "advertisements",
-      "question": "Have you ever bought something because of an advertisement?"
-    },
-    {
-      "topic": "taking_photos",
-      "question": "Do you like taking photos?"
-    },
-    {
-      "topic": "taking_photos",
-      "question": "What do you usually take photos of?"
-    },
-    {
-      "topic": "taking_photos",
-      "question": "Do you prefer taking photos with a camera or a phone?"
-    },
-    {
-      "topic": "colors",
-      "question": "What is your favourite colour?"
-    },
-    {
-      "topic": "colors",
-      "question": "Did you like the same colour when you were a child?"
-    },
-    {
-      "topic": "colors",
-      "question": "What colours would you choose for your home?"
-    },
-    {
-      "topic": "flowers",
-      "question": "Do you like flowers?"
-    },
-    {
-      "topic": "flowers",
-      "question": "Have you ever given flowers to someone?"
-    },
-    {
-      "topic": "flowers",
-      "question": "Are flowers important in your culture?"
-    },
-    {
-      "topic": "chocolate",
-      "question": "Do you like eating chocolate?"
-    },
-    {
-      "topic": "chocolate",
-      "question": "How often do you eat chocolate?"
-    },
-    {
-      "topic": "chocolate",
-      "question": "Did you like chocolate when you were a child?"
-    },
-    {
-      "topic": "bags",
-      "question": "What kind of bag do you usually use?"
-    },
-    {
-      "topic": "bags",
-      "question": "Do you prefer a small bag or a large bag?"
-    },
-    {
-      "topic": "bags",
-      "question": "Have you ever lost a bag?"
-    },
-    {
-      "topic": "fishing",
-      "question": "Have you ever been fishing?"
-    },
-    {
-      "topic": "fishing",
-      "question": "Would you like to try fishing in the future?"
-    },
-    {
-      "topic": "fishing",
-      "question": "Is fishing popular in your country?"
-    },
-    {
-      "topic": "libraries",
-      "question": "Do you often go to libraries?"
-    },
-    {
-      "topic": "libraries",
-      "question": "What do you usually do in a library?"
-    },
-    {
-      "topic": "libraries",
-      "question": "Did you go to libraries when you were a child?"
-    },
-    {
-      "topic": "keys",
-      "question": "Do you always carry keys with you?"
-    },
-    {
-      "topic": "keys",
-      "question": "Have you ever lost your keys?"
-    },
-    {
-      "topic": "keys",
-      "question": "Do you think keys will still be used in the future?"
-    },
-    {
       "topic": "outer_space_and_stars",
       "question": "Have you ever learnt about outer space and stars?"
     },
     {
       "topic": "outer_space_and_stars",
-      "question": "Do you like science fiction movies? Why?"
+      "question": "Do you enjoy watching science-fiction films/movies set in space?"
     },
     {
       "topic": "outer_space_and_stars",
@@ -233,55 +85,31 @@
     },
     {
       "topic": "outer_space_and_stars",
-      "question": "Do you want to go into outer space in the future?"
+      "question": "Would you like to go into outer space in the future?"
     },
     {
-      "topic": "jewelry",
-      "question": "Do you like wearing jewelry?"
+      "topic": "outer_space_and_stars",
+      "question": "Do you like science fiction movies? Why?"
     },
     {
-      "topic": "jewelry",
-      "question": "Have you ever bought jewelry as a gift?"
+      "topic": "singing",
+      "question": "Did you like singing when you were a child?"
     },
     {
-      "topic": "jewelry",
-      "question": "Why do some people like expensive jewelry?"
+      "topic": "singing",
+      "question": "Do you like singing now?"
     },
     {
-      "topic": "schools",
-      "question": "What was your school like when you were a child?"
+      "topic": "singing",
+      "question": "Do you enjoy singing in the car?"
     },
     {
-      "topic": "schools",
-      "question": "Did you enjoy your school life?"
+      "topic": "singing",
+      "question": "Do you like listening to other people sing?"
     },
     {
-      "topic": "schools",
-      "question": "What would you like to change about schools?"
-    },
-    {
-      "topic": "crowded_places",
-      "question": "Do you like crowded places?"
-    },
-    {
-      "topic": "crowded_places",
-      "question": "When was the last time you were in a crowded place?"
-    },
-    {
-      "topic": "crowded_places",
-      "question": "How do you feel when a place is very crowded?"
-    },
-    {
-      "topic": "study_or_work",
-      "question": "Do you work or are you a student?"
-    },
-    {
-      "topic": "study_or_work",
-      "question": "Why did you choose your subject or job?"
-    },
-    {
-      "topic": "study_or_work",
-      "question": "What is the most interesting part of your work or study?"
+      "topic": "singing",
+      "question": "Did you learn to sing when you were at school?"
     },
     {
       "topic": "singing",
@@ -296,24 +124,16 @@
       "question": "Who do you want to sing for?"
     },
     {
-      "topic": "singing",
-      "question": "Do you think singing can bring happiness to people?"
-    },
-    {
-      "topic": "singing",
-      "question": "Do you like listening to others singing?"
-    },
-    {
-      "topic": "singing",
-      "question": "Have you ever taken a singing class?"
-    },
-    {
       "topic": "tidiness",
       "question": "Do you like to keep things tidy?"
     },
     {
       "topic": "tidiness",
-      "question": "Did you keep your room tidy as a child?"
+      "question": "Did you use to keep your room tidy as a child?"
+    },
+    {
+      "topic": "tidiness",
+      "question": "Are you a tidy person now?"
     },
     {
       "topic": "tidiness",
@@ -322,6 +142,14 @@
     {
       "topic": "tidiness",
       "question": "Do you think that it is necessary to be tidy?"
+    },
+    {
+      "topic": "tidiness",
+      "question": "What do you think of those who don't care about tidiness?"
+    },
+    {
+      "topic": "tidiness",
+      "question": "What do you think of those who are overly concerned about tidiness?"
     },
     {
       "topic": "watches",
@@ -436,18 +264,6 @@
       "question": "What do people often do on social media?"
     },
     {
-      "topic": "talking_to_elderly_people",
-      "question": "Do you often talk with elderly people?"
-    },
-    {
-      "topic": "talking_to_elderly_people",
-      "question": "What can young people learn from elderly people?"
-    },
-    {
-      "topic": "talking_to_elderly_people",
-      "question": "Do you enjoy listening to older people talk about the past?"
-    },
-    {
       "topic": "cinema",
       "question": "What films do you like?"
     },
@@ -481,15 +297,19 @@
     },
     {
       "topic": "headphones",
-      "question": "What type of headphones do you use?"
+      "question": "How often do you wear headphones?"
     },
     {
       "topic": "headphones",
-      "question": "When would you use headphones?"
+      "question": "Do you think headphones are useful?"
     },
     {
       "topic": "headphones",
-      "question": "In what conditions would you not use headphones?"
+      "question": "Are headphones popular in your country?"
+    },
+    {
+      "topic": "headphones",
+      "question": "In what situations should people not wear headphones?"
     },
     {
       "topic": "headphones",
@@ -573,6 +393,18 @@
     },
     {
       "topic": "shopping",
+      "question": "Do you compare prices when you shop? Why?"
+    },
+    {
+      "topic": "shopping",
+      "question": "Is it difficult for you to make choices when you shop?"
+    },
+    {
+      "topic": "shopping",
+      "question": "Do you think expensive products are always better than cheaper ones?"
+    },
+    {
+      "topic": "shopping",
       "question": "Have you ever returned anything you bought online?"
     },
     {
@@ -581,7 +413,7 @@
     },
     {
       "topic": "clothes",
-      "question": "Do you prefer to wear comfortable and casual clothes or smart clothes?"
+      "question": "Do you prefer to wear comfortable and casual clothes or formal clothes?"
     },
     {
       "topic": "clothes",
@@ -593,7 +425,7 @@
     },
     {
       "topic": "clothes",
-      "question": "Do you wear different styles of clothes on weekdays and weekends?"
+      "question": "Do you wear clothes of different styles on weekdays and weekends?"
     },
     {
       "topic": "clothes",
@@ -605,7 +437,7 @@
     },
     {
       "topic": "jokes",
-      "question": "Do your friends like to jokes?"
+      "question": "Do your friends like to tell jokes?"
     },
     {
       "topic": "jokes",
@@ -618,30 +450,6 @@
     {
       "topic": "jokes",
       "question": "Are comedy shows popular in your country?"
-    },
-    {
-      "topic": "happy_things",
-      "question": "What kinds of things make you happy?"
-    },
-    {
-      "topic": "happy_things",
-      "question": "Do you think small things can make people happy?"
-    },
-    {
-      "topic": "happy_things",
-      "question": "Did different things make you happy when you were a child?"
-    },
-    {
-      "topic": "holidays",
-      "question": "What do you usually do during holidays?"
-    },
-    {
-      "topic": "holidays",
-      "question": "Do you prefer short holidays or long holidays?"
-    },
-    {
-      "topic": "holidays",
-      "question": "What holiday would you like to have in the future?"
     },
     {
       "topic": "art",
@@ -749,6 +557,14 @@
     },
     {
       "topic": "music",
+      "question": "Do you like music?"
+    },
+    {
+      "topic": "music",
+      "question": "What kinds of music do you listen to?"
+    },
+    {
+      "topic": "music",
       "question": "Do you prefer sad or happy music?"
     },
     {
@@ -762,12 +578,31 @@
     {
       "topic": "music",
       "question": "Do you listen to music while doing other things?"
+    },
+    {
+      "topic": "daily_routine",
+      "question": "What is your daily study routine?"
+    },
+    {
+      "topic": "daily_routine",
+      "question": "Have you ever changed your routine?"
+    },
+    {
+      "topic": "daily_routine",
+      "question": "Do you think it is important to have a daily routine for your study?"
+    },
+    {
+      "topic": "daily_routine",
+      "question": "What part of your day do you like best?"
+    },
+    {
+      "topic": "daily_routine",
+      "question": "Do you often go to bed late or early?"
     }
   ],
   "source_notes": [
-    "Cross-checked against New Oriental public 2026 May-August speaking season list.",
-    "Cross-checked against Koolearn current-season Part 1 practice list.",
-    "Xiaohongshu/Zhihu-style public prep signals are treated as unofficial coverage hints, not official IELTS publication.",
-    "IELTSBro latest topic-card OCR cache (getDataV2 p1Update 2026-05-22T18:31:54+0800) was used to expand the 24 current/new P1 topics to their full visible card question counts."
+    "Authoritative base: idictation.cn (爱听写 / 神奇题库) current 2026 May-August Part 1 season bank, scraped 2026-06-14.",
+    "Thin idictation topics (fewer than 8 questions) were topped up with genuinely distinct questions from prior cross-checked public season lists (New Oriental / Koolearn) and the IELTSBro 0604 PDF card OCR, using Jaccard fuzzy dedup (>=0.55 dropped).",
+    "No AI-generated questions were added; every question traces to idictation or a cross-checked public season source."
   ]
 }

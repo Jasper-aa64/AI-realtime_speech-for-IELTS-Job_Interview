@@ -7,66 +7,531 @@
   "source_url": "mixed_public_sources",
   "topic": "legacy_mixed_part1",
   "questions": [
-    {"topic": "legacy_study", "question": "Are you a student or do you work?"},
-    {"topic": "legacy_study", "question": "What subject are you studying or what did you study?"},
-    {"topic": "legacy_study", "question": "Do you enjoy your studies? Why or why not?"},
-    {"topic": "legacy_study", "question": "What was your favourite subject at school?"},
-    {"topic": "legacy_study", "question": "Do you prefer studying alone or with others?"},
-    {"topic": "legacy_study", "question": "How do you feel about exams?"},
-    {"topic": "legacy_family", "question": "Do you live with your family or on your own?"},
-    {"topic": "legacy_family", "question": "How much time do you spend with your family each week?"},
-    {"topic": "legacy_family", "question": "What do you usually do together with your family?"},
-    {"topic": "legacy_family", "question": "Did you have a large or small family when you were growing up?"},
-    {"topic": "legacy_family", "question": "Is family very important in your culture?"},
-    {"topic": "legacy_family", "question": "Have your relationships with family members changed as you have grown older?"},
-    {"topic": "legacy_work_leisure", "question": "Do you work or are you a full-time student?"},
-    {"topic": "legacy_work_leisure", "question": "What do you do in your free time?"},
-    {"topic": "legacy_work_leisure", "question": "Do you prefer indoor or outdoor activities? Why?"},
-    {"topic": "legacy_work_leisure", "question": "Have your hobbies changed compared to when you were a child?"},
-    {"topic": "legacy_work_leisure", "question": "Do you think it is important to have hobbies?"},
-    {"topic": "legacy_work_leisure", "question": "How much free time do you have each week?"},
-    {"topic": "legacy_daily_routine", "question": "What is your daily routine?"},
-    {"topic": "legacy_daily_routine", "question": "When do you usually get up in the morning?"},
-    {"topic": "legacy_daily_routine", "question": "Do you think it is important to have a daily routine?"},
-    {"topic": "legacy_daily_routine", "question": "Has your daily routine changed recently?"},
-    {"topic": "legacy_daily_routine", "question": "What would you like to change about your daily routine?"},
-    {"topic": "legacy_daily_routine", "question": "Is your daily routine different at the weekend to during the week?"},
-    {"topic": "legacy_daily_routine", "question": "What part of your daily life do you enjoy the most?"},
-    {"topic": "legacy_food", "question": "What's your favourite food?"},
-    {"topic": "legacy_food", "question": "Do you enjoy cooking? How often do you cook?"},
-    {"topic": "legacy_food", "question": "Do you prefer eating at home or eating out?"},
-    {"topic": "legacy_food", "question": "When was the last time you tried a new dish?"},
-    {"topic": "legacy_food", "question": "Do you have a healthy diet?"},
-    {"topic": "legacy_food", "question": "What do you think of fast food?"},
-    {"topic": "legacy_food", "question": "Is there any food you didn't like as a child that you do now?"},
-    {"topic": "legacy_hobbies", "question": "Do you have a hobby?"},
-    {"topic": "legacy_hobbies", "question": "Did you have a hobby as a child?"},
-    {"topic": "legacy_hobbies", "question": "What hobbies are popular in your country?"},
-    {"topic": "legacy_hobbies", "question": "Why do you think people have hobbies?"},
-    {"topic": "legacy_hobbies", "question": "Do you prefer to spend your free time with other people or alone?"},
-    {"topic": "legacy_hobbies", "question": "How do you like to relax?"},
-    {"topic": "legacy_hobbies", "question": "Have your hobbies changed since you were a child?"},
-    {"topic": "legacy_home", "question": "Do you live in a house or a flat?"},
-    {"topic": "legacy_home", "question": "Who do you live with?"},
-    {"topic": "legacy_home", "question": "What is your favourite room in your home?"},
-    {"topic": "legacy_home", "question": "What do you like most about your home?"},
-    {"topic": "legacy_home", "question": "What changes would you like to make to your home?"},
-    {"topic": "legacy_home", "question": "Is your neighbourhood a good place to live?"},
-    {"topic": "legacy_home", "question": "Do you plan to continue living there in the future?"},
-    {"topic": "legacy_technology", "question": "Do you often use a computer or laptop for your studies or work?"},
-    {"topic": "legacy_technology", "question": "Has technology changed the way you study or work?"},
-    {"topic": "legacy_technology", "question": "Do you find typing easy or difficult?"},
-    {"topic": "legacy_technology", "question": "How important is the Internet to you?"},
-    {"topic": "legacy_technology", "question": "Do you use the Internet more for work or in your free time?"},
-    {"topic": "legacy_technology", "question": "Do you think you use the Internet too much?"},
-    {"topic": "legacy_technology", "question": "How do you think the Internet will develop in the future?"},
-    {"topic": "legacy_travel", "question": "Where was the last place you visited on holiday?"},
-    {"topic": "legacy_travel", "question": "Do you prefer travelling by plane, train or bus?"},
-    {"topic": "legacy_travel", "question": "Did you often go on holiday as a child?"},
-    {"topic": "legacy_travel", "question": "What kind of tourist destinations do you usually prefer?"},
-    {"topic": "legacy_travel", "question": "When did you last go on holiday?"},
-    {"topic": "legacy_travel", "question": "If you could go on holiday anywhere in the world, where would you go?"},
-    {"topic": "legacy_travel", "question": "Do you think holidays are important for people?"}
+    {
+      "topic": "legacy_study",
+      "question": "Are you a student or do you work?"
+    },
+    {
+      "topic": "legacy_study",
+      "question": "What subject are you studying or what did you study?"
+    },
+    {
+      "topic": "legacy_study",
+      "question": "Do you enjoy your studies? Why or why not?"
+    },
+    {
+      "topic": "legacy_study",
+      "question": "What was your favourite subject at school?"
+    },
+    {
+      "topic": "legacy_study",
+      "question": "Do you prefer studying alone or with others?"
+    },
+    {
+      "topic": "legacy_study",
+      "question": "How do you feel about exams?"
+    },
+    {
+      "topic": "legacy_family",
+      "question": "Do you live with your family or on your own?"
+    },
+    {
+      "topic": "legacy_family",
+      "question": "How much time do you spend with your family each week?"
+    },
+    {
+      "topic": "legacy_family",
+      "question": "What do you usually do together with your family?"
+    },
+    {
+      "topic": "legacy_family",
+      "question": "Did you have a large or small family when you were growing up?"
+    },
+    {
+      "topic": "legacy_family",
+      "question": "Is family very important in your culture?"
+    },
+    {
+      "topic": "legacy_family",
+      "question": "Have your relationships with family members changed as you have grown older?"
+    },
+    {
+      "topic": "legacy_work_leisure",
+      "question": "Do you work or are you a full-time student?"
+    },
+    {
+      "topic": "legacy_work_leisure",
+      "question": "What do you do in your free time?"
+    },
+    {
+      "topic": "legacy_work_leisure",
+      "question": "Do you prefer indoor or outdoor activities? Why?"
+    },
+    {
+      "topic": "legacy_work_leisure",
+      "question": "Have your hobbies changed compared to when you were a child?"
+    },
+    {
+      "topic": "legacy_work_leisure",
+      "question": "Do you think it is important to have hobbies?"
+    },
+    {
+      "topic": "legacy_work_leisure",
+      "question": "How much free time do you have each week?"
+    },
+    {
+      "topic": "legacy_daily_routine",
+      "question": "What is your daily routine?"
+    },
+    {
+      "topic": "legacy_daily_routine",
+      "question": "When do you usually get up in the morning?"
+    },
+    {
+      "topic": "legacy_daily_routine",
+      "question": "Do you think it is important to have a daily routine?"
+    },
+    {
+      "topic": "legacy_daily_routine",
+      "question": "Has your daily routine changed recently?"
+    },
+    {
+      "topic": "legacy_daily_routine",
+      "question": "What would you like to change about your daily routine?"
+    },
+    {
+      "topic": "legacy_daily_routine",
+      "question": "Is your daily routine different at the weekend to during the week?"
+    },
+    {
+      "topic": "legacy_daily_routine",
+      "question": "What part of your daily life do you enjoy the most?"
+    },
+    {
+      "topic": "legacy_food",
+      "question": "What's your favourite food?"
+    },
+    {
+      "topic": "legacy_food",
+      "question": "Do you enjoy cooking? How often do you cook?"
+    },
+    {
+      "topic": "legacy_food",
+      "question": "Do you prefer eating at home or eating out?"
+    },
+    {
+      "topic": "legacy_food",
+      "question": "When was the last time you tried a new dish?"
+    },
+    {
+      "topic": "legacy_food",
+      "question": "Do you have a healthy diet?"
+    },
+    {
+      "topic": "legacy_food",
+      "question": "What do you think of fast food?"
+    },
+    {
+      "topic": "legacy_food",
+      "question": "Is there any food you didn't like as a child that you do now?"
+    },
+    {
+      "topic": "legacy_hobbies",
+      "question": "Do you have a hobby?"
+    },
+    {
+      "topic": "legacy_hobbies",
+      "question": "Did you have a hobby as a child?"
+    },
+    {
+      "topic": "legacy_hobbies",
+      "question": "What hobbies are popular in your country?"
+    },
+    {
+      "topic": "legacy_hobbies",
+      "question": "Why do you think people have hobbies?"
+    },
+    {
+      "topic": "legacy_hobbies",
+      "question": "Do you prefer to spend your free time with other people or alone?"
+    },
+    {
+      "topic": "legacy_hobbies",
+      "question": "How do you like to relax?"
+    },
+    {
+      "topic": "legacy_hobbies",
+      "question": "Have your hobbies changed since you were a child?"
+    },
+    {
+      "topic": "legacy_home",
+      "question": "Do you live in a house or a flat?"
+    },
+    {
+      "topic": "legacy_home",
+      "question": "Who do you live with?"
+    },
+    {
+      "topic": "legacy_home",
+      "question": "What is your favourite room in your home?"
+    },
+    {
+      "topic": "legacy_home",
+      "question": "What do you like most about your home?"
+    },
+    {
+      "topic": "legacy_home",
+      "question": "What changes would you like to make to your home?"
+    },
+    {
+      "topic": "legacy_home",
+      "question": "Is your neighbourhood a good place to live?"
+    },
+    {
+      "topic": "legacy_home",
+      "question": "Do you plan to continue living there in the future?"
+    },
+    {
+      "topic": "legacy_technology",
+      "question": "Do you often use a computer or laptop for your studies or work?"
+    },
+    {
+      "topic": "legacy_technology",
+      "question": "Has technology changed the way you study or work?"
+    },
+    {
+      "topic": "legacy_technology",
+      "question": "Do you find typing easy or difficult?"
+    },
+    {
+      "topic": "legacy_technology",
+      "question": "How important is the Internet to you?"
+    },
+    {
+      "topic": "legacy_technology",
+      "question": "Do you use the Internet more for work or in your free time?"
+    },
+    {
+      "topic": "legacy_technology",
+      "question": "Do you think you use the Internet too much?"
+    },
+    {
+      "topic": "legacy_technology",
+      "question": "How do you think the Internet will develop in the future?"
+    },
+    {
+      "topic": "legacy_travel",
+      "question": "Where was the last place you visited on holiday?"
+    },
+    {
+      "topic": "legacy_travel",
+      "question": "Do you prefer travelling by plane, train or bus?"
+    },
+    {
+      "topic": "legacy_travel",
+      "question": "Did you often go on holiday as a child?"
+    },
+    {
+      "topic": "legacy_travel",
+      "question": "What kind of tourist destinations do you usually prefer?"
+    },
+    {
+      "topic": "legacy_travel",
+      "question": "When did you last go on holiday?"
+    },
+    {
+      "topic": "legacy_travel",
+      "question": "If you could go on holiday anywhere in the world, where would you go?"
+    },
+    {
+      "topic": "legacy_travel",
+      "question": "Do you think holidays are important for people?"
+    },
+    {
+      "topic": "collecting_things",
+      "question": "Did you collect anything when you were a child?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "collecting_things",
+      "question": "Do you collect anything now?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "collecting_things",
+      "question": "Why do some people enjoy collecting things?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "perfume",
+      "question": "Do you use perfume?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "perfume",
+      "question": "Have you ever given perfume as a gift?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "perfume",
+      "question": "What kinds of smells do you like?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "sharing",
+      "question": "Do you like sharing things with others?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "sharing",
+      "question": "What do you usually share with your friends?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "sharing",
+      "question": "Did your parents teach you to share when you were young?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "mobile_phones",
+      "question": "How often do you use your mobile phone?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "mobile_phones",
+      "question": "What do you mainly use your phone for?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "mobile_phones",
+      "question": "Would you like to change your mobile phone?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "meeting_places",
+      "question": "Where do you usually meet your friends?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "meeting_places",
+      "question": "Do you prefer meeting people at home or outside?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "meeting_places",
+      "question": "What makes a place good for meeting friends?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "advertisements",
+      "question": "Do you often see advertisements?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "advertisements",
+      "question": "What kinds of advertisements do you dislike?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "advertisements",
+      "question": "Have you ever bought something because of an advertisement?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "taking_photos",
+      "question": "Do you like taking photos?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "taking_photos",
+      "question": "What do you usually take photos of?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "taking_photos",
+      "question": "Do you prefer taking photos with a camera or a phone?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "colors",
+      "question": "What is your favourite colour?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "colors",
+      "question": "Did you like the same colour when you were a child?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "colors",
+      "question": "What colours would you choose for your home?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "flowers",
+      "question": "Do you like flowers?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "flowers",
+      "question": "Have you ever given flowers to someone?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "flowers",
+      "question": "Are flowers important in your culture?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "chocolate",
+      "question": "Do you like eating chocolate?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "chocolate",
+      "question": "How often do you eat chocolate?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "chocolate",
+      "question": "Did you like chocolate when you were a child?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "bags",
+      "question": "What kind of bag do you usually use?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "bags",
+      "question": "Do you prefer a small bag or a large bag?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "bags",
+      "question": "Have you ever lost a bag?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "fishing",
+      "question": "Have you ever been fishing?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "fishing",
+      "question": "Would you like to try fishing in the future?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "fishing",
+      "question": "Is fishing popular in your country?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "libraries",
+      "question": "Do you often go to libraries?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "libraries",
+      "question": "What do you usually do in a library?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "libraries",
+      "question": "Did you go to libraries when you were a child?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "keys",
+      "question": "Do you always carry keys with you?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "keys",
+      "question": "Have you ever lost your keys?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "keys",
+      "question": "Do you think keys will still be used in the future?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "jewelry",
+      "question": "Do you like wearing jewelry?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "jewelry",
+      "question": "Have you ever bought jewelry as a gift?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "jewelry",
+      "question": "Why do some people like expensive jewelry?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "schools",
+      "question": "What was your school like when you were a child?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "schools",
+      "question": "Did you enjoy your school life?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "schools",
+      "question": "What would you like to change about schools?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "talking_to_elderly_people",
+      "question": "Do you often talk with elderly people?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "talking_to_elderly_people",
+      "question": "What can young people learn from elderly people?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "talking_to_elderly_people",
+      "question": "Do you enjoy listening to older people talk about the past?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "happy_things",
+      "question": "What kinds of things make you happy?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "happy_things",
+      "question": "Do you think small things can make people happy?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "happy_things",
+      "question": "Did different things make you happy when you were a child?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "holidays",
+      "question": "What do you usually do during holidays?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "holidays",
+      "question": "Do you prefer short holidays or long holidays?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    },
+    {
+      "topic": "holidays",
+      "question": "What holiday would you like to have in the future?",
+      "archived_reason": "not in 2026-05-08 idictation or PDF season"
+    }
   ],
   "source_notes": [
     "Archive bucket for P1 questions that are not confirmed as 2026 May-August current-season retained items.",

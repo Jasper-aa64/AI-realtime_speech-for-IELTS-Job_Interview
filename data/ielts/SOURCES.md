@@ -13,6 +13,12 @@
 - This PDF is the retained main source for `data/ielts/part1/2026_may_august_retained_topics.json`.
 - Questions were extracted from the PDF text layer with local `pdftotext` style parsing and minimal cleanup only.
 
+## idictation (爱听写 / 神奇题库) Current-Season Part 1 Bank
+
+- Source file: `data/ielts/sources/2026_may_august_idictation_part1_bank.json` (37 topics, scraped 2026-06-14 via a logged-in topic sweep of `https://www.idictation.cn/`).
+- This is the **authoritative base** for the merged P1 seed files. The 2026 May–August retained and new topic files were rebuilt as: idictation base, with genuinely-distinct questions from the 0604 PDF / public season lists topping up only the thin (<8 question) topics, deduplicated by Jaccard similarity (>=0.55 dropped) to avoid paraphrase bloat.
+- Topics present in neither the idictation current season nor the 0604 PDF were moved to `data/ielts/archive/old_topics.json`.
+
 ## Notes
 
 - Firecrawl quota was insufficient for this pass, so local PDF text parsing was used instead.

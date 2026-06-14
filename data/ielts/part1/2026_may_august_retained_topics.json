@@ -3,8 +3,8 @@
   "part": 1,
   "status": "retained",
   "region": "china_mainland",
-  "source": "ieltsbro_pdf_2026_0604",
-  "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+  "source": "merged_idictation_2026_season_and_ieltsbro_pdf_2026_0604",
+  "source_url": "https://www.idictation.cn/ ; data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
   "topic": "2026_may_august_retained",
   "partial": false,
   "topic_aliases": {
@@ -34,1058 +34,577 @@
   "questions": [
     {
       "topic": "food",
-      "topic_alias": "Food",
-      "question": "What is your favourite food?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What is your favourite food?"
     },
     {
       "topic": "food",
-      "topic_alias": "Food",
-      "question": "What kind of food did you like when you were young?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What kind of food did you like when you were young?"
     },
     {
       "topic": "food",
-      "topic_alias": "Food",
-      "question": "Do you eat different foods at different times of the year?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you eat different foods at different times of the year?"
     },
     {
       "topic": "food",
-      "topic_alias": "Food",
-      "question": "Has your favourite food changed since you were a child?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Has your favourite food changed since you were a child?"
     },
     {
       "topic": "pets_and_animals",
-      "topic_alias": "Pets and Animals",
-      "question": "What's your favourite animal? Why?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Have you ever had a pet before?"
     },
     {
       "topic": "pets_and_animals",
-      "topic_alias": "Pets and Animals",
-      "question": "Where do you prefer to keep your pet, indoors or outdoors?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Where do you prefer to keep your pet, indoors or outdoors?"
     },
     {
       "topic": "pets_and_animals",
-      "topic_alias": "Pets and Animals",
-      "question": "Have you ever had a pet before?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What is the most popular animal in China?"
     },
     {
       "topic": "pets_and_animals",
-      "topic_alias": "Pets and Animals",
-      "question": "What is the most popular animal in China?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What's your favourite animal? Why?"
     },
     {
       "topic": "pets_and_animals",
-      "topic_alias": "Pets and Animals",
-      "question": "Have you ever visited a zoo?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Have you ever visited a zoo?"
     },
     {
       "topic": "pets_and_animals",
-      "topic_alias": "Pets and Animals",
-      "question": "How often do you visit a zoo?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "How often do you visit a zoo?"
     },
     {
       "topic": "pets_and_animals",
-      "topic_alias": "Pets and Animals",
-      "question": "Are there many people keeping pets in your country?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "pets_and_animals",
-      "topic_alias": "Pets and Animals",
-      "question": "Should schools teach students knowledge about pets or animals?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are there many people keeping pets in your country?"
     },
     {
       "topic": "sports_team",
-      "topic_alias": "Sports team",
-      "question": "Have you ever been part of a sports team?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Have you ever been part of a sports team?"
     },
     {
       "topic": "sports_team",
-      "topic_alias": "Sports team",
-      "question": "Is team sports popular in your culture?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are team sports popular in your culture?"
     },
     {
       "topic": "sports_team",
-      "topic_alias": "Sports team",
-      "question": "Do you like watching team games? Why?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What are the differences between team sports and individual sports?"
     },
     {
       "topic": "sports_team",
-      "topic_alias": "Sports team",
-      "question": "What are the differences between team sports and individual sports?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like watching team games? Why?"
     },
     {
       "topic": "hobby",
-      "topic_alias": "Hobby",
-      "question": "Do you have any hobbies?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you have any hobbies?"
     },
     {
       "topic": "hobby",
-      "topic_alias": "Hobby",
-      "question": "Did you have any hobbies when you were a child?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Did you have any hobbies when you were a child?"
     },
     {
       "topic": "hobby",
-      "topic_alias": "Hobby",
-      "question": "Do you have a hobby that you’ve had since childhood?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you have a hobby that you've had since childhood?"
     },
     {
       "topic": "hobby",
-      "topic_alias": "Hobby",
-      "question": "Do you have the same hobbies as your family members?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you have the same hobbies as your family members?"
     },
     {
       "topic": "morning_time",
-      "topic_alias": "Morning time",
-      "question": "Do you like getting up early in the morning?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like getting up early in the morning?"
     },
     {
       "topic": "morning_time",
-      "topic_alias": "Morning time",
-      "question": "What do you usually do in the morning?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you usually do in the morning?"
     },
     {
       "topic": "morning_time",
-      "topic_alias": "Morning time",
-      "question": "What did you do in the morning when you were little? Why?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What did you do in the morning when you were little? Why?"
     },
     {
       "topic": "morning_time",
-      "topic_alias": "Morning time",
-      "question": "Are there any differences between what you do in the morning now and what you did in the past?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are there any differences between what you do in the morning now and what you did in the past?"
     },
     {
       "topic": "morning_time",
-      "topic_alias": "Morning time",
-      "question": "Do you spend your mornings doing the same things on both weekends and weekdays? Why?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you spend your mornings doing the same things on both weekends and weekdays? Why?"
     },
     {
       "topic": "gifts",
-      "topic_alias": "Gifts",
-      "question": "Have you ever sent handmade gifts to others?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Have you ever sent handmade gifts to others?"
     },
     {
       "topic": "gifts",
-      "topic_alias": "Gifts",
-      "question": "Have you ever received a great gift?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Have you ever received a great gift?"
     },
     {
       "topic": "gifts",
-      "topic_alias": "Gifts",
-      "question": "What do you consider when choosing a gift?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you consider when choosing a gift?"
     },
     {
       "topic": "gifts",
-      "topic_alias": "Gifts",
-      "question": "Do you think you are good at choosing gifts?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you think you are good at choosing gifts?"
     },
     {
       "topic": "gifts",
-      "topic_alias": "Gifts",
-      "question": "What gift have you received recently?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What gift have you received recently?"
     },
     {
       "topic": "reading",
-      "topic_alias": "Reading",
-      "question": "Do you like reading?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like reading?"
     },
     {
       "topic": "reading",
-      "topic_alias": "Reading",
-      "question": "Do you prefer to read on paper or on a screen?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you prefer to read on paper or on a screen?"
     },
     {
       "topic": "reading",
-      "topic_alias": "Reading",
-      "question": "When do you need to read carefully, and when not?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "When do you need to read carefully, and when not?"
     },
     {
       "topic": "reading",
-      "topic_alias": "Reading",
-      "question": "Do you prefer scanning or detailed reading?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you prefer scanning or detailed reading?"
     },
     {
       "topic": "walking",
-      "topic_alias": "Walking",
-      "question": "Do you walk a lot?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you walk a lot?"
     },
     {
       "topic": "walking",
-      "topic_alias": "Walking",
-      "question": "Did you often go outside to have a walk when you were a child?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Did you often go outside to have a walk when you were a child?"
     },
     {
       "topic": "walking",
-      "topic_alias": "Walking",
-      "question": "Why do people like to walk in parks?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Why do people like to walk in parks?"
     },
     {
       "topic": "walking",
-      "topic_alias": "Walking",
-      "question": "Where would you like to take a long walk if you had the chance?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Where would you like to take a long walk if you had the chance?"
     },
     {
       "topic": "walking",
-      "topic_alias": "Walking",
-      "question": "Where did you go for a walk lately?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Where did you go for a walk lately?"
     },
     {
       "topic": "typing",
-      "topic_alias": "Typing",
-      "question": "Do you prefer typing or handwriting?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you prefer typing or handwriting?"
     },
     {
       "topic": "typing",
-      "topic_alias": "Typing",
-      "question": "Do you type on a desktop or laptop keyboard every day?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you type on a desktop or laptop keyboard every day?"
     },
     {
       "topic": "typing",
-      "topic_alias": "Typing",
-      "question": "When did you learn how to type on a keyboard?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "When did you learn how to type on a keyboard?"
     },
     {
       "topic": "typing",
-      "topic_alias": "Typing",
-      "question": "How do you improve your typing?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "How do you improve your typing?"
     },
     {
       "topic": "scenery",
-      "topic_alias": "Scenery",
-      "question": "Do you look out the window at the scenery when travelling by bus or car?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you look out the window at the scenery when travelling by bus or car?"
     },
     {
       "topic": "scenery",
-      "topic_alias": "Scenery",
-      "question": "Do you prefer the mountains or the sea?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you prefer the mountains or the sea?"
     },
     {
       "topic": "scenery",
-      "topic_alias": "Scenery",
-      "question": "Do you like to take scenery pictures?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like to take pictures of the scenery?"
     },
     {
       "topic": "scenery",
-      "topic_alias": "Scenery",
-      "question": "What are the most beautiful sights you have seen while traveling?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What are the most beautiful sights you have seen while traveling?"
     },
     {
       "topic": "building",
-      "topic_alias": "Building",
-      "question": "Are there tall buildings near your home?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are there tall buildings near your home?"
     },
     {
       "topic": "building",
-      "topic_alias": "Building",
-      "question": "Do you take photos of buildings?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you take photos of buildings?"
     },
     {
       "topic": "building",
-      "topic_alias": "Building",
-      "question": "Is there a building that you would like to visit?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Is there a building that you would like to visit?"
     },
     {
       "topic": "building",
-      "topic_alias": "Building",
-      "question": "Do you want to live in a tall building?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you want to live in a tall building?"
     },
     {
       "topic": "childhood_activities",
-      "topic_alias": "Childhood activities",
-      "question": "What are your favourite activities?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What are your favourite activities?"
     },
     {
       "topic": "childhood_activities",
-      "topic_alias": "Childhood activities",
-      "question": "What were your favourite activities when you were a child?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What were your favourite activities when you were a child?"
     },
     {
       "topic": "childhood_activities",
-      "topic_alias": "Childhood activities",
-      "question": "Did you prefer to do activities alone or with a group of people when you were a child?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Did you prefer to do activities alone or with a group of people when you were a child?"
     },
     {
       "topic": "childhood_activities",
-      "topic_alias": "Childhood activities",
-      "question": "Are there any differences between the activities you liked when you were a child and those you like now?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are there any differences between the activities you liked when you were a child and those you like now?"
     },
     {
       "topic": "views",
-      "topic_alias": "Views",
-      "question": "Do you like taking pictures of different views?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like taking pictures of different views?"
     },
     {
       "topic": "views",
-      "topic_alias": "Views",
-      "question": "Do you prefer views in urban areas or rural areas?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you prefer views in urban areas or rural areas?"
     },
     {
       "topic": "views",
-      "topic_alias": "Views",
-      "question": "Do you prefer views in your own country or in other countries?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you prefer views in your own country or in other countries?"
     },
     {
       "topic": "views",
-      "topic_alias": "Views",
-      "question": "Have you seen an unforgettable and beautiful view or scenery?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Have you ever seen an unforgettable and beautiful view or scenery?"
     },
     {
       "topic": "life_stages",
-      "topic_alias": "Life stages",
-      "question": "What did you often do with your friends in your childhood?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What did you often do with your friends in your childhood?"
     },
     {
       "topic": "life_stages",
-      "topic_alias": "Life stages",
-      "question": "What do you think is the most important at the moment?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you think is the most important at the moment?"
     },
     {
       "topic": "life_stages",
-      "topic_alias": "Life stages",
-      "question": "Do you have any plans for the next five years?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you have any plans for the next five years?"
     },
     {
       "topic": "life_stages",
-      "topic_alias": "Life stages",
-      "question": "How do people remember each stage of their lives?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "How do people remember each stage of their lives?"
     },
     {
       "topic": "life_stages",
-      "topic_alias": "Life stages",
-      "question": "Do you enjoy being the age you are now?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you enjoy being the age you are now?"
     },
     {
       "topic": "life_stages",
-      "topic_alias": "Life stages",
-      "question": "At what age do you think people are the happiest?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "At what age do you think people are the happiest?"
     },
     {
       "topic": "free_time",
-      "topic_alias": "Spare time",
-      "question": "Do you often have free time?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you often have free time?"
     },
     {
       "topic": "free_time",
-      "topic_alias": "Spare time",
-      "question": "What do you usually do in your spare time?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you usually do in your spare time?"
     },
     {
       "topic": "free_time",
-      "topic_alias": "Spare time",
-      "question": "Which day do you have more free time on, Saturday or Sunday?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Which day do you have more free time on, Saturday or Sunday?"
     },
     {
       "topic": "free_time",
-      "topic_alias": "Spare time",
-      "question": "Would you like to have more free time in the future?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Would you like to have more free time in the future?"
     },
     {
       "topic": "memory",
-      "topic_alias": "Memory",
-      "question": "Are you good at memorising things?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are you good at memorising things?"
     },
     {
       "topic": "memory",
-      "topic_alias": "Memory",
-      "question": "Have you ever forgotten something important?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Have you ever forgotten something important?"
     },
     {
       "topic": "memory",
-      "topic_alias": "Memory",
-      "question": "What do you need to remember in your daily life?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you need to remember in your daily life?"
     },
     {
       "topic": "memory",
-      "topic_alias": "Memory",
-      "question": "How do you remember important things?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "How do you remember important things?"
     },
     {
       "topic": "crowded_places",
-      "topic_alias": "Crowded place",
-      "question": "Is the city where you live crowded?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Is the city where you live crowded?"
     },
     {
       "topic": "crowded_places",
-      "topic_alias": "Crowded place",
-      "question": "Is there a crowded place near where you live?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Is there a crowded place near where you live?"
     },
     {
       "topic": "crowded_places",
-      "topic_alias": "Crowded place",
-      "question": "Do you like crowded places?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like crowded places?"
     },
     {
       "topic": "crowded_places",
-      "topic_alias": "Crowded place",
-      "question": "Do most people like crowded places?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do most people like crowded places?"
     },
     {
       "topic": "crowded_places",
-      "topic_alias": "Crowded place",
-      "question": "When was the last time you were in a crowded place?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "When was the last time you were in a crowded place?"
+    },
+    {
+      "topic": "crowded_places",
+      "question": "How do you feel when a place is very crowded?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "What subjects are you studying?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you work or are you a student?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you like your subject?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you do?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Why did you choose to study that subject?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Why did you choose to do this type of work?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you think that your subject is popular in your country?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like your job? Why/Why not?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you have any plans for your studies in the next five years?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you find the most interesting about the work you do? Why?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "What are the benefits of being your age?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Will you need to do any more study for your job?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you want to change your major?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Where do you work?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you prefer to study in the mornings or in the afternoons?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Is it a good place to work?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "How much time do you spend on your studies each week?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Would you like the place where you work to make any changes?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Are you looking forward to working?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What technology do you use at work?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "What technology do you use when you study?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What subjects are you studying?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "What changes would you like to see in your school?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Why did you choose to study this subject?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "What work do you do?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you like about your course?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Why did you choose to do that type of work (or that job)?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What would you like to do after you finish your course?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you like your job?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you prefer to study in the mornings or in the afternoons?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "What requirements did you need to meet to get your current job?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you think you will miss being a student once you finish your studies? Why/why not?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you have any plans for your work in the next five years?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What technology do you use when you study?"
     },
     {
       "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "What do you think is the most important at the moment?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you want to change to another job?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Do you miss being a student?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "What technology do you use at work?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "study_or_work",
-      "topic_alias": "Work or studies",
-      "question": "Who helps you the most? And how?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are you enjoying your studies at the moment? Why/why not?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "What kind of house or apartment do you want to live in in the future?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you live in a house or an apartment?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "Are the transport facilities to your home very good?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you prefer living in a house or an apartment?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "Do you prefer living in a house or an apartment?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you live with anyone else? Why/Why not?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "Please describe the room you live in.",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like the place you currently live in? Why/Why not?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "What part of your home do you like the most?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What is your favourite room in your house/apartment?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "How long have you lived there?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Would you like to change anything in your house/apartment?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "Do you plan to live there for a long time?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Would you like to move to a different house/apartment in the future?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "What’s the difference between where you are living now and where you have lived in the past?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you think makes a place comfortable to live in?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "Can you describe the place where you live?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Can you describe the place where you live?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "What room does your family spend most of the time in?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "How long have you lived there?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "What's your favorite room in your apartment or house？",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Who do you live with?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "What makes you feel pleasant in your home？",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you plan to live there for a long time?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "Do you think it is important to live in a comfortable environment？",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What is the difference between where you are living now and where you have lived in the past?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "Do you live in an apartment or a house?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you usually do in your flat?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "Who do you live with?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Which room does your family spend most of the time in?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "What do you usually do in your apartment?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are there transport facilities to your home that are very good?"
     },
     {
       "topic": "home_and_accommodation",
-      "topic_alias": "Home/accommodation",
-      "question": "What kinds of accommodation do you live in?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What kinds of accommodation do you live in?"
+    },
+    {
+      "topic": "home_and_accommodation",
+      "question": "Please describe the room you live in?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Where is your hometown?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Where is your hometown?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Is that a big city or a small place?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What kind of place is it?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Please describe your hometown a little.",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "How long have you lived there?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "How long have you been living there?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What is one of the best things about living there?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Do you think you will continue living there for a long time?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Is there anything you dislike about it?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Do you like your hometown?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you know many people who live nearby?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Do you like living there?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you have any relatives who still live in your hometown? Why/Why not?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "What do you like (most) about your hometown?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you often go back to visit your hometown? Why/Why not?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Is there anything you dislike about it?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Can you describe your hometown a little bit?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "What's your hometown famous for？",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like it?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Did you learn about the history of your hometown at school？",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Did you like living there?"
     },
     {
       "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Are there many young people in your hometown?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Is your hometown a good place for young people to pursue their careers?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Have you learned anything about the history of your hometown?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "hometown",
-      "topic_alias": "Hometown",
-      "question": "Did you learn about the culture of your hometown in your childhood?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you think you'll continue living there for a long time?"
     },
     {
       "topic": "the_area_you_live_in",
-      "topic_alias": "The area you live in",
-      "question": "Do you like the area that you live in?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Where are you living at the moment?"
     },
     {
       "topic": "the_area_you_live_in",
-      "topic_alias": "The area you live in",
-      "question": "Where do you like to go in that area?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What kind of area is it?"
     },
     {
       "topic": "the_area_you_live_in",
-      "topic_alias": "The area you live in",
-      "question": "Do you know any famous people in your area?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "How long have you lived there?"
     },
     {
       "topic": "the_area_you_live_in",
-      "topic_alias": "The area you live in",
-      "question": "What are some changes in the area recently?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you know any of your neighbours?"
     },
     {
       "topic": "the_area_you_live_in",
-      "topic_alias": "The area you live in",
-      "question": "Do you know any of your neighbors?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What do you like about living there?"
     },
     {
       "topic": "the_area_you_live_in",
-      "topic_alias": "The area you live in",
-      "question": "Are the people in your neighborhood nice and friendly?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What changes have taken place in the area recently?"
     },
     {
       "topic": "the_area_you_live_in",
-      "topic_alias": "The area you live in",
-      "question": "Do you live in a noisy or a quiet area?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Would you like to change anything about your area? Why/Why not?"
+    },
+    {
+      "topic": "the_area_you_live_in",
+      "question": "Would you like to continue living there in the future? Why/Why not?"
     },
     {
       "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "What city do you live in?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "What city do you live in?"
     },
     {
       "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "Do you like this city? Why?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you like this city? Why?"
     },
     {
       "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "How long have you lived in this city?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "How long have you lived in this city?"
     },
     {
       "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "Are there big changes in this city?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are there big changes in this city?"
     },
     {
       "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "Is this city your permanent residence?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Is this city your permanent residence?"
     },
     {
       "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "Are there people of different ages living in this city?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are there people of different ages living in this city?"
     },
     {
       "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "Are the people friendly in the city?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Are the people friendly in the city?"
     },
     {
       "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "Is the city friendly to children and old people?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "Do you often see your neighbors?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "What's the weather like where you live?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
-    },
-    {
-      "topic": "the_city_you_live_in",
-      "topic_alias": "The city you live in",
-      "question": "Would you recommend your city to others?",
-      "source": "ieltsbro_pdf_2026_0604",
-      "partial": false
+      "question": "Do you often see your neighbors?"
     }
   ],
   "source_notes": [
-    "Source: 2026年5-8月最新雅思口语题库-0604.pdf, WPS-created PDF dated 2026-06-04.",
-    "Retained section includes 17 carried-over P1 topics plus 5 evergreen topics from the PDF.",
-    "Questions are extracted from the PDF text layer with page-number/form-feed cleanup only; no AI-generated questions were added."
+    "Authoritative base: idictation.cn (爱听写 / 神奇题库) current 2026 May-August Part 1 season bank, scraped 2026-06-14.",
+    "Thin idictation topics (fewer than 8 questions) were topped up with genuinely distinct questions from the IELTSBro 0604 PDF using Jaccard fuzzy dedup (>=0.55 dropped) to avoid paraphrase bloat.",
+    "No AI-generated questions were added; every question traces to idictation or the 0604 PDF.",
+    "Stale topics not present in the current idictation season were moved to data/ielts/archive/old_topics.json."
   ]
 }
