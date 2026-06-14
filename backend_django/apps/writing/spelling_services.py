@@ -33,6 +33,7 @@ SRS_STAGE_INTERVAL_DAYS: list[int] = [
 ]
 SRS_MAX_STAGE = len(SRS_STAGE_INTERVAL_DAYS)  # 4
 SRS_LAPSE_INTERVAL_DAYS = 1
+SRS_MASTERED_LAPSE_STAGE = max(0, SRS_MAX_STAGE - 1)
 SRS_MASTERED_INTERVAL_DAYS: list[int] = [7, 14, 30, 60, 90]
 
 
@@ -535,9 +536,10 @@ def record_spelling_attempt(user, word_id: str, typed: Any) -> dict[str, Any]:
                 else:
                     word.due_at = next_review_refresh(SRS_STAGE_INTERVAL_DAYS[new_stage - 1], now)
         else:
+            was_mastered = word.status == SpellingDrillWord.Status.MASTERED
             word.current_streak = 0
             word.lapses += 1
-            word.review_stage = 0
+            word.review_stage = SRS_MASTERED_LAPSE_STAGE if was_mastered else 0
             word.status = SpellingDrillWord.Status.ACTIVE
             set_mastered_review_level(word, 0)
             word.due_at = next_review_refresh(SRS_LAPSE_INTERVAL_DAYS, now)
@@ -565,7 +567,10 @@ def update_spelling_word(user, word_id: str, payload: dict[str, Any]) -> dict[st
             raise WritingError("Spelling drill word not found")
         if action == "master":
             word.status = SpellingDrillWord.Status.MASTERED
-            update_fields = ["status", "updated_at"]
+            word.review_stage = SRS_MAX_STAGE
+            set_mastered_review_level(word, 0)
+            word.due_at = next_review_refresh(SRS_MASTERED_INTERVAL_DAYS[0])
+            update_fields = ["status", "review_stage", "due_at", "metadata", "updated_at"]
         elif action == "reset":
             word.status = SpellingDrillWord.Status.ACTIVE
             word.current_streak = 0

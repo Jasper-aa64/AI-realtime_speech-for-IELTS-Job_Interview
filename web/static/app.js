@@ -161,6 +161,8 @@ const state = {
     promptLoadingPromises: {},
     promptImagePreloads: new Set(),
     promptImagePreloadPromises: new Map(),
+    promptOriginalPreloads: new Set(),
+    promptOriginalPreloadPromises: new Map(),
     promptImagePreloadQueue: [],
     promptImagePreloadQueued: new Set(),
     promptImagePreloadActive: 0,
@@ -238,6 +240,10 @@ const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
 const QUESTION_BANK_SCOPE_STORAGE_KEY = "ielts-speaking-question-bank-scope";
 const SPEAKING_PENDING_ANALYSIS_STORAGE_KEY = "ielts-speaking-pending-analysis";
 const SPEAKING_PENDING_ANALYSIS_VIEW_STORAGE_KEY = "ielts-speaking-pending-analysis-view";
+const SPEAKING_AUDIO_IDB_NAME = "ielts-speaking";
+const SPEAKING_AUDIO_IDB_STORE = "pendingTurnAudio";
+const SPEAKING_AUDIO_IDB_VERSION = 1;
+const SPEAKING_AUDIO_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const QUESTION_BANK_SCOPES = new Set(["current", "new", "retained", "archive", "all"]);
 const PRACTICE_VIEWS = new Set(["mock", "p1", "p2", "p3"]);
 const SPEAKING_PART_VIEWS = new Set(["p1", "p2", "p3", "mock"]);
@@ -1020,13 +1026,20 @@ function saveWritingPromptHighlights() {
 
 function normalizeWritingPromptHighlightRanges(ranges = [], sourceText = "") {
   const text = String(sourceText || "");
-  return (Array.isArray(ranges) ? ranges : [])
+  const sorted = (Array.isArray(ranges) ? ranges : [])
     .map((range) => ({
       start: Math.max(0, Math.min(text.length, Number(range?.start) || 0)),
       end: Math.max(0, Math.min(text.length, Number(range?.end) || 0)),
     }))
     .filter((range) => range.end > range.start)
-    .sort((a, b) => a.start - b.start);
+    .sort((a, b) => a.start - b.start || b.end - a.end);
+  const normalized = [];
+  sorted.forEach((range) => {
+    const previous = normalized[normalized.length - 1];
+    if (previous && range.start < previous.end) return;
+    normalized.push(range);
+  });
+  return normalized;
 }
 
 function writingPromptHighlightKey(prompt = state.writing.prompt) {
@@ -1366,6 +1379,7 @@ const {
   prefetchWritingPromptImageHints,
   scheduleNearbyWritingPromptImagePreload,
   warmAllWritingPromptImages,
+  writingPromptThumbUrl,
 } = writingPromptImagePreloader;
 
 const writingPromptPickerController = window.IELTSWritingPromptPicker?.createWritingPromptPickerController?.({
@@ -1534,6 +1548,8 @@ function clearUserScopedCaches() {
   state.writing.promptLoadingPromises = {};
   state.writing.promptImagePreloads.clear();
   state.writing.promptImagePreloadPromises.clear();
+  state.writing.promptOriginalPreloads.clear();
+  state.writing.promptOriginalPreloadPromises.clear();
   state.writing.promptImagePreloadQueue = [];
   state.writing.promptImagePreloadQueued.clear();
   state.writing.promptImagePreloadActive = 0;
@@ -1683,9 +1699,11 @@ function applyP1CorpusPayload(payload) {
   state.p1Corpus.loaded = true;
   const stats = $("p1CorpusStats");
   if (stats) {
-    const season = payload.active_season ? `${payload.active_season.replace(/-/g, " ")} · ` : "";
-    const scope = payload.active_scope_label ? `${payload.active_scope_label} · ` : "";
-    stats.textContent = `${season}${scope}${payload.topic_count || state.p1Corpus.topics.length} 个话题 · ${payload.question_count || 0} 道题 · 已保存 ${payload.saved_count || 0}`;
+    const season = payload.active_season ? formatSeasonLabel(payload.active_season) : "";
+    const scope = payload.active_scope_label || "";
+    const line1 = [season, scope].filter(Boolean).join(" · ");
+    const line2 = `${payload.question_count || 0} 道题 · 已保存 ${payload.saved_count || 0}`;
+    stats.innerHTML = `${escapeHtml(line1)}<br>${escapeHtml(line2)}`;
   }
   if (state.view === "p1Corpus") renderP1CorpusTopics();
   updateP1CorpusPeekButton(state.currentTurn);
@@ -1697,9 +1715,11 @@ function applyP2CorpusPayload(payload) {
   state.p2Corpus.loaded = true;
   const stats = $("p2CorpusStats");
   if (stats) {
-    const season = payload.active_season ? `${payload.active_season.replace(/-/g, " ")} · ` : "";
-    const scope = payload.active_scope_label ? `${payload.active_scope_label} · ` : "";
-    stats.textContent = `${season}${scope}${payload.current_part2_count || 0} 道 P2 题 · ${payload.category_count || 5} 个素材分类 · 已保存 ${payload.material_count || 0}`;
+    const season = payload.active_season ? formatSeasonLabel(payload.active_season) : "";
+    const scope = payload.active_scope_label || "";
+    const line1 = [season, scope].filter(Boolean).join(" · ");
+    const line2 = `${payload.current_part2_count || 0} 道题 · 已保存 ${payload.material_count || 0}`;
+    stats.innerHTML = `${escapeHtml(line1)}<br>${escapeHtml(line2)}`;
     stats.classList.remove("is-refreshing");
     stats.removeAttribute("aria-busy");
   }
@@ -1848,7 +1868,11 @@ function switchView(view, options = {}) {
     }
   }
   if (view === state.view && !options.force) return;
-  if (state.practiceLocked && isPracticeView(state.view) && accountViews.has(view) && options.preservePractice) {
+  if (isPracticeView(state.view) && accountViews.has(view) && options.preservePractice) {
+    // Treat the account page as a floating overlay over ANY practice surface
+    // (not just a locked session): it must not change the URL or tear down the
+    // current view, so a generated P3 plan / prepared P2 corpus survives the
+    // round-trip. returnFromSettings() restores the hidden panel in place.
     showPracticeOverlay(view);
     return;
   }
@@ -2194,6 +2218,11 @@ function showPracticeOverlay(view = "accountProfile") {
   $(".workspace").classList.remove("history-workspace", "writing-workspace");
   $(".topbar").classList.remove("hidden");
   $("#viewTitleBlock").classList.remove("hidden");
+  // Overlay mode skips switchView(), so apply the same account layout + back button
+  // it would normally set — otherwise the account page renders without its shell
+  // styling and with no way back except a page refresh.
+  $(".shell")?.classList.add("account-shell");
+  $("#accountBackBtn")?.classList.remove("hidden");
   text("viewTitle", viewTitleFor(view));
   text("viewSubtitle", viewSubtitleFor(view));
   if (view === "accountProfile") loadAccountProfile();
@@ -2221,6 +2250,7 @@ function returnFromSettings() {
   $("#accountSecurityPanel")?.classList.add("hidden");
   $("#practicePanel").classList.remove("hidden");
   $(".shell")?.classList.remove("auth-shell", "account-shell");
+  $("#accountBackBtn")?.classList.add("hidden");
   text("viewTitle", viewTitleFor(practiceView));
   text("viewSubtitle", viewSubtitleFor(practiceView));
   updateAgentAssistantVisibility(practiceView);
@@ -2228,6 +2258,14 @@ function returnFromSettings() {
 }
 
 function returnToPreviousView() {
+  // Overlay mode (avatar tapped over any practice surface): restore the practice
+  // view without tearing it down via switchView (which would reset the session
+  // or wipe a generated P3 plan). practiceViewBeforeSettings is only set by
+  // showPracticeOverlay, so its presence means we arrived here as an overlay.
+  if (state.practiceViewBeforeSettings && accountViews.has(state.view)) {
+    returnFromSettings();
+    return;
+  }
   if (authViews.has(state.view)) {
     const sourceView = authSourceView(state.account.fromView);
     state.account.returnView = null;
@@ -4359,6 +4397,18 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
   const attempt = retrySnapshot?.attempt || state.attempt;
   const turn = retrySnapshot?.turn || state.currentTurn;
   if (!attempt || !turn) return;
+  // Part 2 is a single long (~2 min) turn whose scoring follows immediately, so
+  // the dictation-wait + big-audio upload below is the longest pre-"Analyzing"
+  // stretch in the app — and the most likely moment a refresh lands. Persist the
+  // resume key NOW (before that stretch) so a refresh always returns to this
+  // attempt: scoreAttempt() is idempotent server-side, so it either resumes the
+  // running report or, if the upload never finished, shows the existing
+  // recoverable "重新分析" state instead of a blank screen. Gated to the P2
+  // single-turn practice flow (no local next turn) so multi-turn parts can't be
+  // yanked into the analysis surface mid-practice.
+  if (!retrySnapshot && state.view === "p2" && !localNextTurnAfter(turn, attempt)) {
+    persistSpeakingAnalysisAttemptId(attempt.id, "p2");
+  }
   if (!retrySnapshot) {
     await waitForFinalDictation();
     setDictationStatus("", "");
@@ -4372,6 +4422,24 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
   const transcriptStatusSnapshot = retrySnapshot?.transcriptStatus || state.transcriptStatus;
   const transcriptSourceSnapshot = retrySnapshot?.transcriptSource || state.transcriptSource || "browser_dictation";
   const p2CorpusEntrySnapshot = retrySnapshot?.p2CorpusEntryId || state.p2Corpus.selectedEntryId;
+  const pendingAudioRecord = {
+    key: pendingTurnAudioKey(attempt.id, turn.id),
+    attemptId: attempt.id,
+    turnId: turn.id,
+    turn,
+    mimeType,
+    blob,
+    transcript: transcriptSnapshot,
+    transcriptStatus: transcriptStatusSnapshot,
+    transcriptSource: transcriptSourceSnapshot,
+    p2CorpusEntryId: p2CorpusEntrySnapshot,
+    audioPreprocessingMetrics,
+    realtimeAsrMetrics,
+    view: state.view,
+    userScopeKey: speakingAudioUserScopeKey(),
+    createdAt: Date.now(),
+  };
+  await putPendingTurnAudio(pendingAudioRecord).catch(() => null);
   state.speaking.retryCompletion = {
     attempt,
     turn,
@@ -4384,45 +4452,80 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
     transcriptSource: transcriptSourceSnapshot,
     p2CorpusEntryId: p2CorpusEntrySnapshot,
   };
-  setRecordButton("processing", "Saving", "正在上传回答音频...");
   try {
-    const token = await ensureCsrfToken();
-    const uploadHeaders = { "Content-Type": mimeType.split(";")[0] };
-    if (token) uploadHeaders["X-CSRFToken"] = token;
-    const upload = await fetch(`/api/attempts/${attempt.id}/turns/${turn.id}/audio`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: uploadHeaders,
-      body: blob,
-    });
-    const body = await upload.text();
-    const payload = body ? JSON.parse(body) : {};
-    if (!upload.ok) throw new Error(payload.error || "Audio upload failed");
-    const identityAnswerMissing = isP1WorkStudyIdentityTurn(turn) && !String(transcriptSnapshot || "").trim();
-    const completionStatus = identityAnswerMissing
-      ? "没有检测到回答，已跳过追问。"
-      : isP1WorkStudyIdentityTurn(turn)
-        ? "正在生成追问..."
-        : "正在保存本题...";
     const localNextTurn = localNextTurnAfter(turn, attempt);
     const requiresSyncComplete = turnRequiresSynchronousComplete(turn, localNextTurn);
-    recordRealtimePhaseMetric({ turnCompleteStartedAt: Date.now() });
-    const completeRequest = (streamFollowUp = false) => api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
-      turn,
-      transcriptSnapshot,
-      transcriptStatusSnapshot,
-      transcriptSourceSnapshot,
-      p2CorpusEntrySnapshot,
-      audioPreprocessingMetrics,
-      realtimeAsrMetrics,
-      streamFollowUp,
-    ));
+    const completeRequest = async (streamFollowUp = false) => {
+      let lastError = null;
+      for (let tryIndex = 1; tryIndex <= 3; tryIndex += 1) {
+        try {
+          return await api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
+            turn,
+            transcriptSnapshot,
+            transcriptStatusSnapshot,
+            transcriptSourceSnapshot,
+            p2CorpusEntrySnapshot,
+            audioPreprocessingMetrics,
+            realtimeAsrMetrics,
+            streamFollowUp,
+          ));
+        } catch (error) {
+          // api() tags HTTP errors with .status; a bare network drop has none.
+          // Only retry the latter — complete_turn is idempotent so a re-send is safe.
+          if (error?.status || tryIndex >= 3) throw error;
+          lastError = error;
+          await wait(700 * tryIndex);
+        }
+      }
+      throw lastError || new Error("Turn completion failed");
+    };
+    // Upload the answer audio; returns the upload response (throws on failure).
+    // Retries on network drops ("Failed to fetch") and transient 5xx, because
+    // the public quick-tunnel often resets a large upload mid-flight — a single
+    // attempt would otherwise lose the whole answer.
+    const uploadAudio = async () => {
+      const token = await ensureCsrfToken();
+      const uploadHeaders = { "Content-Type": mimeType.split(";")[0] };
+      if (token) uploadHeaders["X-CSRFToken"] = token;
+      const maxAttempts = 3;
+      let lastError = null;
+      for (let tryIndex = 1; tryIndex <= maxAttempts; tryIndex += 1) {
+        try {
+          const upload = await fetch(`/api/attempts/${attempt.id}/turns/${turn.id}/audio`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: uploadHeaders,
+            body: blob,
+          });
+          const body = await upload.text();
+          const uploadPayload = body ? JSON.parse(body) : {};
+          if (upload.ok) return uploadPayload;
+          // 4xx is a real rejection (size/auth/validation) — surface immediately.
+          // 5xx may be transient — fall through to retry.
+          const httpError = new Error(uploadPayload.error || `Audio upload failed (${upload.status})`);
+          if (upload.status < 500 || tryIndex >= maxAttempts) throw httpError;
+          lastError = httpError;
+        } catch (error) {
+          // TypeError === network-level failure ("Failed to fetch"); JSON.parse of a
+          // truncated body also lands here. Retry unless we're out of attempts.
+          if (tryIndex >= maxAttempts) throw error;
+          lastError = error;
+        }
+        await wait(700 * tryIndex);
+      }
+      throw lastError || new Error("Audio upload failed");
+    };
+
     if (!requiresSyncComplete) {
+      // Multi-turn middle question: jump to the next question IMMEDIATELY and run
+      // the audio upload + complete entirely in the background, so the slow
+      // "正在上传回答音频" no longer blocks the next question. The upload is still
+      // awaited before scoring (waitForPendingTurnCompletions), so nothing is lost.
       const sessionId = state.practiceSessionId;
       state.attempt = mergeCompletedTurnPayload(state.attempt, {
         id: turn.id,
         status: "completed",
-        audio: payload.audio || turn.audio,
+        audio: turn.audio,
         transcript_raw: transcriptSnapshot,
         transcript_cleaned: transcriptSnapshot,
         transcript_status: transcriptStatusSnapshot,
@@ -4431,13 +4534,22 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
       state.currentTurn = localNextTurn;
       renderTurn(localNextTurn);
       setRecordButton("turn_saved", "Next", "正在进入下一题。");
-      text("recordStatus", "音频已上传，正在后台保存转写。");
+      text("recordStatus", "已进入下一题，本题在后台上传保存。");
       scheduleExaminerPhase(sessionId, localNextTurn.id, 200);
-      const completion = completeRequest()
+      recordRealtimePhaseMetric({ turnCompleteStartedAt: Date.now() });
+      const completion = uploadAudio()
+        .then((uploadPayload) => {
+          if (uploadPayload?.audio) {
+            state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, audio: uploadPayload.audio });
+          }
+          return completeRequest();
+        })
         .then((completePayload) => {
+          deletePendingTurnAudio(attempt.id, turn.id).catch(() => null);
+          // Do NOT reset state.audioChunks here — a later turn may already be
+          // recording into it; startRecording() owns that buffer's lifecycle.
           if (state.speaking.retryCompletion?.turn?.id === turn.id) {
             state.speaking.retryCompletion = null;
-            state.audioChunks = [];
           }
           state.speaking.turnCompletionErrors.delete(pendingTurnCompletionKey(attempt.id, turn.id));
           handleTurnCompletionResult(attempt, turn, completePayload);
@@ -4449,6 +4561,73 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
       registerPendingTurnCompletion(attempt, turn, completion);
       return;
     }
+
+    // Synchronous completion path. The /complete response must be awaited inline
+    // because the frontend needs it to advance (next question / follow-up / scoring).
+    // The AUDIO upload, by contrast, is never needed for /complete or for scoring —
+    // the score uses the local transcript; the audio only powers report replay and the
+    // non-Chrome ASR fallback. So at the scoring boundary (the truly-last turn, e.g.
+    // the ~2-minute P2) upload the audio DETACHED and complete + score immediately from
+    // the transcript, instead of making the user watch the slow ~MB upload cross the
+    // tunnel. The blob is already in IndexedDB, so a failed/interrupted upload simply
+    // re-uploads on the next page load — a flaky tunnel no longer blocks or fails the
+    // save. (Identity turns are excluded: they spawn a follow-up, so they are not a
+    // scoring boundary even when they have no local next turn.)
+    const isScoringBoundary = !localNextTurn && !isP1WorkStudyIdentityTurn(turn);
+    if (isScoringBoundary) {
+      setRecordButton("processing", "Saving", "正在保存并评分...");
+      text("recordStatus", "正在保存并评分...");
+      // Detached on purpose: NOT registered as a pending turn completion, so
+      // scoreAttempt() does not wait on it. On success attach the audio and drop the
+      // IndexedDB copy; on failure the copy stays and resumePendingTurnAudioUploads()
+      // re-uploads it on the next page load.
+      uploadAudio()
+        .then((uploadPayload) => {
+          if (uploadPayload?.audio && state.attempt?.id === attempt.id) {
+            state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, audio: uploadPayload.audio });
+          }
+          return deletePendingTurnAudio(attempt.id, turn.id).catch(() => null);
+        })
+        .catch(() => { /* stays in IndexedDB; resume retries on the next page load */ });
+      recordRealtimePhaseMetric({ turnCompleteStartedAt: Date.now() });
+      const completePayload = await completeRequest(requiresSyncComplete);
+      recordRealtimePhaseMetric({
+        turnCompleteReturnedAt: Date.now(),
+        turnCompleteAfterStopMs: realtimeMetricElapsed("recordingStoppedAt", "turnCompleteReturnedAt"),
+      });
+      if (state.abortingAttemptId === attempt.id || state.attempt?.id !== attempt.id) return;
+      state.speaking.turnCompletionErrors.delete(pendingTurnCompletionKey(attempt.id, turn.id));
+      state.attempt = completePayload.attempt;
+      state.currentTurn = null;
+      state.speaking.retryCompletion = null;
+      if (completePayload.follow_up_skipped) {
+        text("recordStatus", completePayload.follow_up_skipped.message || "没有检测到回答，已跳过追问。");
+      }
+      await scoreAttempt();
+      state.speaking.retryCompletion = null;
+      return;
+    }
+
+    // Non-scoring sync cases (P1 identity follow-up, P3 dynamic boundary): the
+    // follow-up is generated by /complete and never needs the answer audio. So upload
+    // DETACHED (blob stays in IndexedDB; resumePendingTurnAudioUploads re-uploads on the
+    // next page load if it fails) and go straight to /complete — the slow "正在上传回答音频"
+    // no longer blocks follow-up generation.
+    uploadAudio()
+      .then((uploadPayload) => {
+        if (uploadPayload?.audio && state.attempt?.id === attempt.id) {
+          state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, audio: uploadPayload.audio });
+        }
+        return deletePendingTurnAudio(attempt.id, turn.id).catch(() => null);
+      })
+      .catch(() => { /* stays in IndexedDB; resume retries on the next page load */ });
+    const identityAnswerMissing = isP1WorkStudyIdentityTurn(turn) && !String(transcriptSnapshot || "").trim();
+    const completionStatus = identityAnswerMissing
+      ? "没有检测到回答，已跳过追问。"
+      : isP1WorkStudyIdentityTurn(turn)
+        ? "正在生成追问..."
+        : "正在保存本题...";
+    recordRealtimePhaseMetric({ turnCompleteStartedAt: Date.now() });
     setRecordButton("processing", "Saving", completionStatus);
     text("recordStatus", completionStatus);
     const completePayload = await completeRequest(requiresSyncComplete);
@@ -4534,6 +4713,196 @@ async function retryTurnCompletion() {
   state.p2Corpus.selectedEntryId = retry.p2CorpusEntryId || state.p2Corpus.selectedEntryId || "";
   renderTurn(retry.turn);
   await finalizeTurn(retry.mimeType || "audio/webm", retry);
+}
+
+function speakingAudioUserScopeKey() {
+  const user = state.account?.user;
+  return String(user?.id ?? user?.username ?? "").trim();
+}
+
+function pendingTurnAudioKey(attemptId, turnId) {
+  return `${attemptId}:${turnId}`;
+}
+
+function openSpeakingAudioDb() {
+  if (!("indexedDB" in window)) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let request = null;
+    try {
+      request = indexedDB.open(SPEAKING_AUDIO_IDB_NAME, SPEAKING_AUDIO_IDB_VERSION);
+    } catch (_error) {
+      resolve(null);
+      return;
+    }
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(SPEAKING_AUDIO_IDB_STORE)) {
+        db.createObjectStore(SPEAKING_AUDIO_IDB_STORE, { keyPath: "key" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+    request.onblocked = () => resolve(null);
+  });
+}
+
+async function withSpeakingAudioStore(mode, handler) {
+  const db = await openSpeakingAudioDb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(SPEAKING_AUDIO_IDB_STORE, mode);
+      const store = tx.objectStore(SPEAKING_AUDIO_IDB_STORE);
+      const result = handler(store);
+      tx.oncomplete = () => {
+        db.close();
+        resolve(result);
+      };
+      tx.onerror = () => {
+        db.close();
+        resolve(null);
+      };
+      tx.onabort = () => {
+        db.close();
+        resolve(null);
+      };
+    } catch (_error) {
+      try { db.close(); } catch (_closeError) { /* ignore */ }
+      resolve(null);
+    }
+  });
+}
+
+async function putPendingTurnAudio(record) {
+  await withSpeakingAudioStore("readwrite", (store) => store.put(record));
+}
+
+async function deletePendingTurnAudio(attemptId, turnId) {
+  await withSpeakingAudioStore("readwrite", (store) => store.delete(pendingTurnAudioKey(attemptId, turnId)));
+}
+
+async function allPendingTurnAudioRecords() {
+  const records = [];
+  await withSpeakingAudioStore("readonly", (store) => {
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      records.push(cursor.value);
+      cursor.continue();
+    };
+    return records;
+  });
+  return records;
+}
+
+async function cleanupPendingTurnAudio(records, userScopeKey) {
+  const now = Date.now();
+  await Promise.all((records || []).map((record) => {
+    const isOld = now - Number(record.createdAt || 0) > SPEAKING_AUDIO_MAX_AGE_MS;
+    const isOtherUser = !record.userScopeKey || !userScopeKey || record.userScopeKey !== userScopeKey;
+    if (!isOld && !isOtherUser) return Promise.resolve();
+    return deletePendingTurnAudio(record.attemptId, record.turnId);
+  }));
+}
+
+function pendingAudioResumeMessage() {
+  return "\u68c0\u6d4b\u5230\u672a\u4fdd\u5b58\u5b8c\u6210\u7684\u5f55\u97f3\uff0c\u6b63\u5728\u540e\u53f0\u8865\u4f20\u2026";
+}
+
+async function uploadPendingTurnAudioRecord(record) {
+  if (!record?.attemptId || !record?.turnId || !record?.blob) return;
+  const mimeType = record.mimeType || record.blob.type || "audio/webm";
+  const uploadHeaders = { "Content-Type": mimeType.split(";")[0] };
+  const token = await ensureCsrfToken();
+  if (token) uploadHeaders["X-CSRFToken"] = token;
+  let lastError = null;
+  for (let tryIndex = 1; tryIndex <= 3; tryIndex += 1) {
+    try {
+      const upload = await fetch(`/api/attempts/${record.attemptId}/turns/${record.turnId}/audio`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: uploadHeaders,
+        body: record.blob,
+      });
+      const body = await upload.text();
+      const uploadPayload = body ? JSON.parse(body) : {};
+      if (!upload.ok) {
+        const httpError = new Error(uploadPayload.error || `Audio upload failed (${upload.status})`);
+        if (upload.status < 500 || tryIndex >= 3) throw httpError;
+        lastError = httpError;
+      } else {
+        try {
+          const completePayload = await api(`/api/attempts/${record.attemptId}/turns/${record.turnId}/complete`, completeTurnPayload(
+            record.turn || {},
+            record.transcript || "",
+            record.transcriptStatus || (record.transcript ? "captured" : "missing"),
+            record.transcriptSource || "browser_dictation",
+            record.p2CorpusEntryId || "",
+            record.audioPreprocessingMetrics || null,
+            record.realtimeAsrMetrics || null,
+            false,
+          ));
+          await deletePendingTurnAudio(record.attemptId, record.turnId);
+          return completePayload;
+        } catch (completeError) {
+          // The audio (the slow part) is now stored on the server. If /complete is
+          // refused because the turn/attempt was already finalized — the P2 instant-
+          // save path completes and scores in the foreground, then this background/
+          // resume upload only needs to attach the audio — or the attempt was aborted,
+          // there is nothing left to do. Drop the record so we never retry forever.
+          if (/cannot be completed/i.test(String(completeError?.message || ""))) {
+            await deletePendingTurnAudio(record.attemptId, record.turnId);
+            return null;
+          }
+          throw completeError;
+        }
+      }
+    } catch (error) {
+      if (error?.status || tryIndex >= 3) throw error;
+      lastError = error;
+    }
+    await wait(700 * tryIndex);
+  }
+  throw lastError || new Error("Audio resume upload failed");
+}
+
+async function resumePendingTurnAudioUploads() {
+  if (!state.account?.authenticated) return;
+  const userScopeKey = speakingAudioUserScopeKey();
+  const records = await allPendingTurnAudioRecords();
+  await cleanupPendingTurnAudio(records, userScopeKey);
+  const now = Date.now();
+  const currentRecords = records
+    .filter((record) => (
+      record?.userScopeKey === userScopeKey
+      && record?.blob
+      && now - Number(record.createdAt || 0) <= SPEAKING_AUDIO_MAX_AGE_MS
+    ))
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+  if (!currentRecords.length) return;
+  renderAccountStatus(pendingAudioResumeMessage());
+  if (isPracticeView(state.view)) text("recordStatus", pendingAudioResumeMessage());
+  for (const record of currentRecords) {
+    try {
+      const completePayload = await uploadPendingTurnAudioRecord(record);
+      if (completePayload?.attempt?.id) {
+        state.attempt = completePayload.attempt;
+        state.historyDetailCache.set(completePayload.attempt.id, completePayload.attempt);
+      } else if (record.attemptId) {
+        state.attempt = state.attempt?.id === record.attemptId ? state.attempt : { id: record.attemptId };
+      }
+      if (record.view && isPracticeView(record.view)) {
+        persistSpeakingAnalysisAttemptId(record.attemptId, record.view);
+      }
+      if (state.attempt?.id === record.attemptId && !completePayload?.next_turn) {
+        await scoreAttempt();
+      }
+    } catch (error) {
+      renderAccountStatus(error.message || "\u5f55\u97f3\u8865\u4f20\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002", true);
+      break;
+    }
+  }
 }
 
 function persistSpeakingAnalysisAttemptId(attemptId, view = "") {
@@ -6314,33 +6683,40 @@ async function openWritingFrameEditor() {
     const label = `${writingTaskLabel(taskType)}${typeLabel ? " · " + typeLabel : ""}`;
     sub.textContent = `当前类型：${label}（保存的框架仅作用于这一种固定问法/图表类型）`;
   }
+  // Show the modal immediately with the locally known frame so the first open
+  // has no perceived delay; template sync + migration then run in the
+  // background and only refresh the editor if the user hasn't started editing.
+  const editor = $("writingFrameEditor");
+  const status = $("writingFrameSaveStatus");
+  const initialFrame = writingFrameFor(taskType, frameType);
+  if (editor) {
+    editor.value = initialFrame;
+    if (editor.dataset) editor.dataset.frameKey = key;
+  }
+  if (status) status.textContent = "";
+  $("writingFrameModal")?.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  setTimeout(() => editor?.focus(), 50);
   try {
     await loadWritingFrameTemplates();
     const migrated = await migrateLocalWritingFrameToServer(key);
-    if (migrated) {
-      const status = $("writingFrameSaveStatus");
-      if (status) {
-        status.textContent = "已同步本机旧框架";
-        status.classList.remove("error");
-        setTimeout(() => { if (status) status.textContent = ""; }, 1800);
-      }
+    if (migrated && status) {
+      status.textContent = "已同步本机旧框架";
+      status.classList.remove("error");
+      setTimeout(() => { if (status) status.textContent = ""; }, 1800);
+    }
+    // Refresh only if this modal is still on the same key and untouched.
+    if (editor && editor.dataset?.frameKey === key && editor.value === initialFrame) {
+      const refreshed = writingFrameFor(taskType, frameType);
+      if (refreshed !== initialFrame) editor.value = refreshed;
     }
   } catch (error) {
     // LocalStorage remains a fallback if the user is offline or the session expires.
-    const status = $("writingFrameSaveStatus");
     if (status) {
       status.textContent = "本机有旧框架，但同步到账号失败；保存前请确认已登录。";
       status.classList.add("error");
     }
   }
-  const editor = $("writingFrameEditor");
-  if (editor) editor.value = writingFrameFor(taskType, frameType);
-  const status = $("writingFrameSaveStatus");
-  if (status) status.textContent = "";
-  editor?.dataset && (editor.dataset.frameKey = key);
-  $("writingFrameModal")?.classList.remove("hidden");
-  document.body.classList.add("modal-open");
-  setTimeout(() => editor?.focus(), 50);
 }
 
 function closeWritingFrameEditor() {
@@ -6399,22 +6775,17 @@ async function closeWritingFrameEditorSavingChanges() {
     closeWritingFrameEditor();
     return;
   }
+  const editor = $("writingFrameEditor");
+  const key = editor?.dataset.frameKey || "";
+  const value = editor?.value || "";
   writingFrameCloseSaving = true;
-  const modal = $("writingFrameModal");
-  const card = modal?.querySelector(".writing-frame-modal-card");
-  const status = $("writingFrameSaveStatus");
-  card?.classList.add("is-saving");
-  if (status) {
-    status.textContent = "正在保存…";
-    status.classList.remove("error");
-  }
+  closeWritingFrameEditor();
   try {
-    const ok = await saveWritingFrame();
-    if (!ok) return;
-    closeWritingFrameEditor();
+    await saveWritingFrameTemplateToServer(key, value);
+  } catch (_error) {
+    if (key) writeLocalWritingFrameValue(key, value);
   } finally {
     writingFrameCloseSaving = false;
-    card?.classList.remove("is-saving");
   }
 }
 
@@ -7785,6 +8156,7 @@ const writingImageViewerController = window.IELTSWritingImageViewer?.createWriti
   state,
   $,
   currentWritingPromptImageUrl,
+  thumbUrlFor: writingPromptThumbUrl,
 });
 
 function applyWritingPromptHighlightSelection() {
@@ -7807,10 +8179,11 @@ function applyWritingPromptHighlightSelection() {
     setWritingHighlightMenuMode("select");
     window.getSelection?.().removeAllRanges?.();
     return;
-  } else {
-    current.push({ start: selectionRange.start, end: selectionRange.end });
   }
-  setWritingPromptHighlightState(promptId, current);
+  const nextRanges = current
+    .filter((range) => range.end <= selectionRange.start || range.start >= selectionRange.end);
+  nextRanges.push({ start: selectionRange.start, end: selectionRange.end });
+  setWritingPromptHighlightState(promptId, nextRanges);
   hideWritingHighlightMenu();
   setWritingHighlightMenuMode("select");
   window.getSelection?.().removeAllRanges?.();
@@ -8540,7 +8913,7 @@ async function editWritingReportEntry(entryId) {
       await recoverWritingEntry(source);
       syncWritingScorePolling(source, { switchOnComplete: false });
       syncUrlForCurrentState({ replace: true });
-      text("writingSaveStatus", "已打开未评分作文，可继续编辑原稿。");
+      text("writingSaveStatus", "继续编辑原稿");
       $("writingAnswer")?.focus();
       return;
     }
@@ -8701,6 +9074,9 @@ function renderDetail(attempt, updateView = true, options = {}) {
       p2QuestionId: button.dataset.p2QuestionId || "",
       followupId: button.dataset.followupId || "",
       entryId: button.dataset.p2CorpusEntryId || "",
+      title: button.dataset.title || "",
+      category: button.dataset.category || "",
+      label: button.dataset.label || "",
     }).catch(showError));
   });
   document.querySelectorAll("[data-start-p3-from-p2]").forEach((button) => {
@@ -8750,7 +9126,7 @@ function overallReviewSection(review = {}, attempt = null) {
   if (!markdown && !comment && !points.length) return "";
   const isP2 = attempt && (attempt.mode === "p2" || attempt.part === "p2");
   const action = isP2
-    ? `<button type="button" class="p2-report-p3-button" data-start-p3-from-p2="${escapeHtml(attempt.id || "")}">根据本次P2回答练习P3</button>`
+    ? `<button type="button" class="primary writing-report-edit-btn p2-report-p3-cta" data-start-p3-from-p2="${escapeHtml(attempt.id || "")}">根据本次P2回答练习P3</button>`
     : "";
   const body = markdown ? renderMarkdown(markdown) : `
     ${comment ? `<h4>总体点评</h4><p>${escapeHtml(comment)}</p>` : ""}
@@ -8892,8 +9268,8 @@ function turnTableSection(attempt, turns, isP2 = false) {
   const reportTurns = turns.filter(shouldRenderReportTurn);
   const tableClass = isP2 ? "turn-report-table p2-report-table" : "turn-report-table p1-p3-report-table";
   const headers = isP2
-    ? "<th>我的原文</th><th>7 分回答</th>"
-    : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th>";
+    ? '<th>我的原文</th><th class="band7-head">7分回答参考</th>'
+    : '<th>Question</th><th>Your recording</th><th class="band7-head">7分回答参考</th>';
   const bodyHtml = reportTurns.map((turn) => turnReportGroup(attempt.id, turn, attempt, isP2)).join("");
   return `
     <div class="detail-card turn-report-card${isP2 ? " p2-report-card" : ""}">
@@ -8942,8 +9318,8 @@ function mockTurnSections(attempt, turns) {
     const isP2 = part === "p2";
     const tableClass = isP2 ? "turn-report-table" : "turn-report-table p1-p3-report-table";
     const headers = isP2
-      ? "<th>Your recording</th><th>Band 7 spoken version</th>"
-      : "<th>Question</th><th>Your recording</th><th>Band 7 spoken version</th>";
+      ? '<th>Your recording</th><th class="band7-head">7分回答参考</th>'
+      : '<th>Question</th><th>Your recording</th><th class="band7-head">7分回答参考</th>';
     return `
       <div class="detail-section">
         <h3>${escapeHtml(part.toUpperCase())}</h3>
@@ -9305,6 +9681,10 @@ function p2CorpusPeekHtml(...args) {
 
 async function openP2CorpusPeek(...args) {
   return corpusTakeawayController.openP2CorpusPeek(...args);
+}
+
+async function openP2CorpusBodyPeek(...args) {
+  return corpusTakeawayController.openP2CorpusBodyPeek(...args);
 }
 
 function closeP2CorpusPeek(...args) {
@@ -9682,6 +10062,31 @@ function p1CorpusTargetForTurn(turn, attempt) {
   };
 }
 
+function p2CorpusTargetForTurn(turn, attempt) {
+  if (turn?.part !== "p2") return null;
+  const prompt = turn.prompt || {};
+  const cue = turn.cue_card || attempt?.cue_card || {};
+  const questionId = String(
+    cue.cue_id
+    || cue.question_id
+    || cue.canonical_entry_id
+    || prompt.p2_question_id
+    || prompt.cue_id
+    || prompt.question_id
+    || ""
+  ).trim();
+  if (!questionId) return null;
+  return {
+    kind: "p2_bank",
+    questionId,
+    title: cue.title || prompt.title || turn.question || "P2 题卡",
+    question: turn.question || cue.title || prompt.question || "",
+    displayQuestion: cue.title || turn.question || prompt.question || "",
+    category: cue.category || cue.type || "special",
+    label: cue.label || "P2",
+  };
+}
+
 function p3CorpusTargetForTurn(turn) {
   if (turn?.part !== "p3") return null;
   const prompt = turn.prompt || {};
@@ -9710,6 +10115,8 @@ function p3CorpusTargetForTurn(turn) {
 function corpusTargetForTurn(turn, attempt) {
   const p1Target = p1CorpusTargetForTurn(turn, attempt);
   if (p1Target) return { kind: "p1", ...p1Target };
+  const p2Target = p2CorpusTargetForTurn(turn, attempt);
+  if (p2Target) return p2Target;
   return p3CorpusTargetForTurn(turn);
 }
 
@@ -9724,6 +10131,21 @@ async function openReportCorpusTarget(target) {
       corpus_text: "",
       last_ai_answer: target.aiAnswer || "",
     }, { showReferenceAnswer: true });
+    return;
+  }
+  if (target.kind === "p2_bank") {
+    await openP2CorpusEditor({
+      entry_id: target.questionId || "",
+      cue_id: target.questionId || "",
+      canonical_entry_id: target.questionId || "",
+      source_type: "bank",
+      category: target.category || "special",
+      label: target.label || "P2",
+      title: target.title || target.displayQuestion || "P2 题卡",
+      cue_title: target.title || target.displayQuestion || "P2 题卡",
+      linked_question: target.question || target.displayQuestion || "",
+      last_ai_answer: target.aiAnswer || "",
+    });
     return;
   }
   if (target.kind === "p3_bank") {
@@ -9779,7 +10201,10 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
         data-ai-answer="${escapeHtml(band7Markdown || band7 || "")}"
         data-p2-question-id="${escapeHtml(corpusTarget.p2QuestionId || "")}"
         data-followup-id="${escapeHtml(corpusTarget.followupId || "")}"
-        data-p2-corpus-entry-id="${escapeHtml(corpusTarget.entryId || "")}">编辑语料库</button>`
+        data-p2-corpus-entry-id="${escapeHtml(corpusTarget.entryId || "")}"
+        data-title="${escapeHtml(corpusTarget.title || "")}"
+        data-category="${escapeHtml(corpusTarget.category || "")}"
+        data-label="${escapeHtml(corpusTarget.label || "")}">编辑语料库</button>`
     : "";
   const coachingRow = shouldRenderTurnCoaching(turn)
     ? `<tr class="p1-p3-coaching-row">
@@ -9797,6 +10222,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
         <td>
           ${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}
           ${reportRecordingCellInner(attemptId, turn)}
+          ${corpusButton ? `<div class="question-cell-actions p2-report-actions">${corpusButton}</div>` : ""}
         </td>
         <td>
           ${modelAudioControl}
@@ -9986,6 +10412,39 @@ function accountProfileNames(user) {
   };
 }
 
+function normalizeAiSource(value) {
+  return String(value || "").trim() === "claude_cli" ? "claude_cli" : "gpt";
+}
+
+function applyAccountProfileForm(user = state.account.user) {
+  if (!user) return;
+  applyCandidateNames(accountProfileNames(user));
+  const aiSourceSelect = $("aiSourceSelect");
+  if (aiSourceSelect) {
+    aiSourceSelect.value = normalizeAiSource(user.profile?.report_ai_source);
+  }
+}
+
+async function saveAiSourcePreference(value) {
+  const aiSource = normalizeAiSource(value);
+  const select = $("aiSourceSelect");
+  if (select) {
+    select.value = aiSource;
+    select.disabled = true;
+  }
+  try {
+    const payload = await api("/api/accounts/me/", { report_ai_source: aiSource }, { method: "PATCH" });
+    state.account.user = payload.user || state.account.user;
+    applyAccountProfileForm(state.account.user);
+    renderAccountStatus(aiSource === "claude_cli" ? "AI 评分来源已切换为 Claude。" : "AI 评分来源已切换为 GPT。");
+  } catch (error) {
+    applyAccountProfileForm(state.account.user);
+    renderAccountStatus(error.message || "AI 评分来源保存失败。", true);
+  } finally {
+    if (select) select.disabled = false;
+  }
+}
+
 function formatCompactDateTime(value) {
   if (!value) return "未安排";
   const date = new Date(value);
@@ -10108,6 +10567,7 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
   const optionRoot = $("accountBankScopeOptions");
   if (optionRoot) {
     const optionByScope = new Map(options.map((item) => [normalizeQuestionBankScope(item.scope), item]));
+    const switchingAttr = state.account.questionBankSwitching ? "disabled" : "";
     const optionButton = (scopeName, className = "") => {
       const scope = normalizeQuestionBankScope(scopeName);
       const item = optionByScope.get(scope) || { scope, label: questionBankScopeLabel(scope) };
@@ -10115,7 +10575,7 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
         ? `<small>${Number(item.part1_count || 0)} P1 · ${Number(item.part2_count || 0)} P2</small>`
         : "";
       const classes = [className, scope === activeScope ? "is-active" : ""].filter(Boolean).join(" ");
-      return `<button type="button" data-bank-scope="${escapeHtml(scope)}" class="${escapeHtml(classes)}" aria-pressed="${scope === activeScope ? "true" : "false"}">
+      return `<button type="button" data-bank-scope="${escapeHtml(scope)}" class="${escapeHtml(classes)}" aria-pressed="${scope === activeScope ? "true" : "false"}" ${switchingAttr}>
         <span class="account-bank-option-label">${escapeHtml(questionBankScopeLabel(scope, item.label || scope))}</span>
         ${countText}
       </button>`;
@@ -10135,7 +10595,7 @@ function renderQuestionBankSelector(summary = state.account.questionBankSummary)
       <div class="account-bank-secondary">
         <label class="account-bank-archive-control">
           <span>${escapeHtml(t("bank.archive"))}</span>
-          <select id="accountBankArchiveSelect" data-bank-scope-select aria-label="${escapeHtml(t("bank.archiveSelect"))}">
+          <select id="accountBankArchiveSelect" data-bank-scope-select aria-label="${escapeHtml(t("bank.archiveSelect"))}" ${switchingAttr}>
             <option value="">${escapeHtml(t("bank.archiveSelect"))}</option>
             <option value="archive" ${activeScope === "archive" ? "selected" : ""}>
               ${escapeHtml(questionBankScopeLabel("archive", archiveItem.label || "archive"))}${archiveCount ? ` · ${escapeHtml(archiveCount)}` : ""}
@@ -10153,10 +10613,12 @@ function renderNavigationBankStatus(summary = state.account.questionBankSummary)
   const navScroll = captureNavScrollState();
   const season = formatSeasonLabel(summary.active_season);
   const scope = questionBankScopeLabel(summary.active_scope, summary.active_scope_label || t("bank.generic"));
-  const p1 = Number(summary.part1_count || 0);
-  const p2 = Number(summary.part2_count || 0);
-  const p3 = Number(summary.part3_follow_up_count || 0);
-  text("bankStatus", tf(p3 ? "bank.statusLine" : "bank.statusLineNoP3", { season, scope, p1, p2, p3 }));
+  // Left rail shows the season at a glance. The season itself stays the same
+  // for current/new/retained (it's the exam period); only when the scope is
+  // not the default do we append it, so switching scopes is visibly reflected
+  // here too. The full counts line still lives in the account bank selector.
+  const scopeIsDefault = normalizeQuestionBankScope(summary.active_scope) === "current";
+  text("bankStatus", scopeIsDefault || !scope ? season : `${season} · ${scope}`);
   restoreNavScrollState(navScroll);
 }
 
@@ -10204,22 +10666,16 @@ function resetAccountProfileLoadingUi() {
     walletStatus.classList.remove("is-error");
     walletStatus.classList.add("is-loading");
     walletStatus.innerHTML = `
-      <article class="wallet-balance-card">
-        <div class="wallet-balance-main">
-          <span class="wallet-balance-label">${escapeHtml(t("wallet.available"))}</span>
-          <strong class="wallet-balance-amount">${escapeHtml(t("wallet.loading"))}</strong>
-        </div>
-        <div class="wallet-balance-side">
-          <button type="button" id="openRechargeBtn" class="wallet-balance-recharge" data-i18n="wallet.recharge">${escapeHtml(t("wallet.recharge"))}</button>
-          <span class="wallet-balance-status">${escapeHtml(t("wallet.reading"))}</span>
-        </div>
-        <p class="wallet-balance-hint">${escapeHtml(t("wallet.hint"))}</p>
+      <article class="wallet-balance-card wallet-balance-skeleton" aria-label="${escapeHtml(t("wallet.loading"))}">
+        <span class="wallet-skeleton-line wallet-skeleton-line-label"></span>
+        <span class="wallet-skeleton-line wallet-skeleton-line-amount"></span>
+        <span class="wallet-skeleton-line wallet-skeleton-line-hint"></span>
       </article>
     `;
   }
   const ledgerList = $("ledgerList");
   if (ledgerList) {
-    ledgerList.innerHTML = '<div class="account-skeleton-row"></div><div class="account-skeleton-row"></div><div class="account-skeleton-row"></div>';
+    ledgerList.innerHTML = `<div class="account-ledger-loading" aria-label="${escapeHtml(t("wallet.reading"))}"><span class="wallet-loading-spinner" aria-hidden="true"></span></div>`;
   }
   renderQuestionBankSelector(state.account.questionBankSummary);
 }
@@ -10231,7 +10687,7 @@ async function loadAccount() {
     state.account.authenticated = Boolean(payload.authenticated);
     state.account.user = payload.user || null;
     if (state.account.authenticated) {
-      applyCandidateNames(accountProfileNames(state.account.user));
+      applyAccountProfileForm(state.account.user);
     }
   } catch (error) {
     state.account.backendAvailable = error.status === 401;
@@ -10478,7 +10934,7 @@ function bindEvents() {
       const targetView = button.dataset.view || "home";
       if (isNewTabNavigationEvent(event)) return;
       event.preventDefault();
-      if (state.practiceLocked && targetView === state.practiceViewBeforeSettings) {
+      if (state.practiceViewBeforeSettings && accountViews.has(state.view) && targetView === state.practiceViewBeforeSettings) {
         returnFromSettings();
         return;
       }
@@ -10516,6 +10972,9 @@ function bindEvents() {
   $("englishNameInput")?.addEventListener("input", scheduleCandidateNameSave);
   $("fullNameInput")?.addEventListener("blur", flushCandidateNameSave);
   $("englishNameInput")?.addEventListener("blur", flushCandidateNameSave);
+  $("aiSourceSelect")?.addEventListener("change", (event) => {
+    saveAiSourcePreference(event.target.value).catch(showError);
+  });
   $("darkModeToggle")?.addEventListener("change", (event) => applyDarkMode(event.target.checked));
   document.querySelectorAll("[data-ui-language-option]").forEach((button) => {
     button.addEventListener("click", () => applyUiLanguage(button.dataset.uiLanguageOption));
@@ -10523,15 +10982,15 @@ function bindEvents() {
   $("accountBankScopeOptions")?.addEventListener("click", (event) => {
     const button = event.target?.closest?.("[data-bank-scope]");
     if (!button) return;
+    // Keep the dialog open so the user can quickly switch scopes and compare
+    // counts in place; closing happens via backdrop click / Escape / the close button.
     selectQuestionBankScope(button.dataset.bankScope)
-      .then(() => closeBankSelectorDialog())
       .catch(renderQuestionBankSelectorError);
   });
   $("accountBankScopeOptions")?.addEventListener("change", (event) => {
     const select = event.target?.closest?.("[data-bank-scope-select]");
     if (!select || !select.value) return;
     selectQuestionBankScope(select.value)
-      .then(() => closeBankSelectorDialog())
       .catch(renderQuestionBankSelectorError);
   });
   $("openBankSelectorBtn")?.addEventListener("click", openBankSelectorDialog);
@@ -10571,6 +11030,7 @@ function bindEvents() {
   $("securityLogoutBtn")?.addEventListener("click", logoutAccount);
   $("peekP1CorpusBtn")?.addEventListener("click", openP1CorpusPeek);
   $("peekP2CorpusBtn")?.addEventListener("click", openP2CorpusPeek);
+  $("peekP2CorpusBodyBtn")?.addEventListener("click", openP2CorpusBodyPeek);
   $("peekP3CorpusBtn")?.addEventListener("click", () => openP3CorpusPeek().catch(showError));
   $("closeP1CorpusPeekBtn")?.addEventListener("click", closeP1CorpusPeek);
   $("closeP2CorpusPeek")?.addEventListener("click", closeP2CorpusPeek);
@@ -11206,11 +11666,15 @@ function bindEvents() {
   document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
     button.addEventListener("click", () => {
       state.p3Intensity = button.dataset.p3Intensity || "normal";
-      if (state.p3SourceType === "bank" || state.p3SourceType === "season_bank") {
-        syncP3LaunchPanel();
-      } else {
-        clearP3Plan();
+      // Switching 标准练习 ⇄ 追问压力 must NOT discard an already-generated plan —
+      // those questions cost tokens. Intensity only changes how the existing plan is
+      // run (high adds live follow-ups on the same main questions), so keep the plan
+      // and just re-sync the panel + preview label.
+      if (state.p3Plan) {
+        state.p3Plan.intensity = state.p3Intensity;
+        renderP3PlanPreview();
       }
+      syncP3LaunchPanel();
     });
   });
   $("p3TopicChips")?.addEventListener("click", (event) => {
@@ -11373,7 +11837,7 @@ function bindEvents() {
   document.querySelectorAll("[data-writing-frame-close]").forEach((el) => {
     el.addEventListener("click", (event) => {
       event.preventDefault();
-      withPending(el, closeWritingFrameEditorSavingChanges, { busyText: el.id === "writingFrameCloseBtn" ? "保存中..." : "" }).catch(showError);
+      closeWritingFrameEditorSavingChanges().catch(showError);
     });
   });
   $("writingAnswer")?.addEventListener("input", () => {
@@ -11466,7 +11930,9 @@ function p3ReportContextCard(source = state.p3PracticeSource || {}) {
         <span class="history-item-tag p2">P2</span>
         ${band !== "" ? `<span class="history-item-band">Band ${escapeHtml(band)}</span>` : ""}
       </div>
-      <span class="p3-source-card-menu" aria-hidden="true">•••</span>
+      <button type="button" class="p3-source-card-menu" data-p3-source-report-menu aria-label="P2 来源操作" title="P2 来源操作">
+        <span aria-hidden="true"></span>
+      </button>
       <strong class="history-item-title">${escapeHtml(title)}</strong>
       ${time ? `<small class="history-item-time">${escapeHtml(time)}</small>` : ""}
       <div class="p3-linked-corpus-line">
@@ -11475,6 +11941,48 @@ function p3ReportContextCard(source = state.p3PracticeSource || {}) {
       </div>
     </article>
   `;
+}
+
+function showP3SourceReportMenu(anchor) {
+  closeHistoryItemMenu();
+  const menu = document.createElement("div");
+  menu.className = "history-item-menu p3-source-report-menu";
+  menu.innerHTML = `
+    <button type="button" class="history-menu-action" data-p3-source-action="open-report">回到报告</button>
+  `;
+  anchor.closest(".p3-source-report-card")?.appendChild(menu);
+  menu.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-p3-source-action]")?.dataset.p3SourceAction || "";
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeHistoryItemMenu();
+    if (action === "open-report") {
+      openP3SourceReport().catch(showError);
+      return;
+    }
+    if (action === "clear-source") {
+      state.p3PracticeSource = null;
+      state.p3SourceType = "bank";
+      clearP3Plan("已清除 P2 报告来源。请选择题卡或重新从报告进入。");
+    }
+  });
+  // Dismiss on any outside click. Deferred a tick so the click that opened the
+  // menu (already stopPropagation'd at the trigger) doesn't immediately close it.
+  setTimeout(() => document.addEventListener("click", closeHistoryItemMenu, { once: true }), 0);
+}
+
+async function openP3SourceReport() {
+  const attemptId = state.p3PracticeSource?.attemptId || "";
+  if (!attemptId) {
+    clearP3Plan("当前没有可返回的 P2 报告。");
+    return;
+  }
+  state.activeHistoryId = attemptId;
+  switchView("history", { force: true });
+  await loadHistory(false);
+  const detail = await fetchHistoryDetail(attemptId);
+  if (detail) renderDetail(detail, false);
 }
 
 function p3CorpusContextHtml() {
@@ -11551,6 +12059,11 @@ function renderP3SourceContext(message = "") {
           </div>
         </div>
       `;
+      target.querySelector("[data-p3-source-report-menu]")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        showP3SourceReportMenu(event.currentTarget);
+      });
     } else {
       target.innerHTML = `
         <div class="p3-context-note p3-context-warning">
@@ -11646,7 +12159,7 @@ function renderP3PlanPreview() {
       <div class="p3-plan-empty p3-plan-error">
         <strong>AI 生成失败</strong>
         <span>${escapeHtml(state.p3PlanError)}</span>
-        <small>请确认 Aiapis/HTTP provider 已配置并可用，然后重新生成。不会用本地假题冒充 AI 输出。</small>
+        <small>请确认当前 AI 来源已登录且额度可用，然后重新生成。不会用本地假题冒充 AI 输出。</small>
       </div>
     `;
     return;
@@ -11714,6 +12227,11 @@ function renderP3PlanPreview() {
 
 async function generateP3Plan(options = {}) {
   if (state.p3PlanLoading) return;
+  const previousSourceType = state.p3SourceType;
+  const previousPracticeSource = state.p3PracticeSource && typeof state.p3PracticeSource === "object"
+    ? { ...state.p3PracticeSource }
+    : state.p3PracticeSource;
+  const previousSelectedTopic = state.p3SelectedTopic;
   state.p3PlanError = "";
   if (state.p3SourceType === "bank") {
     const source = await ensureSelectedP3BankCard();
@@ -11775,10 +12293,17 @@ async function generateP3Plan(options = {}) {
     state.p3Plan = nextPlan;
     state.p3Intensity = state.p3Plan.intensity || state.p3Intensity;
     state.p3Focus = state.p3Plan.focus || state.p3Focus;
-    state.p3SourceType = state.p3Plan.source?.type === "season_bank" ? "bank" : (state.p3Plan.source?.type || state.p3SourceType);
+    if (!(previousSourceType === "p2_report" && previousPracticeSource?.sourceType === "p2_report")) {
+      state.p3SourceType = state.p3Plan.source?.type === "season_bank" ? "bank" : (state.p3Plan.source?.type || state.p3SourceType);
+    }
     renderP3PlanPreview();
     syncP3LaunchPanel(options.fromP2 ? "已根据这次 P2 生成训练计划，确认后再开始。" : "计划已生成，确认后可以开始。");
   } catch (error) {
+    if (previousSourceType === "p2_report" && previousPracticeSource?.sourceType === "p2_report") {
+      state.p3SourceType = previousSourceType;
+      state.p3PracticeSource = previousPracticeSource;
+      state.p3SelectedTopic = previousSelectedTopic;
+    }
     state.p3PlanError = error instanceof Error ? error.message : "生成计划失败。";
     renderP3PlanPreview();
     syncP3LaunchPanel(state.p3PlanError);
@@ -12381,12 +12906,22 @@ async function loadAccountProfile() {
   await loadWallet();
 }
 
+let questionBankScopeSwitching = false;
+let questionBankScopeCooldownUntil = 0;
+
 async function selectQuestionBankScope(scope) {
   const normalized = normalizeQuestionBankScope(scope);
+  const now = Date.now();
+  if (questionBankScopeSwitching || now < questionBankScopeCooldownUntil) {
+    return;
+  }
   if (normalized === state.account.questionBankScope && state.account.questionBankSummary?.active_scope === normalized) {
     renderQuestionBankSelector(state.account.questionBankSummary);
     return;
   }
+  questionBankScopeSwitching = true;
+  questionBankScopeCooldownUntil = now + 700;
+  state.account.questionBankSwitching = true;
   state.account.questionBankScope = normalized;
   try {
     localStorage.setItem(QUESTION_BANK_SCOPE_STORAGE_KEY, normalized);
@@ -12406,6 +12941,10 @@ async function selectQuestionBankScope(scope) {
     renderP3TopicChips(summary.part2_themes || []);
   } catch (error) {
     renderQuestionBankSelectorError(error);
+  } finally {
+    questionBankScopeSwitching = false;
+    state.account.questionBankSwitching = false;
+    renderQuestionBankSelector(state.account.questionBankSummary);
   }
 }
 
@@ -12624,9 +13163,10 @@ async function init() {
   let savedView = urlView || "home";
   if (!isKnownView(savedView)) savedView = "home";
   switchView(savedView, { force: true, skipPersist: Boolean(urlView), skipUrl: true });
-  document.body.classList.remove("app-booting");
+  finishBootOverlay();
   scheduleAuthenticatedPrefetch();
   scheduleIdleTask(() => prefetchCorpusEditor(state.prefetch.token), 900);
+  resumePendingTurnAudioUploads().catch(() => {});
   resumeSpeakingAnalysisFromStorage().catch(() => {});
   try {
     const summary = await loadQuestionBankSummary({ force: true });
@@ -12637,6 +13177,17 @@ async function init() {
     text("bankStatus", error.message);
     renderQuestionBankSelectorError(error);
   }
+}
+
+function finishBootOverlay() {
+  if (!document.body.classList.contains("app-booting")) {
+    document.body.classList.remove("app-boot-ready");
+    return;
+  }
+  document.body.classList.add("app-boot-ready");
+  window.setTimeout(() => {
+    document.body.classList.remove("app-booting", "app-boot-ready");
+  }, 260);
 }
 
 init();

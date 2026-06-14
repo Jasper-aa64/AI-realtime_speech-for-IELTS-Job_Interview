@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.db import connection
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponseNotModified, JsonResponse
+from django.utils.http import http_date
 from django.views.decorators.http import require_GET
+from django.views.static import was_modified_since
 
 
 @require_GET
@@ -66,6 +68,26 @@ def frontend_cache_control(request, *, is_index: bool = False) -> str:
     return "no-cache"
 
 
+def _conditional_file_response(request, path, *, content_type=None, max_age: int = 604800):
+    """Serve a file with a 7-day cache + Last-Modified/If-Modified-Since 304.
+
+    Image/asset bytes are effectively immutable, so once a client has a copy it
+    can revalidate with a cheap 304 after expiry instead of re-downloading the
+    whole file.
+    """
+    stat_result = path.stat()
+    last_modified = stat_result.st_mtime
+    if not was_modified_since(request.META.get("HTTP_IF_MODIFIED_SINCE"), last_modified):
+        response = HttpResponseNotModified()
+    elif content_type is not None:
+        response = FileResponse(open(path, "rb"), content_type=content_type)
+    else:
+        response = FileResponse(open(path, "rb"))
+    response["Cache-Control"] = f"public, max-age={max_age}"
+    response["Last-Modified"] = http_date(last_modified)
+    return response
+
+
 @require_GET
 def frontend_static_asset(request, asset_path: str):
     normalized = (asset_path or "").lstrip("/")
@@ -74,9 +96,7 @@ def frontend_static_asset(request, asset_path: str):
     path = settings.BASE_DIR.parent / "web" / "static" / "assets" / normalized
     if not path.exists() or not path.is_file():
         raise Http404("Static asset not found")
-    response = FileResponse(open(path, "rb"))
-    response["Cache-Control"] = "public, max-age=86400"
-    return response
+    return _conditional_file_response(request, path)
 
 
 @require_GET
@@ -92,9 +112,7 @@ def frontend_wasm_asset(request, asset_path: str):
         ".js": "text/javascript; charset=utf-8",
         ".wasm": "application/wasm",
     }
-    response = FileResponse(open(path, "rb"), content_type=content_types.get(path.suffix))
-    response["Cache-Control"] = "public, max-age=86400"
-    return response
+    return _conditional_file_response(request, path, content_type=content_types.get(path.suffix))
 
 
 @require_GET

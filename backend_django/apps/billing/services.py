@@ -181,11 +181,39 @@ def normalize_usage(usage: dict[str, Any] | None) -> BillingUsage:
     if not isinstance(usage, dict):
         raise BillingError("usage must be an object")
     input_details = usage.get("input_tokens_details") if isinstance(usage.get("input_tokens_details"), dict) else {}
+    prompt_details = usage.get("prompt_tokens_details") if isinstance(usage.get("prompt_tokens_details"), dict) else {}
     output_details = usage.get("output_tokens_details") if isinstance(usage.get("output_tokens_details"), dict) else {}
-    input_tokens = non_negative_int(usage.get("input_tokens"), "input_tokens")
-    cached = non_negative_int(usage.get("cached_input_tokens") or input_details.get("cached_tokens"), "cached_input_tokens")
-    output = non_negative_int(usage.get("output_tokens"), "output_tokens")
-    reasoning = non_negative_int(usage.get("reasoning_output_tokens") or output_details.get("reasoning_tokens"), "reasoning_output_tokens")
+    completion_details = usage.get("completion_tokens_details") if isinstance(usage.get("completion_tokens_details"), dict) else {}
+
+    def first_positive_or_zero(field_name: str, *values: Any) -> int:
+        first_zero = 0
+        for value in values:
+            if value in (None, ""):
+                continue
+            parsed = non_negative_int(value, field_name)
+            if parsed > 0:
+                return parsed
+            first_zero = parsed
+        return first_zero
+
+    claude_cache_creation = first_positive_or_zero("cache_creation_input_tokens", usage.get("cache_creation_input_tokens"))
+    claude_cache_read = first_positive_or_zero("cache_read_input_tokens", usage.get("cache_read_input_tokens"))
+    canonical_input = first_positive_or_zero("input_tokens", usage.get("input_tokens"))
+    input_tokens = first_positive_or_zero("input_tokens", canonical_input + claude_cache_creation + claude_cache_read, usage.get("prompt_tokens"))
+    cached = first_positive_or_zero(
+        "cached_input_tokens",
+        usage.get("cached_input_tokens"),
+        input_details.get("cached_tokens"),
+        prompt_details.get("cached_tokens"),
+        claude_cache_read,
+    )
+    output = first_positive_or_zero("output_tokens", usage.get("output_tokens"), usage.get("completion_tokens"))
+    reasoning = first_positive_or_zero(
+        "reasoning_output_tokens",
+        usage.get("reasoning_output_tokens"),
+        output_details.get("reasoning_tokens"),
+        completion_details.get("reasoning_tokens"),
+    )
     cached = max(0, min(cached, input_tokens))
     return BillingUsage(
         input_tokens=input_tokens,

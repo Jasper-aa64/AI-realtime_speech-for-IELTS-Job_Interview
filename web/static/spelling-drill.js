@@ -452,9 +452,9 @@
         const due      = items.filter((w) => w.is_due);
         const active   = items.filter((w) => !w.is_due && w.status !== "mastered");
         const mastered = items.filter((w) => !w.is_due && w.status === "mastered");
-        if (due.length)      groups.push({ title: "待复习", items: due });
-        if (active.length)   groups.push({ title: "学中",   items: active });
-        if (mastered.length) groups.push({ title: "已掌握", items: mastered });
+        if (due.length)      groups.push({ title: "\u5f85\u590d\u4e60", items: due });
+        if (active.length)   groups.push({ title: "\u5b66\u4e2d",   items: active });
+        if (mastered.length) groups.push({ title: "\u5df2\u638c\u63e1", items: mastered });
       }
 
       const groupHtml = groups.length ? groups.map((g) => `
@@ -463,24 +463,27 @@
           <ul class="nr-lib-list">
             ${g.items.map((w) => {
               const stage = Number(w.review_stage || 0);
+              const isMastered = w.status === "mastered";
               return `
                 <li class="nr-lib-item" data-spelling-word="${escapeHtml(w.word_id)}">
                   <div class="nr-lib-main">
                     <strong class="nr-lib-word">${escapeHtml(w.correct_spelling)}</strong>
-                    <span class="nr-lib-gloss">${escapeHtml(w.chinese_gloss || "—")}</span>
-                    <span class="nr-lib-wrong">误：${escapeHtml(wrongFormsText(w))}</span>
+                    <span class="nr-lib-gloss">${escapeHtml(w.chinese_gloss || "-")}</span>
+                    <span class="nr-lib-wrong">\u8bef\uff1a${escapeHtml(wrongFormsText(w))}</span>
                   </div>
                   <div class="nr-lib-side">
-                    <span class="nr-lib-stage">阶 ${stage}</span>
-                    <button class="nr-lib-act" data-spelling-master="${escapeHtml(w.word_id)}" title="标为已掌握">✓</button>
-                    <button class="nr-lib-act is-danger" data-spelling-delete="${escapeHtml(w.word_id)}" title="移出错词本">×</button>
+                    <span class="nr-lib-stage">\u9636 ${stage}</span>
+                    ${isMastered
+                      ? `<span class="nr-lib-mastered">\u5df2\u638c\u63e1</span>`
+                      : `<button class="nr-lib-act nr-lib-master-btn" data-spelling-master="${escapeHtml(w.word_id)}" title="\u6807\u4e3a\u5df2\u638c\u63e1">\u6807\u4e3a\u5df2\u638c\u63e1</button>`}
+                    <button class="nr-lib-act is-danger" data-spelling-delete="${escapeHtml(w.word_id)}" title="\u79fb\u51fa\u9519\u8bcd\u672c">\u5220\u9664</button>
                   </div>
                 </li>
               `;
             }).join("")}
           </ul>
         </section>
-      `).join("") : `<p class="nr-lib-empty">这个范围里还没有词。</p>`;
+      `).join("") : `<p class="nr-lib-empty">\u8fd9\u4e2a\u8303\u56f4\u91cc\u8fd8\u6ca1\u6709\u8bcd\u3002</p>`;
 
       sideList().innerHTML = `
         <header class="nr-lib-head">
@@ -488,10 +491,10 @@
             <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
               <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/>
             </svg>
-            回练习
+            \u56de\u5230\u7ec3\u4e60
           </button>
-          <span class="nr-lib-title">错词本 · ${escapeHtml(
-            ({ due: "今日待复习", active: "全部学中", mastered: "已掌握" })[s.scope] || s.scope
+          <span class="nr-lib-title">\u9519\u8bcd\u672c \u00b7 ${escapeHtml(
+            ({ due: "\u4eca\u65e5\u5f85\u590d\u4e60", active: "\u5168\u90e8\u5b66\u4e2d", mastered: "\u5df2\u638c\u63e1" })[s.scope] || s.scope
           )}</span>
         </header>
         <div class="nr-lib-body">

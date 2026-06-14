@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase, override_settings
 
+from apps.ai.http_provider import HttpApiProviderError
 from apps.speaking import services
 
 
@@ -30,7 +31,13 @@ class _JsonProvider:
         return _ProviderResult(self.text, model=self.captured.get("model") or "gpt-5.4-mini")
 
 
-@override_settings(AI_HTTP_BASE_URL="https://ai.example/v1", AI_HTTP_API_KEY="test-key", AI_HTTP_MODEL="legacy-model")
+@override_settings(
+    AI_HTTP_BASE_URL="https://ai.example/v1",
+    AI_HTTP_API_KEY="test-key",
+    AI_HTTP_MODEL="legacy-model",
+    SPEAKING_AI_MODEL="",
+    SPEAKING_REPORT_AI_MODEL="gpt-5.4-mini",
+)
 class SpeakingAiProviderRoutingTests(SimpleTestCase):
     def test_speaking_report_score_prefers_http_gpt54mini(self):
         payload = {
@@ -127,3 +134,90 @@ class SpeakingAiProviderRoutingTests(SimpleTestCase):
         self.assertEqual(result["backend"], "codex")
         http_provider.assert_not_called()
         run_codex.assert_called_once()
+
+    def test_speaking_report_preserves_http_error_when_codex_fallback_missing(self):
+        class _FailingHttpProvider:
+            def complete_chat(self, *args, **kwargs):
+                raise HttpApiProviderError(
+                    "HTTP AI provider returned 401: Invalid token",
+                    status_code=401,
+                )
+
+        with patch("apps.speaking.services.HttpApiProvider", return_value=_FailingHttpProvider()), patch(
+            "apps.speaking.services.run_codex",
+            side_effect=RuntimeError("codex CLI not found"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "HTTP AI provider returned 401: Invalid token"):
+                services.score_with_codex(
+                    "Q1: Do you work or study?\nA: I study software engineering.",
+                    "Q1: Do you work or study?",
+                    "p1",
+                    "score-http-token-expired",
+                )
+
+    def test_report_provider_json_preserves_http_error_when_codex_fallback_missing(self):
+        class _FailingHttpProvider:
+            def complete_chat(self, *args, **kwargs):
+                raise HttpApiProviderError(
+                    "HTTP AI provider returned 401: Invalid token",
+                    status_code=401,
+                )
+
+        with patch("apps.speaking.services.HttpApiProvider", return_value=_FailingHttpProvider()), patch(
+            "apps.speaking.services.run_codex",
+            side_effect=RuntimeError("codex CLI not found"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "HTTP AI provider returned 401: Invalid token"):
+                services._report_provider_json(
+                    "Return JSON.",
+                    {"feedback"},
+                    "report-json-http-token-expired",
+                )
+
+    def test_p3_plan_uses_claude_preference_without_http(self):
+        claude_payload = {
+            "questions": [
+                "Why do some people prefer visiting historic cities?",
+                "How can tourism affect local residents?",
+                "Do you think domestic travel will become more popular in the future?",
+            ],
+            "follow_up": "What might be one disadvantage of that trend?",
+        }
+
+        with patch(
+            "apps.speaking.services.run_claude_cli",
+            return_value=(json.dumps(claude_payload), {"input_tokens": 100, "output_tokens": 50}),
+        ) as run_claude_cli, patch("apps.speaking.services.HttpApiProvider") as http_provider:
+            plan = services.build_p3_plan(
+                {
+                    "source": "p2_report",
+                    "theme": "Describe a place you would like to visit in the future",
+                    "prior_answer": "I would like to visit Chengdu because I am interested in food and local culture.",
+                    "ai_source": "claude_cli",
+                }
+            )
+
+        self.assertEqual(plan["status"], "ready")
+        self.assertEqual(plan["backend"], "claude_cli")
+        self.assertEqual(plan["question_count"], 3)
+        run_claude_cli.assert_called_once()
+        http_provider.assert_not_called()
+
+    def test_p3_plan_claude_failure_does_not_fall_through_to_http(self):
+        with patch(
+            "apps.speaking.services.run_claude_cli",
+            side_effect=RuntimeError("Claude CLI API error for p3: 429"),
+        ) as run_claude_cli, patch("apps.speaking.services.HttpApiProvider") as http_provider:
+            plan = services.build_p3_plan(
+                {
+                    "source": "p2_report",
+                    "theme": "Describe a place you would like to visit in the future",
+                    "prior_answer": "I would like to visit Chengdu because I am interested in food and local culture.",
+                    "ai_source": "claude_cli",
+                }
+            )
+
+        self.assertEqual(plan["status"], "failed")
+        self.assertIn("Claude CLI API error", plan["error"])
+        run_claude_cli.assert_called_once()
+        http_provider.assert_not_called()

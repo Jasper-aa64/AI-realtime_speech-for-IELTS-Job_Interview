@@ -52,6 +52,10 @@ function Install-IeltsService {
     & $NssmExe set            $Name AppDirectory      $DjangoDir
     & $NssmExe set            $Name DisplayName       $DisplayName
     & $NssmExe set            $Name Description       "IELTS studio — $DisplayName"
+    # Run under LocalSystem by default. Do not bind to ".\$env:USERNAME":
+    # Microsoft-account or renamed local profiles can fail SID lookup and break
+    # NSSM's "Log on as a service" grant.
+    & $NssmExe set            $Name ObjectName        LocalSystem
     & $NssmExe set            $Name Start             SERVICE_AUTO_START
     & $NssmExe set            $Name AppStdout         $OutLog
     & $NssmExe set            $Name AppStderr         $ErrLog

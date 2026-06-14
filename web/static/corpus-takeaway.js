@@ -55,6 +55,8 @@
       ["many", "numerous / a large number of / a considerable number of / a substantial number of"],
       ["more and more", "an increasing number of / a growing number of / an increasing proportion of / a growing trend of"],
       ["think", "believe / argue / maintain / contend / hold the view that"],
+      ["like", "enjoy / be fond of / be into / be keen on / have a strong interest in / be drawn to / find ... appealing"],
+      ["relax", "unwind / loosen up / de-stress / take a break / recharge / clear my mind / let off steam"],
       ["need", "require / demand / call for / necessitate / rely on / depend on / be essential for"],
       ["be important", "play a vital role in / play a crucial role in / play a key role in / serve as a cornerstone of / be fundamental to"],
       ["good", "beneficial / advantageous / favourable / positive"],
@@ -88,6 +90,178 @@
     let p1CorpusEditorLoadToken = 0;
     let p2BankCorpusLoadToken = 0;
     let p2BankP3LoadToken = 0;
+
+    // ── P2/P3 bank corpus: persistent SWR cache + batch prefetch ──────────────
+    // Memory cache holds resolved Promises; localStorage gives stale-while-
+    // revalidate across reloads; a batch endpoint warms the whole visible list.
+    const P2BANK_LS_PREFIX = "p2bank_corpus_v1";
+    const P3BANK_LS_PREFIX = "p2bank_p3_v1";
+    const P2BANK_LS_MAX = 200;
+    const P2BANK_BATCH_CHUNK = 20;
+    const p2BankBatchRequested = new Set();
+
+    function scheduleIdle(fn, delay = 0) {
+      const idle = window.requestIdleCallback;
+      if (idle) { idle(() => fn(), { timeout: Math.max(delay, 200) }); return; }
+      window.setTimeout(fn, delay);
+    }
+
+    function canBackgroundPrefetch() {
+      const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (connection?.saveData) return false;
+      const effectiveType = String(connection?.effectiveType || "").toLowerCase();
+      return effectiveType !== "slow-2g" && effectiveType !== "2g";
+    }
+
+    // localStorage is scoped per logged-in user so one account never sees
+    // another's cached corpus. Guests (no scope) skip persistence entirely.
+    function p2BankUserScope() {
+      const user = state.account?.user;
+      return String(user?.id ?? user?.username ?? "").trim();
+    }
+    function p2BankLsKey(prefix, qid) {
+      const scope = p2BankUserScope();
+      return scope ? `${prefix}:${scope}:${qid}` : "";
+    }
+    function p2BankLsIndexKey(prefix) {
+      const scope = p2BankUserScope();
+      return scope ? `${prefix}:index:${scope}` : "";
+    }
+    function p2BankLsRead(prefix, qid) {
+      const key = p2BankLsKey(prefix, qid);
+      if (!key) return null;
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && parsed.payload ? parsed : null;
+      } catch (_error) { return null; }
+    }
+    function p2BankLsWrite(prefix, qid, payload) {
+      const key = p2BankLsKey(prefix, qid);
+      if (!key || !payload) return;
+      try {
+        localStorage.setItem(key, JSON.stringify({ payload, cached_at: Date.now() }));
+        const indexKey = p2BankLsIndexKey(prefix);
+        if (!indexKey) return;
+        let index = [];
+        try { index = JSON.parse(localStorage.getItem(indexKey) || "[]"); } catch (_error) { index = []; }
+        if (!Array.isArray(index)) index = [];
+        index = index.filter((entry) => entry !== qid);
+        index.push(qid);
+        while (index.length > P2BANK_LS_MAX) {
+          const evicted = index.shift();
+          try { localStorage.removeItem(p2BankLsKey(prefix, evicted)); } catch (_error) { /* ignore */ }
+        }
+        localStorage.setItem(indexKey, JSON.stringify(index));
+      } catch (_error) { /* quota / disabled storage — ignore */ }
+    }
+    function p2BankLsDelete(prefix, qid) {
+      const key = p2BankLsKey(prefix, qid);
+      if (!key) return;
+      try { localStorage.removeItem(key); } catch (_error) { /* ignore */ }
+    }
+
+    // The in-memory caches are not key-scoped, so drop them whenever the logged
+    // in user changes (logout / account switch) to prevent cross-account leaks.
+    // localStorage is already isolated via the user id baked into each key.
+    let p2BankCacheScope = null;
+    function ensureP2BankCacheScope() {
+      const scope = p2BankUserScope();
+      if (p2BankCacheScope === scope) return;
+      p2BankCacheScope = scope;
+      p2BankCorpusCache.clear();
+      p2BankP3Cache.clear();
+      p2BankBatchRequested.clear();
+    }
+
+    function revalidateP2BankCorpus(questionId) {
+      api(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`).then((fresh) => {
+        p2BankCorpusCache.set(questionId, Promise.resolve(fresh));
+        p2BankLsWrite(P2BANK_LS_PREFIX, questionId, fresh);
+        maybeApplyFreshP2BankCorpus(questionId, fresh);
+      }).catch(() => { /* keep cached copy on failure */ });
+    }
+    function revalidateP2BankP3(questionId) {
+      api(`/api/p3-bank-corpus/${encodeURIComponent(questionId)}`).then((fresh) => {
+        p2BankP3Cache.set(questionId, Promise.resolve(fresh));
+        p2BankLsWrite(P3BANK_LS_PREFIX, questionId, fresh);
+        maybeApplyFreshP2BankP3(questionId, fresh);
+      }).catch(() => { /* keep cached copy on failure */ });
+    }
+
+    // Background revalidation finished: replace the OPEN editor only if it is
+    // showing this card and the user has not typed (never clobber edits).
+    function maybeApplyFreshP2BankCorpus(questionId, fresh) {
+      if ($("p2CorpusDialog")?.classList.contains("hidden")) return;
+      const active = state.p2Corpus.activeEntry;
+      if (!active || p2BankQuestionId(active) !== questionId) return;
+      const rendered = String(active.material_text || "");
+      const freshText = String(fresh.corpus_text || "");
+      if (freshText === rendered) return;
+      const current = String(getCorpusMarkdownValue("p2CorpusText") || "");
+      if (current.trim() !== rendered.trim()) {
+        text("p2CorpusSaveStatus", "服务器上有更新版本（未覆盖你的修改）");
+        return;
+      }
+      active.material_text = freshText;
+      active.brainstorm_idea = fresh.brainstorm_idea ?? active.brainstorm_idea;
+      setCorpusMarkdownValue("p2CorpusText", freshText);
+      const brainstormInput = $("p2CorpusBrainstormIdea");
+      if (brainstormInput && document.activeElement !== brainstormInput) {
+        brainstormInput.value = active.brainstorm_idea || "";
+      }
+    }
+    function maybeApplyFreshP2BankP3(questionId, fresh) {
+      if ($("p2CorpusP3Dialog")?.classList.contains("hidden")) return;
+      const active = state.p2Corpus.activeBankP3Entry;
+      if (!active || String(active.question_id) !== String(questionId)) return;
+      const signature = (items) => JSON.stringify((items || []).map((item) => [item.followup_id, item.corpus_text]));
+      if (signature(active.items) === signature(fresh.items)) return;
+      const selected = (active.items || []).find((item) => item.followup_id === active.selectedFollowupId);
+      const current = String(getCorpusMarkdownValue("p2CorpusP3FollowUp") || "");
+      if (selected && current.trim() !== String(selected.corpus_text || "").trim()) {
+        text("p2CorpusP3SaveStatus", "服务器上有更新版本（未覆盖你的修改）");
+        return;
+      }
+      active.items = fresh.items || [];
+      renderP2BankP3Entries(fresh);
+    }
+
+    // Warm the whole visible list in a couple of batched round-trips.
+    function prefetchP2BankList() {
+      if (!canBackgroundPrefetch()) return;
+      ensureP2BankCacheScope();
+      const ids = [...new Set((state.p2Corpus.currentPart2Cards || []).map(p2BankQuestionId).filter(Boolean))];
+      const pending = ids.filter((id) => !p2BankCorpusCache.has(id) && !p2BankBatchRequested.has(id));
+      if (!pending.length) return;
+      pending.forEach((id) => p2BankBatchRequested.add(id));
+      for (let offset = 0; offset < pending.length; offset += P2BANK_BATCH_CHUNK) {
+        const chunk = pending.slice(offset, offset + P2BANK_BATCH_CHUNK);
+        api("/api/p2-bank-corpus/batch", { question_ids: chunk }).then((response) => {
+          const items = (response && response.items) || {};
+          Object.keys(items).forEach((qid) => {
+            if (!p2BankCorpusCache.has(qid)) p2BankCorpusCache.set(qid, Promise.resolve(items[qid]));
+            p2BankLsWrite(P2BANK_LS_PREFIX, qid, items[qid]);
+          });
+        }).catch(() => { chunk.forEach((qid) => p2BankBatchRequested.delete(qid)); });
+        api("/api/p3-bank-corpus/batch", { question_ids: chunk }).then((response) => {
+          const items = (response && response.items) || {};
+          Object.keys(items).forEach((qid) => {
+            if (!p2BankP3Cache.has(qid)) p2BankP3Cache.set(qid, Promise.resolve(items[qid]));
+            p2BankLsWrite(P3BANK_LS_PREFIX, qid, items[qid]);
+          });
+        }).catch(() => { /* P3 falls back to per-card fetch on open */ });
+      }
+    }
+    function scheduleP2BankListPrefetch() {
+      if (state.p2Corpus._bankBatchScheduled) return;
+      state.p2Corpus._bankBatchScheduled = true;
+      scheduleIdle(() => {
+        state.p2Corpus._bankBatchScheduled = false;
+        prefetchP2BankList();
+      }, 800);
+    }
     const DOTS_ICON = `
       <svg aria-hidden="true" viewBox="0 0 24 24">
         <path d="M12 6.5h.01"></path>
@@ -113,6 +287,8 @@
       document.querySelectorAll("[data-corpus-card-action-menu]").forEach((menu) => {
         if (menu === exceptMenu) return;
         menu.classList.add("hidden");
+        menu.closest(".p2-material-row, .language-takeaway-card-wrap")?.classList.remove("is-menu-open");
+        menu.closest(".p2-category-entry-card, .p2-topic-card, .language-takeaway-card")?.classList.remove("is-menu-open");
         const button = menu.parentElement?.querySelector("[data-corpus-card-menu]");
         button?.setAttribute("aria-expanded", "false");
       });
@@ -126,6 +302,8 @@
       closeCorpusCardActionMenus(menu);
       menu.classList.toggle("hidden", !willOpen);
       button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      menu.closest(".p2-material-row, .language-takeaway-card-wrap")?.classList.toggle("is-menu-open", willOpen);
+      menu.closest(".p2-category-entry-card, .p2-topic-card, .language-takeaway-card")?.classList.toggle("is-menu-open", willOpen);
     }
 
     function reviewDayDate(date = new Date()) {
@@ -459,6 +637,10 @@
     function startTakeawayReview(kind = "language") {
       const due = dueTakeawayEntries(kind);
       const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      // Capture the reveal state BEFORE the session forces masking, so that
+      // ending the review restores what the user actually had (typically
+      // "show English") instead of always falling back to all-masked.
+      const previousHideEnglish = Boolean(target.hideEnglish);
       target.hideEnglish = true;
       target.revealedEntryIds.clear();
       target.reviewSession = {
@@ -466,7 +648,7 @@
         ids: due.map((item) => item.entry_id),
         reviewedIds: new Set(),
         currentId: "",
-        previousHideEnglish: Boolean(target.hideEnglish),
+        previousHideEnglish,
       };
       setTakeawayReviewToast(kind, "先点一张被遮住的卡片，露出英文后再按 A / D。");
       if (kind === "writing") {
@@ -889,19 +1071,71 @@
       }
     }
 
+    // The bank question id for the current P2 turn (mirrors p2CorpusTargetForTurn
+    // in app.js). Used to load 随题目绑定的「题库正文」 — independent of any linked
+    // 串题素材.
+    function p2TurnBankQuestionId(turn = state.currentTurn) {
+      if (turn?.part !== "p2") return "";
+      const prompt = turn.prompt || {};
+      const cue = turn.cue_card || state.attempt?.cue_card || {};
+      return String(
+        cue.cue_id
+        || cue.question_id
+        || cue.canonical_entry_id
+        || prompt.p2_question_id
+        || prompt.cue_id
+        || prompt.question_id
+        || ""
+      ).trim();
+    }
+
     function updateP2CorpusPeekButton(turn = state.currentTurn) {
-      const button = $("peekP2CorpusBtn");
-      if (!button) return;
       const inP2Turn = state.view === "p2" && turn?.part === "p2";
+
+      // Lightbulb → 随题目绑定的「题库正文」(串题灵感 + 正文). Shown only once we
+      // confirm the learner actually prepared a body for this question.
+      const questionId = inP2Turn ? p2TurnBankQuestionId(turn) : "";
+      state.p2Corpus.activeTurnQuestionId = questionId;
+      const bankButton = $("peekP2CorpusBtn");
+      if (bankButton) {
+        bankButton.title = "我准备的本题正文";
+        bankButton.setAttribute("aria-label", "查看我为这道题准备的题库正文");
+        if (!inP2Turn || !questionId) {
+          bankButton.classList.add("hidden");
+          bankButton.classList.remove("has-corpus", "is-empty-slot");
+          bankButton.disabled = true;
+          bankButton.setAttribute("aria-hidden", "true");
+        } else {
+          bankButton.disabled = false;
+          fetchP2BankCorpusPayload(questionId)
+            .then((payload) => {
+              if (state.p2Corpus.activeTurnQuestionId !== questionId) return;
+              const hasBody = Boolean(String(payload?.corpus_text || payload?.brainstorm_idea || "").trim());
+              bankButton.classList.toggle("hidden", !hasBody);
+              bankButton.classList.toggle("has-corpus", hasBody);
+              bankButton.setAttribute("aria-hidden", hasBody ? "false" : "true");
+            })
+            .catch(() => {
+              if (state.p2Corpus.activeTurnQuestionId !== questionId) return;
+              bankButton.classList.add("hidden");
+            });
+        }
+      }
+
+      // Document → 随素材绑定的内容 (the linked 串题素材). Shown only when a material
+      // is linked for this turn.
       const visible = inP2Turn && Boolean(state.p2Corpus.selectedEntryId);
       const entry = visible ? currentP2CorpusEntry() : null;
-      button.classList.toggle("hidden", !inP2Turn);
-      button.classList.toggle("is-empty-slot", inP2Turn && !visible);
-      button.classList.toggle("has-corpus", Boolean(entry));
-      button.disabled = !visible;
-      button.setAttribute("aria-hidden", visible ? "false" : "true");
-      button.title = entry ? "查看已链接素材" : "已选择素材，正在加载内容";
-      if (visible && !entry && !state.p2Corpus.loaded) {
+      const bodyButton = $("peekP2CorpusBodyBtn");
+      if (bodyButton) {
+        bodyButton.classList.toggle("hidden", !visible);
+        bodyButton.classList.toggle("is-empty-slot", inP2Turn && Boolean(state.p2Corpus.selectedEntryId) && !entry);
+        bodyButton.classList.toggle("has-corpus", Boolean(entry));
+        bodyButton.disabled = !visible;
+        bodyButton.setAttribute("aria-hidden", visible ? "false" : "true");
+        bodyButton.title = entry ? "查看链接的串题素材" : "已选择素材，正在加载内容";
+      }
+      if (inP2Turn && state.p2Corpus.selectedEntryId && !entry && !state.p2Corpus.loaded) {
         ensureP2CorpusLoaded().then(() => updateP2CorpusPeekButton(state.currentTurn));
       }
     }
@@ -918,12 +1152,53 @@
       `;
     }
 
+    // 随题目绑定的「题库正文」: 串题灵感 (brainstorm) on top, 正文 (corpus_text) below,
+    // mirroring the 编辑题库正文 editor layout.
+    function p2BankBodyPeekHtml(payload) {
+      const brainstorm = String(payload?.brainstorm_idea || "").trim();
+      const corpusText = String(payload?.corpus_text || "").trim();
+      if (!brainstorm && !corpusText) {
+        return '<p class="muted">还没有为这道题准备正文。可以在「题库正文」里编辑。</p>';
+      }
+      return `
+        <section class="p2-corpus-peek-section p2-corpus-body-peek-section">
+          <h4>串题灵感 Brainstorm</h4>
+          <div>${brainstorm ? `<p>${escapeHtml(brainstorm)}</p>` : '<p class="muted">还没有写串题灵感。</p>'}</div>
+        </section>
+        <section class="p2-corpus-peek-section p2-corpus-body-peek-section">
+          <h4>正文</h4>
+          <div>${corpusText ? renderMarkdown(corpusText) : '<p class="muted">还没有保存正文。</p>'}</div>
+        </section>
+      `;
+    }
+
+    // Lightbulb → 随题目绑定的「题库正文」(我准备的本题正文): 串题灵感 + 正文,
+    // loaded by the turn's bank question id (independent of any linked material).
     async function openP2CorpusPeek() {
+      const questionId = state.p2Corpus.activeTurnQuestionId || p2TurnBankQuestionId(state.currentTurn);
+      if (!questionId) return;
+      let payload = null;
+      try {
+        payload = await fetchP2BankCorpusPayload(questionId);
+      } catch (_error) {
+        payload = null;
+      }
+      const titleText = p2CleanCueTitle({ question: payload?.question || state.currentTurn?.question || "" }) || "本题";
+      text("p2CorpusPeekMeta", "我准备的本题正文");
+      text("p2CorpusPeekTitle", titleText);
+      const body = $("p2CorpusPeekBody");
+      if (body) body.innerHTML = p2BankBodyPeekHtml(payload);
+      $("p2CorpusPeekDialog")?.classList.remove("hidden");
+      resetCorpusPeekWindowPosition("p2CorpusPeekDialog");
+    }
+
+    // Document → 随素材绑定的内容: the linked 串题素材 the learner attached to this turn.
+    async function openP2CorpusBodyPeek() {
       if (!state.p2Corpus.selectedEntryId) return;
       if (!state.p2Corpus.loaded) await ensureP2CorpusLoaded();
       const entry = currentP2CorpusEntry();
       text("p2CorpusPeekMeta", entry?.label || "P2 LINKED MATERIAL");
-      text("p2CorpusPeekTitle", entry?.title || "已链接素材");
+      text("p2CorpusPeekTitle", entry?.title ? `链接素材：${entry.title}` : "链接的串题素材");
       const body = $("p2CorpusPeekBody");
       if (body) body.innerHTML = p2CorpusPeekHtml(entry);
       $("p2CorpusPeekDialog")?.classList.remove("hidden");
@@ -1168,14 +1443,21 @@
         storage_question_id: preparedEntry.storage_question_id,
         legacy_question_id: preparedEntry.legacy_question_id,
       });
+      // When opened from a report, the band7 reference travels in on the entry
+      // (last_ai_answer/aiAnswer). Clearing the saved corpus must NOT wipe that
+      // read-only reference — otherwise a previously-cleared question shows an
+      // empty 7分回答参考 even though the report still has a Band 7 version.
+      const reportReferenceAnswer = showReferenceAnswer
+        ? String(entry.last_ai_answer || entry.aiAnswer || entry.band7_version || "")
+        : "";
       const wasCleared = openedIds.some((id) => state.p1Corpus.clearedQuestionIds?.has?.(id));
       if (wasCleared) {
         preparedEntry = {
           ...preparedEntry,
           corpus_text: "",
-          last_ai_answer: "",
+          last_ai_answer: reportReferenceAnswer,
           band7_version: "",
-          aiAnswer: "",
+          aiAnswer: reportReferenceAnswer,
         };
       }
       state.p1Corpus.activeEntry = preparedEntry;
@@ -1413,9 +1695,41 @@
       }
     }
 
+    let p2CorpusFeedbackTimer = 0;
+
+    function setP2CorpusFeedback(message, kind = "info") {
+      const stats = $("p2CorpusStats");
+      if (!stats) return;
+      window.clearTimeout(p2CorpusFeedbackTimer);
+      stats.textContent = message;
+      stats.classList.toggle("is-refreshing", kind === "saving");
+      stats.classList.toggle("is-success", kind === "success");
+      stats.classList.toggle("is-error", kind === "error");
+      if (kind !== "saving") {
+        p2CorpusFeedbackTimer = window.setTimeout(() => {
+          stats.classList.remove("is-success", "is-error");
+          if (state.view === "p2Corpus" && state.p2Corpus.loaded) loadP2Corpus({ force: false }).catch(() => null);
+        }, 1600);
+      }
+    }
+
+    function flashP2CorpusEntry(entryId) {
+      if (!entryId) return;
+      window.requestAnimationFrame(() => {
+        const selector = `[data-p2-corpus-entry="${CSS.escape(String(entryId))}"]`;
+        const row = document.querySelector(selector)?.closest(".p2-material-row");
+        if (!row) return;
+        row.classList.remove("just-saved");
+        void row.offsetWidth;
+        row.classList.add("just-saved");
+        window.setTimeout(() => row.classList.remove("just-saved"), 1800);
+      });
+    }
+
     function renderP2CorpusTopics() {
       const container = $("p2CorpusTopics");
       if (!container) return;
+      scheduleP2BankListPrefetch();
       const categories = state.p2Corpus.categories || [];
       const currentCards = state.p2Corpus.currentPart2Cards || [];
       const P2_CAT_META = {
@@ -1600,7 +1914,7 @@
         return;
       } else {
         if (stats) stats.textContent = "Loading...";
-        if (list) list.innerHTML = '<p class="muted">正在加载 Takeaway...</p>';
+        if (list) list.innerHTML = '<div class="page-center-loading takeaway-page-loading" role="status" aria-live="polite"><div><span class="spinner"></span><div><strong>正在加载 Takeaway</strong><span>按记忆曲线整理你的语料卡片…</span></div></div></div>';
       }
       try {
         const payload = await fetchLanguageTakeawaysPayload();
@@ -2718,7 +3032,7 @@
         replaceTakeawayEntry(kind, saved);
         if (button) {
           button.classList.add("is-added");
-          button.textContent = "✓";
+          button.innerHTML = "&#10003;";
           window.setTimeout(() => {
             button.classList.remove("is-added");
             button.innerHTML = "+";
@@ -2907,19 +3221,41 @@
     function fetchP2BankCorpusPayload(questionId) {
       const key = String(questionId || "").trim();
       if (!key) return Promise.resolve(null);
-      if (!p2BankCorpusCache.has(key)) {
-        p2BankCorpusCache.set(key, api(`/api/p2-bank-corpus/${encodeURIComponent(key)}`));
+      ensureP2BankCacheScope();
+      if (p2BankCorpusCache.has(key)) return p2BankCorpusCache.get(key);
+      const cached = p2BankLsRead(P2BANK_LS_PREFIX, key);
+      if (cached) {
+        const promise = Promise.resolve(cached.payload);
+        p2BankCorpusCache.set(key, promise);
+        scheduleIdle(() => revalidateP2BankCorpus(key), 50);
+        return promise;
       }
-      return p2BankCorpusCache.get(key);
+      const netPromise = api(`/api/p2-bank-corpus/${encodeURIComponent(key)}`).then((payload) => {
+        p2BankLsWrite(P2BANK_LS_PREFIX, key, payload);
+        return payload;
+      });
+      p2BankCorpusCache.set(key, netPromise);
+      return netPromise;
     }
 
     function fetchP2BankP3Payload(questionId) {
       const key = String(questionId || "").trim();
       if (!key) return Promise.resolve(null);
-      if (!p2BankP3Cache.has(key)) {
-        p2BankP3Cache.set(key, api(`/api/p3-bank-corpus/${encodeURIComponent(key)}`));
+      ensureP2BankCacheScope();
+      if (p2BankP3Cache.has(key)) return p2BankP3Cache.get(key);
+      const cached = p2BankLsRead(P3BANK_LS_PREFIX, key);
+      if (cached) {
+        const promise = Promise.resolve(cached.payload);
+        p2BankP3Cache.set(key, promise);
+        scheduleIdle(() => revalidateP2BankP3(key), 50);
+        return promise;
       }
-      return p2BankP3Cache.get(key);
+      const netPromise = api(`/api/p3-bank-corpus/${encodeURIComponent(key)}`).then((payload) => {
+        p2BankLsWrite(P3BANK_LS_PREFIX, key, payload);
+        return payload;
+      });
+      p2BankP3Cache.set(key, netPromise);
+      return netPromise;
     }
 
     function warmP2BankEditorPayload(entry = {}) {
@@ -3410,13 +3746,11 @@
       state.p2Corpus.activeBankP3Entry = null;
       text("p2CorpusP3DialogCategory", (entry.label || category).toString());
       text("p2CorpusP3DialogTitle", entry.title ? `相关 P3 追问：${entry.title}` : "编辑相关 P3 追问");
-      updateP2CorpusP3QuestionSource(state.p2Corpus.activeP3Entry);
       $("p2BankP3EntryList")?.classList.add("hidden");
       $("p2CorpusP3FollowUpLabel")?.classList.remove("hidden");
-      document.querySelector(".p2-p3-source-tools")?.classList.remove("hidden");
       const initialText = entry.p3_follow_up_text || p2P3FollowUpMarkdownTemplate(entry);
       setCorpusMarkdownValue("p2CorpusP3FollowUp", initialText);
-      text("p2CorpusP3SaveStatus", entry.p3_follow_up_text ? "" : (initialText ? "已放入题库追问，可直接补充回答。" : "这张题卡暂无题库 P3 追问，可手动添加。"));
+      text("p2CorpusP3SaveStatus", entry.p3_follow_up_text ? "" : "可直接编辑并保存。");
       closeP2CorpusP3QuestionPicker();
       $("p2CorpusP3Dialog")?.classList.remove("hidden");
       if (!isCorpusEditorReady("p2CorpusP3FollowUp")) setCorpusEditorLoading("p2CorpusP3FollowUp", true);
@@ -3484,10 +3818,6 @@
       list.innerHTML = `
         <div class="p2-bank-p3-question-list" aria-label="题库 P3 追问列表">
           ${listHtml}
-        </div>
-        <div class="p2-bank-p3-active-question">
-          <span>当前题库追问</span>
-          <strong>${escapeHtml(selected?.followup_question || "P3 追问")}</strong>
         </div>
       `;
       if ($("p2CorpusP3FollowUpLabel")) $("p2CorpusP3FollowUpLabel").textContent = "回答正文";
@@ -3636,6 +3966,7 @@
       const category = $("p2CorpusCategory")?.value || entry.category || "person";
       closeP2CorpusEditor();
       if (materialText) {
+        setP2CorpusFeedback(entry.entry_id ? "正在保存素材..." : "正在新增素材...", "saving");
         saveP2CorpusEntry({
           entry: { ...entry, category, title },
           materialText,
@@ -3700,7 +4031,11 @@
           corpus_text: draft.corpus_text || "",
           source: "p3_bank_corpus_editor",
         })));
+        // P3 save is per-item with no combined payload; drop both caches so the
+        // next open re-fetches fresh and no stale copy covers the new content.
         p2BankP3Cache.delete(questionId);
+        p2BankLsDelete(P3BANK_LS_PREFIX, questionId);
+        p2BankBatchRequested.delete(questionId);
         if (!options.silent) text("p2CorpusP3SaveStatus", "已保存题库 P3 追问");
         await loadP2Corpus({ force: true });
         if (options.closeOnSuccess) closeP2CorpusP3Editor();
@@ -3940,9 +4275,14 @@
         if (!options.silent) text("p2CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
         await loadP2Corpus();
         state.p2Corpus.selectedEntryId ||= saved.entry_id;
+        if (options.silent) {
+          setP2CorpusFeedback("\u5df2\u4fdd\u5b58\u7d20\u6750", "success");
+          flashP2CorpusEntry(saved.entry_id);
+        }
         if (options.closeOnSuccess) closeP2CorpusEditor();
       } catch (error) {
         if (!options.silent) text("p2CorpusSaveStatus", error.message || String(error));
+        if (options.silent) setP2CorpusFeedback(error.message || "\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5", "error");
         if (options.closeOnError) closeP2CorpusEditor();
       } finally {
         state.p2Corpus.saving = false;
@@ -3979,7 +4319,14 @@
           source: "p2_bank_corpus_editor",
         });
         updateP2BrainstormCardLocal(questionId, saved.brainstorm_idea ?? nextBrainstormIdea);
-        p2BankCorpusCache.delete(questionId);
+        // Push the just-saved payload into both caches so a stale copy can
+        // never cover fresh content, and a reopen is instant.
+        p2BankCorpusCache.set(questionId, Promise.resolve(saved));
+        p2BankLsWrite(P2BANK_LS_PREFIX, questionId, saved);
+        p2BankBatchRequested.add(questionId);
+        if (state.p2Corpus.activeEntry && p2BankQuestionId(state.p2Corpus.activeEntry) === questionId) {
+          state.p2Corpus.activeEntry.material_text = saved.corpus_text || "";
+        }
         if (!options.silent) text("p2CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
         await loadP2Corpus({ force: true });
         if (options.closeOnSuccess) closeP2CorpusEditor();
@@ -4034,7 +4381,7 @@
         return;
       } else {
         if (stats) stats.textContent = "Loading...";
-        if (list) list.innerHTML = '<p class="muted">正在加载写作积累...</p>';
+        if (list) list.innerHTML = '<div class="page-center-loading takeaway-page-loading" role="status" aria-live="polite"><div><span class="spinner"></span><div><strong>正在加载写作积累</strong><span>整理你保存的写作素材…</span></div></div></div>';
       }
       try {
         const payload = await fetchWritingTakeawaysPayload();
@@ -4164,6 +4511,7 @@
       updateP2CorpusPeekButton,
       p2CorpusPeekHtml,
       openP2CorpusPeek,
+      openP2CorpusBodyPeek,
       closeP2CorpusPeek,
       updateP3CorpusPeekButton,
       openP3CorpusPeek,

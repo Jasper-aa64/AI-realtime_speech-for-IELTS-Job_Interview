@@ -345,8 +345,12 @@ class SpellingDrillTests(TestCase):
         self.assertFalse(wrong["correct"])
         word.refresh_from_db()
         self.assertEqual(word.status, SpellingDrillWord.Status.ACTIVE)
-        self.assertEqual(word.review_stage, 0)
+        self.assertEqual(word.review_stage, 3)
         self.assertEqual(word.metadata["mastered_review_level"], 0)
+        self.assertEqual(
+            self.review_local(word.due_at),
+            self.review_local(review_time).replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=1),
+        )
 
     def test_update_edit_gloss_reset_master_and_delete(self):
         self.create_score(
@@ -365,6 +369,9 @@ class SpellingDrillTests(TestCase):
         update_spelling_word(self.user, word.word_id, {"action": "master"})
         word.refresh_from_db()
         self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
+        self.assertEqual(word.review_stage, 4)
+        self.assertEqual(word.metadata["mastered_review_level"], 0)
+        self.assertGreater(word.due_at, timezone.now())
 
         update_spelling_word(self.user, word.word_id, {"action": "reset"})
         word.refresh_from_db()

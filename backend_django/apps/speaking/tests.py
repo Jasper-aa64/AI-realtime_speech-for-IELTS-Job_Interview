@@ -820,6 +820,78 @@ class QuestionBankApiTests(TestCase):
         self.assertTrue(updated_card["has_p3_follow_up"])
         self.assertEqual(updated_card["p3_follow_up_saved_count"], 1)
 
+    def test_p2_bank_corpus_batch_returns_multiple_cards(self):
+        cards = self.client.get("/api/p2-corpus").json()["current_part2_cards"]
+        ids = [card["cue_id"] for card in cards[:3]]
+        response = self.client.post(
+            "/api/p2-bank-corpus/batch",
+            data={"question_ids": ids},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertEqual(set(items.keys()), set(ids))
+        for cue_id in ids:
+            self.assertEqual(items[cue_id]["question_id"], cue_id)
+
+    def test_p2_bank_corpus_batch_empty_returns_empty_items(self):
+        response = self.client.post(
+            "/api/p2-bank-corpus/batch",
+            data={"question_ids": []},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], {})
+
+    def test_p2_bank_corpus_batch_over_limit_returns_400(self):
+        response = self.client.post(
+            "/api/p2-bank-corpus/batch",
+            data={"question_ids": [f"p2cue:{index}" for index in range(51)]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_p2_bank_corpus_batch_requires_login(self):
+        self.client.logout()
+        response = self.client.post(
+            "/api/p2-bank-corpus/batch",
+            data={"question_ids": []},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_p3_bank_corpus_batch_returns_multiple_cards(self):
+        cards = self.client.get("/api/p2-corpus").json()["current_part2_cards"]
+        ids = [card["cue_id"] for card in cards[:3]]
+        response = self.client.post(
+            "/api/p3-bank-corpus/batch",
+            data={"question_ids": ids},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        self.assertEqual(set(items.keys()), set(ids))
+        for cue_id in ids:
+            self.assertEqual(items[cue_id]["p2_question_id"], cue_id)
+            self.assertIn("items", items[cue_id])
+
+    def test_p3_bank_corpus_batch_empty_returns_empty_items(self):
+        response = self.client.post(
+            "/api/p3-bank-corpus/batch",
+            data={"question_ids": []},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], {})
+
+    def test_p3_bank_corpus_batch_over_limit_returns_400(self):
+        response = self.client.post(
+            "/api/p3-bank-corpus/batch",
+            data={"question_ids": [f"p2cue:{index}" for index in range(51)]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_p2_corpus_library_respects_scope(self):
         response = self.client.get("/api/p2-corpus?scope=archive")
         self.assertEqual(response.status_code, 200)
@@ -3779,3 +3851,76 @@ class TurnFeedbackValidationTests(TestCase):
         attempt.refresh_from_db()
         self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
         self.assertIsNone(attempt.metadata["current_turn"])
+
+    @override_settings(
+        AI_HTTP_BASE_URL="https://ai.example/v1",
+        AI_HTTP_API_KEY="test-key",
+        SPEAKING_FOLLOWUP_AI_CALL_MODE="chain",
+        SPEAKING_FOLLOWUP_AI_MODEL="gpt-5.4-mini",
+    )
+    def test_streamed_p1_followup_fails_without_fallback_when_http_stream_fails(self):
+        # Spec: follow-ups use the GPT/HTTP provider only. When it fails, the stream
+        # must emit `failed` with an empty question (frontend shows "点击重录") and must
+        # NOT fabricate a codex or canned follow-up dressed up as the AI's question.
+        from apps.speaking.services import stream_follow_up_sse_events
+        from apps.accounts.models import CustomUser
+
+        class FailingStreamProvider:
+            def stream_tokens(self, *args, **kwargs):
+                raise RuntimeError("401 invalid token")
+
+            def complete_chat(self, *args, **kwargs):
+                raise RuntimeError("401 invalid token")
+
+        user = CustomUser.objects.create_user(username="test-p1-sse-fallback-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-p1-sse-fallback-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t2"},
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=0,
+            part="p1",
+            question="Do you work or do you study?",
+            transcript_raw="I study software engineering and I am also doing an internship.",
+            transcript_cleaned="I study software engineering and I am also doing an internship.",
+            metadata={
+                "prompt": {
+                    "topic": "intro",
+                    "question": "Do you work or do you study?",
+                    "flow": "intro",
+                    "role": "work_study",
+                    "counts_toward_total": True,
+                }
+            },
+        )
+
+        with (
+            patch("apps.speaking.services._speaking_http_provider", return_value=FailingStreamProvider()),
+            patch("apps.speaking.services.run_codex") as run_codex_mock,
+            patch("apps.speaking.services._generate_streamed_follow_up_tts") as generate_tts,
+        ):
+            raw_events = list(stream_follow_up_sse_events(user, "test-p1-sse-fallback-attempt", "t2"))
+
+        events = [
+            json.loads(item.removeprefix("data: ").strip())
+            for item in raw_events
+            if item.startswith("data: ")
+        ]
+        self.assertTrue(any(event["event"] == "failed" for event in events))
+        self.assertFalse(any(event["event"] == "question_complete" for event in events))
+        run_codex_mock.assert_not_called()
+        generate_tts.assert_not_called()
+        failed_event = next(event for event in events if event["event"] == "failed")
+        self.assertEqual(failed_event["backend"], "stream_failed")
+
+        target_turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2_followup")
+        self.assertEqual(target_turn.question, "")
+        self.assertEqual(target_turn.metadata["prompt"]["backend"], "stream_failed")
+        self.assertEqual(target_turn.metadata["prompt"]["generation_status"], "failed")

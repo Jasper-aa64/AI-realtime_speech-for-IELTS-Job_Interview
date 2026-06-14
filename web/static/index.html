@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
-    <link rel="icon" href="/assets/brand/ielts-pencil-mark.svg?v=20260612-brand-icon-1" type="image/svg+xml">
+    <link rel="icon" href="/assets/brand/ielts-pencil-favicon.svg?v=20260614-favicon-bg-1" type="image/svg+xml">
     <link rel="preload" href="/assets/takeaway/pencil-paper-study-bg.webp" as="image" type="image/webp">
     <link rel="preload" href="/assets/takeaway/pencil-card-paper-light.webp" as="image" type="image/webp">
     <link rel="preload" href="/assets/takeaway/pencil-card-paper-dark.webp" as="image" type="image/webp">
@@ -15,7 +15,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260612-myframe-close-saving-1">
+    <link rel="stylesheet" href="/styles.css?v=20260614-p3cols-max3-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -28,7 +28,7 @@
           </svg>
           <span data-i18n="action.back">返回</span>
         </button>
-        <button type="button" id="accountBackBtn" class="account-back-button hidden" title="返回" aria-label="返回" data-i18n-title="action.back" data-i18n-aria="action.back">
+        <button type="button" id="accountBackBtn" class="topbar-back-button account-back-button hidden" title="返回" aria-label="返回" data-i18n-title="action.back" data-i18n-aria="action.back">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M15 18l-6-6 6-6"></path>
             <path d="M9 12h11"></path>
@@ -96,10 +96,17 @@
           <div id="navLockHint" class="nav-lock-hint hidden" data-i18n="nav.lockHint">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
           <nav class="nav-primary" aria-label="Practice modes">
             <a class="nav-button active" data-view="home" href="?view=home" data-i18n="nav.home">首页</a>
-            <a class="nav-button" data-view="mock" href="?view=mock">Mock</a>
-            <a class="nav-button" data-view="p1" href="?view=p1">P1</a>
-            <a class="nav-button" data-view="p2" href="?view=p2">P2</a>
-            <a class="nav-button" data-view="p3" href="?view=p3">P3</a>
+            <div class="nav-exam-group" role="group" aria-label="口语练习">
+              <a class="nav-button nav-exam-lead" data-view="mock" href="?view=mock">
+                <span class="nav-exam-lead-title">Mock</span>
+                <span class="nav-exam-lead-sub">完整模考</span>
+              </a>
+              <div class="nav-pgroup">
+                <a class="nav-button nav-pgroup-item" data-view="p1" href="?view=p1">P1</a>
+                <a class="nav-button nav-pgroup-item" data-view="p2" href="?view=p2">P2</a>
+                <a class="nav-button nav-pgroup-item" data-view="p3" href="?view=p3">P3</a>
+              </div>
+            </div>
             <a class="nav-button" data-view="history" href="?view=history" data-i18n="nav.speakingReports">口语报告</a>
             <div class="nav-divider" aria-hidden="true"></div>
             <a class="nav-button" data-view="writing" href="?view=writing" data-i18n="nav.dailyWriting">每日写作</a>
@@ -241,11 +248,18 @@
                   <path d="M10.7 21.75h2.6"></path>
                 </svg>
               </button>
-              <button id="peekP2CorpusBtn" class="p1-corpus-peek-button p2-corpus-peek-button hidden" type="button" aria-label="查看已链接的 P2 素材" title="查看已链接素材">
+              <button id="peekP2CorpusBtn" class="p1-corpus-peek-button p2-corpus-peek-button hidden" type="button" aria-label="查看我为这道题准备的题库正文" title="我准备的本题正文">
                 <svg aria-hidden="true" viewBox="0 0 24 24">
                   <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
                   <path d="M9.6 20h4.8"></path>
                   <path d="M10.7 21.75h2.6"></path>
+                </svg>
+              </button>
+              <button id="peekP2CorpusBodyBtn" class="p1-corpus-peek-button p2-corpus-peek-button p2-corpus-body-peek-button hidden" type="button" aria-label="查看这道题链接的串题素材" title="查看链接的串题素材">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M6 3h9l4 4v13.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 20.5v-16A1.5 1.5 0 0 1 5.5 3z"></path>
+                  <path d="M14.5 3v4.5H19"></path>
+                  <path d="M8 12.5h8M8 16h8M8 9h3"></path>
                 </svg>
               </button>
               <button id="peekP3CorpusBtn" class="p1-corpus-peek-button p3-corpus-peek-button hidden" type="button" aria-label="查看 P3 追问素材" title="查看 P3 追问素材">
@@ -264,9 +278,9 @@
               </button>
               <button id="openP2CorpusBtn" class="corpus-entry-button p2-corpus-entry hidden" type="button">
                 <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M9 18h6"></path>
-                  <path d="M10 22h4"></path>
-                  <path d="M12 2a7 7 0 0 0-4 12.7c.7.5 1 1.1 1 1.8V17h6v-.5c0-.7.3-1.3 1-1.8A7 7 0 0 0 12 2z"></path>
+                  <path d="M12 2 2 7l10 5 10-5-10-5z"></path>
+                  <path d="M2 12l10 5 10-5"></path>
+                  <path d="M2 17l10 5 10-5"></path>
                 </svg>
                 <span data-i18n="p2.corpusButton">我的 P2 串题素材库</span>
               </button>
@@ -351,10 +365,12 @@
                   </svg>
                 </button>
               </div>
-              <div id="recordStatus" class="record-status">Microphone will be requested when recording starts.</div>
-              <div id="dictationStatus" class="dictation-status hidden" aria-live="polite"></div>
-              <div id="realtimePcmStatus" class="realtime-pcm-status hidden" aria-live="polite"></div>
-              <audio id="candidateAudio" controls class="hidden"></audio>
+              <div class="recorder-status-zone">
+                <div id="recordStatus" class="record-status">Microphone will be requested when recording starts.</div>
+                <div id="dictationStatus" class="dictation-status hidden" aria-live="polite"></div>
+                <div id="realtimePcmStatus" class="realtime-pcm-status hidden" aria-live="polite"></div>
+                <audio id="candidateAudio" controls class="hidden"></audio>
+              </div>
             </article>
           </div>
 
@@ -659,13 +675,6 @@
               <button id="saveP2CorpusP3Btn" type="button">保存追问</button>
             </header>
             <div class="p2-corpus-p3-context">
-              <div class="p2-p3-source-tools">
-                <div>
-                  <strong>题库 P3 追问</strong>
-                  <span id="p2CorpusP3QuestionSourceStatus">暂无题库追问</span>
-                </div>
-                <button id="openP2CorpusP3QuestionPickerBtn" type="button">选择题库追问</button>
-              </div>
               <div id="p2CorpusP3QuestionPicker" class="p2-p3-question-picker hidden" role="dialog" aria-label="选择题库 P3 追问">
                 <header>
                   <strong>选择追问</strong>
@@ -708,7 +717,7 @@
         </div>
 
         <section id="historyPanel" class="panel hidden">
-          <div class="history-rail-shell speaking-report-rail-shell">
+          <div class="history-rail-shell speaking-report-rail-shell at-start">
             <div class="history-rail-head">
               <div>
                 <strong>Reports</strong>
@@ -1061,7 +1070,7 @@
         </div>
 
         <section id="writingReportsPanel" class="panel writing-reports-panel hidden">
-          <div class="history-rail-shell writing-report-rail-shell">
+          <div class="history-rail-shell writing-report-rail-shell at-start">
             <div class="history-rail-head">
               <div>
                 <strong>Reports</strong>
@@ -1286,16 +1295,19 @@
                 <div class="account-card-head account-wallet-head">
                   <div>
                     <span class="account-card-eyebrow" data-i18n="wallet.eyebrow">Wallet</span>
-                    <h2 data-i18n="wallet.title">钱包</h2>
                   </div>
                 </div>
                 <div id="walletStatus" class="account-balance-panel is-loading">
-                  <div><span data-i18n="wallet.available">可用余额</span><strong data-i18n="wallet.loading">加载中</strong></div>
+                  <article class="wallet-balance-card wallet-balance-skeleton" aria-label="钱包加载中">
+                    <span class="wallet-skeleton-line wallet-skeleton-line-label"></span>
+                    <span class="wallet-skeleton-line wallet-skeleton-line-amount"></span>
+                    <span class="wallet-skeleton-line wallet-skeleton-line-hint"></span>
+                  </article>
                 </div>
                 <div id="ledgerList" class="settings-list account-ledger-list" aria-live="polite">
-                  <div class="account-skeleton-row"></div>
-                  <div class="account-skeleton-row"></div>
-                  <div class="account-skeleton-row"></div>
+                  <div class="account-ledger-loading" aria-label="读取中">
+                    <span class="wallet-loading-spinner" aria-hidden="true"></span>
+                  </div>
                 </div>
               </article>
             </div>
@@ -1388,11 +1400,11 @@
       </main>
     </div>
     <script src="/shared-ui.js?v=20260612-writing-takeaway-optimistic-1"></script>
-    <script src="/writing-image-preload.js?v=20260612-thumb-warm-fix-1"></script>
-    <script src="/writing-image-viewer.js?v=20260530-writing-image-viewer"></script>
-    <script src="/writing-prompt-picker.js?v=20260612-thumb-warm-fix-1"></script>
-    <script src="/corpus-markdown-editor.js?v=20260612-p1-md-empty-close-fix-1"></script>
-    <script src="/corpus-takeaway.js?v=20260612-brainstorm-icon-1"></script>
+    <script src="/writing-image-preload.js?v=20260614-img-ready-instant-1"></script>
+    <script src="/writing-image-viewer.js?v=20260613-img-original-preload-1"></script>
+    <script src="/writing-prompt-picker.js?v=20260614-img-ready-instant-1"></script>
+    <script src="/corpus-markdown-editor.js?v=20260613-p2bank-instant-1"></script>
+    <script src="/corpus-takeaway.js?v=20260614-p2-bodypeek-split-1"></script>
     <script src="/spelling-drill.js?v=20260612-writing-takeaway-optimistic-1"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
@@ -1401,6 +1413,6 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260612-myframe-close-saving-1"></script>
+    <script src="/app.js?v=20260614-account-overlay-1"></script>
   </body>
 </html>

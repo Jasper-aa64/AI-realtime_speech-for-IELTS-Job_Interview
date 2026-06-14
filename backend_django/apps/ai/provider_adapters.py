@@ -11,9 +11,11 @@ from typing import Any
 
 from django.conf import settings
 
+from apps.ai.cli_paths import resolve_claude_cli_path
 from apps.ai.models import AITask
 from apps.ai.http_provider import HttpApiProvider, HttpApiProviderError
 from apps.ai.provider_config import (
+    ADAPTER_KEY_CLAUDE_WRITING_SCORE,
     ADAPTER_KEY_CODEX_SPEAKING_REPORT,
     ADAPTER_KEY_CODEX_WRITING_SCORE,
     ADAPTER_KEY_FALLBACK,
@@ -318,6 +320,120 @@ def run_codex(prompt: str, call_id: str, timeout: int = 120, max_attempts: int =
     return _DEFAULT_CODEX_CLIENT.run(prompt, call_id, timeout=timeout, max_attempts=max_attempts)
 
 
+CLAUDE_CLI_QUOTA_PHRASES = ("limit reached", "quota", "rate limit", "overloaded", "capacity")
+
+
+def _claude_usage_payload(raw_usage: dict[str, Any], *, model: str) -> dict[str, Any]:
+    input_tokens = int(raw_usage.get("input_tokens") or 0)
+    cache_creation_input_tokens = int(raw_usage.get("cache_creation_input_tokens") or 0)
+    cache_read_input_tokens = int(raw_usage.get("cache_read_input_tokens") or 0)
+    output_tokens = int(raw_usage.get("output_tokens") or 0)
+    return {
+        **raw_usage,
+        "input_tokens": input_tokens + cache_creation_input_tokens + cache_read_input_tokens,
+        "cached_input_tokens": cache_read_input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": raw_usage.get("total_cost_usd"),
+        "provider": "claude",
+        "model": model,
+    }
+
+
+class ClaudeCliClient:
+    """Adapter around the local Claude Code CLI in headless JSON mode.
+
+    Uses the machine's logged-in Claude session (subscription), so no
+    ANTHROPIC_API_KEY is needed. The prompt is fed via stdin to sidestep
+    command-line length limits on long writing prompts. On Windows the CLI
+    resolves to claude.cmd / claude.exe via shutil.which.
+    """
+
+    def __init__(self, *, executable: str | None = None, model: str | None = None):
+        self.executable = executable
+        self.model = model or os.environ.get("CLAUDE_CLI_MODEL") or "sonnet"
+
+    def run(self, prompt: str, call_id: str, timeout: int = 180, max_attempts: int = 2) -> tuple[str, dict[str, Any] | None]:
+        if os.environ.get("IELTS_WEB_DISABLE_CLAUDE") == "1":
+            raise RuntimeError("claude disabled by IELTS_WEB_DISABLE_CLAUDE=1")
+
+        claude = resolve_claude_cli_path(self.executable)
+        if not shutil.which(claude) and not Path(claude).exists():
+            raise RuntimeError(f"claude CLI not found at {claude}")
+
+        last_error: RuntimeError | None = None
+        for _attempt in range(max(1, int(max_attempts or 1))):
+            try:
+                result = subprocess.run(
+                    [claude, "-p", "--output-format", "json", "--model", self.model],
+                    input=prompt,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    capture_output=True,
+                    timeout=timeout,
+                )
+            except subprocess.TimeoutExpired:
+                last_error = RuntimeError(f"claude CLI timed out after {timeout}s for {call_id}")
+                continue
+            except Exception as exc:
+                last_error = RuntimeError(f"claude CLI subprocess error for {call_id}: {exc}")
+                continue
+
+            raw_stdout = (result.stdout or "").strip()
+            raw_stderr = (result.stderr or "").strip()
+
+            combined_err = (raw_stderr + " " + raw_stdout).lower()
+            if any(phrase in combined_err for phrase in CLAUDE_CLI_QUOTA_PHRASES):
+                last_error = RuntimeError(
+                    f"claude CLI quota exhausted for {call_id}: {raw_stderr[:200] or raw_stdout[:200]}"
+                )
+                continue
+
+            try:
+                parsed = json.loads(raw_stdout)
+            except json.JSONDecodeError:
+                if raw_stdout:
+                    # Plain-text output (non-JSON) — still usable, no usage data.
+                    return raw_stdout, None
+                last_error = RuntimeError(
+                    f"claude CLI returned empty output for {call_id}. stderr: {raw_stderr[:300]}"
+                )
+                continue
+
+            api_error = parsed.get("api_error_status")
+            if api_error:
+                message = str(parsed.get("result") or api_error).strip()
+                last_error = RuntimeError(f"Claude CLI error for {call_id}: {message}")
+                continue
+            if parsed.get("is_error"):
+                message = str(parsed.get("result") or "Claude CLI reported an error").strip()
+                last_error = RuntimeError(f"Claude CLI error for {call_id}: {message}")
+                continue
+
+            text = str(parsed.get("result") or "").strip()
+            if not text:
+                last_error = RuntimeError(f"claude CLI returned empty result for {call_id}")
+                continue
+
+            raw_usage = parsed.get("usage") or {}
+            usage: dict[str, Any] | None = None
+            if raw_usage:
+                usage = _claude_usage_payload(
+                    {**raw_usage, "total_cost_usd": parsed.get("total_cost_usd")},
+                    model=self.model,
+                )
+            return text, usage
+
+        raise last_error or RuntimeError(f"claude CLI returned no usable output for {call_id}")
+
+
+_DEFAULT_CLAUDE_CLIENT = ClaudeCliClient()
+
+
+def run_claude(prompt: str, call_id: str, timeout: int = 180, max_attempts: int = 2) -> tuple[str, dict[str, Any] | None]:
+    return _DEFAULT_CLAUDE_CLIENT.run(prompt, call_id, timeout=timeout, max_attempts=max_attempts)
+
+
 class AiTaskTemplate(BaseProviderAdapter):
     """Template Method for provider-backed durable AI task execution."""
 
@@ -581,6 +697,41 @@ class HttpWritingScoreAdapter(CodexWritingScoreAdapter):
     def _failure_message(self, exc: Exception) -> str:
         return f"HTTP writing report generation failed: {exc}"
 
+    def run(self, task: AITask) -> ProviderRunResult:
+        result = super().run(task)
+        if result.outcome != ProviderRunOutcome.TERMINAL_FAILURE:
+            return result
+        # The configured HTTP/OpenAI-compatible provider failed in a non-retryable
+        # way — most commonly an expired or invalid API key (HTTP 401, which is not
+        # in the retryable status set). Rather than hard-failing the whole writing
+        # request, fall back to the local Codex CLI, which is a real AI scorer (not a
+        # canned stub). The returned result carries the Codex adapter's own backend
+        # metadata, so the report is reported honestly as codex-generated and is never
+        # disguised as the HTTP provider. If codex also fails, keep the original HTTP
+        # error so the user sees the primary provider's failure.
+        codex_result = CodexWritingScoreAdapter(self.route).run(task)
+        if codex_result.outcome == ProviderRunOutcome.SUCCESS:
+            return codex_result
+        return result
+
+
+class ClaudeWritingScoreAdapter(CodexWritingScoreAdapter):
+    adapter_name = "writing_score_claude"
+    failure_error_code = "claude_writing_score_failed"
+
+    def _execute_provider(self, task: AITask, request_payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        model = self.route.requested_model if self.route and self.route.requested_model else task.model
+        output, usage = ClaudeCliClient(model=model or None).run(
+            self._report_prompt(request_payload),
+            task.call_id or task.task_id,
+            timeout=180,
+            max_attempts=2,
+        )
+        return extract_json_object(output), usage or {}
+
+    def _failure_message(self, exc: Exception) -> str:
+        return f"Claude writing report generation failed: {exc}"
+
 
 class CodexSpeakingReportAdapter(AiTaskTemplate):
     adapter_name = "speaking_report_codex"
@@ -753,6 +904,8 @@ def select_provider_adapter(task: AITask) -> AIProvider:
         return ProviderChain([CodexWritingScoreAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_HTTP_WRITING_SCORE:
         return ProviderChain([HttpWritingScoreAdapter(route)], route)
+    if route.adapter_key == ADAPTER_KEY_CLAUDE_WRITING_SCORE:
+        return ProviderChain([ClaudeWritingScoreAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_CODEX_SPEAKING_REPORT:
         return ProviderChain([CodexSpeakingReportAdapter(route)], route)
     if route.adapter_key == ADAPTER_KEY_FALLBACK:

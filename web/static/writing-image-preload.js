@@ -25,9 +25,15 @@
 
     function prime(url, primeOptions = {}) {
       const imageUrl = String(url || "").trim();
-      if (!imageUrl || state.writing.promptImagePreloads.has(imageUrl)) return false;
-      const preloadUrl = thumbUrlFor(imageUrl);
-      state.writing.promptImagePreloads.add(imageUrl);
+      if (!imageUrl) return false;
+      // Originals and thumbnails are tracked in separate dedup sets so warming
+      // one never blocks the other for the same prompt.
+      const original = Boolean(primeOptions.original);
+      const seen = original ? state.writing.promptOriginalPreloads : state.writing.promptImagePreloads;
+      const promises = original ? state.writing.promptOriginalPreloadPromises : state.writing.promptImagePreloadPromises;
+      if (seen.has(imageUrl)) return false;
+      const preloadUrl = original ? imageUrl : thumbUrlFor(imageUrl);
+      seen.add(imageUrl);
       const image = new Image();
       image.decoding = "async";
       image.loading = primeOptions.priority === "low" ? "lazy" : "eager";
@@ -40,11 +46,24 @@
         if (result.ok && typeof image.decode === "function") {
           await image.decode().catch(() => null);
         }
+        if (result.ok) {
+          // Record the actually-loaded URL (thumb or original) so the picker
+          // can render already-decoded images instantly, without a blank
+          // opacity fade-in on every re-render.
+          if (!state.writing.promptImageReadyUrls) state.writing.promptImageReadyUrls = new Set();
+          state.writing.promptImageReadyUrls.add(preloadUrl);
+        }
         return result;
       });
-      state.writing.promptImagePreloadPromises.set(imageUrl, promise);
+      promises.set(imageUrl, promise);
       image.src = preloadUrl;
       return true;
+    }
+
+    // Preload an original-resolution image (low priority by default) so the
+    // full-size viewer ("点开看") opens instantly.
+    function primeOriginal(url, priority = "low") {
+      return prime(url, { original: true, priority });
     }
 
     function queue(prompts = [], queueOptions = {}) {
@@ -58,6 +77,22 @@
         state.writing.promptImagePreloadQueue.push(url);
         queued += 1;
       }
+    }
+
+    // Push prompts to the FRONT of the queue without discarding the existing
+    // backlog, so nearby thumbnails get priority while warmAll keeps running.
+    function queueFront(prompts = [], queueOptions = {}) {
+      const limit = Number.isFinite(Number(queueOptions.limit)) ? Math.max(0, Number(queueOptions.limit)) : Infinity;
+      const urls = [];
+      let queued = 0;
+      for (const url of imageUrls(prompts)) {
+        if (queued >= limit) break;
+        if (state.writing.promptImagePreloads.has(url) || state.writing.promptImagePreloadQueued.has(url)) continue;
+        state.writing.promptImagePreloadQueued.add(url);
+        urls.push(url);
+        queued += 1;
+      }
+      if (urls.length) state.writing.promptImagePreloadQueue.unshift(...urls);
     }
 
     function canUseBackgroundPreload() {
@@ -80,7 +115,6 @@
       const currentIndex = prompts.findIndex((item) => item.id === prompt.id);
       if (currentIndex < 0) return;
       const nearbyPrompts = prompts.slice(currentIndex + 1, currentIndex + 1 + imagePreloadLimit);
-      if (!nearbyPrompts.length) return;
       const currentImageUrl = String(prompt.image_url || "").trim();
       const preloadSource = `${prompt.id || currentIndex}:${currentImageUrl}`;
       if (state.writing.nearbyPromptImagePreloadSource === preloadSource) {
@@ -90,9 +124,13 @@
       state.writing.nearbyPromptImagePreloadSource = preloadSource;
       const preloadAfterCurrent = () => {
         if (!canWarm()) return;
-        state.writing.promptImagePreloadQueue = [];
-        state.writing.promptImagePreloadQueued.clear();
-        queue(nearbyPrompts, { limit: imagePreloadLimit });
+        // Give nearby thumbnails priority without wiping the warmAll backlog.
+        queueFront(nearbyPrompts, { limit: imagePreloadLimit });
+        // Warm the ORIGINAL-resolution images for the current prompt and the
+        // nearby ones (low priority) so "点开看" opens instantly. These run
+        // outside the thumbnail queue.
+        if (currentImageUrl) primeOriginal(currentImageUrl, "low");
+        imageUrls(nearbyPrompts).slice(0, imagePreloadLimit).forEach((nearbyUrl) => primeOriginal(nearbyUrl, "low"));
         drain();
       };
       const currentPromise = currentImageUrl ? state.writing.promptImagePreloadPromises.get(currentImageUrl) : null;
@@ -177,9 +215,11 @@
       drainWritingPromptImagePreloadQueue: drain,
       ensureWritingPromptImageReady: ensureReady,
       primeWritingPromptImage: prime,
+      primeWritingPromptOriginalImage: primeOriginal,
       prefetchWritingPromptImageHints: prefetchHints,
       scheduleNearbyWritingPromptImagePreload: scheduleNearby,
       warmAllWritingPromptImages: warmAll,
+      writingPromptThumbUrl: thumbUrlFor,
     };
   }
 

@@ -138,6 +138,31 @@ class BillingServiceTests(TestCase):
         with self.assertRaises(BillingError):
             settle_usage(user, "bad-usage-call", {"input_tokens": "not-a-number"})
 
+    def test_settlement_accepts_openai_compatible_token_aliases(self):
+        user = get_user_model().objects.create_user(username="alias-usage-user", password="test-pass")
+        result = settle_usage(
+            user,
+            "alias-usage-call",
+            {
+                "prompt_tokens": 6948,
+                "completion_tokens": 3760,
+                "total_tokens": 10708,
+                "prompt_tokens_details": {"cached_tokens": 4864},
+                "completion_tokens_details": {"reasoning_tokens": 238},
+            },
+        )
+
+        self.assertEqual(result["status"], "settled")
+        self.assertEqual(result["usage"]["input_tokens"], 6948)
+        self.assertEqual(result["usage"]["cached_input_tokens"], 4864)
+        self.assertEqual(result["usage"]["uncached_input_tokens"], 2084)
+        self.assertEqual(result["usage"]["output_tokens"], 3760)
+        event = CodexUsageEvent.objects.get(call_id="alias-usage-call")
+        self.assertEqual(event.input_tokens, 6948)
+        self.assertEqual(event.cached_input_tokens, 4864)
+        self.assertEqual(event.output_tokens, 3760)
+        self.assertGreater(result["charged_u"], 0)
+
 
 class BillingApiTests(TestCase):
     def setUp(self):

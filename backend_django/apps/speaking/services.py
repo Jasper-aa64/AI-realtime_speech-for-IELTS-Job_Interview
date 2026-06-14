@@ -19,6 +19,7 @@ from django.db import close_old_connections, transaction
 from django.db.utils import DatabaseError
 from django.utils import timezone
 
+from apps.ai.cli_paths import resolve_claude_cli_path
 from apps.ai.http_provider import HttpApiProvider, HttpApiProviderConfig
 from apps.ai.models import AITask
 from apps.ai.services import create_ai_task, task_payload
@@ -51,6 +52,7 @@ from .corpus_services import (
     p1_corpus_library,
     p1_question_id,
     p1_topic_label,
+    p2_bank_corpus_batch,
     p2_bank_corpus_payload,
     p2_bank_topic_for_question_id,
     p2_corpus_entry_payload,
@@ -58,6 +60,7 @@ from .corpus_services import (
     p2_corpus_for_selection,
     p2_corpus_library,
     p2_entry_id,
+    p3_bank_corpus_batch,
     p3_bank_followup_id,
     p3_bank_followup_list,
     prepared_corpus_for_turns,
@@ -379,8 +382,21 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45) -> tuple[str, dict[s
 
 # ── Claude CLI runner ─────────────────────────────────────────────────────────
 
-CLAUDE_CLI_PATH = shutil.which("claude") or "/Users/mac/.local/bin/claude"
 CLAUDE_CLI_QUOTA_PHRASES = ("limit reached", "quota", "rate limit", "overloaded", "capacity")
+
+
+def _claude_cli_usage_payload(raw_usage: dict[str, Any]) -> dict[str, Any]:
+    input_tokens = int(raw_usage.get("input_tokens") or 0)
+    cache_creation_input_tokens = int(raw_usage.get("cache_creation_input_tokens") or 0)
+    cache_read_input_tokens = int(raw_usage.get("cache_read_input_tokens") or 0)
+    output_tokens = int(raw_usage.get("output_tokens") or 0)
+    return {
+        **raw_usage,
+        "input_tokens": input_tokens + cache_creation_input_tokens + cache_read_input_tokens,
+        "cached_input_tokens": cache_read_input_tokens,
+        "output_tokens": output_tokens,
+        "provider": "claude_cli",
+    }
 
 
 class ClaudeCliQuotaError(RuntimeError):
@@ -394,13 +410,20 @@ def run_claude_cli(prompt: str, call_id: str, timeout: int = 180) -> tuple[str, 
     Raises ClaudeCliQuotaError on detected quota exhaustion.
     Raises RuntimeError on other failures.
     """
-    cli = CLAUDE_CLI_PATH
+    cli = resolve_claude_cli_path()
     if not (shutil.which(cli) or Path(cli).exists()):
         raise RuntimeError(f"claude CLI not found at {cli}")
 
     try:
+        # Feed the prompt over stdin, NOT as a -p argv value. On Windows `claude`
+        # resolves to claude.CMD (a batch wrapper); a long multi-line report prompt
+        # passed as a command-line argument gets mangled/truncated by cmd.exe, so
+        # Claude receives an empty/garbled message and replies "No speaking response
+        # was included" — which then fails JSON extraction and silently falls back to
+        # codex. stdin sidesteps both the length limit and the argv mangling.
         result = subprocess.run(
-            [cli, "-p", prompt, "--output-format", "json"],
+            [cli, "-p", "--output-format", "json"],
+            input=prompt,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -438,11 +461,14 @@ def run_claude_cli(prompt: str, call_id: str, timeout: int = 180) -> tuple[str, 
     if api_error:
         err_str = str(api_error).lower()
         if any(phrase in err_str for phrase in CLAUDE_CLI_QUOTA_PHRASES):
-            raise ClaudeCliQuotaError(f"Claude CLI API error (quota) for {call_id}: {api_error}")
-        raise RuntimeError(f"Claude CLI API error for {call_id}: {api_error}")
+            message = str(parsed.get("result") or api_error).strip()
+            raise ClaudeCliQuotaError(f"Claude CLI quota exhausted for {call_id}: {message}")
+        message = str(parsed.get("result") or api_error).strip()
+        raise RuntimeError(f"Claude CLI error for {call_id}: {message}")
 
     if parsed.get("is_error"):
-        raise RuntimeError(f"Claude CLI reported error for {call_id}: {parsed}")
+        message = str(parsed.get("result") or "Claude CLI reported an error").strip()
+        raise RuntimeError(f"Claude CLI error for {call_id}: {message}")
 
     text = str(parsed.get("result") or "").strip()
     if not text:
@@ -452,12 +478,7 @@ def run_claude_cli(prompt: str, call_id: str, timeout: int = 180) -> tuple[str, 
     raw_usage = parsed.get("usage") or {}
     usage: dict[str, Any] | None = None
     if raw_usage:
-        usage = {
-            "input_tokens": raw_usage.get("input_tokens", 0),
-            "output_tokens": raw_usage.get("output_tokens", 0),
-            "cost_usd": parsed.get("total_cost_usd"),
-            "provider": "claude_cli",
-        }
+        usage = _claude_cli_usage_payload({**raw_usage, "total_cost_usd": parsed.get("total_cost_usd")})
 
     return text, usage
 
@@ -690,10 +711,19 @@ SPEAKING_AI_CALL_MODES = {
 }
 P1_FOLLOW_UP_HTTP_TIMEOUT = 8
 P1_FOLLOW_UP_CODEX_TIMEOUT = 15
+# Claude CLI (headless) one-shot budget for a single live follow-up question. Much
+# smaller than the report budget — it's one short question, but Claude still has cold
+# start + reasoning overhead, so give it more room than the 8s HTTP path.
+FOLLOW_UP_CLAUDE_TIMEOUT = 60
 P3_QUICK_FOLLOW_UP_CODEX_MODEL = SPEAKING_AI_DEFAULT_HTTP_MODEL
 P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT = 8
 P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT = 12
 SPEAKING_REPORT_HTTP_TIMEOUT = 60
+# Claude CLI (headless) reasons before answering, so a full scoring + overall-review
+# prompt routinely needs more than the 60s HTTP budget. A too-short timeout makes the
+# claude path silently time out and fall back to codex (the "never see a Claude report"
+# bug), so give Claude its own, larger budget.
+SPEAKING_REPORT_CLAUDE_TIMEOUT = 180
 SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT = 90
 P3_MAIN_COUNT = 3
 P3_TURN_COUNT = 8
@@ -706,6 +736,20 @@ def _setting_or_env(name: str, default: str = "") -> str:
     if value is None:
         value = os.environ.get(name, default)
     return str(value or "").strip()
+
+
+def _strip_inline_comment(value: str) -> str:
+    """Drop a trailing ``# ...`` inline comment from a single-token .env value.
+
+    Applied ONLY to model-name reads so that ``AI_HTTP_MODEL=gpt-4o-mini # 备注`` in
+    .env yields a clean model name. Deliberately NOT used in the generic reader,
+    because secrets/URLs (API keys, base URLs) may legitimately contain ``#`` and
+    must never be truncated.
+    """
+    text = str(value or "").strip()
+    if "#" in text:
+        text = text.split("#", 1)[0].strip()
+    return text
 
 
 def _float_setting_or_env(name: str, default: float) -> float:
@@ -742,12 +786,11 @@ def speaking_ai_call_mode(kind: str = "speaking") -> str:
 
 def speaking_ai_http_model(kind: str = "speaking") -> str:
     key = _speaking_ai_kind_key(kind)
-    return (
+    return _strip_inline_comment(
         _setting_or_env(f"SPEAKING_{key}_AI_MODEL")
         or _setting_or_env("SPEAKING_AI_MODEL")
         or _setting_or_env("AI_HTTP_PREFERRED_MODEL")
-        or SPEAKING_AI_DEFAULT_HTTP_MODEL
-    )
+    ) or SPEAKING_AI_DEFAULT_HTTP_MODEL
 
 
 def _speaking_http_provider(kind: str = "speaking", timeout_seconds: float | None = None) -> HttpApiProvider:
@@ -777,6 +820,32 @@ def _mode_allows_codex(kind: str) -> bool:
 
 def _mode_is_fallback_only(kind: str) -> bool:
     return speaking_ai_call_mode(kind) == SPEAKING_AI_CALL_MODE_FALLBACK
+
+
+def _raise_report_provider_chain_error(
+    *,
+    http_error: Exception | None = None,
+    codex_error: Exception | None = None,
+    claude_error: Exception | None = None,
+    fallback_message: str,
+) -> None:
+    """Raise the most useful report-provider error instead of masking HTTP failures.
+
+    In chain mode the HTTP provider is the primary route for GPT. If it returns a
+    real upstream error such as 401 and the optional Codex fallback is simply not
+    installed on the worker, surfacing "codex CLI not found" sends debugging in
+    the wrong direction. Prefer the HTTP error in that case.
+    """
+    codex_text = str(codex_error or "")
+    if http_error and ("codex CLI not found" in codex_text or not codex_error):
+        raise RuntimeError(str(http_error)) from http_error
+    if codex_error:
+        raise RuntimeError(str(codex_error)) from codex_error
+    if http_error:
+        raise RuntimeError(str(http_error)) from http_error
+    if claude_error:
+        raise RuntimeError(str(claude_error)) from claude_error
+    raise RuntimeError(fallback_message)
 
 
 def _http_backend_name(stream: bool = False) -> str:
@@ -1282,6 +1351,7 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     requested_source = _p3_source_type(payload)
     prior_answer = clean_report_text(str(payload.get("prior_answer") or ""))[:4000]
     p3_follow_up_text = clean_markdown_text(str(payload.get("p3_follow_up_text") or ""))[:8000]
+    ai_source = str(payload.get("ai_source") or "").strip()
     provided_follow_ups = payload.get("p3_follow_ups")
     cue_questions = [
         clean_report_text(str(item))[:260]
@@ -1311,12 +1381,14 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             theme,
             prior_answer,
             f"p3_from_p2_{hashlib.sha1(prior_answer.encode('utf-8')).hexdigest()[:16]}",
+            ai_source=ai_source,
         )
         source_type = _p3_source_type(payload, "p2_report")
     elif requested_source == "custom":
         raw_plan = _generate_p3_from_theme(
             theme,
             f"p3_custom_{hashlib.sha1(theme.encode('utf-8')).hexdigest()[:16]}",
+            ai_source=ai_source,
         )
         source_type = "custom"
     else:
@@ -1394,7 +1466,37 @@ def _p3_questions_from_ai_payload(payload: dict[str, Any], count: int = P3_MAIN_
     return questions
 
 
-def _generate_p3_from_p2_answer(theme: str, prior_answer: str, call_id: str) -> dict[str, Any]:
+def _p3_ai_json_from_prompt(
+    *,
+    prompt: str,
+    call_id: str,
+    max_tokens: int,
+    ai_source: str = "",
+) -> tuple[str, str, str, dict[str, Any]]:
+    if ai_source == "claude_cli":
+        output, usage = run_claude_cli(prompt, f"{call_id}_claude", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+        return output, "claude_cli", "claude", usage or {}
+    if _mode_is_fallback_only("followup"):
+        raise RuntimeError("speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback")
+    if _mode_allows_http("followup"):
+        result = _speaking_http_provider("followup", timeout_seconds=45).complete_chat(
+            [
+                {"role": "system", "content": f"You are an IELTS Speaking Part 3 examiner. Return JSON only, with exactly {P3_MAIN_COUNT} questions and no extra text."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.15,
+            timeout_seconds=45,
+            stream=True,
+        )
+        return result.text, "http_api", result.model, getattr(result, "usage", None) or {}
+    if _mode_allows_codex("followup"):
+        output, usage = run_codex(prompt, call_id, timeout=45)
+        return output, "codex", "", usage or {}
+    raise RuntimeError(f"speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
+
+
+def _generate_p3_from_p2_answer(theme: str, prior_answer: str, call_id: str, *, ai_source: str = "") -> dict[str, Any]:
     answer = clean_report_text(prior_answer)[:4000]
     if not answer:
         return _failed_p3_plan(theme, "p2_report", "P2 answer is required before generating AI P3 questions.")
@@ -1414,34 +1516,16 @@ Generate Part 3 questions based on this Part 2 response. The questions should ex
 Theme:
 {theme}
 
-Candidate Part 2 answer:
+    Candidate Part 2 answer:
 {answer}
 """
     try:
-        if _mode_is_fallback_only("followup"):
-            raise RuntimeError("speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback")
-        if _mode_allows_http("followup"):
-            result = _speaking_http_provider("followup", timeout_seconds=45).complete_chat(
-                [
-                    {"role": "system", "content": f"You are an IELTS Speaking Part 3 examiner. Return JSON only, with exactly {P3_MAIN_COUNT} questions and no extra text."},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=420,
-                temperature=0.15,
-                timeout_seconds=45,
-                stream=True,
-            )
-            output = result.text
-            backend = "http_api"
-            provider_model = result.model
-            usage = getattr(result, "usage", None) or {}
-        elif _mode_allows_codex("followup"):
-            output, _usage = run_codex(prompt, f"{call_id}_p3_from_p2", timeout=45)
-            backend = "codex"
-            provider_model = ""
-            usage = _usage or {}
-        else:
-            raise RuntimeError(f"speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
+        output, backend, provider_model, usage = _p3_ai_json_from_prompt(
+            prompt=prompt,
+            call_id=f"{call_id}_p3_from_p2",
+            max_tokens=420,
+            ai_source=ai_source,
+        )
         payload = extract_json_object_with_keys(output, {"questions", "follow_up"})
         questions = _p3_questions_from_ai_payload(payload, P3_MAIN_COUNT)
         if len(questions) < P3_MAIN_COUNT:
@@ -1461,7 +1545,7 @@ Candidate Part 2 answer:
         return _failed_p3_plan(theme, "p2_report", str(exc))
 
 
-def _generate_p3_from_theme(theme: str, call_id: str) -> dict[str, Any]:
+def _generate_p3_from_theme(theme: str, call_id: str, *, ai_source: str = "") -> dict[str, Any]:
     clean_theme = clean_report_text(theme)[:500] or "society and daily life"
     prompt = f"""Return ONLY this JSON shape:
 {{
@@ -1480,30 +1564,12 @@ Theme:
 {clean_theme}
 """
     try:
-        if _mode_is_fallback_only("followup"):
-            raise RuntimeError("speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback")
-        if _mode_allows_http("followup"):
-            result = _speaking_http_provider("followup", timeout_seconds=45).complete_chat(
-                [
-                    {"role": "system", "content": f"You are an IELTS Speaking Part 3 examiner. Return JSON only, with exactly {P3_MAIN_COUNT} questions and no extra text."},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=360,
-                temperature=0.15,
-                timeout_seconds=45,
-                stream=True,
-            )
-            output = result.text
-            backend = "http_api"
-            provider_model = result.model
-            usage = getattr(result, "usage", None) or {}
-        elif _mode_allows_codex("followup"):
-            output, _usage = run_codex(prompt, f"{call_id}_p3_custom", timeout=45)
-            backend = "codex"
-            provider_model = ""
-            usage = _usage or {}
-        else:
-            raise RuntimeError(f"speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
+        output, backend, provider_model, usage = _p3_ai_json_from_prompt(
+            prompt=prompt,
+            call_id=f"{call_id}_p3_custom",
+            max_tokens=360,
+            ai_source=ai_source,
+        )
         payload = extract_json_object_with_keys(output, {"questions", "follow_up"})
         questions = _p3_questions_from_ai_payload(payload, P3_MAIN_COUNT)
         if len(questions) < P3_MAIN_COUNT:
@@ -2898,6 +2964,8 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
     source_turn = _find_turn(attempt, turn_id)
     context = _follow_up_stream_context(attempt, source_turn)
     target_turn = context["target_turn"]
+    profile = getattr(user, "profile", None)
+    ai_source = str(getattr(profile, "report_ai_source", "") or "").strip() if profile is not None else ""
 
     def generate() -> Iterator[str]:
         started = time.monotonic()
@@ -2907,48 +2975,50 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
         try:
             if context.get("skip_provider"):
                 raise RuntimeError(str(context.get("skip_reason") or "follow-up provider skipped"))
-            if not _mode_allows_http("followup") or _mode_is_fallback_only("followup"):
-                raise RuntimeError(f"speaking follow-up HTTP provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
-            provider = _speaking_http_provider("followup", timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT)
-            for token in provider.stream_tokens(
-                [
-                    {"role": "system", "content": context["system"]},
-                    {"role": "user", "content": context["prompt"]},
-                ],
-                max_tokens=40,
-                temperature=float(context.get("temperature") or 0.2),
-                timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
-                on_usage=lambda value: usage.update(value),
-            ):
-                parts.append(token)
-                yield _sse_payload({"event": "chunk", "text": token})
-            follow_up = context["extract"]("".join(parts))
-            latency_ms = int((time.monotonic() - started) * 1000)
-            model = speaking_ai_http_model("followup")
-            _save_streamed_follow_up(
-                attempt,
-                source_turn,
-                target_turn,
-                follow_up,
-                backend="http_api_stream",
-                status="ready",
-                question_type=str(context.get("question_type") or ""),
-                provider="openai_compatible_http",
-                model=model,
-                usage=usage,
-                latency_ms=latency_ms,
-            )
-            yield _sse_payload({
-                "event": "question_complete",
-                "text": follow_up,
-                "backend": "http_api_stream",
-                "latency_ms": latency_ms,
-                "provider": "openai_compatible_http",
-                "model": model,
-                "usage": usage,
-                "turn": _turn_payload(target_turn),
-            })
+            # Claude CLI is one-shot (no token stream): generate the whole question,
+            # then emit it as a single chunk so the live UI still renders progressively.
+            # This is what makes follow-ups work when the account AI source is Claude —
+            # the HTTP relay is never touched.
+            if ai_source == "claude_cli":
+                combined_prompt = f"{context['system']}\n\n{context['prompt']}".strip()
+                output, claude_usage = run_claude_cli(
+                    combined_prompt,
+                    f"follow_up_{attempt.attempt_id}_{source_turn.turn_id}_claude",
+                    timeout=FOLLOW_UP_CLAUDE_TIMEOUT,
+                )
+                follow_up = context["extract"](output)
+                yield _sse_payload({"event": "chunk", "text": follow_up})
+                latency_ms = int((time.monotonic() - started) * 1000)
+                _save_streamed_follow_up(
+                    attempt,
+                    source_turn,
+                    target_turn,
+                    follow_up,
+                    backend="claude_cli_stream",
+                    status="ready",
+                    question_type=str(context.get("question_type") or ""),
+                    provider="claude_cli",
+                    model="claude",
+                    usage=claude_usage or {},
+                    latency_ms=latency_ms,
+                )
+                yield _sse_payload({
+                    "event": "question_complete",
+                    "text": follow_up,
+                    "backend": "claude_cli_stream",
+                    "latency_ms": latency_ms,
+                    "provider": "claude_cli",
+                    "model": "claude",
+                    "usage": claude_usage or {},
+                    "turn": _turn_payload(target_turn),
+                })
+            else:
+                yield from _stream_http_follow_up(
+                    attempt, source_turn, target_turn, context, started, parts, usage,
+                )
         except Exception as exc:  # noqa: BLE001 - streaming endpoint must keep the practice flow usable
+            # No fabricated fallback. If the configured provider fails we surface an empty
+            # failed turn (frontend shows "点击重录"), never a canned imitation question.
             error = str(exc)
             _mark_streamed_follow_up_failed(
                 attempt,
@@ -2985,6 +3055,57 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
 
     return generate()
 
+
+def _stream_http_follow_up(
+    attempt: SpeakingAttempt,
+    source_turn: SpeakingTurn,
+    target_turn: SpeakingTurn,
+    context: dict[str, Any],
+    started: float,
+    parts: list[str],
+    usage: dict[str, Any],
+) -> Iterator[str]:
+    if not _mode_allows_http("followup") or _mode_is_fallback_only("followup"):
+        raise RuntimeError(f"speaking follow-up HTTP provider disabled by SPEAKING_AI_CALL_MODE={speaking_ai_call_mode('followup')}")
+    provider = _speaking_http_provider("followup", timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT)
+    for token in provider.stream_tokens(
+        [
+            {"role": "system", "content": context["system"]},
+            {"role": "user", "content": context["prompt"]},
+        ],
+        max_tokens=40,
+        temperature=float(context.get("temperature") or 0.2),
+        timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
+        on_usage=lambda value: usage.update(value),
+    ):
+        parts.append(token)
+        yield _sse_payload({"event": "chunk", "text": token})
+    follow_up = context["extract"]("".join(parts))
+    latency_ms = int((time.monotonic() - started) * 1000)
+    model = speaking_ai_http_model("followup")
+    _save_streamed_follow_up(
+        attempt,
+        source_turn,
+        target_turn,
+        follow_up,
+        backend="http_api_stream",
+        status="ready",
+        question_type=str(context.get("question_type") or ""),
+        provider="openai_compatible_http",
+        model=model,
+        usage=usage,
+        latency_ms=latency_ms,
+    )
+    yield _sse_payload({
+        "event": "question_complete",
+        "text": follow_up,
+        "backend": "http_api_stream",
+        "latency_ms": latency_ms,
+        "provider": "openai_compatible_http",
+        "model": model,
+        "usage": usage,
+        "turn": _turn_payload(target_turn),
+    })
 
 
 def abort_attempt(user, attempt_id: str) -> dict[str, Any]:
@@ -3086,6 +3207,9 @@ Overall Review 写法要求：
     )
 
     last_error: Exception | None = None
+    http_error: Exception | None = None
+    codex_error: Exception | None = None
+    claude_error: Exception | None = None
     provider_backend = ""
     provider_model = ""
     usage: dict[str, Any] | None = None
@@ -3097,7 +3221,7 @@ Overall Review 写法要求：
         # ── Claude CLI path ──────────────────────────────────────────────────
         if ai_source == "claude_cli":
             try:
-                output, usage = run_claude_cli(prompt, f"{call_id}_claude_p{index}", timeout=SPEAKING_REPORT_HTTP_TIMEOUT)
+                output, usage = run_claude_cli(prompt, f"{call_id}_claude_p{index}", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
                 payload = extract_json_object_with_keys(
                     output,
                     {"fluency_coherence", "lexical_resource", "grammatical_range"},
@@ -3107,6 +3231,7 @@ Overall Review 写法要求：
                 break
             except Exception as exc:
                 last_error = exc
+                claude_error = exc
                 # Claude CLI is an optional user preference, not a hard stop for
                 # durable reports. If HTTP/Codex is available, continue through
                 # the normal provider chain instead of leaving the report stuck
@@ -3135,6 +3260,7 @@ Overall Review 写法要求：
                 break
             except Exception as exc:
                 last_error = exc
+                http_error = exc
                 if speaking_ai_call_mode("report") == SPEAKING_AI_CALL_MODE_HTTP:
                     continue
         if _mode_allows_codex("report"):
@@ -3149,8 +3275,14 @@ Overall Review 写法要求：
                 break
             except Exception as exc:
                 last_error = exc
+                codex_error = exc
     else:
-        raise RuntimeError(str(last_error or "speaking report scoring failed"))
+        _raise_report_provider_chain_error(
+            http_error=http_error,
+            codex_error=codex_error,
+            claude_error=claude_error,
+            fallback_message=str(last_error or "speaking report scoring failed"),
+        )
 
     # Validate required fields are present and numeric
     fc_raw = payload.get("fluency_coherence")
@@ -3387,16 +3519,20 @@ def _report_provider_json(
     temperature: float = 0.15,
 ) -> tuple[dict[str, Any], str, str, dict[str, Any] | None]:
     last_error: Exception | None = None
+    http_error: Exception | None = None
+    codex_error: Exception | None = None
+    claude_error: Exception | None = None
 
     if _mode_is_fallback_only("report"):
         raise RuntimeError("speaking report provider disabled by SPEAKING_AI_CALL_MODE=fallback")
 
     if ai_source == "claude_cli":
         try:
-            output, usage = run_claude_cli(prompt, f"{call_id}_claude", timeout=SPEAKING_REPORT_HTTP_TIMEOUT)
+            output, usage = run_claude_cli(prompt, f"{call_id}_claude", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
             return extract_json_object_with_keys(output, required_keys), "claude_cli", "claude", usage
         except Exception as exc:
             last_error = exc
+            claude_error = exc
 
     if _mode_allows_http("report"):
         try:
@@ -3414,6 +3550,7 @@ def _report_provider_json(
             return extract_json_object_with_keys(result.text, required_keys), "http_api", result.model, usage
         except Exception as exc:
             last_error = exc
+            http_error = exc
 
     if _mode_allows_codex("report"):
         try:
@@ -3421,8 +3558,14 @@ def _report_provider_json(
             return extract_json_object_with_keys(output, required_keys), "codex", "", usage
         except Exception as exc:
             last_error = exc
+            codex_error = exc
 
-    raise RuntimeError(str(last_error or "speaking report provider unavailable"))
+    _raise_report_provider_chain_error(
+        http_error=http_error,
+        codex_error=codex_error,
+        claude_error=claude_error,
+        fallback_message=str(last_error or "speaking report provider unavailable"),
+    )
 
 
 def enrich_p3_discussion_skills_with_ai(
@@ -3722,7 +3865,7 @@ def display_transcript_markdown_from_payload(value: Any, display_transcript: str
     return spoken_markdown(display_transcript, part)
 
 
-def turn_feedback_with_codex(question: str, transcript: str, part: str, target: str, profile: dict[str, Any] | None, call_id: str, requires_ai_coaching: bool = True) -> dict[str, str]:
+def turn_feedback_with_codex(question: str, transcript: str, part: str, target: str, profile: dict[str, Any] | None, call_id: str, requires_ai_coaching: bool = True, ai_source: str = "") -> dict[str, str]:
     """Generate Band 7 and AI coaching together using Codex CLI.
 
     This combined generation ensures the Band 7 and coaching are consistent.
@@ -3801,13 +3944,16 @@ requires_ai_coaching:
     last_error: Exception | None = None
     for index, candidate_prompt in enumerate((prompt, compact_prompt), start=1):
         try:
-            output, usage = run_codex(candidate_prompt, f"{call_id}_p{index}")
+            if ai_source == "claude_cli":
+                output, usage = run_claude_cli(candidate_prompt, f"{call_id}_claude_p{index}", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+            else:
+                output, usage = run_codex(candidate_prompt, f"{call_id}_p{index}")
             payload = extract_json_object_with_keys(output, {"display_transcript", "band7_version", "ai_coaching"})
             break
         except Exception as exc:
             last_error = exc
     else:
-        raise RuntimeError(str(last_error or "codex turn feedback failed"))
+        raise RuntimeError(str(last_error or "turn feedback failed"))
 
     # Validate required fields exist
     band7_raw = payload.get("band7_version")
@@ -3841,6 +3987,7 @@ requires_ai_coaching:
         "band7_version": band7,
         "ai_coaching": coaching if requires_ai_coaching else "",
         "usage": usage,
+        "generation_backend": "claude_cli" if ai_source == "claude_cli" else "codex",
     }
 
 
@@ -3851,8 +3998,15 @@ def turn_feedback_batch_with_codex(
     profile: dict[str, Any] | None,
     call_id: str,
     prepared_corpus_by_turn: dict[str, str] | None = None,
+    ai_source: str = "",
 ) -> dict[str, dict[str, str]]:
-    """Generate Band 7 answers and coaching for all completed turns in one Codex call."""
+    """Generate Band 7 answers and coaching for all completed turns in one AI call.
+
+    Honors the account AI source: when ai_source is "claude_cli" the whole batch is
+    produced by the Claude CLI (same as the Overall review), instead of silently
+    falling back to the HTTP relay / Codex — which is why per-turn Band 7 + coaching
+    used to fail while the Claude Overall succeeded.
+    """
     items: list[dict[str, str]] = []
     for turn in turns:
         if is_p1_name_intro_turn(turn):
@@ -3942,7 +4096,21 @@ Input turns:
     provider_backend = ""
     provider_model = ""
     payload: dict[str, Any] | None = None
-    if _mode_allows_http("report"):
+    # Claude-source accounts: generate the whole batch with the Claude CLI only. Do
+    # not fall through to HTTP/Codex — that would silently answer with a different
+    # provider than the user picked (and is exactly the bug that left every turn's
+    # Band 7 + coaching "生成失败" while the Claude Overall came through fine).
+    if ai_source == "claude_cli":
+        try:
+            output, usage = run_claude_cli(prompt, f"{call_id}_claude", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+            provider_backend = "claude_cli"
+            provider_model = "claude"
+            payload = extract_json_object_with_keys(output, {"turns"})
+        except Exception as exc:
+            last_error = exc
+        if payload is None:
+            raise RuntimeError(str(last_error or "claude turn feedback provider failed"))
+    if payload is None and ai_source != "claude_cli" and _mode_allows_http("report"):
         try:
             result = _speaking_http_provider("report", timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT).complete_chat(
                 [
@@ -3962,7 +4130,7 @@ Input turns:
             last_error = exc
             if speaking_ai_call_mode("report") == SPEAKING_AI_CALL_MODE_HTTP:
                 raise
-    if payload is None and _mode_allows_codex("report"):
+    if payload is None and ai_source != "claude_cli" and _mode_allows_codex("report"):
         try:
             output, usage = run_codex(prompt, call_id, timeout=180)
             provider_backend = "codex"
@@ -4449,6 +4617,7 @@ def build_turn_feedback(
     user_profile: dict[str, Any] | None = None,
     allow_codex: bool = True,
     generated_feedback: dict[str, str] | None = None,
+    ai_source: str = "",
 ) -> dict[str, Any]:
     """Build complete turn feedback with Band 7 and AI coaching.
 
@@ -4479,6 +4648,7 @@ def build_turn_feedback(
                 profile,
                 f"turn_feedback_{attempt.attempt_id}_{turn.turn_id}",
                 turn_needs_ai_coaching(turn),
+                ai_source=ai_source,
             )
         except Exception as exc:
             result["feedback_generation_error"] = str(exc)
@@ -4548,7 +4718,7 @@ def build_turn_feedback(
     # from the HTTP provider, while direct regeneration still returns a plain
     # generated dict from the Codex path.
     generated_backend = clean_report_text(str(generated.get("generation_backend") or generated.get("backend") or ""))
-    if generated and generated_backend not in {"http_api", "codex"}:
+    if generated and generated_backend not in {"http_api", "codex", "claude_cli"}:
         generated_backend = "codex"
     result["feedback_generation_backend"] = generated_backend if generated else "fallback"
     if "feedback_generation_status" not in result:
@@ -4649,6 +4819,8 @@ def generate_turn_feedback_for_report(
     if not pending_turns:
         return
 
+    profile_obj = getattr(attempt.user, "profile", None)
+    ai_source = str(getattr(profile_obj, "report_ai_source", "") or "").strip() if profile_obj is not None else ""
     try:
         prepared_corpus_by_turn = prepared_corpus_for_turns(attempt.user, pending_turns)
         generated_by_turn = turn_feedback_batch_with_codex(
@@ -4658,10 +4830,15 @@ def generate_turn_feedback_for_report(
             learning_profile,
             f"{call_id}_turn_feedback_batch",
             prepared_corpus_by_turn=prepared_corpus_by_turn,
+            ai_source=ai_source,
         )
     except Exception as exc:
+        # Phase 1 (per-turn ASR cleanup + Band 7 + coaching) failed. Mark the turns and
+        # propagate so the caller can abort the whole report instead of building the
+        # Overall summary on raw ASR text. See the callers for why a half-report is worse
+        # than no report.
         _mark_turn_feedback_failed(pending_turns, exc)
-        return
+        raise
 
     for turn in pending_turns:
         generated = generated_by_turn.get(turn.turn_id) or {}
@@ -4675,7 +4852,7 @@ def generate_turn_feedback_for_report(
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
         metadata.update(feedback)
         generation_backend = str(generated.get("generation_backend") or feedback.get("feedback_generation_backend") or "")
-        if generation_backend in {"codex", "http_api"}:
+        if generation_backend in {"codex", "http_api", "claude_cli"}:
             metadata["band7_source"] = f"{generation_backend}_report_batch"
             metadata["ai_coaching_source"] = f"{generation_backend}_report_batch"
             metadata["feedback_generation_backend"] = generation_backend
@@ -4715,7 +4892,19 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
         raise SpeakingError("Missing transcript")
 
     learning_profile = build_learning_profile(user, attempt)
-    generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
+    # Phase 1: per-turn ASR cleanup (display_transcript) + Band 7 + coaching. The Overall
+    # summary below is built from turn_display_transcript(), so if this fails the summary
+    # would be scored on raw ASR and "correct" transcription noise as if it were the
+    # learner's grammar (e.g. "where I was a child" when they clearly said "when"). Per
+    # the rule "if the first pass fails, don't run the second", abort the whole report so
+    # the user retries cleanly instead of getting a misleading half-report.
+    try:
+        generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
+    except ClaudeCliQuotaError as exc:
+        raise SpeakingError("ai_quota_exhausted") from exc
+    except Exception as exc:
+        mark_attempt_analysis_failed(attempt, exc, call_id)
+        raise SpeakingError(f"AI analysis failed: {exc}") from exc
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
@@ -4995,8 +5184,11 @@ def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, A
     # Build learning profile
     learning_profile = build_learning_profile(user, attempt)
 
+    # Honor the account AI source (Claude CLI vs HTTP/Codex) when regenerating.
+    ai_source = str(getattr(profile_obj, "report_ai_source", "") or "").strip()
+
     # Use the complete build_turn_feedback logic
-    feedback = build_turn_feedback(turn, attempt, user_profile, allow_codex=True)
+    feedback = build_turn_feedback(turn, attempt, user_profile, allow_codex=True, ai_source=ai_source)
 
     # Update turn metadata
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
@@ -5005,7 +5197,7 @@ def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, A
 
     # Track regeneration source
     feedback_backend = str(feedback.get("feedback_generation_backend") or "")
-    if feedback_backend in {"codex", "http_api"}:
+    if feedback_backend in {"codex", "http_api", "claude_cli"}:
         metadata["band7_source"] = f"{feedback_backend}_regenerated"
         metadata["ai_coaching_source"] = f"{feedback_backend}_regenerated"
     else:
@@ -5083,7 +5275,15 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
         raise SpeakingError("Missing transcript")
 
     learning_profile = build_learning_profile(user, attempt)
-    generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
+    # Phase 1 gate (same rule as score_attempt_sync): if per-turn ASR cleanup + Band 7 +
+    # coaching fails, abort instead of regenerating the Overall on raw ASR text.
+    try:
+        generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
+    except ClaudeCliQuotaError as exc:
+        raise SpeakingError("ai_quota_exhausted") from exc
+    except Exception as exc:
+        mark_attempt_analysis_failed(attempt, exc, call_id)
+        raise SpeakingError(f"AI report regeneration failed: {exc}") from exc
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]

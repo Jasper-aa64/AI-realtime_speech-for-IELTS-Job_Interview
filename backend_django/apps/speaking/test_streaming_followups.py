@@ -32,7 +32,13 @@ def _sse_payloads(response) -> list[dict]:
     return payloads
 
 
-@override_settings(AI_HTTP_BASE_URL="https://ai.example/v1", AI_HTTP_API_KEY="test-key", AI_HTTP_MODEL="legacy-model")
+@override_settings(
+    AI_HTTP_BASE_URL="https://ai.example/v1",
+    AI_HTTP_API_KEY="test-key",
+    AI_HTTP_MODEL="legacy-model",
+    SPEAKING_AI_MODEL="",
+    SPEAKING_FOLLOWUP_AI_MODEL="gpt-5.4-mini",
+)
 class StreamingFollowUpTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -121,7 +127,54 @@ class StreamingFollowUpTests(TestCase):
         self.assertIn("latency_ms", follow_up_turn.metadata["prompt"])
         self.assertEqual(follow_up_turn.metadata["examiner_tts"]["status"], "ready")
 
+    def test_follow_up_stream_uses_claude_cli_when_account_source_is_claude(self):
+        # When the account AI source is Claude, the follow-up must come from the
+        # Claude CLI one-shot — never the HTTP relay (which may be down). Regression
+        # for "用 Claude 时 P1/P3 追问生成失败".
+        from apps.accounts.models import UserProfile
+
+        UserProfile.objects.update_or_create(
+            user=self.user, defaults={"report_ai_source": "claude_cli"}
+        )
+        _attempt, main_turn, follow_up_turn = self.create_p3_attempt()
+        with (
+            patch("apps.speaking.services.HttpApiProvider") as http_provider,
+            patch(
+                "apps.speaking.services.run_claude_cli",
+                return_value=("How could this change family routines in the future?", {"input_tokens": 12}),
+            ) as claude_cli,
+            patch(
+                "apps.speaking.services.volcengine_tts",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/stream-p3-attempt_t2_followup_examiner.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ),
+        ):
+            response = self.client.get(
+                f"/api/attempts/stream-p3-attempt/turns/{main_turn.turn_id}/follow-up-stream"
+            )
+            payloads = _sse_payloads(response)
+
+        self.assertEqual(response.status_code, 200)
+        http_provider.assert_not_called()
+        claude_cli.assert_called_once()
+        events = [payload["event"] for payload in payloads]
+        self.assertIn("question_complete", events)
+        self.assertIn("tts_ready", events)
+        follow_up_turn.refresh_from_db()
+        self.assertEqual(
+            follow_up_turn.question, "How could this change family routines in the future?"
+        )
+        self.assertEqual(follow_up_turn.metadata["prompt"]["backend"], "claude_cli_stream")
+        self.assertEqual(follow_up_turn.metadata["prompt"]["provider"], "claude_cli")
+
     def test_p3_follow_up_stream_emits_failed_without_fallback_when_http_provider_fails(self):
+        # Spec: follow-ups use the GPT/HTTP provider only. If it fails we surface an
+        # empty failed turn (frontend shows "点击重录") — never a canned or codex
+        # fallback question dressed up as the AI's follow-up.
         _attempt, main_turn, follow_up_turn = self.create_p3_attempt()
         with (
             patch("apps.speaking.services.HttpApiProvider", side_effect=RuntimeError("provider unavailable")),
@@ -151,15 +204,7 @@ class StreamingFollowUpTests(TestCase):
 
         with (
             patch("apps.speaking.services.HttpApiProvider") as provider,
-            patch(
-                "apps.speaking.services._generate_streamed_follow_up_tts",
-                return_value={
-                    "provider": "volcengine",
-                    "status": "ready",
-                    "audio_url": "/api/tts-audio/examiner/stream-p3-attempt_t2_followup_examiner.mp3",
-                    "content_type": "audio/mpeg",
-                },
-            ) as generate_tts,
+            patch("apps.speaking.services._generate_streamed_follow_up_tts") as generate_tts,
         ):
             response = self.client.get(
                 f"/api/attempts/stream-p3-attempt/turns/{main_turn.turn_id}/follow-up-stream"

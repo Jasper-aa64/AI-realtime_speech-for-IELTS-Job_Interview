@@ -48,10 +48,23 @@
       });
     }
 
+    function hasCachedPrompts(taskType) {
+      return (state.writing.prompts?.[taskType] || []).length > 0;
+    }
+
     function open(taskType = state.writing.taskType || "task1_academic") {
       state.writing.pickerTaskType = taskType;
       $("writingPromptModal")?.classList.remove("hidden");
       document.body.classList.add("modal-open");
+      // Already loaded this session → render straight from memory. Skipping the
+      // skeleton + nextPaint avoids the blank flash on every reopen. The grid
+      // still holds the previous render, so this updates it in place.
+      if (hasCachedPrompts(taskType)) {
+        renderShell(taskType);
+        render();
+        if (taskType === "task1_academic") warmWritingPromptThumbnails?.(state.writing.prompts[taskType], { hintLimit: 18 });
+        return;
+      }
       const grid = $("writingPromptGrid");
       if (grid) {
         grid.classList.add("is-loading");
@@ -207,7 +220,12 @@
       const originalUrl = String(prompt?.image_url || "").trim();
       if (!originalUrl) return "Task 1 chart";
       const thumbUrl = thumbUrlFor(originalUrl);
-      return `<img src="${escapeHtml(thumbUrl)}" data-original-src="${escapeHtml(originalUrl)}" alt="" loading="${imageLoading}" decoding="async" fetchpriority="${imagePriority}">`;
+      // If the preloader already decoded this thumbnail, paint it at full
+      // opacity straight away so re-entering the Task 1 grid doesn't replay a
+      // blank-to-visible fade for images that are already cached.
+      const alreadyReady = Boolean(state.writing.promptImageReadyUrls?.has(thumbUrl));
+      const readyClass = alreadyReady ? ' class="is-loaded"' : "";
+      return `<img${readyClass} src="${escapeHtml(thumbUrl)}" data-original-src="${escapeHtml(originalUrl)}" alt="" loading="${imageLoading}" decoding="async" fetchpriority="${imagePriority}">`;
     }
 
     function handlePromptThumbError(image) {
@@ -489,6 +507,13 @@
     async function switchTask(taskType) {
       state.writing.pickerTaskType = taskType;
       renderShell(taskType);
+      // Same as open(): if this task's prompts are cached, render immediately
+      // with no skeleton flash when flipping between Task 1 and Task 2.
+      if (hasCachedPrompts(taskType)) {
+        render();
+        if (taskType === "task1_academic") warmWritingPromptThumbnails?.(state.writing.prompts[taskType], { hintLimit: 18 });
+        return;
+      }
       const grid = $("writingPromptGrid");
       if (grid) {
         grid.classList.add("is-loading");

@@ -69,12 +69,35 @@
       await ensureScriptLoaded(vditorScriptUrl, "Vditor");
     }
 
+    // Static fields whose Vditor instance is built once, up front, so the
+    // first open of each never pays the ~0.5-1s `new Vditor` construction tax.
+    const PREWARM_TEXTAREA_IDS = ["p2CorpusText", "p2CorpusP3FollowUp", "p1CorpusText"];
+
+    function prewarmCorpusMarkdownInstances() {
+      if (!window.Vditor) return;
+      const idle = window.requestIdleCallback || ((fn) => window.setTimeout(fn, 1));
+      PREWARM_TEXTAREA_IDS.forEach((textareaId, index) => {
+        idle(() => {
+          // Skip if already built, or the static textarea isn't in the DOM yet.
+          if (corpusMarkdownEditors[textareaId] || !$(textareaId) || !window.Vditor) return;
+          // Builds inside the (hidden) dialog; the editor's after() callback
+          // keeps it inactive until the field is actually opened, then
+          // activateCorpusMarkdownEditor fixes layout with a resize.
+          ensureCorpusMarkdownEditor(textareaId);
+        }, { timeout: 600 + index * 350 });
+      });
+    }
+
     function warmCorpusMarkdownEditor() {
-      if (state.prefetch.corpusEditorWarmed) return Promise.resolve();
+      if (state.prefetch.corpusEditorWarmed) {
+        prewarmCorpusMarkdownInstances();
+        return Promise.resolve();
+      }
       if (state.prefetch.corpusEditorWarmPromise) return state.prefetch.corpusEditorWarmPromise;
       state.prefetch.corpusEditorWarmPromise = ensureVditorLoaded()
         .then(() => {
           state.prefetch.corpusEditorWarmed = true;
+          prewarmCorpusMarkdownInstances();
         })
         .catch(() => {
           state.prefetch.corpusEditorWarmed = false;

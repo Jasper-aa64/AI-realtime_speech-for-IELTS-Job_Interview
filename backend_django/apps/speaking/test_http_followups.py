@@ -23,7 +23,12 @@ class _Provider:
         return _ProviderResult(self.text)
 
 
-@override_settings(AI_HTTP_BASE_URL="https://ai.example/v1", AI_HTTP_API_KEY="test-key", AI_HTTP_MODEL="legacy-model")
+@override_settings(
+    AI_HTTP_BASE_URL="https://ai.example/v1",
+    AI_HTTP_API_KEY="test-key",
+    AI_HTTP_MODEL="legacy-model",
+    SPEAKING_AI_MODEL="",
+)
 class HttpFollowUpRoutingTests(SimpleTestCase):
     def test_p3_follow_up_prefers_http_success(self):
         with patch("apps.speaking.services.HttpApiProvider", return_value=_Provider("How might this affect families?")), patch(

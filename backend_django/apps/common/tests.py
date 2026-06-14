@@ -33,6 +33,40 @@ class HealthEndpointTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_frontend_asset_sets_cache_and_last_modified(self):
+        response = Client().get("/assets/writing/task1/line_transport.svg")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Cache-Control"], "public, max-age=604800")
+        self.assertIn("Last-Modified", response.headers)
+
+    def test_frontend_asset_returns_304_when_not_modified(self):
+        first = Client().get("/assets/writing/task1/line_transport.svg")
+        last_modified = first.headers["Last-Modified"]
+
+        second = Client().get(
+            "/assets/writing/task1/line_transport.svg",
+            HTTP_IF_MODIFIED_SINCE=last_modified,
+        )
+
+        self.assertEqual(second.status_code, 304)
+
+    def test_frontend_asset_returns_200_when_modified_since_is_old(self):
+        response = Client().get(
+            "/assets/writing/task1/line_transport.svg",
+            HTTP_IF_MODIFIED_SINCE="Mon, 01 Jan 2001 00:00:00 GMT",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_frontend_asset_ignores_malformed_if_modified_since(self):
+        response = Client().get(
+            "/assets/writing/task1/line_transport.svg",
+            HTTP_IF_MODIFIED_SINCE="not-a-date",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
     def test_frontend_wasm_asset_route_serves_generated_wasm(self):
         response = Client().get("/wasm/audio_core_wasm.wasm")
 

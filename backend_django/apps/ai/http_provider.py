@@ -14,6 +14,15 @@ from django.conf import settings
 DEFAULT_HTTP_TIMEOUT_SECONDS = 8.0
 DEFAULT_HTTP_TEMPERATURE = 0.2
 
+# Some OpenAI-compatible gateways (e.g. aiapis behind Cloudflare) reject non-browser
+# clients with "error code: 1010" purely based on the User-Agent signature. A custom
+# UA like "IELTS-Speaking-Monitor/1.0" gets blocked before the request ever reaches the
+# API; a normal browser UA passes the Cloudflare edge so the real API/auth can respond.
+_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+
 
 class HttpApiProviderError(RuntimeError):
     def __init__(self, message: str, *, error_code: str = "http_api_provider_failed", status_code: int | None = None):
@@ -132,7 +141,7 @@ class HttpApiProvider:
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream" if stream else "application/json",
-                "User-Agent": "IELTS-Speaking-Monitor/1.0",
+                "User-Agent": _BROWSER_USER_AGENT,
             },
             method="POST",
         )
@@ -194,7 +203,7 @@ class HttpApiProvider:
                 "Authorization": f"Bearer {self.config.api_key}",
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream",
-                "User-Agent": "IELTS-Speaking-Monitor/1.0",
+                "User-Agent": _BROWSER_USER_AGENT,
             },
             method="POST",
         )

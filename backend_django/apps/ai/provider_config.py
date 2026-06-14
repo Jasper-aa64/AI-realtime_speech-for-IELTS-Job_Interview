@@ -14,6 +14,7 @@ ADAPTER_KEY_FALLBACK = "fallback"
 ADAPTER_KEY_MOCK_SUCCESS = "mock_success"
 ADAPTER_KEY_CODEX_WRITING_SCORE = "codex_writing_score"
 ADAPTER_KEY_CODEX_SPEAKING_REPORT = "codex_speaking_report"
+ADAPTER_KEY_CLAUDE_WRITING_SCORE = "claude_writing_score"
 ADAPTER_KEY_HTTP_WRITING_SCORE = "http_writing_score"
 ADAPTER_KEY_UNSUPPORTED_TASK = "unsupported_task"
 
@@ -250,6 +251,19 @@ def resolve_provider_route(
             config_mode=active_config.mode,
         )
 
+    if requested_provider == "claude":
+        # Claude Code CLI (headless) — uses the machine's logged-in Claude
+        # session, no ANTHROPIC_API_KEY required. Reached only when
+        # AI_PROVIDER_ENABLE_CLAUDE is on (is_provider_enabled gate above).
+        return ProviderRoute(
+            task_type=normalized_task_type,
+            requested_provider=requested_provider,
+            requested_model=requested_model or "sonnet",
+            adapter_key=ADAPTER_KEY_CLAUDE_WRITING_SCORE,
+            effective_provider="claude",
+            config_mode=active_config.mode,
+        )
+
     reason = f"{requested_provider} provider adapter is not wired in {active_config.mode} mode; using local fallback"
 
     return ProviderRoute(
@@ -266,6 +280,7 @@ def resolve_provider_route(
 __all__ = [
     "ADAPTER_KEY_FALLBACK",
     "ADAPTER_KEY_CODEX_WRITING_SCORE",
+    "ADAPTER_KEY_CLAUDE_WRITING_SCORE",
     "ADAPTER_KEY_HTTP_WRITING_SCORE",
     "ADAPTER_KEY_MOCK_SUCCESS",
     "ADAPTER_KEY_UNSUPPORTED_TASK",

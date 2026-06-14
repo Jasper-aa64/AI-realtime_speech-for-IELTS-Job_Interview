@@ -683,6 +683,35 @@ def p3_bank_followup_list(user, p2_question_id: str) -> dict[str, Any]:
     }
 
 
+P2_BANK_CORPUS_BATCH_LIMIT = 50
+
+
+def _normalize_batch_question_ids(question_ids) -> list[str]:
+    """Validate + dedupe a batch request id list. Raises on bad input."""
+    if not isinstance(question_ids, (list, tuple)):
+        raise SpeakingError("question_ids must be a list.")
+    if len(question_ids) > P2_BANK_CORPUS_BATCH_LIMIT:
+        raise SpeakingError(f"Too many question_ids (max {P2_BANK_CORPUS_BATCH_LIMIT}).")
+    seen: list[str] = []
+    for raw in question_ids:
+        cue_id = _p2_cue_id_from_any(str(raw or ""))
+        if cue_id and cue_id not in seen:
+            seen.append(cue_id)
+    return seen
+
+
+def p2_bank_corpus_batch(user, question_ids) -> dict[str, Any]:
+    """Resolve many P2 bank corpus payloads in one round-trip, keyed by cue id."""
+    items = {cue_id: p2_bank_corpus_payload(user, cue_id) for cue_id in _normalize_batch_question_ids(question_ids)}
+    return {"items": items}
+
+
+def p3_bank_corpus_batch(user, question_ids) -> dict[str, Any]:
+    """Resolve many P3 bank follow-up payloads in one round-trip, keyed by cue id."""
+    items = {cue_id: p3_bank_followup_list(user, cue_id) for cue_id in _normalize_batch_question_ids(question_ids)}
+    return {"items": items}
+
+
 def save_p3_bank_followup_corpus(user, followup_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     followup_key = clean_report_text(str(followup_id or payload.get("followup_id") or ""))
     if not followup_key:
