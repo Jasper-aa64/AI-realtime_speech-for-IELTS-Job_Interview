@@ -8,6 +8,9 @@ from typing import Any
 from .models import SpeakingTurn
 from .text_utils import clean_report_text
 
+DEFAULT_FULL_NAME = "Li Hua"
+DEFAULT_ENGLISH_NAME = "Jasper"
+
 
 def clamp_band(value: float | int | None) -> float:
     """Clamp band score to 0.0-9.0 in 0.5 increments."""
@@ -372,3 +375,288 @@ def infer_primary_focus(tags: list[str]) -> str:
     if "low_band" in tags:
         return "answer_development"
     return "answer_development"
+
+
+# --- Attempt/report assembly helpers ---
+
+def _word_count(text: str) -> int:
+    return len([word for word in text.replace("\n", " ").split(" ") if word.strip()])
+
+
+def attempt_part(attempt: SpeakingAttempt) -> str:
+    """Get the part/mode of an attempt."""
+    mode = str(attempt.mode or attempt.part or "").lower()
+    if mode in {"p1", "p2", "p3", "mock"}:
+        return mode
+    turns = list(attempt.turns.all())
+    parts = {str(t.part or "").lower() for t in turns if t.part}
+    if len(parts) == 1:
+        return next(iter(parts))
+    return ""
+
+
+def target_band(attempt: SpeakingAttempt) -> float:
+    """Get target band from attempt metadata."""
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    try:
+        value = float(metadata.get("target_band", 7.0))
+    except (TypeError, ValueError):
+        value = 7.0
+    return max(5.0, min(9.0, round(value * 2) / 2))
+
+
+def score_for_part(turns: list[SpeakingTurn], part: str, fallback_score: dict[str, Any]) -> dict[str, Any]:
+    """Calculate score for a specific part."""
+    part_turns = [turn for turn in turns if turn.part == part]
+    transcript = "\n".join(turn.transcript_cleaned or turn.transcript_raw or "" for turn in part_turns)
+    if not part_turns:
+        return {}
+    part_score = heuristic_score(
+        transcript,
+        f"{part.upper()} section estimate",
+        "\n".join(turn.question for turn in part_turns),
+        part,
+    )
+    part_score["overall_band"] = rounded_overall(part_score)
+    part_score = calibrate_realistic_score(
+        part_score,
+        "\n".join(turn.question for turn in part_turns),
+        transcript,
+        part,
+    )
+    return {
+        "part": part,
+        "turn_count": len(part_turns),
+        "band": part_score.get("overall_band", fallback_score.get("overall_band")),
+        "fluency_coherence": part_score.get("fluency_coherence", fallback_score.get("fluency_coherence")),
+        "lexical_resource": part_score.get("lexical_resource", fallback_score.get("lexical_resource")),
+        "grammatical_range": part_score.get("grammatical_range", fallback_score.get("grammatical_range")),
+    }
+
+
+def build_part_scores(attempt: SpeakingAttempt, score: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Build scores for each part in the attempt."""
+    turns = list(attempt.turns.all())
+    return {
+        part: score_for_part(turns, part, score)
+        for part in ("p1", "p2", "p3")
+        if any(turn.part == part for turn in turns)
+    }
+
+
+def _criteria_feedback(score: dict[str, Any], transcript: str) -> dict[str, Any]:
+    """Build criteria feedback based on score and transcript.
+
+    This is the complete version from old server with band-based advice.
+    """
+    def band_advice(band: float | None, low: str, mid: str, high: str) -> str:
+        if band is None:
+            return low
+        if band < 5.5:
+            return low
+        if band < 7.0:
+            return mid
+        return high
+
+    standards = {
+        "fluency and coherence": (
+            "Assesses whether answers are developed, logically connected, and spoken without excessive hesitation or repetition."
+        ),
+        "lexical resource": (
+            "Assesses range and precision of vocabulary, including natural collocations and the ability to paraphrase."
+        ),
+        "grammar": (
+            "Assesses sentence control, tense accuracy, clause variety, and whether errors reduce clarity."
+        ),
+    }
+
+    fc_band = score.get("fluency_coherence", 5.0)
+    lr_band = score.get("lexical_resource", 5.0)
+    gr_band = score.get("grammatical_range", 5.0)
+
+    advice = {
+        "fluency and coherence": band_advice(
+            fc_band,
+            "Build each answer with a direct point, one reason, and one concrete example before closing.",
+            "Add contrast, consequence, and smoother linking so ideas feel connected rather than listed.",
+            "Refine pacing and use clearer signposting when moving from reason to example to conclusion.",
+        ),
+        "lexical resource": band_advice(
+            lr_band,
+            "Replace repeated basic words with topic-specific phrases copied from your Band 7 version.",
+            "Paraphrase the question and add two or three natural collocations for the topic.",
+            "Use more precise topic vocabulary while keeping the answer conversational.",
+        ),
+        "grammar": band_advice(
+            gr_band,
+            "Prioritise complete simple sentences first, then add one because/when/although clause.",
+            "Vary sentence openings and check tense consistency when giving examples.",
+            "Reduce small accuracy slips in longer complex sentences.",
+        ),
+    }
+
+    words = len(re.findall(r"[A-Za-z']+", transcript))
+    sample_note = (
+        "The sample is short or incomplete, so the advice focuses on building enough answer content."
+        if words < 20
+        else "The advice is a static IELTS reference for the current band range, not live AI-generated feedback."
+    )
+
+    return {
+        "fluency_coherence": {
+            "band": fc_band,
+            "standard": standards["fluency and coherence"],
+            "focus": sample_note,
+            "advice": advice["fluency and coherence"],
+            "strengths": [standards["fluency and coherence"]],
+            "problems": [sample_note],
+            "suggestion": advice["fluency and coherence"],
+        },
+        "lexical_resource": {
+            "band": lr_band,
+            "standard": standards["lexical resource"],
+            "focus": sample_note,
+            "advice": advice["lexical resource"],
+            "strengths": [standards["lexical resource"]],
+            "problems": [sample_note],
+            "suggestion": advice["lexical resource"],
+        },
+        "grammatical_range_accuracy": {
+            "band": gr_band,
+            "standard": standards["grammar"],
+            "focus": sample_note,
+            "advice": advice["grammar"],
+            "strengths": [standards["grammar"]],
+            "problems": [sample_note],
+            "suggestion": advice["grammar"],
+        },
+    }
+
+
+def is_p1_name_intro_turn(turn: dict[str, Any] | SpeakingTurn) -> bool:
+    """Check if turn is a P1 name introduction."""
+    if isinstance(turn, SpeakingTurn):
+        prompt = turn.metadata.get("prompt", {}) if isinstance(turn.metadata, dict) else {}
+        return turn.part == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "name"
+    prompt = turn.get("prompt") or {}
+    return turn.get("part") == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "name"
+
+
+def is_p1_work_study_intro_turn(turn: dict[str, Any] | SpeakingTurn) -> bool:
+    """Check if turn is the fixed P1 work/study identity question."""
+    if isinstance(turn, SpeakingTurn):
+        prompt = turn.metadata.get("prompt", {}) if isinstance(turn.metadata, dict) else {}
+        return turn.part == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "work_study"
+    prompt = turn.get("prompt") or {}
+    return turn.get("part") == "p1" and prompt.get("flow") == "intro" and prompt.get("role") == "work_study"
+
+
+def turn_needs_ai_coaching(turn: SpeakingTurn) -> bool:
+    # Empty answers get a Band 7 model answer but no coaching ("为空 → 本次不辅导").
+    transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
+    if not transcript:
+        return False
+    return not (is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn))
+
+
+def turn_counts_for_scoring(turn: SpeakingTurn) -> bool:
+    return not is_p1_name_intro_turn(turn)
+
+
+def turn_display_transcript(turn: SpeakingTurn) -> str:
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    return (metadata.get("display_transcript") or turn.transcript_cleaned or turn.transcript_raw or "").strip()
+
+
+def scoring_turns_have_answer_text(turns: list[SpeakingTurn]) -> bool:
+    return any(turn_display_transcript(turn).strip() for turn in turns if turn_counts_for_scoring(turn))
+
+
+def p1_name_answer(full_name: str | None, english_name: str | None) -> str:
+    """Generate P1 name answer from profile."""
+    full = clean_report_text(str(full_name or DEFAULT_FULL_NAME)) or DEFAULT_FULL_NAME
+    english = clean_report_text(str(english_name or DEFAULT_ENGLISH_NAME)) or DEFAULT_ENGLISH_NAME
+    if full.lower() == english.lower():
+        return f"My full name is {full}."
+    return f"My full name is {full}, but you can call me {english}."
+
+
+def _p1_question_only_answer(question: str, answer_lower: str = "") -> str:
+    """Minimal P1 identity fallback for work/study only.
+
+    General Band 7 answers should come from Codex. This helper exists only to
+    avoid inventing the wrong identity if a work/study fallback is explicitly
+    requested by older paths or tests.
+    """
+    lowered = question.lower()
+    if ("work" in lowered or "study" in lowered or "student" in lowered) and "prefer" not in lowered:
+        has_student = any(w in answer_lower for w in ("student", "study", "studying", "university", "school", "major"))
+        has_internship = any(w in answer_lower for w in ("intern", "internship", "company"))
+        has_software = any(w in answer_lower for w in ("software", "computer", "code", "coding", "engineering"))
+        if has_student and has_internship:
+            major = "software engineering" if has_software else "my major"
+            return (
+                f"I'm a university student majoring in {major}, and I'm also doing an internship at a company. "
+                "I enjoy it because I can connect what I learn in class with real practical work."
+            )
+        if has_student:
+            major = "software engineering" if has_software else "my major"
+            return f"I'm a university student majoring in {major}. I enjoy it because I can learn practical skills and solve real problems."
+        if any(w in answer_lower for w in ("work", "job", "office", "engineer", "business")):
+            return "I work at the moment. I enjoy it because the work is practical and I get to solve real problems every day."
+        return "I'm a university student at the moment, majoring in computer science. I chose it because I enjoy building things and solving practical problems."
+    topic_hint = "this topic"
+    if "hobby" in lowered or "free time" in lowered or "relax" in lowered:
+        topic_hint = "hobbies and free time"
+    elif "holiday" in lowered or "vacation" in lowered:
+        topic_hint = "holidays"
+    elif "country" in lowered:
+        topic_hint = "the situation in my country"
+    return (
+        f"Yes, I think {topic_hint} is quite important in daily life. "
+        "For me, it is not only about enjoyment, but also about having a healthy balance after studying or working. "
+        "For example, when I have some spare time, I prefer doing something simple and relaxing, like taking a walk, listening to music, or focusing on a personal interest. "
+        "It helps me clear my mind and return to my routine with more energy."
+    )
+
+
+def build_turn_band7_fallback(
+    question: str,
+    part: str,
+    transcript: str = "",
+    full_name: str | None = None,
+    english_name: str | None = None,
+    turn_metadata: dict[str, Any] | None = None,
+) -> str:
+    """Generate a rule-based Band 7 answer. Never quotes raw transcript — only uses it to detect intent direction."""
+    question_clean = clean_report_text(question) or "this question"
+    answer_lower = clean_report_text(transcript).lower() if transcript else ""
+    turn_metadata = turn_metadata or {}
+
+    if part == "p1":
+        # Check if it's a name intro turn
+        if turn_metadata.get("prompt", {}).get("flow") == "intro" and turn_metadata.get("prompt", {}).get("role") == "name":
+            return p1_name_answer(full_name, english_name)
+        return _p1_question_only_answer(question_clean, answer_lower)
+
+    if part == "p2":
+        cue = turn_metadata.get("cue_card") if isinstance(turn_metadata.get("cue_card"), dict) else {}
+        cue_title = clean_report_text(str(cue.get("title") or question_clean))
+        return (
+            f"I would like to talk about {cue_title.lower()}. It is something I remember clearly because it was connected with a real moment in my life, "
+            "not just a general idea. At first, I did not pay much attention to it, but later I realized that it affected the way I handled similar situations. "
+            "What made it meaningful was the combination of the people involved, the pressure at the time, and the result afterwards. "
+            "For example, I had to make a practical decision instead of waiting for everything to be perfect, and that taught me to be more organized and patient. "
+            "Overall, I would say this experience was valuable because it gave me a clearer understanding of myself and helped me respond more confidently next time."
+        )
+
+    if part == "p3":
+        return (
+            f"That's an interesting question. In my view, {question_clean.rstrip('?').lower()} depends a lot on the situation and on people's personal priorities. "
+            "On the one hand, there are clear practical benefits, because people usually want something efficient, affordable and easy to manage. "
+            "On the other hand, we should not ignore the long-term effects, especially when a decision influences families, schools, workplaces or the wider community. "
+            "For instance, a choice that looks convenient in the short term may create extra pressure later if people do not think about responsibility and balance. "
+            "So I would say the best approach is not to choose one extreme, but to look at the purpose, the people affected, and the possible consequences."
+        )
+
+    return ""
