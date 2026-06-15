@@ -108,6 +108,8 @@ from .p3_services import (
     _normalize_p3_focus,
     _normalize_p3_intensity,
     _p3_follow_up_for_type,
+    _p3_questions_from_ai_payload,
+    _p3_questions_from_material,
     _p3_question_type_for_index,
     _p3_source_type,
     _quick_follow_up_prompt,
@@ -835,34 +837,8 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-def _p3_questions_from_material(value: str, count: int = P3_MAIN_COUNT) -> list[str]:
-    questions: list[str] = []
-    for line in clean_markdown_text(value).splitlines():
-        item = re.sub(r"^\s*(?:[-*]|\d+[.)]|[Qq]\d+[:：])\s*", "", line).strip()
-        if not item or ("?" not in item and "？" not in item):
-            continue
-        questions.append(item[:240])
-        if len(questions) >= count:
-            break
-    return questions
 
 
-def _p3_questions_from_ai_payload(payload: dict[str, Any], count: int = P3_MAIN_COUNT) -> list[str]:
-    """Normalize model P3 output without inventing local fallback questions."""
-    raw_questions = payload.get("questions")
-    if not isinstance(raw_questions, list):
-        return []
-    questions: list[str] = []
-    for item in raw_questions:
-        if isinstance(item, dict):
-            item = item.get("question") or item.get("text") or item.get("prompt") or ""
-        question = clean_report_text(str(item))[:260]
-        if not question or ("?" not in question and "？" not in question):
-            continue
-        questions.append(question)
-        if len(questions) >= count:
-            break
-    return questions
 
 
 def _p3_ai_json_from_prompt(

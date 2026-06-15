@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .text_utils import clean_report_text
+from .text_utils import clean_markdown_text, clean_report_text
 
 P3_MAIN_COUNT = 3
 
@@ -248,3 +248,33 @@ Candidate answer:
 
 One follow-up question:
 """
+
+
+def _p3_questions_from_material(value: str, count: int = P3_MAIN_COUNT) -> list[str]:
+    questions: list[str] = []
+    for line in clean_markdown_text(value).splitlines():
+        item = re.sub(r"^\s*(?:[-*]|\d+[.)]|[Qq]\d+[:：])\s*", "", line).strip()
+        if not item or ("?" not in item and "？" not in item):
+            continue
+        questions.append(item[:240])
+        if len(questions) >= count:
+            break
+    return questions
+
+
+def _p3_questions_from_ai_payload(payload: dict[str, Any], count: int = P3_MAIN_COUNT) -> list[str]:
+    """Normalize model P3 output without inventing local fallback questions."""
+    raw_questions = payload.get("questions")
+    if not isinstance(raw_questions, list):
+        return []
+    questions: list[str] = []
+    for item in raw_questions:
+        if isinstance(item, dict):
+            item = item.get("question") or item.get("text") or item.get("prompt") or ""
+        question = clean_report_text(str(item))[:260]
+        if not question or ("?" not in question and "？" not in question):
+            continue
+        questions.append(question)
+        if len(questions) >= count:
+            break
+    return questions
