@@ -28,6 +28,8 @@
         sd.phase          = "idle";    // "idle" | "loading" | "ready"
         sd.scope          = "due";     // always open on today's due queue
         sd.items          = Array.isArray(sd.items) ? sd.items : [];
+        sd.itemsScope     = sd.itemsScope || null; // which scope sd.items holds
+        sd.scopeCache     = sd.scopeCache || {};   // scope → last payload (SWR)
         sd.stats          = sd.stats  || {};
         sd.queue          = [];
         sd.queuePos       = 0;
@@ -137,7 +139,16 @@
 
     function updateDueDot() {
       const s = S();
-      const due = s.scope === "due" && s.queueInitialLen
+      // Only trust the live queue-progress count once the queue is actually
+      // loaded FOR THE CURRENT SCOPE. During a scope switch the scope flips to
+      // "due" immediately while queueInitialLen still holds the previous scope's
+      // length (e.g. 32 from "已掌握"), which would flash a wrong red-dot count.
+      const useQueue =
+        s.phase === "ready" &&
+        s.scope === "due" &&
+        s.itemsScope === "due" &&
+        Number(s.queueInitialLen || 0) > 0;
+      const due = useQueue
         ? Math.max(0, Number(s.queueInitialLen || 0) - Number(s.doneCount || 0))
         : Number(s.stats?.due || 0);
       const dot = $("spellingDrillDueDot");
@@ -155,20 +166,41 @@
     }
 
     // ─── Data ────────────────────────────────────────────────────────
+    // In-flight requests keyed by scope so switching scopes can't hand back a
+    // promise (and payload) for the wrong scope.
     async function fetchWords(scope, { force = false } = {}) {
       const s = S();
-      s.scope = scope;
-      if (force) s.loadingPromise = null;
-      if (!s.loadingPromise) {
-        s.loadingPromise = api(`/api/writing/spelling-words?scope=${encodeURIComponent(scope)}`)
-          .finally(() => { s.loadingPromise = null; });
+      s._loading = s._loading || {};
+      if (force) delete s._loading[scope];
+      if (!s._loading[scope]) {
+        s._loading[scope] = api(`/api/writing/spelling-words?scope=${encodeURIComponent(scope)}`)
+          .finally(() => { delete s._loading[scope]; });
       }
-      return s.loadingPromise;
+      return s._loading[scope];
+    }
+
+    // Warm the other scopes in the background so the first switch to them is
+    // instant. Doesn't touch s.scope (uses a raw request, not fetchWords).
+    function prefetchOtherScopes() {
+      const s = S();
+      s.scopeCache = s.scopeCache || {};
+      const others = ["due", "active", "mastered"].filter(
+        (sc) => sc !== s.scope && !s.scopeCache[sc]
+      );
+      if (!others.length) return;
+      const run = () => others.forEach((sc) => {
+        api(`/api/writing/spelling-words?scope=${encodeURIComponent(sc)}`)
+          .then((p) => { s.scopeCache[sc] = p; })
+          .catch(() => {});
+      });
+      if (window.requestIdleCallback) window.requestIdleCallback(run, { timeout: 2000 });
+      else setTimeout(run, 500);
     }
 
     function ingest(payload, { resetQueue = true } = {}) {
       const s = S();
       s.items = payload.items || [];
+      s.itemsScope = s.scope;
       s.stats = payload.stats || {};
       s.phase = "ready";
       if (resetQueue) {
@@ -184,9 +216,23 @@
 
     async function load({ force = false, resetQueue = true, _pivoted = false } = {}) {
       const s  = S();
-      const canRenderCached = !force && resetQueue && Array.isArray(s.items) && s.items.length > 0;
+      // Pin the scope + a monotonic sequence for THIS load. Rapid tab switches
+      // fire overlapping loads; a stale one must not paint over the newest view
+      // ("快速切换会乱界面"). stale() is true once a newer load() has started.
+      const scope = s.scope;
+      const seq   = (s._loadSeq = (s._loadSeq || 0) + 1);
+      const stale = () => seq !== s._loadSeq;
+
+      s.scopeCache = s.scopeCache || {};
+      const cached = s.scopeCache[scope];
+      // Paint instantly when we have data for THIS scope (a per-scope cache, or
+      // s.items already holding this scope), then revalidate behind it.
+      const sameScopeItems =
+        s.itemsScope === scope && Array.isArray(s.items) && s.items.length > 0;
+      const canRenderCached = !force && resetQueue && Boolean(cached || sameScopeItems);
+
       if (canRenderCached) {
-        ingest({ items: s.items, stats: s.stats || {} }, { resetQueue: true });
+        ingest(cached || { items: s.items, stats: s.stats || {} }, { resetQueue: true });
         render();
         setStatus("正在同步最新错词本…");
       } else {
@@ -194,13 +240,22 @@
         render();
       }
       try {
-        const payload = await fetchWords(s.scope, { force });
-        ingest(payload, { resetQueue });
+        const payload = await fetchWords(scope, { force });
+        s.scopeCache[scope] = payload;
+        if (stale()) return;            // user switched away — don't clobber
+        // If the user already started answering in the cached view, don't yank
+        // the queue out from under them — refresh stats/items only.
+        const progressed = canRenderCached &&
+          (Number(s.doneCount || 0) > 0 || Number(s.queuePos || 0) > 0 || s.result);
+        ingest(payload, { resetQueue: resetQueue && !progressed });
         setStatus("");
+        prefetchOtherScopes();
       } catch (err) {
+        if (stale()) return;
         s.phase = "ready";
         setStatus(err.message || String(err), true);
       }
+      if (stale()) return;
       render();
     }
 
@@ -307,7 +362,10 @@
       card.hidden = s.view !== "drill";
 
       if (s.view === "library") { renderLibrary(); return; }
-      if (s.phase === "loading") return renderLoading();
+      // Anything that isn't a settled "ready" state shows the spinner — never the
+      // empty card. Otherwise the initial "idle" phase flashes "错词本空着" for a
+      // frame before the words arrive ("进入为空，然后突然跳出来单词").
+      if (s.phase !== "ready")   return renderLoading();
       if (!s.queue.length)       return renderEmpty();
       if (s.queuePos >= s.queue.length) return renderDone();
       renderDrill();
@@ -660,7 +718,7 @@
         btn.addEventListener("click", () => {
           S().scope = btn.dataset.spellingScope || "due";
           S().view  = "drill";
-          load({ force: true, resetQueue: true });
+          load({ resetQueue: true });
         });
       });
 
@@ -682,7 +740,7 @@
         const scopeBtn = t.closest("[data-spelling-scope]");
         if (scopeBtn) {
           S().scope = scopeBtn.dataset.spellingScope;
-          load({ force: true, resetQueue: true });
+          load({ resetQueue: true });
           return;
         }
       });

@@ -774,8 +774,8 @@
         renderP1CorpusTopics();
         if (stats) stats.textContent = `${state.p1Corpus.topics.length} 个话题 · 刷新中`;
       } else {
-        if (stats) stats.textContent = "Loading...";
-        if (container) container.innerHTML = '<p class="muted">正在加载 P1 题库...</p>';
+        if (stats) stats.textContent = "加载中";
+        if (container) container.innerHTML = corpusLoadingSkeletonHtml("正在加载 P1 题库...");
       }
       try {
         const payload = await fetchP1CorpusPayload();
@@ -784,6 +784,31 @@
         if (container) container.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
         if (stats) stats.textContent = "加载失败";
       }
+    }
+
+    function corpusLoadingSkeletonHtml(label = "正在加载题库...") {
+      return `
+        <div class="corpus-loading-state" role="status" aria-live="polite">
+          <div class="corpus-loading-copy">
+            <span class="spinner" aria-hidden="true"></span>
+            <span>${escapeHtml(label)}</span>
+          </div>
+          <div class="corpus-loading-grid" aria-hidden="true">
+            ${Array.from({ length: 6 }).map(() => `
+              <article class="corpus-loading-card">
+                <div class="corpus-loading-card-head">
+                  <span></span>
+                  <em></em>
+                </div>
+                <strong></strong>
+                <p></p>
+                <p></p>
+                <p></p>
+              </article>
+            `).join("")}
+          </div>
+        </div>
+      `;
     }
 
     function renderP1CorpusTopics() {
@@ -1688,8 +1713,8 @@
           stats.setAttribute("aria-busy", "true");
         }
       } else {
-        if (stats) stats.textContent = "Loading...";
-        if (container) container.innerHTML = '<p class="muted">正在加载 P2 素材库...</p>';
+        if (stats) stats.textContent = "加载中";
+        if (container) container.innerHTML = corpusLoadingSkeletonHtml("正在加载 P2 素材库...");
       }
       try {
         const payload = await fetchP2CorpusPayload({ force: Boolean(options.force) });

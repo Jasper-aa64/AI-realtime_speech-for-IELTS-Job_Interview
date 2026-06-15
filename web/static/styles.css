@@ -5659,6 +5659,13 @@ body.theme-dark .spelling-drill-panel {
   padding: 0 4px 6px 0;
 }
 
+.p1-corpus-topics:has(.corpus-loading-state),
+.p2-corpus-topics:has(.corpus-loading-state) {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  padding: 0;
+}
+
 .p2-category-entry-grid,
 .p2-seasonal-card-grid {
   display: grid;
@@ -6192,6 +6199,29 @@ body.theme-dark .spelling-drill-panel {
   display: grid;
   gap: 0;
   padding: 0;
+}
+
+/* Cap tall topics (e.g. 18-question banks) so every card stays a uniform,
+   compact height; overflow scrolls inside the card instead of stretching it. */
+.p1-topic-question-list {
+  max-height: 304px; /* ~6.5 rows @ 44px — hints "scroll for more" */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+  overscroll-behavior: contain;
+}
+.p1-topic-question-list::-webkit-scrollbar {
+  width: 8px;
+}
+.p1-topic-question-list::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.p1-topic-question-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+  background-clip: padding-box;
 }
 
 .p2-topic-material-list {
@@ -11112,6 +11142,109 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   border-radius: 8px;
   background: rgba(251, 252, 253, 0.9);
   backdrop-filter: blur(2px);
+}
+
+.corpus-loading-state {
+  grid-column: 1 / -1;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 18px;
+  width: 100%;
+  justify-self: stretch;
+  min-height: min(680px, calc(100vh - 240px));
+  padding: 18px 0 8px;
+}
+
+.corpus-loading-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.corpus-loading-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 16px;
+  width: min(100%, 1180px);
+}
+
+.corpus-loading-card {
+  min-height: 244px;
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel) 92%, #ffffff);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+}
+
+.corpus-loading-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.corpus-loading-card span,
+.corpus-loading-card em,
+.corpus-loading-card strong,
+.corpus-loading-card p {
+  display: block;
+  margin: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.27), rgba(148, 163, 184, 0.12));
+  background-size: 220% 100%;
+  animation: shimmer 1.15s linear infinite;
+}
+
+.corpus-loading-card span {
+  width: 46%;
+  height: 22px;
+}
+
+.corpus-loading-card em {
+  width: 44px;
+  height: 30px;
+}
+
+.corpus-loading-card strong {
+  width: 86%;
+  height: 10px;
+}
+
+.corpus-loading-card p {
+  height: 12px;
+}
+
+.corpus-loading-card p:nth-of-type(1) { width: 92%; }
+.corpus-loading-card p:nth-of-type(2) { width: 76%; }
+.corpus-loading-card p:nth-of-type(3) { width: 84%; }
+
+body.theme-dark .corpus-loading-card {
+  background: rgba(15, 23, 42, 0.42);
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.22);
+}
+
+@media (max-width: 1180px) {
+  .corpus-loading-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .corpus-loading-state {
+    min-height: 420px;
+  }
+
+  .corpus-loading-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .writing-feedback {
@@ -30260,13 +30393,18 @@ body.theme-dark .p2-material-entry-button .p2-material-index {
 .corpus-head-actions > span#p1CorpusStats,
 .corpus-head-actions > span#p2CorpusStats {
   flex: 0 0 auto !important;
-  width: clamp(240px, 30vw, 360px) !important;
+  width: auto !important;
   min-width: 0 !important;
-  max-width: 360px !important;
+  max-width: min(280px, 34vw) !important;
   white-space: normal !important;
   text-align: center !important;
   line-height: 1.22 !important;
-  padding: 4px 12px !important;
+  padding: 4px 10px !important;
+}
+
+.corpus-head-actions > span#p1CorpusStats:where(:not(.is-error):not(.is-success)),
+.corpus-head-actions > span#p2CorpusStats:where(:not(.is-error):not(.is-success)) {
+  min-width: 76px !important;
 }
 .corpus-head-actions > .corpus-agent-button {
   flex: 0 0 auto !important;

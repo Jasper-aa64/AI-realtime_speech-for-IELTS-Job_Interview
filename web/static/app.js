@@ -2138,11 +2138,15 @@ function updateSpellingDrillDueDot(stats = state.spellingDrill?.stats || {}) {
 async function prefetchSpellingDrill(token) {
   const payload = await api("/api/writing/spelling-words?scope=due");
   if (!prefetchCanApply(token)) return;
-  if (!state.spellingDrill._drillReady || state.spellingDrill.scope === "due") {
-    state.spellingDrill.items = payload.items || [];
+  const sd = state.spellingDrill;
+  sd.scopeCache = sd.scopeCache || {};
+  sd.scopeCache.due = payload; // let the drill paint instantly on first open
+  if (!sd._drillReady || sd.scope === "due") {
+    sd.items = payload.items || [];
+    sd.itemsScope = "due";
   }
-  state.spellingDrill.stats = payload.stats || {};
-  state.spellingDrill.loaded = true;
+  sd.stats = payload.stats || {};
+  sd.loaded = true;
   updateSpellingDrillDueDot(payload.stats || {});
 }
 
