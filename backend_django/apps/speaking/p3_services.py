@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .text_utils import clean_report_text
@@ -138,3 +139,112 @@ def _structured_p3_questions(questions: list[str], source_type: str, focus: str)
             }
         )
     return structured
+
+
+def _dynamic_p3_follow_up(question_type: str, transcript: str, focus: str = "") -> str:
+    words = re.findall(r"[A-Za-z']+", str(transcript or "").lower())
+    word_count = len(words)
+    text = " ".join(words)
+    if word_count < 35:
+        return "Could you develop that answer with one reason and one specific example?"
+    if question_type in {"comparison_concession", "opinion_justify"}:
+        if not any(token in text for token in ("however", "although", "whereas", "while", "on the other hand")):
+            return "What might be the opposite view, and why might some people agree with it?"
+        return "How is this different for younger and older people?"
+    if question_type in {"cause_effect", "change_trend"}:
+        if not any(token in text for token in ("because", "reason", "cause", "lead", "result", "therefore")):
+            return "Which factor do you think matters most, and why?"
+        return "What long-term effect could this have on ordinary people?"
+    if question_type in {"future_prediction", "future_trends"}:
+        return "What could change this situation in the next ten years?"
+    if question_type in {"policy_responsibility", "policy_society", "problem_solution"}:
+        return "Should the government be involved, or should individuals decide?"
+    if focus == "abstract_discussion":
+        return "Can you explain this at a wider social level rather than as a personal example?"
+    return _p3_follow_up_for_type(question_type)
+
+
+def _reasonable_p3_follow_up_question(value: str) -> bool:
+    question = clean_report_text(value)
+    lowered = question.lower()
+    if not question.endswith("?") or question.count("?") != 1:
+        return False
+    if len(question) < 20 or len(question) > 180:
+        return False
+    if any(marker in lowered for marker in ("```", "{", "}", "as an ai", "here is", "candidate answer", "current question")):
+        return False
+    starters = (
+        "what",
+        "why",
+        "how",
+        "do",
+        "does",
+        "did",
+        "is",
+        "are",
+        "should",
+        "could",
+        "would",
+        "can",
+        "which",
+        "who",
+        "when",
+        "where",
+        "in what",
+        "to what extent",
+    )
+    return lowered.startswith(starters)
+
+
+def _normalize_question_for_match(value: str) -> str:
+    return re.sub(r"\s+", " ", clean_report_text(value).strip().lower())
+
+
+def _extract_single_follow_up_question(output: str, rejected_questions: tuple[str, ...] = ()) -> str:
+    text = str(output or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    text = re.sub(r"```(?:[a-zA-Z0-9_-]+)?", "", text).replace("```", "")
+    rejected = {_normalize_question_for_match(item) for item in rejected_questions if item}
+    candidates: list[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line)
+        line = re.sub(r"^\s*(?:follow[-_ ]?up|question|answer)\s*:\s*", "", line, flags=re.I).strip()
+        line = line.strip("\"'“”‘’")
+        if line:
+            candidates.append(line)
+    if not candidates and text:
+        candidates.append(text.strip("\"'“”‘’"))
+    for candidate in candidates:
+        question = clean_report_text(candidate)
+        if _normalize_question_for_match(question) in rejected:
+            continue
+        if _reasonable_p3_follow_up_question(question):
+            return question
+    raise RuntimeError("codex quick follow-up did not return a usable question")
+
+
+def _quick_follow_up_prompt(current_question: str, candidate_answer: str, focus: str = "", question_type: str = "") -> str:
+    question = clean_report_text(current_question)[:500]
+    answer = clean_report_text(candidate_answer)[:2500]
+    if not question:
+        raise RuntimeError("missing current P3 question")
+    if not answer:
+        raise RuntimeError("missing candidate answer")
+    return f"""You are an IELTS Speaking Part 3 examiner.
+Write exactly one natural follow-up question based on the candidate's answer.
+Output one line only. Do not include JSON, Markdown, labels, explanations, or quotes.
+Do not repeat the current question. Make the follow-up more specific and deeper.
+
+Current Part 3 question:
+{question}
+
+Question type: {question_type or "general"}
+Training focus: {focus or "general IELTS Part 3 discussion"}
+
+Candidate answer:
+{answer}
+
+One follow-up question:
+"""
