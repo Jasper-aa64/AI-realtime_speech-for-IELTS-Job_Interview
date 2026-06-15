@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -176,6 +177,62 @@ class FallbackWritingScoreAdapter(BaseProviderAdapter):
         )
 
 
+def _run_subprocess_with_tree_kill(
+    args: list[str],
+    *,
+    input: str | None = None,
+    timeout: int,
+    text: bool = True,
+    encoding: str = "utf-8",
+    errors: str = "replace",
+    cwd: str | None = None,
+    env: dict | None = None,
+    check: bool = False,
+) -> subprocess.CompletedProcess:
+    """subprocess.run replacement that kills the full process tree on Windows.
+
+    On Windows, subprocess.run(timeout=...) can hang forever after proc.kill()
+    because child processes (e.g. Node.js workers spawned by Claude/Codex CLI)
+    keep the stdout/stderr pipes open. This helper uses taskkill /F /T to
+    terminate the entire process tree, releasing the pipes before communicating.
+    """
+    input_bytes: bytes | None = None
+    if input is not None:
+        input_bytes = input.encode(encoding, errors=errors) if isinstance(input, str) else input
+
+    proc = subprocess.Popen(
+        args,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=cwd,
+        env=env,
+    )
+    try:
+        stdout_bytes, stderr_bytes = proc.communicate(input=input_bytes, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        if sys.platform == "win32":
+            # /F = force, /T = include child tree, /PID = target by process id
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=10,
+            )
+        else:
+            proc.kill()
+        try:
+            stdout_bytes, stderr_bytes = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            stdout_bytes, stderr_bytes = b"", b""
+        raise subprocess.TimeoutExpired(args, timeout, output=stdout_bytes, stderr=stderr_bytes)
+
+    stdout = stdout_bytes.decode(encoding, errors=errors) if stdout_bytes else ""
+    stderr = stderr_bytes.decode(encoding, errors=errors) if stderr_bytes else ""
+    if check and proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, args, stdout, stderr)
+    return subprocess.CompletedProcess(args=args, returncode=proc.returncode, stdout=stdout, stderr=stderr)
+
+
 def extract_json_object(text: str) -> dict[str, Any]:
     decoder = json.JSONDecoder()
     raw = str(text or "")
@@ -278,13 +335,9 @@ class CodexCliClient:
         last_error: RuntimeError | None = None
         for _attempt in range(max(1, int(max_attempts or 1))):
             try:
-                result = subprocess.run(
+                result = _run_subprocess_with_tree_kill(
                     [codex, "exec", "--json", *config_args, "-"],
                     input=prompt,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    capture_output=True,
                     timeout=timeout,
                     check=True,
                     cwd=cwd,
@@ -363,13 +416,9 @@ class ClaudeCliClient:
         last_error: RuntimeError | None = None
         for _attempt in range(max(1, int(max_attempts or 1))):
             try:
-                result = subprocess.run(
+                result = _run_subprocess_with_tree_kill(
                     [claude, "-p", "--output-format", "json", "--model", self.model],
                     input=prompt,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    capture_output=True,
                     timeout=timeout,
                 )
             except subprocess.TimeoutExpired:
