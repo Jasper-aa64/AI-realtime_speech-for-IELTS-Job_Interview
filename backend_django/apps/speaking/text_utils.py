@@ -7,7 +7,191 @@ existing import surface for views/tests.
 
 from __future__ import annotations
 
+import json
 import re
+from typing import Any
+
+
+def extract_json_object(text: str) -> dict[str, Any]:
+    """Extract first valid JSON object from text using balanced bracket scanning.
+
+    Handles cases where:
+    - Text contains multiple JSON objects
+    - Text has Trellis/other content before/after JSON
+    - JSON spans multiple lines
+
+    Returns the first complete, parseable JSON object.
+    """
+    text = str(text or "")
+
+    # Find the first '{' that starts a JSON object
+    start = text.find("{")
+    if start == -1:
+        raise ValueError("model output did not contain a JSON object")
+
+    # Use balanced bracket scanning to find the matching '}'
+    depth = 0
+    in_string = False
+    escape_next = False
+
+    for i, char in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\":
+            escape_next = True
+            continue
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                # Found the closing brace
+                json_str = text[start:i + 1]
+                try:
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    # Try finding next JSON object
+                    remaining = text[i + 1:]
+                    if "{" in remaining:
+                        return extract_json_object(remaining)
+                    raise ValueError(f"Invalid JSON object: {json_str[:100]}...")
+
+    raise ValueError("model output contained unbalanced JSON braces")
+
+
+def extract_json_object_with_keys(text: str, required_keys: set[str]) -> dict[str, Any]:
+    """Extract the first JSON object containing all required top-level keys."""
+    remaining = str(text or "")
+    last_error: Exception | None = None
+    while "{" in remaining:
+        try:
+            payload = extract_json_object(remaining)
+        except ValueError as exc:
+            last_error = exc
+            break
+        if required_keys.issubset(set(payload.keys())):
+            return payload
+        start = remaining.find("{")
+        if start == -1:
+            break
+        depth = 0
+        in_string = False
+        escape_next = False
+        end = -1
+        for index, char in enumerate(remaining[start:], start):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == "\\":
+                escape_next = True
+                continue
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    end = index
+                    break
+        if end == -1:
+            break
+        remaining = remaining[end + 1:]
+    keys = ", ".join(sorted(required_keys))
+    raise ValueError(f"model output did not contain a JSON object with required keys: {keys}") from last_error
+
+
+def extract_codex_json_events(stdout: str) -> tuple[str, dict[str, Any] | None, bool]:
+    """Parse codex CLI JSON events from stdout.
+
+    Extracts the final model output text from:
+    1. agent_message events (item.completed with type=agent_message)
+    2. message.item events with text content
+    3. Raw text events
+
+    Skips Trellis injection text and other non-JSON prefixes.
+
+    Returns:
+        tuple of (text, usage, has_real_content)
+        - text: extracted model output
+        - usage: token usage dict or None
+        - has_real_content: True if we found actual agent_message content,
+          False if only event stream without model output
+    """
+    events: list[dict[str, Any]] = []
+    for line in str(stdout or "").splitlines():
+        stripped = line.strip()
+        if not stripped or not stripped.startswith("{"):
+            continue
+        try:
+            event = json.loads(stripped)
+        except ValueError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+
+    usage = None
+    final_text = ""
+    has_real_content = False
+
+    for event in events:
+        # Track usage
+        event_usage = event.get("usage")
+        if isinstance(event_usage, dict):
+            usage = event_usage
+        if event.get("type") == "turn.completed" and isinstance(event.get("usage"), dict):
+            usage = event["usage"]
+
+        # Extract text from various event formats
+        # Format 1: item.completed with agent_message (preferred)
+        if event.get("type") == "item.completed":
+            item = event.get("item", {})
+            if item.get("type") == "agent_message":
+                content_list = item.get("content", [])
+                for content_item in content_list:
+                    if isinstance(content_item, dict) and content_item.get("type") == "text":
+                        text_value = content_item.get("text", "")
+                        if text_value:
+                            final_text = text_value
+                            has_real_content = True
+
+        # Format 2: message/item/response dict
+        message = event.get("message") or event.get("item") or event.get("response")
+        if isinstance(message, dict):
+            content = message.get("content") or message.get("text")
+            if isinstance(content, str) and content.strip():
+                final_text = content
+                has_real_content = True
+            elif isinstance(content, list):
+                parts = []
+                for part in content:
+                    if isinstance(part, dict):
+                        value = part.get("text") or part.get("content")
+                        if isinstance(value, str):
+                            parts.append(value)
+                    elif isinstance(part, str):
+                        parts.append(part)
+                if parts:
+                    final_text = "\n".join(parts)
+                    has_real_content = True
+
+        # Format 3: direct content field
+        elif isinstance(event.get("content"), str) and event["content"].strip():
+            final_text = event["content"]
+            has_real_content = True
+
+    if not events:
+        return str(stdout or ""), None, False
+    return final_text or str(stdout or ""), usage, has_real_content
 
 
 def clean_band7_output(value: str) -> str:
