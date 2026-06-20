@@ -5,7 +5,7 @@
 
 ## Public Preview
 
-- Current public URL: https://directly-contacting-typically-cassette.trycloudflare.com/?view=p2Corpus
+- Current public URL: https://avon-cars-delete-ridge.trycloudflare.com/?view=p3
 - Local service URL: http://127.0.0.1:8767/
 - Note: this uses a Cloudflare quick tunnel, so the URL may change if the tunnel process restarts.
 <img width="2880" height="1500" alt="CleanShot 2026-06-14 at 20 19 32@2x" src="https://github.com/user-attachments/assets/790b4955-11fa-47c6-9d50-ac1dc44891ff" />
