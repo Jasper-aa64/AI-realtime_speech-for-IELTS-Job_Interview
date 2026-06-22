@@ -560,7 +560,7 @@ def turn_needs_ai_coaching(turn: SpeakingTurn) -> bool:
 
 
 def turn_counts_for_scoring(turn: SpeakingTurn) -> bool:
-    return not is_p1_name_intro_turn(turn)
+    return not (is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn))
 
 
 def turn_display_transcript(turn: SpeakingTurn) -> str:

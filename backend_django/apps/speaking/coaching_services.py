@@ -93,7 +93,7 @@ def build_overall_review(
                 "review_points": points,
                 "markdown": markdown,
                 "source": score_review.get("source") or "codex_score",
-                "backend": "codex" if str(score_review.get("source") or "codex_score").startswith("codex") else score.get("backend", "fallback"),
+                "backend": score.get("backend", "fallback"),
                 "status": "ready",
             }
         if comment or points:
@@ -113,7 +113,7 @@ def build_overall_review(
                 "review_points": points,
                 "markdown": "\n".join(markdown_lines),
                 "source": "codex_score",
-                "backend": "codex",
+                "backend": score.get("backend", "fallback"),
                 "status": "ready",
             }
 

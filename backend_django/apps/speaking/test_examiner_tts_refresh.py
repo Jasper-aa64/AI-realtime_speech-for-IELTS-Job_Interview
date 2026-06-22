@@ -57,7 +57,7 @@ class ExaminerTtsRefreshTests(TestCase):
             "/api/tts-audio/examiner/tts-refresh-attempt_t2_followup_examiner.mp3",
         )
         expected_cache_key = (
-            "tts-refresh-attempt_t2_followup_examiner_"
+            "examiner_"
             f"{_examiner_tts_text_hash('How does your internship connect with your studies?')}"
         )
         mock_tts.assert_called_once_with(
@@ -104,7 +104,7 @@ class ExaminerTtsRefreshTests(TestCase):
                     "status": "ready",
                     "audio_url": "/api/tts-audio/examiner/old-default.mp3",
                     "content_type": "audio/mpeg",
-                    "cache_key": f"tts-p3-stale-attempt_t2_examiner_{_examiner_tts_text_hash(old_text)}",
+                    "cache_key": f"examiner_{_examiner_tts_text_hash(old_text)}",
                     "text_hash": _examiner_tts_text_hash(old_text),
                 },
             },
@@ -126,7 +126,7 @@ class ExaminerTtsRefreshTests(TestCase):
             response = self.client.get("/api/attempts/tts-p3-stale-attempt/turns/t2/examiner-tts")
 
         self.assertEqual(response.status_code, 200)
-        expected_cache_key = f"tts-p3-stale-attempt_t2_examiner_{_examiner_tts_text_hash(new_text)}"
+        expected_cache_key = f"examiner_{_examiner_tts_text_hash(new_text)}"
         payload = response.json()
         self.assertEqual(payload["examiner_tts"]["audio_url"], "/api/tts-audio/examiner/new-generated.mp3")
         self.assertEqual(payload["examiner_tts"]["cache_key"], expected_cache_key)

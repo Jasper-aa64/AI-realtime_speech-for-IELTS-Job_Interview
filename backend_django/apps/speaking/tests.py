@@ -1,11 +1,13 @@
 import json
 import subprocess
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.conf import settings
+from django.utils import timezone
 
 from apps.speaking.models import (
     ExpressionReplacementEntry,
@@ -150,7 +152,7 @@ class AttemptStartApiTests(TestCase):
         self.assertIn("target_moves", payload["p3_plan"]["questions"][0])
 
     def test_start_p3_draws_three_from_an_oversized_bank_card(self):
-        """A card with more bank follow-ups than P3_MAIN_COUNT drills only a subset."""
+        """A card with more bank follow-ups drills one stable, identifiable round."""
         from apps.speaking import services as speaking_services
 
         followups = [
@@ -182,6 +184,70 @@ class AttemptStartApiTests(TestCase):
         plan_questions = [q["question"] for q in payload["p3_plan"]["questions"]]
         self.assertEqual(len(plan_questions), speaking_services.P3_MAIN_COUNT)
         self.assertTrue(set(plan_questions).issubset(set(followups)))
+        expected_cue_id = speaking_services.p2_cue_id(cue)
+        self.assertEqual(payload["p3_bank_cue_id"], expected_cue_id)
+        self.assertEqual(payload["p3_bank_round_index"], 0)
+        self.assertEqual(payload["p3_bank_round_count"], 2)
+        attempt = SpeakingAttempt.objects.get(attempt_id=payload["id"])
+        self.assertEqual(attempt.metadata["p3_bank_cue_id"], expected_cue_id)
+
+    def test_start_p3_selects_least_practised_bank_round_and_persists_identity(self):
+        from apps.speaking import services as speaking_services
+
+        cue_id = "p2cue:five-question-rounds"
+        followups = [f"Fixed follow-up {index}?" for index in range(1, 6)]
+        cue = {
+            "cue_id": cue_id,
+            "title": "Describe a useful gift",
+            "season": "2026-may-august",
+            "p3_theme": "gifts_and_giving",
+            "p3_follow_ups": followups,
+        }
+        completed = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="completed-first-bank-round",
+            mode=SpeakingAttempt.Mode.P3,
+            part="p3",
+            status=SpeakingAttempt.Status.SCORED,
+            metadata={
+                "p3_bank_cue_id": cue_id,
+                "p3_bank_round_index": 0,
+                "p3_bank_round_count": 2,
+            },
+        )
+        SpeakingReport.objects.create(user=self.user, attempt=completed, report_payload={"status": "scored"})
+        bank = MagicMock()
+        bank.p2 = [cue]
+        bank.part2_for_scope.return_value = [cue]
+
+        with (
+            patch.object(speaking_services, "get_question_bank", return_value=bank),
+            patch.object(speaking_services, "_select_p3_followups", return_value=followups[:3]),
+        ):
+            response = self.client.post(
+                "/api/attempts/start",
+                data={
+                    "mode": "p3",
+                    "theme": cue["p3_theme"],
+                    "p2_question_id": cue_id,
+                    "p3_intensity": "normal",
+                },
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["p3_plan"]["question_texts"], [followups[3], followups[4], followups[2]])
+        self.assertEqual(payload["p3_bank_cue_id"], cue_id)
+        self.assertEqual(payload["p3_bank_round_index"], 1)
+        self.assertEqual(payload["p3_bank_round_count"], 2)
+        expected_ids = [
+            speaking_services.p3_bank_followup_id(cue_id, followups[index], index)
+            for index in (3, 4, 2)
+        ]
+        self.assertEqual(payload["p3_bank_followup_ids"], expected_ids)
+        attempt = SpeakingAttempt.objects.get(attempt_id=payload["id"])
+        self.assertEqual(attempt.metadata["p3_bank_followup_ids"], expected_ids)
 
     def test_start_p3_uses_current_season_p2_follow_ups_when_theme_matches(self):
         from apps.speaking import services as speaking_services
@@ -274,22 +340,26 @@ class AttemptStartApiTests(TestCase):
         p2_turns = [t for t in payload["turns"] if t["part"] == "p2"]
         from collections import Counter
         from apps.speaking import services
-        # P1 now mirrors the real exam: several distinct topics, a capped handful of
-        # questions each (never one giant topic). The body questions arrive in
-        # contiguous runs by topic.
+        # P1 body = 9-12 real topic questions, assembled from 2-3 topics (more topics
+        # only when needed to reach the count or to split a big topic). Each selected
+        # topic keeps its opener and its questions arrive in one contiguous run.
         body_topics = [
             t.get("prompt", {}).get("topic")
             for t in p1_turns
             if t.get("counts_toward_total", True) and t.get("prompt", {}).get("topic") != "intro"
         ]
         topic_counts = Counter(body_topics)
-        # At least the per-session minimum number of distinct topics.
-        self.assertGreaterEqual(len(topic_counts), services.P1_TOPICS_PER_SESSION)
-        # No single topic exceeds the per-topic cap.
-        self.assertLessEqual(max(topic_counts.values()), services.P1_QUESTIONS_PER_TOPIC_MAX)
-        # Contiguous runs by topic: switches == distinct topics - 1.
+        # Body length stays in the configured window.
+        self.assertGreaterEqual(len(body_topics), services.P1_BODY_QUESTION_MIN)
+        self.assertLessEqual(len(body_topics), services.P1_BODY_QUESTION_MAX)
+        # Two or three distinct topics — never one giant topic, never a fixed count.
+        self.assertIn(len(topic_counts), (2, 3))
+        # A big topic is split (<= P1_SPLIT_MAX); a whole small topic can contribute
+        # all of its (sub-threshold) questions, so the ceiling is split_threshold - 1.
+        self.assertLessEqual(max(topic_counts.values()), services.P1_SPLIT_THRESHOLD - 1)
+        # Contiguous runs by topic: one switch per topic boundary.
         switches = sum(1 for a, b in zip(body_topics, body_topics[1:]) if a != b)
-        self.assertLessEqual(switches, len(topic_counts))
+        self.assertEqual(switches, len(topic_counts) - 1)
         self.assertEqual(len(p2_turns), 1)
         self.assertEqual(payload["p3_generation_status"], "pending_after_p2")
 
@@ -392,6 +462,288 @@ class SpeakingModelTests(TestCase):
         self.assertEqual(observation.weak_reasons, ["short_answer"])
 
 
+class P3BankPracticeRoundTests(TestCase):
+    def test_three_and_four_questions_stay_in_one_round(self):
+        from apps.speaking import corpus_services
+
+        build_rounds = getattr(corpus_services, "p3_bank_practice_rounds", None)
+        self.assertIsNotNone(build_rounds)
+        self.assertEqual(build_rounds(list(range(3))), [[0, 1, 2]])
+        self.assertEqual(build_rounds(list(range(4))), [[0, 1, 2, 3]])
+
+    def test_five_questions_repeat_the_third_as_a_bridge(self):
+        from apps.speaking import corpus_services
+
+        build_rounds = getattr(corpus_services, "p3_bank_practice_rounds", None)
+        self.assertIsNotNone(build_rounds)
+        self.assertEqual(build_rounds(list(range(5))), [[0, 1, 2], [3, 4, 2]])
+
+    def test_six_questions_split_into_two_stable_rounds(self):
+        from apps.speaking import corpus_services
+
+        build_rounds = getattr(corpus_services, "p3_bank_practice_rounds", None)
+        self.assertIsNotNone(build_rounds)
+        self.assertEqual(build_rounds(list(range(6))), [[0, 1, 2], [3, 4, 5]])
+
+    def test_larger_banks_are_balanced_into_three_or_four_question_rounds(self):
+        from apps.speaking import corpus_services
+
+        build_rounds = getattr(corpus_services, "p3_bank_practice_rounds", None)
+        self.assertIsNotNone(build_rounds)
+        self.assertEqual([len(items) for items in build_rounds(list(range(7)))], [4, 3])
+        self.assertEqual([len(items) for items in build_rounds(list(range(10)))], [4, 3, 3])
+
+
+class P1PracticeCountTests(TestCase):
+    def test_ai_training_observation_keeps_count_after_report_is_deleted(self):
+        from apps.speaking.turn_building_services import _question_practice_counts
+
+        user = get_user_model().objects.create_user(username="p1-deleted-report-count", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="p1-deleted-report-count",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            status=SpeakingAttempt.Status.SCORED,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="park-q1",
+            sequence=1,
+            part="p1",
+            question="Did you like going to parks as a child?",
+            transcript_cleaned="Yes, I often went there with my family.",
+        )
+        SpeakingReport.objects.create(user=user, attempt=attempt, report_payload={"status": "scored"})
+        now = timezone.now()
+        SpeakingTrainingObservation.objects.create(
+            observation_id="p1-deleted-report-count-park-q1",
+            user=user,
+            attempt=attempt,
+            turn=turn,
+            legacy_attempt_id=attempt.attempt_id,
+            legacy_turn_id=turn.turn_id,
+            question_id="p1q:park-q1",
+            part="p1",
+            question=turn.question,
+            transcript=turn.transcript_cleaned,
+            relevance=Decimal("1.000"),
+            observed_at=now,
+            next_due=now,
+        )
+
+        attempt.delete()
+
+        self.assertEqual(
+            _question_practice_counts(user, "p1"),
+            {"did you like going to parks as a child?": 1},
+        )
+
+    def test_split_topic_repeated_opener_advances_only_once_per_coverage_round(self):
+        from apps.speaking.turn_building_services import (
+            _p1_balanced_practice_counts,
+            _p1_topic_practice_debt,
+        )
+
+        user = get_user_model().objects.create_user(username="p1-split-waterline", password="test-pass")
+        questions = ["Topic opener"] + [f"Topic question {index}" for index in range(2, 9)]
+        topics = {"large-topic": [{"topic": "large-topic", "question": question} for question in questions]}
+        now = timezone.now()
+
+        def observe(question, attempt_suffix, turn_suffix, offset):
+            SpeakingTrainingObservation.objects.create(
+                observation_id=f"p1-waterline-{attempt_suffix}-{turn_suffix}",
+                user=user,
+                legacy_attempt_id=f"attempt-{attempt_suffix}",
+                legacy_turn_id=f"turn-{turn_suffix}",
+                question_id=f"p1q:{turn_suffix}",
+                part="p1",
+                question=question,
+                transcript="A completed answer.",
+                relevance=Decimal("1.000"),
+                observed_at=now + timedelta(seconds=offset),
+                next_due=now,
+            )
+
+        observe(questions[0], "one", "opener-one", 1)
+        observe(questions[1], "one", "q2", 2)
+        observe(questions[2], "one", "q3", 3)
+        observe(questions[0], "two", "opener-two", 4)
+        observe(questions[1], "two", "q2-repeat", 5)
+        observe(questions[3], "two", "q4", 6)
+        observe(questions[4], "two", "q5", 7)
+
+        counts = _p1_balanced_practice_counts(user, topics)
+
+        self.assertEqual(counts["topic opener"], 1)
+        self.assertEqual({counts[question.lower()] for question in questions[1:5]}, {1})
+        self.assertNotIn(questions[5].lower(), counts)
+        self.assertEqual(
+            _p1_topic_practice_debt(user, topics)["large-topic"]["total_practice"],
+            5,
+        )
+
+    def test_topic_combination_scores_questions_that_will_actually_be_selected(self):
+        from apps.speaking.turn_building_services import select_p1_body_questions
+
+        class FixedRng:
+            def randint(self, _low, _high):
+                return 9
+
+            def random(self):
+                return 0.5
+
+        topics = {
+            "overstated": [
+                {"topic": "overstated", "question": f"Overstated {index}"}
+                for index in range(8)
+            ],
+            "better": [
+                {"topic": "better", "question": f"Better {index}"}
+                for index in range(8)
+            ],
+            "common": [
+                {"topic": "common", "question": f"Common {index}"}
+                for index in range(6)
+            ],
+        }
+        topic_debt = {
+            "overstated": {"unpracticed": 7, "total_practice": 1, "last_ts": 1},
+            "better": {"unpracticed": 6, "total_practice": 1, "last_ts": 1},
+            "common": {"unpracticed": 6, "total_practice": 0, "last_ts": None},
+        }
+        counts = {
+            "overstated 0": 1,
+            "better 7": 1,
+        }
+
+        selected = select_p1_body_questions(
+            topics,
+            topic_debt,
+            counts,
+            body_min=9,
+            body_max=9,
+            rng=FixedRng(),
+        )
+
+        self.assertEqual({item["topic"] for item in selected}, {"better", "common"})
+
+    def test_counts_only_answered_turns_with_completed_reports(self):
+        from apps.speaking.turn_building_services import (
+            _p1_topic_practice_counts,
+            _p1_topic_practice_debt,
+            _question_practice_counts,
+        )
+
+        user = get_user_model().objects.create_user(username="p1-practice-count-user", password="test-pass")
+        question = "Do you often use public transport?"
+
+        def add_attempt(status, transcript, *, with_report=False, suffix=""):
+            attempt = SpeakingAttempt.objects.create(
+                user=user,
+                attempt_id=f"p1-count-{suffix}",
+                mode=SpeakingAttempt.Mode.P1,
+                part="p1",
+                status=status,
+            )
+            SpeakingTurn.objects.create(
+                user=user,
+                attempt=attempt,
+                turn_id=f"turn-{suffix}",
+                sequence=1,
+                part="p1",
+                question=question,
+                transcript_raw=transcript,
+                transcript_cleaned=transcript,
+            )
+            if with_report:
+                SpeakingReport.objects.create(user=user, attempt=attempt, report_payload={"status": "scored"})
+
+        add_attempt(SpeakingAttempt.Status.STARTED, "I take the metro every day.", suffix="started")
+        add_attempt(SpeakingAttempt.Status.ABORTED, "I usually take the bus.", suffix="aborted")
+        add_attempt(SpeakingAttempt.Status.SCORED, "", with_report=True, suffix="empty")
+        add_attempt(
+            SpeakingAttempt.Status.SCORED,
+            "Yes, I normally commute by metro.",
+            with_report=True,
+            suffix="completed",
+        )
+
+        topics = {
+            "transport": [
+                {"question": question},
+                {"question": "Would you like to use public transport more often?"},
+            ]
+        }
+        normalized = "do you often use public transport?"
+
+        self.assertEqual(_question_practice_counts(user, "p1"), {normalized: 1})
+        self.assertEqual(_p1_topic_practice_counts(user, topics), {"transport": 1})
+        self.assertEqual(
+            _p1_topic_practice_debt(user, topics)["transport"],
+            {
+                "unpracticed": 1,
+                "total_practice": 1,
+                "last_ts": SpeakingTurn.objects.get(turn_id="turn-completed").created_at.timestamp(),
+            },
+        )
+
+    def test_per_topic_selection_exhausts_lower_counts_before_repeats(self):
+        from apps.speaking.turn_building_services import _select_least_practiced_items
+
+        items = [
+            {"question": "Opener"},
+            {"question": "Practised three times"},
+            {"question": "Never practised"},
+            {"question": "Practised once"},
+        ]
+        counts = {
+            "opener": 20,
+            "practised three times": 3,
+            "never practised": 0,
+            "practised once": 1,
+        }
+        with (
+            patch("apps.speaking.turn_building_services.random.shuffle"),
+            patch("apps.speaking.turn_building_services.random.choices", return_value=[0]),
+        ):
+            selected = _select_least_practiced_items(items, 3, counts, pin_first=True)
+
+        self.assertEqual(
+            [item["question"] for item in selected],
+            ["Opener", "Never practised", "Practised once"],
+        )
+
+    def test_practice_debt_beats_random_target_length(self):
+        from apps.speaking.turn_building_services import select_p1_body_questions
+
+        class FixedRng:
+            def randint(self, _low, _high):
+                return 12
+
+            def random(self):
+                return 0.5
+
+        topics = {
+            "unseen-a": [{"topic": "unseen-a", "question": f"A{i}"} for i in range(5)],
+            "unseen-b": [{"topic": "unseen-b", "question": f"B{i}"} for i in range(4)],
+            "repeated-c": [{"topic": "repeated-c", "question": f"C{i}"} for i in range(6)],
+            "repeated-d": [{"topic": "repeated-d", "question": f"D{i}"} for i in range(6)],
+        }
+        topic_debt = {
+            "unseen-a": {"unpracticed": 5, "total_practice": 0, "last_ts": None},
+            "unseen-b": {"unpracticed": 4, "total_practice": 0, "last_ts": None},
+            "repeated-c": {"unpracticed": 0, "total_practice": 60, "last_ts": 100},
+            "repeated-d": {"unpracticed": 0, "total_practice": 60, "last_ts": 100},
+        }
+        counts = {f"c{i}": 10 for i in range(6)} | {f"d{i}": 10 for i in range(6)}
+
+        selected = select_p1_body_questions(topics, topic_debt, counts, rng=FixedRng())
+
+        self.assertEqual({item["topic"] for item in selected}, {"unseen-a", "unseen-b"})
+
+
 class SpeakingHistoryApiTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -435,7 +787,7 @@ class SpeakingHistoryApiTests(TestCase):
                 "mode": "p1",
                 "title": "Part 1 practice",
                 "ielts_score": {"overall_band": 5.5},
-                "turns": [{"id": "t1", "status": turn_status, "question": "What is your full name?", "transcript_cleaned": "My full name is Jasper."}],
+                "turns": [{"id": "t1", "status": turn_status, "question": "What is your full name?", "transcript_cleaned": "My full name is Jasper.", "band7_version": "My full name is Jasper Chen."}],
             },
         )
         return attempt
@@ -462,6 +814,57 @@ class SpeakingHistoryApiTests(TestCase):
 
         invalid_detail = self.client.get("/api/history/attempt-incomplete")
         self.assertEqual(invalid_detail.status_code, 404)
+
+    def create_failed_attempt(self, attempt_id="attempt-failed-1"):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id=attempt_id,
+            legacy_attempt_id=attempt_id,
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+            english_name="Jasper",
+            metadata={
+                "report_generation_status": "failed",
+                "analysis_status": "failed",
+                "analysis_error": "AI analysis failed: exit status 1",
+            },
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=1,
+            part="p1",
+            question="What is your full name?",
+            transcript_raw="My full name is Jasper.",
+            transcript_cleaned="My full name is Jasper.",
+            metadata={"transcript_status": "captured"},
+        )
+        return attempt
+
+    def test_failed_analysis_surfaces_as_unscored_report(self):
+        valid = self.create_scored_attempt()
+        failed = self.create_failed_attempt()
+
+        history = self.client.get("/api/history")
+        self.assertEqual(history.status_code, 200)
+        items = {item["id"]: item for item in history.json()["items"]}
+        # The failed attempt must no longer vanish from history.
+        self.assertIn(failed.attempt_id, items)
+        self.assertEqual(items[failed.attempt_id]["report_status"], "failed")
+        self.assertIsNone(items[failed.attempt_id]["overall_band"])
+        self.assertEqual(items[valid.attempt_id]["report_status"], "ready")
+
+        detail = self.client.get(f"/api/history/{failed.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        self.assertEqual(body["report_status"], "failed")
+        self.assertEqual(body["ielts_score"], {})
+        self.assertTrue(body["report_error"])
+        self.assertEqual(body["turns"][0]["question"], "What is your full name?")
+        self.assertEqual(body["turns"][0]["transcript_cleaned"], "My full name is Jasper.")
 
     def test_delete_requires_login(self):
         self.client.logout()
@@ -759,6 +1162,54 @@ class QuestionBankApiTests(TestCase):
                 self.assertTrue(card.get("p3_follow_ups"))
                 self.assertEqual(card["p3_follow_up_count"], len(card["p3_follow_ups"]))
                 self.assertTrue(all("?" in question for question in card["p3_follow_ups"]))
+
+    def test_p2_corpus_progress_counts_only_report_backed_scored_bank_rounds(self):
+        cards = self.client.get("/api/p2-corpus").json()["current_part2_cards"]
+        card = next(item for item in cards if len(item["p3_follow_ups"]) > 4)
+        cue_id = card["cue_id"]
+        round_count = card["practice_round_count"]
+
+        def add_attempt(status, round_index, suffix, *, with_report=False):
+            attempt = SpeakingAttempt.objects.create(
+                user=self.user,
+                attempt_id=f"bank-progress-{suffix}",
+                mode=SpeakingAttempt.Mode.P3,
+                part="p3",
+                status=status,
+                metadata={
+                    "p3_bank_cue_id": cue_id,
+                    "p3_bank_round_index": round_index,
+                    "p3_bank_round_count": round_count,
+                },
+            )
+            if with_report:
+                SpeakingReport.objects.create(user=self.user, attempt=attempt, report_payload={"status": "scored"})
+
+        add_attempt(SpeakingAttempt.Status.STARTED, 0, "started")
+        add_attempt(SpeakingAttempt.Status.ABORTED, 0, "aborted")
+        add_attempt(SpeakingAttempt.Status.READY_TO_SCORE, 0, "ready")
+        add_attempt(SpeakingAttempt.Status.SCORED, 0, "reportless")
+        add_attempt(SpeakingAttempt.Status.SCORED, 1, "reported", with_report=True)
+
+        updated = self.client.get("/api/p2-corpus").json()
+        progress = next(item for item in updated["current_part2_cards"] if item["cue_id"] == cue_id)
+        self.assertEqual(progress["practice_round_count"], round_count)
+        self.assertEqual(progress["practice_completed_round_indexes"], [1])
+        self.assertEqual(progress["practice_completed_round_count"], 1)
+        self.assertFalse(progress["practice_is_complete"])
+        self.assertEqual(progress["practice_next_round_index"], 0)
+
+        add_attempt(SpeakingAttempt.Status.SCORED, 0, "reported-other-round", with_report=True)
+        completed = self.client.get("/api/p2-corpus").json()
+        progress = next(item for item in completed["current_part2_cards"] if item["cue_id"] == cue_id)
+        self.assertEqual(progress["practice_completed_round_indexes"], [0, 1])
+        self.assertTrue(progress["practice_is_complete"])
+        self.assertEqual(progress["practice_next_round_index"], 0)
+
+        add_attempt(SpeakingAttempt.Status.SCORED, 0, "reported-repeat", with_report=True)
+        repeated = self.client.get("/api/p2-corpus").json()
+        progress = next(item for item in repeated["current_part2_cards"] if item["cue_id"] == cue_id)
+        self.assertEqual(progress["practice_next_round_index"], 1)
 
     def test_p2_corpus_category_counts_user_saved_material_not_season_topics(self):
         payload = self.client.get("/api/p2-corpus").json()
@@ -2059,11 +2510,15 @@ class SpeakingRuntimeApiTests(TestCase):
         response = self.client.post("/api/attempts/runtime-attempt/score", data={}, content_type="application/json")
         self.assertEqual(response.status_code, 401)
 
-    def test_score_rejects_incomplete_attempt(self):
+    def test_score_rejects_attempt_with_no_answers(self):
+        # A dropped/empty turn no longer blocks the whole report (that left learners
+        # stuck on an endless 重新分析 loop). Auto-completing empty turns means an
+        # attempt where *nothing* was answered is now rejected for the real reason:
+        # there is no transcript to score.
         attempt, _turn1, _turn2 = self.create_attempt()
         response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
         self.assertEqual(response.status_code, 400)
-        self.assertIn("Complete all speaking turns", response.json()["error"])
+        self.assertIn("没有拿到文字稿", response.json()["error"])
 
     def test_score_rejects_aborted_attempt(self):
         attempt, turn1, turn2 = self.create_attempt(status=SpeakingAttempt.Status.ABORTED)
@@ -2120,6 +2575,25 @@ class SpeakingRuntimeApiTests(TestCase):
 
         history = self.client.get("/api/history")
         self.assertNotIn(attempt.attempt_id, [item["id"] for item in history.json()["items"]])
+
+    def test_score_self_heals_dropped_turn_instead_of_blocking(self):
+        # turn1 is answered, turn2 dropped (no transcript / never completed). The
+        # report must still queue instead of failing the whole attempt with
+        # "Complete all speaking turns" — and the dropped turn is auto-completed empty.
+        attempt, turn1, turn2 = self.create_attempt()
+        turn1.transcript_raw = "I study English every day so I can talk with classmates."
+        turn1.transcript_cleaned = turn1.transcript_raw
+        turn1.metadata = {**turn1.metadata, "status": "completed"}
+        turn1.save()
+        self.assertNotEqual(turn2.metadata.get("status"), "completed")
+
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "analysis_pending")
+
+        turn2.refresh_from_db()
+        self.assertEqual(turn2.metadata.get("status"), "completed")
+        self.assertTrue(turn2.metadata.get("dropped_empty"))
 
 
 class RegenerateApiTests(TestCase):
@@ -2279,7 +2753,7 @@ class DjangoOnlyRuntimeSurfaceTests(TestCase):
                 "status": "scored",
                 "mode": "p1",
                 "ielts_score": {"overall_band": 5.5},
-                "turns": [{"id": "t1", "status": "completed", "transcript_cleaned": "My full name is Sam."}],
+                "turns": [{"id": "t1", "status": "completed", "transcript_cleaned": "My full name is Sam.", "band7_version": "My full name is Sam, and I usually go by Sam."}],
             },
         )
         return attempt
@@ -2480,7 +2954,7 @@ class CodexValidationTests(TestCase):
         with patch("apps.speaking.services.run_codex") as mock_run:
             mock_run.return_value = ('{"feedback": "test"}', {"input_tokens": 100})
             with self.assertRaises(RuntimeError) as ctx:
-                score_with_codex("test transcript", "test question", "p1", "test_call")
+                score_with_codex("test transcript", "test question", "p1", "test_call", ai_source="codex_cli")
             self.assertTrue(
                 "missing or invalid fields" in str(ctx.exception)
                 or "required keys" in str(ctx.exception)
@@ -2497,7 +2971,7 @@ class CodexValidationTests(TestCase):
                 {"input_tokens": 100},
             )
             with self.assertRaises(RuntimeError) as ctx:
-                score_with_codex("test transcript", "test question", "p1", "test_call")
+                score_with_codex("test transcript", "test question", "p1", "test_call", ai_source="codex_cli")
             self.assertIn("missing or invalid fields", str(ctx.exception))
 
     def test_score_with_codex_accepts_valid_scores(self):
@@ -2510,8 +2984,14 @@ class CodexValidationTests(TestCase):
                 '{"fluency_coherence": 6.5, "lexical_resource": 6.0, "grammatical_range": 6.0, "feedback": "Good work"}',
                 {"input_tokens": 100},
             )
-            result = score_with_codex("test transcript", "test question", "p1", "test_call")
-            self.assertEqual(result["backend"], "codex")
+            result = score_with_codex(
+                "test transcript",
+                "test question",
+                "p1",
+                "test_call",
+                ai_source="codex_cli",
+            )
+            self.assertEqual(result["backend"], "codex_cli")
             self.assertIn("fluency_coherence", result)
             self.assertGreater(result["fluency_coherence"], 0)
 
@@ -2540,15 +3020,13 @@ class CodexValidationTests(TestCase):
                 {"input_tokens": 100},
             )
 
-        with (
-            override_settings(SPEAKING_REPORT_AI_CALL_MODE="codex"),
-            patch("apps.speaking.services.run_codex", side_effect=fake_run_codex),
-        ):
+        with patch("apps.speaking.services.run_codex", side_effect=fake_run_codex):
             result = score_with_codex(
                 "Q1: Do you like buses?\nA: I like buses because they are cheap.",
                 "Do you like buses?",
                 "p1",
                 "test_review_prompt",
+                ai_source="codex_cli",
             )
 
         prompt = captured_prompt["text"]
@@ -2612,9 +3090,9 @@ class CodexValidationTests(TestCase):
             },
         }
 
-        with (
-            override_settings(SPEAKING_REPORT_AI_CALL_MODE="codex"),
-            patch("apps.speaking.services.run_codex", return_value=(json.dumps(ai_payload, ensure_ascii=False), {"input_tokens": 10})),
+        with patch(
+            "apps.speaking.services.run_codex",
+            return_value=(json.dumps(ai_payload, ensure_ascii=False), {"input_tokens": 10}),
         ):
             enriched = enrich_p3_discussion_skills_with_ai(
                 attempt,
@@ -2622,9 +3100,10 @@ class CodexValidationTests(TestCase):
                 {"overall_band": 6.0},
                 {"primary_focus_text": "补展开"},
                 "test_p3_skills",
+                ai_source="codex_cli",
             )
 
-        self.assertEqual(enriched["generation_backend"], "codex")
+        self.assertEqual(enriched["generation_backend"], "codex_cli")
         self.assertEqual(enriched["summary"], ai_payload["summary"])
         self.assertEqual(enriched["next_drill"], ai_payload["next_drill"])
         enriched_status = {
@@ -2633,6 +3112,56 @@ class CodexValidationTests(TestCase):
         }
         self.assertEqual(enriched_status, original_status)
         self.assertEqual(enriched["dimensions"][0]["evidence"], "AI 证据：提到了 society，但还缺少 wider impact。")
+
+    def test_p3_discussion_skills_reuses_score_payload_without_third_ai_call(self):
+        from apps.accounts.models import CustomUser
+        from apps.speaking.services import build_p3_discussion_skills, enrich_p3_discussion_skills_with_ai
+
+        user = CustomUser.objects.create_user(username="p3-skills-score-payload", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="p3-skills-score-payload",
+            mode="p3",
+            part="p3",
+            status=SpeakingAttempt.Status.SCORED,
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="p3-score-payload-turn",
+            sequence=0,
+            part="p3",
+            question="Why is public transport important?",
+            transcript_cleaned="It reduces traffic because many people can share one vehicle.",
+            metadata={"status": "completed", "prompt": {"role": "main"}},
+        )
+        base = build_p3_discussion_skills(attempt)
+        payload = {
+            "summary": "The answer gives a clear reason but needs wider development.",
+            "best_moment": "The traffic-reduction reason is direct.",
+            "fix_next": "Add a social consequence.",
+            "next_drill": ["State a view", "Give a reason", "Add an impact"],
+            "dimensions": {
+                item["key"]: {"evidence": "Specific evidence.", "next_action": "Develop this move."}
+                for item in base["dimensions"]
+            },
+        }
+
+        with patch("apps.speaking.services._report_provider_json") as report_provider:
+            enriched = enrich_p3_discussion_skills_with_ai(
+                attempt,
+                base,
+                {"overall_band": 6.0, "backend": "http_api", "model": "test-model"},
+                {},
+                "p3-score-payload",
+                ai_payload=payload,
+                allow_provider_call=False,
+            )
+
+        report_provider.assert_not_called()
+        self.assertEqual(enriched["generation_status"], "ready")
+        self.assertEqual(enriched["generation_backend"], "http_api")
+        self.assertEqual(enriched["summary"], payload["summary"])
 
     def test_p3_discussion_skills_ai_failure_falls_back_to_heuristic(self):
         from apps.accounts.models import CustomUser
@@ -2800,9 +3329,11 @@ class CodexValidationTests(TestCase):
 
     @override_settings(SPEAKING_REPORT_AI_CALL_MODE="codex")
     def test_score_attempt_uses_scorer_overall_review_without_second_review_codex_call(self):
+        from apps.accounts.models import UserProfile
         from apps.speaking.services import score_attempt_sync
 
         user, attempt, turn = self.create_ready_attempt()
+        UserProfile.objects.create(user=user, report_ai_source="codex_cli")
         score_payload = {
             "fluency_coherence": 6.5,
             "lexical_resource": 6.0,
@@ -2846,27 +3377,27 @@ class CodexValidationTests(TestCase):
         self.assertIn("software engineering", score_prompt)
         self.assertNotIn("small technology company", score_prompt)
         self.assertIn("ASR error", score_prompt)
-        self.assertEqual(result["ielts_score"]["backend"], "codex")
+        self.assertEqual(result["ielts_score"]["backend"], "codex_cli")
         self.assertEqual(result["ielts_score"]["generation_status"], "ready")
         self.assertEqual(result["ielts_score"]["overall_band"], 6.0)
         self.assertEqual(result["feedback_summary"], "Codex scored this exact speaking response.")
-        self.assertEqual(result["overall_review"]["backend"], "codex")
+        self.assertEqual(result["overall_review"]["backend"], "codex_cli")
         self.assertEqual(result["overall_review"]["markdown"], score_payload["overall_review"]["markdown"])
         turn.refresh_from_db()
-        self.assertEqual(turn.metadata["feedback_generation_backend"], "codex")
+        self.assertEqual(turn.metadata["feedback_generation_backend"], "codex_cli")
         self.assertEqual(turn.metadata["feedback_generation_status"], "ready")
         self.assertEqual(turn.metadata["display_transcript_markdown"], "I study software engineering.")
         self.assertIn("software engineering", turn.metadata["band7_version"])
-        self.assertEqual(turn.metadata["band7_source"], "codex_report_batch")
+        self.assertEqual(turn.metadata["band7_source"], "codex_cli_report_batch")
         report = SpeakingReport.objects.get(attempt=attempt)
-        self.assertEqual(report.report_payload["score_generation_backend"], "codex")
+        self.assertEqual(report.report_payload["score_generation_backend"], "codex_cli")
         self.assertEqual(report.report_payload["report_generation_status"], "ready")
         self.assertEqual(report.report_payload["turns"][0]["feedback_generation_status"], "ready")
         self.assertIn("software engineering", report.report_payload["turns"][0]["band7_version"])
         attempt.refresh_from_db()
         self.assertEqual(attempt.status, SpeakingAttempt.Status.SCORED)
         self.assertEqual(attempt.metadata["analysis_status"], "ready")
-        self.assertEqual(attempt.metadata["analysis_backend"], "codex")
+        self.assertEqual(attempt.metadata["analysis_backend"], "codex_cli")
         self.assertEqual(attempt.metadata["analysis_error"], "")
         self.assertEqual(attempt.metadata["report_generation_status"], "ready")
 
@@ -2885,7 +3416,7 @@ class CodexValidationTests(TestCase):
             "mode": "p1",
             "part": "p1",
             "title": "Part 1 practice",
-            "turns": [{"id": turn.turn_id, "status": "completed"}],
+            "turns": [{"id": turn.turn_id, "status": "completed", "band7_version": "My full name is Sam Chen."}],
             "feedback_summary": "Existing report should be reused.",
         }
         SpeakingReport.objects.create(
@@ -2992,14 +3523,15 @@ class CodexValidationTests(TestCase):
         self.assertTrue(first_key.startswith(f"{attempt.attempt_id}_{turn.turn_id}_band7_"))
         self.assertTrue(second_key.startswith(f"{attempt.attempt_id}_{turn.turn_id}_band7_"))
 
-    @override_settings(SPEAKING_REPORT_AI_CALL_MODE="codex")
     def test_score_attempt_marks_analysis_failed_without_publishing_report_when_codex_fails(self):
+        from apps.accounts.models import UserProfile
         from apps.speaking.services import SpeakingError, score_attempt_sync
 
         user, attempt, turn = self.create_ready_attempt(
             username="score-attempt-fallback-user",
             attempt_id="score-attempt-fallback-path",
         )
+        UserProfile.objects.create(user=user, report_ai_source="codex_cli")
 
         with patch("apps.speaking.services.run_codex", side_effect=RuntimeError("codex returned empty output")) as mock_run:
             with self.assertRaises(SpeakingError) as ctx:
@@ -3232,7 +3764,14 @@ class TurnFeedbackValidationTests(TestCase):
         }
 
         with patch("apps.speaking.services.run_codex", return_value=(json.dumps(payload), {"input_tokens": 100})):
-            result = turn_feedback_batch_with_codex([turn], attempt, "7", None, "batch_visible")
+            result = turn_feedback_batch_with_codex(
+                [turn],
+                attempt,
+                "7",
+                None,
+                "batch_visible",
+                ai_source="codex_cli",
+            )
 
         self.assertIn("t1", result)
         self.assertEqual(
@@ -3292,6 +3831,98 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertIn("A kind teacher", prepared_corpus_by_turn["t1"])
         self.assertIn("speech competition", prepared_corpus_by_turn["t1"])
 
+    def test_report_turn_feedback_generates_band7_for_empty_answer_without_coaching(self):
+        from apps.speaking.services import generate_turn_feedback_for_report
+
+        user = get_user_model().objects.create_user(username="report-empty-band7", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="report-empty-band7-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t-empty",
+            sequence=0,
+            part="p1",
+            question="Do you like rainy days?",
+            transcript_raw="",
+            transcript_cleaned="",
+            metadata={"status": "completed", "dropped_empty": True},
+        )
+        generated = {
+            "t-empty": {
+                "display_transcript": "",
+                "display_transcript_markdown": "",
+                "band7_version": "Yes, I do, because rainy days make the city feel calmer and help me slow down.",
+                "ai_coaching": "This should be ignored for an empty answer.",
+                "generation_backend": "codex",
+            }
+        }
+
+        with (
+            patch("apps.speaking.services.turn_feedback_batch_with_codex", return_value=generated) as batch,
+            patch("apps.speaking.services.volcengine_tts", return_value={"status": "pending"}),
+        ):
+            generate_turn_feedback_for_report(attempt, [turn], {}, "report_empty_band7")
+
+        batch.assert_called_once()
+        turn.refresh_from_db()
+        self.assertIn("rainy days", turn.metadata["band7_version"])
+        self.assertEqual(turn.metadata["display_transcript"], "")
+        self.assertEqual(turn.metadata["display_transcript_markdown"], "")
+        self.assertEqual(turn.metadata["ai_coaching"], "")
+        self.assertEqual(turn.metadata["feedback_generation_status"], "ready")
+
+    def test_report_cache_invalid_when_empty_turn_lacks_band7(self):
+        from apps.speaking.report_services import report_is_valid
+
+        user = get_user_model().objects.create_user(username="report-empty-cache", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="report-empty-cache-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.SCORED,
+        )
+        SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t-empty",
+            sequence=0,
+            part="p1",
+            question="Do you like rainy days?",
+            transcript_raw="",
+            transcript_cleaned="",
+            metadata={"status": "completed", "dropped_empty": True},
+        )
+        SpeakingReport.objects.create(
+            user=user,
+            attempt=attempt,
+            overall_band=6.0,
+            fluency_coherence=6.0,
+            lexical_resource=6.0,
+            grammar_range_accuracy=6.0,
+            report_payload={
+                "turns": [
+                    {
+                        "id": "t-empty",
+                        "part": "p1",
+                        "status": "completed",
+                        "question": "Do you like rainy days?",
+                        "display_transcript": "",
+                        "band7_version": "",
+                        "ai_coaching": "",
+                    }
+                ]
+            },
+        )
+
+        self.assertFalse(report_is_valid(attempt))
+
     def test_complete_turn_sets_pending_not_fallback(self):
         """complete_turn should set feedback_generation_status to pending, not fallback."""
         from apps.speaking.services import complete_turn
@@ -3324,9 +3955,10 @@ class TurnFeedbackValidationTests(TestCase):
         """regenerate_attempt_report should fix a report with all-zero scores."""
         from unittest.mock import patch
         from apps.speaking.services import regenerate_attempt_report
-        from apps.accounts.models import CustomUser
+        from apps.accounts.models import CustomUser, UserProfile
 
         user = CustomUser.objects.create_user(username="test-regen-user", password="test-pass")
+        UserProfile.objects.create(user=user, report_ai_source="codex_cli")
         attempt = SpeakingAttempt.objects.create(
             user=user,
             attempt_id="test-regen-attempt",
@@ -3377,7 +4009,7 @@ class TurnFeedbackValidationTests(TestCase):
             self.assertTrue(result["ok"])
             # Should have real scores now
             self.assertGreater(result["attempt"]["ielts_score"]["overall_band"], 0)
-            self.assertEqual(result["attempt"]["ielts_score"]["backend"], "codex")
+            self.assertEqual(result["attempt"]["ielts_score"]["backend"], "codex_cli")
 
     def test_coaching_must_include_grammar_correction(self):
         """AI coaching must include a grammar correction section."""
@@ -3425,7 +4057,7 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertNotIn("I work as a software engineer", result)
 
     def test_p1_identity_report_rules(self):
-        """Name intro is hidden from scoring, while work/study keeps Band 7 but no coaching."""
+        """Both fixed intros are hidden from scoring; Work/Study also skips Band 7 and coaching."""
         from apps.speaking.services import build_turn_feedback, is_p1_name_intro_turn, turn_counts_for_scoring, turn_needs_ai_coaching
         from apps.accounts.models import CustomUser
 
@@ -3456,7 +4088,7 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertTrue(is_p1_name_intro_turn(name_turn))
         self.assertFalse(turn_counts_for_scoring(name_turn))
         self.assertFalse(turn_needs_ai_coaching(name_turn))
-        self.assertTrue(turn_counts_for_scoring(work_turn))
+        self.assertFalse(turn_counts_for_scoring(work_turn))
         self.assertFalse(turn_needs_ai_coaching(work_turn))
 
         feedback = build_turn_feedback(
@@ -3465,12 +4097,137 @@ class TurnFeedbackValidationTests(TestCase):
             allow_codex=False,
             generated_feedback={
                 "display_transcript": "I'm a university student majoring in software engineering, and I'm also doing an internship.",
-                "band7_version": "I'm a university student majoring in software engineering, and I'm also doing an internship at a tech company at the moment.",
+                "band7_version": "This generated answer must be ignored for the fixed opener.",
                 "ai_coaching": "",
             },
         )
         self.assertEqual(feedback["ai_coaching"], "")
         self.assertIn("university student", feedback["display_transcript"])
+        self.assertEqual(feedback["band7_version"], "")
+        self.assertEqual(feedback["feedback_generation_status"], "skipped")
+
+    def test_p1_work_study_intro_is_omitted_from_batch_ai_call(self):
+        from apps.accounts.models import CustomUser
+        from apps.speaking.services import turn_feedback_batch_with_codex
+
+        user = CustomUser.objects.create_user(username="test-work-study-batch-skip", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(user=user, attempt_id="test-work-study-batch-skip", mode="p1", part="p1")
+        work_turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="work-study-intro",
+            sequence=0,
+            part="p1",
+            question="Do you work or do you study?",
+            transcript_raw="I'm a university student.",
+            metadata={"status": "completed", "prompt": {"flow": "intro", "role": "work_study"}},
+        )
+
+        with patch("apps.speaking.services.run_codex") as run_codex:
+            result = turn_feedback_batch_with_codex(
+                [work_turn],
+                attempt,
+                "7",
+                {},
+                "work-study-intro-batch",
+                ai_source="codex_cli",
+            )
+
+        self.assertEqual(result, {})
+        run_codex.assert_not_called()
+
+    def test_codex_cli_turn_feedback_uses_small_batches(self):
+        from apps.accounts.models import CustomUser
+        from apps.speaking.services import turn_feedback_batch_with_codex
+
+        user = CustomUser.objects.create_user(username="test-codex-cli-batches", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(user=user, attempt_id="test-codex-cli-batches", mode="p1", part="p1")
+        turns = [
+            SpeakingTurn.objects.create(
+                user=user,
+                attempt=attempt,
+                turn_id=f"batch-turn-{index}",
+                sequence=index,
+                part="p1",
+                question=f"Question {index + 1}?",
+                transcript_raw="",
+                metadata={"status": "completed"},
+            )
+            for index in range(4)
+        ]
+
+        def codex_batch_result(prompt, _call_id, timeout=180):
+            input_turns = json.loads(prompt.split("Input turns:\n", 1)[1].strip())
+            payload = {
+                "turns": [
+                    {
+                        "turn_id": item["turn_id"],
+                        "display_transcript": "",
+                        "display_transcript_markdown": "",
+                        "band7_version": f"A direct model answer for {item['question']}",
+                        "ai_coaching": "",
+                    }
+                    for item in input_turns
+                ]
+            }
+            return json.dumps(payload), {"input_tokens": 10, "output_tokens": 5}
+
+        with patch("apps.speaking.services.run_codex", side_effect=codex_batch_result) as run_codex:
+            result = turn_feedback_batch_with_codex(
+                turns,
+                attempt,
+                "7",
+                {},
+                "codex-cli-batch-test",
+                ai_source="codex_cli",
+            )
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(run_codex.call_count, 2)
+
+    def test_http_turn_feedback_failure_never_calls_codex(self):
+        from apps.accounts.models import CustomUser
+        from apps.speaking.services import turn_feedback_batch_with_codex
+
+        class FailingHttpProvider:
+            def complete_chat(self, *args, **kwargs):
+                raise RuntimeError("relay unavailable")
+
+        user = CustomUser.objects.create_user(username="test-http-codex-fallback-batches", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="test-http-codex-fallback-batches",
+            mode="p1",
+            part="p1",
+        )
+        turns = [
+            SpeakingTurn.objects.create(
+                user=user,
+                attempt=attempt,
+                turn_id=f"fallback-batch-turn-{index}",
+                sequence=index,
+                part="p1",
+                question=f"Question {index + 1}?",
+                transcript_raw="",
+                metadata={"status": "completed"},
+            )
+            for index in range(4)
+        ]
+
+        with (
+            patch("apps.speaking.services._speaking_http_provider", return_value=FailingHttpProvider()),
+            patch("apps.speaking.services.run_codex") as run_codex,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "relay unavailable"):
+                turn_feedback_batch_with_codex(
+                    turns,
+                    attempt,
+                    "7",
+                    {},
+                    "http-no-codex-fallback-batch-test",
+                )
+
+        run_codex.assert_not_called()
 
     def test_p1_work_study_followup_uses_codex_result_with_server_tts(self):
         """Completing work/study identity turn should insert the Codex-generated follow-up with server TTS."""
@@ -3556,7 +4313,7 @@ class TurnFeedbackValidationTests(TestCase):
         from apps.speaking.services import _examiner_tts_text_hash
 
         expected_follow_up_tts_key = (
-            "test-p1-followup-attempt_t2_followup_examiner_"
+            "examiner_"
             f"{_examiner_tts_text_hash('How has your software engineering internship shaped your studies?')}"
         )
         mock_tts.assert_called_once_with(

@@ -20,10 +20,18 @@ class CustomUser(AbstractUser):
 
 class UserProfile(models.Model):
     REPORT_AI_SOURCE_GPT = "gpt"
+    REPORT_AI_SOURCE_CLAUDE = "claude"
+    REPORT_AI_SOURCE_CLAUDE_HAIKU = "claude_haiku"
     REPORT_AI_SOURCE_CLAUDE_CLI = "claude_cli"
+    REPORT_AI_SOURCE_CLAUDE_CLI_HAIKU = "claude_cli_haiku"
+    REPORT_AI_SOURCE_CODEX_CLI = "codex_cli"
     REPORT_AI_SOURCE_CHOICES = [
         (REPORT_AI_SOURCE_GPT, "GPT (默认)"),
-        (REPORT_AI_SOURCE_CLAUDE_CLI, "Claude CLI"),
+        (REPORT_AI_SOURCE_CLAUDE, "Claude Sonnet"),
+        (REPORT_AI_SOURCE_CLAUDE_HAIKU, "Claude Haiku"),
+        (REPORT_AI_SOURCE_CLAUDE_CLI, "Claude CLI (Sonnet)"),
+        (REPORT_AI_SOURCE_CLAUDE_CLI_HAIKU, "Claude CLI (Haiku)"),
+        (REPORT_AI_SOURCE_CODEX_CLI, "Codex CLI (本机)"),
     ]
 
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="profile")

@@ -24,18 +24,34 @@ def report_is_valid(attempt: SpeakingAttempt) -> bool:
     payload = attempt.report.report_payload if isinstance(attempt.report.report_payload, dict) else {}
     payload_turns = payload.get("turns") if isinstance(payload.get("turns"), list) else []
     if payload_turns:
-        return all(str(turn.get("status") or "completed") == "completed" for turn in payload_turns)
+        return all(str(turn.get("status") or "completed") == "completed" for turn in payload_turns) and all(
+            _report_turn_has_required_band7(turn)
+            for turn in payload_turns
+        )
     return all(turn.transcript_cleaned or turn.transcript_raw or not turn.counts_toward_total for turn in turns)
+
+
+def _report_turn_has_required_band7(turn: dict[str, Any]) -> bool:
+    prompt = turn.get("prompt") if isinstance(turn.get("prompt"), dict) else {}
+    is_fixed_intro = (
+        turn.get("part") == "p1"
+        and prompt.get("flow") == "intro"
+        and prompt.get("role") in {"name", "work_study"}
+    )
+    if is_fixed_intro:
+        return True
+    return bool(str(turn.get("band7_version") or turn.get("band7_markdown") or "").strip())
 
 
 def report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
     payload = dict(attempt.report.report_payload or {})
     payload.setdefault("id", attempt.attempt_id)
+    payload["report_status"] = "ready"
     payload.setdefault("mode", attempt.mode)
     payload.setdefault("part", attempt.part)
     payload.setdefault("title", attempt.title)
     payload.setdefault("status", attempt.status)
-    payload.setdefault("display_time", timezone.localtime(attempt.updated_at).strftime("%Y-%m-%d %H:%M"))
+    payload.setdefault("display_time", timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"))
     payload.setdefault("candidate", attempt.english_name)
     payload.setdefault("full_name", attempt.full_name)
     payload.setdefault("english_name", attempt.english_name)
@@ -147,18 +163,118 @@ def normalize_p1_report_turn_corpus_keys(payload: dict[str, Any]) -> None:
                 turn["parent_question"] = parent_question
 
 
+_FAILED_REPORT_TASK_STATUSES = {
+    AITask.Status.FAILED,
+    AITask.Status.FALLBACK,
+    AITask.Status.CANCELLED,
+}
+
+
+def report_generation_failed_by_metadata(attempt: SpeakingAttempt) -> bool:
+    """Metadata-only failure check (no DB query) for cheap use in list views."""
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    return (
+        str(metadata.get("report_generation_status") or "") == "failed"
+        or str(metadata.get("analysis_status") or "") == "failed"
+    )
+
+
+def report_generation_failed(attempt: SpeakingAttempt) -> bool:
+    """Whether report generation terminally failed and no valid report exists.
+
+    A re-queued retry overwrites ``analysis_status`` with ``queued``/``running``,
+    so a pending retry is intentionally NOT reported as failed.
+    """
+    if report_is_valid(attempt):
+        return False
+    if report_generation_failed_by_metadata(attempt):
+        return True
+    task = latest_speaking_report_task(attempt)
+    return bool(task and task.status in _FAILED_REPORT_TASK_STATUSES)
+
+
+def friendly_report_error(raw: str) -> str:
+    text = str(raw or "").strip()
+    lowered = text.lower()
+    if "quota" in lowered or "usage limit" in lowered or "rate limit" in lowered:
+        return "AI 评分服务的额度已用尽，稍后额度恢复后点「重新生成报告」即可。"
+    if "non-zero exit status" in lowered or "ai analysis failed" in lowered or not text:
+        return "AI 评分服务暂时没有返回报告（可能是额度用尽或网络波动）。点「重新生成报告」重试，不会重开整场练习。"
+    return text
+
+
+def _attempt_turns_payload(attempt: SpeakingAttempt) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": turn.turn_id,
+            "part": turn.part,
+            "question": turn.question,
+            "transcript_raw": turn.transcript_raw,
+            "transcript_cleaned": turn.transcript_cleaned,
+            "display_transcript": turn.metadata.get("display_transcript", "") if isinstance(turn.metadata, dict) else "",
+            "status": "completed",
+        }
+        for turn in attempt.turns.all().order_by("sequence")
+    ]
+
+
+def failed_history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
+    return {
+        "id": attempt.attempt_id,
+        "timestamp": attempt.created_at.isoformat(),
+        "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
+        "mode": attempt.mode,
+        "part": attempt.part,
+        "title": attempt.title or attempt.mode.upper(),
+        "question": attempt.title,
+        "status": attempt.status,
+        "overall_band": None,
+        "report_status": "failed",
+        "turn_count": attempt.turns.count(),
+    }
+
+
+def failed_report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
+    task = latest_speaking_report_task(attempt)
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    raw_error = (
+        (task.error_message if task else "")
+        or metadata.get("report_generation_error")
+        or metadata.get("analysis_error")
+        or ""
+    )
+    return {
+        "id": attempt.attempt_id,
+        "mode": attempt.mode,
+        "part": attempt.part,
+        "title": attempt.title,
+        "status": attempt.status,
+        "report_status": "failed",
+        "report_error": friendly_report_error(raw_error),
+        "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
+        "candidate": attempt.english_name,
+        "full_name": attempt.full_name,
+        "english_name": attempt.english_name,
+        "ielts_score": {},
+        "feedback_summary": "",
+        "turns": _attempt_turns_payload(attempt),
+        "ai_task": speaking_task_summary_payload(task),
+    }
+
+
 def history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
     payload = attempt.report.report_payload if isinstance(attempt.report.report_payload, dict) else {}
     score = payload.get("ielts_score") if isinstance(payload.get("ielts_score"), dict) else {}
     return {
         "id": attempt.attempt_id,
         "timestamp": attempt.created_at.isoformat(),
-        "display_time": timezone.localtime(attempt.updated_at).strftime("%Y-%m-%d %H:%M"),
+        "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
         "mode": attempt.mode,
         "part": attempt.part,
         "title": attempt.title or payload.get("title") or payload.get("question") or attempt.mode.upper(),
         "question": payload.get("question") or attempt.title,
         "status": attempt.status,
+        "report_status": "ready",
         "overall_band": float(attempt.report.overall_band) if attempt.report.overall_band is not None else score.get("overall_band"),
         "turn_count": attempt.turns.count(),
     }
@@ -166,12 +282,21 @@ def history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
 
 def history(user) -> dict[str, Any]:
     attempts = (
-        SpeakingAttempt.objects.filter(user=user, status=SpeakingAttempt.Status.SCORED)
+        SpeakingAttempt.objects.filter(user=user)
+        .exclude(status=SpeakingAttempt.Status.ABORTED)
         .select_related("report")
         .prefetch_related("turns")
-        .order_by("-updated_at")
+        .order_by("-created_at")
     )
-    return {"items": [history_item(attempt) for attempt in attempts if report_is_valid(attempt)]}
+    items: list[dict[str, Any]] = []
+    for attempt in attempts:
+        if report_is_valid(attempt):
+            items.append(history_item(attempt))
+        elif report_generation_failed_by_metadata(attempt):
+            # Surface failed analyses as "未评分" cards with a 重新生成 button instead
+            # of silently dropping them — otherwise the attempt vanishes from history.
+            items.append(failed_history_item(attempt))
+    return {"items": items}
 
 
 def detail(user, attempt_id: str) -> dict[str, Any]:
@@ -181,9 +306,13 @@ def detail(user, attempt_id: str) -> dict[str, Any]:
         .prefetch_related("turns")
         .first()
     )
-    if not attempt or not report_is_valid(attempt):
+    if not attempt:
         raise SpeakingError("Speaking report not found")
-    return report_payload(attempt)
+    if report_is_valid(attempt):
+        return report_payload(attempt)
+    if report_generation_failed(attempt):
+        return failed_report_payload(attempt)
+    raise SpeakingError("Speaking report not found")
 
 
 def delete_attempt(user, attempt_id: str) -> dict[str, Any]:

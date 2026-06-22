@@ -528,7 +528,7 @@ def p3_view(request):
     except Exception:
         pass
     result = p3_fallback(payload)
-    return JsonResponse(result)
+    return JsonResponse(result, status=502 if result.get("status") == "failed" else 200)
 
 
 @require_http_methods(["POST"])
@@ -536,7 +536,12 @@ def p3_follow_up_view(request):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
-    return JsonResponse(p3_follow_up_fallback(_json_payload(request)))
+    payload = _json_payload(request)
+    try:
+        payload.setdefault("ai_source", getattr(request.user.profile, "report_ai_source", "") or "")
+    except Exception:
+        pass
+    return JsonResponse(p3_follow_up_fallback(payload))
 
 
 @require_http_methods(["POST"])

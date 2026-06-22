@@ -100,7 +100,7 @@ def _runtime_attempt_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
     return {
         "id": attempt.attempt_id,
         "timestamp": attempt.created_at.isoformat(),
-        "display_time": timezone.localtime(attempt.updated_at).strftime("%Y-%m-%d %H:%M"),
+        "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
         "status": attempt.status,
         "user_id": str(attempt.user_id),
         "mode": attempt.mode,

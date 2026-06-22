@@ -12,6 +12,54 @@ import re
 from typing import Any
 
 
+def _repair_unescaped_string_quotes(text: str) -> str:
+    """Escape stray double-quotes that appear *inside* JSON string values.
+
+    LLMs frequently quote an inline example inside a string (e.g. the coaching
+    text `说完"看视频"和...`) and forget to escape the inner quotes, producing
+    output json.loads rejects. We walk the text tracking string state: a quote
+    inside a string that is not immediately followed (ignoring whitespace) by a
+    structural delimiter (`:` `,` `}` `]`) is a literal quote, so we escape it.
+    Already-escaped quotes (`\\"`) and structural quotes are left untouched, so a
+    well-formed object is returned unchanged.
+    """
+    out: list[str] = []
+    in_str = False
+    i = 0
+    n = len(text)
+    while i < n:
+        char = text[i]
+        if not in_str:
+            out.append(char)
+            if char == '"':
+                in_str = True
+            i += 1
+            continue
+        if char == "\\":
+            out.append(char)
+            if i + 1 < n:
+                out.append(text[i + 1])
+                i += 2
+            else:
+                i += 1
+            continue
+        if char == '"':
+            j = i + 1
+            while j < n and text[j] in " \t\r\n":
+                j += 1
+            nxt = text[j] if j < n else ""
+            if nxt in ":,}]" or nxt == "":
+                out.append('"')
+                in_str = False
+            else:
+                out.append('\\"')
+            i += 1
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
 def extract_json_object(text: str) -> dict[str, Any]:
     """Extract first valid JSON object from text using balanced bracket scanning.
 
@@ -19,9 +67,21 @@ def extract_json_object(text: str) -> dict[str, Any]:
     - Text contains multiple JSON objects
     - Text has Trellis/other content before/after JSON
     - JSON spans multiple lines
+    - String values contain unescaped inline double-quotes (auto-repaired)
 
     Returns the first complete, parseable JSON object.
     """
+    text = str(text or "")
+    try:
+        return _extract_json_object_scan(text)
+    except ValueError:
+        repaired = _repair_unescaped_string_quotes(text)
+        if repaired != text:
+            return _extract_json_object_scan(repaired)
+        raise
+
+
+def _extract_json_object_scan(text: str) -> dict[str, Any]:
     text = str(text or "")
 
     # Find the first '{' that starts a JSON object

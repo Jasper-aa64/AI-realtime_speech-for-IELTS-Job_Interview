@@ -15,7 +15,7 @@ from typing import Any
 
 from django.conf import settings
 
-from apps.ai.cli_paths import resolve_claude_cli_path
+from apps.ai.cli_paths import resolve_claude_cli_path, resolve_codex_cli_path
 from .text_utils import extract_codex_json_events
 
 
@@ -34,7 +34,7 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45) -> tuple[str, dict[s
     if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
         raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
 
-    codex = shutil.which("codex") or "/opt/homebrew/bin/codex"
+    codex = resolve_codex_cli_path()
     if not shutil.which(codex) and not Path(codex).exists():
         raise RuntimeError("codex CLI not found")
 
@@ -112,16 +112,27 @@ class ClaudeCliQuotaError(RuntimeError):
     """Raised when Claude CLI reports quota/rate-limit exhaustion."""
 
 
-def run_claude_cli(prompt: str, call_id: str, timeout: int = 180) -> tuple[str, dict[str, Any] | None]:
+def run_claude_cli(
+    prompt: str,
+    call_id: str,
+    timeout: int = 180,
+    model: str | None = None,
+) -> tuple[str, dict[str, Any] | None]:
     """Call Claude CLI with -p and return (text_output, usage_dict).
 
     Uses --output-format json so we get structured output including api_error_status.
+    When ``model`` is set it is passed through as ``--model`` (e.g. "haiku") so the
+    same path can drive the Sonnet or Haiku variant; otherwise the CLI default is used.
     Raises ClaudeCliQuotaError on detected quota exhaustion.
     Raises RuntimeError on other failures.
     """
     cli = resolve_claude_cli_path()
     if not (shutil.which(cli) or Path(cli).exists()):
         raise RuntimeError(f"claude CLI not found at {cli}")
+
+    cli_args = [cli, "-p", "--output-format", "json"]
+    if model:
+        cli_args += ["--model", model]
 
     try:
         # Feed the prompt over stdin, NOT as a -p argv value. On Windows `claude`
@@ -131,7 +142,7 @@ def run_claude_cli(prompt: str, call_id: str, timeout: int = 180) -> tuple[str, 
         # was included" -- which then fails JSON extraction and silently falls back to
         # codex. stdin sidesteps both the length limit and the argv mangling.
         result = subprocess.run(
-            [cli, "-p", "--output-format", "json"],
+            cli_args,
             input=prompt,
             text=True,
             encoding="utf-8",

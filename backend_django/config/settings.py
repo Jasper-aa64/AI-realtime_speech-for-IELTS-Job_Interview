@@ -8,6 +8,36 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _load_dotenv() -> None:
+    """Load `.env` (repo root, next to backend_django) into os.environ.
+
+    Parsed in-process so values with shell metacharacters ($, (, #, !) load
+    correctly without sourcing the file in bash. Existing environment variables
+    win, so an explicit export still overrides the file.
+    """
+    for candidate in (BASE_DIR.parent / ".env", BASE_DIR / ".env"):
+        if not candidate.is_file():
+            continue
+        try:
+            for raw in candidate.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                if key and key not in os.environ:
+                    os.environ[key] = value
+        except OSError:
+            continue
+        break
+
+
+_load_dotenv()
+
+
 def env_flag(name: str, default: bool = False) -> bool:
     value = str(os.environ.get(name, "1" if default else "0")).strip().lower()
     return value in {"1", "true", "yes", "on"}
@@ -130,7 +160,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Display times in China Standard Time (UTC+8). USE_TZ stays True so values are
+# stored in UTC and converted on display via timezone.localtime().
+TIME_ZONE = 'Asia/Shanghai'
 
 USE_I18N = True
 

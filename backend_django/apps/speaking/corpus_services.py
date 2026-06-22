@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from .exceptions import SpeakingError
@@ -30,6 +30,7 @@ from .models import (
     P2BankCorpusEntry,
     P2CorpusEntry,
     P3BankFollowupCorpusEntry,
+    SpeakingAttempt,
     SpeakingTurn,
     TakeawayReviewState,
 )
@@ -569,6 +570,58 @@ def p3_bank_followup_id(p2_question_id: str, followup_question: str, index: int)
     return f"p3bank:{digest}"
 
 
+def p3_bank_practice_rounds(items: list[Any]) -> list[list[Any]]:
+    values = list(items)
+    item_count = len(values)
+    if item_count <= 4:
+        return [values] if values else []
+    if item_count == 5:
+        return [values[:3], [values[3], values[4], values[2]]]
+
+    round_count = (item_count + 3) // 4
+    base_size, larger_rounds = divmod(item_count, round_count)
+    rounds: list[list[Any]] = []
+    start = 0
+    for round_index in range(round_count):
+        size = base_size + (1 if round_index < larger_rounds else 0)
+        rounds.append(values[start:start + size])
+        start += size
+    return rounds
+
+
+def p3_bank_practice_completion_counts(user, cue_ids: list[str]) -> dict[str, dict[int, int]]:
+    normalized_cue_ids = list(dict.fromkeys(clean_report_text(str(cue_id)) for cue_id in cue_ids if cue_id))
+    if not normalized_cue_ids:
+        return {}
+    rows = (
+        SpeakingAttempt.objects.filter(
+            user=user,
+            status=SpeakingAttempt.Status.SCORED,
+            report__isnull=False,
+            metadata__p3_bank_cue_id__in=normalized_cue_ids,
+        )
+        .values("metadata__p3_bank_cue_id", "metadata__p3_bank_round_index")
+        .annotate(completion_count=Count("id"))
+    )
+    counts: dict[str, dict[int, int]] = {}
+    for row in rows:
+        cue_id = clean_report_text(str(row.get("metadata__p3_bank_cue_id") or ""))
+        try:
+            round_index = int(row.get("metadata__p3_bank_round_index"))
+        except (TypeError, ValueError):
+            continue
+        if cue_id and round_index >= 0:
+            counts.setdefault(cue_id, {})[round_index] = int(row["completion_count"])
+    return counts
+
+
+def p3_bank_next_round_index(round_count: int, completion_counts: dict[int, int] | None = None) -> int:
+    if round_count <= 0:
+        return 0
+    counts = completion_counts or {}
+    return min(range(round_count), key=lambda round_index: (counts.get(round_index, 0), round_index))
+
+
 def _p2_cue_id_from_any(question_id: str) -> str:
     value = clean_report_text(str(question_id or ""))
     if value.startswith("p2:"):
@@ -759,6 +812,7 @@ def p2_topic_card_payload(
     topic: dict[str, Any],
     bank_entry: P2BankCorpusEntry | None = None,
     p3_entries_by_id: dict[str, P3BankFollowupCorpusEntry] | None = None,
+    practice_completion_counts: dict[int, int] | None = None,
 ) -> dict[str, Any]:
     category = p2_topic_category(topic)
     cue_id = str(topic.get("cue_id") or p2_cue_id(topic))
@@ -780,6 +834,13 @@ def p2_topic_card_payload(
         followup_id = p3_bank_followup_id(cue_id, question, index)
         if p3_entries_by_id.get(followup_id) and p3_entries_by_id[followup_id].corpus_text.strip():
             p3_saved_count += 1
+    practice_round_count = len(p3_bank_practice_rounds(p3_follow_ups))
+    completion_counts = practice_completion_counts or {}
+    completed_round_indexes = [
+        round_index
+        for round_index in range(practice_round_count)
+        if completion_counts.get(round_index, 0) > 0
+    ]
     return {
         "entry_id": entry_id,
         "canonical_entry_id": entry_id,
@@ -807,6 +868,11 @@ def p2_topic_card_payload(
         "p3_follow_up_saved_count": p3_saved_count,
         "has_material": bool(bank_entry and bank_entry.corpus_text.strip()),
         "has_p3_follow_up": p3_saved_count > 0,
+        "practice_round_count": practice_round_count,
+        "practice_completed_round_indexes": completed_round_indexes,
+        "practice_completed_round_count": len(completed_round_indexes),
+        "practice_is_complete": bool(practice_round_count) and len(completed_round_indexes) == practice_round_count,
+        "practice_next_round_index": p3_bank_next_round_index(practice_round_count, completion_counts),
     }
 
 
@@ -824,7 +890,7 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
         }
         for item in P2_CORPUS_CATEGORIES
     }
-    ordered_entries = sorted(entries_by_id.values(), key=lambda item: (item.category, -item.updated_at.timestamp(), item.title))
+    ordered_entries = sorted(entries_by_id.values(), key=lambda item: (item.category, item.title.lower(), item.entry_id))
     for entry in ordered_entries:
         group = grouped.setdefault(
             entry.category,
@@ -846,11 +912,13 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
         entry.followup_id: entry
         for entry in P3BankFollowupCorpusEntry.objects.filter(user=user, p2_question_id__in=topic_cue_ids)
     }
+    practice_counts_by_cue_id = p3_bank_practice_completion_counts(user, topic_cue_ids)
     current_part2_cards = [
         p2_topic_card_payload(
             topic,
             bank_entries_by_question_id.get(str(topic.get("cue_id") or p2_cue_id(topic))),
             p3_entries_by_id,
+            practice_counts_by_cue_id.get(str(topic.get("cue_id") or p2_cue_id(topic))),
         )
         for topic in selected_topics
     ]

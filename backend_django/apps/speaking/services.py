@@ -39,6 +39,25 @@ from .ai_runtime import (
     run_claude_cli,
     run_codex,
 )
+from .ai_provider_services import (
+    SPEAKING_CLAUDE_CLI_DEFAULT_MODEL,
+    SPEAKING_CLAUDE_CLI_HAIKU_MODEL,
+    SPEAKING_CLAUDE_CLI_SOURCES,
+    SPEAKING_CLAUDE_HAIKU_HTTP_DEFAULT_MODEL,
+    SPEAKING_CLAUDE_HTTP_DEFAULT_MODEL,
+    SPEAKING_CLAUDE_HTTP_SOURCES,
+    SPEAKING_CODEX_CLI_SOURCES,
+    SPEAKING_READY_AI_BACKENDS,
+    _claude_cli_model_for,
+    _follow_up_generation_provenance,
+    _http_backend_name,
+    _is_claude_cli_source,
+    _is_claude_http_source,
+    _is_codex_cli_source,
+    _is_slow_cli_source,
+    _raise_report_provider_chain_error,
+    _speaking_http_provider,
+)
 from .audio_services import (
     MAX_AUDIO_BYTES,
     get_turn_audio_path,
@@ -83,10 +102,14 @@ from .corpus_services import (
     p2_corpus_extra,
     p2_corpus_for_selection,
     p2_corpus_library,
+    p2_cue_id,
     p2_entry_id,
     p3_bank_corpus_batch,
     p3_bank_followup_id,
     p3_bank_followup_list,
+    p3_bank_next_round_index,
+    p3_bank_practice_completion_counts,
+    p3_bank_practice_rounds,
     prepared_corpus_for_turns,
     question_bank_sample,
     question_bank_summary,
@@ -104,6 +127,26 @@ from .corpus_services import (
     writing_takeaway_library,
 )
 from .exceptions import SpeakingError
+from .examiner_tts_services import (
+    _cached_examiner_tts_for_turn,
+    _examiner_tts_cache_key,
+    _examiner_tts_identity,
+    _examiner_tts_matches_text,
+    _examiner_tts_not_started,
+    _examiner_tts_text_hash,
+    _fixed_examiner_fallback,
+    _fixed_examiner_item_for_text,
+    _fixed_examiner_pending_state,
+    _generate_remaining_examiner_tts,
+    _generate_remaining_examiner_tts_after_commit,
+    _is_stream_pending_follow_up_metadata,
+    _warm_fixed_examiner_tts_item,
+    _warm_fixed_examiner_tts_item_background,
+    _with_examiner_tts_identity,
+    ensure_examiner_tts,
+    examiner_tts_status,
+    warm_fixed_examiner_tts,
+)
 from .models import SpeakingAttempt, SpeakingReport, SpeakingTrainingObservation, SpeakingTurn
 from .p1_followup_services import (
     _fallback_p1_identity_follow_up,
@@ -223,13 +266,16 @@ from .turn_building_services import (
     _cue_to_text,
     _is_p1_work_study_identity_question,
     _normalize_question_text,
+    _p1_balanced_practice_counts,
     _p1_topic_practice_counts,
+    _p1_topic_practice_debt,
     _p3_question_practice_counts,
     _question_practice_counts,
     _select_least_practiced_items,
     _select_p3_followups,
     _timers_for_part,
     _weighted_topic_order,
+    select_p1_body_questions,
 )
 
 
@@ -262,9 +308,18 @@ P1_TURN_COUNT = 10
 # "frames", asking a handful of questions on each — never one giant topic, and
 # never a single topic for the whole part. So we draw several DISTINCT topics and
 # a capped slice of each, instead of dumping a whole 18-question bank topic.
-P1_TOPICS_PER_SESSION = 3      # at least this many distinct topics per session
-P1_QUESTIONS_PER_TOPIC = 4     # typical questions drawn from one topic
-P1_QUESTIONS_PER_TOPIC_MAX = 6 # hard cap per topic (a topic never exceeds this)
+# "Body" = the real topic questions: everything EXCEPT the two fixed openers (name +
+# work/study) and any live follow-up. Each session assembles 9-12 body questions by
+# enumerating 2-/3-topic combinations and scoring them, with practice debt (least-
+# practiced first) as the top priority. See select_p1_body_questions.
+P1_BODY_QUESTION_MIN = 9
+P1_BODY_QUESTION_MAX = 12
+# A topic with this many bank questions or more is "big": never dumped whole, only
+# P1_SPLIT_MIN..P1_SPLIT_MAX of its questions are drawn this session (the rest waits
+# for a later one). Smaller topics ride as a whole group so they stay complete.
+P1_SPLIT_THRESHOLD = 8
+P1_SPLIT_MIN = 3
+P1_SPLIT_MAX = 6
 STREAM_PENDING_FOLLOW_UP_PLACEHOLDER = "Generating follow-up question..."
 P1_FOLLOW_UP_HTTP_TIMEOUT = 8
 P1_FOLLOW_UP_CODEX_TIMEOUT = 15
@@ -280,120 +335,31 @@ SPEAKING_REPORT_HTTP_TIMEOUT = 60
 # prompt routinely needs more than the 60s HTTP budget. A too-short timeout makes the
 # claude path silently time out and fall back to codex (the "never see a Claude report"
 # bug), so give Claude its own, larger budget.
-SPEAKING_REPORT_CLAUDE_TIMEOUT = 180
+SPEAKING_REPORT_CLAUDE_TIMEOUT = 360
 SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT = 90
+# The claude_cli turn-feedback path asks for 4 fields per turn in a single CLI
+# call; a full P1/P3 batch (9+ turns) reliably overruns SPEAKING_REPORT_CLAUDE_TIMEOUT.
+# Generate the Claude batch in small chunks so each call stays well within budget.
+SPEAKING_TURN_FEEDBACK_BATCH_SIZE = 3
 P3_TURN_COUNT = 8
 DEFAULT_FULL_NAME = "LiHua"
 DEFAULT_ENGLISH_NAME = "Jasper"
-
-
-def _speaking_http_provider(kind: str = "speaking", timeout_seconds: float | None = None) -> HttpApiProvider:
-    base_url = _setting_or_env("AI_HTTP_BASE_URL")
-    api_key = _setting_or_env("AI_HTTP_API_KEY")
-    missing = [name for name, value in (("AI_HTTP_BASE_URL", base_url), ("AI_HTTP_API_KEY", api_key)) if not value]
-    if missing:
-        raise RuntimeError(f"HTTP speaking AI provider is not configured: missing {', '.join(missing)}")
-    timeout = timeout_seconds or _float_setting_or_env("AI_HTTP_TIMEOUT_SECONDS", 8.0)
-    return HttpApiProvider(
-        HttpApiProviderConfig(
-            base_url=base_url,
-            api_key=api_key,
-            model=speaking_ai_http_model(kind),
-            timeout_seconds=timeout,
-        )
-    )
-
-
-def _raise_report_provider_chain_error(
-    *,
-    http_error: Exception | None = None,
-    codex_error: Exception | None = None,
-    claude_error: Exception | None = None,
-    fallback_message: str,
-) -> None:
-    """Raise the most useful report-provider error instead of masking HTTP failures.
-
-    In chain mode the HTTP provider is the primary route for GPT. If it returns a
-    real upstream error such as 401 and the optional Codex fallback is simply not
-    installed on the worker, surfacing "codex CLI not found" sends debugging in
-    the wrong direction. Prefer the HTTP error in that case.
-    """
-    codex_text = str(codex_error or "")
-    if http_error and ("codex CLI not found" in codex_text or not codex_error):
-        raise RuntimeError(str(http_error)) from http_error
-    if codex_error:
-        raise RuntimeError(str(codex_error)) from codex_error
-    if http_error:
-        raise RuntimeError(str(http_error)) from http_error
-    if claude_error:
-        raise RuntimeError(str(claude_error)) from claude_error
-    raise RuntimeError(fallback_message)
-
-
-def _http_backend_name(stream: bool = False) -> str:
-    return "http_api_stream" if stream else "http_api"
-
-
-def _follow_up_generation_provenance(result: dict[str, Any]) -> dict[str, Any]:
-    provenance: dict[str, Any] = {}
-    for key in ("provider", "model"):
-        value = _clean_report_text(str(result.get(key) or ""))[:120]
-        if value:
-            provenance[key] = value
-    usage = result.get("usage")
-    if isinstance(usage, dict) and usage:
-        provenance["usage"] = usage
-    latency_ms = result.get("latency_ms")
-    if latency_ms not in (None, ""):
-        provenance["latency_ms"] = _safe_int(latency_ms)
-    return provenance
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 def quick_follow_up_http_runner(
     current_question: str,
     candidate_answer: str,
     focus: str = "",
     question_type: str = "",
+    ai_source: str = "",
 ) -> dict[str, Any]:
     """Generate one P3 follow-up through an OpenAI-compatible HTTP endpoint."""
     question = clean_report_text(current_question)[:500]
     prompt = _quick_follow_up_prompt(current_question, candidate_answer, focus=focus, question_type=question_type)
-    provider = _speaking_http_provider("followup", timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT)
+    provider = _speaking_http_provider(
+        "followup",
+        timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
+        ai_source=ai_source,
+    )
     result = provider.complete_chat(
         [
             {
@@ -482,8 +448,42 @@ def quick_follow_up_runner_with_metadata(
     focus: str = "",
     question_type: str = "",
     timeout: int = P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
+    ai_source: str = "",
 ) -> dict[str, Any]:
     """Generate one P3 follow-up through the configured speaking AI route."""
+    if _is_codex_cli_source(ai_source):
+        question = clean_report_text(current_question)[:500]
+        prompt = _quick_follow_up_prompt(current_question, candidate_answer, focus=focus, question_type=question_type)
+        call_key = hashlib.sha1(f"{question}\n{candidate_answer}".encode("utf-8")).hexdigest()[:16]
+        output, usage = run_codex(prompt, f"p3_quick_follow_up_{call_key}", timeout=timeout)
+        follow_up = _extract_single_follow_up_question(output, rejected_questions=(question,))
+        return {
+            "follow_up": follow_up,
+            "backend": "codex_cli",
+            "status": "ready",
+            "provider": "codex_cli",
+            "model": "codex-cli",
+            "usage": usage or {},
+        }
+    if _is_claude_cli_source(ai_source):
+        question = clean_report_text(current_question)[:500]
+        prompt = _quick_follow_up_prompt(current_question, candidate_answer, focus=focus, question_type=question_type)
+        call_key = hashlib.sha1(f"{question}\n{candidate_answer}".encode("utf-8")).hexdigest()[:16]
+        output, usage = run_claude_cli(
+            prompt,
+            f"p3_quick_follow_up_{call_key}_claude",
+            timeout=FOLLOW_UP_CLAUDE_TIMEOUT,
+            model=_claude_cli_model_for(ai_source),
+        )
+        follow_up = _extract_single_follow_up_question(output, rejected_questions=(question,))
+        return {
+            "follow_up": follow_up,
+            "backend": "claude_cli",
+            "status": "ready",
+            "provider": "claude_cli",
+            "model": _claude_cli_model_for(ai_source),
+            "usage": usage or {},
+        }
     if _mode_is_fallback_only("followup"):
         raise RuntimeError("speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback")
 
@@ -495,6 +495,7 @@ def quick_follow_up_runner_with_metadata(
                 candidate_answer,
                 focus=focus,
                 question_type=question_type,
+                ai_source=ai_source,
             )
         except Exception as exc:  # noqa: BLE001 - provider chain may continue to Codex
             http_error = str(exc)
@@ -550,6 +551,7 @@ def _generate_p3_dynamic_follow_up(
     transcript: str,
     focus: str = "",
     call_id: str = "",
+    ai_source: str = "",
 ) -> dict[str, Any]:
     fallback = _dynamic_p3_follow_up(question_type, transcript, focus)
     try:
@@ -559,6 +561,7 @@ def _generate_p3_dynamic_follow_up(
             focus=focus,
             question_type=question_type,
             timeout=P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT,
+            ai_source=ai_source,
         )
         return result
     except Exception as exc:  # noqa: BLE001 - P3 follow-up must never block the flow
@@ -589,11 +592,22 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         for item in provided_follow_ups
         if clean_report_text(str(item)) and ("?" in str(item) or "？" in str(item))
     ] if isinstance(provided_follow_ups, list) else []
-    # A bank card may hold more follow-ups than one session should drill. Draw
-    # `question_count` of them, least-practiced first, so each session is ~3
-    # questions and repeats rotate through the rest. (<=count is left untouched.)
-    if len(cue_questions) > question_count:
-        cue_questions = _select_p3_followups(cue_questions, question_count, payload.get("_user"))
+    bank_round_metadata: dict[str, Any] = {}
+    selected_bank_questions: list[tuple[int, str]] = []
+    bank_cue_id = clean_report_text(str(payload.get("p2_question_id") or payload.get("cue_id") or ""))
+    if cue_questions:
+        rounds = p3_bank_practice_rounds(list(enumerate(cue_questions)))
+        completion_counts = {}
+        if payload.get("_user") and bank_cue_id:
+            completion_counts = p3_bank_practice_completion_counts(payload["_user"], [bank_cue_id]).get(bank_cue_id, {})
+        round_index = p3_bank_next_round_index(len(rounds), completion_counts)
+        selected_bank_questions = rounds[round_index] if rounds else []
+        cue_questions = [question for _source_index, question in selected_bank_questions]
+        bank_round_metadata = {
+            "p3_bank_cue_id": bank_cue_id,
+            "p3_bank_round_index": round_index,
+            "p3_bank_round_count": len(rounds),
+        }
     material_questions = _p3_questions_from_material(p3_follow_up_text, question_count)
 
     if cue_questions:
@@ -641,6 +655,11 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         questions = questions[:question_count]
 
     structured_questions = _structured_p3_questions(questions, source_type, focus)
+    if fixed_bank_questions and bank_cue_id:
+        for item, (source_index, question) in zip(structured_questions, selected_bank_questions):
+            item["p2_question_id"] = bank_cue_id
+            item["followup_id"] = p3_bank_followup_id(bank_cue_id, question, source_index)
+        bank_round_metadata["p3_bank_followup_ids"] = [item["followup_id"] for item in structured_questions]
     first_type = structured_questions[0]["type"] if structured_questions else _p3_question_type_for_index(0, focus)
     follow_up = clean_report_text(str(raw_plan.get("follow_up") or _p3_follow_up_for_type(first_type)))
     if not follow_up or "?" not in follow_up:
@@ -666,6 +685,7 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         "backend": str(raw_plan.get("backend") or "fallback"),
         "status": str(raw_plan.get("status") or "fallback"),
         "question_count": len(structured_questions),
+        **bank_round_metadata,
         **({"model": str(raw_plan.get("model"))} if raw_plan.get("model") else {}),
         **({"usage": raw_plan.get("usage")} if raw_plan.get("usage") else {}),
         **({"error": str(raw_plan.get("error"))} if raw_plan.get("error") else {}),
@@ -683,13 +703,21 @@ def _p3_ai_json_from_prompt(
     max_tokens: int,
     ai_source: str = "",
 ) -> tuple[str, str, str, dict[str, Any]]:
-    if ai_source == "claude_cli":
-        output, usage = run_claude_cli(prompt, f"{call_id}_claude", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+    if _is_codex_cli_source(ai_source):
+        output, usage = run_codex(prompt, f"{call_id}_codex", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+        return output, "codex_cli", "codex-cli", usage or {}
+    if _is_claude_cli_source(ai_source):
+        output, usage = run_claude_cli(
+            prompt,
+            f"{call_id}_claude",
+            timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT,
+            model=_claude_cli_model_for(ai_source),
+        )
         return output, "claude_cli", "claude", usage or {}
     if _mode_is_fallback_only("followup"):
         raise RuntimeError("speaking follow-up provider disabled by SPEAKING_AI_CALL_MODE=fallback")
     if _mode_allows_http("followup"):
-        result = _speaking_http_provider("followup", timeout_seconds=45).complete_chat(
+        result = _speaking_http_provider("followup", timeout_seconds=45, ai_source=ai_source).complete_chat(
             [
                 {"role": "system", "content": f"You are an IELTS Speaking Part 3 examiner. Return JSON only, with exactly {P3_MAIN_COUNT} questions and no extra text."},
                 {"role": "user", "content": prompt},
@@ -863,11 +891,10 @@ def _build_p1_turns(
     p1_bank = bank.part1_for_scope(question_bank_scope)
     countable_intro_items = [item for item in P1_INTRO_QUESTIONS if item.get("counts_toward_total", True)]
     uncounted_intro_items = [item for item in P1_INTRO_QUESTIONS if not item.get("counts_toward_total", True)]
-    remaining_count = max(0, total - len(countable_intro_items))
     ordinary_pool = [
         item for item in p1_bank if not _is_p1_work_study_identity_question(str(item.get("question") or ""))
     ]
-    if len(ordinary_pool) < remaining_count:
+    if len(ordinary_pool) < P1_BODY_QUESTION_MAX:
         ordinary_pool = p1_bank
     if not ordinary_pool:
         ordinary_pool = [
@@ -885,48 +912,22 @@ def _build_p1_turns(
     topics: dict[str, list[dict[str, Any]]] = {}
     for item in ordinary_pool:
         topics.setdefault(str(item.get("topic") or "general"), []).append(item)
-    # Mirror the real P1: cover several DISTINCT topics, a capped handful of
-    # questions each — never one giant topic, never a single topic for the whole
-    # part. Topics are ordered least-practiced first; within each topic the
-    # questions are also chosen least-practiced first, so a deep bank topic (e.g.
-    # 18 questions) is walked through across sessions instead of dumped at once,
-    # and no question is ever starved.
-    topic_counts = _p1_topic_practice_counts(user, topics)
-    topic_order = _weighted_topic_order(list(topics), topic_counts)
-    available = len(topic_order)
-
-    # How many questions this session should serve, and across how many topics.
-    target_total = max(remaining_count, min(available, P1_TOPICS_PER_SESSION))
-    min_topics = min(available, P1_TOPICS_PER_SESSION)
-    # Enough topics that no topic has to exceed its per-topic cap.
-    n_by_cap = -(-target_total // P1_QUESTIONS_PER_TOPIC_MAX)  # ceil division
-    n_topics = min(available, max(min_topics, n_by_cap))
-    selected = topic_order[:n_topics]
-
-    # Distribute the target evenly across the selected topics (round-robin),
-    # capped per topic at the smaller of the topic size and the hard cap.
-    caps = [min(len(topics[t]), P1_QUESTIONS_PER_TOPIC_MAX) for t in selected]
-    quota = [0] * n_topics
-    target = min(target_total, sum(caps))
-    assigned = 0
-    while assigned < target:
-        progressed = False
-        for j in range(n_topics):
-            if quota[j] < caps[j]:
-                quota[j] += 1
-                assigned += 1
-                progressed = True
-                if assigned >= target:
-                    break
-        if not progressed:
-            break
-
-    question_counts = _question_practice_counts(user, "p1")
-    ordinary_questions: list[dict[str, Any]] = []
-    for topic, want in zip(selected, quota):
-        if want <= 0:
-            continue
-        ordinary_questions.extend(_select_least_practiced_items(topics[topic], want, question_counts))
+    # Assemble the body (9-12 real topic questions) with practice debt as the top
+    # priority: enumerate 2-/3-topic combinations, keep the per-topic openers, split
+    # big topics (8+) into 3-6, and score so the least-practiced topics/questions win.
+    # See select_p1_body_questions for the full strategy.
+    question_counts = _p1_balanced_practice_counts(user, topics)
+    topic_debt = _p1_topic_practice_debt(user, topics)
+    ordinary_questions = select_p1_body_questions(
+        topics,
+        topic_debt,
+        question_counts,
+        body_min=P1_BODY_QUESTION_MIN,
+        body_max=P1_BODY_QUESTION_MAX,
+        split_threshold=P1_SPLIT_THRESHOLD,
+        split_min=P1_SPLIT_MIN,
+        split_max=P1_SPLIT_MAX,
+    )
     turn_items = uncounted_intro_items + countable_intro_items + ordinary_questions
     # The counted length is dynamic now, so derive the displayed "of N" total from
     # the actual questions. display_total carried an offset over `total` at the call
@@ -1121,6 +1122,9 @@ def _build_p3_turns(
         "p3_focus": focus,
         "p3_plan": plan,
     }
+    for key in ("p3_bank_cue_id", "p3_bank_round_index", "p3_bank_round_count", "p3_bank_followup_ids"):
+        if key in plan:
+            metadata[key] = plan[key]
     if plan.get("error"):
         metadata["p3_generation_error"] = str(plan.get("error"))
     return turns, metadata
@@ -1157,9 +1161,9 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
         turns = _build_p1_turns(P1_TURN_COUNT, question_bank_scope=question_bank_scope, user=payload.get("_user"))
         return "p1", "Part 1 practice", turns, None, metadata
     if mode == "p2":
-        p2_cue_id = str(payload.get("p2_cue_id") or "").strip()
-        if p2_cue_id:
-            cue = p2_bank_topic_for_question_id(p2_cue_id) or _sample_p2_cue(question_bank_scope)
+        selected_p2_cue_id = str(payload.get("p2_cue_id") or "").strip()
+        if selected_p2_cue_id:
+            cue = p2_bank_topic_for_question_id(selected_p2_cue_id) or _sample_p2_cue(question_bank_scope)
         else:
             cue = _sample_p2_cue(question_bank_scope)
         turns = [_create_turn("p2", 0, 1, _cue_to_text(cue), cue, cue)]
@@ -1179,6 +1183,7 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
                 if str(cue.get("p3_theme") or "") == theme and isinstance(cue.get("p3_follow_ups"), list):
                     payload["p3_follow_ups"] = cue["p3_follow_ups"]
                     payload.setdefault("season", cue.get("season"))
+                    payload.setdefault("p2_question_id", str(cue.get("cue_id") or p2_cue_id(cue)))
                     break
         source_type = _p3_source_type(payload)
         plan_payload = payload.get("p3_plan") if isinstance(payload.get("p3_plan"), dict) else None
@@ -1320,7 +1325,7 @@ def start_attempt(user, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 
-def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, Any]:
+def _generate_p1_identity_follow_up(answer: str, call_id: str, *, ai_source: str = "") -> dict[str, Any]:
     fallback = _fallback_p1_identity_follow_up(answer)
     if not answer.strip():
         return {
@@ -1331,6 +1336,47 @@ def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, Any]
         }
     prompt = _p1_identity_follow_up_prompt(answer)
     http_error = ""
+    if _is_codex_cli_source(ai_source):
+        try:
+            output, usage = run_codex(prompt, call_id, timeout=P1_FOLLOW_UP_CODEX_TIMEOUT)
+            return {
+                "follow_up": _extract_p1_identity_follow_up_output(output),
+                "backend": "codex_cli",
+                "status": "ready",
+                "provider": "codex_cli",
+                "model": "codex-cli",
+                "usage": usage or {},
+            }
+        except Exception as exc:
+            return {
+                "follow_up": fallback,
+                "backend": "fallback",
+                "status": "fallback",
+                "error": f"codex_cli: {exc}",
+            }
+    if _is_claude_cli_source(ai_source):
+        try:
+            output, usage = run_claude_cli(
+                prompt,
+                f"{call_id}_claude",
+                timeout=FOLLOW_UP_CLAUDE_TIMEOUT,
+                model=_claude_cli_model_for(ai_source),
+            )
+            return {
+                "follow_up": _extract_p1_identity_follow_up_output(output),
+                "backend": "claude_cli",
+                "status": "ready",
+                "provider": "claude_cli",
+                "model": _claude_cli_model_for(ai_source),
+                "usage": usage or {},
+            }
+        except Exception as exc:
+            return {
+                "follow_up": fallback,
+                "backend": "fallback",
+                "status": "fallback",
+                "error": f"claude_cli: {exc}",
+            }
     if _mode_is_fallback_only("followup"):
         return {
             "follow_up": fallback,
@@ -1340,7 +1386,11 @@ def _generate_p1_identity_follow_up(answer: str, call_id: str) -> dict[str, Any]
         }
     if _mode_allows_http("followup"):
         try:
-            provider = _speaking_http_provider("followup", timeout_seconds=P1_FOLLOW_UP_HTTP_TIMEOUT)
+            provider = _speaking_http_provider(
+                "followup",
+                timeout_seconds=P1_FOLLOW_UP_HTTP_TIMEOUT,
+                ai_source=ai_source,
+            )
             result = provider.complete_chat(
                 [
                     {
@@ -1422,7 +1472,11 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
             "status": "pending",
         }
         if stream_pending
-        else _generate_p1_identity_follow_up(transcript, f"p1_follow_up_{attempt.attempt_id}_{completed_turn.turn_id}")
+        else _generate_p1_identity_follow_up(
+            transcript,
+            f"p1_follow_up_{attempt.attempt_id}_{completed_turn.turn_id}",
+            ai_source=str(getattr(getattr(attempt.user, "profile", None), "report_ai_source", "") or "").strip(),
+        )
     )
     follow_up = result["follow_up"]
     for item in attempt.turns.filter(sequence__gt=completed_turn.sequence).order_by("-sequence"):
@@ -1456,7 +1510,7 @@ def _insert_p1_identity_follow_up(attempt: SpeakingAttempt, completed_turn: Spea
     # Codex success preserves the legacy synchronous server TTS behavior. HTTP
     # success and fallback return the question first, then warm server TTS in the
     # background so the live practice flow is not held by a second network call.
-    if result["backend"] == "codex":
+    if result["backend"] in {"codex", "codex_cli"}:
         ensure_examiner_tts(attempt.attempt_id, turn_data)
     else:
         turn_data["examiner_tts"] = {
@@ -1689,6 +1743,7 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
                     cleaned,
                     focus,
                     f"p3_follow_up_{attempt.attempt_id}_{turn.turn_id}",
+                    ai_source=str(getattr(getattr(attempt.user, "profile", None), "report_ai_source", "") or "").strip(),
                 )
             )
             follow_up = result["follow_up"]
@@ -1963,16 +2018,52 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
         try:
             if context.get("skip_provider"):
                 raise RuntimeError(str(context.get("skip_reason") or "follow-up provider skipped"))
+            # Local CLIs are one-shot here: generate the whole question, then emit
+            # it as a single chunk so the live UI keeps the same event contract.
+            if _is_codex_cli_source(ai_source):
+                combined_prompt = f"{context['system']}\n\n{context['prompt']}".strip()
+                output, codex_usage = run_codex(
+                    combined_prompt,
+                    f"follow_up_{attempt.attempt_id}_{source_turn.turn_id}_codex",
+                    timeout=FOLLOW_UP_CLAUDE_TIMEOUT,
+                )
+                follow_up = context["extract"](output)
+                yield _sse_payload({"event": "chunk", "text": follow_up})
+                latency_ms = int((time.monotonic() - started) * 1000)
+                _save_streamed_follow_up(
+                    attempt,
+                    source_turn,
+                    target_turn,
+                    follow_up,
+                    backend="codex_cli_stream",
+                    status="ready",
+                    question_type=str(context.get("question_type") or ""),
+                    provider="codex_cli",
+                    model="codex-cli",
+                    usage=codex_usage or {},
+                    latency_ms=latency_ms,
+                )
+                yield _sse_payload({
+                    "event": "question_complete",
+                    "text": follow_up,
+                    "backend": "codex_cli_stream",
+                    "latency_ms": latency_ms,
+                    "provider": "codex_cli",
+                    "model": "codex-cli",
+                    "usage": codex_usage or {},
+                    "turn": _turn_payload(target_turn),
+                })
             # Claude CLI is one-shot (no token stream): generate the whole question,
             # then emit it as a single chunk so the live UI still renders progressively.
             # This is what makes follow-ups work when the account AI source is Claude —
             # the HTTP relay is never touched.
-            if ai_source == "claude_cli":
+            elif _is_claude_cli_source(ai_source):
                 combined_prompt = f"{context['system']}\n\n{context['prompt']}".strip()
                 output, claude_usage = run_claude_cli(
                     combined_prompt,
                     f"follow_up_{attempt.attempt_id}_{source_turn.turn_id}_claude",
                     timeout=FOLLOW_UP_CLAUDE_TIMEOUT,
+                    model=_claude_cli_model_for(ai_source),
                 )
                 follow_up = context["extract"](output)
                 yield _sse_payload({"event": "chunk", "text": follow_up})
@@ -2112,7 +2203,14 @@ def abort_attempt(user, attempt_id: str) -> dict[str, Any]:
 
 
 
-def score_with_codex(transcript: str, question: str, part: str, call_id: str, ai_source: str = "gpt") -> dict[str, Any]:
+def score_with_codex(
+    transcript: str,
+    question: str,
+    part: str,
+    call_id: str,
+    ai_source: str = "gpt",
+    p3_discussion_request: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Score transcript using Codex CLI with full part-specific guidance.
 
     Raises RuntimeError if the model output is invalid or missing required fields.
@@ -2159,6 +2257,21 @@ Overall Review 写法要求：
 {json.dumps(overall_review_profile, ensure_ascii=False)}
 """
 
+    p3_discussion_prompt = ""
+    if part.lower() == "p3" and p3_discussion_request:
+        p3_discussion_prompt = f"""
+
+Also include a top-level object named p3_discussion_skills with:
+- string keys summary, best_moment, fix_next
+- next_drill: exactly three concise Chinese practice actions
+- dimensions: an object keyed only by the supplied dimension keys; each value has Chinese string keys evidence and next_action
+Do not change or infer dimension status values. Status is owned by the application heuristics.
+Base every sentence on the ASR-corrected transcript supplied below. Do not invent learner content.
+
+P3 discussion input:
+{json.dumps(p3_discussion_request, ensure_ascii=False)}
+"""
+
     full_prompt = (
         system_prompt
         + "\n\nReturn JSON only. The top-level object must contain numeric keys fluency_coherence, lexical_resource, "
@@ -2168,6 +2281,7 @@ Overall Review 写法要求：
         "If a word is clearly an ASR error in context, do not count that word as a GRA/LR mistake; score real learner grammar, vocabulary, content, and fluency evidence. "
         + score_prompt_for_part(part)
         + overall_review_prompt
+        + p3_discussion_prompt
         + "\n\nPrompt(s):\n"
         + (question.strip() or "(not provided)")
         + "\n\nTranscript:\n"
@@ -2183,6 +2297,7 @@ Overall Review 写法要求：
         "Do not repeat the input. Do not include Markdown, explanation, or code fences. Do not score pronunciation from text. "
         "Transcript note: ASR may leave obvious machine mis-recognitions; do not count clearly machine-heard words as learner GRA/LR mistakes. "
         + score_prompt_for_part(part)
+        + p3_discussion_prompt
         + "\n\nQuestion or cue card:\n"
         + (question.strip() or "(not provided)")
         + "\n\nTranscript:\n"
@@ -2204,10 +2319,30 @@ Overall Review 写法要求：
             last_error = RuntimeError("speaking report provider disabled by SPEAKING_AI_CALL_MODE=fallback")
             continue
 
-        # ── Claude CLI path ──────────────────────────────────────────────────
-        if ai_source == "claude_cli":
+        if _is_codex_cli_source(ai_source):
             try:
-                output, usage = run_claude_cli(prompt, f"{call_id}_claude_p{index}", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+                output, usage = run_codex(prompt, f"{call_id}_codex_p{index}", timeout=180)
+                payload = extract_json_object_with_keys(
+                    output,
+                    {"fluency_coherence", "lexical_resource", "grammatical_range"},
+                )
+                provider_backend = "codex_cli"
+                provider_model = "codex-cli"
+                break
+            except Exception as exc:
+                last_error = exc
+                codex_error = exc
+                continue
+
+        # ── Claude CLI path ──────────────────────────────────────────────────
+        if _is_claude_cli_source(ai_source):
+            try:
+                output, usage = run_claude_cli(
+                    prompt,
+                    f"{call_id}_claude_p{index}",
+                    timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT,
+                    model=_claude_cli_model_for(ai_source),
+                )
                 payload = extract_json_object_with_keys(
                     output,
                     {"fluency_coherence", "lexical_resource", "grammatical_range"},
@@ -2218,15 +2353,15 @@ Overall Review 写法要求：
             except Exception as exc:
                 last_error = exc
                 claude_error = exc
-                # Claude CLI is an optional user preference, not a hard stop for
-                # durable reports. If HTTP/Codex is available, continue through
-                # the normal provider chain instead of leaving the report stuck
-                # in analysis_failed after a Claude API/403/quota issue.
+                # User explicitly picked Claude CLI: retry the compact prompt with
+                # the SAME provider, then surface the error. Never silently fall
+                # through to HTTP/Codex and answer as a different model than chosen.
+                continue
 
         # ── GPT / HTTP path ──────────────────────────────────────────────────
         if _mode_allows_http("report"):
             try:
-                result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT).complete_chat(
+                result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT, ai_source=ai_source).complete_chat(
                     [
                         {"role": "system", "content": "You are an IELTS Speaking examiner. Return JSON only."},
                         {"role": "user", "content": prompt},
@@ -2247,21 +2382,10 @@ Overall Review 写法要求：
             except Exception as exc:
                 last_error = exc
                 http_error = exc
-                if speaking_ai_call_mode("report") == SPEAKING_AI_CALL_MODE_HTTP:
-                    continue
-        if _mode_allows_codex("report"):
-            try:
-                output, usage = run_codex(prompt, f"{call_id}_p{index}", timeout=180)
-                payload = extract_json_object_with_keys(
-                    output,
-                    {"fluency_coherence", "lexical_resource", "grammatical_range"},
-                )
-                provider_backend = "codex"
-                provider_model = ""
-                break
-            except Exception as exc:
-                last_error = exc
-                codex_error = exc
+                # Stay on the chosen HTTP provider (retry the compact prompt), then
+                # surface the error. No silent fallback to the local Codex relay —
+                # that was the "等死" path for the default GPT option.
+                continue
     else:
         _raise_report_provider_chain_error(
             http_error=http_error,
@@ -2300,6 +2424,8 @@ Overall Review 写法要求：
         "generation_status": "ready",
         **({"model": provider_model} if provider_model else {}),
     }
+    if isinstance(payload.get("p3_discussion_skills"), dict):
+        result_payload["p3_discussion_skills"] = payload["p3_discussion_skills"]
 
     overall_review = payload.get("overall_review")
     if isinstance(overall_review, dict):
@@ -2459,17 +2585,25 @@ def _report_provider_json(
     if _mode_is_fallback_only("report"):
         raise RuntimeError("speaking report provider disabled by SPEAKING_AI_CALL_MODE=fallback")
 
-    if ai_source == "claude_cli":
+    if _is_codex_cli_source(ai_source):
+        output, usage = run_codex(prompt, f"{call_id}_codex", timeout=180)
+        return extract_json_object_with_keys(output, required_keys), "codex_cli", "codex-cli", usage
+
+    if _is_claude_cli_source(ai_source):
         try:
-            output, usage = run_claude_cli(prompt, f"{call_id}_claude", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+            output, usage = run_claude_cli(
+                prompt,
+                f"{call_id}_claude",
+                timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT,
+                model=_claude_cli_model_for(ai_source),
+            )
             return extract_json_object_with_keys(output, required_keys), "claude_cli", "claude", usage
         except Exception as exc:
-            last_error = exc
-            claude_error = exc
+            raise RuntimeError(str(exc)) from exc
 
     if _mode_allows_http("report"):
         try:
-            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT).complete_chat(
+            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT, ai_source=ai_source).complete_chat(
                 [
                     {"role": "system", "content": "You are an IELTS Speaking coach. Return JSON only."},
                     {"role": "user", "content": prompt},
@@ -2484,14 +2618,6 @@ def _report_provider_json(
         except Exception as exc:
             last_error = exc
             http_error = exc
-
-    if _mode_allows_codex("report"):
-        try:
-            output, usage = run_codex(prompt, call_id, timeout=180)
-            return extract_json_object_with_keys(output, required_keys), "codex", "", usage
-        except Exception as exc:
-            last_error = exc
-            codex_error = exc
 
     _raise_report_provider_chain_error(
         http_error=http_error,
@@ -2508,6 +2634,8 @@ def enrich_p3_discussion_skills_with_ai(
     learning_profile: dict[str, Any],
     call_id: str,
     ai_source: str = "gpt",
+    ai_payload: dict[str, Any] | None = None,
+    allow_provider_call: bool = True,
 ) -> dict[str, Any] | None:
     """Use the report AI provider to write P3 skill text while preserving heuristic statuses."""
     if not base_skills:
@@ -2570,14 +2698,22 @@ def enrich_p3_discussion_skills_with_ai(
 {json.dumps(learning_profile, ensure_ascii=False)}
 """
     try:
-        payload, backend, model, usage = _report_provider_json(
-            prompt,
-            {"summary", "best_moment", "fix_next", "next_drill", "dimensions"},
-            f"{call_id}_p3_discussion_skills",
-            ai_source=ai_source,
-            max_tokens=1500,
-            temperature=0.2,
-        )
+        if allow_provider_call:
+            payload, backend, model, usage = _report_provider_json(
+                prompt,
+                {"summary", "best_moment", "fix_next", "next_drill", "dimensions"},
+                f"{call_id}_p3_discussion_skills",
+                ai_source=ai_source,
+                max_tokens=1500,
+                temperature=0.2,
+            )
+        else:
+            payload = ai_payload if isinstance(ai_payload, dict) else {}
+            backend = str(score.get("backend") or score.get("generation_backend") or "")
+            model = str(score.get("model") or "")
+            usage = score.get("billing_usage") if isinstance(score.get("billing_usage"), dict) else None
+            if not payload:
+                raise ValueError("P3 score payload omitted p3_discussion_skills")
         dimensions_payload = payload.get("dimensions")
         if not isinstance(dimensions_payload, dict):
             raise ValueError("P3 skills AI payload dimensions must be an object")
@@ -2622,6 +2758,33 @@ def enrich_p3_discussion_skills_with_ai(
         base_skills["generation_status"] = "fallback"
         base_skills["generation_error"] = clean_report_text(str(exc))[:240]
         return base_skills
+
+
+def p3_discussion_score_request(
+    attempt: SpeakingAttempt,
+    base_skills: dict[str, Any] | None,
+    learning_profile: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not base_skills:
+        return None
+    context = _p3_turn_context(attempt)
+    if not context:
+        return None
+    return {
+        "dimensions": [
+            {
+                "key": item.get("key"),
+                "label": item.get("label"),
+                "status": item.get("status"),
+                "heuristic_evidence": item.get("evidence"),
+                "heuristic_next_action": item.get("next_action"),
+            }
+            for item in base_skills.get("dimensions", [])
+            if isinstance(item, dict) and item.get("key")
+        ],
+        "turns": context,
+        "learning_profile": learning_profile,
+    }
 
 
 def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_id: str) -> str:
@@ -2877,8 +3040,13 @@ requires_ai_coaching:
     last_error: Exception | None = None
     for index, candidate_prompt in enumerate((prompt, compact_prompt), start=1):
         try:
-            if ai_source == "claude_cli":
-                output, usage = run_claude_cli(candidate_prompt, f"{call_id}_claude_p{index}", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+            if _is_claude_cli_source(ai_source):
+                output, usage = run_claude_cli(
+                    candidate_prompt,
+                    f"{call_id}_claude_p{index}",
+                    timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT,
+                    model=_claude_cli_model_for(ai_source),
+                )
             else:
                 output, usage = run_codex(candidate_prompt, f"{call_id}_p{index}")
             payload = extract_json_object_with_keys(output, {"display_transcript", "band7_version", "ai_coaching"})
@@ -2920,7 +3088,11 @@ requires_ai_coaching:
         "band7_version": band7,
         "ai_coaching": coaching if requires_ai_coaching else "",
         "usage": usage,
-        "generation_backend": "claude_cli" if ai_source == "claude_cli" else "codex",
+        "generation_backend": (
+            "claude_cli"
+            if _is_claude_cli_source(ai_source)
+            else "codex_cli" if _is_codex_cli_source(ai_source) else "codex"
+        ),
     }
 
 
@@ -2935,14 +3107,36 @@ def turn_feedback_batch_with_codex(
 ) -> dict[str, dict[str, str]]:
     """Generate Band 7 answers and coaching for all completed turns in one AI call.
 
-    Honors the account AI source: when ai_source is "claude_cli" the whole batch is
-    produced by the Claude CLI (same as the Overall review), instead of silently
-    falling back to the HTTP relay / Codex — which is why per-turn Band 7 + coaching
-    used to fail while the Claude Overall succeeded.
+    Honors explicit local CLI sources without silently switching providers.
     """
+    # Local CLIs overrun the timeout on a full report batch. Split them into small
+    # on a full batch. Split into small chunks and merge — each recursive call gets
+    # <= SPEAKING_TURN_FEEDBACK_BATCH_SIZE turns and so skips this branch. Streaming
+    # HTTP providers handle the whole batch in one request.
+    if _is_slow_cli_source(ai_source):
+        feedback_turns = [
+            turn for turn in turns
+            if not (is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn))
+        ]
+        if len(feedback_turns) > SPEAKING_TURN_FEEDBACK_BATCH_SIZE:
+            merged: dict[str, dict[str, str]] = {}
+            for offset in range(0, len(feedback_turns), SPEAKING_TURN_FEEDBACK_BATCH_SIZE):
+                chunk = feedback_turns[offset:offset + SPEAKING_TURN_FEEDBACK_BATCH_SIZE]
+                merged.update(
+                    turn_feedback_batch_with_codex(
+                        chunk,
+                        attempt,
+                        target,
+                        profile,
+                        f"{call_id}_b{offset // SPEAKING_TURN_FEEDBACK_BATCH_SIZE}",
+                        prepared_corpus_by_turn=prepared_corpus_by_turn,
+                        ai_source=ai_source,
+                    )
+                )
+            return merged
     items: list[dict[str, str]] = []
     for turn in turns:
-        if is_p1_name_intro_turn(turn):
+        if is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn):
             continue
         # Empty answers are still included so the AI writes a Band 7 model answer
         # from the question alone; coaching is suppressed (requires_ai_coaching=no).
@@ -3003,6 +3197,7 @@ Band 7 version constraints:
 - For Part 1, write only 1-3 natural spoken sentences.
 - For Part 2, write a natural long-turn answer in Markdown paragraphs and cover the cue-card points.
 - For Part 3, write a developed discussion answer with a clear position, reasoning, one concrete example or contrast, and a wider social implication. Do not make it a Part 2 personal story.
+- If candidate_transcript is empty, keep display_transcript and display_transcript_markdown empty, but still write a direct Band {target} spoken version that answers the examiner question from the question alone; ai_coaching must remain an empty string.
 - Use Markdown bold inside band7_version to mark the phrases the learner should notice and reuse.
 - Bold 2-5 useful upgraded chunks per answer, such as natural collocations, idiomatic spoken links, or topic-specific phrases.
 - Do not bold the whole answer or full sentences.
@@ -3029,13 +3224,28 @@ Input turns:
     provider_backend = ""
     provider_model = ""
     payload: dict[str, Any] | None = None
+    if _is_codex_cli_source(ai_source):
+        try:
+            output, usage = run_codex(prompt, f"{call_id}_codex", timeout=180)
+            provider_backend = "codex_cli"
+            provider_model = "codex-cli"
+            payload = extract_json_object_with_keys(output, {"turns"})
+        except Exception as exc:
+            last_error = exc
+        if payload is None:
+            raise RuntimeError(str(last_error or "codex turn feedback provider failed"))
     # Claude-source accounts: generate the whole batch with the Claude CLI only. Do
     # not fall through to HTTP/Codex — that would silently answer with a different
     # provider than the user picked (and is exactly the bug that left every turn's
     # Band 7 + coaching "生成失败" while the Claude Overall came through fine).
-    if ai_source == "claude_cli":
+    if _is_claude_cli_source(ai_source):
         try:
-            output, usage = run_claude_cli(prompt, f"{call_id}_claude", timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT)
+            output, usage = run_claude_cli(
+                prompt,
+                f"{call_id}_claude",
+                timeout=SPEAKING_REPORT_CLAUDE_TIMEOUT,
+                model=_claude_cli_model_for(ai_source),
+            )
             provider_backend = "claude_cli"
             provider_model = "claude"
             payload = extract_json_object_with_keys(output, {"turns"})
@@ -3043,9 +3253,9 @@ Input turns:
             last_error = exc
         if payload is None:
             raise RuntimeError(str(last_error or "claude turn feedback provider failed"))
-    if payload is None and ai_source != "claude_cli" and _mode_allows_http("report"):
+    if payload is None and not _is_slow_cli_source(ai_source) and _mode_allows_http("report"):
         try:
-            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT).complete_chat(
+            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT, ai_source=ai_source).complete_chat(
                 [
                     {"role": "system", "content": "You are an IELTS Speaking coach. Return JSON only."},
                     {"role": "user", "content": prompt},
@@ -3061,15 +3271,10 @@ Input turns:
             payload = extract_json_object_with_keys(result.text, {"turns"})
         except Exception as exc:
             last_error = exc
-            if speaking_ai_call_mode("report") == SPEAKING_AI_CALL_MODE_HTTP:
-                raise
-    if payload is None and ai_source != "claude_cli" and _mode_allows_codex("report"):
-        try:
-            output, usage = run_codex(prompt, call_id, timeout=180)
-            provider_backend = "codex"
-            payload = extract_json_object_with_keys(output, {"turns"})
-        except Exception as exc:
-            last_error = exc
+            # Each model option uses only its own provider; an HTTP failure surfaces
+            # the error instead of silently falling through to the local Codex relay
+            # and answering as a different model than the user picked.
+            raise
     if payload is None:
         raise RuntimeError(str(last_error or "speaking turn feedback provider failed"))
     raw_turns = payload.get("turns")
@@ -3119,14 +3324,7 @@ Input turns:
             **({"model": provider_model} if provider_model else {}),
         }
     if len(by_id) != len(items):
-        # Only hard-fail when a turn the learner actually answered is missing usable
-        # output. An empty-answer turn that fails to get a model answer is tolerated
-        # (it stays without a Band 7 version) so it cannot sink the whole report.
-        required_missing = [
-            item["turn_id"]
-            for item in items
-            if item["turn_id"] not in by_id and item.get("candidate_transcript")
-        ]
+        required_missing = [item["turn_id"] for item in items if item["turn_id"] not in by_id]
         if required_missing:
             raise RuntimeError(f"codex batch turn feedback missing usable output for turns: {', '.join(required_missing)}")
     return by_id
@@ -3207,7 +3405,7 @@ def mark_attempt_analysis_ready(attempt: SpeakingAttempt, score: dict[str, Any],
     """Persist successful AI-analysis state so polling never shows stale queued/failed status."""
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
     backend = str(score.get("generation_backend") or score.get("backend") or "codex")
-    status = str(score.get("generation_status") or ("ready" if backend in {"codex", "http_api", "claude_cli"} else "fallback"))
+    status = str(score.get("generation_status") or ("ready" if backend in SPEAKING_READY_AI_BACKENDS else "fallback"))
     metadata.update(
         {
             "analysis_status": "ready",
@@ -3363,6 +3561,27 @@ def build_turn_feedback(
     target = target_band_label(attempt)
     part = turn.part or "p1"
 
+    # The fixed Work/Study opener is a learner-prepared identity line. It is
+    # deliberately excluded from scoring, Band 7 generation, and coaching;
+    # its generated follow-up remains a normal scored turn.
+    if is_p1_work_study_intro_turn(turn):
+        return {
+            "display_transcript": transcript,
+            "display_transcript_markdown": spoken_markdown(transcript, part) if transcript else "",
+            "band7_version": "",
+            "band7_markdown": "",
+            "target_band_version": "",
+            "target_band_markdown": "",
+            "target_band": target,
+            "model_audio": {"provider": "none", "status": "empty_text", "audio_url": None},
+            "upgrade_notes": [],
+            "ai_coaching": "",
+            "feedback_generation_backend": "none",
+            "feedback_generation_status": "skipped",
+            "band7_source": "prepared_expression",
+            "ai_coaching_source": "skipped",
+        }
+
     # Get user profile for personalization
     profile = user_profile or {}
     full_name = profile.get("full_name")
@@ -3419,6 +3638,9 @@ def build_turn_feedback(
             display_transcript,
             part,
         )
+    elif not transcript:
+        result["display_transcript"] = ""
+        result["display_transcript_markdown"] = ""
 
     if result["band7_version"]:
         result["model_audio"] = volcengine_tts(
@@ -3453,7 +3675,7 @@ def build_turn_feedback(
     # from the HTTP provider, while direct regeneration still returns a plain
     # generated dict from the Codex path.
     generated_backend = clean_report_text(str(generated.get("generation_backend") or generated.get("backend") or ""))
-    if generated and generated_backend not in {"http_api", "codex", "claude_cli"}:
+    if generated and generated_backend not in SPEAKING_READY_AI_BACKENDS:
         generated_backend = "codex"
     result["feedback_generation_backend"] = generated_backend if generated else "fallback"
     if "feedback_generation_status" not in result:
@@ -3480,10 +3702,10 @@ def mark_missing_turn_feedback_pending(turns: list[SpeakingTurn]) -> None:
     """Keep report payloads honest when turn-level AI feedback is not ready."""
     for turn in turns:
         transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
-        if not transcript or is_p1_name_intro_turn(turn):
+        if not transcript or is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn):
             continue
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-        if metadata.get("feedback_generation_backend") in {"codex", "http_api"} and metadata.get("feedback_generation_status") == "ready":
+        if metadata.get("feedback_generation_backend") in SPEAKING_READY_AI_BACKENDS and metadata.get("feedback_generation_status") == "ready":
             continue
         metadata.update(
             {
@@ -3503,10 +3725,34 @@ def mark_missing_turn_feedback_pending(turns: list[SpeakingTurn]) -> None:
         turn.save(update_fields=["metadata", "updated_at"])
 
 
+def complete_dropped_turns(turns: list[SpeakingTurn]) -> int:
+    """At scoring time, any turn that never reached "completed" is a dropped
+    recording (the audio/transcript never landed). Instead of blocking the whole
+    section report forever — which left the learner stuck on an endless "重新分析"
+    loop — mark each such turn completed-but-empty so the report can publish.
+
+    An empty turn then flows through the existing empty-answer path: its row in the
+    transcript table stays blank, the AI still writes a Band 7 model answer from the
+    question alone, and coaching is suppressed (`turn_needs_ai_coaching` -> False,
+    "为空 → 本次不辅导"). Returns how many turns were auto-completed.
+    """
+    dropped = 0
+    for turn in turns:
+        if _turn_status(turn) == "completed":
+            continue
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        metadata["status"] = "completed"
+        metadata["dropped_empty"] = True
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+        dropped += 1
+    return dropped
+
+
 def _turn_feedback_ready(turn: SpeakingTurn) -> bool:
     metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
     return (
-        metadata.get("feedback_generation_backend") in {"codex", "http_api"}
+        metadata.get("feedback_generation_backend") in SPEAKING_READY_AI_BACKENDS
         and metadata.get("feedback_generation_status") == "ready"
         and bool(clean_report_text(metadata.get("band7_version") or metadata.get("band7_markdown") or ""))
     )
@@ -3516,7 +3762,7 @@ def _mark_turn_feedback_failed(turns: list[SpeakingTurn], exc: Exception) -> Non
     error = str(exc or "AI turn feedback generation failed")
     for turn in turns:
         transcript = (turn.transcript_cleaned or turn.transcript_raw or "").strip()
-        if not transcript or is_p1_name_intro_turn(turn):
+        if not transcript or is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn):
             continue
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
         metadata.update(
@@ -3548,7 +3794,7 @@ def generate_turn_feedback_for_report(
     pending_turns = [
         turn
         for turn in scoring_turns
-        if not is_p1_name_intro_turn(turn)
+        if not (is_p1_name_intro_turn(turn) or is_p1_work_study_intro_turn(turn))
         and not _turn_feedback_ready(turn)
     ]
     if not pending_turns:
@@ -3587,7 +3833,7 @@ def generate_turn_feedback_for_report(
         metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
         metadata.update(feedback)
         generation_backend = str(generated.get("generation_backend") or feedback.get("feedback_generation_backend") or "")
-        if generation_backend in {"codex", "http_api", "claude_cli"}:
+        if generation_backend in SPEAKING_READY_AI_BACKENDS:
             metadata["band7_source"] = f"{generation_backend}_report_batch"
             metadata["ai_coaching_source"] = f"{generation_backend}_report_batch"
             metadata["feedback_generation_backend"] = generation_backend
@@ -3613,9 +3859,12 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     if attempt.status == SpeakingAttempt.Status.ABORTED:
         raise SpeakingError("Aborted attempts cannot be scored.")
     turns = list(attempt.turns.all().order_by("sequence"))
-    incomplete = [turn for turn in turns if _turn_status(turn) != "completed"]
-    if incomplete:
-        raise SpeakingError("Complete all speaking turns before generating the section report.")
+    # A dropped recording must not block the whole report forever. Auto-complete any
+    # turn that never finished as an empty turn (blank row + Band 7 answer, no coaching)
+    # so the answered turns can still be scored, then reload.
+    if complete_dropped_turns(turns):
+        attempt.refresh_from_db()
+        turns = list(attempt.turns.all().order_by("sequence"))
     call_id = f"score_attempt_{attempt_id}"
     part = attempt.part or attempt.mode or ""
 
@@ -3643,10 +3892,15 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
-    questions_text = "\n".join(f"Q{i + 1}: {turn.question}" for i, turn in enumerate(scoring_turns))
+    # The overall band is graded only on turns the learner actually answered. A
+    # dropped turn still gets its own Band 7 model answer above, but feeding its blank
+    # "A:" into the overall transcript would read as a non-answer and unfairly tank
+    # fluency/coherence — so exclude empty turns from the section-level transcript.
+    answered_turns = [turn for turn in scoring_turns if turn_display_transcript(turn).strip()]
+    questions_text = "\n".join(f"Q{i + 1}: {turn.question}" for i, turn in enumerate(answered_turns))
     transcript = "\n".join(
         f"Q{index + 1}: {turn.question}\nA: {turn_display_transcript(turn)}"
-        for index, turn in enumerate(scoring_turns)
+        for index, turn in enumerate(answered_turns)
     )
 
     # Resolve per-user AI source preference
@@ -3655,8 +3909,17 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     except Exception:
         _ai_source = "gpt"
 
+    p3_discussion_base = build_p3_discussion_skills(attempt) if part == "p3" else None
+    p3_discussion_request = p3_discussion_score_request(attempt, p3_discussion_base, learning_profile)
     try:
-        score = score_with_codex(transcript, questions_text, part, call_id, ai_source=_ai_source)
+        score = score_with_codex(
+            transcript,
+            questions_text,
+            part,
+            call_id,
+            ai_source=_ai_source,
+            p3_discussion_request=p3_discussion_request,
+        )
         score = calibrate_realistic_score(score, questions_text, transcript, part)
     except ClaudeCliQuotaError as exc:
         raise SpeakingError("ai_quota_exhausted") from exc
@@ -3685,11 +3948,13 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
     p3_discussion_skills = enrich_p3_discussion_skills_with_ai(
         attempt,
-        build_p3_discussion_skills(attempt),
+        p3_discussion_base,
         score,
         learning_profile,
         call_id,
         ai_source=_ai_source,
+        ai_payload=score.get("p3_discussion_skills"),
+        allow_provider_call=False,
     )
 
     runtime.update(
@@ -3698,10 +3963,10 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
             "transcript_cleaned": transcript,
             "ielts_score": score,
             "score_generation_backend": score.get("generation_backend", score.get("backend")),
-            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") in {"codex", "http_api"} else "fallback"),
+            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") in SPEAKING_READY_AI_BACKENDS else "fallback"),
             "score_generation_error": score.get("fallback_reason", ""),
             "report_generation_backend": score.get("backend"),
-            "report_generation_status": "ready" if score.get("backend") in {"codex", "http_api"} else "fallback",
+            "report_generation_status": "ready" if score.get("backend") in SPEAKING_READY_AI_BACKENDS else "fallback",
             "feedback_summary": score["feedback"],
             "criteria_feedback": criteria,
             "part_scores": {
@@ -3797,9 +4062,12 @@ def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] |
     if attempt.status == SpeakingAttempt.Status.ABORTED:
         raise SpeakingError("Aborted attempts cannot be scored.")
     turns = list(attempt.turns.all().order_by("sequence"))
-    incomplete = [turn for turn in turns if _turn_status(turn) != "completed"]
-    if incomplete:
-        raise SpeakingError("Complete all speaking turns before generating the section report.")
+    # Same self-heal as score_attempt_sync: never reject the section report just
+    # because a turn dropped. Auto-complete the dropped turns as empty so the task
+    # can be queued; the worker then scores the answered turns.
+    if complete_dropped_turns(turns):
+        attempt.refresh_from_db()
+        turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
     if not scoring_turns_have_answer_text(scoring_turns):
         raise SpeakingError("录音已保存，但没有拿到文字稿；请先重新转写录音或重录。")
@@ -3932,7 +4200,7 @@ def regenerate_turn_feedback(user, attempt_id: str, turn_id: str) -> dict[str, A
 
     # Track regeneration source
     feedback_backend = str(feedback.get("feedback_generation_backend") or "")
-    if feedback_backend in {"codex", "http_api", "claude_cli"}:
+    if feedback_backend in SPEAKING_READY_AI_BACKENDS:
         metadata["band7_source"] = f"{feedback_backend}_regenerated"
         metadata["ai_coaching_source"] = f"{feedback_backend}_regenerated"
     else:
@@ -4022,10 +4290,13 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
-    questions_text = "\n".join(f"Q{i + 1}: {turn.question}" for i, turn in enumerate(scoring_turns))
+    # Overall band is graded only on answered turns (a dropped turn keeps its own
+    # Band 7 answer but is left out of the section transcript). See score_attempt_sync.
+    answered_turns = [turn for turn in scoring_turns if turn_display_transcript(turn).strip()]
+    questions_text = "\n".join(f"Q{i + 1}: {turn.question}" for i, turn in enumerate(answered_turns))
     transcript = "\n".join(
         f"Q{index + 1}: {turn.question}\nA: {turn_display_transcript(turn)}"
-        for index, turn in enumerate(scoring_turns)
+        for index, turn in enumerate(answered_turns)
     )
 
     # Resolve per-user AI source preference
@@ -4034,8 +4305,17 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     except Exception:
         _ai_source = "gpt"
 
+    p3_discussion_base = build_p3_discussion_skills(attempt) if part == "p3" else None
+    p3_discussion_request = p3_discussion_score_request(attempt, p3_discussion_base, learning_profile)
     try:
-        score = score_with_codex(transcript, questions_text, part, call_id, ai_source=_ai_source)
+        score = score_with_codex(
+            transcript,
+            questions_text,
+            part,
+            call_id,
+            ai_source=_ai_source,
+            p3_discussion_request=p3_discussion_request,
+        )
         score = calibrate_realistic_score(score, questions_text, transcript, part)
     except ClaudeCliQuotaError as exc:
         raise SpeakingError("ai_quota_exhausted") from exc
@@ -4059,11 +4339,13 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     personalized_coaching = build_personalized_coaching(learning_profile, attempt, score)
     p3_discussion_skills = enrich_p3_discussion_skills_with_ai(
         attempt,
-        build_p3_discussion_skills(attempt),
+        p3_discussion_base,
         score,
         learning_profile,
         call_id,
         ai_source=_ai_source,
+        ai_payload=score.get("p3_discussion_skills"),
+        allow_provider_call=False,
     )
 
     runtime.update(
@@ -4072,10 +4354,10 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
             "transcript_cleaned": transcript,
             "ielts_score": score,
             "score_generation_backend": score.get("generation_backend", score.get("backend")),
-            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") in {"codex", "http_api"} else "fallback"),
+            "score_generation_status": score.get("generation_status", "ready" if score.get("backend") in SPEAKING_READY_AI_BACKENDS else "fallback"),
             "score_generation_error": score.get("fallback_reason", ""),
             "report_generation_backend": score.get("backend"),
-            "report_generation_status": "ready" if score.get("backend") in {"codex", "http_api"} else "fallback",
+            "report_generation_status": "ready" if score.get("backend") in SPEAKING_READY_AI_BACKENDS else "fallback",
             "feedback_summary": score["feedback"],
             "criteria_feedback": criteria,
             "part_scores": {
@@ -4258,6 +4540,7 @@ def p3_follow_up_fallback(payload: dict[str, Any] | None = None) -> dict[str, An
             prior_answer,
             focus,
             f"p3_follow_up_api_{hashlib.sha1((current_question + prior_answer).encode('utf-8')).hexdigest()[:16]}",
+            ai_source=str(payload.get("ai_source") or "").strip(),
         )
         return {key: value for key, value in result.items() if value}
 
@@ -4265,357 +4548,6 @@ def p3_follow_up_fallback(payload: dict[str, Any] | None = None) -> dict[str, An
     if len(prior_answer.split()) > 40:
         follow_up = "What might be the opposite argument, and why might some people agree with it?"
     return {"follow_up": follow_up, "backend": "fallback", "status": "fallback"}
-
-
-def _fixed_examiner_item_for_text(text: str) -> dict[str, str] | None:
-    normalized = " ".join(str(text or "").strip().lower().split())
-    for item in FIXED_EXAMINER_TTS_ITEMS:
-        if normalized == " ".join(item["text"].lower().split()):
-            return item
-    return None
-
-
-def _fixed_examiner_pending_state(item: dict[str, str]) -> dict[str, Any]:
-    return {
-        "provider": "volcengine",
-        "status": "warming",
-        "audio_url": None,
-        "message": f"Fixed examiner audio is warming in the background: {item['key']}",
-    }
-
-
-def _fixed_examiner_fallback(cache_key: str) -> dict[str, Any]:
-    return {
-        "provider": "browser",
-        "status": "fallback",
-        "audio_url": None,
-        "message": f"Fixed examiner audio is using browser fallback for now: {cache_key}",
-    }
-
-
-def _warm_fixed_examiner_tts_item(item: dict[str, str]) -> dict[str, Any]:
-    return volcengine_tts(item["text"], role="examiner", cache_key=item["key"])
-
-
-def _warm_fixed_examiner_tts_item_background(item: dict[str, str]) -> None:
-    if _cached_tts_url("examiner", item["key"]):
-        return
-    threading.Thread(target=_warm_fixed_examiner_tts_item, args=(item,), daemon=True).start()
-
-
-def _examiner_tts_text_hash(examiner_text: str) -> str:
-    normalized = clean_report_text(examiner_text)
-    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
-
-
-def _examiner_tts_cache_key(attempt_id: str, turn_id: str, examiner_text: str) -> str:
-    return f"{attempt_id}_{turn_id}_examiner_{_examiner_tts_text_hash(examiner_text)}"
-
-
-def _examiner_tts_identity(examiner_text: str, cache_key: str) -> dict[str, str]:
-    return {
-        "text_hash": _examiner_tts_text_hash(examiner_text),
-        "cache_key": cache_key,
-        # Exact text this audio was synthesized for. The client compares this
-        # against the currently displayed question and refuses to play audio
-        # that does not match — so a streamed AI follow-up can never be voiced
-        # with a stale/template clip, regardless of any race or leftover payload.
-        "tts_source_text": clean_report_text(examiner_text),
-    }
-
-
-def _with_examiner_tts_identity(tts: dict[str, Any], examiner_text: str, cache_key: str) -> dict[str, Any]:
-    return {
-        **(tts or {}),
-        **_examiner_tts_identity(examiner_text, cache_key),
-    }
-
-
-def _examiner_tts_not_started(message: str = "Examiner text is not ready yet.") -> dict[str, Any]:
-    return {
-        "provider": "volcengine",
-        "status": "not_started",
-        "audio_url": None,
-        "message": message,
-    }
-
-
-def _examiner_tts_matches_text(tts: dict[str, Any], examiner_text: str) -> bool:
-    if not isinstance(tts, dict) or not examiner_text:
-        return False
-    fixed_item = _fixed_examiner_item_for_text(examiner_text)
-    if fixed_item and tts.get("cache_key") == fixed_item["key"]:
-        return True
-    return tts.get("text_hash") == _examiner_tts_text_hash(examiner_text)
-
-
-def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
-    """Ensure turn has examiner TTS audio_url generated."""
-    current = turn.get("examiner_tts") or {}
-    examiner_text = str(turn.get("examiner_text") or turn.get("question") or "")
-    if not clean_report_text(examiner_text):
-        turn["examiner_tts"] = _examiner_tts_not_started()
-        return
-    if current.get("audio_url") or current.get("status") not in (None, "pending"):
-        if _examiner_tts_matches_text(current, examiner_text):
-            return
-    try:
-        fixed_item = _fixed_examiner_item_for_text(examiner_text)
-        if fixed_item:
-            cached_url = _cached_tts_url("examiner", fixed_item["key"])
-            if cached_url:
-                turn["examiner_tts"] = _with_examiner_tts_identity(
-                    {
-                        "provider": "volcengine",
-                        "status": "cached",
-                        "audio_url": cached_url,
-                        "content_type": "audio/mpeg",
-                    },
-                    examiner_text,
-                    fixed_item["key"],
-                )
-                return
-            _warm_fixed_examiner_tts_item_background(fixed_item)
-            turn["examiner_tts"] = _with_examiner_tts_identity(
-                _fixed_examiner_pending_state(fixed_item),
-                examiner_text,
-                fixed_item["key"],
-            )
-            return
-        cache_key = _examiner_tts_cache_key(attempt_id, str(turn["id"]), examiner_text)
-        turn["examiner_tts"] = _with_examiner_tts_identity(
-            volcengine_tts(
-                examiner_text,
-                role="examiner",
-                cache_key=cache_key,
-            ),
-            examiner_text,
-            cache_key,
-        )
-    except Exception as exc:
-        cache_key = _examiner_tts_cache_key(attempt_id, str(turn["id"]), examiner_text)
-        turn["examiner_tts"] = _with_examiner_tts_identity(
-            {
-                "provider": "volcengine",
-                "status": "fallback",
-                "audio_url": None,
-                "message": f"Server TTS unavailable: {exc}",
-            },
-            examiner_text,
-            cache_key,
-        )
-
-
-def _cached_examiner_tts_for_turn(attempt_id: str, turn_id: str, examiner_text: str) -> dict[str, Any] | None:
-    fixed_item = _fixed_examiner_item_for_text(examiner_text)
-    if fixed_item:
-        cached_url = _cached_tts_url("examiner", fixed_item["key"])
-        if cached_url:
-            return _with_examiner_tts_identity(
-                {
-                    "provider": "volcengine",
-                    "status": "cached",
-                    "audio_url": cached_url,
-                    "content_type": "audio/mpeg",
-                },
-                examiner_text,
-                fixed_item["key"],
-            )
-    cache_key = _examiner_tts_cache_key(attempt_id, turn_id, examiner_text)
-    cached_url = _cached_tts_url("examiner", cache_key)
-    if cached_url:
-        return _with_examiner_tts_identity(
-            {
-                "provider": "volcengine",
-                "status": "cached",
-                "audio_url": cached_url,
-                "content_type": "audio/mpeg",
-            },
-            examiner_text,
-            cache_key,
-        )
-    return None
-
-
-def warm_fixed_examiner_tts() -> dict[str, Any]:
-    """Ensure fixed examiner prompts are cached before the learner starts."""
-    items = []
-    for item in FIXED_EXAMINER_TTS_ITEMS:
-        tts = _warm_fixed_examiner_tts_item(item)
-        items.append({
-            "key": item["key"],
-            "status": tts.get("status"),
-            "audio_url": tts.get("audio_url"),
-            "provider": tts.get("provider"),
-        })
-    ready_urls = [item["audio_url"] for item in items if item.get("audio_url")]
-    return {
-        "items": items,
-        "audio_urls": ready_urls,
-        "ready_count": len(ready_urls),
-    }
-
-
-def _generate_remaining_examiner_tts_after_commit(attempt_id: str, turn_ids: list[str]) -> None:
-    clean_turn_ids = [str(turn_id) for turn_id in turn_ids if turn_id]
-    if not clean_turn_ids:
-        return
-
-    def start_background_tts() -> None:
-        threading.Thread(
-            target=_generate_remaining_examiner_tts,
-            args=(str(attempt_id), clean_turn_ids),
-            daemon=True,
-        ).start()
-
-    transaction.on_commit(start_background_tts)
-
-
-def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> None:
-    close_old_connections()
-    try:
-        attempt = SpeakingAttempt.objects.filter(attempt_id=attempt_id).first()
-        if not attempt:
-            return
-        for db_turn in attempt.turns.filter(turn_id__in=turn_ids).order_by("sequence"):
-            metadata = db_turn.metadata if isinstance(db_turn.metadata, dict) else {}
-            current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
-            examiner_text = str(metadata.get("examiner_text") or db_turn.question)
-            if not clean_report_text(examiner_text):
-                metadata["examiner_tts"] = _examiner_tts_not_started()
-                db_turn.metadata = metadata
-                db_turn.save(update_fields=["metadata", "updated_at"])
-                continue
-            if (
-                (current.get("audio_url") or current.get("status") not in (None, "pending"))
-                and _examiner_tts_matches_text(current, examiner_text)
-            ):
-                continue
-            cache_key = (
-                (_fixed_examiner_item_for_text(examiner_text) or {}).get("key")
-                or _examiner_tts_cache_key(attempt_id, db_turn.turn_id, examiner_text)
-            )
-            generating_state = {
-                **(current or {}),
-                "provider": "volcengine",
-                "status": "generating",
-                "audio_url": None,
-                **_examiner_tts_identity(examiner_text, cache_key),
-            }
-            metadata["examiner_tts"] = generating_state
-            db_turn.metadata = metadata
-            db_turn.save(update_fields=["metadata", "updated_at"])
-            turn_data = {
-                "id": db_turn.turn_id,
-                "question": db_turn.question,
-                "examiner_text": examiner_text,
-                "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
-            }
-            ensure_examiner_tts(attempt_id, turn_data)
-            metadata["examiner_tts"] = turn_data.get("examiner_tts")
-            db_turn.metadata = metadata
-            db_turn.save(update_fields=["metadata"])
-    except DatabaseError:
-        return
-    finally:
-        close_old_connections()
-
-
-def _is_stream_pending_follow_up_metadata(metadata: dict[str, Any]) -> bool:
-    prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
-    return (
-        prompt.get("role") == "follow_up"
-        and (
-            prompt.get("backend") == "stream_pending"
-            or prompt.get("generation_status") == "pending"
-        )
-    )
-
-
-def examiner_tts_status(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
-    """Return the latest examiner TTS state, generating it once when pending."""
-    started = time.monotonic()
-    attempt = _load_attempt_for_user(user, attempt_id)
-    turn = _find_turn(attempt, turn_id)
-    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
-    current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
-    tts = current or {"provider": "volcengine", "status": "pending", "audio_url": None}
-    if _is_stream_pending_follow_up_metadata(metadata):
-        tts = {
-            "provider": "volcengine",
-            "status": "pending",
-            "audio_url": None,
-            "message": "Follow-up text is still generating; server TTS waits for the finalized question.",
-        }
-        metadata["examiner_tts"] = tts
-        turn.metadata = metadata
-        turn.save(update_fields=["metadata", "updated_at"])
-        return {
-            "attempt_id": attempt.attempt_id,
-            "turn_id": turn.turn_id,
-            "examiner_tts": {
-                **tts,
-                "refresh_latency_ms": int((time.monotonic() - started) * 1000),
-            },
-        }
-    examiner_text = str(metadata.get("examiner_text") or turn.question)
-    if not clean_report_text(examiner_text):
-        tts = _examiner_tts_not_started()
-        metadata["examiner_tts"] = tts
-        turn.metadata = metadata
-        turn.save(update_fields=["metadata", "updated_at"])
-        return {
-            "attempt_id": attempt.attempt_id,
-            "turn_id": turn.turn_id,
-            "examiner_tts": {
-                **tts,
-                "refresh_latency_ms": int((time.monotonic() - started) * 1000),
-            },
-        }
-    if tts and not _examiner_tts_matches_text(tts, examiner_text):
-        tts = {
-            "provider": "volcengine",
-            "status": "pending",
-            "audio_url": None,
-            **_examiner_tts_identity(
-                examiner_text,
-                (_fixed_examiner_item_for_text(examiner_text) or {}).get("key")
-                or _examiner_tts_cache_key(attempt.attempt_id, turn.turn_id, examiner_text),
-            ),
-        }
-        metadata["examiner_tts"] = tts
-    cached_tts = _cached_examiner_tts_for_turn(attempt.attempt_id, turn.turn_id, examiner_text)
-    if cached_tts:
-        tts = cached_tts
-        metadata["examiner_tts"] = tts
-        turn.metadata = metadata
-        turn.save(update_fields=["metadata", "updated_at"])
-    elif not tts.get("audio_url"):
-        # Self-heal: regenerate whenever there is no audio yet, regardless of the
-        # last status. Background warming can leave a run of turns in "fallback"
-        # / "failed" / "generating" after a transient volcengine hiccup; without
-        # this, those turns would stay permanently silent because the old guard
-        # only retried "pending". ensure_examiner_tts is idempotent (returns the
-        # cached clip if it already exists).
-        turn_data = {
-            "id": turn.turn_id,
-            "question": turn.question,
-            "examiner_text": examiner_text,
-            "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None, **_examiner_tts_identity(examiner_text, (_fixed_examiner_item_for_text(examiner_text) or {}).get("key") or _examiner_tts_cache_key(attempt.attempt_id, turn.turn_id, examiner_text))},
-        }
-        ensure_examiner_tts(attempt.attempt_id, turn_data)
-        tts = turn_data.get("examiner_tts") or tts
-        metadata["examiner_tts"] = tts
-        turn.metadata = metadata
-        turn.save(update_fields=["metadata", "updated_at"])
-    return {
-        "attempt_id": attempt.attempt_id,
-        "turn_id": turn.turn_id,
-        "examiner_tts": {
-            **tts,
-            "refresh_latency_ms": int((time.monotonic() - started) * 1000),
-        },
-    }
 
 
 def latest_report(user) -> dict[str, Any]:

@@ -177,6 +177,30 @@ class FallbackWritingScoreAdapter(BaseProviderAdapter):
         )
 
 
+def _tree_kill_pid(pid: int) -> None:
+    """Best-effort kill of a process and its whole subtree."""
+    if sys.platform == "win32":
+        try:
+            # /F = force, /T = include child tree, /PID = target by process id
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                capture_output=True,
+                timeout=10,
+            )
+        except Exception:
+            pass
+    else:
+        import signal as _signal
+
+        try:
+            os.killpg(os.getpgid(pid), _signal.SIGKILL)
+        except Exception:
+            try:
+                os.kill(pid, _signal.SIGKILL)
+            except Exception:
+                pass
+
+
 def _run_subprocess_with_tree_kill(
     args: list[str],
     *,
@@ -189,42 +213,65 @@ def _run_subprocess_with_tree_kill(
     env: dict | None = None,
     check: bool = False,
 ) -> subprocess.CompletedProcess:
-    """subprocess.run replacement that kills the full process tree on Windows.
+    """subprocess.run replacement that returns as soon as the CLI's main process
+    exits and never deadlocks on child processes holding the output handles.
 
-    On Windows, subprocess.run(timeout=...) can hang forever after proc.kill()
-    because child processes (e.g. Node.js workers spawned by Claude/Codex CLI)
-    keep the stdout/stderr pipes open. This helper uses taskkill /F /T to
-    terminate the entire process tree, releasing the pipes before communicating.
+    Claude/Codex CLIs (Node) spawn helper child processes that inherit the
+    parent's stdout/stderr. Reading those via subprocess.run()/Popen.communicate()
+    waits for the *pipes* to reach EOF, so the call blocks until those children
+    exit even though the CLI already printed its answer and exited — on Windows
+    every speaking-report call then ran to the full timeout and left orphan
+    Codex.exe workers piling up. We instead send child output to temp files and
+    wait on the *main* process, then tree-kill any lingering descendants so they
+    cannot accumulate.
     """
+    import tempfile
+
     input_bytes: bytes | None = None
     if input is not None:
         input_bytes = input.encode(encoding, errors=errors) if isinstance(input, str) else input
 
-    proc = subprocess.Popen(
-        args,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=cwd,
-        env=env,
-    )
-    try:
-        stdout_bytes, stderr_bytes = proc.communicate(input=input_bytes, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        if sys.platform == "win32":
-            # /F = force, /T = include child tree, /PID = target by process id
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                capture_output=True,
-                timeout=10,
-            )
-        else:
-            proc.kill()
+    with tempfile.TemporaryFile() as out_f, tempfile.TemporaryFile() as err_f:
+        popen_kwargs: dict[str, Any] = {"stdout": out_f, "stderr": err_f, "cwd": cwd, "env": env}
+        if input_bytes is not None:
+            popen_kwargs["stdin"] = subprocess.PIPE
+        if sys.platform != "win32":
+            # Own process group so os.killpg reaps the whole tree on timeout.
+            popen_kwargs["start_new_session"] = True
+
+        proc = subprocess.Popen(args, **popen_kwargs)
+        if input_bytes is not None:
+            try:
+                proc.stdin.write(input_bytes)
+            except (BrokenPipeError, OSError):
+                pass
+            finally:
+                try:
+                    proc.stdin.close()
+                except OSError:
+                    pass
+
         try:
-            stdout_bytes, stderr_bytes = proc.communicate(timeout=5)
+            proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            stdout_bytes, stderr_bytes = b"", b""
-        raise subprocess.TimeoutExpired(args, timeout, output=stdout_bytes, stderr=stderr_bytes)
+            _tree_kill_pid(proc.pid)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+            out_f.seek(0)
+            err_f.seek(0)
+            raise subprocess.TimeoutExpired(
+                args, timeout, output=out_f.read(), stderr=err_f.read()
+            )
+
+        # Main process finished. Reap any helper children it left behind holding
+        # the output handles so orphan workers can't pile up and eat memory.
+        _tree_kill_pid(proc.pid)
+        out_f.seek(0)
+        err_f.seek(0)
+        stdout_bytes = out_f.read()
+        stderr_bytes = err_f.read()
 
     stdout = stdout_bytes.decode(encoding, errors=errors) if stdout_bytes else ""
     stderr = stderr_bytes.decode(encoding, errors=errors) if stderr_bytes else ""
