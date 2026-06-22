@@ -409,3 +409,12 @@ def ensure_grammar_correction_bullet(coaching: str, transcript: str) -> str:
         lines.append("语法错误纠正：")
         lines.extend(f"{index}. {correction}" for index, correction in enumerate(corrections, start=1))
     return "\n".join(lines).strip()
+
+
+def _clean_report_text(text: str) -> str:
+    """Strip non-printable characters while preserving newlines and tabs.
+
+    Distinct from ``clean_report_text``: this is the lighter filter used on raw
+    candidate transcripts, where line structure must survive.
+    """
+    return "".join(c for c in text if c.isprintable() or c in "\n\t").strip()

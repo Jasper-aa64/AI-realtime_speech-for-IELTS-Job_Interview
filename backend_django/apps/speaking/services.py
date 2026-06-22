@@ -270,6 +270,7 @@ from .tts_services import (
     volcengine_tts,
 )
 from .text_utils import (
+    _clean_report_text,
     acceptable_coaching_markdown,
     clean_band7_output,
     clean_coaching_markdown_text,
@@ -1246,8 +1247,7 @@ def _candidate_names_from_payload(payload: dict[str, Any]) -> tuple[str, str]:
     return full_name, english_name
 
 
-def _clean_report_text(text: str) -> str:
-    return "".join(c for c in text if c.isprintable() or c in "\n\t").strip()
+# _clean_report_text now lives in text_utils.py (imported above).
 
 
 def start_attempt(user, payload: dict[str, Any]) -> dict[str, Any]:
