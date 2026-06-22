@@ -16,11 +16,27 @@ from apps.ai.services import claim_ai_task
 from apps.billing.models import TokenWallet, WalletLedgerEntry
 from apps.billing.services import DEFAULT_INITIAL_GRANT_U
 from apps.writing.models import WritingEntry, WritingFrameTemplate, WritingLearnerProfile, WritingPrompt, WritingScore
-from apps.writing.services import WRITING_TASK_LABELS, WritingError, complete_score_task, fallback_score_task
+from apps.writing.services import WRITING_TASK_LABELS, WritingError, complete_score_task, fallback_score_task, ielts_overall_band
 
 
 def paragraph_answer(*parts: str) -> str:
     return "\n\n".join(parts)
+
+
+class IeltsOverallBandTests(TestCase):
+    def test_overall_is_average_of_four_criteria_rounded_half_up(self):
+        # The real "Clean Water" case: TR7.5 / CC8 / LR8 / GRA8 averages to 7.875,
+        # which must round UP to 8.0 (was incorrectly stored as 7.5).
+        self.assertEqual(ielts_overall_band(7.5, 8.0, 8.0, 8.0), 8.0)
+        # Uniform scores stay put.
+        self.assertEqual(ielts_overall_band(6.0, 6.0, 6.0, 6.0), 6.0)
+        # .25 average rounds up to .5 — Python's banker's round() would wrongly
+        # give 7.0 here, so this guards the half-up rule.
+        self.assertEqual(ielts_overall_band(7.5, 7.5, 7.0, 7.0), 7.5)  # mean 7.25
+        # .75 average rounds up to the next whole band.
+        self.assertEqual(ielts_overall_band(8.0, 8.0, 7.5, 7.5), 8.0)  # mean 7.75
+        # Below the midpoint rounds down.
+        self.assertEqual(ielts_overall_band(6.5, 6.5, 6.5, 7.0), 6.5)  # mean 6.625
 
 
 def ai_score_payload(*, paragraph_reviews: list[dict] | None = None, **overrides):
@@ -1100,6 +1116,54 @@ class WritingApiTests(TestCase):
             WalletLedgerEntry.objects.filter(user=self.user, call_id=task.call_id, entry_type=WalletLedgerEntry.EntryType.SETTLE).count(),
             1,
         )
+
+    def test_complete_score_task_overrides_inconsistent_model_overall_with_average(self):
+        # Reproduces the "Clean Water" bug: the model returns four sub-scores that
+        # average to 8.0 but reports overall_band 7.5. The persisted overall must
+        # be the IELTS average (8.0), not the model's inconsistent number.
+        prompt = WritingPrompt.objects.create(
+            prompt_id="task2-overall-average",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Overall average prompt",
+            prompt="Some people think clean water should be free for everyone. Discuss.",
+        )
+        save = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer(
+                    "Providing clean water free of charge could improve public health for everyone.",
+                    "However, it may also encourage waste, so a small fee might use the resource wisely.",
+                ),
+            },
+            content_type="application/json",
+        ).json()
+        task_payload = self.client.post(
+            f"/api/writing/entries/{save['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        claim_ai_task(task_payload["id"], worker_id="test-worker")
+
+        completed = complete_score_task(
+            task_payload["id"],
+            {
+                "score": ai_score_payload(
+                    overall_band=7.5,  # model's inconsistent overall — must be ignored
+                    task_response=7.5,
+                    coherence_cohesion=8.0,
+                    lexical_resource=8.0,
+                    grammatical_range_accuracy=8.0,
+                ),
+                "usage": {"input_tokens": 1000, "output_tokens": 100},
+            },
+        )
+        self.assertEqual(completed["score"]["overall_band"], 8.0)
+        score = WritingScore.objects.get(entry__entry_id=save["id"])
+        self.assertEqual(float(score.overall_band), 8.0)
+        self.assertEqual(float(score.task_response), 7.5)
 
     def test_complete_score_task_rejects_ai_score_without_structured_analysis(self):
         prompt = WritingPrompt.objects.create(

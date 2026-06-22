@@ -1,4 +1,5 @@
 import hashlib
+import math
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -254,6 +255,20 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
 
 def decimal_band(value: float) -> Decimal:
     return Decimal(str(round(float(value) * 2) / 2)).quantize(Decimal("0.1"))
+
+
+def ielts_overall_band(*criteria: float) -> float:
+    """IELTS Writing overall band = the average of the four equally-weighted
+    criteria (TR/TA, CC, LR, GRA), rounded to the nearest half band.
+
+    Uses round-half-UP (not Python's banker's ``round``) so a .25 average goes up
+    to .5 and .75 up to the next whole band, per the official IELTS rule —
+    e.g. 7.875 -> 8.0, 7.25 -> 7.5, 6.625 -> 6.5. We compute this ourselves
+    instead of trusting the model's own ``overall_band`` field, which can be
+    internally inconsistent with the four sub-scores it returns.
+    """
+    mean = sum(criteria) / len(criteria)
+    return math.floor(mean * 2 + 0.5) / 2
 
 
 def task_score_key(task_type: str) -> str:
@@ -560,12 +575,21 @@ def normalize_score_payload(entry: WritingEntry, payload: dict[str, Any]) -> dic
     missing = [key for key in required if score.get(key) is None]
     if missing:
         raise WritingError(f"Missing score fields: {', '.join(missing)}")
+    task_value = float(score[task_key])
+    coherence_cohesion = float(score["coherence_cohesion"])
+    lexical_resource = float(score["lexical_resource"])
+    grammatical_range_accuracy = float(score["grammatical_range_accuracy"])
     return {
-        "overall_band": float(score["overall_band"]),
-        task_key: float(score[task_key]),
-        "coherence_cohesion": float(score["coherence_cohesion"]),
-        "lexical_resource": float(score["lexical_resource"]),
-        "grammatical_range_accuracy": float(score["grammatical_range_accuracy"]),
+        # Derive the overall from the four criteria (IELTS averaging rule) rather
+        # than trusting the model's own overall_band, which can disagree with its
+        # sub-scores — e.g. it returned 7.5 while TR7.5/CC8/LR8/GRA8 averages to 8.0.
+        "overall_band": ielts_overall_band(
+            task_value, coherence_cohesion, lexical_resource, grammatical_range_accuracy
+        ),
+        task_key: task_value,
+        "coherence_cohesion": coherence_cohesion,
+        "lexical_resource": lexical_resource,
+        "grammatical_range_accuracy": grammatical_range_accuracy,
         "feedback_markdown": str(score.get("feedback_markdown") or ""),
         "grammar_corrections": score.get("grammar_corrections") if isinstance(score.get("grammar_corrections"), list) else [],
         "overall_review": str(score.get("overall_review") or payload.get("overall_review") or ""),
