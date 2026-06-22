@@ -229,6 +229,7 @@ from .runtime_payload_services import (
 from .scoring_services import (
     _criteria_feedback,
     _p1_question_only_answer,
+    _training_relevance,
     _word_count,
     attempt_part,
     band_cap,
@@ -3524,12 +3525,7 @@ def generate_turn_feedback_for_report(
         turn.save(update_fields=["metadata", "updated_at"])
 
 
-def _training_relevance(question: str, transcript: str) -> Decimal:
-    q_words = {word.strip(".,?!:;").lower() for word in question.split() if len(word.strip(".,?!:;")) > 3}
-    t_words = {word.strip(".,?!:;").lower() for word in transcript.split() if len(word.strip(".,?!:;")) > 3}
-    if not q_words or not t_words:
-        return Decimal("0.000")
-    return Decimal(str(round(len(q_words & t_words) / max(1, len(q_words)), 3)))
+# _training_relevance now lives in scoring_services.py (imported above).
 
 
 def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:

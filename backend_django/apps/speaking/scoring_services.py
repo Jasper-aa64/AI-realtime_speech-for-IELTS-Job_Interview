@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+from decimal import Decimal
 from typing import Any
 
 from .models import SpeakingTurn
@@ -660,3 +661,11 @@ def build_turn_band7_fallback(
         )
 
     return ""
+
+
+def _training_relevance(question: str, transcript: str) -> Decimal:
+    q_words = {word.strip(".,?!:;").lower() for word in question.split() if len(word.strip(".,?!:;")) > 3}
+    t_words = {word.strip(".,?!:;").lower() for word in transcript.split() if len(word.strip(".,?!:;")) > 3}
+    if not q_words or not t_words:
+        return Decimal("0.000")
+    return Decimal(str(round(len(q_words & t_words) / max(1, len(q_words)), 3)))
