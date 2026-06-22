@@ -8,7 +8,7 @@ from typing import Any
 
 from .ai_runtime import run_codex
 from .models import SpeakingAttempt
-from .text_utils import clean_markdown_text, clean_report_text
+from .text_utils import clean_markdown_text, clean_report_text, ensure_grammar_correction_bullet
 
 def overall_review_with_codex(
     profile: dict[str, Any],
@@ -208,3 +208,17 @@ def target_band_label(attempt: SpeakingAttempt | dict[str, Any]) -> str:
 def _model_band7_tts_cache_key(attempt_id: str, turn_id: str, band7_version: str) -> str:
     text_hash = hashlib.sha1(clean_report_text(band7_version).encode("utf-8")).hexdigest()[:12]
     return f"{attempt_id}_{turn_id}_band7_{text_hash}"
+
+
+def build_ai_coaching_fallback(
+    question: str,
+    transcript: str,
+    band7: str,
+    part: str,
+    profile: dict[str, Any] | None = None,
+) -> str:
+    """Build transparent fallback coaching when Codex fails."""
+    lines: list[str] = []
+    lines.append("AI 辅导生成失败，当前没有展示伪 AI 建议。请点击重新生成，让系统重新调用 AI 分析这一次回答。")
+    lines.append("")
+    return ensure_grammar_correction_bullet("\n".join(lines), transcript)

@@ -66,6 +66,7 @@ from .audio_services import (
 )
 from .coaching_services import (
     _model_band7_tts_cache_key,
+    build_ai_coaching_fallback,
     build_overall_review,
     build_personalized_coaching,
     model_answer_constraints,
@@ -3455,18 +3456,7 @@ def build_turn_feedback(
     return result
 
 
-def build_ai_coaching_fallback(
-    question: str,
-    transcript: str,
-    band7: str,
-    part: str,
-    profile: dict[str, Any] | None = None,
-) -> str:
-    """Build transparent fallback coaching when Codex fails."""
-    lines: list[str] = []
-    lines.append("AI 辅导生成失败，当前没有展示伪 AI 建议。请点击重新生成，让系统重新调用 AI 分析这一次回答。")
-    lines.append("")
-    return ensure_grammar_correction_bullet("\n".join(lines), transcript)
+# build_ai_coaching_fallback now lives in coaching_services.py (imported above).
 
 
 # mark_missing_turn_feedback_pending / complete_dropped_turns /
