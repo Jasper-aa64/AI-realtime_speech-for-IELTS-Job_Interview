@@ -232,7 +232,15 @@ def report_generation_stalled(attempt: SpeakingAttempt) -> bool:
 def friendly_report_error(raw: str) -> str:
     text = str(raw or "").strip()
     lowered = text.lower()
-    if "quota" in lowered or "usage limit" in lowered or "rate limit" in lowered:
+    # "no available accounts" is the HTTP AI gateway's 503 when its whole account
+    # pool is exhausted — the same quota wall as the codex CLI usage limit, so map
+    # it to the quota message rather than the generic "network" fallback below.
+    if (
+        "quota" in lowered
+        or "usage limit" in lowered
+        or "rate limit" in lowered
+        or "no available account" in lowered
+    ):
         return "AI 评分服务的额度已用尽，稍后额度恢复后点「重新生成报告」即可。"
     if "non-zero exit status" in lowered or "ai analysis failed" in lowered or not text:
         return "AI 评分服务暂时没有返回报告（可能是额度用尽或网络波动）。点「重新生成报告」重试，不会重开整场练习。"

@@ -945,6 +945,15 @@ class SpeakingHistoryApiTests(TestCase):
         detail = self.client.get(f"/api/history/{fresh.attempt_id}")
         self.assertEqual(detail.status_code, 404)
 
+    def test_friendly_report_error_maps_no_available_accounts_to_quota(self):
+        from apps.speaking.report_services import friendly_report_error
+
+        raw = 'AI analysis failed: HTTP AI provider returned 503: {"error":{"message":"No available accounts: no available accounts"}}'
+        self.assertEqual(
+            friendly_report_error(raw),
+            "AI 评分服务的额度已用尽，稍后额度恢复后点「重新生成报告」即可。",
+        )
+
     def test_delete_requires_login(self):
         self.client.logout()
         attempt = self.create_scored_attempt("attempt-to-delete")
