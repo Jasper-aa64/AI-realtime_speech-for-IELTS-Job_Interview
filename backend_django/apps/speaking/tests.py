@@ -866,6 +866,85 @@ class SpeakingHistoryApiTests(TestCase):
         self.assertEqual(body["turns"][0]["question"], "What is your full name?")
         self.assertEqual(body["turns"][0]["transcript_cleaned"], "My full name is Jasper.")
 
+    def create_stalled_attempt(self, attempt_id="attempt-stalled-1", *, task_status=None, age_seconds=600):
+        from apps.ai.models import AITask
+        from apps.ai.services import create_ai_task
+
+        if task_status is None:
+            task_status = AITask.Status.PENDING
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id=attempt_id,
+            legacy_attempt_id=attempt_id,
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+            english_name="Jasper",
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=1,
+            part="p1",
+            question="What is your full name?",
+            transcript_raw="My full name is Jasper.",
+            transcript_cleaned="My full name is Jasper.",
+            metadata={"transcript_status": "captured"},
+        )
+        task, _ = create_ai_task(
+            user=self.user,
+            task_type="speaking_report",
+            idempotency_key=f"speaking_report:{attempt_id}",
+            provider="codex",
+            model="",
+            related_type="speaking_attempt",
+            related_id=attempt_id,
+            call_id=f"speaking_report_{attempt_id}",
+            prompt_version="speaking_report_v1",
+            request_payload={},
+            metadata={},
+        )
+        old = timezone.now() - timedelta(seconds=age_seconds)
+        AITask.objects.filter(pk=task.pk).update(
+            status=task_status, available_at=old, started_at=old, created_at=old
+        )
+        return attempt
+
+    def test_stalled_pending_report_surfaces_as_unscored_when_worker_offline(self):
+        # A report task stuck pending past the claim window (worker offline) must
+        # not vanish or spin forever — it surfaces as a 未评分 card so the user can
+        # re-generate, exactly like a terminally failed analysis.
+        stalled = self.create_stalled_attempt()
+
+        history = self.client.get("/api/history")
+        self.assertEqual(history.status_code, 200)
+        items = {item["id"]: item for item in history.json()["items"]}
+        self.assertIn(stalled.attempt_id, items)
+        self.assertEqual(items[stalled.attempt_id]["report_status"], "failed")
+        self.assertIsNone(items[stalled.attempt_id]["overall_band"])
+
+        detail = self.client.get(f"/api/history/{stalled.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        self.assertEqual(body["report_status"], "failed")
+        self.assertTrue(body["report_error"])
+        self.assertEqual(body["turns"][0]["transcript_cleaned"], "My full name is Jasper.")
+
+    def test_fresh_pending_report_still_loads_and_is_not_marked_unscored(self):
+        # A report queued seconds ago (worker about to claim it) must NOT be
+        # flagged as stalled — the report screen should keep loading, not flip to
+        # a premature 未评分 card.
+        fresh = self.create_stalled_attempt("attempt-fresh-pending", age_seconds=5)
+
+        history = self.client.get("/api/history")
+        ids = [item["id"] for item in history.json()["items"]]
+        self.assertNotIn(fresh.attempt_id, ids)
+
+        detail = self.client.get(f"/api/history/{fresh.attempt_id}")
+        self.assertEqual(detail.status_code, 404)
+
     def test_delete_requires_login(self):
         self.client.logout()
         attempt = self.create_scored_attempt("attempt-to-delete")

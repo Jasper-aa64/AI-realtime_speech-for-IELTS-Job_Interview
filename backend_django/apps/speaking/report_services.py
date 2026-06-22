@@ -193,6 +193,42 @@ def report_generation_failed(attempt: SpeakingAttempt) -> bool:
     return bool(task and task.status in _FAILED_REPORT_TASK_STATUSES)
 
 
+# A healthy background worker claims a queued report within a few seconds and
+# finishes the RUNNING phase within a couple of minutes. When the worker is
+# offline or wedged the task just sits in ``pending``/``running`` forever, so the
+# report screen would otherwise spin with no feedback. Past these windows we
+# treat the attempt as stalled and surface a "未评分" card (with a 重新生成报告
+# button) instead of letting the frontend hang. The RUNNING window matches the
+# worker's own ``--recover-stale-seconds 900`` lease so we never flag a report
+# that is still legitimately generating.
+STALLED_PENDING_REPORT_AFTER_SECONDS = 180
+STALLED_RUNNING_REPORT_AFTER_SECONDS = 900
+
+
+def report_generation_stalled(attempt: SpeakingAttempt) -> bool:
+    """Whether a queued report is stuck because no worker is processing it.
+
+    Distinct from :func:`report_generation_failed`: the task never reached a
+    terminal status, it is simply not being picked up (the AI worker is down).
+    """
+    if report_is_valid(attempt):
+        return False
+    task = latest_speaking_report_task(attempt)
+    if task is None:
+        return False
+    if task.status == AITask.Status.PENDING:
+        reference = task.available_at or task.created_at
+        threshold = STALLED_PENDING_REPORT_AFTER_SECONDS
+    elif task.status == AITask.Status.RUNNING:
+        reference = task.started_at or task.available_at or task.created_at
+        threshold = STALLED_RUNNING_REPORT_AFTER_SECONDS
+    else:
+        return False
+    if reference is None:
+        return False
+    return (timezone.now() - reference).total_seconds() >= threshold
+
+
 def friendly_report_error(raw: str) -> str:
     text = str(raw or "").strip()
     lowered = text.lower()
@@ -234,7 +270,7 @@ def failed_history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
     }
 
 
-def failed_report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
+def failed_report_payload(attempt: SpeakingAttempt, *, stalled: bool = False) -> dict[str, Any]:
     task = latest_speaking_report_task(attempt)
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
     raw_error = (
@@ -243,6 +279,11 @@ def failed_report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
         or metadata.get("analysis_error")
         or ""
     )
+    report_error = (
+        "报告还在排队，但后台 AI 评分服务暂时没有响应（worker 可能已离线）。点「重新生成报告」即可重试。"
+        if stalled and not raw_error
+        else friendly_report_error(raw_error)
+    )
     return {
         "id": attempt.attempt_id,
         "mode": attempt.mode,
@@ -250,7 +291,7 @@ def failed_report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
         "title": attempt.title,
         "status": attempt.status,
         "report_status": "failed",
-        "report_error": friendly_report_error(raw_error),
+        "report_error": report_error,
         "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
         "candidate": attempt.english_name,
         "full_name": attempt.full_name,
@@ -296,6 +337,11 @@ def history(user) -> dict[str, Any]:
             # Surface failed analyses as "未评分" cards with a 重新生成 button instead
             # of silently dropping them — otherwise the attempt vanishes from history.
             items.append(failed_history_item(attempt))
+        elif report_generation_stalled(attempt):
+            # Worker offline / wedged: the report task is stuck pending and will
+            # never resolve on its own. Show it as 未评分 too so the just-recorded
+            # attempt does not silently disappear from the list.
+            items.append(failed_history_item(attempt))
     return {"items": items}
 
 
@@ -312,6 +358,8 @@ def detail(user, attempt_id: str) -> dict[str, Any]:
         return report_payload(attempt)
     if report_generation_failed(attempt):
         return failed_report_payload(attempt)
+    if report_generation_stalled(attempt):
+        return failed_report_payload(attempt, stalled=True)
     raise SpeakingError("Speaking report not found")
 
 
