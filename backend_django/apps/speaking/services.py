@@ -365,7 +365,10 @@ SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT = 90
 # Generate the Claude batch in small chunks so each call stays well within budget.
 SPEAKING_TURN_FEEDBACK_BATCH_SIZE = 3
 P3_TURN_COUNT = 8
-DEFAULT_FULL_NAME = "LiHua"
+# Single source of truth for the default candidate identity. (Previously this
+# value was shadowed by a second, identical definition further down the module;
+# "Li Hua" is the effective value that definition produced.)
+DEFAULT_FULL_NAME = "Li Hua"
 DEFAULT_ENGLISH_NAME = "Jasper"
 
 def quick_follow_up_http_runner(
@@ -3302,34 +3305,6 @@ Input turns:
 # build_upgrade_notes / _fallback_score / fallback_score_for_report /
 # mark_attempt_analysis_failed / mark_attempt_analysis_ready now live in
 # analysis_status_services.py (imported above).
-
-
-
-
-# --- P1 Name/Identity Helpers ---
-
-
-DEFAULT_FULL_NAME = "Li Hua"
-DEFAULT_ENGLISH_NAME = "Jasper"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # --- Learning Profile ---
