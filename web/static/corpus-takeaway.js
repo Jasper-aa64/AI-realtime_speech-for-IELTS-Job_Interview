@@ -89,6 +89,86 @@
       if (el) el.innerHTML = `<p class="guest-view-notice">${escapeHtml(line || "登录后可查看你的记录。")}</p>`;
     }
 
+    function guestSamples() {
+      return (typeof window !== "undefined" && window.IELTSGuestSamples) || {};
+    }
+
+    // Banner that labels a screen's content as read-only demo data and offers a
+    // one-tap path to sign in. Pair with bindGuestSampleLogin after innerHTML.
+    function guestSampleBannerHtml(line) {
+      return `
+        <div class="guest-sample-banner" role="note">
+          <span class="guest-sample-banner-pill">示例</span>
+          <span class="guest-sample-banner-text">${escapeHtml(line)}</span>
+          <button type="button" class="guest-sample-banner-login">登录解锁</button>
+        </div>`;
+    }
+
+    function bindGuestSampleLogin(container, reason) {
+      const el = typeof container === "string" ? $(container) : container;
+      el?.querySelector(".guest-sample-banner-login")?.addEventListener("click", () => {
+        if (typeof promptGuestLogin === "function") promptGuestLogin(reason);
+        else switchView("login", { force: true, skipAuthGate: true });
+      });
+    }
+
+    // Show the nav review dot for a guest so the takeaway entry visibly has
+    // (sample) content waiting.
+    function showGuestTakeawayDot(kind, count) {
+      const dot = $(kind === "writing" ? "writingTakeawayDueDot" : "languageTakeawayDueDot");
+      if (!dot) return;
+      dot.classList.toggle("hidden", !count);
+      if (count) dot.setAttribute("data-count", String(count));
+    }
+
+    // Render the curated demo Takeaways for a signed-out visitor. Returns false
+    // when no fixture is available, so the caller can fall back to the notice.
+    function renderGuestTakeawaySamples(kind) {
+      const bundle = guestSamples();
+      const items = kind === "writing" ? bundle.writingTakeaways : bundle.languageTakeaways;
+      const list = $(kind === "writing" ? "writingTakeawayList" : "languageTakeawayList");
+      const stats = $(kind === "writing" ? "writingTakeawayStats" : "languageTakeawayStats");
+      if (!list || !Array.isArray(items) || !items.length) return false;
+      const cards = items.map((it) => `
+        <article class="guest-sample-card guest-sample-takeaway-card">
+          <p class="guest-sample-en">${escapeHtml(it.source_text || "")}</p>
+          <p class="guest-sample-zh">${escapeHtml(it.chinese_text || "")}</p>
+          ${it.context_label ? `<span class="guest-sample-source">${escapeHtml(it.context_label)}</span>` : ""}
+        </article>`).join("");
+      const reason = kind === "writing"
+        ? "登录后这里会显示并复习你自己的写作积累。"
+        : "登录后这里会显示并复习你自己保存的 Takeaway。";
+      list.innerHTML = guestSampleBannerHtml(reason) + `<div class="guest-sample-grid">${cards}</div>`;
+      bindGuestSampleLogin(list, reason);
+      if (stats) stats.textContent = `${items.length} 条 · 示例`;
+      showGuestTakeawayDot(kind, items.length);
+      return true;
+    }
+
+    function renderGuestP1CorpusSamples() {
+      const topics = guestSamples().p1Corpus?.topics;
+      const container = $("p1CorpusTopics");
+      const stats = $("p1CorpusStats");
+      if (!container || !Array.isArray(topics) || !topics.length) return false;
+      const cards = topics.map((topic) => {
+        const questions = (topic.questions || []).map((q) => `
+          <li class="guest-sample-q">
+            <p class="guest-sample-q-title">${escapeHtml(q.question || "")}</p>
+            <p class="guest-sample-q-corpus">${escapeHtml(q.corpus_text || "")}</p>
+          </li>`).join("");
+        return `
+          <article class="guest-sample-card guest-sample-corpus-card">
+            <h3 class="guest-sample-corpus-topic">${escapeHtml(topic.label || topic.topic || "")}</h3>
+            <ul class="guest-sample-q-list">${questions}</ul>
+          </article>`;
+      }).join("");
+      const reason = "登录后这里会显示并复用你自己的 P1 语料库。";
+      container.innerHTML = guestSampleBannerHtml(reason) + `<div class="guest-sample-grid">${cards}</div>`;
+      bindGuestSampleLogin(container, reason);
+      if (stats) stats.textContent = `${topics.length} 个示例话题`;
+      return true;
+    }
+
     const CORPUS_PEEK_WINDOW_MARGIN = Number(corpusPeekWindowMargin) || 16;
     const EXPRESSION_REPLACEMENT_STORAGE_KEY = "ielts-expression-replacements";
     const TAKEAWAY_SRS_STORAGE_KEY = "ielts-takeaway-srs";
@@ -861,9 +941,11 @@
 
     async function loadP1Corpus() {
       if (!state.account.authenticated) {
-        const guestStats = $("p1CorpusStats");
-        if (guestStats) guestStats.textContent = "未登录";
-        guestNotice($("p1CorpusTopics"), "登录后保存和复用你的 P1 语料库。");
+        if (!renderGuestP1CorpusSamples()) {
+          const guestStats = $("p1CorpusStats");
+          if (guestStats) guestStats.textContent = "未登录";
+          guestNotice($("p1CorpusTopics"), "登录后保存和复用你的 P1 语料库。");
+        }
         return;
       }
       const stats = $("p1CorpusStats");
@@ -2521,9 +2603,11 @@
 
     async function loadLanguageTakeaways() {
       if (!state.account.authenticated) {
-        const guestStats = $("languageTakeawayStats");
-        if (guestStats) guestStats.textContent = "未登录";
-        guestNotice($("languageTakeawayList"), "登录后查看和复习你的 Takeaway。");
+        if (!renderGuestTakeawaySamples("language")) {
+          const guestStats = $("languageTakeawayStats");
+          if (guestStats) guestStats.textContent = "未登录";
+          guestNotice($("languageTakeawayList"), "登录后查看和复习你的 Takeaway。");
+        }
         return;
       }
       const stats = $("languageTakeawayStats");
@@ -5727,9 +5811,11 @@
 
     async function loadWritingTakeaways() {
       if (!state.account.authenticated) {
-        const guestStats = $("writingTakeawayStats");
-        if (guestStats) guestStats.textContent = "未登录";
-        guestNotice($("writingTakeawayList"), "登录后查看你的写作积累。");
+        if (!renderGuestTakeawaySamples("writing")) {
+          const guestStats = $("writingTakeawayStats");
+          if (guestStats) guestStats.textContent = "未登录";
+          guestNotice($("writingTakeawayList"), "登录后查看你的写作积累。");
+        }
         return;
       }
       const stats = $("writingTakeawayStats");

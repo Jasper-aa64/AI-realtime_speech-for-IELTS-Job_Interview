@@ -39,16 +39,16 @@ test("the avatar opens the (guest-capable) account profile, never bounces to log
 
 test("guest-reachable data loaders bail cleanly instead of spinning/erroring on 401", () => {
   assert.match(app, /function renderGuestViewNotice\(container, line\)/);
-  // app-side loaders
+  // app-side loaders bail to a guest sample or the plain notice.
   for (const fnName of ["loadHistory", "loadWritingReports"]) {
-    const body = app.match(new RegExp(`async function ${fnName}\\([^)]*\\) \\{[\\s\\S]{0,260}?renderGuestViewNotice`))?.[0] || "";
-    assert.ok(body, `expected ${fnName} to guard guests with renderGuestViewNotice`);
+    const body = app.match(new RegExp(`async function ${fnName}\\([^)]*\\) \\{[\\s\\S]{0,320}?(renderGuestViewNotice|renderGuestHistorySamples)`))?.[0] || "";
+    assert.ok(body, `expected ${fnName} to guard guests`);
   }
   assert.match(app, /async function loadWriting\(\) \{\s*\n\s*if \(!state\.account\.authenticated\)/);
-  // module-side loaders
+  // module-side loaders bail to a guest sample or the plain notice.
   for (const fnName of ["loadP1Corpus", "loadP2Corpus", "loadLanguageTakeaways", "loadWritingTakeaways"]) {
-    const body = corpus.match(new RegExp(`async function ${fnName}\\([^)]*\\) \\{[\\s\\S]{0,220}?guestNotice`))?.[0] || "";
-    assert.ok(body, `expected ${fnName} to guard guests with guestNotice`);
+    const body = corpus.match(new RegExp(`async function ${fnName}\\([^)]*\\) \\{[\\s\\S]{0,400}?(guestNotice|renderGuest)`))?.[0] || "";
+    assert.ok(body, `expected ${fnName} to guard guests`);
   }
 });
 

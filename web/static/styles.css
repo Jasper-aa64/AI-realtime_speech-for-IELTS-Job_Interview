@@ -16051,6 +16051,192 @@ body.font-popular .record-control.recording {
   background: #1d4ed8;
 }
 
+/* ── Guest sample content (read-only 示例 preview for signed-out visitors) ── */
+.guest-sample-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, #2563eb 22%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, #2563eb 7%, var(--panel));
+  font-size: 13px;
+  color: var(--ink);
+}
+.guest-sample-banner-pill {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.guest-sample-banner-text {
+  flex: 1 1 180px;
+  line-height: 1.4;
+}
+.guest-sample-banner-login {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.guest-sample-banner-login:hover {
+  background: #1d4ed8;
+}
+
+.guest-sample-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.guest-sample-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 14px 16px;
+}
+.guest-sample-takeaway-card .guest-sample-en {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ink);
+  line-height: 1.45;
+}
+.guest-sample-takeaway-card .guest-sample-zh {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted, #64748b);
+  line-height: 1.5;
+}
+.guest-sample-source {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #2563eb;
+  background: color-mix(in srgb, #2563eb 10%, transparent);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.guest-sample-corpus-card .guest-sample-corpus-topic {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+.guest-sample-q-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.guest-sample-q-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.guest-sample-q-corpus {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted, #64748b);
+  line-height: 1.5;
+}
+
+.guest-sample-history-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.guest-sample-history-card.is-active {
+  border-color: #2563eb;
+  background: color-mix(in srgb, #2563eb 8%, var(--panel));
+}
+.guest-sample-history-tag {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #2563eb 12%, transparent);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+.guest-sample-history-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guest-sample-history-band {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted, #64748b);
+}
+
+.guest-sample-report {
+  padding: 20px;
+}
+.guest-sample-report-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.guest-sample-report-q {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--muted, #64748b);
+}
+.guest-sample-bands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.guest-sample-band-overall,
+.guest-sample-band-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted, #64748b);
+}
+.guest-sample-band-overall {
+  background: color-mix(in srgb, #2563eb 8%, var(--panel));
+  border-color: color-mix(in srgb, #2563eb 22%, transparent);
+}
+.guest-sample-band-overall strong,
+.guest-sample-band-item strong {
+  font-size: 20px;
+  color: var(--ink);
+}
+
 .detail-panel {
   min-width: 0;
   padding: 0;

@@ -6039,7 +6039,9 @@ function setWritingPageLoading(isLoading, title = "正在加载每日写作", de
 async function loadHistory(showBusy = true) {
   if (!state.account.authenticated) {
     state.historyItems = [];
-    renderGuestViewNotice($("detailPanel"), "登录后查看你的口语报告与历史记录。");
+    if (!renderGuestHistorySamples()) {
+      renderGuestViewNotice($("detailPanel"), "登录后查看你的口语报告与历史记录。");
+    }
     return;
   }
   const navScroll = captureNavScrollState();
@@ -6564,6 +6566,77 @@ function renderGuestViewNotice(container, line) {
       <button type="button" class="guest-view-notice-login">登录 / 注册</button>
     </div>`;
   el.querySelector(".guest-view-notice-login")?.addEventListener("click", () => promptGuestLogin(message));
+}
+
+// ── Guest history preview: a few clearly-labelled 示例 report cards so a
+// signed-out visitor can click through a realistic report list. Returns false
+// when no fixture is bundled, so loadHistory falls back to the plain notice. ──
+function guestSamplePartLabel(part) {
+  return { p1: "P1", p2: "P2", p3: "P3", mock: "Mock" }[String(part || "").toLowerCase()] || String(part || "").toUpperCase();
+}
+
+function renderGuestHistorySamples() {
+  const items = (typeof window !== "undefined" && window.IELTSGuestSamples?.history) || null;
+  const list = $("historyList");
+  if (!list || !Array.isArray(items) || !items.length) return false;
+  list.innerHTML = items.map((it, index) => `
+    <button type="button" class="guest-sample-history-card${index === 0 ? " is-active" : ""}" data-guest-sample-report="${escapeHtml(String(it.id))}">
+      <span class="guest-sample-history-tag">${escapeHtml(guestSamplePartLabel(it.part || it.mode))}</span>
+      <span class="guest-sample-history-title">${escapeHtml(it.title || it.question || "")}</span>
+      <span class="guest-sample-history-band">Band ${escapeHtml(String(it.overall_band ?? "—"))}</span>
+    </button>`).join("");
+  renderGuestHistoryDetail(items[0]);
+  list.querySelectorAll("[data-guest-sample-report]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const item = items.find((x) => String(x.id) === btn.dataset.guestSampleReport);
+      list.querySelectorAll(".guest-sample-history-card").forEach((card) => card.classList.toggle("is-active", card === btn));
+      renderGuestHistoryDetail(item);
+    });
+  });
+  return true;
+}
+
+function renderGuestHistoryDetail(item) {
+  const panel = $("detailPanel");
+  if (!panel || !item) return;
+  const band = item.overall_band ?? "—";
+  const criteria = [
+    ["流利度与连贯", band],
+    ["词汇丰富度", band],
+    ["语法多样性与准确性", band],
+    ["发音", band],
+  ];
+  panel.innerHTML = `
+    <div class="guest-sample-report">
+      <div class="guest-sample-banner" role="note">
+        <span class="guest-sample-banner-pill">示例</span>
+        <span class="guest-sample-banner-text">这是示例报告。登录后即可查看你自己的口语报告、逐题转写与 AI 反馈。</span>
+        <button type="button" class="guest-sample-banner-login">登录解锁</button>
+      </div>
+      <h2 class="guest-sample-report-title">${escapeHtml(item.title || item.question || "")}</h2>
+      <p class="guest-sample-report-q">${escapeHtml(item.question || "")}</p>
+      <div class="guest-sample-bands">
+        <div class="guest-sample-band-overall"><span>总分</span><strong>${escapeHtml(String(item.overall_band ?? "—"))}</strong></div>
+        ${criteria.map(([label, value]) => `
+          <div class="guest-sample-band-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "—"))}</strong></div>`).join("")}
+      </div>
+    </div>`;
+  panel.querySelector(".guest-sample-banner-login")?.addEventListener("click", () => promptGuestLogin("登录后查看你自己的口语报告。"));
+}
+
+// On boot, light up the Takeaway / 写作积累 nav dots for a signed-out visitor
+// so the sample content is visibly waiting (the user's "直接会有红点").
+function maybeShowGuestTakeawayDots() {
+  if (state.account.authenticated) return;
+  const samples = (typeof window !== "undefined" && window.IELTSGuestSamples) || {};
+  const setDot = (id, count) => {
+    const dot = $(id);
+    if (!dot) return;
+    dot.classList.toggle("hidden", !count);
+    if (count) dot.setAttribute("data-count", String(count));
+  };
+  setDot("languageTakeawayDueDot", (samples.languageTakeaways || []).length);
+  setDot("writingTakeawayDueDot", (samples.writingTakeaways || []).length);
 }
 
 // ── Report manager: a single dialog (reachable from the avatar-area button) for
@@ -14364,6 +14437,7 @@ async function init() {
   bindEvents();
   setupReportRails();
   await loadAccount();
+  maybeShowGuestTakeawayDots();
   // Keep general audio playback exclusive, but do not let report/player audio interrupt
   // the in-flow examiner prompt once it has started.
   document.addEventListener("play", (e) => {
