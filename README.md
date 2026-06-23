@@ -5,7 +5,7 @@
 
 ## Public Preview
 
-- Current public URL: https://directly-contacting-typically-cassette.trycloudflare.com
+- Current public URL: https://treated-caused-father-eddie.trycloudflare.com
 - Local service URL: http://127.0.0.1:8767/
 - Note: this uses a Cloudflare quick tunnel, so the URL may change if the tunnel process restarts.
 - Windows startup / NSSM / public tunnel guide: [docs/WINDOWS_STARTUP_AND_PUBLIC_ACCESS.md](docs/WINDOWS_STARTUP_AND_PUBLIC_ACCESS.md)
