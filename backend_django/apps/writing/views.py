@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
+from .dictionary_services import is_single_dictionary_word, lookup_word
 from .models import WritingFrameTemplate
 from .spelling_services import add_manual_spelling_word, delete_spelling_word, record_spelling_attempt, spelling_drill_library, update_spelling_word
 from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, prompt_patterns, random_prompt, save_entry, score_entry, writing_reports, writing_summary
@@ -123,6 +124,18 @@ def spelling_word_add(request):
         ))
     except WritingError as exc:
         return writing_error(exc)
+
+
+@require_GET
+def dictionary_lookup(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    word = (request.GET.get("word") or request.GET.get("text") or "").strip()
+    if not is_single_dictionary_word(word):
+        return JsonResponse({"ok": True, "found": False, "entry": None, "word": word})
+    entry = lookup_word(word)
+    return JsonResponse({"ok": True, "found": bool(entry), "entry": entry, "word": word})
 
 
 @csrf_exempt

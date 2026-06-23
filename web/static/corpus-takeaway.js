@@ -3438,7 +3438,39 @@
       autosizeLanguageTakeawaySource();
       updateLanguageTakeawaySpellingButton();
       hideLanguageTakeawayTrigger();
+      // Single English word -> offline dictionary; otherwise full-sentence translation.
+      if (isSingleEnglishWord(textValue)) {
+        const found = await lookupLanguageTakeawayDictionary(textValue);
+        if (found) return;
+      }
       await translateLanguageTakeawaySource(textValue);
+    }
+
+    // Offline dictionary lookup for a single English word. Fills the Chinese
+    // box with the dictionary senses (so saving + the spelling gloss work) and
+    // shows the phonetic in the status line. Returns false on miss so the caller
+    // can fall back to online sentence translation.
+    async function lookupLanguageTakeawayDictionary(word) {
+      const w = String(word || "").trim();
+      if (!w) return false;
+      setLanguageTakeawayStatus("查询离线词典...", { loading: true });
+      try {
+        const result = await api(`/api/dictionary/lookup?word=${encodeURIComponent(w)}`);
+        const entry = result && result.found ? result.entry : null;
+        if (!entry) return false;
+        const senses = Array.isArray(entry.senses) && entry.senses.length
+          ? entry.senses
+          : (entry.translation ? [entry.translation] : []);
+        if (!senses.length) return false;
+        const chineseEl = $("languageTakeawayChinese");
+        if (chineseEl) chineseEl.value = senses.slice(0, 6).join("\n");
+        autosizeLanguageTakeawaySource();
+        const phon = entry.phonetic ? ` · [${entry.phonetic}]` : "";
+        setLanguageTakeawayStatus(`离线词典${phon}`);
+        return true;
+      } catch (_error) {
+        return false;
+      }
     }
 
     async function translateLanguageTakeawaySource(sourceValue = null) {

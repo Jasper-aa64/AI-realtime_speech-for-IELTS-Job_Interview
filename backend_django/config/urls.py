@@ -96,6 +96,7 @@ urlpatterns = [
     path("api/writing/reports", writing_views.reports, name="writing-reports"),
     path("api/writing/frames", writing_views.writing_frames, name="writing-frames"),
     path("api/writing/frames/<path:frame_key>", writing_views.writing_frame_detail, name="writing-frame-detail"),
+    path("api/dictionary/lookup", writing_views.dictionary_lookup, name="dictionary-lookup"),
     path("api/writing/spelling-words", writing_views.spelling_words, name="writing-spelling-words"),
     path("api/writing/spelling-words/add", writing_views.spelling_word_add, name="writing-spelling-word-add"),
     path("api/writing/spelling-words/<str:word_id>/attempt", writing_views.spelling_word_attempt, name="writing-spelling-word-attempt"),
