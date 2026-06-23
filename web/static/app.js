@@ -2151,10 +2151,6 @@ function switchView(view, options = {}) {
     closeP3CorpusPeek();
     updateP3CorpusPeekButton(null);
   }
-  if (view !== "p1" && view !== "p3" && view !== "mock") {
-    closeFollowUpSourcePeek();
-    updateFollowUpSourcePeekButton(null);
-  }
   if (view === "p3") {
     syncP3LaunchPanel();
     // Warm the P2 corpus the moment P3 opens so the first "浏览题卡" pops instantly.
@@ -2488,11 +2484,9 @@ function resetPracticeSurface() {
   closeP1CorpusPeek();
   closeP2CorpusPeek();
   closeP3CorpusPeek();
-  closeFollowUpSourcePeek();
   updateP1CorpusPeekButton(null);
   updateP2CorpusPeekButton(null);
   updateP3CorpusPeekButton(null);
-  updateFollowUpSourcePeekButton(null);
   state.practiceLocked = false;
   state.status = "idle";
   state.attempt = null;
@@ -2642,8 +2636,14 @@ function setRecordButton(status, title, hint) {
 }
 
 function setPromptHtml(html, size = "medium") {
-  $("#promptCard").className = `prompt-card ${size}-prompt`;
-  $("#promptCard").innerHTML = html;
+  const card = $("#promptCard");
+  // The follow-up thinking mascot is an absolutely-positioned child of the
+  // prompt card; setting innerHTML would delete it mid-think (and mid-fly-off),
+  // so detach it first and re-attach after the question text is written.
+  const mascot = document.getElementById("followUpMascot");
+  card.className = `prompt-card ${size}-prompt`;
+  card.innerHTML = html;
+  if (mascot) card.appendChild(mascot);
 }
 
 function promptSize(question) {
@@ -2893,7 +2893,6 @@ function renderTurn(turn) {
   updateP1CorpusPeekButton(turn);
   updateP2CorpusPeekButton(turn);
   updateP3CorpusPeekButton(turn);
-  updateFollowUpSourcePeekButton(turn);
   renderExaminerAudio(turn);
   if (isP2 && turn.cue_card) {
     hideFollowUpThinkingMascot();
@@ -4590,38 +4589,6 @@ function sourceTurnForStreamedFollowUp(attempt, followUpTurn) {
 
 function turnAnswerIsEmpty(turn) {
   return !String(turn?.transcript_cleaned || turn?.transcript_raw || "").trim();
-}
-
-// The "original question" (题干) a follow-up was adapted from. Used by the
-// follow-up hint button so learners can re-read the source question.
-function followUpSourceQuestionText(turn = state.currentTurn) {
-  if (turn?.prompt?.role !== "follow_up") return "";
-  const source = sourceTurnForStreamedFollowUp(state.attempt, turn);
-  return String(source?.question || "").trim();
-}
-
-function updateFollowUpSourcePeekButton(turn = state.currentTurn) {
-  const button = $("peekFollowUpSourceBtn");
-  if (!button) return;
-  const visible = turn?.prompt?.role === "follow_up" && Boolean(followUpSourceQuestionText(turn));
-  button.classList.toggle("hidden", !visible);
-  button.classList.toggle("has-corpus", visible);
-  button.title = visible ? "查看这道追问的原始题目" : "没有可显示的原始题目";
-}
-
-function openFollowUpSourcePeek() {
-  const question = followUpSourceQuestionText();
-  const body = $("followUpSourcePeekBody");
-  if (body) {
-    body.innerHTML = question
-      ? `<section class="p2-corpus-peek-section"><div><p>${escapeHtml(question)}</p></div></section>`
-      : `<section class="p2-corpus-peek-section"><p class="muted">没有可显示的原始题目。</p></section>`;
-  }
-  $("followUpSourcePeekDialog")?.classList.remove("hidden");
-}
-
-function closeFollowUpSourcePeek() {
-  $("followUpSourcePeekDialog")?.classList.add("hidden");
 }
 
 function parseSseEventBlock(block) {
@@ -9121,9 +9088,6 @@ function handleGlobalKeydown(event) {
   } else if (!$("p3CorpusPeekDialog")?.classList.contains("hidden")) {
     event.preventDefault();
     closeP3CorpusPeek();
-  } else if (!$("followUpSourcePeekDialog")?.classList.contains("hidden")) {
-    event.preventDefault();
-    closeFollowUpSourcePeek();
   } else if (!$("reportManagerDialog")?.classList.contains("hidden")) {
     event.preventDefault();
     closeReportManager();
@@ -11368,6 +11332,15 @@ function p3CorpusTargetForTurn(turn) {
 }
 
 function corpusTargetForTurn(turn, attempt) {
+  // A generated follow-up (P1 identity / P3 adaptive) has no editable corpus of
+  // its own — it was produced on the fly. Its corpus lives on the ORIGINAL
+  // question it was adapted from, so resolve the source turn and target that.
+  if (turn?.prompt?.role === "follow_up") {
+    const source = sourceTurnForStreamedFollowUp(attempt, turn);
+    if (source && source.id !== turn.id) {
+      return corpusTargetForTurn(source, attempt);
+    }
+  }
   const p1Target = p1CorpusTargetForTurn(turn, attempt);
   if (p1Target) return { kind: "p1", ...p1Target };
   const p2Target = p2CorpusTargetForTurn(turn, attempt);
@@ -12374,13 +12347,8 @@ function bindEvents() {
   $("peekP2CorpusBtn")?.addEventListener("click", openP2CorpusPeek);
   $("peekP2CorpusBodyBtn")?.addEventListener("click", openP2CorpusBodyPeek);
   $("peekP3CorpusBtn")?.addEventListener("click", () => openP3CorpusPeek().catch(showError));
-  $("peekFollowUpSourceBtn")?.addEventListener("click", openFollowUpSourcePeek);
   $("closeP1CorpusPeekBtn")?.addEventListener("click", closeP1CorpusPeek);
   $("closeP3CorpusPeek")?.addEventListener("click", closeP3CorpusPeek);
-  $("closeFollowUpSourcePeek")?.addEventListener("click", closeFollowUpSourcePeek);
-  $("followUpSourcePeekDialog")?.addEventListener("click", (event) => {
-    if (event.target?.id === "followUpSourcePeekDialog") closeFollowUpSourcePeek();
-  });
   $("reportManagerBtn")?.addEventListener("click", () => openReportManager().catch(showError));
   $("closeReportManager")?.addEventListener("click", closeReportManager);
   $("reportManagerDeleteBtn")?.addEventListener("click", reportManagerBatchDelete);
