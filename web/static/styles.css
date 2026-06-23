@@ -5765,14 +5765,14 @@ body.theme-dark .spelling-drill-panel {
 .language-takeaway-popup {
   position: fixed;
   z-index: 510;
-  width: min(420px, calc(100vw - 24px));
+  width: min(560px, calc(100vw - 24px));
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--panel);
   box-shadow: 0 22px 70px rgba(15, 23, 42, 0.28);
-  padding: 14px;
+  padding: 16px 18px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .language-takeaway-popup header {
@@ -5784,11 +5784,49 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .language-takeaway-popup header button {
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
   padding: 0;
   border-radius: 999px;
+}
+
+/* Circular browser-TTS button that replaced the close button. Reuses the
+   header-button circle; speaker icon is drawn with currentColor strokes. */
+.language-takeaway-tts-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--panel-2, var(--panel));
+  color: var(--accent, #2563eb);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.language-takeaway-tts-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.language-takeaway-tts-btn svg path:first-child {
+  fill: currentColor;
+  stroke: none;
+}
+.language-takeaway-tts-btn:hover {
+  background: color-mix(in srgb, var(--accent, #2563eb) 12%, var(--panel));
+}
+.language-takeaway-tts-btn:active { transform: scale(0.94); }
+.language-takeaway-tts-btn.is-speaking {
+  background: color-mix(in srgb, var(--accent, #2563eb) 18%, var(--panel));
+  animation: takeaway-tts-pulse 1s ease-in-out infinite;
+}
+@keyframes takeaway-tts-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #2563eb) 40%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent, #2563eb) 0%, transparent); }
 }
 
 .language-takeaway-popup label {
@@ -5798,21 +5836,32 @@ body.theme-dark .spelling-drill-panel {
 
 .language-takeaway-popup textarea {
   width: 100%;
-  min-height: 72px;
-  resize: vertical;
+  resize: none;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 10px 13px;
   color: var(--ink);
   font: inherit;
-  font-size: 16px;
   font-weight: 650;
-  line-height: 1.42;
+  line-height: 1.5;
 }
 
+/* English source: bigger and auto-grows to show the whole selection (no inner
+   scroll), so the popup never has to scroll its body. */
 #languageTakeawaySource {
-  min-height: 64px;
-  padding-top: 7px;
+  min-height: 96px;
+  max-height: 42vh;
+  font-size: 17px;
+  overflow: hidden;
+  padding-top: 9px;
+}
+
+/* Chinese keeps reserved space so the popup doesn't jump in size once the
+   translation arrives. */
+#languageTakeawayChinese {
+  min-height: 84px;
+  font-size: 15px;
+  overflow: auto;
 }
 
 .language-takeaway-actions {
@@ -16729,49 +16778,62 @@ body.font-popular .record-control.recording {
   margin: 0 0 12px;
 }
 
-.corpus-edit-button {
-  --corpus-accent: var(--p1-corpus-accent);
-  --corpus-accent-dark: var(--p1-corpus-accent-dark);
+/* 编辑语料库 button: an icon + label pill so it reads by SHAPE, not just colour.
+   One coherent accent-tinted treatment across P1/P2/P3 (the old per-context
+   solid green/blue is gone) with a real dark-mode surface. */
+.corpus-edit-button,
+button.ghost.corpus-edit-button,
+.p2-report-actions button.ghost.corpus-edit-button {
+  --corpus-accent: var(--accent, #2563eb);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 7px;
   min-height: 34px;
-  border: 1px solid color-mix(in srgb, var(--corpus-accent) 42%, transparent);
+  border: 1px solid color-mix(in srgb, var(--corpus-accent) 38%, transparent);
   border-radius: 999px;
-  padding: 7px 13px;
-  color: #fff !important;
-  background: linear-gradient(180deg, var(--corpus-accent), var(--corpus-accent-dark));
-  font-weight: 760;
+  padding: 6px 14px 6px 11px;
+  color: var(--corpus-accent) !important;
+  background: color-mix(in srgb, var(--corpus-accent) 9%, var(--panel)) !important;
+  font-weight: 720;
   white-space: nowrap;
-  box-shadow: 0 6px 14px color-mix(in srgb, var(--corpus-accent-dark) 18%, transparent);
-}
-
-.corpus-edit-button:hover {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--corpus-accent) 88%, #fff), var(--corpus-accent-dark));
-}
-
-button.ghost.corpus-edit-button {
-  border: 1px solid #064e3b;
-  background: #047857;
-  color: #ffffff !important;
+  box-shadow: none;
   text-shadow: none;
-  box-shadow: 0 7px 16px rgba(4, 120, 87, 0.28);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
-button.ghost.corpus-edit-button:hover {
-  border-color: #022c22;
-  background: #065f46;
+.corpus-edit-button .corpus-edit-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
+.corpus-edit-button .corpus-edit-icon path:last-child { fill: color-mix(in srgb, currentColor 18%, transparent); }
 
-.p2-report-actions button.ghost.corpus-edit-button {
-  border-color: #1d4ed8;
-  background: #2563eb;
-  box-shadow: 0 7px 16px rgba(37, 99, 235, 0.24);
-}
-
+.corpus-edit-button:hover,
+button.ghost.corpus-edit-button:hover,
 .p2-report-actions button.ghost.corpus-edit-button:hover {
-  border-color: #1e40af;
-  background: #1d4ed8;
+  background: color-mix(in srgb, var(--corpus-accent) 16%, var(--panel)) !important;
+  border-color: color-mix(in srgb, var(--corpus-accent) 55%, transparent) !important;
+}
+.corpus-edit-button:active { transform: translateY(1px); }
+
+body.theme-dark .corpus-edit-button,
+body.theme-dark button.ghost.corpus-edit-button,
+body.theme-dark .p2-report-actions button.ghost.corpus-edit-button {
+  --corpus-accent: #7aa2ff;
+  color: #cdddff !important;
+  background: color-mix(in srgb, #7aa2ff 16%, var(--panel)) !important;
+  border-color: color-mix(in srgb, #7aa2ff 38%, transparent) !important;
+}
+body.theme-dark .corpus-edit-button:hover,
+body.theme-dark button.ghost.corpus-edit-button:hover,
+body.theme-dark .p2-report-actions button.ghost.corpus-edit-button:hover {
+  background: color-mix(in srgb, #7aa2ff 26%, var(--panel)) !important;
+  border-color: color-mix(in srgb, #7aa2ff 60%, transparent) !important;
 }
 
 .coaching-content {

@@ -161,6 +161,9 @@
     const EXPRESSION_REPLACEMENT_STORAGE_KEY = "ielts-expression-replacements";
     const TAKEAWAY_SRS_STORAGE_KEY = "ielts-takeaway-srs";
     const TAKEAWAY_DAILY_REVIEW_LIMIT = 20;
+    // Max length of a 划词 selection that still offers the Takeaway trigger.
+    // Widened 3× (was 160) so longer sentences can be captured.
+    const TAKEAWAY_SELECTION_MAX_LEN = 480;
     const P1_CORPUS_CLEARED_STORAGE_KEY = "ielts-p1-corpus-cleared";
     const DEFAULT_EXPRESSION_REPLACEMENTS = [
       ["important", "vital / crucial / essential / significant / critical / indispensable / of great importance"],
@@ -3140,7 +3143,7 @@
       const end = Number(answerEl.selectionEnd);
       if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
       const textValue = String(answerEl.value || "").slice(start, end).trim();
-      if (textValue.length < 1 || textValue.length > 160) return null;
+      if (textValue.length < 1 || textValue.length > TAKEAWAY_SELECTION_MAX_LEN) return null;
       const selectionRect = textareaSelectionEndpointRect(answerEl, end);
       if (!selectionRect) return null;
       return {
@@ -3207,7 +3210,7 @@
       if (answerSelection) return answerSelection;
       const selection = window.getSelection?.();
       const textValue = String(selection?.toString() || "").trim();
-      if (!selection || selection.rangeCount === 0 || textValue.length < 1 || textValue.length > 160) return null;
+      if (!selection || selection.rangeCount === 0 || textValue.length < 1 || textValue.length > TAKEAWAY_SELECTION_MAX_LEN) return null;
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       if (!rect || (rect.width === 0 && rect.height === 0)) return null;
@@ -3240,6 +3243,27 @@
     function hideLanguageTakeawayPopup() {
       $("languageTakeawayPopup")?.classList.add("hidden");
       setLanguageTakeawayStatus("");
+    }
+
+    // Grow the English source textarea to fit its content so the whole selection
+    // is shown without an inner scrollbar (capped by the CSS max-height).
+    function autosizeLanguageTakeawaySource() {
+      const el = $("languageTakeawaySource");
+      if (!el) return;
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    }
+
+    // Browser-TTS the English source of the 划词 popup (the popup's top-right
+    // control is now a speaker button instead of a close button).
+    function speakLanguageTakeawaySource() {
+      const value = String($("languageTakeawaySource")?.value || "").trim();
+      if (!value) return;
+      const btn = $("languageTakeawayTtsBtn");
+      const done = () => btn?.classList.remove("is-speaking");
+      btn?.classList.add("is-speaking");
+      const result = speakWithBrowserTts(value, { onEnd: done, onError: done, onNoStart: done });
+      if (!result?.ok) done();
     }
 
     function placeLanguageTakeawayTrigger(left, top) {
@@ -3336,6 +3360,7 @@
       const triggerRect = trigger.getBoundingClientRect();
       popup.classList.remove("hidden");
       placeLanguageTakeawayPopup(triggerRect.left, triggerRect.bottom + 8);
+      autosizeLanguageTakeawaySource();
       hideLanguageTakeawayTrigger();
       await translateLanguageTakeawaySource(textValue);
     }
@@ -3351,6 +3376,7 @@
         const result = await api("/api/language-takeaways/translate", { text: sourceText });
         $("languageTakeawaySource").value = result.source_text || sourceText;
         $("languageTakeawayChinese").value = result.chinese_text || "";
+        autosizeLanguageTakeawaySource();
         setLanguageTakeawayStatus(languageTakeawayTranslationStatus(result));
       } catch (error) {
         setLanguageTakeawayStatus(error.message || "翻译失败，可手动填写中文");
@@ -3919,6 +3945,25 @@
         renderLanguageTakeaways();
         text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
         renderTakeawayReviewSurfaces("language");
+      }
+    }
+
+    // Enter in the add/edit dialog's English field auto-translates and fills the
+    // 中文 field — same behaviour as the 划词 popup.
+    async function translateTakeawayEditSource() {
+      const sourceText = String($("takeawayEditSource")?.value || "").trim();
+      if (!sourceText) {
+        text("takeawayEditStatus", "原文为空。");
+        return;
+      }
+      text("takeawayEditStatus", "翻译中...");
+      try {
+        const result = await api("/api/language-takeaways/translate", { text: sourceText });
+        if ($("takeawayEditSource")) $("takeawayEditSource").value = result.source_text || sourceText;
+        if ($("takeawayEditChinese")) $("takeawayEditChinese").value = result.chinese_text || "";
+        text("takeawayEditStatus", languageTakeawayTranslationStatus(result));
+      } catch (error) {
+        text("takeawayEditStatus", error.message || "翻译失败，可手动填写中文");
       }
     }
 
@@ -5999,6 +6044,9 @@
       selectionText,
       hideLanguageTakeawayTrigger,
       hideLanguageTakeawayPopup,
+      speakLanguageTakeawaySource,
+      autosizeLanguageTakeawaySource,
+      translateTakeawayEditSource,
       placeLanguageTakeawayTrigger,
       showLanguageTakeawayTrigger,
       trackLanguageTakeawayTriggerDuringScroll,

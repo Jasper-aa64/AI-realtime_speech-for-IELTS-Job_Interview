@@ -11059,6 +11059,18 @@ function hideLanguageTakeawayPopup(...args) {
   return corpusTakeawayController.hideLanguageTakeawayPopup(...args);
 }
 
+function speakLanguageTakeawaySource(...args) {
+  return corpusTakeawayController.speakLanguageTakeawaySource(...args);
+}
+
+function translateTakeawayEditSource(...args) {
+  return corpusTakeawayController.translateTakeawayEditSource(...args);
+}
+
+function autosizeLanguageTakeawaySource(...args) {
+  return corpusTakeawayController.autosizeLanguageTakeawaySource(...args);
+}
+
 function placeLanguageTakeawayTrigger(...args) {
   return corpusTakeawayController.placeLanguageTakeawayTrigger(...args);
 }
@@ -11402,7 +11414,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
         data-p2-corpus-entry-id="${escapeHtml(corpusTarget.entryId || "")}"
         data-title="${escapeHtml(corpusTarget.title || "")}"
         data-category="${escapeHtml(corpusTarget.category || "")}"
-        data-label="${escapeHtml(corpusTarget.label || "")}">编辑语料库</button>`
+        data-label="${escapeHtml(corpusTarget.label || "")}"><svg class="corpus-edit-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11M4 12h7M4 17h5"></path><path d="m15.5 15.5 4-4a1.4 1.4 0 0 1 2 2l-4 4-2.6.6z"></path></svg><span class="corpus-edit-label">编辑语料库</span></button>`
     : "";
   const coachingRow = shouldRenderTurnCoaching(turn)
     ? `<tr class="p1-p3-coaching-row">
@@ -12385,6 +12397,12 @@ function bindEvents() {
   $("saveTakeawayEditBtn")?.addEventListener("click", (event) => {
     withPending(event.currentTarget, saveTakeawayEditor, { busyText: "保存中..." }).catch(showError);
   });
+  // Enter in the dialog's English field auto-translates → fills 中文 (like the popup).
+  $("takeawayEditSource")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    translateTakeawayEditSource().catch(showError);
+  });
   $("cancelTakeawayEditBtn")?.addEventListener("click", closeTakeawayEditor);
   $("p1CorpusTopics")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-p1-corpus-question]");
@@ -12652,7 +12670,15 @@ function bindEvents() {
   $("languageTakeawaySaveBtn")?.addEventListener("click", (event) => {
     withPending(event.currentTarget, saveLanguageTakeaway, { busyText: "保存中..." }).catch(showError);
   });
-  $("languageTakeawayCloseBtn")?.addEventListener("click", hideLanguageTakeawayPopup);
+  // The popup's top-right control is now a TTS button (browser voice for the
+  // English source); the popup still closes via the existing outside-click
+  // handler, plus Esc below.
+  $("languageTakeawayTtsBtn")?.addEventListener("click", () => speakLanguageTakeawaySource());
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const popup = $("languageTakeawayPopup");
+    if (popup && !popup.classList.contains("hidden")) hideLanguageTakeawayPopup();
+  });
   $("writingPromptImage")?.addEventListener("click", (event) => {
     const image = event.target.closest("[data-writing-image-preview]");
     if (!image) return;
@@ -12766,6 +12792,7 @@ function bindEvents() {
     event.preventDefault();
     translateLanguageTakeawaySource();
   });
+  $("languageTakeawaySource")?.addEventListener("input", () => autosizeLanguageTakeawaySource());
   document.addEventListener("pointerdown", (event) => {
     const popup = $("languageTakeawayPopup");
     const trigger = $("languageTakeawayTrigger");
@@ -12821,6 +12848,12 @@ function bindEvents() {
     const sourceEl = anchor?.closest?.("[data-markdown-source]") || focus?.closest?.("[data-markdown-source]");
     const markdown = sourceEl?.dataset?.markdownSource?.trim();
     if (!markdown) return;
+    // Only substitute the clean markdown when the user selected essentially the
+    // WHOLE block. For a partial selection (e.g. one phrase of the 7分回答参考)
+    // copy exactly what was highlighted instead of the entire answer.
+    const selectedText = selection.toString().replace(/\s+/g, " ").trim();
+    const fullText = String(sourceEl.textContent || "").replace(/\s+/g, " ").trim();
+    if (!selectedText || !fullText || selectedText.length < fullText.length * 0.95) return;
     event.preventDefault();
     event.clipboardData?.setData("text/plain", markdown);
   });
