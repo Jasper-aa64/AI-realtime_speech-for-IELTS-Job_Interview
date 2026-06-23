@@ -8,6 +8,36 @@
   window.IELTSGuestSamples = {
   "languageTakeaways": [
     {
+      "entry_id": "lt:249165936da8ad",
+      "source_text": "money → income / earnings / financial resources / wealth",
+      "chinese_text": "表达替换：money",
+      "source_language": "en",
+      "target_language": "zh",
+      "context_url": "https://jerusalem-competitors-formats-higher.trycloudflare.com/?view=takeawayBook",
+      "context_label": "表达替换",
+      "updated_at": "2026-06-15 21:11"
+    },
+    {
+      "entry_id": "lt:b2ee4dd6bf76d2",
+      "source_text": "relax → unwind / loosen up / de-stress / take a break / recharge / clear my mind / let off steam",
+      "chinese_text": "表达替换：relax",
+      "source_language": "en",
+      "target_language": "zh",
+      "context_url": "https://jerusalem-competitors-formats-higher.trycloudflare.com/?view=takeawayBook",
+      "context_label": "表达替换",
+      "updated_at": "2026-06-15 21:10"
+    },
+    {
+      "entry_id": "lt:3cccfbb32084f0",
+      "source_text": "like → be fond of / be into / be keen on / have a strong interest in / be drawn to / find ... appealing",
+      "chinese_text": "表达替换：like",
+      "source_language": "en",
+      "target_language": "zh",
+      "context_url": "https://jerusalem-competitors-formats-higher.trycloudflare.com/?view=takeawayBook",
+      "context_label": "表达替换",
+      "updated_at": "2026-06-15 21:10"
+    },
+    {
       "entry_id": "lt:a1b363e628f711",
       "source_text": "However, if there’s one similarity, it’s our shared love for tabletop gaming.",
       "chinese_text": "然而，如果说有什么相似之处的话，那就是我们都热爱桌面游戏。",
@@ -36,36 +66,6 @@
       "context_url": "https://treated-caused-father-eddie.trycloudflare.com/?view=history&report=c9b3ab7fe60d4dc4822f194a8fd7f609",
       "context_label": "口语报告",
       "updated_at": "2026-06-23 10:08"
-    },
-    {
-      "entry_id": "lt:a9928fa047fff9",
-      "source_text": "obsessed with drawing",
-      "chinese_text": "痴迷于绘画",
-      "source_language": "en",
-      "target_language": "zh",
-      "context_url": "https://treated-caused-father-eddie.trycloudflare.com/?view=history&report=c9b3ab7fe60d4dc4822f194a8fd7f609",
-      "context_label": "口语报告",
-      "updated_at": "2026-06-23 09:39"
-    },
-    {
-      "entry_id": "lt:c654e9046de695",
-      "source_text": "Yes, to some extent. If I really care about a dream, I usually keep working toward it, but I'm also realistic enough to adjust when necessary.",
-      "chinese_text": "是的，在某种程度上是这样。如果我真的在乎一个梦想，我通常会继续朝着它努力，但我也足够现实，会在必要时调整自己。",
-      "source_language": "en",
-      "target_language": "zh",
-      "context_url": "https://explains-keen-totals-bob.trycloudflare.com/?view=history&report=c9b3ab7fe60d4dc4822f194a8fd7f609",
-      "context_label": "口语报告",
-      "updated_at": "2026-06-23 01:12"
-    },
-    {
-      "entry_id": "lt:4649b353397e14",
-      "source_text": "Rather than constantly striving to climb the corporate ladder，I place a much higher value on maintaining a healthy work-life balance and personal peace of mind.",
-      "chinese_text": "与其不断努力攀登企业阶梯，我更重视维持健康的工作生活平衡和个人内心的平静。",
-      "source_language": "en",
-      "target_language": "zh",
-      "context_url": "https://explains-keen-totals-bob.trycloudflare.com/?view=history&report=c9b3ab7fe60d4dc4822f194a8fd7f609",
-      "context_label": "口语报告",
-      "updated_at": "2026-06-23 00:50"
     }
   ],
   "writingTakeaways": [
@@ -130,7 +130,7 @@
             "question_id": "p1q:e6b10ece6f40968a",
             "topic": "intro",
             "question": "What is your full name?",
-            "corpus_text": "### 总结几个雅思开场固定问题\n\n除了询问名字，考官接下来必然会从**身份/状态**、**家乡**或**住所**这几个核心话题中二选一进行提问，以此来帮你热身：\n\n1. **What is your full name?**\n\n* *后续通常紧跟：Can I see your ID? / Could you show me your identification, please?*\n\n2. **Are you a student or do you work?**\n\n* *核心衍生问题（如果是学生）：What is your major? / Why did you choose this major? / Do you like it?*\n* *核心衍生问题（如果已工作）：What do you do for a living? / Is it a difficult job?*\n\n3. **Where are you from?** / **Where is your hometown?**\n\n* *核心衍生问题：Is that a good place to live? / What's the most interesting part of your hometown? / How long have you lived there?*\n\n4. **Tell me about the house or apartment you live in.** / **Do you live in a house or a flat?**\n\n* *核心衍生问题：What's your favorite room in your home? / Can you describe the neighborhood? / Do you plan to live there for a long time?*\n\n> **💡 备考小贴士：**\n>\n> 这些开场问题虽然固定且简单，但在回答时**切忌只蹦出单词或短句**（例如问 \"Where are you from?\" 不要只答…",
+            "corpus_text": "### 总结几个雅思开场固定问题\n\n除了询问名字，考官接下来必然会从**身份/状态**、**家乡**或**住所**这几个核心话题中二选一进行提问，以此来帮你热身：\n\n1. **What is your full name?**\n\n* *后续通常紧跟：Can I see your ID? / Could you show me your identification, please?*\n\n2. **Are you a student or do you work?**\n\n* *核心衍生问题（如果是学生）：What is your major? / Why did you choose this major? / Do you like it?*\n* *核心衍生问题（如果已工作）：What do you do for a living? / Is it a difficult job?*\n\n3. **Where are you from?** / **Where is your hometown?**\n\n* *核心衍生问题：Is that a good place to live? / What's the most interesting part of your hometown? / How long have you lived there?*\n\n4. **Tell me about the house or apartment you live in.** / **Do you live in a house or a flat?**\n\n* *核心衍生问题：What's your favorite room in your home? / Can you describe the neighborhood? / Do you plan to live there for a long time?*\n\n> **💡 备考小贴士：**\n>\n> 这些开场问题虽然固定且简单，但在回答时**切忌只蹦出单词或短句**（例如问 \"Where are you from?\" 不要只答 \"Suzhou.\"）。\n>\n> 最好用 **1-2句结构完整、自然的句子** 撑起回答。例如：\n>\n> * \"I’m currently a university student, majoring in software engineering.\"\n> * \"I’m from Chengdu, which is a vibrant city famous for its spicy food…",
             "last_ai_answer": "",
             "updated_at": "2026-06-19 12:11"
           },
@@ -138,9 +138,9 @@
             "question_id": "p1q:e2b279283eea5c57",
             "topic": "intro",
             "question": "Do you work or do you study?",
-            "corpus_text": "* Actually, I do both.\n* I’m a university student majoring in software engineering, and at the same time I’m doing an internship at a tech company\n\n### **How does your internship connect with what you study?「实习作用」**\n\nWhat I enjoy most is that it lets me **turn theory into practice**.\n\nInstead of just learning programming concepts from lecturers, I can **apply them to real problems** at work, which makes the subject feel much more useful and motivating.\n\n### **What kind of work do you do at the tech company?**\n\nI mainly do development work, **such as** writing and testing code for a trading-related system.\n\nIt can be challenging at times, but honestly, that is what keeps the work interesting.\n\n### **How are you finding your software engineering studies so far?「专业」**\n\n* **For the most part, yes.**\n* I found that I like doing problem sets more than writing essays.\n* So what I enjoy most abo…",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-23 11:01"
+            "updated_at": ""
           }
         ]
       },
@@ -152,25 +152,71 @@
             "question_id": "p1q:2be25380f35c9753",
             "topic": "ambition_and_dreams",
             "question": "What was your childhood dream?",
-            "corpus_text": "When I was a child, I dreamed of becoming a designer, probably because I was good at drawing and enjoyed being creative.\n\nIt felt like a job where I could turn ideas into something real.",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-23 11:01"
+            "updated_at": ""
           },
           {
             "question_id": "p1q:2b14f527be174660",
             "topic": "ambition_and_dreams",
             "question": "Are you the kind of person who sticks to dreams?",
-            "corpus_text": "Yes, to some extent.\n\nIf I really care about a dream, I usually keep working toward it,\n\nbut I'm also **realistic enough to adjust when necessary.**",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-23 11:01"
+            "updated_at": ""
           },
           {
             "question_id": "p1q:15f225955ade1151",
             "topic": "ambition_and_dreams",
             "question": "What is your dream job?",
-            "corpus_text": "* \"My dream job is to be an AI engineer focused on **utilizing artificial intelligence to solve technical problems**.\n* But equally important is a corporate culture with a **standard nine-to-six, five-day workweek**, allowing me to focus on cutting-edge tech without **burning out**.\"",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-23 11:01"
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:57d2194361191d45",
+            "topic": "ambition_and_dreams",
+            "question": "Do you think you are an ambitious person?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "art",
+        "label": "Art",
+        "questions": [
+          {
+            "question_id": "p1q:7f1064f67889a16d",
+            "topic": "art",
+            "question": "Do you like art?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4330987f7d974295",
+            "topic": "art",
+            "question": "Do you like visiting art galleries?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:53d7a7424019c820",
+            "topic": "art",
+            "question": "Do you want to be an artist?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:eb03ed4df234da26",
+            "topic": "art",
+            "question": "Do you like modern art or traditional art?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
           }
         ]
       },
@@ -182,25 +228,103 @@
             "question_id": "p1q:fabcddecb6a57273",
             "topic": "boring_things",
             "question": "Do you often feel bored?",
-            "corpus_text": "Yes, I do feel bored sometimes, especially in **serious circumstances** or when I have nothing interesting to do.\n\nIn those moments, I try to distract myself with something small and active rather than just sitting there doing nothing.",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-22 16:06"
+            "updated_at": ""
           },
           {
             "question_id": "p1q:4c83d9d98e4ef14c",
             "topic": "boring_things",
             "question": "Did you ever find school boring when you were a child?",
-            "corpus_text": "I don’t really think school was boring for me as a child.\n\nI actually **kind of enjoyed studying** because I was **curious about things**, and that made lessons feel more interesting.\n\nNow I’m less excited about it, but back then I was much more engaged.",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-22 16:08"
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:0db5bb720fd8c145",
+            "topic": "boring_things",
+            "question": "What sort of things do you find most boring now?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
           },
           {
             "question_id": "p1q:afa934d14353bf90",
             "topic": "boring_things",
             "question": "What do you do to stop yourself feeling bored?",
-            "corpus_text": "If I’m bored, I usually **play around with things near me** or find something simple to do, like listening to music or checking my phone for a few minutes.\n\nIt doesn’t have to be anything big; I just need to keep myself occupied.\n\nand if I’m at home, I just **keep myself busy with small tasks** so I don’t sit there feeling restless.",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-22 16:08"
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:55baa9122befb084",
+            "topic": "boring_things",
+            "question": "When would you feel bored?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d6899758e6512239",
+            "topic": "boring_things",
+            "question": "What do you do when you feel bored?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:185e3254c4ab48c6",
+            "topic": "boring_things",
+            "question": "Do you think childhood is boring or adulthood is boring?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:f9dd81585a1d04e6",
+            "topic": "boring_things",
+            "question": "What kinds of things do you find boring?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "building",
+        "label": "Building",
+        "questions": [
+          {
+            "question_id": "p1q:0748c91a3ec80b3e",
+            "topic": "building",
+            "question": "Are there tall buildings near your home?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:eac6e9bcb38382e8",
+            "topic": "building",
+            "question": "Do you take photos of buildings?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:653ae7b7d4f41efd",
+            "topic": "building",
+            "question": "Is there a building that you would like to visit?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:fd201b3c7ef52eb6",
+            "topic": "building",
+            "question": "Do you want to live in a tall building?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
           }
         ]
       },
@@ -212,31 +336,2409 @@
             "question_id": "p1q:cce454a967308524",
             "topic": "cars",
             "question": "Did you enjoy traveling by car when you were a kid?",
-            "corpus_text": "Yes, I did.\n\nI **really enjoyed** travelling by car as a kid because it felt like a **little adventure** every time, especially when my family went on longer trips.",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-19 13:49"
+            "updated_at": ""
           },
           {
             "question_id": "p1q:2b943a481de4ad35",
             "topic": "cars",
             "question": "What types of cars do you like?",
-            "corpus_text": "I like **practical cars** most, especially ones that are **fuel-efficient** and comfortable.\n\nI’m not too focused on flashy models; I prefer something **reliable** and easy to drive.",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-19 13:50"
+            "updated_at": ""
           },
           {
             "question_id": "p1q:da987c4b777cabb2",
             "topic": "cars",
             "question": "Do you prefer to be a driver or a passenger?",
-            "corpus_text": "I usually prefer to be a **passenger**, because I can just relax and enjoy the journey.\n\nIf I’m driving, I have to stay fully focused, so being a passenger feels **less stressful**.",
+            "corpus_text": "",
             "last_ai_answer": "",
-            "updated_at": "2026-06-19 13:51"
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:2f2c276c61ed4365",
+            "topic": "cars",
+            "question": "What do you usually do when there is a traffic jam?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:01dd26d3af3cf6f2",
+            "topic": "cars",
+            "question": "Do you think car colours are important?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:234f6a8236c7cf22",
+            "topic": "cars",
+            "question": "Will you buy an expensive car in the future?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "childhood_activities",
+        "label": "Childhood Activities",
+        "questions": [
+          {
+            "question_id": "p1q:00e071d537eacd47",
+            "topic": "childhood_activities",
+            "question": "What are your favourite activities?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3bf894b731ab5257",
+            "topic": "childhood_activities",
+            "question": "What were your favourite activities when you were a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3623d947a9bab3e7",
+            "topic": "childhood_activities",
+            "question": "Did you prefer to do activities alone or with a group of people when you were a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e1f91d9d6f8594c8",
+            "topic": "childhood_activities",
+            "question": "Are there any differences between the activities you liked when you were a child and those you like now?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "cinema",
+        "label": "Cinema",
+        "questions": [
+          {
+            "question_id": "p1q:49893f796e591c74",
+            "topic": "cinema",
+            "question": "What films do you like?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:bd92407da54cde3c",
+            "topic": "cinema",
+            "question": "Did you often watch films when you were a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:fd2b2ae6054ebd4d",
+            "topic": "cinema",
+            "question": "Did you ever go to the cinema alone as a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:bd38d57a84446e81",
+            "topic": "cinema",
+            "question": "Do you often go to the cinema with your friends?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a373ec0eefd10682",
+            "topic": "cinema",
+            "question": "Do you think going to the cinema is a good way to spend time with friends?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:82468356d350577b",
+            "topic": "cinema",
+            "question": "How often do you watch films?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:cb6f59dbf9d3583e",
+            "topic": "cinema",
+            "question": "Do you prefer to watch films at home or in the cinema?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "clothes",
+        "label": "Clothes",
+        "questions": [
+          {
+            "question_id": "p1q:450bd4b7cf6067ba",
+            "topic": "clothes",
+            "question": "What kind of clothes do you like to wear?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:cdb3f2de98459a93",
+            "topic": "clothes",
+            "question": "Do you prefer to wear comfortable and casual clothes or formal clothes?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3642e40d82e6531f",
+            "topic": "clothes",
+            "question": "Do you like wearing T-shirts?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:868d277781a33e51",
+            "topic": "clothes",
+            "question": "Do you spend a lot of time choosing clothes?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c0b6dfcfcb9f3653",
+            "topic": "clothes",
+            "question": "Do you wear clothes of different styles on weekdays and weekends?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4022fecf50ef4e38",
+            "topic": "clothes",
+            "question": "What colour clothes do you like?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "crowded_places",
+        "label": "Crowded Places",
+        "questions": [
+          {
+            "question_id": "p1q:b32011a498f76555",
+            "topic": "crowded_places",
+            "question": "Is the city where you live crowded?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:6a6b0732dff555cd",
+            "topic": "crowded_places",
+            "question": "Is there a crowded place near where you live?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:5a564f893437da6f",
+            "topic": "crowded_places",
+            "question": "Do you like crowded places?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:1a44acba55ee7895",
+            "topic": "crowded_places",
+            "question": "Do most people like crowded places?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ee969b8551e96bc3",
+            "topic": "crowded_places",
+            "question": "When was the last time you were in a crowded place?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:cca60c7fd6e68c94",
+            "topic": "crowded_places",
+            "question": "How do you feel when a place is very crowded?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "daily_routine",
+        "label": "Daily Routine",
+        "questions": [
+          {
+            "question_id": "p1q:a64f79598b79d149",
+            "topic": "daily_routine",
+            "question": "What is your daily study routine?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:373633a60378249c",
+            "topic": "daily_routine",
+            "question": "Have you ever changed your routine?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:5edb123be8409cdf",
+            "topic": "daily_routine",
+            "question": "Do you think it is important to have a daily routine for your study?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:8f9aaa43e53fe9e3",
+            "topic": "daily_routine",
+            "question": "What part of your day do you like best?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:5370ebb996ce8a40",
+            "topic": "daily_routine",
+            "question": "Do you often go to bed late or early?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "evening_time",
+        "label": "Evening Time",
+        "questions": [
+          {
+            "question_id": "p1q:62f12c6f032242fa",
+            "topic": "evening_time",
+            "question": "Do you like the morning or evening?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:beffb0c9c3592c90",
+            "topic": "evening_time",
+            "question": "What do you usually do in the evening?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c1483168eb6016ff",
+            "topic": "evening_time",
+            "question": "What did you do in the evening when you were little? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4168caaaa08938c8",
+            "topic": "evening_time",
+            "question": "Are there any differences between what you do in the evening now and what you did in the past?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:8d295eb9af7d156f",
+            "topic": "evening_time",
+            "question": "Do you spend your evenings doing the same things on both weekends and weekdays? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:1ebad59d56b74bab",
+            "topic": "evening_time",
+            "question": "What do you hate doing in the evening?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "food",
+        "label": "Food",
+        "questions": [
+          {
+            "question_id": "p1q:2a868f10b7ff7a57",
+            "topic": "food",
+            "question": "What is your favourite food?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:7b65c5885e611db6",
+            "topic": "food",
+            "question": "What kind of food did you like when you were young?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:7892785d0803c6c4",
+            "topic": "food",
+            "question": "Do you eat different foods at different times of the year?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:225ee0ee3619cd20",
+            "topic": "food",
+            "question": "Has your favourite food changed since you were a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "free_time",
+        "label": "Free Time",
+        "questions": [
+          {
+            "question_id": "p1q:2f5e172f33c0ed0c",
+            "topic": "free_time",
+            "question": "Do you often have free time?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:277d34324921a3f9",
+            "topic": "free_time",
+            "question": "What do you usually do in your spare time?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:2c61d38194e846d2",
+            "topic": "free_time",
+            "question": "Which day do you have more free time on, Saturday or Sunday?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:7a60103a86020f40",
+            "topic": "free_time",
+            "question": "Would you like to have more free time in the future?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "gifts",
+        "label": "Gifts",
+        "questions": [
+          {
+            "question_id": "p1q:213bac74b37c1207",
+            "topic": "gifts",
+            "question": "Have you ever sent handmade gifts to others?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c8fe53c8df310927",
+            "topic": "gifts",
+            "question": "Have you ever received a great gift?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c20b612fbd3751c1",
+            "topic": "gifts",
+            "question": "What do you consider when choosing a gift?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:fc2fde9f04f5f497",
+            "topic": "gifts",
+            "question": "Do you think you are good at choosing gifts?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:648015dba5e42482",
+            "topic": "gifts",
+            "question": "What gift have you received recently?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "headphones",
+        "label": "Headphones",
+        "questions": [
+          {
+            "question_id": "p1q:c7d2c03068141ab2",
+            "topic": "headphones",
+            "question": "Do you use headphones?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3927bce492cf9cf1",
+            "topic": "headphones",
+            "question": "How often do you wear headphones?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a21985814c97c253",
+            "topic": "headphones",
+            "question": "Do you think headphones are useful?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4fe365cdae111c5c",
+            "topic": "headphones",
+            "question": "Are headphones popular in your country?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ed727108196d4280",
+            "topic": "headphones",
+            "question": "In what situations should people not wear headphones?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:826bd97a8ed0df35",
+            "topic": "headphones",
+            "question": "Is wearing headphones comfortable?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "history",
+        "label": "History",
+        "questions": [
+          {
+            "question_id": "p1q:8bcd5840156a4ffc",
+            "topic": "history",
+            "question": "Have you ever been to historical museums?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:13c45588a78e31e8",
+            "topic": "history",
+            "question": "Do you like history?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:709aa31c1901ff7c",
+            "topic": "history",
+            "question": "When was the last time you read about history?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:051a7938c60419ca",
+            "topic": "history",
+            "question": "Did you like history when you were young?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "hobby",
+        "label": "Hobby",
+        "questions": [
+          {
+            "question_id": "p1q:22243eeea2082299",
+            "topic": "hobby",
+            "question": "Do you have any hobbies?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:84ead94be261497e",
+            "topic": "hobby",
+            "question": "Did you have any hobbies when you were a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ac03501006b894e3",
+            "topic": "hobby",
+            "question": "Do you have a hobby that you've had since childhood?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d2925020b90a59ae",
+            "topic": "hobby",
+            "question": "Do you have the same hobbies as your family members?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "home_and_accommodation",
+        "label": "Home And Accommodation",
+        "questions": [
+          {
+            "question_id": "p1q:bec49272d0690cc0",
+            "topic": "home_and_accommodation",
+            "question": "Do you live in a house or an apartment?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:8adc6fce3d762443",
+            "topic": "home_and_accommodation",
+            "question": "Do you prefer living in a house or an apartment?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a5fd5ecf4e168249",
+            "topic": "home_and_accommodation",
+            "question": "Do you live with anyone else? Why/Why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:b71ba24c6f8539c1",
+            "topic": "home_and_accommodation",
+            "question": "Do you like the place you currently live in? Why/Why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:1e409735158d5866",
+            "topic": "home_and_accommodation",
+            "question": "What is your favourite room in your house/apartment?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:55aa36c5ab977d63",
+            "topic": "home_and_accommodation",
+            "question": "Would you like to change anything in your house/apartment?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:69c19b6dda5e7619",
+            "topic": "home_and_accommodation",
+            "question": "Would you like to move to a different house/apartment in the future?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:815ebf7644ac1c7e",
+            "topic": "home_and_accommodation",
+            "question": "What do you think makes a place comfortable to live in?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e6b96935af35f1ac",
+            "topic": "home_and_accommodation",
+            "question": "Can you describe the place where you live?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3dd7fdeb0b98509c",
+            "topic": "home_and_accommodation",
+            "question": "How long have you lived there?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:b5f157293f403870",
+            "topic": "home_and_accommodation",
+            "question": "Who do you live with?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4256960d70e28265",
+            "topic": "home_and_accommodation",
+            "question": "Do you plan to live there for a long time?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3bc66b60302d0334",
+            "topic": "home_and_accommodation",
+            "question": "What is the difference between where you are living now and where you have lived in the past?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:30aa6f5cc1a5dd0a",
+            "topic": "home_and_accommodation",
+            "question": "What do you usually do in your flat?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:2edaf42753c8dda4",
+            "topic": "home_and_accommodation",
+            "question": "Which room does your family spend most of the time in?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:12159b1eb4346012",
+            "topic": "home_and_accommodation",
+            "question": "Are there transport facilities to your home that are very good?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:6739b7b43dbfb7f8",
+            "topic": "home_and_accommodation",
+            "question": "What kinds of accommodation do you live in?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e7292e5ebea4d5d6",
+            "topic": "home_and_accommodation",
+            "question": "Please describe the room you live in?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "hometown",
+        "label": "Hometown",
+        "questions": [
+          {
+            "question_id": "p1q:3d630c1476db4570",
+            "topic": "hometown",
+            "question": "Where is your hometown?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e68d733baab57eb0",
+            "topic": "hometown",
+            "question": "What kind of place is it?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:18561bc1f84079d0",
+            "topic": "hometown",
+            "question": "What is one of the best things about living there?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a3ef1412b3f9f8d1",
+            "topic": "hometown",
+            "question": "Is there anything you dislike about it?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a74f1eeb301ebbf6",
+            "topic": "hometown",
+            "question": "Do you know many people who live nearby?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c05327ff30dbd7e1",
+            "topic": "hometown",
+            "question": "Do you have any relatives who still live in your hometown? Why/Why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:248a8cdab210bfcc",
+            "topic": "hometown",
+            "question": "Do you often go back to visit your hometown? Why/Why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:820a9ad0e95ef385",
+            "topic": "hometown",
+            "question": "Can you describe your hometown a little bit?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d6efdb2441a74709",
+            "topic": "hometown",
+            "question": "Do you like it?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:32e3fe038a0b6837",
+            "topic": "hometown",
+            "question": "Did you like living there?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:80f61efadc2c2a8a",
+            "topic": "hometown",
+            "question": "Do you think you'll continue living there for a long time?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "jokes",
+        "label": "Jokes",
+        "questions": [
+          {
+            "question_id": "p1q:aaabb191bf4ab79f",
+            "topic": "jokes",
+            "question": "Are you good at telling jokes?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:f4a8968bfaa9665e",
+            "topic": "jokes",
+            "question": "Do your friends like to tell jokes?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:519047e690683b99",
+            "topic": "jokes",
+            "question": "Do you like to watch comedies?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:8c13206e66d727ae",
+            "topic": "jokes",
+            "question": "Have you ever watched a live show?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:9abf22dcc216bb10",
+            "topic": "jokes",
+            "question": "Are comedy shows popular in your country?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "life_stages",
+        "label": "Life Stages",
+        "questions": [
+          {
+            "question_id": "p1q:9aeb5969bf988acd",
+            "topic": "life_stages",
+            "question": "What did you often do with your friends in your childhood?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e8f9b55e51300b20",
+            "topic": "life_stages",
+            "question": "What do you think is the most important at the moment?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a6dcd1fe17f0415a",
+            "topic": "life_stages",
+            "question": "Do you have any plans for the next five years?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c2e0469448b71501",
+            "topic": "life_stages",
+            "question": "How do people remember each stage of their lives?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:88b92f05447df55f",
+            "topic": "life_stages",
+            "question": "Do you enjoy being the age you are now?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4847702edec98989",
+            "topic": "life_stages",
+            "question": "At what age do you think people are the happiest?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "memory",
+        "label": "Memory",
+        "questions": [
+          {
+            "question_id": "p1q:37a472c898beda25",
+            "topic": "memory",
+            "question": "Are you good at memorising things?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:61f78172219f0c47",
+            "topic": "memory",
+            "question": "Have you ever forgotten something important?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c067e2c001b43a29",
+            "topic": "memory",
+            "question": "What do you need to remember in your daily life?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3e57cd481b2baf21",
+            "topic": "memory",
+            "question": "How do you remember important things?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "mirrors",
+        "label": "Mirrors",
+        "questions": [
+          {
+            "question_id": "p1q:d699757257ccee76",
+            "topic": "mirrors",
+            "question": "Do you like looking at yourself in the mirror? How often?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:18a6fd89a70b59f3",
+            "topic": "mirrors",
+            "question": "Have you ever bought mirrors?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:f7d5c47ed4310e4d",
+            "topic": "mirrors",
+            "question": "Do you usually take a mirror with you?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c1d50da1a676fe21",
+            "topic": "mirrors",
+            "question": "Would you use mirrors to decorate your room?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "morning_routines",
+        "label": "Morning Routines",
+        "questions": [
+          {
+            "question_id": "p1q:d634c6374fbafcfd",
+            "topic": "morning_routines",
+            "question": "What do you do right after getting up in the morning?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e73cdbaf59668e97",
+            "topic": "morning_routines",
+            "question": "Is breakfast important?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e77d3f3ad0a7c07a",
+            "topic": "morning_routines",
+            "question": "What is your morning routine?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4148ca3f9cebdf27",
+            "topic": "morning_routines",
+            "question": "Do you like to get up early in the morning?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "morning_time",
+        "label": "Morning Time",
+        "questions": [
+          {
+            "question_id": "p1q:5271f02b4cc9b1ac",
+            "topic": "morning_time",
+            "question": "Do you like getting up early in the morning?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d16df437c5ccd616",
+            "topic": "morning_time",
+            "question": "What do you usually do in the morning?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:2b715eef5b644d0e",
+            "topic": "morning_time",
+            "question": "What did you do in the morning when you were little? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ec627079ae515b50",
+            "topic": "morning_time",
+            "question": "Are there any differences between what you do in the morning now and what you did in the past?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:9ffddf73846dc8b0",
+            "topic": "morning_time",
+            "question": "Do you spend your mornings doing the same things on both weekends and weekdays? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "music",
+        "label": "Music",
+        "questions": [
+          {
+            "question_id": "p1q:d3d5c04175a1f6f7",
+            "topic": "music",
+            "question": "Do you like music?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:5518c5d530857b25",
+            "topic": "music",
+            "question": "What kinds of music do you listen to?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:dce71f865aa113bc",
+            "topic": "music",
+            "question": "Do you prefer sad or happy music?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:755c08c6cffa696d",
+            "topic": "music",
+            "question": "Does happy music make you feel more excited?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d78cb9b7158fb5ad",
+            "topic": "music",
+            "question": "Have you taken any music classes?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:942725436a948bcd",
+            "topic": "music",
+            "question": "Do you listen to music while doing other things?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "old_buildings",
+        "label": "Old Buildings",
+        "questions": [
+          {
+            "question_id": "p1q:ab18e111b24811e9",
+            "topic": "old_buildings",
+            "question": "Have you ever seen old buildings in the city?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e5de791944dd1d4d",
+            "topic": "old_buildings",
+            "question": "Do you think we should preserve old buildings in cities?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:52e4eecb071cbea4",
+            "topic": "old_buildings",
+            "question": "Do you prefer living in an old building or a modern house?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c77006ca86eeb793",
+            "topic": "old_buildings",
+            "question": "Are there any old buildings you want to see in the future? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "outer_space_and_stars",
+        "label": "Outer Space And Stars",
+        "questions": [
+          {
+            "question_id": "p1q:257a34c103b380a5",
+            "topic": "outer_space_and_stars",
+            "question": "Have you ever learnt about outer space and stars?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:1c4816f59e664195",
+            "topic": "outer_space_and_stars",
+            "question": "Do you enjoy watching science-fiction films/movies set in space?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:56c0fd9aaf6dcbab",
+            "topic": "outer_space_and_stars",
+            "question": "Do you want to know more about outer space?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:fffaa8ce92909430",
+            "topic": "outer_space_and_stars",
+            "question": "Would you like to go into outer space in the future?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:f40f18ba956e80e2",
+            "topic": "outer_space_and_stars",
+            "question": "Do you like science fiction movies? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "pets_and_animals",
+        "label": "Pets And Animals",
+        "questions": [
+          {
+            "question_id": "p1q:f9828bbe33933dfa",
+            "topic": "pets_and_animals",
+            "question": "Have you ever had a pet before?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:68d27c2ebee78ed6",
+            "topic": "pets_and_animals",
+            "question": "Where do you prefer to keep your pet, indoors or outdoors?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:da7dbfb08d029b3b",
+            "topic": "pets_and_animals",
+            "question": "What is the most popular animal in China?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:6a9d41fb4925656f",
+            "topic": "pets_and_animals",
+            "question": "What's your favourite animal? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:be008556eee4f6a8",
+            "topic": "pets_and_animals",
+            "question": "Have you ever visited a zoo?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:94d9bc9ef6482c7c",
+            "topic": "pets_and_animals",
+            "question": "How often do you visit a zoo?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c37d6876a55c8e70",
+            "topic": "pets_and_animals",
+            "question": "Are there many people keeping pets in your country?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "public_gardens_and_parks",
+        "label": "Public Gardens And Parks",
+        "questions": [
+          {
+            "question_id": "p1q:398004f5701fcc40",
+            "topic": "public_gardens_and_parks",
+            "question": "Did you like going to parks as a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:89baae8f9d2248d2",
+            "topic": "public_gardens_and_parks",
+            "question": "Do you still like going to parks now?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4edc0fa3d6a2976e",
+            "topic": "public_gardens_and_parks",
+            "question": "Would you like to see more parks in your city?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ee40bfb9c629b632",
+            "topic": "public_gardens_and_parks",
+            "question": "Are there any parks you want to go to in the future?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4faa4e1d9e805f2a",
+            "topic": "public_gardens_and_parks",
+            "question": "Would you prefer to play in a personal garden or public garden?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:00dd3b635501fad4",
+            "topic": "public_gardens_and_parks",
+            "question": "How are the parks today different from those you visited as a kid?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:883d393447cf72f3",
+            "topic": "public_gardens_and_parks",
+            "question": "What do you like to do when visiting a park?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:8badde0009f4e762",
+            "topic": "public_gardens_and_parks",
+            "question": "Would you like to play in a public garden or park?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "reading",
+        "label": "Reading",
+        "questions": [
+          {
+            "question_id": "p1q:cbaf9136c19b5306",
+            "topic": "reading",
+            "question": "Do you like reading?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:219fd8f64ae418d5",
+            "topic": "reading",
+            "question": "Do you prefer to read on paper or on a screen?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:5422a7af41947cf6",
+            "topic": "reading",
+            "question": "When do you need to read carefully, and when not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:429a9c3aa27d53b7",
+            "topic": "reading",
+            "question": "Do you prefer scanning or detailed reading?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "scenery",
+        "label": "Scenery",
+        "questions": [
+          {
+            "question_id": "p1q:098563d4bb49ac56",
+            "topic": "scenery",
+            "question": "Do you look out the window at the scenery when travelling by bus or car?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:26febad27f69bcb7",
+            "topic": "scenery",
+            "question": "Do you prefer the mountains or the sea?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:cefe131c970c3192",
+            "topic": "scenery",
+            "question": "Do you like to take pictures of the scenery?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:f0f1c2e147e0560a",
+            "topic": "scenery",
+            "question": "What are the most beautiful sights you have seen while traveling?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "science",
+        "label": "Science",
+        "questions": [
+          {
+            "question_id": "p1q:4130c4b2a6d95aeb",
+            "topic": "science",
+            "question": "Do you like science?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:42ee0a8f600fc232",
+            "topic": "science",
+            "question": "When did you start to learn about science?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:34d16b84a4c82044",
+            "topic": "science",
+            "question": "Which science subject is interesting to you?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4ff17f3b4e4b2b40",
+            "topic": "science",
+            "question": "What kinds of interesting things have you done with science?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:b65e2f765132bbf5",
+            "topic": "science",
+            "question": "Do you like watching science TV programs?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:db229b96be08b9cc",
+            "topic": "science",
+            "question": "Do Chinese people often visit science museums?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "shopping",
+        "label": "Shopping",
+        "questions": [
+          {
+            "question_id": "p1q:2d520e68aa4d0f9f",
+            "topic": "shopping",
+            "question": "Do you like shopping?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:11c455bfaf71a502",
+            "topic": "shopping",
+            "question": "How often do you go shopping?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3345274b40274f65",
+            "topic": "shopping",
+            "question": "Do you prefer online shopping or in-store shopping?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:14f309d9f9cac684",
+            "topic": "shopping",
+            "question": "Do you compare prices when you shop? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:71705a55c523912f",
+            "topic": "shopping",
+            "question": "Is it difficult for you to make choices when you shop?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:13110ca597700755",
+            "topic": "shopping",
+            "question": "Do you think expensive products are always better than cheaper ones?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ae95b9acbfc2f773",
+            "topic": "shopping",
+            "question": "Have you ever returned anything you bought online?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "singing",
+        "label": "Singing",
+        "questions": [
+          {
+            "question_id": "p1q:8f87c51d92dc0bdf",
+            "topic": "singing",
+            "question": "Did you like singing when you were a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:72dda62dfd3533bb",
+            "topic": "singing",
+            "question": "Do you like singing now?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:82b1229a49d8d6b6",
+            "topic": "singing",
+            "question": "Do you enjoy singing in the car?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:292070723add9b8e",
+            "topic": "singing",
+            "question": "Do you like listening to other people sing?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:5a4c5bf98ace6fc7",
+            "topic": "singing",
+            "question": "Did you learn to sing when you were at school?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3d0ebfe216680e44",
+            "topic": "singing",
+            "question": "Do you like singing? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:0d694521c364657a",
+            "topic": "singing",
+            "question": "Have you ever learnt how to sing?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d4a7de7f861d2876",
+            "topic": "singing",
+            "question": "Who do you want to sing for?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "social_media",
+        "label": "Social Media",
+        "questions": [
+          {
+            "question_id": "p1q:110c7b88d9b75540",
+            "topic": "social_media",
+            "question": "Have you ever posted anything on social media?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:b77c4603a27aac53",
+            "topic": "social_media",
+            "question": "When did you start using social media?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:0213399d929d7810",
+            "topic": "social_media",
+            "question": "Do you think you spend too much time on social media?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d874910edf826898",
+            "topic": "social_media",
+            "question": "Do your friends use social media?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:2175775804b80933",
+            "topic": "social_media",
+            "question": "What do people often do on social media?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "sports_programs",
+        "label": "Sports Programs",
+        "questions": [
+          {
+            "question_id": "p1q:736a8cfadcc90280",
+            "topic": "sports_programs",
+            "question": "Do you like watching sports programs on TV?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:68e649a960b61280",
+            "topic": "sports_programs",
+            "question": "Do you like to watch live sports games?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:64418071bd39b0da",
+            "topic": "sports_programs",
+            "question": "Who do you like to watch sports games with?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:8ab1a8897e5b9436",
+            "topic": "sports_programs",
+            "question": "What kinds of games do you expect to watch in the future?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a1adebc7cf2eecb9",
+            "topic": "sports_programs",
+            "question": "Do you prefer to watch sports games alone or with a group of friends?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:6bcdc8a7226cdb26",
+            "topic": "sports_programs",
+            "question": "Have you ever watched a sports game in a stadium?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "sports_team",
+        "label": "Sports Team",
+        "questions": [
+          {
+            "question_id": "p1q:04e322a2fac6438c",
+            "topic": "sports_team",
+            "question": "Have you ever been part of a sports team?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d66f5752e6c44218",
+            "topic": "sports_team",
+            "question": "Are team sports popular in your culture?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c16e437b088c0df0",
+            "topic": "sports_team",
+            "question": "What are the differences between team sports and individual sports?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:00458e5b143c94a1",
+            "topic": "sports_team",
+            "question": "Do you like watching team games? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "study_or_work",
+        "label": "Study Or Work",
+        "questions": [
+          {
+            "question_id": "p1q:798310fb6e913d6c",
+            "topic": "study_or_work",
+            "question": "Do you work or are you a student?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:2216552db04a6f9e",
+            "topic": "study_or_work",
+            "question": "What do you do?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:fbffea755070117e",
+            "topic": "study_or_work",
+            "question": "Why did you choose to do this type of work?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e97758587c56ec70",
+            "topic": "study_or_work",
+            "question": "Do you like your job? Why/Why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c0d1a929955f5126",
+            "topic": "study_or_work",
+            "question": "What do you find the most interesting about the work you do? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:7a6b4a98c8fb34a8",
+            "topic": "study_or_work",
+            "question": "Will you need to do any more study for your job?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:8103ab58ba4fe8dc",
+            "topic": "study_or_work",
+            "question": "Where do you work?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:fece8f39acaf100e",
+            "topic": "study_or_work",
+            "question": "Is it a good place to work?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:29f2093540b7768c",
+            "topic": "study_or_work",
+            "question": "Would you like the place where you work to make any changes?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:677fbf5b3cb4adcf",
+            "topic": "study_or_work",
+            "question": "What technology do you use at work?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d4ef31eeace68e66",
+            "topic": "study_or_work",
+            "question": "What subjects are you studying?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d6c4877b36fe3dac",
+            "topic": "study_or_work",
+            "question": "Why did you choose to study this subject?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ed1025818689e30b",
+            "topic": "study_or_work",
+            "question": "What do you like about your course?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3b71ae66ff418394",
+            "topic": "study_or_work",
+            "question": "What would you like to do after you finish your course?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ca6d3fe467d3d979",
+            "topic": "study_or_work",
+            "question": "Do you prefer to study in the mornings or in the afternoons?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:18fa4594d02a0194",
+            "topic": "study_or_work",
+            "question": "Do you think you will miss being a student once you finish your studies? Why/why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:282d27d167355a93",
+            "topic": "study_or_work",
+            "question": "What technology do you use when you study?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:b70b858e9f0a994a",
+            "topic": "study_or_work",
+            "question": "Are you enjoying your studies at the moment? Why/why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "teachers",
+        "label": "Teachers",
+        "questions": [
+          {
+            "question_id": "p1q:6489abe9e20c2aa0",
+            "topic": "teachers",
+            "question": "Do you have a favorite teacher?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:6c7d5a08ab4b15be",
+            "topic": "teachers",
+            "question": "Do you want to be a teacher in the future?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d474b8d28f2e5e14",
+            "topic": "teachers",
+            "question": "Do you have a teacher from your past that you still remember?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:9e6ae9e6dcd0fe1f",
+            "topic": "teachers",
+            "question": "Are you still in touch with your primary school teachers?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a9921868d5b03e82",
+            "topic": "teachers",
+            "question": "In what way has your favourite teacher helped you?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c7d176b714b4f12c",
+            "topic": "teachers",
+            "question": "Do you like your primary school teachers more than your high school teachers?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "the_area_you_live_in",
+        "label": "The Area You Live In",
+        "questions": [
+          {
+            "question_id": "p1q:2ed272da5a781976",
+            "topic": "the_area_you_live_in",
+            "question": "Where are you living at the moment?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:c9c9d63616fc6a8f",
+            "topic": "the_area_you_live_in",
+            "question": "What kind of area is it?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:36924488a24834f9",
+            "topic": "the_area_you_live_in",
+            "question": "Do you know any of your neighbours?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:23e98149a0530121",
+            "topic": "the_area_you_live_in",
+            "question": "What do you like about living there?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:0451b4b0cd4e11c1",
+            "topic": "the_area_you_live_in",
+            "question": "What changes have taken place in the area recently?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:94be80c22b8d6996",
+            "topic": "the_area_you_live_in",
+            "question": "Would you like to change anything about your area? Why/Why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:0381d5fe46bea3d2",
+            "topic": "the_area_you_live_in",
+            "question": "Would you like to continue living there in the future? Why/Why not?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "the_city_you_live_in",
+        "label": "The City You Live In",
+        "questions": [
+          {
+            "question_id": "p1q:eb2c5f20a7b80555",
+            "topic": "the_city_you_live_in",
+            "question": "What city do you live in?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:862dcc38089e2f09",
+            "topic": "the_city_you_live_in",
+            "question": "Do you like this city? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:a347cf8b4d890d2d",
+            "topic": "the_city_you_live_in",
+            "question": "How long have you lived in this city?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4b46190b863c2471",
+            "topic": "the_city_you_live_in",
+            "question": "Are there big changes in this city?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:d952768de3ab8af9",
+            "topic": "the_city_you_live_in",
+            "question": "Is this city your permanent residence?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:7739f1e3a1c52dea",
+            "topic": "the_city_you_live_in",
+            "question": "Are there people of different ages living in this city?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:f4b37c988a02aa27",
+            "topic": "the_city_you_live_in",
+            "question": "Are the people friendly in the city?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:bf0b626ce6c775d5",
+            "topic": "the_city_you_live_in",
+            "question": "Do you often see your neighbors?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "tidiness",
+        "label": "Tidiness",
+        "questions": [
+          {
+            "question_id": "p1q:82b68ea70af3f022",
+            "topic": "tidiness",
+            "question": "Do you like to keep things tidy?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:1c8a55dfb9e67162",
+            "topic": "tidiness",
+            "question": "Did you use to keep your room tidy as a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:458de3d590a29a6f",
+            "topic": "tidiness",
+            "question": "Are you a tidy person now?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4ef6af0f6f76e67d",
+            "topic": "tidiness",
+            "question": "How do you keep your work or study space tidy?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:f039ce0edb1e96dd",
+            "topic": "tidiness",
+            "question": "Do you think that it is necessary to be tidy?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:5f57f8c4ef62cfa1",
+            "topic": "tidiness",
+            "question": "What do you think of those who don't care about tidiness?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:cd774342c7e6bf34",
+            "topic": "tidiness",
+            "question": "What do you think of those who are overly concerned about tidiness?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "typing",
+        "label": "Typing",
+        "questions": [
+          {
+            "question_id": "p1q:fbe332c464537ea9",
+            "topic": "typing",
+            "question": "Do you prefer typing or handwriting?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:3c4177178fd51f86",
+            "topic": "typing",
+            "question": "Do you type on a desktop or laptop keyboard every day?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:10c10db4a35d0e99",
+            "topic": "typing",
+            "question": "When did you learn how to type on a keyboard?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:6c957965889c7ac3",
+            "topic": "typing",
+            "question": "How do you improve your typing?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "views",
+        "label": "Views",
+        "questions": [
+          {
+            "question_id": "p1q:e53bb050fd4d95d4",
+            "topic": "views",
+            "question": "Do you like taking pictures of different views?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ff2eed286de0e524",
+            "topic": "views",
+            "question": "Do you prefer views in urban areas or rural areas?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:31ac695a7acf260b",
+            "topic": "views",
+            "question": "Do you prefer views in your own country or in other countries?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:dccf56d3c95ba9c2",
+            "topic": "views",
+            "question": "Have you ever seen an unforgettable and beautiful view or scenery?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "walking",
+        "label": "Walking",
+        "questions": [
+          {
+            "question_id": "p1q:def5f39ec4a30ab4",
+            "topic": "walking",
+            "question": "Do you walk a lot?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:9da00d1f7608d2a7",
+            "topic": "walking",
+            "question": "Did you often go outside to have a walk when you were a child?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:1047ab5f83d594a8",
+            "topic": "walking",
+            "question": "Why do people like to walk in parks?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:e66dc89773f291a1",
+            "topic": "walking",
+            "question": "Where would you like to take a long walk if you had the chance?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:64eaa8aaf9a24058",
+            "topic": "walking",
+            "question": "Where did you go for a walk lately?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "watches",
+        "label": "Watches",
+        "questions": [
+          {
+            "question_id": "p1q:07d1e2e880d7417b",
+            "topic": "watches",
+            "question": "Do you wear a watch?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:7cb427c621efd667",
+            "topic": "watches",
+            "question": "Have you ever got a watch as a gift?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:54f9276ea49a4889",
+            "topic": "watches",
+            "question": "Why do some people wear expensive watches?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:ba6ed471199b361e",
+            "topic": "watches",
+            "question": "Do you think it is important to wear a watch? Why?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          }
+        ]
+      },
+      {
+        "topic": "websites",
+        "label": "Websites",
+        "questions": [
+          {
+            "question_id": "p1q:2d2e64260975d950",
+            "topic": "websites",
+            "question": "What kinds of websites do you often visit?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:09bbd80eb372b7e2",
+            "topic": "websites",
+            "question": "What is your favourite website?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:dca38197de590e98",
+            "topic": "websites",
+            "question": "Are there any changes to the websites you often visit?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:4f22b65f12213f5f",
+            "topic": "websites",
+            "question": "What kinds of websites are popular in your country?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:56c175b091744575",
+            "topic": "websites",
+            "question": "Do you prefer getting information from websites or books?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:0e47e687108a8d28",
+            "topic": "websites",
+            "question": "Would you like to have your own website?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
+          },
+          {
+            "question_id": "p1q:36540c9b85f0dbc0",
+            "topic": "websites",
+            "question": "What have you learned from websites that help with your life or studies?",
+            "corpus_text": "",
+            "last_ai_answer": "",
+            "updated_at": ""
           }
         ]
       }
     ],
-    "question_count": 11,
-    "saved_count": 11,
+    "question_count": 290,
+    "saved_count": 1,
     "active_season": "2026-may-august",
     "active_region": "china_mainland",
     "active_scope": "current",
@@ -264,66 +2766,36 @@
       {
         "category": "place",
         "label": "地点",
-        "items": [
-          {
-            "entry_id": "p2:place:208129cae8dc",
-            "category": "place",
-            "label": "地点",
-            "title": "成都 旅游",
-            "material_text": "### ① 交代时间 + 旅行背景\n\n* **发生时间**：The memorable **trip** I'd like to share with you **took place last summer**, **right before I went back home from college**.\n* School life **had been really overwhelming**, so my roommates and I made a plan to **go on a short getaway**, and we picked Chengdu as our destination, **which** is a famous tourist city located in central China.\n* Unlike those so-called first-tier cities in China, like Beijing or Shanghai, where people are always rushing around under great pressure, Chengdu feels like **a peaceful shelter**.\n\n### ② 介绍城市氛围 + 喝茶体验\n\n* It's a modern city, but it still keeps a really relaxed vibe.\n* To fully **immerse ourselves in local life**, we spent an entire afternoon in a traditional tea house: just chatting and watching the world go by, without thinking about homework or deadlines at all.\n\n### ③ 介绍美食体验\n\n* Another big highlight was the food. As someone who is really into spicy food, Chengdu was like heaven for me. We visited several well-known local restaurants and tried a lot of classic Sichuan dishes, from numbing spicy hot pot to savory Dan Dan noodles. Every bite was full of flavor, and I still miss that taste sometimes.\n\n### ④ 介绍熊猫经历\n\n*…",
-            "p3_follow_up_text": "* Yes, I think some people prefer slower-paced cities because they offer **a quieter environment** and **a stronger sense of calm**.\n* For example, people who are introverted or mentally exhausted by work may not enjoy crowded streets, heavy traffic, and constant noise in major cities.\n* In a smaller or slower city, they can walk around without rushing, sit in a local cafe, and **properly switch off**. On a wider level, I think this shows that tourism is not always about excitement; for many people, it is also about **recovering from urban stress**.",
-            "linked_question": "",
-            "updated_at": "2026-06-19 00:23"
-          },
-          {
-            "entry_id": "p2:place:e5a3f751f5a6",
-            "category": "place",
-            "label": "地点",
-            "title": "成都 旅行 新 ifs+茶馆+火锅+熊猫",
-            "material_text": "When it comes to this topic, the first thing that comes to my mind is...\n\n**【⚑ 部分开头1：1句话交代去成都的背景 + 和题目的关联挂钩】**\n\n* **发生时间**：The memorable **trip** I'd like to share with you **took place last summer**, **right before I went back home from college**.\n* School life **had been really overwhelming**, so my roommates and I made a plan to **go on a short getaway**, and we picked Chengdu as our destination,\n\n**【⚑ 部分开头2：这个楼是成都的，这是成都发生的】**\n\n* \"When it comes to this topic, the first thing that comes to my mind is **XX I came across on a trip** with my friend to Chengdu.\n* **or** ---\n* **+**\n* , (which is) a famous tourist city located in central China.\n* Unlike those so-called first-tier cities in China, like Beijing or Shanghai, where people are always rushing around under great pressure, Chengdu feels like **a peaceful shelter**.\n\n**【介绍城市氛围】**\n\n* It's a modern city 【, but it still keeps a really relaxed vibe.】\n\n**【⚑ IFS段——串\"拥挤的地方/高楼/想参观的建筑/热闹场景\"时放大；其他题一句带过或直接跳过】**\n\n* One of the first places we hit was IFS, this massive, modern shopping mall right in the commercial center.\n* 【高楼说：It's a soaring skyscraper, but】 the coolest thing about it is this gigantic panda sculpture that looks like it's…",
-            "p3_follow_up_text": "",
-            "linked_question": "",
-            "updated_at": "2026-06-18 09:50"
-          }
-        ],
-        "material_count": 2
+        "items": [],
+        "material_count": 0
       },
       {
         "category": "event",
         "label": "事件",
-        "items": [
-          {
-            "entry_id": "p2:event:02170d06d057",
-            "category": "event",
-            "label": "事件",
-            "title": "开口说英语/外国人迷路问路",
-            "material_text": "### ① 开头点题：事情发生在什么时候、什么场景\n\n* I can't really remember the very first time I spoke English because **I have a memory like a sieve** — it was probably back in primary school.\n* But the first time I actually used English (in **a real-life situation**) was **last year**, when my friend Leo and I were travelling in **Chengdu**, a well-known tourist city in central China.\n* We were visiting the **Panda Base**, and that's where this little story happened.\n\n### ② 事件经过：外国游客来问路\n\n* After watching the most popular panda there, named **Huahua**, we were on our way back to the exit.\n* Then we noticed a foreign tourist walking around **restlessly**, looking at his map.\n* He then came up to us and asked if we could help him find the entrance.\n\n### ③ 我的反应：紧张但还是开口了\n\n* Honestly, I **was a little on edge** at that moment.\n* Apart from speaking in English classes, I had never talked with a real native speaker **face-to-face** before.\n* But I **took a deep breath** and tried my best to explain the situation to him.\n* I told him that he could take the bus back to the main entrance, but the next bus wouldn't arrive for another hour, so he decided to walk instead.\n\n### ④ 结果 + 感受：我因此更有自信\n\n* Although the news…",
-            "p3_follow_up_text": "",
-            "linked_question": "",
-            "updated_at": "2026-06-18 13:47"
-          },
-          {
-            "entry_id": "p2:event:84624bdbdd12",
-            "category": "event",
-            "label": "事件",
-            "title": "项目-- 困难 --被建议 -- 熬夜改",
-            "material_text": "**【⚑ 每道题开头必说：1句交代项目 + 和题目挂钩】**\n\n\"So, there's this project I've been working on in our university lab for the past few months, and it's honestly taken over a huge chunk of my life recently.\n\n**【⚑ 项目是什么——每次必说，可长可短，不能省】**\n\n**长版（串以下题目时用）：**\n\n* 长期目标/想创办的小生意/艰难的决定/理想的工作/擅长计划的人\n\nThe idea is basically — can we get an AI to automatically find and fix performance bottlenecks in code? The tricky part is: how do you know the AI's suggestions actually work, and not just *seem* to work? That's the core thing we were trying to solve.\n\n**短版（其他题用）：** The idea is basically getting an AI to automatically optimize code performance — especially for finance systems where a bad change can cost real money.\n\n**【⚑ 技术亮点——串以下题目时放大；其他题一句带过】**\n\n* 长期目标/想创办的小生意/艰难的决定/重要规定/擅长计划的人/给别人建议\n\n**长版：**\n\n* So what we built is a system where every change the AI proposes has to pass an actual statistical test before anything gets merged.\n* It keeps a log of everything automatically — kind of like a paper trail — so you *always* know *why* a decision was made. It sounds a bit over-engineered, but when you're dealing with finance systems where a bad change can cost real money, you can't afford to just *hope* it works.\n\n**一句带过版…",
-            "p3_follow_up_text": "",
-            "linked_question": "",
-            "updated_at": "2026-06-18 15:49"
-          }
-        ],
-        "material_count": 2
+        "items": [],
+        "material_count": 0
+      },
+      {
+        "category": "object",
+        "label": "物品",
+        "items": [],
+        "material_count": 0
+      },
+      {
+        "category": "special",
+        "label": "特殊题目素材",
+        "items": [],
+        "material_count": 0
       }
     ],
-    "category_count": 3,
-    "material_count": 5,
+    "category_count": 5,
+    "material_count": 1,
     "active_season": "2026-may-august",
     "active_region": "china_mainland",
     "active_scope": "current",
     "active_scope_label": "当前考季",
     "scope": "current_season_only",
-    "current_part2_count": 6,
+    "current_part2_count": 64,
     "current_part2_categories": [
       {
         "category": "person",
@@ -367,9 +2839,9 @@
         ],
         "rounding": "And explain why you like or dislike this tall building.",
         "linked_question": "Describe a tall building you like or dislike\nWhere the building is\nWhat it looks like\nWhat it is used for\nAnd explain why you like or dislike this tall building.",
-        "material_text": "**【⚑ 部分开头2：这个楼是成都的，这是成都发生的】**\n\n* \"When it comes to this topic, the first thing that comes to my mind is **a skyscrapter I came across on a trip** with my friend to Chengdu.\n* **+**\n* ,(which is) a famous tourist city located in central China.\n\n**【介绍城市氛围】**\n\n* It's a modern city 【, but it still keeps a really relaxed vibe.】\n\n**【⚑ IFS段——串\"拥挤的地方/高楼/想参观的建筑/热闹场景\"时放大；其他题一句带过或直接跳过】**\n\n* One of the first places we hit was IFS, this massive, modern shopping mall right in the commercial center.\n* 【高楼说：It's a soaring skyscraper, but】 the coolest thing about it is this gigantic panda sculpture that looks like it's climbing up the rooftop.\n* The plaza downstairs was absolutely packed with people — tourists and locals alike. Standing in the middle of that bustling( **/ˈbʌs.lɪŋ/** ) crowd, looking up at this giant panda mixed into the concrete jungle, was pretty surreal.\n\n**【⚑ 火锅段——串\"特殊场合的食物/传统习俗/节日/热闹/看到很多人笑\"时放大；其他题一句带过】**\n\n* 【Another big highlight was the food. As someone who is really into spicy food, Chengdu was like heaven for me. 】/ 【如果不是旅行，就说 And I really into spicy food there,】\n* **\"(so) we walked into a hot pot restaurant 【nestled inside the shopping mall】 and gathered around a bubbling,…",
-        "brainstorm_idea": "B ifs",
-        "has_brainstorm_idea": true,
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
         "p3_follow_up_text": "",
         "updated_at": "2026-06-20 22:43",
         "season": "2026-may-august",
@@ -385,7 +2857,7 @@
         ],
         "p3_follow_up_count": 3,
         "p3_follow_up_saved_count": 0,
-        "has_material": true,
+        "has_material": false,
         "has_p3_follow_up": false,
         "practice_round_count": 1,
         "practice_completed_round_indexes": [],
@@ -408,9 +2880,9 @@
         ],
         "rounding": "And explain how you feel about it.",
         "linked_question": "Describe an interesting video\nWhen and where you watched it\nWhat it is about\nWhy you watched it\nAnd explain how you feel about it.",
-        "material_text": "* \"When it comes to this topic, the first thing that comes to my mind is a **vlog** I **came across on social media a few weeks ago, when I was deeply stressed out by my studies and looking for a way to unwind**.\"\n* \"**The video was basically a short travel documentary about** Chengdu,\n* **+**\n* which is a famous tourist city located in central China.\n* Unlike those so-called first-tier cities in China, like Beijing or Shanghai, where people are always rushing around under great pressure, Chengdu feels like **a peaceful shelter**.\n\n**【介绍城市氛围】**\n\n* It's a modern city 【, but it still keeps a really relaxed vibe.】\n\n**【⚑ IFS段——串\"拥挤的地方/高楼/想参观的建筑/热闹场景\"时放大；其他题一句带过或直接跳过】**\n\n* **In the video,** one of the first places **the vlogger hit** was IFS, this massive, modern shopping mall right in the commercial center.\n* 【高楼说：It's a soaring skyscraper, but】 the coolest thing about it is this gigantic panda sculpture that looks like it's climbing up the rooftop.\n* The plaza downstairs was absolutely packed with people — tourists and locals alike. Standing in the middle of that bustling( **/ˈbʌs.lɪŋ/** ) crowd, looking up at this giant panda mixed into the concrete jungle, was pretty surreal.\n\n**【⚑…",
-        "brainstorm_idea": "B",
-        "has_brainstorm_idea": true,
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
         "p3_follow_up_text": "",
         "updated_at": "2026-06-20 22:44",
         "season": "2026-may-august",
@@ -429,7 +2901,51 @@
         ],
         "p3_follow_up_count": 6,
         "p3_follow_up_saved_count": 0,
-        "has_material": true,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:5546b1ea43398c91",
+        "canonical_entry_id": "p2:5546b1ea43398c91",
+        "cue_id": "p2cue:5546b1ea43398c91",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe a boring place",
+        "cue_title": "Describe a boring place",
+        "bullets": [
+          "Where it is",
+          "Who you went there with",
+          "What you did there"
+        ],
+        "rounding": "And explain why you think it is a boring place.",
+        "linked_question": "Describe a boring place\nWhere it is\nWho you went there with\nWhat you did there\nAnd explain why you think it is a boring place.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 16:57",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_boring_place",
+        "p3_follow_ups": [
+          "Why do most children think education is boring?",
+          "Why aren't young people willing to listen to the experiences of older people?",
+          "What can people do when they feel bored?",
+          "Why are some teachers' classes boring? Are there any solutions?",
+          "Why do some young people feel bored when talking with old people?",
+          "Do most people think news about celebrities is boring?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
         "has_p3_follow_up": false,
         "practice_round_count": 2,
         "practice_completed_round_indexes": [],
@@ -452,9 +2968,9 @@
         ],
         "rounding": "And how you felt about it.",
         "linked_question": "Describe a time when you got up early\nWhen it was\nWhat you did\nWhy you got up early\nAnd how you felt about it.",
-        "material_text": "**【⚑ 部分开头2：这个楼是成都的，这是成都发生的】**\n\n* \"When it comes to this topic, the first thing that comes to my mind is the two day short travel with my friend to Chengdu.\n* it took place last summer, **right before I went back home from college**. School life **had been really overwhelming**, so my roommates and I made a plan to **go on a short getaway**, and we picked Chengdu as our destination,\n* , a famous tourist city located in central China.\n\n**【介绍城市氛围】**\n\n* It's a modern city 【, but it still keeps a really relaxed vibe.】\n\n【点题】\n\n* Since we only had two days, we even promised each other to drag ourselves out of bed early every morning, just to **make the most of** our limited time there.\n\n**【⚑ IFS段——串\"拥挤的地方/高楼/想参观的建筑/热闹场景\"时放大；其他题一句带过或直接跳过】**\n\n* One of the first places we hit was IFS, this massive, modern shopping mall right in the commercial center.\n* 【高楼说：It's a soaring skyscraper, but】 the coolest thing about it is this gigantic panda sculpture that looks like it's climbing up the rooftop.\n* **🔴 短版这里结束**\n\n**【⚑ 火锅段——串\"特殊场合的食物/传统习俗/节日/热闹/看到很多人笑\"时放大；其他题一句带过】**\n\n* And I really into spicy food there,\n* **\"(so) we walked into a hot pot restaurant 【nestled inside the shopping mall】 and gathered a…",
-        "brainstorm_idea": "B",
-        "has_brainstorm_idea": true,
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
         "p3_follow_up_text": "",
         "updated_at": "2026-06-19 00:28",
         "season": "2026-may-august",
@@ -473,7 +2989,489 @@
         ],
         "p3_follow_up_count": 6,
         "p3_follow_up_saved_count": 0,
-        "has_material": true,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:42c0f5e52aa5f489",
+        "canonical_entry_id": "p2:42c0f5e52aa5f489",
+        "cue_id": "p2cue:42c0f5e52aa5f489",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
+        "cue_title": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
+        "bullets": [
+          "Who this person is",
+          "What plants he/she grows",
+          "How he/she grows the plants"
+        ],
+        "rounding": "And explain why he/she loves growing plants.",
+        "linked_question": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden\nWho this person is\nWhat plants he/she grows\nHow he/she grows the plants\nAnd explain why he/she loves growing plants.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:36",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_person_who_loves_to_grow_plants_e_g_vegetables_flowers_at_home_or_in_the_garde",
+        "p3_follow_ups": [
+          "What are the advantages of growing vegetables or flowers at home?",
+          "Do many people grow vegetables or flowers at home in your country?",
+          "Is it easy to grow plants at home?",
+          "Why do some people like to grow plants?",
+          "Why do some people prefer to grow their own fruits and vegetables instead of buying them from the market?",
+          "Do you think students should learn to grow plants?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:fb558ea27fcdcf54",
+        "canonical_entry_id": "p2:fb558ea27fcdcf54",
+        "cue_id": "p2cue:fb558ea27fcdcf54",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe a new law you would like to introduce in your country",
+        "cue_title": "Describe a new law you would like to introduce in your country",
+        "bullets": [
+          "What law it is",
+          "What changes this law brings",
+          "Whether this new law will be popular",
+          "How you came up with the new law"
+        ],
+        "rounding": "And explain how you feel about this new law.",
+        "linked_question": "Describe a new law you would like to introduce in your country\nWhat law it is\nWhat changes this law brings\nWhether this new law will be popular\nHow you came up with the new law\nAnd explain how you feel about this new law.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:40",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_new_law_you_would_like_to_introduce_in_your_country",
+        "p3_follow_ups": [
+          "What rules should students follow at school?",
+          "Do people in your country usually obey the law?",
+          "What kinds of behavior are considered as good behavior?",
+          "Do you think children can learn about the law outside of school?",
+          "What are the benefits for people to obey rules?",
+          "How can parents teach children to obey rules?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:1084b772fe6693fb",
+        "canonical_entry_id": "p2:1084b772fe6693fb",
+        "cue_id": "p2cue:1084b772fe6693fb",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a friend from your childhood",
+        "cue_title": "Describe a friend from your childhood",
+        "bullets": [
+          "Who he/she is",
+          "Where and how you met each other",
+          "What you often did together"
+        ],
+        "rounding": "And explain what made you like him/her.",
+        "linked_question": "Describe a friend from your childhood\nWho he/she is\nWhere and how you met each other\nWhat you often did together\nAnd explain what made you like him/her.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-20 09:53",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_friend_from_your_childhood",
+        "p3_follow_ups": [
+          "Do you still keep in touch with your friends from childhood? Why or why not?",
+          "How important is childhood friendship to children?",
+          "What do you think of communicating via social media?",
+          "Do you think online communication through social media will replace face-to-face communication?",
+          "What's the difference between having younger friends and older friends?",
+          "Has technology changed people's friendships? How?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:696aa3ae469f86a1",
+        "canonical_entry_id": "p2:696aa3ae469f86a1",
+        "cue_id": "p2cue:696aa3ae469f86a1",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)",
+        "cue_title": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)",
+        "bullets": [
+          "Who he/she is",
+          "When you knew him/her",
+          "When he/she started to think about that",
+          "What he/she would like to do"
+        ],
+        "rounding": "And explain why he/she would like to choose this.",
+        "linked_question": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)\nWho he/she is\nWhen you knew him/her\nWhen he/she started to think about that\nWhat he/she would like to do\nAnd explain why he/she would like to choose this.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-20 19:21",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_person_you_know_who_would_like_to_choose_a_career_in_the_medical_field_e_g_a_d",
+        "p3_follow_ups": [
+          "Do you think being a doctor is easy or difficult?",
+          "Do you think learning biology is interesting for children?",
+          "Why do some children want to become doctors?",
+          "Do you think governments should put a large amount of money into medical research?",
+          "Why is some doctors' pay high and others' low?",
+          "Do you think doctors should be paid more?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:980a8d525e78c539",
+        "canonical_entry_id": "p2:980a8d525e78c539",
+        "cue_id": "p2cue:980a8d525e78c539",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person you know who has a successful business",
+        "cue_title": "Describe a person you know who has a successful business",
+        "bullets": [
+          "Who this person is",
+          "What business this person does",
+          "How you learned about this person"
+        ],
+        "rounding": "And explain why you admire this business person.",
+        "linked_question": "Describe a person you know who has a successful business\nWho this person is\nWhat business this person does\nHow you learned about this person\nAnd explain why you admire this business person.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-20 22:26",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "business_success_and_entrepreneurship",
+        "p3_follow_ups": [
+          "What qualities do successful business people usually have?",
+          "Is success in business mostly about hard work or opportunity?",
+          "Should business people have social responsibilities?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:70f7e32426b560b5",
+        "canonical_entry_id": "p2:70f7e32426b560b5",
+        "cue_id": "p2cue:70f7e32426b560b5",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a plan that you had to change recently",
+        "cue_title": "Describe a plan that you had to change recently",
+        "bullets": [
+          "When this happened",
+          "What made you change the plan",
+          "What the new plan was"
+        ],
+        "rounding": "And how you felt about the change.",
+        "linked_question": "Describe a plan that you had to change recently\nWhen this happened\nWhat made you change the plan\nWhat the new plan was\nAnd how you felt about the change.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 17:11",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_plan_that_you_had_to_change_recently",
+        "p3_follow_ups": [
+          "Do people often change their plans?",
+          "Would you tell others if you change your plan?",
+          "Why do you think parents still make plans for their children nowadays?",
+          "How does technology help people make plans?",
+          "What kind of plans do people often make?",
+          "Do you think people like the process of making plans more, or the moment of carrying them out?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:d98dcea135eecdef",
+        "canonical_entry_id": "p2:d98dcea135eecdef",
+        "cue_id": "p2cue:d98dcea135eecdef",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe a time when you worked in a group",
+        "cue_title": "Describe a time when you worked in a group",
+        "bullets": [
+          "What you did",
+          "Who you worked with",
+          "What problems you faced"
+        ],
+        "rounding": "And explain why you worked in the group",
+        "linked_question": "Describe a time when you worked in a group\nWhat you did\nWho you worked with\nWhat problems you faced\nAnd explain why you worked in the group",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "time_when_you_worked_in",
+        "p3_follow_ups": [
+          "Why do some people prefer to work by themselves?",
+          "What should a leader do to make team members want to follow him or her?",
+          "Should students learn to do group work?",
+          "What group tasks are there in schools?",
+          "What advantages are there for students experiencing teamwork at school?",
+          "How can you tell if a person is a good leader?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:7c8b8e458e7e9ac5",
+        "canonical_entry_id": "p2:7c8b8e458e7e9ac5",
+        "cue_id": "p2cue:7c8b8e458e7e9ac5",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe an important decision that you made",
+        "cue_title": "Describe an important decision that you made",
+        "bullets": [
+          "What the decision was",
+          "How you made your decision",
+          "What the results of the decision were"
+        ],
+        "rounding": "And explain why it was important.",
+        "linked_question": "Describe an important decision that you made\nWhat the decision was\nHow you made your decision\nWhat the results of the decision were\nAnd explain why it was important.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "an_important_decision_that_you_made",
+        "p3_follow_ups": [
+          "Do you think children sometimes have to make important decisions?",
+          "What important decisions do teenagers need to make after graduation?",
+          "Who can children turn to for help when making a decision?",
+          "Do you think advertisements can influence our decisions when shopping?",
+          "Do you think the influence of advertising is good?",
+          "How do people usually make important decisions?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:46d2d6f1109ffd07",
+        "canonical_entry_id": "p2:46d2d6f1109ffd07",
+        "cue_id": "p2cue:46d2d6f1109ffd07",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe a live sports event you watched and liked",
+        "cue_title": "Describe a live sports event you watched and liked",
+        "bullets": [
+          "What it was",
+          "When and where you watched it",
+          "Who you watched it with"
+        ],
+        "rounding": "And explain why you liked it.",
+        "linked_question": "Describe a live sports event you watched and liked\nWhat it was\nWhen and where you watched it\nWho you watched it with\nAnd explain why you liked it.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 17:29",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_live_sports_event_you_watched_and_liked",
+        "p3_follow_ups": [
+          "Why do some people like to watch sports events?",
+          "Where do people normally watch sports events?",
+          "What are the advantages of watching sports events online?",
+          "What sports matches are suitable for children to attend?",
+          "Why do some people spend a lot going to other countries to watch sports events?",
+          "What sports games are popular in your country?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:a0dc5061a400a46f",
+        "canonical_entry_id": "p2:a0dc5061a400a46f",
+        "cue_id": "p2cue:a0dc5061a400a46f",
+        "category": "object",
+        "label": "物品",
+        "title": "Describe a food that people eat on special occasions/events",
+        "cue_title": "Describe a food that people eat on special occasions/events",
+        "bullets": [
+          "What it is",
+          "What the special event/occasion is",
+          "How it is cooked/made",
+          "occasion/event"
+        ],
+        "rounding": "And explain why people eat it on that special.",
+        "linked_question": "Describe a food that people eat on special occasions/events\nWhat it is\nWhat the special event/occasion is\nHow it is cooked/made\noccasion/event\nAnd explain why people eat it on that special.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_food_that_people_eat_on_special_occasions_events",
+        "p3_follow_ups": [
+          "Why are there special foods on special occasions or events?",
+          "What are the differences between everyday food and festival food?",
+          "Are there any differences between the food people eat today and the food people ate in the past?",
+          "Do people today prefer eating at home or in a restaurant?"
+        ],
+        "p3_follow_up_count": 4,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:2bf893fd26bef3dd",
+        "canonical_entry_id": "p2:2bf893fd26bef3dd",
+        "cue_id": "p2cue:2bf893fd26bef3dd",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person who is good at learning and speaking new languages",
+        "cue_title": "Describe a person who is good at learning and speaking new languages",
+        "bullets": [
+          "How you got to know him/her",
+          "How he/she learns a new language",
+          "What languages he/she can speak"
+        ],
+        "rounding": "And explain how you feel about him/her.",
+        "linked_question": "Describe a person who is good at learning and speaking new languages\nHow you got to know him/her\nHow he/she learns a new language\nWhat languages he/she can speak\nAnd explain how you feel about him/her.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-20 17:08",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_person_who_is_good_at_learning_and_speaking_new_languages",
+        "p3_follow_ups": [
+          "Are there many people who can speak foreign languages in your country?",
+          "Does speaking other languages help at work?",
+          "Do people learn any languages other than English?",
+          "Why is it easier for children to learn new things than for adults?",
+          "How do people learn new things?",
+          "What is the most important thing for learning a language well?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
         "has_p3_follow_up": false,
         "practice_round_count": 2,
         "practice_completed_round_indexes": [],
@@ -496,9 +3494,9 @@
         ],
         "rounding": "And explain how you solved it.",
         "linked_question": "Describe a challenging technological problem you faced\nWhat the problem was\nWhen and where you faced it\nHow challenging it was\nAnd explain how you solved it.",
-        "material_text": "【母本A · 大学实验室 AI 项目 · 带场控注释】\n\n【⚑ 每题开头必说：1句交代项目 + 和题目挂钩】\n\"So, there's this project I've been working on in our university lab for the past few months, and it's honestly taken over a huge chunk of my life recently.\n\n【⚑ 项目是什么——每次必说，可长可短，不能省】\n长版（串：长期目标 / 想创办的小生意 / 艰难的决定 / 理想的工作 / 擅长计划的人）：\nThe idea is basically — can we get an AI to automatically find and fix performance bottlenecks in code? The tricky part is: how do you know the AI's suggestions actually work, and not just seem to work? That's the core thing we were trying to solve.\n短版（其他题）：The idea is basically getting an AI to automatically optimize code performance — especially for finance systems where a bad change can cost real money.\n\n【⚑ 技术亮点——串：长期目标 / 小生意 / 艰难的决定 / 重要规定 / 擅长计划的人 / 给别人建议；放大；其他一句带过】\n长版：\n\n- So what we built is a system where every change the AI proposes has to pass an actual statistical test before anything gets merged.\n- It keeps a log of everything automatically — kind of like a paper trail — so you always know why a decision was made. It sounds a bit over-engineered, but when you're dealing with finance systems where a bad change can cost real money, you can't afford to just hope it works.\n一句带过：We built a statis…",
-        "brainstorm_idea": "A (母本) =大学实验室 AI 项目（自动找&修代码性能瓶颈，statistical test + human-in-the-loop）。一份正文串多题，只换开头点题： • 难题(technological problem)/重要决定/长期目标/理想工作/成功生意 → 项目长版+技术亮点放大 • 鼓励你的人/给别人建议/改变想法(changed opinion)/聪明解决问题的人/强主见的人 → 困难+导师段放大 • 很多人微笑(many smiling)/展示新东西 → 高光40%曲线 • 不能用手机(not allowed mobile) → code review 场景 • 擅长计划的人(makes plans) → 技术亮点(Tech Lead 规划) 建议用具体版：keep a human in the loop for the final call。场控：每题先1句点题+项目是什么必说；细节稀疏防追穿。",
-        "has_brainstorm_idea": true,
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
         "p3_follow_up_text": "",
         "updated_at": "2026-06-18 14:42",
         "season": "2026-may-august",
@@ -517,7 +3515,51 @@
         ],
         "p3_follow_up_count": 6,
         "p3_follow_up_saved_count": 0,
-        "has_material": true,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:4be1c8643f58f9a6",
+        "canonical_entry_id": "p2:4be1c8643f58f9a6",
+        "cue_id": "p2cue:4be1c8643f58f9a6",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe an advertisement with a famous person in it",
+        "cue_title": "Describe an advertisement with a famous person in it",
+        "bullets": [
+          "Who the person is",
+          "Where you can see it",
+          "What the advertisement is about"
+        ],
+        "rounding": "And explain how you feel about the advertisement.",
+        "linked_question": "Describe an advertisement with a famous person in it\nWho the person is\nWhere you can see it\nWhat the advertisement is about\nAnd explain how you feel about the advertisement.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 17:20",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "an_advertisement_with_a_famous_person_in_it",
+        "p3_follow_ups": [
+          "What are the advantages and disadvantages of advertisements?",
+          "Why are many advertisements endorsed by celebrities? How useful are they?",
+          "What is the most important factor in an advertisement?",
+          "Why are some advertisements boring?",
+          "Is advertising important for a company? Why?",
+          "Which is more effective, online advertising or offline advertising?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
         "has_p3_follow_up": false,
         "practice_round_count": 2,
         "practice_completed_round_indexes": [],
@@ -540,9 +3582,9 @@
         ],
         "rounding": "And explain why you would like to recommend it to others",
         "linked_question": "Describe a place you have travelled to that you would like to recommend to others\nWhat it is\nWhere it is\nWhat you saw and did there\nAnd explain why you would like to recommend it to others",
-        "material_text": "**【⚑ 部分开头1：1句话交代去成都的背景 + 和题目的关联挂钩】**\n\n* **发生时间**：The memorable **trip** I'd like to share with you **took place last summer**, **right before I went back home from college**.\n* School life **had been really overwhelming**, so my roommates and I made a plan to **go on a short getaway**, and we picked Chengdu as our destination,\n\n**【⚑ 部分开头2：这个楼是成都的，这是成都发生的】**\n\n* \"When it comes to this topic, the first thing that comes to my mind is **XX I came across on a short travel** with my friend to Chengdu.\n* **or** ---\n* **+**\n* (which is), a famous tourist city located in central China.\n* Unlike those so-called first-tier cities in China, like Beijing or Shanghai, where people are always rushing around under great pressure, Chengdu feels like **a peaceful shelter**.\n\n**【介绍城市氛围】**\n\n* It's a modern city 【, but it still keeps a really relaxed vibe.】\n\n**【⚑ IFS段——串\"拥挤的地方/高楼/想参观的建筑/热闹场景\"时放大；其他题一句带过或直接跳过】**\n\n* One of the first places we hit was IFS, this massive, modern shopping mall right in the commercial center.\n* 【高楼说：It's a soaring skyscraper, but】 the coolest thing about it is this gigantic panda sculpture that looks like it's climbing up the rooftop.\n* **🔴 短版这里结束**\n* The plaza downstairs was…",
-        "brainstorm_idea": "B",
-        "has_brainstorm_idea": true,
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
         "p3_follow_up_text": "",
         "updated_at": "2026-06-19 00:31",
         "season": "2026-may-august",
@@ -561,9 +3603,895 @@
         ],
         "p3_follow_up_count": 6,
         "p3_follow_up_saved_count": 0,
-        "has_material": true,
+        "has_material": false,
         "has_p3_follow_up": false,
         "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:c49ce980ca9c2f2f",
+        "canonical_entry_id": "p2:c49ce980ca9c2f2f",
+        "cue_id": "p2cue:c49ce980ca9c2f2f",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a home that you like to visit but do not want to live in",
+        "cue_title": "Describe a home that you like to visit but do not want to live in",
+        "bullets": [
+          "Where it is",
+          "What it is like",
+          "Why you like to visit it"
+        ],
+        "rounding": "And explain why you would not like to live there",
+        "linked_question": "Describe a home that you like to visit but do not want to live in\nWhere it is\nWhat it is like\nWhy you like to visit it\nAnd explain why you would not like to live there",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 09:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "home_that_you_like_to",
+        "p3_follow_ups": [
+          "Do Chinese people like to visit others' homes?",
+          "What do Chinese people do when they visit others?",
+          "What kind of place do people in your country like to live in?",
+          "What's the difference between homes in cities and those in the countryside?",
+          "What kind of gifts do people usually bring when they visit others?",
+          "How often do you visit your relatives or friends?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:5deb043aa15930ea",
+        "canonical_entry_id": "p2:5deb043aa15930ea",
+        "cue_id": "p2cue:5deb043aa15930ea",
+        "category": "object",
+        "label": "物品",
+        "title": "Describe a story/book with animals in it",
+        "cue_title": "Describe a story/book with animals in it",
+        "bullets": [
+          "What animals are in it",
+          "What the story/book is about",
+          "Why you read the story/book"
+        ],
+        "rounding": "And explain what you think of this story/book.",
+        "linked_question": "Describe a story/book with animals in it\nWhat animals are in it\nWhat the story/book is about\nWhy you read the story/book\nAnd explain what you think of this story/book.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 17:20",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_story_book_with_animals_in_it",
+        "p3_follow_ups": [
+          "Should schools teach children about animals?",
+          "Some people think pets should not be kept in cities. What do you think?",
+          "Many people regard pets as members of their family. What do you think?",
+          "Do many people keep pets in your country?",
+          "What are the advantages of keeping a pet?",
+          "Why do people always tell children stories with animals?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:e790debb9c15437c",
+        "canonical_entry_id": "p2:e790debb9c15437c",
+        "cue_id": "p2cue:e790debb9c15437c",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a time when a person did something to help you solve a problem",
+        "cue_title": "Describe a time when a person did something to help you solve a problem",
+        "bullets": [
+          "Who the person is",
+          "What the problem was",
+          "How he/she helped you"
+        ],
+        "rounding": "And explain how you felt about the experience",
+        "linked_question": "Describe a time when a person did something to help you solve a problem\nWho the person is\nWhat the problem was\nHow he/she helped you\nAnd explain how you felt about the experience",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:41",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "time_when_a_person_did",
+        "p3_follow_ups": [
+          "How important is it for schools to help children become smarter?"
+        ],
+        "p3_follow_up_count": 1,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:a4b08e3886cabc23",
+        "canonical_entry_id": "p2:a4b08e3886cabc23",
+        "cue_id": "p2cue:a4b08e3886cabc23",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a law on environmental protection",
+        "cue_title": "Describe a law on environmental protection",
+        "bullets": [
+          "What it is",
+          "How you first learned about it",
+          "Who benefits from it"
+        ],
+        "rounding": "And explain how you feel about this law",
+        "linked_question": "Describe a law on environmental protection\nWhat it is\nHow you first learned about it\nWho benefits from it\nAnd explain how you feel about this law",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:41",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "law_on_environmental_protection",
+        "p3_follow_ups": [
+          "What kinds of rules do schools in China have?",
+          "Do you think school rules are important?",
+          "Are children unhappy with the school rules?",
+          "How can parents and teachers help children understand and follow rules?",
+          "What are the rules people should obey at work?",
+          "What is the purpose of punishment?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:fb83549369deea34",
+        "canonical_entry_id": "p2:fb83549369deea34",
+        "cue_id": "p2cue:fb83549369deea34",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe a time when you sent a message or an email to someone but received no reply for a long time",
+        "cue_title": "Describe a time when you sent a message or an email to someone but received no reply for a long time",
+        "bullets": [
+          "Who you sent it to",
+          "What the message/email was about",
+          "Whether you finally received the reply"
+        ],
+        "rounding": "And explain how you felt about the experience",
+        "linked_question": "Describe a time when you sent a message or an email to someone but received no reply for a long time\nWho you sent it to\nWhat the message/email was about\nWhether you finally received the reply\nAnd explain how you felt about the experience",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 12:19",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "time_when_you_sent_a",
+        "p3_follow_ups": [
+          "In what situations do people spend a long time responding to others' messages?",
+          "In what situations do people not respond to messages at all?",
+          "What would you do if you did not receive a reply after sending out a message?",
+          "Why do some people prefer sending a message instead of making a call?",
+          "How do you show your respect in your messages?",
+          "Why do some people feel angry when others don't reply to their message?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:4e23632789be00c9",
+        "canonical_entry_id": "p2:4e23632789be00c9",
+        "cue_id": "p2cue:4e23632789be00c9",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a long-term goal/ambition you would like to achieve",
+        "cue_title": "Describe a long-term goal/ambition you would like to achieve",
+        "bullets": [
+          "How long you have had this goal/ambition",
+          "What it is",
+          "How you will achieve it"
+        ],
+        "rounding": "And explain why you set it.",
+        "linked_question": "Describe a long-term goal/ambition you would like to achieve\nHow long you have had this goal/ambition\nWhat it is\nHow you will achieve it\nAnd explain why you set it.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-20 23:21",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_long_term_goal_ambition_you_would_like_to_achieve",
+        "p3_follow_ups": [
+          "Why should children have ambitions?",
+          "What do you think of people going after high positions?",
+          "Why are some young people keen on being fans of superstars?",
+          "Is it good for a person to be ambitious?",
+          "Do you think it is necessary to be ambitious when working in a team in a company?",
+          "Should parents support their children in pursuing their ambitions?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:75af36eaf6f89bd1",
+        "canonical_entry_id": "p2:75af36eaf6f89bd1",
+        "cue_id": "p2cue:75af36eaf6f89bd1",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person who met difficulties but succeeded",
+        "cue_title": "Describe a person who met difficulties but succeeded",
+        "bullets": [
+          "Who this person is",
+          "What difficulties he met",
+          "How he overcame the difficulties"
+        ],
+        "rounding": "And explain how you feel about him.",
+        "linked_question": "Describe a person who met difficulties but succeeded\nWho this person is\nWhat difficulties he met\nHow he overcame the difficulties\nAnd explain how you feel about him.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:41",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_person_who_met_difficulties_but_succeeded",
+        "p3_follow_ups": [
+          "In your country, what industry is it easier to be successful in?",
+          "What's the difference between ordinary people and successful people?",
+          "What are the factors leading to people's success?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:e55f8174ccba87de",
+        "canonical_entry_id": "p2:e55f8174ccba87de",
+        "cue_id": "p2cue:e55f8174ccba87de",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe a time when you changed an important opinion of yours",
+        "cue_title": "Describe a time when you changed an important opinion of yours",
+        "bullets": [
+          "When you changed your opinion",
+          "ELIS",
+          "What the original opinion was",
+          "Why you changed it"
+        ],
+        "rounding": "And explain how you felt about the experience.",
+        "linked_question": "Describe a time when you changed an important opinion of yours\nWhen you changed your opinion\nELIS\nWhat the original opinion was\nWhy you changed it\nAnd explain how you felt about the experience.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 12:40",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_time_when_you_changed_an_important_opinion_of_yours",
+        "p3_follow_ups": [
+          "When do most children begin to have their own opinions?",
+          "Whose opinions are more important to children, their parents' or teachers'?",
+          "Do children communicate more with teachers or with parents?",
+          "Who do young people like to share opinions with?"
+        ],
+        "p3_follow_up_count": 4,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:efe8ede477b8963b",
+        "canonical_entry_id": "p2:efe8ede477b8963b",
+        "cue_id": "p2cue:efe8ede477b8963b",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe an environmental law you would like your country to introduce",
+        "cue_title": "Describe an environmental law you would like your country to introduce",
+        "bullets": [
+          "What law it should be",
+          "Why people should follow the law",
+          "Whether the law will be popular"
+        ],
+        "rounding": "And explain how you feel about this law.",
+        "linked_question": "Describe an environmental law you would like your country to introduce\nWhat law it should be\nWhy people should follow the law\nWhether the law will be popular\nAnd explain how you feel about this law.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:43",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "an_environmental_law_you_would_like_your_country_to_introduce",
+        "p3_follow_ups": [
+          "How does technology affect the law?",
+          "What kinds of rules do schools in China have?",
+          "Will there be a law that is universally accepted?",
+          "What environmental laws does your country already have?"
+        ],
+        "p3_follow_up_count": 4,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:4e4b65b3f50ff641",
+        "canonical_entry_id": "p2:4e4b65b3f50ff641",
+        "cue_id": "p2cue:4e4b65b3f50ff641",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a piece of local news that people are interested in",
+        "cue_title": "Describe a piece of local news that people are interested in",
+        "bullets": [
+          "What it was about",
+          "Where you saw/heard it",
+          "Who was involved"
+        ],
+        "rounding": "And explain why people were interested in it.",
+        "linked_question": "Describe a piece of local news that people are interested in\nWhat it was about\nWhere you saw/heard it\nWho was involved\nAnd explain why people were interested in it.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 17:30",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_piece_of_local_news_that_people_are_interested_in",
+        "p3_follow_ups": [
+          "Do people read the newspaper where you live?",
+          "Do people prefer local or international news?",
+          "Do you think it's important to have a national identity?",
+          "How can people develop their national identity?"
+        ],
+        "p3_follow_up_count": 4,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:5eb2191ebcad3f6c",
+        "canonical_entry_id": "p2:5eb2191ebcad3f6c",
+        "cue_id": "p2cue:5eb2191ebcad3f6c",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a change that you made recently",
+        "cue_title": "Describe a change that you made recently",
+        "bullets": [
+          "What the change was",
+          "What caused the change",
+          "What you did for the change"
+        ],
+        "rounding": "And explain how you feel about the change.",
+        "linked_question": "Describe a change that you made recently\nWhat the change was\nWhat caused the change\nWhat you did for the change\nAnd explain how you feel about the change.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 12:40",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_change_that_you_made_recently",
+        "p3_follow_ups": [
+          "Do you think it is good to change one's daily routine?",
+          "Do you think it is good to change jobs?",
+          "Is it good for people to get a job promotion?",
+          "Do people often make plans around their regular routines?",
+          "Who tend to change their daily routine more, young people or old people?"
+        ],
+        "p3_follow_up_count": 5,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:23e7fb8b93159d97",
+        "canonical_entry_id": "p2:23e7fb8b93159d97",
+        "cue_id": "p2cue:23e7fb8b93159d97",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a perfect job you would like to have in the future",
+        "cue_title": "Describe a perfect job you would like to have in the future",
+        "bullets": [
+          "What the job is",
+          "How you found out about it",
+          "What you need to learn to get this job"
+        ],
+        "rounding": "And explain why you think this would be a perfect job for you.",
+        "linked_question": "Describe a perfect job you would like to have in the future\nWhat the job is\nHow you found out about it\nWhat you need to learn to get this job\nAnd explain why you think this would be a perfect job for you.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-09 01:58",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "career_choices_and_job_values",
+        "p3_follow_ups": [
+          "What should young people consider when choosing a career?",
+          "Is salary the main reason people choose a job?",
+          "Why do some people regret their career choices later?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:07bd496c08d89ffb",
+        "canonical_entry_id": "p2:07bd496c08d89ffb",
+        "cue_id": "p2cue:07bd496c08d89ffb",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a famous person you would like to meet",
+        "cue_title": "Describe a famous person you would like to meet",
+        "bullets": [
+          "Who this person is",
+          "How you knew about this person",
+          "Where you would like to meet this person"
+        ],
+        "rounding": "And explain why you would like to meet this famous person.",
+        "linked_question": "Describe a famous person you would like to meet\nWho this person is\nHow you knew about this person\nWhere you would like to meet this person\nAnd explain why you would like to meet this famous person.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-21 00:06",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "fame_and_public_influence",
+        "p3_follow_ups": [
+          "Why do some people become famous?",
+          "What are the disadvantages of being famous?",
+          "Do famous people influence young people?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:5db26b808553ce01",
+        "canonical_entry_id": "p2:5db26b808553ce01",
+        "cue_id": "p2cue:5db26b808553ce01",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe an occasion when you were not allowed to use your mobile phone",
+        "cue_title": "Describe an occasion when you were not allowed to use your mobile phone",
+        "bullets": [
+          "When it was",
+          "Where it was",
+          "Why you were not allowed to use your phone"
+        ],
+        "rounding": "And explain how you felt about this rule.",
+        "linked_question": "Describe an occasion when you were not allowed to use your mobile phone\nWhen it was\nWhere it was\nWhy you were not allowed to use your phone\nAnd explain how you felt about this rule.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 10:06",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "mobile_phone_rules_and_manners",
+        "p3_follow_ups": [
+          "How do young and older people use mobile phones differently?",
+          "Should there be rules about phone use in public places?",
+          "What are examples of good phone manners?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:bd2da3a9ff369c95",
+        "canonical_entry_id": "p2:bd2da3a9ff369c95",
+        "cue_id": "p2cue:bd2da3a9ff369c95",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe a time when you gave advice to others",
+        "cue_title": "Describe a time when you gave advice to others",
+        "bullets": [
+          "When it was",
+          "Who you gave advice to",
+          "What advice you gave"
+        ],
+        "rounding": "And explain why you gave this advice.",
+        "linked_question": "Describe a time when you gave advice to others\nWhen it was\nWho you gave advice to\nWhat advice you gave\nAnd explain why you gave this advice.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:43",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "advice_and_decision_support",
+        "p3_follow_ups": [
+          "Should people prepare before giving advice?",
+          "Is it good to ask strangers online for advice?",
+          "Why do some people prefer advice from friends?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:589a415ce90d7870",
+        "canonical_entry_id": "p2:589a415ce90d7870",
+        "cue_id": "p2cue:589a415ce90d7870",
+        "category": "object",
+        "label": "物品",
+        "title": "Describe a piece of technology (not a phone) that you would like to own",
+        "cue_title": "Describe a piece of technology (not a phone) that you would like to own",
+        "bullets": [
+          "What it is",
+          "How much it costs",
+          "What you would use it for"
+        ],
+        "rounding": "And explain why you would like to own it.",
+        "linked_question": "Describe a piece of technology (not a phone) that you would like to own\nWhat it is\nHow much it costs\nWhat you would use it for\nAnd explain why you would like to own it.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "technology_and_communication",
+        "p3_follow_ups": [
+          "How has technology changed communication?",
+          "What technology do young people like to use?",
+          "What negative effects can technology have on relationships?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:45e9e88ba7d4bce2",
+        "canonical_entry_id": "p2:45e9e88ba7d4bce2",
+        "cue_id": "p2cue:45e9e88ba7d4bce2",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person who makes plans a lot and is good at planning",
+        "cue_title": "Describe a person who makes plans a lot and is good at planning",
+        "bullets": [
+          "Who this person is",
+          "How you know this person",
+          "What plans this person usually makes"
+        ],
+        "rounding": "And explain how you feel about this person.",
+        "linked_question": "Describe a person who makes plans a lot and is good at planning\nWho this person is\nHow you know this person\nWhat plans this person usually makes\nAnd explain how you feel about this person.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "planning_and_future_choices",
+        "p3_follow_ups": [
+          "Is it important to plan ahead?",
+          "What activities do people need to plan carefully?",
+          "Should children plan their future careers early?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:39b80255ba8251e1",
+        "canonical_entry_id": "p2:39b80255ba8251e1",
+        "cue_id": "p2cue:39b80255ba8251e1",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a child who loves drawing/painting",
+        "cue_title": "Describe a child who loves drawing/painting",
+        "bullets": [
+          "Who he/she is",
+          "How/when you knew him/her",
+          "How often he/she draws/paints"
+        ],
+        "rounding": "And explain why you think he/she loves drawing/painting",
+        "linked_question": "Describe a child who loves drawing/painting\nWho he/she is\nHow/when you knew him/her\nHow often he/she draws/paints\nAnd explain why you think he/she loves drawing/painting",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-20 17:24",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "child_who_loves_drawing_painting",
+        "p3_follow_ups": [
+          "What is the right age for a child to learn drawing?",
+          "Why do most children draw more often than adults do?",
+          "Why do some people visit galleries or museums instead of viewing artworks online?",
+          "Do you think galleries and museums should be free of charge?",
+          "How do artworks inspire people?",
+          "What are the differences between reading a book and visiting a museum?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:a0cacf7f756236e2",
+        "canonical_entry_id": "p2:a0cacf7f756236e2",
+        "cue_id": "p2cue:a0cacf7f756236e2",
+        "category": "object",
+        "label": "物品",
+        "title": "Describe a program or app on your computer or phone",
+        "cue_title": "Describe a program or app on your computer or phone",
+        "bullets": [
+          "What it is",
+          "When or how you use it",
+          "Where you found it"
+        ],
+        "rounding": "And explain how you feel about this program or app.",
+        "linked_question": "Describe a program or app on your computer or phone\nWhat it is\nWhen or how you use it\nWhere you found it\nAnd explain how you feel about this program or app.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 15:12",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "apps_and_digital_life",
+        "p3_follow_ups": [
+          "What apps are popular in your country?",
+          "Why do some people dislike using apps?",
+          "Should parents limit children's use of apps and games?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:70d27f5483cbac1b",
+        "canonical_entry_id": "p2:70d27f5483cbac1b",
+        "cue_id": "p2cue:70d27f5483cbac1b",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe an occasion when many people were smiling",
+        "cue_title": "Describe an occasion when many people were smiling",
+        "bullets": [
+          "When it happened",
+          "Who you were with",
+          "What happened"
+        ],
+        "rounding": "And explain why most people were smiling",
+        "linked_question": "Describe an occasion when many people were smiling\nWhen it happened\nWho you were with\nWhat happened\nAnd explain why most people were smiling",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "occasion_when_many_people_were",
+        "p3_follow_ups": [
+          "Do you think people who like to smile are more friendly?",
+          "Why do most people smile in photographs?",
+          "Do women smile more than men? Why?",
+          "Do people smile more when they are younger or older?",
+          "Is smiling important in your culture?",
+          "Are there any occasions when people need to pretend to smile?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:40abad92cad85554",
+        "canonical_entry_id": "p2:40abad92cad85554",
+        "cue_id": "p2cue:40abad92cad85554",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a time when you felt proud of a family member",
+        "cue_title": "Describe a time when you felt proud of a family member",
+        "bullets": [
+          "When it happened",
+          "Who the person was",
+          "What this person did"
+        ],
+        "rounding": "And explain why you felt proud of this family member.",
+        "linked_question": "Describe a time when you felt proud of a family member\nWhen it happened\nWho the person was\nWhat this person did\nAnd explain why you felt proud of this family member.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-19 23:17",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "family_pride_and_rewards",
+        "p3_follow_ups": [
+          "When do parents usually feel proud of their children?",
+          "Should children be rewarded for doing well?",
+          "Can rewards sometimes make children focus too much on results?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
         "practice_completed_round_indexes": [],
         "practice_completed_round_count": 0,
         "practice_is_complete": false,
@@ -584,9 +4512,9 @@
         ],
         "rounding": "And explain why it is important to your family.",
         "linked_question": "Describe something important that has been kept in your family for a long time\nWhat it is\nWhen your family got it\nHow your family got it\nAnd explain why it is important to your family.",
-        "material_text": "【母本C · 爸爸 + 集邮册 · 人物/物品 · 带场控注释】\n\n【⚑ 人物版开头——串：有趣的老人 / 强主见的人；强调年龄】\n\"So I'd like to talk about my dad. He's in his sixties now — he had me pretty late, so he's older than most of my friends' parents. Pretty quiet guy, the kind of person you'd walk past on the street and not think twice about. But the thing is, once he decides something is worth doing, he goes all the way. No shortcuts, no half measures.\"\n\n【⚑ 物品版开头——串：家里老东西 / 喜欢手工 / 爱读书】\n\"So there's this stamp album that's been on our bookshelf for as long as I can remember. It belonged to my dad — worn cover, yellowed pages, and next to every single stamp a little handwritten note: the date, where it came from, why he kept it. He's been adding to it since his twenties. Never stopped.\"\n\n【⚑ 以下两个开头共用】\n\n【⚑ 核心道具画面——串：家里老东西；放大；其他一句带过】\n\"There's one page near the middle that always catches my eye — a large commemorative stamp from the Rocky series. It shows a lone figure running through a grey industrial district at dawn. Factory chimneys in the background, smoke still hanging in the air, rusted pipes, shuttered factories. The whole scene looks exhausted. But the figure just keeps going.\"\n\n【⚑ 核心复用画面——微调开头直接点题】\n电影/节目版（看过的电影 / 喜欢的节目）：\"There's…",
-        "brainstorm_idea": "C2 album",
-        "has_brainstorm_idea": true,
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
         "p3_follow_up_text": "",
         "updated_at": "2026-06-21 00:03",
         "season": "2026-may-august",
@@ -602,9 +4530,1048 @@
         ],
         "p3_follow_up_count": 3,
         "p3_follow_up_saved_count": 0,
-        "has_material": true,
+        "has_material": false,
         "has_p3_follow_up": false,
         "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:8ff1786e35d2cbd6",
+        "canonical_entry_id": "p2:8ff1786e35d2cbd6",
+        "cue_id": "p2cue:8ff1786e35d2cbd6",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe a bicycle/motorcycle/car trip you would like to go",
+        "cue_title": "Describe a bicycle/motorcycle/car trip you would like to go",
+        "bullets": [
+          "Who you would like to go with",
+          "Where you would like to go",
+          "When you would like to go"
+        ],
+        "rounding": "And explain why you would like to travel this way.",
+        "linked_question": "Describe a bicycle/motorcycle/car trip you would like to go\nWho you would like to go with\nWhere you would like to go\nWhen you would like to go\nAnd explain why you would like to travel this way.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 14:27",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "transport_and_environment",
+        "p3_follow_ups": [
+          "Which form of transport is most popular in your country?",
+          "How are urban and rural transport systems different?",
+          "Should people change how they travel to protect the environment?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:2160295d33df27ae",
+        "canonical_entry_id": "p2:2160295d33df27ae",
+        "cue_id": "p2cue:2160295d33df27ae",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person who solved a problem in a smart way",
+        "cue_title": "Describe a person who solved a problem in a smart way",
+        "bullets": [
+          "Who this person is",
+          "What the problem was",
+          "How this person solved it"
+        ],
+        "rounding": "And explain why you think the solution was smart.",
+        "linked_question": "Describe a person who solved a problem in a smart way\nWho this person is\nWhat the problem was\nHow this person solved it\nAnd explain why you think the solution was smart.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 13:37",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "problem_solving_and_intelligence",
+        "p3_follow_ups": [
+          "Are children born smart or do they learn to become smart?",
+          "How can schools help children become better problem solvers?",
+          "Why does modern society need different kinds of talents?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:0103448193f1c7ec",
+        "canonical_entry_id": "p2:0103448193f1c7ec",
+        "cue_id": "p2cue:0103448193f1c7ec",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe one of your friends who learned something without a teacher",
+        "cue_title": "Describe one of your friends who learned something without a teacher",
+        "bullets": [
+          "Who he/she is",
+          "What he/she learned",
+          "Why he/she learned this"
+        ],
+        "rounding": "And explain whether it would be easier to learn from a teacher",
+        "linked_question": "Describe one of your friends who learned something without a teacher\nWho he/she is\nWhat he/she learned\nWhy he/she learned this\nAnd explain whether it would be easier to learn from a teacher",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "describe_one_of_your_friends",
+        "p3_follow_ups": [
+          "36 Is it necessary to keep learning after graduating from school?",
+          "Should teachers make learning in their classes fun?",
+          "Do you think there are too many subjects for students to learn?",
+          "Is it better to focus on a few subjects or to learn many subjects?",
+          "Do you think enterprises should provide training for their employees?",
+          "Do you think it is good for older adults to continue learning?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:261f2c749595b581",
+        "canonical_entry_id": "p2:261f2c749595b581",
+        "cue_id": "p2cue:261f2c749595b581",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe an event you attended in which you didn't enjoy the music played",
+        "cue_title": "Describe an event you attended in which you didn't enjoy the music played",
+        "bullets": [
+          "What it was",
+          "Who you went with",
+          "Why you decided to go there"
+        ],
+        "rounding": "And explain why you didn't enjoy it",
+        "linked_question": "Describe an event you attended in which you didn't enjoy the music played\nWhat it was\nWho you went with\nWhy you decided to go there\nAnd explain why you didn't enjoy it",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 12:53",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "event_you_attended_in_which",
+        "p3_follow_ups": [
+          "What kind of music events do people like today?",
+          "Do you think children should receive some musical education?",
+          "What are the differences between old and young people's music preferences?",
+          "What kind of music events are there in your country?",
+          "Why do many people like listening to music while doing sports?",
+          "What are the differences between listening to music at home and at a live concert?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:196b25289183c3f6",
+        "canonical_entry_id": "p2:196b25289183c3f6",
+        "cue_id": "p2cue:196b25289183c3f6",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a movie you watched and enjoyed recently",
+        "cue_title": "Describe a movie you watched and enjoyed recently",
+        "bullets": [
+          "What the movie was",
+          "When and where you watched it",
+          "Who you watched it with"
+        ],
+        "rounding": "And explain why you enjoyed this movie.",
+        "linked_question": "Describe a movie you watched and enjoyed recently\nWhat the movie was\nWhen and where you watched it\nWho you watched it with\nAnd explain why you enjoyed this movie.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 17:23",
+        "season": "2026-may-august",
+        "status": "retained",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "movies_and_cinema_culture",
+        "p3_follow_ups": [
+          "What kinds of movies are popular in your country?",
+          "Why do people like watching movies with friends?",
+          "Can movies influence people's values or behaviour?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:63cc3e8ab16d1bbf",
+        "canonical_entry_id": "p2:63cc3e8ab16d1bbf",
+        "cue_id": "p2cue:63cc3e8ab16d1bbf",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe an interesting building",
+        "cue_title": "Describe an interesting building",
+        "bullets": [
+          "Where it is",
+          "What it looks like",
+          "What function it has"
+        ],
+        "rounding": "And explain why you think it is interesting",
+        "linked_question": "Describe an interesting building\nWhere it is\nWhat it looks like\nWhat function it has\nAnd explain why you think it is interesting",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "interesting_building",
+        "p3_follow_ups": [
+          "What types of buildings are popular in your country?",
+          "Is it worth spending a lot of money on the exterior appearance of a building?",
+          "Is it more important for a building to look good on the outside or on the inside?",
+          "Why do people like to visit historical sites?",
+          "Do you think it's reasonable to charge an entry fee for visiting interesting buildings?",
+          "Is it better to live in a new building or an old one?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:e8d0c9b559c0380b",
+        "canonical_entry_id": "p2:e8d0c9b559c0380b",
+        "cue_id": "p2cue:e8d0c9b559c0380b",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe a time you needed to use your imagination",
+        "cue_title": "Describe a time you needed to use your imagination",
+        "bullets": [
+          "When it was",
+          "Why you needed to use imagination",
+          "How difficult or easy it was"
+        ],
+        "rounding": "And explain how you felt about it",
+        "linked_question": "Describe a time you needed to use your imagination\nWhen it was\nWhy you needed to use imagination\nHow difficult or easy it was\nAnd explain how you felt about it",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "time_you_needed_to_use",
+        "p3_follow_ups": [
+          "Do you think adults can have lots of imagination?",
+          "Do you think imagination is essential for scientists?",
+          "What kinds of jobs need imagination?",
+          "What subjects are helpful for children's imagination?",
+          "What games help develop children's imagination?",
+          "How important is imagination to children?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:b19f28644b986a19",
+        "canonical_entry_id": "p2:b19f28644b986a19",
+        "cue_id": "p2cue:b19f28644b986a19",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person who often helps others",
+        "cue_title": "Describe a person who often helps others",
+        "bullets": [
+          "Who this person is",
+          "How often he/she helps others",
+          "How/why he/she helps others"
+        ],
+        "rounding": "And how you feel about this person",
+        "linked_question": "Describe a person who often helps others\nWho this person is\nHow often he/she helps others\nHow/why he/she helps others\nAnd how you feel about this person",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "person_who_often_helps_others",
+        "p3_follow_ups": [
+          "What can children do to help their parents?",
+          "Should children help their parents with household chores?",
+          "What kind of help do people need when looking for a new job?",
+          "Who should people ask for help, colleagues or family members?",
+          "Do you think schools should teach children to do household chores?",
+          "Why are employees reluctant to ask their managers for help?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:50549e1ef774d081",
+        "canonical_entry_id": "p2:50549e1ef774d081",
+        "cue_id": "p2cue:50549e1ef774d081",
+        "category": "object",
+        "label": "物品",
+        "title": "Describe an item on which you spent more than expected",
+        "cue_title": "Describe an item on which you spent more than expected",
+        "bullets": [
+          "What it is",
+          "How much you spent on it",
+          "Why you bought it"
+        ],
+        "rounding": "And explain why you think you spent more than expected",
+        "linked_question": "Describe an item on which you spent more than expected\nWhat it is\nHow much you spent on it\nWhy you bought it\nAnd explain why you think you spent more than expected",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 15:08",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "item_on_which_you_spent",
+        "p3_follow_ups": [
+          "39 Do you often buy more than you expected?",
+          "What do you think young people spend most of their money on?",
+          "Do you think it is important to save money? Why?",
+          "Do people buy things they don't need?",
+          "Do you think it is the rich people's responsibility to donate money to people in need?",
+          "What kind of things are people happy to pay a high price for?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:411e80cc7f03eb8f",
+        "canonical_entry_id": "p2:411e80cc7f03eb8f",
+        "cue_id": "p2cue:411e80cc7f03eb8f",
+        "category": "object",
+        "label": "物品",
+        "title": "Describe a time when you encouraged someone to do something that he/she didn't want to do",
+        "cue_title": "Describe a time when you encouraged someone to do something that he/she didn't want to do",
+        "bullets": [
+          "Who he or she is",
+          "What you encouraged him/her to do",
+          "How he/she reacted"
+        ],
+        "rounding": "And explain why you encouraged him/her to do it",
+        "linked_question": "Describe a time when you encouraged someone to do something that he/she didn't want to do\nWho he or she is\nWhat you encouraged him/her to do\nHow he/she reacted\nAnd explain why you encouraged him/her to do it",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 15:07",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "time_when_you_encouraged_someone",
+        "p3_follow_ups": [
+          "How can leaders encourage their employees?",
+          "When should parents encourage their children?",
+          "What kind of encouragement should parents give?",
+          "Do you think some people are better than others at persuading?",
+          "Should children do everything their parents ask them to do?",
+          "How can employers encourage their staff?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:63b8d5d301402fc1",
+        "canonical_entry_id": "p2:63b8d5d301402fc1",
+        "cue_id": "p2cue:63b8d5d301402fc1",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe a short-term job you want to have in a foreign country",
+        "cue_title": "Describe a short-term job you want to have in a foreign country",
+        "bullets": [
+          "Where it is",
+          "How you know of it",
+          "What the job is"
+        ],
+        "rounding": "And explain why you want to do it",
+        "linked_question": "Describe a short-term job you want to have in a foreign country\nWhere it is\nHow you know of it\nWhat the job is\nAnd explain why you want to do it",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 15:09",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "short_term_job_you_want",
+        "p3_follow_ups": [
+          "What short-term jobs do young people do in other countries?",
+          "What challenges do young people face when working abroad?",
+          "What are the benefits of working for an international company?",
+          "What personal skills are required to work in an international company?",
+          "What kind of work can young people do in foreign countries?",
+          "Why are some people unwilling to work in other countries?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:77ef416cba30bca0",
+        "canonical_entry_id": "p2:77ef416cba30bca0",
+        "cue_id": "p2cue:77ef416cba30bca0",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person who likes to look after the natural world",
+        "cue_title": "Describe a person who likes to look after the natural world",
+        "bullets": [
+          "Who this person is",
+          "What he or she does",
+          "How he or she does it",
+          "How often he or she does it"
+        ],
+        "rounding": "And explain how you feel about this person",
+        "linked_question": "Describe a person who likes to look after the natural world\nWho this person is\nWhat he or she does\nHow he or she does it\nHow often he or she does it\nAnd explain how you feel about this person",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "person_who_likes_to_look",
+        "p3_follow_ups": [
+          "Do you think parents should teach their children how to protect the environment?",
+          "What laws about the environment are effective in your country?",
+          "Which do you think people prefer, rewards or punishment, when it comes to government intervention in environmental protection?",
+          "Is it easy for children in cities to get close to the natural world?",
+          "What can people do to protect the natural world?",
+          "Is it important to teach students environmental protection at school?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:14c69735405062bd",
+        "canonical_entry_id": "p2:14c69735405062bd",
+        "cue_id": "p2cue:14c69735405062bd",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe a shop/store you enjoy visiting",
+        "cue_title": "Describe a shop/store you enjoy visiting",
+        "bullets": [
+          "What the shop's name is",
+          "Where it is",
+          "How often you visit it"
+        ],
+        "rounding": "And explain why you like to visit it",
+        "linked_question": "Describe a shop/store you enjoy visiting\nWhat the shop's name is\nWhere it is\nHow often you visit it\nAnd explain why you like to visit it",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 15:14",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "shop_store_you_enjoy_visiting",
+        "p3_follow_ups": [
+          "Do people in your country go to the shopping mall frequently?",
+          "How have people's shopping habits changed in recent decades?",
+          "Do you think shops and shopping malls will disappear in the future?",
+          "What are the differences between shopping in street markets and big shopping malls?",
+          "What are the differences in the shopping habits of different age groups?",
+          "What are the differences between shopping online and in-store?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:7976000c623f902e",
+        "canonical_entry_id": "p2:7976000c623f902e",
+        "cue_id": "p2cue:7976000c623f902e",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe a city you enjoyed visiting",
+        "cue_title": "Describe a city you enjoyed visiting",
+        "bullets": [
+          "Where it is",
+          "When you visited it",
+          "How long you stayed there",
+          "What you did there"
+        ],
+        "rounding": "And explain why you enjoyed visiting it",
+        "linked_question": "Describe a city you enjoyed visiting\nWhere it is\nWhen you visited it\nHow long you stayed there\nWhat you did there\nAnd explain why you enjoyed visiting it",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-21 09:30",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "city_you_enjoyed_visiting",
+        "p3_follow_ups": [
+          "What kinds of facilities do big cities have?",
+          "Do you think modern cities are suitable for young people or old people?",
+          "Before you travel to a city, what factors would you consider?",
+          "What are the disadvantages of living in a very famous city?",
+          "Do you prefer to visit well-developed cities or cities with a long history?",
+          "For those who live in cities, is it because they want to or have to?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:b3083b58a1a4261a",
+        "canonical_entry_id": "p2:b3083b58a1a4261a",
+        "cue_id": "p2cue:b3083b58a1a4261a",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe a quiet place you like to go",
+        "cue_title": "Describe a quiet place you like to go",
+        "bullets": [
+          "Where it is",
+          "How often you go there",
+          "What you do there"
+        ],
+        "rounding": "And explain why you like this quiet place.",
+        "linked_question": "Describe a quiet place you like to go\nWhere it is\nHow often you go there\nWhat you do there\nAnd explain why you like this quiet place.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 15:14",
+        "season": "2026-may-august",
+        "status": "retained",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "quiet_places_and_mental_rest",
+        "p3_follow_ups": [
+          "Why do people need quiet places?",
+          "Are cities becoming too noisy?",
+          "How can public places be designed to be more peaceful?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:fafefb0c2c7dfc0d",
+        "canonical_entry_id": "p2:fafefb0c2c7dfc0d",
+        "cue_id": "p2cue:fafefb0c2c7dfc0d",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a TV or online program you like to watch",
+        "cue_title": "Describe a TV or online program you like to watch",
+        "bullets": [
+          "What it is",
+          "What it is about",
+          "Who you watch it with"
+        ],
+        "rounding": "And explain why you like to watch it",
+        "linked_question": "Describe a TV or online program you like to watch\nWhat it is\nWhat it is about\nWho you watch it with\nAnd explain why you like to watch it",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 17:12",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "tv_or_online_program_you",
+        "p3_follow_ups": [
+          "What programs do people like to watch in your country?",
+          "Do people in your country like to watch foreign TV programs?",
+          "What's the benefit of letting kids watch animal videos than visiting zoos?",
+          "Do teachers play videos in class in your country?",
+          "Do you think watching talk shows is a waste of time?",
+          "Do you think we can acquire knowledge from watching TV programs?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:92241b68f59a6b80",
+        "canonical_entry_id": "p2:92241b68f59a6b80",
+        "cue_id": "p2cue:92241b68f59a6b80",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe a place you would like to visit in your free time",
+        "cue_title": "Describe a place you would like to visit in your free time",
+        "bullets": [
+          "Where it is",
+          "What you will do there",
+          "How long you will stay there"
+        ],
+        "rounding": "And explain why you would like to visit it",
+        "linked_question": "Describe a place you would like to visit in your free time\nWhere it is\nWhat you will do there\nHow long you will stay there\nAnd explain why you would like to visit it",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-16 20:40",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "place_you_would_like_to",
+        "p3_follow_ups": [
+          "Why do you think some people choose not to travel abroad?",
+          "Do you think a gap period in life is important?"
+        ],
+        "p3_follow_up_count": 2,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:5c97d14436cedd31",
+        "canonical_entry_id": "p2:5c97d14436cedd31",
+        "cue_id": "p2cue:5c97d14436cedd31",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a special cake you received from others",
+        "cue_title": "Describe a special cake you received from others",
+        "bullets": [
+          "When it happened",
+          "Where it happened",
+          "Who you got the cake from"
+        ],
+        "rounding": "And explain why it's a special cake",
+        "linked_question": "Describe a special cake you received from others\nWhen it happened\nWhere it happened\nWho you got the cake from\nAnd explain why it's a special cake",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-20 22:49",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_pdf_2026_0604",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "special_cake_you_received_from",
+        "p3_follow_ups": [
+          "What are the differences between special food in China and other countries?",
+          "Is there any food in your country that is eaten at special times or on special occasions?",
+          "Why are some people willing to spend a lot of money on meals on special days?",
+          "Do you think it's good to communicate when eating with your family?",
+          "In your country, do people nowadays cook at home as frequently as people did in the past?",
+          "What do you think of people using their mobile phones during a meal?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:e9ac0e66da982017",
+        "canonical_entry_id": "p2:e9ac0e66da982017",
+        "cue_id": "p2cue:e9ac0e66da982017",
+        "category": "person",
+        "label": "人物",
+        "title": "Describe a person who works in a successful company",
+        "cue_title": "Describe a person who works in a successful company",
+        "bullets": [
+          "Who he/she is",
+          "What he/she does in the company",
+          "What business the company does"
+        ],
+        "rounding": "And explain why you think it is a successful company.",
+        "linked_question": "Describe a person who works in a successful company\nWho he/she is\nWhat he/she does in the company\nWhat business the company does\nAnd explain why you think it is a successful company.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 14:42",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_person_who_works_in_a_successful_company",
+        "p3_follow_ups": [
+          "Do you think governments should provide financial support to companies?",
+          "Do you think companies should donate money to help society?",
+          "Do you think customer satisfaction is important for a company?"
+        ],
+        "p3_follow_up_count": 3,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 1,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:b0e77c4b08753d82",
+        "canonical_entry_id": "p2:b0e77c4b08753d82",
+        "cue_id": "p2cue:b0e77c4b08753d82",
+        "category": "object",
+        "label": "物品",
+        "title": "Describe a thing you did to learn another language",
+        "cue_title": "Describe a thing you did to learn another language",
+        "bullets": [
+          "What language you learned",
+          "What you did",
+          "How it helped you learn the language"
+        ],
+        "rounding": "And how you felt about it.",
+        "linked_question": "Describe a thing you did to learn another language\nWhat language you learned\nWhat you did\nHow it helped you learn the language\nAnd how you felt about it.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-21 00:09",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_thing_you_did_to_learn_another_language",
+        "p3_follow_ups": [
+          "What difficulties do people face when learning a language?",
+          "Do you think language learning is important? Why?",
+          "Which is better, to study a language alone or to study it in a group? Why?",
+          "What's the best way to learn a language?",
+          "What are the advantages and disadvantages of learning a language?",
+          "Some people think that technology has made it unnecessary to learn languages. What do you think?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:e95c9e61cba26124",
+        "canonical_entry_id": "p2:e95c9e61cba26124",
+        "cue_id": "p2cue:e95c9e61cba26124",
+        "category": "place",
+        "label": "地点",
+        "title": "Describe an important river/lake in your country",
+        "cue_title": "Describe an important river/lake in your country",
+        "bullets": [
+          "Where it is located",
+          "How big/long it is",
+          "What it looks like"
+        ],
+        "rounding": "And explain why it is important.",
+        "linked_question": "Describe an important river/lake in your country\nWhere it is located\nHow big/long it is\nWhat it looks like\nAnd explain why it is important.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-18 17:18",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "an_important_river_lake_in_your_country",
+        "p3_follow_ups": [
+          "Are rivers and lakes important to a country?",
+          "What are the popular water sports in your country?",
+          "Are rivers and lakes good for transport? Why?",
+          "How do rivers and lakes affect local tourism?",
+          "Do you think rivers and lakes attract tourists?",
+          "How can rivers and lakes benefit local people?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:6620eb8a96ae52f7",
+        "canonical_entry_id": "p2:6620eb8a96ae52f7",
+        "cue_id": "p2cue:6620eb8a96ae52f7",
+        "category": "special",
+        "label": "特殊题目素材",
+        "title": "Describe a special day out that cost you little money/didn't cost you much",
+        "cue_title": "Describe a special day out that cost you little money/didn't cost you much",
+        "bullets": [
+          "When the day was",
+          "Where you went",
+          "How much you spent"
+        ],
+        "rounding": "And explain how you feel about the day.",
+        "linked_question": "Describe a special day out that cost you little money/didn't cost you much\nWhen the day was\nWhere you went\nHow much you spent\nAnd explain how you feel about the day.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-21 09:30",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_special_day_out_that_cost_you_little_money_didn_t_cost_you_much",
+        "p3_follow_ups": [
+          "Do people like to spend their leisure time out in your country?",
+          "How do people spend their leisure time in your country?",
+          "How does technology affect the way people spend their leisure time?",
+          "Do you think only old people have time for leisure?",
+          "Why do people like to have days off?",
+          "Going out to have holidays is tiring. Why do people still want to do it?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:885d46d7507975e2",
+        "canonical_entry_id": "p2:885d46d7507975e2",
+        "cue_id": "p2cue:885d46d7507975e2",
+        "category": "object",
+        "label": "物品",
+        "title": "Describe a time when you organized a happy event successfully",
+        "cue_title": "Describe a time when you organized a happy event successfully",
+        "bullets": [
+          "What the event was",
+          "How you prepared for it",
+          "Who helped you to organize it"
+        ],
+        "rounding": "And explain why you think it was a successful event.",
+        "linked_question": "Describe a time when you organized a happy event successfully\nWhat the event was\nHow you prepared for it\nWho helped you to organize it\nAnd explain why you think it was a successful event.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-17 16:52",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_time_when_you_organized_a_happy_event_successfully",
+        "p3_follow_ups": [
+          "How can parents help children to be organized?",
+          "On what occasions do people need to be organized?",
+          "Does everything need to be well prepared?",
+          "Do people need others' help when organizing things?",
+          "How would you feel when you were not well prepared for something?",
+          "Do you prefer to prepare and organize an activity or just take part in an activity?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
+        "practice_completed_round_indexes": [],
+        "practice_completed_round_count": 0,
+        "practice_is_complete": false,
+        "practice_next_round_index": 0
+      },
+      {
+        "entry_id": "p2:b8d365d4d366d778",
+        "canonical_entry_id": "p2:b8d365d4d366d778",
+        "cue_id": "p2cue:b8d365d4d366d778",
+        "category": "event",
+        "label": "事件",
+        "title": "Describe a time when you were stuck in a traffic jam for a very long time",
+        "cue_title": "Describe a time when you were stuck in a traffic jam for a very long time",
+        "bullets": [
+          "When it happened",
+          "Where you were stuck",
+          "What you did while waiting"
+        ],
+        "rounding": "And explain how you felt in the traffic jam.",
+        "linked_question": "Describe a time when you were stuck in a traffic jam for a very long time\nWhen it happened\nWhere you were stuck\nWhat you did while waiting\nAnd explain how you felt in the traffic jam.",
+        "material_text": "",
+        "brainstorm_idea": "",
+        "has_brainstorm_idea": false,
+        "p3_follow_up_text": "",
+        "updated_at": "2026-06-20 22:49",
+        "season": "2026-may-august",
+        "status": "new",
+        "region": "china_mainland",
+        "source": "ieltsbro_local_card_ocr",
+        "source_url": "data/ielts/sources/2026_may_august_ielts_speaking_bank_0604.pdf",
+        "p3_theme": "a_time_when_you_were_stuck_in_a_traffic_jam_for_a_very_long_time",
+        "p3_follow_ups": [
+          "How can we solve the traffic jam problem?",
+          "Do you think developing public transport can solve traffic jam problems?",
+          "Do you think the high ways will help reduce traffic jams?",
+          "What are good ways to manage traffic?",
+          "Do you like to use public transport?",
+          "Would you rather be in a car or a bus in a traffic jam?"
+        ],
+        "p3_follow_up_count": 6,
+        "p3_follow_up_saved_count": 0,
+        "has_material": false,
+        "has_p3_follow_up": false,
+        "practice_round_count": 2,
         "practice_completed_round_indexes": [],
         "practice_completed_round_count": 0,
         "practice_is_complete": false,
@@ -2179,6 +7146,756 @@
           }
         ],
         "report_status": "ready",
+        "is_sample": true
+      }
+    }
+  ],
+  "writingReports": [
+    {
+      "id": "a6e34b22f9864dfa92d22ef1892a46cb",
+      "practice_date": "2026-06-09",
+      "display_time": "2026-06-10 01:33",
+      "task_type": "task2",
+      "task_label": "Task 2",
+      "prompt_id": "cambridge-18-test-3-task-2",
+      "title": "Rural To Urban Migration",
+      "category": "opinion",
+      "prompt": "In many countries around the world, rural people are moving to cities, so the population in the countryside is decreasing. Do you think this is a positive or a negative development? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+      "source": "cambridge_ielts_public_reference",
+      "source_book": 18,
+      "source_test": 3,
+      "source_question": 2,
+      "source_label": "剑雅18-3 Task 2",
+      "prompt_highlights": [
+        {
+          "start": 8,
+          "end": 17
+        },
+        {
+          "start": 36,
+          "end": 69
+        },
+        {
+          "start": 78,
+          "end": 88
+        },
+        {
+          "start": 123,
+          "end": 181
+        },
+        {
+          "start": 166,
+          "end": 175
+        }
+      ],
+      "word_count": 337,
+      "status": "scored",
+      "overall_band": 6.5,
+      "is_sample": true,
+      "detail": {
+        "id": "a6e34b22f9864dfa92d22ef1892a46cb",
+        "user_id": "7",
+        "created_at": "2026-06-09T12:52:33.782347+00:00",
+        "updated_at": "2026-06-09T17:33:33.709805+00:00",
+        "saved_at": "2026-06-09T17:26:11.639646+00:00",
+        "practice_date": "2026-06-09",
+        "status": "scored",
+        "task_type": "task2",
+        "task_label": "Task 2",
+        "prompt_id": "cambridge-18-test-3-task-2",
+        "title": "Rural To Urban Migration",
+        "category": "opinion",
+        "prompt": "In many countries around the world, rural people are moving to cities, so the population in the countryside is decreasing. Do you think this is a positive or a negative development? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+        "image_url": "",
+        "source": "cambridge_ielts_public_reference",
+        "source_book": 18,
+        "source_test": 3,
+        "source_question": 2,
+        "source_label": "剑雅18-3 Task 2",
+        "prompt_highlights": [
+          {
+            "start": 8,
+            "end": 17
+          },
+          {
+            "start": 36,
+            "end": 69
+          },
+          {
+            "start": 78,
+            "end": 88
+          },
+          {
+            "start": 123,
+            "end": 181
+          },
+          {
+            "start": 166,
+            "end": 175
+          }
+        ],
+        "word_count": 337,
+        "score": {
+          "overall_band": 6.5,
+          "task_response": 7.0,
+          "task_achievement": 7.0,
+          "coherence_cohesion": 7.0,
+          "lexical_resource": 6.0,
+          "grammatical_range_accuracy": 6.0,
+          "feedback_markdown": "",
+          "grammar_corrections": [
+            {
+              "original": "increasingly rural people moving to cities",
+              "suggestion": "an increasing number of rural people moving to cities",
+              "reason": "“increasingly”通常修饰形容词或动词，不直接修饰名词短语；这里应使用“an increasing number of”。"
+            },
+            {
+              "original": "provide more workforce",
+              "suggestion": "expand the urban workforce / provide a larger labour force",
+              "reason": "“workforce”通常指整体劳动力群体，不常与“provide more”搭配；这里应使用更自然的搭配。"
+            },
+            {
+              "original": "an increacing demand of workforce",
+              "suggestion": "a growing demand for labour",
+              "reason": "“demand”后常用介词“for”；“workforce”在这里不如“labour”自然。"
+            },
+            {
+              "original": "both manufacture of products and urban infrastructure require enough people to maintain",
+              "suggestion": "both the manufacturing sector and urban infrastructure require enough workers to operate and maintain them",
+              "reason": "原句名词结构不完整，“manufacture of products”不自然；“infrastructure”需要“operate and maintain”，且需要代词宾语。"
+            },
+            {
+              "original": "which demonstrate the merits of population movement are substantial and undeniable",
+              "suggestion": "which demonstrates that the benefits of population movement are substantial and undeniable",
+              "reason": "“which”指代前面整个例子，动词应用单数“demonstrates”；同时需要“that”引导宾语从句。"
+            },
+            {
+              "original": "rural migration to city",
+              "suggestion": "rural-to-urban migration / migration from rural areas to cities",
+              "reason": "固定表达应为“rural-to-urban migration”；“city”作为可数名词不能裸用。"
+            },
+            {
+              "original": "the demand for labour force in urban",
+              "suggestion": "the demand for labour in urban areas",
+              "reason": "“urban”是形容词，不能单独作名词；“labour force”前通常需要限定词，但这里用“labour”更自然。"
+            },
+            {
+              "original": "its motivation to automation technologies",
+              "suggestion": "its role in encouraging automation technologies / the pressure it creates for automation",
+              "reason": "“motivation to technologies”搭配错误；应表达“推动/促使自动化发展”。"
+            }
+          ],
+          "inline_annotations": [
+            {
+              "paragraph_index": 1,
+              "original": "increasingly rural people",
+              "type": "word_choice",
+              "suggestion": "an increasing number of rural people",
+              "explanation": "“increasingly”不能自然地直接修饰“rural people”；应改为名词短语。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 1,
+              "original": "I completely view it as a positive development",
+              "type": "word_choice",
+              "suggestion": "I view it as a largely positive development",
+              "explanation": "“completely view”搭配生硬；“largely positive”也更符合论证中承认缺点的语气。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 1,
+              "original": "paves the way for a more sustainable result for society",
+              "type": "word_choice",
+              "suggestion": "can contribute to more sustainable social and economic development",
+              "explanation": "“sustainable result”含义模糊，Task 2 中应说明具体是哪方面的可持续发展。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "First of all, One major benefit",
+              "type": "punctuation",
+              "suggestion": "First of all, one major benefit",
+              "explanation": "逗号后不应把普通词“One”大写。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "provide more workforce",
+              "type": "word_choice",
+              "suggestion": "provide a larger labour force / expand the workforce",
+              "explanation": "“provide more workforce”搭配不自然。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "a lager proportion",
+              "type": "spelling",
+              "suggestion": "a larger proportion",
+              "explanation": "“lager”是拼写错误；此处应为“larger”。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "rural populatioin",
+              "type": "spelling",
+              "suggestion": "rural population",
+              "explanation": "“populatioin”拼写错误。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "an increacing demand",
+              "type": "spelling",
+              "suggestion": "an increasing demand",
+              "explanation": "“increacing”拼写错误。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "demand of workforce",
+              "type": "word_choice",
+              "suggestion": "demand for labour",
+              "explanation": "“demand”后应接“for”；“labour”比“workforce”更适合此处。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "both manufacture of products",
+              "type": "grammar",
+              "suggestion": "both the manufacturing of products",
+              "explanation": "这里需要名词化形式“manufacturing”，并加冠词使结构完整。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "urban infrastructure require",
+              "type": "grammar",
+              "suggestion": "urban infrastructure requires",
+              "explanation": "如果主语理解为“urban infrastructure”，动词应为单数；若与前面的“manufacturing”并列，则需重写句子避免歧义。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "require enough people to maintain",
+              "type": "missing_word",
+              "suggestion": "it / them",
+              "explanation": "“maintain”是及物动词，这里需要宾语。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "a car factor",
+              "type": "spelling",
+              "suggestion": "a car factory",
+              "explanation": "此处应为“factory”，表示工厂。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "which demonstrate",
+              "type": "grammar",
+              "suggestion": "which demonstrates",
+              "explanation": "“which”指代前面整个例子，动词应用单数形式。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 2,
+              "original": "demonstrate the merits",
+              "type": "missing_word",
+              "suggestion": "that",
+              "explanation": "“demonstrate”后接完整从句时需要“that”。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 3,
+              "original": "nowadays automation of agriculture",
+              "type": "word_choice",
+              "suggestion": "agricultural automation is now highly advanced",
+              "explanation": "“automation of agriculture”不如“agricultural automation”自然。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 3,
+              "original": "rural migration to city",
+              "type": "grammar",
+              "suggestion": "rural-to-urban migration / migration from rural areas to cities",
+              "explanation": "“city”是可数名词，不能在这里单数裸用；该概念有固定表达。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 3,
+              "original": "the inovation of automation",
+              "type": "spelling",
+              "suggestion": "innovation in automation",
+              "explanation": "“inovation”拼写错误；介词搭配也应改为“innovation in”。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 4,
+              "original": "its initial drawbacks",
+              "type": "word_choice",
+              "suggestion": "its possible short-term drawbacks",
+              "explanation": "“initial drawbacks”不够准确；你讨论的是潜在短期问题。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 4,
+              "original": "the demand for labour force in urban",
+              "type": "grammar",
+              "suggestion": "the demand for labour in urban areas",
+              "explanation": "“urban”不能单独作名词；“demand for labour”更自然。",
+              "severity": "medium"
+            },
+            {
+              "paragraph_index": 4,
+              "original": "its motivation to automation technologies",
+              "type": "word_choice",
+              "suggestion": "the pressure it creates to adopt automation technologies",
+              "explanation": "“motivation to automation technologies”搭配错误，表达不清。",
+              "severity": "medium"
+            }
+          ],
+          "data_accuracy_notes": [],
+          "spelling_correction_summary": "### 字母遗漏 / 字母多余类错误\n- `lager` -> 正确：`larger`（更大的）\n- `populatioin` -> 正确：`population`（人口）\n- `inovation` -> 正确：`innovation`（创新）\n\n### 发音误导类错误\n- `increacing` -> 正确：`increasing`（不断增长的）\n\n### 词形相近混淆类错误\n- `factor` -> 正确：`factory`（工厂）；`factor` 是“因素”，不表示“工厂”。",
+          "expression_upgrade_summary": "",
+          "overall_review": "这篇 Task 2 立场明确，认为农村人口进城总体是积极发展，并且两个主体段都围绕“城市劳动力”和“农业自动化”展开，基本回答了题目。Task Response 可以到 7 左右，因为观点清楚、能回应反方并给出例子。但发展不够充分：第二段主要说城市需要劳动力，却没有深入解释为什么这对整个社会一定更可持续；第三段中“农村人口迁移会推动农业自动化”的因果关系有些跳跃，Japan 的例子也没有直接证明“农村到城市迁移”本身带来的积极影响。语言上整体流畅，但有较多拼写、搭配和词形问题，如 “provide more workforce”, “demand of workforce”, “rural migration to city”, “demand for labour force in urban”等，这些会限制 Lexical Resource 和 Grammar 分数。整体属于 6.5：表达较顺，但论证深度和语言准确性还未稳定达到 7。",
+          "practice_focus": "下一步最重要的是练习“因果链论证”：每个主体段不要只提出一个好处，而要按“现象 → 直接影响 → 更深层社会结果 → 具体例子”的顺序展开。尤其要避免中文式抽象表达，例如“paves the way for a more sustainable result”或“motivation to automation technologies”，改成更具体、可验证的英文论证。",
+          "model_answer": "In many countries, an increasing number of people are leaving rural areas and settling in cities. Although this trend can create pressure on agriculture and urban services, I believe it is largely a positive development because it can make labour markets more efficient and encourage technological progress in the countryside.\n\nOne major advantage is that migration to cities can support economic growth. Cities usually have a high demand for workers in construction, manufacturing, transport and public services. When rural workers move to urban areas, they can often find jobs that use their labour more productively than traditional small-scale farming. For example, in many developing economies, factories, logistics companies and infrastructure projects depend on a steady supply of workers. This not only increases production but also gives migrants higher incomes and better access to education and healthcare for their families.\n\nAdmittedly, a declining rural population may lead to labour shortages in agriculture. If too many young people leave villages, some farms may struggle to plant and harvest crops. However, this problem can also push governments and farmers to modernise agriculture. Countries such as Japan have responded to rural labour shortages by investing in machinery, smart farming systems and more efficient food production methods. As a result, fewer workers can produce more food, while rural areas become less dependent on physically demanding manual labour.\n\nIn conclusion, while rural-to-urban migration may create short-term difficulties, I consider it a positive development overall. It helps cities meet their demand for labour, improves opportunities for migrants and can encourage the modernisation of agriculture.",
+          "paragraph_reviews": [
+            {
+              "index": 1,
+              "learner": "Whether the phenomenon of increasingly rural people moving to cities is positive has long been a topic of debate. While some believe that this trend brings certain challenges, I completely view it as a positive development, since this shift ultimately paves the way for a more sustainable result for society.",
+              "model": "In many countries, an increasing number of people are leaving rural areas and moving to cities. Although this trend can create certain challenges, I believe it is largely a positive development because it can make labour markets more efficient and encourage technological progress in agriculture.",
+              "coaching": "开头能明确表态，这是优点。但问题是立场句略抽象：“a more sustainable result for society”没有说明具体是哪种结果，容易像模板句。Task 2 的开头最好直接预告两个核心理由，这样后文逻辑更清楚。你文中其实想论证两个点：城市经济需要劳动力、农村劳动力减少会推动农业自动化，所以开头就应把这两个理由写出来。",
+              "language_correction_upgrade": "- `the phenomenon of increasingly rural people moving to cities` → `the trend of an increasing number of rural people moving to cities`：表达更自然。\n- `I completely view it as...` → `I consider it largely positive`：搭配更准确，也更符合你承认缺点的论证。\n- `paves the way for a more sustainable result` → `can contribute to more sustainable economic development`：避免空泛名词，明确结果。"
+            },
+            {
+              "index": 2,
+              "learner": "First of all, One major benefit of this trend is that rural people moving to cities can promote urban economic development. As more people gather in cities, they can provide more workforce, contributing to increased productivity. This is particularly true for developing countries, which have a lager proportion of rural populatioin as well as an increacing demand of workforce, because both manufacture of products and urban infrastructure require enough people to maintain. For instance, it calls for sufficient labour force not only to build a car factor but also to produce components and assemble cars, which demonstrate the merits of population movement are substantial and undeniable.",
+              "model": "One major benefit of this trend is that it can promote urban economic development. As more people settle in cities, they expand the labour force and help businesses increase productivity. This is especially important in developing countries, where manufacturing, construction and public infrastructure often require large numbers of workers. For example, a car factory needs employees not only to build the facility but also to produce components and assemble vehicles. This shows how rural-to-urban migration can support industrial growth.",
+              "coaching": "这一段有明确中心句，能围绕城市经济展开，结构基本有效。不过论证有一点“列原因但解释不足”：你说更多人进入城市会提高生产力，但没有进一步解释为什么城市岗位比农村岗位更能创造价值。例子“car factory”方向可以，但句子过长，后半句语法压力很大，导致意思不够清楚。建议把“发展中国家需要劳动力”和“具体行业例子”分成两三句写。",
+              "language_correction_upgrade": "- `provide more workforce` → `expand the urban labour force`：更符合英语搭配。\n- `demand of workforce` → `demand for labour`：介词必须用 `for`。\n- `both manufacture of products and urban infrastructure require...` → `both manufacturing and infrastructure projects require...`：并列结构更清楚。\n- `which demonstrate...` → `which demonstrates that...`：指代整件事时用单数动词，并补出从句连接词。"
+            },
+            {
+              "index": 3,
+              "learner": "Nevertheless, it is crucial to consider the counterargument regarding the lack of labour force in agriculture. Critics might argue that rural communities play a vital role in supplying cities with essential food products. However, this concern is often overstated because nowadays automation of agriculture is highly advanced. In fact, without embracing this new development, it would be virtually impossible for humans to achieve higher efficiency, for rural migration to city contributes to the inovation of automation. To illustrate, Japan has invested heavily in automation due to labour shortages in both rural and urban areas, which has accelerated technological innovation. By adopting this trend, the country has successfully improved productivity and maintained economic competitiveness. Hence, the long-term merits of this ongoing development far outweigh its potential drawbacks.",
+              "model": "Admittedly, some people argue that rural depopulation may create labour shortages in agriculture and threaten food supply. However, this concern should not be exaggerated. In many countries, agricultural automation has allowed farms to maintain or even increase output with fewer workers. For instance, Japan has invested heavily in smart farming technologies partly because of labour shortages in rural areas. Such investment has encouraged more efficient production methods and reduced dependence on manual labour. Therefore, rural-to-urban migration can indirectly push agriculture to modernise.",
+              "coaching": "这一段有反驳意识，这是高分写作需要的能力。但逻辑链还不够稳：你从“农村缺劳动力”跳到“自动化已经高度先进”，再跳到“人口迁移促进自动化创新”，中间缺少解释。更好的写法是：农村劳动力减少 → 农业面临压力 → 政府和农场投资机械化/智能农业 → 少量劳动力也能维持产量。Japan 例子可以用，但要明确它证明的是“劳动力短缺推动技术投入”，而不是简单说“adopting this trend”。",
+              "language_correction_upgrade": "- `the lack of labour force in agriculture` → `labour shortages in agriculture`：更自然、更简洁。\n- `nowadays automation of agriculture is highly advanced` → `agricultural automation is now highly advanced`：词序和搭配更地道。\n- `rural migration to city` → `rural-to-urban migration`：固定表达。\n- `contributes to the innovation of automation` → `encourages innovation in automation`：动词和介词搭配更准确。\n- `By adopting this trend` → `By investing in such technologies`：原句指代不清，像是在说国家“采纳人口迁移趋势”。"
+            },
+            {
+              "index": 4,
+              "learner": "In conclusion, while there are valid arguments concerning its initial drawbacks, I still hold the belief that rural migration to cities is a profoundly positive development. This is because the demand for labour force in urban and its motivation to automation technologies will jointly ensure that this trend yields the most valuable and enduring outcomes.",
+              "model": "In conclusion, although rural-to-urban migration can cause short-term difficulties, I believe it is a positive development overall. It helps cities meet their demand for labour, improves opportunities for migrants and encourages agriculture to become more modern and efficient.",
+              "coaching": "结论能重申立场，但最后一句表达过于抽象，而且有明显搭配问题。“the most valuable and enduring outcomes”听起来像模板化总结，没有具体回扣你的两个理由。结论不需要写得很宏大，只要清楚总结：城市获得劳动力、移民获得机会、农业被迫现代化，就更有说服力。",
+              "language_correction_upgrade": "- `valid arguments concerning its initial drawbacks` → `valid concerns about its short-term drawbacks`：更自然。\n- `labour force in urban` → `labour in urban areas`：`urban` 是形容词，不能单独作名词。\n- `its motivation to automation technologies` → `the pressure it creates to adopt automation technologies`：表达“推动自动化”的逻辑更准确。\n- `profoundly positive development` 可改为 `positive development overall`：Task 2 中语气稳健比夸张更好。"
+            }
+          ],
+          "structure_advice_only": false,
+          "structure_advice": "",
+          "analysis_backend": "ai",
+          "fallback_reason": "",
+          "backend": "ai",
+          "billing_usage": {
+            "prompt_tokens": 1848,
+            "completion_tokens": 4898,
+            "total_tokens": 6746
+          },
+          "scored_at": "2026-06-09T17:33:33.703938+00:00"
+        },
+        "ai_task": {
+          "id": "aitask_5b58cd1416fcd99a3aafa504",
+          "task_type": "writing_score",
+          "provider": "codex",
+          "model": "",
+          "status": "succeeded",
+          "progress_percent": 100,
+          "attempt_count": 1,
+          "max_attempts": 3,
+          "related_type": "writing_entry",
+          "related_id": "a6e34b22f9864dfa92d22ef1892a46cb",
+          "call_id": "ai_5b58cd1416fcd99a3aafa504",
+          "prompt_version": "writing_score_v1",
+          "idempotency_key": "writing_score:a6e34b22f9864dfa92d22ef1892a46cb:f0e2c7b6eab4eccb",
+          "request_payload": {
+            "entry_id": "a6e34b22f9864dfa92d22ef1892a46cb",
+            "task_type": "task2",
+            "prompt_id": "cambridge-18-test-3-task-2",
+            "title": "Rural To Urban Migration",
+            "prompt": "In many countries around the world, rural people are moving to cities, so the population in the countryside is decreasing. Do you think this is a positive or a negative development? Give reasons for your answer and include any relevant examples from your own knowledge or experience.",
+            "answer": "Whether the phenomenon of increasingly rural people moving to cities is positive has long been a topic of debate. While some believe that this trend brings certain challenges, I completely view it as a positive development, since this shift ultimately paves the way for a more sustainable result for society. \n\nFirst of all, One major benefit of this trend is that rural people moving to cities can promote urban economic development. As more people gather in cities, they can provide more workforce, contributing to increased productivity. This is particularly true for developing countries, which have a lager proportion of rural populatioin as well as an increacing demand of workforce, because both manufacture of products and urban infrastructure require enough people to maintain. For instance, it calls for sufficient labour force not only to build a car factor but also to produce components and assemble cars, which demonstrate the merits of population movement are substantial and undeniable.\n\nNevertheless, it is crucial to consider the counterargument regarding the lack of labour force in agriculture. Critics might argue that rural communities play a vital role in supplying cities with essential food products. However, this concern is often overstated because nowadays automation of agriculture is highly advanced. In fact, without embracing this new development, it would be virtually impossible for humans to achieve higher efficiency, for rural migration to city contributes to the inovation of automation. To illustrate, Japan has invested heavily in automation due to labour shortages in both rural and urban areas, which has accelerated technological innovation. By adopting this trend, the country has successfully improved productivity and maintained economic competitiveness. Hence, the long-term merits of this ongoing development far outweigh its potential drawbacks.\n\nIn conclusion, while there are valid arguments concerning its initial drawbacks, I still hold the belief that rural migration to cities is a profoundly positive development. This is because the demand for labour force in urban and its motivation to automation technologies will jointly ensure that this trend yields the most valuable and enduring outcomes.",
+            "word_count": 337,
+            "answer_hash": "f0e2c7b6eab4eccb",
+            "chart_facts": {},
+            "chart_facts_status": "none"
+          },
+          "result_payload": {
+            "entry_id": "a6e34b22f9864dfa92d22ef1892a46cb",
+            "score": {
+              "overall_band": 6.5,
+              "task_response": 7.0,
+              "coherence_cohesion": 7.0,
+              "lexical_resource": 6.0,
+              "grammatical_range_accuracy": 6.0,
+              "feedback_markdown": "",
+              "grammar_corrections": [
+                {
+                  "original": "increasingly rural people moving to cities",
+                  "suggestion": "an increasing number of rural people moving to cities",
+                  "reason": "“increasingly”通常修饰形容词或动词，不直接修饰名词短语；这里应使用“an increasing number of”。"
+                },
+                {
+                  "original": "provide more workforce",
+                  "suggestion": "expand the urban workforce / provide a larger labour force",
+                  "reason": "“workforce”通常指整体劳动力群体，不常与“provide more”搭配；这里应使用更自然的搭配。"
+                },
+                {
+                  "original": "an increacing demand of workforce",
+                  "suggestion": "a growing demand for labour",
+                  "reason": "“demand”后常用介词“for”；“workforce”在这里不如“labour”自然。"
+                },
+                {
+                  "original": "both manufacture of products and urban infrastructure require enough people to maintain",
+                  "suggestion": "both the manufacturing sector and urban infrastructure require enough workers to operate and maintain them",
+                  "reason": "原句名词结构不完整，“manufacture of products”不自然；“infrastructure”需要“operate and maintain”，且需要代词宾语。"
+                },
+                {
+                  "original": "which demonstrate the merits of population movement are substantial and undeniable",
+                  "suggestion": "which demonstrates that the benefits of population movement are substantial and undeniable",
+                  "reason": "“which”指代前面整个例子，动词应用单数“demonstrates”；同时需要“that”引导宾语从句。"
+                },
+                {
+                  "original": "rural migration to city",
+                  "suggestion": "rural-to-urban migration / migration from rural areas to cities",
+                  "reason": "固定表达应为“rural-to-urban migration”；“city”作为可数名词不能裸用。"
+                },
+                {
+                  "original": "the demand for labour force in urban",
+                  "suggestion": "the demand for labour in urban areas",
+                  "reason": "“urban”是形容词，不能单独作名词；“labour force”前通常需要限定词，但这里用“labour”更自然。"
+                },
+                {
+                  "original": "its motivation to automation technologies",
+                  "suggestion": "its role in encouraging automation technologies / the pressure it creates for automation",
+                  "reason": "“motivation to technologies”搭配错误；应表达“推动/促使自动化发展”。"
+                }
+              ],
+              "overall_review": "这篇 Task 2 立场明确，认为农村人口进城总体是积极发展，并且两个主体段都围绕“城市劳动力”和“农业自动化”展开，基本回答了题目。Task Response 可以到 7 左右，因为观点清楚、能回应反方并给出例子。但发展不够充分：第二段主要说城市需要劳动力，却没有深入解释为什么这对整个社会一定更可持续；第三段中“农村人口迁移会推动农业自动化”的因果关系有些跳跃，Japan 的例子也没有直接证明“农村到城市迁移”本身带来的积极影响。语言上整体流畅，但有较多拼写、搭配和词形问题，如 “provide more workforce”, “demand of workforce”, “rural migration to city”, “demand for labour force in urban”等，这些会限制 Lexical Resource 和 Grammar 分数。整体属于 6.5：表达较顺，但论证深度和语言准确性还未稳定达到 7。",
+              "practice_focus": "下一步最重要的是练习“因果链论证”：每个主体段不要只提出一个好处，而要按“现象 → 直接影响 → 更深层社会结果 → 具体例子”的顺序展开。尤其要避免中文式抽象表达，例如“paves the way for a more sustainable result”或“motivation to automation technologies”，改成更具体、可验证的英文论证。",
+              "model_answer": "In many countries, an increasing number of people are leaving rural areas and settling in cities. Although this trend can create pressure on agriculture and urban services, I believe it is largely a positive development because it can make labour markets more efficient and encourage technological progress in the countryside.\n\nOne major advantage is that migration to cities can support economic growth. Cities usually have a high demand for workers in construction, manufacturing, transport and public services. When rural workers move to urban areas, they can often find jobs that use their labour more productively than traditional small-scale farming. For example, in many developing economies, factories, logistics companies and infrastructure projects depend on a steady supply of workers. This not only increases production but also gives migrants higher incomes and better access to education and healthcare for their families.\n\nAdmittedly, a declining rural population may lead to labour shortages in agriculture. If too many young people leave villages, some farms may struggle to plant and harvest crops. However, this problem can also push governments and farmers to modernise agriculture. Countries such as Japan have responded to rural labour shortages by investing in machinery, smart farming systems and more efficient food production methods. As a result, fewer workers can produce more food, while rural areas become less dependent on physically demanding manual labour.\n\nIn conclusion, while rural-to-urban migration may create short-term difficulties, I consider it a positive development overall. It helps cities meet their demand for labour, improves opportunities for migrants and can encourage the modernisation of agriculture.",
+              "paragraph_reviews": [
+                {
+                  "index": 1,
+                  "learner": "Whether the phenomenon of increasingly rural people moving to cities is positive has long been a topic of debate. While some believe that this trend brings certain challenges, I completely view it as a positive development, since this shift ultimately paves the way for a more sustainable result for society.",
+                  "model": "In many countries, an increasing number of people are leaving rural areas and moving to cities. Although this trend can create certain challenges, I believe it is largely a positive development because it can make labour markets more efficient and encourage technological progress in agriculture.",
+                  "coaching": "开头能明确表态，这是优点。但问题是立场句略抽象：“a more sustainable result for society”没有说明具体是哪种结果，容易像模板句。Task 2 的开头最好直接预告两个核心理由，这样后文逻辑更清楚。你文中其实想论证两个点：城市经济需要劳动力、农村劳动力减少会推动农业自动化，所以开头就应把这两个理由写出来。",
+                  "language_correction_upgrade": "- `the phenomenon of increasingly rural people moving to cities` → `the trend of an increasing number of rural people moving to cities`：表达更自然。\n- `I completely view it as...` → `I consider it largely positive`：搭配更准确，也更符合你承认缺点的论证。\n- `paves the way for a more sustainable result` → `can contribute to more sustainable economic development`：避免空泛名词，明确结果。"
+                },
+                {
+                  "index": 2,
+                  "learner": "First of all, One major benefit of this trend is that rural people moving to cities can promote urban economic development. As more people gather in cities, they can provide more workforce, contributing to increased productivity. This is particularly true for developing countries, which have a lager proportion of rural populatioin as well as an increacing demand of workforce, because both manufacture of products and urban infrastructure require enough people to maintain. For instance, it calls for sufficient labour force not only to build a car factor but also to produce components and assemble cars, which demonstrate the merits of population movement are substantial and undeniable.",
+                  "model": "One major benefit of this trend is that it can promote urban economic development. As more people settle in cities, they expand the labour force and help businesses increase productivity. This is especially important in developing countries, where manufacturing, construction and public infrastructure often require large numbers of workers. For example, a car factory needs employees not only to build the facility but also to produce components and assemble vehicles. This shows how rural-to-urban migration can support industrial growth.",
+                  "coaching": "这一段有明确中心句，能围绕城市经济展开，结构基本有效。不过论证有一点“列原因但解释不足”：你说更多人进入城市会提高生产力，但没有进一步解释为什么城市岗位比农村岗位更能创造价值。例子“car factory”方向可以，但句子过长，后半句语法压力很大，导致意思不够清楚。建议把“发展中国家需要劳动力”和“具体行业例子”分成两三句写。",
+                  "language_correction_upgrade": "- `provide more workforce` → `expand the urban labour force`：更符合英语搭配。\n- `demand of workforce` → `demand for labour`：介词必须用 `for`。\n- `both manufacture of products and urban infrastructure require...` → `both manufacturing and infrastructure projects require...`：并列结构更清楚。\n- `which demonstrate...` → `which demonstrates that...`：指代整件事时用单数动词，并补出从句连接词。"
+                },
+                {
+                  "index": 3,
+                  "learner": "Nevertheless, it is crucial to consider the counterargument regarding the lack of labour force in agriculture. Critics might argue that rural communities play a vital role in supplying cities with essential food products. However, this concern is often overstated because nowadays automation of agriculture is highly advanced. In fact, without embracing this new development, it would be virtually impossible for humans to achieve higher efficiency, for rural migration to city contributes to the inovation of automation. To illustrate, Japan has invested heavily in automation due to labour shortages in both rural and urban areas, which has accelerated technological innovation. By adopting this trend, the country has successfully improved productivity and maintained economic competitiveness. Hence, the long-term merits of this ongoing development far outweigh its potential drawbacks.",
+                  "model": "Admittedly, some people argue that rural depopulation may create labour shortages in agriculture and threaten food supply. However, this concern should not be exaggerated. In many countries, agricultural automation has allowed farms to maintain or even increase output with fewer workers. For instance, Japan has invested heavily in smart farming technologies partly because of labour shortages in rural areas. Such investment has encouraged more efficient production methods and reduced dependence on manual labour. Therefore, rural-to-urban migration can indirectly push agriculture to modernise.",
+                  "coaching": "这一段有反驳意识，这是高分写作需要的能力。但逻辑链还不够稳：你从“农村缺劳动力”跳到“自动化已经高度先进”，再跳到“人口迁移促进自动化创新”，中间缺少解释。更好的写法是：农村劳动力减少 → 农业面临压力 → 政府和农场投资机械化/智能农业 → 少量劳动力也能维持产量。Japan 例子可以用，但要明确它证明的是“劳动力短缺推动技术投入”，而不是简单说“adopting this trend”。",
+                  "language_correction_upgrade": "- `the lack of labour force in agriculture` → `labour shortages in agriculture`：更自然、更简洁。\n- `nowadays automation of agriculture is highly advanced` → `agricultural automation is now highly advanced`：词序和搭配更地道。\n- `rural migration to city` → `rural-to-urban migration`：固定表达。\n- `contributes to the innovation of automation` → `encourages innovation in automation`：动词和介词搭配更准确。\n- `By adopting this trend` → `By investing in such technologies`：原句指代不清，像是在说国家“采纳人口迁移趋势”。"
+                },
+                {
+                  "index": 4,
+                  "learner": "In conclusion, while there are valid arguments concerning its initial drawbacks, I still hold the belief that rural migration to cities is a profoundly positive development. This is because the demand for labour force in urban and its motivation to automation technologies will jointly ensure that this trend yields the most valuable and enduring outcomes.",
+                  "model": "In conclusion, although rural-to-urban migration can cause short-term difficulties, I believe it is a positive development overall. It helps cities meet their demand for labour, improves opportunities for migrants and encourages agriculture to become more modern and efficient.",
+                  "coaching": "结论能重申立场，但最后一句表达过于抽象，而且有明显搭配问题。“the most valuable and enduring outcomes”听起来像模板化总结，没有具体回扣你的两个理由。结论不需要写得很宏大，只要清楚总结：城市获得劳动力、移民获得机会、农业被迫现代化，就更有说服力。",
+                  "language_correction_upgrade": "- `valid arguments concerning its initial drawbacks` → `valid concerns about its short-term drawbacks`：更自然。\n- `labour force in urban` → `labour in urban areas`：`urban` 是形容词，不能单独作名词。\n- `its motivation to automation technologies` → `the pressure it creates to adopt automation technologies`：表达“推动自动化”的逻辑更准确。\n- `profoundly positive development` 可改为 `positive development overall`：Task 2 中语气稳健比夸张更好。"
+                }
+              ],
+              "inline_annotations": [
+                {
+                  "original": "increasingly rural people",
+                  "type": "word_choice",
+                  "suggestion": "an increasing number of rural people",
+                  "explanation": "“increasingly”不能自然地直接修饰“rural people”；应改为名词短语。",
+                  "paragraph_index": 1
+                },
+                {
+                  "original": "I completely view it as a positive development",
+                  "type": "word_choice",
+                  "suggestion": "I view it as a largely positive development",
+                  "explanation": "“completely view”搭配生硬；“largely positive”也更符合论证中承认缺点的语气。",
+                  "paragraph_index": 1
+                },
+                {
+                  "original": "paves the way for a more sustainable result for society",
+                  "type": "word_choice",
+                  "suggestion": "can contribute to more sustainable social and economic development",
+                  "explanation": "“sustainable result”含义模糊，Task 2 中应说明具体是哪方面的可持续发展。",
+                  "paragraph_index": 1
+                },
+                {
+                  "original": "First of all, One major benefit",
+                  "type": "punctuation",
+                  "suggestion": "First of all, one major benefit",
+                  "explanation": "逗号后不应把普通词“One”大写。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "provide more workforce",
+                  "type": "word_choice",
+                  "suggestion": "provide a larger labour force / expand the workforce",
+                  "explanation": "“provide more workforce”搭配不自然。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "a lager proportion",
+                  "type": "spelling",
+                  "suggestion": "a larger proportion",
+                  "explanation": "“lager”是拼写错误；此处应为“larger”。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "rural populatioin",
+                  "type": "spelling",
+                  "suggestion": "rural population",
+                  "explanation": "“populatioin”拼写错误。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "an increacing demand",
+                  "type": "spelling",
+                  "suggestion": "an increasing demand",
+                  "explanation": "“increacing”拼写错误。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "demand of workforce",
+                  "type": "word_choice",
+                  "suggestion": "demand for labour",
+                  "explanation": "“demand”后应接“for”；“labour”比“workforce”更适合此处。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "both manufacture of products",
+                  "type": "grammar",
+                  "suggestion": "both the manufacturing of products",
+                  "explanation": "这里需要名词化形式“manufacturing”，并加冠词使结构完整。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "urban infrastructure require",
+                  "type": "grammar",
+                  "suggestion": "urban infrastructure requires",
+                  "explanation": "如果主语理解为“urban infrastructure”，动词应为单数；若与前面的“manufacturing”并列，则需重写句子避免歧义。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "require enough people to maintain",
+                  "type": "missing_word",
+                  "suggestion": "it / them",
+                  "explanation": "“maintain”是及物动词，这里需要宾语。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "a car factor",
+                  "type": "spelling",
+                  "suggestion": "a car factory",
+                  "explanation": "此处应为“factory”，表示工厂。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "which demonstrate",
+                  "type": "grammar",
+                  "suggestion": "which demonstrates",
+                  "explanation": "“which”指代前面整个例子，动词应用单数形式。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "demonstrate the merits",
+                  "type": "missing_word",
+                  "suggestion": "that",
+                  "explanation": "“demonstrate”后接完整从句时需要“that”。",
+                  "paragraph_index": 2
+                },
+                {
+                  "original": "nowadays automation of agriculture",
+                  "type": "word_choice",
+                  "suggestion": "agricultural automation is now highly advanced",
+                  "explanation": "“automation of agriculture”不如“agricultural automation”自然。",
+                  "paragraph_index": 3
+                },
+                {
+                  "original": "rural migration to city",
+                  "type": "grammar",
+                  "suggestion": "rural-to-urban migration / migration from rural areas to cities",
+                  "explanation": "“city”是可数名词，不能在这里单数裸用；该概念有固定表达。",
+                  "paragraph_index": 3
+                },
+                {
+                  "original": "the inovation of automation",
+                  "type": "spelling",
+                  "suggestion": "innovation in automation",
+                  "explanation": "“inovation”拼写错误；介词搭配也应改为“innovation in”。",
+                  "paragraph_index": 3
+                },
+                {
+                  "original": "its initial drawbacks",
+                  "type": "word_choice",
+                  "suggestion": "its possible short-term drawbacks",
+                  "explanation": "“initial drawbacks”不够准确；你讨论的是潜在短期问题。",
+                  "paragraph_index": 4
+                },
+                {
+                  "original": "the demand for labour force in urban",
+                  "type": "grammar",
+                  "suggestion": "the demand for labour in urban areas",
+                  "explanation": "“urban”不能单独作名词；“demand for labour”更自然。",
+                  "paragraph_index": 4
+                },
+                {
+                  "original": "its motivation to automation technologies",
+                  "type": "word_choice",
+                  "suggestion": "the pressure it creates to adopt automation technologies",
+                  "explanation": "“motivation to automation technologies”搭配错误，表达不清。",
+                  "paragraph_index": 4
+                }
+              ],
+              "data_accuracy_notes": [],
+              "spelling_correction_summary": "### 字母遗漏 / 字母多余类错误\n- `lager` -> 正确：`larger`（更大的）\n- `populatioin` -> 正确：`population`（人口）\n- `inovation` -> 正确：`innovation`（创新）\n\n### 发音误导类错误\n- `increacing` -> 正确：`increasing`（不断增长的）\n\n### 词形相近混淆类错误\n- `factor` -> 正确：`factory`（工厂）；`factor` 是“因素”，不表示“工厂”。",
+              "expression_upgrade_summary": "",
+              "structure_advice_only": false,
+              "structure_advice": "",
+              "backend": "ai",
+              "billing_usage": {
+                "prompt_tokens": 1848,
+                "completion_tokens": 4898,
+                "total_tokens": 6746
+              },
+              "profile_tags": [
+                "grammar_accuracy"
+              ],
+              "personalization_note": "本次 AI 评分与辅导已用于更新你的写作画像。",
+              "writing_profile": {
+                "total_scored": 19,
+                "average_overall_band": 6.19,
+                "primary_focus": "grammar_accuracy",
+                "primary_focus_text": "句子结构和语法准确度是当前重点。",
+                "top_issues": [
+                  {
+                    "tag": "grammar_accuracy",
+                    "label": "句子结构和语法准确度是当前重点。",
+                    "count": 11
+                  },
+                  {
+                    "tag": "fallback_scoring",
+                    "label": "本次使用系统默认评分，画像证据权重较低。",
+                    "count": 9
+                  },
+                  {
+                    "tag": "weak_lexical_resource",
+                    "label": "词汇变化和准确度还可以继续提升。",
+                    "count": 2
+                  },
+                  {
+                    "tag": "coherence_issue",
+                    "label": "段落衔接和中心句组织需要更清楚。",
+                    "count": 1
+                  },
+                  {
+                    "tag": "weak_task_achievement",
+                    "label": "Task 1 对题目/图表信息覆盖不够稳定。",
+                    "count": 1
+                  }
+                ],
+                "recent_evidence": [
+                  "Task 2 · Band 6.5 · 337 words · 句子结构和语法准确度是当前重点。",
+                  "Task 2 · Band 6.0 · 381 words · 句子结构和语法准确度是当前重点。",
+                  "Task 2 · Band 7.5 · 301 words · 句子结构和语法准确度是当前重点。",
+                  "Task 2 · Band 7.0 · 272 words · 句子结构和语法准确度是当前重点。"
+                ],
+                "updated_at": "2026-06-09T17:33:33.711179+00:00"
+              }
+            },
+            "billing": {
+              "status": "settled",
+              "charged_u": 257280,
+              "usage_id": "usage_57dfea3c03245ee562e6",
+              "snapshot_id": "local_2026_05_default",
+              "usage": {
+                "input_tokens": 1848,
+                "cached_input_tokens": 0,
+                "uncached_input_tokens": 1848,
+                "output_tokens": 4898,
+                "reasoning_output_tokens": 0
+              },
+              "reserved_u": 0,
+              "released_u": 0,
+              "extra_charged_u": 0,
+              "corrected_from_zero_settlement": true
+            }
+          },
+          "error_code": "",
+          "error_message": "",
+          "fallback_reason": "",
+          "available_at": "2026-06-09T17:30:34.324552+00:00",
+          "started_at": "2026-06-09T17:30:35.876191+00:00",
+          "finished_at": "2026-06-09T17:33:33.716910+00:00",
+          "created_at": "2026-06-09T17:30:34.324711+00:00",
+          "updated_at": "2026-06-14T01:36:18.311482+00:00",
+          "metadata": {
+            "source": "writing_score_task",
+            "billing_policy": "balance_gate_then_usage_settlement",
+            "minimum_balance_u": 300000,
+            "minimum_balance_rmb": 0.3
+          },
+          "billing": {
+            "reservation_id": null,
+            "usage_id": "usage_57dfea3c03245ee562e6"
+          }
+        },
+        "writing_profile": {
+          "total_scored": 22,
+          "average_overall_band": 6.28,
+          "primary_focus": "grammar_accuracy",
+          "primary_focus_text": "句子结构和语法准确度是当前重点。",
+          "top_issues": [
+            {
+              "tag": "grammar_accuracy",
+              "label": "句子结构和语法准确度是当前重点。",
+              "count": 14
+            },
+            {
+              "tag": "fallback_scoring",
+              "label": "本次使用系统默认评分，画像证据权重较低。",
+              "count": 9
+            },
+            {
+              "tag": "weak_lexical_resource",
+              "label": "词汇变化和准确度还可以继续提升。",
+              "count": 2
+            },
+            {
+              "tag": "coherence_issue",
+              "label": "段落衔接和中心句组织需要更清楚。",
+              "count": 1
+            },
+            {
+              "tag": "weak_task_achievement",
+              "label": "Task 1 对题目/图表信息覆盖不够稳定。",
+              "count": 1
+            }
+          ],
+          "recent_evidence": [
+            "Task 2 · Band 7.5 · 396 words · 句子结构和语法准确度是当前重点。",
+            "Task 2 · Band 6.0 · 347 words · 句子结构和语法准确度是当前重点。",
+            "Task 2 · Band 7.0 · 347 words · 句子结构和语法准确度是当前重点。",
+            "Task 2 · Band 6.5 · 337 words · 句子结构和语法准确度是当前重点。"
+          ],
+          "updated_at": "2026-06-21T10:19:48.956489+00:00"
+        },
+        "answer": "Whether the phenomenon of increasingly rural people moving to cities is positive has long been a topic of debate. While some believe that this trend brings certain challenges, I completely view it as a positive development, since this shift ultimately paves the way for a more sustainable result for society. \n\nFirst of all, One major benefit of this trend is that rural people moving to cities can promote urban economic development. As more people gather in cities, they can provide more workforce, contributing to increased productivity. This is particularly true for developing countries, which have a lager proportion of rural populatioin as well as an increacing demand of workforce, because both manufacture of products and urban infrastructure require enough people to maintain. For instance, it calls for sufficient labour force not only to build a car factor but also to produce components and assemble cars, which demonstrate the merits of population movement are substantial and undeniable.\n\nNevertheless, it is crucial to consider the counterargument regarding the lack of labour force in agriculture. Critics might argue that rural communities play a vital role in supplying cities with essential food products. However, this concern is often overstated because nowadays automation of agriculture is highly advanced. In fact, without embracing this new development, it would be virtually impossible for humans to achieve higher efficiency, for rural migration to city contributes to the inovation of automation. To illustrate, Japan has invested heavily in automation due to labour shortages in both rural and urban areas, which has accelerated technological innovation. By adopting this trend, the country has successfully improved productivity and maintained economic competitiveness. Hence, the long-term merits of this ongoing development far outweigh its potential drawbacks.\n\nIn conclusion, while there are valid arguments concerning its initial drawbacks, I still hold the belief that rural migration to cities is a profoundly positive development. This is because the demand for labour force in urban and its motivation to automation technologies will jointly ensure that this trend yields the most valuable and enduring outcomes.",
         "is_sample": true
       }
     }

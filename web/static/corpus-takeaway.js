@@ -105,6 +105,28 @@
       return guestSamples().p1Corpus || { topics: [] };
     }
 
+    // Seed the single "What is your full name?" default answer into a real P1
+    // payload when that question is still empty — so brand-new accounts start
+    // with the same one default as guests. The bank question_id is shared across
+    // users, so this is just a starter template they can keep or overwrite.
+    function mergeP1FullNameDefault(payload) {
+      const seedQuestion = (p1SeedPayload().topics || [])
+        .flatMap((topic) => topic.questions || [])
+        .find((q) => q.corpus_text);
+      if (!seedQuestion) return payload;
+      for (const topic of payload?.topics || []) {
+        for (const question of topic.questions || []) {
+          if (
+            String(question.question || "").toLowerCase().includes("full name") &&
+            !String(question.corpus_text || "").trim()
+          ) {
+            question.corpus_text = seedQuestion.corpus_text;
+          }
+        }
+      }
+      return payload;
+    }
+
     function p2SeedPayload() {
       return guestSamples().p2Corpus || { categories: [], current_part2_cards: [] };
     }
@@ -116,6 +138,32 @@
       if (!dot) return;
       dot.classList.toggle("hidden", !count);
       if (count) dot.setAttribute("data-count", String(count));
+    }
+
+    // On the P1/P2 素材库 screens a guest can browse the cards, but clicking any
+    // content must NOT enter an editor — it pops the login dialog instead. A
+    // single capturing listener on the (stable) container intercepts every child
+    // click before the card's own handler runs; it stays inert after login.
+    // Guest gate for takeaway edit surfaces. Reviewing the default cards (and
+    // starting a review from the red dot) is allowed, but adding / editing /
+    // expression-replacement windows all bounce to the login dialog.
+    function guestBlockTakeawayEdit(reason) {
+      if (state.account.authenticated) return false;
+      if (typeof promptGuestLogin === "function") promptGuestLogin(reason, { returnView: state.view });
+      return true;
+    }
+
+    function installGuestCorpusGuard(containerId, reason) {
+      const el = $(containerId);
+      if (!el || el.dataset.guestGuard === "1") return;
+      el.dataset.guestGuard = "1";
+      el.addEventListener("click", (event) => {
+        if (state.account.authenticated) return;
+        if (event.target === el) return; // ignore clicks on empty padding
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof promptGuestLogin === "function") promptGuestLogin(reason, { returnView: state.view });
+      }, true);
     }
 
     const CORPUS_PEEK_WINDOW_MARGIN = Number(corpusPeekWindowMargin) || 16;
@@ -890,9 +938,10 @@
 
     async function loadP1Corpus() {
       if (!state.account.authenticated) {
-        // Seed the default P1 corpus through the real render path so guests get
-        // the genuine topic cards (open editor, peek, etc.).
+        // Seed the default P1 corpus through the real render path so guests see
+        // the genuine topic cards; any click is intercepted to the login dialog.
         applyP1CorpusPayload(p1SeedPayload());
+        installGuestCorpusGuard("p1CorpusTopics", "登录后才能保存和复用你的 P1 语料库。");
         return;
       }
       const stats = $("p1CorpusStats");
@@ -905,7 +954,7 @@
         if (container) container.innerHTML = corpusLoadingSkeletonHtml("正在加载 P1 题库...");
       }
       try {
-        const payload = await fetchP1CorpusPayload();
+        const payload = mergeP1FullNameDefault(await fetchP1CorpusPayload());
         applyP1CorpusPayload(payload);
       } catch (error) {
         if (container) container.innerHTML = `<p class="error">${escapeHtml(error.message || String(error))}</p>`;
@@ -1987,9 +2036,10 @@
 
     async function loadP2Corpus(options = {}) {
       if (!state.account.authenticated) {
-        // Seed the default P2 素材库 through the real render path so guests get
-        // genuine cards (P3 progress, peek windows, material rows).
+        // Seed the default P2 素材库 through the real render path so guests see
+        // genuine cards (P3 progress); any click is intercepted to the login dialog.
         applyP2CorpusPayload(p2SeedPayload());
+        installGuestCorpusGuard("p2CorpusTopics", "登录后才能保存和复用你的 P2 串题素材库。");
         return;
       }
       const stats = $("p2CorpusStats");
@@ -3284,6 +3334,7 @@
     }
 
     async function openLanguageTakeawayPopup() {
+      if (guestBlockTakeawayEdit("登录后才能把划选的表达保存到你的 Takeaway。")) return;
       const textValue = state.languageTakeaway.selectedText;
       if (!textValue) return;
       const popup = $("languageTakeawayPopup");
@@ -3395,6 +3446,7 @@
     }
 
     function openNewTakeawayEditor(kind = "language") {
+      if (guestBlockTakeawayEdit(kind === "writing" ? "登录后才能添加写作积累。" : "登录后才能添加 Takeaway。")) return;
       closeCorpusCardActionMenus();
       state.languageTakeaway.activeEdit = {
         kind,
@@ -3412,6 +3464,7 @@
     }
 
     function openTakeawayEditor(kind, entryId) {
+      if (guestBlockTakeawayEdit(kind === "writing" ? "登录后才能编辑写作积累。" : "登录后才能编辑 Takeaway。")) return;
       const entry = findTakeawayEntry(kind, entryId);
       if (!entry) return;
       closeCorpusCardActionMenus();
@@ -3654,6 +3707,7 @@
     }
 
     function openExpressionReplacementDialog(kind = "writing") {
+      if (guestBlockTakeawayEdit("登录后才能管理你的表达替换。")) return;
       const dialog = $("expressionReplacementDialog");
       if (!dialog) return;
       dialog.dataset.kind = kind === "language" ? "language" : "writing";

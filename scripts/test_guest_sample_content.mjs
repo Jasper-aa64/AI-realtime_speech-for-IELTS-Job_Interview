@@ -22,12 +22,26 @@ test("guest-samples.js publishes default seed in the live payload shapes", () =>
   for (const it of [...S.languageTakeaways, ...S.writingTakeaways]) {
     assert.ok(it.entry_id && it.source_text && it.chinese_text, "takeaway needs id+source+chinese");
   }
-  // P1 corpus is a full library payload with filled topics.
-  assert.ok(Array.isArray(S.p1Corpus?.topics) && S.p1Corpus.topics.length >= 1);
-  assert.ok(S.p1Corpus.topics.every((t) => (t.questions || []).some((q) => q.corpus_text)));
-  // P2 corpus is a full library payload with current_part2_cards.
-  assert.ok(Array.isArray(S.p2Corpus?.categories), "p2 categories array");
+  // P1: the FULL topic bank, but only "What is your full name?" is pre-filled.
+  assert.ok(Array.isArray(S.p1Corpus?.topics) && S.p1Corpus.topics.length >= 5, "P1 full topic bank");
+  const filledP1 = S.p1Corpus.topics.flatMap((t) => (t.questions || []).filter((q) => q.corpus_text));
+  assert.equal(filledP1.length, 1, "only one P1 question carries default content");
+  assert.match(filledP1[0].question, /full name/i);
+  assert.equal(S.p1Corpus.saved_count, 1);
+  // P2: ALL category groups shown, only 人物 carries one material item; all cards.
+  assert.ok(Array.isArray(S.p2Corpus?.categories) && S.p2Corpus.categories.length >= 3, "all P2 category groups");
+  const p2WithItems = S.p2Corpus.categories.filter((c) => (c.items || []).length);
+  assert.equal(p2WithItems.length, 1, "only one P2 category seeded with material");
+  assert.match(p2WithItems[0].label, /人物/);
+  assert.equal(p2WithItems[0].items.length, 1, "人物 has exactly one material");
   assert.ok(Array.isArray(S.p2Corpus?.current_part2_cards) && S.p2Corpus.current_part2_cards.length >= 1);
+});
+
+test("language takeaway seed is 3 expression-replacements + 3 plain phrases", () => {
+  const S = loadSeed();
+  const isRep = (t) => /→|->|=>|—>/.test(t || "");
+  assert.equal(S.languageTakeaways.filter((i) => isRep(i.source_text)).length, 3, "3 replacements");
+  assert.equal(S.languageTakeaways.filter((i) => !isRep(i.source_text)).length, 3, "3 phrases");
 });
 
 test("seeded data is NOT flagged 示例 — only the speaking report is", () => {
@@ -36,13 +50,48 @@ test("seeded data is NOT flagged 示例 — only the speaking report is", () => 
     assert.ok(!("is_sample" in it), "takeaways must be plain defaults, not samples");
   }
   for (const t of S.p1Corpus.topics) assert.ok(!t.is_sample, "p1 topics are defaults");
-  // The history report carries the real report_payload detail and is_sample.
+  // The speaking + writing reports carry real detail payloads and is_sample.
   assert.ok(Array.isArray(S.history) && S.history.length >= 1);
   for (const h of S.history) {
     assert.equal(h.is_sample, true, "history report must be flagged is_sample");
     assert.ok(h.detail && Array.isArray(h.detail.turns) && h.detail.turns.length, "report needs real turns");
     assert.ok(h.detail.ielts_score, "report needs ielts_score for renderDetail");
   }
+  assert.ok(Array.isArray(S.writingReports) && S.writingReports.length >= 1, "a writing report sample exists");
+  for (const w of S.writingReports) {
+    assert.equal(w.is_sample, true, "writing report flagged is_sample");
+    assert.ok(w.detail && w.detail.score, "writing report needs score detail for the real renderer");
+  }
+});
+
+test("guest gates: P1/P2 corpus, takeaway edits, writing bank, report edits, profile", () => {
+  // P1/P2 corpus screens: any content click is intercepted to the login dialog.
+  assert.match(corpus, /function installGuestCorpusGuard\(containerId, reason\)/);
+  assert.match(corpus, /installGuestCorpusGuard\("p1CorpusTopics"/);
+  assert.match(corpus, /installGuestCorpusGuard\("p2CorpusTopics"/);
+  // Takeaway: review is allowed, but add/edit/expression-replacement are gated.
+  assert.match(corpus, /function guestBlockTakeawayEdit\(reason\)/);
+  assert.match(corpus, /openNewTakeawayEditor\(kind = "language"\) \{\s*\n\s*if \(guestBlockTakeawayEdit/);
+  assert.match(corpus, /openTakeawayEditor\(kind, entryId\) \{\s*\n\s*if \(guestBlockTakeawayEdit/);
+  assert.match(corpus, /openExpressionReplacementDialog\(kind = "writing"\) \{\s*\n\s*if \(guestBlockTakeawayEdit/);
+  // Writing question bank: guests get the prompt instead of the picker.
+  assert.match(app, /function openWritingPromptPicker[\s\S]{0,160}?promptGuestLogin\("登录后才能打开写作题库并选题。"\)/);
+  // Writing report edit + speaking report 编辑语料库 are gated.
+  assert.match(app, /promptGuestLogin\("登录后才能编辑作文并重新生成报告。"\)/);
+  assert.match(app, /promptGuestLogin\("登录后才能编辑语料库并保存到你的账号。"\)/);
+  // Profile: logout button doubles as 登录 and entry pops the login prompt.
+  assert.match(app, /logoutBtn\.textContent = "登录"/);
+  assert.match(app, /logoutBtn\.textContent = t\("account\.logout"\)/);
+  assert.match(app, /if \(!state\.account\.authenticated\) \{\s*\n\s*switchView\("login"[\s\S]{0,80}?return;/);
+  assert.match(app, /loadAccountProfile[\s\S]{0,400}?promptGuestLogin\("登录后即可管理账号资料/);
+});
+
+test("the writing report sample renders through the REAL writing pipeline, badged 示例", () => {
+  assert.match(app, /function seedGuestWritingReports\(\)/);
+  assert.match(app, /state\.writing\.reportDetailCache\.set\(entry\.id, entry\.detail\)/);
+  assert.match(app, /renderWritingReports\(state\.writing\.reportEntries\)/);
+  assert.match(app, /if \(!seedGuestWritingReports\(\)\) \{/);
+  assert.match(app, /entry\.is_sample \? ` <span class="report-sample-badge">示例<\/span>`/);
 });
 
 test("the fixture script loads before the consumers in index.html", () => {

@@ -6523,6 +6523,8 @@ function showConfirmDelete(message, onConfirm) {
 function promptGuestLogin(reason, options = {}) {
   const message = reason || "登录后即可使用这个功能，并保存你的记录。";
   const returnView = options.returnView || state.view;
+  // One overlay at a time, so repeated guest clicks don't stack dialogs.
+  document.querySelector(".guest-login-overlay")?.remove();
   const overlay = document.createElement("div");
   overlay.className = "confirm-overlay guest-login-overlay";
   overlay.innerHTML = `
@@ -6530,9 +6532,8 @@ function promptGuestLogin(reason, options = {}) {
       <h3 class="guest-login-title">还没登录</h3>
       <p>${escapeHtml(message)}</p>
       <div class="confirm-actions guest-login-actions">
-        <button class="confirm-cancel" type="button">继续参观</button>
-        <button class="guest-login-register" type="button">注册</button>
-        <button class="guest-login-go" type="button">前往登录</button>
+        <button class="confirm-cancel" type="button">取消</button>
+        <button class="guest-login-go" type="button">登录</button>
       </div>
     </div>
   `;
@@ -6540,11 +6541,6 @@ function promptGuestLogin(reason, options = {}) {
   const close = () => overlay.remove();
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
   overlay.querySelector(".confirm-cancel").addEventListener("click", close);
-  overlay.querySelector(".guest-login-register").addEventListener("click", () => {
-    close();
-    state.account.returnView = returnView;
-    switchView("register", { force: true, skipAuthGate: true, fromView: returnView });
-  });
   overlay.querySelector(".guest-login-go").addEventListener("click", () => {
     close();
     state.account.returnView = returnView;
@@ -6585,6 +6581,21 @@ function seedGuestHistory() {
   });
   state.activeHistoryId = state.historyItems[0]?.id || null;
   renderHistoryList(state.historyItems);
+  return true;
+}
+
+// Same idea for the writing report: seed the real entry + entry_payload detail
+// into the writing report pipeline so the genuine list + detail (score grid,
+// paragraph review, prompt card) render for a guest, badged 示例.
+function seedGuestWritingReports() {
+  const seed = (typeof window !== "undefined" && window.IELTSGuestSamples?.writingReports) || [];
+  if (!Array.isArray(seed) || !seed.length) return false;
+  state.writing.reportEntries = seed.map(({ detail, ...item }) => item);
+  seed.forEach((entry) => {
+    if (entry.detail) state.writing.reportDetailCache.set(entry.id, entry.detail);
+  });
+  state.writing.activeReportId = state.writing.reportEntries[0]?.id || null;
+  renderWritingReports(state.writing.reportEntries).catch(() => null);
   return true;
 }
 
@@ -8480,7 +8491,9 @@ function renderWritingSummary(payload) {
 async function loadWritingReports(showBusy = true) {
   if (!state.account.authenticated) {
     state.writing.reportEntries = [];
-    renderGuestViewNotice($("writingReportDetail"), "登录后查看你的写作报告。");
+    if (!seedGuestWritingReports()) {
+      renderGuestViewNotice($("writingReportDetail"), "登录后查看你的写作报告。");
+    }
     return;
   }
   try {
@@ -8630,6 +8643,7 @@ function writingReportTabHtml(item, active = false) {
     <button class="history-item writing-report-tab ${toneClass} ${active ? "active" : ""}" data-writing-report-tab="${escapeHtml(item.id || "")}">
       <div class="history-item-top">
         <span class="history-item-tag ${tagClass}">${part}</span>
+        ${item.is_sample ? `<span class="report-sample-badge">示例</span>` : ""}
         <span class="history-item-band">${escapeHtml(band)}</span>
       </div>
       <strong class="history-item-title">${escapeHtml(displayTitle || writingTaskLabel(item.task_type))}</strong>
@@ -8713,7 +8727,7 @@ function writingReportDetailHtml(entry) {
     <div class="detail-card writing-score-summary-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
       <div class="writing-score-summary-head">
         <div class="writing-score-summary-copy">
-          <span class="section-label">IELTS Writing 练习估分</span>
+          <span class="section-label">IELTS Writing 练习估分${entry.is_sample ? ` <span class="report-sample-badge">示例</span>` : ""}</span>
           <h2>${escapeHtml(displayTitle || taskName)}</h2>
           <p class="muted">${taskSubline} · ${escapeHtml(entry.word_count ?? 0)} words</p>
         </div>
@@ -9192,6 +9206,10 @@ function renderWritingScore(entry) {
 }
 
 function openWritingPromptPicker(taskType = state.writing.taskType || "task1_academic") {
+  if (!state.account.authenticated) {
+    promptGuestLogin("登录后才能打开写作题库并选题。");
+    return;
+  }
   writingPromptPickerController.open(taskType);
 }
 
@@ -9916,7 +9934,12 @@ function renderDetail(attempt, updateView = true, options = {}) {
     button.addEventListener("click", () => regenerateTurnTranscript(button));
   });
   document.querySelectorAll("[data-edit-turn-corpus]").forEach((button) => {
-    button.addEventListener("click", () => openReportCorpusTarget({
+    button.addEventListener("click", () => {
+      if (!state.account.authenticated) {
+        promptGuestLogin("登录后才能编辑语料库并保存到你的账号。");
+        return;
+      }
+      openReportCorpusTarget({
       kind: button.dataset.corpusKind || "",
       questionId: button.dataset.questionId || "",
       topic: button.dataset.topic || "general",
@@ -9929,10 +9952,17 @@ function renderDetail(attempt, updateView = true, options = {}) {
       title: button.dataset.title || "",
       category: button.dataset.category || "",
       label: button.dataset.label || "",
-    }).catch(showError));
+      }).catch(showError);
+    });
   });
   document.querySelectorAll("[data-start-p3-from-p2]").forEach((button) => {
-    button.addEventListener("click", () => withPending(button, () => startP3FromP2Report(button.dataset.startP3FromP2 || ""), { busyText: "打开中..." }).catch(showError));
+    button.addEventListener("click", () => {
+      if (!state.account.authenticated) {
+        promptGuestLogin("登录后才能从报告进入 P3 练习。");
+        return;
+      }
+      withPending(button, () => startP3FromP2Report(button.dataset.startP3FromP2 || ""), { busyText: "打开中..." }).catch(showError);
+    });
   });
   if (preserveScroll) {
     detailPanel.scrollTop = previousScrollTop;
@@ -11673,6 +11703,19 @@ function renderAccountStatus(message = "", isError = false) {
     securityStatus.textContent = state.account.authenticated ? t("account.securityStrong") : t("account.securityLogin");
     securityStatus.classList.remove("error");
   }
+  // The logout button doubles as a 登录 entry point for guests. Guests are
+  // pinned to 登录 (data-i18n removed so applyTranslations can't overwrite it);
+  // signed-in users keep the i18n-bound 退出登录 label.
+  const logoutBtn = $("profileLogoutBtn");
+  if (logoutBtn) {
+    if (state.account.authenticated) {
+      logoutBtn.setAttribute("data-i18n", "account.logout");
+      logoutBtn.textContent = t("account.logout");
+    } else {
+      logoutBtn.removeAttribute("data-i18n");
+      logoutBtn.textContent = "登录";
+    }
+  }
 }
 
 function questionBankScopeLabel(scope, fallback = "") {
@@ -12035,6 +12078,11 @@ async function submitPasswordChange() {
 }
 
 async function logoutAccount() {
+  // For a guest this button reads 登录 and simply opens the login view.
+  if (!state.account.authenticated) {
+    switchView("login", { force: true, skipAuthGate: true, fromView: state.view });
+    return;
+  }
   try {
     await withBusy("正在退出登录...", () => api("/api/accounts/logout/", {}));
   } catch (_error) {
@@ -13067,6 +13115,10 @@ function bindEvents() {
     if (event.type === "auxclick" && event.button !== 1) return;
     event.preventDefault();
     event.stopPropagation();
+    if (!state.account.authenticated) {
+      promptGuestLogin("登录后才能编辑作文并重新生成报告。");
+      return;
+    }
     const entryId = button.dataset.writingReportEdit || "";
     const entryHint = writingReportEntryFromEditButton(button);
     if (isNewTabNavigationEvent(event)) {
@@ -14158,6 +14210,10 @@ async function loadAccountProfile() {
   resetAccountProfileLoadingUi();
   await loadAccount();
   renderAccountStatus();
+  // Entering the account page as a guest always offers a login prompt once.
+  if (!state.account.authenticated) {
+    promptGuestLogin("登录后即可管理账号资料、查看钱包与考季设置。", { returnView: "accountProfile" });
+  }
   loadQuestionBankSummary({ force: true })
     .then(renderQuestionBankSelector)
     .catch(renderQuestionBankSelectorError);

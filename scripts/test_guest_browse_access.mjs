@@ -13,14 +13,15 @@ test("only the account-security page still hard-gates guests; content is browsab
   assert.doesNotMatch(app, /const protectedViews = new Set\(\["history"/);
 });
 
-test("guest actions show a dismissible login prompt instead of a hard redirect", () => {
+test("guest login prompt is a simple two-option (登录 / 取消) dialog", () => {
   const fn = app.match(/function promptGuestLogin\(reason, options = \{\}\)[\s\S]*?\n}/)?.[0] || "";
   assert.ok(fn, "expected promptGuestLogin definition");
-  assert.match(fn, /继续参观/); // dismiss / keep browsing
-  assert.match(fn, /注册/);     // register
-  assert.match(fn, /前往登录/); // go to login
-  assert.match(fn, /switchView\("register"/);
+  assert.match(fn, /取消/);   // cancel / keep browsing
+  assert.match(fn, />登录</); // go to login
   assert.match(fn, /switchView\("login"/);
+  // Only the two options — no register / 继续参观 buttons.
+  assert.doesNotMatch(fn, /继续参观/);
+  assert.doesNotMatch(fn, /switchView\("register"/);
 });
 
 test("start-practice gate uses the prompt, not a forced jump to the login view", () => {
