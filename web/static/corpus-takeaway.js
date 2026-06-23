@@ -46,6 +46,8 @@
       p1CorpusTargetForTurn,
       api,
       showConfirmDelete,
+      promptGuestLogin,
+      renderGuestViewNotice,
       switchView,
       startPractice,
       openCorpusWindow,
@@ -64,6 +66,27 @@
 
     if (!state || typeof $ !== "function" || typeof api !== "function") {
       throw new Error("Corpus/Takeaway controller requires shared app state and helpers.");
+    }
+
+    // Guest gate for corpus features: prefer the dismissible login prompt; fall
+    // back to the old hard redirect only if the host didn't inject the prompt.
+    function guestGate(reason, returnView) {
+      if (typeof promptGuestLogin === "function") {
+        promptGuestLogin(reason, returnView ? { returnView } : {});
+        return;
+      }
+      if (returnView) state.account.returnView = returnView;
+      switchView("login", { force: true, skipAuthGate: true, authMessage: reason });
+    }
+
+    // Clean guest placeholder for a corpus/takeaway list container.
+    function guestNotice(container, line) {
+      if (typeof renderGuestViewNotice === "function") {
+        renderGuestViewNotice(container, line);
+        return;
+      }
+      const el = typeof container === "string" ? $(container) : container;
+      if (el) el.innerHTML = `<p class="guest-view-notice">${escapeHtml(line || "登录后可查看你的记录。")}</p>`;
     }
 
     const CORPUS_PEEK_WINDOW_MARGIN = Number(corpusPeekWindowMargin) || 16;
@@ -837,6 +860,12 @@
     }
 
     async function loadP1Corpus() {
+      if (!state.account.authenticated) {
+        const guestStats = $("p1CorpusStats");
+        if (guestStats) guestStats.textContent = "未登录";
+        guestNotice($("p1CorpusTopics"), "登录后保存和复用你的 P1 语料库。");
+        return;
+      }
       const stats = $("p1CorpusStats");
       const container = $("p1CorpusTopics");
       if (state.p1Corpus.loaded) {
@@ -1666,8 +1695,7 @@
 
     async function openP1CorpusLibrary() {
       if (!state.account.authenticated) {
-        state.account.returnView = "p1Corpus";
-        switchView("login", { force: true, skipAuthGate: true, authMessage: "登录后才能保存和复用你的 P1 语料库。" });
+        guestGate("登录后才能保存和复用你的 P1 语料库。", "p1Corpus");
         return;
       }
       openCorpusWindow("p1Corpus");
@@ -1929,6 +1957,12 @@
     }
 
     async function loadP2Corpus(options = {}) {
+      if (!state.account.authenticated) {
+        const guestStats = $("p2CorpusStats");
+        if (guestStats) guestStats.textContent = "未登录";
+        guestNotice($("p2CorpusTopics"), "登录后保存和复用你的 P2 串题素材库。");
+        return;
+      }
       const stats = $("p2CorpusStats");
       const container = $("p2CorpusTopics");
       if (state.p2Corpus.loaded) {
@@ -2486,6 +2520,12 @@
     async function loadCorpusHome() {}
 
     async function loadLanguageTakeaways() {
+      if (!state.account.authenticated) {
+        const guestStats = $("languageTakeawayStats");
+        if (guestStats) guestStats.textContent = "未登录";
+        guestNotice($("languageTakeawayList"), "登录后查看和复习你的 Takeaway。");
+        return;
+      }
       const stats = $("languageTakeawayStats");
       const list = $("languageTakeawayList");
       if (state.languageTakeaway.loaded) {
@@ -4657,8 +4697,7 @@
 
     async function openP2CorpusLibrary() {
       if (!state.account.authenticated) {
-        state.account.returnView = "p2Corpus";
-        switchView("login", { force: true, skipAuthGate: true, authMessage: "登录后才能保存和复用你的 P2 串题素材库。" });
+        guestGate("登录后才能保存和复用你的 P2 串题素材库。", "p2Corpus");
         return;
       }
       openCorpusWindow("p2Corpus");
@@ -5687,6 +5726,12 @@
     }
 
     async function loadWritingTakeaways() {
+      if (!state.account.authenticated) {
+        const guestStats = $("writingTakeawayStats");
+        if (guestStats) guestStats.textContent = "未登录";
+        guestNotice($("writingTakeawayList"), "登录后查看你的写作积累。");
+        return;
+      }
       const stats = $("writingTakeawayStats");
       const list = $("writingTakeawayList");
       if (state.writingTakeaway.loaded) {

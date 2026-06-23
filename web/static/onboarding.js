@@ -701,10 +701,11 @@
 
   function boot() {
     waitForReady(function () {
+      // Only mount the floating "教程" launcher. The tour no longer auto-opens
+      // on first visit — guests (and anyone demoing the app) can browse freely,
+      // and start the walkthrough on demand via the launcher or
+      // window.IELTSOnboarding.start().
       addLauncher();
-      var done = false;
-      try { done = localStorage.getItem(DONE_KEY) === "1"; } catch (e) {}
-      if (!done) setTimeout(function () { if (appReady()) start(false); }, 650);
     });
   }
 

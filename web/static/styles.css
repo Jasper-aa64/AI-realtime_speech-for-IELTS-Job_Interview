@@ -15979,6 +15979,78 @@ body.font-popular .record-control.recording {
   background: #dc2626;
 }
 
+/* Guest "not signed in" prompt — reuses the confirm overlay, but reads as an
+   invitation (title + three actions) rather than a destructive confirm. */
+.guest-login-dialog {
+  max-width: 360px;
+}
+.guest-login-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.guest-login-actions {
+  flex-wrap: wrap;
+}
+.guest-login-register {
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+}
+.guest-login-register:hover {
+  background: var(--bg);
+}
+.guest-login-go {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.guest-login-go:hover {
+  background: #1d4ed8;
+}
+
+/* Guest placeholder shown inside data-backed list/detail containers while a
+   visitor browses (before they sign in). */
+.guest-view-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 180px;
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--muted, #64748b);
+}
+.guest-view-notice p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.guest-view-notice-login {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.guest-view-notice-login:hover {
+  background: #1d4ed8;
+}
+
 .detail-panel {
   min-width: 0;
   padding: 0;

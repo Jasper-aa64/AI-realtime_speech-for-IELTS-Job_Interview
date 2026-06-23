@@ -871,7 +871,12 @@ function loadUiLanguage() {
 }
 
 const authViews = new Set(["login", "register", "forgotPassword"]);
-const protectedViews = new Set(["history", "writing", "writingReports", "corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill", "accountProfile", "accountSecurity"]);
+// Views a guest may NOT open — these still hard-redirect to login. Everything
+// else (all practice/content/corpus/report screens and the account profile) is
+// browsable as a visitor: real features prompt for login at the point of use
+// (see promptGuestLogin) instead of walling off the whole screen. Only the
+// security page is kept gated, since a guest has no account to act on there.
+const protectedViews = new Set(["accountSecurity"]);
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 const corpusBackButtonViews = new Set(["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
@@ -1567,6 +1572,8 @@ const corpusTakeawayController = window.IELTSCorpusTakeaway?.createCorpusTakeawa
   p1CorpusTargetForTurn,
   api,
   showConfirmDelete,
+  promptGuestLogin,
+  renderGuestViewNotice,
   switchView,
   startPractice,
   openCorpusWindow,
@@ -2763,12 +2770,7 @@ async function startPractice() {
   state.startAbortController = new AbortController();
   state.userExitedPractice = false;
   if (!state.account.authenticated) {
-    state.account.returnView = state.view;
-    switchView("login", {
-      force: true,
-      skipAuthGate: true,
-      authMessage: "登录后才能开始练习并保存完整报告。",
-    });
+    promptGuestLogin("登录后才能开始练习并保存完整报告。");
     return;
   }
   const mode = state.view === "mock" ? "mock" : state.view;
@@ -6035,6 +6037,11 @@ function setWritingPageLoading(isLoading, title = "正在加载每日写作", de
 }
 
 async function loadHistory(showBusy = true) {
+  if (!state.account.authenticated) {
+    state.historyItems = [];
+    renderGuestViewNotice($("detailPanel"), "登录后查看你的口语报告与历史记录。");
+    return;
+  }
   const navScroll = captureNavScrollState();
   const action = async () => {
     if (state.historyItems.length) renderHistoryList(state.historyItems, { refreshActive: true });
@@ -6502,6 +6509,61 @@ function showConfirmDelete(message, onConfirm) {
       showError(error);
     }
   });
+}
+
+// Guest gate at the point of action. Instead of yanking a visitor onto the
+// login page the instant they open a screen, let them browse and only prompt
+// here when they actually trigger a feature that needs an account. Dismissing
+// ("继续参观") keeps them exactly where they are.
+//
+// Usage: `if (!state.account.authenticated) { promptGuestLogin(reason); return; }`
+function promptGuestLogin(reason, options = {}) {
+  const message = reason || "登录后即可使用这个功能，并保存你的记录。";
+  const returnView = options.returnView || state.view;
+  const overlay = document.createElement("div");
+  overlay.className = "confirm-overlay guest-login-overlay";
+  overlay.innerHTML = `
+    <div class="confirm-dialog guest-login-dialog">
+      <h3 class="guest-login-title">还没登录</h3>
+      <p>${escapeHtml(message)}</p>
+      <div class="confirm-actions guest-login-actions">
+        <button class="confirm-cancel" type="button">继续参观</button>
+        <button class="guest-login-register" type="button">注册</button>
+        <button class="guest-login-go" type="button">前往登录</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.querySelector(".confirm-cancel").addEventListener("click", close);
+  overlay.querySelector(".guest-login-register").addEventListener("click", () => {
+    close();
+    state.account.returnView = returnView;
+    switchView("register", { force: true, skipAuthGate: true, fromView: returnView });
+  });
+  overlay.querySelector(".guest-login-go").addEventListener("click", () => {
+    close();
+    state.account.returnView = returnView;
+    switchView("login", { force: true, skipAuthGate: true, fromView: returnView, authMessage: message });
+  });
+}
+
+// Clean "browsing as a guest" placeholder for a data-backed list/detail
+// container, so a visitor sees an intentional invite instead of a stuck spinner
+// or a 401 error where their personal records would load. Safe only for
+// containers that get fully re-rendered once real data arrives (lists/details),
+// not for structural panels. `container` may be an element or an id.
+function renderGuestViewNotice(container, line) {
+  const el = typeof container === "string" ? $(container) : container;
+  if (!el) return;
+  const message = line || "登录后即可查看和保存你的记录。";
+  el.innerHTML = `
+    <div class="guest-view-notice" role="status" aria-live="polite">
+      <p>${escapeHtml(message)}</p>
+      <button type="button" class="guest-view-notice-login">登录 / 注册</button>
+    </div>`;
+  el.querySelector(".guest-view-notice-login")?.addEventListener("click", () => promptGuestLogin(message));
 }
 
 // ── Report manager: a single dialog (reachable from the avatar-area button) for
@@ -8141,6 +8203,12 @@ function resolveWritingPickerSource(taskType) {
 }
 
 async function loadWriting() {
+  if (!state.account.authenticated) {
+    // Leave the composer's default DOM intact (don't wipe structural panels);
+    // real save/score actions prompt for login at the point of use.
+    setWritingPageLoading(false);
+    return;
+  }
   if (state.writing.reportEditLoading) {
     setWritingPageLoading(false);
     text("writingSaveStatus", "正在复制这篇作文...");
@@ -8373,6 +8441,11 @@ function renderWritingSummary(payload) {
 }
 
 async function loadWritingReports(showBusy = true) {
+  if (!state.account.authenticated) {
+    state.writing.reportEntries = [];
+    renderGuestViewNotice($("writingReportDetail"), "登录后查看你的写作报告。");
+    return;
+  }
   try {
     if (state.writing.reportEntries.length) renderWritingReports(state.writing.reportEntries, { refreshActive: true });
     const loader = () => api("/api/writing/reports");
@@ -12063,15 +12136,13 @@ function bindEvents() {
     });
   });
   const handleAccountNavigation = (event) => {
-    const targetView = state.account.authenticated ? "accountProfile" : "login";
-    if (openViewInNewTabForModifier(event, targetView)) return;
+    // The account profile page has a guest-local mode, so visitors can open it
+    // too (to browse appearance/account settings); login-only actions inside it
+    // prompt at the point of use.
+    if (openViewInNewTabForModifier(event, "accountProfile")) return;
     if (event.type === "auxclick") return;
     event.preventDefault();
-    if (state.account.authenticated) {
-      switchView("accountProfile", { preservePractice: true, fromView: state.view });
-    } else {
-      switchView("login", { fromView: state.view });
-    }
+    switchView("accountProfile", { preservePractice: true, fromView: state.view });
   };
   document.querySelectorAll(".avatar-settings-button").forEach((button) => {
     button.addEventListener("click", handleAccountNavigation);
