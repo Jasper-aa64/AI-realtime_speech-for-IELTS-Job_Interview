@@ -6039,7 +6039,7 @@ function setWritingPageLoading(isLoading, title = "正在加载每日写作", de
 async function loadHistory(showBusy = true) {
   if (!state.account.authenticated) {
     state.historyItems = [];
-    if (!renderGuestHistorySamples()) {
+    if (!seedGuestHistory()) {
       renderGuestViewNotice($("detailPanel"), "登录后查看你的口语报告与历史记录。");
     }
     return;
@@ -6391,6 +6391,7 @@ function renderHistoryList(items, options = {}) {
       <button class="history-item ${toneClass} ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
         <div class="history-item-top">
           <span class="history-item-tag ${tagClass}">${escapeHtml(part.toUpperCase())}</span>
+          ${item.is_sample ? `<span class="report-sample-badge">示例</span>` : ""}
           <span class="history-item-band${bandClass}">${bandText}</span>
         </div>
         <strong class="history-item-title">${escapeHtml(item.title || item.question || "Untitled")}</strong>
@@ -6571,57 +6572,20 @@ function renderGuestViewNotice(container, line) {
 // ── Guest history preview: a few clearly-labelled 示例 report cards so a
 // signed-out visitor can click through a realistic report list. Returns false
 // when no fixture is bundled, so loadHistory falls back to the plain notice. ──
-function guestSamplePartLabel(part) {
-  return { p1: "P1", p2: "P2", p3: "P3", mock: "Mock" }[String(part || "").toLowerCase()] || String(part || "").toUpperCase();
-}
-
-function renderGuestHistorySamples() {
-  const items = (typeof window !== "undefined" && window.IELTSGuestSamples?.history) || null;
-  const list = $("historyList");
-  if (!list || !Array.isArray(items) || !items.length) return false;
-  list.innerHTML = items.map((it, index) => `
-    <button type="button" class="guest-sample-history-card${index === 0 ? " is-active" : ""}" data-guest-sample-report="${escapeHtml(String(it.id))}">
-      <span class="guest-sample-history-tag">${escapeHtml(guestSamplePartLabel(it.part || it.mode))}</span>
-      <span class="guest-sample-history-title">${escapeHtml(it.title || it.question || "")}</span>
-      <span class="guest-sample-history-band">Band ${escapeHtml(String(it.overall_band ?? "—"))}</span>
-    </button>`).join("");
-  renderGuestHistoryDetail(items[0]);
-  list.querySelectorAll("[data-guest-sample-report]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const item = items.find((x) => String(x.id) === btn.dataset.guestSampleReport);
-      list.querySelectorAll(".guest-sample-history-card").forEach((card) => card.classList.toggle("is-active", card === btn));
-      renderGuestHistoryDetail(item);
-    });
+// Seed the demo speaking report into the REAL history pipeline so the genuine
+// list + detail renderer (transcripts, AI feedback, model audio, criteria) all
+// work for a signed-out visitor. The report carries is_sample, so the list and
+// detail badge it 示例 — the only thing marked as a sample.
+function seedGuestHistory() {
+  const seed = (typeof window !== "undefined" && window.IELTSGuestSamples?.history) || [];
+  if (!Array.isArray(seed) || !seed.length) return false;
+  state.historyItems = seed.map(({ detail, ...item }) => item);
+  seed.forEach((entry) => {
+    if (entry.detail) state.historyDetailCache.set(entry.id, entry.detail);
   });
+  state.activeHistoryId = state.historyItems[0]?.id || null;
+  renderHistoryList(state.historyItems);
   return true;
-}
-
-function renderGuestHistoryDetail(item) {
-  const panel = $("detailPanel");
-  if (!panel || !item) return;
-  const band = item.overall_band ?? "—";
-  const criteria = [
-    ["流利度与连贯", band],
-    ["词汇丰富度", band],
-    ["语法多样性与准确性", band],
-    ["发音", band],
-  ];
-  panel.innerHTML = `
-    <div class="guest-sample-report">
-      <div class="guest-sample-banner" role="note">
-        <span class="guest-sample-banner-pill">示例</span>
-        <span class="guest-sample-banner-text">这是示例报告。登录后即可查看你自己的口语报告、逐题转写与 AI 反馈。</span>
-        <button type="button" class="guest-sample-banner-login">登录解锁</button>
-      </div>
-      <h2 class="guest-sample-report-title">${escapeHtml(item.title || item.question || "")}</h2>
-      <p class="guest-sample-report-q">${escapeHtml(item.question || "")}</p>
-      <div class="guest-sample-bands">
-        <div class="guest-sample-band-overall"><span>总分</span><strong>${escapeHtml(String(item.overall_band ?? "—"))}</strong></div>
-        ${criteria.map(([label, value]) => `
-          <div class="guest-sample-band-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "—"))}</strong></div>`).join("")}
-      </div>
-    </div>`;
-  panel.querySelector(".guest-sample-banner-login")?.addEventListener("click", () => promptGuestLogin("登录后查看你自己的口语报告。"));
 }
 
 // On boot, light up the Takeaway / 写作积累 nav dots for a signed-out visitor
@@ -9924,7 +9888,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
     <div class="detail-card speaking-score-summary-card">
       <div class="speaking-score-summary-head">
         <div class="speaking-score-summary-copy">
-          <span class="section-label">IELTS Speaking 练习估分</span>
+          <span class="section-label">IELTS Speaking 练习估分${attempt.is_sample ? ` <span class="report-sample-badge">示例</span>` : ""}</span>
           <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
           <p class="muted">${escapeHtml(attempt.title || "")} · ${visibleTurns.length} question${visibleTurns.length === 1 ? "" : "s"}</p>
         </div>
