@@ -6,6 +6,7 @@ from .services import (
     SpeakingError,
     abort_attempt,
     complete_turn,
+    corpus_saved_status,
     delete_attempt,
     delete_expression_replacement,
     delete_language_takeaway,
@@ -134,6 +135,15 @@ def p2_corpus_view(request):
         return JsonResponse(save_p2_corpus(request.user, _json_payload(request)))
     except SpeakingError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+
+
+@require_http_methods(["POST"])
+def corpus_saved_status_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    targets = _json_payload(request).get("targets") or []
+    return JsonResponse(corpus_saved_status(request.user, targets))
 
 
 @require_http_methods(["DELETE"])

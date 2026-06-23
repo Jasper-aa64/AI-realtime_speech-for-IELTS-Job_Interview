@@ -3288,6 +3288,47 @@
       el.style.height = `${el.scrollHeight}px`;
     }
 
+    function isSingleEnglishWord(value) {
+      return /^[A-Za-z][A-Za-z'’-]*$/.test(String(value || "").trim());
+    }
+
+    // The + button (bottom-left of the popup) only applies to a single English
+    // word; it adds that word to spelling training.
+    function updateLanguageTakeawaySpellingButton() {
+      const btn = $("languageTakeawaySpellingBtn");
+      if (!btn) return;
+      const single = isSingleEnglishWord($("languageTakeawaySource")?.value || "");
+      btn.classList.toggle("hidden", !single);
+      if (!single) return;
+      btn.classList.remove("is-added");
+      btn.disabled = false;
+      btn.title = "加入拼写训练";
+      btn.setAttribute("aria-label", "加入拼写训练");
+    }
+
+    async function addLanguageTakeawaySpellingWord() {
+      const word = String($("languageTakeawaySource")?.value || "").trim();
+      if (!isSingleEnglishWord(word)) return;
+      if (guestBlockTakeawayEdit("登录后才能加入拼写训练。")) return;
+      const btn = $("languageTakeawaySpellingBtn");
+      if (btn) btn.disabled = true;
+      try {
+        await api("/api/writing/spelling-words/add", {
+          word,
+          chinese_gloss: String($("languageTakeawayChinese")?.value || "").trim(),
+        });
+        if (btn) {
+          btn.classList.add("is-added");
+          btn.title = "已加入拼写训练";
+          btn.setAttribute("aria-label", "已加入拼写训练");
+        }
+        setLanguageTakeawayStatus("已加入拼写训练");
+      } catch (error) {
+        if (btn) btn.disabled = false;
+        setLanguageTakeawayStatus(error.message || "加入拼写训练失败");
+      }
+    }
+
     // Browser-TTS the English source of the 划词 popup (the popup's top-right
     // control is now a speaker button instead of a close button).
     function speakLanguageTakeawaySource() {
@@ -3395,6 +3436,7 @@
       popup.classList.remove("hidden");
       placeLanguageTakeawayPopup(triggerRect.left, triggerRect.bottom + 8);
       autosizeLanguageTakeawaySource();
+      updateLanguageTakeawaySpellingButton();
       hideLanguageTakeawayTrigger();
       await translateLanguageTakeawaySource(textValue);
     }
@@ -6080,6 +6122,8 @@
       hideLanguageTakeawayPopup,
       speakLanguageTakeawaySource,
       autosizeLanguageTakeawaySource,
+      updateLanguageTakeawaySpellingButton,
+      addLanguageTakeawaySpellingWord,
       translateTakeawayEditSource,
       placeLanguageTakeawayTrigger,
       showLanguageTakeawayTrigger,

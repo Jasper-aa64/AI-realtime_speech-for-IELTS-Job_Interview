@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .models import WritingFrameTemplate
-from .spelling_services import delete_spelling_word, record_spelling_attempt, spelling_drill_library, update_spelling_word
+from .spelling_services import add_manual_spelling_word, delete_spelling_word, record_spelling_attempt, spelling_drill_library, update_spelling_word
 from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, prompt_patterns, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
@@ -104,6 +104,23 @@ def spelling_words(request):
         return auth_error
     try:
         return JsonResponse(spelling_drill_library(request.user, scope=request.GET.get("scope") or "due"))
+    except WritingError as exc:
+        return writing_error(exc)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def spelling_word_add(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    body = read_json_body(request)
+    try:
+        return JsonResponse(add_manual_spelling_word(
+            request.user,
+            word=body.get("word") or body.get("text") or "",
+            chinese_gloss=body.get("chinese_gloss") or body.get("gloss") or "",
+        ))
     except WritingError as exc:
         return writing_error(exc)
 

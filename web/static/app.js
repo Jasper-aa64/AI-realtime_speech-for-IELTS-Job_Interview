@@ -9968,6 +9968,47 @@ function renderDetail(attempt, updateView = true, options = {}) {
   } else {
     detailPanel.scrollTo({ top: 0, behavior: "smooth" });
   }
+  refreshReportCorpusButtonStates();
+}
+
+// After a report renders, ask the backend which 编辑语料库 targets already have
+// saved corpus, and reflect 已保存 vs 待补充 on each button by icon + label
+// (not just colour). Guests/sample reports skip this (no real account data).
+function refreshReportCorpusButtonStates() {
+  if (!state.account.authenticated) return;
+  const buttons = Array.from(document.querySelectorAll("#detailPanel [data-edit-turn-corpus]"));
+  if (!buttons.length) return;
+  const targets = buttons.map((button, index) => {
+    const key = String(index);
+    button.dataset.corpusKey = key;
+    return {
+      key,
+      kind: button.dataset.corpusKind || "",
+      questionId: button.dataset.questionId || "",
+      p2QuestionId: button.dataset.p2QuestionId || "",
+      followupId: button.dataset.followupId || "",
+      entryId: button.dataset.p2CorpusEntryId || "",
+    };
+  });
+  api("/api/corpus/saved-status", { targets })
+    .then((res) => {
+      const statuses = res?.statuses || {};
+      buttons.forEach((button) => applyCorpusButtonState(button, Boolean(statuses[button.dataset.corpusKey])));
+    })
+    .catch(() => null);
+}
+
+function applyCorpusButtonState(button, saved) {
+  button.classList.toggle("is-corpus-saved", saved);
+  button.classList.toggle("is-corpus-new", !saved);
+  const label = button.querySelector(".corpus-edit-label");
+  if (label) label.textContent = saved ? "语料库已存 · 编辑" : "记入语料库";
+  const icon = button.querySelector(".corpus-edit-icon");
+  if (icon) {
+    icon.innerHTML = saved
+      ? '<path d="M5 12.5l4 4 10-10"></path>'
+      : '<path d="M4 7h11M4 12h7M4 17h5"></path><path d="m15.5 15.5 4-4a1.4 1.4 0 0 1 2 2l-4 4-2.6.6z"></path>';
+  }
 }
 
 function failedSpeakingReportHtml(attempt) {
@@ -11069,6 +11110,14 @@ function translateTakeawayEditSource(...args) {
 
 function autosizeLanguageTakeawaySource(...args) {
   return corpusTakeawayController.autosizeLanguageTakeawaySource(...args);
+}
+
+function updateLanguageTakeawaySpellingButton(...args) {
+  return corpusTakeawayController.updateLanguageTakeawaySpellingButton(...args);
+}
+
+function addLanguageTakeawaySpellingWord(...args) {
+  return corpusTakeawayController.addLanguageTakeawaySpellingWord(...args);
 }
 
 function placeLanguageTakeawayTrigger(...args) {
@@ -12792,7 +12841,13 @@ function bindEvents() {
     event.preventDefault();
     translateLanguageTakeawaySource();
   });
-  $("languageTakeawaySource")?.addEventListener("input", () => autosizeLanguageTakeawaySource());
+  $("languageTakeawaySource")?.addEventListener("input", () => {
+    autosizeLanguageTakeawaySource();
+    updateLanguageTakeawaySpellingButton();
+  });
+  $("languageTakeawaySpellingBtn")?.addEventListener("click", (event) => {
+    withPending(event.currentTarget, addLanguageTakeawaySpellingWord, { busyText: "" }).catch(showError);
+  });
   document.addEventListener("pointerdown", (event) => {
     const popup = $("languageTakeawayPopup");
     const trigger = $("languageTakeawayTrigger");

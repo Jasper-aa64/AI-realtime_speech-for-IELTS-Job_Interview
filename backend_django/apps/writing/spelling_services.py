@@ -373,6 +373,50 @@ def harvest_spelling_words(user) -> int:
     return changed
 
 
+def add_manual_spelling_word(user, *, word: str, chinese_gloss: str = "") -> dict[str, Any]:
+    """Add a single English word to the user's spelling training on demand
+    (from the 划词 popup's + button). Re-activates an existing/mastered entry
+    rather than duplicating it."""
+    normalized = normalize_spelling_display(word)
+    if not is_single_word_spelling(normalized):
+        raise WritingError("请选择单个英文单词加入拼写训练。")
+    gloss = str(chinese_gloss or "").strip() or first_local_gloss(normalized)
+    now = timezone.now()
+    with transaction.atomic():
+        existing = (
+            SpellingDrillWord.objects.select_for_update()
+            .filter(user=user, normalized__iexact=normalized)
+            .first()
+        )
+        if existing:
+            update_fields = ["last_seen_at", "updated_at"]
+            existing.last_seen_at = now
+            if existing.status != SpellingDrillWord.Status.ACTIVE:
+                existing.status = SpellingDrillWord.Status.ACTIVE
+                existing.due_at = now
+                update_fields += ["status", "due_at"]
+            if gloss and not existing.chinese_gloss:
+                existing.chinese_gloss = gloss[:200]
+                update_fields.append("chinese_gloss")
+            existing.save(update_fields=list(dict.fromkeys(update_fields)))
+            return {"ok": True, "created": False, "word": spelling_word_payload(existing)}
+        word_obj = SpellingDrillWord.objects.create(
+            user=user,
+            word_id=spelling_word_id(normalized),
+            correct_spelling=normalized,
+            normalized=normalized,
+            chinese_gloss=gloss[:200],
+            occurrence_count=1,
+            first_seen_at=now,
+            last_seen_at=now,
+            due_at=now,
+            status=SpellingDrillWord.Status.ACTIVE,
+            source_refs=["manual"],
+            metadata={"source": "takeaway_popup"},
+        )
+    return {"ok": True, "created": True, "word": spelling_word_payload(word_obj)}
+
+
 def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
     now = timezone.now()
     due = word.due_at if word.due_at else now

@@ -937,6 +937,40 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
     }
 
 
+def corpus_saved_status(user, targets: list[dict[str, Any]]) -> dict[str, Any]:
+    """For a batch of report 编辑语料库 targets, report which already have saved
+    corpus, so the button can show 已保存 vs 待补充 by shape, not just colour."""
+    statuses: dict[str, bool] = {}
+    for target in targets or []:
+        key = str(target.get("key") or "").strip()
+        if not key:
+            continue
+        kind = str(target.get("kind") or "").strip()
+        saved = False
+        if kind == "p1":
+            qid = str(target.get("questionId") or "").strip()
+            saved = bool(qid) and P1CorpusEntry.objects.filter(
+                user=user, question_id=qid
+            ).exclude(corpus_text="").exists()
+        elif kind == "p2_bank":
+            qid = str(target.get("questionId") or "").strip()
+            saved = bool(qid) and P2BankCorpusEntry.objects.filter(
+                user=user, question_id=qid
+            ).exclude(corpus_text="").exists()
+        elif kind == "p3_bank":
+            fid = str(target.get("followupId") or "").strip()
+            saved = bool(fid) and P3BankFollowupCorpusEntry.objects.filter(
+                user=user, followup_id=fid
+            ).exclude(corpus_text="").exists()
+        elif kind == "p2_corpus_p3":
+            eid = str(target.get("entryId") or "").strip()
+            saved = bool(eid) and P2CorpusEntry.objects.filter(
+                user=user, entry_id=eid
+            ).exclude(material_text="").exists()
+        statuses[key] = bool(saved)
+    return {"statuses": statuses}
+
+
 def save_p2_corpus(user, payload: dict[str, Any]) -> dict[str, Any]:
     category = clean_report_text(str(payload.get("category") or P2CorpusEntry.Category.SPECIAL))
     valid_categories = {item["category"] for item in P2_CORPUS_CATEGORIES}

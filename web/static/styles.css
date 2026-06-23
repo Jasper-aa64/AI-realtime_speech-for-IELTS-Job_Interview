@@ -5865,16 +5865,66 @@ body.theme-dark .spelling-drill-panel {
 }
 
 .language-takeaway-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  justify-items: end;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
+.language-takeaway-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .language-takeaway-actions span {
-  justify-self: start;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* + button: add a single English word to spelling training. */
+.language-takeaway-spelling-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #2563eb) 10%, var(--panel));
+  color: var(--accent, #2563eb);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease;
+}
+.language-takeaway-spelling-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.language-takeaway-spelling-btn:hover { background: color-mix(in srgb, var(--accent, #2563eb) 18%, var(--panel)); }
+.language-takeaway-spelling-btn:active { transform: scale(0.92); }
+.language-takeaway-spelling-btn.is-added {
+  background: #16a34a;
+  border-color: #15803d;
+  color: #fff;
+}
+body.theme-dark .language-takeaway-spelling-btn {
+  border-color: color-mix(in srgb, #7aa2ff 42%, transparent);
+  background: color-mix(in srgb, #7aa2ff 16%, var(--panel));
+  color: #cdddff;
+}
+body.theme-dark .language-takeaway-spelling-btn.is-added {
+  background: #15803d;
+  border-color: #166534;
+  color: #fff;
 }
 
 .language-takeaway-action-buttons {
@@ -16834,6 +16884,30 @@ body.theme-dark button.ghost.corpus-edit-button:hover,
 body.theme-dark .p2-report-actions button.ghost.corpus-edit-button:hover {
   background: color-mix(in srgb, #7aa2ff 26%, var(--panel)) !important;
   border-color: color-mix(in srgb, #7aa2ff 60%, transparent) !important;
+}
+
+/* Saved state: a filled green pill with a check, so 已保存 reads at a glance and
+   isn't confused with the (outline) 待补充 state. */
+.corpus-edit-button.is-corpus-saved,
+button.ghost.corpus-edit-button.is-corpus-saved,
+.p2-report-actions button.ghost.corpus-edit-button.is-corpus-saved {
+  color: #fff !important;
+  background: linear-gradient(180deg, #22a565, #15834e) !important;
+  border-color: #15803d !important;
+}
+.corpus-edit-button.is-corpus-saved:hover,
+button.ghost.corpus-edit-button.is-corpus-saved:hover,
+.p2-report-actions button.ghost.corpus-edit-button.is-corpus-saved:hover {
+  background: linear-gradient(180deg, #1f9a5e, #136e42) !important;
+  border-color: #166534 !important;
+}
+.corpus-edit-button.is-corpus-saved .corpus-edit-icon path:last-child { fill: none; }
+body.theme-dark .corpus-edit-button.is-corpus-saved,
+body.theme-dark button.ghost.corpus-edit-button.is-corpus-saved,
+body.theme-dark .p2-report-actions button.ghost.corpus-edit-button.is-corpus-saved {
+  color: #eafff3 !important;
+  background: linear-gradient(180deg, #1f8f57, #115e38) !important;
+  border-color: #1b7a49 !important;
 }
 
 .coaching-content {
