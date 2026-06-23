@@ -5597,11 +5597,31 @@ function startSpeakingScorePolling(taskId, attemptId) {
   if (!taskId) return;
   clearSpeakingScorePolling();
   state.speaking.scorePollingTaskId = taskId;
+  // Never let a down / overloaded worker spin "评分中" forever. A task that is
+  // never even claimed (stays pending — no worker) bails fast; a claimed task
+  // that wedges gets a longer ceiling. Both route to the normal failure UI,
+  // which keeps the recording and offers 重新分析.
+  const startedAt = Date.now();
+  const PENDING_DEADLINE_MS = 90_000;   // queued but no worker picks it up
+  const OVERALL_DEADLINE_MS = 240_000;  // claimed but never finishes
+  let sawRunning = false;
   const poll = async () => {
     try {
       const task = await api(`/api/ai/tasks/${taskId}`);
       if (state.speaking.scorePollingTaskId !== taskId) return;
       if (isSpeakingTaskActive(task)) {
+        if (String(task?.status) === "running") sawRunning = true;
+        const elapsed = Date.now() - startedAt;
+        const stuckPending = !sawRunning && elapsed > PENDING_DEADLINE_MS;
+        if (stuckPending || elapsed > OVERALL_DEADLINE_MS) {
+          clearSpeakingScorePolling();
+          if (state.speaking.pendingAnalysis?.attemptId === attemptId) state.speaking.pendingAnalysis = null;
+          const msg = stuckPending
+            ? "评分服务暂时排不上队（后台可能繁忙或刚重启）。本次录音已保存，点「重新分析」即可重试，不用重录。"
+            : "评分用时过长，已停止等待。本次录音已保存，点「重新分析」可重新生成报告。";
+          handleSpeakingAnalysisFailure(new Error(msg), attemptId, { task });
+          return;
+        }
         text("recordStatus", speakingTaskStatusTitle(task));
         text("phaseLabel", "Analyzing");
         state.speaking.scorePollTimer = setTimeout(poll, 2500);
