@@ -3157,6 +3157,30 @@
       };
     }
 
+    // 串题灵感 fields are <input>/<textarea> elements, so window.getSelection()
+    // returns nothing for them (like the writing answer box). Capture the
+    // selected substring directly and place the trigger at the caret end.
+    function brainstormSelectionText() {
+      const el = document.activeElement;
+      if (!el || !el.matches?.("[data-p2-brainstorm-input], #p2CorpusBrainstormIdea")) return null;
+      const start = Number(el.selectionStart);
+      const end = Number(el.selectionEnd);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+      const textValue = String(el.value || "").slice(start, end).trim();
+      if (textValue.length < 1 || textValue.length > TAKEAWAY_SELECTION_MAX_LEN) return null;
+      const selectionRect = textareaSelectionEndpointRect(el, end);
+      if (!selectionRect) return null;
+      return {
+        text: textValue,
+        rect: selectionRect,
+        center: {
+          x: selectionRect.left + selectionRect.width / 2,
+          y: selectionRect.top + selectionRect.height / 2,
+        },
+        source: "brainstorm",
+      };
+    }
+
     function textareaSelectionEndpointRect(textarea, endOffset) {
       const hostRect = textarea.getBoundingClientRect();
       if (!hostRect.width || !hostRect.height) return null;
@@ -3208,11 +3232,21 @@
     function selectionText() {
       const answerSelection = writingAnswerSelectionText();
       if (answerSelection) return answerSelection;
+      const brainstormSelection = brainstormSelectionText();
+      if (brainstormSelection) return brainstormSelection;
       const selection = window.getSelection?.();
       const textValue = String(selection?.toString() || "").trim();
       if (!selection || selection.rangeCount === 0 || textValue.length < 1 || textValue.length > TAKEAWAY_SELECTION_MAX_LEN) return null;
       const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
+      let rect = range.getBoundingClientRect();
+      // A selection that begins/ends inside a Vditor bold node (whose ** markers
+      // are non-selectable spans) can report a degenerate 0×0 bounding rect.
+      // Fall back to the first non-empty client rect so the trigger still shows.
+      if (!rect || (rect.width === 0 && rect.height === 0)) {
+        for (const candidate of range.getClientRects()) {
+          if (candidate && (candidate.width || candidate.height)) { rect = candidate; break; }
+        }
+      }
       if (!rect || (rect.width === 0 && rect.height === 0)) return null;
       const promptEl = $("writingPromptText");
       const answerEl = $("writingAnswer");
