@@ -2,10 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "django",
-      "runtimeExecutable": "/Users/mac/Desktop/IE/IELTS_speaking_monitor/.venv-django/bin/python",
-      "runtimeArgs": ["/Users/mac/Desktop/IE/IELTS_speaking_monitor/backend_django/manage.py", "runserver", "127.0.0.1:8767", "--noreload"],
-      "port": 8767
+      "name": "django-preview",
+      "runtimeExecutable": "C:\\Users\\liangjunming\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "runtimeArgs": ["-m", "daphne", "-b", "127.0.0.1", "-p", "8769", "config.asgi:application"],
+      "cwd": "C:\\Users\\liangjunming\\Desktop\\AI_Project\\backend_django",
+      "port": 8769,
+      "autoPort": false
     }
   ]
 }

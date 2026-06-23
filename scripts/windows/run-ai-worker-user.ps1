@@ -10,6 +10,8 @@ $RunLogs = Join-Path $ProjectRoot ".runlogs"
 $EnvFile = Join-Path $ProjectRoot ".env"
 $StopFile = Join-Path ([System.IO.Path]::GetTempPath()) "ielts_worker_user.stop"
 $ClaudeExe = Join-Path $env:APPDATA "npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe"
+$CodexCmd = Join-Path $env:APPDATA "npm\codex.cmd"
+$CodexHome = Join-Path $env:USERPROFILE ".codex"
 $VenvPython = Join-Path $ProjectRoot ".venv-django\Scripts\python.exe"
 
 New-Item -ItemType Directory -Force -Path $RunLogs | Out-Null
@@ -41,6 +43,12 @@ $env:CLAUDE_CLI_MODEL = if ($env:CLAUDE_CLI_MODEL) { $env:CLAUDE_CLI_MODEL } els
 if (-not $env:CLAUDE_CLI_PATH -and (Test-Path $ClaudeExe)) {
     $env:CLAUDE_CLI_PATH = $ClaudeExe
 }
+if (-not $env:CODEX_CLI_PATH -and (Test-Path $CodexCmd)) {
+    $env:CODEX_CLI_PATH = $CodexCmd
+}
+if (-not $env:CODEX_HOME -and (Test-Path $CodexHome)) {
+    $env:CODEX_HOME = $CodexHome
+}
 
 if (Test-Path $VenvPython) {
     $Python = $VenvPython
@@ -54,10 +62,9 @@ $ErrPath = Join-Path $RunLogs "worker-user.err.log"
 Set-Location $DjangoDir
 
 & $Python manage.py run_ai_worker `
-    --worker-id "local-ai-worker-claude-user" `
+    --worker-id "local-ai-worker-user" `
     --recover-stale-seconds 900 `
     --interval-seconds 1 `
     --idle-interval-seconds 2.5 `
     --stop-file "$StopFile" `
     1>> $LogPath 2>> $ErrPath
-

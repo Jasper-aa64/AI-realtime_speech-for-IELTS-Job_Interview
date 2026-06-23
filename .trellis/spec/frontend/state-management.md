@@ -88,6 +88,18 @@ setRecordButton("processing", "Saving", "正在生成追问...");
 streamFollowUpForCompletedTurn(...);
 ```
 
+### Direct P2 Practice Uses URL-Owned Cue State
+
+When a corpus surface opens a specific P2 question in a new tab, pass the cue
+through `?view=p2&p2_cue_id=<cue>&autostart=1`. `requestedRouteState()` maps
+those fields into `state.p2Corpus.pinnedCueId`, then the normal `startPractice()`
+flow consumes the cue. Remove `autostart` before starting so refresh cannot
+submit another attempt.
+
+Do not rely on parent-window memory, `window.opener`, or `sessionStorage` for
+the selected cue. The new tab must be independently reloadable and must keep
+using the existing authenticated practice path.
+
 Correct:
 
 ```js

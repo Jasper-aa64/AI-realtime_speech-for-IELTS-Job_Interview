@@ -15,7 +15,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260615-p1corpus-height-1">
+    <link rel="stylesheet" href="/styles.css?v=20260623-ui-tweaks-3">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -68,6 +68,15 @@
           </button>
         </div>
       </div>
+
+      <button id="reportManagerBtn" class="report-manager-fab hidden" type="button" title="报告管理" aria-label="报告管理">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <rect x="5" y="4" width="14" height="17" rx="2"></rect>
+          <rect x="9" y="2.5" width="6" height="3" rx="1"></rect>
+          <path d="M8.6 11.2l2 2 4.2-4.2"></path>
+          <path d="M9 16.5h6"></path>
+        </svg>
+      </button>
 
       <button id="agentAssistantBtn" class="agent-assistant-trigger floating-agent-assistant-trigger" type="button" title="题库助手" aria-label="题库助手" data-i18n-title="action.questionAssistant" data-i18n-aria="action.questionAssistant">
         <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -177,15 +186,15 @@
               <img src="/assets/home/sketch-workflow.webp" alt="铅笔稿风格的 IELTS 学习流程草图">
               <div class="sketch-flow-overlay" aria-hidden="true">
                 <span>Today</span>
-                <svg class="sketch-flow-connectors" viewBox="0 0 760 430" preserveAspectRatio="none" aria-hidden="true">
+                <svg class="sketch-flow-connectors" viewBox="0 0 620 430" preserveAspectRatio="none" aria-hidden="true">
                   <defs>
-                    <marker id="sketchFlowConnectorHead" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="strokeWidth">
-                      <path d="M0 0 L9 4.5 L0 9 Z"></path>
+                    <marker id="sketchFlowConnectorHead" markerWidth="5" markerHeight="5" refX="4.4" refY="2.5" orient="auto" markerUnits="strokeWidth">
+                      <path d="M0.6 0.6 L5 2.5 L0.6 4.4 Z"></path>
                     </marker>
                   </defs>
-                  <path class="sketch-flow-connector connector-1" d="M332 172 C410 160 482 181 540 226"></path>
-                  <path class="sketch-flow-connector connector-2" d="M542 300 C486 346 405 362 318 344"></path>
-                  <path class="sketch-flow-connector connector-3" d="M226 328 C202 282 213 235 252 199"></path>
+                  <path class="sketch-flow-connector connector-1" d="M205 120 C290 150 440 138 442 168"></path>
+                  <path class="sketch-flow-connector connector-2" d="M428 246 C418 295 300 316 244 322"></path>
+                  <path class="sketch-flow-connector connector-3" d="M85 320 C45 280 46 180 60 122"></path>
                 </svg>
                 <div class="sketch-flow-step step-1"><b>1</b><strong>输入</strong><small>P1 / P2 / P3 真题练习</small></div>
                 <div class="sketch-flow-step step-2"><b>2</b><strong>反馈</strong><small>口语报告与写作批改</small></div>
@@ -214,7 +223,7 @@
                 <strong>写作闭环</strong>
               </div>
               <div class="home-v3-links">
-                <a href="?view=writing"><b>Task</b><span>每日写作</span></a>
+                <a href="?view=writing" data-view="writing"><b>Task</b><span>每日写作</span></a>
                 <a href="?view=writingReports"><b>Report</b><span>批改报告</span></a>
               </div>
             </section>
@@ -268,6 +277,13 @@
                   <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
                   <path d="M9.6 20h4.8"></path>
                   <path d="M10.7 21.75h2.6"></path>
+                </svg>
+              </button>
+              <button id="peekFollowUpSourceBtn" class="p1-corpus-peek-button followup-source-peek-button hidden" type="button" aria-label="查看这道追问的原始题目" title="查看原始题目">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5V14"></path>
+                  <path d="M12 17.5h.01"></path>
+                  <circle cx="12" cy="12" r="9"></circle>
                 </svg>
               </button>
               <button id="openP1CorpusBtn" class="p1-corpus-entry hidden" type="button">
@@ -460,12 +476,11 @@
 
         <div id="p2CorpusPeekDialog" class="p1-corpus-dialog p2-corpus-peek-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="p2CorpusPeekTitle">
           <div class="p1-corpus-dialog-card p1-corpus-peek-card p2-corpus-peek-card">
-            <header class="p1-corpus-dialog-head">
-              <div>
+            <header id="p2CorpusPeekHead" class="p1-corpus-dialog-head">
+              <div id="p2CorpusPeekHeading">
                 <span id="p2CorpusPeekMeta">P2 LINKED MATERIAL</span>
                 <h3 id="p2CorpusPeekTitle">已链接素材</h3>
               </div>
-              <button id="closeP2CorpusPeek" type="button">关闭</button>
             </header>
             <div id="p2CorpusPeekBody" class="p1-corpus-peek-body p2-corpus-peek-body"></div>
           </div>
@@ -481,6 +496,43 @@
               <button id="closeP3CorpusPeek" type="button">关闭</button>
             </header>
             <div id="p3CorpusPeekBody" class="p1-corpus-peek-body p2-corpus-peek-body"></div>
+          </div>
+        </div>
+
+        <div id="followUpSourcePeekDialog" class="p1-corpus-dialog p2-corpus-peek-dialog followup-source-peek-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="followUpSourcePeekTitle">
+          <div class="p1-corpus-dialog-card p1-corpus-peek-card p2-corpus-peek-card">
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="followUpSourcePeekMeta">ORIGINAL QUESTION</span>
+                <h3 id="followUpSourcePeekTitle">这道追问的原始题目</h3>
+              </div>
+              <button id="closeFollowUpSourcePeek" type="button">关闭</button>
+            </header>
+            <div id="followUpSourcePeekBody" class="p1-corpus-peek-body p2-corpus-peek-body"></div>
+          </div>
+        </div>
+
+        <div id="reportManagerDialog" class="report-manager-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="reportManagerTitle">
+          <div class="report-manager-card">
+            <header class="report-manager-head">
+              <div>
+                <span class="report-manager-kicker">REPORT MANAGER</span>
+                <h3 id="reportManagerTitle">报告管理</h3>
+              </div>
+              <button id="closeReportManager" type="button" aria-label="关闭">关闭</button>
+            </header>
+            <div id="reportManagerFilters" class="report-manager-filters" role="group" aria-label="筛选报告"></div>
+            <div class="report-manager-selectall">
+              <label class="report-manager-checkbox">
+                <input type="checkbox" id="reportManagerSelectAll">
+                <span>全选当前筛选</span>
+              </label>
+              <span id="reportManagerCount" class="report-manager-count">已选 0 项</span>
+            </div>
+            <div id="reportManagerList" class="report-manager-list" aria-live="polite"></div>
+            <footer class="report-manager-foot">
+              <button id="reportManagerDeleteBtn" class="report-manager-delete" type="button" disabled>批量删除</button>
+            </footer>
           </div>
         </div>
 
@@ -660,7 +712,10 @@
             </div>
             <label id="p2CorpusBrainstormField" class="p2-bank-brainstorm-field hidden" for="p2CorpusBrainstormIdea">
               <span class="p1-corpus-label">串题灵感</span>
-              <input id="p2CorpusBrainstormIdea" type="text" placeholder="一句灵感：人物 / 地点 / 经历 / 可串题角度" autocomplete="off">
+              <div class="p2-brainstorm-tagfield p2-bank-brainstorm-tagfield">
+                <span class="p2-brainstorm-tags"></span>
+                <input id="p2CorpusBrainstormIdea" class="p2-brainstorm-input" type="text" placeholder="一句灵感：人物 / 地点 / 经历 / 可串题角度" autocomplete="off">
+              </div>
             </label>
             <label id="p2CorpusTextLabel" class="p1-corpus-label" for="p2CorpusText">串题素材</label>
             <textarea id="p2CorpusText" class="p1-corpus-textarea" spellcheck="true"></textarea>
@@ -709,11 +764,20 @@
                 <h3 id="p2BrainstormDialogTitle">Brainstorm</h3>
               </div>
               <div class="p2-brainstorm-head-actions">
-                <button id="copyP2BrainstormBtn" type="button" class="ghost">复制全部</button>
-                <button id="saveP2BrainstormBtn" type="button">保存灵感</button>
+                <button id="copyP2BrainstormBtn" type="button" class="ghost">复制「全部」</button>
+                <label class="p2-brainstorm-search" for="p2BrainstormSearchInput">
+                  <span>查找</span>
+                  <input id="p2BrainstormSearchInput" type="search" placeholder="搜索题目或灵感" autocomplete="off">
+                  <small id="p2BrainstormSearchCount">0/0</small>
+                </label>
+                <button id="p2BrainstormSearchPrev" type="button" class="ghost" aria-label="上一个匹配">↑</button>
+                <button id="p2BrainstormSearchNext" type="button" class="ghost" aria-label="下一个匹配">↓</button>
               </div>
             </header>
-            <p class="p2-brainstorm-dialog-subtitle">每道题先记一句能串到其他题的细碎素材。这里不会覆盖正式 P2 正文。</p>
+            <div class="p2-brainstorm-prelist">
+              <p class="p2-brainstorm-dialog-subtitle">每道题先记一句能串到其他题的细碎素材。这里不会覆盖正式 P2 正文。开头输入 <code>A</code> / <code>B2</code> 再加空格即可打标签（A1/A2/B1/B2 或 A/B/C），支持多个。</p>
+              <div id="p2BrainstormFilterBar" class="p2-brainstorm-filter-bar" hidden></div>
+            </div>
             <div id="p2BrainstormList" class="p2-brainstorm-list"></div>
             <div class="p1-corpus-dialog-actions p2-brainstorm-actions">
               <span id="p2BrainstormStatus"></span>
@@ -1291,7 +1355,11 @@
                     <label class="account-ai-source-label" for="aiSourceSelect" data-i18n="settings.aiSource">AI 评分来源</label>
                     <select id="aiSourceSelect" class="account-ai-source-select" aria-label="AI 评分来源" data-i18n-aria="settings.aiSource">
                       <option value="gpt" data-i18n="settings.aiSource.gpt">GPT（默认）</option>
-                      <option value="claude_cli" data-i18n="settings.aiSource.claude">Claude</option>
+                      <option value="claude" data-i18n="settings.aiSource.claude">Claude Sonnet</option>
+                      <option value="claude_haiku" data-i18n="settings.aiSource.claudeHaiku">Claude Haiku</option>
+                      <option value="claude_cli" data-i18n="settings.aiSource.claudeCli">Claude CLI (Sonnet)</option>
+                      <option value="claude_cli_haiku" data-i18n="settings.aiSource.claudeCliHaiku">Claude CLI (Haiku)</option>
+                      <option value="codex_cli" data-i18n="settings.aiSource.codexCli">Codex CLI（本机）</option>
                     </select>
                   </div>
                 </div>
@@ -1409,7 +1477,7 @@
     <script src="/writing-image-viewer.js?v=20260613-img-original-preload-1"></script>
     <script src="/writing-prompt-picker.js?v=20260614-img-ready-instant-1"></script>
     <script src="/corpus-markdown-editor.js?v=20260613-p2bank-instant-1"></script>
-    <script src="/corpus-takeaway.js?v=20260614-sidebar-source-p2fix-1"></script>
+    <script src="/corpus-takeaway.js?v=20260623-p1-corpus-stale-fix-1"></script>
     <script src="/spelling-drill.js?v=20260615-spelling-cache-3"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
@@ -1417,8 +1485,8 @@
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
-    <script src="/view-router.js?v=20260530-front-view-router"></script>
-    <script src="/app.js?v=20260615-spelling-cache-1"></script>
+    <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
+    <script src="/app.js?v=20260623-p1-corpus-stale-fix-1"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
   </body>
 </html>

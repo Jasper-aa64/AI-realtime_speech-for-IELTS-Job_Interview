@@ -24,6 +24,8 @@
           speakingReportId: params.get("report") || "",
           writingReportId: params.get("writing_report") || "",
           writingEntryId: params.get("writing_entry") || "",
+          p2CueId: params.get("p2_cue_id") || "",
+          autoStartP2: params.get("autostart") === "1",
         };
       } catch (_error) {
         return {
@@ -33,6 +35,8 @@
           speakingReportId: "",
           writingReportId: "",
           writingEntryId: "",
+          p2CueId: "",
+          autoStartP2: false,
         };
       }
     }

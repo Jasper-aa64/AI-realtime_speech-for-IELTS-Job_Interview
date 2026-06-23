@@ -57,6 +57,11 @@ const state = {
     saving: false,
     savingPromise: null,
     clearedQuestionIds: new Set(),
+    // Monotonic generation counter. Bumped on every local save/clear; each GET
+    // is stamped with the value at issue-time so a request that snapshotted the
+    // server *before* a save can't overwrite freshly-saved topics when it
+    // resolves afterward. See applyP1CorpusPayload / fetchP1CorpusPayload.
+    mutationSeq: 0,
   },
   p2Corpus: {
     categories: [],
@@ -188,6 +193,8 @@ const state = {
   },
   speaking: {
     pendingAnalysis: null,
+    reportRegen: null,
+    reportRegenPollTimer: null,
     pendingTurnCompletions: new Map(),
     turnCompletionErrors: new Map(),
     retryCompletion: null,
@@ -204,6 +211,7 @@ const state = {
     realtimePcmSocket: null,
     realtimePcmMetrics: null,
     examinerTtsRefreshPromises: new Map(),
+    examinerTtsPrefetched: new Set(),
     captureDevice: null,
   },
   account: {
@@ -240,6 +248,8 @@ const ENGLISH_NAME_STORAGE_KEY = "ielts-english-name";
 const QUESTION_BANK_SCOPE_STORAGE_KEY = "ielts-speaking-question-bank-scope";
 const SPEAKING_PENDING_ANALYSIS_STORAGE_KEY = "ielts-speaking-pending-analysis";
 const SPEAKING_PENDING_ANALYSIS_VIEW_STORAGE_KEY = "ielts-speaking-pending-analysis-view";
+const SPEAKING_REPORT_REGEN_STORAGE_KEY = "ielts-speaking-report-regen";
+const WRITING_ACTION_PANEL_COLLAPSED_STORAGE_KEY = "ielts-writing-action-panel-collapsed";
 const SPEAKING_AUDIO_IDB_NAME = "ielts-speaking";
 const SPEAKING_AUDIO_IDB_STORE = "pendingTurnAudio";
 const SPEAKING_AUDIO_IDB_VERSION = 1;
@@ -394,7 +404,11 @@ const uiTranslations = {
     "settings.languageAria": "选择界面语言",
     "settings.aiSource": "AI 评分来源",
     "settings.aiSource.gpt": "GPT（默认）",
-    "settings.aiSource.claude": "Claude",
+    "settings.aiSource.claude": "Claude Sonnet",
+    "settings.aiSource.claudeHaiku": "Claude Haiku",
+    "settings.aiSource.claudeCli": "Claude CLI (Sonnet)",
+    "settings.aiSource.claudeCliHaiku": "Claude CLI (Haiku)",
+    "settings.aiSource.codexCli": "Codex CLI（本机）",
     "p1.corpusButton": "我的 P1 语料库",
     "p2.corpusButton": "我的 P2 串题素材库",
     "p2Corpus.aria": "我的 P2 串题素材库",
@@ -528,7 +542,11 @@ const uiTranslations = {
     "settings.languageAria": "Choose interface language",
     "settings.aiSource": "AI scoring source",
     "settings.aiSource.gpt": "GPT (default)",
-    "settings.aiSource.claude": "Claude",
+    "settings.aiSource.claude": "Claude Sonnet",
+    "settings.aiSource.claudeHaiku": "Claude Haiku",
+    "settings.aiSource.claudeCli": "Claude CLI (Sonnet)",
+    "settings.aiSource.claudeCliHaiku": "Claude CLI (Haiku)",
+    "settings.aiSource.codexCli": "Codex CLI (local)",
     "p1.corpusButton": "My P1 Corpus",
     "p2.corpusButton": "My P2 Story Bank",
     "p2Corpus.aria": "My P2 Story Bank",
@@ -665,16 +683,26 @@ function isP1IntroTurn(turn) {
   return turn?.part === "p1" && turn?.prompt?.flow === "intro";
 }
 
+// A turn counts toward the visible "Question N/M" progress iff `counts_toward_total`
+// is not false. That single flag is the source of truth shared with the backend:
+// the name-intro turn and every live follow-up carry false (so they are skipped),
+// while the work/study identity question and all topic questions carry true. Using
+// the same rule here means the practice counter matches the question numbering the
+// report later prints (Q1 = "Do you work or study?", Q2 = first topic question, ...),
+// instead of the old logic that silently dropped the work/study turn and started the
+// topic questions at 1 — the mismatch that made the counter look "weird".
+function turnCountsTowardProgress(turn) {
+  return Boolean(turn) && turn.counts_toward_total !== false;
+}
+
 function turnProgressPlan(turn = state.currentTurn) {
   if (!turn || !state.attempt?.turns?.length) return null;
   const part = String(turn.part || "").toLowerCase();
   if (part !== "p1" && part !== "p3") return null;
-  if (turn.counts_toward_total === false) return null;
-  if (isP1IntroTurn(turn)) return null;
+  if (!turnCountsTowardProgress(turn)) return null;
   const countableTurns = state.attempt.turns.filter((item) => (
     String(item.part || "").toLowerCase() === part
-    && item.counts_toward_total !== false
-    && !isP1IntroTurn(item)
+    && turnCountsTowardProgress(item)
   ));
   const total = countableTurns.length;
   if (!total) return null;
@@ -1740,9 +1768,17 @@ async function fetchP1CorpusPayload(options = {}) {
     return api(`/api/p1-corpus?scope=${encodeURIComponent(scope)}`);
   }
   if (!state.p1Corpus.loadingPromise) {
-    state.p1Corpus.loadingPromise = api(`/api/p1-corpus?${questionBankScopeQuery()}`).finally(() => {
-      state.p1Corpus.loadingPromise = null;
-    });
+    // Stamp the generation at issue-time so applyP1CorpusPayload can detect a
+    // snapshot that predates a save and refuse to clobber newer local state.
+    const fetchSeq = state.p1Corpus.mutationSeq;
+    state.p1Corpus.loadingPromise = api(`/api/p1-corpus?${questionBankScopeQuery()}`)
+      .then((payload) => {
+        if (payload && typeof payload === "object") payload.__fetchSeq = fetchSeq;
+        return payload;
+      })
+      .finally(() => {
+        state.p1Corpus.loadingPromise = null;
+      });
   }
   return state.p1Corpus.loadingPromise;
 }
@@ -1758,6 +1794,18 @@ async function fetchP2CorpusPayload(options = {}) {
 }
 
 function applyP1CorpusPayload(payload) {
+  // Guard against a stale GET clobbering freshly-saved topics. If a save/clear
+  // bumped mutationSeq after this request was issued, the payload is a pre-save
+  // snapshot — discard it and refetch the current server state instead. The
+  // loadingPromise was invalidated on save, so the refetch hits the network.
+  if (
+    payload &&
+    typeof payload.__fetchSeq === "number" &&
+    payload.__fetchSeq < state.p1Corpus.mutationSeq
+  ) {
+    fetchP1CorpusPayload().then(applyP1CorpusPayload).catch(() => null);
+    return;
+  }
   corpusTakeawayController?.hydrateP1CorpusClearedIds?.();
   state.p1Corpus.topics = payload.topics || [];
   for (const topic of state.p1Corpus.topics) {
@@ -1908,13 +1956,28 @@ function rememberAuthSource(candidate) {
   state.account.fromView = authSourceView(candidate);
 }
 
-function setWritingActionPanelCollapsed(collapsed) {
+function storedWritingActionPanelCollapsed() {
+  try {
+    return localStorage.getItem(WRITING_ACTION_PANEL_COLLAPSED_STORAGE_KEY) === "1";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function setWritingActionPanelCollapsed(collapsed, { persist = false } = {}) {
   const panel = $("writingActionPanel");
   const toggle = $("writingActionPanelToggle");
   if (!panel || !toggle) return;
   panel.classList.toggle("is-collapsed", collapsed);
   toggle.setAttribute("aria-expanded", String(!collapsed));
   toggle.setAttribute("aria-label", collapsed ? "展开评分操作" : "折叠评分操作");
+  if (persist) {
+    try {
+      localStorage.setItem(WRITING_ACTION_PANEL_COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
+    } catch (_error) {
+      // Preference persistence is best-effort when browser storage is unavailable.
+    }
+  }
 }
 
 function switchView(view, options = {}) {
@@ -2016,6 +2079,9 @@ function switchView(view, options = {}) {
   $("#historyPanel").classList.toggle("hidden", view !== "history");
   $("#writingPanel")?.classList.toggle("hidden", view !== "writing");
   $("#writingReportsPanel")?.classList.toggle("hidden", view !== "writingReports");
+  // The report-manager button only lives on the two report pages.
+  if (view !== "history" && view !== "writingReports") closeReportManager();
+  $("#reportManagerBtn")?.classList.toggle("hidden", view !== "history" && view !== "writingReports");
   $("#loginPanel")?.classList.toggle("hidden", view !== "login");
   $("#authRequiredPanel")?.classList.toggle("hidden", true);
   $("#registerPanel")?.classList.toggle("hidden", view !== "register");
@@ -2044,8 +2110,13 @@ function switchView(view, options = {}) {
   }
   if (view === "spellingDrill") loadSpellingDrill({ force: false, resetQueue: true });
   if (view === "writing") {
-    setWritingActionPanelCollapsed(false);
+    setWritingActionPanelCollapsed(storedWritingActionPanelCollapsed());
     renderWritingSurface();
+    // Warm the saved-frame (myframe) cache the moment the composer opens, so a
+    // later /frame fills instantly from memory instead of stalling on a fetch.
+    // applyWritingFrame still awaits this same promise, so there's no
+    // default-then-myframe swap — it fills the final template in one shot.
+    loadWritingFrameTemplates().catch(() => {});
     requestAnimationFrame(() => {
       if (state.view === "writing") {
         loadWriting().catch(showWritingError);
@@ -2073,7 +2144,15 @@ function switchView(view, options = {}) {
     closeP3CorpusPeek();
     updateP3CorpusPeekButton(null);
   }
-  if (view === "p3") syncP3LaunchPanel();
+  if (view !== "p1" && view !== "p3" && view !== "mock") {
+    closeFollowUpSourcePeek();
+    updateFollowUpSourcePeekButton(null);
+  }
+  if (view === "p3") {
+    syncP3LaunchPanel();
+    // Warm the P2 corpus the moment P3 opens so the first "浏览题卡" pops instantly.
+    ensureP2CorpusLoaded().catch(() => {});
+  }
   $("#examStatusText")?.classList.remove("hidden");
   $("#exitPractice")?.classList.toggle("hidden", !state.practiceLocked || !isPracticeView(view));
   updateAgentAssistantVisibility(view);
@@ -2215,6 +2294,7 @@ function applyRouteState(route) {
   if (route.speakingReportId) state.activeHistoryId = route.speakingReportId;
   if (route.writingReportId) state.writing.activeReportId = route.writingReportId;
   if (isKnownWritingTaskType(route.writingTask)) state.writing.taskType = route.writingTask;
+  if (route.p2CueId) state.p2Corpus.pinnedCueId = route.p2CueId;
   state.writing.requestedPromptId = route.writingPromptId || "";
   state.writing.requestedEntryId = route.writingEntryId || "";
 }
@@ -2240,7 +2320,7 @@ function openCorpusWindow(view) {
 
 function closeCorpusWindowOrReturn() {
   if (!$("p1CorpusDialog")?.classList.contains("hidden")) {
-    saveAndCloseP1CorpusEditor().catch(() => null);
+    saveAndCloseP1CorpusEditor({ restoreTopic: false }).catch(() => null);
   }
   if (!$("p2CorpusDialog")?.classList.contains("hidden")) {
     saveAndCloseP2CorpusEditor().catch(() => null);
@@ -2401,9 +2481,11 @@ function resetPracticeSurface() {
   closeP1CorpusPeek();
   closeP2CorpusPeek();
   closeP3CorpusPeek();
+  closeFollowUpSourcePeek();
   updateP1CorpusPeekButton(null);
   updateP2CorpusPeekButton(null);
   updateP3CorpusPeekButton(null);
+  updateFollowUpSourcePeekButton(null);
   state.practiceLocked = false;
   state.status = "idle";
   state.attempt = null;
@@ -2416,6 +2498,7 @@ function resetPracticeSurface() {
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();
   state.speaking.examinerTtsRefreshPromises.clear();
+  state.speaking.examinerTtsPrefetched.clear();
   clearExaminerAudioPreloads();
   const summaryPanel = $("#summaryPanel");
   const isPracticeMode = isPracticeView(state.view);
@@ -2563,6 +2646,103 @@ function promptSize(question) {
   return "long";
 }
 
+// Pixel-brain shown under the question card while a P1/P3 pressure-mode follow-up
+// streams in. Reuses the shared .tk-brain-* art; the .follow-up-mascot context
+// drives its behaviour (scratch loop → on success, bulb + balloon fly-off).
+function followUpMascotSvg() {
+  return `
+    <svg class="tk-brain-icon" viewBox="0 0 32 32" focusable="false">
+      <g class="tk-brain-cloud">
+        <path class="tk-brain-cloud-puff" d="M27.3,-5 H35.7 Q37,-5 37,-3.7 V0.2 Q37,1.5 35.7,1.5 H30.6 L26.6,3.3 L27.3,1.5 Q26,1.5 26,0.2 V-3.7 Q26,-5 27.3,-5 Z"/>
+        <g class="tk-brain-cloud-dots">
+          <circle cx="28.8" cy="-1.75" r="1.1"/>
+          <circle cx="31.5" cy="-1.75" r="1.1"/>
+          <circle cx="34.2" cy="-1.75" r="1.1"/>
+        </g>
+      </g>
+      <g class="tk-brain-bulb">
+        <line class="tk-brain-bulb-ray" x1="32" y1="-4.6" x2="32" y2="-6.2"/>
+        <line class="tk-brain-bulb-ray" x1="27.9" y1="-2.6" x2="26.6" y2="-3.7"/>
+        <line class="tk-brain-bulb-ray" x1="36.1" y1="-2.6" x2="37.4" y2="-3.7"/>
+        <circle class="tk-brain-bulb-glass" cx="32" cy="-1" r="3.5"/>
+        <rect class="tk-brain-bulb-base" x="30.2" y="1.8" width="3.6" height="2"/>
+      </g>
+      <rect class="tk-brain-limb" x="12.55" y="20" width="1.7" height="3.4"/>
+      <rect class="tk-brain-limb" x="11.85" y="22.8" width="3.1" height="1.6"/>
+      <rect class="tk-brain-limb" x="17.75" y="20" width="1.7" height="3.4"/>
+      <rect class="tk-brain-limb" x="17.05" y="22.8" width="3.1" height="1.6"/>
+      <path class="tk-brain-limb-stroke" d="M7.5,12.5 Q4.6,15.2 4,19.4"/>
+      <rect class="tk-brain-hand" x="2.6" y="18.6" width="2.7" height="2.7"/>
+      <path class="tk-brain-body" d="M10,6 H22 V8 H24 V10 H26 V16 H24 V18 H22 V20 H10 V18 H8 V16 H6 V10 H8 V8 H10 Z"/>
+      <path class="tk-brain-fold" d="M16,8 V18 M10.5,10 H13.5 M18.5,10 H21.5 M10,16 H13 M19,16 H22"/>
+      <rect class="tk-brain-eye" x="12" y="12.4" width="2" height="2"/>
+      <rect class="tk-brain-eye" x="18" y="12.4" width="2" height="2"/>
+      <g class="tk-brain-balloon">
+        <path class="tk-brain-balloon-string" d="M28,-1.9 C30.2,1 24.6,3.6 26.4,6.4"/>
+        <g class="tk-brain-balloon-bob">
+          <ellipse class="tk-brain-balloon-body" cx="28" cy="-6.6" rx="3.4" ry="3.9"/>
+          <path class="tk-brain-balloon-knot" d="M27.2,-3 L28.8,-3 L28,-1.5 Z"/>
+        </g>
+      </g>
+      <g class="tk-brain-arm-think">
+        <path class="tk-brain-limb-stroke" d="M24,13 C28.6,12 28.8,4.8 22,5"/>
+        <g class="tk-brain-hand-right"><rect class="tk-brain-hand" x="20" y="2.9" width="3" height="3"/></g>
+      </g>
+      <g class="tk-brain-arm-idea">
+        <path class="tk-brain-limb-stroke" d="M24,13 C27.2,11.2 27.6,6.5 26,5.2"/>
+        <rect class="tk-brain-hand" x="24.8" y="3.6" width="2.8" height="2.8"/>
+      </g>
+      <g class="tk-brain-arm-hold">
+        <path class="tk-brain-limb-stroke" d="M24,13 C28.4,11.6 28.8,7 26.4,6"/>
+        <rect class="tk-brain-hand" x="24.9" y="4.9" width="3" height="3"/>
+      </g>
+    </svg>`;
+}
+
+function showFollowUpThinkingMascot(turnId) {
+  const id = String(turnId || "");
+  const existing = document.getElementById("followUpMascot");
+  if (existing && existing.dataset.turnId === id && existing.dataset.state === "thinking") return;
+  if (existing) existing.remove();
+  const card = document.getElementById("promptCard");
+  if (!card) return;
+  const el = document.createElement("div");
+  el.id = "followUpMascot";
+  el.className = "follow-up-mascot";
+  el.setAttribute("aria-hidden", "true");
+  el.dataset.turnId = id;
+  el.dataset.state = "thinking";
+  el.innerHTML = followUpMascotSvg();
+  const palette = ["#fb7185", "#f59e0b", "#34d399", "#38bdf8", "#a78bfa", "#f472b6", "#facc15", "#4ade80", "#fb923c"];
+  el.style.setProperty("--tk-balloon-color", palette[Math.floor(Math.random() * palette.length)]);
+  card.appendChild(el);
+}
+
+// Success beat: light the bulb, grab a balloon and float up out of frame, then
+// remove the element. No-op unless a brain is currently in its thinking loop.
+function resolveFollowUpThinkingMascot() {
+  const el = document.getElementById("followUpMascot");
+  if (!el || el.dataset.state !== "thinking") return;
+  el.dataset.state = "resolving";
+  el.classList.add("is-resolving");
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+  if (reduceMotion) { el.remove(); return; }
+  let done = false;
+  const finish = () => { if (done) return; done = true; el.remove(); };
+  const icon = el.querySelector(".tk-brain-icon");
+  const onEnd = (event) => {
+    if (event.animationName !== "fuFlyAway") return;
+    icon.removeEventListener("animationend", onEnd);
+    finish();
+  };
+  icon?.addEventListener("animationend", onEnd);
+  window.setTimeout(finish, 1900); // safety net if animationend never fires
+}
+
+function hideFollowUpThinkingMascot() {
+  document.getElementById("followUpMascot")?.remove();
+}
+
 async function startPractice() {
   if (state.status === "loading" || state.practiceLocked) return;
   // A background analysis (e.g. a P3 report still scoring) must NOT block
@@ -2665,6 +2845,9 @@ async function startPractice() {
     $("#summaryPanel").classList.add("hidden");
     renderTurn(state.currentTurn);
     beginExaminerPhase(sessionId);
+    // Warm the whole section's examiner audio in the background right away so later
+    // questions never wait, no matter how fast the learner answers.
+    prefetchAllMainExaminerTts(attempt);
   } catch (error) {
     if (error?.name === "AbortError" || state.startRequestId !== requestId || state.practiceSessionId !== sessionId) return;
     state.practiceLocked = false;
@@ -2708,8 +2891,10 @@ function renderTurn(turn) {
   updateP1CorpusPeekButton(turn);
   updateP2CorpusPeekButton(turn);
   updateP3CorpusPeekButton(turn);
+  updateFollowUpSourcePeekButton(turn);
   renderExaminerAudio(turn);
   if (isP2 && turn.cue_card) {
+    hideFollowUpThinkingMascot();
     renderCueCardInPrompt(turn.cue_card);
     renderP2CorpusPrepPanel({
       sessionId: state.practiceSessionId,
@@ -2719,15 +2904,21 @@ function renderTurn(turn) {
   }
   $("p2CorpusPrepPanel")?.classList.add("hidden");
   if (isStreamFollowUpFailed(turn)) {
+    hideFollowUpThinkingMascot();
     setPromptHtml('<span class="prompt-followup-tag">Follow-up question</span><p>追问生成失败。点击下方按钮重新生成，不会重开整场练习。</p>', "short");
     text("recordStatus", "追问生成失败，可以重新生成。");
     return;
   }
   if (isWaitingForStreamedFollowUpText(turn)) {
+    showFollowUpThinkingMascot(turn.id);
     setPromptHtml('<span class="prompt-followup-tag">Follow-up question</span><p>正在生成追问...</p>', "short");
     text("recordStatus", "正在生成追问...");
     return;
   }
+  // Question arrived: a follow-up that was thinking flies off in celebration;
+  // anything else just clears any stray mascot.
+  if (isFollowUp) resolveFollowUpThinkingMascot();
+  else hideFollowUpThinkingMascot();
   setPromptHtml(`${isFollowUp ? '<span class="prompt-followup-tag">Follow-up question</span>' : ""}<p>${escapeHtml(turn.question)}</p>`, promptSize(turn.question));
 }
 
@@ -2938,6 +3129,149 @@ function exposeExaminerAudioDiagnostics() {
   return window.__ieltsExaminerAudio;
 }
 
+// A single-flight gate for background examiner-TTS warm-up requests.
+//
+// Each warm request is a GET that makes the server synthesize a clip — slow (~1s)
+// and it holds a browser HTTP connection the whole time. Firing the whole section's
+// worth at once (the old prefetchAllMainExaminerTts) saturates the browser's ~6
+// per-host connections, so the CURRENT question's own audio file GET queues behind a
+// dozen synthesis calls and the learner stares at "正在准备考官音频" for seconds (and,
+// if it stalls past the load timeout, gets no sound at all). Verified in-browser:
+// the same cached clip loads in ~0.3s alone but took ~2.6s while 12 warm requests ran.
+//
+// The backend already warms every turn server-side (off the browser entirely), so the
+// frontend only needs to nudge persistence. Running these one-at-a-time leaves the
+// other connections free for the audio the learner is actually waiting on. We also
+// hold warming entirely while an examiner clip is mid-load, so nothing competes with
+// the question currently being prepared.
+const examinerPrefetchGate = { active: 0, max: 1, queue: [] };
+
+function examinerAudioIsLoading() {
+  return state.activeExaminerAudioPlayer?.status === "loading";
+}
+
+function runExaminerPrefetch(task) {
+  examinerPrefetchGate.queue.push(task);
+  drainExaminerPrefetchGate();
+}
+
+function drainExaminerPrefetchGate() {
+  if (examinerPrefetchGate.active >= examinerPrefetchGate.max) return;
+  // Never warm in the background while the current question's audio is still
+  // loading — that is exactly the moment the connections must stay free.
+  if (examinerAudioIsLoading()) {
+    window.setTimeout(drainExaminerPrefetchGate, 250);
+    return;
+  }
+  const task = examinerPrefetchGate.queue.shift();
+  if (!task) return;
+  examinerPrefetchGate.active += 1;
+  Promise.resolve()
+    .then(task)
+    .catch(() => null)
+    .finally(() => {
+      examinerPrefetchGate.active -= 1;
+      drainExaminerPrefetchGate();
+    });
+}
+
+// Warm the examiner audio for the upcoming main question(s) in the background while
+// the learner is still hearing/answering the current one. examiner_tts_status
+// synthesizes and caches the clip on a single GET, so by the time the next turn
+// becomes active the server returns the cached audio instantly — no more waiting on
+// "生成 TTS 之前的预处理" before every P1 question. Streamed AI follow-ups are skipped
+// (their text is produced live and would mismatch the warmed clip).
+function prefetchUpcomingExaminerTts(currentTurn = state.currentTurn) {
+  const attemptId = state.attempt?.id;
+  if (!attemptId || !currentTurn || !state.practiceSessionId) return;
+  const turns = state.attempt?.turns || [];
+  const idx = turns.findIndex((item) => item.id === currentTurn.id);
+  if (idx < 0) return;
+  let warmed = 0;
+  for (let i = idx + 1; i < turns.length && warmed < 3; i += 1) {
+    const next = turns[i];
+    if (!next) continue;
+    if (next.examiner_tts?.audio_url) continue;
+    if (shouldStreamFollowUpTurn(next) || next.prompt?.role === "follow_up") continue;
+    if (!hasUsableTurnQuestion(next)) continue;
+    const key = `${attemptId}:${next.id}`;
+    if (state.speaking.examinerTtsPrefetched.has(key)) continue;
+    state.speaking.examinerTtsPrefetched.add(key);
+    warmed += 1;
+    // Fire-and-forget: warm the server-side cache, then hand the ready clip to this
+    // FUTURE turn so it plays without a second round-trip when it activates.
+    //
+    // The write is a single in-place field set on one existing turn object. This is
+    // fundamentally different from the earlier bug, which did
+    // `state.attempt = mergeCompletedTurnPayload(...)` — replacing the whole attempt
+    // and turns array from a stale snapshot and thereby clobbering concurrent updates
+    // (a just-finished turn's transcript, an inserted follow-up), which is what made
+    // a later question lose its audio or get stuck. Setting one field on one object
+    // replaces no container and cannot lose other updates. We also never touch the
+    // turn that is currently playing, so an out-of-band resolve can't disturb it.
+    //
+    // Routed through the single-flight gate so this background synthesis never steals
+    // the connection the current question's audio is loading on.
+    runExaminerPrefetch(() =>
+      api(`/api/attempts/${encodeURIComponent(attemptId)}/turns/${encodeURIComponent(next.id)}/examiner-tts`)
+        .then((payload) => {
+          const readyTts = payload?.examiner_tts;
+          if (
+            readyTts?.audio_url
+            && next.id !== state.currentTurn?.id
+            && !next.examiner_tts?.audio_url
+          ) {
+            next.examiner_tts = readyTts;
+            traceExaminerAudio("prefetch:next-warmed", { turnId: next.id });
+          }
+        })
+        .catch(() => {
+          // Let a later on-demand activation retry if the warm-up failed.
+          state.speaking.examinerTtsPrefetched.delete(key);
+        }));
+  }
+}
+
+// Warm EVERY known main question's examiner audio up front, the moment the section
+// starts. The per-turn prefetch above only warms 1-2 turns ahead and is paced by how
+// far the learner has got — so a learner who answers quickly outruns it and still
+// waits. Warming the whole set at session start (while they're hearing the fixed
+// first question) means each turn's audio is already synthesized AND persisted into
+// its metadata, so the server's `next_turn` payload after every answer already
+// carries audio_url — no per-question wait regardless of answer speed. Live follow-ups
+// are skipped (their text is generated on the fly and cannot be pre-synthesized).
+function prefetchAllMainExaminerTts(attempt = state.attempt) {
+  const attemptId = attempt?.id;
+  if (!attemptId || !state.practiceSessionId) return;
+  for (const turn of attempt.turns || []) {
+    if (!turn) continue;
+    if (turn.examiner_tts?.audio_url) continue;
+    if (shouldStreamFollowUpTurn(turn) || turn.prompt?.role === "follow_up") continue;
+    if (!hasUsableTurnQuestion(turn)) continue;
+    const key = `${attemptId}:${turn.id}`;
+    if (state.speaking.examinerTtsPrefetched.has(key)) continue;
+    state.speaking.examinerTtsPrefetched.add(key);
+    // One-at-a-time through the gate: the whole section is queued but only a single
+    // warm request is ever in flight, so the connection pool stays free for the audio
+    // the learner is currently waiting on. The backend also warms all turns server-side
+    // in parallel, so this queue is just a persistence nudge, not the critical path.
+    runExaminerPrefetch(() =>
+      api(`/api/attempts/${encodeURIComponent(attemptId)}/turns/${encodeURIComponent(turn.id)}/examiner-tts`)
+        .then((payload) => {
+          const readyTts = payload?.examiner_tts;
+          // Same safe in-place hint as the per-turn prefetch: set one field on one
+          // existing turn object; never replace state.attempt or the turns array, and
+          // never touch the turn that is currently playing.
+          if (readyTts?.audio_url && turn.id !== state.currentTurn?.id && !turn.examiner_tts?.audio_url) {
+            turn.examiner_tts = readyTts;
+          }
+        })
+        .catch(() => {
+          state.speaking.examinerTtsPrefetched.delete(key);
+        }));
+  }
+}
+
 function renderExaminerAudio(turn) {
   const tts = turn.examiner_tts || {};
   $("browserTtsFallback")?.classList.add("hidden");
@@ -2946,6 +3280,7 @@ function renderExaminerAudio(turn) {
       url: tts.audio_url,
       ttsStatus: tts.status || "",
     });
+    prefetchUpcomingExaminerTts(turn);
   } else if (
     isPendingExaminerTts(tts)
     && !shouldStreamFollowUpTurn(turn)
@@ -4255,6 +4590,38 @@ function turnAnswerIsEmpty(turn) {
   return !String(turn?.transcript_cleaned || turn?.transcript_raw || "").trim();
 }
 
+// The "original question" (题干) a follow-up was adapted from. Used by the
+// follow-up hint button so learners can re-read the source question.
+function followUpSourceQuestionText(turn = state.currentTurn) {
+  if (turn?.prompt?.role !== "follow_up") return "";
+  const source = sourceTurnForStreamedFollowUp(state.attempt, turn);
+  return String(source?.question || "").trim();
+}
+
+function updateFollowUpSourcePeekButton(turn = state.currentTurn) {
+  const button = $("peekFollowUpSourceBtn");
+  if (!button) return;
+  const visible = turn?.prompt?.role === "follow_up" && Boolean(followUpSourceQuestionText(turn));
+  button.classList.toggle("hidden", !visible);
+  button.classList.toggle("has-corpus", visible);
+  button.title = visible ? "查看这道追问的原始题目" : "没有可显示的原始题目";
+}
+
+function openFollowUpSourcePeek() {
+  const question = followUpSourceQuestionText();
+  const body = $("followUpSourcePeekBody");
+  if (body) {
+    body.innerHTML = question
+      ? `<section class="p2-corpus-peek-section"><div><p>${escapeHtml(question)}</p></div></section>`
+      : `<section class="p2-corpus-peek-section"><p class="muted">没有可显示的原始题目。</p></section>`;
+  }
+  $("followUpSourcePeekDialog")?.classList.remove("hidden");
+}
+
+function closeFollowUpSourcePeek() {
+  $("followUpSourcePeekDialog")?.classList.add("hidden");
+}
+
 function parseSseEventBlock(block) {
   const dataLines = String(block || "")
     .split("\n")
@@ -5146,6 +5513,7 @@ async function scoreAttempt() {
     if (isCurrentAttempt) state.attempt = scored;
     state.historyDetailCache.set(scored.id, scored);
     await loadHistory(false);
+    invalidateP3BankPracticeProgress(scored);
     if (isCurrentAttempt) state.status = "summary";
     if (isCurrentAttempt && isPracticeView(state.view)) {
       setRecordButton("summary", "Start Again", "Record another section.");
@@ -5246,6 +5614,16 @@ async function refreshWalletAfterAiUsage() {
   }
 }
 
+function invalidateP3BankPracticeProgress(attempt) {
+  const cueId = String(attempt?.p3_bank_cue_id || attempt?.p3_plan?.p3_bank_cue_id || "").trim();
+  if (!cueId) return;
+  state.p2Corpus.loaded = false;
+  state.p2Corpus.loadingPromise = null;
+  loadP2Corpus({ force: true }).catch(() => {
+    // The next picker open retries if this background refresh fails.
+  });
+}
+
 function startSpeakingScorePolling(taskId, attemptId) {
   if (!taskId) return;
   clearSpeakingScorePolling();
@@ -5275,6 +5653,7 @@ function startSpeakingScorePolling(taskId, attemptId) {
         }
         state.historyDetailCache.set(attempt.id, attempt);
         await loadHistory(false);
+        invalidateP3BankPracticeProgress(attempt);
         showSpeakingScoreCompleteModal(attempt);
         return;
       }
@@ -5994,12 +6373,16 @@ function renderHistoryList(items, options = {}) {
     const part = (item.mode || item.part || "").toLowerCase();
     const tagClass = isSpeakingPartView(part) ? part : "";
     const toneClass = part === "mock" ? "tone-mock" : `tone-${tagClass || "neutral"}`;
+    const isFailed = item.report_status === "failed";
+    const isScoring = isFailed && isSpeakingReportRegenInFlight(item.id);
+    const bandClass = isFailed ? (isScoring ? " is-scoring" : " is-unscored") : "";
+    const bandText = isFailed ? (isScoring ? "评分中" : "未评分") : `Band ${escapeHtml(item.overall_band ?? "—")}`;
     return `
     <div class="history-item-wrap">
       <button class="history-item ${toneClass} ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
         <div class="history-item-top">
           <span class="history-item-tag ${tagClass}">${escapeHtml(part.toUpperCase())}</span>
-          <span class="history-item-band">Band ${escapeHtml(item.overall_band ?? "—")}</span>
+          <span class="history-item-band${bandClass}">${bandText}</span>
         </div>
         <strong class="history-item-title">${escapeHtml(item.title || item.question || "Untitled")}</strong>
         <small class="history-item-time">${escapeHtml(formatReportTime(item.display_time || item.timestamp || ""))}</small>
@@ -6045,7 +6428,12 @@ function renderHistoryList(items, options = {}) {
     list.querySelector(".history-item")?.classList.add("active");
     syncUrlForCurrentState({ replace: true });
   }
-  requestAnimationFrame(() => updateReportRailState("historyList"));
+  requestAnimationFrame(() => {
+    const activeCard = Array.from(list.querySelectorAll(".history-item"))
+      .find((item) => item.dataset.attemptId === state.activeHistoryId);
+    activeCard?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    updateReportRailState("historyList");
+  });
   prefetchVisibleHistoryDetails(visibleItems);
   if (refreshActive && state.activeHistoryId) {
     const cached = state.historyDetailCache.get(state.activeHistoryId);
@@ -6113,6 +6501,224 @@ function showConfirmDelete(message, onConfirm) {
     } catch (error) {
       showError(error);
     }
+  });
+}
+
+// ── Report manager: a single dialog (reachable from the avatar-area button) for
+// filtering and batch-deleting both speaking and writing reports. It reuses the
+// same data (state.historyItems / state.writing.reportEntries) and delete
+// endpoints as the report pages, then refreshes those pages after a delete. ──
+const reportManagerState = {
+  tab: "speaking",
+  speakingFilter: "all",
+  writingFilter: "all",
+  selected: { speaking: new Set(), writing: new Set() },
+  anchorId: null, // last single-clicked row, used as the range anchor for shift-click
+};
+
+function reportManagerFilterItems() {
+  if (reportManagerState.tab === "speaking") {
+    const filter = reportManagerState.speakingFilter;
+    if (filter === "all") return state.historyItems;
+    return state.historyItems.filter((item) => speakingReportPart(item) === filter);
+  }
+  const filter = reportManagerState.writingFilter;
+  const items = state.writing.reportEntries;
+  if (filter === "all") return items;
+  if (filter === "scored") return items.filter((item) => writingReportScored(item));
+  if (filter === "unscored") return items.filter((item) => !writingReportScored(item));
+  return items.filter((item) => writingReportPart(item) === filter);
+}
+
+function reportManagerItemFields(item) {
+  if (reportManagerState.tab === "speaking") {
+    const part = String(item.mode || item.part || "").toUpperCase();
+    const isFailed = item.report_status === "failed";
+    const isScoring = isFailed && isSpeakingReportRegenInFlight(item.id);
+    return {
+      id: item.id,
+      tag: part || "—",
+      title: item.title || item.question || "Untitled",
+      time: formatReportTime(item.display_time || item.timestamp || ""),
+      band: isFailed ? (isScoring ? "评分中" : "未评分") : `Band ${item.overall_band ?? "—"}`,
+      unscored: isFailed && !isScoring,
+      scoring: isScoring,
+    };
+  }
+  return {
+    id: item.id,
+    tag: item.task_type === "task1_academic" ? "T1" : "T2",
+    title: writingEntryDisplayTitle(item) || writingTaskLabel(item.task_type),
+    time: `${item.display_time || item.practice_date || ""}${item.word_count != null ? ` · ${item.word_count} 词` : ""}`,
+    band: item.overall_band != null ? `Band ${item.overall_band}` : "未评分",
+    unscored: item.overall_band == null,
+  };
+}
+
+async function openReportManager() {
+  const dialog = $("reportManagerDialog");
+  if (!dialog) return;
+  // The manager is scoped to the report page it was opened from — speaking
+  // history vs. writing reports — with no in-dialog switching between them.
+  reportManagerState.tab = state.view === "writingReports" ? "writing" : "speaking";
+  reportManagerState.anchorId = null;
+  reportManagerState.selected.speaking.clear();
+  reportManagerState.selected.writing.clear();
+  dialog.classList.remove("hidden");
+  $("reportManagerBtn")?.classList.add("hidden"); // don't show the trigger over the dialog
+  renderReportManager();
+  await Promise.all([
+    api("/api/history").then((p) => { state.historyItems = p.items || []; }).catch(() => {}),
+    api("/api/writing/reports").then((p) => { state.writing.reportEntries = p.items || []; }).catch(() => {}),
+  ]);
+  if (!dialog.classList.contains("hidden")) renderReportManager();
+}
+
+function closeReportManager() {
+  $("reportManagerDialog")?.classList.add("hidden");
+  // Restore the trigger when back on a report page.
+  $("reportManagerBtn")?.classList.toggle("hidden", state.view !== "history" && state.view !== "writingReports");
+}
+
+function renderReportManager() {
+  const isSpeaking = reportManagerState.tab === "speaking";
+  text("reportManagerTitle", isSpeaking ? "口语报告管理" : "写作报告管理");
+  const filtersWrap = $("reportManagerFilters");
+  if (filtersWrap) {
+    const filters = isSpeaking ? ["all", "p1", "p2", "p3", "mock"] : ["all", "t1", "t2", "scored", "unscored"];
+    const labels = isSpeaking ? SPEAKING_REPORT_FILTER_LABELS : WRITING_REPORT_FILTER_LABELS;
+    const active = isSpeaking ? reportManagerState.speakingFilter : reportManagerState.writingFilter;
+    filtersWrap.innerHTML = filters.map((f) =>
+      `<button type="button" class="report-manager-filter ${f === active ? "active" : ""}" data-rm-filter="${f}">${escapeHtml(labels[f] || f)}</button>`
+    ).join("");
+  }
+  const list = $("reportManagerList");
+  const items = reportManagerFilterItems();
+  const selected = reportManagerState.selected[reportManagerState.tab];
+  if (list) {
+    list.innerHTML = items.length
+      ? items.map((item) => {
+          const f = reportManagerItemFields(item);
+          const checked = selected.has(f.id);
+          const isAnchor = f.id === reportManagerState.anchorId;
+          return `
+            <div class="report-manager-item ${checked ? "is-selected" : ""}${isAnchor ? " is-anchor" : ""}" role="checkbox" aria-checked="${checked ? "true" : "false"}" data-rm-item="${escapeHtml(f.id)}">
+              <input type="checkbox" tabindex="-1" aria-hidden="true" ${checked ? "checked" : ""}>
+              <span class="report-manager-item-tag">${escapeHtml(f.tag)}</span>
+              <span class="report-manager-item-main">
+                <strong>${escapeHtml(f.title)}</strong>
+                <small>${escapeHtml(f.time)}</small>
+              </span>
+              <span class="report-manager-item-band${f.unscored ? " is-unscored" : ""}${f.scoring ? " is-scoring" : ""}">${escapeHtml(f.band)}</span>
+            </div>`;
+        }).join("")
+      : `<p class="report-manager-empty muted">这个筛选下还没有报告。</p>`;
+  }
+  syncReportManagerControls();
+}
+
+function syncReportManagerControls() {
+  const items = reportManagerFilterItems();
+  const selected = reportManagerState.selected[reportManagerState.tab];
+  text("reportManagerCount", `已选 ${selected.size} 项`);
+  const deleteBtn = $("reportManagerDeleteBtn");
+  if (deleteBtn) deleteBtn.disabled = selected.size === 0;
+  const selectAll = $("reportManagerSelectAll");
+  if (selectAll) {
+    const ids = items.map((item) => item.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
+    selectAll.checked = allSelected;
+    selectAll.indeterminate = !allSelected && ids.some((id) => selected.has(id));
+  }
+}
+
+function setReportManagerFilter(filter) {
+  if (reportManagerState.tab === "speaking") {
+    if (!SPEAKING_REPORT_FILTERS.has(filter)) return;
+    reportManagerState.speakingFilter = filter;
+  } else {
+    if (!WRITING_REPORT_FILTERS.has(filter)) return;
+    reportManagerState.writingFilter = filter;
+  }
+  renderReportManager();
+}
+
+function reportManagerItemClicked(id, shiftKey) {
+  const selected = reportManagerState.selected[reportManagerState.tab];
+  const ids = reportManagerFilterItems().map((item) => item.id);
+  const idx = ids.indexOf(id);
+  if (idx === -1) return;
+  const anchorIdx = reportManagerState.anchorId != null ? ids.indexOf(reportManagerState.anchorId) : -1;
+  if (shiftKey && anchorIdx !== -1) {
+    // Range-select from the anchor to this row, additively: rows already
+    // selected outside the range stay selected (never deselect on shift-click).
+    const lo = Math.min(anchorIdx, idx);
+    const hi = Math.max(anchorIdx, idx);
+    for (let i = lo; i <= hi; i += 1) selected.add(ids[i]);
+  } else if (selected.has(id)) {
+    // Plain click on a selected row clears it; if it was the anchor, drop the
+    // anchor too so the marker never sits on a blank row.
+    selected.delete(id);
+    if (reportManagerState.anchorId === id) reportManagerState.anchorId = null;
+  } else {
+    // Blank → selected: this row becomes the new range anchor and gets marked.
+    selected.add(id);
+    reportManagerState.anchorId = id;
+  }
+  renderReportManager();
+}
+
+function toggleReportManagerSelectAll(on) {
+  const selected = reportManagerState.selected[reportManagerState.tab];
+  const ids = reportManagerFilterItems().map((item) => item.id);
+  if (on) ids.forEach((id) => selected.add(id));
+  else ids.forEach((id) => selected.delete(id));
+  renderReportManager();
+}
+
+function reportManagerBatchDelete() {
+  const tab = reportManagerState.tab;
+  const selected = reportManagerState.selected[tab];
+  const ids = Array.from(selected);
+  if (!ids.length) return;
+  const isSpeaking = tab === "speaking";
+  const kind = isSpeaking ? "口语" : "写作";
+  showConfirmDelete(`确定删除选中的 ${ids.length} 份${kind}报告吗？此操作不可恢复。`, async () => {
+    const deleteBtn = $("reportManagerDeleteBtn");
+    const restoreLabel = deleteBtn?.textContent;
+    if (deleteBtn) { deleteBtn.disabled = true; deleteBtn.textContent = "删除中…"; }
+    const succeeded = [];
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        const path = isSpeaking
+          ? `/api/history/${encodeURIComponent(id)}`
+          : `/api/writing/entries/${encodeURIComponent(id)}`;
+        await api(path, null, { method: "DELETE" });
+        succeeded.push(id);
+      } catch {
+        failed += 1;
+      }
+    }
+    const okSet = new Set(succeeded);
+    succeeded.forEach((id) => selected.delete(id));
+    if (isSpeaking) {
+      state.historyItems = state.historyItems.filter((item) => !okSet.has(item.id));
+      succeeded.forEach((id) => state.historyDetailCache.delete(id));
+      if (okSet.has(state.activeHistoryId)) state.activeHistoryId = null;
+      renderHistoryList(state.historyItems);
+    } else {
+      state.writing.reportEntries = state.writing.reportEntries.filter((item) => !okSet.has(item.id));
+      succeeded.forEach((id) => state.writing.reportDetailCache?.delete?.(id));
+      if (okSet.has(state.writing.activeReportId)) {
+        state.writing.activeReportId = null;
+        state.writing.activeReportDetail = null;
+      }
+      renderWritingReports(state.writing.reportEntries).catch(() => {});
+    }
+    if (deleteBtn && restoreLabel != null) deleteBtn.textContent = restoreLabel;
+    renderReportManager();
+    if (failed) showError(new Error(`有 ${failed} 份报告删除失败，请稍后重试。`));
   });
 }
 
@@ -6748,31 +7354,31 @@ function writingFrameFor(taskType, frameType) {
   return writingFrameCustomForKey(key) || writingFrameDefaultFor(taskType, frameType);
 }
 
-function applyWritingFrame() {
+async function applyWritingFrame() {
   const answer = $("writingAnswer");
   if (!answer) return;
   const { taskType, frameType } = currentWritingFrameKey();
-  loadWritingFrameTemplates().then(() => {
-    const latest = writingFrameFor(taskType, frameType);
-    if (answer.value === frame + "\n\n") {
-      answer.value = latest + "\n\n";
-      answer.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-  }).catch(() => null);
-  const frame = writingFrameFor(taskType, frameType);
   const existing = answer.value.trim();
-  // Only auto-fill when empty or value is exactly a slash command — never overwrite real work.
-  if (existing && !/^\/(frame|myframe)\b/i.test(existing)) {
+  const isSlashCommand = /^\/(frame|myframe)\b/i.test(existing);
+  if (existing && !isSlashCommand) {
     const ok = window.confirm("已有作文内容，确定要替换为框架模板吗？");
     if (!ok) { answer.focus(); return; }
   }
+  const valueBeforeLoad = answer.value;
+  if (isSlashCommand) answer.value = "";
+  await loadWritingFrameTemplates().catch(() => null);
+  if (isSlashCommand) {
+    if (answer.value.trim()) return;
+  } else if (answer.value !== valueBeforeLoad) {
+    return;
+  }
+  const frame = writingFrameFor(taskType, frameType);
   answer.value = frame + "\n\n";
   state.writing.autosaveFrameBaselineText = answer.value;
   state.writing.autosaveFrameBaselineWordCount = writingWordCountForValue(answer.value);
   state.writing.autosaveEnabled = false;
   state.writing.autosaveQueued = false;
   clearWritingAutosaveTimer();
-  // Move caret to end and notify the rest of the app
   answer.focus();
   answer.setSelectionRange(answer.value.length, answer.value.length);
   answer.dispatchEvent(new Event("input", { bubbles: true }));
@@ -6799,40 +7405,31 @@ async function openWritingFrameEditor() {
     const label = `${writingTaskLabel(taskType)}${typeLabel ? " · " + typeLabel : ""}`;
     sub.textContent = `当前类型：${label}（保存的框架仅作用于这一种固定问法/图表类型）`;
   }
-  // Show the modal immediately with the locally known frame so the first open
-  // has no perceived delay; template sync + migration then run in the
-  // background and only refresh the editor if the user hasn't started editing.
   const editor = $("writingFrameEditor");
   const status = $("writingFrameSaveStatus");
-  const initialFrame = writingFrameFor(taskType, frameType);
+  let syncFailed = false;
+  let migrated = false;
+  try {
+    await loadWritingFrameTemplates();
+    migrated = await migrateLocalWritingFrameToServer(key);
+  } catch (_error) {
+    syncFailed = true;
+  }
+  const frame = writingFrameFor(taskType, frameType);
   if (editor) {
-    editor.value = initialFrame;
+    editor.value = frame;
     if (editor.dataset) editor.dataset.frameKey = key;
   }
-  if (status) status.textContent = "";
+  if (status) {
+    status.classList.toggle("error", syncFailed);
+    status.textContent = syncFailed
+      ? "本机框架可用，但同步到账户失败；保存前请确认已登录。"
+      : migrated ? "已同步本机旧框架" : "";
+    if (migrated && !syncFailed) setTimeout(() => { if (status) status.textContent = ""; }, 1800);
+  }
   $("writingFrameModal")?.classList.remove("hidden");
   document.body.classList.add("modal-open");
   setTimeout(() => editor?.focus(), 50);
-  try {
-    await loadWritingFrameTemplates();
-    const migrated = await migrateLocalWritingFrameToServer(key);
-    if (migrated && status) {
-      status.textContent = "已同步本机旧框架";
-      status.classList.remove("error");
-      setTimeout(() => { if (status) status.textContent = ""; }, 1800);
-    }
-    // Refresh only if this modal is still on the same key and untouched.
-    if (editor && editor.dataset?.frameKey === key && editor.value === initialFrame) {
-      const refreshed = writingFrameFor(taskType, frameType);
-      if (refreshed !== initialFrame) editor.value = refreshed;
-    }
-  } catch (error) {
-    // LocalStorage remains a fallback if the user is offline or the session expires.
-    if (status) {
-      status.textContent = "本机有旧框架，但同步到账号失败；保存前请确认已登录。";
-      status.classList.add("error");
-    }
-  }
 }
 
 function closeWritingFrameEditor() {
@@ -6920,11 +7517,11 @@ function handleWritingFrameSlashCommand() {
   const answer = $("writingAnswer");
   if (!answer) return false;
   const v = answer.value.trim().toLowerCase();
-  if (v === "/frame") { applyWritingFrame(); return true; }
+  if (v === "/frame") { applyWritingFrame().catch(showError); return true; }
   if (v === "/myframe") {
     answer.value = "";
     answer.dispatchEvent(new Event("input", { bubbles: true }));
-    openWritingFrameEditor();
+    openWritingFrameEditor().catch(showError);
     return true;
   }
   return false;
@@ -8401,6 +8998,12 @@ function handleGlobalKeydown(event) {
   } else if (!$("p3CorpusPeekDialog")?.classList.contains("hidden")) {
     event.preventDefault();
     closeP3CorpusPeek();
+  } else if (!$("followUpSourcePeekDialog")?.classList.contains("hidden")) {
+    event.preventDefault();
+    closeFollowUpSourcePeek();
+  } else if (!$("reportManagerDialog")?.classList.contains("hidden")) {
+    event.preventDefault();
+    closeReportManager();
   } else if (!$("p2CorpusDialog")?.classList.contains("hidden")) {
     event.preventDefault();
     saveAndCloseP2CorpusEditor();
@@ -8675,6 +9278,9 @@ function closeSpeakingScoreCompleteModal() {
 function openSpeakingScoreCompleteReport() {
   const attempt = state.speaking.scoreCompletionModalAttempt;
   if (!attempt?.id) return closeSpeakingScoreCompleteModal();
+  const attemptPart = speakingReportPart(attempt);
+  const reportPart = SPEAKING_REPORT_FILTERS.has(attemptPart) ? attemptPart : "all";
+  state.speakingReportFilter = reportPart;
   state.activeHistoryId = attempt.id;
   state.historyDetailCache.set(attempt.id, attempt);
   closeSpeakingScoreCompleteModal();
@@ -9136,6 +9742,26 @@ function renderDetail(attempt, updateView = true, options = {}) {
   const previousScrollTop = detailPanel?.scrollTop || 0;
   state.activeHistoryId = attempt.id;
   syncUrlForCurrentState({ replace: Boolean(options.replaceUrl) });
+  if (attempt.report_status === "failed") {
+    // A regen already in flight for this attempt → show 加载中 instead of the
+    // failed card (handles switching away and back without losing the state).
+    if (isSpeakingReportRegenInFlight(attempt.id)) {
+      detailPanel.innerHTML = speakingReportRegenLoadingHtml(attempt);
+      if (preserveScroll) detailPanel.scrollTop = previousScrollTop;
+      else detailPanel.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    detailPanel.innerHTML = failedSpeakingReportHtml(attempt);
+    detailPanel.querySelector("[data-regenerate-report]")?.addEventListener("click", (event) => {
+      regenerateSpeakingReport(event.currentTarget);
+    });
+    if (preserveScroll) {
+      detailPanel.scrollTop = previousScrollTop;
+    } else {
+      detailPanel.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return;
+  }
   const score = attempt.ielts_score || {};
   const turns = attempt.turns || [];
   const visibleTurns = turns.filter(shouldRenderReportTurn);
@@ -9203,6 +9829,263 @@ function renderDetail(attempt, updateView = true, options = {}) {
   } else {
     detailPanel.scrollTo({ top: 0, behavior: "smooth" });
   }
+}
+
+function failedSpeakingReportHtml(attempt) {
+  const part = String(attempt.mode || attempt.part || "").toUpperCase();
+  const turns = Array.isArray(attempt.turns) ? attempt.turns : [];
+  const answered = turns.filter((turn) => String(turn.transcript_cleaned || turn.transcript_raw || "").trim());
+  const errorText = attempt.report_error || "AI 评分服务暂时没有返回报告。点「重新生成报告」重试，不会重开整场练习。";
+  const transcriptList = answered.length
+    ? answered.map((turn, index) => `
+        <article class="speaking-failed-turn">
+          <h4>Q${index + 1}${turn.question ? ` · ${escapeHtml(turn.question)}` : ""}</h4>
+          <p>${escapeHtml(String(turn.transcript_cleaned || turn.transcript_raw || "")).replace(/\n/g, "<br>")}</p>
+        </article>`).join("")
+    : `<p class="muted">这次练习没有保存到可用的文字稿。</p>`;
+  return `
+    <div class="detail-card writing-saved-report-card speaking-failed-report-card" data-attempt-id="${escapeHtml(attempt.id || "")}">
+      <div class="writing-saved-report-head">
+        <div>
+          <span class="section-label">IELTS Speaking 估分</span>
+          <h2>${escapeHtml(attempt.title || `${part} report`)}</h2>
+          <p>${escapeHtml(part)} · ${answered.length} question${answered.length === 1 ? "" : "s"} · ${escapeHtml(attempt.display_time || "")}</p>
+        </div>
+        <strong><span>Report</span>未评分</strong>
+      </div>
+      <div class="writing-saved-report-body writing-draft-summary">
+        <section class="writing-draft-primary">
+          <span>评分失败</span>
+          <h3>AI 没有生成这份报告</h3>
+          <p>${escapeHtml(errorText)}</p>
+        </section>
+        <section>
+          <span>辅导内容</span>
+          <h3>暂无</h3>
+          <p>报告生成成功后，这里会显示逐题点评、Band 7 范例和复盘重点。</p>
+        </section>
+      </div>
+      <div class="writing-saved-report-actions">
+        <button type="button" class="primary writing-report-edit-btn" data-regenerate-report="${escapeHtml(attempt.id || "")}">重新生成报告</button>
+      </div>
+    </div>
+    <div class="detail-card speaking-failed-answers-card">
+      <div class="writing-saved-answer-head">
+        <h3>你的回答</h3>
+        <span>${answered.length} 段</span>
+      </div>
+      ${transcriptList}
+    </div>
+  `;
+}
+
+// ── Resilient speaking report regeneration ──────────────────────────────────
+// The report is scored by a server-side background ai_task, so a regen survives
+// view switches and page refreshes: we persist the attempt id, poll the task on
+// a state timer (never bailing on view change), repaint the card as 加载中 while
+// it runs, and pop the completion modal when it lands — exactly like the initial
+// analysis flow.
+function persistSpeakingReportRegen(attemptId) {
+  try {
+    if (attemptId) localStorage.setItem(SPEAKING_REPORT_REGEN_STORAGE_KEY, String(attemptId));
+    else localStorage.removeItem(SPEAKING_REPORT_REGEN_STORAGE_KEY);
+  } catch (_error) {
+    // best-effort; private mode may block storage
+  }
+}
+
+function readSpeakingReportRegenStorage() {
+  try {
+    return localStorage.getItem(SPEAKING_REPORT_REGEN_STORAGE_KEY) || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function clearSpeakingReportRegenPoll() {
+  if (state.speaking.reportRegenPollTimer) {
+    clearTimeout(state.speaking.reportRegenPollTimer);
+    state.speaking.reportRegenPollTimer = null;
+  }
+}
+
+function isSpeakingReportRegenInFlight(attemptId) {
+  return Boolean(attemptId && state.speaking.reportRegen?.attemptId === attemptId);
+}
+
+// Repaint the report list surfaces (left rail + report-manager dialog) so a card
+// being regenerated flips between 未评分 and 评分中 as the regen starts/ends.
+// refreshActive:false keeps the detail panel untouched — the regen loading view
+// (or finished report) owns it.
+function rerenderSpeakingReportLists() {
+  if (state.historyItems?.length && $("historyList")) {
+    renderHistoryList(state.historyItems, { refreshActive: false });
+  }
+  const manager = $("reportManagerDialog");
+  if (manager && !manager.classList.contains("hidden") && reportManagerState.tab === "speaking") {
+    renderReportManager();
+  }
+}
+
+function regenerateSpeakingReport(button) {
+  const attemptId = button?.dataset?.regenerateReport || state.activeHistoryId || "";
+  if (!attemptId) return;
+  if (isSpeakingReportRegenInFlight(attemptId)) return; // already running
+  startSpeakingReportRegen(attemptId);
+}
+
+async function startSpeakingReportRegen(attemptId) {
+  if (!attemptId) return;
+  state.speaking.reportRegen = { attemptId, taskId: "" };
+  persistSpeakingReportRegen(attemptId);
+  if (state.activeHistoryId === attemptId) renderSpeakingReportRegenLoading(attemptId);
+  rerenderSpeakingReportLists(); // flip the list card to 评分中 immediately
+  try {
+    const scored = await api(`/api/attempts/${encodeURIComponent(attemptId)}/score`, {});
+    if (!isSpeakingReportRegenInFlight(attemptId)) return; // superseded/cleared
+    const task = scored.ai_task || null;
+    if (isSpeakingTaskActive(task)) {
+      state.speaking.reportRegen = { attemptId, taskId: task.id };
+      pollSpeakingReportRegen(task.id, attemptId);
+      return;
+    }
+    // Already terminal (e.g. resume after the task finished): succeeded → finish,
+    // otherwise treat as a failure.
+    if (task && isSpeakingTaskTerminal(task) && task.status !== "succeeded") {
+      failSpeakingReportRegen(attemptId, new Error(speakingTaskStatusText(task)));
+      return;
+    }
+    await finishSpeakingReportRegen(attemptId, task?.result_payload?.attempt || scored || null);
+  } catch (error) {
+    failSpeakingReportRegen(attemptId, error);
+  }
+}
+
+function pollSpeakingReportRegen(taskId, attemptId) {
+  clearSpeakingReportRegenPoll();
+  const poll = async () => {
+    try {
+      const task = await api(`/api/ai/tasks/${encodeURIComponent(taskId)}`);
+      if (state.speaking.reportRegen?.taskId !== taskId) return; // superseded/cancelled
+      if (isSpeakingTaskActive(task)) {
+        state.speaking.reportRegenPollTimer = setTimeout(poll, 2500);
+        return;
+      }
+      if (task?.status === "succeeded") {
+        await finishSpeakingReportRegen(attemptId, task?.result_payload?.attempt || null);
+      } else {
+        failSpeakingReportRegen(attemptId, new Error(speakingTaskStatusText(task)));
+      }
+    } catch (_error) {
+      // Network blip — keep watching; the task runs server-side regardless.
+      if (state.speaking.reportRegen?.taskId !== taskId) return;
+      state.speaking.reportRegenPollTimer = setTimeout(poll, 3500);
+    }
+  };
+  poll();
+}
+
+async function finishSpeakingReportRegen(attemptId, attemptPayload = null) {
+  clearSpeakingReportRegenPoll();
+  state.speaking.reportRegen = null;
+  persistSpeakingReportRegen("");
+  await refreshWalletAfterAiUsage().catch(() => null);
+  let detail = attemptPayload && attemptPayload.id ? attemptPayload : null;
+  if (!detail || !detail.ielts_score) {
+    state.historyDetailCache.delete(attemptId);
+    try {
+      detail = await api(`/api/history/${encodeURIComponent(attemptId)}`);
+    } catch (_error) {
+      detail = detail || null;
+    }
+  }
+  if (detail?.id) state.historyDetailCache.set(detail.id, detail);
+  await loadHistory(false).catch(() => null);
+  rerenderSpeakingReportLists(); // refresh report-manager dialog too (loadHistory only repaints the rail)
+  if (detail?.id && state.activeHistoryId === attemptId) renderDetail(detail, false, { preserveScroll: true });
+  if (detail?.id && detail.report_status !== "failed") {
+    showSpeakingScoreCompleteModal(detail);
+  } else {
+    // The retry produced no usable report — repaint the failed card and notify.
+    if (state.activeHistoryId === attemptId && detail?.id) renderDetail(detail, false, { preserveScroll: true });
+    alert("重新生成报告仍未成功，可能是额度用尽或网络波动。稍后可以再点「重新生成报告」。");
+  }
+}
+
+function failSpeakingReportRegen(attemptId, error) {
+  clearSpeakingReportRegenPoll();
+  state.speaking.reportRegen = null;
+  persistSpeakingReportRegen("");
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (error?.status === 401) { showError(error); return; }
+  // Repaint the failed card so the 重新生成报告 button comes back.
+  const cached = state.historyDetailCache.get(attemptId);
+  if (cached && state.activeHistoryId === attemptId) renderDetail(cached, false, { preserveScroll: true });
+  rerenderSpeakingReportLists(); // flip the list card back to 未评分
+
+  alert(message || "重新生成报告失败，可能是额度用尽或网络波动，请稍后重试。");
+}
+
+function speakingReportRegenLoadingHtml(attempt) {
+  const part = String(attempt.mode || attempt.part || "").toUpperCase();
+  const turns = Array.isArray(attempt.turns) ? attempt.turns : [];
+  const answered = turns.filter((turn) => String(turn.transcript_cleaned || turn.transcript_raw || "").trim());
+  const transcriptList = answered.length
+    ? answered.map((turn, index) => `
+        <article class="speaking-failed-turn">
+          <h4>Q${index + 1}${turn.question ? ` · ${escapeHtml(turn.question)}` : ""}</h4>
+          <p>${escapeHtml(String(turn.transcript_cleaned || turn.transcript_raw || "")).replace(/\n/g, "<br>")}</p>
+        </article>`).join("")
+    : `<p class="muted">这次练习没有保存到可用的文字稿。</p>`;
+  return `
+    <div class="detail-card writing-saved-report-card speaking-failed-report-card speaking-report-regen-card" data-attempt-id="${escapeHtml(attempt.id || "")}">
+      <div class="writing-saved-report-head">
+        <div>
+          <span class="section-label">IELTS Speaking 估分</span>
+          <h2>${escapeHtml(attempt.title || `${part} report`)}</h2>
+          <p>${escapeHtml(part)} · ${answered.length} question${answered.length === 1 ? "" : "s"} · ${escapeHtml(attempt.display_time || "")}</p>
+        </div>
+        <strong><span>Report</span><span class="speaking-report-regen-chip">加载中</span></strong>
+      </div>
+      <div class="writing-saved-report-body writing-draft-summary">
+        <section class="writing-draft-primary">
+          <span>正在重新生成</span>
+          <h3><span class="spinner" aria-hidden="true"></span>AI 正在重新生成报告</h3>
+          <p>任务已经在后台运行，可以切换页面或刷新——完成后会自动更新并弹窗通知，不会重开整场练习。</p>
+        </section>
+        <section>
+          <span>辅导内容</span>
+          <h3>生成中…</h3>
+          <p>报告生成成功后，这里会显示逐题点评、Band 7 范例和复盘重点。</p>
+        </section>
+      </div>
+    </div>
+    <div class="detail-card speaking-failed-answers-card">
+      <div class="writing-saved-answer-head">
+        <h3>你的回答</h3>
+        <span>${answered.length} 段</span>
+      </div>
+      ${transcriptList}
+    </div>
+  `;
+}
+
+function renderSpeakingReportRegenLoading(attemptId) {
+  if (state.activeHistoryId !== attemptId) return;
+  const detailPanel = $("detailPanel");
+  if (!detailPanel) return;
+  const attempt = state.historyDetailCache.get(attemptId) || { id: attemptId };
+  const previousScrollTop = detailPanel.scrollTop || 0;
+  detailPanel.innerHTML = speakingReportRegenLoadingHtml(attempt);
+  detailPanel.scrollTop = previousScrollTop;
+}
+
+async function resumeSpeakingReportRegenFromStorage() {
+  if (!state.account?.authenticated) return;
+  const attemptId = readSpeakingReportRegenStorage();
+  if (!attemptId) return;
+  if (isSpeakingReportRegenInFlight(attemptId)) return;
+  startSpeakingReportRegen(attemptId).catch(() => {});
 }
 
 async function regenerateTurnFeedback(button) {
@@ -9561,6 +10444,10 @@ function renderP1CorpusTopics(...args) {
   return corpusTakeawayController.renderP1CorpusTopics(...args);
 }
 
+function openP1TopicCardModal(...args) {
+  return corpusTakeawayController.openP1TopicCardModal(...args);
+}
+
 function findP1CorpusEntry(...args) {
   return corpusTakeawayController.findP1CorpusEntry(...args);
 }
@@ -9701,11 +10588,20 @@ function p3BankCardPreviewHtml(entry) {
   const title = p2BankCardTitle(entry);
   const followUps = p2BankCardFollowUps(entry);
   const bullets = (entry.bullets || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const roundCount = Math.max(0, Number(entry.practice_round_count) || 0);
+  const completedRoundCount = Math.min(roundCount, Math.max(0, Number(entry.practice_completed_round_count) || 0));
+  const isComplete = Boolean(entry.practice_is_complete) && roundCount > 0;
+  const progressClass = isComplete
+    ? " p3-bank-picker-card--complete"
+    : (completedRoundCount > 0 ? " p3-bank-picker-card--partial" : "");
+  const progressLabel = isComplete
+    ? "已完成"
+    : (completedRoundCount > 0 ? `已练 ${completedRoundCount}/${roundCount}` : `${followUps.length} 追问题`);
   return `
-    <article class="p3-bank-picker-card${p2BankQuestionId(entry) === state.p3SelectedBankCardId ? " active" : ""}" tabindex="0" role="button" data-p3-bank-card="${escapeHtml(p2BankQuestionId(entry))}">
+    <article class="p3-bank-picker-card${progressClass}${p2BankQuestionId(entry) === state.p3SelectedBankCardId ? " active" : ""}" tabindex="0" role="button" data-p3-bank-card="${escapeHtml(p2BankQuestionId(entry))}">
       <div class="p3-bank-card-top">
         <span>${escapeHtml(entry.label || entry.category || "P2")}</span>
-        <em>${escapeHtml(followUps.length)} 追问题</em>
+        <em>${escapeHtml(progressLabel)}</em>
       </div>
       <strong>${escapeHtml(title)}</strong>
       ${bullets ? `<ul>${bullets}</ul>` : ""}
@@ -9730,9 +10626,19 @@ function p3SelectedBankCardHtml(entry) {
 }
 
 async function renderP3BankPicker() {
-  await ensureP2CorpusLoaded();
   const list = $("#p3BankPickerList");
   if (!list) return;
+  const loaded = await ensureP2CorpusLoaded();
+  if (!loaded) {
+    // Replace the loading spinner with an error note so it never hangs.
+    list.innerHTML = `
+      <div class="p3-context-note p3-context-warning">
+        <strong>题卡加载失败</strong>
+        <span>请检查网络或登录状态后，关闭重开试试。</span>
+      </div>
+    `;
+    return;
+  }
   const cards = p3BankCardsWithFollowUps();
   if (!cards.length) {
     list.innerHTML = `
@@ -9747,8 +10653,29 @@ async function renderP3BankPicker() {
 }
 
 async function openP3BankPicker() {
-  await renderP3BankPicker();
+  const list = $("#p3BankPickerList");
+  // Pop the modal immediately. When the P2 corpus still needs a fetch, show a
+  // loading spinner so the click feels instant instead of stalling on the
+  // request, then renderP3BankPicker swaps in the cards once it resolves.
+  if (list && !state.p2Corpus.loaded) {
+    list.innerHTML = `
+      <div class="p3-bank-picker-loading" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>正在加载题卡…</span>
+      </div>
+    `;
+  }
   $("p3BankPickerModal")?.classList.remove("hidden");
+  await renderP3BankPicker();
+}
+
+function activateP3BankPickerCard(cardButton) {
+  const card = p3BankCardsWithFollowUps().find((item) => p2BankQuestionId(item) === cardButton?.dataset?.p3BankCard);
+  if (!card) return false;
+  setSelectedP3BankCard(card);
+  closeP3BankPicker();
+  generateP3Plan().catch(showError);
+  return true;
 }
 
 function closeP3BankPicker() {
@@ -9939,10 +10866,6 @@ function interruptTakeawaySpeechPlayback(...args) {
 
 function setTakeawaySpeechStatus(...args) {
   return corpusTakeawayController.setTakeawaySpeechStatus(...args);
-}
-
-function remindTakeawayReviewGate(kind) {
-  return setTakeawayReviewToast(kind, "先用 A / D 记录当前这张，再看下一条。", { render: true });
 }
 
 function selectTakeawayReviewEntry(...args) {
@@ -10321,6 +11244,10 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const modelAudioControl = modelAudio.audio_url
     ? `<audio controls preload="none" src="${escapeHtml(modelAudio.audio_url)}"></audio>`
     : "";
+  const isPreparedWorkStudyIntro = isP1WorkStudyIdentityTurn(turn);
+  const band7Cell = isPreparedWorkStudyIntro
+    ? '<p class="muted work-study-expression-reminder">请准备好你自己的表达</p>'
+    : `${modelAudioControl}${modelAnswerHtml(turn, band7Markdown)}`;
   const corpusTarget = corpusTargetForTurn(turn, attempt);
   const corpusButton = corpusTarget
     ? `<button type="button" class="ghost corpus-edit-button"
@@ -10357,8 +11284,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
           ${corpusButton ? `<div class="question-cell-actions p2-report-actions">${corpusButton}</div>` : ""}
         </td>
         <td>
-          ${modelAudioControl}
-          ${modelAnswerHtml(turn, band7Markdown)}
+          ${band7Cell}
         </td>
       </tr>
       ${shouldRenderTurnCoaching(turn) ? `<tr class="p2-coaching-row">
@@ -10379,8 +11305,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
         ${reportRecordingCellInner(attemptId, turn)}
       </td>
       <td>
-        ${modelAudioControl}
-        ${modelAnswerHtml(turn, band7Markdown)}
+        ${band7Cell}
       </td>
     </tr>
     ${coachingRow}
@@ -10407,6 +11332,7 @@ function stopAllRuntime(label = "Ready") {
   state.speaking.pendingTurnCompletions.clear();
   state.speaking.turnCompletionErrors.clear();
   state.speaking.examinerTtsRefreshPromises.clear();
+  state.speaking.examinerTtsPrefetched.clear();
   state.transcriptFinal = "";
   state.transcriptInterim = "";
   state.transcriptStatus = "missing";
@@ -10441,6 +11367,15 @@ async function exitPractice() {
   state.startAbortController?.abort();
   state.startAbortController = null;
   stopExaminerPlayback("exit-practice");
+  // Tear down the peek popup + lightbulb buttons right away so the red-X feels
+  // instant; otherwise they linger until the abort round-trip (and the full
+  // resetPracticeSurface below) completes.
+  closeP1CorpusPeek();
+  closeP2CorpusPeek();
+  closeP3CorpusPeek();
+  updateP1CorpusPeekButton(null);
+  updateP2CorpusPeekButton(null);
+  updateP3CorpusPeekButton(null);
   let exitSessionId = state.practiceSessionId;
   if (state.status === "recording") {
     state.abortingAttemptId = attemptId || "__loading__";
@@ -10544,9 +11479,21 @@ function accountProfileNames(user) {
   };
 }
 
+const AI_SOURCE_VALUES = new Set(["gpt", "claude", "claude_haiku", "claude_cli", "claude_cli_haiku", "codex_cli"]);
+
 function normalizeAiSource(value) {
-  return String(value || "").trim() === "claude_cli" ? "claude_cli" : "gpt";
+  const v = String(value || "").trim();
+  return AI_SOURCE_VALUES.has(v) ? v : "gpt";
 }
+
+const AI_SOURCE_SAVED_LABELS = {
+  claude: "AI 评分来源已切换为 Claude Sonnet。",
+  claude_haiku: "AI 评分来源已切换为 Claude Haiku。",
+  claude_cli: "AI 评分来源已切换为 Claude CLI (Sonnet)。",
+  claude_cli_haiku: "AI 评分来源已切换为 Claude CLI (Haiku)。",
+  codex_cli: "AI 评分来源已切换为本机 Codex CLI。",
+  gpt: "AI 评分来源已切换为 GPT。",
+};
 
 function syncAiSourceControls(value) {
   const aiSource = normalizeAiSource(value);
@@ -10569,7 +11516,7 @@ async function saveAiSourcePreference(value) {
     const payload = await api("/api/accounts/me/", { report_ai_source: aiSource }, { method: "PATCH" });
     state.account.user = payload.user || state.account.user;
     applyAccountProfileForm(state.account.user);
-    renderAccountStatus(aiSource === "claude_cli" ? "AI 评分来源已切换为 Claude。" : "AI 评分来源已切换为 GPT。");
+    renderAccountStatus(AI_SOURCE_SAVED_LABELS[aiSource] || AI_SOURCE_SAVED_LABELS.gpt);
   } catch (error) {
     applyAccountProfileForm(state.account.user);
     renderAccountStatus(error.message || "AI 评分来源保存失败。", true);
@@ -11027,27 +11974,43 @@ function bindEvents() {
       }
     });
   };
-  const bindCorpusPeekDrag = (dialogId) => {
+  const bindP2DialogDrag = (dialogId) => {
     const dialog = $(dialogId);
-    const card = corpusPeekCard(dialogId);
-    const handle = dialog?.querySelector(".p1-corpus-dialog-head");
-    if (!dialog || !card || !handle) return;
-    handle.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.target.closest("button, a, input, textarea, select")) return;
+    const card = dialog?.querySelector("[data-corpus-dialog-card], .p2-corpus-peek-card");
+    if (!dialog || !card) return;
+    dialog.classList.add("is-draggable-dialog");
+    const placeCard = (left, top) => {
+      const margin = 12;
+      const rect = card.getBoundingClientRect();
+      const width = Math.min(rect.width, Math.max(1, window.innerWidth - margin * 2));
+      const height = Math.min(rect.height, Math.max(1, window.innerHeight - margin * 2));
+      const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+      const maxTop = Math.max(margin, window.innerHeight - height - margin);
+      card.style.position = "fixed";
+      card.style.left = `${Math.min(maxLeft, Math.max(margin, left))}px`;
+      card.style.top = `${Math.min(maxTop, Math.max(margin, top))}px`;
+      card.style.right = "auto";
+      card.style.bottom = "auto";
+      card.style.transform = "none";
+    };
+    dialog.addEventListener("pointerdown", (event) => {
+      const handle = event.target.closest(".p1-corpus-dialog-head, [data-p2-dialog-drag-handle]");
+      if (!handle || !card.contains(handle)) return;
+      if (event.button !== 0 || event.target.closest("button, a, input, textarea, select, label, [role='button'], .p2-corpus-title-cue-trigger")) return;
       const rect = card.getBoundingClientRect();
       corpusPeekDrag.dialogId = dialogId;
       corpusPeekDrag.dragging = true;
       corpusPeekDrag.dragOffsetX = event.clientX - rect.left;
       corpusPeekDrag.dragOffsetY = event.clientY - rect.top;
       card.classList.add("is-dragging");
-      placeCorpusPeekWindow(dialogId, rect.left, rect.top);
+      document.body.classList.add("is-dragging-p2-dialog");
+      placeCard(rect.left, rect.top);
       card.setPointerCapture?.(event.pointerId);
       event.preventDefault();
     });
     card.addEventListener("pointermove", (event) => {
       if (!corpusPeekDrag.dragging || corpusPeekDrag.dialogId !== dialogId) return;
-      placeCorpusPeekWindow(
-        dialogId,
+      placeCard(
         event.clientX - corpusPeekDrag.dragOffsetX,
         event.clientY - corpusPeekDrag.dragOffsetY
       );
@@ -11058,6 +12021,7 @@ function bindEvents() {
         corpusPeekDrag.dragging = false;
       }
       card.classList.remove("is-dragging");
+      document.body.classList.remove("is-dragging-p2-dialog");
     };
     card.addEventListener("pointerup", stopDrag);
     card.addEventListener("pointercancel", stopDrag);
@@ -11178,9 +12142,31 @@ function bindEvents() {
   $("peekP2CorpusBtn")?.addEventListener("click", openP2CorpusPeek);
   $("peekP2CorpusBodyBtn")?.addEventListener("click", openP2CorpusBodyPeek);
   $("peekP3CorpusBtn")?.addEventListener("click", () => openP3CorpusPeek().catch(showError));
+  $("peekFollowUpSourceBtn")?.addEventListener("click", openFollowUpSourcePeek);
   $("closeP1CorpusPeekBtn")?.addEventListener("click", closeP1CorpusPeek);
-  $("closeP2CorpusPeek")?.addEventListener("click", closeP2CorpusPeek);
   $("closeP3CorpusPeek")?.addEventListener("click", closeP3CorpusPeek);
+  $("closeFollowUpSourcePeek")?.addEventListener("click", closeFollowUpSourcePeek);
+  $("followUpSourcePeekDialog")?.addEventListener("click", (event) => {
+    if (event.target?.id === "followUpSourcePeekDialog") closeFollowUpSourcePeek();
+  });
+  $("reportManagerBtn")?.addEventListener("click", () => openReportManager().catch(showError));
+  $("closeReportManager")?.addEventListener("click", closeReportManager);
+  $("reportManagerDeleteBtn")?.addEventListener("click", reportManagerBatchDelete);
+  $("reportManagerDialog")?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target?.id === "reportManagerDialog") { closeReportManager(); return; }
+    const filterBtn = target?.closest?.("[data-rm-filter]");
+    if (filterBtn) { setReportManagerFilter(filterBtn.dataset.rmFilter); return; }
+    const itemEl = target?.closest?.("[data-rm-item]");
+    if (itemEl) reportManagerItemClicked(itemEl.dataset.rmItem, event.shiftKey);
+  });
+  $("reportManagerDialog")?.addEventListener("change", (event) => {
+    const target = event.target;
+    if (target?.id === "reportManagerSelectAll") toggleReportManagerSelectAll(target.checked);
+  });
+  $("p1CorpusPeekDialog")?.addEventListener("click", (event) => {
+    if (event.target?.id === "p1CorpusPeekDialog") closeP1CorpusPeek();
+  });
   $("p2CorpusPeekDialog")?.addEventListener("click", (event) => {
     if (event.target?.id === "p2CorpusPeekDialog") closeP2CorpusPeek();
   });
@@ -11197,14 +12183,21 @@ function bindEvents() {
     }
     const cardButton = event.target?.closest?.("[data-p3-bank-card]");
     if (!cardButton) return;
-    const card = p3BankCardsWithFollowUps().find((item) => p2BankQuestionId(item) === cardButton.dataset.p3BankCard);
-    if (!card) return;
-    setSelectedP3BankCard(card);
-    closeP3BankPicker();
-    generateP3Plan().catch(showError);
+    activateP3BankPickerCard(cardButton);
   });
-  bindCorpusPeekDrag("p2CorpusPeekDialog");
-  bindCorpusPeekDrag("p3CorpusPeekDialog");
+  $("p3BankPickerModal")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const cardButton = event.target?.closest?.("[data-p3-bank-card]");
+    if (!cardButton) return;
+    event.preventDefault();
+    activateP3BankPickerCard(cardButton);
+  });
+  [
+    "p2CorpusDialog",
+    "p2CorpusP3Dialog",
+    "p2BrainstormDialog",
+    "p2CorpusPeekDialog",
+  ].forEach(bindP2DialogDrag);
   window.addEventListener("resize", keepOpenCorpusPeekWindowsInBounds);
   $("openP1CorpusBtn")?.addEventListener("click", openP1CorpusLibrary);
   $("openP2CorpusBtn")?.addEventListener("click", openP2CorpusLibrary);
@@ -11224,8 +12217,13 @@ function bindEvents() {
   $("cancelTakeawayEditBtn")?.addEventListener("click", closeTakeawayEditor);
   $("p1CorpusTopics")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-p1-corpus-question]");
-    if (!button) return;
-    openP1CorpusEditor(findP1CorpusEntry(button.dataset.p1CorpusQuestion || ""));
+    if (button) {
+      openP1CorpusEditor(findP1CorpusEntry(button.dataset.p1CorpusQuestion || ""));
+      return;
+    }
+    const card = event.target.closest("[data-p1-topic-card]");
+    if (!card) return;
+    openP1TopicCardModal(card.dataset.p1TopicCard || "");
   });
   $("p2CorpusTopics")?.addEventListener("click", (event) => {
     const menuButton = event.target.closest("[data-p2-corpus-menu]");
@@ -11260,7 +12258,7 @@ function bindEvents() {
     }
     const existing = event.target.closest("[data-p2-corpus-entry]");
     if (existing) {
-      withPending(existing, () => openP2CorpusEditor(findP2CorpusEntry(existing.dataset.p2CorpusEntry || "")), { busyText: "加载中..." }).catch(showError);
+      openP2CorpusEditor(findP2CorpusEntry(existing.dataset.p2CorpusEntry || ""));
       return;
     }
     const created = event.target.closest("[data-p2-corpus-new]");
@@ -11329,7 +12327,7 @@ function bindEvents() {
     }
     const deleteButton = event.target.closest("[data-expression-replacement-delete]");
     if (deleteButton) {
-      withPending(deleteButton, () => deleteExpressionReplacement(deleteButton.dataset.expressionReplacementDelete || ""), { busyText: "删除中..." }).catch(showError);
+      deleteExpressionReplacement(deleteButton.dataset.expressionReplacementDelete || "");
     }
   });
   $("expressionReplacementDialog")?.addEventListener("keydown", (event) => {
@@ -11381,11 +12379,9 @@ function bindEvents() {
       speakLanguageTakeaway(item?.source_text || "", { kind: "language" });
       return;
     }
+    // "blocked" → a current card owns the deck (toast + scroll done in controller).
+    // "inactive" → free to reveal: clicking is only restricted while a card is current.
     if (reviewState === "blocked") return;
-    if (isTakeawayReviewActiveForKind("language")) {
-      remindTakeawayReviewGate("language");
-      return;
-    }
     revealAndSpeakLanguageTakeaway(entryId);
   });
   $("writingTakeawayList")?.addEventListener("click", (event) => {
@@ -11421,11 +12417,9 @@ function bindEvents() {
       speakLanguageTakeaway(item?.source_text || "", { kind: "writing" });
       return;
     }
+    // "blocked" → a current card owns the deck (toast + scroll done in controller).
+    // "inactive" → free to reveal: clicking is only restricted while a card is current.
     if (reviewState === "blocked") return;
-    if (isTakeawayReviewActiveForKind("writing")) {
-      remindTakeawayReviewGate("writing");
-      return;
-    }
     revealAndSpeakWritingTakeaway(entryId);
   });
   document.addEventListener("selectionchange", () => {
@@ -11953,10 +12947,10 @@ function bindEvents() {
     const panel = $("writingActionPanel");
     const toggle = $("writingActionPanelToggle");
     if (!panel || !toggle) return;
-    setWritingActionPanelCollapsed(false);
+    setWritingActionPanelCollapsed(storedWritingActionPanelCollapsed());
     toggle.addEventListener("click", () => {
       const next = !panel.classList.contains("is-collapsed");
-      setWritingActionPanelCollapsed(next);
+      setWritingActionPanelCollapsed(next, { persist: true });
     });
   })();
   const handleWritingReportEditClick = (event) => {
@@ -11984,8 +12978,8 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-frame-cmd]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (btn.dataset.frameCmd === "frame") applyWritingFrame();
-      else if (btn.dataset.frameCmd === "myframe") openWritingFrameEditor();
+      if (btn.dataset.frameCmd === "frame") applyWritingFrame().catch(showError);
+      else if (btn.dataset.frameCmd === "myframe") openWritingFrameEditor().catch(showError);
     });
   });
   $("writingFrameSaveBtn")?.addEventListener("click", saveWritingFrame);
@@ -13319,11 +14313,22 @@ async function init() {
   let savedView = urlView || "home";
   if (!isKnownView(savedView)) savedView = "home";
   switchView(savedView, { force: true, skipPersist: Boolean(urlView), skipUrl: true });
+  if (route.autoStartP2 && route.p2CueId) {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("autostart");
+    window.history.replaceState({}, "", cleanUrl);
+    window.setTimeout(() => {
+      if (state.view === "p2" && state.p2Corpus.pinnedCueId === route.p2CueId && !state.practiceLocked) {
+        startPractice().catch(showError);
+      }
+    }, 160);
+  }
   finishBootOverlay();
   scheduleAuthenticatedPrefetch();
   scheduleIdleTask(() => prefetchCorpusEditor(state.prefetch.token), 900);
   resumePendingTurnAudioUploads().catch(() => {});
   resumeSpeakingAnalysisFromStorage().catch(() => {});
+  resumeSpeakingReportRegenFromStorage().catch(() => {});
   try {
     const summary = await loadQuestionBankSummary({ force: true });
     renderNavigationBankStatus(summary);

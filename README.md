@@ -5,9 +5,10 @@
 
 ## Public Preview
 
-- Current public URL: https://jerusalem-competitors-formats-higher.trycloudflare.com
+- Current public URL: https://directly-contacting-typically-cassette.trycloudflare.com
 - Local service URL: http://127.0.0.1:8767/
 - Note: this uses a Cloudflare quick tunnel, so the URL may change if the tunnel process restarts.
+- Windows startup / NSSM / public tunnel guide: [docs/WINDOWS_STARTUP_AND_PUBLIC_ACCESS.md](docs/WINDOWS_STARTUP_AND_PUBLIC_ACCESS.md)
 <img width="2880" height="1500" alt="CleanShot 2026-06-14 at 20 19 32@2x" src="https://github.com/user-attachments/assets/790b4955-11fa-47c6-9d50-ac1dc44891ff" />
 
 ## Product Screens

@@ -47,6 +47,7 @@ if (Test-Path $StopFile) { Remove-Item $StopFile }
 # --- Launch daphne (ASGI, supports WebSocket/Channels) ---
 Write-Host "[ielts] Starting daphne on ${BindHost}:${Port} ..."
 $DjangoLog = Join-Path $RunLogs "django.log"
+$DjangoErrLog = Join-Path $RunLogs "django.err.log"
 $DjangoProc = Start-Process -FilePath $Python -ArgumentList @(
     "-m", "daphne",
     "-b", $BindHost,
@@ -54,17 +55,18 @@ $DjangoProc = Start-Process -FilePath $Python -ArgumentList @(
     "config.asgi:application"
 ) -WorkingDirectory (Join-Path $ProjectRoot "backend_django") `
   -PassThru -NoNewWindow `
-  -RedirectStandardOutput $DjangoLog -RedirectStandardError $DjangoLog
+  -RedirectStandardOutput $DjangoLog -RedirectStandardError $DjangoErrLog
 
 # --- Launch AI worker ---
 Write-Host "[ielts] Starting AI worker ..."
 $WorkerLog = Join-Path $RunLogs "worker.log"
+$WorkerErrLog = Join-Path $RunLogs "worker.err.log"
 $WorkerProc = Start-Process -FilePath $Python -ArgumentList @(
     "manage.py", "run_ai_worker",
     "--stop-file", $StopFile
 ) -WorkingDirectory (Join-Path $ProjectRoot "backend_django") `
   -PassThru -NoNewWindow `
-  -RedirectStandardOutput $WorkerLog -RedirectStandardError $WorkerLog
+  -RedirectStandardOutput $WorkerLog -RedirectStandardError $WorkerErrLog
 
 Write-Host "[ielts] Stack running."
 Write-Host "  Django  PID=$($DjangoProc.Id)  log=$DjangoLog"

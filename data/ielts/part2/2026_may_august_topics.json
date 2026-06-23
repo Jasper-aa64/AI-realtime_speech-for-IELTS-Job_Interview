@@ -149,11 +149,10 @@
       "status": "new",
       "source": "ieltsbro_local_card_ocr",
       "bullets": [
-        "1B LT S",
+        "Who he/she is",
         "When you knew him/her",
         "When he/she started to think about that",
-        "What he/she would like to do",
-        "career"
+        "What he/she would like to do"
       ],
       "rounding": "And explain why he/she would like to choose this.",
       "p3_theme": "a_person_you_know_who_would_like_to_choose_a_career_in_the_medical_field_e_g_a_d",
@@ -283,7 +282,7 @@
       ]
     },
     {
-      "title": "Describe a person who is good at learning and speaking new languages 16",
+      "title": "Describe a person who is good at learning and speaking new languages",
       "status": "new",
       "source": "ieltsbro_local_card_ocr",
       "bullets": [
@@ -367,7 +366,6 @@
       "status": "new",
       "source": "ieltsbro_pdf_2026_0604",
       "bullets": [
-        "18",
         "Where it is",
         "What it is like",
         "Why you like to visit it"
@@ -409,7 +407,6 @@
       "source": "ieltsbro_pdf_2026_0604",
       "bullets": [
         "Who the person is",
-        "19",
         "What the problem was",
         "How he/she helped you"
       ],
@@ -446,11 +443,9 @@
       "bullets": [
         "Who you sent it to",
         "What the message/email was about",
-        "Whether you finally received the reply",
-        "And explain how you felt about the experience",
-        "20"
+        "Whether you finally received the reply"
       ],
-      "rounding": "",
+      "rounding": "And explain how you felt about the experience",
       "p3_theme": "time_when_you_sent_a",
       "p3_follow_ups": [
         "In what situations do people spend a long time responding to others' messages?",
@@ -883,11 +878,9 @@
       "bullets": [
         "When it was",
         "Why you needed to use imagination",
-        "How difficult or easy it was",
-        "And explain how you felt about it",
-        "38"
+        "How difficult or easy it was"
       ],
-      "rounding": "",
+      "rounding": "And explain how you felt about it",
       "p3_theme": "time_you_needed_to_use",
       "p3_follow_ups": [
         "Do you think adults can have lots of imagination?",
@@ -965,11 +958,9 @@
       "bullets": [
         "Where it is",
         "How you know of it",
-        "What the job is",
-        "And explain why you want to do it",
-        "40"
+        "What the job is"
       ],
-      "rounding": "",
+      "rounding": "And explain why you want to do it",
       "p3_theme": "short_term_job_you_want",
       "p3_follow_ups": [
         "What short-term jobs do young people do in other countries?",
@@ -1008,8 +999,7 @@
       "bullets": [
         "What the shop's name is",
         "Where it is",
-        "How often you visit it",
-        "41"
+        "How often you visit it"
       ],
       "rounding": "And explain why you like to visit it",
       "p3_theme": "shop_store_you_enjoy_visiting",
@@ -1087,7 +1077,6 @@
       "bullets": [
         "Where it is",
         "What you will do there",
-        "45",
         "How long you will stay there"
       ],
       "rounding": "And explain why you would like to visit it",
@@ -1124,10 +1113,9 @@
       "bullets": [
         "Who he/she is",
         "What he/she does in the company",
-        "What business the company does",
-        "company"
+        "What business the company does"
       ],
-      "rounding": "And explain why you think it is a successful.",
+      "rounding": "And explain why you think it is a successful company.",
       "p3_theme": "a_person_who_works_in_a_successful_company",
       "p3_follow_ups": [
         "Do you think governments should provide financial support to companies?",

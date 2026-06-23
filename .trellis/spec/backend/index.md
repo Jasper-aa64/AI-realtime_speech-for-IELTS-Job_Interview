@@ -71,6 +71,35 @@ feedback["band7_version"] = model_payload["band7_version"]
 
 **Required**: The only fixed user-facing coaching format is the final grammar section (`语法错误纠正：...`). The AI decides the rest of the coaching structure.
 
+### Convention: Count P1 practice only after a completed report
+
+**What**: P1 scheduling history counts a question only when its attempt is
+`scored`, has a persisted `SpeakingReport`, and that turn contains a non-empty
+learner transcript. Creating an attempt, aborting, failing report generation,
+or skipping a question must not increase its practice count.
+
+**Why**: P1 selection prioritizes coverage. Counting questions when they are
+merely assigned makes abandoned and failed sessions look practised and can
+starve unseen questions.
+
+**Required**: Question selection must exhaust lower practice-count tiers before
+choosing higher-count questions. Randomness is allowed only to break ties among
+questions with the same count. The natural first question of a topic may remain
+pinned for conversational flow.
+
+**Durability**: Successful P1 AI feedback is counted from
+`SpeakingTrainingObservation`, not from the continued existence of the report or
+attempt. Deleting a report is a history-management action and must not reset the
+question scheduler. Current scored report turns may supplement legacy records that
+do not yet have observations.
+
+**Coverage rounds**: Topics with at most seven bank questions are kept whole;
+topics with eight or more are split into 3-6 question slices. Every slice may pin
+the topic opener, but no question, opener or otherwise, may advance above the
+topic's current minimum count while sibling questions remain on a lower tier.
+Combination scoring must use the questions that will actually be selected, not an
+approximation from topic-level debt.
+
 ---
 
 ## Guidelines Index
@@ -83,6 +112,7 @@ feedback["band7_version"] = model_payload["band7_version"]
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | AI task lifecycle filled |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 | [Local Stack Startup](./local-stack-startup.md) | Django/AI worker startup and liveness checks | Filled |
+| [P3 Bank Practice Progress](./p3-bank-practice-progress.md) | Stable 3-4 question rounds and report-backed completion | Active |
 
 ---
 

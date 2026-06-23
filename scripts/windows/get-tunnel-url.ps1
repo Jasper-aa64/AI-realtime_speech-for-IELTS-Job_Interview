@@ -1,14 +1,48 @@
-# 读取当前 cloudflared 隧道 URL
-$log = "$PSScriptRoot\..\..\runlogs\cloudflared.log"
-$log = (Resolve-Path $log -ErrorAction SilentlyContinue)?.Path
-if (-not $log -or -not (Test-Path $log)) {
-  Write-Host "日志文件不存在，ielts-tunnel 服务是否在运行？" -ForegroundColor Red
-  exit 1
+# Print the currently usable Cloudflare Quick Tunnel URL.
+# The log can contain stale quick-tunnel URLs after restarts, so this script
+# checks recent candidates and returns the newest one that actually responds.
+
+param(
+    [int]$RecentCandidates = 12,
+    [int]$TimeoutSeconds = 8
+)
+
+$ErrorActionPreference = "Continue"
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$LogPath = Join-Path $ProjectRoot ".runlogs\cloudflared.log"
+
+if (-not (Test-Path $LogPath)) {
+    Write-Host "cloudflared log not found: $LogPath" -ForegroundColor Red
+    exit 1
 }
-$url = (Select-String -Path $log -Pattern "https://.*\.trycloudflare\.com" | Select-Object -Last 1)?.Matches[0].Value
-if ($url) {
-  Write-Host "当前隧道 URL：" -ForegroundColor Cyan
-  Write-Host $url -ForegroundColor Green
-} else {
-  Write-Host "未找到 URL，请稍等几秒后重试（服务可能刚启动）" -ForegroundColor Yellow
+
+$urls = Select-String -Path $LogPath -Pattern "https://[^\s|]+\.trycloudflare\.com" |
+    ForEach-Object { $_.Matches[0].Value.Trim() } |
+    Select-Object -Unique |
+    Select-Object -Last $RecentCandidates
+
+if (-not $urls) {
+    Write-Host "No trycloudflare URL found in $LogPath" -ForegroundColor Yellow
+    exit 1
 }
+
+$candidates = @($urls)
+[array]::Reverse($candidates)
+
+foreach ($url in $candidates) {
+    try {
+        $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec $TimeoutSeconds
+        if ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400) {
+            Write-Host "Current usable Cloudflare Quick Tunnel URL:" -ForegroundColor Cyan
+            Write-Host $url -ForegroundColor Green
+            exit 0
+        }
+    } catch {
+        # Stale quick tunnel URLs often return 530/1033. Keep scanning older candidates.
+    }
+}
+
+Write-Host "No recent trycloudflare URL responded successfully." -ForegroundColor Red
+Write-Host "Check local service: Invoke-WebRequest http://127.0.0.1:8767/ -UseBasicParsing"
+Write-Host "Check cloudflared service: Get-Service ielts-cloudflared"
+exit 2
