@@ -1766,15 +1766,17 @@
     }
 
     async function openP1CorpusLibrary() {
-      if (!state.account.authenticated) {
-        guestGate("登录后才能保存和复用你的 P1 语料库。", "p1Corpus");
-        return;
-      }
+      // Guests may browse the library (the seeded cards render via the real
+      // path); editing/saving is gated at the edit actions below, not at entry.
       openCorpusWindow("p1Corpus");
     }
 
     async function openP1CorpusEditor(entry, options = {}) {
       if (!entry) return;
+      if (!state.account.authenticated) {
+        guestGate("登录后才能编辑和保存你的 P1 语料库。", "p1Corpus");
+        return;
+      }
       ensureCsrfToken?.().catch(() => null);
       const showReferenceAnswer = options.showReferenceAnswer === true;
       const token = ++p1CorpusEditorLoadToken;
@@ -4928,14 +4930,16 @@
     }
 
     async function openP2CorpusLibrary() {
-      if (!state.account.authenticated) {
-        guestGate("登录后才能保存和复用你的 P2 串题素材库。", "p2Corpus");
-        return;
-      }
+      // Guests may browse the library; editing/saving is gated at the edit
+      // actions below, not at entry.
       openCorpusWindow("p2Corpus");
     }
 
     function openP2CorpusEditor(entry = {}) {
+      if (!state.account.authenticated) {
+        guestGate("登录后才能编辑和保存你的 P2 串题素材库。", "p2Corpus");
+        return;
+      }
       if (isP2BankCard(entry)) {
         openP2BankCorpusEditor(entry).catch((error) => {
           text("p2CorpusSaveStatus", error.message || String(error));
@@ -5001,6 +5005,10 @@
     }
 
     async function openP2BankCorpusEditor(entry = {}) {
+      if (!state.account.authenticated) {
+        guestGate("登录后才能编辑和保存这道题卡的正文素材。", "p2Corpus");
+        return;
+      }
       const questionId = p2BankQuestionId(entry);
       if (!questionId) return;
       const token = ++p2BankCorpusLoadToken;
@@ -5212,6 +5220,10 @@
     }
 
     function openP2CorpusP3Editor(entry = {}) {
+      if (!state.account.authenticated) {
+        guestGate("登录后才能编辑 P3 追问素材。", "p2Corpus");
+        return;
+      }
       if (isP2BankCard(entry)) {
         openP2BankP3Editor(entry).catch((error) => {
           text("p2CorpusP3SaveStatus", error.message || String(error));
@@ -5344,6 +5356,10 @@
     }
 
     async function openP2BankP3Editor(entry = {}) {
+      if (!state.account.authenticated) {
+        guestGate("登录后才能编辑这道题卡的 P3 追问素材。", "p2Corpus");
+        return;
+      }
       const questionId = p2BankQuestionId(entry);
       if (!questionId) return;
       const token = ++p2BankP3LoadToken;
@@ -5562,6 +5578,10 @@
       if (practiceBtn) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        if (!state.account.authenticated) {
+          guestGate("登录后才能用这道题卡开始 P2 练习。", "p2Corpus");
+          return;
+        }
         const cueId = practiceBtn.dataset.p2BankStart || "";
         if (cueId && typeof startPractice === "function") {
           state.p2Corpus.pinnedCueId = cueId;

@@ -7431,6 +7431,10 @@ function writingFrameFor(taskType, frameType) {
 }
 
 async function applyWritingFrame() {
+  if (!state.account.authenticated) {
+    promptGuestLogin("登录后才能填充和保存你的作文框架。");
+    return;
+  }
   const answer = $("writingAnswer");
   if (!answer) return;
   const { taskType, frameType } = currentWritingFrameKey();
@@ -7468,6 +7472,10 @@ async function migrateLocalWritingFrameToServer(key) {
 }
 
 async function openWritingFrameEditor() {
+  if (!state.account.authenticated) {
+    promptGuestLogin("登录后才能定制和保存你的作文框架。");
+    return;
+  }
   const { taskType, category, promptPattern, frameType, key } = currentWritingFrameKey();
   if (!state.writing.prompt) {
     window.alert("先选一道题，才能为这类题型定制框架。");
@@ -7593,6 +7601,11 @@ function handleWritingFrameSlashCommand() {
   const answer = $("writingAnswer");
   if (!answer) return false;
   const v = answer.value.trim().toLowerCase();
+  if (v !== "/frame" && v !== "/myframe") return false;
+  if (!state.account.authenticated) {
+    promptGuestLogin("登录后才能使用作文框架。");
+    return true;
+  }
   if (v === "/frame") { applyWritingFrame().catch(showError); return true; }
   if (v === "/myframe") {
     answer.value = "";
@@ -10797,6 +10810,10 @@ async function renderP3BankPicker() {
 }
 
 async function openP3BankPicker() {
+  if (!state.account.authenticated) {
+    promptGuestLogin("登录后才能浏览 P3 题卡并生成追问。");
+    return;
+  }
   const list = $("#p3BankPickerList");
   // Pop the modal immediately. When the P2 corpus still needs a fetch, show a
   // loading spinner so the click feels instant instead of stalling on the
@@ -12478,6 +12495,19 @@ function bindEvents() {
     });
   });
   spellingDrillController.bindSpellingDrillEvents();
+  // When a corpus editor dialog closes, the report's 编辑语料库 buttons may be
+  // stale (e.g. the user just emptied a corpus). Re-query saved-status on close
+  // so the icon/label flips between 语料库已存 and 记入语料库. No-op with no report.
+  ["p1CorpusDialog", "p2CorpusDialog", "p2CorpusP3Dialog"].forEach((id) => {
+    const dialog = $(id);
+    if (!dialog || typeof MutationObserver !== "function") return;
+    let wasHidden = dialog.classList.contains("hidden");
+    new MutationObserver(() => {
+      const hidden = dialog.classList.contains("hidden");
+      if (hidden && !wasHidden) refreshReportCorpusButtonStates();
+      wasHidden = hidden;
+    }).observe(dialog, { attributes: true, attributeFilter: ["class"] });
+  });
   $("languageTakeawayHideToggle")?.addEventListener("click", toggleLanguageTakeawayHiddenMode);
   $("writingTakeawayHideToggle")?.addEventListener("click", toggleWritingTakeawayHiddenMode);
   $("addLanguageTakeawayBtn")?.addEventListener("click", () => openNewTakeawayEditor("language"));
@@ -13607,6 +13637,10 @@ function renderP3PlanPreview() {
 }
 
 async function generateP3Plan(options = {}) {
+  if (!state.account.authenticated) {
+    promptGuestLogin("登录后才能生成 P3 追问。");
+    return;
+  }
   if (state.p3PlanLoading) return;
   const previousSourceType = state.p3SourceType;
   const previousPracticeSource = state.p3PracticeSource && typeof state.p3PracticeSource === "object"

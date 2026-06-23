@@ -15854,7 +15854,9 @@ body.font-popular .record-control.recording {
   font-weight: 800;
   padding: 3px 8px;
   border-radius: 5px;
-  letter-spacing: 0.03em;
+  /* No letter-spacing: a 2-char badge ("T2") gets trailing space that shifts
+     the glyphs left of the pill's centre. */
+  letter-spacing: 0;
 }
 
 .history-item-tag.p1 {
@@ -16155,6 +16157,11 @@ body.font-popular .record-control.recording {
 .report-sample-badge {
   display: inline-block;
   margin-left: 6px;
+  /* In .history-item-top (justify-content: space-between) the sample tab has a
+     third child; without this the badge floats to the row centre and T2 is
+     shoved hard-left. margin-right:auto groups it beside T2 and pushes the band
+     to the far right, matching the 2-child (non-sample) layout. */
+  margin-right: auto;
   padding: 1px 8px;
   border-radius: 999px;
   background: color-mix(in srgb, #2563eb 12%, transparent);
