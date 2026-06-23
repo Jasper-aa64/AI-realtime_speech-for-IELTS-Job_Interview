@@ -416,6 +416,9 @@ body.font-popular .font-option.active {
   align-items: center;
   gap: 10px;
   margin-left: auto;
+  /* Nudge the avatar a little further right in every view (the per-view topbar
+     padding is 16px; this trims the effective right inset to ~8px). */
+  margin-right: -8px;
   pointer-events: auto;
   height: 44px;
   min-width: 0;
@@ -529,6 +532,388 @@ body.theme-dark .floating-agent-assistant-trigger {
 
 .avatar-settings-button:hover .user-avatar {
   box-shadow: 0 0 0 3px rgba(23, 101, 130, 0.16);
+}
+
+/* ── Report manager: floating button stacked just below the avatar, plus its
+   filter + batch-delete dialog. ── */
+.report-manager-fab {
+  position: fixed;
+  top: 56px;
+  right: 9px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-soft, rgba(15, 23, 42, 0.1));
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #475569;
+  box-shadow: var(--shadow-xs, 0 1px 3px rgba(0, 0, 0, 0.08));
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  z-index: 150;
+  transition: background var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+
+.report-manager-fab svg {
+  display: block;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.report-manager-fab:hover {
+  color: var(--accent, #0f7670);
+  border-color: rgba(15, 118, 110, 0.3);
+  background: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.12);
+}
+
+.shell.auth-shell .report-manager-fab {
+  display: none;
+}
+
+.report-manager-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(2px);
+}
+
+.report-manager-dialog.hidden {
+  display: none;
+}
+
+.report-manager-card {
+  width: min(560px, 100%);
+  /* Fixed height so the dialog doesn't jump around as the item count changes —
+     the list area below flexes and scrolls internally. */
+  height: min(86vh, 680px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, #fff);
+  border: 1px solid var(--line, rgba(15, 23, 42, 0.12));
+  border-radius: 18px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.report-manager-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line, rgba(15, 23, 42, 0.1));
+}
+
+.report-manager-kicker {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--muted, #94a3b8);
+}
+
+.report-manager-head h3 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 820;
+  color: var(--ink, #0f172a);
+}
+
+.report-manager-head button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line, rgba(15, 23, 42, 0.12));
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted, #64748b);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.report-manager-head button:hover {
+  color: var(--ink, #0f172a);
+  border-color: rgba(15, 23, 42, 0.24);
+}
+
+.report-manager-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 14px 20px 0;
+}
+
+.report-manager-tab {
+  flex: 1;
+  border: 1px solid var(--line, rgba(15, 23, 42, 0.12));
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted, #64748b);
+  font-size: 14px;
+  font-weight: 760;
+  padding: 9px 0;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast);
+}
+
+.report-manager-tab.active {
+  background: color-mix(in srgb, var(--accent, #0f7670) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent, #0f7670) 40%, transparent);
+  color: var(--accent, #0f7670);
+}
+
+.report-manager-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 20px 0;
+}
+
+.report-manager-filter {
+  border: 1px solid var(--line, rgba(15, 23, 42, 0.12));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted, #64748b);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.report-manager-filter.active {
+  background: var(--ink, #0f172a);
+  border-color: var(--ink, #0f172a);
+  color: #fff;
+}
+
+.report-manager-selectall {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px 8px;
+}
+
+.report-manager-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink, #0f172a);
+  cursor: pointer;
+}
+
+.report-manager-checkbox input,
+.report-manager-item input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent, #0f7670);
+  cursor: pointer;
+}
+
+/* The per-item checkbox is purely visual; selection is driven by clicking the
+   row, so shift-click range selection works without the native toggle racing us. */
+.report-manager-item input {
+  pointer-events: none;
+}
+
+.report-manager-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted, #94a3b8);
+}
+
+.report-manager-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-manager-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, rgba(15, 23, 42, 0.1));
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.7);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--motion-fast), background var(--motion-fast);
+}
+
+.report-manager-item:hover {
+  border-color: rgba(15, 118, 110, 0.26);
+  background: #fff;
+}
+
+.report-manager-item.is-selected {
+  border-color: color-mix(in srgb, var(--accent, #0f7670) 50%, transparent);
+  background: color-mix(in srgb, var(--accent, #0f7670) 8%, #fff);
+}
+
+/* The anchor — the row just selected from blank — gets a distinct mark so it's
+   clear which row a shift-click will range from. */
+.report-manager-item.is-anchor {
+  border-color: var(--accent, #0f7670);
+  box-shadow: inset 4px 0 0 var(--accent, #0f7670),
+    0 0 0 1px color-mix(in srgb, var(--accent, #0f7670) 30%, transparent);
+}
+
+.report-manager-item-tag {
+  flex: 0 0 auto;
+  min-width: 34px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.report-manager-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.report-manager-item-main strong {
+  font-size: 13px;
+  font-weight: 680;
+  color: var(--ink, #0f172a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-manager-item-main small {
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+}
+
+.report-manager-item-band {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink, #0f172a);
+  background: #edf2f4;
+  padding: 3px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.report-manager-item-band.is-unscored {
+  color: var(--warn, #b45309);
+  background: #fef3c7;
+}
+
+.report-manager-item-band.is-scoring {
+  color: var(--accent, #2563eb);
+  background: #dbeafe;
+  animation: report-band-scoring-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes report-band-scoring-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.report-manager-empty {
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.report-manager-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line, rgba(15, 23, 42, 0.1));
+}
+
+.report-manager-delete {
+  border: 0;
+  border-radius: 12px;
+  background: var(--danger, #dc2626);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 760;
+  padding: 10px 22px;
+  cursor: pointer;
+  transition: opacity var(--motion-fast), transform var(--motion-fast);
+}
+
+.report-manager-delete:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.report-manager-delete:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+/* ── Report manager — dark mode (rows/tags/bands had hardcoded light colours) ── */
+body.theme-dark .report-manager-head button:hover {
+  border-color: var(--dark-border-strong, rgba(148, 163, 184, 0.34));
+}
+body.theme-dark .report-manager-item {
+  background: var(--dark-surface, #14202e);
+  border-color: var(--dark-border, rgba(52, 211, 153, 0.16));
+}
+body.theme-dark .report-manager-item:hover {
+  background: var(--dark-surface-2, #1b2d41);
+  border-color: var(--dark-primary-border, rgba(52, 211, 153, 0.42));
+}
+body.theme-dark .report-manager-item.is-selected {
+  background: color-mix(in srgb, var(--accent, #34d399) 16%, var(--dark-surface, #14202e));
+  border-color: color-mix(in srgb, var(--accent, #34d399) 55%, transparent);
+}
+body.theme-dark .report-manager-item.is-anchor {
+  border-color: var(--accent, #34d399);
+  box-shadow: inset 4px 0 0 var(--accent, #34d399),
+    0 0 0 1px color-mix(in srgb, var(--accent, #34d399) 30%, transparent);
+}
+body.theme-dark .report-manager-item-tag {
+  background: var(--dark-chip-bg, rgba(96, 165, 250, 0.14));
+  color: var(--dark-chip-text, #bfdbfe);
+}
+body.theme-dark .report-manager-item-band {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--ink, #edf2f7);
+}
+body.theme-dark .report-manager-item-band.is-unscored {
+  background: color-mix(in srgb, var(--warn, #fbbf24) 18%, transparent);
+  color: var(--warn, #fbbf24);
+}
+body.theme-dark .report-manager-item-band.is-scoring {
+  background: color-mix(in srgb, #60a5fa 20%, transparent);
+  color: #93c5fd;
+}
+body.theme-dark .report-manager-filter.active {
+  background: var(--accent, #34d399);
+  border-color: var(--accent, #34d399);
+  color: #06231c;
 }
 
 html {
@@ -747,6 +1132,11 @@ body.nav-resizing .writing-topbar-actions {
 .nav-primary,
 .nav-bottom {
   display: grid;
+  /* Single column that tracks the (resizable) sidebar width. Without an explicit
+     template the implicit column is sized `auto` (= max-content), so options keep
+     their full width and overflow/clip on the right when the bar is dragged
+     narrower. minmax(0, 1fr) lets the options shrink and wrap to fit. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -756,6 +1146,7 @@ body.nav-resizing .writing-topbar-actions {
 
 .nav-top-left {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
 }
 
@@ -777,6 +1168,7 @@ body.nav-resizing .writing-topbar-actions {
 
 .nav-secondary {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 
@@ -1905,11 +2297,29 @@ h1 {
 
 .takeaway-delete-button,
 .language-takeaway-card-wrap > .corpus-menu-button {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 38px;
-  height: 38px;
+  /* Icon-only button: MUST be a square, never a rectangle. Every dimension is
+     pinned with !important so no stray min-height, asymmetric padding, or
+     auto-height rule anywhere in the cascade can stretch it tall. */
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  aspect-ratio: 1 / 1 !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  flex: 0 0 auto !important;
+  box-sizing: border-box !important;
+}
+
+/* Keep the kebab glyph proportional to the smaller square button. */
+.language-takeaway-card-wrap > .corpus-menu-button svg {
+  width: 15px !important;
+  height: 15px !important;
 }
 
 .p2-material-actions .corpus-menu-button {
@@ -2172,6 +2582,348 @@ h1 {
 
 .language-takeaway-card-wrap.is-review-due .language-takeaway-card {
   animation: takeawayDuePulse 2.2s ease-in-out infinite;
+}
+
+/* ── Thinking pixel-brain mascot on the "current" review card ──
+   Sits in the card's bottom-right and loops two acts only: scratch-think (with a
+   thought bubble) → lightbulb idea. The balloon + fly-off run once on A / D. */
+.takeaway-review-mascot {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 4;
+}
+
+.tk-brain-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.tk-brain-body {
+  fill: #f6bcca;
+  stroke: #c46d87;
+  stroke-width: 1.4;
+  stroke-linejoin: miter;
+  shape-rendering: crispEdges;
+}
+
+.tk-brain-fold {
+  fill: none;
+  stroke: #b15775;
+  stroke-width: 1.2;
+  stroke-linecap: butt;
+  opacity: 0.85;
+}
+
+.tk-brain-eye { fill: #3a2530; shape-rendering: crispEdges; }
+.tk-brain-limb,
+.tk-brain-hand { fill: #7c4f5d; shape-rendering: crispEdges; }
+
+.tk-brain-limb-stroke {
+  fill: none;
+  stroke: #7c4f5d;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tk-brain-arm-think,
+.tk-brain-arm-idea,
+.tk-brain-arm-hold,
+.tk-brain-hand-right,
+.tk-brain-cloud,
+.tk-brain-bulb,
+.tk-brain-balloon,
+.tk-brain-balloon-bob { transform-box: fill-box; }
+
+/* Shared base: hold arm + balloon hidden until a context shows them; the two
+   arms/hand/cloud/bulb get their behaviour from a context (.takeaway-review-mascot
+   loops; .follow-up-mascot scratches then resolves). */
+.tk-brain-arm-hold { opacity: 0; }
+.tk-brain-balloon { opacity: 0; transform-origin: bottom center; }
+.tk-brain-balloon-bob { transform-origin: bottom center; }
+.tk-brain-hand-right { transform-origin: bottom center; }
+.tk-brain-cloud { transform-origin: center; }
+.tk-brain-bulb { transform-origin: center bottom; }
+
+/* Takeaway review idle loop (5s): act 1 think → act 2 idea. */
+.takeaway-review-mascot .tk-brain-arm-think { animation: tkBrainArmThink 5s ease-in-out infinite; }
+.takeaway-review-mascot .tk-brain-arm-idea { animation: tkBrainArmIdea 5s ease-in-out infinite; }
+.takeaway-review-mascot .tk-brain-hand-right { animation: tkBrainScratch 5s ease-in-out infinite; }
+.takeaway-review-mascot .tk-brain-cloud { animation: tkBrainCloud 5s ease-in-out infinite; }
+.takeaway-review-mascot .tk-brain-bulb { animation: tkBrainBulb 5s ease-in-out infinite; }
+.takeaway-review-mascot .tk-brain-bulb-ray { animation: tkBrainBulbRay 5s ease-in-out infinite; }
+
+.tk-brain-cloud-puff {
+  fill: #ffffff;
+  stroke: #111827;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.tk-brain-cloud-dots circle {
+  fill: #1f2937;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tkBrainThinkDot 1.05s ease-in-out infinite;
+}
+.tk-brain-cloud-dots circle:nth-child(2) { animation-delay: 0.14s; }
+.tk-brain-cloud-dots circle:nth-child(3) { animation-delay: 0.28s; }
+
+.tk-brain-bulb-glass { fill: #fde68a; stroke: #f59e0b; stroke-width: 0.8; }
+.tk-brain-bulb-base { fill: #9ca3af; }
+.tk-brain-bulb-ray {
+  stroke: #f59e0b;
+  stroke-width: 0.9;
+  stroke-linecap: round;
+}
+
+.tk-brain-balloon-body {
+  fill: var(--tk-balloon-color, #22c55e);
+  stroke: rgba(0, 0, 0, 0.16);
+  stroke-width: 0.5;
+}
+.tk-brain-balloon-knot { fill: color-mix(in srgb, var(--tk-balloon-color, #22c55e) 82%, #000); }
+.tk-brain-balloon-string {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 0.7;
+  stroke-linecap: round;
+}
+
+@keyframes tkBrainArmThink {
+  0%, 44% { opacity: 1; }
+  48% { opacity: 0; }
+  95% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes tkBrainArmIdea {
+  0%, 48% { opacity: 0; }
+  52% { opacity: 1; }
+  95% { opacity: 1; }
+  99% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@keyframes tkBrainScratch {
+  0% { transform: rotate(0deg); }
+  6% { transform: rotate(16deg); }
+  12% { transform: rotate(-12deg); }
+  18% { transform: rotate(16deg); }
+  24% { transform: rotate(-12deg); }
+  30% { transform: rotate(14deg); }
+  36% { transform: rotate(-10deg); }
+  42% { transform: rotate(6deg); }
+  46%, 100% { transform: rotate(0deg); }
+}
+
+@keyframes tkBrainThinkDot {
+  0%, 55%, 100% { transform: translateY(0); }
+  28% { transform: translateY(-1.5px); }
+}
+
+@keyframes tkBrainCloud {
+  0% { opacity: 0; transform: scale(0.3) translateY(3px); }
+  8% { opacity: 1; transform: scale(1.06) translateY(0); }
+  12% { transform: scale(1); }
+  40% { opacity: 1; transform: scale(1); }
+  46% { opacity: 0; transform: scale(0.5) translateY(-2px); }
+  100% { opacity: 0; transform: scale(0.3); }
+}
+
+@keyframes tkBrainBulb {
+  0%, 50% { opacity: 0; transform: scale(0.2) translateY(3px); }
+  56% { opacity: 1; transform: scale(1.3) translateY(0); }
+  60% { transform: scale(0.92); }
+  64% { transform: scale(1.08); }
+  68% { transform: scale(1); }
+  92% { opacity: 1; transform: scale(1); }
+  97% { opacity: 0; transform: scale(0.7) translateY(-3px); }
+  100% { opacity: 0; transform: scale(0.2); }
+}
+
+@keyframes tkBrainBulbRay {
+  0%, 54% { opacity: 0; }
+  58% { opacity: 1; }
+  62% { opacity: 0.3; }
+  66% { opacity: 1; }
+  92% { opacity: 0.8; }
+  96%, 100% { opacity: 0; }
+}
+
+/* One-shot fly-off on A / D: idle acts stop, the held balloon shows, the whole
+   figure floats up out of the card top and fades — no return. */
+.takeaway-review-mascot.is-flying .tk-brain-arm-think,
+.takeaway-review-mascot.is-flying .tk-brain-arm-idea,
+.takeaway-review-mascot.is-flying .tk-brain-cloud,
+.takeaway-review-mascot.is-flying .tk-brain-bulb,
+.takeaway-review-mascot.is-flying .tk-brain-bulb-ray {
+  animation: none;
+  opacity: 0;
+}
+.takeaway-review-mascot.is-flying .tk-brain-hand-right { animation: none; }
+.takeaway-review-mascot.is-flying .tk-brain-arm-hold { opacity: 1; }
+.takeaway-review-mascot.is-flying .tk-brain-balloon {
+  opacity: 1;
+  animation: tkBrainBalloonSway 1.1s ease-in-out infinite;
+}
+.takeaway-review-mascot.is-flying .tk-brain-icon {
+  animation: tkBrainFlyAway 0.9s cubic-bezier(0.45, 0, 0.7, 0.35) forwards;
+}
+.takeaway-review-mascot.is-flying-a .tk-brain-balloon-body { fill: #22c55e; }
+.takeaway-review-mascot.is-flying-a .tk-brain-balloon-knot { fill: color-mix(in srgb, #22c55e 82%, #000); }
+.takeaway-review-mascot.is-flying-d .tk-brain-balloon-body { fill: #ef4444; }
+.takeaway-review-mascot.is-flying-d .tk-brain-balloon-knot { fill: color-mix(in srgb, #ef4444 82%, #000); }
+
+@keyframes tkBrainBalloonSway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+@keyframes tkBrainFlyAway {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  10% { transform: translateY(3px) scale(1.05); opacity: 1; }
+  35% { opacity: 1; }
+  100% { transform: translateY(-175px) scale(0.92); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .takeaway-review-mascot .tk-brain-icon,
+  .takeaway-review-mascot .tk-brain-hand-right,
+  .takeaway-review-mascot .tk-brain-cloud,
+  .takeaway-review-mascot .tk-brain-cloud-dots circle,
+  .takeaway-review-mascot .tk-brain-bulb,
+  .takeaway-review-mascot .tk-brain-bulb-ray,
+  .takeaway-review-mascot .tk-brain-arm-think,
+  .takeaway-review-mascot .tk-brain-arm-idea,
+  .takeaway-review-mascot .tk-brain-arm-hold { animation: none; }
+  .takeaway-review-mascot .tk-brain-cloud,
+  .takeaway-review-mascot .tk-brain-bulb,
+  .takeaway-review-mascot .tk-brain-balloon,
+  .takeaway-review-mascot .tk-brain-arm-idea,
+  .takeaway-review-mascot .tk-brain-arm-hold { opacity: 0; }
+  .takeaway-review-mascot .tk-brain-arm-think { opacity: 1; }
+}
+
+/* ── Thinking pixel-brain under the question card while a P1/P3 pressure-mode
+   follow-up is being generated. It just scratches its head (thought bubble up)
+   until the question arrives; on success it lights the bulb, grabs a balloon and
+   floats up out of frame — no return (that turn is ready). ── */
+.follow-up-mascot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -28px;
+  margin: 0 auto;
+  width: 56px;
+  height: 56px;
+  pointer-events: none;
+  z-index: 3;
+  overflow: visible;
+  animation: fuMascotIn 0.4s ease-out;
+}
+
+.follow-up-mascot .tk-brain-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+/* Loading: keep scratching, thought bubble visible; everything else hidden. */
+.follow-up-mascot .tk-brain-arm-think { opacity: 1; }
+.follow-up-mascot .tk-brain-arm-idea,
+.follow-up-mascot .tk-brain-bulb,
+.follow-up-mascot .tk-brain-bulb-ray { opacity: 0; }
+.follow-up-mascot .tk-brain-hand-right { animation: fuScratch 1.8s ease-in-out infinite; }
+.follow-up-mascot .tk-brain-cloud { opacity: 1; animation: fuCloudBob 3s ease-in-out infinite; }
+
+/* Success: bulb pops (got it) → grab balloon → float up and gone. */
+.follow-up-mascot.is-resolving .tk-brain-hand-right { animation: none; }
+.follow-up-mascot.is-resolving .tk-brain-arm-think { animation: none; opacity: 0; }
+.follow-up-mascot.is-resolving .tk-brain-cloud { animation: none; opacity: 0; }
+.follow-up-mascot.is-resolving .tk-brain-arm-idea { animation: fuIdeaArm 0.6s ease-out forwards; }
+.follow-up-mascot.is-resolving .tk-brain-bulb { animation: fuBulbPop 0.65s ease-out forwards; }
+.follow-up-mascot.is-resolving .tk-brain-bulb-ray { animation: fuBulbRay 0.65s ease-out forwards; }
+.follow-up-mascot.is-resolving .tk-brain-arm-hold { animation: fuHoldArm 1s ease-out 0.5s forwards; }
+.follow-up-mascot.is-resolving .tk-brain-balloon { animation: fuBalloonGrab 1s ease-out 0.5s forwards; }
+.follow-up-mascot.is-resolving .tk-brain-balloon-bob { animation: tkBrainBalloonSway 1.1s ease-in-out 0.6s infinite; }
+.follow-up-mascot.is-resolving .tk-brain-icon { animation: fuFlyAway 0.95s cubic-bezier(0.45, 0, 0.7, 0.35) 0.6s forwards; }
+
+@keyframes fuMascotIn {
+  0% { opacity: 0; transform: translateY(8px) scale(0.8); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fuScratch {
+  0%, 100% { transform: rotate(-12deg); }
+  25% { transform: rotate(15deg); }
+  50% { transform: rotate(-9deg); }
+  75% { transform: rotate(15deg); }
+}
+
+@keyframes fuCloudBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.2px); }
+}
+
+@keyframes fuIdeaArm {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes fuBulbPop {
+  0% { opacity: 0; transform: scale(0.2) translateY(3px); }
+  35% { opacity: 1; transform: scale(1.3) translateY(0); }
+  50% { transform: scale(0.95); }
+  62% { transform: scale(1.06); }
+  72% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.8) translateY(-3px); }
+}
+
+@keyframes fuBulbRay {
+  0%, 18% { opacity: 0; }
+  35% { opacity: 1; }
+  50% { opacity: 0.4; }
+  65% { opacity: 1; }
+  80% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+
+@keyframes fuHoldArm {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes fuBalloonGrab {
+  0% { opacity: 0; transform: scale(0.4) translateY(3px); }
+  30% { opacity: 1; transform: scale(1.12) translateY(0); }
+  45% { transform: scale(0.98); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fuFlyAway {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  10% { transform: translateY(4px) scale(1.05); opacity: 1; }
+  35% { opacity: 1; }
+  100% { transform: translateY(-240px) scale(0.9); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .follow-up-mascot,
+  .follow-up-mascot .tk-brain-hand-right,
+  .follow-up-mascot .tk-brain-cloud,
+  .follow-up-mascot .tk-brain-cloud-dots circle { animation: none; }
 }
 
 .takeaway-review-panel-actions {
@@ -5653,6 +6405,19 @@ body.theme-dark .spelling-drill-panel {
   grid-template-columns: repeat(3, minmax(280px, 1fr));
 }
 
+/* Full-width fence between the rotating topics and the long-term retained ones. */
+.p1-topic-divider {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 0;
+  margin: 4px 0;
+  border: 0;
+  border-top: 2px dashed color-mix(in srgb, var(--ink) 22%, transparent);
+}
+body.theme-dark .p1-topic-divider {
+  border-top-color: color-mix(in srgb, var(--ink) 26%, transparent);
+}
+
 .p2-corpus-topics {
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
@@ -5870,32 +6635,31 @@ body.theme-dark .spelling-drill-panel {
   padding: 0;
   display: inline-grid;
   place-items: center;
-  border: none;
+  border: 1px solid color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 28%, var(--line));
   border-radius: 50%;
-  background: var(--cat-color, var(--p2-corpus-accent));
-  color: #fff;
+  background: color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 10%, var(--panel));
+  color: var(--cat-color, var(--p2-corpus-accent));
   cursor: pointer;
   transform: translateY(-50%);
   transition: transform 150ms cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 150ms ease;
   box-shadow:
-    0 2px 8px color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 44%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 2px 8px color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 16%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 .p2-seasonal-practice-icon {
-  width: 0;
-  height: 0;
+  width: 18px;
+  height: 18px;
   display: block;
-  margin-left: 3px;
-  border-top: 7px solid transparent;
-  border-bottom: 7px solid transparent;
-  border-left: 11px solid currentColor;
+  margin: 0;
 }
 /* hide text — icon-only FAB */
 .p2-seasonal-practice-btn > span:not(.p2-seasonal-practice-icon) { display: none; }
 .p2-seasonal-practice-btn:hover {
+  border-color: var(--cat-color, var(--p2-corpus-accent));
+  background: color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 18%, var(--panel));
   transform: translateY(-50%) scale(1.08);
   box-shadow:
-    0 4px 14px color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 58%, transparent),
+    0 4px 14px color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 24%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 .p2-seasonal-practice-btn:active {
@@ -5948,6 +6712,49 @@ body.theme-dark .spelling-drill-panel {
   outline: none;
 }
 
+/* ── Seasonal card: P3 follow-up completion progress (mirrors P1 topic progress,
+   but keyed to each card's category accent --cat-color) ── */
+.p2-seasonal-p3-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.p2-seasonal-p3-progress-label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--cat-color, var(--p2-corpus-accent));
+  letter-spacing: 0.01em;
+}
+.p2-seasonal-p3-progress-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 8px;
+  background: #f1f5f9;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.p2-seasonal-p3-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cat-color, var(--p2-corpus-accent)), color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 62%, #6ee7b7));
+  transition: width 480ms cubic-bezier(0.34, 1.1, 0.64, 1);
+}
+.p2-seasonal-p3-progress-count {
+  flex: 0 0 auto;
+  min-width: 34px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 840;
+  color: var(--cat-color, var(--p2-corpus-accent));
+  font-variant-numeric: tabular-nums;
+}
+.p2-seasonal-p3-progress[data-progress="100"] .p2-seasonal-p3-progress-count::after {
+  content: " ✓";
+}
+
 @media (max-width: 1420px) {
   .p2-seasonal-card-grid {
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -5980,6 +6787,7 @@ body.theme-dark .spelling-drill-panel {
   .p2-brainstorm-cue-detail {
     left: 54px;
     right: 12px;
+    width: auto;
   }
 }
 
@@ -6658,13 +7466,114 @@ body.theme-dark .spelling-drill-panel {
 
 .p2-brainstorm-entry-card {
   min-height: 170px;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Card body (正文) — loose square fragments drifting across. */
+.p2-brainstorm-particles {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Header strip ("串题灵感 Brainstorm 62/64") — dense pixel grid sits behind the
+   title and count, which are lifted above it. */
+.p2-brainstorm-entry-card > header {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Clean deep-navy bar (not muddy) so the glowing pixels stand out. Needs to beat
+   both the light override `.p2-category-entry-card header` (0,1,1 !important) and
+   the dark one `body.theme-dark .p2-category-entry-card header` (0,2,2 !important),
+   so the dark-scoped selector below is at (0,3,2). */
+.p2-brainstorm-entry-card[data-category="brainstorm"] > header {
+  background: linear-gradient(110deg, #3d4250 0%, #474d5e 55%, #535a70 100%) !important;
+}
+
+body.theme-dark .p2-brainstorm-entry-card[data-category="brainstorm"] > header {
+  background: linear-gradient(110deg, #1c2030 0%, #262b3b 55%, #313650 100%) !important;
+}
+
+.p2-brainstorm-head-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Reset any count-badge styling that header-level rules might apply, so the
+     field stays a full-bleed rectangle instead of collapsing into a pill. */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  block-size: auto;
+}
+
+/* Static pixel-grid base — keeps the header field visible even if the canvas
+   script never runs (no JS / very old cache). The animated canvas paints on top. */
+.p2-brainstorm-head-field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(90deg, rgba(125, 211, 252, 0.12) 7px, transparent 0),
+    linear-gradient(0deg, rgba(167, 139, 250, 0.1) 7px, transparent 0);
+  background-size: 9px 9px;
+  opacity: 0.5;
+}
+
+.p2-brainstorm-entry-card > header > h3,
+.p2-brainstorm-entry-card > header > .p2-topic-count,
+.p2-brainstorm-entry-card[data-category="brainstorm"] > header::before {
+  position: relative;
+  z-index: 1;
+}
+
+/* Crisp white title on the dark bar — a hard 1px shadow for edge definition,
+   no blur halo. Dark-scoped selector (0,3,2) beats the theme-dark h3 override. */
+.p2-brainstorm-entry-card[data-category="brainstorm"] > header > h3,
+body.theme-dark .p2-brainstorm-entry-card[data-category="brainstorm"] > header > h3 {
+  color: #f8fafc !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 0 rgba(2, 6, 23, 0.55);
+}
+
+.p2-pixel-flow-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.p2-brainstorm-entry-card > header,
+.p2-brainstorm-open-card {
+  position: relative;
+  z-index: 1;
+}
+
+.p2-brainstorm-card-mark,
+.p2-brainstorm-card-copy {
+  position: relative;
+  z-index: 3;
 }
 
 .p2-brainstorm-open-card {
   flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  align-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 12px;
   width: 100%;
   min-height: 102px;
@@ -6703,44 +7612,303 @@ body.theme-dark .spelling-drill-panel {
     inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
-.p2-brainstorm-icon {
-  width: 26px;
-  height: 26px;
-  display: block;
+/* Pixel-art brain mascot (replaces the bulb): a little brain with stick arms and
+   legs that runs a three-act loop —
+     1. curls its right arm up and scratches its head (wrist flick) while a
+        thought cloud puffs out top-right;
+     2. the cloud gives way to a lightbulb popping in — it got an idea;
+     3. it grabs a random-colored balloon and floats up off the top (clipped by
+        the card, so it never covers the "串题灵感 Brainstorm" header), then
+        re-enters from the bottom back to its resting spot.
+   The mark tile drops its card chrome so the character stands on its own. */
+.p2-brainstorm-card-mark--brain {
+  width: 66px;
+  height: 66px;
+  align-self: center;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
   overflow: visible;
 }
 
-.p2-brainstorm-icon-bulb {
-  fill: color-mix(in srgb, var(--cat-color) 16%, #fff);
-  stroke: var(--cat-color);
-  stroke-width: 1.9;
-  stroke-linejoin: round;
+/* The whole figure floats up out of the card top and re-enters from the bottom
+   in act 3; the card's own overflow:hidden is the clip boundary below the head. */
+.p2-brain-icon {
+  width: 60px;
+  height: 60px;
+  display: block;
+  overflow: visible;
+  animation: p2BrainFloat 7s ease-in-out infinite;
 }
 
-.p2-brainstorm-icon-base,
-.p2-brainstorm-icon-spark,
-.p2-brainstorm-icon-link {
+/* The brain itself is brain-colored (soft rosy pink), not the category purple. */
+.p2-brain-body {
+  fill: #f6bcca;
+  stroke: #c46d87;
+  stroke-width: 1.4;
+  stroke-linejoin: miter;
+  shape-rendering: crispEdges;
+}
+
+.p2-brain-fold {
   fill: none;
-  stroke: color-mix(in srgb, var(--cat-color) 86%, #111827);
-  stroke-width: 1.9;
+  stroke: #b15775;
+  stroke-width: 1.2;
+  stroke-linecap: butt;
+  opacity: 0.85;
+}
+
+.p2-brain-eye {
+  fill: #3a2530;
+  shape-rendering: crispEdges;
+}
+
+.p2-brain-limb,
+.p2-brain-hand {
+  fill: #7c4f5d;
+  shape-rendering: crispEdges;
+}
+
+.p2-brain-limb-stroke {
+  fill: none;
+  stroke: #7c4f5d;
+  stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.p2-brainstorm-icon-spark {
-  stroke-width: 1.55;
-  opacity: 0.72;
+/* The right arm changes pose for each act: scratch the head (think) → react to
+   the lightbulb (idea) → hold the balloon's string (lift-off & return). Only one
+   pose is opaque at a time; the snappy cross-fades read as gesture changes. */
+.p2-brain-arm-think,
+.p2-brain-arm-idea,
+.p2-brain-arm-hold,
+.p2-brain-hand-right,
+.p2-brain-cloud,
+.p2-brain-bulb,
+.p2-brain-balloon,
+.p2-brain-balloon-bob {
+  transform-box: fill-box;
 }
 
-.p2-brainstorm-icon-node {
-  fill: var(--cat-color);
-  stroke: #fff;
-  stroke-width: 1.2;
+.p2-brain-arm-think { animation: p2BrainArmThink 7s ease-in-out infinite; }
+.p2-brain-arm-idea { animation: p2BrainArmIdea 7s ease-in-out infinite; }
+.p2-brain-arm-hold { animation: p2BrainArmHold 7s ease-in-out infinite; }
+
+@keyframes p2BrainArmThink {
+  0% { opacity: 1; }
+  28% { opacity: 1; }
+  31% { opacity: 0; }
+  94% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
-.p2-brainstorm-icon-link {
-  stroke-width: 1.45;
-  opacity: 0.72;
+@keyframes p2BrainArmIdea {
+  0%, 33% { opacity: 0; }
+  37% { opacity: 1; }
+  49% { opacity: 1; }
+  52% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+@keyframes p2BrainArmHold {
+  0%, 50% { opacity: 0; }
+  54% { opacity: 1; }
+  95% { opacity: 1; }
+  99% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* Act 1 — the hand scratches at the WRIST: the curved arm stays put while just
+   the hand flicks back and forth around its wrist (its bbox bottom-center). */
+.p2-brain-hand-right {
+  transform-origin: bottom center;
+  animation: p2BrainScratch 7s ease-in-out infinite;
+}
+
+@keyframes p2BrainScratch {
+  0% { transform: rotate(0deg); }
+  4% { transform: rotate(16deg); }
+  8% { transform: rotate(-12deg); }
+  12% { transform: rotate(16deg); }
+  16% { transform: rotate(-12deg); }
+  20% { transform: rotate(14deg); }
+  24% { transform: rotate(-10deg); }
+  28% { transform: rotate(6deg); }
+  31%, 100% { transform: rotate(0deg); }
+}
+
+/* Act 1 — thought cloud puffs out top-right while it thinks, then clears. */
+.p2-brain-cloud {
+  transform-origin: center;
+  animation: p2BrainCloud 7s ease-in-out infinite;
+}
+
+/* The "thinking" bubble: a rounded rectangle with a bottom-left tail and a
+   black outline, so the three centered dots read clearly. */
+.p2-brain-cloud-puff {
+  fill: #ffffff;
+  stroke: #111827;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+/* The "thinking" indicator: three dots inside the cloud bouncing in sequence. */
+.p2-brain-cloud-dots circle {
+  fill: #1f2937;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: p2BrainThinkDot 1.05s ease-in-out infinite;
+}
+
+.p2-brain-cloud-dots circle:nth-child(2) { animation-delay: 0.14s; }
+.p2-brain-cloud-dots circle:nth-child(3) { animation-delay: 0.28s; }
+
+@keyframes p2BrainThinkDot {
+  0%, 55%, 100% { transform: translateY(0); }
+  28% { transform: translateY(-1.5px); }
+}
+
+@keyframes p2BrainCloud {
+  0% { opacity: 0; transform: scale(0.3) translateY(3px); }
+  7% { opacity: 1; transform: scale(1.06) translateY(0); }
+  11% { transform: scale(1); }
+  17% { transform: scale(1) translateY(-0.6px); }
+  24% { transform: scale(1) translateY(0.5px); }
+  29% { opacity: 1; transform: scale(1) translateY(0); }
+  32% { opacity: 0; transform: scale(0.5) translateY(-2px); }
+  100% { opacity: 0; transform: scale(0.3); }
+}
+
+/* Act 2 — lightbulb pops in (bigger, higher up-right): it got the idea. */
+.p2-brain-bulb {
+  transform-origin: center bottom;
+  animation: p2BrainBulb 7s ease-in-out infinite;
+}
+
+.p2-brain-bulb-glass {
+  fill: #fde68a;
+  stroke: #f59e0b;
+  stroke-width: 0.8;
+}
+
+.p2-brain-bulb-base {
+  fill: #9ca3af;
+}
+
+.p2-brain-bulb-ray {
+  stroke: #f59e0b;
+  stroke-width: 0.9;
+  stroke-linecap: round;
+  animation: p2BrainBulbRay 7s ease-in-out infinite;
+}
+
+@keyframes p2BrainBulb {
+  0%, 33% { opacity: 0; transform: scale(0.2) translateY(3px); }
+  38% { opacity: 1; transform: scale(1.3) translateY(0); }
+  42% { transform: scale(0.92); }
+  46% { transform: scale(1.08); }
+  49% { transform: scale(1); }
+  50% { opacity: 1; transform: scale(1); }
+  53% { opacity: 0; transform: scale(0.7) translateY(-3px); }
+  100% { opacity: 0; transform: scale(0.2); }
+}
+
+@keyframes p2BrainBulbRay {
+  0%, 37% { opacity: 0; }
+  40% { opacity: 1; }
+  44% { opacity: 0.3; }
+  47% { opacity: 1; }
+  50% { opacity: 0.8; }
+  53%, 100% { opacity: 0; }
+}
+
+/* Act 3 — a random-colored balloon (with a dangling string the hand holds)
+   appears, then lifts the whole figure away; JS sets --p2-balloon-color fresh
+   every loop. The body sways on its string for life; the group handles the
+   grab-pop and the release drift. */
+.p2-brain-balloon {
+  transform-origin: bottom center;
+  animation: p2BrainBalloon 7s ease-in-out infinite;
+}
+
+.p2-brain-balloon-bob {
+  transform-origin: bottom center;
+  animation: p2BrainBalloonSway 7s ease-in-out infinite;
+}
+
+.p2-brain-balloon-body {
+  fill: var(--p2-balloon-color, #fb7185);
+  stroke: rgba(0, 0, 0, 0.16);
+  stroke-width: 0.5;
+}
+
+.p2-brain-balloon-knot {
+  fill: color-mix(in srgb, var(--p2-balloon-color, #fb7185) 82%, #000);
+}
+
+.p2-brain-balloon-string {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 0.7;
+  stroke-linecap: round;
+}
+
+@keyframes p2BrainBalloon {
+  0% { opacity: 0; }
+  50% { opacity: 0; transform: scale(0.2) translateY(4px); }
+  55% { opacity: 1; transform: scale(1.12) translateY(0); }
+  58% { transform: scale(0.97); }
+  61% { opacity: 1; transform: scale(1) translateY(0); }
+  95% { opacity: 1; transform: scale(1) translateY(0); }
+  100% { opacity: 0; transform: scale(1) translateY(-8px); }
+}
+
+@keyframes p2BrainBalloonSway {
+  0%, 55% { transform: rotate(0deg); }
+  62% { transform: rotate(-5deg); }
+  70% { transform: rotate(5deg); }
+  78% { transform: rotate(-4deg); }
+  86% { transform: rotate(4deg); }
+  93% { transform: rotate(-2deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* Act 3 motion — accelerate up and out the top (clipped by the card, below the
+   header), vanish, then ease back in from the bottom — still holding the
+   balloon — and bounce-settle to rest. The opacity-0 window hides the instant
+   teleport from top to bottom. */
+@keyframes p2BrainFloat {
+  0% { transform: translateY(0); opacity: 1; }
+  58% { transform: translateY(0); opacity: 1; animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.25); }
+  72% { transform: translateY(-165px); opacity: 1; }
+  73% { transform: translateY(-165px); opacity: 0; }
+  77% { transform: translateY(125px); opacity: 0; }
+  78% { transform: translateY(125px); opacity: 1; animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1); }
+  93% { transform: translateY(-6px); opacity: 1; }
+  97% { transform: translateY(2px); }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p2-brain-icon,
+  .p2-brain-hand-right,
+  .p2-brain-cloud,
+  .p2-brain-cloud-dots circle,
+  .p2-brain-bulb,
+  .p2-brain-bulb-ray,
+  .p2-brain-balloon,
+  .p2-brain-balloon-bob,
+  .p2-brain-arm-think,
+  .p2-brain-arm-idea,
+  .p2-brain-arm-hold { animation: none; }
+  .p2-brain-cloud,
+  .p2-brain-bulb,
+  .p2-brain-balloon,
+  .p2-brain-arm-idea,
+  .p2-brain-arm-hold { opacity: 0; }
+  .p2-brain-arm-think { opacity: 1; }
 }
 
 .p2-brainstorm-card-copy {
@@ -7003,14 +8171,23 @@ body.theme-dark .spelling-drill-panel {
   will-change: left, top;
 }
 
-.p2-corpus-peek-card .p1-corpus-dialog-head {
-  cursor: grab;
+.is-draggable-dialog .p1-corpus-dialog-head,
+.is-draggable-dialog [data-p2-dialog-drag-handle] {
+  cursor: move;
   user-select: none;
   touch-action: none;
 }
 
-.p2-corpus-peek-card.is-dragging .p1-corpus-dialog-head {
-  cursor: grabbing;
+.p2-corpus-peek-drag-handle {
+  margin: -4px -2px 0;
+  padding: 4px 2px 10px;
+}
+
+.is-draggable-dialog .p1-corpus-dialog-card.is-dragging,
+.is-draggable-dialog .p1-corpus-dialog-card.is-dragging .p1-corpus-dialog-head,
+body.is-dragging-p2-dialog,
+body.is-dragging-p2-dialog * {
+  cursor: move !important;
 }
 
 .p1-corpus-peek-body {
@@ -7110,6 +8287,7 @@ body.theme-dark .spelling-drill-panel {
 .p2-corpus-dialog-card.is-bank-editor .p1-corpus-dialog-head > div {
   display: grid;
   gap: 2px;
+  position: relative;
 }
 
 .p1-corpus-dialog-head span,
@@ -7129,6 +8307,54 @@ body.theme-dark .spelling-drill-panel {
 .p2-corpus-dialog-card.is-bank-editor .p1-corpus-dialog-head h3 {
   max-width: min(980px, calc(100vw - var(--sidebar-width) - 360px));
   overflow-wrap: anywhere;
+}
+
+.p2-corpus-title-cue-trigger {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: color-mix(in srgb, var(--p2-corpus-accent-dark) 42%, transparent);
+}
+
+.p2-corpus-title-cue-trigger::after {
+  content: "点击查看题卡要求";
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--p2-corpus-accent-dark) 20%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--p2-corpus-accent-dark) 7%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.p2-corpus-title-cue-trigger:focus-visible {
+  outline: 3px solid rgba(47, 128, 109, 0.14);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.p2-corpus-title-cue-detail {
+  left: min(120px, 18vw);
+  right: auto;
+  top: calc(100% + 58px);
+  width: min(560px, calc(100vw - var(--sidebar-width) - 210px));
+  max-height: 260px;
+  padding: 14px 16px;
+}
+
+.p2-corpus-title-cue-detail .p2-seasonal-cue {
+  padding-right: 0;
+  gap: 8px;
+  font-size: 14.5px;
 }
 
 .p1-corpus-dialog-head button {
@@ -7260,6 +8486,20 @@ body.theme-dark .spelling-drill-panel {
 .p1-corpus-dialog-card .vditor-reset p {
   margin: 0 0 14px;
   text-align: left !important;
+}
+
+.p2-corpus-dialog-card.is-bank-editor .p1-corpus-textarea,
+.p2-corpus-dialog-card.is-bank-editor .vditor-ir,
+.p2-corpus-dialog-card.is-bank-editor .vditor-reset {
+  font-size: 21px !important;
+  line-height: 1.72 !important;
+}
+
+.p2-corpus-dialog-card.is-bank-editor .vditor-ir pre.vditor-reset,
+.p2-corpus-dialog-card.is-bank-editor .vditor-ir .vditor-reset,
+.p2-corpus-dialog-card.is-bank-editor .vditor-reset p {
+  font-size: 21px !important;
+  line-height: 1.72 !important;
 }
 
 .p1-corpus-ai-box {
@@ -7409,6 +8649,63 @@ body.theme-dark .spelling-drill-panel {
   padding: 18px;
 }
 
+/* Refined entrance: the scrim fades in and the card eases up from slightly
+   below + scaled-down, so opening the dialog feels intentional, not abrupt. */
+.p2-brainstorm-dialog:not(.hidden) {
+  animation: p2BrainstormScrimIn 220ms ease both;
+}
+
+.p2-brainstorm-dialog:not(.hidden) .p2-brainstorm-dialog-card {
+  animation: p2BrainstormCardIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Returning from the body editor: reveal the underlying dialog instantly, no
+   open-from-scratch entrance. */
+.p2-brainstorm-dialog.no-entrance:not(.hidden),
+.p2-brainstorm-dialog.no-entrance:not(.hidden) .p2-brainstorm-dialog-card {
+  animation: none;
+}
+
+@keyframes p2BrainstormScrimIn {
+  from { background: rgba(15, 23, 42, 0); }
+  to { background: rgba(15, 23, 42, 0.48); }
+}
+
+@keyframes p2BrainstormCardIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* One-shot staggered fade-up for the rows, gated behind .is-entering (added on
+   open, removed shortly after) so filtering/searching stays instant. */
+.p2-brainstorm-list.is-entering .p2-brainstorm-row {
+  animation: p2BrainstormRowIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(1) { animation-delay: 20ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(2) { animation-delay: 44ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(3) { animation-delay: 68ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(4) { animation-delay: 92ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(5) { animation-delay: 116ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(6) { animation-delay: 140ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(7) { animation-delay: 164ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(8) { animation-delay: 188ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(9) { animation-delay: 212ms; }
+.p2-brainstorm-list.is-entering .p2-brainstorm-row:nth-child(n+10) { animation-delay: 236ms; }
+
+@keyframes p2BrainstormRowIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p2-brainstorm-dialog:not(.hidden),
+  .p2-brainstorm-dialog:not(.hidden) .p2-brainstorm-dialog-card,
+  .p2-brainstorm-list.is-entering .p2-brainstorm-row {
+    animation: none;
+  }
+}
+
 .p2-brainstorm-dialog-head {
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.9);
@@ -7422,6 +8719,90 @@ body.theme-dark .spelling-drill-panel {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.p2-brainstorm-search {
+  width: min(440px, 42vw);
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.p2-brainstorm-search:focus-within {
+  border-color: rgba(79, 70, 229, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.p2-brainstorm-search > span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 860;
+}
+
+.p2-brainstorm-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #0f172a;
+  font-family: var(--ui-font);
+  font-size: 14px;
+  font-weight: 640;
+}
+
+.p2-brainstorm-search input::placeholder {
+  color: #94a3b8;
+  font-weight: 560;
+}
+
+.p2-brainstorm-search small {
+  min-width: 42px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 820;
+  text-align: right;
+}
+
+#p2BrainstormSearchPrev,
+#p2BrainstormSearchNext {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 16px;
+  line-height: 1;
+  transition: border-color 150ms ease, background 150ms ease,
+    color 150ms ease, transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#p2BrainstormSearchPrev:not(:disabled):hover,
+#p2BrainstormSearchNext:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: rgba(79, 70, 229, 0.45);
+  color: #4338ca;
+}
+
+#p2BrainstormSearchPrev:not(:disabled):active,
+#p2BrainstormSearchNext:not(:disabled):active {
+  transform: translateY(0) scale(0.94);
+}
+
+#p2BrainstormSearchPrev:disabled,
+#p2BrainstormSearchNext:disabled {
+  cursor: default;
+  opacity: 0.42;
 }
 
 .p2-brainstorm-dialog-subtitle {
@@ -7469,6 +8850,18 @@ body.theme-dark .spelling-drill-panel {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.09);
 }
 
+.p2-brainstorm-row.is-search-match {
+  border-color: rgba(20, 184, 166, 0.34);
+  background: linear-gradient(180deg, #f2fffc 0%, #fff 100%);
+}
+
+.p2-brainstorm-row.is-search-current {
+  border-color: rgba(15, 118, 110, 0.58);
+  box-shadow:
+    0 0 0 3px rgba(20, 184, 166, 0.13),
+    0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
 /* 左侧容器：题干行 + 可展开的 cue 详情 */
 .p2-brainstorm-left {
   min-width: 0;
@@ -7513,9 +8906,10 @@ body.theme-dark .spelling-drill-panel {
 .p2-brainstorm-cue-detail {
   position: absolute;
   left: 54px;
-  right: calc(50% + 10px);
+  right: auto;
   top: calc(100% - 8px);
   z-index: 20;
+  width: min(370px, calc(50% - 64px));
   max-height: 220px;
   overflow: auto;
   margin: 0;
@@ -7531,6 +8925,90 @@ body.theme-dark .spelling-drill-panel {
     0 16px 34px rgba(15, 23, 42, 0.14),
     0 0 0 1px rgba(255, 255, 255, 0.86) inset;
 }
+
+/* Flip-up variant: opens above the row when there isn't room below, so a
+   bottom-row popover never spills past the list and inflates its scroll. */
+.p2-brainstorm-cue-detail {
+  transform-origin: top left;
+}
+
+.p2-brainstorm-cue-detail.is-detail-up {
+  top: auto;
+  bottom: calc(100% - 8px);
+  transform-origin: bottom left;
+}
+
+.p2-brainstorm-cue-detail.is-detail-in {
+  animation: p2BrainstormDetailIn 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.p2-brainstorm-cue-detail.is-detail-up.is-detail-in {
+  animation-name: p2BrainstormDetailInUp;
+}
+
+@keyframes p2BrainstormDetailIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes p2BrainstormDetailInUp {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Filter reveal / hide: rows fade-slide in when a filter brings them back and
+   fade-slide out before collapsing, instead of snapping on/off. */
+.p2-brainstorm-row.is-filtering-in {
+  animation: p2BrainstormFilterIn 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.p2-brainstorm-row.is-filtering-out {
+  animation: p2BrainstormFilterOut 150ms ease both;
+  pointer-events: none;
+}
+
+@keyframes p2BrainstormFilterIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes p2BrainstormFilterOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-6px) scale(0.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p2-brainstorm-cue-detail.is-detail-in,
+  .p2-brainstorm-row.is-filtering-in,
+  .p2-brainstorm-row.is-filtering-out {
+    animation: none;
+  }
+}
+
+.p2-brainstorm-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.p2-brainstorm-detail-head strong {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 860;
+  letter-spacing: 0;
+}
+
+.p2-brainstorm-edit-body {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
 .p2-brainstorm-cue-detail ul {
   margin: 0 0 4px 0;
   padding-left: 14px;
@@ -7585,8 +9063,210 @@ body.theme-dark .spelling-drill-panel {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.09);
 }
 
+/* --- Brainstorm 标签筛选栏 + 标签 chip --- */
+/* 固定宽度，文案在 复制「全部」/「A1」/「没灵感」之间切换时按钮不抖动。 */
+#copyP2BrainstormBtn {
+  width: 132px;
+  padding-left: 10px;
+  padding-right: 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.p2-brainstorm-dialog-subtitle code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-family: var(--mono-font, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.p2-brainstorm-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 2px;
+}
+
+.p2-brainstorm-filter-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 860;
+}
+
+.p2-brainstorm-filter-count {
+  margin-left: auto;      /* 推到同行最右 */
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.08);
+  color: #4f5b93;
+  font-size: 12.5px;
+  font-weight: 760;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.p2-brainstorm-filter-chip {
+  min-height: 30px;
+  padding: 4px 13px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff 0%, #f7f8fb 100%);
+  color: #334155;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  font-weight: 760;
+  cursor: pointer;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.03);
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease,
+    box-shadow 150ms ease, transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.p2-brainstorm-filter-chip:hover {
+  border-color: rgba(79, 70, 229, 0.5);
+  color: #4338ca;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.12);
+}
+
+.p2-brainstorm-filter-chip:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.p2-brainstorm-filter-chip.is-active {
+  border-color: transparent;
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+  color: #fff;
+  box-shadow:
+    0 2px 6px rgba(67, 56, 202, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.p2-brainstorm-filter-chip.is-active:hover {
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 14px rgba(67, 56, 202, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.p2-brainstorm-row.is-filtered-out {
+  display: none;
+}
+
+.p2-brainstorm-tagfield {
+  width: 100%;
+  min-height: 50px;
+  align-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 10px;
+  background: #fff;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.p2-brainstorm-tagfield:focus-within {
+  border-color: rgba(79, 70, 229, 0.52);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.09);
+}
+
+.p2-brainstorm-tags {
+  display: contents;
+}
+
+.p2-brainstorm-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 880;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.p2-brainstorm-tag-x {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  min-height: 0;          /* override global button { min-height: 42px } so it stays a small circle */
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(67, 56, 202, 0.14);
+  color: #4338ca;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.p2-brainstorm-tag-x:active {
+  transform: none;        /* avoid the global button:active scale jitter on a tiny circle */
+}
+
+.p2-brainstorm-tag-x:hover {
+  background: #4338ca;
+  color: #fff;
+}
+
+.p2-brainstorm-tagfield .p2-brainstorm-input {
+  flex: 1 1 140px;
+  width: auto;
+  min-height: 36px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 2px;
+  line-height: 36px;
+  box-shadow: none;
+}
+
+.p2-brainstorm-tagfield .p2-brainstorm-input:focus {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 正文编辑器里的串题灵感字段：高度对齐其它输入框 */
+.p2-bank-brainstorm-tagfield {
+  min-height: 44px;
+}
+
+/* 灯泡弹窗里只读展示的标签（没有 × 按钮） */
+.p2-brainstorm-tag.is-readonly {
+  padding: 0 10px;
+}
+
+.p2-brainstorm-peek-idea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.p2-brainstorm-peek-idea-text {
+  color: var(--ink, #0f172a);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .p2-brainstorm-actions {
   min-height: 28px;
+  justify-content: space-between;
   padding-top: 0;
 }
 
@@ -10905,6 +12585,55 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   gap: 18px;
 }
 
+.speaking-failed-answers-card {
+  display: grid;
+  gap: 14px;
+}
+
+.speaking-failed-turn h4 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.speaking-failed-turn p {
+  margin: 0;
+  color: var(--muted, #64748b);
+  line-height: 1.6;
+}
+
+.speaking-failed-turn + .speaking-failed-turn {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* Report regeneration: 加载中 state on the speaking report card. */
+/* Match the bare-text 未评分 size; the selector is scoped under the strong so it
+   out-specifies .writing-saved-report-head > strong span (the small uppercase
+   label style) which would otherwise shrink it to 10px. */
+.writing-saved-report-head > strong span.speaking-report-regen-chip {
+  font-size: 18px;
+  font-weight: 850;
+  letter-spacing: normal;
+  text-transform: none;
+  color: #fff;
+}
+
+.speaking-report-regen-card .writing-draft-primary h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-item-band.is-unscored {
+  opacity: 0.72;
+}
+
+.history-item-band.is-scoring {
+  animation: report-band-scoring-pulse 1.4s ease-in-out infinite;
+}
+
 .writing-saved-report-head h2 {
   margin: 8px 0 4px;
   color: var(--ink);
@@ -12212,6 +13941,18 @@ body.theme-dark.font-popular .p3-bank-entry-icon {
   gap: 16px;
 }
 
+.p3-bank-picker-loading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 160px;
+  color: var(--muted, #64748b);
+  font-size: 14px;
+  font-weight: 650;
+}
+
 .p3-bank-picker-card {
   width: 100%;
   appearance: none;
@@ -12253,6 +13994,60 @@ body.theme-dark.font-popular .p3-bank-entry-icon {
   color: var(--muted);
   font-size: 15px;
   line-height: 1.45;
+}
+
+.p2-brainstorm-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.p2-brainstorm-practice-btn {
+  flex: 0 0 30px;
+  inline-size: 30px;
+  block-size: 30px;
+  min-inline-size: 30px;
+  min-block-size: 30px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.p2-brainstorm-practice-btn svg {
+  display: block;
+  inline-size: 14px;
+  block-size: 14px;
+  margin: 0;
+}
+
+.p2-brainstorm-practice-btn:hover,
+.p2-brainstorm-practice-btn:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  outline: none;
+}
+
+
+.p3-bank-picker-card--complete {
+  opacity: 0.58;
+  transition: opacity 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.p3-bank-picker-card--complete:hover,
+.p3-bank-picker-card--complete:focus-visible,
+.p3-bank-picker-card--complete.active {
+  opacity: 1;
+}
+
+.p3-bank-picker-card--partial .p3-bank-card-top em,
+.p3-bank-picker-card--complete .p3-bank-card-top em {
+  color: var(--accent);
 }
 
 .p3-bank-picker-card:hover,
@@ -17897,6 +19692,11 @@ body.theme-dark .p1-topic-progress span {
   background: linear-gradient(90deg, var(--dark-primary), var(--dark-secondary));
 }
 
+body.theme-dark .p2-seasonal-p3-progress-track {
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
 body.theme-dark .p1-topic-question-list button.has-corpus {
   background: linear-gradient(90deg,
     color-mix(in srgb, var(--p1-corpus-accent) 12%, var(--dark-surface)) 0%,
@@ -17920,11 +19720,119 @@ body.theme-dark .p2-brainstorm-input {
   color: var(--ink);
 }
 
+body.theme-dark .p2-brainstorm-tagfield {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+body.theme-dark .p2-brainstorm-tagfield .p2-brainstorm-input {
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+}
+
+body.theme-dark .p2-brainstorm-filter-chip {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.82) 100%);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+body.theme-dark .p2-brainstorm-filter-chip:hover {
+  border-color: rgba(129, 140, 248, 0.6);
+  color: #c7d2fe;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+}
+
+body.theme-dark .p2-brainstorm-filter-chip.is-active,
+body.theme-dark .p2-brainstorm-filter-chip.is-active:hover {
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  border-color: transparent;
+  color: #fff;
+  box-shadow:
+    0 2px 8px rgba(79, 70, 229, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+body.theme-dark .p2-brainstorm-filter-label {
+  color: var(--muted);
+}
+
+body.theme-dark .p2-brainstorm-filter-count {
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+}
+
+body.theme-dark .p2-brainstorm-tag,
+body.theme-dark .p2-brainstorm-dialog-subtitle code {
+  background: rgba(99, 102, 241, 0.22);
+  color: #c7d2fe;
+}
+
+body.theme-dark .p2-brainstorm-tag-x {
+  background: rgba(199, 210, 254, 0.18);
+  color: #c7d2fe;
+}
+
+body.theme-dark .p2-brainstorm-tag-x:hover {
+  background: #6366f1;
+  color: #fff;
+}
+
+body.theme-dark .p2-brainstorm-search {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body.theme-dark .p2-brainstorm-search input {
+  color: var(--ink);
+}
+
+body.theme-dark .p2-brainstorm-search > span,
+body.theme-dark .p2-brainstorm-search small {
+  color: var(--muted);
+}
+
 body.theme-dark .p2-brainstorm-open-card:hover,
 body.theme-dark .p2-brainstorm-open-card:focus-visible,
 body.theme-dark .p2-brainstorm-row:focus-within {
-  background: var(--dark-primary-soft);
-  border-color: var(--dark-primary-border);
+  background: rgba(20, 83, 75, 0.28);
+  border-color: rgba(45, 212, 191, 0.26);
+}
+
+body.theme-dark .p2-brainstorm-row:hover {
+  background: rgba(16, 65, 60, 0.32);
+  border-color: rgba(45, 212, 191, 0.22);
+}
+
+body.theme-dark .p2-brainstorm-row:has(.p2-brainstorm-left.is-expanded) {
+  background: rgba(17, 94, 89, 0.24);
+  border-color: rgba(45, 212, 191, 0.28);
+  box-shadow:
+    0 0 0 3px rgba(45, 212, 191, 0.07),
+    0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+body.theme-dark .p2-brainstorm-row.is-search-match {
+  background: rgba(20, 83, 75, 0.3);
+  border-color: rgba(45, 212, 191, 0.28);
+}
+
+body.theme-dark .p2-brainstorm-row.is-search-current {
+  border-color: rgba(94, 234, 212, 0.58);
+  box-shadow:
+    0 0 0 3px rgba(45, 212, 191, 0.12),
+    0 14px 28px rgba(0, 0, 0, 0.3);
+}
+
+body.theme-dark .p2-brainstorm-left.is-clickable:hover .p2-brainstorm-stem,
+body.theme-dark .p2-brainstorm-left.is-clickable:focus-visible .p2-brainstorm-stem {
+  color: var(--ink);
+}
+
+body.theme-dark .p2-brainstorm-left.is-clickable:focus-visible {
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.1);
 }
 
 body.theme-dark .p2-brainstorm-card-copy strong,
@@ -17943,6 +19851,16 @@ body.theme-dark .p2-brainstorm-cue-detail {
   color: var(--muted);
 }
 
+body.theme-dark .p2-brainstorm-detail-head strong {
+  color: var(--dark-primary-text);
+}
+
+body.theme-dark .p2-brainstorm-edit-body {
+  border-color: var(--dark-primary-border);
+  color: var(--dark-primary-text);
+  background: rgba(45, 212, 191, 0.08);
+}
+
 body.theme-dark .p2-brainstorm-card-mark,
 body.theme-dark .p2-brainstorm-index {
   background: var(--dark-primary-soft);
@@ -17957,6 +19875,11 @@ body.theme-dark .p2-brainstorm-card-mark {
   box-shadow:
     0 12px 24px rgba(0, 0, 0, 0.26),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .p2-brainstorm-card-mark--brain {
+  background: none;
+  box-shadow: none;
 }
 
 body.theme-dark .p2-brainstorm-icon-bulb {
@@ -19700,16 +21623,9 @@ body.theme-dark.font-popular .avatar-settings-button:hover {
   place-items: center;
 }
 
-.speaking-report-rail-shell .history-list {
-  gap: 10px;
-}
-
-.speaking-report-rail-shell .history-item {
-  width: 204px;
-  min-width: 204px;
-  height: 109px;
-  padding: 13px 34px 13px 14px;
-}
+/* Speaking report rail intentionally inherits the base .history-list/.history-item
+   styles so its cards match the writing report rail exactly (writing is the
+   reference). No size/gap overrides here. */
 
 .writing-report-rail-shell {
   grid-template-columns: 68px minmax(0, 1fr);
@@ -23326,6 +25242,152 @@ body.theme-dark.font-popular .mobile-font-options .font-option.active {
   min-height: 64px;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   P1 Library — paper checklist / pencil aesthetic  (light theme only)
+   Visual-only restyle: no layout/flow changes. Scoped to .p1-topic-card under
+   body:not(.theme-dark) so it overrides the quiet-dashboard block above without
+   leaking into dark mode (which keeps its own treatment). Accent-driven, plus
+   the same study-paper texture used by the Takeaway book.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Card → a sheet of ruled study paper ── */
+body:not(.theme-dark) .p1-topic-card {
+  /* --nr-hand is otherwise scoped to the spelling drill; redeclare so the card
+     and its descendants can use the Caveat handwriting stack (loaded globally). */
+  --nr-hand: "Caveat", "Newsreader", "Songti SC", "Source Han Serif SC", cursive;
+  border: 1px solid rgba(79, 102, 94, 0.30);
+  border-radius: 11px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.84), rgba(249, 246, 239, 0.80)),
+    url("/assets/takeaway/pencil-card-paper-light.webp") center / cover no-repeat,
+    rgba(255, 251, 243, 0.97);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 10px 24px rgba(83, 66, 55, 0.08);
+}
+body:not(.theme-dark) .p1-topic-card:hover {
+  transform: translateY(-3px) rotate(-0.3deg);
+  border-color: color-mix(in srgb, var(--p1-corpus-accent) 50%, rgba(79, 102, 94, 0.4));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 16px 34px rgba(83, 66, 55, 0.14);
+}
+
+/* Faded red margin rule down the left, like a real notebook page */
+body:not(.theme-dark) .p1-topic-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 34px;
+  width: 1.5px;
+  background: repeating-linear-gradient(180deg,
+    color-mix(in srgb, #c2554e 50%, transparent) 0 7px,
+    transparent 7px 11px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Header → handwritten heading, dashed pencil rule under it ── */
+body:not(.theme-dark) .p1-topic-card header {
+  background: transparent !important;
+  border-bottom: 1.5px dashed rgba(79, 102, 94, 0.32);
+}
+/* Topic title → Caveat handwriting in graphite ink */
+body:not(.theme-dark) .p1-topic-card h3 {
+  font-family: var(--nr-hand);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #2f2924 !important;
+}
+/* Count → a hand-circled fraction, not a solid pill */
+body:not(.theme-dark) .p1-topic-card .p1-topic-count {
+  background: transparent !important;
+  border: 1.6px solid color-mix(in srgb, var(--p1-corpus-accent) 45%, #8a9890);
+  border-radius: 16px 14px 17px 13px / 14px 17px 13px 16px;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 72%, #2f2924) !important;
+  font-family: var(--nr-hand);
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
+/* ── Progress → an empty pencil-drawn capsule that fills with cross-hatch ── */
+body:not(.theme-dark) .p1-topic-progress {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 5%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--p1-corpus-accent) 28%, #9aa8a0);
+  border-radius: 999px;
+  height: 9px;
+  overflow: hidden;
+}
+body:not(.theme-dark) .p1-topic-progress span {
+  background: repeating-linear-gradient(45deg,
+    var(--p1-corpus-accent) 0 4px,
+    color-mix(in srgb, var(--p1-corpus-accent) 65%, #fff) 4px 8px);
+  box-shadow: none;
+}
+
+/* ── Question rows → checklist items on dotted pencil rules ── */
+body:not(.theme-dark) .p1-topic-question-list button {
+  background: transparent;
+  border-bottom: 1.5px dotted rgba(79, 102, 94, 0.28);
+}
+body:not(.theme-dark) .p1-topic-question-list button:hover {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 7%, transparent);
+}
+body:not(.theme-dark) .p1-topic-question-list button > span {
+  color: #44403a;
+}
+/* Q badge → a wobbly hand-drawn checkbox with a pencilled label */
+body:not(.theme-dark) .p1-topic-question-list strong {
+  border-radius: 7px 6px 8px 5px / 6px 8px 5px 7px;
+  border: 2px solid color-mix(in srgb, var(--p1-corpus-accent) 40%, #8a9890);
+  background: transparent;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 55%, #6b7c74);
+  font-family: var(--nr-hand);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── Saved row → the box gets ticked, "已备" noted in the margin ── */
+body:not(.theme-dark) .p1-topic-question-list button.has-corpus {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 8%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--p1-corpus-accent) 55%, transparent);
+}
+body:not(.theme-dark) .p1-topic-question-list button.has-corpus:hover {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 12%, transparent);
+}
+body:not(.theme-dark) .p1-topic-question-list button.has-corpus > span {
+  color: #2f2924;
+  font-weight: 600;
+}
+body:not(.theme-dark) .p1-topic-question-list button.has-corpus strong {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 15%, transparent);
+  border-color: var(--p1-corpus-accent);
+  color: transparent;
+  font-size: 0;
+  box-shadow: none;
+}
+body:not(.theme-dark) .p1-topic-question-list button.has-corpus strong::after {
+  content: "✓";
+  font-family: var(--nr-hand);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--p1-corpus-accent);
+}
+body:not(.theme-dark) .p1-topic-question-list button.has-corpus::after {
+  content: "已备";
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: var(--nr-hand);
+  font-size: 15px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 70%, #2f2924);
+}
+
 .p2-category-entry-card .p2-material-row {
   grid-template-columns: minmax(0, 1fr) 112px;
 }
@@ -23466,6 +25528,10 @@ body.theme-dark .p2-category-entry-card .p2-material-actions .corpus-menu-button
   animation: p2MaterialSavedPulse 1.6s ease;
 }
 
+body.theme-dark .p2-material-row.just-saved {
+  animation-name: p2MaterialSavedPulseDark;
+}
+
 @keyframes p2MaterialSavedPulse {
   0% {
     background: color-mix(in srgb, var(--cat-color, var(--p2-corpus-accent)) 18%, #fff);
@@ -23473,6 +25539,17 @@ body.theme-dark .p2-category-entry-card .p2-material-actions .corpus-menu-button
   }
   100% {
     background: #fff;
+    box-shadow: none;
+  }
+}
+
+@keyframes p2MaterialSavedPulseDark {
+  0% {
+    background: color-mix(in srgb, var(--cat-readable, var(--cat-color, #93c5fd)) 18%, var(--dark-surface));
+    box-shadow: inset 4px 0 0 var(--cat-readable, var(--cat-color, #93c5fd));
+  }
+  100% {
+    background: var(--dark-surface);
     box-shadow: none;
   }
 }
@@ -23495,6 +25572,465 @@ body.theme-dark .p2-category-entry-card header span {
   background: rgba(255, 255, 255, 0.04) !important;
   border-color: rgba(148, 163, 184, 0.22);
   color: var(--muted) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   P1 Library — paper checklist / pencil aesthetic  (DARK theme)
+   Mirror of the light treatment on the dark study-paper texture. Uses
+   !important so it wins over the per-sub-theme dark card rules (default /
+   academic / popular), matching how those rules are written.
+   ══════════════════════════════════════════════════════════════════════════ */
+body.theme-dark .p1-topic-card {
+  --nr-hand: "Caveat", "Newsreader", "Songti SC", "Source Han Serif SC", cursive;
+  border: 1px solid rgba(111, 151, 142, 0.30) !important;
+  border-radius: 11px !important;
+  background:
+    linear-gradient(180deg, rgba(16, 22, 28, 0.74), rgba(13, 18, 24, 0.80)),
+    url("/assets/takeaway/pencil-card-paper-dark.webp") center / cover no-repeat,
+    #10171d !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 16px 34px rgba(0, 0, 0, 0.30) !important;
+}
+body.theme-dark .p1-topic-card:hover {
+  transform: translateY(-3px) rotate(-0.3deg);
+  border-color: color-mix(in srgb, var(--p1-corpus-accent) 50%, rgba(111, 151, 142, 0.4)) !important;
+}
+/* Dim terracotta margin rule */
+body.theme-dark .p1-topic-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 34px;
+  width: 1.5px;
+  background: repeating-linear-gradient(180deg,
+    color-mix(in srgb, #d4756c 42%, transparent) 0 7px,
+    transparent 7px 11px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 1;
+}
+body.theme-dark .p1-topic-card header {
+  background: transparent !important;
+  border-bottom: 1.5px dashed rgba(150, 172, 162, 0.28) !important;
+}
+body.theme-dark .p1-topic-card h3 {
+  font-family: var(--nr-hand);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #eaf1ec !important;
+}
+body.theme-dark .p1-topic-card .p1-topic-count {
+  background: transparent !important;
+  border: 1.6px solid color-mix(in srgb, var(--p1-corpus-accent) 50%, rgba(150, 172, 162, 0.5)) !important;
+  border-radius: 16px 14px 17px 13px / 14px 17px 13px 16px;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 55%, #eaf1ec) !important;
+  font-family: var(--nr-hand);
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+body.theme-dark .p1-topic-progress {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 10%, transparent) !important;
+  border: 1.5px solid color-mix(in srgb, var(--p1-corpus-accent) 32%, rgba(150, 172, 162, 0.4)) !important;
+  border-radius: 999px !important;
+  height: 9px;
+  overflow: hidden;
+}
+body.theme-dark .p1-topic-progress span {
+  background: repeating-linear-gradient(45deg,
+    var(--p1-corpus-accent) 0 4px,
+    color-mix(in srgb, var(--p1-corpus-accent) 55%, #0c1116) 4px 8px) !important;
+  box-shadow: none !important;
+}
+body.theme-dark .p1-topic-question-list button {
+  background: transparent !important;
+  border-bottom: 1.5px dotted rgba(150, 172, 162, 0.22) !important;
+}
+body.theme-dark .p1-topic-question-list button:hover {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 12%, transparent) !important;
+}
+body.theme-dark .p1-topic-question-list button > span {
+  color: #ccd6ce !important;
+}
+body.theme-dark .p1-topic-question-list strong {
+  border-radius: 7px 6px 8px 5px / 6px 8px 5px 7px;
+  border: 2px solid color-mix(in srgb, var(--p1-corpus-accent) 45%, rgba(150, 172, 162, 0.45)) !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 60%, #ccd6ce) !important;
+  font-family: var(--nr-hand);
+  font-size: 13px;
+  font-weight: 700;
+}
+body.theme-dark .p1-topic-question-list button.has-corpus {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 14%, transparent) !important;
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--p1-corpus-accent) 60%, transparent) !important;
+}
+body.theme-dark .p1-topic-question-list button.has-corpus:hover {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 20%, transparent) !important;
+}
+body.theme-dark .p1-topic-question-list button.has-corpus > span {
+  color: #eaf1ec !important;
+  font-weight: 600;
+}
+body.theme-dark .p1-topic-question-list button.has-corpus strong {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 22%, transparent) !important;
+  border-color: var(--p1-corpus-accent) !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  box-shadow: none !important;
+}
+body.theme-dark .p1-topic-question-list button.has-corpus strong::after {
+  content: "✓";
+  font-family: var(--nr-hand);
+  font-size: 18px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 70%, #fff) !important;
+}
+body.theme-dark .p1-topic-question-list button.has-corpus::after {
+  content: "已备";
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font-family: var(--nr-hand);
+  font-size: 15px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 60%, #eaf1ec) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   P2 Library — paper checklist / pencil aesthetic  (DARK theme)
+   Dark study-paper texture + light ink, per-category colour as the accent.
+   ══════════════════════════════════════════════════════════════════════════ */
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card) {
+  --nr-hand: "Caveat", "Newsreader", "Songti SC", "Source Han Serif SC", cursive;
+  --pen: var(--cat-color, var(--p2-corpus-accent));
+  border: 1px solid color-mix(in srgb, var(--pen) 34%, rgba(111, 151, 142, 0.30)) !important;
+  border-radius: 11px !important;
+  background:
+    linear-gradient(180deg, rgba(16, 22, 28, 0.74), rgba(13, 18, 24, 0.80)),
+    url("/assets/takeaway/pencil-card-paper-dark.webp") center / cover no-repeat,
+    #10171d !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 16px 34px rgba(0, 0, 0, 0.30) !important;
+}
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card):hover {
+  transform: translateY(-3px) rotate(-0.3deg);
+  border-color: color-mix(in srgb, var(--pen) 55%, rgba(111, 151, 142, 0.4)) !important;
+}
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card) header {
+  background: transparent !important;
+  border-bottom: 1.5px dashed color-mix(in srgb, var(--pen) 26%, rgba(150, 172, 162, 0.28)) !important;
+}
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card) h3 {
+  font-family: var(--nr-hand);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #eaf1ec !important;
+}
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card) header span,
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card) .p2-topic-count {
+  background: transparent !important;
+  border: 1.6px solid color-mix(in srgb, var(--pen) 52%, rgba(150, 172, 162, 0.5)) !important;
+  border-radius: 16px 14px 17px 13px / 14px 17px 13px 16px;
+  color: color-mix(in srgb, var(--pen) 55%, #eaf1ec) !important;
+  font-family: var(--nr-hand);
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+body.theme-dark .p2-category-entry-card .p2-material-row {
+  background: transparent !important;
+  border-bottom: 1.5px dotted color-mix(in srgb, var(--pen) 20%, rgba(150, 172, 162, 0.22)) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-material-entry-button.has-corpus {
+  background: transparent !important;
+}
+body.theme-dark .p2-category-entry-card .p2-material-entry-button.has-corpus:hover {
+  background: color-mix(in srgb, var(--pen) 14%, transparent) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-material-index {
+  background: transparent !important;
+  border: 2px solid color-mix(in srgb, var(--pen) 46%, rgba(150, 172, 162, 0.45));
+  border-radius: 8px 7px 9px 6px / 7px 9px 6px 8px;
+  color: color-mix(in srgb, var(--pen) 60%, #ccd6ce) !important;
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  font-weight: 700;
+}
+body.theme-dark .p2-category-entry-card .p2-material-title {
+  color: #eaf1ec !important;
+}
+body.theme-dark .p2-category-entry-card .p2-material-status {
+  font-family: var(--nr-hand);
+  font-size: 14px;
+}
+body.theme-dark .p2-category-entry-card .p2-material-status.has-follow-up {
+  color: color-mix(in srgb, var(--pen) 60%, #eaf1ec) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-material-status.is-empty {
+  color: #8c9389 !important;
+}
+body.theme-dark .p2-category-entry-card .p2-topic-empty {
+  background: transparent !important;
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  color: #8c9389;
+}
+body.theme-dark .p2-category-entry-card .p2-add-material-button {
+  background: transparent !important;
+  border-top: 1.5px dotted color-mix(in srgb, var(--pen) 20%, rgba(150, 172, 162, 0.22)) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-add-material-button strong {
+  border: 1.6px dashed color-mix(in srgb, var(--pen) 46%, rgba(150, 172, 162, 0.45)) !important;
+  border-radius: 8px 7px 9px 6px / 7px 9px 6px 8px;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--pen) 60%, #ccd6ce) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-add-material-button span {
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  color: color-mix(in srgb, var(--pen) 58%, #eaf1ec) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-material-actions .p2-follow-up-edit-button {
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  border: 1.4px solid color-mix(in srgb, var(--pen) 42%, rgba(150, 172, 162, 0.4)) !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--pen) 58%, #eaf1ec) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-material-actions .p2-follow-up-edit-button.has-follow-up {
+  background: color-mix(in srgb, var(--pen) 18%, transparent) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   P2 Library — paper checklist / pencil aesthetic  (LIGHT theme)
+   Same study-paper language as P1, but the pencil/ink accent is each card's
+   per-category colour (--cat-color) so the category identity survives. Visual
+   only — no layout/flow changes. Brainstorm card keeps its own body; only its
+   shared shell/header is restyled.
+   ══════════════════════════════════════════════════════════════════════════ */
+body:not(.theme-dark) .p2-category-entry-card:not(.p2-brainstorm-entry-card) {
+  --nr-hand: "Caveat", "Newsreader", "Songti SC", "Source Han Serif SC", cursive;
+  --pen: var(--cat-color, var(--p2-corpus-accent));
+  border: 1px solid color-mix(in srgb, var(--pen) 30%, rgba(79, 102, 94, 0.30)) !important;
+  border-radius: 11px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.84), rgba(249, 246, 239, 0.80)),
+    url("/assets/takeaway/pencil-card-paper-light.webp") center / cover no-repeat,
+    rgba(255, 251, 243, 0.97) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 10px 24px rgba(83, 66, 55, 0.08) !important;
+}
+body:not(.theme-dark) .p2-category-entry-card:not(.p2-brainstorm-entry-card):hover {
+  transform: translateY(-3px) rotate(-0.3deg);
+  border-color: color-mix(in srgb, var(--pen) 50%, rgba(79, 102, 94, 0.4)) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 16px 34px rgba(83, 66, 55, 0.14) !important;
+}
+/* Header → handwritten heading, dashed pencil rule */
+body:not(.theme-dark) .p2-category-entry-card:not(.p2-brainstorm-entry-card) header {
+  background: transparent !important;
+  border-bottom: 1.5px dashed color-mix(in srgb, var(--pen) 20%, rgba(79, 102, 94, 0.32)) !important;
+}
+body:not(.theme-dark) .p2-category-entry-card:not(.p2-brainstorm-entry-card) h3 {
+  font-family: var(--nr-hand);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #2f2924 !important;
+}
+/* Count → hand-circled in the category colour */
+body:not(.theme-dark) .p2-category-entry-card:not(.p2-brainstorm-entry-card) header span,
+body:not(.theme-dark) .p2-category-entry-card:not(.p2-brainstorm-entry-card) .p2-topic-count {
+  background: transparent !important;
+  border: 1.6px solid color-mix(in srgb, var(--pen) 48%, #8a9890) !important;
+  border-radius: 16px 14px 17px 13px / 14px 17px 13px 16px;
+  color: color-mix(in srgb, var(--pen) 72%, #2f2924) !important;
+  font-family: var(--nr-hand);
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+/* Material rows → checklist items on dotted pencil rules */
+body:not(.theme-dark) .p2-category-entry-card .p2-material-row {
+  background: transparent !important;
+  border-bottom: 1.5px dotted color-mix(in srgb, var(--pen) 16%, rgba(79, 102, 94, 0.30)) !important;
+}
+body:not(.theme-dark) .p2-category-entry-card .p2-material-entry-button.has-corpus {
+  background: transparent !important;
+}
+body:not(.theme-dark) .p2-category-entry-card .p2-material-entry-button.has-corpus:hover {
+  background: color-mix(in srgb, var(--pen) 7%, transparent) !important;
+}
+/* Index → a wobbly hand-drawn number badge */
+body:not(.theme-dark) .p2-category-entry-card .p2-material-index {
+  background: transparent !important;
+  border: 2px solid color-mix(in srgb, var(--pen) 40%, #8a9890);
+  border-radius: 8px 7px 9px 6px / 7px 9px 6px 8px;
+  color: color-mix(in srgb, var(--pen) 62%, #6b7c74) !important;
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  font-weight: 700;
+}
+body:not(.theme-dark) .p2-category-entry-card .p2-material-title {
+  color: #2f2924 !important;
+}
+/* P3 status → a pencilled margin note */
+body:not(.theme-dark) .p2-category-entry-card .p2-material-status {
+  font-family: var(--nr-hand);
+  font-size: 14px;
+}
+body:not(.theme-dark) .p2-category-entry-card .p2-material-status.has-follow-up {
+  color: color-mix(in srgb, var(--pen) 72%, #2f2924) !important;
+}
+body:not(.theme-dark) .p2-category-entry-card .p2-material-status.is-empty {
+  color: #9a8f7d !important;
+}
+/* Empty state */
+body:not(.theme-dark) .p2-category-entry-card .p2-topic-empty {
+  background: transparent !important;
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  color: #9a8f7d;
+}
+/* "新增素材" → dashed pencil box + handwritten label */
+body:not(.theme-dark) .p2-category-entry-card .p2-add-material-button {
+  background: transparent !important;
+  border-top: 1.5px dotted color-mix(in srgb, var(--pen) 16%, rgba(79, 102, 94, 0.30)) !important;
+}
+body:not(.theme-dark) .p2-category-entry-card .p2-add-material-button strong {
+  border: 1.6px dashed color-mix(in srgb, var(--pen) 42%, #8a9890) !important;
+  border-radius: 8px 7px 9px 6px / 7px 9px 6px 8px;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--pen) 62%, #6b7c74) !important;
+}
+body:not(.theme-dark) .p2-category-entry-card .p2-add-material-button span {
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  color: color-mix(in srgb, var(--pen) 70%, #2f2924) !important;
+}
+/* P3 edit pill → hand-drawn outline in the category colour */
+body:not(.theme-dark) .p2-category-entry-card .p2-material-actions .p2-follow-up-edit-button {
+  font-family: var(--nr-hand);
+  font-size: 16px;
+  border: 1.4px solid color-mix(in srgb, var(--pen) 36%, #b9a07a) !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--pen) 72%, #2f2924) !important;
+}
+body:not(.theme-dark) .p2-category-entry-card .p2-material-actions .p2-follow-up-edit-button.has-follow-up {
+  background: color-mix(in srgb, var(--pen) 10%, transparent) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   P2 当季 seasonal cue cards — paper checklist aesthetic (LIGHT theme)
+   Same study-paper language; pencil/ink accent = each card's category colour.
+   Visual only, no layout changes.
+   ══════════════════════════════════════════════════════════════════════════ */
+body:not(.theme-dark) .p2-seasonal-card {
+  --nr-hand: "Caveat", "Newsreader", "Songti SC", "Source Han Serif SC", cursive;
+  --pen: var(--cat-color, var(--p2-corpus-accent));
+  border: 1px solid color-mix(in srgb, var(--pen) 28%, rgba(79, 102, 94, 0.30));
+  border-left: 4px solid color-mix(in srgb, var(--pen) 58%, #8a9890);
+  border-radius: 11px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.84), rgba(249, 246, 239, 0.80)),
+    url("/assets/takeaway/pencil-card-paper-light.webp") center / cover no-repeat,
+    rgba(255, 251, 243, 0.97);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 10px 24px rgba(83, 66, 55, 0.08);
+}
+body:not(.theme-dark) .p2-seasonal-card:hover {
+  transform: translateY(-3px) rotate(-0.3deg);
+  border-color: color-mix(in srgb, var(--pen) 50%, rgba(79, 102, 94, 0.4));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 16px 34px rgba(83, 66, 55, 0.14);
+}
+/* Cue title → handwritten ink */
+body:not(.theme-dark) .p2-seasonal-card h3 {
+  font-family: var(--nr-hand);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #2f2924;
+}
+/* Cue body stays legible, just inked */
+body:not(.theme-dark) .p2-seasonal-cue,
+body:not(.theme-dark) .p2-seasonal-cue strong {
+  color: #44403a;
+}
+/* Status → a pencilled note */
+body:not(.theme-dark) .p2-seasonal-card-state {
+  background: transparent;
+  border: 1.4px solid color-mix(in srgb, var(--pen) 30%, #b9a07a);
+  color: color-mix(in srgb, var(--pen) 62%, #2f2924);
+  font-family: var(--nr-hand);
+  font-size: 15px;
+}
+body:not(.theme-dark) .p2-seasonal-card-state.is-ready {
+  background: color-mix(in srgb, var(--pen) 10%, transparent);
+  border-color: color-mix(in srgb, var(--pen) 40%, #8a9890);
+  color: color-mix(in srgb, var(--pen) 74%, #2f2924);
+}
+/* Footer actions → hand-drawn outline buttons in the category colour */
+body:not(.theme-dark) .p2-seasonal-action {
+  border: 1.5px solid color-mix(in srgb, var(--pen) 32%, #b9a07a);
+  background: transparent;
+  color: color-mix(in srgb, var(--pen) 72%, #2f2924);
+  font-family: var(--nr-hand);
+  font-size: 17px;
+}
+body:not(.theme-dark) .p2-seasonal-action.primary,
+body:not(.theme-dark) .p2-seasonal-action.is-ready {
+  background: color-mix(in srgb, var(--pen) 9%, transparent);
+  color: color-mix(in srgb, var(--pen) 78%, #2f2924);
+}
+body:not(.theme-dark) .p2-seasonal-action:hover,
+body:not(.theme-dark) .p2-seasonal-action:focus-visible {
+  background: color-mix(in srgb, var(--pen) 16%, transparent);
+  border-color: color-mix(in srgb, var(--pen) 50%, transparent);
+}
+/* Filter chips → light pencil tone */
+body:not(.theme-dark) .p2-cat-filter-btn {
+  font-family: var(--nr-hand);
+  font-size: 15px;
+  background: transparent;
+}
+
+/* ── Title centred in the card (count floats to the right corner) ── */
+.p1-topic-card header,
+.p2-category-entry-card:not(.p2-brainstorm-entry-card) header {
+  position: relative;
+  justify-content: center !important;
+}
+.p1-topic-card header > div {
+  flex: 0 1 auto;
+  text-align: center;
+}
+.p1-topic-card h3,
+.p2-category-entry-card:not(.p2-brainstorm-entry-card) h3 {
+  text-align: center;
+}
+.p1-topic-card .p1-topic-count,
+.p2-category-entry-card:not(.p2-brainstorm-entry-card) .p2-topic-count {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+body.theme-dark .p2-category-entry-card .p2-material-row.just-saved,
+body.theme-dark .p2-category-entry-card .p2-material-row.just-saved .p2-material-actions,
+body.theme-dark .p2-category-entry-card .p2-material-row.just-saved .p2-material-entry-button {
+  background-color: var(--dark-surface) !important;
 }
 
 /* Final P3 launch workbench overrides. Kept at the end so older responsive rules cannot undo it. */
@@ -26411,7 +28947,8 @@ body.theme-dark .language-takeaway-card-wrap.is-reviewing .language-takeaway-car
 }
 
 .p2-corpus-stat {
-  min-width: 350px;
+  /* Width is pinned by the fixed-footprint rule below; keep this in sync. */
+  min-width: 220px;
 }
 
 .language-takeaway-list {
@@ -26581,7 +29118,8 @@ body.view-writingTakeawayBook .language-book-shell {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  gap: 6px;
+  /* Nudge the list's top edge ~5px further below the header card. */
+  gap: 11px;
   padding: 4px 26px 6px;
   background:
     linear-gradient(90deg, rgba(23, 32, 51, 0.026) 1px, transparent 1px),
@@ -27516,7 +30054,13 @@ body.view-home .home-v3-primary {
 
 body.view-home .sketch-flow-board {
   position: relative;
-  min-height: 430px;
+  /* Lock the board to the connector SVG's aspect ratio (620 x 430). With a
+     matching aspect ratio, `preserveAspectRatio="none"` scales the viewBox
+     uniformly, so the arrows no longer skew. align-self: start stops the grid
+     from stretching the board taller (which would re-introduce the skew). */
+  aspect-ratio: 620 / 430;
+  align-self: start;
+  min-height: 0;
   padding: 0;
   overflow: hidden;
   border: 1.5px solid rgba(45, 55, 72, 0.16);
@@ -27536,10 +30080,12 @@ body.view-home .sketch-flow-board img {
 }
 
 body.view-home .sketch-flow-overlay {
-  position: relative;
+  /* Fill the board via inset:0 rather than height:100%. The board's height comes
+     from aspect-ratio, which isn't a "definite" height for a percentage-height
+     child — height:100% would collapse and squash the step percentages. */
+  position: absolute;
+  inset: 0;
   z-index: 1;
-  height: 100%;
-  min-height: 430px;
   padding: 28px;
 }
 
@@ -27548,10 +30094,10 @@ body.view-home .sketch-flow-overlay > span {
   display: inline-flex;
   margin: 0;
   padding: 7px 18px;
-  border: 1.5px solid rgba(47, 128, 109, 0.32);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 36%, transparent);
   border-radius: 999px 18px 999px 16px;
-  background: rgba(232, 244, 239, 0.86);
-  color: #2f806d;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent-dark);
   font-size: 13px;
   font-weight: 950;
   letter-spacing: 0.10em;
@@ -27589,18 +30135,18 @@ body.view-home .sketch-flow-connectors {
 
 body.view-home .sketch-flow-connector {
   fill: none;
-  stroke: rgba(137, 234, 205, 0.82);
-  stroke-width: 5.2;
+  stroke: color-mix(in srgb, var(--accent) 88%, transparent);
+  stroke-width: 3.4;
   stroke-linecap: round;
   stroke-linejoin: round;
   marker-end: url("#sketchFlowConnectorHead");
   filter:
-    drop-shadow(0 1px 0 rgba(255, 253, 246, 0.72))
-    drop-shadow(0 0 10px rgba(72, 210, 174, 0.22));
+    drop-shadow(0 0 2px color-mix(in srgb, var(--panel) 88%, transparent))
+    drop-shadow(0 1px 2px color-mix(in srgb, var(--accent-dark) 28%, transparent));
 }
 
 body.view-home .sketch-flow-connectors marker path {
-  fill: rgba(137, 234, 205, 0.92);
+  fill: color-mix(in srgb, var(--accent) 92%, transparent);
 }
 
 body.view-home .sketch-flow-step b {
@@ -27609,19 +30155,19 @@ body.view-home .sketch-flow-step b {
   height: 54px;
   display: grid;
   place-items: center;
-  border: 2px solid rgba(214, 246, 235, 0.86);
+  border: 1.5px solid color-mix(in srgb, var(--accent-dark) 50%, transparent);
   border-radius: 50%;
-  background: linear-gradient(180deg, #2f9a83, #236f62);
-  color: #ffffff;
-  font-size: 23px;
-  font-weight: 950;
-  box-shadow:
-    0 0 0 4px rgba(47, 128, 109, 0.16),
-    0 8px 18px rgba(20, 80, 68, 0.24);
+  background: linear-gradient(165deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 24px;
+  font-weight: 800;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 5px 14px -5px color-mix(in srgb, var(--accent-dark) 55%, transparent);
 }
 
 body.view-home .sketch-flow-step strong {
-  color: #172033;
+  color: var(--ink);
   font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
   font-size: clamp(22px, 2vw, 30px);
   font-weight: 900;
@@ -27629,15 +30175,18 @@ body.view-home .sketch-flow-step strong {
 }
 
 body.view-home .sketch-flow-step small {
-  color: #667487;
+  color: var(--muted);
   font-size: 15px;
   font-weight: 820;
   line-height: 1.3;
 }
 
+/* The three cards sit at the corners of a clockwise triangle (1 top-left,
+   2 mid-right, 3 bottom-left). Positions are percentages so they track the
+   board as it scales, keeping them locked to the connector arrows. */
 body.view-home .sketch-flow-step.step-1 {
-  top: 92px;
-  left: 24px;
+  top: 11%;
+  left: 4%;
   transform: rotate(-1deg);
 }
 
@@ -27646,8 +30195,8 @@ body.view-home .sketch-flow-step.step-1::after {
 }
 
 body.view-home .sketch-flow-step.step-2 {
-  top: 200px;
-  right: 30px;
+  top: 40%;
+  right: 4%;
   transform: rotate(1.1deg);
 }
 
@@ -27656,8 +30205,8 @@ body.view-home .sketch-flow-step.step-2::after {
 }
 
 body.view-home .sketch-flow-step.step-3 {
-  left: 72px;
-  bottom: 32px;
+  left: 9%;
+  bottom: 9%;
   transform: rotate(-0.7deg);
 }
 
@@ -27722,23 +30271,68 @@ body.theme-dark.view-home .sketch-flow-step small {
 }
 
 body.theme-dark.view-home .sketch-flow-step b {
-  border-color: rgba(198, 244, 226, 0.84);
-  background: linear-gradient(180deg, #36b090, #227665);
-  color: #ffffff;
-  box-shadow:
-    0 0 0 4px rgba(137, 220, 193, 0.16),
-    0 8px 18px rgba(0, 0, 0, 0.34);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: linear-gradient(165deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  box-shadow: 0 5px 14px -5px rgba(0, 0, 0, 0.5);
 }
 
-body.theme-dark.view-home .sketch-flow-connector {
-  stroke: rgba(137, 220, 193, 0.82);
+/* =====================================================================
+   Dark + Academic ("第二个主题"): the home page hardcodes a teal/green
+   accent (#2f806d, plus the sketch-flow teal gradient/connectors) which
+   reads as a cool colour and clashes with this theme's warm terracotta
+   --accent. Remap the home accents onto the theme accent so the home page
+   matches the surrounding warm UI. Scoped to dark+academic only — the
+   default and font-popular themes keep their original teal.
+   ===================================================================== */
+body.theme-dark.font-academic.view-home .home-v3-eyebrow,
+body.theme-dark.font-academic.view-home .home-v3-today > span,
+body.theme-dark.font-academic.view-home .home-v3-lane-head span,
+body.theme-dark.font-academic.view-home .home-v3-today li::before,
+body.theme-dark.font-academic.view-home .sketch-flow-overlay > span {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent-dark);
+}
+
+body.theme-dark.font-academic.view-home .home-v3-links b {
+  color: var(--accent-dark);
+}
+
+body.theme-dark.font-academic.view-home .home-v3-links a:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+body.theme-dark.font-academic.view-home .home-v3-route-title svg {
+  stroke: var(--accent-dark);
+  filter: drop-shadow(1px 1px 0 color-mix(in srgb, var(--accent) 14%, transparent));
+}
+
+body.theme-dark.font-academic.view-home .home-v3-primary {
+  background: var(--accent);
+  color: #1b1410;
+  border-color: transparent;
+  box-shadow:
+    0 16px 32px rgba(0, 0, 0, 0.34),
+    0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+body.theme-dark.font-academic.view-home .sketch-flow-step b {
+  border-color: color-mix(in srgb, var(--accent-dark) 60%, transparent);
+  background: linear-gradient(165deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  box-shadow: 0 5px 14px -5px rgba(0, 0, 0, 0.5);
+}
+
+body.theme-dark.font-academic.view-home .sketch-flow-connector {
+  stroke: color-mix(in srgb, var(--accent) 82%, transparent);
   filter:
     drop-shadow(0 1px 0 rgba(0, 0, 0, 0.26))
-    drop-shadow(0 0 11px rgba(137, 220, 193, 0.18));
+    drop-shadow(0 0 11px color-mix(in srgb, var(--accent) 22%, transparent));
 }
 
-body.theme-dark.view-home .sketch-flow-connectors marker path {
-  fill: rgba(137, 220, 193, 0.92);
+body.theme-dark.font-academic.view-home .sketch-flow-connectors marker path {
+  fill: color-mix(in srgb, var(--accent) 90%, transparent);
 }
 
 @media (max-width: 1180px) {
@@ -27766,11 +30360,18 @@ body.theme-dark.view-home .sketch-flow-connectors marker path {
     min-height: 0;
   }
 
+  /* Mobile stacks the cards in normal flow: drop the desktop aspect-ratio and
+     the absolute overlay so the board grows with its content. */
+  body.view-home .sketch-flow-board {
+    aspect-ratio: auto;
+  }
+
   body.view-home .sketch-flow-board img {
     opacity: 0.34;
   }
 
   body.view-home .sketch-flow-overlay {
+    position: relative;
     display: grid;
     gap: 12px;
     height: auto;
@@ -27964,6 +30565,71 @@ body.theme-dark.view-home .home-v3-panel {
   background: transparent !important;
 }
 
+/* =====================================================================
+   Dark + Academic ("第二个主题"): warm the 首页 / 语料库 底色. The home and
+   corpus pages fill their backgrounds with a cool navy + blue/teal glows
+   (#0c1219 / #111923 / #141923) that fight this theme's warm accent. The
+   theme's --bg is already a warm charcoal, so remap these hardcoded page
+   backgrounds + glows onto warm tones too. Scoped to dark+academic; the
+   default and font-popular themes keep their cool navy base.
+   ===================================================================== */
+body.theme-dark.font-academic {
+  background:
+    radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 28%),
+    var(--bg) !important;
+}
+
+html:has(body.theme-dark.font-academic.view-home) {
+  background: #0d0a08 !important;
+}
+
+body.theme-dark.font-academic.view-home,
+body.theme-dark.font-academic.view-home .shell {
+  background:
+    radial-gradient(circle at 14% 8%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 30%),
+    radial-gradient(circle at 84% 10%, color-mix(in srgb, var(--warn) 10%, transparent), transparent 28%),
+    linear-gradient(180deg, #15100c 0%, #0d0a08 100%) !important;
+}
+
+body.theme-dark.font-academic.view-home .workspace,
+body.theme-dark.font-academic.view-home .workspace:has(#homePanel:not(.hidden)) {
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 34%),
+    linear-gradient(180deg, #191310 0%, #0d0a08 100%) !important;
+}
+
+body.theme-dark.font-academic.view-home .global-topbar {
+  background:
+    linear-gradient(180deg, rgba(21, 16, 12, 0.94), rgba(21, 16, 12, 0.76)) !important;
+}
+
+body.theme-dark.font-academic.view-home .home-v3-hero,
+body.theme-dark.font-academic.view-home .home-v3-workbench,
+body.theme-dark.font-academic.view-home .sketch-flow-board {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    #1c150f !important;
+  background-size: 28px 28px !important;
+}
+
+/* Corpus library landing (语料库) — same warm remap of the cool navy base. */
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) {
+  background:
+    radial-gradient(circle at 18% 10%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 32%),
+    radial-gradient(circle at 82% 16%, color-mix(in srgb, var(--warn) 10%, transparent), transparent 34%),
+    linear-gradient(180deg, #15100c 0%, #0c0907 100%) !important;
+}
+
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-card,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-lane {
+  background:
+    linear-gradient(90deg, rgba(214, 224, 224, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(214, 224, 224, 0.036) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(38, 30, 25, 0.96), rgba(28, 22, 18, 0.96)) !important;
+  background-size: 30px 30px, 30px 30px, auto !important;
+}
+
 /* Writing topbar final absolute-last guard: expand the middle prompt selector
    into the empty area without scaling text or button internals. */
 body.view-writing .global-topbar > .writing-topbar-actions:not(.hidden) {
@@ -28129,6 +30795,103 @@ body.theme-dark .p2-seasonal-section-head > span {
   background: rgba(96, 165, 250, 0.16) !important;
   border-color: rgba(147, 197, 253, 0.34) !important;
   color: #dbeafe !important;
+}
+
+/* Re-assert the P2 paper-checklist look over the dark "readable category"
+   overrides directly above (they share specificity, so this must come later).
+   Keeps the count hand-circled and the "新增" box pencil-dashed in dark mode. */
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card) h3 {
+  color: color-mix(in srgb, var(--pen) 30%, #eaf1ec) !important;
+  text-shadow: none;
+}
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card) header span,
+body.theme-dark .p2-category-entry-card:not(.p2-brainstorm-entry-card) .p2-topic-count {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--pen) 52%, rgba(150, 172, 162, 0.5)) !important;
+  color: color-mix(in srgb, var(--pen) 55%, #eaf1ec) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-topic-material-list .p2-add-material-button {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--pen) 20%, rgba(150, 172, 162, 0.22)) !important;
+  color: color-mix(in srgb, var(--pen) 58%, #eaf1ec) !important;
+}
+body.theme-dark .p2-category-entry-card .p2-topic-material-list .p2-add-material-button strong {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--pen) 46%, rgba(150, 172, 162, 0.45)) !important;
+  color: color-mix(in srgb, var(--pen) 60%, #ccd6ce) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   P2 当季 seasonal cue cards — paper checklist (DARK theme)
+   Placed after the "readable category" block above so it wins; !important
+   beats the equal-specificity overrides there.
+   ══════════════════════════════════════════════════════════════════════════ */
+body.theme-dark .p2-seasonal-card {
+  --nr-hand: "Caveat", "Newsreader", "Songti SC", "Source Han Serif SC", cursive;
+  --pen: var(--cat-color, var(--p2-corpus-accent));
+  border: 1px solid color-mix(in srgb, var(--pen) 34%, rgba(111, 151, 142, 0.30)) !important;
+  border-left: 4px solid color-mix(in srgb, var(--pen) 60%, rgba(150, 172, 162, 0.5)) !important;
+  border-radius: 11px !important;
+  background:
+    linear-gradient(180deg, rgba(16, 22, 28, 0.74), rgba(13, 18, 24, 0.80)),
+    url("/assets/takeaway/pencil-card-paper-dark.webp") center / cover no-repeat,
+    #10171d !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 16px 34px rgba(0, 0, 0, 0.30) !important;
+}
+body.theme-dark .p2-seasonal-card:hover {
+  transform: translateY(-3px) rotate(-0.3deg);
+  border-color: color-mix(in srgb, var(--pen) 55%, rgba(111, 151, 142, 0.4)) !important;
+}
+body.theme-dark .p2-seasonal-card h3 {
+  font-family: var(--nr-hand);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #eaf1ec !important;
+}
+body.theme-dark .p2-seasonal-card-kicker {
+  color: color-mix(in srgb, var(--pen) 45%, #eaf1ec) !important;
+  text-shadow: none;
+}
+body.theme-dark .p2-seasonal-cue,
+body.theme-dark .p2-seasonal-cue strong {
+  color: #ccd6ce !important;
+}
+body.theme-dark .p2-seasonal-card-state {
+  background: transparent !important;
+  border: 1.4px solid color-mix(in srgb, var(--pen) 34%, rgba(150, 172, 162, 0.4)) !important;
+  color: color-mix(in srgb, var(--pen) 55%, #eaf1ec) !important;
+  font-family: var(--nr-hand);
+  font-size: 15px;
+}
+body.theme-dark .p2-seasonal-card-state.is-ready {
+  background: color-mix(in srgb, var(--pen) 16%, transparent) !important;
+  border-color: color-mix(in srgb, var(--pen) 45%, rgba(150, 172, 162, 0.45)) !important;
+  color: color-mix(in srgb, var(--pen) 58%, #eaf1ec) !important;
+}
+body.theme-dark .p2-seasonal-action {
+  border: 1.5px solid color-mix(in srgb, var(--pen) 38%, rgba(150, 172, 162, 0.4)) !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--pen) 55%, #eaf1ec) !important;
+  font-family: var(--nr-hand);
+  font-size: 17px;
+}
+body.theme-dark .p2-seasonal-action.primary,
+body.theme-dark .p2-seasonal-action.is-ready {
+  background: color-mix(in srgb, var(--pen) 16%, transparent) !important;
+  color: color-mix(in srgb, var(--pen) 60%, #eaf1ec) !important;
+}
+body.theme-dark .p2-seasonal-action:hover,
+body.theme-dark .p2-seasonal-action:focus-visible {
+  background: color-mix(in srgb, var(--pen) 24%, transparent) !important;
+  border-color: color-mix(in srgb, var(--pen) 55%, transparent) !important;
+  color: #ffffff !important;
+}
+body.theme-dark .p2-cat-filter-btn {
+  font-family: var(--nr-hand);
+  font-size: 15px;
 }
 
 /* Final P3 intensity switch: clearer segmented affordance and centered help copy. */
@@ -30392,19 +33155,18 @@ body.theme-dark .p2-material-entry-button .p2-material-index {
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-head-actions > span#p2CorpusStats,
 .corpus-head-actions > span#p1CorpusStats,
 .corpus-head-actions > span#p2CorpusStats {
+  /* Fixed footprint so the chip never resizes with the variable-length stat
+     string (loading -> season + count) and never drags the 题库助手 button. */
   flex: 0 0 auto !important;
-  width: auto !important;
-  min-width: 0 !important;
-  max-width: min(280px, 34vw) !important;
+  width: 220px !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+  min-height: 42px !important;
+  box-sizing: border-box !important;
   white-space: normal !important;
   text-align: center !important;
   line-height: 1.22 !important;
   padding: 4px 10px !important;
-}
-
-.corpus-head-actions > span#p1CorpusStats:where(:not(.is-error):not(.is-success)),
-.corpus-head-actions > span#p2CorpusStats:where(:not(.is-error):not(.is-success)) {
-  min-width: 76px !important;
 }
 .corpus-head-actions > .corpus-agent-button {
   flex: 0 0 auto !important;
@@ -30435,24 +33197,46 @@ body.theme-dark .p2-material-entry-button .p2-material-index {
 .turn-report-group:hover {
   transform: translateY(-1px) !important;
   box-shadow: 0 6px 16px rgba(19, 32, 38, 0.10) !important;
-}
-.turn-report-group:hover tr:first-child > td {
-  border-top-color: var(--accent) !important;
-}
-.turn-report-group:hover tr:last-child > td {
-  border-bottom-color: var(--accent) !important;
-}
-.turn-report-group:hover tr > td:first-child {
-  border-left-width: 4px !important;
-  border-left-color: var(--accent) !important;
-}
-.turn-report-group:hover tr > td:last-child {
-  border-right-color: var(--accent) !important;
-}
-/* lift the active group above its neighbours */
-.turn-report-group:hover {
+  /* lift the active group above its neighbours */
   position: relative !important;
   z-index: 3 !important;
+}
+/* Selected/hovered group highlight: a thick dashed border that "flows" around
+   the group (marching ants). It is painted on an overlay pseudo-element, so it
+   never changes the cells' box size — no more layout shift. The base border
+   widths are left untouched (the old hover bumped the left border 3px→4px,
+   which is what nudged the layout). */
+.turn-report-group:hover::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: -2px !important;
+  z-index: 4 !important;
+  pointer-events: none !important;
+  /* Pull the ring just inside the group so the left/right dashes aren't clipped
+     by the surrounding overflow. */
+  inset: 1px !important;
+  border-radius: 11px !important;
+  /* The dashes live in a diagonal repeating gradient that fills the whole box;
+     a 2.4px-thick rounded ring is carved out with a mask so the dashes only
+     show on the perimeter and bend smoothly around the rounded corners. */
+  padding: 2.4px !important;
+  background:
+    repeating-linear-gradient(45deg,
+      var(--accent) 0, var(--accent) 7px,
+      transparent 7px, transparent 15px) !important;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0) !important;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0) !important;
+  -webkit-mask-composite: xor !important;
+          mask-composite: exclude !important;
+  /* Slow, continuous drift of the dashes along the 45° axis. */
+  animation: turn-report-ants 3.2s linear infinite !important;
+}
+@keyframes turn-report-ants {
+  to { background-position: 21.21px -21.21px; }
 }
 
 /* T11b — Band 7 spoken version: recolour the bolded upgrade phrases so they
@@ -30477,31 +33261,21 @@ body.theme-dark .turn-report-table th.band7-head {
 }
 
 /* =====================================================================
-   T12 — home hero 1→2→3 cycle: the mint connectors vanished on the cream
-   sketch board in light mode. Give them a saturated teal with a crisp
-   white halo so the loop reads clearly; refine arrowheads and badges.
+   Home hero 1→2→3 cycle connectors — a single theme-adaptive rule. Colour
+   comes straight from --accent, so it stays on-theme for every palette and
+   for both light and dark with no per-theme special-casing. The panel-tinted
+   halo keeps the stroke legible on whatever board background sits behind it.
    ===================================================================== */
 body.view-home .sketch-flow-connector {
-  stroke: #1f9a7e !important;
-  stroke-width: 4.4 !important;
-  opacity: 0.96 !important;
+  stroke: color-mix(in srgb, var(--accent) 90%, transparent) !important;
+  stroke-width: 2.6 !important;
+  opacity: 1 !important;
   filter:
-    drop-shadow(0 0 2.5px rgba(255, 253, 246, 0.95))
-    drop-shadow(0 1px 1px rgba(20, 80, 68, 0.18)) !important;
+    drop-shadow(0 0 2px color-mix(in srgb, var(--panel) 85%, transparent))
+    drop-shadow(0 1px 2px color-mix(in srgb, var(--accent-dark) 30%, transparent)) !important;
 }
 body.view-home .sketch-flow-connectors marker path {
-  fill: #1f9a7e !important;
-}
-/* dark mode keeps the bright mint, just a touch stronger */
-body.theme-dark.view-home .sketch-flow-connector {
-  stroke: rgba(150, 233, 206, 0.95) !important;
-  stroke-width: 4.4 !important;
-  filter:
-    drop-shadow(0 0 3px rgba(0, 0, 0, 0.4))
-    drop-shadow(0 0 10px rgba(137, 220, 193, 0.28)) !important;
-}
-body.theme-dark.view-home .sketch-flow-connectors marker path {
-  fill: rgba(150, 233, 206, 0.98) !important;
+  fill: color-mix(in srgb, var(--accent) 92%, transparent) !important;
 }
 
 /* T9 — Takeaway first-load: the unified centered spinner needs room and must
@@ -31157,4 +33931,405 @@ body.theme-dark #accountProfilePanel .account-ai-source-select {
   background-color: rgba(30, 41, 59, 0.78) !important;
   color: #f8fbff !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 22px rgba(0, 0, 0, 0.22) !important;
+}
+
+/* Expression replacement add button: keep the pending spinner centered inside the round icon. */
+.expression-replacement-add {
+  position: relative !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  min-height: 34px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  line-height: 1 !important;
+}
+
+.expression-replacement-add > span {
+  display: grid !important;
+  place-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  line-height: 1 !important;
+  transform: translateY(-1px) !important;
+}
+
+.expression-replacement-add.is-busy {
+  color: var(--accent-dark) !important;
+}
+
+.expression-replacement-add.is-busy > span {
+  opacity: 0 !important;
+}
+
+.expression-replacement-add.is-busy::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  border: 2px solid var(--accent-dark) !important;
+  border-top-color: transparent !important;
+  border-radius: 999px !important;
+  transform: translate(-50%, -50%) !important;
+  animation: expression-add-spin 720ms linear infinite !important;
+}
+
+body.theme-dark .expression-replacement-add.is-busy::after {
+  border-color: #7dd3fc !important;
+  border-top-color: transparent !important;
+}
+
+@keyframes expression-add-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* P1 corpus: compact cards do not trap wheel scroll; full list opens in a fixed modal. */
+.p1-topic-card {
+  height: 100% !important;
+  cursor: zoom-in !important;
+}
+
+.p1-corpus-topics {
+  align-items: stretch !important;
+}
+
+.p1-topic-card.is-complete-list {
+  cursor: default !important;
+}
+
+.p1-topic-card.is-complete-list .p1-topic-question-list {
+  max-height: none !important;
+  overflow: visible !important;
+  scrollbar-width: auto !important;
+}
+
+.p1-topic-card.is-modal-only .p1-topic-question-list {
+  position: relative !important;
+  max-height: 304px !important;
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+  overscroll-behavior: auto !important;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 calc(100% - 34px), transparent 100%) !important;
+  mask-image: linear-gradient(180deg, #000 0%, #000 calc(100% - 34px), transparent 100%) !important;
+}
+
+.p1-topic-card.is-modal-only .p1-topic-question-list::-webkit-scrollbar {
+  display: none !important;
+}
+
+.p1-topic-card.is-complete-list .p1-topic-question-list button {
+  cursor: pointer !important;
+}
+
+.p1-topic-card.is-modal-only .p1-topic-question-list button {
+  cursor: zoom-in !important;
+  pointer-events: none !important;
+}
+
+.p1-topic-card.is-modal-only::after {
+  content: "点击卡片查看全部" !important;
+  position: absolute !important;
+  left: 14px !important;
+  right: 14px !important;
+  bottom: 12px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 999px !important;
+  border: 1.4px dashed color-mix(in srgb, var(--p1-corpus-accent) 36%, #b9a07a) !important;
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.95), rgba(249, 246, 239, 0.93)) !important;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 78%, #2f2924) !important;
+  font-family: var(--nr-hand) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  pointer-events: none !important;
+  box-shadow: 0 6px 16px rgba(83, 66, 55, 0.12) !important;
+}
+
+.p1-topic-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9000 !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: clamp(18px, 4vw, 42px) !important;
+  background: rgba(8, 13, 23, 0.46) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.p1-topic-modal-backdrop.hidden {
+  display: none !important;
+}
+
+.p1-topic-modal {
+  width: min(760px, 100%) !important;
+  max-height: min(760px, calc(100vh - 72px)) !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  overflow: hidden !important;
+  border: 1px solid color-mix(in srgb, var(--p1-corpus-accent) 34%, rgba(148, 163, 184, 0.30)) !important;
+  border-radius: 18px !important;
+  background: #fff !important;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.26) !important;
+}
+
+.p1-topic-modal > header {
+  min-height: 74px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 16px 18px !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.86) !important;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--p1-corpus-accent) 10%, #f8fafc), #fff) !important;
+}
+
+.p1-topic-modal > header span {
+  color: color-mix(in srgb, var(--p1-corpus-accent) 78%, #475569) !important;
+  font-size: 11px !important;
+  font-weight: 860 !important;
+  letter-spacing: 0.08em !important;
+}
+
+.p1-topic-modal > header h3 {
+  margin: 3px 0 0 !important;
+  color: #0f172a !important;
+  font-size: clamp(18px, 2.1vw, 26px) !important;
+  font-weight: 860 !important;
+  line-height: 1.18 !important;
+}
+
+.p1-topic-modal > header strong {
+  min-width: 58px !important;
+  min-height: 32px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 999px !important;
+  background: var(--p1-corpus-accent) !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 860 !important;
+}
+
+.p1-topic-modal-close {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.76) !important;
+  color: #334155 !important;
+  font-size: 22px !important;
+  line-height: 1 !important;
+}
+
+.p1-topic-modal-list {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  padding: 8px 0 !important;
+}
+
+.p1-topic-modal-list button {
+  width: 100% !important;
+  min-height: 58px !important;
+  display: grid !important;
+  grid-template-columns: 54px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.82) !important;
+  background: transparent !important;
+  color: var(--ink) !important;
+  padding: 12px 18px !important;
+  text-align: left !important;
+}
+
+.p1-topic-modal-list button:hover,
+.p1-topic-modal-list button:focus-visible {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 6%, #f8fafc) !important;
+  outline: none !important;
+}
+
+.p1-topic-modal-list button strong {
+  width: 30px !important;
+  height: 30px !important;
+  display: grid !important;
+  place-items: center !important;
+  justify-self: center !important;
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 999px !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  font-weight: 860 !important;
+}
+
+.p1-topic-modal-list button.has-corpus strong {
+  border-color: color-mix(in srgb, var(--p1-corpus-accent) 72%, #e2e8f0) !important;
+  background: var(--p1-corpus-accent) !important;
+  color: #fff !important;
+}
+
+.p1-topic-modal-list button span {
+  color: #172033 !important;
+  font-size: 15px !important;
+  font-weight: 680 !important;
+  line-height: 1.42 !important;
+  white-space: normal !important;
+}
+
+body.theme-dark .p1-topic-modal {
+  border-color: rgba(45, 212, 191, 0.25) !important;
+  background: #111827 !important;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48) !important;
+}
+
+body.theme-dark .p1-topic-modal > header {
+  border-bottom-color: rgba(51, 65, 85, 0.86) !important;
+  background: linear-gradient(135deg, rgba(20, 94, 86, 0.28), rgba(15, 23, 42, 0.92)) !important;
+}
+
+body.theme-dark .p1-topic-modal > header h3,
+body.theme-dark .p1-topic-modal-list button span {
+  color: #eef5fb !important;
+}
+
+body.theme-dark .p1-topic-modal-close {
+  border-color: rgba(148, 163, 184, 0.20) !important;
+  background: rgba(15, 23, 42, 0.74) !important;
+  color: #cbd5e1 !important;
+}
+
+body.theme-dark .p1-topic-modal-list button {
+  border-bottom-color: rgba(51, 65, 85, 0.76) !important;
+}
+
+body.theme-dark .p1-topic-modal-list button:hover,
+body.theme-dark .p1-topic-modal-list button:focus-visible {
+  background: rgba(45, 212, 191, 0.08) !important;
+}
+
+body.theme-dark .p1-topic-modal-list button strong {
+  border-color: rgba(148, 163, 184, 0.42) !important;
+  background: rgba(30, 41, 59, 0.84) !important;
+  color: #dbe7f3 !important;
+}
+
+body.theme-dark .p1-topic-modal-list button.has-corpus strong {
+  border-color: rgba(45, 212, 191, 0.72) !important;
+  background: var(--p1-corpus-accent) !important;
+  color: #ffffff !important;
+}
+
+body.theme-dark .p1-topic-card.is-modal-only::after {
+  border-color: color-mix(in srgb, var(--p1-corpus-accent) 42%, #6f978e) !important;
+  background: linear-gradient(180deg, rgba(16, 22, 28, 0.93), rgba(13, 18, 24, 0.95)) !important;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 58%, #eaf1ec) !important;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.30) !important;
+}
+
+/* P2 bank-body editor final override: the title cue popover shares the
+   Brainstorm popover class, so keep this after all shared popover rules. */
+.p2-corpus-dialog-card.is-bank-editor .p2-corpus-title-cue-detail.p2-brainstorm-cue-detail {
+  left: clamp(140px, 18vw, 240px) !important;
+  right: auto !important;
+  top: calc(100% + 8px) !important;
+  width: min(335px, calc(100vw - var(--sidebar-width) - 260px)) !important;
+  max-width: 335px !important;
+  min-width: min(300px, calc(100vw - var(--sidebar-width) - 260px)) !important;
+  max-height: 270px !important;
+  padding: 15px 17px !important;
+}
+
+.p2-corpus-dialog-card.is-bank-editor .p2-corpus-title-cue-detail .p2-seasonal-cue {
+  font-size: 15px !important;
+  line-height: 1.58 !important;
+}
+
+.p2-corpus-dialog-card.is-bank-editor #p2CorpusText,
+.p2-corpus-dialog-card.is-bank-editor .vditor-ir,
+.p2-corpus-dialog-card.is-bank-editor .vditor-reset,
+.p2-corpus-dialog-card.is-bank-editor .vditor-ir pre.vditor-reset,
+.p2-corpus-dialog-card.is-bank-editor .vditor-ir .vditor-reset,
+.p2-corpus-dialog-card.is-bank-editor .vditor-reset p {
+  font-size: 18px !important;
+  line-height: 1.62 !important;
+}
+
+/* P2 material menus must escape the fixed-height row and stay above adjacent cards. */
+.p2-category-entry-grid > .p2-category-entry-card.is-menu-open {
+  position: relative !important;
+  z-index: 5000 !important;
+  overflow: visible !important;
+}
+
+.p2-category-entry-card.is-menu-open .p2-topic-material-list,
+.p2-category-entry-card.is-menu-open .p2-material-row.is-menu-open,
+.p2-category-entry-card.is-menu-open .p2-material-row.is-menu-open .p2-material-actions {
+  position: relative !important;
+  z-index: 5001 !important;
+  overflow: visible !important;
+}
+
+.p2-category-entry-card.is-menu-open .p2-material-row.is-menu-open .corpus-card-action-menu {
+  z-index: 5002 !important;
+}
+
+/* Report toolbars need the full top-right area; onboarding remains available elsewhere. */
+body:has(#historyPanel:not(.hidden)) .ob-launch,
+body:has(#writingReportsPanel:not(.hidden)) .ob-launch {
+  display: none !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Spelling drill — style-only refinement (2026-06-23).
+   Appearance ONLY: resting surface fills + accent gradients. No motion,
+   no transitions, no transforms, no hover-lift, no shadow tricks, no
+   layout — strictly how the surfaces look at rest. The card geometry
+   above stays hard-locked and untouched.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Answer input — a faintly accent-tinted resting fill so it reads as the
+   focal field (border weight and size unchanged). */
+.spelling-drill-panel .nr-input {
+  background: color-mix(in srgb, var(--sd-card) 94%, var(--sd-accent)) !important;
+  border-color: color-mix(in srgb, var(--sd-accent) 30%, var(--sd-line)) !important;
+}
+
+/* Progress fill — a soft left-to-right sheen across the accent. */
+.spelling-drill-panel .nr-progress-fill {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--sd-accent) 72%, #fff),
+    var(--sd-accent)) !important;
+}
+
+/* Primary action ("下一题" / "再来一轮") — a top-lit accent gradient for a
+   more finished fill; existing white label is kept. */
+.spelling-drill-panel .nr-next-btn,
+.spelling-drill-panel .nr-btn-primary {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--sd-accent) 90%, #fff),
+    var(--sd-accent)) !important;
+  border-color: color-mix(in srgb, var(--sd-accent) 64%, #000) !important;
+}
+
+/* Active scope pill — same accent gradient so the toggle matches the action. */
+.spelling-drill-panel .spelling-scope-switch button.is-active {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--sd-accent) 90%, #fff),
+    var(--sd-accent)) !important;
 }

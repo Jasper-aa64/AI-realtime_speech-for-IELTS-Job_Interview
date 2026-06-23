@@ -1,6 +1,32 @@
 (function () {
   "use strict";
 
+  function formatP2BrainstormCopyBlock({
+    index = "",
+    stem = "",
+    bullets = [],
+    rounding = "",
+    fallbackRequirement = "",
+    idea = "",
+  } = {}) {
+    const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const normalizedIndex = normalize(index);
+    const normalizedStem = normalize(stem);
+    const normalizedBullets = (Array.isArray(bullets) ? bullets : []).map(normalize).filter(Boolean);
+    const normalizedRounding = normalize(rounding);
+    const heading = [normalizedIndex ? `${normalizedIndex}.` : "", normalizedStem].filter(Boolean).join(" ");
+    const structuredRequirement = [
+      normalizedBullets.map((bullet) => `- ${bullet}`).join(" "),
+      normalizedRounding,
+    ].filter(Boolean).join(normalizedBullets.length && normalizedRounding ? "  " : "");
+    const requirement = structuredRequirement || normalize(fallbackRequirement);
+    return [
+      heading,
+      requirement ? `    ${requirement}` : "",
+      `    灵感：${normalize(idea)}`,
+    ].filter(Boolean).join("\n");
+  }
+
   function createCorpusTakeawayController(options) {
     const {
       state,
@@ -88,14 +114,15 @@
     const p2BankCorpusCache = new Map();
     const p2BankP3Cache = new Map();
     let p1CorpusEditorLoadToken = 0;
+    let p1TopicModalResumeKey = "";
     let p2BankCorpusLoadToken = 0;
     let p2BankP3LoadToken = 0;
 
     // ── P2/P3 bank corpus: persistent SWR cache + batch prefetch ──────────────
     // Memory cache holds resolved Promises; localStorage gives stale-while-
     // revalidate across reloads; a batch endpoint warms the whole visible list.
-    const P2BANK_LS_PREFIX = "p2bank_corpus_v1";
-    const P3BANK_LS_PREFIX = "p2bank_p3_v1";
+    const P2BANK_LS_PREFIX = "p2bank_corpus_v2";
+    const P3BANK_LS_PREFIX = "p2bank_p3_v2";
     const P2BANK_LS_MAX = 200;
     const P2BANK_BATCH_CHUNK = 20;
     const p2BankBatchRequested = new Set();
@@ -190,27 +217,18 @@
       }).catch(() => { /* keep cached copy on failure */ });
     }
 
-    // Background revalidation finished: replace the OPEN editor only if it is
-    // showing this card and the user has not typed (never clobber edits).
+    // Background revalidation may update caches, but an already-open editor must
+    // remain visually stable. Do not rewrite its fields after the dialog opens.
     function maybeApplyFreshP2BankCorpus(questionId, fresh) {
       if ($("p2CorpusDialog")?.classList.contains("hidden")) return;
       const active = state.p2Corpus.activeEntry;
       if (!active || p2BankQuestionId(active) !== questionId) return;
       const rendered = String(active.material_text || "");
       const freshText = String(fresh.corpus_text || "");
-      if (freshText === rendered) return;
-      const current = String(getCorpusMarkdownValue("p2CorpusText") || "");
-      if (current.trim() !== rendered.trim()) {
-        text("p2CorpusSaveStatus", "服务器上有更新版本（未覆盖你的修改）");
-        return;
-      }
-      active.material_text = freshText;
-      active.brainstorm_idea = fresh.brainstorm_idea ?? active.brainstorm_idea;
-      setCorpusMarkdownValue("p2CorpusText", freshText);
-      const brainstormInput = $("p2CorpusBrainstormIdea");
-      if (brainstormInput && document.activeElement !== brainstormInput) {
-        brainstormInput.value = active.brainstorm_idea || "";
-      }
+      const renderedIdea = String(active.brainstorm_idea || "");
+      const freshIdea = String(fresh.brainstorm_idea || "");
+      if (freshText === rendered && freshIdea === renderedIdea) return;
+      text("p2CorpusSaveStatus", "\u670d\u52a1\u5668\u4e0a\u6709\u66f4\u65b0\uff0c\u5f53\u524d\u7f16\u8f91\u7a97\u53e3\u5df2\u4fdd\u6301\u4e0d\u53d8");
     }
     function maybeApplyFreshP2BankP3(questionId, fresh) {
       if ($("p2CorpusP3Dialog")?.classList.contains("hidden")) return;
@@ -651,6 +669,7 @@
         ids: due.map((item) => item.entry_id),
         reviewedIds: new Set(),
         currentId: "",
+        animatingId: "",
         previousHideEnglish,
       };
       setTakeawayReviewToast(kind, "先点一张被遮住的卡片，露出英文后再按 A / D。");
@@ -675,6 +694,7 @@
         ids: [],
         reviewedIds: new Set(),
         currentId: "",
+        animatingId: "",
         previousHideEnglish,
       };
       setTakeawayReviewToast(kind, message);
@@ -696,14 +716,21 @@
 
     function selectTakeawayReviewEntry(kind, entryId) {
       const id = String(entryId || "").trim();
-      if (!isTakeawayReviewEntry(kind, id)) return "inactive";
-      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
       const session = takeawayReviewSession(kind);
-      if (session.currentId && session.currentId !== id) {
+      // Ignore taps while the current card's mascot is flying off.
+      if (session.active && session.animatingId) return "blocked";
+      // Only a "current" card (revealed, awaiting A / D) locks the deck: clicking
+      // any *other* card is refused and we scroll back to it. With no current
+      // card, clicking is free — review targets become current, everything else
+      // just reveals normally (handled by the caller via the "inactive" result).
+      if (session.active && session.currentId && session.currentId !== id) {
         setTakeawayReviewToast(kind, "先用 A / D 记录当前这张，再看下一条。");
         renderTakeawayReviewSurfaces(kind);
+        scrollTakeawayCardIntoView(kind, session.currentId);
         return "blocked";
       }
+      if (!isTakeawayReviewEntry(kind, id)) return "inactive";
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
       session.currentId = id;
       target.revealedEntryIds.add(id);
       setTakeawayReviewToast(kind, "");
@@ -714,12 +741,15 @@
 
     function takeawayReviewFeedback(kind, entryId = "", result) {
       const session = takeawayReviewSession(kind);
+      if (session.animatingId) return false; // ignore input while the mascot flies off
       const id = String(entryId || session.currentId || "").trim();
       if (!id) {
         setTakeawayReviewToast(kind, "先点一张被遮住的卡片，露出英文后再按 A / D。");
         renderTakeawayReviewSurfaces(kind);
         return false;
       }
+      // Persist the SRS record immediately so the grade is never lost, then let
+      // the mascot lift the card away before we re-conceal / advance the deck.
       const records = ensureTakeawayReviewRecords(kind);
       const record = records[id] || {};
       const currentEase = Number(record.ease || 2.5);
@@ -744,7 +774,19 @@
       record.last = todayKey();
       records[id] = record;
       saveTakeawayReviewState(kind, records);
+
+      const wasCurrent = session.currentId === id;
+      const commit = () => commitTakeawayReviewFeedback(kind, id, result, records);
+      if (wasCurrent && playTakeawayMascotFlyAway(kind, id, result, commit)) return true;
+      commit();
+      return true;
+    }
+
+    function commitTakeawayReviewFeedback(kind, entryId, result, records) {
+      const id = String(entryId || "").trim();
+      const session = takeawayReviewSession(kind);
       const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      session.animatingId = "";
       session.reviewedIds.add(id);
       session.currentId = "";
       target.revealedEntryIds.delete(id);
@@ -758,12 +800,39 @@
         saveTakeawayReviewState(kind, records);
         endTakeawayReview(kind, "今日复习完成。");
         return true;
-      } else {
-        setTakeawayReviewToast(kind, result === "again" ? "已记为 D，明天再复习。" : "已记为 A，间隔已延长。");
       }
+      setTakeawayReviewToast(kind, result === "again" ? "已记为 D，明天再复习。" : "已记为 A，间隔已延长。");
       if (kind === "writing") renderWritingTakeaways();
       else renderLanguageTakeaways();
       renderTakeawayReviewSurfaces(kind);
+      return true;
+    }
+
+    // A → green balloon, D → red. The brain grabs it and floats up out of the
+    // card top, then it's gone (no return — the card is done). Returns false if
+    // there's no mascot to animate so the caller can commit immediately.
+    function playTakeawayMascotFlyAway(kind, entryId, result, onDone) {
+      const wrap = takeawayReviewCardWrap(kind, entryId);
+      const mascot = wrap?.querySelector(".takeaway-review-mascot");
+      if (!mascot) return false;
+      const session = takeawayReviewSession(kind);
+      session.animatingId = String(entryId || "").trim();
+      mascot.classList.add("is-flying", result === "again" ? "is-flying-d" : "is-flying-a");
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      if (reduceMotion) {
+        onDone?.();
+        return true;
+      }
+      let done = false;
+      const finish = () => { if (done) return; done = true; onDone?.(); };
+      const icon = mascot.querySelector(".tk-brain-icon");
+      const onEnd = (event) => {
+        if (event.animationName !== "tkBrainFlyAway") return;
+        icon.removeEventListener("animationend", onEnd);
+        finish();
+      };
+      icon?.addEventListener("animationend", onEnd);
+      window.setTimeout(finish, 1200); // safety net if animationend never fires
       return true;
     }
 
@@ -819,12 +888,39 @@
         container.innerHTML = '<p class="muted">还没有 P1 题目。</p>';
         return;
       }
-      container.innerHTML = topics.map((topic) => {
+      // Near-permanent opener topics recur every cycle: those with 9+ questions
+      // (hometown, work/study, etc.) plus the "city/area you live in" topics,
+      // which are long-term retained regardless of question count. Keep them, but
+      // float them to the very end so the rotating seasonal topics surface first.
+      // sort() is stable, so the order within each group is preserved.
+      const isPermanentTopic = (topic) => {
+        if ((topic.questions || []).length >= 9) return true;
+        const name = String(topic.label || topic.topic || "").toLowerCase();
+        return /\b(city|area)\b.*\byou live in\b/.test(name);
+      };
+      const orderedTopics = topics
+        .map((topic, index) => ({ topic, index }))
+        .sort((a, b) => {
+          const aPerm = isPermanentTopic(a.topic) ? 1 : 0;
+          const bPerm = isPermanentTopic(b.topic) ? 1 : 0;
+          return aPerm - bPerm || a.index - b.index;
+        })
+        .map((entry) => entry.topic);
+      // Index of the first permanent topic — a full-width divider goes right
+      // before it to visually fence off the long-term retained topics.
+      const firstPermanentIndex = orderedTopics.findIndex(isPermanentTopic);
+      container.innerHTML = orderedTopics.map((topic, topicIndex) => {
+        const divider = (topicIndex === firstPermanentIndex && firstPermanentIndex > 0)
+          ? '<hr class="p1-topic-divider" aria-hidden="true">'
+          : "";
         const questions = topic.questions || [];
         const saved = questions.filter((item) => item.corpus_text).length;
         const progress = questions.length ? Math.round((saved / questions.length) * 100) : 0;
+        const topicKey = String(topic.topic || topic.label || "").trim();
+        const opensInModal = questions.length > 6;
         return `
-          <article class="p1-topic-card" data-p1-progress="${progress}">
+          ${divider}
+          <article class="p1-topic-card ${opensInModal ? "is-modal-only" : "is-complete-list"}" data-p1-progress="${progress}" data-p1-topic-card="${escapeHtml(topicKey)}">
             <header>
               <div>
                 <h3>${escapeHtml(topic.label || topic.topic)}</h3>
@@ -834,7 +930,7 @@
             <div class="p1-topic-progress" aria-label="完成进度 ${progress}%" data-progress="${progress}"><span style="width: ${progress}%"></span></div>
             <div class="p1-topic-question-list">
               ${questions.map((item, index) => `
-                <button type="button" class="${item.corpus_text ? "has-corpus" : ""}" data-p1-corpus-question="${escapeHtml(item.question_id)}">
+                <button type="button" class="${item.corpus_text ? "has-corpus" : ""}" ${opensInModal ? 'tabindex="-1" aria-hidden="true"' : `data-p1-corpus-question="${escapeHtml(item.question_id)}"`}>
                   <strong>Q${index + 1}</strong>
                   <span>${escapeHtml(item.question)}</span>
                 </button>
@@ -843,6 +939,71 @@
           </article>
         `;
       }).join("");
+    }
+
+    function openP1TopicCardModal(topicKey) {
+      const key = String(topicKey || "").trim();
+      if (!key) return;
+      const topic = (state.p1Corpus.topics || []).find((item) => String(item.topic || item.label || "").trim() === key);
+      if (!topic) return;
+      const questions = topic.questions || [];
+      const saved = questions.filter((item) => item.corpus_text).length;
+      let modal = $("p1TopicCardModal");
+      if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "p1TopicCardModal";
+        document.body.appendChild(modal);
+      }
+      modal.className = "p1-topic-modal-backdrop";
+      modal.dataset.p1TopicKey = key;
+      modal.innerHTML = `
+        <section class="p1-topic-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(topic.label || topic.topic || "P1 话题")}">
+          <header>
+            <div>
+              <span>PART 1</span>
+              <h3>${escapeHtml(topic.label || topic.topic)}</h3>
+            </div>
+            <strong>${saved}/${questions.length}</strong>
+            <button type="button" class="p1-topic-modal-close" data-p1-topic-modal-close aria-label="关闭">×</button>
+          </header>
+          <div class="p1-topic-modal-list">
+            ${questions.map((item, index) => `
+              <button type="button" class="${item.corpus_text ? "has-corpus" : ""}" data-p1-topic-modal-question="${escapeHtml(item.question_id)}">
+                <strong>Q${index + 1}</strong>
+                <span>${escapeHtml(item.question)}</span>
+              </button>
+            `).join("")}
+          </div>
+        </section>
+      `;
+      modal.classList.remove("hidden");
+      modal.addEventListener("click", handleP1TopicModalClick);
+      document.addEventListener("keydown", handleP1TopicModalKeydown);
+    }
+
+    function closeP1TopicCardModal() {
+      const modal = $("p1TopicCardModal");
+      if (!modal) return;
+      modal.classList.add("hidden");
+      modal.removeEventListener("click", handleP1TopicModalClick);
+      document.removeEventListener("keydown", handleP1TopicModalKeydown);
+    }
+
+    function handleP1TopicModalClick(event) {
+      if (event.target === event.currentTarget || event.target.closest("[data-p1-topic-modal-close]")) {
+        closeP1TopicCardModal();
+        return;
+      }
+      const button = event.target.closest("[data-p1-topic-modal-question]");
+      if (!button) return;
+      const topicKey = String(event.currentTarget?.dataset?.p1TopicKey || "").trim();
+      closeP1TopicCardModal();
+      p1TopicModalResumeKey = topicKey;
+      openP1CorpusEditor(findP1CorpusEntry(button.dataset.p1TopicModalQuestion || ""));
+    }
+
+    function handleP1TopicModalKeydown(event) {
+      if (event.key === "Escape") closeP1TopicCardModal();
     }
 
     function findP1CorpusEntry(questionId) {
@@ -925,6 +1086,9 @@
       }
       renderP1CorpusTopics();
       updateP1CorpusPeekButton(state.currentTurn);
+      // Same generation bump as the save path: a clear is also a local mutation
+      // that must win against any GET snapshotted before it.
+      state.p1Corpus.mutationSeq = (state.p1Corpus.mutationSeq || 0) + 1;
       state.p1Corpus.loadingPromise = null;
     }
 
@@ -1190,15 +1354,19 @@
     // 随题目绑定的「题库正文」: 串题灵感 (brainstorm) on top, 正文 (corpus_text) below,
     // mirroring the 编辑题库正文 editor layout.
     function p2BankBodyPeekHtml(payload) {
-      const brainstorm = String(payload?.brainstorm_idea || "").trim();
+      const parsed = p2ParseBrainstormValue(payload?.brainstorm_idea);
       const corpusText = String(payload?.corpus_text || "").trim();
-      if (!brainstorm && !corpusText) {
+      if (!parsed.tags.length && !parsed.text && !corpusText) {
         return '<p class="muted">还没有为这道题准备正文。可以在「题库正文」里编辑。</p>';
       }
+      const tagChips = parsed.tags.map((t) => `<span class="p2-brainstorm-tag is-readonly">${escapeHtml(t)}</span>`).join("");
+      const ideaHtml = (parsed.tags.length || parsed.text)
+        ? `<div class="p2-brainstorm-peek-idea">${tagChips}${parsed.text ? `<span class="p2-brainstorm-peek-idea-text">${escapeHtml(parsed.text)}</span>` : ""}</div>`
+        : '<p class="muted">还没有写串题灵感。</p>';
       return `
-        <section class="p2-corpus-peek-section p2-corpus-body-peek-section">
+        <section class="p2-corpus-peek-section p2-corpus-body-peek-section p2-corpus-peek-drag-handle" data-p2-dialog-drag-handle>
           <h4>串题灵感 Brainstorm</h4>
-          <div>${brainstorm ? `<p>${escapeHtml(brainstorm)}</p>` : '<p class="muted">还没有写串题灵感。</p>'}</div>
+          <div>${ideaHtml}</div>
         </section>
         <section class="p2-corpus-peek-section p2-corpus-body-peek-section">
           <h4>正文</h4>
@@ -1212,19 +1380,24 @@
     async function openP2CorpusPeek() {
       const questionId = state.p2Corpus.activeTurnQuestionId || p2TurnBankQuestionId(state.currentTurn);
       if (!questionId) return;
+      // 这个弹窗不要标题栏（超长题干 + 多余的关闭按钮都没意义，点空白即关）。
+      $("p2CorpusPeekHead")?.classList.add("hidden");
+      // 立刻出窗口 + 加载反馈，不再等 fetch 才弹。
+      const body = $("p2CorpusPeekBody");
+      if (body) body.innerHTML = '<p class="muted p2-corpus-peek-loading">正在加载本题正文…</p>';
+      $("p2CorpusPeekDialog")?.classList.remove("hidden");
+      resetCorpusPeekWindowPosition("p2CorpusPeekDialog");
       let payload = null;
       try {
+        // 不 force：按钮渲染时已预热过缓存，命中即秒开；过期由后台 revalidate 处理。
         payload = await fetchP2BankCorpusPayload(questionId);
       } catch (_error) {
         payload = null;
       }
-      const titleText = p2CleanCueTitle({ question: payload?.question || state.currentTurn?.question || "" }) || "本题";
-      text("p2CorpusPeekMeta", "我准备的本题正文");
-      text("p2CorpusPeekTitle", titleText);
-      const body = $("p2CorpusPeekBody");
+      // 窗口可能已被关掉或切到了别的题。
+      if ($("p2CorpusPeekDialog")?.classList.contains("hidden")) return;
+      if (state.p2Corpus.activeTurnQuestionId && state.p2Corpus.activeTurnQuestionId !== questionId) return;
       if (body) body.innerHTML = p2BankBodyPeekHtml(payload);
-      $("p2CorpusPeekDialog")?.classList.remove("hidden");
-      resetCorpusPeekWindowPosition("p2CorpusPeekDialog");
     }
 
     // Document → 随素材绑定的内容: the linked 串题素材 the learner attached to this turn.
@@ -1232,6 +1405,7 @@
       if (!state.p2Corpus.selectedEntryId) return;
       if (!state.p2Corpus.loaded) await ensureP2CorpusLoaded();
       const entry = currentP2CorpusEntry();
+      $("p2CorpusPeekHead")?.classList.remove("hidden"); // 链接素材弹窗仍保留标题栏
       text("p2CorpusPeekMeta", entry?.label || "P2 LINKED MATERIAL");
       text("p2CorpusPeekTitle", entry?.title ? `链接素材：${entry.title}` : "链接的串题素材");
       const body = $("p2CorpusPeekBody");
@@ -1263,6 +1437,8 @@
       button.classList.toggle("hidden", !visible);
       button.classList.toggle("has-corpus", visible);
       button.title = visible ? "查看这次 P3 关联的已保存语料" : "没有关联的 P3 追问素材";
+      // Warm the material in the background so the popup opens instantly.
+      if (visible) prefetchP3CorpusPeekMaterial(turn).catch(() => {});
     }
 
     async function p3CorpusPeekMaterialForTurn(turn = state.currentTurn) {
@@ -1301,25 +1477,57 @@
     }
 
     let p3CorpusPeekRequestSeq = 0;
+    // Prefetch cache: warm the P3 material the moment the peek button becomes
+    // visible so clicking it opens instantly instead of waiting on a network
+    // round-trip. Keyed by the turn's corpus identity so a new turn re-fetches.
+    let p3CorpusPeekPrefetch = null; // { key, promise }
+
+    function p3CorpusPeekTurnKey(turn = state.currentTurn) {
+      const prompt = turn?.prompt || {};
+      return [
+        turn?.id || turn?.turn_id || "",
+        prompt.source || state.p3PracticeSource?.sourceType || "",
+        prompt.p3_bank_followup_id || prompt.followup_id || "",
+        prompt.p2_question_id || prompt.cue_id || "",
+        prompt.p2_corpus_entry_id || state.p3PracticeSource?.p2CorpusEntryId || "",
+      ].join("|");
+    }
+
+    function prefetchP3CorpusPeekMaterial(turn = state.currentTurn) {
+      const key = p3CorpusPeekTurnKey(turn);
+      if (p3CorpusPeekPrefetch && p3CorpusPeekPrefetch.key === key) {
+        return p3CorpusPeekPrefetch.promise;
+      }
+      const promise = p3CorpusPeekMaterialForTurn(turn).catch((err) => {
+        // Drop a failed prefetch so a real open (or retry) fetches again.
+        if (p3CorpusPeekPrefetch && p3CorpusPeekPrefetch.key === key) p3CorpusPeekPrefetch = null;
+        throw err;
+      });
+      p3CorpusPeekPrefetch = { key, promise };
+      return promise;
+    }
 
     function renderP3CorpusPeekSource(source) {
       const body = $("p3CorpusPeekBody");
-      if (body) body.innerHTML = `
-        <section class="p2-corpus-peek-section">
-          <h4>${escapeHtml(source.title || "相关 P3 追问")}</h4>
-          <div>${source.body ? renderMarkdown(source.body) : `<p class="muted">${escapeHtml(source.empty || "还没有保存语料。")}</p>`}</div>
-        </section>
-      `;
+      if (!body) return;
+      // The P3 question is the only thing the user wants here. It already shows
+      // in the header, so the body carries just the saved corpus text when it
+      // exists — no duplicated question, no empty-state nag, no P2 cue clutter.
+      const corpus = source.body ? renderMarkdown(source.body) : "";
+      body.innerHTML = corpus
+        ? `<section class="p2-corpus-peek-section"><div>${corpus}</div></section>`
+        : "";
     }
 
     async function openP3CorpusPeek() {
       const seq = ++p3CorpusPeekRequestSeq;
-      text("p3CorpusPeekMeta", "P3 FOLLOW-UP MATERIAL");
+      // Header carries only the P3 question — hide the kicker so the P2 cue card
+      // and other meta never leak in.
+      $("p3CorpusPeekMeta")?.classList.add("hidden");
       text("p3CorpusPeekTitle", "相关 P3 追问");
       const body = $("p3CorpusPeekBody");
       if (body) body.innerHTML = `
         <section class="p2-corpus-peek-section p2-corpus-peek-loading" aria-live="polite">
-          <h4>正在加载语料…</h4>
           <div class="corpus-peek-loading-lines" aria-hidden="true">
             <span></span><span></span><span></span>
           </div>
@@ -1328,9 +1536,10 @@
       $("p3CorpusPeekDialog")?.classList.remove("hidden");
       resetCorpusPeekWindowPosition("p3CorpusPeekDialog");
       try {
-        const source = await p3CorpusPeekMaterialForTurn();
+        // Reuse the warmed prefetch when available — usually already resolved,
+        // so the loading state is skipped entirely.
+        const source = await prefetchP3CorpusPeekMaterial();
         if (seq !== p3CorpusPeekRequestSeq) return;
-        text("p3CorpusPeekMeta", source.meta || "P3 FOLLOW-UP MATERIAL");
         text("p3CorpusPeekTitle", source.title || "相关 P3 追问");
         renderP3CorpusPeekSource(source);
       } catch (err) {
@@ -1424,7 +1633,7 @@
           sendKeepaliveJson(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`, {
             question: p2Entry.linked_question || p2Entry.question || "",
             corpus_text: materialText,
-            metadata: { brainstorm_idea: $("p2CorpusBrainstormIdea")?.value || p2Entry.brainstorm_idea || "" },
+            metadata: { brainstorm_idea: p2CorpusBrainstormIdeaValue() || p2Entry.brainstorm_idea || "" },
             source: "p2_bank_corpus_editor",
           }).catch(() => null);
           return;
@@ -1589,19 +1798,25 @@
       text("p1CorpusSaveStatus", "");
     }
 
-    function closeP1CorpusEditor() {
+    function closeP1CorpusEditor(options = {}) {
+      const restoreTopic = options.restoreTopic !== false;
+      const resumeTopicKey = restoreTopic ? p1TopicModalResumeKey : "";
+      p1TopicModalResumeKey = "";
       p1CorpusEditorLoadToken += 1;
       $("p1CorpusDialog")?.classList.add("hidden");
       state.p1Corpus.activeEntry = null;
+      if (resumeTopicKey && state.view === "p1Corpus") {
+        requestAnimationFrame(() => openP1TopicCardModal(resumeTopicKey));
+      }
     }
 
-    async function saveAndCloseP1CorpusEditor() {
+    async function saveAndCloseP1CorpusEditor(options = {}) {
       if (!$("p1CorpusDialog") || $("p1CorpusDialog").classList.contains("hidden")) return;
       const entry = state.p1Corpus.activeEntry;
       const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
       if (entry && !corpusText) {
         markP1CorpusEntryCleared(entry);
-        closeP1CorpusEditor();
+        closeP1CorpusEditor(options);
         state.p1Corpus.savingPromise?.catch(() => null)
           .then(() => sendP1CorpusClearKeepalive(entry))
           .catch((error) => {
@@ -1610,7 +1825,7 @@
           });
         return;
       }
-      closeP1CorpusEditor();
+      closeP1CorpusEditor(options);
       if (entry) {
         saveP1CorpusEntry({ entry, corpusText, silent: true })
           .catch((error) => {
@@ -1652,6 +1867,12 @@
           persistP1CorpusClearedIds();
         }
         const saved = await api("/api/p1-corpus", payload);
+        // Local state now leads any GET issued before this save. Bump the
+        // generation and drop the cached in-flight request so a pre-save
+        // snapshot can't overwrite what we just persisted (see
+        // applyP1CorpusPayload's stale-payload guard).
+        state.p1Corpus.mutationSeq = (state.p1Corpus.mutationSeq || 0) + 1;
+        state.p1Corpus.loadingPromise = null;
         if (!String(saved.corpus_text || "").trim()) {
           saved.last_ai_answer = "";
           markP1CorpusEntryCleared({
@@ -1681,6 +1902,10 @@
           };
         }
         renderP1CorpusTopics();
+        const topicModal = $("p1TopicCardModal");
+        if (topicModal && !topicModal.classList.contains("hidden") && topicModal.dataset.p1TopicKey) {
+          openP1TopicCardModal(topicModal.dataset.p1TopicKey);
+        }
         updateP1CorpusPeekButton(state.currentTurn);
         if (options.closeOnSuccess) closeP1CorpusEditor();
       } catch (error) {
@@ -1849,23 +2074,65 @@
       const brainstormCardHtml = `
         <article class="p2-topic-card p2-category-entry-card p2-brainstorm-entry-card" data-category="brainstorm">
           <header>
+            <div id="p2BrainstormHeadField" class="p2-brainstorm-head-field" aria-hidden="true"></div>
             <h3>串题灵感 Brainstorm</h3>
             <span class="p2-topic-count">${brainstormCount}/${currentCards.length || 0}</span>
           </header>
           <button type="button" class="p2-brainstorm-open-card" data-p2-brainstorm-open>
-            <span class="p2-brainstorm-card-mark" aria-hidden="true">
-              <svg class="p2-brainstorm-icon" viewBox="0 0 32 32" focusable="false">
-                <path class="p2-brainstorm-icon-bulb" d="M16 5.5c-4.1 0-7.4 3.2-7.4 7.2 0 2.7 1.5 4.7 3.4 6.1.8.6 1.3 1.5 1.4 2.5h5.2c.1-1 .6-1.9 1.4-2.5 1.9-1.4 3.4-3.4 3.4-6.1 0-4-3.3-7.2-7.4-7.2Z"/>
-                <path class="p2-brainstorm-icon-base" d="M13.3 24h5.4M14 27h4"/>
-                <path class="p2-brainstorm-icon-spark" d="M4.8 15.8h3.1M24.1 15.8h3.1M7.2 7.2l2.2 2.2M24.8 7.2l-2.2 2.2M16 2.8v2.7"/>
-                <circle class="p2-brainstorm-icon-node" cx="8" cy="23.8" r="1.8"/>
-                <circle class="p2-brainstorm-icon-node" cx="24" cy="23.8" r="1.8"/>
-                <path class="p2-brainstorm-icon-link" d="M9.7 23.4c1.9-.5 3.2-1.2 4-2.1M22.3 23.4c-1.9-.5-3.2-1.2-4-2.1"/>
-              </svg>
-            </span>
+            <span id="p2BrainstormParticles" class="p2-brainstorm-particles" aria-hidden="true"></span>
             <span class="p2-brainstorm-card-copy">
               <strong>按题干快速记一句灵感</strong>
               <span>适合先放关键词、人物关系、地点、经历碎片，之后再整理成正式素材。</span>
+            </span>
+            <span class="p2-brainstorm-card-mark p2-brainstorm-card-mark--brain" aria-hidden="true">
+              <svg class="p2-brain-icon" viewBox="0 0 32 32" focusable="false">
+                <g class="p2-brain-cloud">
+                  <path class="p2-brain-cloud-puff" d="M27.3,-5 H35.7 Q37,-5 37,-3.7 V0.2 Q37,1.5 35.7,1.5 H30.6 L26.6,3.3 L27.3,1.5 Q26,1.5 26,0.2 V-3.7 Q26,-5 27.3,-5 Z"/>
+                  <g class="p2-brain-cloud-dots">
+                    <circle cx="28.8" cy="-1.75" r="1.1"/>
+                    <circle cx="31.5" cy="-1.75" r="1.1"/>
+                    <circle cx="34.2" cy="-1.75" r="1.1"/>
+                  </g>
+                </g>
+                <g class="p2-brain-bulb">
+                  <line class="p2-brain-bulb-ray" x1="32" y1="-4.6" x2="32" y2="-6.2"/>
+                  <line class="p2-brain-bulb-ray" x1="27.9" y1="-2.6" x2="26.6" y2="-3.7"/>
+                  <line class="p2-brain-bulb-ray" x1="36.1" y1="-2.6" x2="37.4" y2="-3.7"/>
+                  <circle class="p2-brain-bulb-glass" cx="32" cy="-1" r="3.5"/>
+                  <rect class="p2-brain-bulb-base" x="30.2" y="1.8" width="3.6" height="2"/>
+                </g>
+                <rect class="p2-brain-limb" x="12.55" y="20" width="1.7" height="3.4"/>
+                <rect class="p2-brain-limb" x="11.85" y="22.8" width="3.1" height="1.6"/>
+                <rect class="p2-brain-limb" x="17.75" y="20" width="1.7" height="3.4"/>
+                <rect class="p2-brain-limb" x="17.05" y="22.8" width="3.1" height="1.6"/>
+                <path class="p2-brain-limb-stroke" d="M7.5,12.5 Q4.6,15.2 4,19.4"/>
+                <rect class="p2-brain-hand" x="2.6" y="18.6" width="2.7" height="2.7"/>
+                <path class="p2-brain-body" d="M10,6 H22 V8 H24 V10 H26 V16 H24 V18 H22 V20 H10 V18 H8 V16 H6 V10 H8 V8 H10 Z"/>
+                <path class="p2-brain-fold" d="M16,8 V18 M10.5,10 H13.5 M18.5,10 H21.5 M10,16 H13 M19,16 H22"/>
+                <rect class="p2-brain-eye" x="12" y="12.4" width="2" height="2"/>
+                <rect class="p2-brain-eye" x="18" y="12.4" width="2" height="2"/>
+                <g class="p2-brain-balloon">
+                  <path class="p2-brain-balloon-string" d="M28,-1.9 C30.2,1 24.6,3.6 26.4,6.4"/>
+                  <g class="p2-brain-balloon-bob">
+                    <ellipse class="p2-brain-balloon-body" cx="28" cy="-6.6" rx="3.4" ry="3.9"/>
+                    <path class="p2-brain-balloon-knot" d="M27.2,-3 L28.8,-3 L28,-1.5 Z"/>
+                  </g>
+                </g>
+                <g class="p2-brain-arm-think">
+                  <path class="p2-brain-limb-stroke" d="M24,13 C28.6,12 28.8,4.8 22,5"/>
+                  <g class="p2-brain-hand-right">
+                    <rect class="p2-brain-hand" x="20" y="2.9" width="3" height="3"/>
+                  </g>
+                </g>
+                <g class="p2-brain-arm-idea">
+                  <path class="p2-brain-limb-stroke" d="M24,13 C27.2,11.2 27.6,6.5 26,5.2"/>
+                  <rect class="p2-brain-hand" x="24.8" y="3.6" width="2.8" height="2.8"/>
+                </g>
+                <g class="p2-brain-arm-hold">
+                  <path class="p2-brain-limb-stroke" d="M24,13 C28.4,11.6 28.8,7 26.4,6"/>
+                  <rect class="p2-brain-hand" x="24.9" y="4.9" width="3" height="3"/>
+                </g>
+              </svg>
             </span>
           </button>
         </article>
@@ -1886,6 +2153,9 @@
         const cat = normalizeSeasonalCategory(item.category);
         const cueTitle = p2CleanCueTitle(item);
         const cueHtml = p2CueQuestionHtml(item);
+        const p3Total = Number(item.p3_follow_up_count) || 0;
+        const p3Saved = Math.min(Number(item.p3_follow_up_saved_count) || 0, p3Total);
+        const p3Progress = p3Total ? Math.round((p3Saved / p3Total) * 100) : 0;
         return `
           <article
             class="p2-seasonal-card"
@@ -1904,10 +2174,16 @@
             <div class="p2-seasonal-body">
               ${cueHtml}
               <button type="button" class="p2-seasonal-practice-btn" data-p2-bank-start="${escapeHtml(cardId)}" title="直接用这道题开始 P2 练习">
-                <span class="p2-seasonal-practice-icon" aria-hidden="true"></span>
+                <svg class="p2-seasonal-practice-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>
                 <span>直接<br>练习</span>
               </button>
             </div>
+            ${p3Total > 0 ? `
+            <div class="p2-seasonal-p3-progress" data-progress="${p3Progress}" aria-label="P3 追问完成进度 ${p3Saved}/${p3Total}">
+              <span class="p2-seasonal-p3-progress-label">P3 追问</span>
+              <span class="p2-seasonal-p3-progress-track"><span style="width: ${p3Progress}%"></span></span>
+              <span class="p2-seasonal-p3-progress-count">${p3Saved}/${p3Total}</span>
+            </div>` : ""}
             <footer>
               <button type="button" class="p2-seasonal-action primary" data-p2-corpus-card-material="${escapeHtml(cardId)}">正文</button>
               <button type="button" class="p2-seasonal-action${item.has_p3_follow_up ? " is-ready" : ""}" data-p2-corpus-card-p3="${escapeHtml(cardId)}">P3 追问</button>
@@ -1915,6 +2191,7 @@
           </article>
         `;
       }).join("");
+      destroyP2BrainstormParticles();
       container.innerHTML = `
         <section class="p2-category-entry-grid" aria-label="P2 分类入口">
           ${categoryHtml}
@@ -1934,6 +2211,276 @@
           </div>
         </section>
       `;
+      initializeP2BrainstormParticles();
+    }
+
+    let p2BrainstormFields = [];
+    // Shared origin for the mascot's 7s animation loop so re-renders can resume
+    // the rebuilt SVG from the same phase instead of snapping back to t=0.
+    let p2BrainMascotStartTime = 0;
+
+    function destroyP2BrainstormParticles() {
+      p2BrainstormFields.forEach((field) => field.destroy());
+      p2BrainstormFields = [];
+    }
+
+    function initializeP2BrainstormParticles() {
+      destroyP2BrainstormParticles();
+      // Header strip ("串题灵感 Brainstorm 62/64") → dense pixel grid lit by a soft
+      // diagonal wave. Card body (正文) → loose square fragments drifting across.
+      const head = $("p2BrainstormHeadField");
+      const body = $("p2BrainstormParticles");
+      if (head) p2BrainstormFields.push(createPixelFlowField(head, "grid"));
+      if (body) p2BrainstormFields.push(createPixelFlowField(body, "scatter"));
+      initializeP2BrainstormMascot();
+    }
+
+    // The mascot's act-3 balloon picks a fresh random color every loop. The icon
+    // element is rebuilt on each card render, so the listener can't accumulate.
+    function initializeP2BrainstormMascot() {
+      const icon = document.querySelector(".p2-brainstorm-card-mark--brain .p2-brain-icon");
+      if (!icon) return;
+      const colors = ["#fb7185", "#f59e0b", "#34d399", "#38bdf8", "#a78bfa", "#f472b6", "#facc15", "#4ade80", "#fb923c"];
+      const pick = () => colors[Math.floor(Math.random() * colors.length)];
+      icon.style.setProperty("--p2-balloon-color", pick());
+      icon.addEventListener("animationiteration", (event) => {
+        if (event.animationName === "p2BrainFloat") icon.style.setProperty("--p2-balloon-color", pick());
+      });
+
+      // The card re-renders when the async corpus payload resolves (a few seconds
+      // after the first paint), which rebuilds this SVG and would otherwise
+      // restart every 7s loop from t=0. On a hard refresh that reset lands right
+      // in the middle of act-3 lift-off, so the balloon ascent visibly breaks the
+      // first time (and only the first time). Anchor all 7s-synced animations to
+      // one shared origin and resume the rebuilt element from the same phase via a
+      // negative animation-delay, so any re-render is seamless. The cloud dots run
+      // their own staggered 1.05s bounce and are intentionally left untouched.
+      const LOOP_MS = 7000;
+      if (!p2BrainMascotStartTime) p2BrainMascotStartTime = Date.now();
+      const phase = ((Date.now() - p2BrainMascotStartTime) % LOOP_MS) / 1000;
+      const delay = `-${phase.toFixed(3)}s`;
+      icon.style.animationDelay = delay;
+      icon
+        .querySelectorAll(
+          ".p2-brain-arm-think, .p2-brain-arm-idea, .p2-brain-arm-hold, .p2-brain-hand-right, .p2-brain-cloud, .p2-brain-bulb, .p2-brain-bulb-ray, .p2-brain-balloon, .p2-brain-balloon-bob"
+        )
+        .forEach((el) => {
+          el.style.animationDelay = delay;
+        });
+    }
+
+    // Self-contained canvas effect with two modes. Unlike particles.js, which
+    // measures its host exactly once at init and silently renders nothing when
+    // the box is 0×0 (hidden view) or its density math collapses the count, this
+    // owns its canvas, re-sizes through a ResizeObserver, and repaints every
+    // frame — so it can never go blank and always fills the host edge-to-edge.
+    //   mode "grid"    — dense block grid, soft diagonal brightness wave.
+    //   mode "scatter" — loose square fragments drifting rightward (the原来的特效).
+    function createPixelFlowField(host, mode = "grid") {
+      const canvas = document.createElement("canvas");
+      canvas.className = "p2-pixel-flow-canvas";
+      host.appendChild(canvas);
+      const ctx = canvas.getContext("2d");
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      const palette = ["#5eead4", "#34d399", "#22d3ee", "#7dd3fc", "#93c5fd", "#a5b4fc", "#c4b5fd"]
+        .map((hex) => {
+          const n = parseInt(hex.slice(1), 16);
+          return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        });
+      const cell = 9;  // logical px per grid cell (block + gap) → small, dense pixels
+      const block = 7; // painted grid square size
+      // Stable per-cell colour + phase so the grid shimmers without flickering.
+      const colorAt = (c, r) => palette[(c * 7 + r * 13 + ((c * r) % 5)) % palette.length];
+      // Well-distributed per-cell random (no row/column structure → no diagonal).
+      const hash = (c, r) => { const s = Math.sin(c * 127.1 + r * 311.7) * 43758.5453; return s - Math.floor(s); };
+      // Deterministic fragment pool for scatter mode. Positions use the R2
+      // low-discrepancy sequence so the fragments spread evenly across the whole
+      // box instead of folding into a couple of rows (which a plain `i*k % n`
+      // recurrence does).
+      const frac = (x) => x - Math.floor(x);
+      const fragments = Array.from({ length: 64 }, (_, i) => {
+        const h1 = frac(Math.sin((i + 1) * 12.9898) * 43758.5453);
+        const h2 = frac(Math.sin((i + 1) * 4.1414) * 27182.8459);
+        return {
+          x0: frac(0.5 + 0.7548776662 * i),   // 1/plastic-number
+          y: frac(0.13 + 0.5698402910 * i),   // 1/plastic-number²
+          size: 4 + Math.round(h1 * h1 * 6),  // 4–10px, skewed small: a few large, most smaller
+          speed: 9 + h2 * 22,
+          color: palette[i % palette.length],
+          phase: h1 * Math.PI * 2,
+        };
+      });
+      let cols = 0;
+      let rows = 0;
+      let width = 0;
+      let height = 0;
+      let rafId = 0;
+      let start = 0;
+
+      // Pointer-link state for scatter mode: a FIXED maximum number of the nearest
+      // fragments get tethered to the cursor with a line, so moving the mouse looks
+      // like it gathers the drifting fragments together — never a big clump.
+      const pointer = { x: 0, y: 0, active: false };
+      const scatterPos = new Array(fragments.length);
+      const LINK_MAX = 6;      // never tether more than this many fragments at once
+      const LINK_RADIUS = 170; // px; lines fade out past this so distant ones drop off
+      function onPointerMove(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        pointer.x = x;
+        pointer.y = y;
+        pointer.active = x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
+      }
+      function onPointerLeave() { pointer.active = false; }
+
+      function resize() {
+        const w = host.clientWidth;
+        const h = host.clientHeight;
+        if (w < 1 || h < 1) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        width = w;
+        height = h;
+        cols = Math.ceil(w / cell) + 1;
+        rows = Math.ceil(h / cell) + 1;
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        canvas.style.width = `${w}px`;
+        canvas.style.height = `${h}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (reduceMotion) draw(0);
+      }
+
+      function drawGrid(t) {
+        // Soft VERTICAL band that flows RIGHTWARD. Brightness over time comes ONLY
+        // from the rightward-moving column waves (depends on c and t, never on r →
+        // never diagonal), so it reads as a coherent flow, not random blinking. A
+        // static per-cell texture grains the band to keep its edges soft. Pixel
+        // density is EVEN across the whole bar; intensity just eases off to the
+        // right, so the left reads brighter and the right stays softer.
+        const baseA = 0.16;
+        const peakA = 0.9;
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
+            const x = c * cell;
+            const rnd = hash(c, r);                                // static texture, no time → no random blink
+            // Three right-moving waves at incommensurate scales sum into an
+            // irregular, non-periodic flow — keeps the rightward trend but breaks
+            // the too-regular even spacing. Raised baseline avoids hard dark gaps.
+            const flow = 0.5
+              + 0.22 * Math.sin(c * 0.17 - t * 8.32)
+              + 0.16 * Math.sin(c * 0.41 - t * 6.76 + 2.1)
+              + 0.12 * Math.sin(c * 0.93 - t * 9.1 + 0.7);
+            const lit = (0.4 + 0.6 * flow) * (0.32 + 0.68 * rnd); // wider per-cell grain → more randomness
+            // Even density; the first 1/3 stays fullest, then intensity eases off,
+            // the rightmost quarter dims harder, and the last eighth goes fully dark.
+            const u = x / width;
+            let soft;
+            if (u >= 0.875) soft = 0;                              // last 1/8 fully dark
+            else if (u >= 0.75) soft = 0.55 * (1 - (u - 0.75) / 0.125); // rightmost 1/4: 0.55 → 0
+            else if (u >= 1 / 3) soft = 1 - ((u - 1 / 3) / (0.75 - 1 / 3)) * 0.45; // ease 1 → 0.55
+            else soft = 1;                                         // first 1/3 stays brightest
+            let alpha = (baseA + (peakA - baseA) * lit) * soft;
+            if (alpha < 0.03) continue;
+            const rgb = colorAt(c, r);
+            // A little pure white at the brightest crest cells (mostly on the bright
+            // left). The white probability eases off smoothly left→right — one
+            // continuous curve instead of the old piecewise region split, but the
+            // same overall envelope: ~0.7 at the far left, ~0.55 at 1/5, fading to
+            // 0 by 2/5. The 0.35 exponent keeps it full early then drops near 2/5.
+            const leftWhite = u < 0.4 ? 0.7 * Math.pow(1 - u / 0.4, 0.35) : 0;
+            const wAmt = Math.min(1, Math.max(0, (flow * rnd - (0.82 - 0.5 * leftWhite)) / 0.18)) * soft;
+            const rr = Math.round(rgb[0] + (255 - rgb[0]) * wAmt);
+            const gg = Math.round(rgb[1] + (255 - rgb[1]) * wAmt);
+            const bb = Math.round(rgb[2] + (255 - rgb[2]) * wAmt);
+            ctx.fillStyle = `rgba(${rr}, ${gg}, ${bb}, ${alpha.toFixed(3)})`;
+            ctx.fillRect(x, r * cell, block, block);
+          }
+        }
+      }
+
+      function drawScatter(t, dark) {
+        const ceiling = dark ? 0.82 : 0.66;
+        const span = width + 16;
+        for (let i = 0; i < fragments.length; i += 1) {
+          const f = fragments[i];
+          const x = ((f.x0 * span + f.speed * t) % span) - 8;
+          const y = f.y * height + Math.sin(t * 0.6 + f.phase) * 3;
+          const alpha = ceiling * (0.5 + 0.5 * (0.5 + 0.5 * Math.sin(t * 1.4 + f.phase)));
+          ctx.fillStyle = `rgba(${f.color[0]}, ${f.color[1]}, ${f.color[2]}, ${alpha.toFixed(3)})`;
+          ctx.fillRect(x, y, f.size, f.size);
+          scatterPos[i] = { x: x + f.size / 2, y: y + f.size / 2, c: f.color };
+        }
+        if (pointer.active) drawPointerLinks(dark);
+      }
+
+      // Tether the cursor to its nearest few fragments. Ranking every fragment and
+      // keeping only the closest LINK_MAX (and dropping any past LINK_RADIUS) keeps
+      // the web small and steady instead of binding a whole cluster.
+      function drawPointerLinks(dark) {
+        const px = pointer.x;
+        const py = pointer.y;
+        const near = scatterPos
+          .map((p, i) => ({ i, d: Math.hypot(p.x - px, p.y - py) }))
+          .sort((a, b) => a.d - b.d)
+          .slice(0, LINK_MAX);
+        ctx.lineWidth = 1.4;
+        for (const { i, d } of near) {
+          if (d > LINK_RADIUS) continue;
+          const p = scatterPos[i];
+          const fade = 1 - d / LINK_RADIUS;
+          const lineA = (dark ? 0.65 : 0.52) * fade;
+          ctx.strokeStyle = `rgba(${p.c[0]}, ${p.c[1]}, ${p.c[2]}, ${lineA.toFixed(3)})`;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        }
+        // A faint hub dot where the cursor sits, so the link origin reads clearly.
+        const hub = dark ? "rgba(125, 211, 252, 0.6)" : "rgba(45, 212, 191, 0.5)";
+        ctx.fillStyle = hub;
+        ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
+      }
+
+      function draw(elapsed) {
+        if (width < 1 || height < 1) return;
+        ctx.clearRect(0, 0, width, height);
+        const dark = document.body.classList.contains("theme-dark");
+        const t = elapsed / 1000;
+        if (mode === "scatter") drawScatter(t, dark);
+        else drawGrid(t);
+      }
+
+      function frame(now) {
+        if (!start) start = now;
+        draw(now - start);
+        rafId = window.requestAnimationFrame(frame);
+      }
+
+      const observer = new ResizeObserver(() => resize());
+      observer.observe(host);
+      resize();
+      if (!reduceMotion) rafId = window.requestAnimationFrame(frame);
+
+      // The canvas host is pointer-events:none (so card clicks pass through), so the
+      // cursor is tracked on the document and mapped into canvas-local coordinates.
+      const pointerTracked = mode === "scatter" && !reduceMotion;
+      if (pointerTracked) {
+        window.addEventListener("pointermove", onPointerMove, { passive: true });
+        window.addEventListener("pointerleave", onPointerLeave, { passive: true });
+      }
+
+      return {
+        destroy() {
+          if (rafId) window.cancelAnimationFrame(rafId);
+          observer.disconnect();
+          if (pointerTracked) {
+            window.removeEventListener("pointermove", onPointerMove);
+            window.removeEventListener("pointerleave", onPointerLeave);
+          }
+          canvas.remove();
+        },
+      };
     }
 
     async function loadCorpusHome() {}
@@ -2081,6 +2628,93 @@
       wrap.classList.remove("is-concealed");
       wrap.classList.add("is-revealed");
       wrap.classList.toggle("is-review-current", Boolean(options.current));
+      setTakeawayReviewMascot(wrap, Boolean(options.current));
+    }
+
+    // The thinking pixel-brain that sits in the bottom-right of the "current"
+    // review card. Unlike the P2 brainstorm mascot it only loops two acts
+    // (scratch-think → lightbulb idea); the balloon + fly-off only run on A / D.
+    function takeawayReviewMascotHtml() {
+      return `
+        <span class="takeaway-review-mascot" aria-hidden="true">
+          <svg class="tk-brain-icon" viewBox="0 0 32 32" focusable="false">
+            <g class="tk-brain-cloud">
+              <path class="tk-brain-cloud-puff" d="M27.3,-5 H35.7 Q37,-5 37,-3.7 V0.2 Q37,1.5 35.7,1.5 H30.6 L26.6,3.3 L27.3,1.5 Q26,1.5 26,0.2 V-3.7 Q26,-5 27.3,-5 Z"/>
+              <g class="tk-brain-cloud-dots">
+                <circle cx="28.8" cy="-1.75" r="1.1"/>
+                <circle cx="31.5" cy="-1.75" r="1.1"/>
+                <circle cx="34.2" cy="-1.75" r="1.1"/>
+              </g>
+            </g>
+            <g class="tk-brain-bulb">
+              <line class="tk-brain-bulb-ray" x1="32" y1="-4.6" x2="32" y2="-6.2"/>
+              <line class="tk-brain-bulb-ray" x1="27.9" y1="-2.6" x2="26.6" y2="-3.7"/>
+              <line class="tk-brain-bulb-ray" x1="36.1" y1="-2.6" x2="37.4" y2="-3.7"/>
+              <circle class="tk-brain-bulb-glass" cx="32" cy="-1" r="3.5"/>
+              <rect class="tk-brain-bulb-base" x="30.2" y="1.8" width="3.6" height="2"/>
+            </g>
+            <rect class="tk-brain-limb" x="12.55" y="20" width="1.7" height="3.4"/>
+            <rect class="tk-brain-limb" x="11.85" y="22.8" width="3.1" height="1.6"/>
+            <rect class="tk-brain-limb" x="17.75" y="20" width="1.7" height="3.4"/>
+            <rect class="tk-brain-limb" x="17.05" y="22.8" width="3.1" height="1.6"/>
+            <path class="tk-brain-limb-stroke" d="M7.5,12.5 Q4.6,15.2 4,19.4"/>
+            <rect class="tk-brain-hand" x="2.6" y="18.6" width="2.7" height="2.7"/>
+            <path class="tk-brain-body" d="M10,6 H22 V8 H24 V10 H26 V16 H24 V18 H22 V20 H10 V18 H8 V16 H6 V10 H8 V8 H10 Z"/>
+            <path class="tk-brain-fold" d="M16,8 V18 M10.5,10 H13.5 M18.5,10 H21.5 M10,16 H13 M19,16 H22"/>
+            <rect class="tk-brain-eye" x="12" y="12.4" width="2" height="2"/>
+            <rect class="tk-brain-eye" x="18" y="12.4" width="2" height="2"/>
+            <g class="tk-brain-balloon">
+              <path class="tk-brain-balloon-string" d="M28,-1.9 C30.2,1 24.6,3.6 26.4,6.4"/>
+              <g class="tk-brain-balloon-bob">
+                <ellipse class="tk-brain-balloon-body" cx="28" cy="-6.6" rx="3.4" ry="3.9"/>
+                <path class="tk-brain-balloon-knot" d="M27.2,-3 L28.8,-3 L28,-1.5 Z"/>
+              </g>
+            </g>
+            <g class="tk-brain-arm-think">
+              <path class="tk-brain-limb-stroke" d="M24,13 C28.6,12 28.8,4.8 22,5"/>
+              <g class="tk-brain-hand-right">
+                <rect class="tk-brain-hand" x="20" y="2.9" width="3" height="3"/>
+              </g>
+            </g>
+            <g class="tk-brain-arm-idea">
+              <path class="tk-brain-limb-stroke" d="M24,13 C27.2,11.2 27.6,6.5 26,5.2"/>
+              <rect class="tk-brain-hand" x="24.8" y="3.6" width="2.8" height="2.8"/>
+            </g>
+            <g class="tk-brain-arm-hold">
+              <path class="tk-brain-limb-stroke" d="M24,13 C28.4,11.6 28.8,7 26.4,6"/>
+              <rect class="tk-brain-hand" x="24.9" y="4.9" width="3" height="3"/>
+            </g>
+          </svg>
+        </span>
+      `;
+    }
+
+    function setTakeawayReviewMascot(wrap, on) {
+      if (!wrap) return;
+      const existing = wrap.querySelector(".takeaway-review-mascot");
+      if (on) {
+        if (!existing) wrap.insertAdjacentHTML("beforeend", takeawayReviewMascotHtml());
+      } else if (existing) {
+        existing.remove();
+      }
+    }
+
+    function takeawayReviewCardWrap(kind, entryId) {
+      const id = String(entryId || "").trim();
+      if (!id) return null;
+      const list = $(kind === "writing" ? "writingTakeawayList" : "languageTakeawayList");
+      const selector = kind === "writing" ? "[data-writing-takeaway-entry]" : "[data-takeaway-entry]";
+      const button = Array.from(list?.querySelectorAll(selector) || []).find((candidate) => {
+        return kind === "writing"
+          ? candidate.dataset.writingTakeawayEntry === id
+          : candidate.dataset.takeawayEntry === id;
+      });
+      return button?.closest(".language-takeaway-card-wrap") || null;
+    }
+
+    function scrollTakeawayCardIntoView(kind, entryId) {
+      const wrap = takeawayReviewCardWrap(kind, entryId);
+      wrap?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
     function renderLanguageTakeaways() {
@@ -2113,6 +2747,7 @@
             deleteAttr: "data-takeaway-delete",
             entryId: item.entry_id,
           })}
+          ${isCurrent ? takeawayReviewMascotHtml() : ""}
         </div>
       `,
         };
@@ -2868,7 +3503,9 @@
             <strong>${escapeHtml(item.source || "未命名表达")}</strong>
             <p>${escapeHtml(item.replacements || "还没有替换表达")}</p>
           </div>
-          <button type="button" class="expression-replacement-add" data-expression-replacement-add="${escapeHtml(item.id)}" aria-label="加入${kind === "language" ? "Takeaway" : "写作积累"}">+</button>
+          <button type="button" class="expression-replacement-add" data-expression-replacement-add="${escapeHtml(item.id)}" aria-label="加入${kind === "language" ? "Takeaway" : "写作积累"}">
+            <span aria-hidden="true">+</span>
+          </button>
           <button type="button" class="expression-replacement-speak" data-expression-replacement-speak="${escapeHtml(item.id)}" aria-label="朗读替换表达">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M11 5 6 9H3v6h3l5 4V5z"></path>
@@ -3072,10 +3709,10 @@
         replaceTakeawayEntry(kind, saved);
         if (button) {
           button.classList.add("is-added");
-          button.innerHTML = "&#10003;";
+          button.innerHTML = '<span aria-hidden="true">&#10003;</span>';
           window.setTimeout(() => {
             button.classList.remove("is-added");
-            button.innerHTML = "+";
+            button.innerHTML = '<span aria-hidden="true">+</span>';
           }, 900);
         }
       };
@@ -3088,18 +3725,27 @@
       });
     }
 
-    async function deleteExpressionReplacement(itemId) {
+    function deleteExpressionReplacement(itemId) {
       const kind = activeExpressionReplacementKind();
-      const items = expressionReplacementItems(kind).filter((item) => item.id !== itemId);
-      saveExpressionReplacements(kind, items);
-      renderExpressionReplacements(kind);
-      setExpressionReplacementStatus("正在同步...");
-      try {
-        await api(expressionReplacementEndpoint(kind, itemId), null, { method: "DELETE" });
-        setExpressionReplacementStatus("");
-      } catch (error) {
-        setExpressionReplacementStatus(`未同步，仅本地：${error.message || error}`, { error: true });
+      const item = expressionReplacementItems(kind).find((entry) => entry.id === itemId);
+      if (!item) return;
+      const runDelete = async () => {
+        const items = expressionReplacementItems(kind).filter((entry) => entry.id !== itemId);
+        saveExpressionReplacements(kind, items);
+        renderExpressionReplacements(kind);
+        setExpressionReplacementStatus("\u6b63\u5728\u540c\u6b65...");
+        try {
+          await api(expressionReplacementEndpoint(kind, itemId), null, { method: "DELETE" });
+          setExpressionReplacementStatus("");
+        } catch (error) {
+          setExpressionReplacementStatus(`\u672a\u540c\u6b65\uff0c\u4ec5\u672c\u5730\uff1a${error.message || error}`, { error: true });
+        }
+      };
+      if (typeof showConfirmDelete === "function") {
+        showConfirmDelete("\u786e\u5b9a\u8981\u5220\u9664\u8fd9\u6761\u8868\u8fbe\u66ff\u6362\u5417\uff1f", runDelete);
+        return;
       }
+      runDelete();
     }
 
     function takeawayEditorValues() {
@@ -3242,6 +3888,16 @@
     function p2BankEntryFromElement(element) {
       const card = element?.closest?.("[data-p2-bank-card-id]");
       const cardId = card?.dataset?.p2BankCardId || element?.dataset?.p2CorpusCardMaterial || element?.dataset?.p2CorpusCardP3 || "";
+      const fullEntry = findP2CorpusEntry(cardId);
+      if (fullEntry) {
+        return {
+          ...fullEntry,
+          source_type: "bank",
+          entry_id: fullEntry.entry_id || cardId,
+          cue_id: fullEntry.cue_id || cardId,
+          canonical_entry_id: fullEntry.canonical_entry_id || cardId,
+        };
+      }
       return {
         entry_id: cardId,
         cue_id: cardId,
@@ -3258,13 +3914,14 @@
       return String(entry.linked_question || entry.question || p2CleanCueTitle(entry) || "").trim();
     }
 
-    function fetchP2BankCorpusPayload(questionId) {
+    function fetchP2BankCorpusPayload(questionId, options = {}) {
       const key = String(questionId || "").trim();
       if (!key) return Promise.resolve(null);
       ensureP2BankCacheScope();
-      if (p2BankCorpusCache.has(key)) return p2BankCorpusCache.get(key);
+      const force = Boolean(options.force);
+      if (!force && p2BankCorpusCache.has(key)) return p2BankCorpusCache.get(key);
       const cached = p2BankLsRead(P2BANK_LS_PREFIX, key);
-      if (cached) {
+      if (!force && cached) {
         const promise = Promise.resolve(cached.payload);
         p2BankCorpusCache.set(key, promise);
         scheduleIdle(() => revalidateP2BankCorpus(key), 50);
@@ -3309,6 +3966,212 @@
       });
     }
 
+    // --- Brainstorm 素材标签（A/B/C 或 A1/B2 这类），内联存进 brainstorm_idea 字符串开头 ---
+    let p2BrainstormActiveFilter = "";
+    const P2_BRAINSTORM_EMPTY_FILTER = "__empty__"; // 筛选「空」：当前没写灵感的题
+
+    function p2NormalizeBrainstormTag(token) {
+      const t = String(token || "").trim().toUpperCase();
+      return /^[A-Z]\d?$/.test(t) ? t : "";
+    }
+
+    // 把存储字符串解析成 { tags:[], text:"" }：开头连续的“字母+可选一位数字 + 空格”视为标签。
+    function p2ParseBrainstormValue(raw) {
+      let rest = String(raw || "");
+      const tags = [];
+      const seen = new Set();
+      let m;
+      // 仅大写字母（A/B/C 或 A1/B2）才当标签，避免把英文冠词 "a "/"the " 误判成标签。
+      // 末尾用 (\s+|$)：单走的 "B"（保存后没有尾随空格）再次打开也能识别成标签。
+      while ((m = rest.match(/^\s*([A-Z]\d?)(\s+|$)/))) {
+        const tag = p2NormalizeBrainstormTag(m[1]);
+        if (!tag) break;
+        if (!seen.has(tag)) { seen.add(tag); tags.push(tag); }
+        rest = rest.slice(m[0].length);
+      }
+      return { tags, text: rest };
+    }
+
+    function p2SerializeBrainstormValue(tags, text) {
+      const seen = new Set();
+      const cleanTags = [];
+      (tags || []).forEach((raw) => {
+        const tag = p2NormalizeBrainstormTag(raw);
+        if (tag && !seen.has(tag)) { seen.add(tag); cleanTags.push(tag); }
+      });
+      const body = String(text || "");
+      if (!cleanTags.length) return body;
+      return body ? `${cleanTags.join(" ")} ${body}` : cleanTags.join(" ");
+    }
+
+    function p2BrainstormTagChipHtml(tag) {
+      const t = escapeHtml(tag);
+      return `<span class="p2-brainstorm-tag" data-tag="${t}">${t}<button type="button" class="p2-brainstorm-tag-x" data-p2-brainstorm-tag-remove aria-label="删除标签 ${t}">×</button></span>`;
+    }
+
+    function p2BrainstormRowTags(row) {
+      return Array.from(row?.querySelectorAll(".p2-brainstorm-tag") || []).map((el) => el.dataset.tag);
+    }
+
+    // 行的完整存储值 = 标签（开头）+ 正文。
+    function p2BrainstormRowValue(row) {
+      if (!row) return "";
+      const text = row.querySelector("[data-p2-brainstorm-input]")?.value || "";
+      return p2SerializeBrainstormValue(p2BrainstormRowTags(row), text);
+    }
+
+    function p2BrainstormFieldValue(input) {
+      const field = input?.closest?.(".p2-brainstorm-tagfield");
+      if (!field) return String(input?.value || "");
+      const tags = Array.from(field.querySelectorAll(".p2-brainstorm-tag")).map((el) => el.dataset.tag);
+      return p2SerializeBrainstormValue(tags, input?.value || "");
+    }
+
+    // 把存储值渲染进「正文编辑」里的串题灵感字段（标签 chip + 正文）。
+    function setP2CorpusBrainstormField(rawValue) {
+      const input = $("p2CorpusBrainstormIdea");
+      if (!input) return;
+      const parsed = p2ParseBrainstormValue(rawValue);
+      const tagsEl = input.closest(".p2-brainstorm-tagfield")?.querySelector(".p2-brainstorm-tags");
+      if (tagsEl) tagsEl.innerHTML = parsed.tags.map(p2BrainstormTagChipHtml).join("");
+      input.value = parsed.text;
+    }
+
+    function p2CorpusBrainstormIdeaValue() {
+      const input = $("p2CorpusBrainstormIdea");
+      return input ? p2BrainstormFieldValue(input) : "";
+    }
+
+    // 只在输入框开头出现“标签令牌 + 空格”时，把它转成 chip 并从文本里抠掉；中间输入不触发。
+    function maybeConvertLeadingBrainstormTag(input) {
+      // 只在开头出现大写标签令牌（A/B/C/A1/B2）+ 空格时解析；小写或中间输入都不触发。
+      const match = String(input.value || "").match(/^([A-Z]\d?)\s+(.*)$/);
+      if (!match) return false;
+      const tag = p2NormalizeBrainstormTag(match[1]);
+      if (!tag) return false;
+      const tagsEl = input.closest(".p2-brainstorm-tagfield")?.querySelector(".p2-brainstorm-tags");
+      if (!tagsEl) return false;
+      const existing = Array.from(tagsEl.querySelectorAll(".p2-brainstorm-tag")).map((el) => el.dataset.tag);
+      if (!existing.includes(tag)) {
+        tagsEl.insertAdjacentHTML("beforeend", p2BrainstormTagChipHtml(tag));
+      }
+      input.value = match[2];
+      try { input.setSelectionRange(0, 0); } catch (_e) {}
+      // 筛选栏只属于 Brainstorm 列表窗口；编辑器字段里不刷新。
+      if (input.closest("#p2BrainstormList")) {
+        renderP2BrainstormFilterBar();
+        applyP2BrainstormFilter();
+      }
+      return true;
+    }
+
+    function p2BrainstormAllTags() {
+      const set = new Set();
+      (state.p2Corpus.currentPart2Cards || []).forEach((item) => {
+        p2ParseBrainstormValue(item.brainstorm_idea).tags.forEach((t) => set.add(t));
+      });
+      document.querySelectorAll("#p2BrainstormList .p2-brainstorm-tag").forEach((el) => set.add(el.dataset.tag));
+      return Array.from(set).sort();
+    }
+
+    // 「没灵感」= 既没有正文也没有标签。只打了标签（如单走的 B）算已处理，不算没灵感。
+    function p2BrainstormRowIsEmpty(row) {
+      const hasText = !!String(row?.querySelector("[data-p2-brainstorm-input]")?.value || "").trim();
+      const hasTags = p2BrainstormRowTags(row).length > 0;
+      return !hasText && !hasTags;
+    }
+
+    function p2BrainstormHasEmptyRow() {
+      return Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row")).some(p2BrainstormRowIsEmpty);
+    }
+
+    // 当前筛选命中的题数。
+    function p2BrainstormFilteredCount() {
+      const rows = Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row"));
+      if (!p2BrainstormActiveFilter) return rows.length;
+      if (p2BrainstormActiveFilter === P2_BRAINSTORM_EMPTY_FILTER) return rows.filter(p2BrainstormRowIsEmpty).length;
+      return rows.filter((row) => p2BrainstormRowTags(row).includes(p2BrainstormActiveFilter)).length;
+    }
+
+    // 当前筛选对应的复制标签：无筛选→全部、空筛选→没灵感、否则就是标签名。
+    function p2BrainstormFilterLabel() {
+      if (!p2BrainstormActiveFilter) return "全部";
+      if (p2BrainstormActiveFilter === P2_BRAINSTORM_EMPTY_FILTER) return "没灵感";
+      return p2BrainstormActiveFilter;
+    }
+
+    function updateP2BrainstormCopyLabel() {
+      const btn = $("copyP2BrainstormBtn");
+      if (btn) btn.textContent = `复制「${p2BrainstormFilterLabel()}」`;
+    }
+
+    function renderP2BrainstormFilterBar() {
+      const bar = $("p2BrainstormFilterBar");
+      if (!bar) { updateP2BrainstormCopyLabel(); return; }
+      const tags = p2BrainstormAllTags();
+      const hasEmpty = p2BrainstormHasEmptyRow();
+      // 选中的筛选若已不存在了，回落到「全部」。
+      if (p2BrainstormActiveFilter === P2_BRAINSTORM_EMPTY_FILTER) {
+        if (!hasEmpty) p2BrainstormActiveFilter = "";
+      } else if (p2BrainstormActiveFilter && !tags.includes(p2BrainstormActiveFilter)) {
+        p2BrainstormActiveFilter = "";
+      }
+      if (!tags.length && !hasEmpty) {
+        bar.hidden = true;
+        bar.innerHTML = "";
+        updateP2BrainstormCopyLabel();
+        return;
+      }
+      bar.hidden = false;
+      const chip = (label, value) =>
+        `<button type="button" class="p2-brainstorm-filter-chip${p2BrainstormActiveFilter === value ? " is-active" : ""}" data-p2-brainstorm-filter="${escapeHtml(value)}">${escapeHtml(label)}</button>`;
+      bar.innerHTML =
+        `<span class="p2-brainstorm-filter-label">筛选</span>` +
+        chip("全部", "") +
+        tags.map((t) => chip(t, t)).join("") +
+        (hasEmpty ? chip("没灵感", P2_BRAINSTORM_EMPTY_FILTER) : "") +
+        `<span class="p2-brainstorm-filter-count">共 ${p2BrainstormFilteredCount()} 道「${escapeHtml(p2BrainstormFilterLabel())}」</span>`;
+      updateP2BrainstormCopyLabel();
+    }
+
+    // Bumped on every filter pass so a stale exit-animation handler can't hide a
+    // row that a newer pass has since decided to keep visible.
+    let p2BrainstormFilterGen = 0;
+
+    function applyP2BrainstormFilter(options = {}) {
+      const animate = options.animate !== false;
+      const gen = ++p2BrainstormFilterGen;
+      Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row")).forEach((row) => {
+        let show;
+        if (!p2BrainstormActiveFilter) show = true;
+        else if (p2BrainstormActiveFilter === P2_BRAINSTORM_EMPTY_FILTER) show = p2BrainstormRowIsEmpty(row);
+        else show = p2BrainstormRowTags(row).includes(p2BrainstormActiveFilter);
+        const hidden = row.classList.contains("is-filtered-out");
+        if (!animate) {
+          row.classList.remove("is-filtering-in", "is-filtering-out");
+          row.classList.toggle("is-filtered-out", !show);
+          return;
+        }
+        if (show && hidden) {
+          // Reveal: drop the hide flag and play the fade-in.
+          row.classList.remove("is-filtered-out", "is-filtering-out");
+          row.classList.add("is-filtering-in");
+          row.addEventListener("animationend", (e) => {
+            if (e.animationName === "p2BrainstormFilterIn") row.classList.remove("is-filtering-in");
+          }, { once: true });
+        } else if (!show && !hidden) {
+          // Hide: play the fade-out, then collapse it once the animation ends.
+          row.classList.remove("is-filtering-in");
+          row.classList.add("is-filtering-out");
+          row.addEventListener("animationend", (e) => {
+            if (e.animationName !== "p2BrainstormFilterOut") return;
+            row.classList.remove("is-filtering-out");
+            if (gen === p2BrainstormFilterGen) row.classList.add("is-filtered-out");
+          }, { once: true });
+        }
+      });
+    }
+
     function p2BrainstormRows() {
       return (state.p2Corpus.currentPart2Cards || [])
         .map((item, index) => ({ ...item, _rowIndex: index + 1 }))
@@ -3323,7 +4186,7 @@
     function p2BrainstormInputChanged(input) {
       if (!input) return false;
       const entry = p2BrainstormEntryForQuestion(input.dataset.p2BrainstormInput || "");
-      return String(entry.brainstorm_idea || "").trim() !== String(input.value || "").trim();
+      return String(entry.brainstorm_idea || "").trim() !== p2BrainstormFieldValue(input).trim();
     }
 
     function renderP2BrainstormRows() {
@@ -3336,7 +4199,8 @@
       }
       list.innerHTML = rows.map((item) => {
         const questionId = p2BankQuestionId(item);
-        const idea = String(item.brainstorm_idea || "").trim();
+        const parsedIdea = p2ParseBrainstormValue(item.brainstorm_idea);
+        const chipsHtml = parsedIdea.tags.map(p2BrainstormTagChipHtml).join("");
         const stem = escapeHtml(p2CleanCueTitle(item));
         const hasCue = (Array.isArray(item.bullets) && item.bullets.length > 0) || String(item.rounding || "").trim();
         const detailHtml = hasCue ? p2CueQuestionHtml(item) : "";
@@ -3350,19 +4214,41 @@
                 <span class="p2-brainstorm-index">${item._rowIndex}</span>
                 <span class="p2-brainstorm-stem">${stem}</span>
               </div>
-              ${hasCue ? `<div class="p2-brainstorm-cue-detail" data-p2-brainstorm-detail="${escapeHtml(questionId)}" hidden>${detailHtml}</div>` : ""}
+              ${hasCue ? `
+                <div class="p2-brainstorm-cue-detail" data-p2-brainstorm-detail="${escapeHtml(questionId)}" hidden>
+                  <div class="p2-brainstorm-detail-head">
+                    <strong>题目要求</strong>
+                    <div class="p2-brainstorm-detail-actions">
+                      <button type="button" class="p2-brainstorm-practice-btn" data-p2-brainstorm-practice="${escapeHtml(questionId)}" aria-label="在新标签页练习此题" title="练习此题">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>
+                      </button>
+                      <button type="button" class="ghost p2-brainstorm-edit-body" data-p2-brainstorm-edit-body="${escapeHtml(questionId)}">编辑正文</button>
+                    </div>
+                  </div>
+                  ${detailHtml}
+                </div>
+              ` : ""}
             </div>
-            <input
-              class="p2-brainstorm-input"
-              data-p2-brainstorm-input="${escapeHtml(questionId)}"
-              type="text"
-              value="${escapeHtml(idea)}"
-              placeholder="一句灵感：人物 / 地点 / 经历 / 可串题角度"
-              autocomplete="off"
-            >
+            <div class="p2-brainstorm-tagfield" data-p2-brainstorm-field="${escapeHtml(questionId)}">
+              <span class="p2-brainstorm-tags">${chipsHtml}</span>
+              <input
+                class="p2-brainstorm-input"
+                data-p2-brainstorm-input="${escapeHtml(questionId)}"
+                type="text"
+                value="${escapeHtml(parsedIdea.text)}"
+                placeholder="一句灵感：人物 / 地点 / 经历 / 可串题角度"
+                autocomplete="off"
+              >
+            </div>
           </div>
         `;
       }).join("");
+      // Rebuilding innerHTML wipes the per-row is-filtered-out flags, so the active
+      // filter must be re-applied here — otherwise any caller that re-renders (e.g.
+      // returning from the body editor) silently drops the filter and every tag
+      // reappears. Keeping it inside the renderer makes every call self-consistent.
+      renderP2BrainstormFilterBar();
+      applyP2BrainstormFilter({ animate: false });
     }
 
     async function openP2BrainstormDialog() {
@@ -3370,14 +4256,26 @@
         text("p2BrainstormStatus", "正在加载题卡...");
         await loadP2Corpus({ force: true });
       }
+      p2BrainstormActiveFilter = "";  // open in 「全部」; reset before the render applies it
       renderP2BrainstormRows();
+      if ($("p2BrainstormSearchInput")) $("p2BrainstormSearchInput").value = "";
+      updateP2BrainstormSearch();
       const count = (state.p2Corpus.currentPart2Cards || []).filter((item) => String(item.brainstorm_idea || "").trim()).length;
       text("p2BrainstormStatus", count ? `已填写 ${count} 条灵感` : "");
-      $("p2BrainstormDialog")?.classList.remove("hidden");
+      // Clear the body-editor-return flag so a fresh open plays the entrance again.
+      $("p2BrainstormDialog")?.classList.remove("no-entrance", "hidden");
+      // One-shot staggered row entrance: tag the list while the dialog opens, then
+      // drop the flag so later filtering/searching re-flows the rows instantly.
+      const listEl = $("p2BrainstormList");
+      if (listEl) {
+        listEl.classList.add("is-entering");
+        window.setTimeout(() => listEl.classList.remove("is-entering"), 700);
+      }
       setTimeout(() => $("p2BrainstormList")?.querySelector(".p2-brainstorm-input")?.focus(), 0);
     }
 
     function closeP2BrainstormDialog() {
+      flushP2BrainstormAutosaves();
       $("p2BrainstormDialog")?.classList.add("hidden");
       text("p2BrainstormStatus", "");
     }
@@ -3393,6 +4291,14 @@
         };
       });
     }
+
+    const p2BrainstormDirtyValues = new Map();
+    const p2BrainstormAutosaveTimers = new Map();
+    let p2BrainstormAutosaveChain = Promise.resolve();
+    let p2BrainstormSearchMatches = [];
+    let p2BrainstormSearchIndex = -1;
+    let p2BrainstormReturnAfterBodyEditor = false;
+    let p2BrainstormReturnQuestionId = "";
 
     async function saveP2BrainstormIdea(questionId, idea, options = {}) {
       const targetId = String(questionId || "").trim();
@@ -3413,6 +4319,100 @@
       return saved;
     }
 
+    function p2BrainstormFilledCount() {
+      return (state.p2Corpus.currentPart2Cards || []).filter((item) => String(item.brainstorm_idea || "").trim()).length;
+    }
+
+    function persistP2BrainstormDirty(questionId) {
+      const targetId = String(questionId || "").trim();
+      if (!targetId || !p2BrainstormDirtyValues.has(targetId)) return;
+      const nextIdea = p2BrainstormDirtyValues.get(targetId);
+      p2BrainstormDirtyValues.delete(targetId);
+      const timer = p2BrainstormAutosaveTimers.get(targetId);
+      if (timer) window.clearTimeout(timer);
+      p2BrainstormAutosaveTimers.delete(targetId);
+      text("p2BrainstormStatus", "自动保存中...");
+      p2BrainstormAutosaveChain = p2BrainstormAutosaveChain
+        .catch(() => null)
+        .then(async () => {
+          await saveP2BrainstormIdea(targetId, nextIdea, { silent: true });
+          if (p2BrainstormDirtyValues.has(targetId)) {
+            updateP2BrainstormCardLocal(targetId, p2BrainstormDirtyValues.get(targetId));
+            return;
+          }
+          renderP2CorpusTopics();
+          text("p2BrainstormStatus", `已自动保存 · ${p2BrainstormFilledCount()} 条灵感`);
+        })
+        .catch((error) => {
+          p2BrainstormDirtyValues.set(targetId, nextIdea);
+          text("p2BrainstormStatus", error.message || String(error));
+        });
+    }
+
+    function scheduleP2BrainstormAutosave(input, delay = 700) {
+      const targetId = String(input?.dataset?.p2BrainstormInput || "").trim();
+      if (!targetId) return;
+      const nextIdea = p2BrainstormFieldValue(input);
+      updateP2BrainstormCardLocal(targetId, nextIdea);
+      p2BrainstormDirtyValues.set(targetId, nextIdea);
+      const existing = p2BrainstormAutosaveTimers.get(targetId);
+      if (existing) window.clearTimeout(existing);
+      p2BrainstormAutosaveTimers.set(targetId, window.setTimeout(() => {
+        persistP2BrainstormDirty(targetId);
+      }, delay));
+      text("p2BrainstormStatus", "已修改，正在自动保存...");
+    }
+
+    function flushP2BrainstormAutosaves() {
+      Array.from(p2BrainstormDirtyValues.keys()).forEach((questionId) => persistP2BrainstormDirty(questionId));
+    }
+
+    async function openP2BrainstormBodyEditor(questionId = "") {
+      const targetId = String(questionId || "").trim();
+      if (!targetId) return;
+      const entry = p2BrainstormEntryForQuestion(targetId);
+      if (!p2BankQuestionId(entry)) return;
+      const input = document.querySelector(`[data-p2-brainstorm-input="${CSS.escape(targetId)}"]`);
+      if (input && p2BrainstormInputChanged(input)) {
+        p2BrainstormDirtyValues.set(targetId, input.value || "");
+        persistP2BrainstormDirty(targetId);
+        await p2BrainstormAutosaveChain.catch(() => null);
+      }
+      p2BrainstormReturnAfterBodyEditor = true;
+      p2BrainstormReturnQuestionId = targetId;
+      closeP2BrainstormDetails();
+      $("p2BrainstormDialog")?.classList.add("hidden");
+      try {
+        await openP2BankCorpusEditor({
+          ...entry,
+          source_type: "bank",
+          entry_id: entry.entry_id || targetId,
+          cue_id: entry.cue_id || targetId,
+          canonical_entry_id: entry.canonical_entry_id || targetId,
+        });
+      } catch (error) {
+        p2BrainstormReturnAfterBodyEditor = false;
+        p2BrainstormReturnQuestionId = "";
+        $("p2CorpusDialog")?.classList.add("hidden");
+        state.p2Corpus.activeEntry = null;
+        $("p2BrainstormDialog")?.classList.remove("hidden");
+        throw error;
+      }
+    }
+
+    function openP2BankPracticeInNewTab(cueId = "") {
+      const normalizedCueId = String(cueId || "").trim();
+      if (!normalizedCueId) return;
+      const url = new URL(window.location.href);
+      url.search = "";
+      url.hash = "";
+      url.searchParams.set("view", "p2");
+      url.searchParams.set("p2_cue_id", normalizedCueId);
+      url.searchParams.set("autostart", "1");
+      const opened = window.open(url.toString(), "_blank", "noopener");
+      if (!opened) text("p2BrainstormStatus", "浏览器阻止了新标签页，请允许弹窗后重试。");
+    }
+
     async function saveP2BrainstormAll(options = {}) {
       if (state.p2Corpus.brainstormSaving) return;
       const inputs = Array.from(document.querySelectorAll("[data-p2-brainstorm-input]"))
@@ -3429,9 +4429,9 @@
       try {
         // SQLite 不支持并发写入，逐条顺序保存避免 "database is locked" 500 错误
         for (const input of inputs) {
-          await saveP2BrainstormIdea(input.dataset.p2BrainstormInput || "", input.value || "", { silent: true });
+          await saveP2BrainstormIdea(input.dataset.p2BrainstormInput || "", p2BrainstormFieldValue(input), { silent: true });
         }
-        renderP2BrainstormRows();
+        renderP2BrainstormRows();  // re-applies the active filter internally
         renderP2CorpusTopics();
         const count = (state.p2Corpus.currentPart2Cards || []).filter((item) => String(item.brainstorm_idea || "").trim()).length;
         text("p2BrainstormStatus", `已保存 ${inputs.length} 处修改 · 共 ${count} 条灵感`);
@@ -3445,6 +4445,66 @@
           button.textContent = original;
         }
       }
+    }
+
+    function clearP2BrainstormSearchMarks() {
+      $("p2BrainstormList")?.querySelectorAll(".p2-brainstorm-row").forEach((row) => {
+        row.classList.remove("is-search-match", "is-search-current");
+      });
+    }
+
+    function p2BrainstormRowSearchText(row) {
+      const stem = row.querySelector(".p2-brainstorm-stem")?.textContent || "";
+      return `${stem} ${p2BrainstormRowValue(row)}`.toLowerCase();
+    }
+
+    function activateP2BrainstormSearchMatch(step = 1, options = {}) {
+      if (!p2BrainstormSearchMatches.length) {
+        updateP2BrainstormSearch();
+        return;
+      }
+      p2BrainstormSearchMatches.forEach((row) => row.classList.remove("is-search-current"));
+      p2BrainstormSearchIndex = (p2BrainstormSearchIndex + step + p2BrainstormSearchMatches.length) % p2BrainstormSearchMatches.length;
+      const row = p2BrainstormSearchMatches[p2BrainstormSearchIndex];
+      row.classList.add("is-search-current");
+      const counter = $("p2BrainstormSearchCount");
+      if (counter) counter.textContent = `${p2BrainstormSearchIndex + 1}/${p2BrainstormSearchMatches.length}`;
+      row.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (!options.preserveFocus) row.querySelector("[data-p2-brainstorm-input]")?.focus({ preventScroll: true });
+    }
+
+    function updateP2BrainstormSearch(options = {}) {
+      const input = $("p2BrainstormSearchInput");
+      const counter = $("p2BrainstormSearchCount");
+      const prev = $("p2BrainstormSearchPrev");
+      const next = $("p2BrainstormSearchNext");
+      const query = String(input?.value || "").trim().toLowerCase();
+      clearP2BrainstormSearchMarks();
+      p2BrainstormSearchMatches = [];
+      if (!query) {
+        p2BrainstormSearchIndex = -1;
+        if (counter) counter.textContent = "0/0";
+        if (prev) prev.disabled = true;
+        if (next) next.disabled = true;
+        return;
+      }
+      p2BrainstormSearchMatches = Array.from($("p2BrainstormList")?.querySelectorAll(".p2-brainstorm-row") || [])
+        .filter((row) => p2BrainstormRowSearchText(row).includes(query));
+      p2BrainstormSearchMatches.forEach((row) => row.classList.add("is-search-match"));
+      if (prev) prev.disabled = p2BrainstormSearchMatches.length < 2;
+      if (next) next.disabled = p2BrainstormSearchMatches.length < 2;
+      if (!p2BrainstormSearchMatches.length) {
+        p2BrainstormSearchIndex = -1;
+        if (counter) counter.textContent = "0/0";
+        return;
+      }
+      if (!options.keepIndex) {
+        p2BrainstormSearchIndex = -1;
+      } else if (p2BrainstormSearchIndex >= p2BrainstormSearchMatches.length) {
+        p2BrainstormSearchIndex = p2BrainstormSearchMatches.length - 1;
+      }
+      if (counter) counter.textContent = p2BrainstormSearchIndex >= 0 ? `${p2BrainstormSearchIndex + 1}/${p2BrainstormSearchMatches.length}` : `0/${p2BrainstormSearchMatches.length}`;
+      if (options.jump) activateP2BrainstormSearchMatch(0, { preserveFocus: true });
     }
 
     async function copyPlainTextToClipboard(value) {
@@ -3474,24 +4534,40 @@
     }
 
     // 把当前 Brainstorm 窗口导出成发给 AI 的纯文本（读 DOM 实时值，含未保存的修改和空灵感原题）。
+    // 跟随筛选：只复制当前筛选出来的题（无筛选=全部，A1=只复制 A1，空=只复制没灵感的）。
     async function copyP2BrainstormAll() {
-      const rows = Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row"));
+      const rows = Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row"))
+        .filter((row) => !row.classList.contains("is-filtered-out"));
       const blocks = [];
       rows.forEach((row) => {
         const index = (row.querySelector(".p2-brainstorm-index")?.textContent || "").trim();
         const stem = (row.querySelector(".p2-brainstorm-stem")?.textContent || "").trim();
-        const idea = (row.querySelector("[data-p2-brainstorm-input]")?.value || "").trim();
+        const idea = p2BrainstormRowValue(row).trim();
         if (!stem && !idea) return;
-        const heading = [index ? `${index}.` : "", stem].filter(Boolean).join(" ").trim();
-        blocks.push(heading ? `${heading}\n灵感：${idea}` : `灵感：${idea}`);
+        const questionId = String(row.dataset.p2BrainstormRow || "").trim();
+        const entry = p2BrainstormEntryForQuestion(questionId);
+        const sourceQuestion = p2NormalizedCueText(entry.question || entry.linked_question || "");
+        const cleanTitle = p2CleanCueTitle(entry);
+        const fallbackRequirement = sourceQuestion && cleanTitle
+          ? sourceQuestion.replace(cleanTitle, "").trim()
+          : sourceQuestion;
+        blocks.push(formatP2BrainstormCopyBlock({
+          index,
+          stem,
+          bullets: entry.bullets,
+          rounding: entry.rounding,
+          fallbackRequirement,
+          idea,
+        }));
       });
       if (!blocks.length) {
-        text("p2BrainstormStatus", "没有可复制的题卡。");
+        text("p2BrainstormStatus", "当前筛选下没有可复制的题卡。");
         return;
       }
       const payload = blocks.join("\n\n");
       const ok = await copyPlainTextToClipboard(payload);
-      text("p2BrainstormStatus", ok ? `已复制 ${blocks.length} 道题（含未填写灵感的原题），可直接粘贴给 AI。` : "复制失败，请手动选择文字复制。");
+      const scope = p2BrainstormActiveFilter ? `（筛选：${p2BrainstormFilterLabel()}）` : "（含未填写灵感的原题）";
+      text("p2BrainstormStatus", ok ? `已复制 ${blocks.length} 道题${scope}，可直接粘贴给 AI。` : "复制失败，请手动选择文字复制。");
     }
 
     function isP2BankCard(entry = {}) {
@@ -3507,6 +4583,76 @@
           ${item.rounding ? `<p>${escapeHtml(item.rounding)}</p>` : ""}
         </div>
       `;
+    }
+
+    function p2CueRequirementsHtml(entry = {}) {
+      const structured = p2CueQuestionHtml(entry);
+      if (structured) return structured;
+      const title = p2CleanCueTitle(entry);
+      const question = p2NormalizedCueText(entry.question || entry.linked_question || "");
+      const remainder = question && title ? question.replace(title, "").trim() : question;
+      if (!remainder) return "";
+      return `
+        <div class="p2-seasonal-cue">
+          <p>${escapeHtml(remainder)}</p>
+        </div>
+      `;
+    }
+
+    function p2CorpusTitleCueDetail() {
+      const host = $("p2CorpusDialogTitle")?.parentElement;
+      if (!host) return null;
+      let detail = $("p2CorpusTitleCueDetail");
+      if (!detail) {
+        detail = document.createElement("div");
+        detail.id = "p2CorpusTitleCueDetail";
+        detail.className = "p2-brainstorm-cue-detail p2-corpus-title-cue-detail";
+        detail.hidden = true;
+        host.appendChild(detail);
+      }
+      return detail;
+    }
+
+    function closeP2CorpusTitleCue() {
+      const title = $("p2CorpusDialogTitle");
+      const detail = $("p2CorpusTitleCueDetail");
+      title?.setAttribute("aria-expanded", "false");
+      if (detail) detail.hidden = true;
+    }
+
+    function setP2CorpusTitleCue(entry = {}, enabled = false) {
+      const title = $("p2CorpusDialogTitle");
+      const body = enabled ? p2CueRequirementsHtml(entry) : "";
+      if (!title || !body) {
+        title?.classList.remove("p2-corpus-title-cue-trigger");
+        title?.removeAttribute("role");
+        title?.removeAttribute("tabindex");
+        title?.removeAttribute("aria-expanded");
+        const detail = $("p2CorpusTitleCueDetail");
+        if (detail) {
+          detail.hidden = true;
+          detail.innerHTML = "";
+        }
+        return;
+      }
+      title.classList.add("p2-corpus-title-cue-trigger");
+      title.setAttribute("role", "button");
+      title.setAttribute("tabindex", "0");
+      title.setAttribute("aria-expanded", "false");
+      const detail = p2CorpusTitleCueDetail();
+      if (detail) {
+        detail.hidden = true;
+        detail.innerHTML = body;
+      }
+    }
+
+    function toggleP2CorpusTitleCue() {
+      const title = $("p2CorpusDialogTitle");
+      const detail = $("p2CorpusTitleCueDetail");
+      if (!title?.classList.contains("p2-corpus-title-cue-trigger") || !detail?.innerHTML) return;
+      const willOpen = detail.hidden;
+      detail.hidden = !willOpen;
+      title.setAttribute("aria-expanded", String(willOpen));
     }
 
     async function openP2CorpusLibrary() {
@@ -3529,6 +4675,7 @@
       state.p2Corpus.activeEntry = { ...entry, category };
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.remove("is-bank-editor");
       $("p2CorpusBrainstormField")?.classList.add("hidden");
+      setP2CorpusTitleCue({}, false);
       text("p2CorpusDialogCategory", (entry.label || category).toString());
       text("p2CorpusDialogTitle", entry.entry_id ? "编辑 P2 素材" : "新增 P2 素材");
       text("p2CorpusTextLabel", "串题素材");
@@ -3536,7 +4683,7 @@
       if (saveButton) saveButton.textContent = "保存素材";
       if ($("p2CorpusCategory")) $("p2CorpusCategory").value = category;
       if ($("p2CorpusTitle")) $("p2CorpusTitle").value = entry.title || "";
-      if ($("p2CorpusBrainstormIdea")) $("p2CorpusBrainstormIdea").value = "";
+      setP2CorpusBrainstormField("");
       setCorpusMarkdownValue("p2CorpusText", entry.material_text || "");
       text("p2CorpusSaveStatus", "");
       $("p2CorpusDialog")?.classList.remove("hidden");
@@ -3560,8 +4707,9 @@
       };
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.add("is-bank-editor");
       $("p2CorpusBrainstormField")?.classList.remove("hidden");
+      setP2CorpusTitleCue(state.p2Corpus.activeEntry, true);
       text("p2CorpusDialogCategory", "题库正文");
-      text("p2CorpusDialogTitle", `编辑题库正文：${titleText}`);
+      text("p2CorpusDialogTitle", `编辑正文：${titleText}`);
       text("p2CorpusTextLabel", "正文");
       const saveButton = $("saveP2CorpusBtn");
       if (saveButton) {
@@ -3570,10 +4718,8 @@
       }
       if ($("p2CorpusCategory")) $("p2CorpusCategory").value = "special";
       if ($("p2CorpusTitle")) $("p2CorpusTitle").value = titleText;
-      if ($("p2CorpusBrainstormIdea")) {
-        $("p2CorpusBrainstormIdea").value = "";
-        $("p2CorpusBrainstormIdea").disabled = true;
-      }
+      setP2CorpusBrainstormField("");
+      if ($("p2CorpusBrainstormIdea")) $("p2CorpusBrainstormIdea").disabled = true;
       setCorpusMarkdownValue("p2CorpusText", "");
       setCorpusEditorLoading("p2CorpusText", true, {
         title: "正在加载题库正文",
@@ -3590,7 +4736,7 @@
       showP2BankCorpusEditorLoading(entry);
       let payload;
       try {
-        payload = await fetchP2BankCorpusPayload(questionId);
+        payload = await fetchP2BankCorpusPayload(questionId, { force: true });
       } catch (error) {
         if (token === p2BankCorpusLoadToken) {
           text("p2CorpusSaveStatus", error.message || String(error));
@@ -3617,18 +4763,17 @@
       state.p2Corpus.activeEntry = activeEntry;
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.add("is-bank-editor");
       $("p2CorpusBrainstormField")?.classList.remove("hidden");
+      setP2CorpusTitleCue(activeEntry, true);
       const titleText = activeEntry.title || activeEntry.linked_question || "P2 题卡";
       text("p2CorpusDialogCategory", "题库正文");
-      text("p2CorpusDialogTitle", `编辑题库正文：${titleText}`);
+      text("p2CorpusDialogTitle", `编辑正文：${titleText}`);
       text("p2CorpusTextLabel", "正文");
       const saveButton = $("saveP2CorpusBtn");
       if (saveButton) saveButton.textContent = "保存正文";
       if ($("p2CorpusCategory")) $("p2CorpusCategory").value = "special";
       if ($("p2CorpusTitle")) $("p2CorpusTitle").value = activeEntry.title || "";
-      if ($("p2CorpusBrainstormIdea")) {
-        $("p2CorpusBrainstormIdea").disabled = false;
-        $("p2CorpusBrainstormIdea").value = activeEntry.brainstorm_idea || "";
-      }
+      if ($("p2CorpusBrainstormIdea")) $("p2CorpusBrainstormIdea").disabled = false;
+      setP2CorpusBrainstormField(activeEntry.brainstorm_idea || "");
       setCorpusEditorLoading("p2CorpusText", false);
       setCorpusMarkdownValue("p2CorpusText", activeEntry.material_text || "");
       text("p2CorpusSaveStatus", "");
@@ -3650,9 +4795,31 @@
       $("p2CorpusDialog")?.classList.add("hidden");
       $("p2CorpusDialog")?.querySelector("[data-corpus-dialog-card]")?.classList.remove("is-bank-editor");
       $("p2CorpusBrainstormField")?.classList.add("hidden");
+      setP2CorpusTitleCue({}, false);
       if ($("p2CorpusBrainstormIdea")) $("p2CorpusBrainstormIdea").disabled = false;
       if ($("saveP2CorpusBtn")) $("saveP2CorpusBtn").disabled = false;
       state.p2Corpus.activeEntry = null;
+      if (p2BrainstormReturnAfterBodyEditor) {
+        const returnId = p2BrainstormReturnQuestionId;
+        p2BrainstormReturnAfterBodyEditor = false;
+        p2BrainstormReturnQuestionId = "";
+        renderP2BrainstormRows();
+        // Returning from the body editor should reveal the dialog that was sitting
+        // underneath, not replay the open-from-scratch entrance — otherwise it reads
+        // as a fresh dialog rather than the layer beneath. The flag stays on while
+        // shown (removing it would re-trigger the animation); a fresh open clears it.
+        const dialog = $("p2BrainstormDialog");
+        if (dialog) {
+          dialog.classList.add("no-entrance");
+          dialog.classList.remove("hidden");
+        }
+        if (returnId) {
+          setP2BrainstormActiveDetail(returnId);
+          setTimeout(() => {
+            document.querySelector(`[data-p2-brainstorm-row="${CSS.escape(returnId)}"]`)?.scrollIntoView({ block: "center" });
+          }, 0);
+        }
+      }
     }
 
     function p2OfficialFollowUpQuestions(entry = {}) {
@@ -3990,7 +5157,7 @@
       const entry = state.p2Corpus.activeEntry || {};
       const materialText = getCorpusMarkdownValue("p2CorpusText").trim();
       if (entry.is_bank_card) {
-        const brainstormIdea = $("p2CorpusBrainstormIdea")?.value || "";
+        const brainstormIdea = p2CorpusBrainstormIdeaValue();
         closeP2CorpusEditor();
         if (materialText || brainstormIdea.trim() !== String(entry.brainstorm_idea || "").trim()) {
           saveP2BankCorpusEntry({
@@ -4092,6 +5259,16 @@
     }
 
     document.addEventListener("click", (event) => {
+      const titleCueTrigger = event.target.closest("#p2CorpusDialogTitle");
+      if (titleCueTrigger?.classList.contains("p2-corpus-title-cue-trigger")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        toggleP2CorpusTitleCue();
+        return;
+      }
+      if (!event.target.closest("#p2CorpusTitleCueDetail")) {
+        closeP2CorpusTitleCue();
+      }
       const brainstormOpenButton = event.target.closest("[data-p2-brainstorm-open]");
       if (brainstormOpenButton) {
         event.preventDefault();
@@ -4131,7 +5308,7 @@
       if (cardMaterialButton) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        withPending(cardMaterialButton, () => openP2BankCorpusEditor(p2BankEntryFromElement(cardMaterialButton)), { busyText: "加载中" }).catch((error) => {
+        openP2BankCorpusEditor(p2BankEntryFromElement(cardMaterialButton)).catch((error) => {
           text("p2CorpusSaveStatus", error.message || String(error));
         });
         return;
@@ -4152,13 +5329,23 @@
       selectP2BankP3Question(bankP3Button.dataset.p2BankP3Select || "");
     }, true);
 
+    $("p2CorpusDialogTitle")?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeP2CorpusTitleCue();
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (!event.currentTarget.classList.contains("p2-corpus-title-cue-trigger")) return;
+      event.preventDefault();
+      toggleP2CorpusTitleCue();
+    });
+
     $("p2BrainstormDialog")?.addEventListener("pointerdown", (event) => {
       if (event.target === $("p2BrainstormDialog")) closeP2BrainstormDialog();
     });
 
     $("p2BrainstormDialog")?.addEventListener("click", (event) => {
       if (event.target.closest("#p2BrainstormList")) return;
-      if (event.target.closest("#saveP2BrainstormBtn")) return;
       closeP2BrainstormDetails();
     });
 
@@ -4175,8 +5362,31 @@
         trigger.classList.toggle("is-expanded", expanded);
       });
       list.querySelectorAll("[data-p2-brainstorm-detail]").forEach((detail) => {
-        detail.hidden = !(activeId && detail.dataset.p2BrainstormDetail === activeId);
+        const isActive = Boolean(activeId && detail.dataset.p2BrainstormDetail === activeId);
+        detail.hidden = !isActive;
+        if (isActive) positionP2BrainstormDetail(detail);
+        else detail.classList.remove("is-detail-up", "is-detail-in");
       });
+    }
+
+    // The cue popover is absolutely positioned inside the scrolling list, so for a
+    // row near the bottom an open-downward popover spills past the content and
+    // inflates the scroll height (you'd have to scroll to see it). Flip it to open
+    // upward whenever there isn't enough room below, then replay its entrance.
+    function positionP2BrainstormDetail(detail) {
+      const list = $("p2BrainstormList");
+      const row = detail.closest(".p2-brainstorm-row");
+      if (!list || !row) return;
+      const listRect = list.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const needed = Math.min((detail.scrollHeight || 200) + 24, 244);
+      const spaceBelow = listRect.bottom - rowRect.bottom;
+      const spaceAbove = rowRect.top - listRect.top;
+      const flipUp = spaceBelow < needed && spaceAbove > spaceBelow;
+      detail.classList.toggle("is-detail-up", flipUp);
+      detail.classList.remove("is-detail-in");
+      void detail.offsetWidth;            // reflow so the entrance animation replays
+      detail.classList.add("is-detail-in");
     }
 
     function closeP2BrainstormDetails() {
@@ -4206,6 +5416,35 @@
     });
 
     $("p2BrainstormList")?.addEventListener("click", (event) => {
+      const tagRemove = event.target.closest("[data-p2-brainstorm-tag-remove]");
+      if (tagRemove) {
+        event.preventDefault();
+        event.stopPropagation();
+        const row = tagRemove.closest(".p2-brainstorm-row");
+        tagRemove.closest(".p2-brainstorm-tag")?.remove();
+        const input = row?.querySelector("[data-p2-brainstorm-input]");
+        if (input) scheduleP2BrainstormAutosave(input);
+        renderP2BrainstormFilterBar();
+        applyP2BrainstormFilter();
+        return;
+      }
+      const practiceButton = event.target.closest("[data-p2-brainstorm-practice]");
+      if (practiceButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        openP2BankPracticeInNewTab(practiceButton.dataset.p2BrainstormPractice || "");
+        return;
+      }
+      const editBodyButton = event.target.closest("[data-p2-brainstorm-edit-body]");
+      if (editBodyButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        openP2BrainstormBodyEditor(editBodyButton.dataset.p2BrainstormEditBody || "").catch((error) => {
+          $("p2BrainstormDialog")?.classList.remove("hidden");
+          text("p2BrainstormStatus", error.message || String(error));
+        });
+        return;
+      }
       const trigger = event.target.closest("[data-p2-brainstorm-toggle]");
       if (!trigger) return;
       openP2BrainstormDetail(trigger);
@@ -4216,11 +5455,20 @@
         closeP2BrainstormDetails();
         return;
       }
+      if (event.target.closest("button")) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       const trigger = event.target.closest("[data-p2-brainstorm-toggle]");
       if (!trigger) return;
       event.preventDefault();
       openP2BrainstormDetail(trigger);
+    });
+
+    $("p2BrainstormList")?.addEventListener("input", (event) => {
+      const input = event.target.closest("[data-p2-brainstorm-input]");
+      if (!input) return;
+      maybeConvertLeadingBrainstormTag(input);
+      scheduleP2BrainstormAutosave(input);
+      updateP2BrainstormSearch({ keepIndex: true });
     });
 
     const warmP2BankCardFromElement = (element) => {
@@ -4242,30 +5490,58 @@
       if (!input) return;
       if (state.p2Corpus.brainstormSaving || state.p2Corpus.brainstormSuppressBlurSave) return;
       const questionId = input.dataset.p2BrainstormInput || "";
-      if (!p2BrainstormInputChanged(input)) return;
-      saveP2BrainstormIdea(questionId, input.value || "").catch((error) => {
-        text("p2BrainstormStatus", error.message || String(error));
-      });
+      if (p2BrainstormDirtyValues.has(questionId)) persistP2BrainstormDirty(questionId);
     });
 
-    $("saveP2BrainstormBtn")?.addEventListener("pointerdown", () => {
-      state.p2Corpus.brainstormSuppressBlurSave = true;
-      window.setTimeout(() => {
-        state.p2Corpus.brainstormSuppressBlurSave = false;
-      }, 350);
+    $("p2BrainstormSearchInput")?.addEventListener("input", () => {
+      updateP2BrainstormSearch();
     });
 
-    $("saveP2BrainstormBtn")?.addEventListener("click", () => {
-      state.p2Corpus.brainstormSuppressBlurSave = false;
-      saveP2BrainstormAll().catch((error) => {
-        text("p2BrainstormStatus", error.message || String(error));
-      });
+    $("p2BrainstormSearchInput")?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        updateP2BrainstormSearch({ keepIndex: true });
+        activateP2BrainstormSearchMatch(event.shiftKey ? -1 : 1);
+      } else if (event.key === "Escape") {
+        event.currentTarget.value = "";
+        updateP2BrainstormSearch();
+      }
+    });
+
+    $("p2BrainstormSearchPrev")?.addEventListener("click", () => {
+      activateP2BrainstormSearchMatch(-1);
+    });
+
+    $("p2BrainstormSearchNext")?.addEventListener("click", () => {
+      activateP2BrainstormSearchMatch(1);
     });
 
     $("copyP2BrainstormBtn")?.addEventListener("click", () => {
       copyP2BrainstormAll().catch((error) => {
         text("p2BrainstormStatus", error.message || String(error));
       });
+    });
+
+    $("p2BrainstormFilterBar")?.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-p2-brainstorm-filter]");
+      if (!btn) return;
+      p2BrainstormActiveFilter = btn.dataset.p2BrainstormFilter || "";
+      renderP2BrainstormFilterBar();
+      applyP2BrainstormFilter();
+    });
+
+    // 「正文编辑」里的串题灵感字段：开头打 A/B2 + 空格转 chip；× 删除 chip。
+    $("p2CorpusBrainstormIdea")?.addEventListener("input", (event) => {
+      maybeConvertLeadingBrainstormTag(event.target);
+    });
+
+    $("p2CorpusBrainstormField")?.addEventListener("click", (event) => {
+      const x = event.target.closest("[data-p2-brainstorm-tag-remove]");
+      if (!x) return;
+      event.preventDefault();
+      event.stopPropagation();
+      x.closest(".p2-brainstorm-tag")?.remove();
+      $("p2CorpusBrainstormIdea")?.focus();
     });
 
     $("p2BankP3EntryList")?.addEventListener("click", (event) => {
@@ -4344,7 +5620,7 @@
       const button = $("saveP2CorpusBtn");
       const original = button?.textContent || "保存素材";
       const nextMaterialText = (options.materialText ?? getCorpusMarkdownValue("p2CorpusText")).trim();
-      const nextBrainstormIdea = options.brainstormIdea ?? ($("p2CorpusBrainstormIdea")?.value || entry.brainstorm_idea || "");
+      const nextBrainstormIdea = options.brainstormIdea ?? (p2CorpusBrainstormIdeaValue() || entry.brainstorm_idea || "");
       if (button && !options.silent) {
         button.disabled = true;
         button.textContent = "保存中...";
@@ -4466,6 +5742,7 @@
             deleteAttr: "data-writing-takeaway-delete",
             entryId: item.entry_id,
           })}
+          ${isCurrent ? takeawayReviewMascotHtml() : ""}
         </div>
       `,
         };
@@ -4532,6 +5809,7 @@
     return {
       loadP1Corpus,
       renderP1CorpusTopics,
+      openP1TopicCardModal,
       findP1CorpusEntry,
       p1CorpusEntryIds,
       normalizeP1CorpusQuestionText,
@@ -4641,5 +5919,6 @@
 
   window.IELTSCorpusTakeaway = {
     createCorpusTakeawayController,
+    formatP2BrainstormCopyBlock,
   };
 })();
