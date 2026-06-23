@@ -177,8 +177,8 @@
       navTarget: '.nav .nav-button[data-view="spellingDrill"]',
       // New users have no words yet, so we show a sample of the screen instead
       // of spotlighting an empty panel.
-      title: "拼写错词训练",
-      body: "左边点 <b>拼写错词训练</b> 进来。写作里拼错的词会<b>自动收进来</b>，按记忆曲线安排。界面长这样 ↓：看<b>中文 + 你的误拼</b>回忆正确写法，拼对一个直接按 <b>Enter</b> 继续下一个，不用找按钮。",
+      title: "拼写训练",
+      body: "左边点 <b>拼写训练</b> 进来。写作里拼错的词会<b>自动收进来</b>，按记忆曲线安排。界面长这样 ↓：看<b>中文 + 你的误拼</b>回忆正确写法，拼对一个直接按 <b>Enter</b> 继续下一个，不用找按钮。",
       illustration: illoSpellingSample(),
     },
     {

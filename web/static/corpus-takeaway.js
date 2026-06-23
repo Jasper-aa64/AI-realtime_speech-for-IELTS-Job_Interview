@@ -131,15 +131,6 @@
       return guestSamples().p2Corpus || { categories: [], current_part2_cards: [] };
     }
 
-    // Light up the nav review dot so a freshly-seeded takeaway entry visibly has
-    // content waiting.
-    function showGuestTakeawayDot(kind, count) {
-      const dot = $(kind === "writing" ? "writingTakeawayDueDot" : "languageTakeawayDueDot");
-      if (!dot) return;
-      dot.classList.toggle("hidden", !count);
-      if (count) dot.setAttribute("data-count", String(count));
-    }
-
     // On the P1/P2 素材库 screens a guest can browse the cards, but clicking any
     // content must NOT enter an editor — it pops the login dialog instead. A
     // single capturing listener on the (stable) container intercepts every child
@@ -2610,7 +2601,6 @@
         renderLanguageTakeawayToggle();
         renderLanguageTakeaways();
         renderTakeawayReviewSurfaces("language");
-        showGuestTakeawayDot("language", payload.count);
         return;
       }
       if (state.languageTakeaway.loaded) {
@@ -5824,7 +5814,6 @@
         renderWritingTakeawayToggle();
         renderWritingTakeaways();
         renderTakeawayReviewSurfaces("writing");
-        showGuestTakeawayDot("writing", payload.count);
         return;
       }
       if (state.writingTakeaway.loaded) {

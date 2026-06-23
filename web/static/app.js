@@ -338,7 +338,7 @@ const uiTranslations = {
     "nav.corpus": "语料库",
     "nav.takeaway": "Takeaway",
     "nav.writingTakeaway": "写作积累",
-    "nav.spellingDrill": "拼写错词训练",
+    "nav.spellingDrill": "拼写训练",
     "nav.appearance": "Appearance",
     "nav.lockHint": "流程进行中，先点右侧叉号结束，再切换左侧模式。",
     "home.kicker": "IELTS Study Workspace",
@@ -368,7 +368,7 @@ const uiTranslations = {
     "home.corpus.libraryDesc": "管理 P1、P2、Takeaway 和写作积累。",
     "home.corpus.takeaway": "写作积累",
     "home.corpus.takeawayDesc": "沉淀可复用句型和观点表达。",
-    "home.corpus.spelling": "拼写错词训练",
+    "home.corpus.spelling": "拼写训练",
     "home.corpus.spellingDesc": "把作文错词加入间隔复习。",
     "account.kicker": "账户",
     "account.title": "个人资料与训练",
@@ -606,7 +606,7 @@ const viewCopy = {
   p2Corpus: ["我的 P2 串题素材库", "准备可复用的 Part 2 故事素材，并在练习中链接使用。"],
   takeawayBook: ["Takeaway", "复习已保存表达，遮住英文进行回忆。"],
   writingTakeawayBook: ["写作积累", "复习已保存的写作短语和论证素材。"],
-  spellingDrill: ["拼写错词训练", "重写作文批改中的拼写错词，直到掌握。"],
+  spellingDrill: ["拼写训练", "重写作文批改中的拼写错词，直到掌握。"],
   history: ["口语报告", ""],
   writing: ["", ""],
   writingReports: ["写作报告", ""],
@@ -6599,19 +6599,18 @@ function seedGuestWritingReports() {
   return true;
 }
 
-// On boot, light up the Takeaway / 写作积累 nav dots for a signed-out visitor
-// so the sample content is visibly waiting (the user's "直接会有红点").
+// On boot, seed the default takeaway items into state for a signed-out visitor
+// and let the REAL due-review logic decide the nav dots — so a dot only shows
+// when there is actually something to start (matching the in-page 开始 button),
+// not merely because items exist (the user's "有红点点进去没有可以开始的" bug).
 function maybeShowGuestTakeawayDots() {
   if (state.account.authenticated) return;
   const samples = (typeof window !== "undefined" && window.IELTSGuestSamples) || {};
-  const setDot = (id, count) => {
-    const dot = $(id);
-    if (!dot) return;
-    dot.classList.toggle("hidden", !count);
-    if (count) dot.setAttribute("data-count", String(count));
-  };
-  setDot("languageTakeawayDueDot", (samples.languageTakeaways || []).length);
-  setDot("writingTakeawayDueDot", (samples.writingTakeaways || []).length);
+  const language = samples.languageTakeaways || [];
+  const writing = samples.writingTakeaways || [];
+  applyLanguageTakeawaysPayload({ items: language, count: language.length });
+  applyWritingTakeawaysPayload({ items: writing, count: writing.length });
+  updateTakeawayReviewDots();
 }
 
 // ── Report manager: a single dialog (reachable from the avatar-area button) for
@@ -11964,6 +11963,14 @@ async function submitLogin() {
     resetCsrfToken();
     await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
+    // The guest session may have cached a generic bank summary; refresh it for
+    // this account so the left-rail season label is correct immediately instead
+    // of showing stale text until the user switches scope.
+    state.account.questionBankSummary = null;
+    state.account.questionBankLoadingPromise = null;
+    loadQuestionBankSummary({ force: true })
+      .then((summary) => { renderNavigationBankStatus(summary); renderQuestionBankSelector(summary); })
+      .catch(() => null);
     await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
     const returnView = state.account.returnView || "accountProfile";
     state.account.returnView = null;
@@ -12019,6 +12026,14 @@ async function submitRegister() {
     resetCsrfToken();
     await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
+    // The guest session may have cached a generic bank summary; refresh it for
+    // this account so the left-rail season label is correct immediately instead
+    // of showing stale text until the user switches scope.
+    state.account.questionBankSummary = null;
+    state.account.questionBankLoadingPromise = null;
+    loadQuestionBankSummary({ force: true })
+      .then((summary) => { renderNavigationBankStatus(summary); renderQuestionBankSelector(summary); })
+      .catch(() => null);
     await Promise.all([loadWallet(), loadWritingSummary(false).catch(() => null)]);
     const returnView = state.account.returnView || "accountProfile";
     state.account.returnView = null;

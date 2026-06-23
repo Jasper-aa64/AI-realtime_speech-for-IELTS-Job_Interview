@@ -121,11 +121,14 @@ test("takeaway/P1/P2 loaders inject defaults through the REAL render pipeline", 
   assert.doesNotMatch(corpus, /renderGuestP1CorpusSamples/);
 });
 
-test("the takeaway nav dot lights up for guests (both on entry and on boot)", () => {
-  assert.match(corpus, /function showGuestTakeawayDot\(kind, count\)/);
-  assert.match(corpus, /showGuestTakeawayDot\("language", payload\.count\)/);
-  assert.match(corpus, /showGuestTakeawayDot\("writing", payload\.count\)/);
+test("guest takeaway nav dots use the REAL due logic, not raw item counts", () => {
+  // No count-based dot override survives — that caused a dot with nothing to start.
+  assert.doesNotMatch(corpus, /showGuestTakeawayDot/);
+  // Boot seeds state through applyXPayload then lets updateTakeawayReviewDots decide.
   assert.match(app, /function maybeShowGuestTakeawayDots\(\)/);
+  assert.match(app, /applyLanguageTakeawaysPayload\(\{ items: language/);
+  assert.match(app, /applyWritingTakeawaysPayload\(\{ items: writing/);
+  assert.match(app, /maybeShowGuestTakeawayDots[\s\S]{0,400}?updateTakeawayReviewDots\(\)/);
   assert.match(app, /await loadAccount\(\);\s*\n\s*maybeShowGuestTakeawayDots\(\);/);
 });
 
