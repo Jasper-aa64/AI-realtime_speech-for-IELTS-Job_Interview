@@ -9975,6 +9975,13 @@ function refreshReportCorpusButtonStates() {
   if (!state.account.authenticated) return;
   const buttons = Array.from(document.querySelectorAll("#detailPanel [data-edit-turn-corpus]"));
   if (!buttons.length) return;
+  // Optimistic local pass: flip what we already know from in-memory corpus state
+  // (the user just edited it) so emptying/saving reflects instantly. The network
+  // query below still runs and reconciles anything we couldn't resolve locally.
+  buttons.forEach((button) => {
+    const local = localReportCorpusSavedState(button);
+    if (local !== null) applyCorpusButtonState(button, local);
+  });
   const targets = buttons.map((button, index) => {
     const key = String(index);
     button.dataset.corpusKey = key;
@@ -9990,9 +9997,33 @@ function refreshReportCorpusButtonStates() {
   api("/api/corpus/saved-status", { targets })
     .then((res) => {
       const statuses = res?.statuses || {};
-      buttons.forEach((button) => applyCorpusButtonState(button, Boolean(statuses[button.dataset.corpusKey])));
+      buttons.forEach((button) => {
+        // Local state wins when known: right after a clear, the clear keepalive
+        // may not have persisted yet, so the server could still report 已存.
+        // Don't let a stale server snapshot clobber what the user just emptied.
+        const local = localReportCorpusSavedState(button);
+        const saved = local !== null ? local : Boolean(statuses[button.dataset.corpusKey]);
+        applyCorpusButtonState(button, saved);
+      });
     })
     .catch(() => null);
+}
+
+// Resolve a report 编辑语料库 button's saved/empty state from already-loaded
+// local corpus state, so the icon/label can flip without waiting on the network
+// saved-status round-trip. Returns true/false when known locally, or null to
+// defer to the server query. Covers the P1 case the user hits most; other kinds
+// fall through to the network path unchanged.
+function localReportCorpusSavedState(button) {
+  const kind = button.dataset.corpusKind || "";
+  if (kind === "p1") {
+    const questionId = button.dataset.questionId || "";
+    if (!questionId) return null;
+    const entry = findP1CorpusEntry(questionId);
+    if (!entry) return null;
+    return Boolean(String(entry.corpus_text || "").trim());
+  }
+  return null;
 }
 
 function applyCorpusButtonState(button, saved) {

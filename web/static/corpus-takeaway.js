@@ -4526,6 +4526,10 @@
     }
 
     async function openP2BrainstormDialog() {
+      if (!state.account.authenticated) {
+        guestGate("登录后才能记录和复用串题灵感 Brainstorm。", "p2Corpus");
+        return;
+      }
       if (!state.p2Corpus.loaded) {
         text("p2BrainstormStatus", "正在加载题卡...");
         await loadP2Corpus({ force: true });
