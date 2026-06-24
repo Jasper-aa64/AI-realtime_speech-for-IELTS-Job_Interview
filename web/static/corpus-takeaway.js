@@ -2637,8 +2637,24 @@
       }
     }
 
+    // Strip inline markdown so a pasted "**a**" shows as plain "a" — the 原文,
+    // nothing else. The Language Takeaway popup already captures clean text via
+    // the browser selection; this gives the same result for typed/pasted/stored
+    // source text everywhere it's displayed or saved.
+    function stripInlineMarkdown(value) {
+      return String(value || "")
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url) / ![alt](url) -> text
+        .replace(/\*\*\*([^*]+)\*\*\*/g, "$1")      // ***bold italic***
+        .replace(/\*\*([^*]+)\*\*/g, "$1")           // **bold**
+        .replace(/\*([^*]+)\*/g, "$1")               // *italic*
+        .replace(/__([^_]+)__/g, "$1")               // __bold__
+        .replace(/~~([^~]+)~~/g, "$1")               // ~~strike~~
+        .replace(/`([^`]+)`/g, "$1")                 // `code`
+        .replace(/[*`~]/g, "");                      // any stray leftover markers
+    }
+
     function takeawaySourceHtml(sourceText = "") {
-      const raw = String(sourceText || "").trim();
+      const raw = stripInlineMarkdown(String(sourceText || "").trim());
       const replacement = parseReplacementSource(raw);
       if (!replacement) {
         return `<strong class="takeaway-source takeaway-source-plain"><span>${escapeHtml(raw)}</span></strong>`;
@@ -4136,7 +4152,8 @@
 
     function takeawayEditorValues() {
       return {
-        sourceText: ($("takeawayEditSource")?.value || "").trim(),
+        // Keep only the 原文 — drop any pasted markdown emphasis (**a** → a).
+        sourceText: stripInlineMarkdown(($("takeawayEditSource")?.value || "").trim()).trim(),
         chineseText: ($("takeawayEditChinese")?.value || "").trim(),
       };
     }

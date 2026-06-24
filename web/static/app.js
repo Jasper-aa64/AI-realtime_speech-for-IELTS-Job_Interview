@@ -12561,7 +12561,6 @@ function bindEvents() {
     event.preventDefault();
     translateTakeawayEditSource().catch(showError);
   });
-  $("cancelTakeawayEditBtn")?.addEventListener("click", closeTakeawayEditor);
   $("p1CorpusTopics")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-p1-corpus-question]");
     if (button) {

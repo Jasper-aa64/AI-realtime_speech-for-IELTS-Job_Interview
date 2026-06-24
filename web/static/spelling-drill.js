@@ -595,13 +595,6 @@
             </button>
           </div>
 
-          <form class="nr-card-add-form hidden" data-spelling-add-form autocomplete="off">
-            <input type="text" class="nr-card-add-input" data-spelling-add-input
-              autocomplete="off" autocapitalize="none" spellcheck="false"
-              placeholder="输入一个英文单词，回车查词加入">
-            <span class="nr-card-add-status" data-spelling-add-status aria-live="polite"></span>
-          </form>
-
           <div class="nr-prompt">${buildPromptHtml(word, s)}</div>
 
           <div class="nr-drill-body">${buildInputHtml(word, result, s)}</div>
@@ -852,55 +845,84 @@
       else if (window.confirm("移除此单词？以后拼写训练不再出现。")) run();
     }
 
-    // Add-word box (card's + button). One English word only — this is single-
-    // word spelling practice. Type + Enter → dictionary lookup for the gloss →
-    // add to spelling training. Mirrors the 划词 popup's translate-on-enter.
-    function toggleAddWordBox(forceOpen) {
-      const form = root()?.querySelector("[data-spelling-add-form]");
-      if (!form) return;
-      const open = typeof forceOpen === "boolean" ? forceOpen : form.classList.contains("hidden");
-      form.classList.toggle("hidden", !open);
-      const input = form.querySelector("[data-spelling-add-input]");
-      const statusEl = form.querySelector("[data-spelling-add-status]");
-      if (open) {
-        if (statusEl) statusEl.textContent = "";
-        input?.focus();
-      } else if (input) {
-        input.value = "";
+    // Add-word dialog (card's + button). A centered modal like the takeaway 添加
+    // window: type one English word, Enter looks it up in the dictionary and
+    // fills 中文, 保存 adds it. Backdrop / Escape closes (no cancel button).
+    function normalizeAddWord(value) {
+      // Keep only the 原文 — strip pasted markdown markers (**phone** → phone).
+      return String(value || "").replace(/[*_`~]/g, "").trim();
+    }
+
+    function setAddWordStatus(msg, isError = false) {
+      const el = $("spellingAddStatus");
+      if (!el) return;
+      el.textContent = msg || "";
+      el.classList.toggle("is-error", !!isError);
+    }
+
+    function openAddWordDialog() {
+      const dialog = $("spellingAddDialog");
+      if (!dialog) return;
+      if ($("spellingAddWord")) { $("spellingAddWord").value = ""; $("spellingAddWord").disabled = false; }
+      if ($("spellingAddGloss")) $("spellingAddGloss").value = "";
+      setAddWordStatus("");
+      dialog.classList.remove("hidden");
+      setTimeout(() => $("spellingAddWord")?.focus(), 0);
+    }
+
+    function closeAddWordDialog() {
+      $("spellingAddDialog")?.classList.add("hidden");
+    }
+
+    // Enter in the word field → dictionary lookup → fill 中文 (translate-on-enter,
+    // same as the takeaway 原文 field).
+    async function lookupAddWordGloss() {
+      const word = normalizeAddWord($("spellingAddWord")?.value);
+      if ($("spellingAddWord")) $("spellingAddWord").value = word;
+      if (!word) return;
+      if (!/^[A-Za-z][A-Za-z'’-]*$/.test(word)) {
+        setAddWordStatus("只能添加单个英文单词。", true);
+        return;
+      }
+      setAddWordStatus("查词中…");
+      try {
+        const dict = await api(`/api/dictionary/lookup?word=${encodeURIComponent(word)}`);
+        const entry = dict && dict.found ? dict.entry : null;
+        const senses = entry
+          ? (Array.isArray(entry.senses) && entry.senses.length ? entry.senses : (entry.translation ? [entry.translation] : []))
+          : [];
+        if (senses.length && $("spellingAddGloss")) $("spellingAddGloss").value = senses.slice(0, 4).join("；");
+        setAddWordStatus(entry?.phonetic ? `[${entry.phonetic}]` : "");
+      } catch (_e) {
+        setAddWordStatus("");
       }
     }
 
     async function submitAddWord() {
-      const form = root()?.querySelector("[data-spelling-add-form]");
-      const input = form?.querySelector("[data-spelling-add-input]");
-      const statusEl = form?.querySelector("[data-spelling-add-status]");
-      const setAddStatus = (msg, isError = false) => {
-        if (!statusEl) return;
-        statusEl.textContent = msg || "";
-        statusEl.classList.toggle("is-error", !!isError);
-      };
-      const raw = String(input?.value || "").trim();
-      if (!raw) return;
+      const word = normalizeAddWord($("spellingAddWord")?.value);
+      if ($("spellingAddWord")) $("spellingAddWord").value = word;
+      if (!word) { setAddWordStatus("先输入一个英文单词。", true); return; }
       // Single English word only.
-      if (!/^[A-Za-z][A-Za-z'’-]*$/.test(raw)) {
-        setAddStatus("只能添加单个英文单词。", true);
+      if (!/^[A-Za-z][A-Za-z'’-]*$/.test(word)) {
+        setAddWordStatus("只能添加单个英文单词。", true);
         return;
       }
-      if (input) input.disabled = true;
-      setAddStatus("查词中…");
-      let gloss = "";
-      try {
-        const dict = await api(`/api/dictionary/lookup?word=${encodeURIComponent(raw)}`);
-        const entry = dict && dict.found ? dict.entry : null;
-        if (entry) {
-          const senses = Array.isArray(entry.senses) && entry.senses.length
-            ? entry.senses
-            : (entry.translation ? [entry.translation] : []);
+      let gloss = String($("spellingAddGloss")?.value || "").trim();
+      const saveBtn = $("spellingAddSaveBtn");
+      if (saveBtn) saveBtn.disabled = true;
+      // If the learner saved straight away without pressing Enter, look up first.
+      if (!gloss) {
+        try {
+          const dict = await api(`/api/dictionary/lookup?word=${encodeURIComponent(word)}`);
+          const entry = dict && dict.found ? dict.entry : null;
+          const senses = entry
+            ? (Array.isArray(entry.senses) && entry.senses.length ? entry.senses : (entry.translation ? [entry.translation] : []))
+            : [];
           gloss = senses.slice(0, 4).join("；");
-        }
-      } catch (_e) { /* dictionary is optional; backend fills a local gloss */ }
+        } catch (_e) { /* dictionary optional; backend fills a local gloss */ }
+      }
       try {
-        const res = await api("/api/writing/spelling-words/add", { word: raw, chinese_gloss: gloss });
+        const res = await api("/api/writing/spelling-words/add", { word, chinese_gloss: gloss });
         const saved = res?.word;
         const s = S();
         if (saved && saved.word_id) {
@@ -908,12 +930,13 @@
           if (idx >= 0) s.items[idx] = saved;
           else s.items.unshift(saved);
         }
-        setAddStatus(`已加入：${raw}`);
-        if (input) { input.value = ""; input.disabled = false; input.focus(); }
+        closeAddWordDialog();
+        setStatus(`已加入：${word}`);
         if (s.view === "library") render();
       } catch (err) {
-        setAddStatus(err.message || "加入失败", true);
-        if (input) input.disabled = false;
+        setAddWordStatus(err.message || "加入失败", true);
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
       }
     }
 
@@ -929,17 +952,23 @@
         });
       });
 
-      // Card: form submit — the main attempt form, and the add-word box.
+      // Card: form submit — the main attempt form.
       root()?.addEventListener("submit", (e) => {
-        const form = e.target;
-        if (form?.id === "spellingAttemptForm") {
-          submitAttempt(e);
-          return;
-        }
-        if (form?.matches?.("[data-spelling-add-form]")) {
-          e.preventDefault();
-          submitAddWord();
-        }
+        if (e.target?.id === "spellingAttemptForm") submitAttempt(e);
+      });
+
+      // Add-word dialog: 保存, Enter-to-lookup, backdrop / Escape close.
+      $("spellingAddSaveBtn")?.addEventListener("click", () => submitAddWord());
+      $("spellingAddWord")?.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" || e.isComposing) return;
+        e.preventDefault();
+        lookupAddWordGloss();
+      });
+      $("spellingAddDialog")?.addEventListener("pointerdown", (e) => {
+        if (e.target === $("spellingAddDialog")) closeAddWordDialog();
+      });
+      $("spellingAddDialog")?.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeAddWordDialog();
       });
 
 
@@ -948,7 +977,7 @@
         const t = e.target;
         const ansWord = t.closest(".nr-answer-word");
         if (ansWord) { speakWord(ansWord.textContent); return; }
-        if (t.closest("[data-spelling-card-add]")) { toggleAddWordBox(); return; }
+        if (t.closest("[data-spelling-card-add]")) { openAddWordDialog(); return; }
         if (t.closest("[data-spelling-card-del]")) { confirmRemoveCurrentWord(); return; }
         if (t.closest("[data-spelling-continue]")) { gotoNext(); return; }
         if (t.closest("[data-open-library]"))      { S().view = "library"; render(); return; }
@@ -968,12 +997,6 @@
         // Any keystroke is a user gesture — warm the speech engine once so the
         // answer speaks with ~0 latency by the time Enter reveals it.
         primeSpeech();
-        // Escape closes the add-word box if it's open.
-        if (e.key === "Escape" && e.target?.closest?.("[data-spelling-add-form]")) {
-          toggleAddWordBox(false);
-          $("spellingTypedInput")?.focus();
-          return;
-        }
         if (e.key !== "Delete") return;
         const s = S();
         if (s.view !== "drill") return;
@@ -982,8 +1005,6 @@
         const input = $("spellingTypedInput");
         const editingText = input && document.activeElement === input && input.value.length > 0;
         if (editingText) return;
-        // Don't treat Delete inside the add-word box as "remove current word".
-        if (e.target?.closest?.("[data-spelling-add-form]")) return;
         e.preventDefault();
         confirmRemoveCurrentWord();
       });

@@ -28853,43 +28853,18 @@ body.theme-dark .writing-pattern-menu-option.active {
 .nr-card-tool:active { transform: scale(0.92) !important; }
 .nr-card-tool svg { display: block !important; }
 
-/* Add-word box: a slim bar under the tool cluster, shown on demand. */
-.nr-card-add-form {
-  position: absolute !important;
-  top: 100px !important;
-  left: 18px !important;
-  right: 18px !important;
-  z-index: 3 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
+/* Add-word dialog (reuses .p1-corpus-dialog): the word field is single-line,
+   the gloss is compact. */
+.spelling-add-word {
+  min-height: 0 !important;
+  height: 48px !important;
+  resize: none !important;
 }
-.nr-card-add-form.hidden { display: none !important; }
-.nr-card-add-input {
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  height: 34px !important;
-  padding: 0 12px !important;
-  border: 1px solid var(--sd-line) !important;
-  border-radius: var(--radius-md, 10px) !important;
-  background: var(--sd-card-soft) !important;
-  color: var(--sd-ink) !important;
-  font: 600 14px/1 inherit !important;
-}
-.nr-card-add-status {
-  flex: 0 0 auto !important;
-  max-width: 45% !important;
-  font-size: 12px !important;
-  color: var(--sd-muted) !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-.nr-card-add-status.is-error { color: var(--sd-danger, #dc2626) !important; }
+.spelling-add-gloss { min-height: 84px !important; }
+#spellingAddStatus.is-error { color: #dc2626 !important; }
 
 @media (max-height: 760px) {
   .nr-card-tools { top: 52px !important; right: 12px !important; }
-  .nr-card-add-form { top: 86px !important; left: 12px !important; right: 12px !important; }
 }
 
 .spelling-drill-panel .nr-prompt {
