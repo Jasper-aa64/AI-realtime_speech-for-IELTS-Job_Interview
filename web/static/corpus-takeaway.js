@@ -4566,6 +4566,29 @@
       });
     }
 
+    // Mirror the P1 pattern: after a P3 save, update the seasonal card's
+    // filled/total counts in place so the progress bar moves instantly, instead
+    // of waiting on (or depending on) a full loadP2Corpus refetch. Pass
+    // totalCount when known (e.g. the editor loaded every follow-up) so clearing
+    // the last answer drops the bar without a refresh.
+    function updateP2CardP3CountLocal(questionId, savedCount, totalCount) {
+      const targetId = String(questionId || "").trim();
+      if (!targetId) return;
+      const nextSaved = Math.max(0, Number(savedCount) || 0);
+      state.p2Corpus.currentPart2Cards = (state.p2Corpus.currentPart2Cards || []).map((item) => {
+        if (p2BankQuestionId(item) !== targetId) return item;
+        const total = Number.isFinite(totalCount)
+          ? Math.max(Number(totalCount) || 0, nextSaved)
+          : Math.max(Number(item.p3_follow_up_count) || 0, nextSaved);
+        return {
+          ...item,
+          p3_follow_up_count: total,
+          p3_follow_up_saved_count: Math.min(nextSaved, total),
+          has_p3_follow_up: nextSaved > 0,
+        };
+      });
+    }
+
     const p2BrainstormDirtyValues = new Map();
     const p2BrainstormAutosaveTimers = new Map();
     let p2BrainstormAutosaveChain = Promise.resolve();
@@ -5530,6 +5553,14 @@
         p2BankP3Cache.delete(questionId);
         p2BankLsDelete(P3BANK_LS_PREFIX, questionId);
         p2BankBatchRequested.delete(questionId);
+        // Move the progress bar now from local state (P1 pattern): the editor
+        // loaded every follow-up, so drafts.length is the true total and the
+        // non-empty count is the true saved count. The forced refetch below just
+        // reconciles — the bar must not wait on it, and clearing the last answer
+        // must drop the bar without a manual refresh.
+        const savedCount = drafts.filter((draft) => String(draft.corpus_text || "").trim()).length;
+        updateP2CardP3CountLocal(questionId, savedCount, drafts.length);
+        renderP2CorpusTopics();
         if (!options.silent) text("p2CorpusP3SaveStatus", "已保存题库 P3 追问");
         await loadP2Corpus({ force: true });
         if (options.closeOnSuccess) closeP2CorpusP3Editor();
@@ -5880,7 +5911,10 @@
           source: options.source || "p2_corpus_editor",
         });
         if (!options.silent) text("p2CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
-        await loadP2Corpus();
+        // Force a fresh pull so the just-saved material/P3 status replaces any
+        // cached snapshot — without this a save can show stale state until a
+        // manual refresh (same fix the bank path already has).
+        await loadP2Corpus({ force: true });
         state.p2Corpus.selectedEntryId ||= saved.entry_id;
         if (options.silent) {
           setP2CorpusFeedback("\u5df2\u4fdd\u5b58\u7d20\u6750", "success");
