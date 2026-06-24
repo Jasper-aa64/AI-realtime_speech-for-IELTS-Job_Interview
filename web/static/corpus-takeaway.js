@@ -3046,7 +3046,13 @@
       if (!target) return;
       if (session.locatedId === target) {
         session.locatedId = "";
-        selectTakeawayReviewEntry(kind, target);
+        const reviewState = selectTakeawayReviewEntry(kind, target);
+        // Opening via W must read the English aloud, same as clicking the card.
+        if (reviewState === "selected") {
+          const items = kind === "writing" ? state.writingTakeaway.items : state.languageTakeaway.items;
+          const item = (items || []).find((entry) => entry.entry_id === target);
+          speakLanguageTakeaway(item?.source_text || "", { kind });
+        }
         scrollTakeawayCardIntoView(kind, target);
         return;
       }
