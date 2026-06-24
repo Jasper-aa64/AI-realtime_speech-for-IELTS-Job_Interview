@@ -2935,17 +2935,38 @@ h1 {
   align-items: center;
 }
 
-/* 定位 button: reuses the A/D grade pill styling (square, icon-only) so it sits
-   flush beside them without a bespoke button. Jumps to the current card. */
+/* 定位 button: reuses the A/D grade pill styling but rendered as a circle. Jumps
+   to the visually topmost card still to practise. A faint "W" watermark sits
+   behind the crosshair so the icon reads as "locate" and the backdrop signals
+   it's bound to the W key. */
 .takeaway-review-grade.is-locate {
   width: 42px;
   min-width: 42px;
   padding: 0;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
   color: var(--accent, #2563eb);
 }
+.takeaway-review-grade.is-locate::before {
+  content: "W";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, monospace;
+  font-size: 24px;
+  font-weight: 900;
+  color: currentColor;
+  opacity: 0.18;
+  pointer-events: none;
+}
 .takeaway-review-grade.is-locate svg {
-  width: 18px;
-  height: 18px;
+  position: relative;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -29399,6 +29420,30 @@ body.theme-dark .language-takeaway-card-wrap.is-reviewing .language-takeaway-car
 .topbar-review-panel .takeaway-review-grade.is-again:hover {
   background:
     linear-gradient(180deg, rgba(255, 250, 246, 1), rgba(247, 226, 218, 0.96));
+}
+
+/* The locate button must stay round + accent-coloured even inside the topbar,
+   whose generic grade rule would otherwise impose its lopsided radius / green. */
+.topbar-review-panel .takeaway-review-grade.is-locate {
+  border-radius: 50%;
+  color: var(--accent, #2563eb);
+}
+
+/* Dark mode: the topbar hover gradients above are near-white, so on a dark theme
+   hovering A / D / 定位 flashed the button white. Repaint hover for dark. */
+body.theme-dark .topbar-review-panel .takeaway-review-start:hover,
+body.theme-dark .topbar-review-panel .takeaway-review-grade:hover {
+  background:
+    linear-gradient(180deg, rgba(40, 52, 71, 0.98), rgba(22, 31, 48, 0.96));
+  border-color: rgba(148, 163, 184, 0.4);
+}
+body.theme-dark .topbar-review-panel .takeaway-review-grade.is-again:hover {
+  background:
+    linear-gradient(180deg, rgba(64, 34, 34, 0.98), rgba(44, 20, 20, 0.96));
+}
+body.theme-dark .topbar-review-panel .takeaway-review-grade.is-mastered:hover {
+  background:
+    linear-gradient(180deg, rgba(28, 56, 42, 0.98), rgba(18, 38, 28, 0.96));
 }
 
 .takeaway-review-grade[aria-disabled="true"] {

@@ -484,17 +484,69 @@
       return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length);
     }
 
+    // Client-side mirror of the server's merge_takeaway_review_state so that a
+    // stale server copy can never clobber locally-newer grades. Used when the
+    // library payload brings remote review state back in (e.g. after re-login).
+    function reviewRecordLast(value) {
+      return value && typeof value === "object" ? String(value.last || "") : "";
+    }
+    function reviewRecordReps(value) {
+      if (!value || typeof value !== "object") return 0;
+      const n = Number(value.reps || 0);
+      return Number.isFinite(n) ? n : 0;
+    }
+    function preferReviewRecord(current, incoming) {
+      if (!current || typeof current !== "object") return incoming;
+      if (!incoming || typeof incoming !== "object") return current;
+      const a = reviewRecordLast(current);
+      const b = reviewRecordLast(incoming);
+      if (b > a) return incoming;
+      if (b < a) return current;
+      return reviewRecordReps(incoming) > reviewRecordReps(current) ? incoming : current;
+    }
+    function preferDailyBatch(current, incoming) {
+      if (!current || typeof current !== "object") return incoming;
+      if (!incoming || typeof incoming !== "object") return current;
+      const currentDay = String(current.day || "");
+      const incomingDay = String(incoming.day || "");
+      if (incomingDay > currentDay) return incoming;
+      if (incomingDay < currentDay) return current;
+      // Same review-day: completion is monotonic — a not-yet-completed batch must
+      // not un-complete a day the user already cleared.
+      const currentDone = Boolean(current.completedDay) || Boolean(current.locked);
+      const incomingDone = Boolean(incoming.completedDay) || Boolean(incoming.locked);
+      if (currentDone && !incomingDone) return current;
+      return incoming;
+    }
+    function mergeTakeawayReviewRecords(localState, remoteState) {
+      const merged = { ...(localState || {}) };
+      for (const [key, value] of Object.entries(remoteState || {})) {
+        if (key === "__daily_batch") merged[key] = preferDailyBatch(merged[key], value);
+        else if (key.startsWith("__")) merged[key] = value;
+        else merged[key] = preferReviewRecord(merged[key], value);
+      }
+      return merged;
+    }
+
     function applyRemoteTakeawayReviewState(kind, value) {
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
+      const local = takeawayReviewState(kind);
       if (!hasTakeawayReviewData(value)) {
-        const local = takeawayReviewState(kind);
         if (hasTakeawayReviewData(local)) syncTakeawayReviewState(kind, local);
         return;
       }
+      // Reconcile instead of overwriting: a grade whose sync POST failed leaves a
+      // newer record in localStorage than on the server, and a blind overwrite on
+      // the next login would resurrect already-cleared due cards (the red dot bug).
+      const merged = mergeTakeawayReviewRecords(local, value);
       try {
-        window.localStorage?.setItem(takeawayReviewStorageKey(kind), JSON.stringify(value));
+        window.localStorage?.setItem(takeawayReviewStorageKey(kind), JSON.stringify(merged));
       } catch (_error) {
-        // Server state still wins for the current payload even if local cache fails.
+        // Reconciled state still drives this session even if the cache write fails.
+      }
+      // Heal the server when local turned out to be ahead, so the next login is clean.
+      if (hasTakeawayReviewData(local) && JSON.stringify(merged) !== JSON.stringify(value)) {
+        syncTakeawayReviewState(kind, merged);
       }
     }
 
@@ -728,7 +780,7 @@
         </div>
         ${session.active ? `
           <div class="takeaway-review-panel-actions" aria-label="复习反馈">
-            <button type="button" class="takeaway-review-grade is-locate" data-takeaway-review-locate="${kind}" aria-label="定位到当前要练的卡片" title="定位到当前要练的卡片">
+            <button type="button" class="takeaway-review-grade is-locate" data-takeaway-review-locate="${kind}" aria-label="定位最上面要练的卡片（快捷键 W）" title="定位最上面要练的卡片（W）">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.4"></circle><path d="M12 2.5v3.6M12 17.9v3.6M2.5 12h3.6M17.9 12h3.6"></path></svg>
             </button>
             <button type="button" class="takeaway-review-grade is-mastered ${currentId ? "" : "needs-card"}" data-takeaway-review-panel-grade="mastered" data-takeaway-review-kind="${kind}" aria-disabled="${currentId ? "false" : "true"}">A<span>已掌握</span></button>
@@ -2913,20 +2965,34 @@
       wrap?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
-    // The first card that still needs practising this session: the current
-    // revealed card if any, otherwise the next un-graded due card. Graded
-    // ("点过的") cards are skipped.
+    // The card to jump to this session. If a card is currently revealed and
+    // awaiting A / D the deck is locked to it, so that wins. Otherwise we pick
+    // the *visually topmost* un-graded due card — the masonry reorders cards
+    // across columns, so "first in session.ids" is not the one highest on the
+    // page. We measure live DOM rects and take the smallest top, so the result
+    // is dynamic: as cards get graded and disappear, the topmost shifts.
     function firstTakeawayReviewTargetId(kind = "language") {
       const session = takeawayReviewSession(kind);
       if (!session.active) return "";
       const reviewed = session.reviewedIds || new Set();
       const current = String(session.currentId || "").trim();
       if (current && !reviewed.has(current)) return current;
+      let bestId = "";
+      let bestTop = Infinity;
       for (const value of (session.ids || [])) {
         const id = String(value || "").trim();
-        if (id && !reviewed.has(id)) return id;
+        if (!id || reviewed.has(id)) continue;
+        const wrap = takeawayReviewCardWrap(kind, id);
+        if (!wrap) continue;
+        // All rects measured at the same scroll offset, so the relative order by
+        // viewport-top equals document order — smallest top = physically highest.
+        const top = wrap.getBoundingClientRect().top;
+        if (top < bestTop) {
+          bestTop = top;
+          bestId = id;
+        }
       }
-      return "";
+      return bestId;
     }
 
     // Jump the list to that card — used by the 定位 button and the auto-jump

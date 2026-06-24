@@ -9103,12 +9103,16 @@ function isShiftSpaceShortcut(event) {
 
 function handleGlobalKeydown(event) {
   const reviewKey = String(event.key || "").toLowerCase();
-  if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && (reviewKey === "a" || reviewKey === "d")) {
+  if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && (reviewKey === "a" || reviewKey === "d" || reviewKey === "w")) {
     const kind = state.view === "writingTakeawayBook" ? "writing" : (state.view === "takeawayBook" ? "language" : "");
     if (kind && isTakeawayReviewActiveForKind(kind) && !isEditableShortcutTarget(event.target)) {
       event.preventDefault();
       event.stopPropagation();
-      takeawayReviewFeedback(kind, "", reviewKey === "d" ? "again" : "mastered");
+      if (reviewKey === "w") {
+        scrollToTakeawayReviewTarget(kind);
+      } else {
+        takeawayReviewFeedback(kind, "", reviewKey === "d" ? "again" : "mastered");
+      }
       return;
     }
   }
