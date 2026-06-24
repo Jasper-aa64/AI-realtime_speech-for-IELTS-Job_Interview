@@ -9,7 +9,7 @@
 
 param(
     [string]$TaskName = "IELTS Stack Watchdog",
-    [int]$IntervalMinutes = 3
+    [int]$IntervalMinutes = 10
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,9 +17,14 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $Watchdog = Join-Path $ProjectRoot "scripts\windows\watchdog-ielts-stack.ps1"
 if (-not (Test-Path $Watchdog)) { throw "Watchdog script not found: $Watchdog" }
+$HiddenLauncher = Join-Path $ProjectRoot "scripts\windows\run-watchdog-hidden.vbs"
+if (-not (Test-Path $HiddenLauncher)) { throw "Hidden launcher not found: $HiddenLauncher" }
 
-$argument = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Watchdog`""
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $argument
+# Launch through wscript.exe + a VBS launcher so the periodic run never flashes a
+# console window. powershell.exe as the action spawns a conhost window that blinks
+# on screen every interval even with -WindowStyle Hidden; wscript has no console.
+$argument = "`"$HiddenLauncher`""
+$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument $argument
 
 # Two triggers: once at logon, and a repeating one so a mid-session crash recovers.
 $atLogon = New-ScheduledTaskTrigger -AtLogOn
