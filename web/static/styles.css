@@ -2673,14 +2673,15 @@ h1 {
   stroke-linejoin: round;
 }
 
-.tk-brain-cloud-dots circle {
+.tk-brain-cloud-dots rect {
   fill: #1f2937;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: tkBrainThinkDot 1.05s ease-in-out infinite;
+  opacity: 0;
+  /* Square dots pop in left→right, hold, then vanish together, repeat. All three
+     share one 1.5s timeline (no per-dot delay) so the disappear stays in sync. */
+  animation: tkBrainSeqDot1 1.5s steps(1, end) infinite;
 }
-.tk-brain-cloud-dots circle:nth-child(2) { animation-delay: 0.14s; }
-.tk-brain-cloud-dots circle:nth-child(3) { animation-delay: 0.28s; }
+.tk-brain-cloud-dots rect:nth-child(2) { animation-name: tkBrainSeqDot2; }
+.tk-brain-cloud-dots rect:nth-child(3) { animation-name: tkBrainSeqDot3; }
 
 .tk-brain-bulb-glass { fill: #fde68a; stroke: #f59e0b; stroke-width: 0.8; }
 .tk-brain-bulb-base { fill: #9ca3af; }
@@ -2733,6 +2734,24 @@ h1 {
 @keyframes tkBrainThinkDot {
   0%, 55%, 100% { transform: translateY(0); }
   28% { transform: translateY(-1.5px); }
+}
+
+/* Sequential square-dot loader: dot1→dot2→dot3 appear, all hold, then disappear
+   together; the trailing hidden stretch is the pause before the next round. */
+@keyframes tkBrainSeqDot1 {
+  0%, 100% { opacity: 0; }
+  12%, 74% { opacity: 1; }
+  80% { opacity: 0; }
+}
+@keyframes tkBrainSeqDot2 {
+  0%, 30% { opacity: 0; }
+  32%, 74% { opacity: 1; }
+  80%, 100% { opacity: 0; }
+}
+@keyframes tkBrainSeqDot3 {
+  0%, 50% { opacity: 0; }
+  52%, 74% { opacity: 1; }
+  80%, 100% { opacity: 0; }
 }
 
 @keyframes tkBrainCloud {
@@ -2804,12 +2823,13 @@ h1 {
   .takeaway-review-mascot .tk-brain-icon,
   .takeaway-review-mascot .tk-brain-hand-right,
   .takeaway-review-mascot .tk-brain-cloud,
-  .takeaway-review-mascot .tk-brain-cloud-dots circle,
+  .takeaway-review-mascot .tk-brain-cloud-dots rect,
   .takeaway-review-mascot .tk-brain-bulb,
   .takeaway-review-mascot .tk-brain-bulb-ray,
   .takeaway-review-mascot .tk-brain-arm-think,
   .takeaway-review-mascot .tk-brain-arm-idea,
   .takeaway-review-mascot .tk-brain-arm-hold { animation: none; }
+  .takeaway-review-mascot .tk-brain-cloud-dots rect { opacity: 1; }
   .takeaway-review-mascot .tk-brain-cloud,
   .takeaway-review-mascot .tk-brain-bulb,
   .takeaway-review-mascot .tk-brain-balloon,
@@ -2932,7 +2952,8 @@ h1 {
   .follow-up-mascot,
   .follow-up-mascot .tk-brain-hand-right,
   .follow-up-mascot .tk-brain-cloud,
-  .follow-up-mascot .tk-brain-cloud-dots circle { animation: none; }
+  .follow-up-mascot .tk-brain-cloud-dots rect { animation: none; }
+  .follow-up-mascot .tk-brain-cloud-dots rect { opacity: 1; }
 }
 
 .takeaway-review-panel-actions {
@@ -27564,6 +27585,29 @@ body.view-home .home-v3-lane-head span {
   font-weight: 950;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* Circular learning loop (输入 → 反馈 → 复用) — replaces the old sketch board. */
+body.view-home .home-loop-cycle {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  margin: 0 auto;
+}
+body.view-home .home-loop-title {
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 21px;
+  font-weight: 800;
+}
+body.view-home .home-loop-sub {
+  font-size: 13px;
+  font-weight: 720;
+}
+body.view-home .home-loop-num {
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 17px;
+  font-weight: 800;
 }
 
 body.view-home .home-v3-today ol {

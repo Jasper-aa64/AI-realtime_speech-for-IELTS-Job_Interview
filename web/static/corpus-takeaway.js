@@ -2922,9 +2922,9 @@
             <g class="tk-brain-cloud">
               <path class="tk-brain-cloud-puff" d="M27.3,-5 H35.7 Q37,-5 37,-3.7 V0.2 Q37,1.5 35.7,1.5 H30.6 L26.6,3.3 L27.3,1.5 Q26,1.5 26,0.2 V-3.7 Q26,-5 27.3,-5 Z"/>
               <g class="tk-brain-cloud-dots">
-                <circle cx="28.8" cy="-1.75" r="1.1"/>
-                <circle cx="31.5" cy="-1.75" r="1.1"/>
-                <circle cx="34.2" cy="-1.75" r="1.1"/>
+                <rect x="27.8" y="-2.75" width="2" height="2"/>
+                <rect x="30.5" y="-2.75" width="2" height="2"/>
+                <rect x="33.2" y="-2.75" width="2" height="2"/>
               </g>
             </g>
             <g class="tk-brain-bulb">

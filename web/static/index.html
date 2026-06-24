@@ -15,7 +15,7 @@
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260624-followup-mascot-8">
+    <link rel="stylesheet" href="/styles.css?v=20260624-loop-and-dots-9">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -182,24 +182,42 @@
               </div>
             </div>
 
-            <aside class="home-v3-today sketch-flow-board" aria-label="今日训练流程">
-              <img src="/assets/home/sketch-workflow.webp" alt="铅笔稿风格的 IELTS 学习流程草图">
-              <div class="sketch-flow-overlay" aria-hidden="true">
-                <span>Today</span>
-                <svg class="sketch-flow-connectors" viewBox="0 0 620 430" preserveAspectRatio="none" aria-hidden="true">
-                  <defs>
-                    <marker id="sketchFlowConnectorHead" markerWidth="5" markerHeight="5" refX="4.4" refY="2.5" orient="auto" markerUnits="strokeWidth">
-                      <path d="M0.6 0.6 L5 2.5 L0.6 4.4 Z"></path>
-                    </marker>
-                  </defs>
-                  <path class="sketch-flow-connector connector-1" d="M205 120 C290 150 440 138 442 168"></path>
-                  <path class="sketch-flow-connector connector-2" d="M428 246 C418 295 300 316 244 322"></path>
-                  <path class="sketch-flow-connector connector-3" d="M85 320 C45 280 46 180 60 122"></path>
-                </svg>
-                <div class="sketch-flow-step step-1"><b>1</b><strong>输入</strong><small>P1 / P2 / P3 真题练习</small></div>
-                <div class="sketch-flow-step step-2"><b>2</b><strong>反馈</strong><small>口语报告与写作批改</small></div>
-                <div class="sketch-flow-step step-3"><b>3</b><strong>复用</strong><small>语料、Takeaway、拼写错词</small></div>
-              </div>
+            <aside class="home-v3-today" aria-label="今日训练流程">
+              <span>Today</span>
+              <svg class="home-loop-cycle" viewBox="0 0 460 410" role="img" aria-label="每日训练循环：输入真题练习，得到反馈报告，再复用语料与错词，回到输入。">
+                <defs>
+                  <marker id="homeLoopArrow" markerWidth="7" markerHeight="7" refX="3.6" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0.6 0.4 L6 3 L0.6 5.6 Z" fill="var(--accent, #2f806d)"></path>
+                  </marker>
+                </defs>
+                <circle cx="230" cy="220" r="135" fill="none" stroke="var(--line, #d9d4c7)" stroke-width="1.5" stroke-dasharray="2 7" stroke-linecap="round"></circle>
+                <g fill="none" stroke="var(--accent, #2f806d)" stroke-width="3" stroke-linecap="round" marker-end="url(#homeLoopArrow)">
+                  <path d="M280.5 94.8 A135 135 0 0 1 363.7 238.8"></path>
+                  <path d="M313.2 326.4 A135 135 0 0 1 146.8 326.4"></path>
+                  <path d="M96.3 238.8 A135 135 0 0 1 179.4 94.9"></path>
+                </g>
+                <g class="home-loop-node">
+                  <rect x="160" y="55" width="140" height="60" rx="16" fill="var(--panel, #fff)" stroke="rgba(47,128,109,0.22)" stroke-width="1.5"></rect>
+                  <circle cx="185" cy="85" r="15" fill="var(--accent, #2f806d)"></circle>
+                  <text x="185" y="91" text-anchor="middle" fill="#fff" class="home-loop-num">1</text>
+                  <text x="209" y="81" class="home-loop-title" fill="var(--ink, #2b2b2b)">输入</text>
+                  <text x="209" y="100" class="home-loop-sub" fill="var(--muted, #8a8478)">真题 · 练习</text>
+                </g>
+                <g class="home-loop-node">
+                  <rect x="278" y="257" width="140" height="60" rx="16" fill="var(--panel, #fff)" stroke="rgba(47,128,109,0.22)" stroke-width="1.5"></rect>
+                  <circle cx="303" cy="287" r="15" fill="var(--accent, #2f806d)"></circle>
+                  <text x="303" y="293" text-anchor="middle" fill="#fff" class="home-loop-num">2</text>
+                  <text x="327" y="283" class="home-loop-title" fill="var(--ink, #2b2b2b)">反馈</text>
+                  <text x="327" y="302" class="home-loop-sub" fill="var(--muted, #8a8478)">报告 · 批改</text>
+                </g>
+                <g class="home-loop-node">
+                  <rect x="42" y="257" width="140" height="60" rx="16" fill="var(--panel, #fff)" stroke="rgba(47,128,109,0.22)" stroke-width="1.5"></rect>
+                  <circle cx="67" cy="287" r="15" fill="var(--accent, #2f806d)"></circle>
+                  <text x="67" y="293" text-anchor="middle" fill="#fff" class="home-loop-num">3</text>
+                  <text x="91" y="283" class="home-loop-title" fill="var(--ink, #2b2b2b)">复用</text>
+                  <text x="91" y="302" class="home-loop-sub" fill="var(--muted, #8a8478)">语料 · 错词本</text>
+                </g>
+              </svg>
             </aside>
           </div>
 
@@ -1486,8 +1504,8 @@
     <script src="/writing-prompt-picker.js?v=20260614-img-ready-instant-1"></script>
     <script src="/corpus-markdown-editor.js?v=20260613-p2bank-instant-1"></script>
     <script src="/assets/guest-samples.js?v=20260623-ux-batch-3"></script>
-    <script src="/corpus-takeaway.js?v=20260624-followup-mascot-8"></script>
-    <script src="/spelling-drill.js?v=20260624-followup-mascot-8"></script>
+    <script src="/corpus-takeaway.js?v=20260624-loop-and-dots-9"></script>
+    <script src="/spelling-drill.js?v=20260624-loop-and-dots-9"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
@@ -1495,7 +1513,7 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260530-front-appearance"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20260624-followup-mascot-8"></script>
+    <script src="/app.js?v=20260624-loop-and-dots-9"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
   </body>
 </html>
