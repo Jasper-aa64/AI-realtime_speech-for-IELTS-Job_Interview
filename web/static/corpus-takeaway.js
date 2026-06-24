@@ -934,6 +934,34 @@
       return true;
     }
 
+    // Re-rendering the book rebuilds the masonry from scratch (list.innerHTML=""),
+    // which resets the scroll container to the top and reshuffles cards between
+    // columns — so after every A/D the view jumped. Anchor on the topmost card
+    // visible in the list, run the mutation, then restore that card to the same
+    // offset so the position stays put across the rebuild.
+    function preserveTakeawayListScroll(kind, mutate) {
+      const list = $(kind === "writing" ? "writingTakeawayList" : "languageTakeawayList");
+      if (!list) { mutate(); return; }
+      const listTop = list.getBoundingClientRect().top;
+      let anchorId = "";
+      let anchorOffset = 0;
+      for (const wrap of list.querySelectorAll(".language-takeaway-card-wrap")) {
+        const rect = wrap.getBoundingClientRect();
+        if (rect.bottom > listTop + 1) {
+          const btn = wrap.querySelector("[data-takeaway-entry], [data-writing-takeaway-entry]");
+          anchorId = btn?.dataset.takeawayEntry || btn?.dataset.writingTakeawayEntry || "";
+          anchorOffset = rect.top - listTop;
+          break;
+        }
+      }
+      mutate();
+      if (!anchorId) return;
+      const newWrap = takeawayReviewCardWrap(kind, anchorId);
+      if (!newWrap) return;
+      const newOffset = newWrap.getBoundingClientRect().top - list.getBoundingClientRect().top;
+      list.scrollTop += (newOffset - anchorOffset);
+    }
+
     function commitTakeawayReviewFeedback(kind, entryId, result, records) {
       const id = String(entryId || "").trim();
       const session = takeawayReviewSession(kind);
@@ -955,8 +983,10 @@
         return true;
       }
       setTakeawayReviewToast(kind, result === "again" ? "已记为 D，明天再复习。" : "已记为 A，间隔已延长。");
-      if (kind === "writing") renderWritingTakeaways();
-      else renderLanguageTakeaways();
+      preserveTakeawayListScroll(kind, () => {
+        if (kind === "writing") renderWritingTakeaways();
+        else renderLanguageTakeaways();
+      });
       renderTakeawayReviewSurfaces(kind);
       return true;
     }

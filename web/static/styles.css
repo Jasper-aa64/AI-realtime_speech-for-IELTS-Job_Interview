@@ -29480,11 +29480,12 @@ body.view-writingTakeawayBook .topbar-review-panel .takeaway-review-grade.is-loc
   justify-self: center;
 }
 
-/* 定位 first press frames the topmost card to practise; press again to open it. */
+/* 定位 first press frames the topmost card to practise; press again to open it.
+   Inset (negative offset) so the dashed frame is drawn inside the card and can
+   never be clipped by the list's scroll container at the left/right edge. */
 .language-takeaway-card-wrap.is-located .language-takeaway-card {
   outline: 2px dashed var(--accent, #2563eb);
-  outline-offset: 3px;
-  border-radius: 12px;
+  outline-offset: -4px;
 }
 
 /* Dark mode: the A / D / 定位 buttons have a DARK base here, so their near-white
