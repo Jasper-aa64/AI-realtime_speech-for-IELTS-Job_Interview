@@ -1021,6 +1021,10 @@ def language_takeaway_payload(entry: LanguageTakeawayEntry) -> dict[str, Any]:
         "target_language": entry.target_language,
         "context_url": entry.context_url,
         "context_label": entry.context_label,
+        "source": (entry.metadata or {}).get("saved_from") or "",
+        # Add-time, fixed at creation (auto_now_add). The list sorts on this, not
+        # updated_at, so editing an old entry never reorders it.
+        "created_at": timezone.localtime(entry.created_at).isoformat() if entry.created_at else "",
         "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M"),
     }
 
@@ -1159,7 +1163,7 @@ def save_takeaway_review_state(user, kind: str, payload: dict[str, Any]) -> dict
 def language_takeaway_library(user) -> dict[str, Any]:
     entries = [
         language_takeaway_payload(entry)
-        for entry in language_takeaway_queryset(user).order_by("-updated_at")[:300]
+        for entry in language_takeaway_queryset(user).order_by("-created_at", "-id")[:300]
     ]
     return {"items": entries, "count": len(entries), "review_state": takeaway_review_state_payload(user, "language")}
 
@@ -1170,7 +1174,7 @@ def writing_takeaway_library(user) -> dict[str, Any]:
         for entry in LanguageTakeawayEntry.objects.filter(
             user=user,
             metadata__saved_from="writing_takeaway",
-        ).order_by("-updated_at")[:300]
+        ).order_by("-created_at", "-id")[:300]
     ]
     return {"items": entries, "count": len(entries), "review_state": takeaway_review_state_payload(user, "writing")}
 

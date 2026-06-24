@@ -29411,11 +29411,53 @@ body.view-writingTakeawayBook .language-takeaway-list {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(121, 107, 97, 0.46) transparent;
+  /* Vertical stack of sections (表达替换 group, divider, ordinary group). The
+     two-column masonry grid now lives on .takeaway-group, not the list. */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 0 8px 18px 2px;
+}
+
+body.view-takeawayBook .takeaway-group,
+body.view-writingTakeawayBook .takeaway-group {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
   gap: 10px;
-  padding: 0 8px 18px 2px;
+}
+
+/* Expression-replacement section sits above; this rule separates it from the
+   ordinary entries below. Hidden automatically when only one group renders. */
+body.view-takeawayBook .takeaway-section-divider,
+body.view-writingTakeawayBook .takeaway-section-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 2px;
+  color: rgba(121, 107, 97, 0.82);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+body.view-takeawayBook .takeaway-section-divider::before,
+body.view-takeawayBook .takeaway-section-divider::after,
+body.view-writingTakeawayBook .takeaway-section-divider::before,
+body.view-writingTakeawayBook .takeaway-section-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(121, 107, 97, 0.26);
+}
+
+@media (max-width: 720px) {
+  body.view-takeawayBook .takeaway-group,
+  body.view-writingTakeawayBook .takeaway-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 body.view-takeawayBook .language-takeaway-list::-webkit-scrollbar,

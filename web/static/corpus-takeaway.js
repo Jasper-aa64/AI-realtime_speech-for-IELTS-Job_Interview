@@ -2721,16 +2721,70 @@
         return node;
       }).filter(Boolean);
       const heights = nodes.map((node) => Math.max(1, node.getBoundingClientRect().height));
-      const order = nodes.map((node, index) => ({ node, height: heights[index], index }))
-        .sort((left, right) => right.height - left.height || left.index - right.index);
+      // Keep the given order (creation order). Greedy: drop each next card into
+      // the currently-shorter column. This balances heights without scrambling
+      // reading order — older entries stay above newer ones within each column.
       const columnHeights = [0, 0];
       const gap = 10;
-      order.forEach(({ node, height }) => {
+      nodes.forEach((node, index) => {
         const target = columnHeights[0] <= columnHeights[1] ? 0 : 1;
         columns[target].appendChild(node);
-        columnHeights[target] += height + gap;
+        columnHeights[target] += heights[index] + gap;
       });
       measure.remove();
+    }
+
+    // Expression-replacement entries (表达替换) are pinned to the top group.
+    // They carry source="expression_replacement" (local optimistic inserts) and
+    // a persisted context_label of "表达替换"/"写作表达替换" (survives reload).
+    function isExpressionReplacementTakeaway(item) {
+      return String(item?.source || "") === "expression_replacement"
+        || String(item?.context_label || "").includes("表达替换");
+    }
+
+    // Sort by add-time ascending (oldest on top). Missing created_at (a just-
+    // added optimistic entry not yet saved) sorts last → newest at the bottom.
+    function sortTakeawaysByCreatedAsc(arr) {
+      const key = (item) => String(item?.created_at || "").trim() || "￿";
+      return arr
+        .map((item, index) => ({ item, index }))
+        .sort((a, b) => {
+          const ka = key(a.item);
+          const kb = key(b.item);
+          if (ka < kb) return -1;
+          if (ka > kb) return 1;
+          return a.index - b.index;
+        })
+        .map((x) => x.item);
+    }
+
+    // Render a takeaway book: 表达替换 group on top, a divider, then the ordinary
+    // entries below — each group its own height-balanced masonry, each sorted by
+    // add-time. cardFor(item) returns the card HTML for one entry.
+    function renderTakeawayBook(list, items, cardFor) {
+      const expr = [];
+      const normal = [];
+      for (const item of items) {
+        (isExpressionReplacementTakeaway(item) ? expr : normal).push(item);
+      }
+      const exprSorted = sortTakeawaysByCreatedAsc(expr);
+      const normalSorted = sortTakeawaysByCreatedAsc(normal);
+      list.innerHTML = "";
+      const renderGroup = (groupItems) => {
+        const group = document.createElement("div");
+        group.className = "takeaway-group";
+        list.appendChild(group);
+        renderTakeawayMasonry(group, groupItems.map((item) => ({ html: cardFor(item) })));
+      };
+      if (exprSorted.length) renderGroup(exprSorted);
+      if (exprSorted.length && normalSorted.length) {
+        const divider = document.createElement("div");
+        divider.className = "takeaway-section-divider";
+        divider.setAttribute("role", "separator");
+        divider.innerHTML = '<span>普通摘录</span>';
+        list.appendChild(divider);
+      }
+      if (normalSorted.length) renderGroup(normalSorted);
     }
 
     function updateTakeawayCardReveal(kind, entryId, options = {}) {
@@ -2849,13 +2903,12 @@
         list.innerHTML = '<p class="muted language-book-empty">还没有摘录。平时选中单词或短语，点击“译”就可以加入这里。</p>';
         return;
       }
-      const cards = items.map((item) => {
+      const cardFor = (item) => {
         const isReviewTarget = isTakeawayReviewEntry("language", item.entry_id);
         const isDue = dueIds.has(item.entry_id);
         const shouldConceal = (session.active ? isReviewTarget : hiddenMode) && !revealed.has(item.entry_id);
         const isCurrent = session.active && session.currentId === item.entry_id;
-        return {
-          html: `
+        return `
         <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""}">
           <button type="button" class="language-takeaway-card" data-takeaway-entry="${escapeHtml(item.entry_id)}">
             ${takeawaySourceHtml(item.source_text)}
@@ -2869,10 +2922,9 @@
           })}
           ${isCurrent ? takeawayReviewMascotHtml() : ""}
         </div>
-      `,
-        };
-      });
-      renderTakeawayMasonry(list, cards);
+      `;
+      };
+      renderTakeawayBook(list, items, cardFor);
     }
 
     function renderLanguageTakeawayToggle() {
@@ -6115,13 +6167,12 @@
         list.innerHTML = '<p class="muted language-book-empty">还没有写作积累。写作文或看报告时划选表达，点击“加入写作积累”即可保存到这里。</p>';
         return;
       }
-      const cards = items.map((item) => {
+      const cardFor = (item) => {
         const isReviewTarget = isTakeawayReviewEntry("writing", item.entry_id);
         const isDue = dueIds.has(item.entry_id);
         const shouldConceal = (session.active ? isReviewTarget : hiddenMode) && !revealed.has(item.entry_id);
         const isCurrent = session.active && session.currentId === item.entry_id;
-        return {
-          html: `
+        return `
         <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""}">
           <button type="button" class="language-takeaway-card writing-takeaway-item" data-writing-takeaway-entry="${escapeHtml(item.entry_id)}">
             ${takeawaySourceHtml(item.source_text)}
@@ -6135,10 +6186,9 @@
           })}
           ${isCurrent ? takeawayReviewMascotHtml() : ""}
         </div>
-      `,
-        };
-      });
-      renderTakeawayMasonry(list, cards);
+      `;
+      };
+      renderTakeawayBook(list, items, cardFor);
     }
 
     function renderWritingTakeawayToggle() {
