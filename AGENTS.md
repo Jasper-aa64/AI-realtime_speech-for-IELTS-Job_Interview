@@ -34,6 +34,11 @@ Managed by Trellis. Edits outside this block are preserved; edits inside may be 
 reports, research). Start there; do not pile prose into this file — it is a map,
 not a manual.
 
+Hard rule (frontend): icon-only buttons must be square — equal width/height plus
+matching `min-width`/`min-height` and `box-sizing: border-box`, or a stray global
+`min-height` stretches them into tall rectangles. See
+`docs/frontend-ui-conventions.md`.
+
 ## Local Startup / Public Access
 
 When asked to start, restart, expose, debug public access, diagnose `502 Bad Gateway`, the backend "randomly dropping", or work with NSSM / Windows services for this project, read this guide first:

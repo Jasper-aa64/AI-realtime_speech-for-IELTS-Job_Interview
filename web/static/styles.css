@@ -28793,17 +28793,32 @@ body.theme-dark .writing-pattern-menu-option.active {
 
 /* Borderless trash button, top-right under the 词库 button. Outline only on
    hover; icon centered. Removes the current word from spelling training. */
-.nr-card-del-btn {
+/* Card tool cluster (top-right, under 词库): square borderless icon buttons —
+   add on the left, delete on the right. Outline only on hover, icon centered.
+   Square is enforced hard (width==height==min-* + aspect-ratio + border-box) so
+   no stray min-height can ever stretch these into tall rectangles. */
+.nr-card-tools {
   position: absolute !important;
-  top: 66px !important;
+  top: 64px !important;
   right: 18px !important;
   z-index: 2 !important;
   display: inline-flex !important;
   align-items: center !important;
-  justify-content: center !important;
+  gap: 6px !important;
+}
+.nr-card-tool {
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
   width: 30px !important;
   height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  aspect-ratio: 1 / 1 !important;
   padding: 0 !important;
+  line-height: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   border: 1px solid transparent !important;
   border-radius: var(--radius-md, 10px) !important;
   background: transparent !important;
@@ -28811,15 +28826,52 @@ body.theme-dark .writing-pattern-menu-option.active {
   cursor: pointer !important;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease !important;
 }
-.nr-card-del-btn:hover {
-  color: var(--sd-danger, #dc2626) !important;
+.nr-card-tool:hover {
+  color: var(--sd-ink) !important;
   border-color: var(--sd-line) !important;
   background: var(--sd-card-soft) !important;
 }
-.nr-card-del-btn:active { transform: scale(0.92) !important; }
-.nr-card-del-btn svg { display: block !important; }
+.nr-card-tool.is-danger:hover { color: var(--sd-danger, #dc2626) !important; }
+.nr-card-tool:active { transform: scale(0.92) !important; }
+.nr-card-tool svg { display: block !important; }
+
+/* Add-word box: a slim bar under the tool cluster, shown on demand. */
+.nr-card-add-form {
+  position: absolute !important;
+  top: 100px !important;
+  left: 18px !important;
+  right: 18px !important;
+  z-index: 3 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.nr-card-add-form.hidden { display: none !important; }
+.nr-card-add-input {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  height: 34px !important;
+  padding: 0 12px !important;
+  border: 1px solid var(--sd-line) !important;
+  border-radius: var(--radius-md, 10px) !important;
+  background: var(--sd-card-soft) !important;
+  color: var(--sd-ink) !important;
+  font: 600 14px/1 inherit !important;
+}
+.nr-card-add-status {
+  flex: 0 0 auto !important;
+  max-width: 45% !important;
+  font-size: 12px !important;
+  color: var(--sd-muted) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.nr-card-add-status.is-error { color: var(--sd-danger, #dc2626) !important; }
+
 @media (max-height: 760px) {
-  .nr-card-del-btn { top: 54px !important; right: 12px !important; }
+  .nr-card-tools { top: 52px !important; right: 12px !important; }
+  .nr-card-add-form { top: 86px !important; left: 12px !important; right: 12px !important; }
 }
 
 .spelling-drill-panel .nr-prompt {

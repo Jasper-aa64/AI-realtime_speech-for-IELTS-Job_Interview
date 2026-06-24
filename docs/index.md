@@ -4,6 +4,7 @@
 根目录不再堆散文件;新文档按下面的分类放进对应子目录。
 
 > 给 agent 看的规范 / 设计 / 计划文档统一在 [`superpowers/`](superpowers/index.md)。
+> 前端 UI 硬规则(图标按钮必须正方形等):[frontend-ui-conventions.md](frontend-ui-conventions.md)。
 
 ## ops/ — 启动 · 部署 · 公网
 

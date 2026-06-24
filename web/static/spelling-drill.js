@@ -58,7 +58,7 @@
     // warming the voice list up front (warmSpeech, called when the panel
     // binds) and caching the chosen English voice — so by the time the
     // learner finishes typing, speaking the answer is instant.
-    const speech = { token: 0, voice: null, warmed: false, suppressCancelErr: false };
+    const speech = { token: 0, voice: null, warmed: false, primed: false, suppressCancelErr: false };
 
     function speechSupported() {
       return typeof window !== "undefined"
@@ -97,20 +97,46 @@
       }
     }
 
+    // Warm the audio engine itself (not just the voice list) with a silent
+    // utterance on the first keystroke, so the answer speaks with ~0 latency the
+    // moment Enter reveals it. Gated on a real user gesture (browsers block
+    // speechSynthesis before one) and run only once per session.
+    function primeSpeech() {
+      if (!speechSupported() || speech.primed) return;
+      speech.primed = true;
+      try {
+        const synth = window.speechSynthesis;
+        synth.resume?.();
+        const warm = new SpeechSynthesisUtterance(" ");
+        warm.volume = 0;
+        warm.rate = 2;
+        if (speech.voice) warm.voice = speech.voice;
+        synth.speak(warm);
+      } catch (_e) { /* ignore */ }
+    }
+
     function speakWord(text) {
       const value = String(text || "").trim();
       if (!value || !speechSupported()) return;
       const synth = window.speechSynthesis;
       const token = ++speech.token;
-      if (synth.speaking || synth.pending) { speech.suppressCancelErr = true; synth.cancel(); }
+      const needCancel = synth.speaking || synth.pending;
+      if (needCancel) { speech.suppressCancelErr = true; synth.cancel(); }
       if (!speech.voice) speech.voice = pickEnglishVoice();
       const utt = new SpeechSynthesisUtterance(value);
       utt.lang = "en-US";
       utt.rate = 0.92;
       if (speech.voice) utt.voice = speech.voice;
       utt.onend = utt.onerror = () => { speech.suppressCancelErr = false; };
-      // Tiny defer lets cancel() settle so Chrome doesn't drop the new utterance.
-      window.setTimeout(() => { if (token === speech.token) synth.speak(utt); }, 60);
+      const fire = () => {
+        if (token !== speech.token) return;
+        try { synth.resume?.(); } catch (_e) { /* ignore */ }
+        synth.speak(utt);
+      };
+      // Speak immediately when idle (0 latency on Enter). Only defer when we had
+      // to cancel a previous utterance — that needs a beat to settle in Chrome.
+      if (needCancel) window.setTimeout(fire, 50);
+      else fire();
     }
 
     function normalizeTyped(value) {
@@ -553,13 +579,28 @@
             </button>
           </header>
 
-          <button type="button" class="nr-card-del-btn" data-spelling-card-del
-            aria-label="移除此单词" title="移除此单词（拼写训练不再出现）">
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15">
-              <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
-                d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
-            </svg>
-          </button>
+          <div class="nr-card-tools">
+            <button type="button" class="nr-card-tool" data-spelling-card-add
+              aria-label="添加单词" title="添加单词（查词典后加入拼写训练）">
+              <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15">
+                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/>
+              </svg>
+            </button>
+            <button type="button" class="nr-card-tool is-danger" data-spelling-card-del
+              aria-label="移除此单词" title="移除此单词（拼写训练不再出现）">
+              <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15">
+                <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                  d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+              </svg>
+            </button>
+          </div>
+
+          <form class="nr-card-add-form hidden" data-spelling-add-form autocomplete="off">
+            <input type="text" class="nr-card-add-input" data-spelling-add-input
+              autocomplete="off" autocapitalize="none" spellcheck="false"
+              placeholder="输入一个英文单词，回车查词加入">
+            <span class="nr-card-add-status" data-spelling-add-status aria-live="polite"></span>
+          </form>
 
           <div class="nr-prompt">${buildPromptHtml(word, s)}</div>
 
@@ -777,9 +818,12 @@
       render();
     }
 
-    async function deleteWord(wordId) {
-      await api(`/api/writing/spelling-words/${encodeURIComponent(wordId)}`, null, { method: "DELETE" });
-      const s   = S();
+    function deleteWord(wordId) {
+      const s = S();
+      // Optimistic: drop it from the UI immediately so the card never lags, then
+      // confirm with the server in the background. Roll back on failure.
+      const snapshot = { items: s.items, queue: s.queue, queuePos: s.queuePos, doneCount: s.doneCount };
+      const wasCompleted = s.completedWordIds?.has(wordId);
       s.items = s.items.filter((w) => w.word_id !== wordId);
       s.queue = s.queue.filter((w) => w.word_id !== wordId);
       s.completedWordIds?.delete(wordId);
@@ -787,6 +831,14 @@
       s.queuePos = Math.min(s.queuePos, Math.max(0, s.queue.length));
       s.result = null;
       render();
+      return api(`/api/writing/spelling-words/${encodeURIComponent(wordId)}`, null, { method: "DELETE" })
+        .catch((err) => {
+          // Restore exactly what we removed and re-render.
+          Object.assign(s, snapshot);
+          if (wasCompleted) s.completedWordIds?.add(wordId);
+          render();
+          throw err;
+        });
     }
 
     // Remove the current drill word for good (Delete key or the card's trash
@@ -798,6 +850,71 @@
       if (typeof showConfirmDelete === "function")
         showConfirmDelete("移除此单词？以后拼写训练不再出现。", run);
       else if (window.confirm("移除此单词？以后拼写训练不再出现。")) run();
+    }
+
+    // Add-word box (card's + button). One English word only — this is single-
+    // word spelling practice. Type + Enter → dictionary lookup for the gloss →
+    // add to spelling training. Mirrors the 划词 popup's translate-on-enter.
+    function toggleAddWordBox(forceOpen) {
+      const form = root()?.querySelector("[data-spelling-add-form]");
+      if (!form) return;
+      const open = typeof forceOpen === "boolean" ? forceOpen : form.classList.contains("hidden");
+      form.classList.toggle("hidden", !open);
+      const input = form.querySelector("[data-spelling-add-input]");
+      const statusEl = form.querySelector("[data-spelling-add-status]");
+      if (open) {
+        if (statusEl) statusEl.textContent = "";
+        input?.focus();
+      } else if (input) {
+        input.value = "";
+      }
+    }
+
+    async function submitAddWord() {
+      const form = root()?.querySelector("[data-spelling-add-form]");
+      const input = form?.querySelector("[data-spelling-add-input]");
+      const statusEl = form?.querySelector("[data-spelling-add-status]");
+      const setAddStatus = (msg, isError = false) => {
+        if (!statusEl) return;
+        statusEl.textContent = msg || "";
+        statusEl.classList.toggle("is-error", !!isError);
+      };
+      const raw = String(input?.value || "").trim();
+      if (!raw) return;
+      // Single English word only.
+      if (!/^[A-Za-z][A-Za-z'’-]*$/.test(raw)) {
+        setAddStatus("只能添加单个英文单词。", true);
+        return;
+      }
+      if (input) input.disabled = true;
+      setAddStatus("查词中…");
+      let gloss = "";
+      try {
+        const dict = await api(`/api/dictionary/lookup?word=${encodeURIComponent(raw)}`);
+        const entry = dict && dict.found ? dict.entry : null;
+        if (entry) {
+          const senses = Array.isArray(entry.senses) && entry.senses.length
+            ? entry.senses
+            : (entry.translation ? [entry.translation] : []);
+          gloss = senses.slice(0, 4).join("；");
+        }
+      } catch (_e) { /* dictionary is optional; backend fills a local gloss */ }
+      try {
+        const res = await api("/api/writing/spelling-words/add", { word: raw, chinese_gloss: gloss });
+        const saved = res?.word;
+        const s = S();
+        if (saved && saved.word_id) {
+          const idx = s.items.findIndex((w) => w.word_id === saved.word_id);
+          if (idx >= 0) s.items[idx] = saved;
+          else s.items.unshift(saved);
+        }
+        setAddStatus(`已加入：${raw}`);
+        if (input) { input.value = ""; input.disabled = false; input.focus(); }
+        if (s.view === "library") render();
+      } catch (err) {
+        setAddStatus(err.message || "加入失败", true);
+        if (input) input.disabled = false;
+      }
     }
 
     // ─── Events ──────────────────────────────────────────────────────
@@ -812,11 +929,16 @@
         });
       });
 
-      // Card: form submit — only handles the main attempt form
+      // Card: form submit — the main attempt form, and the add-word box.
       root()?.addEventListener("submit", (e) => {
         const form = e.target;
         if (form?.id === "spellingAttemptForm") {
           submitAttempt(e);
+          return;
+        }
+        if (form?.matches?.("[data-spelling-add-form]")) {
+          e.preventDefault();
+          submitAddWord();
         }
       });
 
@@ -826,6 +948,7 @@
         const t = e.target;
         const ansWord = t.closest(".nr-answer-word");
         if (ansWord) { speakWord(ansWord.textContent); return; }
+        if (t.closest("[data-spelling-card-add]")) { toggleAddWordBox(); return; }
         if (t.closest("[data-spelling-card-del]")) { confirmRemoveCurrentWord(); return; }
         if (t.closest("[data-spelling-continue]")) { gotoNext(); return; }
         if (t.closest("[data-open-library]"))      { S().view = "library"; render(); return; }
@@ -842,6 +965,15 @@
       // Don't hijack Delete while the learner is mid-edit with text in the box —
       // only when the input is empty or the answer is already revealed.
       root()?.addEventListener("keydown", (e) => {
+        // Any keystroke is a user gesture — warm the speech engine once so the
+        // answer speaks with ~0 latency by the time Enter reveals it.
+        primeSpeech();
+        // Escape closes the add-word box if it's open.
+        if (e.key === "Escape" && e.target?.closest?.("[data-spelling-add-form]")) {
+          toggleAddWordBox(false);
+          $("spellingTypedInput")?.focus();
+          return;
+        }
         if (e.key !== "Delete") return;
         const s = S();
         if (s.view !== "drill") return;
@@ -850,6 +982,8 @@
         const input = $("spellingTypedInput");
         const editingText = input && document.activeElement === input && input.value.length > 0;
         if (editingText) return;
+        // Don't treat Delete inside the add-word box as "remove current word".
+        if (e.target?.closest?.("[data-spelling-add-form]")) return;
         e.preventDefault();
         confirmRemoveCurrentWord();
       });
