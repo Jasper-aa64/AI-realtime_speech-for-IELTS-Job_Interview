@@ -2930,9 +2930,27 @@ h1 {
 
 .takeaway-review-panel-actions {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(112px, 1fr));
+  grid-template-columns: auto minmax(100px, 1fr) minmax(100px, 1fr);
   gap: 10px;
   align-items: center;
+}
+
+/* 定位 button: reuses the A/D grade pill styling (square, icon-only) so it sits
+   flush beside them without a bespoke button. Jumps to the current card. */
+.takeaway-review-grade.is-locate {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  color: var(--accent, #2563eb);
+}
+.takeaway-review-grade.is-locate svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .takeaway-review-grade {
@@ -29382,7 +29400,7 @@ body.theme-dark .language-takeaway-card-wrap.is-reviewing .language-takeaway-car
 }
 
 .topbar-review-panel .takeaway-review-panel-actions {
-  grid-template-columns: repeat(2, 44px);
+  grid-template-columns: repeat(3, 44px);
   gap: 7px;
 }
 
@@ -30075,7 +30093,7 @@ body.view-writingTakeawayBook .topbar-review-panel .takeaway-review-grade {
 
 body.view-takeawayBook .topbar-review-panel .takeaway-review-panel-actions,
 body.view-writingTakeawayBook .topbar-review-panel .takeaway-review-panel-actions {
-  grid-template-columns: repeat(2, 42px);
+  grid-template-columns: repeat(3, 42px);
   gap: 7px;
 }
 
@@ -30777,7 +30795,7 @@ body.theme-dark.font-academic.view-home .sketch-flow-connectors marker path {
   }
 
   .takeaway-review-panel-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: auto repeat(2, minmax(0, 1fr));
   }
 
   .language-book-head {

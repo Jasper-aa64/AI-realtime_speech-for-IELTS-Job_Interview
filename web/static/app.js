@@ -11144,6 +11144,10 @@ function selectTakeawayReviewEntry(...args) {
   return corpusTakeawayController.selectTakeawayReviewEntry(...args);
 }
 
+function scrollToTakeawayReviewTarget(...args) {
+  return corpusTakeawayController.scrollToTakeawayReviewTarget(...args);
+}
+
 function takeawayReviewFeedback(...args) {
   return corpusTakeawayController.takeawayReviewFeedback(...args);
 }
@@ -12797,6 +12801,13 @@ function bindEvents() {
         "",
         gradeButton.dataset.takeawayReviewPanelGrade === "again" ? "again" : "mastered",
       );
+      return;
+    }
+    const locateButton = event.target.closest("[data-takeaway-review-locate]");
+    if (locateButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      scrollToTakeawayReviewTarget(locateButton.dataset.takeawayReviewLocate || (state.view === "writingTakeawayBook" ? "writing" : "language"));
       return;
     }
     const startButton = event.target.closest("[data-takeaway-review-start]");

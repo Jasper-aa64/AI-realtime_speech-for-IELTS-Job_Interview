@@ -728,6 +728,9 @@
         </div>
         ${session.active ? `
           <div class="takeaway-review-panel-actions" aria-label="复习反馈">
+            <button type="button" class="takeaway-review-grade is-locate" data-takeaway-review-locate="${kind}" aria-label="定位到当前要练的卡片" title="定位到当前要练的卡片">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.4"></circle><path d="M12 2.5v3.6M12 17.9v3.6M2.5 12h3.6M17.9 12h3.6"></path></svg>
+            </button>
             <button type="button" class="takeaway-review-grade is-mastered ${currentId ? "" : "needs-card"}" data-takeaway-review-panel-grade="mastered" data-takeaway-review-kind="${kind}" aria-disabled="${currentId ? "false" : "true"}">A<span>已掌握</span></button>
             <button type="button" class="takeaway-review-grade is-again ${currentId ? "" : "needs-card"}" data-takeaway-review-panel-grade="again" data-takeaway-review-kind="${kind}" aria-disabled="${currentId ? "false" : "true"}">D<span>记错了</span></button>
           </div>
@@ -775,6 +778,9 @@
         renderLanguageTakeaways();
       }
       renderTakeawayReviewSurfaces(kind);
+      // Jump straight to the first card to practise so the user isn't left
+      // scrolling to find where this session starts.
+      window.requestAnimationFrame(() => scrollToTakeawayReviewTarget(kind));
     }
 
     function endTakeawayReview(kind = "language", message = "已结束复习。") {
@@ -2889,6 +2895,29 @@
     function scrollTakeawayCardIntoView(kind, entryId) {
       const wrap = takeawayReviewCardWrap(kind, entryId);
       wrap?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    // The first card that still needs practising this session: the current
+    // revealed card if any, otherwise the next un-graded due card. Graded
+    // ("点过的") cards are skipped.
+    function firstTakeawayReviewTargetId(kind = "language") {
+      const session = takeawayReviewSession(kind);
+      if (!session.active) return "";
+      const reviewed = session.reviewedIds || new Set();
+      const current = String(session.currentId || "").trim();
+      if (current && !reviewed.has(current)) return current;
+      for (const value of (session.ids || [])) {
+        const id = String(value || "").trim();
+        if (id && !reviewed.has(id)) return id;
+      }
+      return "";
+    }
+
+    // Jump the list to that card — used by the 定位 button and the auto-jump
+    // right after 开始, so the user never has to scroll around hunting for it.
+    function scrollToTakeawayReviewTarget(kind = "language") {
+      const id = firstTakeawayReviewTargetId(kind);
+      if (id) scrollTakeawayCardIntoView(kind, id);
     }
 
     function renderLanguageTakeaways() {
@@ -6315,6 +6344,7 @@
       setTakeawayReviewToast,
       interruptTakeawaySpeechPlayback,
       selectTakeawayReviewEntry,
+      scrollToTakeawayReviewTarget,
       takeawayReviewFeedback,
       updateTakeawayReviewDots,
       applyRemoteTakeawayReviewState,
