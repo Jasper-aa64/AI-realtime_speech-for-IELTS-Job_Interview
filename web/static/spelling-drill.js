@@ -53,6 +53,66 @@
       return s.queue[s.queuePos] || null;
     }
 
+    // ─── Browser TTS ─────────────────────────────────────────────────
+    // Mirrors corpus-takeaway's speech approach. Low latency comes from
+    // warming the voice list up front (warmSpeech, called when the panel
+    // binds) and caching the chosen English voice — so by the time the
+    // learner finishes typing, speaking the answer is instant.
+    const speech = { token: 0, voice: null, warmed: false, suppressCancelErr: false };
+
+    function speechSupported() {
+      return typeof window !== "undefined"
+        && !!window.speechSynthesis
+        && typeof window.SpeechSynthesisUtterance !== "undefined";
+    }
+
+    function pickEnglishVoice() {
+      const synth = window.speechSynthesis;
+      const voices = typeof synth?.getVoices === "function" ? synth.getVoices() : [];
+      if (!voices.length) return null;
+      const english = voices.filter((v) => /^en([-_]|$)/i.test(String(v.lang || "")));
+      const local = english.filter((v) => v.localService);
+      const preferred = [
+        "Google US English", "Google UK English Female", "Microsoft Jenny",
+        "Microsoft Aria", "Samantha", "Alex", "Karen", "Daniel",
+      ];
+      return preferred
+        .map((name) => english.find((v) => String(v.name || "").toLowerCase().includes(name.toLowerCase())))
+        .find(Boolean)
+        || local.find((v) => v.default) || english.find((v) => v.default)
+        || local[0] || english[0] || null;
+    }
+
+    function warmSpeech() {
+      if (!speechSupported() || speech.warmed) return;
+      speech.warmed = true;
+      speech.voice = pickEnglishVoice();
+      // First getVoices() can be empty until the engine loads; refresh on the event.
+      if (!speech.voice && typeof window.speechSynthesis.addEventListener === "function") {
+        const onVoices = () => {
+          speech.voice = pickEnglishVoice();
+          if (speech.voice) window.speechSynthesis.removeEventListener("voiceschanged", onVoices);
+        };
+        window.speechSynthesis.addEventListener("voiceschanged", onVoices);
+      }
+    }
+
+    function speakWord(text) {
+      const value = String(text || "").trim();
+      if (!value || !speechSupported()) return;
+      const synth = window.speechSynthesis;
+      const token = ++speech.token;
+      if (synth.speaking || synth.pending) { speech.suppressCancelErr = true; synth.cancel(); }
+      if (!speech.voice) speech.voice = pickEnglishVoice();
+      const utt = new SpeechSynthesisUtterance(value);
+      utt.lang = "en-US";
+      utt.rate = 0.92;
+      if (speech.voice) utt.voice = speech.voice;
+      utt.onend = utt.onerror = () => { speech.suppressCancelErr = false; };
+      // Tiny defer lets cancel() settle so Chrome doesn't drop the new utterance.
+      window.setTimeout(() => { if (token === speech.token) synth.speak(utt); }, 60);
+    }
+
     function normalizeTyped(value) {
       return String(value || "").trim().toLowerCase();
     }
@@ -493,6 +553,14 @@
             </button>
           </header>
 
+          <button type="button" class="nr-card-del-btn" data-spelling-card-del
+            aria-label="移除此单词" title="移除此单词（拼写训练不再出现）">
+            <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15">
+              <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"
+                d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+            </svg>
+          </button>
+
           <div class="nr-prompt">${buildPromptHtml(word, s)}</div>
 
           <div class="nr-drill-body">${buildInputHtml(word, result, s)}</div>
@@ -634,6 +702,8 @@
       const s = S();
       const stored = { ...result, _typed: typed };
       s.result = stored;
+      // Read the answer aloud the moment it's revealed (right or wrong).
+      speakWord(word?.correct_spelling || word?.normalized || "");
       if (syncWord) {
         mergeAttemptResultIntoWord(word, result, { countAttempt: true });
       }
@@ -719,8 +789,20 @@
       render();
     }
 
+    // Remove the current drill word for good (Delete key or the card's trash
+    // button), behind a confirm. Shared so both entry points behave the same.
+    function confirmRemoveCurrentWord() {
+      const word = currentWord();
+      if (!word) return;
+      const run = () => deleteWord(word.word_id).catch((err) => setStatus(err.message, true));
+      if (typeof showConfirmDelete === "function")
+        showConfirmDelete("移除此单词？以后拼写训练不再出现。", run);
+      else if (window.confirm("移除此单词？以后拼写训练不再出现。")) run();
+    }
+
     // ─── Events ──────────────────────────────────────────────────────
     function bindSpellingDrillEvents() {
+      warmSpeech();
       // Scope tabs (header bar)
       document.querySelectorAll("[data-spelling-scope]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -742,6 +824,9 @@
       // Card: button clicks
       root()?.addEventListener("click", (e) => {
         const t = e.target;
+        const ansWord = t.closest(".nr-answer-word");
+        if (ansWord) { speakWord(ansWord.textContent); return; }
+        if (t.closest("[data-spelling-card-del]")) { confirmRemoveCurrentWord(); return; }
         if (t.closest("[data-spelling-continue]")) { gotoNext(); return; }
         if (t.closest("[data-open-library]"))      { S().view = "library"; render(); return; }
         if (t.closest("[data-spelling-reload]"))   { load({ force: true, resetQueue: true }); return; }
@@ -766,10 +851,7 @@
         const editingText = input && document.activeElement === input && input.value.length > 0;
         if (editingText) return;
         e.preventDefault();
-        const run = () => deleteWord(word.word_id).catch((err) => setStatus(err.message, true));
-        if (typeof showConfirmDelete === "function")
-          showConfirmDelete("移除此单词？以后拼写训练不再出现。", run);
-        else if (window.confirm("移除此单词？以后拼写训练不再出现。")) run();
+        confirmRemoveCurrentWord();
       });
 
       // Library: back + actions

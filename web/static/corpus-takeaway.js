@@ -3303,6 +3303,7 @@
       btn.classList.toggle("hidden", !single);
       if (!single) return;
       btn.classList.remove("is-added");
+      delete btn.dataset.spellingWordId;
       const svg = btn.querySelector("svg");
       if (svg) svg.innerHTML = '<path d="M12 5v14M5 12h14"></path>'; // back to "+"
       btn.disabled = false;
@@ -3310,30 +3311,57 @@
       btn.setAttribute("aria-label", "加入拼写训练");
     }
 
+    // Toggle the current word in/out of spelling training. First click adds it
+    // (button turns green + checkmark); clicking the added button cancels the
+    // add, same as deleting the word from the drill.
     async function addLanguageTakeawaySpellingWord() {
+      const btn = $("languageTakeawaySpellingBtn");
+      if (btn && btn.classList.contains("is-added")) {
+        return removeLanguageTakeawaySpellingWord();
+      }
       const word = String($("languageTakeawaySource")?.value || "").trim();
       if (!isSingleEnglishWord(word)) return;
       if (guestBlockTakeawayEdit("登录后才能加入拼写训练。")) return;
-      const btn = $("languageTakeawaySpellingBtn");
       if (btn) btn.disabled = true;
       try {
-        await api("/api/writing/spelling-words/add", {
+        const result = await api("/api/writing/spelling-words/add", {
           word,
           chinese_gloss: String($("languageTakeawayChinese")?.value || "").trim(),
         });
         if (btn) {
+          btn.dataset.spellingWordId = String(result?.word?.word_id || "");
           btn.classList.add("is-added");
-          // Morph "+" → check and let the .is-added pop play (reuses the saved-
-          // corpus button's checkmark instead of the janky bare scale squish).
+          // Morph "+" → check; the green .is-added state alone is the confirm
+          // (reuses the expression-replacement add button's glyph swap — no
+          // bespoke scale keyframe, which read as "distorted" on click).
           const svg = btn.querySelector("svg");
           if (svg) svg.innerHTML = '<path d="M5 12.5l4 4 10-10"></path>';
-          btn.title = "已加入拼写训练";
-          btn.setAttribute("aria-label", "已加入拼写训练");
+          btn.disabled = false;
+          btn.title = "已加入拼写训练 · 点击取消";
+          btn.setAttribute("aria-label", "已加入拼写训练，点击取消");
         }
         setLanguageTakeawayStatus("已加入拼写训练");
       } catch (error) {
         if (btn) btn.disabled = false;
         setLanguageTakeawayStatus(error.message || "加入拼写训练失败");
+      }
+    }
+
+    async function removeLanguageTakeawaySpellingWord() {
+      const btn = $("languageTakeawaySpellingBtn");
+      const wordId = String(btn?.dataset.spellingWordId || "");
+      if (!wordId) {
+        updateLanguageTakeawaySpellingButton();
+        return;
+      }
+      if (btn) btn.disabled = true;
+      try {
+        await api(`/api/writing/spelling-words/${encodeURIComponent(wordId)}`, null, { method: "DELETE" });
+        updateLanguageTakeawaySpellingButton();
+        setLanguageTakeawayStatus("已取消加入拼写训练");
+      } catch (error) {
+        if (btn) btn.disabled = false;
+        setLanguageTakeawayStatus(error.message || "取消失败");
       }
     }
 

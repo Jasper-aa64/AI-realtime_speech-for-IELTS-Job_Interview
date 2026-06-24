@@ -5445,6 +5445,7 @@ body.theme-dark .spelling-drill-panel {
   text-align: center !important;
   color: var(--sd-good) !important;
   font: 760 16px/1.15 inherit !important;
+  cursor: pointer !important; /* click to replay the browser TTS */
 }
 
 .nr-answer-word::before {
@@ -5917,14 +5918,8 @@ body.theme-dark .spelling-drill-panel {
   background: #16a34a;
   border-color: #15803d;
   color: #fff;
-  /* Clean confirm pop (same easing family as the bulb pop) instead of the bare
-     scale squish that read as "distorted" on click. */
-  animation: ltSpellAddedPop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.3);
-}
-@keyframes ltSpellAddedPop {
-  0%   { transform: scale(0.82); }
-  55%  { transform: scale(1.12); }
-  100% { transform: scale(1); }
+  /* Confirm is the green + checkmark swap only — same as the expression-
+     replacement add button. No bespoke scale keyframe (read as "distorted"). */
 }
 body.theme-dark .language-takeaway-spelling-btn {
   border-color: color-mix(in srgb, #7aa2ff 42%, transparent);
@@ -28794,6 +28789,37 @@ body.theme-dark .writing-pattern-menu-option.active {
   height: 40px !important;
   min-height: 40px !important;
   margin: 0 !important;
+}
+
+/* Borderless trash button, top-right under the 词库 button. Outline only on
+   hover; icon centered. Removes the current word from spelling training. */
+.nr-card-del-btn {
+  position: absolute !important;
+  top: 66px !important;
+  right: 18px !important;
+  z-index: 2 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-md, 10px) !important;
+  background: transparent !important;
+  color: var(--sd-muted) !important;
+  cursor: pointer !important;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease !important;
+}
+.nr-card-del-btn:hover {
+  color: var(--sd-danger, #dc2626) !important;
+  border-color: var(--sd-line) !important;
+  background: var(--sd-card-soft) !important;
+}
+.nr-card-del-btn:active { transform: scale(0.92) !important; }
+.nr-card-del-btn svg { display: block !important; }
+@media (max-height: 760px) {
+  .nr-card-del-btn { top: 54px !important; right: 12px !important; }
 }
 
 .spelling-drill-panel .nr-prompt {
