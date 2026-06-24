@@ -37,6 +37,10 @@ class HttpApiProviderConfig:
     api_key: str
     model: str
     timeout_seconds: float = DEFAULT_HTTP_TIMEOUT_SECONDS
+    # OpenAI-style reasoning budget hint ("low" / "medium" / "high"). Empty = omit
+    # the field entirely (keeps backward-compatible request bodies). For thinking
+    # models like claude-sonnet, "low" cuts the per-call latency noticeably.
+    reasoning_effort: str = ""
 
     @property
     def endpoint(self) -> str:
@@ -132,6 +136,8 @@ class HttpApiProvider:
             "max_tokens": max(1, int(max_tokens or 1)),
             "stream": bool(stream),
         }
+        if self.config.reasoning_effort:
+            body["reasoning_effort"] = self.config.reasoning_effort
         if stream:
             body["stream_options"] = {"include_usage": True}
         request = urllib.request.Request(
@@ -196,6 +202,8 @@ class HttpApiProvider:
             "stream": True,
             "stream_options": {"include_usage": True},
         }
+        if self.config.reasoning_effort:
+            body["reasoning_effort"] = self.config.reasoning_effort
         request = urllib.request.Request(
             self.config.endpoint,
             data=json.dumps(body).encode("utf-8"),

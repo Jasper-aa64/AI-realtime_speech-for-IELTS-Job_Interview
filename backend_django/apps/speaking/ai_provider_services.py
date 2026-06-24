@@ -25,6 +25,18 @@ SPEAKING_CLAUDE_CLI_SOURCES = frozenset({"claude_cli", "claude_cli_haiku"})
 SPEAKING_CODEX_CLI_SOURCES = frozenset({"codex_cli"})
 SPEAKING_READY_AI_BACKENDS = frozenset({"codex", "codex_cli", "http_api", "claude_cli"})
 
+# Reasoning-effort budget for the HTTP (sonnet) path. Thinking models are slow at
+# full effort, so interactive calls (follow-ups) run "low"; only the heavier report
+# generation gets "medium". Both overridable via env.
+SPEAKING_HTTP_REASONING_EFFORT_DEFAULT = "low"
+SPEAKING_HTTP_REPORT_REASONING_EFFORT = "medium"
+
+
+def _reasoning_effort_for(kind: str) -> str:
+    if str(kind or "").strip().lower() == "report":
+        return _setting_or_env("AI_HTTP_REPORT_REASONING_EFFORT") or SPEAKING_HTTP_REPORT_REASONING_EFFORT
+    return _setting_or_env("AI_HTTP_REASONING_EFFORT") or SPEAKING_HTTP_REASONING_EFFORT_DEFAULT
+
 
 def _facade_attr(name: str, default: Any) -> Any:
     facade = sys.modules.get("apps.speaking.services")
@@ -89,6 +101,7 @@ def _speaking_http_provider(
             api_key=api_key,
             model=model,
             timeout_seconds=timeout,
+            reasoning_effort=_reasoning_effort_for(kind),
         )
     )
 
@@ -145,6 +158,9 @@ __all__ = [
     "SPEAKING_CLAUDE_CLI_SOURCES",
     "SPEAKING_CODEX_CLI_SOURCES",
     "SPEAKING_READY_AI_BACKENDS",
+    "SPEAKING_HTTP_REASONING_EFFORT_DEFAULT",
+    "SPEAKING_HTTP_REPORT_REASONING_EFFORT",
+    "_reasoning_effort_for",
     "_is_claude_http_source",
     "_is_claude_cli_source",
     "_is_codex_cli_source",
