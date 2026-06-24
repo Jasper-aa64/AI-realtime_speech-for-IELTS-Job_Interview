@@ -35,7 +35,7 @@ def ensure_readme_is_django_only() -> None:
 
 
 def ensure_retirement_doc_exists() -> None:
-    doc = read_text("docs/LEGACY_SERVER_RETIREMENT.md")
+    doc = read_text("docs/ops/legacy-server-retirement.md")
     normalized = normalized_text(doc)
     for token in [
         "frozen as a legacy reference artifact",

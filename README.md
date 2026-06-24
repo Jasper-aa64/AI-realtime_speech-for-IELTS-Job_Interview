@@ -8,7 +8,8 @@
 - Current public URL: https://treated-caused-father-eddie.trycloudflare.com
 - Local service URL: http://127.0.0.1:8767/
 - Note: this uses a Cloudflare quick tunnel, so the URL may change if the tunnel process restarts.
-- Windows startup / NSSM / public tunnel guide: [docs/WINDOWS_STARTUP_AND_PUBLIC_ACCESS.md](docs/WINDOWS_STARTUP_AND_PUBLIC_ACCESS.md)
+- Windows startup / NSSM / public tunnel guide: [docs/ops/windows-startup-and-public-access.md](docs/ops/windows-startup-and-public-access.md)
+- Docs map / index: [docs/index.md](docs/index.md)
 <img width="2880" height="1500" alt="CleanShot 2026-06-14 at 20 19 32@2x" src="https://github.com/user-attachments/assets/790b4955-11fa-47c6-9d50-ac1dc44891ff" />
 
 ## Product Screens
@@ -319,7 +320,7 @@ python backend_django/manage.py runserver 127.0.0.1:8767 --noreload
 IELTS_ALLOW_LEGACY_SERVER=1 python web/ielts_server.py --host 127.0.0.1 --port 8765
 ```
 
-相关约束见 `docs/LEGACY_SERVER_RETIREMENT.md`。
+相关约束见 `docs/ops/legacy-server-retirement.md`。
 
 ## 软件构造实验产物
 

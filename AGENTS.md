@@ -28,11 +28,17 @@ Managed by Trellis. Edits outside this block are preserved; edits inside may be 
 
 <!-- TRELLIS:END -->
 
+## Docs map
+
+`docs/index.md` is the navigation hub for everything else (ops, specs, plans,
+reports, research). Start there; do not pile prose into this file — it is a map,
+not a manual.
+
 ## Local Startup / Public Access
 
 When asked to start, restart, expose, debug public access, diagnose `502 Bad Gateway`, the backend "randomly dropping", or work with NSSM / Windows services for this project, read this guide first:
 
-- `docs/WINDOWS_STARTUP_AND_PUBLIC_ACCESS.md`
+- `docs/ops/windows-startup-and-public-access.md`
 
 It documents the Django + AI worker startup paths, the legacy watchdog option, NSSM service scripts, interactive-user scheduled tasks, Cloudflare quick tunnel usage, and the 502 checklist.
 

@@ -10,7 +10,7 @@ All API endpoints and static frontend serving have been migrated to Django
 historical behavior and debugging.
 
 Direct startup is blocked unless `IELTS_ALLOW_LEGACY_SERVER=1` is set.
-See `docs/LEGACY_SERVER_RETIREMENT.md` and `backend_django/README.md` for the
+See `docs/ops/legacy-server-retirement.md` and `backend_django/README.md` for the
 current runtime setup.
 """
 
