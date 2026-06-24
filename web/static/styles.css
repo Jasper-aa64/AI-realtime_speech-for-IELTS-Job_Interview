@@ -29580,6 +29580,29 @@ body.view-writingTakeawayBook .takeaway-group {
   gap: 10px;
 }
 
+/* Notebook-style numbered section headings (replace the old divider). Left-aligned,
+   H1-ish size; the second section gets extra top margin so it's clearly apart. */
+body.view-takeawayBook .takeaway-section-heading,
+body.view-writingTakeawayBook .takeaway-section-heading {
+  margin: 22px 4px 6px;
+  font-size: 23px;
+  font-weight: 850;
+  line-height: 1.25;
+  color: var(--ink);
+  text-align: left;
+  letter-spacing: 0.01em;
+}
+body.view-takeawayBook .language-takeaway-list > .takeaway-section-heading:first-child,
+body.view-writingTakeawayBook .language-takeaway-list > .takeaway-section-heading:first-child {
+  margin-top: 2px;
+}
+body.view-takeawayBook .takeaway-section-heading .tk-sec-num,
+body.view-writingTakeawayBook .takeaway-section-heading .tk-sec-num {
+  color: var(--accent, #2f6f60);
+  font-weight: 900;
+  margin-right: 4px;
+}
+
 /* Expression-replacement section sits above; this rule separates it from the
    ordinary entries below. Hidden automatically when only one group renders. */
 body.view-takeawayBook .takeaway-section-divider,

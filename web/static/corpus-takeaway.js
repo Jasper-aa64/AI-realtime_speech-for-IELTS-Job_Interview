@@ -2863,10 +2863,11 @@
         .map((x) => x.item);
     }
 
-    // Render a takeaway book: 表达替换 group on top, a divider, then the ordinary
-    // entries below — each group its own height-balanced masonry, each sorted by
-    // add-time. cardFor(item) returns the card HTML for one entry.
-    function renderTakeawayBook(list, items, cardFor) {
+    // Render a takeaway book as two notebook-style numbered sections, each its own
+    // height-balanced masonry sorted by add-time: the ordinary "积累的…表达" group
+    // on top (section 1), the 表达替换 group below (section 2). cardFor(item)
+    // returns the card HTML for one entry; kind picks the 口语/写作 wording.
+    function renderTakeawayBook(list, items, cardFor, kind = "language") {
       const expr = [];
       const normal = [];
       for (const item of items) {
@@ -2875,21 +2876,22 @@
       const exprSorted = sortTakeawaysByCreatedAsc(expr);
       const normalSorted = sortTakeawaysByCreatedAsc(normal);
       list.innerHTML = "";
-      const renderGroup = (groupItems) => {
+      const ordinaryLabel = kind === "writing" ? "积累的写作表达" : "积累的口语表达";
+      let sectionNum = 0;
+      const renderSection = (label, groupItems) => {
+        if (!groupItems.length) return;
+        sectionNum += 1;
+        const heading = document.createElement("h2");
+        heading.className = "takeaway-section-heading";
+        heading.innerHTML = `<span class="tk-sec-num">${sectionNum}.</span> ${escapeHtml(label)}`;
+        list.appendChild(heading);
         const group = document.createElement("div");
         group.className = "takeaway-group";
         list.appendChild(group);
         renderTakeawayMasonry(group, groupItems.map((item) => ({ html: cardFor(item) })));
       };
-      if (exprSorted.length) renderGroup(exprSorted);
-      if (exprSorted.length && normalSorted.length) {
-        const divider = document.createElement("div");
-        divider.className = "takeaway-section-divider";
-        divider.setAttribute("role", "separator");
-        divider.innerHTML = '<span>普通摘录</span>';
-        list.appendChild(divider);
-      }
-      if (normalSorted.length) renderGroup(normalSorted);
+      renderSection(ordinaryLabel, normalSorted);
+      renderSection("表达替换", exprSorted);
     }
 
     function updateTakeawayCardReveal(kind, entryId, options = {}) {
@@ -3088,7 +3090,7 @@
         </div>
       `;
       };
-      renderTakeawayBook(list, items, cardFor);
+      renderTakeawayBook(list, items, cardFor, "language");
     }
 
     function renderLanguageTakeawayToggle() {
@@ -6370,7 +6372,7 @@
         </div>
       `;
       };
-      renderTakeawayBook(list, items, cardFor);
+      renderTakeawayBook(list, items, cardFor, "writing");
     }
 
     function renderWritingTakeawayToggle() {
