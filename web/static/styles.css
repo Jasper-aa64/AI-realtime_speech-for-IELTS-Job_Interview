@@ -2826,12 +2826,11 @@ h1 {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -56px;
+  /* Sit higher (less negative) and a touch smaller than before, per request. */
+  bottom: -34px;
   margin: 0 auto;
-  /* Doubled from 56px: the prompt card is large, so the thinking mascot needs
-     to scale with it or it reads as a tiny speck under the box. */
-  width: 112px;
-  height: 112px;
+  width: 90px;
+  height: 90px;
   pointer-events: none;
   z-index: 3;
   overflow: visible;
@@ -2878,8 +2877,10 @@ h1 {
 }
 
 @keyframes fuCloudBob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1.2px); }
+  /* Bake a bigger (scale) + raised (translateY) thought bubble into the bob so it
+     reads clearly above the brain during 生成追问. */
+  0%, 100% { transform: translateY(-2.6px) scale(1.26); }
+  50% { transform: translateY(-3.8px) scale(1.26); }
 }
 
 @keyframes fuIdeaArm {
