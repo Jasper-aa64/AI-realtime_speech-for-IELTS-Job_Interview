@@ -3303,6 +3303,8 @@
       btn.classList.toggle("hidden", !single);
       if (!single) return;
       btn.classList.remove("is-added");
+      const svg = btn.querySelector("svg");
+      if (svg) svg.innerHTML = '<path d="M12 5v14M5 12h14"></path>'; // back to "+"
       btn.disabled = false;
       btn.title = "加入拼写训练";
       btn.setAttribute("aria-label", "加入拼写训练");
@@ -3321,6 +3323,10 @@
         });
         if (btn) {
           btn.classList.add("is-added");
+          // Morph "+" → check and let the .is-added pop play (reuses the saved-
+          // corpus button's checkmark instead of the janky bare scale squish).
+          const svg = btn.querySelector("svg");
+          if (svg) svg.innerHTML = '<path d="M5 12.5l4 4 10-10"></path>';
           btn.title = "已加入拼写训练";
           btn.setAttribute("aria-label", "已加入拼写训练");
         }
@@ -3455,7 +3461,7 @@
     async function lookupLanguageTakeawayDictionary(word) {
       const w = String(word || "").trim();
       if (!w) return false;
-      setLanguageTakeawayStatus("查询离线词典...", { loading: true });
+      setLanguageTakeawayStatus("查询中...", { loading: true });
       try {
         const result = await api(`/api/dictionary/lookup?word=${encodeURIComponent(w)}`);
         const entry = result && result.found ? result.entry : null;
@@ -3467,8 +3473,8 @@
         const chineseEl = $("languageTakeawayChinese");
         if (chineseEl) chineseEl.value = senses.slice(0, 6).join("\n");
         autosizeLanguageTakeawaySource();
-        const phon = entry.phonetic ? ` · [${entry.phonetic}]` : "";
-        setLanguageTakeawayStatus(`离线词典${phon}`);
+        // Keep the phonetic, drop the "离线词典" label the user found noisy.
+        setLanguageTakeawayStatus(entry.phonetic ? `[${entry.phonetic}]` : "");
         return true;
       } catch (_error) {
         return false;

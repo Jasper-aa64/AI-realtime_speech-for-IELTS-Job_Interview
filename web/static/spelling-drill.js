@@ -277,12 +277,18 @@
       const letterCount = String(word.correct_spelling || "").replace(/[^A-Za-z]/g, "").length;
       const fallback    = letterCount > 0 ? `回忆这个 ${letterCount} 字母的词` : "回忆这个词";
       // Only show the Chinese meaning; the spelling note is revealed after Enter.
+      // Manually-added words (from the 划词 popup) were never misspelled, so they
+      // carry no wrong_forms — hide the "曾误作" pill rather than show a bare "—".
+      const forms = Array.isArray(word?.wrong_forms) ? word.wrong_forms.filter(Boolean) : [];
+      const wrongPill = forms.length
+        ? `<div class="nr-wrong-pill">
+          <span class="nr-wrong-tag">曾误作</span>
+          <span class="nr-wrong-text">${escapeHtml(forms.join(" · "))}</span>
+        </div>`
+        : "";
       return `
         <p class="nr-gloss${chinese ? "" : " is-fallback"}">${escapeHtml(chinese || fallback)}</p>
-        <div class="nr-wrong-pill">
-          <span class="nr-wrong-tag">曾误作</span>
-          <span class="nr-wrong-text">${escapeHtml(wrongFormsText(word))}</span>
-        </div>
+        ${wrongPill}
       `;
     }
 
@@ -527,7 +533,9 @@
                   <div class="nr-lib-main">
                     <strong class="nr-lib-word">${escapeHtml(w.correct_spelling)}</strong>
                     <span class="nr-lib-gloss">${escapeHtml(w.chinese_gloss || "-")}</span>
-                    <span class="nr-lib-wrong">\u8bef\uff1a${escapeHtml(wrongFormsText(w))}</span>
+                    ${(Array.isArray(w.wrong_forms) ? w.wrong_forms.filter(Boolean) : []).length
+                      ? `<span class="nr-lib-wrong">\u8bef\uff1a${escapeHtml(wrongFormsText(w))}</span>`
+                      : ""}
                   </div>
                   <div class="nr-lib-side">
                     <span class="nr-lib-stage">\u9636 ${stage}</span>
@@ -743,6 +751,25 @@
           load({ resetQueue: true });
           return;
         }
+      });
+
+      // Press Delete on the current word to drop it for good (never drilled again).
+      // Don't hijack Delete while the learner is mid-edit with text in the box —
+      // only when the input is empty or the answer is already revealed.
+      root()?.addEventListener("keydown", (e) => {
+        if (e.key !== "Delete") return;
+        const s = S();
+        if (s.view !== "drill") return;
+        const word = currentWord();
+        if (!word) return;
+        const input = $("spellingTypedInput");
+        const editingText = input && document.activeElement === input && input.value.length > 0;
+        if (editingText) return;
+        e.preventDefault();
+        const run = () => deleteWord(word.word_id).catch((err) => setStatus(err.message, true));
+        if (typeof showConfirmDelete === "function")
+          showConfirmDelete("移除此单词？以后拼写训练不再出现。", run);
+        else if (window.confirm("移除此单词？以后拼写训练不再出现。")) run();
       });
 
       // Library: back + actions
