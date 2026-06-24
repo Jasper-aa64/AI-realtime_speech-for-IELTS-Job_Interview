@@ -5078,10 +5078,18 @@
       const questionId = p2BankQuestionId(entry);
       if (!questionId) return;
       const token = ++p2BankCorpusLoadToken;
-      showP2BankCorpusEditorLoading(entry);
+      // Cache-first open. A local copy exists after the first open or any save,
+      // so render it instantly with no loading flash and let the SWR layer
+      // revalidate in the background — revalidate never rewrites an open editor
+      // (see maybeApplyFreshP2BankCorpus), so content can't jump under the user.
+      // Only a genuinely cold cache shows the loader. This removes both the
+      // every-open network wait and the "blank → text jumps in" flicker on
+      // reopen that the forced refetch used to cause.
+      const hasLocalCopy = Boolean(p2BankLsRead(P2BANK_LS_PREFIX, questionId));
+      if (!hasLocalCopy) showP2BankCorpusEditorLoading(entry);
       let payload;
       try {
-        payload = await fetchP2BankCorpusPayload(questionId, { force: true });
+        payload = await fetchP2BankCorpusPayload(questionId);
       } catch (error) {
         if (token === p2BankCorpusLoadToken) {
           text("p2CorpusSaveStatus", error.message || String(error));
