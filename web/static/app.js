@@ -77,6 +77,10 @@ const state = {
     selectedEntryId: "",
     pinnedCueId: "",
     saving: false,
+    // Same stale-snapshot guard as p1Corpus.mutationSeq: bumped on every local
+    // P2 save/clear so a GET that snapshotted the server before the mutation
+    // can't clobber the optimistic card state when it resolves later.
+    mutationSeq: 0,
   },
   languageTakeaway: {
     items: [],
@@ -1793,9 +1797,17 @@ async function fetchP1CorpusPayload(options = {}) {
 async function fetchP2CorpusPayload(options = {}) {
   if (options.force) state.p2Corpus.loadingPromise = null;
   if (!state.p2Corpus.loadingPromise) {
-    state.p2Corpus.loadingPromise = api(`/api/p2-corpus?${questionBankScopeQuery()}`).finally(() => {
-      state.p2Corpus.loadingPromise = null;
-    });
+    // Stamp the generation at issue-time so applyP2CorpusPayload can drop a
+    // snapshot that predates a local save/clear and refuse to clobber it.
+    const fetchSeq = state.p2Corpus.mutationSeq;
+    state.p2Corpus.loadingPromise = api(`/api/p2-corpus?${questionBankScopeQuery()}`)
+      .then((payload) => {
+        if (payload && typeof payload === "object") payload.__fetchSeq = fetchSeq;
+        return payload;
+      })
+      .finally(() => {
+        state.p2Corpus.loadingPromise = null;
+      });
   }
   return state.p2Corpus.loadingPromise;
 }
@@ -1842,6 +1854,18 @@ function applyP1CorpusPayload(payload) {
 }
 
 function applyP2CorpusPayload(payload) {
+  // Guard against a stale GET clobbering a freshly-saved card (e.g. a P3 progress
+  // decrement that already rendered optimistically). If a save/clear bumped
+  // mutationSeq after this request was issued, it's a pre-save snapshot — discard
+  // it and refetch current server state instead. Mirrors applyP1CorpusPayload.
+  if (
+    payload &&
+    typeof payload.__fetchSeq === "number" &&
+    payload.__fetchSeq < state.p2Corpus.mutationSeq
+  ) {
+    fetchP2CorpusPayload({ force: true }).then(applyP2CorpusPayload).catch(() => null);
+    return;
+  }
   state.p2Corpus.categories = payload.categories || [];
   state.p2Corpus.currentPart2Cards = payload.current_part2_cards || [];
   state.p2Corpus.loaded = true;

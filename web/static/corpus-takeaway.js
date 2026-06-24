@@ -4591,6 +4591,11 @@
           has_p3_follow_up: nextSaved > 0,
         };
       });
+      // This is a local mutation that must win against any GET snapshotted before
+      // it — bump the generation and drop the in-flight load so the background
+      // reconcile refetches fresh instead of replaying a pre-save snapshot.
+      state.p2Corpus.mutationSeq = (state.p2Corpus.mutationSeq || 0) + 1;
+      state.p2Corpus.loadingPromise = null;
     }
 
     const p2BrainstormDirtyValues = new Map();
@@ -5540,6 +5545,14 @@
         button.textContent = "保存中...";
       }
       if (!options.silent) text("p2CorpusP3SaveStatus", "");
+      // Move the progress bar NOW from local drafts, before any network — this is
+      // what makes P1 feel instant and roll back the moment you empty an answer.
+      // The editor loaded every follow-up, so items.length is the true total and
+      // the non-empty count is the true saved count. updateP2CardP3CountLocal
+      // bumps mutationSeq, so the background reconcile below can't clobber this.
+      const savedCount = items.filter((item) => String(item.corpus_text || "").trim()).length;
+      updateP2CardP3CountLocal(questionId, savedCount, items.length);
+      renderP2CorpusTopics();
       try {
         const drafts = items.map((item) => ({
           followup_id: item.followup_id || "",
@@ -5557,19 +5570,17 @@
         p2BankP3Cache.delete(questionId);
         p2BankLsDelete(P3BANK_LS_PREFIX, questionId);
         p2BankBatchRequested.delete(questionId);
-        // Move the progress bar now from local state (P1 pattern): the editor
-        // loaded every follow-up, so drafts.length is the true total and the
-        // non-empty count is the true saved count. The forced refetch below just
-        // reconciles — the bar must not wait on it, and clearing the last answer
-        // must drop the bar without a manual refresh.
-        const savedCount = drafts.filter((draft) => String(draft.corpus_text || "").trim()).length;
-        updateP2CardP3CountLocal(questionId, savedCount, drafts.length);
-        renderP2CorpusTopics();
         if (!options.silent) text("p2CorpusP3SaveStatus", "已保存题库 P3 追问");
-        await loadP2Corpus({ force: true });
+        // Reconcile in the background; the optimistic counts already match the
+        // saved state, so the UI must not block on a full library refetch.
+        loadP2Corpus({ force: true }).catch(() => null);
         if (options.closeOnSuccess) closeP2CorpusP3Editor();
       } catch (error) {
         if (!options.silent) text("p2CorpusP3SaveStatus", error.message || String(error));
+        // Save failed after the optimistic bar moved — pull server truth back so
+        // the count reverts instead of lying. mutationSeq was bumped above, so
+        // this refetch is current (not discarded by the stale guard).
+        loadP2Corpus({ force: true }).catch(() => null);
         if (options.closeOnError) closeP2CorpusP3Editor();
       } finally {
         state.p2Corpus.saving = false;
