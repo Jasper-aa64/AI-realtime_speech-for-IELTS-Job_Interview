@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import urllib.request
 import uuid
 from pathlib import Path
@@ -50,8 +51,23 @@ def cached_tts_url(role: str, cache_key: str) -> str | None:
     return f"/api/tts-audio/{safe_role}/{audio_path.name}"
 
 
-def volcengine_tts(text: str, voice: str = "en_male_adam", role: str = "model", cache_key: str | None = None) -> dict[str, Any]:
-    """Generate TTS audio using VolcEngine API, with caching."""
+def volcengine_tts(
+    text: str,
+    voice: str = "en_male_adam",
+    role: str = "model",
+    cache_key: str | None = None,
+    *,
+    retries: int = 0,
+    timeout: float = 4.0,
+) -> dict[str, Any]:
+    """Generate TTS audio using VolcEngine API, with caching.
+
+    The upstream is an unofficial endpoint that occasionally times out or throttles
+    under a burst (e.g. synthesizing every band7 answer of a report at once), which
+    used to leave a few turns with no audio and no retry. ``retries`` lets callers
+    that care about completeness (the band7 model answers) try again before falling
+    back; the default (0 retries, 4s) preserves the latency-sensitive examiner path.
+    """
     text = text.strip()
     if not text:
         return {"provider": "none", "status": "empty_text", "audio_url": None, "message": "No text to synthesize."}
@@ -89,28 +105,34 @@ def volcengine_tts(text: str, voice: str = "en_male_adam", role: str = "model", 
         method="POST",
     )
 
-    try:
-        with urllib.request.urlopen(request, timeout=4) as response:  # noqa: S310
-            data = json.loads(response.read().decode("utf-8"))
-        encoded = data.get("audio", {}).get("data")
-        if not encoded:
-            raise ValueError(f"VolcEngine TTS returned no audio: {data}")  # noqa: TRY301
-        audio_path.write_bytes(base64.b64decode(encoded))
-        return {
-            "provider": "volcengine",
-            "status": "ready",
-            "audio_url": f"/api/tts-audio/{safe_role}/{audio_path.name}",
-            "path": str(audio_path),
-            "content_type": "audio/mpeg",
-        }
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "provider": "browser",
-            "status": "fallback",
-            "audio_url": None,
-            "error": str(exc),
-            "message": f"VolcEngine TTS unavailable; use browser fallback: {exc}",
-        }
+    last_exc: Exception | None = None
+    for attempt in range(max(0, retries) + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+                data = json.loads(response.read().decode("utf-8"))
+            encoded = data.get("audio", {}).get("data")
+            if not encoded:
+                raise ValueError(f"VolcEngine TTS returned no audio: {data}")  # noqa: TRY301
+            audio_path.write_bytes(base64.b64decode(encoded))
+            return {
+                "provider": "volcengine",
+                "status": "ready",
+                "audio_url": f"/api/tts-audio/{safe_role}/{audio_path.name}",
+                "path": str(audio_path),
+                "content_type": "audio/mpeg",
+            }
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if attempt < max(0, retries):
+                time.sleep(0.4 * (attempt + 1))
+
+    return {
+        "provider": "browser",
+        "status": "fallback",
+        "audio_url": None,
+        "error": str(last_exc),
+        "message": f"VolcEngine TTS unavailable; use browser fallback: {last_exc}",
+    }
 
 
 def tts_audio_path(role: str, filename: str) -> Path | None:

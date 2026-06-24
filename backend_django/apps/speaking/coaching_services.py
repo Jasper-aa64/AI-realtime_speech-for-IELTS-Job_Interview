@@ -210,6 +210,54 @@ def _model_band7_tts_cache_key(attempt_id: str, turn_id: str, band7_version: str
     return f"{attempt_id}_{turn_id}_band7_{text_hash}"
 
 
+def model_band7_tts_status(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
+    """Return a report turn's band7 model-answer TTS, regenerating it once when the
+    server synthesis failed at scoring time.
+
+    The band7 text is already saved; only the audio is missing (a flaky upstream can
+    drop a few turns during a report-sized burst). Opening the report calls this so
+    the missing 朗读 audio fills itself in with the real VolcEngine voice instead of
+    staying blank forever.
+    """
+    from .runtime_payload_services import _find_turn, _load_attempt_for_user
+    from .tts_services import volcengine_tts
+
+    attempt = _load_attempt_for_user(user, attempt_id)
+    turn = _find_turn(attempt, turn_id)
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    band7_version = metadata.get("band7_version") or ""
+    current = metadata.get("model_audio") if isinstance(metadata.get("model_audio"), dict) else {}
+
+    if not clean_report_text(band7_version):
+        return {
+            "attempt_id": attempt.attempt_id,
+            "turn_id": turn.turn_id,
+            "model_audio": {"provider": "none", "status": "empty_text", "audio_url": None},
+        }
+    if current.get("audio_url"):
+        return {
+            "attempt_id": attempt.attempt_id,
+            "turn_id": turn.turn_id,
+            "model_audio": current,
+        }
+
+    model_audio = volcengine_tts(
+        band7_version,
+        role="model",
+        cache_key=_model_band7_tts_cache_key(attempt.attempt_id, turn.turn_id, band7_version),
+        retries=2,
+        timeout=8.0,
+    )
+    metadata["model_audio"] = model_audio
+    turn.metadata = metadata
+    turn.save(update_fields=["metadata", "updated_at"])
+    return {
+        "attempt_id": attempt.attempt_id,
+        "turn_id": turn.turn_id,
+        "model_audio": model_audio,
+    }
+
+
 def build_ai_coaching_fallback(
     question: str,
     transcript: str,

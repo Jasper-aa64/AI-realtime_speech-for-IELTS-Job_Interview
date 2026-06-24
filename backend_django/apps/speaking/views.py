@@ -20,6 +20,7 @@ from .services import (
     caiyun_translate_text,
     language_takeaway_library,
     latest_report,
+    model_band7_tts_status,
     p3_fallback,
     p3_follow_up_fallback,
     p1_corpus_library,
@@ -396,6 +397,19 @@ def turn_examiner_tts_view(request, attempt_id: str, turn_id: str):
         return auth_error
     try:
         return JsonResponse(examiner_tts_status(request.user, attempt_id, turn_id))
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)
+
+
+@require_GET
+def turn_model_tts_view(request, attempt_id: str, turn_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(model_band7_tts_status(request.user, attempt_id, turn_id))
     except SpeakingError as exc:
         msg = str(exc)
         status = 404 if "not found" in msg.lower() else 400

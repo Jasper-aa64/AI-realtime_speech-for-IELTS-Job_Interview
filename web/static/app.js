@@ -9966,6 +9966,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
     detailPanel.scrollTo({ top: 0, behavior: "smooth" });
   }
   refreshReportCorpusButtonStates();
+  hydrateModelTtsPlaceholders();
 }
 
 // After a report renders, ask the backend which 编辑语料库 targets already have
@@ -10024,6 +10025,41 @@ function localReportCorpusSavedState(button) {
     return Boolean(String(entry.corpus_text || "").trim());
   }
   return null;
+}
+
+// Fill in band7 model-answer audio that the server's TTS dropped at scoring time.
+// Runs after a report renders: for each placeholder, ask the backend to (re)build
+// the audio and swap an <audio> control in place. Sequential on purpose — parallel
+// bursts are what throttle the flaky upstream, so we never re-trigger that here.
+let modelTtsHydrating = false;
+async function hydrateModelTtsPlaceholders() {
+  if (!state.account.authenticated || modelTtsHydrating) return;
+  const nodes = Array.from(document.querySelectorAll("#detailPanel [data-model-tts]"));
+  if (!nodes.length) return;
+  modelTtsHydrating = true;
+  try {
+    for (const node of nodes) {
+      if (!node.isConnected) continue; // dropped by a re-render mid-loop
+      const attemptId = node.dataset.attemptId || "";
+      const turnId = node.dataset.turnId || "";
+      if (!attemptId || !turnId) continue;
+      try {
+        const res = await api(`/api/attempts/${encodeURIComponent(attemptId)}/turns/${encodeURIComponent(turnId)}/model-tts`);
+        const url = res?.model_audio?.audio_url;
+        if (url && node.isConnected) {
+          const audio = document.createElement("audio");
+          audio.controls = true;
+          audio.preload = "none";
+          audio.src = url;
+          node.replaceWith(audio);
+        }
+      } catch (_error) {
+        // Leave the placeholder empty — no worse than before the regen attempt.
+      }
+    }
+  } finally {
+    modelTtsHydrating = false;
+  }
 }
 
 function applyCorpusButtonState(button, saved) {
@@ -11482,10 +11518,15 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   const band7 = turn.band7_version || attempt.band7_version || "";
   const band7Markdown = turn.band7_markdown || attempt.band7_markdown || band7;
   const isFollowUp = turn.prompt?.role === "follow_up";
+  const isPreparedWorkStudyIntro = isP1WorkStudyIdentityTurn(turn);
+  // When scoring's TTS upstream dropped this turn's band7 audio, the text is still
+  // here but there's no <audio>. Emit an invisible placeholder that gets filled in
+  // lazily on report open (hydrateModelTtsPlaceholders → /model-tts regenerates it).
   const modelAudioControl = modelAudio.audio_url
     ? `<audio controls preload="none" src="${escapeHtml(modelAudio.audio_url)}"></audio>`
-    : "";
-  const isPreparedWorkStudyIntro = isP1WorkStudyIdentityTurn(turn);
+    : (!isPreparedWorkStudyIntro && band7)
+      ? `<span class="model-tts-pending" data-model-tts data-attempt-id="${escapeHtml(attemptId)}" data-turn-id="${escapeHtml(turn.id || "")}"></span>`
+      : "";
   const band7Cell = isPreparedWorkStudyIntro
     ? '<p class="muted work-study-expression-reminder">请准备好你自己的表达</p>'
     : `${modelAudioControl}${modelAnswerHtml(turn, band7Markdown)}`;

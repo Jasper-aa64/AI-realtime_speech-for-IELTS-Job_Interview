@@ -70,6 +70,7 @@ from .coaching_services import (
     build_overall_review,
     build_personalized_coaching,
     model_answer_constraints,
+    model_band7_tts_status,
     overall_review_with_codex,
     target_band_label,
 )
@@ -3417,10 +3418,16 @@ def build_turn_feedback(
         result["display_transcript_markdown"] = ""
 
     if result["band7_version"]:
+        # The unofficial TTS upstream throttles under a report-sized burst, so give
+        # the band7 model answer a couple retries and a longer timeout. Any turn it
+        # still can't synthesize is filled in lazily when the report is opened
+        # (see model_band7_tts_status / the model-tts endpoint).
         result["model_audio"] = volcengine_tts(
             result["band7_version"],
             role="model",
             cache_key=_model_band7_tts_cache_key(attempt.attempt_id, turn.turn_id, result["band7_version"]),
+            retries=2,
+            timeout=8.0,
         )
     else:
         result["model_audio"] = {"provider": "none", "status": "empty_text", "audio_url": None}
