@@ -11240,6 +11240,10 @@ async function translateLanguageTakeawaySource(...args) {
   return corpusTakeawayController.translateLanguageTakeawaySource(...args);
 }
 
+async function resolveLanguageTakeawaySource(...args) {
+  return corpusTakeawayController.resolveLanguageTakeawaySource(...args);
+}
+
 async function saveLanguageTakeaway(...args) {
   return corpusTakeawayController.saveLanguageTakeaway(...args);
 }
@@ -12953,7 +12957,7 @@ function bindEvents() {
   $("languageTakeawaySource")?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
     event.preventDefault();
-    translateLanguageTakeawaySource();
+    resolveLanguageTakeawaySource();
   });
   $("languageTakeawaySource")?.addEventListener("input", () => {
     autosizeLanguageTakeawaySource();

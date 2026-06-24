@@ -3561,6 +3561,22 @@
       }
     }
 
+    // Enter in the 划词 source field: a single English word goes through the
+    // dictionary (same as opening the popup on one word); anything else uses
+    // full-sentence translation.
+    async function resolveLanguageTakeawaySource() {
+      const value = String($("languageTakeawaySource")?.value || "").trim();
+      if (!value) {
+        setLanguageTakeawayStatus("原文为空。");
+        return;
+      }
+      if (isSingleEnglishWord(value)) {
+        const found = await lookupLanguageTakeawayDictionary(value);
+        if (found) return;
+      }
+      await translateLanguageTakeawaySource(value);
+    }
+
     async function translateLanguageTakeawaySource(sourceValue = null) {
       const sourceText = String(sourceValue ?? $("languageTakeawaySource")?.value ?? "").trim();
       if (!sourceText) {
@@ -6324,6 +6340,7 @@
       scheduleLanguageTakeawayTriggerFromSelection,
       placeLanguageTakeawayPopup,
       openLanguageTakeawayPopup,
+      resolveLanguageTakeawaySource,
       translateLanguageTakeawaySource,
       saveLanguageTakeaway,
       saveWritingTakeaway,

@@ -5934,10 +5934,10 @@ body.theme-dark .language-takeaway-spelling-btn.is-added {
 
 .language-takeaway-action-buttons {
   display: grid;
-  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, minmax(128px, 1fr));
   justify-content: end;
-  gap: 12px;
-  width: min(100%, 324px);
+  gap: 10px;
+  width: min(100%, 282px);
 }
 
 .language-takeaway-action-buttons button {
