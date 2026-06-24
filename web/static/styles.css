@@ -2820,10 +2820,12 @@ h1 {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -28px;
+  bottom: -56px;
   margin: 0 auto;
-  width: 56px;
-  height: 56px;
+  /* Doubled from 56px: the prompt card is large, so the thinking mascot needs
+     to scale with it or it reads as a tiny speck under the box. */
+  width: 112px;
+  height: 112px;
   pointer-events: none;
   z-index: 3;
   overflow: visible;
