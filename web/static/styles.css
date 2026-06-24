@@ -29487,9 +29487,11 @@ body.view-writingTakeawayBook .topbar-review-panel .takeaway-review-grade.is-loc
   border-radius: 12px;
 }
 
-/* Dark mode: the topbar hover gradients above are near-white, so on a dark theme
-   hovering A / D / 定位 flashed the button white. Repaint hover for dark. */
-body.theme-dark .topbar-review-panel .takeaway-review-start:hover,
+/* Dark mode: the A / D / 定位 buttons have a DARK base here, so their near-white
+   light-theme hover flashed them white — repaint that hover dark.
+   The 开始 button is the exception: its base stays light/white, so it must keep a
+   LIGHT hover (the generic rule above), never the dark fill — otherwise it reads
+   as "turning black" on hover. Hence start is intentionally excluded below. */
 body.theme-dark .topbar-review-panel .takeaway-review-grade:hover {
   background:
     linear-gradient(180deg, rgba(40, 52, 71, 0.98), rgba(22, 31, 48, 0.96));
