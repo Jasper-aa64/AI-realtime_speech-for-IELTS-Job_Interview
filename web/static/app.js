@@ -9109,7 +9109,7 @@ function handleGlobalKeydown(event) {
       event.preventDefault();
       event.stopPropagation();
       if (reviewKey === "w") {
-        scrollToTakeawayReviewTarget(kind);
+        triggerTakeawayLocate(kind);
       } else {
         takeawayReviewFeedback(kind, "", reviewKey === "d" ? "again" : "mastered");
       }
@@ -11152,6 +11152,10 @@ function scrollToTakeawayReviewTarget(...args) {
   return corpusTakeawayController.scrollToTakeawayReviewTarget(...args);
 }
 
+function triggerTakeawayLocate(...args) {
+  return corpusTakeawayController.triggerTakeawayLocate(...args);
+}
+
 function takeawayReviewFeedback(...args) {
   return corpusTakeawayController.takeawayReviewFeedback(...args);
 }
@@ -12810,7 +12814,7 @@ function bindEvents() {
     if (locateButton) {
       event.preventDefault();
       event.stopPropagation();
-      scrollToTakeawayReviewTarget(locateButton.dataset.takeawayReviewLocate || (state.view === "writingTakeawayBook" ? "writing" : "language"));
+      triggerTakeawayLocate(locateButton.dataset.takeawayReviewLocate || (state.view === "writingTakeawayBook" ? "writing" : "language"));
       return;
     }
     const startButton = event.target.closest("[data-takeaway-review-start]");

@@ -941,6 +941,7 @@
       session.animatingId = "";
       session.reviewedIds.add(id);
       session.currentId = "";
+      if (session.locatedId === id) session.locatedId = "";
       target.revealedEntryIds.delete(id);
       if ((session.reviewedIds.size || 0) >= (session.ids.length || 0)) {
         records.__daily_batch = {
@@ -2995,11 +2996,32 @@
       return bestId;
     }
 
-    // Jump the list to that card — used by the 定位 button and the auto-jump
-    // right after 开始, so the user never has to scroll around hunting for it.
+    // Jump the list to that card — used by the auto-jump right after 开始, so the
+    // user never has to scroll around hunting for where the session begins.
     function scrollToTakeawayReviewTarget(kind = "language") {
       const id = firstTakeawayReviewTargetId(kind);
       if (id) scrollTakeawayCardIntoView(kind, id);
+    }
+
+    // The 定位 button / W key is two-stage: the first press frames the visually
+    // topmost card still to practise (dashed outline) and centres it; pressing
+    // again — while that same card is still the target — opens it (reveals the
+    // English, entering the selected state), exactly like clicking the card.
+    function triggerTakeawayLocate(kind = "language") {
+      const session = takeawayReviewSession(kind);
+      if (!session.active) return;
+      const target = firstTakeawayReviewTargetId(kind);
+      if (!target) return;
+      if (session.locatedId === target) {
+        session.locatedId = "";
+        selectTakeawayReviewEntry(kind, target);
+        scrollTakeawayCardIntoView(kind, target);
+        return;
+      }
+      session.locatedId = target;
+      if (kind === "writing") renderWritingTakeaways();
+      else renderLanguageTakeaways();
+      scrollTakeawayCardIntoView(kind, target);
     }
 
     function renderLanguageTakeaways() {
@@ -3019,8 +3041,9 @@
         const isDue = dueIds.has(item.entry_id);
         const shouldConceal = (session.active ? isReviewTarget : hiddenMode) && !revealed.has(item.entry_id);
         const isCurrent = session.active && session.currentId === item.entry_id;
+        const isLocated = session.active && session.locatedId === item.entry_id && isReviewTarget && !isCurrent;
         return `
-        <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""}">
+        <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""} ${isLocated ? "is-located" : ""}">
           <button type="button" class="language-takeaway-card" data-takeaway-entry="${escapeHtml(item.entry_id)}">
             ${takeawaySourceHtml(item.source_text)}
             <span class="takeaway-chinese">${escapeHtml(takeawayChineseDisplayText(item))}</span>
@@ -6300,8 +6323,9 @@
         const isDue = dueIds.has(item.entry_id);
         const shouldConceal = (session.active ? isReviewTarget : hiddenMode) && !revealed.has(item.entry_id);
         const isCurrent = session.active && session.currentId === item.entry_id;
+        const isLocated = session.active && session.locatedId === item.entry_id && isReviewTarget && !isCurrent;
         return `
-        <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""}">
+        <div class="language-takeaway-card-wrap ${shouldConceal ? "is-concealed" : "is-revealed"} ${isDue ? "is-review-due" : ""} ${isReviewTarget ? "is-reviewing" : ""} ${isCurrent ? "is-review-current" : ""} ${isLocated ? "is-located" : ""}">
           <button type="button" class="language-takeaway-card writing-takeaway-item" data-writing-takeaway-entry="${escapeHtml(item.entry_id)}">
             ${takeawaySourceHtml(item.source_text)}
             <span class="takeaway-chinese">${escapeHtml(takeawayChineseDisplayText(item))}</span>
@@ -6428,6 +6452,7 @@
       interruptTakeawaySpeechPlayback,
       selectTakeawayReviewEntry,
       scrollToTakeawayReviewTarget,
+      triggerTakeawayLocate,
       takeawayReviewFeedback,
       updateTakeawayReviewDots,
       applyRemoteTakeawayReviewState,

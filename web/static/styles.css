@@ -539,9 +539,15 @@ body.theme-dark .floating-agent-assistant-trigger {
 .report-manager-fab {
   position: fixed;
   top: 56px;
-  right: 9px;
+  /* Centre under the 44px avatar (its centre sits 38px from the viewport's right
+     edge): 38 − 36/2 = 20px. Without min-height a stray global button min-height
+     stretches this into a tall rectangle, so pin all four box dimensions. */
+  right: 20px;
   width: 36px;
   height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  box-sizing: border-box;
   padding: 0;
   display: grid;
   place-items: center;
@@ -2942,8 +2948,11 @@ h1 {
 .takeaway-review-grade.is-locate {
   width: 42px;
   min-width: 42px;
+  height: 42px;
+  min-height: 42px;
   padding: 0;
   border-radius: 50%;
+  box-sizing: border-box;
   position: relative;
   overflow: hidden;
   color: var(--accent, #2563eb);
@@ -2956,10 +2965,11 @@ h1 {
   align-items: center;
   justify-content: center;
   font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, monospace;
-  font-size: 24px;
+  font-size: 30px;
   font-weight: 900;
+  letter-spacing: -1px;
   color: currentColor;
-  opacity: 0.18;
+  opacity: 0.26;
   pointer-events: none;
 }
 .takeaway-review-grade.is-locate svg {
@@ -5987,23 +5997,23 @@ body.theme-dark .language-takeaway-spelling-btn.is-added {
 }
 
 .p1-corpus-dialog-card.takeaway-edit-card {
-  width: min(560px, calc(100vw - 24px));
+  width: min(680px, calc(100vw - 24px));
   height: auto;
   min-height: 0;
-  max-height: min(620px, calc(100vh - 96px));
+  max-height: min(720px, calc(100vh - 80px));
   grid-template-rows: auto auto auto auto auto auto;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 18px 20px;
   overflow: auto;
 }
 
 .takeaway-edit-dialog .p1-corpus-dialog-card.takeaway-edit-card {
-  width: min(540px, calc(100vw - 32px));
-  max-width: 540px;
+  width: min(680px, calc(100vw - 32px));
+  max-width: 680px;
   height: auto;
   min-height: 0;
-  max-height: min(560px, calc(100vh - 64px));
-  padding: 14px 16px;
+  max-height: min(720px, calc(100vh - 64px));
+  padding: 18px 20px;
 }
 
 .p1-corpus-dialog-card.takeaway-edit-card .p1-corpus-dialog-head {
@@ -6023,10 +6033,10 @@ body.theme-dark .language-takeaway-spelling-btn.is-added {
 
 .p1-corpus-dialog-card.takeaway-edit-card .takeaway-edit-source,
 .p1-corpus-dialog-card.takeaway-edit-card .takeaway-edit-chinese {
-  min-height: 76px;
-  max-height: 132px;
+  min-height: 120px;
+  max-height: 260px;
   font-size: 15px;
-  line-height: 1.45;
+  line-height: 1.5;
   resize: vertical;
   overflow: auto;
 }
@@ -22952,7 +22962,7 @@ body.theme-dark.font-academic .history-item:hover {
     max-height: calc(100vh - 24px);
   }
   .p1-corpus-dialog-card.takeaway-edit-card {
-    width: min(100%, 540px);
+    width: min(100%, 680px);
     height: auto;
     min-height: 0;
     max-height: calc(100vh - 24px);
@@ -28874,14 +28884,40 @@ body.theme-dark .writing-pattern-menu-option.active {
 .nr-card-tool:active { transform: scale(0.92) !important; }
 .nr-card-tool svg { display: block !important; }
 
-/* Add-word dialog (reuses .p1-corpus-dialog): the word field is single-line,
-   the gloss is compact. */
+/* Add-word dialog (reuses .p1-corpus-dialog): it's a single word, so override the
+   1500×760 editor shell down to a small, tidy card. Without this it inherits the
+   giant .p1-corpus-dialog-card and the layout looks chaotic. */
+.p1-corpus-dialog-card.spelling-add-card {
+  width: min(360px, calc(100vw - 32px));
+  max-width: 360px;
+  height: auto;
+  min-height: 0;
+  max-height: min(420px, calc(100vh - 64px));
+  grid-template-rows: auto auto auto auto auto auto;
+  gap: 10px;
+  padding: 16px 18px;
+  overflow: auto;
+}
+.p1-corpus-dialog-card.spelling-add-card .p1-corpus-dialog-head h3 {
+  font-size: 18px;
+}
+.p1-corpus-dialog-card.spelling-add-card .p1-corpus-dialog-head button {
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-size: 14px;
+}
 .spelling-add-word {
   min-height: 0 !important;
-  height: 48px !important;
+  height: 46px !important;
+  font-size: 16px !important;
   resize: none !important;
 }
-.spelling-add-gloss { min-height: 84px !important; }
+.spelling-add-gloss {
+  min-height: 64px !important;
+  max-height: 120px !important;
+  resize: vertical !important;
+}
 #spellingAddStatus.is-error { color: #dc2626 !important; }
 
 @media (max-height: 760px) {
@@ -29422,11 +29458,33 @@ body.theme-dark .language-takeaway-card-wrap.is-reviewing .language-takeaway-car
     linear-gradient(180deg, rgba(255, 250, 246, 1), rgba(247, 226, 218, 0.96));
 }
 
-/* The locate button must stay round + accent-coloured even inside the topbar,
-   whose generic grade rule would otherwise impose its lopsided radius / green. */
+/* The locate button must stay a true circle + accent-coloured even inside the
+   topbar, whose generic grade rule would otherwise force a lopsided width≠height
+   (ellipse) and its green text. Equal width/height is what keeps it round. */
 .topbar-review-panel .takeaway-review-grade.is-locate {
   border-radius: 50%;
   color: var(--accent, #2563eb);
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  box-sizing: border-box;
+  justify-self: center;
+}
+body.view-takeawayBook .topbar-review-panel .takeaway-review-grade.is-locate,
+body.view-writingTakeawayBook .topbar-review-panel .takeaway-review-grade.is-locate {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  justify-self: center;
+}
+
+/* 定位 first press frames the topmost card to practise; press again to open it. */
+.language-takeaway-card-wrap.is-located .language-takeaway-card {
+  outline: 2px dashed var(--accent, #2563eb);
+  outline-offset: 3px;
+  border-radius: 12px;
 }
 
 /* Dark mode: the topbar hover gradients above are near-white, so on a dark theme
