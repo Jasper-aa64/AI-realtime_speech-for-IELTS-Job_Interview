@@ -9531,8 +9531,11 @@ body.is-dragging-p2-dialog * {
   overflow: hidden;
 }
 
-.p1-corpus-dialog-card .vditor-content > .vditor-preview {
+.p1-corpus-dialog-card .vditor-content > .vditor-preview,
+.p1-corpus-dialog-card .vditor-content > .vditor-ir,
+.p1-corpus-dialog-card .vditor-content > .vditor-sv {
   display: none !important;
+  flex: 0 0 auto !important;
 }
 
 .p1-corpus-dialog-card .vditor-ir,
@@ -9545,7 +9548,6 @@ body.is-dragging-p2-dialog * {
   text-align: left !important;
 }
 
-.p1-corpus-dialog-card .vditor-ir,
 .p1-corpus-dialog-card .vditor-wysiwyg {
   flex: 1 1 100% !important;
   width: 100% !important;
