@@ -38574,3 +38574,23 @@ body.theme-dark.font-popular #writingPanel .writing-day.scored {
   border-color: rgba(110, 231, 183, 0.52) !important;
   color: #d9ffed !important;
 }
+
+/* P1 report -> corpus editor: brighten the Band 7 reference in the lower
+   editor panel for the second/third dark themes without turning it white. */
+body.theme-dark.font-academic .p1-corpus-ai-head > strong,
+body.theme-dark.font-popular .p1-corpus-ai-head > strong {
+  color: #7ee7d1 !important;
+}
+
+body.theme-dark.font-academic #p1CorpusAiAnswer,
+body.theme-dark.font-popular #p1CorpusAiAnswer {
+  color: #c4eee5 !important;
+}
+
+body.theme-dark.font-academic #p1CorpusAiAnswer strong,
+body.theme-dark.font-academic #p1CorpusAiAnswer b,
+body.theme-dark.font-popular #p1CorpusAiAnswer strong,
+body.theme-dark.font-popular #p1CorpusAiAnswer b {
+  color: #7df5dc !important;
+  font-weight: 760;
+}
