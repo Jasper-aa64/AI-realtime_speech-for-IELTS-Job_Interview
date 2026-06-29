@@ -38582,3 +38582,51 @@ body.theme-dark.font-popular #p1CorpusAiAnswer b {
   color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%) !important;
   font-weight: 760;
 }
+
+/* P3 launch controls: make source selection visibly change in the first two
+   dark themes, and keep the bank reload/start button text white. */
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-source-option.active {
+  background: linear-gradient(180deg, rgba(17, 112, 79, 0.44), rgba(8, 74, 54, 0.54)) !important;
+  border-color: rgba(124, 244, 198, 0.62) !important;
+  color: #f5fff9 !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(209, 250, 229, 0.13),
+    0 10px 22px rgba(16, 185, 129, 0.16) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-source-option.active::before {
+  background: #8cf2c9 !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-source-option.active small {
+  color: rgba(229, 255, 246, 0.82) !important;
+}
+
+body.theme-dark.font-academic .p3-source-option.active {
+  background: linear-gradient(180deg, rgba(114, 87, 58, 0.42), rgba(74, 57, 40, 0.56)) !important;
+  border-color: rgba(232, 203, 158, 0.60) !important;
+  color: #fff7ea !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 240, 214, 0.12),
+    0 10px 22px rgba(198, 160, 113, 0.14) !important;
+}
+
+body.theme-dark.font-academic .p3-source-option.active::before {
+  background: #e8cb9e !important;
+}
+
+body.theme-dark.font-academic .p3-source-option.active small {
+  color: rgba(255, 244, 226, 0.80) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-start-button:not(:disabled) {
+  background: linear-gradient(180deg, #15875f 0%, #0c6f4d 58%, #07563d 100%) !important;
+  border-color: rgba(124, 244, 198, 0.46) !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.20);
+}
+
+body.theme-dark.font-academic .p3-start-button:not(:disabled) {
+  color: #ffffff !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
+}
