@@ -9531,6 +9531,10 @@ body.is-dragging-p2-dialog * {
   overflow: hidden;
 }
 
+.p1-corpus-dialog-card .vditor-content > .vditor-preview {
+  display: none !important;
+}
+
 .p1-corpus-dialog-card .vditor-ir,
 .p1-corpus-dialog-card .vditor-wysiwyg,
 .p1-corpus-dialog-card .vditor-reset {
@@ -9543,6 +9547,9 @@ body.is-dragging-p2-dialog * {
 
 .p1-corpus-dialog-card .vditor-ir,
 .p1-corpus-dialog-card .vditor-wysiwyg {
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
   min-height: 0;
   height: 100% !important;
   overflow: auto;
