@@ -542,7 +542,7 @@ body.theme-dark .floating-agent-assistant-trigger {
   /* Centre under the 44px avatar (its centre sits 38px from the viewport's right
      edge): 38 − 36/2 = 20px. Without min-height a stray global button min-height
      stretches this into a tall rectangle, so pin all four box dimensions. */
-  right: 20px;
+  right: 14px;
   width: 36px;
   height: 36px;
   min-width: 36px;
@@ -602,7 +602,7 @@ body.theme-dark .floating-agent-assistant-trigger {
 }
 
 .report-manager-card {
-  width: min(560px, 100%);
+  width: min(728px, 100%);
   /* Fixed height so the dialog doesn't jump around as the item count changes —
      the list area below flexes and scrolls internally. */
   height: min(86vh, 680px);
@@ -939,23 +939,41 @@ body {
 }
 
 body.app-booting .shell {
+  visibility: hidden;
+}
+
+body.app-booting.app-boot-ready .shell {
   visibility: visible;
 }
 
 body.app-booting::before {
-  content: "IELTS Studio";
+  content: "IELTS Studio\A sketching your practice desk";
   position: fixed;
   z-index: 9999;
   inset: 0;
   display: grid;
   place-items: center;
-  color: #10253a;
+  white-space: pre;
+  text-align: center;
+  color: #142033;
   background:
-    linear-gradient(180deg, rgba(248, 251, 252, 0.98), rgba(241, 247, 247, 0.98));
-  font-size: clamp(22px, 2.4vw, 32px);
+    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.94) 0 0, transparent 172px),
+    linear-gradient(118deg, transparent 0 42%, rgba(47, 128, 109, 0.12) 42% 42.35%, transparent 42.35%),
+    linear-gradient(145deg, transparent 0 55%, rgba(42, 89, 132, 0.10) 55% 55.3%, transparent 55.3%),
+    repeating-linear-gradient(0deg, rgba(26, 40, 54, 0.035) 0 1px, transparent 1px 19px),
+    repeating-linear-gradient(90deg, rgba(26, 40, 54, 0.025) 0 1px, transparent 1px 23px),
+    linear-gradient(180deg, #f7faf8, #edf4f1);
+  font-family: "Bradley Hand ITC", "Segoe Print", "Comic Sans MS", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(23px, 2.2vw, 33px);
   font-weight: 760;
+  line-height: 1.46;
   letter-spacing: 0;
   pointer-events: none;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88),
+    0.5px 0 rgba(20, 32, 51, 0.18),
+    -0.4px 0 rgba(20, 32, 51, 0.12);
+  animation: bootSketchPaper 1400ms ease-out both;
 }
 
 body.app-booting::after {
@@ -963,17 +981,18 @@ body.app-booting::after {
   position: fixed;
   z-index: 10000;
   left: 50%;
-  top: calc(50% + 42px);
-  width: min(220px, 42vw);
-  height: 3px;
-  border-radius: 999px;
+  top: calc(50% + 70px);
+  width: min(252px, 48vw);
+  height: 12px;
   background:
-    linear-gradient(90deg, rgba(35, 141, 120, 0), rgba(35, 141, 120, 0.95), rgba(46, 132, 198, 0.9));
-  box-shadow: 0 10px 24px rgba(35, 141, 120, 0.18);
-  transform: translateX(-50%) scaleX(0.18);
-  transform-origin: left center;
+    linear-gradient(90deg, rgba(19, 93, 83, 0.10), rgba(19, 93, 83, 0.92), rgba(43, 96, 150, 0.86)) 0 3px / 100% 2px no-repeat,
+    linear-gradient(90deg, rgba(43, 96, 150, 0.18), rgba(43, 96, 150, 0.66), rgba(19, 93, 83, 0.06)) 0 8px / 100% 1px no-repeat,
+    linear-gradient(115deg, transparent 0 78%, rgba(41, 62, 81, 0.34) 78% 82%, transparent 82%) 0 0 / 34px 10px repeat-x;
+  filter: drop-shadow(0 10px 18px rgba(26, 87, 80, 0.13));
+  transform: translateX(-50%);
   pointer-events: none;
-  animation: bootProgress 1500ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  clip-path: inset(0 82% 0 0 round 999px);
+  animation: bootPencilStroke 1500ms cubic-bezier(0.2, 0.78, 0.2, 1) forwards;
 }
 
 body.app-booting.app-boot-ready::before,
@@ -982,35 +1001,69 @@ body.app-booting.app-boot-ready::after {
 }
 
 body.app-booting.app-boot-ready::after {
-  transform: translateX(-50%) scaleX(1);
+  clip-path: inset(0 0 0 0 round 999px);
 }
 
+html.boot-theme-dark,
+html.boot-theme-dark body {
+  background: #071119;
+  color-scheme: dark;
+}
+
+html.boot-theme-dark body.app-booting::before,
 body.theme-dark.app-booting::before {
-  color: #edf8f5;
+  color: #ecf8f3;
   background:
-    linear-gradient(180deg, rgba(8, 14, 22, 0.98), rgba(12, 21, 30, 0.98));
+    radial-gradient(circle at 50% 46%, rgba(20, 38, 52, 0.90) 0 0, transparent 176px),
+    linear-gradient(118deg, transparent 0 42%, rgba(58, 218, 181, 0.16) 42% 42.35%, transparent 42.35%),
+    linear-gradient(145deg, transparent 0 55%, rgba(124, 179, 244, 0.14) 55% 55.3%, transparent 55.3%),
+    repeating-linear-gradient(0deg, rgba(223, 244, 238, 0.045) 0 1px, transparent 1px 19px),
+    repeating-linear-gradient(90deg, rgba(223, 244, 238, 0.035) 0 1px, transparent 1px 23px),
+    linear-gradient(180deg, #071119, #0d1a26);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.72),
+    0.5px 0 rgba(236, 248, 243, 0.18),
+    -0.4px 0 rgba(236, 248, 243, 0.10);
 }
 
+html.boot-theme-dark body.app-booting::after,
 body.theme-dark.app-booting::after {
+  color: rgba(210, 232, 226, 0.64);
   background:
-    linear-gradient(90deg, rgba(37, 167, 143, 0), rgba(37, 167, 143, 0.95), rgba(96, 165, 250, 0.9));
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32);
+    linear-gradient(90deg, rgba(60, 220, 182, 0.08), rgba(60, 220, 182, 0.96), rgba(96, 165, 250, 0.90)) 0 3px / 100% 2px no-repeat,
+    linear-gradient(90deg, rgba(96, 165, 250, 0.18), rgba(96, 165, 250, 0.76), rgba(60, 220, 182, 0.08)) 0 8px / 100% 1px no-repeat,
+    linear-gradient(115deg, transparent 0 78%, rgba(214, 236, 232, 0.40) 78% 82%, transparent 82%) 0 0 / 34px 10px repeat-x;
+  filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.34));
 }
 
-@keyframes bootProgress {
+@keyframes bootSketchPaper {
   0% {
     opacity: 0;
-    transform: translateX(-50%) scaleX(0.16);
+    filter: blur(0.8px);
   }
-  12% {
+  18% {
     opacity: 1;
-  }
-  72% {
-    transform: translateX(-50%) scaleX(0.78);
   }
   100% {
     opacity: 1;
-    transform: translateX(-50%) scaleX(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes bootPencilStroke {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 92% 0 0 round 999px);
+  }
+  14% {
+    opacity: 1;
+  }
+  68% {
+    clip-path: inset(0 23% 0 0 round 999px);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 999px);
   }
 }
 
@@ -1023,7 +1076,7 @@ body.theme-dark.app-booting::after {
 @media (prefers-reduced-motion: reduce) {
   body.app-booting::after {
     opacity: 1;
-    transform: translateX(-50%) scaleX(1);
+    clip-path: inset(0 0 0 0 round 999px);
     animation: none;
   }
 
@@ -3834,6 +3887,7 @@ body.theme-dark .spelling-drill-panel {
 
 /* ─── Loading / empty / done stages ──────────────────────────────── */
 .nr-stage {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3844,6 +3898,17 @@ body.theme-dark .spelling-drill-panel {
   gap: 14px;
   padding: 24px;
 }
+
+.nr-stage-empty .nr-empty-add {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+
+.nr-stage-empty .nr-empty-add svg {
+  pointer-events: none;
+}
+
 .nr-spinner {
   display: inline-flex;
   gap: 6px;
@@ -5317,6 +5382,19 @@ body.theme-dark .spelling-drill-panel {
   animation: none !important;
 }
 
+.nr-gloss.is-multiline {
+  display: grid !important;
+  gap: 5px !important;
+  font-size: var(--nr-gloss-size, 30px) !important;
+  line-height: 1.16 !important;
+  font-weight: 820 !important;
+  white-space: normal !important;
+}
+
+.nr-gloss-line {
+  display: block !important;
+}
+
 .nr-gloss.is-fallback {
   color: var(--sd-muted) !important;
   font-size: clamp(22px, 3vw, 30px) !important;
@@ -5865,6 +5943,57 @@ body.theme-dark .spelling-drill-panel {
   border-radius: 999px;
 }
 
+.language-takeaway-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.language-takeaway-popup header .language-takeaway-practice-btn {
+  width: auto;
+  min-width: 112px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 28%, var(--line));
+  background: color-mix(in srgb, var(--accent, #2563eb) 10%, var(--panel));
+  color: color-mix(in srgb, var(--accent, #2563eb) 76%, var(--ink));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.language-takeaway-popup header .language-takeaway-practice-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
+}
+
+.language-takeaway-popup header .language-takeaway-practice-btn:hover {
+  background: color-mix(in srgb, var(--accent, #2563eb) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 48%, var(--line));
+}
+
+.language-takeaway-popup header .language-takeaway-practice-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
 /* Circular browser-TTS button that replaced the close button. Reuses the
    header-button circle; speaker icon is drawn with currentColor strokes. */
 .language-takeaway-tts-btn {
@@ -5894,13 +6023,374 @@ body.theme-dark .spelling-drill-panel {
   background: color-mix(in srgb, var(--accent, #2563eb) 12%, var(--panel));
 }
 .language-takeaway-tts-btn:active { transform: scale(0.94); }
+.language-takeaway-tts-btn:disabled {
+  cursor: progress;
+}
+.language-takeaway-tts-btn.is-loading {
+  position: relative;
+  color: color-mix(in srgb, var(--accent, #2563eb) 58%, var(--muted));
+  background: color-mix(in srgb, var(--accent, #2563eb) 10%, var(--panel));
+}
+.language-takeaway-tts-btn.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 2px solid color-mix(in srgb, var(--accent, #2563eb) 18%, transparent);
+  border-top-color: currentColor;
+  border-radius: inherit;
+  animation: takeaway-tts-spin 0.72s linear infinite;
+}
+.language-takeaway-tts-btn.is-loading svg {
+  opacity: 0.42;
+}
 .language-takeaway-tts-btn.is-speaking {
   background: color-mix(in srgb, var(--accent, #2563eb) 18%, var(--panel));
   animation: takeaway-tts-pulse 1s ease-in-out infinite;
 }
+@keyframes takeaway-tts-spin {
+  to { transform: rotate(360deg); }
+}
 @keyframes takeaway-tts-pulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #2563eb) 40%, transparent); }
   50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent, #2563eb) 0%, transparent); }
+}
+
+.takeaway-pronunciation-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 560;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.takeaway-pronunciation-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.26);
+  backdrop-filter: blur(2px);
+}
+
+.takeaway-pronunciation-card {
+  position: relative;
+  z-index: 1;
+  width: min(620px, calc(100vw - 28px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 18%, var(--line));
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 86% 8%, color-mix(in srgb, var(--accent, #2563eb) 12%, transparent), transparent 32%),
+    var(--panel);
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.34);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.takeaway-pronunciation-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.takeaway-pronunciation-card header span,
+.takeaway-pronunciation-target small,
+.takeaway-pronunciation-transcript small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.takeaway-pronunciation-card h3 {
+  margin: 2px 0 0;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.takeaway-pronunciation-close {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2, var(--panel));
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.takeaway-pronunciation-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+}
+
+.takeaway-pronunciation-target {
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 18%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent, #2563eb) 6%, var(--panel));
+  padding: 13px 14px;
+}
+
+.takeaway-pronunciation-target p {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 760;
+  line-height: 1.5;
+}
+
+.takeaway-pronunciation-result {
+  display: grid;
+  gap: 12px;
+}
+
+.takeaway-pronunciation-scores {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.takeaway-pronunciation-score-main {
+  min-height: 112px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent, #2563eb) 22%, var(--panel)), color-mix(in srgb, #10b981 16%, var(--panel)));
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 22%, var(--line));
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+}
+
+.takeaway-pronunciation-score-main strong {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.takeaway-pronunciation-score-main span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.takeaway-pronunciation-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.takeaway-pronunciation-score-grid span {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2, var(--panel));
+  padding: 12px 8px;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.takeaway-pronunciation-score-grid b {
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.takeaway-pronunciation-words {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.takeaway-pronunciation-word {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2, var(--panel));
+  color: var(--ink);
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.takeaway-pronunciation-word.is-good {
+  border-color: color-mix(in srgb, #10b981 42%, var(--line));
+  background: color-mix(in srgb, #10b981 13%, var(--panel));
+  color: color-mix(in srgb, #047857 78%, var(--ink));
+}
+
+.takeaway-pronunciation-word.is-close {
+  border-color: color-mix(in srgb, #f59e0b 46%, var(--line));
+  background: color-mix(in srgb, #f59e0b 14%, var(--panel));
+  color: color-mix(in srgb, #b45309 78%, var(--ink));
+}
+
+.takeaway-pronunciation-word.is-missed {
+  border-color: color-mix(in srgb, #ef4444 42%, var(--line));
+  background: color-mix(in srgb, #ef4444 11%, var(--panel));
+  color: color-mix(in srgb, #b91c1c 78%, var(--ink));
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.takeaway-pronunciation-transcript {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--panel-2, var(--panel)) 82%, transparent);
+}
+
+.takeaway-pronunciation-transcript p {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.takeaway-pronunciation-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.takeaway-pronunciation-status.is-error {
+  color: #b91c1c;
+}
+
+.takeaway-pronunciation-status.is-listening::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 999px;
+  display: inline-block;
+  background: #ef4444;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  animation: takeaway-listening-dot 1.1s ease-in-out infinite;
+}
+
+@keyframes takeaway-listening-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.42); }
+  50% { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); }
+}
+
+.takeaway-pronunciation-card footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.takeaway-pronunciation-secondary,
+.takeaway-pronunciation-record {
+  min-height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 850;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.takeaway-pronunciation-secondary {
+  background: var(--panel-2, var(--panel));
+  color: var(--ink);
+}
+
+.takeaway-pronunciation-record {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.takeaway-pronunciation-record.is-recording {
+  background: #ef4444;
+  border-color: #ef4444;
+  box-shadow: 0 12px 26px rgba(239, 68, 68, 0.26);
+}
+
+.takeaway-pronunciation-secondary svg,
+.takeaway-pronunciation-record svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 640px) {
+  .language-takeaway-popup header {
+    align-items: flex-start;
+  }
+
+  .language-takeaway-head-actions {
+    gap: 6px;
+  }
+
+  .language-takeaway-popup header .language-takeaway-practice-btn {
+    min-width: 0;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .takeaway-pronunciation-dialog {
+    padding: 12px;
+    align-items: end;
+  }
+
+  .takeaway-pronunciation-card {
+    max-height: calc(100vh - 24px);
+    padding: 15px;
+    border-radius: 16px;
+  }
+
+  .takeaway-pronunciation-scores {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .takeaway-pronunciation-score-main {
+    min-height: 86px;
+  }
+
+  .takeaway-pronunciation-score-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .takeaway-pronunciation-card footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .takeaway-pronunciation-secondary,
+  .takeaway-pronunciation-record {
+    width: 100%;
+  }
 }
 
 .language-takeaway-popup label {
@@ -5938,6 +6428,87 @@ body.theme-dark .spelling-drill-panel {
   overflow: auto;
 }
 
+/* Read-only dictionary card: shown instead of the Chinese textarea while a
+   single-word lookup is active. Renders bracketed ECDICT domain codes ([经]…)
+   as pill tags so the field of each sense reads clearly. */
+.language-takeaway-dict-display {
+  min-height: 84px;
+  max-height: 42vh;
+  overflow: auto;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  transition: opacity 0.16s ease;
+}
+.language-takeaway-dict-display.is-dictionary-transitioning {
+  opacity: 0;
+}
+.language-takeaway-dict-display.is-dictionary-editable {
+  cursor: text;
+  background: color-mix(in srgb, var(--panel) 96%, #ffffff);
+}
+.language-takeaway-dict-display.is-dictionary-editable:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+/* Block (not flex) so the tag, its trailing colon and the sense text read as
+   one continuous line — flex gap would scatter them. */
+.dict-sense-line {
+  display: block;
+  font-weight: 650;
+  line-height: 1.7;
+}
+.dict-sense-line.dict-sense-en {
+  font-weight: 600;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--ink) 88%, transparent);
+}
+/* The tag's label is one step smaller than the surrounding text and scales with
+   it (em), so it stays proportional in both the popup card and the big spelling
+   gloss. padding is em-based for the same reason. */
+.dict-domain-tag {
+  display: inline;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  font-size: 1em;
+  font-weight: 720;
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: baseline;
+  user-select: all;
+}
+.dict-domain-tag[contenteditable="false"] {
+  user-select: all;
+}
+.dict-domain-tag-colon {
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  opacity: 1;
+}
+body.theme-dark .language-takeaway-dict-display {
+  background: var(--dark-input);
+  border-color: var(--dark-border);
+}
+body.theme-dark .language-takeaway-dict-display.is-dictionary-editable {
+  background: color-mix(in srgb, var(--dark-input) 92%, #020617);
+}
+body.theme-dark .dict-domain-tag {
+  background: transparent;
+  color: color-mix(in srgb, var(--accent) 62%, #ffffff);
+}
+
+body.theme-dark .dict-domain-tag-colon {
+  color: color-mix(in srgb, var(--accent) 62%, #ffffff);
+}
+
 .language-takeaway-actions {
   display: flex;
   align-items: center;
@@ -5953,7 +6524,7 @@ body.theme-dark .spelling-drill-panel {
   min-width: 0;
 }
 
-.language-takeaway-actions span {
+.language-takeaway-actions-left > span {
   color: var(--muted);
   font-size: 12px;
 }
@@ -5961,36 +6532,76 @@ body.theme-dark .spelling-drill-panel {
 /* + button: add a single English word to spelling training. */
 .language-takeaway-spelling-btn {
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  min-height: 30px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
   padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
+  position: relative;
   border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 40%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent, #2563eb) 10%, var(--panel));
   color: var(--accent, #2563eb);
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease;
+  overflow: hidden;
+  transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.language-takeaway-spelling-btn svg {
-  width: 16px;
-  height: 16px;
+.language-takeaway-spelling-btn .lt-spell-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 140ms ease, transform 140ms ease;
+  pointer-events: none;
+}
+.language-takeaway-spelling-btn .lt-spell-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.2;
+  stroke-width: 2.4;
   stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.language-takeaway-spelling-btn:not([data-spelling-state="busy"]):not([data-spelling-state="check"]) .lt-spell-icon-add,
+.language-takeaway-spelling-btn[data-spelling-state="plus"] .lt-spell-icon-add,
+.language-takeaway-spelling-btn[data-spelling-state="check"] .lt-spell-icon-check,
+.language-takeaway-spelling-btn[data-spelling-state="busy"] .lt-spell-icon-loading {
+  opacity: 1;
+  transform: scale(1);
 }
 .language-takeaway-spelling-btn:hover { background: color-mix(in srgb, var(--accent, #2563eb) 18%, var(--panel)); }
 .language-takeaway-spelling-btn:active { transform: scale(0.92); }
+.language-takeaway-spelling-btn.is-busy {
+  cursor: progress;
+}
+.language-takeaway-spelling-btn .lt-spell-icon-loading {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  margin: -9px 0 0 -9px;
+  display: block;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 2.4px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-top-color: currentColor;
+  animation: takeawayAddSpin 760ms linear infinite;
+}
+@keyframes takeawayAddSpin {
+  to { transform: rotate(360deg); }
+}
 .language-takeaway-spelling-btn.is-added {
   background: #16a34a;
   border-color: #15803d;
   color: #fff;
-  /* Confirm is the green + checkmark swap only — same as the expression-
-     replacement add button. No bespoke scale keyframe (read as "distorted"). */
 }
 body.theme-dark .language-takeaway-spelling-btn {
   border-color: color-mix(in srgb, #7aa2ff 42%, transparent);
@@ -6002,20 +6613,311 @@ body.theme-dark .language-takeaway-spelling-btn.is-added {
   border-color: #166534;
   color: #fff;
 }
-
 .language-takeaway-action-buttons {
   display: grid;
   grid-template-columns: repeat(2, minmax(128px, 1fr));
+  align-items: center;
   justify-content: end;
   gap: 10px;
   width: min(100%, 282px);
 }
 
+.language-takeaway-action-buttons:has(.language-takeaway-dict-toggle:not(.hidden)) {
+  grid-template-columns: 58px minmax(118px, 1fr) minmax(118px, 1fr);
+  gap: 8px;
+  width: min(100%, 340px);
+}
+
 .language-takeaway-action-buttons button {
   width: 100%;
   min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  text-align: center;
   white-space: nowrap;
+}
+
+.language-takeaway-action-buttons .language-takeaway-dict-toggle {
+  box-sizing: border-box !important;
+  width: 58px !important;
+  height: 30px !important;
+  min-width: 58px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent) !important;
+  background: color-mix(in srgb, var(--panel) 92%, #ffffff) !important;
+  box-shadow:
+    inset 0 1px 2px rgba(15, 23, 42, 0.08),
+    0 3px 10px rgba(15, 23, 42, 0.08) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  color: var(--muted) !important;
+  position: relative !important;
+  z-index: 2 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  transform: none !important;
+}
+
+.language-takeaway-action-buttons .language-takeaway-dict-toggle:hover,
+.language-takeaway-action-buttons .language-takeaway-dict-toggle:active,
+.language-takeaway-action-buttons .language-takeaway-dict-toggle:focus-visible {
+  transform: none !important;
+}
+
+.language-takeaway-action-buttons .language-takeaway-dict-toggle.hidden {
+  display: none !important;
+}
+
+.language-takeaway-dict-toggle .dict-toggle-rail {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.language-takeaway-dict-toggle .dict-toggle-label {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: 0;
+  padding-top: 1px;
+  color: color-mix(in srgb, var(--muted) 82%, transparent);
+  pointer-events: none;
+  transition: color 160ms ease;
+}
+
+.language-takeaway-dict-toggle .dict-toggle-thumb {
+  position: absolute;
+  z-index: 1;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #14b8a6, #0ea5e9);
+  box-shadow:
+    0 4px 10px rgba(20, 184, 166, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transform: translateX(0);
+  transition: transform 190ms cubic-bezier(0.2, 0.8, 0.2, 1), background 160ms ease;
+}
+
+.language-takeaway-dict-toggle[data-dictionary-mode="en"] .dict-toggle-thumb {
+  transform: translateX(28px);
+}
+
+.language-takeaway-dict-toggle[data-dictionary-mode="zh"] .dict-toggle-label-zh,
+.language-takeaway-dict-toggle[data-dictionary-mode="en"] .dict-toggle-label-en {
+  color: #ffffff;
+}
+
+body.theme-dark .language-takeaway-action-buttons .language-takeaway-dict-toggle {
+  border-color: rgba(74, 95, 111, 0.68) !important;
+  background: #0b1117 !important;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(13, 95, 82, 0.08) !important;
+}
+
+body.theme-dark .language-takeaway-dict-toggle .dict-toggle-label {
+  color: rgba(203, 213, 225, 0.64);
+}
+
+body.theme-dark .language-takeaway-dict-toggle .dict-toggle-thumb {
+  background: linear-gradient(135deg, #0d5f52, #11466a);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+body.theme-dark .language-takeaway-dict-toggle[data-dictionary-mode="zh"] .dict-toggle-label-zh,
+body.theme-dark .language-takeaway-dict-toggle[data-dictionary-mode="en"] .dict-toggle-label-en {
+  color: #ffffff;
+}
+
+/* Language Takeaway compact controls: keep the spelling glyph truly centered and
+   prevent the global .is-busy pseudo spinner from drawing a second ring. */
+.language-takeaway-actions-left .language-takeaway-spelling-btn {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  align-self: center !important;
+  justify-self: center !important;
+  overflow: hidden !important;
+}
+
+.language-takeaway-spelling-btn.is-busy::after {
+  content: none !important;
+  display: none !important;
+}
+
+.language-takeaway-spelling-btn .lt-spell-icon {
+  inset: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  transform-origin: center !important;
+}
+
+.language-takeaway-spelling-btn .lt-spell-icon svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.language-takeaway-spelling-btn .lt-spell-icon-loading {
+  top: 50% !important;
+  left: 50% !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin: -8px 0 0 -8px !important;
+  border: 0 !important;
+  animation: none !important;
+}
+
+.language-takeaway-spelling-btn .lt-spell-icon-loading::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-right-color: transparent;
+  animation: takeawaySpellSpin 720ms linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes takeawaySpellSpin {
+  to { transform: rotate(360deg); }
+}
+
+.language-takeaway-action-buttons:has(.language-takeaway-dict-toggle:not(.hidden)) {
+  grid-template-columns: 52px minmax(118px, 1fr) minmax(118px, 1fr) !important;
+  width: min(100%, 334px) !important;
+}
+
+.language-takeaway-action-buttons .language-takeaway-dict-toggle {
+  width: 52px !important;
+  height: 28px !important;
+  min-width: 52px !important;
+  min-height: 28px !important;
+  flex: 0 0 52px !important;
+  line-height: 1 !important;
+  transform: none !important;
+}
+
+.language-takeaway-dict-toggle .dict-toggle-label {
+  font-size: 9.5px !important;
+  padding-top: 0 !important;
+}
+
+.language-takeaway-dict-toggle .dict-toggle-thumb {
+  top: 3px !important;
+  left: 3px !important;
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.language-takeaway-dict-toggle[data-dictionary-mode="en"] .dict-toggle-thumb {
+  transform: translateX(24px) !important;
+}
+
+/* Final P1 intensity controls and header pixel-flow treatment. */
+.exam-status.p1-pixel-flow {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.exam-status.p1-pixel-flow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--panel) 88%, transparent), transparent 48%, color-mix(in srgb, var(--panel) 84%, transparent)),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 82%, transparent), color-mix(in srgb, var(--panel) 96%, transparent));
+}
+
+.exam-status.p1-pixel-flow .p2-pixel-flow-canvas {
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 520ms ease;
+}
+
+.exam-status.p1-pixel-flow.p1-pixel-flow-visible .p2-pixel-flow-canvas {
+  opacity: 0.74;
+}
+
+.exam-status.p1-pixel-flow #examStatusText,
+.exam-status.p1-pixel-flow .exam-actions,
+.exam-status.p1-pixel-flow .p2-corpus-prep {
+  position: relative;
+  z-index: 3;
+}
+
+.exam-actions .p1-mode-switch {
+  flex: 0 0 auto;
+  width: 214px;
+  min-width: 214px;
+  max-width: 214px;
+  transition:
+    width 260ms ease,
+    min-width 260ms ease,
+    max-width 260ms ease,
+    opacity 220ms ease,
+    transform 220ms ease,
+    margin 220ms ease,
+    padding 220ms ease;
+}
+
+.exam-actions .p1-mode-switch .p3-mode-option {
+  min-height: 36px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+}
+
+.practice-panel.p1-started .p1-mode-switch,
+.exam-actions .p1-mode-switch.is-collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  opacity: 0 !important;
+  transform: translateX(10px) scale(0.96);
+  pointer-events: none;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.practice-panel.p3-starting #practiceGrid {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.theme-dark .exam-status.p1-pixel-flow::before {
+  background:
+    linear-gradient(90deg, rgba(8, 14, 24, 0.9), rgba(8, 14, 24, 0.34) 48%, rgba(8, 14, 24, 0.86)),
+    linear-gradient(180deg, rgba(8, 14, 24, 0.72), rgba(8, 14, 24, 0.95));
 }
 
 .p1-corpus-dialog-card.takeaway-edit-card {
@@ -6388,6 +7290,8 @@ body.theme-dark .language-takeaway-spelling-btn.is-added {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .language-status-spinner {
@@ -7929,21 +8833,16 @@ body.theme-dark .p2-brainstorm-entry-card[data-category="brainstorm"] > header >
   stroke-linejoin: round;
 }
 
-/* The "thinking" indicator: three dots inside the cloud bouncing in sequence. */
-.p2-brain-cloud-dots circle {
+/* The "thinking" indicator: square dots pop in left→right, hold, then vanish
+   together — shares the tk-brain sequential timeline so every mascot matches. */
+.p2-brain-cloud-dots rect {
   fill: #1f2937;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: p2BrainThinkDot 1.05s ease-in-out infinite;
+  opacity: 0;
+  animation: tkBrainSeqDot1 1.5s steps(1, end) infinite;
 }
 
-.p2-brain-cloud-dots circle:nth-child(2) { animation-delay: 0.14s; }
-.p2-brain-cloud-dots circle:nth-child(3) { animation-delay: 0.28s; }
-
-@keyframes p2BrainThinkDot {
-  0%, 55%, 100% { transform: translateY(0); }
-  28% { transform: translateY(-1.5px); }
-}
+.p2-brain-cloud-dots rect:nth-child(2) { animation-name: tkBrainSeqDot2; }
+.p2-brain-cloud-dots rect:nth-child(3) { animation-name: tkBrainSeqDot3; }
 
 @keyframes p2BrainCloud {
   0% { opacity: 0; transform: scale(0.3) translateY(3px); }
@@ -8070,7 +8969,7 @@ body.theme-dark .p2-brainstorm-entry-card[data-category="brainstorm"] > header >
   .p2-brain-icon,
   .p2-brain-hand-right,
   .p2-brain-cloud,
-  .p2-brain-cloud-dots circle,
+  .p2-brain-cloud-dots rect,
   .p2-brain-bulb,
   .p2-brain-bulb-ray,
   .p2-brain-balloon,
@@ -8084,6 +8983,7 @@ body.theme-dark .p2-brainstorm-entry-card[data-category="brainstorm"] > header >
   .p2-brain-arm-idea,
   .p2-brain-arm-hold { opacity: 0; }
   .p2-brain-arm-think { opacity: 1; }
+  .p2-brain-cloud-dots rect { opacity: 1; }
 }
 
 .p2-brainstorm-card-copy {
@@ -8304,7 +9204,7 @@ body.theme-dark .p2-brainstorm-entry-card[data-category="brainstorm"] > header >
      Fixed 5-row grid keeps the layout stable whether the personal-corpus tools
      or the bank P3 list is the visible part of the context zone. */
   grid-template-rows: auto auto auto minmax(280px, 1fr) auto;
-  width: min(1040px, calc(100vw - var(--sidebar-width) - 56px));
+  width: min(1280px, calc(100vw - var(--sidebar-width) - 44px));
   max-height: calc(100vh - 84px);
 }
 
@@ -8632,6 +9532,7 @@ body.is-dragging-p2-dialog * {
 }
 
 .p1-corpus-dialog-card .vditor-ir,
+.p1-corpus-dialog-card .vditor-wysiwyg,
 .p1-corpus-dialog-card .vditor-reset {
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -8640,7 +9541,8 @@ body.is-dragging-p2-dialog * {
   text-align: left !important;
 }
 
-.p1-corpus-dialog-card .vditor-ir {
+.p1-corpus-dialog-card .vditor-ir,
+.p1-corpus-dialog-card .vditor-wysiwyg {
   min-height: 0;
   height: 100% !important;
   overflow: auto;
@@ -8648,7 +9550,8 @@ body.is-dragging-p2-dialog * {
 }
 
 .p1-corpus-dialog-card .vditor-ir pre.vditor-reset,
-.p1-corpus-dialog-card .vditor-ir .vditor-reset {
+.p1-corpus-dialog-card .vditor-ir .vditor-reset,
+.p1-corpus-dialog-card .vditor-wysiwyg .vditor-reset {
   width: 100%;
   max-width: none;
   min-height: 100%;
@@ -8665,6 +9568,7 @@ body.is-dragging-p2-dialog * {
 
 .p2-corpus-dialog-card.is-bank-editor .p1-corpus-textarea,
 .p2-corpus-dialog-card.is-bank-editor .vditor-ir,
+.p2-corpus-dialog-card.is-bank-editor .vditor-wysiwyg,
 .p2-corpus-dialog-card.is-bank-editor .vditor-reset {
   font-size: 21px !important;
   line-height: 1.72 !important;
@@ -8672,6 +9576,7 @@ body.is-dragging-p2-dialog * {
 
 .p2-corpus-dialog-card.is-bank-editor .vditor-ir pre.vditor-reset,
 .p2-corpus-dialog-card.is-bank-editor .vditor-ir .vditor-reset,
+.p2-corpus-dialog-card.is-bank-editor .vditor-wysiwyg .vditor-reset,
 .p2-corpus-dialog-card.is-bank-editor .vditor-reset p {
   font-size: 21px !important;
   line-height: 1.72 !important;
@@ -9822,6 +10727,7 @@ body.is-dragging-p2-dialog * {
 }
 
 .p2-corpus-p3-dialog-card .vditor-ir,
+.p2-corpus-p3-dialog-card .vditor-wysiwyg,
 .p2-corpus-p3-dialog-card .vditor-reset {
   font-size: 17px;
   line-height: 1.58;
@@ -10772,32 +11678,68 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
 }
 
 .speaking-score-complete-card {
-  width: min(460px, 100%);
+  width: min(560px, 100%);
+}
+
+.speaking-score-complete-main {
+  grid-template-columns: 132px minmax(0, 1fr);
+}
+
+.speaking-score-complete-criteria {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.speaking-score-complete-criteria .score-cell {
+  min-height: 88px;
 }
 
 .writing-score-complete-body {
   display: grid;
-  gap: 14px;
-  padding: 22px;
+  gap: 12px;
+  padding: 16px 18px 18px;
 }
 
-.writing-score-complete-body strong {
-  width: fit-content;
-  padding: 8px 12px;
-  border-radius: 999px;
+.score-complete-main {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.score-complete-band {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  min-height: 84px;
+  padding: 13px 12px;
+  border-radius: 12px;
+  text-align: center;
   background: #ecfdf5;
+  border: 1px solid rgba(5, 150, 105, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.score-complete-band span {
   color: #047857;
-  font-size: 18px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.score-complete-band strong {
+  color: #065f46;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .writing-score-complete-criteria {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.speaking-score-complete-criteria {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-self: stretch;
 }
 
 .writing-score-complete-criteria.hidden {
@@ -10805,15 +11747,16 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
 }
 
 .writing-score-complete-criteria .score-cell {
-  min-height: 64px;
+  min-height: 84px;
   display: grid;
-  grid-template-rows: auto 1fr;
-  align-items: stretch;
-  text-align: left;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
   border-radius: 10px;
   background: #f8fafc;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  padding: 10px;
+  padding: 8px 6px;
 }
 
 .writing-score-complete-criteria .score-cell span {
@@ -10824,26 +11767,31 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
 }
 
 .writing-score-complete-criteria .score-cell strong {
-  align-self: center;
-  justify-self: center;
-  width: auto;
+  width: fit-content;
   padding: 0;
   border-radius: 0;
   background: transparent;
   color: #111827;
-  font-size: 20px;
+  font-size: 19px;
   line-height: 1;
 }
 
 .writing-score-complete-body p {
   margin: 0;
   color: var(--muted);
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.score-complete-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0;
 }
 
 .writing-score-complete-body button {
-  justify-self: end;
-  min-width: 150px;
+  min-width: 142px;
+  min-height: 40px;
 }
 
 .writing-report-prompt-card {
@@ -10851,9 +11799,22 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
   overflow: visible;
 }
 
+.writing-report-prompt-card.is-task2-report-prompt {
+  gap: 16px;
+  padding: clamp(20px, 2.2vw, 28px);
+}
+
 .writing-report-prompt-card .writing-pill {
   justify-self: start;
   margin-bottom: 0;
+}
+
+.writing-report-prompt-card.is-task2-report-prompt > h2 {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: clamp(23px, 2.1vw, 34px);
+  line-height: 1.24;
 }
 
 .writing-report-prompt-text {
@@ -10866,6 +11827,18 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
   overflow: visible;
   white-space: pre-wrap;
   max-width: none;
+}
+
+.writing-report-prompt-card.is-task2-report-prompt .writing-report-prompt-text {
+  font-size: clamp(18px, 1.55vw, 24px);
+  line-height: 1.72;
+}
+
+.writing-report-prompt-card.is-task2-report-prompt .writing-prompt-fixed-question {
+  margin: 2px 0;
+  padding: 4px 12px;
+  border-radius: 10px;
+  font-size: 1.04em;
 }
 
 .writing-overall-content {
@@ -10978,6 +11951,105 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
 
 .writing-annotated-original {
   color: var(--text);
+}
+
+.writing-original-cell-head {
+  align-items: center;
+  gap: 10px;
+}
+
+.writing-inline-edit-btn {
+  width: auto;
+  min-width: 66px;
+  min-height: 28px;
+  height: 28px;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  font-size: 12px;
+  font-weight: 850;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.writing-inline-edit-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.writing-inline-edit-btn:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+.writing-inline-edit-btn.is-saving-mode {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent, #0f766e) 82%, #fff), var(--accent, #0f766e));
+  border-color: color-mix(in srgb, var(--accent, #0f766e) 70%, transparent);
+  color: #ffffff;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent, #0f766e) 18%, transparent);
+}
+
+.writing-inline-edit-btn.is-busy {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.writing-paragraph-report-table td.is-editing {
+  vertical-align: top;
+}
+
+.writing-inline-paragraph-editor {
+  width: 100%;
+  min-height: 118px;
+  resize: vertical;
+  margin-top: 8px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.65;
+  box-sizing: border-box;
+}
+
+.writing-fix-popover {
+  position: fixed;
+  z-index: 760;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px) scale(0.98);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.writing-fix-popover.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.writing-fix-popover button {
+  min-height: 30px;
+  padding: 0 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.20);
+  cursor: pointer;
 }
 
 .writing-inline-issue {
@@ -12463,8 +13535,30 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
 
 .writing-submit-row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+.writing-submit-row #writingScoreBtn {
+  grid-column: auto;
+}
+
+.writing-inline-edit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.writing-inline-undo-btn:disabled,
+.writing-inline-undo-btn.is-disabled {
+  background: color-mix(in srgb, #94a3b8 8%, var(--panel));
+  border-color: color-mix(in srgb, #94a3b8 24%, var(--line));
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.42;
+  transform: none;
+  box-shadow: none;
 }
 
 .writing-score-summary {
@@ -12493,6 +13587,7 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
 }
 
 .writing-score-summary-card {
+  position: relative;
   display: grid;
   gap: 14px;
   padding: 20px 22px 18px;
@@ -12603,6 +13698,7 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
 }
 
 .speaking-score-summary-card {
+  position: relative;
   display: grid;
   gap: 10px;
   padding: 20px 22px 18px;
@@ -12730,6 +13826,25 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
 .writing-score-summary-card .writing-report-actions {
   margin-top: 2px;
   justify-content: flex-end;
+}
+
+.writing-score-summary-card > .writing-score-summary-head,
+.speaking-score-summary-card > .speaking-score-summary-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding-right: 0;
+}
+
+.writing-score-summary-side,
+.speaking-score-summary-side {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  justify-self: end;
+  min-width: max-content;
 }
 
 .writing-score-summary-card .writing-report-edit-btn {
@@ -13036,6 +14151,41 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   font-size: 13px;
 }
 
+.report-rail-loading-card {
+  min-width: 220px;
+  height: 100%;
+  min-height: 86px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 48%),
+    var(--panel);
+  color: var(--ink);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+  animation: report-rail-loading-in 420ms ease both;
+}
+
+.report-rail-loading-card strong {
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+@keyframes report-rail-loading-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .corpus-editor-loading {
   position: absolute;
   inset: 0;
@@ -13248,6 +14398,14 @@ body.theme-dark .corpus-loading-card {
 .writing-reports-panel .detail-panel {
   border-top: 0;
   padding-top: 0;
+}
+
+#detailPanel > .page-center-loading,
+#writingReportDetail > .page-center-loading {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
 }
 
 .writing-report-prompt .coaching-content,
@@ -15811,11 +16969,33 @@ body.font-popular .record-control.recording {
   background: rgba(255, 255, 255, 0.76);
   color: var(--ink);
   text-align: left;
-  padding: 12px 36px 12px 14px;
+  padding: 12px 18px 12px 14px;
   scroll-snap-align: start;
   transition: transform var(--motion-fast), box-shadow var(--motion-fast), border-color var(--motion-fast), background var(--motion-fast);
   cursor: pointer;
   font-size: 13px;
+}
+
+.history-item-wrap .history-item {
+  display: grid;
+  grid-template-rows: auto minmax(36px, 1fr) 16px;
+  align-content: start;
+  overflow: hidden;
+}
+
+.history-item-wrap .history-item-title {
+  min-height: 36px;
+  max-height: 38px;
+}
+
+.history-item-wrap .history-item-time {
+  display: block;
+  min-height: 16px;
+  line-height: 16px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .history-item:hover {
@@ -16007,10 +17187,56 @@ body.font-popular .record-control.recording {
   flex-shrink: 0;
 }
 
+.report-band-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.report-export-btn {
+  min-height: 34px;
+  height: 34px;
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.report-export-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.report-export-btn:hover {
+  background: color-mix(in srgb, var(--accent) 15%, var(--panel));
+}
+
+.history-item-wrap .history-item {
+  position: relative;
+}
+
 .history-item-menu-btn {
   position: absolute;
-  top: 7px;
-  right: 6px;
+  top: 5px;
+  right: 5px;
   width: 22px;
   height: 22px;
   min-width: 22px;
@@ -16030,7 +17256,17 @@ body.font-popular .record-control.recording {
   box-shadow: none;
   padding: 0;
   overflow: hidden;
+  z-index: 6;
   transition: background 160ms ease, color 160ms ease;
+}
+
+.history-item-wrap .history-item-top {
+  padding-right: 18px;
+}
+
+.history-item-wrap .history-item-title,
+.history-item-wrap .history-item-time {
+  padding-right: 2px;
 }
 
 .history-item-menu-btn span {
@@ -16045,6 +17281,49 @@ body.font-popular .record-control.recording {
 .history-item-menu-btn:hover {
   background: rgba(16, 163, 127, 0.08);
   color: var(--ink);
+}
+
+/* Per-card three-dot menu MUST be a floating overlay pinned to each card's OWN
+   top-right corner: anchored to the (relative) wrap, lifted out of flow so it never
+   squeezes the title, and never collapsing onto the whole rail's corner. Hardened
+   with !important + child specificity so no stray rule can knock it back into flow. */
+.history-item-wrap,
+.writing-report-item-wrap {
+  position: relative !important;
+}
+
+.history-item-wrap > .history-item-menu-btn,
+.writing-report-item-wrap > .history-item-menu-btn {
+  position: absolute !important;
+  top: 4px !important;
+  right: 4px !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: 8 !important;
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+  /* A faint floating chip so the dots read as hovering above the card, always
+     visible (not only on hover). */
+  background: color-mix(in srgb, var(--panel) 72%, transparent) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14) !important;
+  backdrop-filter: blur(2px);
+}
+
+.history-item-wrap > .history-item-menu-btn:hover,
+.writing-report-item-wrap > .history-item-menu-btn:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel)) !important;
+  color: var(--ink) !important;
+}
+
+/* The band/title rows only need to clear the floating chip — no extra reserved
+   gutter that would push the title left and leave dead space on the right. */
+.history-item-wrap .history-item-top {
+  padding-right: 26px !important;
+}
+
+.history-item-wrap .history-item-title,
+.history-item-wrap .history-item-time {
+  padding-right: 0 !important;
 }
 
 .history-item-menu {
@@ -18765,6 +20044,7 @@ body.theme-dark .agent-result-card,
 body.theme-dark .page-center-loading > div,
 body.theme-dark .corpus-editor-loading,
 body.theme-dark .corpus-editor-loading > div,
+body.theme-dark .report-rail-loading-card,
 body.theme-dark .settings-list-row,
 body.theme-dark .writing-history-item,
 body.theme-dark .history-item,
@@ -20277,6 +21557,72 @@ body.theme-dark .p2-bank-brainstorm-field input {
   color: var(--ink);
 }
 
+body.theme-dark .language-takeaway-popup header .language-takeaway-practice-btn {
+  background: color-mix(in srgb, var(--dark-primary) 18%, var(--dark-surface));
+  border-color: var(--dark-primary-border);
+  color: var(--dark-primary-text);
+}
+
+body.theme-dark .language-takeaway-popup header .language-takeaway-practice-btn:hover,
+body.theme-dark .language-takeaway-tts-btn:hover {
+  background: color-mix(in srgb, var(--dark-primary) 24%, var(--dark-surface-2));
+}
+
+body.theme-dark .takeaway-pronunciation-backdrop {
+  background: rgba(0, 9, 16, 0.46);
+}
+
+body.theme-dark .takeaway-pronunciation-card {
+  background:
+    radial-gradient(circle at 86% 8%, color-mix(in srgb, var(--dark-primary) 18%, transparent), transparent 32%),
+    linear-gradient(180deg, var(--dark-panel-top), var(--dark-panel-bottom));
+  border-color: var(--dark-border);
+  color: var(--ink);
+  box-shadow: 0 28px 78px rgba(0, 0, 0, 0.52);
+}
+
+body.theme-dark .takeaway-pronunciation-close,
+body.theme-dark .takeaway-pronunciation-score-grid span,
+body.theme-dark .takeaway-pronunciation-secondary,
+body.theme-dark .takeaway-pronunciation-word {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  color: var(--ink);
+}
+
+body.theme-dark .takeaway-pronunciation-target {
+  background: color-mix(in srgb, var(--dark-primary) 12%, var(--dark-surface));
+  border-color: var(--dark-primary-border);
+}
+
+body.theme-dark .takeaway-pronunciation-score-main {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--dark-primary) 26%, var(--dark-surface)), color-mix(in srgb, #10b981 14%, var(--dark-surface)));
+  border-color: var(--dark-primary-border);
+}
+
+body.theme-dark .takeaway-pronunciation-transcript {
+  background: color-mix(in srgb, var(--dark-surface) 88%, transparent);
+  border-color: var(--dark-border);
+}
+
+body.theme-dark .takeaway-pronunciation-word.is-good {
+  color: #86efac;
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(134, 239, 172, 0.36);
+}
+
+body.theme-dark .takeaway-pronunciation-word.is-close {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(252, 211, 77, 0.36);
+}
+
+body.theme-dark .takeaway-pronunciation-word.is-missed {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(252, 165, 165, 0.34);
+}
+
 body.theme-dark .p1-corpus-ai-box,
 body.theme-dark .p2-corpus-prep,
 body.theme-dark .p2-p3-source-tools,
@@ -20396,9 +21742,11 @@ body.theme-dark .p1-corpus-dialog-card .vditor,
 body.theme-dark .p1-corpus-dialog-card .vditor-toolbar,
 body.theme-dark .p1-corpus-dialog-card .vditor-content,
 body.theme-dark .p1-corpus-dialog-card .vditor-ir,
+body.theme-dark .p1-corpus-dialog-card .vditor-wysiwyg,
 body.theme-dark .p1-corpus-dialog-card .vditor-reset,
 body.theme-dark .p1-corpus-dialog-card .vditor-ir pre.vditor-reset,
-body.theme-dark .p1-corpus-dialog-card .vditor-ir .vditor-reset {
+body.theme-dark .p1-corpus-dialog-card .vditor-ir .vditor-reset,
+body.theme-dark .p1-corpus-dialog-card .vditor-wysiwyg .vditor-reset {
   background: var(--dark-input) !important;
   border-color: var(--dark-border) !important;
   color: var(--ink) !important;
@@ -21147,6 +22495,29 @@ body.theme-dark.font-academic .writing-score-complete-body > strong {
   color: #0d1012;
 }
 
+body.theme-dark .score-complete-band {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--dark-secondary) 44%, var(--dark-card)), color-mix(in srgb, var(--dark-primary) 22%, var(--dark-surface)));
+  border-color: var(--dark-primary-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .score-complete-band span {
+  color: color-mix(in srgb, var(--dark-primary) 82%, #ffffff);
+}
+
+body.theme-dark .score-complete-band strong {
+  color: var(--ink);
+}
+
+body.theme-dark.font-academic .score-complete-band {
+  background: linear-gradient(180deg, rgba(58, 64, 58, 0.96), rgba(35, 39, 35, 0.98));
+  border-color: rgba(157, 183, 173, 0.35);
+}
+
+body.theme-dark.font-academic .score-complete-band span {
+  color: #c6d6cc;
+}
+
 body.theme-dark .writing-score-complete-criteria .score-cell {
   background: var(--dark-surface);
   border-color: var(--dark-border);
@@ -21163,12 +22534,12 @@ body.theme-dark .writing-score-complete-criteria .score-cell strong {
 body.theme-dark .language-takeaway-trigger {
   background: linear-gradient(180deg, var(--dark-primary), var(--dark-primary-strong));
   border-color: var(--dark-primary-border);
-  color: #081019;
+  color: #ffffff;
   box-shadow: 0 12px 28px color-mix(in srgb, var(--dark-primary) 18%, transparent);
 }
 
 body.theme-dark.font-academic .language-takeaway-trigger {
-  color: #0d1012;
+  color: #ffffff;
 }
 
 body.theme-dark .language-takeaway-popup header button,
@@ -21887,25 +23258,29 @@ body.theme-dark.font-popular .avatar-settings-button:hover {
   color: #f3f8ff;
 }
 
-.speaking-report-rail-shell {
+.speaking-report-rail-shell,
+.writing-report-rail-shell {
   grid-template-columns: 68px minmax(0, 1fr);
   gap: 8px;
   padding: 8px 10px 8px 12px;
 }
 
-.speaking-report-rail-shell .history-rail-head {
+.speaking-report-rail-shell .history-rail-head,
+.writing-report-rail-shell .history-rail-head {
   width: 68px;
   max-width: 68px;
   padding: 4px 0 4px 0;
   border-right: 0;
 }
 
-.speaking-report-rail-shell .history-rail-head strong {
+.speaking-report-rail-shell .history-rail-head strong,
+.writing-report-rail-shell .history-rail-head strong {
   font-size: 13px;
   letter-spacing: 0;
 }
 
-.speaking-report-rail-shell .history-rail-head span {
+.speaking-report-rail-shell .history-rail-head span,
+.writing-report-rail-shell .history-rail-head span {
   font-size: 10px;
   color: color-mix(in srgb, var(--muted) 88%, var(--ink));
 }
@@ -21932,18 +23307,6 @@ body.theme-dark.font-popular .avatar-settings-button:hover {
 /* Speaking report rail intentionally inherits the base .history-list/.history-item
    styles so its cards match the writing report rail exactly (writing is the
    reference). No size/gap overrides here. */
-
-.writing-report-rail-shell {
-  grid-template-columns: 68px minmax(0, 1fr);
-  gap: 8px;
-}
-
-.writing-report-rail-shell .history-rail-head {
-  width: 68px;
-  max-width: 68px;
-  padding-right: 0;
-  border-right: 0;
-}
 
 body.theme-dark .writing-report-rail-shell .history-rail-actions,
 body.theme-dark .speaking-report-rail-shell .history-rail-actions,
@@ -23039,11 +24402,17 @@ body.theme-dark.font-academic .history-item:hover {
   .writing-score-summary-head {
     grid-template-columns: 1fr;
   }
+  .writing-score-summary-side {
+    justify-self: start;
+  }
   .writing-score-summary-band {
     justify-self: start;
   }
   .speaking-score-summary-head {
     grid-template-columns: 1fr;
+  }
+  .speaking-score-summary-side {
+    justify-self: start;
   }
   .speaking-score-summary-band {
     justify-self: start;
@@ -23105,6 +24474,17 @@ body.theme-dark.font-academic .history-item:hover {
   }
   .writing-score-complete-criteria {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .score-complete-main {
+    grid-template-columns: 1fr;
+  }
+  .score-complete-band,
+  .writing-score-complete-criteria .score-cell {
+    min-height: 76px;
+  }
+  .score-complete-actions,
+  .writing-score-complete-body button {
+    width: 100%;
   }
   .writing-prompt-modal-toolbar {
     grid-template-columns: 1fr;
@@ -27559,6 +28939,8 @@ body.view-home .home-v3-links a:focus-visible {
 }
 
 body.view-home .home-v3-today {
+  position: relative;
+  overflow: hidden;
   min-height: 230px;
   display: grid;
   align-content: center;
@@ -27587,13 +28969,40 @@ body.view-home .home-v3-lane-head span {
   text-transform: uppercase;
 }
 
-/* Circular learning loop (输入 → 反馈 → 复用) — replaces the old sketch board. */
+/* Pencil-sketch workflow image, restored as the panel's background (bottom-
+   anchored, full-bleed) the way it was before — the clean loop floats on top. */
+body.view-home .home-loop-illus {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  opacity: 0.32;
+  filter: saturate(0.55) contrast(0.94);
+  pointer-events: none;
+  z-index: 0;
+}
+body.theme-dark .home-loop-illus {
+  opacity: 0.22;
+  mix-blend-mode: screen;
+}
+
+/* Circular learning loop (输入 → 反馈 → 复用) — floats above the sketch.
+   The viewBox is cropped tight to the circle, so a modest max-width still
+   renders a big loop without the empty margins that ballooned the panel. */
 body.view-home .home-loop-cycle {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
-  max-width: 360px;
+  max-width: 400px;
   height: auto;
   margin: 0 auto;
+}
+body.view-home .home-v3-today > span {
+  position: relative;
+  z-index: 1;
 }
 body.view-home .home-loop-title {
   font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
@@ -28834,9 +30243,29 @@ body.theme-dark .writing-pattern-menu-option.active {
   height: 32px !important;
 }
 
-.spelling-drill-panel .nr-next-btn,
+.spelling-drill-panel .nr-next-hint,
 .spelling-drill-panel .nr-button-spacer {
   grid-row: 4 !important;
+}
+
+.spelling-drill-panel .nr-next-hint {
+  margin: 0 !important;
+  min-height: 46px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--sd-muted) !important;
+  font: 760 13px/1.2 inherit !important;
+  letter-spacing: 0 !important;
+  opacity: 0 !important;
+  transform: translateY(5px) scale(0.985) !important;
+  transition: opacity 360ms ease, transform 360ms ease !important;
+  pointer-events: none !important;
+}
+
+.spelling-drill-panel .nr-next-hint.is-visible {
+  opacity: 0.82 !important;
+  transform: translateY(0) scale(1) !important;
 }
 
 .spelling-drill-panel .nr-button-spacer {
@@ -34460,68 +35889,6 @@ body.theme-dark #accountProfilePanel .account-ai-source-select {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 22px rgba(0, 0, 0, 0.22) !important;
 }
 
-/* Expression replacement add button: keep the pending spinner centered inside the round icon. */
-.expression-replacement-add {
-  position: relative !important;
-  width: 34px !important;
-  height: 34px !important;
-  min-width: 34px !important;
-  min-height: 34px !important;
-  display: inline-grid !important;
-  place-items: center !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  line-height: 1 !important;
-}
-
-.expression-replacement-add > span {
-  display: grid !important;
-  place-items: center !important;
-  width: 100% !important;
-  height: 100% !important;
-  line-height: 1 !important;
-  transform: translateY(-1px) !important;
-}
-
-.expression-replacement-add.is-busy {
-  color: var(--accent-dark) !important;
-}
-
-.expression-replacement-add.is-busy > span {
-  opacity: 0 !important;
-}
-
-.expression-replacement-add.is-busy::after {
-  content: "" !important;
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  width: 16px !important;
-  height: 16px !important;
-  margin: 0 !important;
-  box-sizing: border-box !important;
-  border: 2px solid var(--accent-dark) !important;
-  border-top-color: transparent !important;
-  border-radius: 999px !important;
-  transform: translate(-50%, -50%) !important;
-  animation: expression-add-spin 720ms linear infinite !important;
-}
-
-body.theme-dark .expression-replacement-add.is-busy::after {
-  border-color: #7dd3fc !important;
-  border-top-color: transparent !important;
-}
-
-@keyframes expression-add-spin {
-  from {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-
-  to {
-    transform: translate(-50%, -50%) rotate(360deg);
-  }
-}
-
 /* P1 corpus: compact cards do not trap wheel scroll; full list opens in a fixed modal. */
 .p1-topic-card {
   height: 100% !important;
@@ -34616,7 +35983,7 @@ body.theme-dark .expression-replacement-add.is-busy::after {
 .p1-topic-modal > header {
   min-height: 74px !important;
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: 12px !important;
   padding: 16px 18px !important;
@@ -34789,9 +36156,11 @@ body.theme-dark .p1-topic-card.is-modal-only::after {
 
 .p2-corpus-dialog-card.is-bank-editor #p2CorpusText,
 .p2-corpus-dialog-card.is-bank-editor .vditor-ir,
+.p2-corpus-dialog-card.is-bank-editor .vditor-wysiwyg,
 .p2-corpus-dialog-card.is-bank-editor .vditor-reset,
 .p2-corpus-dialog-card.is-bank-editor .vditor-ir pre.vditor-reset,
 .p2-corpus-dialog-card.is-bank-editor .vditor-ir .vditor-reset,
+.p2-corpus-dialog-card.is-bank-editor .vditor-wysiwyg .vditor-reset,
 .p2-corpus-dialog-card.is-bank-editor .vditor-reset p {
   font-size: 18px !important;
   line-height: 1.62 !important;
@@ -34846,7 +36215,6 @@ body:has(#writingReportsPanel:not(.hidden)) .ob-launch {
 
 /* Primary action ("下一题" / "再来一轮") — a top-lit accent gradient for a
    more finished fill; existing white label is kept. */
-.spelling-drill-panel .nr-next-btn,
 .spelling-drill-panel .nr-btn-primary {
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--sd-accent) 90%, #fff),
@@ -34859,4 +36227,2282 @@ body:has(#writingReportsPanel:not(.hidden)) .ob-launch {
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--sd-accent) 90%, #fff),
     var(--sd-accent)) !important;
+}
+
+/* Final authority: P1/P3 intensity switches and the P1 pressure header effect.
+   Kept at EOF because earlier historical switch blocks are numerous and broad. */
+.exam-actions .p1-mode-switch,
+.p3-mode-row .p3-mode-switch {
+  --p3-switch-pad: 6px;
+  --p3-switch-gap: 6px;
+  isolation: isolate;
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: var(--p3-switch-gap) !important;
+  padding: var(--p3-switch-pad) !important;
+  overflow: hidden !important;
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(248, 250, 252, 0.94)) !important;
+  border: 1px solid rgba(148, 163, 184, 0.34) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.04) !important;
+}
+
+.exam-actions .p1-mode-switch {
+  --p3-switch-pad: 5px;
+  --p3-switch-gap: 5px;
+  width: 214px !important;
+  min-width: 214px !important;
+  max-width: 214px !important;
+  flex: 0 0 auto !important;
+  transition:
+    width 260ms ease,
+    min-width 260ms ease,
+    max-width 260ms ease,
+    opacity 220ms ease,
+    transform 220ms ease,
+    margin 220ms ease,
+    padding 220ms ease !important;
+}
+
+.exam-actions .p1-mode-switch.hidden {
+  display: none !important;
+}
+
+.exam-actions .p1-mode-help {
+  --p1-help-opacity: 0.78;
+  flex: 0 0 auto !important;
+  max-width: 112px !important;
+  color: color-mix(in srgb, var(--muted) 86%, transparent) !important;
+  font-size: 12px !important;
+  font-weight: 760 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+  opacity: var(--p1-help-opacity) !important;
+  transform: translateY(0) !important;
+  will-change: opacity, transform, color, text-shadow, filter !important;
+  transition:
+    max-width 240ms ease,
+    opacity 260ms ease,
+    color 520ms ease,
+    text-shadow 520ms ease,
+    filter 320ms ease,
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    margin 220ms ease !important;
+}
+
+.exam-actions .p1-mode-help.hidden {
+  display: none !important;
+}
+
+.exam-actions .p1-mode-help.is-high {
+  --p1-help-opacity: 0.96;
+  color: color-mix(in srgb, #fecaca 82%, #ffffff) !important;
+  text-shadow: 0 1px 8px rgba(15, 23, 42, 0.28) !important;
+}
+
+.exam-actions .p1-mode-help.is-switching {
+  opacity: 0.24 !important;
+  transform: translateY(2px) scale(0.985) !important;
+  filter: brightness(1.18) saturate(1.2) !important;
+  text-shadow: 0 0 14px rgba(34, 211, 238, 0.22) !important;
+}
+
+.exam-actions .p1-mode-help.is-entering {
+  animation: p1ModeHelpGlowIn 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both !important;
+}
+
+@keyframes p1ModeHelpGlowIn {
+  from {
+    opacity: 0.34;
+    transform: translateY(-2px) scale(0.985);
+    filter: brightness(1.45) saturate(1.28);
+    text-shadow: 0 0 18px rgba(45, 212, 191, 0.34);
+  }
+  64% {
+    opacity: 1;
+    filter: brightness(1.22) saturate(1.14);
+  }
+  to {
+    opacity: var(--p1-help-opacity);
+    transform: translateY(0) scale(1);
+    filter: brightness(1) saturate(1);
+  }
+}
+
+.practice-panel.p1-started .p1-mode-help,
+.exam-actions .p1-mode-help.is-collapsed {
+  max-width: 0 !important;
+  opacity: 0 !important;
+  transform: translateX(8px) !important;
+  pointer-events: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  overflow: hidden !important;
+}
+
+.exam-actions .p1-mode-switch::before,
+.p3-mode-row .p3-mode-switch::before {
+  content: "" !important;
+  position: absolute !important;
+  z-index: 0 !important;
+  top: var(--p3-switch-pad) !important;
+  bottom: var(--p3-switch-pad) !important;
+  left: var(--p3-switch-pad) !important;
+  width: calc((100% - (var(--p3-switch-pad) * 2) - var(--p3-switch-gap)) / 2) !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.36) !important;
+  box-shadow:
+    0 10px 22px rgba(14, 165, 233, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+  transform: translateX(0) !important;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 220ms ease,
+    box-shadow 220ms ease !important;
+}
+
+.exam-actions .p1-mode-switch.high-intensity::before,
+.p3-mode-row .p3-mode-switch.high-intensity::before {
+  background: linear-gradient(135deg, #f97316 0%, #ef4444 100%) !important;
+  box-shadow:
+    0 10px 22px rgba(239, 68, 68, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+  transform: translateX(calc(100% + var(--p3-switch-gap))) !important;
+}
+
+/* Dark TRACK behind the 标准/压力 toggle only in dark theme. In light theme the
+   track must stay light regardless of standard/pressure — only the sliding pill
+   changes colour — so these dark-track rules are scoped to body.theme-dark. */
+body.theme-dark .exam-actions .p1-mode-switch.high-intensity,
+body.theme-dark .p3-mode-row .p3-mode-switch.high-intensity {
+  background: linear-gradient(180deg, rgba(11, 20, 31, 0.94), rgba(7, 13, 22, 0.98)) !important;
+  border-color: rgba(125, 211, 252, 0.2) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(15, 23, 42, 0.22) !important;
+}
+
+body.theme-dark .exam-actions .p1-mode-switch.high-intensity .p3-mode-option,
+body.theme-dark .p3-mode-row .p3-mode-switch.high-intensity .p3-mode-option {
+  color: #9fb0c2 !important;
+}
+
+.exam-actions .p1-mode-switch.high-intensity .p3-mode-option.active,
+.p3-mode-row .p3-mode-switch.high-intensity .p3-mode-option.active {
+  color: #f8fafc !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28) !important;
+}
+
+/* LIGHT-mode pressure pill: vivid orange→red so the white active label pops on the
+   light track. (The muddy dark-amber #b45309 was for the dark track and made the
+   label read as dull grey on light — dark theme keeps it via the body.theme-dark
+   override below.) */
+.exam-actions .p1-mode-switch.high-intensity::before,
+.p3-mode-row .p3-mode-switch.high-intensity::before {
+  background: linear-gradient(135deg, #f97316 0%, #ef4444 100%) !important;
+  border-color: rgba(255, 255, 255, 0.36) !important;
+  box-shadow:
+    0 10px 22px rgba(239, 68, 68, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+}
+
+.exam-actions .p1-mode-switch .p3-mode-option,
+.p3-mode-row .p3-mode-option {
+  position: relative !important;
+  z-index: 1 !important;
+  min-width: 0 !important;
+  min-height: 46px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 15px !important;
+  font-weight: 820 !important;
+  letter-spacing: 0 !important;
+  padding: 0 14px !important;
+  white-space: nowrap !important;
+  transform: none !important;
+  transition:
+    color 180ms ease,
+    transform 180ms ease,
+    background 180ms ease !important;
+}
+
+.exam-actions .p1-mode-switch .p3-mode-option {
+  min-height: 36px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+}
+
+.exam-actions .p1-mode-switch .p3-mode-option.active,
+.p3-mode-row .p3-mode-option.active {
+  background: transparent !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  transform: translateY(-1px) !important;
+}
+
+.practice-panel.p1-started .p1-mode-switch,
+.exam-actions .p1-mode-switch.is-collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  opacity: 0 !important;
+  transform: translateX(10px) scale(0.96) !important;
+  pointer-events: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-width: 0 !important;
+}
+
+.exam-status.pressure-header-shell {
+  isolation: isolate !important;
+  overflow: visible !important;
+  margin: -18px -18px 0 !important;
+  padding: 18px 18px 8px !important;
+  width: calc(100% + 36px) !important;
+  height: 82px !important;
+  min-height: 82px !important;
+  border-radius: 12px 12px 0 0 !important;
+  border-bottom-color: color-mix(in srgb, var(--accent) 28%, var(--line)) !important;
+  background-color: transparent !important;
+  transition:
+    background-color 620ms ease,
+    border-color 520ms ease,
+    box-shadow 520ms ease !important;
+  box-shadow: none !important;
+}
+
+.exam-status.p1-pixel-flow {
+  isolation: isolate !important;
+  /* Pressure-header-shell makes the background transparent, so in LIGHT theme the
+     page bleeds through the canvas's 2px grid gaps and turns the pixel-flow grey —
+     which is why light pressure mode looked different from dark. Lay a solid dark
+     backdrop (same in both themes) so the pixel grid always renders on dark, exactly
+     like dark mode. The backdrop is gated on .p1-pixel-flow-visible (below) with the
+     transition living HERE on the persistent class, so it FADES out instead of
+     snapping when the flow ends. */
+  transition: background-color 1180ms ease !important;
+}
+
+.exam-status.p1-pixel-flow.p1-pixel-flow-visible {
+  background-color: #0a1322 !important;
+}
+
+.exam-status.p1-pixel-flow .p2-pixel-flow-canvas {
+  top: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 0 !important;
+  z-index: 1 !important;
+  opacity: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  inline-size: 100% !important;
+  block-size: 100% !important;
+  image-rendering: pixelated;
+  filter: saturate(2.15) brightness(1.95) contrast(1.18);
+  transition: opacity 1180ms ease !important;
+  /* The header keeps overflow:visible (for floating bits), so the rectangular
+     canvas corner pokes past the rounded top corners. Round the canvas itself to
+     the header's radius so no stray pixel escapes the corner. */
+  border-radius: 12px 12px 0 0 !important;
+}
+
+.exam-status.p1-pixel-flow.p1-pixel-flow-visible .p2-pixel-flow-canvas {
+  opacity: 1 !important;
+  animation: p1PixelFlowIgnite 3000ms linear both !important;
+}
+
+.exam-status.p1-pixel-flow::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2 !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  border-radius: 12px 12px 0 0 !important;
+  background:
+    linear-gradient(90deg, rgba(8, 14, 24, 0.32), rgba(8, 14, 24, 0.02) 46%, rgba(8, 14, 24, 0.26)),
+    linear-gradient(180deg, rgba(8, 14, 24, 0.12), rgba(8, 14, 24, 0.24)),
+    rgba(6, 16, 28, 0.36) !important;
+  transition:
+    opacity 1180ms ease,
+    background 1180ms ease !important;
+}
+
+.exam-status.p1-pixel-flow.p1-pixel-flow-visible::before {
+  opacity: 1 !important;
+}
+
+@keyframes p1PixelFlowIgnite {
+  0% {
+    filter: saturate(1.45) brightness(1.08) contrast(1.04);
+  }
+  33.33% {
+    filter: saturate(3.15) brightness(3.65) contrast(1.34);
+  }
+  48% {
+    filter: saturate(2.48) brightness(2.28) contrast(1.22);
+  }
+  66% {
+    filter: saturate(2.24) brightness(2.02) contrast(1.19);
+  }
+  84% {
+    filter: saturate(2.18) brightness(1.97) contrast(1.18);
+  }
+  100% {
+    filter: saturate(2.15) brightness(1.95) contrast(1.18);
+  }
+}
+
+.exam-status.p1-pixel-flow #examStatusText,
+.exam-status.p1-pixel-flow .exam-actions,
+.exam-status.p1-pixel-flow .p2-corpus-prep {
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+.exam-status #progressTrack,
+.exam-status #phaseLabel {
+  transition:
+    color 680ms ease,
+    text-shadow 680ms ease !important;
+}
+
+.exam-status.p1-pixel-flow.p1-pixel-flow-visible #progressTrack,
+.exam-status.p1-pixel-flow.p1-pixel-flow-visible #phaseLabel {
+  color: #f8fafc !important;
+  text-shadow:
+    0 1px 0 rgba(2, 6, 23, 0.6),
+    0 0 12px rgba(14, 165, 233, 0.18) !important;
+}
+
+.practice-panel.p3-starting #practiceGrid {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.theme-dark .exam-actions .p1-mode-switch,
+body.theme-dark .p3-mode-row .p3-mode-switch {
+  background: linear-gradient(180deg, rgba(11, 20, 31, 0.94), rgba(7, 13, 22, 0.98)) !important;
+  border-color: rgba(125, 211, 252, 0.2) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(15, 23, 42, 0.22) !important;
+}
+
+body.theme-dark .exam-actions .p1-mode-switch::before,
+body.theme-dark .p3-mode-row .p3-mode-switch::before {
+  background: linear-gradient(135deg, #0f766e 0%, #2563eb 100%) !important;
+  border-color: rgba(125, 211, 252, 0.34) !important;
+  box-shadow:
+    0 0 0 1px rgba(125, 211, 252, 0.12),
+    0 12px 30px rgba(37, 99, 235, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+body.theme-dark .exam-actions .p1-mode-switch.high-intensity::before,
+body.theme-dark .p3-mode-row .p3-mode-switch.high-intensity::before {
+  background: linear-gradient(135deg, #b45309 0%, #be123c 100%) !important;
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, 0.12),
+    0 12px 30px rgba(190, 18, 60, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+body.theme-dark .exam-actions .p1-mode-switch .p3-mode-option,
+body.theme-dark .p3-mode-row .p3-mode-option {
+  color: #9fb0c2 !important;
+}
+
+body.theme-dark .exam-actions .p1-mode-switch .p3-mode-option.active,
+body.theme-dark .p3-mode-row .p3-mode-option.active {
+  color: #f8fafc !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28) !important;
+}
+
+body.theme-dark .exam-status.p1-pixel-flow::before {
+  background:
+    linear-gradient(90deg, rgba(8, 14, 24, 0.32), rgba(8, 14, 24, 0.02) 46%, rgba(8, 14, 24, 0.26)),
+    linear-gradient(180deg, rgba(8, 14, 24, 0.12), rgba(8, 14, 24, 0.24)),
+    rgba(6, 16, 28, 0.36) !important;
+}
+
+/* Final guard for the reused P1/P3 segmented mode switch: selected labels must
+   stay readable on the sliding pill, especially when switching to 追问压力. */
+.exam-actions .p1-mode-switch .p3-mode-option.active,
+.exam-actions .p1-mode-switch.high-intensity .p3-mode-option.active,
+.p3-mode-row .p3-mode-switch .p3-mode-option.active,
+.p3-mode-row .p3-mode-switch.high-intensity .p3-mode-option.active,
+body.theme-dark .exam-actions .p1-mode-switch .p3-mode-option.active,
+body.theme-dark .exam-actions .p1-mode-switch.high-intensity .p3-mode-option.active,
+body.theme-dark .p3-mode-row .p3-mode-switch .p3-mode-option.active,
+body.theme-dark .p3-mode-row .p3-mode-switch.high-intensity .p3-mode-option.active {
+  color: #ffffff !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.34) !important;
+}
+
+.exam-status {
+  transition:
+    background-color 620ms ease,
+    border-color 520ms ease,
+    box-shadow 520ms ease !important;
+}
+
+/* ── P3 launch-screen 训练强度 box pixel-flow (mirrors the P1 header) ─────────
+   Switching to 追问压力 ignites the whole .p3-mode-row box background, reusing the
+   same @keyframes p1PixelFlowIgnite + .p2-pixel-flow-canvas as the P1 header. */
+.p3-mode-row.p3-pixel-flow {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Dark backdrop so the pixel grid renders on dark in BOTH themes (the box's own
+     light --panel would otherwise bleed through the grid gaps in light mode). Gated
+     on .p3-pixel-flow-visible with the transition on this persistent class so the
+     backdrop FADES back to the panel colour instead of snapping when flow ends. */
+  transition: background-color 1180ms ease;
+}
+
+.p3-mode-row.p3-pixel-flow.p3-pixel-flow-visible {
+  background-color: #0a1322 !important;
+}
+
+.p3-mode-row.p3-pixel-flow .p2-pixel-flow-canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  z-index: 0 !important;
+  opacity: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  inline-size: 100% !important;
+  block-size: 100% !important;
+  pointer-events: none !important;
+  image-rendering: pixelated;
+  filter: saturate(2.15) brightness(1.95) contrast(1.18);
+  transition: opacity 1180ms ease !important;
+  border-radius: inherit !important;
+}
+
+.p3-mode-row.p3-pixel-flow.p3-pixel-flow-visible .p2-pixel-flow-canvas {
+  opacity: 1 !important;
+  animation: p1PixelFlowIgnite 3000ms linear both !important;
+}
+
+.p3-mode-row.p3-pixel-flow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(8, 14, 24, 0.32), rgba(8, 14, 24, 0.02) 46%, rgba(8, 14, 24, 0.26)),
+    linear-gradient(180deg, rgba(8, 14, 24, 0.12), rgba(8, 14, 24, 0.24)),
+    rgba(6, 16, 28, 0.36);
+  transition: opacity 1180ms ease;
+}
+
+.p3-mode-row.p3-pixel-flow.p3-pixel-flow-visible::after {
+  opacity: 1;
+}
+
+/* Keep the label / switch / help above both the canvas and the wash. */
+.p3-mode-row.p3-pixel-flow > * {
+  position: relative;
+  z-index: 2;
+}
+
+.p3-mode-row.p3-pixel-flow.p3-pixel-flow-visible .p3-launch-label,
+.p3-mode-row.p3-pixel-flow.p3-pixel-flow-visible .p3-mode-help {
+  color: #f8fafc !important;
+  text-shadow:
+    0 1px 0 rgba(2, 6, 23, 0.6),
+    0 0 12px rgba(14, 165, 233, 0.18) !important;
+}
+
+/* Re-entry animation when returning to the P3 options panel (e.g. after cancel). */
+.p3-topic-panel.p3-launch-enter {
+  animation: practiceEnter 240ms ease-out;
+}
+
+/* Takeaway review mascot: keep the pixel brain as a true floating layer.
+   It is appended beside the card during review, but it must never change the
+   masonry measurement or push neighbouring UI when the animation appears. */
+body.view-takeawayBook .language-takeaway-card-wrap,
+body.view-writingTakeawayBook .language-takeaway-card-wrap {
+  position: relative !important;
+}
+
+body.view-takeawayBook .language-takeaway-card-wrap > .takeaway-review-mascot,
+body.view-writingTakeawayBook .language-takeaway-card-wrap > .takeaway-review-mascot {
+  position: absolute !important;
+  display: block !important;
+  right: 13px !important;
+  bottom: 12px !important;
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  min-height: 42px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: translateX(-1px) !important;
+  pointer-events: none !important;
+  overflow: visible !important;
+  z-index: 8 !important;
+  contain: layout style !important;
+}
+
+body.view-takeawayBook .language-takeaway-card-wrap > .takeaway-review-mascot .tk-brain-icon,
+body.view-writingTakeawayBook .language-takeaway-card-wrap > .takeaway-review-mascot .tk-brain-icon {
+  width: 42px !important;
+  height: 42px !important;
+  transform-origin: 50% 50% !important;
+}
+
+/* P2/P1/P3 peek buttons and question progress: soften runtime appearance changes. */
+.exam-actions .p1-corpus-peek-button,
+.practice-header-progress {
+  transition:
+    opacity 220ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 220ms ease,
+    box-shadow 220ms ease !important;
+}
+
+.exam-actions .p1-corpus-peek-button.peek-button-entering {
+  animation: peekButtonEnter 420ms cubic-bezier(0.18, 1.25, 0.28, 1) both !important;
+}
+
+.exam-actions .p1-corpus-peek-button.peek-button-leaving {
+  opacity: 0 !important;
+  transform: translateY(-7px) scale(0.72) rotate(-8deg) !important;
+  filter: blur(1px) saturate(1.12) brightness(1.08) !important;
+  pointer-events: none !important;
+}
+
+@keyframes peekButtonEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.58) rotate(-12deg);
+    filter: blur(2px) saturate(0.92) brightness(1.18);
+  }
+  38% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.18) rotate(5deg);
+    filter: blur(0) saturate(1.18) brightness(1.16);
+  }
+  68% {
+    opacity: 1;
+    transform: translateY(1px) scale(0.96) rotate(-2deg);
+    filter: blur(0) saturate(1.08) brightness(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: none;
+  }
+}
+
+.practice-header-progress {
+  min-width: 48px !important;
+  min-height: 28px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 999px !important;
+  font-variant-numeric: tabular-nums !important;
+  will-change: transform, opacity !important;
+}
+
+.practice-header-progress.hidden {
+  display: none !important;
+}
+
+.practice-header-progress.practice-header-progress-entering {
+  animation: practiceProgressEnter 220ms ease-out both !important;
+}
+
+.practice-header-progress.practice-header-progress-leaving {
+  opacity: 0 !important;
+  transform: translateY(-5px) scale(0.9) !important;
+  pointer-events: none !important;
+}
+
+.practice-header-progress.practice-header-progress-pulse {
+  animation: practiceProgressPulse 260ms ease-out both !important;
+}
+
+@keyframes practiceProgressEnter {
+  from { opacity: 0; transform: translateY(-5px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes practiceProgressPulse {
+  0% { transform: translateY(0) scale(0.96); }
+  55% { transform: translateY(-1px) scale(1.055); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* P3 start: immediate feedback while wallet/start-attempt round trips finish. */
+.practice-panel.p3-starting .p3-topic-panel {
+  position: relative !important;
+}
+
+.practice-panel.p3-starting .p3-start-row {
+  position: relative !important;
+  padding-bottom: 11px !important;
+}
+
+.practice-panel.p3-starting .p3-start-row::after {
+  content: "" !important;
+  position: absolute !important;
+  right: 2px !important;
+  bottom: 0 !important;
+  left: 2px !important;
+  height: 3px !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(20, 184, 166, 0.22) 28%, rgba(14, 165, 233, 0.68) 50%, rgba(20, 184, 166, 0.22) 72%, transparent 100%),
+    color-mix(in srgb, var(--accent) 10%, var(--line)) !important;
+  background-size: 190% 100%, 100% 100% !important;
+  animation: p3StartProgressSweep 1.05s linear infinite !important;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 26%, transparent) !important;
+}
+
+.p3-start-button.is-starting {
+  position: relative !important;
+  opacity: 1 !important;
+  cursor: wait !important;
+  overflow: hidden !important;
+  box-shadow:
+    0 12px 26px color-mix(in srgb, var(--accent) 26%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
+}
+
+.p3-start-button.is-starting::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit !important;
+  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.26) 44%, transparent 68%) !important;
+  transform: translateX(-120%) !important;
+  animation: p3StartButtonSheen 1.25s ease-in-out infinite !important;
+  pointer-events: none !important;
+}
+
+.practice-panel.p3-starting #p3PlanStatus {
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink)) !important;
+}
+
+@keyframes p3StartProgressSweep {
+  from { background-position: 190% 0, 0 0; }
+  to { background-position: -190% 0, 0 0; }
+}
+
+@keyframes p3StartButtonSheen {
+  0% { transform: translateX(-120%); }
+  58%, 100% { transform: translateX(120%); }
+}
+
+/* Scoped dark fix: only the third/popular dark theme swaps its pale blue for
+   the darker blue from the reference image. Do not touch P1/P3 intensity
+   switches here; they keep their existing theme-specific colors and motion. */
+body.theme-dark.font-popular {
+  --popular-dark-blue: #184870;
+  --popular-dark-blue-strong: #0f3e62;
+  --popular-dark-blue-soft: rgba(24, 72, 112, 0.22);
+  --accent: var(--popular-dark-blue);
+  --accent-dark: var(--popular-dark-blue-strong);
+  --blue: var(--popular-dark-blue);
+  --chrome-active: linear-gradient(180deg, #235b86, #184870 62%, #0f3e62);
+  --chrome-active-text: #f4faff;
+  --chrome-border-strong: rgba(93, 153, 197, 0.54);
+  --chrome-glow: rgba(24, 72, 112, 0.28);
+  --dark-primary: var(--popular-dark-blue);
+  --dark-primary-strong: var(--popular-dark-blue-strong);
+  --dark-primary-soft: var(--popular-dark-blue-soft);
+  --ds-l1-border: rgba(24, 72, 112, 0.38);
+  --ds-l2-border: rgba(56, 111, 153, 0.34);
+  --prompt-card-border: rgba(93, 153, 197, 0.30);
+  --prompt-card-border-strong: rgba(93, 153, 197, 0.58);
+  --prompt-card-hover: #173754;
+  --prompt-chip-hover: #173754;
+  --prompt-active-bg: rgba(24, 72, 112, 0.24);
+  --prompt-active-text: #eaf6ff;
+  --prompt-active-shadow: rgba(24, 72, 112, 0.24);
+}
+
+body.theme-dark.font-popular .user-avatar {
+  background: linear-gradient(180deg, #235b86 0%, #184870 60%, #0f3e62 100%) !important;
+  border-color: rgba(123, 161, 190, 0.34) !important;
+  color: #eef7ff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 24px rgba(0, 0, 0, 0.34) !important;
+}
+
+body.theme-dark.font-popular .writing-prompt-modal-toolbar .writing-task-switch::before,
+body.theme-dark.font-popular .writing-topbar-actions .writing-task-switch::before {
+  background: linear-gradient(180deg, #235b86 0%, #184870 62%, #0f3e62 100%) !important;
+  border-color: rgba(93, 153, 197, 0.54) !important;
+  box-shadow: 0 10px 24px rgba(24, 72, 112, 0.28) !important;
+}
+
+body.theme-dark.font-popular .writing-prompt-modal-toolbar .writing-task-option.active,
+body.theme-dark.font-popular .writing-topbar-actions .writing-task-option.active {
+  color: #f4faff !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .writing-prompt-modal-toolbar .writing-task-switch::before,
+body.theme-dark:not(.font-academic):not(.font-popular) .writing-topbar-actions .writing-task-switch::before {
+  background: linear-gradient(180deg, #8cf2c9 0%, #34d399 58%, #10b981 100%) !important;
+  border-color: rgba(167, 243, 208, 0.56) !important;
+  box-shadow: 0 10px 24px rgba(52, 211, 153, 0.26) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .writing-prompt-modal-toolbar .writing-task-option.active,
+body.theme-dark:not(.font-academic):not(.font-popular) .writing-topbar-actions .writing-task-option.active {
+  color: #06140f !important;
+  text-shadow: none !important;
+}
+
+body.theme-dark.font-popular .writing-prompt-modal-card {
+  --prompt-card-border: rgba(93, 153, 197, 0.30);
+  --prompt-card-border-strong: rgba(93, 153, 197, 0.58);
+  --prompt-card-hover: #173754;
+  --prompt-chip-hover: #173754;
+  --prompt-active-bg: rgba(24, 72, 112, 0.24);
+  --prompt-active-text: #eaf6ff;
+  --prompt-active-shadow: rgba(24, 72, 112, 0.24);
+  border-color: rgba(93, 153, 197, 0.28) !important;
+}
+
+body.theme-dark.font-popular .account-action-button-primary,
+body.theme-dark.font-popular .account-action-button-accent,
+body.theme-dark.font-popular .p3-generate-button:not(:disabled),
+body.theme-dark.font-popular .p3-start-button:not(:disabled),
+body.theme-dark.font-popular .p3-bank-entry-btn,
+body.theme-dark.font-popular .writing-submit-row button,
+body.theme-dark.font-popular .agent-assistant-input-row button,
+body.theme-dark.font-popular .agent-result-open,
+body.theme-dark.font-popular .recharge-dialog-confirm,
+body.theme-dark.font-popular .writing-paragraph-modal-body button,
+body.theme-dark.font-popular .writing-score-complete-body button,
+body.theme-dark.font-popular .language-takeaway-action-buttons button:last-child {
+  background: linear-gradient(180deg, #235b86 0%, #184870 62%, #0f3e62 100%) !important;
+  border-color: rgba(93, 153, 197, 0.46) !important;
+  color: #f4faff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 14px 30px rgba(0, 0, 0, 0.28),
+    0 0 24px rgba(24, 72, 112, 0.20) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .account-action-button-primary,
+body.theme-dark:not(.font-academic):not(.font-popular) .account-action-button-accent,
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-generate-button:not(:disabled),
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-start-button:not(:disabled),
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-entry-btn,
+body.theme-dark:not(.font-academic):not(.font-popular) .writing-submit-row button,
+body.theme-dark:not(.font-academic):not(.font-popular) .agent-assistant-input-row button,
+body.theme-dark:not(.font-academic):not(.font-popular) .agent-result-open,
+body.theme-dark:not(.font-academic):not(.font-popular) .recharge-dialog-confirm,
+body.theme-dark:not(.font-academic):not(.font-popular) .writing-paragraph-modal-body button,
+body.theme-dark:not(.font-academic):not(.font-popular) .writing-score-complete-body button,
+body.theme-dark:not(.font-academic):not(.font-popular) .language-takeaway-action-buttons button:last-child {
+  background: linear-gradient(180deg, #8cf2c9 0%, #34d399 58%, #10b981 100%) !important;
+  border-color: rgba(167, 243, 208, 0.52) !important;
+  color: #06140f !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 14px 30px rgba(0, 0, 0, 0.24),
+    0 0 24px rgba(52, 211, 153, 0.18) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-source-option:hover,
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-focus-option:hover,
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-picker-card:hover,
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-picker-card:focus-visible {
+  background: color-mix(in srgb, var(--ds-l2-bg) 84%, #34d399) !important;
+  border-color: rgba(110, 231, 183, 0.48) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-source-option.active,
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-focus-option.active,
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-picker-card.active {
+  background: color-mix(in srgb, var(--ds-l2-bg) 82%, #34d399) !important;
+  border-color: rgba(167, 243, 208, 0.54) !important;
+  color: #eafff7 !important;
+}
+
+body.theme-dark.font-popular .p3-source-option:hover,
+body.theme-dark.font-popular .p3-focus-option:hover,
+body.theme-dark.font-popular .p3-bank-picker-card:hover,
+body.theme-dark.font-popular .p3-bank-picker-card:focus-visible {
+  background: color-mix(in srgb, var(--ds-l2-bg) 84%, #184870) !important;
+  border-color: rgba(76, 137, 183, 0.50) !important;
+}
+
+body.theme-dark.font-popular .p3-source-option.active,
+body.theme-dark.font-popular .p3-focus-option.active,
+body.theme-dark.font-popular .p3-bank-picker-card.active {
+  background: color-mix(in srgb, var(--ds-l2-bg) 82%, #184870) !important;
+  border-color: rgba(93, 153, 197, 0.56) !important;
+  color: #eaf6ff !important;
+}
+
+body.theme-dark.font-popular .writing-picker-chip,
+body.theme-dark.font-popular .writing-pill,
+body.theme-dark.font-popular .writing-prompt-status,
+body.theme-dark.font-popular .history-item-band,
+body.theme-dark.font-popular .writing-saved-answer-head span,
+body.theme-dark.font-popular .agent-result-score,
+body.theme-dark.font-popular .p3-skill-item span,
+body.theme-dark.font-popular .topic-chip.active {
+  background: rgba(24, 72, 112, 0.22) !important;
+  border-color: rgba(93, 153, 197, 0.34) !important;
+  color: #d4ebfb !important;
+}
+
+body.theme-dark.font-popular {
+  --tone-p1-bg: #1f8f61;
+  --tone-p1-border: #5ee0a0;
+  --tone-p1-fg: #f4fff9;
+  --tone-p2-bg: #2c6e9e;
+  --tone-p2-border: #7ebae2;
+  --tone-p2-fg: #f1f9ff;
+  --tone-p3-bg: #6b4fc7;
+  --tone-p3-border: #b7a7ff;
+  --tone-p3-fg: #fbf9ff;
+}
+
+body.theme-dark.font-popular .nav-exam-group .nav-pgroup {
+  border-top-color: rgba(225, 229, 235, 0.18) !important;
+}
+
+body.theme-dark.font-popular .nav-exam-group .nav-pgroup-item[data-view="p1"].active {
+  background: linear-gradient(180deg, #27a873 0%, #1f8f61 100%) !important;
+  border-color: rgba(94, 224, 160, 0.66) !important;
+  color: #f4fff9 !important;
+  box-shadow: 0 8px 18px rgba(31, 143, 97, 0.24) !important;
+}
+
+body.theme-dark.font-popular .nav-exam-group .nav-pgroup-item[data-view="p2"].active {
+  background: linear-gradient(180deg, #347fb4 0%, #2c6e9e 100%) !important;
+  border-color: rgba(126, 186, 226, 0.72) !important;
+  color: #f1f9ff !important;
+  box-shadow: 0 8px 18px rgba(44, 110, 158, 0.26) !important;
+}
+
+body.theme-dark.font-popular .nav-exam-group .nav-pgroup-item[data-view="p3"].active {
+  background: linear-gradient(180deg, #7b63da 0%, #6b4fc7 100%) !important;
+  border-color: rgba(183, 167, 255, 0.72) !important;
+  color: #fbf9ff !important;
+  box-shadow: 0 8px 18px rgba(107, 79, 199, 0.28) !important;
+}
+
+body.theme-dark.font-popular .nav-exam-group .nav-pgroup-item[data-view="p1"]:not(.active):hover {
+  color: #8df0bc !important;
+  background: rgba(31, 143, 97, 0.18) !important;
+}
+
+body.theme-dark.font-popular .nav-exam-group .nav-pgroup-item[data-view="p2"]:not(.active):hover {
+  color: #a9d8f2 !important;
+  background: rgba(44, 110, 158, 0.20) !important;
+}
+
+body.theme-dark.font-popular .nav-exam-group .nav-pgroup-item[data-view="p3"]:not(.active):hover {
+  color: #cec4ff !important;
+  background: rgba(107, 79, 199, 0.20) !important;
+}
+
+body.theme-dark .writing-frame-hint {
+  color: rgba(230, 241, 250, 0.72) !important;
+}
+
+body.theme-dark .writing-frame-hint-lead {
+  color: rgba(248, 250, 252, 0.90) !important;
+}
+
+body.theme-dark .writing-frame-hint-dot {
+  color: rgba(230, 241, 250, 0.56) !important;
+  opacity: 1 !important;
+}
+
+body.theme-dark .writing-frame-cmd {
+  color: color-mix(in srgb, var(--accent) 42%, #f4faff) !important;
+}
+
+body.theme-dark .writing-frame-cmd code {
+  background: color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.08)) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, rgba(255, 255, 255, 0.12)) !important;
+  color: inherit !important;
+}
+
+body.theme-dark .writing-frame-cmd:hover {
+  color: color-mix(in srgb, var(--accent) 30%, #ffffff) !important;
+}
+
+body.theme-dark .writing-frame-cmd:hover code {
+  background: color-mix(in srgb, var(--accent) 32%, rgba(255, 255, 255, 0.10)) !important;
+}
+
+/* Dark spelling surfaces: remove light cards without forcing every theme blue.
+   Accent colors still come from the active theme via --sd-accent. */
+body.theme-dark .spelling-drill-panel {
+  --sd-bg: #071119;
+  --sd-card: color-mix(in srgb, var(--dark-panel-top) 82%, #071119);
+  --sd-card-soft: color-mix(in srgb, var(--dark-surface) 84%, #071119);
+  --sd-line: var(--dark-border);
+  background: var(--sd-bg) !important;
+}
+
+body.theme-dark .spelling-drill-shell,
+body.theme-dark .spelling-drill-head,
+body.theme-dark .spelling-scope-switch,
+body.theme-dark .nr-card,
+body.theme-dark .nr-stage,
+body.theme-dark .nr-slot,
+body.theme-dark .nr-answer,
+body.theme-dark .nr-lib-item,
+body.theme-dark .spelling-add-card {
+  background: var(--sd-card) !important;
+  border-color: var(--sd-line) !important;
+  color: var(--sd-ink) !important;
+}
+
+body.theme-dark .spelling-drill-panel .nr-input,
+body.theme-dark .spelling-drill-panel .nr-inline-answer,
+body.theme-dark .spelling-add-word,
+body.theme-dark .spelling-add-gloss {
+  background: var(--sd-card-soft) !important;
+  border-color: color-mix(in srgb, var(--sd-accent) 30%, var(--sd-line)) !important;
+  color: var(--sd-ink) !important;
+}
+
+/* Report screens only: neutral black-gray backgrounds. Do not bleed into
+   practice, corpus, spelling, account, or the writing composer. */
+body.theme-dark:has(#historyPanel:not(.hidden)) .workspace,
+body.theme-dark:has(#writingReportsPanel:not(.hidden)) .workspace {
+  background:
+    linear-gradient(180deg, rgba(15, 18, 22, 0.90), rgba(8, 10, 13, 0.96)),
+    #080a0d !important;
+}
+
+body.theme-dark #historyPanel,
+body.theme-dark #writingReportsPanel {
+  background: transparent !important;
+}
+
+body.theme-dark #historyPanel .history-rail-shell,
+body.theme-dark #writingReportsPanel .history-rail-shell,
+body.theme-dark #historyPanel .detail-card,
+body.theme-dark #writingReportsPanel .detail-card,
+body.theme-dark #historyPanel .writing-report-prompt-card,
+body.theme-dark #writingReportsPanel .writing-report-prompt-card,
+body.theme-dark #historyPanel .writing-score-summary-card,
+body.theme-dark #writingReportsPanel .writing-score-summary-card,
+body.theme-dark #historyPanel .speaking-score-summary-card,
+body.theme-dark #writingReportsPanel .speaking-score-summary-card,
+body.theme-dark #historyPanel .writing-saved-report-card,
+body.theme-dark #writingReportsPanel .writing-saved-report-card,
+body.theme-dark #historyPanel .writing-saved-answer-card,
+body.theme-dark #writingReportsPanel .writing-saved-answer-card,
+body.theme-dark #historyPanel .turn-report-card,
+body.theme-dark #writingReportsPanel .turn-report-card {
+  background: linear-gradient(180deg, #171a20 0%, #0f1216 100%) !important;
+  border-color: rgba(225, 229, 235, 0.15) !important;
+}
+
+body.theme-dark #historyPanel .writing-prompt-image,
+body.theme-dark #writingReportsPanel .writing-prompt-image,
+body.theme-dark #historyPanel .writing-report-image,
+body.theme-dark #writingReportsPanel .writing-report-image {
+  background: linear-gradient(180deg, #111418 0%, #0a0c10 100%) !important;
+  border-color: rgba(225, 229, 235, 0.18) !important;
+}
+
+body.theme-dark #historyPanel .writing-prompt-image img,
+body.theme-dark #writingReportsPanel .writing-prompt-image img,
+body.theme-dark #historyPanel .writing-report-image img,
+body.theme-dark #writingReportsPanel .writing-report-image img {
+  background: #0b0d10 !important;
+  border-color: rgba(225, 229, 235, 0.18) !important;
+}
+
+/* Takeaway sections: give "2. 表达替换" a clearer break from the first group. */
+body.view-takeawayBook .takeaway-section-heading:not(:first-child),
+body.view-writingTakeawayBook .takeaway-section-heading:not(:first-child) {
+  margin-top: 34px !important;
+  padding-top: 20px !important;
+  border-top: 1px solid color-mix(in srgb, var(--line) 86%, transparent) !important;
+}
+
+body.theme-dark.view-takeawayBook .takeaway-section-heading:not(:first-child),
+body.theme-dark.view-writingTakeawayBook .takeaway-section-heading:not(:first-child) {
+  border-top-color: rgba(226, 232, 240, 0.18) !important;
+}
+
+/* Corpus pages: one neutral palette across all three themes. This is scoped to
+   corpus workspaces/dialogs only so writing/P3/spelling keep their own themes. */
+body.theme-dark .workspace.corpus-workspace,
+body.theme-dark.font-academic .workspace.corpus-workspace,
+body.theme-dark.font-popular .workspace.corpus-workspace {
+  --corpus-neutral-bg: #0b0e11;
+  --corpus-neutral-panel: #151a1f;
+  --corpus-neutral-panel-2: #101418;
+  --corpus-neutral-line: rgba(214, 222, 228, 0.16);
+  --corpus-neutral-line-strong: rgba(167, 188, 178, 0.30);
+  --corpus-neutral-ink: #edf3ef;
+  --corpus-neutral-muted: rgba(220, 230, 224, 0.66);
+  --corpus-neutral-accent: #8fc7ad;
+  --corpus-neutral-accent-strong: #c8ead9;
+  --corpus-neutral-accent-soft: rgba(143, 199, 173, 0.14);
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)),
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)),
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)),
+body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)),
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)),
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(143, 199, 173, 0.08), transparent 34%),
+    linear-gradient(180deg, #0f1215 0%, #090b0e 100%) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-home-head,
+body.theme-dark .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark .workspace.corpus-workspace .p1-corpus-head,
+body.theme-dark .workspace.corpus-workspace .p2-corpus-head,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-head,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-head,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-corpus-head,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-corpus-head,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card {
+  background:
+    linear-gradient(90deg, rgba(226, 232, 240, 0.038) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(226, 232, 240, 0.030) 1px, transparent 1px),
+    linear-gradient(180deg, var(--corpus-neutral-panel), var(--corpus-neutral-panel-2)) !important;
+  background-size: 28px 28px, 28px 28px, auto !important;
+  border-color: var(--corpus-neutral-line) !important;
+  color: var(--corpus-neutral-ink) !important;
+  box-shadow:
+    7px 9px 0 rgba(0, 0, 0, 0.18),
+    0 22px 56px rgba(0, 0, 0, 0.28) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card-kicker,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-section-head > span,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card h3,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card h3,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-section-head > span,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card h3,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card h3,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-section-head > span,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card h3,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card h3 {
+  color: var(--corpus-neutral-accent-strong) !important;
+  text-shadow: none !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-home-sub,
+body.theme-dark .workspace.corpus-workspace .p1-corpus-head p,
+body.theme-dark .workspace.corpus-workspace .p2-corpus-head p,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-cue,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-cue strong,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card p,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-sub,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head p,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head p,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-cue,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-cue strong,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card p,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-sub,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-corpus-head p,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-corpus-head p,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-cue,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-cue strong,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card p {
+  color: var(--corpus-neutral-muted) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-agent-button,
+body.theme-dark .workspace.corpus-workspace .corpus-head-actions > span,
+body.theme-dark .workspace.corpus-workspace .p1-corpus-entry,
+body.theme-dark .workspace.corpus-workspace .corpus-entry-button,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-action,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card-state,
+body.theme-dark .workspace.corpus-workspace .p2-topic-material-list .p2-add-material-button,
+body.theme-dark .workspace.corpus-workspace .p2-topic-count,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-agent-button,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-head-actions > span,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-entry,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-entry-button,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-action,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card-state,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-topic-material-list .p2-add-material-button,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-topic-count,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-agent-button,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-head-actions > span,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-corpus-entry,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-entry-button,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-action,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card-state,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-topic-material-list .p2-add-material-button,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-topic-count {
+  background: var(--corpus-neutral-accent-soft) !important;
+  border-color: var(--corpus-neutral-line-strong) !important;
+  color: var(--corpus-neutral-accent-strong) !important;
+  box-shadow: none !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-home-card:hover,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card:hover,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card:hover,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card:hover {
+  border-color: color-mix(in srgb, var(--corpus-neutral-accent) 38%, var(--corpus-neutral-line)) !important;
+  box-shadow:
+    8px 10px 0 rgba(0, 0, 0, 0.20),
+    0 24px 60px rgba(0, 0, 0, 0.32) !important;
+}
+
+/* Writing Task 1 prompt images: in dark mode, the padding/transparent area
+   around chart screenshots should not render as a pure white slab. */
+body.theme-dark .writing-prompt-image {
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.035), transparent 34%),
+    linear-gradient(180deg, #11161c 0%, #080b0f 100%) !important;
+  border-color: rgba(226, 232, 240, 0.18) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 18px 48px rgba(0, 0, 0, 0.26) !important;
+}
+
+body.theme-dark .writing-prompt-image img,
+body.theme-dark .writing-prompt-image img.writing-prompt-image-thumb,
+body.theme-dark .writing-report-image img,
+body.theme-dark .writing-image-viewer img {
+  background: #0b0f14 !important;
+  border-color: rgba(226, 232, 240, 0.18) !important;
+}
+
+body.theme-dark .writing-prompt-image-loading {
+  background:
+    linear-gradient(90deg, rgba(20, 27, 35, 0.88) 0%, rgba(35, 45, 55, 0.96) 42%, rgba(20, 27, 35, 0.88) 84%) !important;
+  background-size: 240% 100% !important;
+  color: rgba(226, 232, 240, 0.72) !important;
+}
+
+body.theme-dark .writing-prompt-image-loading span {
+  border-color: rgba(143, 199, 173, 0.20) !important;
+  border-top-color: #8fc7ad !important;
+}
+
+/* Corpus workspace final dark palette: keep P1/P2/corpus landing neutral
+   across all three UI themes, instead of leaking blue/orange/category hues. */
+body.theme-dark .workspace.corpus-workspace,
+body.theme-dark.font-academic .workspace.corpus-workspace,
+body.theme-dark.font-popular .workspace.corpus-workspace {
+  --cat-color: #8fc7ad;
+  --cat-light: rgba(143, 199, 173, 0.14);
+  --cat-mid: rgba(143, 199, 173, 0.34);
+  --cat-readable: #8fc7ad;
+  --cat-readable-strong: #d7efe3;
+  --cat-readable-soft: rgba(143, 199, 173, 0.14);
+  --cat-readable-border: rgba(143, 199, 173, 0.34);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(143, 199, 173, 0.08), transparent 34%),
+    linear-gradient(180deg, #101316 0%, #080a0d 100%) !important;
+}
+
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)),
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)),
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)),
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)),
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)),
+body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(143, 199, 173, 0.08), transparent 34%),
+    linear-gradient(180deg, #101316 0%, #080a0d 100%) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head .corpus-page-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head .corpus-page-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head .corpus-page-kicker {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 72%, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: color-mix(in srgb, var(--p2-corpus-accent) 72%, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-home-title,
+body.theme-dark .workspace.corpus-workspace .p1-corpus-head h2,
+body.theme-dark .workspace.corpus-workspace .p2-corpus-head h2,
+body.theme-dark .workspace.corpus-workspace .corpus-review-lane-head strong,
+body.theme-dark .workspace.corpus-workspace .corpus-home-card strong,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card h3,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card h3,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card h3,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-title,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head h2,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head h2,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-lane-head strong,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-card strong,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card h3,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card h3,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card h3,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-title,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-corpus-head h2,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-corpus-head h2,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-lane-head strong,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-card strong,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card h3,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card h3,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card h3 {
+  color: #eef5f1 !important;
+  text-shadow: none !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-home-sub,
+body.theme-dark .workspace.corpus-workspace .corpus-home-card small,
+body.theme-dark .workspace.corpus-workspace .corpus-review-link small,
+body.theme-dark .workspace.corpus-workspace .p1-corpus-head p,
+body.theme-dark .workspace.corpus-workspace .p2-corpus-head p,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card p,
+body.theme-dark .workspace.corpus-workspace .p1-topic-question-list button,
+body.theme-dark .workspace.corpus-workspace .p2-material-status,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-cue,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-cue strong,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-sub,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-card small,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link small,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head p,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head p,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card p,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-question-list button,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-material-status,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-cue,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-cue strong,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-sub,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-card small,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link small,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-corpus-head p,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-corpus-head p,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card p,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-question-list button,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-material-status,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-cue,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-cue strong {
+  color: rgba(226, 235, 230, 0.70) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-home-head,
+body.theme-dark .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark .workspace.corpus-workspace .corpus-review-link,
+body.theme-dark .workspace.corpus-workspace .p1-corpus-head,
+body.theme-dark .workspace.corpus-workspace .p2-corpus-head,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card,
+body.theme-dark .workspace.corpus-workspace .p2-material-row,
+body.theme-dark .workspace.corpus-workspace .p2-material-entry-button,
+body.theme-dark .workspace.corpus-workspace .p2-topic-empty,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-head,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-material-row,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-material-entry-button,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-topic-empty,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-head,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-corpus-head,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-corpus-head,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-material-row,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-material-entry-button,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-topic-empty {
+  background:
+    linear-gradient(90deg, rgba(226, 232, 240, 0.038) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(226, 232, 240, 0.030) 1px, transparent 1px),
+    linear-gradient(180deg, #171d21 0%, #101417 100%) !important;
+  background-size: 28px 28px, 28px 28px, auto !important;
+  border-color: rgba(214, 222, 228, 0.16) !important;
+  color: #edf3ef !important;
+  box-shadow:
+    7px 9px 0 rgba(0, 0, 0, 0.18),
+    0 22px 56px rgba(0, 0, 0, 0.28) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-review-link,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link {
+  box-shadow: none !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark .workspace.corpus-workspace .corpus-card-cta,
+body.theme-dark .workspace.corpus-workspace .corpus-review-lane-head span,
+body.theme-dark .workspace.corpus-workspace .corpus-review-link b,
+body.theme-dark .workspace.corpus-workspace .corpus-review-link span,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card-kicker,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-section-head > span,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card-state,
+body.theme-dark .workspace.corpus-workspace .p2-topic-count,
+body.theme-dark .workspace.corpus-workspace .p1-topic-count,
+body.theme-dark .workspace.corpus-workspace .p2-material-index,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-card-cta,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-lane-head span,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link b,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link span,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-section-head > span,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card-state,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-topic-count,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-count,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-material-index,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-card-cta,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-lane-head span,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link b,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link span,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-section-head > span,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card-state,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-topic-count,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-count,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-material-index {
+  background: rgba(143, 199, 173, 0.14) !important;
+  border-color: rgba(143, 199, 173, 0.34) !important;
+  color: #d7efe3 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-home-card:hover,
+body.theme-dark .workspace.corpus-workspace .corpus-review-link:hover,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card:hover,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card:hover,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card:hover,
+body.theme-dark .workspace.corpus-workspace .p2-material-row:hover,
+body.theme-dark .workspace.corpus-workspace .p2-material-entry-button:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-material-row:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-material-entry-button:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-material-row:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-material-entry-button:hover {
+  border-color: rgba(143, 199, 173, 0.42) !important;
+  background:
+    linear-gradient(90deg, rgba(226, 232, 240, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(226, 232, 240, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, #1a2224 0%, #111719 100%) !important;
+  box-shadow:
+    8px 10px 0 rgba(0, 0, 0, 0.20),
+    0 24px 60px rgba(0, 0, 0, 0.32) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .p1-topic-card header,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card header,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card header,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card header,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card header,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card header,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card header,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card header,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card header {
+  background: transparent !important;
+  border-color: rgba(214, 222, 228, 0.14) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card::before,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card header::before,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card header::before,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card::before,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card header::before,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card header::before,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card::before,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card header::before,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card header::before {
+  background: rgba(143, 199, 173, 0.16) !important;
+  border-color: rgba(143, 199, 173, 0.32) !important;
+  color: #d7efe3 !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-agent-button,
+body.theme-dark .workspace.corpus-workspace .corpus-head-actions > span,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-action,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-action.primary,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-action.is-ready,
+body.theme-dark .workspace.corpus-workspace .p2-topic-material-list .p2-add-material-button,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card .p2-topic-material-list .p2-add-material-button,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-agent-button,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-head-actions > span,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-action,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-action.primary,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-action.is-ready,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-topic-material-list .p2-add-material-button,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card .p2-topic-material-list .p2-add-material-button,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-agent-button,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-head-actions > span,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-action,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-action.primary,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-action.is-ready,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-topic-material-list .p2-add-material-button,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card .p2-topic-material-list .p2-add-material-button {
+  background: rgba(143, 199, 173, 0.12) !important;
+  border-color: rgba(143, 199, 173, 0.30) !important;
+  color: #d7efe3 !important;
+  box-shadow: none !important;
+}
+
+/* Higher-specificity corpus landing guard: the academic dark theme has an
+   older :has(#corpusPanel) warm remap, so match it and neutralize the BOXES. */
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-card,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-lane,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-link,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-card,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-lane,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-link,
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-home-card,
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-lane,
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corpus-review-link {
+  background:
+    linear-gradient(90deg, rgba(226, 232, 240, 0.038) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(226, 232, 240, 0.030) 1px, transparent 1px),
+    linear-gradient(180deg, #171d21 0%, #101417 100%) !important;
+  background-size: 28px 28px, 28px 28px, auto !important;
+  border-color: rgba(214, 222, 228, 0.16) !important;
+}
+
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)),
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)),
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(143, 199, 173, 0.08), transparent 34%),
+    linear-gradient(180deg, #101316 0%, #080a0d 100%) !important;
+}
+
+/* Academic dark report table: keep Question / Your recording cells neutral,
+   matching the right-side report cells instead of the old warm brown fill. */
+body.theme-dark.font-academic .turn-report-table.p1-p3-report-table th:nth-child(1),
+body.theme-dark.font-academic .turn-report-table.p1-p3-report-table th:nth-child(2) {
+  background: #182126 !important;
+  border-color: rgba(157, 183, 173, 0.22) !important;
+  color: #dce7e2 !important;
+}
+
+body.theme-dark.font-academic .turn-report-table.p1-p3-report-table .p1-p3-content-row > td:nth-child(1),
+body.theme-dark.font-academic .turn-report-table.p1-p3-report-table .p1-p3-content-row > td:nth-child(2) {
+  background: linear-gradient(180deg, #12191b, #0e1416) !important;
+  border-color: rgba(157, 183, 173, 0.22) !important;
+  color: #dce7e2 !important;
+}
+
+body.theme-dark.font-academic .turn-report-table.p1-p3-report-table .p1-p3-content-row > td:nth-child(1) .follow-up-pill {
+  background: rgba(143, 199, 173, 0.14) !important;
+  border-color: rgba(143, 199, 173, 0.34) !important;
+  color: #d7efe3 !important;
+}
+
+/* Corpus palette correction: the neutral fill belongs to the large cards and
+   panels, not to the tiny text labels such as P1 / REVIEW / LT / WT. */
+body.theme-dark .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark .workspace.corpus-workspace .corpus-review-lane-head span,
+body.theme-dark .workspace.corpus-workspace .corpus-review-link b,
+body.theme-dark .workspace.corpus-workspace .corpus-review-link span,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-lane-head span,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link b,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link span,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-page-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-card-mark,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-card-type,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-lane-head span,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link b,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link span,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card-kicker {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #d7efe3 !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark .workspace.corpus-workspace .corpus-review-link,
+body.theme-dark .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark .workspace.corpus-workspace .p2-seasonal-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark.font-academic .workspace.corpus-workspace .corpus-review-link,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-seasonal-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-home-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-lane,
+body.theme-dark.font-popular .workspace.corpus-workspace .corpus-review-link,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-topic-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-category-entry-card,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-seasonal-card {
+  background:
+    linear-gradient(90deg, rgba(226, 232, 240, 0.038) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(226, 232, 240, 0.030) 1px, transparent 1px),
+    linear-gradient(180deg, #171d21 0%, #101417 100%) !important;
+  background-size: 28px 28px, 28px 28px, auto !important;
+  border-color: rgba(214, 222, 228, 0.16) !important;
+}
+
+/* Speaking P1/P3 report table: keep dark-theme cells neutral without touching
+   writing reports, P2 editors, or generic table components. */
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table th,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table th,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table th {
+  background: #182126 !important;
+  border-color: rgba(157, 183, 173, 0.22) !important;
+  color: #dce7e2 !important;
+}
+
+/* Recovered corpus-title guard: the neutral corpus-box palette must not turn
+   the P1/P2 page kicker into the same green across every theme. */
+body.theme-dark .workspace.corpus-workspace .p1-corpus-head .corpus-page-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head .corpus-page-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace .p1-corpus-head .corpus-page-kicker {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: color-mix(in srgb, var(--p1-corpus-accent) 72%, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+body.theme-dark .workspace.corpus-workspace .p2-corpus-head .corpus-page-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head .corpus-page-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace .p2-corpus-head .corpus-page-kicker {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: color-mix(in srgb, var(--p2-corpus-accent) 72%, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table td,
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table td.ai-coaching-cell,
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-content-row > td,
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-coaching-row > td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table td.ai-coaching-cell,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-content-row > td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-coaching-row > td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table td.ai-coaching-cell,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-content-row > td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-coaching-row > td {
+  background: linear-gradient(180deg, #12191b, #0e1416) !important;
+  border-color: rgba(157, 183, 173, 0.22) !important;
+  color: #dce7e2 !important;
+}
+
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr:first-child > td,
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr:last-child > td,
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:first-child,
+body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:last-child,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr:first-child > td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr:last-child > td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:first-child,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:last-child,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr:first-child > td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr:last-child > td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:first-child,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:last-child {
+  border-color: rgba(157, 183, 173, 0.22) !important;
+}
+
+/* Light spelling primary action: keep the bright accent fill, but make the
+   label readable on buttons like "提前练（全部词）". */
+body:not(.theme-dark) .spelling-drill-panel .nr-btn-primary {
+  color: #ffffff !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.16) !important;
+}
+
+/* Writing report paragraph table: same neutral dark cell palette as speaking
+   report tables, scoped to the report page only. */
+body.theme-dark #writingReportsPanel .writing-paragraph-report-card .turn-report-wrap,
+body.theme-dark.font-academic #writingReportsPanel .writing-paragraph-report-card .turn-report-wrap,
+body.theme-dark.font-popular #writingReportsPanel .writing-paragraph-report-card .turn-report-wrap {
+  background: #0d1416 !important;
+  border-top-color: rgba(157, 183, 173, 0.20) !important;
+}
+
+body.theme-dark #writingReportsPanel .turn-report-table.writing-paragraph-report-table th,
+body.theme-dark.font-academic #writingReportsPanel .turn-report-table.writing-paragraph-report-table th,
+body.theme-dark.font-popular #writingReportsPanel .turn-report-table.writing-paragraph-report-table th {
+  background: #182126 !important;
+  border-color: rgba(157, 183, 173, 0.22) !important;
+  color: #dce7e2 !important;
+}
+
+body.theme-dark #writingReportsPanel .turn-report-table.writing-paragraph-report-table td,
+body.theme-dark #writingReportsPanel .turn-report-table.writing-paragraph-report-table .writing-paragraph-content-row > td,
+body.theme-dark #writingReportsPanel .turn-report-table.writing-paragraph-report-table .writing-paragraph-coaching-row > td,
+body.theme-dark #writingReportsPanel .turn-report-table.writing-paragraph-report-table td.ai-coaching-cell,
+body.theme-dark.font-academic #writingReportsPanel .turn-report-table.writing-paragraph-report-table td,
+body.theme-dark.font-academic #writingReportsPanel .turn-report-table.writing-paragraph-report-table .writing-paragraph-content-row > td,
+body.theme-dark.font-academic #writingReportsPanel .turn-report-table.writing-paragraph-report-table .writing-paragraph-coaching-row > td,
+body.theme-dark.font-academic #writingReportsPanel .turn-report-table.writing-paragraph-report-table td.ai-coaching-cell,
+body.theme-dark.font-popular #writingReportsPanel .turn-report-table.writing-paragraph-report-table td,
+body.theme-dark.font-popular #writingReportsPanel .turn-report-table.writing-paragraph-report-table .writing-paragraph-content-row > td,
+body.theme-dark.font-popular #writingReportsPanel .turn-report-table.writing-paragraph-report-table .writing-paragraph-coaching-row > td,
+body.theme-dark.font-popular #writingReportsPanel .turn-report-table.writing-paragraph-report-table td.ai-coaching-cell {
+  background: linear-gradient(180deg, #12191b, #0e1416) !important;
+  border-color: rgba(157, 183, 173, 0.22) !important;
+  color: #dce7e2 !important;
+}
+
+/* Writing report prompt cards are reference context, not the main reading
+   surface; keep Task 2 prompt copy compact in the report view. */
+#writingReportsPanel .writing-report-prompt-card.is-task2-report-prompt .writing-report-prompt-text {
+  font-size: clamp(15.5px, 1.08vw, 17px) !important;
+  line-height: 1.58 !important;
+}
+
+#writingReportsPanel .writing-report-prompt-card.is-task2-report-prompt .writing-prompt-fixed-question {
+  font-size: 0.96em !important;
+  line-height: 1.48 !important;
+}
+
+/* P3 in-report move tags: wrapped rows should center as a group, not cling left. */
+.p3-turn-moves {
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+.p3-turn-moves span,
+.p3-turn-moves em {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+body.theme-dark .p3-turn-moves span,
+body.theme-dark.font-academic .p3-turn-moves span,
+body.theme-dark.font-popular .p3-turn-moves span {
+  background: rgba(72, 122, 109, 0.20) !important;
+  border: 1px solid rgba(132, 204, 186, 0.26) !important;
+  color: #a9dccc !important;
+}
+
+body.theme-dark .p3-turn-moves em,
+body.theme-dark.font-academic .p3-turn-moves em,
+body.theme-dark.font-popular .p3-turn-moves em {
+  background: rgba(42, 55, 58, 0.82) !important;
+  border: 1px solid rgba(139, 161, 154, 0.22) !important;
+  color: #b7c8c2 !important;
+}
+
+/* P3 focus cards: center the move labels and keep dark mode soft, not white. */
+.p3-focus-option {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 13px 14px !important;
+  text-align: center !important;
+}
+
+.p3-focus-option::before {
+  left: 50% !important;
+  top: auto !important;
+  bottom: 8px !important;
+  width: 36px !important;
+  height: 3px !important;
+  transform: translateX(-50%) !important;
+}
+
+.p3-focus-option strong,
+.p3-focus-option small {
+  text-align: center !important;
+}
+
+.p3-focus-option small {
+  max-width: 26ch !important;
+}
+
+body.theme-dark .p3-focus-option,
+body.theme-dark.font-academic .p3-focus-option,
+body.theme-dark.font-popular .p3-focus-option {
+  background: rgba(18, 26, 30, 0.92) !important;
+  border-color: rgba(139, 161, 154, 0.22) !important;
+  color: #d7e4df !important;
+}
+
+body.theme-dark .p3-focus-option small,
+body.theme-dark.font-academic .p3-focus-option small,
+body.theme-dark.font-popular .p3-focus-option small {
+  color: #9fb4ad !important;
+}
+
+body.theme-dark .p3-focus-option:hover,
+body.theme-dark.font-academic .p3-focus-option:hover,
+body.theme-dark.font-popular .p3-focus-option:hover {
+  background: rgba(27, 40, 43, 0.96) !important;
+  border-color: rgba(125, 211, 186, 0.34) !important;
+  color: #dff3eb !important;
+}
+
+body.theme-dark .p3-focus-option.active,
+body.theme-dark.font-academic .p3-focus-option.active,
+body.theme-dark.font-popular .p3-focus-option.active {
+  background: linear-gradient(180deg, rgba(33, 64, 58, 0.96), rgba(17, 35, 34, 0.98)) !important;
+  border-color: rgba(125, 211, 186, 0.46) !important;
+  color: #bcebdc !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 186, 0.14),
+    0 12px 24px rgba(0, 0, 0, 0.22) !important;
+}
+
+body.theme-dark .p3-focus-option.active small,
+body.theme-dark.font-academic .p3-focus-option.active small,
+body.theme-dark.font-popular .p3-focus-option.active small {
+  color: #9ed5c5 !important;
+}
+
+body.theme-dark .p3-focus-option.active::before,
+body.theme-dark.font-academic .p3-focus-option.active::before,
+body.theme-dark.font-popular .p3-focus-option.active::before {
+  background: #76d5ba !important;
+}
+
+/* Unified dark redesign for the P3 discussion-skills report block. Keep this
+   scoped to the report skill panel so the three visual themes no longer leak
+   blue/orange/green palettes into this one diagnostic surface. */
+body.theme-dark .detail-card.p3-skills-card,
+body.theme-dark.font-academic .detail-card.p3-skills-card,
+body.theme-dark.font-popular .detail-card.p3-skills-card {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background:
+    linear-gradient(135deg, rgba(17, 24, 31, 0.98), rgba(9, 14, 20, 0.98)),
+    radial-gradient(circle at 10% 0%, rgba(125, 211, 186, 0.10), transparent 32%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 18px 46px rgba(0, 0, 0, 0.26) !important;
+}
+
+body.theme-dark .p3-skills-card .section-label,
+body.theme-dark.font-academic .p3-skills-card .section-label,
+body.theme-dark.font-popular .p3-skills-card .section-label {
+  color: #9fd8c8 !important;
+  background: rgba(125, 211, 186, 0.10) !important;
+  border-color: rgba(125, 211, 186, 0.22) !important;
+}
+
+body.theme-dark .p3-skills-head h3,
+body.theme-dark.font-academic .p3-skills-head h3,
+body.theme-dark.font-popular .p3-skills-head h3 {
+  color: #eef5f2 !important;
+}
+
+body.theme-dark .p3-skills-head p,
+body.theme-dark.font-academic .p3-skills-head p,
+body.theme-dark.font-popular .p3-skills-head p {
+  color: rgba(211, 222, 218, 0.76) !important;
+}
+
+body.theme-dark .p3-skill-highlight,
+body.theme-dark .p3-next-drill,
+body.theme-dark .p3-fix-next,
+body.theme-dark.font-academic .p3-skill-highlight,
+body.theme-dark.font-academic .p3-next-drill,
+body.theme-dark.font-academic .p3-fix-next,
+body.theme-dark.font-popular .p3-skill-highlight,
+body.theme-dark.font-popular .p3-next-drill,
+body.theme-dark.font-popular .p3-fix-next {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  background:
+    linear-gradient(180deg, rgba(24, 34, 41, 0.92), rgba(14, 21, 27, 0.94)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+}
+
+body.theme-dark .p3-skill-highlight span,
+body.theme-dark .p3-next-drill span,
+body.theme-dark .p3-fix-next span,
+body.theme-dark.font-academic .p3-skill-highlight span,
+body.theme-dark.font-academic .p3-next-drill span,
+body.theme-dark.font-academic .p3-fix-next span,
+body.theme-dark.font-popular .p3-skill-highlight span,
+body.theme-dark.font-popular .p3-next-drill span,
+body.theme-dark.font-popular .p3-fix-next span {
+  color: rgba(159, 216, 200, 0.84) !important;
+}
+
+body.theme-dark .p3-skill-highlight strong,
+body.theme-dark .p3-next-drill li,
+body.theme-dark .p3-fix-next strong,
+body.theme-dark.font-academic .p3-skill-highlight strong,
+body.theme-dark.font-academic .p3-next-drill li,
+body.theme-dark.font-academic .p3-fix-next strong,
+body.theme-dark.font-popular .p3-skill-highlight strong,
+body.theme-dark.font-popular .p3-next-drill li,
+body.theme-dark.font-popular .p3-fix-next strong {
+  color: #e6efeb !important;
+}
+
+body.theme-dark .p3-skill-item,
+body.theme-dark.font-academic .p3-skill-item,
+body.theme-dark.font-popular .p3-skill-item {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  background:
+    linear-gradient(180deg, rgba(21, 30, 37, 0.94), rgba(12, 18, 24, 0.96)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.026),
+    0 10px 22px rgba(0, 0, 0, 0.16) !important;
+}
+
+body.theme-dark .p3-skill-item strong,
+body.theme-dark.font-academic .p3-skill-item strong,
+body.theme-dark.font-popular .p3-skill-item strong {
+  color: #eef5f2 !important;
+}
+
+body.theme-dark .p3-skill-item p,
+body.theme-dark .p3-skill-item small,
+body.theme-dark.font-academic .p3-skill-item p,
+body.theme-dark.font-academic .p3-skill-item small,
+body.theme-dark.font-popular .p3-skill-item p,
+body.theme-dark.font-popular .p3-skill-item small {
+  color: rgba(211, 222, 218, 0.74) !important;
+}
+
+body.theme-dark .p3-skill-item span,
+body.theme-dark.font-academic .p3-skill-item span,
+body.theme-dark.font-popular .p3-skill-item span {
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  background: rgba(148, 163, 184, 0.10) !important;
+  color: rgba(226, 236, 232, 0.88) !important;
+}
+
+body.theme-dark .p3-skill-item.strong span,
+body.theme-dark.font-academic .p3-skill-item.strong span,
+body.theme-dark.font-popular .p3-skill-item.strong span {
+  background: rgba(52, 211, 153, 0.13) !important;
+  border-color: rgba(52, 211, 153, 0.28) !important;
+  color: #b8f3d6 !important;
+}
+
+body.theme-dark .p3-skill-item.developing span,
+body.theme-dark.font-academic .p3-skill-item.developing span,
+body.theme-dark.font-popular .p3-skill-item.developing span {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.24) !important;
+  color: #f4d58f !important;
+}
+
+body.theme-dark .p3-skill-item.weak span,
+body.theme-dark.font-academic .p3-skill-item.weak span,
+body.theme-dark.font-popular .p3-skill-item.weak span {
+  background: rgba(248, 113, 113, 0.12) !important;
+  border-color: rgba(248, 113, 113, 0.24) !important;
+  color: #f4b6b6 !important;
+}
+
+/* Report rails: third dark theme keeps cards readable without recoloring global
+   task buttons or the other two themes. */
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab,
+body.theme-dark.font-popular #historyPanel .history-item {
+  background:
+    linear-gradient(180deg, rgba(20, 25, 29, 0.99), rgba(13, 17, 21, 0.99)) !important;
+  border-color: rgba(118, 137, 150, 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 24px rgba(0, 0, 0, 0.22) !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab:hover,
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab.active,
+body.theme-dark.font-popular #historyPanel .history-item:hover,
+body.theme-dark.font-popular #historyPanel .history-item.active {
+  background:
+    linear-gradient(180deg, rgba(21, 31, 38, 0.99), rgba(12, 19, 25, 0.99)) !important;
+  border-color: rgba(70, 151, 211, 0.74) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 2px rgba(70, 151, 211, 0.20),
+    0 14px 30px rgba(0, 0, 0, 0.28) !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-tag,
+body.theme-dark.font-popular #historyPanel .history-item .history-item-tag {
+  background: #d7ecff !important;
+  border: 1px solid rgba(215, 236, 255, 0.45) !important;
+  color: #15608f !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18) !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-tag.p1,
+body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p1 {
+  background: #d7f8e6 !important;
+  border-color: rgba(167, 243, 208, 0.50) !important;
+  color: #116b43 !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-tag.p2,
+body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p2 {
+  background: #d7ecff !important;
+  border-color: rgba(147, 197, 253, 0.50) !important;
+  color: #155e91 !important;
+}
+
+body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p3 {
+  background: #ece6ff !important;
+  border-color: rgba(196, 181, 253, 0.50) !important;
+  color: #5c3eb0 !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-band,
+body.theme-dark.font-popular #historyPanel .history-item .history-item-band {
+  background: rgba(16, 68, 105, 0.92) !important;
+  border: 1px solid rgba(96, 165, 218, 0.40) !important;
+  color: #e8f5ff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab strong,
+body.theme-dark.font-popular #historyPanel .history-item strong {
+  color: #f1f6f8 !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-time,
+body.theme-dark.font-popular #historyPanel .history-item .history-item-time {
+  color: #aebbc2 !important;
+}
+
+/* Writing report detail cleanup: the prompt card should show the task badge and
+   question body, not repeat the long Cambridge/title line, and review text
+   should not sit on a separate tinted rectangle. */
+#writingReportsPanel .writing-report-prompt-card > h2 {
+  display: none !important;
+}
+
+#writingReportsPanel .writing-overall-content,
+#writingReportsPanel .overall-review-content.writing-overall-content {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Third dark theme: keep daily writing surfaces black/graphite. */
+body.theme-dark.font-popular .workspace.writing-workspace {
+  background: #050607 !important;
+}
+
+body.theme-dark.font-popular .workspace.writing-workspace .topbar,
+body.theme-dark.font-popular #writingPanel,
+body.theme-dark.font-popular #writingPanel .writing-shell,
+body.theme-dark.font-popular #writingPanel .writing-calendar-card,
+body.theme-dark.font-popular #writingPanel .writing-editor-card,
+body.theme-dark.font-popular #writingPanel .writing-result-card,
+body.theme-dark.font-popular #writingPanel .writing-prompt-card,
+body.theme-dark.font-popular #writingPanel .writing-score-summary-card,
+body.theme-dark.font-popular #writingPanel .writing-saved-report-card,
+body.theme-dark.font-popular #writingPanel .writing-saved-answer-card,
+body.theme-dark.font-popular #writingPanel .writing-band-card,
+body.theme-dark.font-popular #writingPanel .writing-action-panel,
+body.theme-dark.font-popular #writingPanel .writing-stats-grid div,
+body.theme-dark.font-popular #writingPanel .writing-calendar,
+body.theme-dark.font-popular #writingPanel .writing-day,
+body.theme-dark.font-popular #writingPanel .writing-saved-report-body section,
+body.theme-dark.font-popular #writingPanel .writing-prompt-image,
+body.theme-dark.font-popular #writingPanel .writing-report-image,
+body.theme-dark.font-popular .writing-prompt-modal-card,
+body.theme-dark.font-popular .writing-prompt-pattern-panel,
+body.theme-dark.font-popular .writing-prompt-section,
+body.theme-dark.font-popular .writing-prompt-choice,
+body.theme-dark.font-popular .writing-catalog-slot {
+  background: #080a0c !important;
+  border-color: rgba(226, 232, 240, 0.14) !important;
+  color: #edf4f7 !important;
+  box-shadow: none !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-editor-card,
+body.theme-dark.font-popular #writingPanel .writing-result-card,
+body.theme-dark.font-popular #writingPanel .writing-prompt-card,
+body.theme-dark.font-popular .writing-prompt-modal-card,
+body.theme-dark.font-popular .writing-prompt-choice {
+  background: linear-gradient(180deg, #0b0d10, #050607) !important;
+}
+
+body.theme-dark.font-popular #writingPanel textarea,
+body.theme-dark.font-popular #writingPanel input,
+body.theme-dark.font-popular #writingPanel select,
+body.theme-dark.font-popular #writingPanel .writing-answer,
+body.theme-dark.font-popular .writing-prompt-modal-card input {
+  background: #030405 !important;
+  border-color: rgba(226, 232, 240, 0.16) !important;
+  color: #f2f7fa !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-prompt-choice:hover,
+body.theme-dark.font-popular #writingPanel .writing-prompt-choice.active,
+body.theme-dark.font-popular .writing-prompt-choice:hover,
+body.theme-dark.font-popular .writing-prompt-choice.active {
+  background: linear-gradient(180deg, #11161c, #07090c) !important;
+  border-color: rgba(76, 154, 212, 0.72) !important;
+  box-shadow:
+    inset 3px 0 0 rgba(76, 154, 212, 0.82),
+    0 0 0 1px rgba(76, 154, 212, 0.18) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-pill,
+body.theme-dark.font-popular #writingPanel .writing-picker-chip,
+body.theme-dark.font-popular #writingPanel .writing-prompt-status,
+body.theme-dark.font-popular .writing-prompt-status,
+body.theme-dark.font-popular .writing-prompt-pattern-badge {
+  background: rgba(76, 154, 212, 0.14) !important;
+  border-color: rgba(76, 154, 212, 0.28) !important;
+  color: #dbefff !important;
+}
+
+body.theme-dark.font-popular .workspace.writing-workspace .floating-agent-assistant-trigger {
+  background: linear-gradient(180deg, #0f141a, #07090c) !important;
+  border-color: rgba(168, 199, 250, 0.42) !important;
+  color: #eef7ff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.34) !important;
+}
+
+body.theme-dark.font-popular .workspace.writing-workspace .floating-agent-assistant-trigger svg {
+  stroke: #f2f8ff !important;
+  filter: drop-shadow(0 0 6px rgba(168, 199, 250, 0.38));
+}
+
+body.theme-dark.font-popular .workspace.writing-workspace .floating-agent-assistant-trigger:hover {
+  background: linear-gradient(180deg, #14202b, #090d12) !important;
+  border-color: rgba(168, 199, 250, 0.62) !important;
+}
+
+/* P2 corpus: restore per-category colour and keep hover cheap. The broad
+   neutral corpus guard above is useful for landing cards, but it made the P2
+   bank feel flat and forced expensive full-card repaint shadows on hover. */
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="person"],
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="person"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="person"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"] { --cat-color: #a78bfa; --cat-readable: #ddd6fe; }
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="place"],
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="place"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="place"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"] { --cat-color: #34d399; --cat-readable: #bbf7d0; }
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="event"],
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="event"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="event"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"] { --cat-color: #fbbf24; --cat-readable: #fde68a; }
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="object"],
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="object"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="object"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"] { --cat-color: #38bdf8; --cat-readable: #bae6fd; }
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="special"],
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="special"],
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="special"],
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"] { --cat-color: #f472b6; --cat-readable: #fbcfe8; }
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card,
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--cat-color) 12%, #151b20), #101418) !important;
+  border-left-color: var(--cat-color) !important;
+  border-color: color-mix(in srgb, var(--cat-color) 24%, rgba(214, 222, 228, 0.16)) !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22) !important;
+  transition: border-color 130ms ease, background-color 130ms ease !important;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card:hover,
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card:hover,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card:hover,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card:hover {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--cat-color) 16%, #171f23), #111719) !important;
+  border-color: color-mix(in srgb, var(--cat-color) 42%, rgba(214, 222, 228, 0.18)) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card-kicker,
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card-state,
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card header::before,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card-kicker,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card-state,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card header::before,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card-kicker,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card-state,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card header::before {
+  background: color-mix(in srgb, var(--cat-color) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--cat-color) 36%, transparent) !important;
+  color: var(--cat-readable, #d7efe3) !important;
+}
+
+/* P2 bank body status: only the "正文待填" pill is neutral/dim. The card and
+   category label keep their original category colour. */
+.workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready) {
+  background: rgba(148, 163, 184, 0.12) !important;
+  border-color: rgba(148, 163, 184, 0.36) !important;
+  color: #64748b !important;
+}
+
+.workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready {
+  background: color-mix(in srgb, var(--cat-color, #2563eb) 14%, transparent) !important;
+  border-color: color-mix(in srgb, var(--cat-color, #2563eb) 42%, transparent) !important;
+  color: var(--cat-color, #2563eb) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready),
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready),
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready) {
+  background: rgba(148, 163, 184, 0.10) !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  color: #8996a4 !important;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready,
+body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready,
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready {
+  background: color-mix(in srgb, var(--cat-color, #34d399) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--cat-color, #34d399) 42%, transparent) !important;
+  color: var(--cat-readable, #d7efe3) !important;
+}
+
+/* Third dark theme: selected sidebar items need a visible frame. The deep-blue
+   active fill can blend into the nav background, so add a clear outline like
+   the second dark theme without touching P1/P2/P3's category colours. */
+body.theme-dark.font-popular .nav-button.active:not(.nav-pgroup-item) {
+  background: rgba(24, 72, 112, 0.30) !important;
+  border-color: rgba(139, 191, 230, 0.64) !important;
+  color: #f4faff !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(226, 242, 255, 0.12),
+    0 0 0 1px rgba(24, 72, 112, 0.28),
+    0 8px 18px rgba(0, 0, 0, 0.18) !important;
+}
+
+body.theme-dark.font-popular .nav-button.active:not(.nav-pgroup-item)::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 999px;
+  background: #8bbfe6;
+  box-shadow: 0 0 10px rgba(139, 191, 230, 0.42);
 }

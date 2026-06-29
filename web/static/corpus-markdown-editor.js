@@ -221,7 +221,7 @@
       let editor;
       editor = new Vditor(mount, {
         value: valueAtCreate,
-        mode: "ir",
+        mode: "wysiwyg",
         height: "100%",
         cache: { enable: false },
         counter: { enable: false },

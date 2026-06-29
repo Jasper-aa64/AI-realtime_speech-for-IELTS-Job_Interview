@@ -14,8 +14,29 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" as="style">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
+    <style id="boot-critical-style">
+      html { background: #edf4f1; }
+      html.boot-theme-dark { background: #071119; color-scheme: dark; }
+      body.app-booting { margin: 0; background: #edf4f1; }
+      html.boot-theme-dark body.app-booting { background: #071119; }
+      body.app-booting .shell { visibility: hidden; }
+      body.app-booting.app-boot-ready .shell { visibility: visible; }
+    </style>
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem("ielts-dark-mode") === "1") {
+            document.documentElement.classList.add("theme-dark", "boot-theme-dark");
+            document.documentElement.style.background = "#071119";
+            document.documentElement.style.colorScheme = "dark";
+          }
+        } catch (_error) {
+          /* Theme bootstrap is best-effort; the app will apply its normal theme. */
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
-    <link rel="stylesheet" href="/styles.css?v=20260624-loop-and-dots-9">
+    <link rel="stylesheet" href="/styles.css?v=20260629-md-wysiwyg-undo-stack-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -297,6 +318,11 @@
                   <path d="M10.7 21.75h2.6"></path>
                 </svg>
               </button>
+              <span id="p1ModeHelp" class="p1-mode-help hidden">原题节奏练习</span>
+              <div id="p1ModeSwitch" class="p3-mode-switch p1-mode-switch hidden" role="group" aria-label="Part 1 mode">
+                <button type="button" class="p3-mode-option active" data-p1-intensity="normal">标准模式</button>
+                <button type="button" class="p3-mode-option" data-p1-intensity="high">追问压力</button>
+              </div>
               <button id="openP1CorpusBtn" class="p1-corpus-entry hidden" type="button">
                 <svg aria-hidden="true" viewBox="0 0 24 24">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
@@ -813,7 +839,13 @@
               </div>
             </div>
             <div class="history-rail-window">
-              <div id="historyList" class="history-list">No attempts yet.</div>
+              <div id="historyList" class="history-list">
+                <div class="report-rail-loading-card" role="status" aria-live="polite">
+                  <span class="spinner" aria-hidden="true"></span>
+                  <strong>正在加载口语报告</strong>
+                  <small>正在读取历史记录和报告详情。</small>
+                </div>
+              </div>
             </div>
           </div>
           <article id="detailPanel" class="detail-panel">
@@ -850,17 +882,31 @@
           <label aria-label="原文">
             <textarea id="languageTakeawaySource" spellcheck="true" aria-label="原文"></textarea>
           </label>
-          <label aria-label="中文">
+          <label id="languageTakeawayChineseField" aria-label="中文">
             <textarea id="languageTakeawayChinese" spellcheck="true" aria-label="中文"></textarea>
           </label>
+          <div id="languageTakeawayDictDisplay" class="language-takeaway-dict-display hidden" aria-live="polite"></div>
           <div class="language-takeaway-actions">
             <div class="language-takeaway-actions-left">
               <button id="languageTakeawaySpellingBtn" class="language-takeaway-spelling-btn hidden" type="button" aria-label="加入拼写训练" title="加入拼写训练">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                <span class="lt-spell-icon lt-spell-icon-add" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+                </span>
+                <span class="lt-spell-icon lt-spell-icon-check" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M5 12.5l4 4 10-10"></path></svg>
+                </span>
+                <span class="lt-spell-icon lt-spell-icon-loading" aria-hidden="true"></span>
               </button>
               <span id="languageTakeawayStatus"></span>
             </div>
             <div class="language-takeaway-action-buttons">
+              <button id="languageTakeawayDictToggle" class="language-takeaway-dict-toggle hidden" type="button" aria-label="切换英英/翻译词典" title="切换英英/翻译词典">
+                <span class="dict-toggle-rail" aria-hidden="true">
+                  <span class="dict-toggle-label dict-toggle-label-zh">中</span>
+                  <span class="dict-toggle-label dict-toggle-label-en">EN</span>
+                  <span class="dict-toggle-thumb"></span>
+                </span>
+              </button>
               <button id="writingTakeawaySaveBtn" type="button" class="secondary">加入写作积累</button>
               <button id="languageTakeawaySaveBtn" type="button">加入 Takeaway</button>
             </div>
@@ -1156,10 +1202,17 @@
               </button>
             </header>
             <div class="writing-score-complete-body speaking-score-complete-body">
-              <strong id="speakingScoreCompleteBand">Band —</strong>
-              <div id="speakingScoreCompleteCriteria" class="writing-score-complete-criteria speaking-score-complete-criteria hidden" aria-label="Speaking criterion scores"></div>
+              <div class="score-complete-main speaking-score-complete-main">
+                <div class="score-complete-band speaking-score-complete-band">
+                  <span>OVERALL</span>
+                  <strong id="speakingScoreCompleteBand">Band —</strong>
+                </div>
+                <div id="speakingScoreCompleteCriteria" class="writing-score-complete-criteria speaking-score-complete-criteria hidden" aria-label="Speaking criterion scores"></div>
+              </div>
               <p id="speakingScoreCompleteText">口语报告已经生成，可以在方便的时候查看详细反馈。</p>
-              <button id="speakingScoreCompleteReportBtn" type="button">查看详细口语报告</button>
+              <div class="score-complete-actions">
+                <button id="speakingScoreCompleteReportBtn" type="button">查看详细口语报告</button>
+              </div>
             </div>
           </article>
         </div>
@@ -1194,7 +1247,13 @@
               </div>
             </div>
             <div class="history-rail-window">
-              <div id="writingReportList" class="history-list writing-report-list">还没有写作记录。</div>
+              <div id="writingReportList" class="history-list writing-report-list">
+                <div class="report-rail-loading-card" role="status" aria-live="polite">
+                  <span class="spinner" aria-hidden="true"></span>
+                  <strong>正在加载写作报告</strong>
+                  <small>正在读取写作历史和报告详情。</small>
+                </div>
+              </div>
             </div>
           </div>
           <article id="writingReportDetail" class="detail-panel">
@@ -1502,18 +1561,18 @@
     <script src="/writing-image-preload.js?v=20260614-img-ready-instant-1"></script>
     <script src="/writing-image-viewer.js?v=20260613-img-original-preload-1"></script>
     <script src="/writing-prompt-picker.js?v=20260614-img-ready-instant-1"></script>
-    <script src="/corpus-markdown-editor.js?v=20260613-p2bank-instant-1"></script>
+    <script src="/corpus-markdown-editor.js?v=20260629-md-wysiwyg-undo-stack-1"></script>
     <script src="/assets/guest-samples.js?v=20260623-ux-batch-3"></script>
-    <script src="/corpus-takeaway.js?v=20260624-loop-and-dots-9"></script>
-    <script src="/spelling-drill.js?v=20260624-loop-and-dots-9"></script>
+    <script src="/corpus-takeaway.js?v=20260629-speaking-writing-ui-1"></script>
+    <script src="/spelling-drill.js?v=20260627-spelling-empty-add-2"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
-    <script src="/appearance.js?v=20260530-front-appearance"></script>
+    <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20260624-loop-and-dots-9"></script>
+    <script src="/app.js?v=20260629-md-wysiwyg-undo-stack-1"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
   </body>
 </html>

@@ -38,7 +38,13 @@ const state = {
   uiLanguage: "zh",
   p3Topics: [],
   p3SelectedTopic: "",
+  p1Intensity: "normal",
+  p1ModeHelpTimer: null,
+  p1StatusPixelFlow: null,
+  p1StatusPixelFlowTimer: null,
   p3Intensity: "normal",
+  p3IntensityPixelFlow: null,
+  p3IntensityPixelFlowTimer: null,
   p3Focus: "comparison_concession",
   p3SourceType: "bank",
   p3SelectedBankCardId: "",
@@ -150,6 +156,8 @@ const state = {
     requestedEntryId: "",
     dirty: false,
     month: "",
+    summaryPayload: null,
+    summaryLoadingPromise: null,
     recentEntries: [],
     reportEntries: [],
     reportFilter: "all",
@@ -157,10 +165,12 @@ const state = {
     activeReportDetail: null,
     reportDetailCache: new Map(),
     reportDetailPromises: new Map(),
+    reportUndoStacks: new Map(),
     reportEditLoading: false,
     reportEditRequestId: 0,
     scorePollTimer: null,
     scorePollingEntryId: null,
+    rescoreAfterActiveTask: false,
     scoreCompletionModalEntry: null,
     scoreCompletionNotifiedIds: new Set(),
     pickerTaskType: "task1_academic",
@@ -735,6 +745,111 @@ function updatePracticeHeaderProgress(turn = state.currentTurn) {
   } else {
     el.removeAttribute("aria-label");
   }
+}
+
+function syncP1ModeHelp(helpEl, { isP1, isHigh, collapsed }) {
+  const nextText = isHigh ? "每题都会追问" : "原题节奏练习";
+  window.clearTimeout(state.p1ModeHelpTimer);
+  state.p1ModeHelpTimer = null;
+  helpEl.classList.toggle("hidden", !isP1);
+  helpEl.classList.toggle("is-collapsed", collapsed);
+  if (!isP1 || collapsed || !helpEl.dataset.modeHelpText || helpEl.dataset.modeHelpText === nextText) {
+    helpEl.textContent = nextText;
+    helpEl.dataset.modeHelpText = nextText;
+    helpEl.classList.toggle("is-high", isHigh);
+    helpEl.classList.remove("is-switching", "is-entering");
+    return;
+  }
+  helpEl.classList.add("is-switching");
+  helpEl.classList.remove("is-entering");
+  state.p1ModeHelpTimer = window.setTimeout(() => {
+    helpEl.textContent = nextText;
+    helpEl.dataset.modeHelpText = nextText;
+    helpEl.classList.toggle("is-high", isHigh);
+    helpEl.classList.remove("is-switching");
+    helpEl.classList.add("is-entering");
+    window.setTimeout(() => helpEl.classList.remove("is-entering"), 320);
+  }, 150);
+}
+
+function syncP1IntensityPanel() {
+  const isP1 = state.view === "p1";
+  const isHigh = state.p1Intensity === "high";
+  const switchEl = $("p1ModeSwitch");
+  if (switchEl) {
+    switchEl.classList.toggle("hidden", !isP1);
+    switchEl.classList.toggle("high-intensity", isHigh);
+    switchEl.classList.toggle("is-collapsed", isP1 && state.practiceLocked);
+  }
+  const helpEl = $("p1ModeHelp");
+  if (helpEl) {
+    syncP1ModeHelp(helpEl, { isP1, isHigh, collapsed: isP1 && state.practiceLocked });
+  }
+  document.querySelectorAll("[data-p1-intensity]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.p1Intensity === state.p1Intensity);
+  });
+  $("#practicePanel")?.classList.toggle("p1-started", isP1 && state.practiceLocked);
+  syncP1StatusPixelFlow();
+}
+
+function syncP1StatusPixelFlow() {
+  const status = document.querySelector(".exam-status");
+  const shouldShowP1 = state.view === "p1" && state.p1Intensity === "high";
+  const shouldShowP3 = state.view === "p3" && state.practiceLocked && state.p3Intensity === "high";
+  const shouldShow = shouldShowP1 || shouldShowP3;
+  status?.classList.toggle(
+    "pressure-header-shell",
+    state.view === "p1" || shouldShowP3,
+  );
+  window.clearTimeout(state.p1StatusPixelFlowTimer);
+  state.p1StatusPixelFlowTimer = null;
+  if (!status) return;
+  if (shouldShow) {
+    status.classList.add("p1-pixel-flow");
+    if (!state.p1StatusPixelFlow) {
+      state.p1StatusPixelFlow = createPixelFlowField(status, "grid");
+    }
+    window.requestAnimationFrame(() => {
+      if ((state.view === "p1" && state.p1Intensity === "high")
+        || (state.view === "p3" && state.practiceLocked && state.p3Intensity === "high")) {
+        status.classList.add("p1-pixel-flow-visible");
+      }
+    });
+    return;
+  }
+  status.classList.remove("p1-pixel-flow-visible");
+  if (!status.classList.contains("p1-pixel-flow")) return;
+  state.p1StatusPixelFlowTimer = window.setTimeout(() => {
+    state.p1StatusPixelFlow?.destroy?.();
+    state.p1StatusPixelFlow = null;
+    status.classList.remove("p1-pixel-flow");
+  }, 1220);
+}
+
+function syncP3IntensityPixelFlow() {
+  const box = document.querySelector("#p3TopicPanel .p3-mode-row");
+  if (!box) return;
+  const shouldShow = state.view === "p3" && !state.practiceLocked && state.p3Intensity === "high";
+  window.clearTimeout(state.p3IntensityPixelFlowTimer);
+  state.p3IntensityPixelFlowTimer = null;
+  if (shouldShow) {
+    box.classList.add("p3-pixel-flow");
+    if (!state.p3IntensityPixelFlow) {
+      state.p3IntensityPixelFlow = createPixelFlowField(box, "grid", { reverse: true });
+    }
+    window.requestAnimationFrame(() => {
+      if (state.view === "p3" && !state.practiceLocked && state.p3Intensity === "high") {
+        box.classList.add("p3-pixel-flow-visible");
+      }
+    });
+    return;
+  }
+  box.classList.remove("p3-pixel-flow-visible");
+  state.p3IntensityPixelFlowTimer = window.setTimeout(() => {
+    state.p3IntensityPixelFlow?.destroy?.();
+    state.p3IntensityPixelFlow = null;
+    box.classList.remove("p3-pixel-flow");
+  }, 1220);
 }
 
 function isPracticeView(view) {
@@ -1477,6 +1592,42 @@ function scheduleIdleTask(action, timeout = 1200) {
   }, delay);
 }
 
+function setAnimatedHidden(element, hidden, options = {}) {
+  if (!element) return;
+  const leavingClass = options.leavingClass || "ui-soft-leaving";
+  const enteringClass = options.enteringClass || "ui-soft-entering";
+  const duration = Math.max(0, Number(options.duration) || 220);
+  const wasHidden = element.classList.contains("hidden");
+  const wasLeaving = element.classList.contains(leavingClass);
+  window.clearTimeout(element._uiHiddenTimer);
+  element._uiHiddenTimer = null;
+  if (hidden) {
+    element.classList.remove(enteringClass);
+    if (wasHidden && !wasLeaving) {
+      element.classList.remove(leavingClass);
+      return;
+    }
+    element.classList.add(leavingClass);
+    element._uiHiddenTimer = window.setTimeout(() => {
+      element.classList.add("hidden");
+      element.classList.remove(leavingClass);
+      if (options.clearTextOnHide && !element.textContent.trim()) element.textContent = "";
+      element._uiHiddenTimer = null;
+    }, duration);
+    return;
+  }
+  element.classList.remove("hidden", leavingClass);
+  if (!wasHidden && !wasLeaving) {
+    element.classList.remove(enteringClass);
+    return;
+  }
+  element.classList.add(enteringClass);
+  element._uiHiddenTimer = window.setTimeout(() => {
+    element.classList.remove(enteringClass);
+    element._uiHiddenTimer = null;
+  }, duration);
+}
+
 const writingPromptImagePreloader = window.IELTSWritingImagePreload?.createWritingPromptImagePreloader?.({
   state,
   scheduleIdleTask,
@@ -1592,6 +1743,8 @@ const corpusTakeawayController = window.IELTSCorpusTakeaway?.createCorpusTakeawa
   viewCopy,
   corpusPeekWindowMargin: CORPUS_PEEK_WINDOW_MARGIN,
   withPending,
+  setAnimatedHidden,
+  onCorpusSaved: handleCorpusSavedLocally,
 });
 if (!corpusTakeawayController) {
   throw new Error("IELTSCorpusTakeaway module failed to initialize.");
@@ -1655,6 +1808,8 @@ function clearUserScopedCaches() {
   state.p2Corpus.loaded = false;
   state.p2Corpus.loadingPromise = null;
   state.writing.reportEntries = [];
+  state.writing.summaryPayload = null;
+  state.writing.summaryLoadingPromise = null;
   state.writing.activeReportId = null;
   state.writing.activeReportDetail = null;
   state.writing.reportDetailCache.clear();
@@ -1690,6 +1845,7 @@ function scheduleAuthenticatedPrefetch() {
   const token = state.prefetch.token;
   prefetchFixedExaminerTts(token);
   scheduleIdleTask(() => prefetchTakeawayBackgroundAssets(), 450);
+  scheduleIdleTask(() => prefetchWritingSummary(token), 520);
   scheduleIdleTask(() => prefetchSpeakingHistory(token), 550);
   scheduleIdleTask(() => prefetchWritingReports(token), 1300);
   scheduleIdleTask(() => prefetchLanguageTakeaways(token), 1800);
@@ -2129,6 +2285,7 @@ function switchView(view, options = {}) {
   text("viewTitle", currentViewCopy[0]);
   text("viewSubtitle", currentViewCopy[1]);
   updatePracticeHeaderProgress();
+  syncP1IntensityPanel();
   if (view === "history") loadHistory();
   if (view === "corpus") loadCorpusHome();
   if (view === "takeawayBook") {
@@ -2179,6 +2336,8 @@ function switchView(view, options = {}) {
     syncP3LaunchPanel();
     // Warm the P2 corpus the moment P3 opens so the first "浏览题卡" pops instantly.
     ensureP2CorpusLoaded().catch(() => {});
+  } else {
+    syncP3IntensityPixelFlow();
   }
   $("#examStatusText")?.classList.remove("hidden");
   $("#exitPractice")?.classList.toggle("hidden", !state.practiceLocked || !isPracticeView(view));
@@ -2549,6 +2708,8 @@ function resetPracticeSurface() {
   if (state.view === "p3") {
     renderP3PlanPreview();
     syncP3LaunchPanel();
+  } else {
+    syncP3IntensityPixelFlow();
   }
   summaryPanel?.classList.add("hidden");
   if (summaryPanel) summaryPanel.innerHTML = "";
@@ -2565,6 +2726,7 @@ function resetPracticeSurface() {
   setRecordButton("ready", "Start", "Record the full section. No typing.");
   text("recordStatus", "Click Start. The examiner will load the questions automatically.");
   $("#examStatusText")?.classList.toggle("hidden", state.view === "p2");
+  syncP1IntensityPanel();
 }
 
 function hasPendingSpeakingAnalysisForView(view) {
@@ -2802,8 +2964,10 @@ async function startPractice() {
     await generateP3Plan();
     if (!state.p3Plan) return;
   }
+  if (mode === "p3") setP3StartPending(true);
   state.abortingAttemptId = null;
   state.practiceLocked = true;
+  syncP1IntensityPanel();
   $(".exam-status")?.classList.remove("hidden");
   $("#examStatusText")?.classList.toggle("hidden", mode === "p2");
   $("#practiceGrid")?.classList.remove("hidden");
@@ -2818,6 +2982,8 @@ async function startPractice() {
     if (state.startRequestId !== requestId || state.practiceSessionId !== sessionId || state.abortingAttemptId === "__loading__") return;
     if (!walletAiStartAllowed(wallet)) {
       state.practiceLocked = false;
+      syncP1IntensityPanel();
+      if (mode === "p3") setP3StartPending(false);
       $("#exitPractice")?.classList.add("hidden");
       updateSidebarLock();
       setRecordButton("idle", "Start", t("wallet.rechargeRequiredShort"));
@@ -2849,6 +3015,7 @@ async function startPractice() {
       full_name: names.fullName,
       english_name: names.englishName,
       ...(mode === "p2" && p2PinnedCueId ? { p2_cue_id: p2PinnedCueId } : {}),
+      ...(mode === "p1" ? { p1_intensity: state.p1Intensity } : {}),
       ...(mode === "p3" ? { p3_intensity: state.p3Intensity } : {}),
       ...(mode === "p3" ? { p3_focus: state.p3Focus } : {}),
       ...(mode === "p3" && state.p3Plan ? { p3_plan: state.p3Plan } : {}),
@@ -2877,6 +3044,8 @@ async function startPractice() {
   } catch (error) {
     if (error?.name === "AbortError" || state.startRequestId !== requestId || state.practiceSessionId !== sessionId) return;
     state.practiceLocked = false;
+    syncP1IntensityPanel();
+    if (mode === "p3") showP3LaunchPanel();
     $("#exitPractice")?.classList.add("hidden");
     updateSidebarLock();
     showError(error);
@@ -2885,11 +3054,41 @@ async function startPractice() {
 
 function revealP3PracticeGrid() {
   $("#p3TopicPanel").classList.add("hidden");
+  syncP3IntensityPixelFlow();
   $("#practicePanel")?.classList.remove("p3-launch-mode");
+  setP3StartPending(false);
   const grid = $("#practiceGrid");
   grid.classList.remove("hidden", "practice-enter");
   void grid.offsetWidth;
   grid.classList.add("practice-enter");
+}
+
+function showP3LaunchPanel() {
+  $("#practiceGrid")?.classList.add("hidden");
+  $("#practiceGrid")?.classList.remove("practice-enter");
+  $("#practicePanel")?.classList.add("p3-launch-mode");
+  $("#practicePanel")?.classList.remove("p3-starting");
+  setP3StartPending(false);
+  const panel = $("#p3TopicPanel");
+  if (panel) {
+    panel.classList.remove("hidden", "p3-launch-enter");
+    void panel.offsetWidth;
+    panel.classList.add("p3-launch-enter");
+  }
+  syncP3LaunchPanel();
+}
+
+function setP3StartPending(pending, message = "正在准备练习...") {
+  const isPending = Boolean(pending);
+  $("#practicePanel")?.classList.toggle("p3-starting", isPending);
+  const button = $("#p3StartButton");
+  if (button) {
+    button.disabled = isPending || !state.p3Plan || state.p3PlanLoading;
+    button.classList.toggle("is-starting", isPending);
+    button.textContent = isPending ? message : "按计划开始练习";
+  }
+  const status = $("#p3PlanStatus");
+  if (status && isPending) status.textContent = message;
 }
 
 function renderTurn(turn) {
@@ -3605,9 +3804,18 @@ function isP3DynamicFollowUpBoundary(turn, nextTurn) {
     && nextTurn?.prompt?.role === "follow_up";
 }
 
+function isP1DynamicFollowUpBoundary(turn, nextTurn) {
+  return turn?.part === "p1"
+    && turn?.prompt?.role !== "follow_up"
+    && nextTurn?.part === "p1"
+    && nextTurn?.prompt?.role === "follow_up";
+}
+
 function turnRequiresSynchronousComplete(turn, nextTurn) {
   if (!nextTurn) return true;
-  return isP1WorkStudyIdentityTurn(turn) || isP3DynamicFollowUpBoundary(turn, nextTurn);
+  return isP1WorkStudyIdentityTurn(turn)
+    || isP1DynamicFollowUpBoundary(turn, nextTurn)
+    || isP3DynamicFollowUpBoundary(turn, nextTurn);
 }
 
 function isPendingExaminerTts(tts) {
@@ -5480,7 +5688,9 @@ async function scoreAttempt() {
   try {
     await waitForPendingTurnCompletions(attemptId);
     if (state.abortingAttemptId === attemptId || state.attempt?.id !== attemptId) return;
-    const scored = await api(`/api/attempts/${attemptId}/score`, {});
+    const scored = await api(`/api/attempts/${attemptId}/score`, {
+      provider: currentAiSourcePreference(),
+    });
     if (state.abortingAttemptId === attemptId) return;
     const task = scored.ai_task || null;
     if (isSpeakingTaskActive(task)) {
@@ -6117,12 +6327,30 @@ function writingReportScored(item = {}) {
   return item.status === "scored" || item.overall_band != null || item.score != null;
 }
 
+function writingReportSortValue(item = {}) {
+  const raw = String(item.sort_time || item.display_time || item.practice_date || item.created_at || "");
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const value = Date.parse(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function sortWritingReportItems(items = []) {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const delta = writingReportSortValue(right.item) - writingReportSortValue(left.item);
+      return delta || left.index - right.index;
+    })
+    .map(({ item }) => item);
+}
+
 function visibleWritingReportItems(items = state.writing.reportEntries) {
   const filter = WRITING_REPORT_FILTERS.has(state.writing.reportFilter) ? state.writing.reportFilter : "all";
-  if (filter === "all") return items;
-  if (filter === "scored") return items.filter((item) => writingReportScored(item));
-  if (filter === "unscored") return items.filter((item) => !writingReportScored(item));
-  return items.filter((item) => writingReportPart(item) === filter);
+  const sorted = sortWritingReportItems(items);
+  if (filter === "all") return sorted;
+  if (filter === "scored") return sorted.filter((item) => writingReportScored(item));
+  if (filter === "unscored") return sorted.filter((item) => !writingReportScored(item));
+  return sorted.filter((item) => writingReportPart(item) === filter);
 }
 
 function restoreSpeakingHistoryAfterDeleteFailure(snapshot) {
@@ -6559,6 +6787,12 @@ function promptGuestLogin(reason, options = {}) {
   });
 }
 
+function requireAuthenticatedAction(reason, options = {}) {
+  if (state.account.authenticated) return true;
+  promptGuestLogin(reason, options);
+  return false;
+}
+
 // Clean "browsing as a guest" placeholder for a data-backed list/detail
 // container, so a visitor sees an intentional invite instead of a stuck spinner
 // or a 401 error where their personal records would load. Safe only for
@@ -6975,7 +7209,10 @@ function renderWritingAnnotatedText(textValue, annotations = []) {
     if (start < cursor) return;
     const label = writingAnnotationTypeLabel(annotation.type);
     const detail = [label, annotation.suggestion ? `\u5efa\u8bae\uff1a${annotation.suggestion}` : "", annotation.explanation].filter(Boolean).join(" \u00b7 ");
-    const tooltipAttr = `data-writing-tooltip="${escapeHtml(detail)}"`;
+    const fixAttr = annotation.suggestion
+      ? ` data-writing-fix-original="${escapeHtml(text.slice(start, end))}" data-writing-fix-suggestion="${escapeHtml(annotation.suggestion)}"`
+      : "";
+    const tooltipAttr = `data-writing-tooltip="${escapeHtml(detail)}"${fixAttr}`;
     html += escapeHtml(text.slice(cursor, start)).replace(/\n/g, "<br>");
     const original = escapeHtml(text.slice(start, end)).replace(/\n/g, "<br>");
     if (annotation.type === "missing_word") {
@@ -6989,6 +7226,91 @@ function renderWritingAnnotatedText(textValue, annotations = []) {
   });
   html += escapeHtml(text.slice(cursor)).replace(/\n/g, "<br>");
   return html;
+}
+
+function writingParagraphEditButtonHtml(entryId, paragraphIndex, mode = "edit") {
+  const isSave = mode === "save";
+  const label = isSave ? "\u4fdd\u5b58" : "\u7f16\u8f91";
+  const title = isSave ? "\u4fdd\u5b58\u8fd9\u4e00\u6bb5" : "\u7f16\u8f91\u8fd9\u4e00\u6bb5";
+  const icon = isSave
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4L19 6"></path></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
+  return `
+    <button type="button"
+      class="writing-inline-edit-btn ${isSave ? "is-saving-mode" : ""}"
+      data-writing-paragraph-edit="${escapeHtml(entryId || "")}"
+      data-writing-paragraph-index="${escapeHtml(paragraphIndex || 1)}"
+      title="${title}"
+      aria-label="${title}">
+      ${icon}<span>${label}</span>
+    </button>
+  `;
+}
+
+function writingReportUndoKey(entryId, paragraphIndex) {
+  return `${String(entryId || "").trim()}::${Number.parseInt(paragraphIndex || 1, 10) || 1}`;
+}
+
+function writingReportUndoStack(entryId, paragraphIndex, options = {}) {
+  const key = writingReportUndoKey(entryId, paragraphIndex);
+  let stack = state.writing.reportUndoStacks.get(key);
+  if (!stack && options.create) {
+    stack = [];
+    state.writing.reportUndoStacks.set(key, stack);
+  }
+  return stack || [];
+}
+
+function writingReportUndoSnapshot(entryId, paragraphIndex) {
+  const stack = writingReportUndoStack(entryId, paragraphIndex);
+  return stack.length ? stack[stack.length - 1] : null;
+}
+
+function moveWritingReportUndoStacks(fromEntryId, toEntryId) {
+  const fromId = String(fromEntryId || "").trim();
+  const toId = String(toEntryId || "").trim();
+  if (!fromId || !toId || fromId === toId) return;
+  const prefix = `${fromId}::`;
+  [...state.writing.reportUndoStacks.entries()].forEach(([key, stack]) => {
+    if (!key.startsWith(prefix)) return;
+    const suffix = key.slice(prefix.length);
+    const nextKey = `${toId}::${suffix}`;
+    const nextStack = state.writing.reportUndoStacks.get(nextKey) || [];
+    state.writing.reportUndoStacks.set(nextKey, [...nextStack, ...stack]);
+    state.writing.reportUndoStacks.delete(key);
+  });
+}
+
+function rememberWritingReportUndo(entry, paragraphIndex, previousAnswer, reason = "edit") {
+  const entryId = String(entry?.id || "").trim();
+  const answer = String(previousAnswer || "");
+  if (!entryId) return;
+  const stack = writingReportUndoStack(entryId, paragraphIndex, { create: true });
+  const previous = stack[stack.length - 1];
+  if (previous && String(previous.answer || "") === answer) return;
+  stack.push({
+    answer,
+    score: entry?.score || null,
+    overall_band: entry?.overall_band ?? entry?.score?.overall_band ?? null,
+    reason,
+  });
+  if (stack.length > 30) stack.splice(0, stack.length - 30);
+}
+
+function writingParagraphUndoButtonHtml(entryId, paragraphIndex) {
+  const hasUndo = Boolean(writingReportUndoSnapshot(entryId, paragraphIndex));
+  return `
+    <button type="button"
+      class="writing-inline-edit-btn writing-inline-undo-btn"
+      data-writing-paragraph-undo="${escapeHtml(entryId || "")}"
+      data-writing-paragraph-index="${escapeHtml(paragraphIndex || 1)}"
+      title="\u64a4\u56de\u8fd9\u4e00\u6bb5\u7684\u4e0a\u4e00\u6b21\u6539\u52a8"
+      aria-label="\u64a4\u56de\u8fd9\u4e00\u6bb5\u7684\u4e0a\u4e00\u6b21\u6539\u52a8"
+      ${hasUndo ? "" : "disabled"}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v5"></path><path d="M4 12c2.2-4.2 6.8-6.2 11-4.6 3.2 1.2 5 4.2 4.6 7.1-.4 3.4-3.3 5.8-6.8 5.8H8"></path></svg>
+      <span>\u64a4\u56de</span>
+    </button>
+  `;
 }
 
 function parseWritingSpellingSummary(value = "") {
@@ -8479,8 +8801,35 @@ function inferWritingPromptPatterns(prompts = []) {
     .map(([pattern, count]) => ({ pattern, label: writingPromptPatternLabel(pattern), count }));
 }
 
-async function loadWritingSummary(render = true) {
-  const payload = await api("/api/writing/summary");
+function requestWritingSummary(options = {}) {
+  const force = options.force === true;
+  if (!force && state.writing.summaryPayload) {
+    return Promise.resolve(state.writing.summaryPayload);
+  }
+  if (!force && state.writing.summaryLoadingPromise) {
+    return state.writing.summaryLoadingPromise;
+  }
+  const request = api("/api/writing/summary")
+    .then((payload) => {
+      state.writing.summaryPayload = payload;
+      return payload;
+    })
+    .finally(() => {
+      if (state.writing.summaryLoadingPromise === request) {
+        state.writing.summaryLoadingPromise = null;
+      }
+    });
+  state.writing.summaryLoadingPromise = request;
+  return request;
+}
+
+async function prefetchWritingSummary(token) {
+  if (!prefetchCanApply(token)) return null;
+  return requestWritingSummary().catch(() => null);
+}
+
+async function loadWritingSummary(render = true, options = {}) {
+  const payload = await requestWritingSummary({ force: options.force === true });
   state.writing.month = payload.month || "";
   if (render) renderWritingSummary(payload);
   else renderWritingSummary(payload);
@@ -8662,6 +9011,7 @@ function writingReportTabHtml(item, active = false) {
   const toneClass = item.task_type === "task1_academic" ? "tone-p1" : "tone-p2";
   const tagClass = item.task_type === "task1_academic" ? "p1" : "p2";
   const displayTitle = writingEntryDisplayTitle(item);
+  const wordCount = Number.isFinite(Number(item.word_count)) ? Number(item.word_count) : 0;
   return `
     <button class="history-item writing-report-tab ${toneClass} ${active ? "active" : ""}" data-writing-report-tab="${escapeHtml(item.id || "")}">
       <div class="history-item-top">
@@ -8670,7 +9020,7 @@ function writingReportTabHtml(item, active = false) {
         <span class="history-item-band">${escapeHtml(band)}</span>
       </div>
       <strong class="history-item-title">${escapeHtml(displayTitle || writingTaskLabel(item.task_type))}</strong>
-      <small class="history-item-time">${escapeHtml(item.display_time || item.practice_date || "")} · ${escapeHtml(item.word_count ?? 0)}</small>
+      <small class="history-item-time">${escapeHtml(item.display_time || item.practice_date || "")} · ${escapeHtml(wordCount)} words</small>
     </button>
   `;
 }
@@ -8693,9 +9043,12 @@ async function deleteWritingReport(entryId) {
   if (!entryId) return;
   const snapshot = optimisticallyRemoveWritingReport(entryId);
   try {
-    await api(`/api/writing/entries/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
+    const keptEntry = await api(`/api/writing/entries/${encodeURIComponent(entryId)}/report`, null, { method: "DELETE" });
+    if (keptEntry?.id) {
+      syncWritingReportEntryCache(keptEntry);
+      state.writing.entry = state.writing.entry?.id === entryId ? keptEntry : state.writing.entry;
+    }
     if (state.writing.entry?.id === entryId) {
-      state.writing.entry = null;
       state.writing.dirty = false;
       loadWritingSummary(false).catch(() => null);
       renderWritingSurface();
@@ -8722,12 +9075,15 @@ function writingReportDetailHtml(entry) {
   const promptImageUrl = writingEntryImageUrl(entry, score);
   const promptFallback = promptText ? null : writingReportPromptFallback(entry);
   const promptDisplayText = promptText || promptFallback?.body || "The original writing prompt was not included in this saved report.";
+  const promptHighlightRanges = Array.isArray(entry.prompt_highlights) ? entry.prompt_highlights : [];
+  const promptBodyHtml = entry.task_type === "task2"
+    ? renderTask2PromptTextWithHighlights(promptDisplayText, promptHighlightRanges)
+    : renderWritingPromptTextWithHighlights(promptDisplayText, promptHighlightRanges);
   const answerText = String(entry.answer || "").trim();
   const promptCard = `
-    <div class="writing-prompt-card writing-report-prompt-card">
+    <div class="writing-prompt-card writing-report-prompt-card ${entry.task_type === "task2" ? "is-task2-report-prompt" : ""}">
       <span class="writing-pill">${escapeHtml(writingTaskLabel(entry.task_type))}</span>
-      ${promptFallback?.title ? `<h2>${escapeHtml(promptFallback.title)}</h2>` : ""}
-      <p class="writing-report-prompt-text">${escapeHtml(promptDisplayText).replace(/\n/g, "<br>")}</p>
+      <p class="writing-report-prompt-text">${promptBodyHtml}</p>
       ${entry.task_type === "task1_academic" && promptImageUrl ? `
         <div class="writing-prompt-image">
           <img src="${escapeHtml(promptImageUrl)}" alt="Task 1 chart" loading="eager" decoding="async" data-writing-image-preview onerror="this.parentElement.classList.add('hidden')">
@@ -8754,9 +9110,12 @@ function writingReportDetailHtml(entry) {
           <h2>${escapeHtml(displayTitle || taskName)}</h2>
           <p class="muted">${taskSubline} · ${escapeHtml(entry.word_count ?? 0)} words</p>
         </div>
-        <div class="writing-score-summary-band">
-          <span>Overall</span>
-          <strong>Band ${escapeHtml(score.overall_band ?? "—")}</strong>
+        <div class="writing-score-summary-side">
+          <button type="button" class="report-export-btn" data-report-export="writing">打开报告页</button>
+          <div class="writing-score-summary-band">
+            <span>Overall</span>
+            <strong>Band ${escapeHtml(score.overall_band ?? "—")}</strong>
+          </div>
         </div>
       </div>
       <div class="writing-score-summary-grid">
@@ -8864,9 +9223,17 @@ function writingParagraphReviewHtml(entry, score, reviews) {
     return `
       <tbody class="turn-report-group writing-paragraph-group">
         <tr class="writing-paragraph-content-row">
-          <td>
-            <div class="question-header"><strong>Paragraph ${escapeHtml(paragraphIndex || index + 1)}</strong></div>
-            <p class="writing-annotated-original">${renderWritingAnnotatedText(learnerText, paragraphAnnotations)}</p>
+          <td data-writing-original-cell data-writing-entry-id="${escapeHtml(entry.id || "")}" data-writing-paragraph-index="${escapeHtml(paragraphIndex || index + 1)}">
+            <div class="question-header writing-original-cell-head">
+              <strong>Paragraph ${escapeHtml(paragraphIndex || index + 1)}</strong>
+              <span class="writing-inline-edit-actions">
+                ${writingParagraphUndoButtonHtml(entry.id || "", paragraphIndex || index + 1)}
+                ${writingParagraphEditButtonHtml(entry.id || "", paragraphIndex || index + 1)}
+              </span>
+            </div>
+            <div class="writing-original-cell-body">
+              <p class="writing-annotated-original">${renderWritingAnnotatedText(learnerText, paragraphAnnotations)}</p>
+            </div>
           </td>
           <td>
             <p>${escapeHtml(item.model || "暂无 AI 改写。").replace(/\n/g, "<br>")}</p>
@@ -8892,6 +9259,224 @@ function writingParagraphReviewHtml(entry, score, reviews) {
     </div>
     ${writingSpellingSummaryHtml(score || {})}
   `;
+}
+
+function writingReportSavePayload(entry, answer, options = {}) {
+  return {
+    id: entry.id || "",
+    task_type: entry.task_type || "task2",
+    prompt_id: entry.prompt_id || "",
+    prompt: entry.prompt || "",
+    title: entry.title || writingEntryDisplayTitle(entry) || writingTaskLabel(entry.task_type),
+    category: entry.category || "",
+    image_url: entry.image_url || "",
+    practice_date: entry.practice_date || "",
+    answer,
+    prompt_highlights: entry.prompt_highlights || [],
+    preserve_score: options.preserveScore === true,
+  };
+}
+
+async function saveWritingReportAnswer(entry, answer, options = {}) {
+  const originalId = String(entry?.id || "").trim();
+  const saved = await api("/api/writing/entries", writingReportSavePayload(entry, answer, options));
+  const savedId = String(saved?.id || "").trim();
+  const shouldPreserveScoredState = options.preserveScore === true && writingReportScored(entry);
+  const preservedScore = shouldPreserveScoredState
+    ? (saved.score || entry.score || (entry.overall_band != null ? { overall_band: entry.overall_band } : null))
+    : null;
+  const mergedScore = saved.score || preservedScore || entry.score || null;
+  const merged = {
+    ...entry,
+    ...saved,
+    status: shouldPreserveScoredState && mergedScore ? "scored" : (saved.status || entry.status || "saved"),
+    overall_band: mergedScore?.overall_band ?? saved.overall_band ?? entry.overall_band ?? null,
+    score: mergedScore,
+  };
+  if (originalId && savedId && originalId !== savedId) {
+    state.writing.reportDetailCache.delete(originalId);
+    state.writing.reportEntries = state.writing.reportEntries.filter((item) => String(item?.id || "") !== originalId);
+    if (String(state.writing.activeReportId || "") === originalId) state.writing.activeReportId = savedId;
+    moveWritingReportUndoStacks(originalId, savedId);
+  }
+  state.writing.activeReportDetail = merged;
+  syncWritingReportEntryCache(merged, { renderList: state.view === "writingReports" });
+  return merged;
+}
+
+function writingFixPopoverElement() {
+  let el = document.getElementById("writingFixPopover");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "writingFixPopover";
+    el.className = "writing-fix-popover";
+    el.innerHTML = `<button type="button" data-writing-fix-apply>Fix</button>`;
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function hideWritingFixPopover() {
+  document.getElementById("writingFixPopover")?.classList.remove("is-visible");
+}
+
+function showWritingFixPopover(anchor, event) {
+  const original = String(anchor?.dataset?.writingFixOriginal || "");
+  const suggestion = String(anchor?.dataset?.writingFixSuggestion || "");
+  if (!original || !suggestion) return;
+  const popover = writingFixPopoverElement();
+  popover.dataset.fixOriginal = original;
+  popover.dataset.fixSuggestion = suggestion;
+  popover.dataset.fixEntryId = anchor.closest("[data-writing-original-cell]")?.dataset?.writingEntryId || "";
+  popover.dataset.fixParagraphIndex = anchor.closest("[data-writing-original-cell]")?.dataset?.writingParagraphIndex || "";
+  popover.style.left = `${Math.min(window.innerWidth - 72, Math.max(8, event.clientX + 8))}px`;
+  popover.style.top = `${Math.min(window.innerHeight - 44, Math.max(8, event.clientY + 8))}px`;
+  popover.classList.add("is-visible");
+}
+
+async function applyWritingFixFromPopover() {
+  const popover = document.getElementById("writingFixPopover");
+  if (!popover?.classList.contains("is-visible")) return;
+  const entry = cachedWritingReportEntry(popover.dataset.fixEntryId) || state.writing.activeReportDetail;
+  const paragraphIndex = Number.parseInt(popover.dataset.fixParagraphIndex || "1", 10);
+  const original = String(popover.dataset.fixOriginal || "");
+  const suggestion = String(popover.dataset.fixSuggestion || "");
+  if (!entry?.id || !original || !suggestion) return;
+  const paragraphs = writingParagraphs(entry.answer || "");
+  const idx = Math.max(0, paragraphIndex - 1);
+  const previousAnswer = String(entry.answer || "");
+  paragraphs[idx] = String(paragraphs[idx] || "").replace(original, suggestion);
+  const nextAnswer = paragraphs.join("\n\n");
+  if (nextAnswer === previousAnswer) {
+    hideWritingFixPopover();
+    return;
+  }
+  hideWritingFixPopover();
+  try {
+    const saved = await saveWritingReportAnswer(entry, nextAnswer, { preserveScore: true });
+    rememberWritingReportUndo(entry, paragraphIndex, previousAnswer, "fix");
+    renderVisibleWritingReport(saved);
+  } catch (error) {
+    showWritingReportEditError(error);
+  }
+}
+
+function writingParagraphsForEditing(value = "") {
+  const raw = String(value || "");
+  if (!raw.trim()) return [""];
+  return raw.split(/\n\s*\n+/).map((item) => item.trim());
+}
+
+function writingReportParagraphCellFromButton(button) {
+  return button?.closest?.("[data-writing-original-cell]") || null;
+}
+
+function beginWritingParagraphInlineEdit(button) {
+  const cell = writingReportParagraphCellFromButton(button);
+  const entry = cachedWritingReportEntry(button?.dataset?.writingParagraphEdit || "") || state.writing.activeReportDetail;
+  if (!cell || !entry?.id) return;
+  const paragraphIndex = Number.parseInt(button.dataset.writingParagraphIndex || cell.dataset.writingParagraphIndex || "1", 10);
+  const paragraphs = writingParagraphsForEditing(entry.answer || "");
+  const idx = Math.max(0, paragraphIndex - 1);
+  const body = cell.querySelector(".writing-original-cell-body");
+  if (!body) return;
+  const bodyHeight = Math.max(118, Math.ceil(body.getBoundingClientRect().height || 0));
+  const cellHeight = Math.ceil(cell.getBoundingClientRect().height || 0);
+  cell.style.minHeight = cellHeight ? `${cellHeight}px` : "";
+  cell.dataset.writingEditOriginal = String(paragraphs[idx] || "");
+  cell.classList.add("is-editing");
+  body.innerHTML = `
+    <textarea class="writing-inline-paragraph-editor"
+      data-writing-paragraph-editor
+      spellcheck="true">${escapeHtml(paragraphs[idx] || "")}</textarea>
+  `;
+  const editor = body.querySelector("[data-writing-paragraph-editor]");
+  if (editor) {
+    editor.style.minHeight = `${bodyHeight}px`;
+    editor.focus();
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+  }
+  button.classList.add("is-saving-mode");
+  button.innerHTML = `${'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4L19 6"></path></svg>'}<span>\u4fdd\u5b58</span>`;
+  button.title = "\u4fdd\u5b58\u8fd9\u4e00\u6bb5";
+  button.setAttribute("aria-label", button.title);
+}
+
+async function saveWritingParagraphInlineEdit(button) {
+  const cell = writingReportParagraphCellFromButton(button);
+  const entry = cachedWritingReportEntry(button?.dataset?.writingParagraphEdit || "") || state.writing.activeReportDetail;
+  if (!cell || !entry?.id) return;
+  const editor = cell.querySelector("[data-writing-paragraph-editor]");
+  if (!editor) {
+    beginWritingParagraphInlineEdit(button);
+    return;
+  }
+  const paragraphIndex = Number.parseInt(button.dataset.writingParagraphIndex || cell.dataset.writingParagraphIndex || "1", 10);
+  const paragraphs = writingParagraphsForEditing(entry.answer || "");
+  const idx = Math.max(0, paragraphIndex - 1);
+  while (paragraphs.length <= idx) paragraphs.push("");
+  const previousAnswer = String(entry.answer || "");
+  paragraphs[idx] = String(editor.value || "").trim();
+  const nextAnswer = paragraphs.join("\n\n").trim();
+  if (nextAnswer === previousAnswer.trim()) {
+    renderVisibleWritingReport(entry);
+    return;
+  }
+  button.classList.add("is-busy");
+  button.disabled = true;
+  try {
+    const saved = await saveWritingReportAnswer(entry, nextAnswer, { preserveScore: true });
+    rememberWritingReportUndo(entry, paragraphIndex, previousAnswer, "save");
+    renderVisibleWritingReport(saved);
+  } catch (error) {
+    button.classList.remove("is-busy");
+    button.disabled = false;
+    showWritingReportEditError(error);
+  }
+}
+
+function handleWritingParagraphInlineEditClick(button) {
+  const cell = writingReportParagraphCellFromButton(button);
+  if (!cell) return;
+  if (cell.classList.contains("is-editing")) {
+    saveWritingParagraphInlineEdit(button).catch(showWritingError);
+    return;
+  }
+  beginWritingParagraphInlineEdit(button);
+}
+
+async function handleWritingParagraphUndoClick(button) {
+  if (!button || button.disabled) return;
+  const entryId = button.dataset.writingParagraphUndo || "";
+  const paragraphIndex = Number.parseInt(button.dataset.writingParagraphIndex || "1", 10) || 1;
+  const entry = cachedWritingReportEntry(entryId) || state.writing.activeReportDetail;
+  const stack = writingReportUndoStack(entryId, paragraphIndex);
+  const currentAnswer = String(entry?.answer || "");
+  let snapshot = null;
+  while (stack.length && !snapshot) {
+    const candidate = stack.pop();
+    if (candidate && Object.prototype.hasOwnProperty.call(candidate, "answer") && String(candidate.answer || "") !== currentAnswer) {
+      snapshot = candidate;
+    }
+  }
+  if (!entry?.id || !snapshot) return;
+  button.classList.add("is-busy");
+  button.disabled = true;
+  try {
+    const saved = await saveWritingReportAnswer(entry, snapshot.answer, { preserveScore: true });
+    if (snapshot.score) {
+      saved.score = snapshot.score;
+      saved.overall_band = snapshot.overall_band ?? snapshot.score.overall_band ?? saved.overall_band;
+      state.writing.activeReportDetail = saved;
+      syncWritingReportEntryCache(saved, { renderList: state.view === "writingReports" });
+    }
+    renderVisibleWritingReport(saved);
+  } catch (error) {
+    stack.push(snapshot);
+    button.classList.remove("is-busy");
+    button.disabled = false;
+    showWritingReportEditError(error);
+  }
 }
 
 function setWritingPrompt(prompt, clearAnswer = true, options = {}) {
@@ -8923,6 +9508,31 @@ function setWritingPrompt(prompt, clearAnswer = true, options = {}) {
   }
   renderWritingSurface();
   if (!options.skipUrl) syncUrlForCurrentState({ replace: Boolean(options.replaceUrl) });
+  if (clearAnswer && !options.skipEntryLoad) {
+    loadMaintainedEntryForPrompt(prompt).catch(() => null);
+  }
+}
+
+async function loadMaintainedEntryForPrompt(prompt) {
+  if (!prompt || !state.account.authenticated) return;
+  const promptId = String(prompt.id || "").trim();
+  const taskType = prompt.task_type || state.writing.taskType || "task2";
+  const params = new URLSearchParams({ task_type: taskType });
+  if (promptId) params.set("prompt_id", promptId);
+  if (prompt.prompt) params.set("prompt", String(prompt.prompt));
+  let result;
+  try {
+    result = await api(`/api/writing/entry-for-prompt?${params.toString()}`);
+  } catch (_error) {
+    return;
+  }
+  const entry = result?.entry;
+  if (!entry?.id) return;
+  if (String(state.writing.prompt?.id || "") !== promptId) return;
+  if (state.writing.dirty || String($("writingAnswer")?.value || "").trim()) return;
+  await recoverWritingEntry(entry);
+  state.writing.activeReportId = entry.id;
+  if (entry.answer) text("writingSaveStatus", "已载入这道题当前维护的作文。");
 }
 
 function renderWritingSurface() {
@@ -9273,6 +9883,7 @@ async function saveWritingEntry(keepPending = false, options = {}) {
     title: writingPromptDisplayTitle(prompt),
     category: prompt.category,
     image_url: prompt.image_url || "",
+    practice_date: previousEntry?.practice_date || "",
     answer,
     prompt_highlights: currentWritingPromptHighlightsPayload(),
   };
@@ -9471,6 +10082,179 @@ function closeWritingScoreCompleteModal() {
   $("writingScoreCompleteModal")?.classList.add("hidden");
 }
 
+function reportHtmlStylesheetHref() {
+  const link = document.querySelector('link[rel="stylesheet"][href*="styles.css"]');
+  return link?.href || `${window.location.origin}/styles.css`;
+}
+
+function reportMascotFramesHtml() {
+  const brainSvg = `
+    <svg class="tk-brain-icon" viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+      <g class="tk-brain-cloud">
+        <path class="tk-brain-cloud-puff" d="M27.3,-5 H35.7 Q37,-5 37,-3.7 V0.2 Q37,1.5 35.7,1.5 H30.6 L26.6,3.3 L27.3,1.5 Q26,1.5 26,0.2 V-3.7 Q26,-5 27.3,-5 Z"/>
+        <g class="tk-brain-cloud-dots">
+          <rect x="29" y="-2.5" width="1.3" height="1.3"/>
+          <rect x="31.5" y="-2.5" width="1.3" height="1.3"/>
+          <rect x="34" y="-2.5" width="1.3" height="1.3"/>
+        </g>
+      </g>
+      <g class="tk-brain-bulb">
+        <line class="tk-brain-bulb-ray" x1="32" y1="-4.6" x2="32" y2="-6.2"/>
+        <line class="tk-brain-bulb-ray" x1="27.9" y1="-2.6" x2="26.6" y2="-3.7"/>
+        <line class="tk-brain-bulb-ray" x1="36.1" y1="-2.6" x2="37.4" y2="-3.7"/>
+        <circle class="tk-brain-bulb-glass" cx="32" cy="-1" r="3.5"/>
+        <rect class="tk-brain-bulb-base" x="30.2" y="1.8" width="3.6" height="2"/>
+      </g>
+      <rect class="tk-brain-limb" x="12.55" y="20" width="1.7" height="3.4"/>
+      <rect class="tk-brain-limb" x="11.85" y="22.8" width="3.1" height="1.6"/>
+      <rect class="tk-brain-limb" x="17.75" y="20" width="1.7" height="3.4"/>
+      <rect class="tk-brain-limb" x="17.05" y="22.8" width="3.1" height="1.6"/>
+      <path class="tk-brain-limb-stroke" d="M7.5,12.5 Q4.6,15.2 4,19.4"/>
+      <rect class="tk-brain-hand" x="2.6" y="18.6" width="2.7" height="2.7"/>
+      <path class="tk-brain-body" d="M10,6 H22 V8 H24 V10 H26 V16 H24 V18 H22 V20 H10 V18 H8 V16 H6 V10 H8 V8 H10 Z"/>
+      <path class="tk-brain-fold" d="M16,8 V18 M10.5,10 H13.5 M18.5,10 H21.5 M10,16 H13 M19,16 H22"/>
+      <rect class="tk-brain-eye" x="12" y="12.4" width="2" height="2"/>
+      <rect class="tk-brain-eye" x="18" y="12.4" width="2" height="2"/>
+      <g class="tk-brain-balloon">
+        <path class="tk-brain-balloon-string" d="M28,-1.9 C30.2,1 24.6,3.6 26.4,6.4"/>
+        <g class="tk-brain-balloon-bob">
+          <ellipse class="tk-brain-balloon-body" cx="28" cy="-6.6" rx="3.4" ry="3.9"/>
+          <path class="tk-brain-balloon-knot" d="M27.2,-3 L28.8,-3 L28,-1.5 Z"/>
+        </g>
+      </g>
+      <g class="tk-brain-arm-think">
+        <path class="tk-brain-limb-stroke" d="M24,13 C28.6,12 28.8,4.8 22,5"/>
+        <g class="tk-brain-hand-right"><rect class="tk-brain-hand" x="20" y="2.9" width="3" height="3"/></g>
+      </g>
+      <g class="tk-brain-arm-idea">
+        <path class="tk-brain-limb-stroke" d="M24,13 C27.2,11.2 27.6,6.5 26,5.2"/>
+        <rect class="tk-brain-hand" x="24.8" y="3.6" width="2.8" height="2.8"/>
+      </g>
+      <g class="tk-brain-arm-hold">
+        <path class="tk-brain-limb-stroke" d="M24,13 C28.4,11.6 28.8,7 26.4,6"/>
+        <rect class="tk-brain-hand" x="24.9" y="4.9" width="3" height="3"/>
+      </g>
+    </svg>
+  `;
+  return `
+    <div class="report-mascot-strip" aria-label="IELTS Studio mascot">
+      <span class="report-mascot-frame is-think">${brainSvg}<small>Think</small></span>
+      <span class="report-mascot-frame is-idea">${brainSvg}<small>Idea</small></span>
+      <span class="report-mascot-frame is-balloon">${brainSvg}<small>Lift</small></span>
+    </div>
+  `;
+}
+
+function prepareReportHtmlContent(source) {
+  const content = source.cloneNode(true);
+  content.querySelectorAll("textarea, input").forEach((el) => {
+    const replacement = document.createElement("div");
+    replacement.className = "report-pdf-field-value";
+    replacement.textContent = "value" in el ? String(el.value || "") : "";
+    el.replaceWith(replacement);
+  });
+  content.querySelectorAll([
+    ".history-item-menu",
+    ".writing-fix-popover",
+    ".writing-report-edit-btn",
+    ".report-export-btn",
+    "[data-writing-report-edit]",
+    "[data-report-export]",
+    "[data-regenerate-report]",
+    "[data-regenerate-turn]",
+    "[data-regenerate-transcript]",
+    "[data-writing-report-paragraph-edit]",
+    "[data-writing-report-paragraph-save]",
+  ].join(",")).forEach((node) => node.remove());
+  content.querySelectorAll("[style]").forEach((el) => {
+    const style = el.getAttribute("style") || "";
+    if (!/max-height|overflow|height/i.test(style)) return;
+    el.style.maxHeight = "none";
+    el.style.overflow = "visible";
+    if (/height/i.test(style)) el.style.height = "auto";
+  });
+  return content;
+}
+
+function openReportHtmlPage(kind, options = {}) {
+  const isWriting = kind === "writing";
+  const source = isWriting ? $("writingReportDetail") : $("detailPanel");
+  if (!source) return;
+  const reportTitle = isWriting ? "IELTS Studio 写作报告" : "IELTS Studio 口语报告";
+  const content = prepareReportHtmlContent(source);
+  const bodyClass = `${document.body.className || ""} report-pdf-body`.trim();
+  const stylesheetHref = reportHtmlStylesheetHref();
+  const html = `<!doctype html>
+    <html lang="zh-CN">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <base href="${escapeHtml(window.location.origin)}/">
+        <title>${escapeHtml(reportTitle)}</title>
+        <link rel="stylesheet" href="${escapeHtml(stylesheetHref)}">
+        <style>
+          html, body { min-height: auto !important; height: auto !important; overflow: visible !important; }
+          body.report-pdf-body { margin: 0 !important; background: var(--bg, #f7fbfa) !important; color: var(--ink, #10201d); }
+          body.report-pdf-body.theme-dark { background: #07131a !important; }
+          .report-html-page { width: min(1080px, 100%); margin: 0 auto; padding: 28px 30px 42px; }
+          .report-html-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; padding: 16px 18px; border: 1px solid var(--line, #dbe5e2); border-radius: 16px; background: var(--panel, #fff); }
+          .report-html-bar h1 { margin: 0; font-size: 22px; letter-spacing: 0; }
+          .report-html-brand { display: flex; flex-direction: column; gap: 3px; }
+          .report-html-brand small { color: var(--muted, #64746f); font-weight: 750; }
+          .report-html-actions { display: inline-flex; align-items: center; gap: 10px; }
+          .report-html-download-btn { min-height: 34px; height: 34px; padding: 0 12px; border: 1px solid var(--line, #dbe5e2); border-radius: 10px; background: var(--accent, #0f8f72); color: #fff; font-weight: 800; cursor: pointer; }
+          .report-html-source, .report-html-source * { max-height: none !important; overflow: visible !important; }
+          .report-html-source { display: block !important; width: 100% !important; height: auto !important; }
+          .report-html-source .detail-card, .report-html-source .writing-report-section, .report-html-source .turn-report-card { break-inside: avoid; page-break-inside: avoid; }
+          @media print { .report-html-bar { display: none !important; } .report-html-page { padding: 0; width: 100%; } }
+        </style>
+      </head>
+      <body class="${escapeHtml(bodyClass)}">
+        <main class="report-html-page">
+          <header class="report-html-bar">
+            <div class="report-html-brand">
+              <h1>${escapeHtml(reportTitle)}</h1>
+              <small>IELTS Studio · Practice report</small>
+            </div>
+            <div class="report-html-actions">
+              <button id="reportHtmlDownloadBtn" class="report-html-download-btn" type="button">下载 HTML</button>
+            </div>
+          </header>
+          <section class="report-html-source">${content.innerHTML}</section>
+        </main>
+        <script>
+          document.getElementById("reportHtmlDownloadBtn")?.addEventListener("click", function () {
+            var clone = document.documentElement.cloneNode(true);
+            clone.querySelector("#reportHtmlDownloadBtn")?.remove();
+            var blob = new Blob(["<!doctype html>\\n" + clone.outerHTML], { type: "text/html;charset=utf-8" });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+            a.href = url;
+            a.download = "ielts-studio-report-" + stamp + ".html";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+          });
+        </script>
+      </body>
+    </html>`;
+  const win = window.open("about:blank", "_blank");
+  if (!win) {
+    alert("浏览器拦截了新标签页，请允许弹窗后再试。");
+    return;
+  }
+  try {
+    win.opener = null;
+  } catch (_error) {
+    // Keep the report page isolated when the browser allows it.
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
 function openWritingScoreCompleteReport() {
   const entry = state.writing.scoreCompletionModalEntry;
   if (!entry?.id) return closeWritingScoreCompleteModal();
@@ -9487,6 +10271,19 @@ function clearWritingScorePolling() {
     state.writing.scorePollTimer = null;
   }
   state.writing.scorePollingEntryId = null;
+}
+
+function shouldRescoreWritingAfterActiveTask() {
+  return Boolean(state.writing.rescoreAfterActiveTask && state.writing.dirty && state.view === "writing");
+}
+
+async function rescoreWritingAfterActiveTaskIfNeeded() {
+  if (!shouldRescoreWritingAfterActiveTask()) return false;
+  state.writing.rescoreAfterActiveTask = false;
+  clearWritingScorePolling();
+  setWritingPending(true, "正在使用最新作文重新评分", "刚才评分过程中作文已被修改，旧结果不会作为最终报告。");
+  await scoreWritingEntry();
+  return true;
 }
 
 function isScoreTaskUnsupported(error) {
@@ -9657,6 +10454,7 @@ function startWritingScorePolling(entryId, options = {}) {
       await loadWritingSummary();
       const task = entry.ai_task || null;
       if (entry.score || (task && isAiTaskCompletedWithResultStatus(task.status))) {
+        if (await rescoreWritingAfterActiveTaskIfNeeded()) return;
         clearWritingScorePolling();
         setWritingPending(false);
         await refreshWalletAfterAiUsage();
@@ -9664,6 +10462,7 @@ function startWritingScorePolling(entryId, options = {}) {
         return;
       }
       if (task && isWritingTaskTerminal(task)) {
+        if (await rescoreWritingAfterActiveTaskIfNeeded()) return;
         clearWritingScorePolling();
         setWritingPending(false);
         text("writingSaveStatus", writingTaskStatusTitle(task));
@@ -9702,6 +10501,7 @@ function syncWritingScorePolling(entry, options = {}) {
 }
 
 async function scoreWritingEntry() {
+  state.writing.rescoreAfterActiveTask = false;
   const currentAnswer = $("writingAnswer")?.value || "";
   if (!ensureWritingParagraphsBeforeScore(currentAnswer, state.writing.taskType || "task1_academic")) return;
   setWritingPending(true, "AI 正在评分与生成辅导", "正在分析题目、你的作文和 IELTS 写作评分标准。");
@@ -9769,41 +10569,23 @@ async function editWritingReportEntry(entryId) {
   const requestId = state.writing.reportEditRequestId + 1;
   state.writing.reportEditRequestId = requestId;
   state.writing.reportEditLoading = true;
-  const editBusyMessage = cachedEntry && isWritingEntryScored(cachedEntry) ? "正在复制为新版草稿..." : "正在打开作文...";
+  const editBusyMessage = "正在打开作文...";
   text("writingSaveStatus", editBusyMessage);
   try {
-    const source = cachedEntry && isWritingEntryScored(cachedEntry)
-      ? cachedEntry
-      : await withBusy("正在打开作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
+    const source = cachedEntry || await withBusy("正在打开作文...", () => api(`/api/writing/entries/${encodeURIComponent(entryId)}`));
     if (state.writing.reportEditRequestId !== requestId) return;
     syncWritingReportEntryCache(source);
     state.writing.activeReportDetail = source;
-    if (!isWritingEntryScored(source)) {
-      state.writing.requestedEntryId = "";
-      state.writing.requestedPromptId = "";
-      state.writing.dirty = false;
-      clearWritingAutosaveTimer();
-      switchView("writing", { force: true });
-      await recoverWritingEntry(source);
-      syncWritingScorePolling(source, { switchOnComplete: false });
-      syncUrlForCurrentState({ replace: true });
-      text("writingSaveStatus", "继续编辑原稿");
-      $("writingAnswer")?.focus();
-      return;
-    }
-    const clone = await withBusy("正在复制为新版草稿...", () => cloneWritingEntryForRevision(entryId));
     if (state.writing.reportEditRequestId !== requestId) return;
     state.writing.requestedEntryId = "";
     state.writing.requestedPromptId = "";
     state.writing.dirty = false;
     clearWritingAutosaveTimer();
     switchView("writing", { force: true });
-    await recoverWritingEntry(clone);
-    state.writing.reportDetailCache.set(clone.id, clone);
-    state.writing.activeReportId = entryId;
-    state.writing.activeReportDetail = cachedWritingReportEntry(entryId) || state.writing.activeReportDetail || null;
+    await recoverWritingEntry(source);
+    syncWritingScorePolling(source, { switchOnComplete: false });
     syncUrlForCurrentState({ replace: true });
-    text("writingSaveStatus", "已复制为新版草稿。旧报告会保留，重新评分后新版会排在旧报告左边。");
+    text("writingSaveStatus", isWritingEntryScored(source) ? "正在修改这道题当前维护的作文，保存后原报告批注会按句保留。" : "继续编辑原稿");
     $("writingAnswer")?.focus();
   } catch (error) {
     if (state.writing.reportEditRequestId === requestId) showWritingReportEditError(error);
@@ -9817,7 +10599,7 @@ async function editWritingReportEntry(entryId) {
 async function editWritingReportEntryInNewTab(entryId, entryHint = null) {
   if (!entryId) return;
   let targetWindow = null;
-  const newTabBusyMessage = entryHint && isWritingEntryScored(entryHint) ? "正在复制为新版草稿..." : "正在打开作文...";
+  const newTabBusyMessage = "正在打开作文...";
   try {
     targetWindow = window.open("about:blank", "_blank");
     if (targetWindow) {
@@ -9843,24 +10625,11 @@ async function editWritingReportEntryInNewTab(entryId, entryHint = null) {
   }
   try {
     const source = await withBusy(newTabBusyMessage, async () => {
-      if (entryHint && isWritingEntryScored(entryHint)) return entryHint;
+      if (entryHint?.id) return entryHint;
       return api(`/api/writing/entries/${encodeURIComponent(entryId)}`);
     });
     syncWritingReportEntryCache(source);
-    if (!isWritingEntryScored(source)) {
-      const url = writingEntryEditUrl(source);
-      if (targetWindow && !targetWindow.closed) {
-        targetWindow.location.replace(url);
-        return;
-      }
-      const opened = window.open(url, "_blank", "noopener");
-      if (!opened) {
-        throw new Error("浏览器阻止了新窗口。请允许弹窗后重试，或普通点击按钮在当前页面编辑。");
-      }
-      return;
-    }
-    const clone = await withBusy("正在复制为新版草稿...", () => cloneWritingEntryForRevision(entryId));
-    const url = writingEntryEditUrl(clone);
+    const url = writingEntryEditUrl(source);
     if (targetWindow && !targetWindow.closed) {
       targetWindow.location.replace(url);
       return;
@@ -9934,9 +10703,12 @@ function renderDetail(attempt, updateView = true, options = {}) {
           <h2>${escapeHtml((attempt.mode || attempt.part || "").toUpperCase())} report</h2>
           <p class="muted">${escapeHtml(attempt.title || "")} · ${visibleTurns.length} question${visibleTurns.length === 1 ? "" : "s"}</p>
         </div>
-        <div class="speaking-score-summary-band">
-          <span>Overall</span>
-          <strong>Band ${escapeHtml(score.overall_band ?? "—")}</strong>
+        <div class="speaking-score-summary-side">
+          <button type="button" class="report-export-btn" data-report-export="speaking">打开报告页</button>
+          <div class="speaking-score-summary-band">
+            <span>Overall</span>
+            <strong>Band ${escapeHtml(score.overall_band ?? "—")}</strong>
+          </div>
         </div>
       </div>
       <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
@@ -10043,7 +10815,43 @@ function refreshReportCorpusButtonStates() {
 // saved-status round-trip. Returns true/false when known locally, or null to
 // defer to the server query. Covers the P1 case the user hits most; other kinds
 // fall through to the network path unchanged.
+const reportCorpusSavedOverrides = new Map();
+
+function normalizeP2ReportQuestionId(questionId) {
+  const value = String(questionId || "").trim();
+  return value.startsWith("p2:") ? `p2cue:${value.slice(3)}` : value;
+}
+
+function reportCorpusTargetKey(target = {}) {
+  const kind = String(target.kind || target.corpusKind || "").trim();
+  if (kind === "p1") return `p1:${String(target.questionId || target.question_id || "").trim()}`;
+  if (kind === "p2_bank") return `p2_bank:${normalizeP2ReportQuestionId(target.questionId || target.question_id || target.p2QuestionId || "")}`;
+  if (kind === "p3_bank") return `p3_bank:${String(target.followupId || target.followup_id || "").trim()}`;
+  if (kind === "p2_corpus_p3") return `p2_corpus_p3:${String(target.entryId || target.entry_id || target.p2CorpusEntryId || "").trim()}`;
+  return "";
+}
+
+function handleCorpusSavedLocally(detail = {}) {
+  const key = reportCorpusTargetKey(detail);
+  if (!key) return;
+  if (detail.invalidate) {
+    reportCorpusSavedOverrides.delete(key);
+    refreshReportCorpusButtonStates();
+    return;
+  }
+  reportCorpusSavedOverrides.set(key, Boolean(detail.saved));
+  document.querySelectorAll("#detailPanel [data-edit-turn-corpus]").forEach((button) => {
+    if (reportCorpusTargetKey(button.dataset) === key) {
+      applyCorpusButtonState(button, Boolean(detail.saved));
+    }
+  });
+}
+
 function localReportCorpusSavedState(button) {
+  const overrideKey = reportCorpusTargetKey(button.dataset);
+  if (overrideKey && reportCorpusSavedOverrides.has(overrideKey)) {
+    return reportCorpusSavedOverrides.get(overrideKey);
+  }
   const kind = button.dataset.corpusKind || "";
   if (kind === "p1") {
     const questionId = button.dataset.questionId || "";
@@ -10213,7 +11021,9 @@ async function startSpeakingReportRegen(attemptId) {
   if (state.activeHistoryId === attemptId) renderSpeakingReportRegenLoading(attemptId);
   rerenderSpeakingReportLists(); // flip the list card to 评分中 immediately
   try {
-    const scored = await api(`/api/attempts/${encodeURIComponent(attemptId)}/score`, {});
+    const scored = await api(`/api/attempts/${encodeURIComponent(attemptId)}/score`, {
+      provider: currentAiSourcePreference(),
+    });
     if (!isSpeakingReportRegenInFlight(attemptId)) return; // superseded/cleared
     const task = scored.ai_task || null;
     if (isSpeakingTaskActive(task)) {
@@ -11094,6 +11904,34 @@ async function openP2BrainstormDialog(...args) {
   return corpusTakeawayController.openP2BrainstormDialog(...args);
 }
 
+function createPixelFlowField(...args) {
+  return corpusTakeawayController.createPixelFlowField(...args);
+}
+
+function resetLanguageTakeawayDictionary(...args) {
+  return corpusTakeawayController.resetLanguageTakeawayDictionary(...args);
+}
+
+function toggleLanguageTakeawayDictionaryMode(...args) {
+  return corpusTakeawayController.toggleLanguageTakeawayDictionaryMode(...args);
+}
+
+function syncLanguageTakeawayDictionaryChineseDraft(...args) {
+  return corpusTakeawayController.syncLanguageTakeawayDictionaryChineseDraft(...args);
+}
+
+function openTakeawayPronunciationDialog(...args) {
+  return corpusTakeawayController.openTakeawayPronunciationDialog(...args);
+}
+
+function closeTakeawayPronunciationDialog(...args) {
+  return corpusTakeawayController.closeTakeawayPronunciationDialog(...args);
+}
+
+function startTakeawayPronunciationRecording(...args) {
+  return corpusTakeawayController.startTakeawayPronunciationRecording(...args);
+}
+
 async function loadCorpusHome(...args) {
   return corpusTakeawayController.loadCorpusHome(...args);
 }
@@ -11821,6 +12659,11 @@ function syncAiSourceControls(value) {
   const aiSource = normalizeAiSource(value);
   const aiSourceSelect = $("aiSourceSelect");
   if (aiSourceSelect) aiSourceSelect.value = aiSource;
+}
+
+function currentAiSourcePreference() {
+  const selectValue = $("aiSourceSelect")?.value;
+  return normalizeAiSource(selectValue || state.account.user?.profile?.report_ai_source);
 }
 
 function applyAccountProfileForm(user = state.account.user) {
@@ -12791,7 +13634,12 @@ function bindEvents() {
   });
   document.addEventListener("selectionchange", () => {
     window.clearTimeout(state.languageTakeaway.selectionTimer);
-    if (!selectionText()) hideLanguageTakeawayTrigger();
+    const info = selectionText();
+    if (!info) {
+      hideLanguageTakeawayTrigger();
+      return;
+    }
+    if (info.source !== "writing_prompt") scheduleLanguageTakeawayTriggerFromSelection();
   });
   document.addEventListener("scroll", trackLanguageTakeawayTriggerDuringScroll, { capture: true, passive: true });
   document.addEventListener("pointerdown", (event) => {
@@ -12981,8 +13829,12 @@ function bindEvents() {
     autosizeLanguageTakeawaySource();
     updateLanguageTakeawaySpellingButton();
   });
-  $("languageTakeawaySpellingBtn")?.addEventListener("click", (event) => {
-    withPending(event.currentTarget, addLanguageTakeawaySpellingWord, { busyText: "" }).catch(showError);
+  $("languageTakeawaySpellingBtn")?.addEventListener("click", () => {
+    addLanguageTakeawaySpellingWord().catch(showError);
+  });
+  $("languageTakeawayDictToggle")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    toggleLanguageTakeawayDictionaryMode();
   });
   document.addEventListener("pointerdown", (event) => {
     const popup = $("languageTakeawayPopup");
@@ -13149,6 +14001,11 @@ function bindEvents() {
     });
   });
   $("detailPanel")?.addEventListener("click", (event) => {
+    const exportButton = event.target.closest("[data-report-export]");
+    if (exportButton) {
+      openReportHtmlPage(exportButton.dataset.reportExport || "speaking");
+      return;
+    }
     const filterButton = event.target.closest("[data-speaking-report-filter]");
     if (!filterButton) return;
     const filter = filterButton.dataset.speakingReportFilter || "all";
@@ -13159,6 +14016,11 @@ function bindEvents() {
     renderHistoryList(state.historyItems);
   });
   $("writingReportDetail")?.addEventListener("click", (event) => {
+    const exportButton = event.target.closest("[data-report-export]");
+    if (exportButton) {
+      openReportHtmlPage(exportButton.dataset.reportExport || "writing");
+      return;
+    }
     const filterButton = event.target.closest("[data-writing-report-filter]");
     if (!filterButton) return;
     const filter = filterButton.dataset.writingReportFilter || "all";
@@ -13208,6 +14070,12 @@ function bindEvents() {
     state.p3CustomTheme = String(event.target.value || "").trim();
     clearP3Plan();
   });
+  document.querySelectorAll("[data-p1-intensity]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.p1Intensity = button.dataset.p1Intensity || "normal";
+      syncP1IntensityPanel();
+    });
+  });
   document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
     button.addEventListener("click", () => {
       state.p3Intensity = button.dataset.p3Intensity || "normal";
@@ -13220,6 +14088,7 @@ function bindEvents() {
         renderP3PlanPreview();
       }
       syncP3LaunchPanel();
+      syncP3IntensityPixelFlow();
     });
   });
   $("p3TopicChips")?.addEventListener("click", (event) => {
@@ -13368,12 +14237,44 @@ function bindEvents() {
   };
   document.addEventListener("click", handleWritingReportEditClick);
   document.addEventListener("auxclick", handleWritingReportEditClick);
+  document.addEventListener("click", (event) => {
+    const paragraphUndoButton = event.target.closest("[data-writing-paragraph-undo]");
+    if (paragraphUndoButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      handleWritingParagraphUndoClick(paragraphUndoButton).catch(showWritingError);
+      return;
+    }
+    const paragraphEditButton = event.target.closest("[data-writing-paragraph-edit]");
+    if (paragraphEditButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      handleWritingParagraphInlineEditClick(paragraphEditButton);
+      return;
+    }
+    const applyButton = event.target.closest("[data-writing-fix-apply]");
+    if (applyButton) {
+      applyWritingFixFromPopover().catch(showWritingError);
+      return;
+    }
+    const fixAnchor = event.target.closest("[data-writing-fix-original][data-writing-fix-suggestion]");
+    if (fixAnchor) {
+      showWritingFixPopover(fixAnchor, event);
+      return;
+    }
+    if (!event.target.closest("#writingFixPopover")) hideWritingFixPopover();
+  });
   $("writingAnswer")?.addEventListener("input", () => {
     // Slash commands resolve before we mark the doc dirty.
-    if (handleWritingFrameSlashCommand()) return;
+    if (handleWritingFrameSlashCommand()) {
+      return;
+    }
     state.writing.dirty = true;
+    if (state.writing.scorePollingEntryId) {
+      state.writing.rescoreAfterActiveTask = true;
+    }
     updateWritingWordCount({ preserveScroll: true });
-    text("writingSaveStatus", "未保存的修改");
+    text("writingSaveStatus", state.writing.rescoreAfterActiveTask ? "已修改 · 当前评分结束后会按最新作文重新评分" : "未保存的修改");
   });
   document.querySelectorAll("[data-frame-cmd]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -13671,7 +14572,7 @@ function syncP3LaunchPanel(message = "") {
   document.querySelectorAll("[data-p3-intensity]").forEach((button) => {
     button.classList.toggle("active", button.dataset.p3Intensity === state.p3Intensity);
   });
-  const switchEl = document.querySelector(".p3-mode-switch");
+  const switchEl = document.querySelector("#p3TopicPanel .p3-mode-switch");
   if (switchEl) {
     switchEl.classList.toggle("high-intensity", state.p3Intensity === "high");
   }
