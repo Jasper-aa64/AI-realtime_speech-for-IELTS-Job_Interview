@@ -38715,3 +38715,82 @@ body.theme-dark.font-popular .p3-bank-picker-card.active .p3-bank-card-top span,
 body.theme-dark.font-popular .p3-bank-context-card.active .p3-bank-card-top span {
   color: #d9f2ff !important;
 }
+
+/* Report rail loading card: keep spinner/text aligned instead of squeezing the
+   status copy into one horizontal row. */
+.report-rail-loading-card {
+  display: inline-grid !important;
+  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-content: start;
+  column-gap: 10px;
+  row-gap: 2px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.report-rail-loading-card .spinner {
+  grid-row: 1 / 3;
+  grid-column: 1;
+}
+
+.report-rail-loading-card strong,
+.report-rail-loading-card small {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.report-rail-loading-card small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+/* Third dark theme: brighten writing-report edit/undo controls and report
+   loading spinners without changing the other two themes. */
+body.theme-dark.font-popular #writingReportsPanel .writing-report-edit-btn,
+body.theme-dark.font-popular #writingReportsPanel .writing-inline-edit-btn:not(:disabled) {
+  background: linear-gradient(180deg, #2474b5 0%, #155b91 100%) !important;
+  border-color: rgba(174, 221, 255, 0.70) !important;
+  color: #f7fbff !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 10px 22px rgba(28, 107, 170, 0.28) !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-report-edit-btn:hover,
+body.theme-dark.font-popular #writingReportsPanel .writing-inline-edit-btn:not(:disabled):hover {
+  background: linear-gradient(180deg, #2f86cf 0%, #1b6dab 100%) !important;
+  border-color: rgba(214, 239, 255, 0.82) !important;
+  color: #ffffff !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .writing-inline-undo-btn:disabled,
+body.theme-dark.font-popular #writingReportsPanel .writing-inline-undo-btn.is-disabled {
+  background: rgba(71, 85, 105, 0.20) !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  color: rgba(203, 213, 225, 0.55) !important;
+  box-shadow: none !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .spinner {
+  border-color: rgba(174, 221, 255, 0.26) !important;
+  border-top-color: #d7f0ff !important;
+  filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.42));
+}
+
+body.theme-dark.font-popular #writingReportsPanel .report-rail-loading-card {
+  background: linear-gradient(180deg, #111820, #080d12) !important;
+  border-color: rgba(174, 221, 255, 0.34) !important;
+  color: #edf7ff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.28) !important;
+}
+
+body.theme-dark.font-popular #writingReportsPanel .report-rail-loading-card small {
+  color: rgba(211, 230, 243, 0.72) !important;
+}
