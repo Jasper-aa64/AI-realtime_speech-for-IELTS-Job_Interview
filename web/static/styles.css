@@ -38704,25 +38704,14 @@ body.theme-dark.font-popular .p3-plan-card-top em {
 }
 
 /* P3 fixed-bank selected cue card: deepen the card surface and keep the
-   category label readable in the first two dark themes. */
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-picker-card.active,
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-context-card.active {
-  background: linear-gradient(180deg, rgba(7, 31, 24, 0.92), rgba(5, 18, 16, 0.96)) !important;
-  border-color: rgba(124, 244, 198, 0.48) !important;
+   category label readable in the third dark theme only. */
+body.theme-dark.font-popular .p3-bank-picker-card.active,
+body.theme-dark.font-popular .p3-bank-context-card.active {
+  background: linear-gradient(180deg, rgba(7, 22, 34, 0.94), rgba(4, 10, 16, 0.98)) !important;
+  border-color: rgba(91, 177, 232, 0.50) !important;
 }
 
-body.theme-dark.font-academic .p3-bank-picker-card.active,
-body.theme-dark.font-academic .p3-bank-context-card.active {
-  background: linear-gradient(180deg, rgba(38, 28, 19, 0.94), rgba(21, 17, 13, 0.98)) !important;
-  border-color: rgba(232, 203, 158, 0.46) !important;
-}
-
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-picker-card.active .p3-bank-card-top span,
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-context-card.active .p3-bank-card-top span {
-  color: #bffbe7 !important;
-}
-
-body.theme-dark.font-academic .p3-bank-picker-card.active .p3-bank-card-top span,
-body.theme-dark.font-academic .p3-bank-context-card.active .p3-bank-card-top span {
-  color: #f1d9ad !important;
+body.theme-dark.font-popular .p3-bank-picker-card.active .p3-bank-card-top span,
+body.theme-dark.font-popular .p3-bank-context-card.active .p3-bank-card-top span {
+  color: #d9f2ff !important;
 }
