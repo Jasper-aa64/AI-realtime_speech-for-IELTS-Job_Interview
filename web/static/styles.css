@@ -38685,3 +38685,20 @@ body.theme-dark.font-popular .p3-target-moves span {
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 6px 14px rgba(0, 0, 0, 0.18) !important;
 }
+
+body.theme-dark .p3-plan-card-top span,
+body.theme-dark.font-academic .p3-plan-card-top span,
+body.theme-dark.font-popular .p3-plan-card-top span {
+  background: rgba(12, 18, 27, 0.82) !important;
+  border: 1px solid rgba(169, 184, 201, 0.34) !important;
+  color: #e7eef7 !important;
+}
+
+body.theme-dark .p3-plan-card-top em,
+body.theme-dark.font-academic .p3-plan-card-top em,
+body.theme-dark.font-popular .p3-plan-card-top em {
+  background: rgba(13, 48, 64, 0.74) !important;
+  border: 1px solid rgba(125, 211, 252, 0.36) !important;
+  color: #d9f3ff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
