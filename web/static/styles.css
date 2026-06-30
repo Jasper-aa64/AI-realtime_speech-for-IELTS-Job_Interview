@@ -38636,6 +38636,32 @@ body.theme-dark.font-popular .p3-source-option.active small {
   color: rgba(224, 244, 255, 0.84) !important;
 }
 
+body.theme-dark.font-popular .report-export-btn {
+  background: linear-gradient(180deg, #121923, #090d13) !important;
+  border-color: rgba(173, 214, 255, 0.52) !important;
+  color: #f2f8ff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 18px rgba(0, 0, 0, 0.26) !important;
+}
+
+body.theme-dark.font-popular .report-export-btn:hover {
+  background: linear-gradient(180deg, #182638, #0d141f) !important;
+  border-color: rgba(173, 214, 255, 0.72) !important;
+  color: #ffffff !important;
+}
+
+body.theme-dark.font-popular .agent-assistant-trigger svg {
+  stroke: #f3f8ff !important;
+  filter: drop-shadow(0 0 5px rgba(173, 214, 255, 0.36));
+}
+
+body.theme-dark.font-popular .floating-agent-assistant-trigger {
+  background: linear-gradient(180deg, #121923, #090d13) !important;
+  border-color: rgba(173, 214, 255, 0.48) !important;
+  color: #f2f8ff !important;
+}
+
 body.theme-dark:not(.font-academic):not(.font-popular) .p3-start-button:not(:disabled) {
   background: linear-gradient(180deg, #15875f 0%, #0c6f4d 58%, #07563d 100%) !important;
   border-color: rgba(124, 244, 198, 0.46) !important;
