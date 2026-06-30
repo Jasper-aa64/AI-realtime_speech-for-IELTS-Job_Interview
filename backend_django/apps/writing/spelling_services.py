@@ -551,8 +551,6 @@ def get_spelling_word(user, word_id: str) -> SpellingDrillWord:
 
 def record_spelling_attempt(user, word_id: str, typed: Any) -> dict[str, Any]:
     typed_text = str(typed or "").strip().lower()
-    if not typed_text:
-        raise WritingError("Typed spelling is required")
     with transaction.atomic():
         word = SpellingDrillWord.objects.select_for_update().filter(user=user, word_id=str(word_id or "").strip()).first()
         if not word:

@@ -31,6 +31,7 @@ from .models import (
     P2CorpusEntry,
     P3BankFollowupCorpusEntry,
     SpeakingAttempt,
+    SpeakingTrainingObservation,
     SpeakingTurn,
     TakeawayReviewState,
 )
@@ -575,18 +576,112 @@ def p3_bank_practice_rounds(items: list[Any]) -> list[list[Any]]:
     item_count = len(values)
     if item_count <= 4:
         return [values] if values else []
-    if item_count == 5:
-        return [values[:3], [values[3], values[4], values[2]]]
-
-    round_count = (item_count + 3) // 4
-    base_size, larger_rounds = divmod(item_count, round_count)
     rounds: list[list[Any]] = []
-    start = 0
-    for round_index in range(round_count):
-        size = base_size + (1 if round_index < larger_rounds else 0)
-        rounds.append(values[start:start + size])
-        start += size
+    for start in range(0, item_count, 3):
+        rounds.append(values[start:start + 3])
     return rounds
+
+
+def p3_bank_followup_ids_for_questions(cue_id: str, questions: list[str]) -> list[str]:
+    normalized_cue_id = clean_report_text(str(cue_id or ""))
+    return [
+        p3_bank_followup_id(normalized_cue_id, clean_report_text(str(question))[:260], index)
+        for index, question in enumerate(questions)
+    ]
+
+
+def p3_bank_practice_question_counts(user, cue_id: str, questions: list[str]) -> dict[str, int]:
+    """Balanced per-follow-up counts for fixed P3 bank practice.
+
+    SpeakingTrainingObservation is the durable source: it is written only after
+    AI report feedback completes and survives user report deletion. Repeated
+    bridge/grey questions in the same coverage round do not advance above their
+    siblings' current minimum count.
+    """
+    followup_ids = p3_bank_followup_ids_for_questions(cue_id, questions)
+    if not followup_ids:
+        return {}
+    counts = {followup_id: 0 for followup_id in followup_ids}
+    if user is None or not getattr(user, "is_authenticated", False):
+        return counts
+    id_set = set(followup_ids)
+    rows = (
+        SpeakingTrainingObservation.objects.filter(user=user, part="p3", question_id__in=followup_ids)
+        .exclude(transcript="")
+        .order_by("observed_at", "created_at", "id")
+        .values_list("question_id", "observed_at", "legacy_attempt_id", "attempt_id", "id")
+    )
+    sessions: dict[str, list[str]] = {}
+    for question_id, _observed_at, legacy_attempt_id, attempt_id, observation_pk in rows:
+        followup_id = clean_report_text(str(question_id or ""))
+        if followup_id not in id_set:
+            continue
+        session_key = (
+            clean_report_text(str(legacy_attempt_id or ""))
+            or (f"attempt:{attempt_id}" if attempt_id else "")
+            or f"observation:{observation_pk}"
+        )
+        sessions.setdefault(session_key, []).append(followup_id)
+    for session_followup_ids in sessions.values():
+        floor = min(counts.values()) if counts else 0
+        seen_in_session: set[str] = set()
+        for followup_id in session_followup_ids:
+            if followup_id in seen_in_session:
+                continue
+            seen_in_session.add(followup_id)
+            if counts.get(followup_id, 0) > floor:
+                continue
+            counts[followup_id] = counts.get(followup_id, 0) + 1
+    return counts
+
+
+def p3_bank_practice_progress(user, cue_id: str, questions: list[str]) -> dict[str, Any]:
+    clean_questions = [clean_report_text(str(question))[:260] for question in questions if clean_report_text(str(question))]
+    followup_ids = p3_bank_followup_ids_for_questions(cue_id, clean_questions)
+    rounds = p3_bank_practice_rounds(list(range(len(clean_questions))))
+    counts = p3_bank_practice_question_counts(user, cue_id, clean_questions)
+    min_count = min((counts.get(followup_id, 0) for followup_id in followup_ids), default=0)
+    current_cycle_indexes = [
+        index for index, followup_id in enumerate(followup_ids)
+        if counts.get(followup_id, 0) > min_count
+    ]
+    remaining_indexes = {
+        index for index, followup_id in enumerate(followup_ids)
+        if counts.get(followup_id, 0) == min_count
+    }
+    next_round_index = 0
+    next_question_indexes: list[int] = []
+    for round_index, round_items in enumerate(rounds):
+        round_remaining = [index for index in round_items if index in remaining_indexes]
+        if round_remaining:
+            next_round_index = round_index
+            next_question_indexes = round_remaining
+            break
+    completed_round_indexes = [
+        round_index
+        for round_index, round_items in enumerate(rounds)
+        if round_items and all(index in current_cycle_indexes for index in round_items)
+    ]
+    return {
+        "practice_round_count": len(rounds),
+        "practice_rounds": [
+            {
+                "round_index": round_index,
+                "question_indexes": list(round_items),
+                "followup_ids": [followup_ids[index] for index in round_items if index < len(followup_ids)],
+                "is_current_cycle_complete": bool(round_items) and all(index in current_cycle_indexes for index in round_items),
+            }
+            for round_index, round_items in enumerate(rounds)
+        ],
+        "practice_question_counts": counts,
+        "practice_cycle": min_count + 1,
+        "practice_current_cycle_question_indexes": current_cycle_indexes,
+        "practice_completed_round_indexes": completed_round_indexes,
+        "practice_completed_round_count": len(completed_round_indexes),
+        "practice_is_complete": bool(followup_ids) and len(current_cycle_indexes) == len(followup_ids),
+        "practice_next_round_index": next_round_index,
+        "practice_next_question_indexes": next_question_indexes,
+    }
 
 
 def p3_bank_practice_completion_counts(user, cue_ids: list[str]) -> dict[str, dict[int, int]]:
@@ -813,6 +908,7 @@ def p2_topic_card_payload(
     bank_entry: P2BankCorpusEntry | None = None,
     p3_entries_by_id: dict[str, P3BankFollowupCorpusEntry] | None = None,
     practice_completion_counts: dict[int, int] | None = None,
+    practice_progress: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     category = p2_topic_category(topic)
     cue_id = str(topic.get("cue_id") or p2_cue_id(topic))
@@ -834,13 +930,26 @@ def p2_topic_card_payload(
         followup_id = p3_bank_followup_id(cue_id, question, index)
         if p3_entries_by_id.get(followup_id) and p3_entries_by_id[followup_id].corpus_text.strip():
             p3_saved_count += 1
-    practice_round_count = len(p3_bank_practice_rounds(p3_follow_ups))
-    completion_counts = practice_completion_counts or {}
-    completed_round_indexes = [
-        round_index
-        for round_index in range(practice_round_count)
-        if completion_counts.get(round_index, 0) > 0
-    ]
+    if practice_progress is None:
+        practice_round_count = len(p3_bank_practice_rounds(p3_follow_ups))
+        completion_counts = practice_completion_counts or {}
+        completed_round_indexes = [
+            round_index
+            for round_index in range(practice_round_count)
+            if completion_counts.get(round_index, 0) > 0
+        ]
+        practice_progress = {
+            "practice_round_count": practice_round_count,
+            "practice_rounds": [],
+            "practice_question_counts": {},
+            "practice_cycle": 1,
+            "practice_current_cycle_question_indexes": [],
+            "practice_completed_round_indexes": completed_round_indexes,
+            "practice_completed_round_count": len(completed_round_indexes),
+            "practice_is_complete": bool(practice_round_count) and len(completed_round_indexes) == practice_round_count,
+            "practice_next_round_index": p3_bank_next_round_index(practice_round_count, completion_counts),
+            "practice_next_question_indexes": [],
+        }
     return {
         "entry_id": entry_id,
         "canonical_entry_id": entry_id,
@@ -868,11 +977,7 @@ def p2_topic_card_payload(
         "p3_follow_up_saved_count": p3_saved_count,
         "has_material": bool(bank_entry and bank_entry.corpus_text.strip()),
         "has_p3_follow_up": p3_saved_count > 0,
-        "practice_round_count": practice_round_count,
-        "practice_completed_round_indexes": completed_round_indexes,
-        "practice_completed_round_count": len(completed_round_indexes),
-        "practice_is_complete": bool(practice_round_count) and len(completed_round_indexes) == practice_round_count,
-        "practice_next_round_index": p3_bank_next_round_index(practice_round_count, completion_counts),
+        **practice_progress,
     }
 
 
@@ -912,13 +1017,20 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
         entry.followup_id: entry
         for entry in P3BankFollowupCorpusEntry.objects.filter(user=user, p2_question_id__in=topic_cue_ids)
     }
-    practice_counts_by_cue_id = p3_bank_practice_completion_counts(user, topic_cue_ids)
     current_part2_cards = [
         p2_topic_card_payload(
             topic,
             bank_entries_by_question_id.get(str(topic.get("cue_id") or p2_cue_id(topic))),
             p3_entries_by_id,
-            practice_counts_by_cue_id.get(str(topic.get("cue_id") or p2_cue_id(topic))),
+            practice_progress=p3_bank_practice_progress(
+                user,
+                str(topic.get("cue_id") or p2_cue_id(topic)),
+                [
+                    clean_report_text(str(item))[:260]
+                    for item in topic.get("p3_follow_ups") or []
+                    if clean_report_text(str(item))
+                ],
+            ),
         )
         for topic in selected_topics
     ]
@@ -953,7 +1065,7 @@ def corpus_saved_status(user, targets: list[dict[str, Any]]) -> dict[str, Any]:
                 user=user, question_id=qid
             ).exclude(corpus_text="").exists()
         elif kind == "p2_bank":
-            qid = str(target.get("questionId") or "").strip()
+            qid = _p2_cue_id_from_any(str(target.get("questionId") or "").strip())
             saved = bool(qid) and P2BankCorpusEntry.objects.filter(
                 user=user, question_id=qid
             ).exclude(corpus_text="").exists()
@@ -964,9 +1076,8 @@ def corpus_saved_status(user, targets: list[dict[str, Any]]) -> dict[str, Any]:
             ).exclude(corpus_text="").exists()
         elif kind == "p2_corpus_p3":
             eid = str(target.get("entryId") or "").strip()
-            saved = bool(eid) and P2CorpusEntry.objects.filter(
-                user=user, entry_id=eid
-            ).exclude(material_text="").exists()
+            entry = P2CorpusEntry.objects.filter(user=user, entry_id=eid).first() if eid else None
+            saved = bool(entry and clean_markdown_text(str((entry.metadata or {}).get("p3_follow_up_text") or "")).strip())
         statuses[key] = bool(saved)
     return {"statuses": statuses}
 

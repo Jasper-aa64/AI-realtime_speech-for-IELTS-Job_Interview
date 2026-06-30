@@ -1,4 +1,4 @@
-import json
+﻿import json
 import subprocess
 from datetime import timedelta
 from decimal import Decimal
@@ -9,6 +9,7 @@ from django.test import Client, TestCase, override_settings
 from django.conf import settings
 from django.utils import timezone
 
+from apps.speaking import corpus_services
 from apps.speaking.models import (
     ExpressionReplacementEntry,
     LanguageTakeawayEntry,
@@ -106,6 +107,49 @@ class AttemptStartApiTests(TestCase):
         self.assertTrue(countable_bank_turns)
         self.assertTrue(all(turn.get("prompt", {}).get("status") == "new" for turn in countable_bank_turns))
 
+    def test_start_p1_high_counts_body_questions_and_followups_without_intro(self):
+        from apps.speaking import services
+
+        response = self.client.post(
+            "/api/attempts/start",
+            data={"mode": "p1", "p1_intensity": "high"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        turns = payload["turns"]
+        body_questions = [
+            turn
+            for turn in turns
+            if turn.get("prompt", {}).get("topic") != "intro"
+            and turn.get("prompt", {}).get("role") != "follow_up"
+        ]
+        body_followups = [
+            turn
+            for turn in turns
+            if turn.get("prompt", {}).get("topic") != "intro"
+            and turn.get("prompt", {}).get("role") == "follow_up"
+        ]
+        intro_turns = [turn for turn in turns if turn.get("prompt", {}).get("topic") == "intro"]
+        counted_turns = [turn for turn in turns if turn.get("counts_toward_total")]
+
+        self.assertEqual(services.P1_HIGH_BODY_QUESTION_MIN, 5)
+        self.assertEqual(services.P1_HIGH_BODY_QUESTION_MAX, 7)
+        self.assertGreaterEqual(len(body_questions), 5)
+        self.assertLessEqual(len(body_questions), 7)
+        self.assertEqual(len(body_followups), len(body_questions))
+        self.assertEqual(len(counted_turns), len(body_questions) + len(body_followups))
+        self.assertTrue(all(not turn.get("counts_toward_total") for turn in intro_turns))
+        self.assertTrue(all((turn.get("display_index") or 0) == 0 for turn in intro_turns))
+        self.assertEqual([turn.get("display_index") for turn in counted_turns], list(range(1, len(counted_turns) + 1)))
+
+        for body_turn in body_questions:
+            body_index = turns.index(body_turn)
+            self.assertLess(body_index + 1, len(turns))
+            follow_up = turns[body_index + 1]
+            self.assertEqual(follow_up.get("prompt", {}).get("role"), "follow_up")
+            self.assertEqual(follow_up.get("prompt", {}).get("after_turn"), body_turn["id"])
+
     def test_start_p2_respects_question_bank_scope(self):
         response = self.client.post(
             "/api/attempts/start",
@@ -150,6 +194,10 @@ class AttemptStartApiTests(TestCase):
         self.assertEqual(payload["p3_generation_backend"], "season_bank")
         self.assertEqual(len(payload["p3_plan"]["questions"]), 3)
         self.assertIn("target_moves", payload["p3_plan"]["questions"][0])
+        self.assertEqual(
+            [item["type"] for item in payload["p3_plan"]["questions"]],
+            ["change_trend", "comparison_concession", "problem_solution"],
+        )
 
     def test_start_p3_draws_three_from_an_oversized_bank_card(self):
         """A card with more bank follow-ups drills one stable, identifiable round."""
@@ -191,6 +239,11 @@ class AttemptStartApiTests(TestCase):
         attempt = SpeakingAttempt.objects.get(attempt_id=payload["id"])
         self.assertEqual(attempt.metadata["p3_bank_cue_id"], expected_cue_id)
 
+    def test_p3_bank_rounds_cap_at_three_except_exactly_four(self):
+        self.assertEqual(corpus_services.p3_bank_practice_rounds([1, 2, 3, 4]), [[1, 2, 3, 4]])
+        self.assertEqual(corpus_services.p3_bank_practice_rounds([1, 2, 3, 4, 5]), [[1, 2, 3], [4, 5]])
+        self.assertEqual(corpus_services.p3_bank_practice_rounds([1, 2, 3, 4, 5, 6, 7]), [[1, 2, 3], [4, 5, 6], [7]])
+
     def test_start_p3_selects_least_practised_bank_round_and_persists_identity(self):
         from apps.speaking import services as speaking_services
 
@@ -203,19 +256,21 @@ class AttemptStartApiTests(TestCase):
             "p3_theme": "gifts_and_giving",
             "p3_follow_ups": followups,
         }
-        completed = SpeakingAttempt.objects.create(
-            user=self.user,
-            attempt_id="completed-first-bank-round",
-            mode=SpeakingAttempt.Mode.P3,
-            part="p3",
-            status=SpeakingAttempt.Status.SCORED,
-            metadata={
-                "p3_bank_cue_id": cue_id,
-                "p3_bank_round_index": 0,
-                "p3_bank_round_count": 2,
-            },
-        )
-        SpeakingReport.objects.create(user=self.user, attempt=completed, report_payload={"status": "scored"})
+        now = timezone.now()
+        for index in range(3):
+            SpeakingTrainingObservation.objects.create(
+                observation_id=f"completed-first-bank-round-turn-{index}",
+                user=self.user,
+                legacy_attempt_id="completed-first-bank-round",
+                legacy_turn_id=f"completed-first-bank-round-turn-{index}",
+                question_id=corpus_services.p3_bank_followup_id(cue_id, followups[index], index),
+                part="p3",
+                question=followups[index],
+                transcript="This is a completed answer.",
+                relevance=Decimal("1.000"),
+                observed_at=now + timedelta(seconds=index),
+                next_due=now,
+            )
         bank = MagicMock()
         bank.p2 = [cue]
         bank.part2_for_scope.return_value = [cue]
@@ -237,13 +292,13 @@ class AttemptStartApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["p3_plan"]["question_texts"], [followups[3], followups[4], followups[2]])
+        self.assertEqual(payload["p3_plan"]["question_texts"], [followups[3], followups[4]])
         self.assertEqual(payload["p3_bank_cue_id"], cue_id)
         self.assertEqual(payload["p3_bank_round_index"], 1)
         self.assertEqual(payload["p3_bank_round_count"], 2)
         expected_ids = [
-            speaking_services.p3_bank_followup_id(cue_id, followups[index], index)
-            for index in (3, 4, 2)
+            corpus_services.p3_bank_followup_id(cue_id, followups[index], index)
+            for index in (3, 4)
         ]
         self.assertEqual(payload["p3_bank_followup_ids"], expected_ids)
         attempt = SpeakingAttempt.objects.get(attempt_id=payload["id"])
@@ -471,12 +526,12 @@ class P3BankPracticeRoundTests(TestCase):
         self.assertEqual(build_rounds(list(range(3))), [[0, 1, 2]])
         self.assertEqual(build_rounds(list(range(4))), [[0, 1, 2, 3]])
 
-    def test_five_questions_repeat_the_third_as_a_bridge(self):
+    def test_five_questions_split_without_repeating_bridge_question(self):
         from apps.speaking import corpus_services
 
         build_rounds = getattr(corpus_services, "p3_bank_practice_rounds", None)
         self.assertIsNotNone(build_rounds)
-        self.assertEqual(build_rounds(list(range(5))), [[0, 1, 2], [3, 4, 2]])
+        self.assertEqual(build_rounds(list(range(5))), [[0, 1, 2], [3, 4]])
 
     def test_six_questions_split_into_two_stable_rounds(self):
         from apps.speaking import corpus_services
@@ -485,13 +540,13 @@ class P3BankPracticeRoundTests(TestCase):
         self.assertIsNotNone(build_rounds)
         self.assertEqual(build_rounds(list(range(6))), [[0, 1, 2], [3, 4, 5]])
 
-    def test_larger_banks_are_balanced_into_three_or_four_question_rounds(self):
+    def test_larger_banks_are_capped_at_three_question_rounds(self):
         from apps.speaking import corpus_services
 
         build_rounds = getattr(corpus_services, "p3_bank_practice_rounds", None)
         self.assertIsNotNone(build_rounds)
-        self.assertEqual([len(items) for items in build_rounds(list(range(7)))], [4, 3])
-        self.assertEqual([len(items) for items in build_rounds(list(range(10)))], [4, 3, 3])
+        self.assertEqual([len(items) for items in build_rounds(list(range(7)))], [3, 3, 1])
+        self.assertEqual([len(items) for items in build_rounds(list(range(10)))], [3, 3, 3, 1])
 
 
 class P1PracticeCountTests(TestCase):
@@ -844,6 +899,32 @@ class SpeakingHistoryApiTests(TestCase):
         )
         return attempt
 
+    def create_empty_failed_attempt(self, attempt_id="attempt-empty-failed"):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id=attempt_id,
+            legacy_attempt_id=attempt_id,
+            mode=SpeakingAttempt.Mode.P2,
+            part="p2",
+            title="Part 2 practice",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+            metadata={
+                "report_generation_status": "failed",
+                "analysis_status": "failed",
+                "analysis_error": "Recording was not saved and no scoreable transcript was captured.",
+            },
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=1,
+            part="p2",
+            question="Describe a city you visited.",
+            metadata={"status": "completed", "transcript_status": "missing"},
+        )
+        return attempt
+
     def test_failed_analysis_surfaces_as_unscored_report(self):
         valid = self.create_scored_attempt()
         failed = self.create_failed_attempt()
@@ -865,6 +946,79 @@ class SpeakingHistoryApiTests(TestCase):
         self.assertTrue(body["report_error"])
         self.assertEqual(body["turns"][0]["question"], "What is your full name?")
         self.assertEqual(body["turns"][0]["transcript_cleaned"], "My full name is Jasper.")
+        self.assertTrue(body["can_regenerate_report"])
+        self.assertFalse(body["can_regenerate_transcript"])
+
+    def test_failed_analysis_with_audio_exposes_transcription_recovery_only(self):
+        failed = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="attempt-failed-audio-only",
+            legacy_attempt_id="attempt-failed-audio-only",
+            mode=SpeakingAttempt.Mode.P2,
+            part="p2",
+            title="Part 2 practice",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+            metadata={
+                "report_generation_status": "failed",
+                "analysis_status": "failed",
+                "analysis_error": "Recording saved, but no scoreable transcript was captured.",
+            },
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=failed,
+            turn_id="t1",
+            sequence=1,
+            part="p2",
+            question="Describe a city you visited.",
+            audio_path="audio/attempt-failed-audio-only/t1.webm",
+            metadata={"status": "completed", "transcript_status": "missing"},
+        )
+
+        history = self.client.get("/api/history")
+        items = {item["id"]: item for item in history.json()["items"]}
+        self.assertIn(failed.attempt_id, items)
+
+        detail = self.client.get(f"/api/history/{failed.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        self.assertFalse(body["can_regenerate_report"])
+        self.assertTrue(body["can_regenerate_transcript"])
+        self.assertEqual(body["turns"][0]["audio"]["url"], f"/api/audio/{failed.attempt_id}/t1/candidate")
+        self.assertEqual(body["turns"][0]["transcript_status"], "missing")
+
+    def test_failed_analysis_without_saved_audio_or_text_stays_out_of_history(self):
+        empty = self.create_empty_failed_attempt()
+
+        history = self.client.get("/api/history")
+        self.assertNotIn(empty.attempt_id, [item["id"] for item in history.json()["items"]])
+
+        detail = self.client.get(f"/api/history/{empty.attempt_id}")
+        self.assertEqual(detail.status_code, 404)
+
+    def test_failed_history_detail_is_owner_scoped(self):
+        failed = self.create_failed_attempt("attempt-owner-failed")
+        other_user = get_user_model().objects.create_user(username="other-failed-reader", password="test-pass")
+        self.client.logout()
+        self.client.force_login(other_user)
+
+        history = self.client.get("/api/history")
+        self.assertNotIn(failed.attempt_id, [item["id"] for item in history.json()["items"]])
+
+        detail = self.client.get(f"/api/history/{failed.attempt_id}")
+        self.assertEqual(detail.status_code, 404)
+
+    def test_scored_report_payload_backfills_audio_from_turn_when_payload_lacks_it(self):
+        attempt = self.create_scored_attempt("attempt-audio-backfill")
+        turn = attempt.turns.get(turn_id="t1")
+        turn.audio_path = "audio/attempt-audio-backfill/t1.webm"
+        turn.save(update_fields=["audio_path", "updated_at"])
+
+        detail = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        self.assertEqual(body["report_status"], "ready")
+        self.assertEqual(body["turns"][0]["audio"]["url"], f"/api/audio/{attempt.attempt_id}/t1/candidate")
 
     def create_stalled_attempt(self, attempt_id="attempt-stalled-1", *, task_status=None, age_seconds=600):
         from apps.ai.models import AITask
@@ -1251,11 +1405,16 @@ class QuestionBankApiTests(TestCase):
                 self.assertEqual(card["p3_follow_up_count"], len(card["p3_follow_ups"]))
                 self.assertTrue(all("?" in question for question in card["p3_follow_ups"]))
 
-    def test_p2_corpus_progress_counts_only_report_backed_scored_bank_rounds(self):
+    def test_p2_corpus_progress_counts_only_completed_feedback_observations(self):
         cards = self.client.get("/api/p2-corpus").json()["current_part2_cards"]
         card = next(item for item in cards if len(item["p3_follow_ups"]) > 4)
         cue_id = card["cue_id"]
         round_count = card["practice_round_count"]
+        followup_ids = [
+            corpus_services.p3_bank_followup_id(cue_id, question, index)
+            for index, question in enumerate(card["p3_follow_ups"])
+        ]
+        rounds = corpus_services.p3_bank_practice_rounds(list(range(len(followup_ids))))
 
         def add_attempt(status, round_index, suffix, *, with_report=False):
             attempt = SpeakingAttempt.objects.create(
@@ -1273,6 +1432,23 @@ class QuestionBankApiTests(TestCase):
             if with_report:
                 SpeakingReport.objects.create(user=self.user, attempt=attempt, report_payload={"status": "scored"})
 
+        def add_observed_round(round_index, suffix):
+            now = timezone.now()
+            for offset, question_index in enumerate(rounds[round_index], start=1):
+                SpeakingTrainingObservation.objects.create(
+                    observation_id=f"bank-progress-observed-{suffix}-{offset}",
+                    user=self.user,
+                    legacy_attempt_id=f"bank-progress-observed-{suffix}",
+                    legacy_turn_id=f"bank-progress-observed-turn-{suffix}-{offset}",
+                    question_id=followup_ids[question_index],
+                    part="p3",
+                    question=card["p3_follow_ups"][question_index],
+                    transcript="This is a completed answer.",
+                    relevance=Decimal("1.000"),
+                    observed_at=now + timedelta(seconds=offset),
+                    next_due=now,
+                )
+
         add_attempt(SpeakingAttempt.Status.STARTED, 0, "started")
         add_attempt(SpeakingAttempt.Status.ABORTED, 0, "aborted")
         add_attempt(SpeakingAttempt.Status.READY_TO_SCORE, 0, "ready")
@@ -1282,22 +1458,116 @@ class QuestionBankApiTests(TestCase):
         updated = self.client.get("/api/p2-corpus").json()
         progress = next(item for item in updated["current_part2_cards"] if item["cue_id"] == cue_id)
         self.assertEqual(progress["practice_round_count"], round_count)
-        self.assertEqual(progress["practice_completed_round_indexes"], [1])
-        self.assertEqual(progress["practice_completed_round_count"], 1)
+        self.assertEqual(progress["practice_completed_round_indexes"], [])
+        self.assertEqual(progress["practice_completed_round_count"], 0)
         self.assertFalse(progress["practice_is_complete"])
         self.assertEqual(progress["practice_next_round_index"], 0)
 
-        add_attempt(SpeakingAttempt.Status.SCORED, 0, "reported-other-round", with_report=True)
-        completed = self.client.get("/api/p2-corpus").json()
-        progress = next(item for item in completed["current_part2_cards"] if item["cue_id"] == cue_id)
-        self.assertEqual(progress["practice_completed_round_indexes"], [0, 1])
-        self.assertTrue(progress["practice_is_complete"])
+        add_observed_round(1, "round-1")
+        partly_done = self.client.get("/api/p2-corpus").json()
+        progress = next(item for item in partly_done["current_part2_cards"] if item["cue_id"] == cue_id)
+        self.assertEqual(progress["practice_completed_round_indexes"], [1])
+        self.assertEqual(progress["practice_completed_round_count"], 1)
         self.assertEqual(progress["practice_next_round_index"], 0)
 
-        add_attempt(SpeakingAttempt.Status.SCORED, 0, "reported-repeat", with_report=True)
+        add_observed_round(0, "round-0")
+        completed = self.client.get("/api/p2-corpus").json()
+        progress = next(item for item in completed["current_part2_cards"] if item["cue_id"] == cue_id)
+        self.assertEqual(progress["practice_completed_round_indexes"], [])
+        self.assertFalse(progress["practice_is_complete"])
+        self.assertEqual(progress["practice_cycle"], 2)
+        self.assertEqual(progress["practice_next_round_index"], 0)
+
+        add_observed_round(0, "round-0-cycle-2")
         repeated = self.client.get("/api/p2-corpus").json()
         progress = next(item for item in repeated["current_part2_cards"] if item["cue_id"] == cue_id)
         self.assertEqual(progress["practice_next_round_index"], 1)
+
+    def test_p2_corpus_p3_progress_uses_observations_after_report_delete(self):
+        cards = self.client.get("/api/p2-corpus").json()["current_part2_cards"]
+        card = next(item for item in cards if len(item["p3_follow_ups"]) > 4)
+        cue_id = card["cue_id"]
+        followup_id = corpus_services.p3_bank_followup_id(cue_id, card["p3_follow_ups"][0], 0)
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="bank-progress-observed",
+            mode=SpeakingAttempt.Mode.P3,
+            part="p3",
+            status=SpeakingAttempt.Status.SCORED,
+            metadata={
+                "p3_bank_cue_id": cue_id,
+                "p3_bank_round_index": 0,
+                "p3_bank_round_count": card["practice_round_count"],
+                "p3_bank_followup_ids": [followup_id],
+            },
+        )
+        turn = SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="bank-progress-observed-turn",
+            sequence=1,
+            part="p3",
+            question=card["p3_follow_ups"][0],
+            transcript_cleaned="This is a completed answer.",
+            metadata={"prompt": {"p3_bank_followup_id": followup_id}},
+        )
+        report = SpeakingReport.objects.create(user=self.user, attempt=attempt, report_payload={"status": "scored"})
+        now = timezone.now()
+        SpeakingTrainingObservation.objects.create(
+            observation_id="bank-progress-observed-turn",
+            user=self.user,
+            attempt=attempt,
+            turn=turn,
+            legacy_attempt_id=attempt.attempt_id,
+            legacy_turn_id=turn.turn_id,
+            question_id=followup_id,
+            part="p3",
+            question=turn.question,
+            transcript=turn.transcript_cleaned,
+            relevance=Decimal("1.000"),
+            observed_at=now,
+            next_due=now,
+        )
+        report.delete()
+
+        updated = self.client.get("/api/p2-corpus").json()
+        progress = next(item for item in updated["current_part2_cards"] if item["cue_id"] == cue_id)
+
+        self.assertEqual(progress["practice_question_counts"][followup_id], 1)
+        self.assertEqual(progress["practice_cycle"], 1)
+        self.assertIn(0, progress["practice_current_cycle_question_indexes"])
+
+    def test_p2_corpus_p3_overlap_bridge_does_not_advance_ahead_of_cycle(self):
+        cards = self.client.get("/api/p2-corpus").json()["current_part2_cards"]
+        card = next(item for item in cards if len(item["p3_follow_ups"]) == 5)
+        cue_id = card["cue_id"]
+        followup_ids = [
+            corpus_services.p3_bank_followup_id(cue_id, question, index)
+            for index, question in enumerate(card["p3_follow_ups"])
+        ]
+        now = timezone.now()
+        practice_attempts = ["bank-overlap-a", "bank-overlap-a", "bank-overlap-a", "bank-overlap-b", "bank-overlap-b", "bank-overlap-b"]
+        for offset, (index, practice_attempt_id) in enumerate(zip([0, 1, 2, 3, 4, 2], practice_attempts), start=1):
+            SpeakingTrainingObservation.objects.create(
+                observation_id=f"bank-overlap-{offset}",
+                user=self.user,
+                legacy_attempt_id=practice_attempt_id,
+                legacy_turn_id=f"bank-overlap-turn-{offset}",
+                question_id=followup_ids[index],
+                part="p3",
+                question=card["p3_follow_ups"][index],
+                transcript="This is a completed answer.",
+                relevance=Decimal("1.000"),
+                observed_at=now + timedelta(seconds=offset),
+                next_due=now,
+            )
+
+        updated = self.client.get("/api/p2-corpus").json()
+        progress = next(item for item in updated["current_part2_cards"] if item["cue_id"] == cue_id)
+
+        self.assertEqual(progress["practice_question_counts"], {followup_id: 1 for followup_id in followup_ids})
+        self.assertEqual(progress["practice_cycle"], 2)
+        self.assertEqual(progress["practice_next_round_index"], 0)
 
     def test_p2_corpus_category_counts_user_saved_material_not_season_topics(self):
         payload = self.client.get("/api/p2-corpus").json()
@@ -1344,6 +1614,89 @@ class QuestionBankApiTests(TestCase):
         self.assertTrue(updated_card["has_material"])
         self.assertEqual(updated_card["material_text"], "I can use one prepared story for this cue card.")
         self.assertFalse(updated_card["has_p3_follow_up"])
+
+    def test_p2_corpus_and_bank_entries_can_be_cleared(self):
+        entry = P2CorpusEntry.objects.create(
+            user=self.user,
+            entry_id="clearable-p2-entry",
+            category=P2CorpusEntry.Category.PERSON,
+            title="Clearable P2 material",
+            material_text="Prepared material to clear.",
+        )
+
+        response = self.client.post(
+            "/api/p2-corpus",
+            data={
+                "entry_id": entry.entry_id,
+                "category": entry.category,
+                "title": entry.title,
+                "material_text": "",
+                "linked_question": entry.linked_question,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["material_text"], "")
+        entry.refresh_from_db()
+        self.assertEqual(entry.material_text, "")
+
+        library = self.client.get("/api/p2-corpus").json()
+        card = library["current_part2_cards"][0]
+        self.client.put(
+            f"/api/p2-bank-corpus/{card['cue_id']}",
+            data={
+                "question": card["linked_question"],
+                "corpus_text": "Prepared bank material to clear.",
+            },
+            content_type="application/json",
+        )
+        clear_response = self.client.put(
+            f"/api/p2-bank-corpus/{card['cue_id']}",
+            data={
+                "question": card["linked_question"],
+                "corpus_text": "",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(clear_response.status_code, 200)
+        self.assertEqual(clear_response.json()["corpus_text"], "")
+        bank_entry = P2BankCorpusEntry.objects.get(user=self.user, question_id=card["cue_id"])
+        self.assertEqual(bank_entry.corpus_text, "")
+
+        updated = self.client.get("/api/p2-corpus").json()
+        updated_card = next(item for item in updated["current_part2_cards"] if item["entry_id"] == card["entry_id"])
+        self.assertFalse(updated_card["has_material"])
+        self.assertEqual(updated_card["material_text"], "")
+
+    def test_report_saved_status_normalizes_p2_bank_ids(self):
+        library = self.client.get("/api/p2-corpus").json()
+        card = library["current_part2_cards"][0]
+        canonical_id = card["entry_id"]
+        cue_id = card["cue_id"]
+
+        self.client.put(
+            f"/api/p2-bank-corpus/{canonical_id}",
+            data={
+                "question": card["linked_question"],
+                "corpus_text": "A prepared P2 answer saved through the report entry.",
+            },
+            content_type="application/json",
+        )
+
+        response = self.client.post(
+            "/api/corpus/saved-status",
+            data={
+                "targets": [
+                    {"key": "canonical", "kind": "p2_bank", "questionId": canonical_id},
+                    {"key": "cue", "kind": "p2_bank", "questionId": cue_id},
+                ]
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        statuses = response.json()["statuses"]
+        self.assertTrue(statuses["canonical"])
+        self.assertTrue(statuses["cue"])
 
     def test_p2_bank_brainstorm_idea_preserves_existing_bank_material(self):
         library = self.client.get("/api/p2-corpus").json()
@@ -1408,6 +1761,32 @@ class QuestionBankApiTests(TestCase):
         updated_card = next(item for item in updated["current_part2_cards"] if item["entry_id"] == card["entry_id"])
         self.assertTrue(updated_card["has_p3_follow_up"])
         self.assertEqual(updated_card["p3_follow_up_saved_count"], 1)
+
+    def test_report_saved_status_uses_p2_corpus_p3_text_not_material_text(self):
+        entry = P2CorpusEntry.objects.create(
+            user=self.user,
+            entry_id="p2:test-p3-only",
+            category=P2CorpusEntry.Category.PERSON,
+            title="A person I know",
+            material_text="",
+            linked_question="Describe a person you know.",
+            metadata={"p3_follow_up_text": "For P3, I can discuss social trust."},
+        )
+
+        response = self.client.post(
+            "/api/corpus/saved-status",
+            data={
+                "targets": [
+                    {"key": "p3", "kind": "p2_corpus_p3", "entryId": entry.entry_id},
+                    {"key": "body", "kind": "p2_bank", "questionId": entry.entry_id},
+                ]
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        statuses = response.json()["statuses"]
+        self.assertTrue(statuses["p3"])
+        self.assertFalse(statuses["body"])
 
     def test_p2_bank_corpus_batch_returns_multiple_cards(self):
         cards = self.client.get("/api/p2-corpus").json()["current_part2_cards"]
@@ -2602,11 +2981,71 @@ class SpeakingRuntimeApiTests(TestCase):
         # A dropped/empty turn no longer blocks the whole report (that left learners
         # stuck on an endless 重新分析 loop). Auto-completing empty turns means an
         # attempt where *nothing* was answered is now rejected for the real reason:
-        # there is no transcript to score.
+        # there is no transcript to score. A totally empty attempt should not be
+        # presented as a recoverable report, because there is nothing to replay,
+        # transcribe, or rescore.
         attempt, _turn1, _turn2 = self.create_attempt()
         response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
         self.assertEqual(response.status_code, 400)
-        self.assertIn("没有拿到文字稿", response.json()["error"])
+        self.assertIn("no scoreable transcript", response.json()["error"])
+
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
+        self.assertEqual(attempt.metadata["analysis_status"], "failed")
+        history = self.client.get("/api/history")
+        self.assertNotIn(attempt.attempt_id, [item["id"] for item in history.json()["items"]])
+
+        detail = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(detail.status_code, 404)
+
+    def test_score_failure_with_audio_keeps_unscored_report_and_audio_recovery(self):
+        attempt, turn1, _turn2 = self.create_attempt(attempt_id="runtime-audio-only")
+        turn1.audio_path = "audio/runtime-audio-only/t1.webm"
+        turn1.metadata = {**turn1.metadata, "status": "completed", "transcript_status": "missing"}
+        turn1.save()
+
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Recording saved", response.json()["error"])
+
+        detail = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        self.assertEqual(body["report_status"], "failed")
+        self.assertFalse(body["can_regenerate_report"])
+        self.assertTrue(body["can_regenerate_transcript"])
+        first_turn = body["turns"][0]
+        self.assertEqual(first_turn["audio"]["url"], f"/api/audio/{attempt.attempt_id}/t1/candidate")
+        self.assertEqual(first_turn["transcript_status"], "missing")
+
+    def test_score_retry_after_failed_metadata_requeues_when_transcript_exists(self):
+        attempt, turn1, _turn2 = self.create_attempt(attempt_id="runtime-failed-retry")
+        turn1.transcript_raw = "I study English every day because I want to speak more clearly."
+        turn1.transcript_cleaned = turn1.transcript_raw
+        turn1.metadata = {**turn1.metadata, "status": "completed", "transcript_status": "captured"}
+        turn1.save()
+        attempt.status = SpeakingAttempt.Status.READY_TO_SCORE
+        attempt.metadata = {
+            "analysis_status": "failed",
+            "report_generation_status": "failed",
+            "analysis_error": "previous AI failure",
+        }
+        attempt.save(update_fields=["status", "metadata", "updated_at"])
+
+        before = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(before.status_code, 200)
+        self.assertEqual(before.json()["report_status"], "failed")
+        self.assertTrue(before.json()["can_regenerate_report"])
+
+        response = self.client.post(f"/api/attempts/{attempt.attempt_id}/score", data={}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "analysis_pending")
+        self.assertEqual(body["ai_task"]["related_id"], attempt.attempt_id)
+
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
+        self.assertEqual(attempt.metadata["analysis_status"], "queued")
 
     def test_score_rejects_aborted_attempt(self):
         attempt, turn1, turn2 = self.create_attempt(status=SpeakingAttempt.Status.ABORTED)
@@ -3181,7 +3620,7 @@ class CodexValidationTests(TestCase):
         with patch(
             "apps.speaking.services.run_codex",
             return_value=(json.dumps(ai_payload, ensure_ascii=False), {"input_tokens": 10}),
-        ):
+        ) as run_codex:
             enriched = enrich_p3_discussion_skills_with_ai(
                 attempt,
                 base,
@@ -3191,6 +3630,10 @@ class CodexValidationTests(TestCase):
                 ai_source="codex_cli",
             )
 
+        prompt = run_codex.call_args.args[0]
+        self.assertIn("老师听完这次 Part 3 后给的一段复盘", prompt)
+        self.assertIn("为什么这样会让 Part 3 更像讨论", prompt)
+        self.assertIn("不要每次都写同一类", prompt)
         self.assertEqual(enriched["generation_backend"], "codex_cli")
         self.assertEqual(enriched["summary"], ai_payload["summary"])
         self.assertEqual(enriched["next_drill"], ai_payload["next_drill"])
@@ -3564,6 +4007,24 @@ class CodexValidationTests(TestCase):
         self.assertEqual(task.request_payload["requested_model"], "gpt-5.4-mini")
         self.assertEqual(task.metadata["requested_provider"], "http")
 
+    def test_speaking_report_task_uses_profile_source_when_payload_omits_provider(self):
+        from apps.accounts.models import UserProfile
+        from apps.ai.models import AITask
+        from apps.speaking.services import score_attempt
+
+        user, attempt, _turn = self.create_ready_attempt(
+            username="score-attempt-profile-source-user",
+            attempt_id="score-attempt-profile-source",
+        )
+        UserProfile.objects.create(user=user, report_ai_source="claude")
+
+        result = score_attempt(user, attempt.attempt_id, {})
+
+        task = AITask.objects.get(task_id=result["ai_task"]["id"])
+        self.assertEqual(task.provider, "codex")
+        self.assertEqual(task.request_payload["requested_provider"], "claude")
+        self.assertEqual(task.metadata["requested_provider"], "claude")
+
     def test_score_attempt_rejects_empty_answer_transcripts_before_queueing(self):
         from apps.ai.models import AITask
         from apps.speaking.services import SpeakingError, score_attempt
@@ -3580,8 +4041,11 @@ class CodexValidationTests(TestCase):
         with self.assertRaises(SpeakingError) as ctx:
             score_attempt(user, attempt.attempt_id)
 
-        self.assertIn("没有拿到文字稿", str(ctx.exception))
+        self.assertIn("no scoreable transcript", str(ctx.exception))
         self.assertFalse(AITask.objects.filter(related_id=attempt.attempt_id, task_type="speaking_report").exists())
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
+        self.assertEqual(attempt.metadata["analysis_status"], "failed")
 
     def test_model_answer_tts_cache_key_changes_when_band7_text_changes(self):
         from apps.speaking.services import build_turn_feedback

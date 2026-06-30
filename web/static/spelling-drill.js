@@ -29,7 +29,9 @@
         sd.scope          = "due";     // always open on today's due queue
         sd.items          = Array.isArray(sd.items) ? sd.items : [];
         sd.itemsScope     = sd.itemsScope || null; // which scope sd.items holds
+        sd.itemsEpoch     = Number(sd.itemsEpoch || 0);
         sd.scopeCache     = sd.scopeCache || {};   // scope → last payload (SWR)
+        sd.cacheEpoch     = Number(sd.cacheEpoch || 0);
         sd.stats          = sd.stats  || {};
         sd.queue          = [];
         sd.queuePos       = 0;
@@ -40,6 +42,7 @@
         sd.result         = null;
         sd.loadingPromise = sd.loadingPromise || null;
         sd.submitSeq      = Number(sd.submitSeq || 0);
+        sd.nextHintTimer  = sd.nextHintTimer || null;
         sd._drillReady    = true;
       }
       return sd;
@@ -47,18 +50,52 @@
 
     const root     = () => $("spellingPracticeCard");
     const sideList = () => $("spellingDrillList");
+    const NEXT_HINT_DELAY_MS = 4000;
 
     function currentWord() {
       const s = S();
       return s.queue[s.queuePos] || null;
     }
 
-    // ─── Browser TTS ─────────────────────────────────────────────────
-    // Mirrors corpus-takeaway's speech approach. Low latency comes from
-    // warming the voice list up front (warmSpeech, called when the panel
-    // binds) and caching the chosen English voice — so by the time the
-    // learner finishes typing, speaking the answer is instant.
-    const speech = { token: 0, voice: null, warmed: false, primed: false, suppressCancelErr: false };
+    function clearNextHintTimer() {
+      const s = S();
+      if (s.nextHintTimer) {
+        window.clearTimeout(s.nextHintTimer);
+        s.nextHintTimer = null;
+      }
+    }
+
+    function scheduleNextHintReveal(renderKey, seq) {
+      clearNextHintTimer();
+      const s = S();
+      s.nextHintTimer = window.setTimeout(() => {
+        const currentResult = S().result;
+        if (seq !== S().submitSeq || !currentResult || wordRenderKey(currentWord()) !== renderKey) return;
+        currentResult._nextHintVisible = true;
+        render();
+      }, NEXT_HINT_DELAY_MS);
+    }
+
+    // ─── TTS ─────────────────────────────────────────────────────────
+    // Main path: server-side VolcEngine mp3 via /api/tts, prefetched per word.
+    // Browser speechSynthesis stays only as a fallback for provider errors.
+    const SERVER_TTS_VOICE = "en_female_sarah";
+    const SERVER_TTS_ROLE = "model";
+    const serverTts = {
+      cache: new Map(),
+      activeKey: "",
+      activeAudio: null,
+    };
+
+    const speech = {
+      token: 0,
+      voice: null,
+      warmed: false,
+      primed: false,
+      primedText: "",
+      preparedText: "",
+      suppressCancelErr: false,
+    };
 
     function speechSupported() {
       return typeof window !== "undefined"
@@ -72,15 +109,23 @@
       if (!voices.length) return null;
       const english = voices.filter((v) => /^en([-_]|$)/i.test(String(v.lang || "")));
       const local = english.filter((v) => v.localService);
-      const preferred = [
-        "Google US English", "Google UK English Female", "Microsoft Jenny",
-        "Microsoft Aria", "Samantha", "Alex", "Karen", "Daniel",
+      const findNamed = (list, names) => names
+        .map((name) => list.find((v) => String(v.name || "").toLowerCase().includes(name.toLowerCase())))
+        .find(Boolean);
+      const preferredRemote = [
+        "Google US English", "Google UK English Female", "Google UK English Male", "Google English",
       ];
-      return preferred
-        .map((name) => english.find((v) => String(v.name || "").toLowerCase().includes(name.toLowerCase())))
-        .find(Boolean)
-        || local.find((v) => v.default) || english.find((v) => v.default)
-        || local[0] || english[0] || null;
+      const localFallback = [
+        "Microsoft Jenny", "Microsoft Aria", "Microsoft Sonia",
+        "Samantha", "Alex", "Karen", "Daniel",
+      ];
+      return findNamed(english, preferredRemote)
+        || english.find((v) => v.default)
+        || findNamed(local, localFallback)
+        || local.find((v) => v.default)
+        || local[0]
+        || english[0]
+        || null;
     }
 
     function warmSpeech() {
@@ -97,17 +142,115 @@
       }
     }
 
+    function speechTextForWord(word) {
+      return String(word?.correct_spelling || word?.normalized || "").trim();
+    }
+
+    function serverTtsCacheKey(text) {
+      const word = String(text || "").trim().toLowerCase();
+      const safe = word.replace(/[^a-z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "");
+      return `spelling_${safe || "word"}`;
+    }
+
+    function makeAudio(url) {
+      const AudioCtor = window.Audio || (typeof Audio !== "undefined" ? Audio : null);
+      if (!AudioCtor || !url) return null;
+      const audio = new AudioCtor(url);
+      audio.preload = "auto";
+      try { audio.load?.(); } catch (_e) { /* ignore */ }
+      return audio;
+    }
+
+    function prefetchServerTts(text) {
+      const value = String(text || "").trim();
+      if (!value) return null;
+      const cacheKey = serverTtsCacheKey(value);
+      serverTts.activeKey = cacheKey;
+      const existing = serverTts.cache.get(cacheKey);
+      if (existing && (existing.status === "ready" || existing.status === "pending")) return existing;
+      const entry = {
+        status: "pending",
+        text: value,
+        cacheKey,
+        audioUrl: "",
+        audio: null,
+        promise: null,
+      };
+      serverTts.cache.set(cacheKey, entry);
+      entry.promise = api("/api/tts", {
+        text: value,
+        role: SERVER_TTS_ROLE,
+        voice: SERVER_TTS_VOICE,
+        cache_key: cacheKey,
+        server_fallback: true,
+      }).then((payload) => {
+        const audioUrl = String(payload?.audio_url || "");
+        if (!audioUrl) {
+          entry.status = "fallback";
+          entry.error = payload?.message || payload?.error || "server tts unavailable";
+          return entry;
+        }
+        entry.audioUrl = audioUrl;
+        entry.audio = makeAudio(audioUrl);
+        entry.status = entry.audio ? "ready" : "fallback";
+        return entry;
+      }).catch((err) => {
+        entry.status = "failed";
+        entry.error = err;
+        return entry;
+      });
+      return entry;
+    }
+
+    function playServerTts(text) {
+      const value = String(text || "").trim();
+      if (!value) return false;
+      const cacheKey = serverTtsCacheKey(value);
+      const entry = serverTts.cache.get(cacheKey);
+      if (!entry || entry.status !== "ready" || !entry.audio) {
+        prefetchServerTts(value);
+        return false;
+      }
+      try {
+        if (serverTts.activeAudio && serverTts.activeAudio !== entry.audio) {
+          serverTts.activeAudio.pause?.();
+        }
+        serverTts.activeAudio = entry.audio;
+        entry.audio.currentTime = 0;
+        const playPromise = entry.audio.play?.();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(() => browserSpeakWord(value));
+        }
+        return true;
+      } catch (_e) {
+        return false;
+      }
+    }
+
+    function prepareSpeechForWord(word) {
+      const text = speechTextForWord(word);
+      prefetchServerTts(text);
+      if (!speechSupported()) return;
+      warmSpeech();
+      speech.preparedText = text;
+      if (!speech.voice) speech.voice = pickEnglishVoice();
+    }
+
     // Warm the audio engine itself (not just the voice list) with a silent
-    // utterance on the first keystroke, so the answer speaks with ~0 latency the
-    // moment Enter reveals it. Gated on a real user gesture (browsers block
-    // speechSynthesis before one) and run only once per session.
-    function primeSpeech() {
-      if (!speechSupported() || speech.primed) return;
+    // utterance for the current word. Gated on a real user gesture because
+    // browsers may block speechSynthesis before one.
+    function primeSpeech(text) {
+      if (!speechSupported()) return;
+      const value = String(text || speech.preparedText || "").trim();
+      const primeText = value || " ";
+      if (speech.primed && speech.primedText === primeText) return;
       speech.primed = true;
+      speech.primedText = primeText;
       try {
         const synth = window.speechSynthesis;
         synth.resume?.();
-        const warm = new SpeechSynthesisUtterance(" ");
+        if (!speech.voice) speech.voice = pickEnglishVoice();
+        const warm = new SpeechSynthesisUtterance(primeText);
         warm.volume = 0;
         warm.rate = 2;
         if (speech.voice) warm.voice = speech.voice;
@@ -115,7 +258,12 @@
       } catch (_e) { /* ignore */ }
     }
 
-    function speakWord(text) {
+    function shouldPrimeSpeechFromKey(e) {
+      if (!e || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return false;
+      return String(e.key || "").length === 1;
+    }
+
+    function browserSpeakWord(text) {
       const value = String(text || "").trim();
       if (!value || !speechSupported()) return;
       const synth = window.speechSynthesis;
@@ -137,6 +285,11 @@
       // to cancel a previous utterance — that needs a beat to settle in Chrome.
       if (needCancel) window.setTimeout(fire, 50);
       else fire();
+    }
+
+    function speakWord(text) {
+      if (playServerTts(text)) return;
+      browserSpeakWord(text);
     }
 
     function normalizeTyped(value) {
@@ -254,6 +407,28 @@
     // ─── Data ────────────────────────────────────────────────────────
     // In-flight requests keyed by scope so switching scopes can't hand back a
     // promise (and payload) for the wrong scope.
+    function cachedPayload(scope) {
+      const s = S();
+      const entry = s.scopeCache?.[scope];
+      if (!entry || Number(entry.epoch) !== Number(s.cacheEpoch)) return null;
+      return entry.payload || null;
+    }
+
+    function rememberScopePayload(scope, payload, epoch = S().cacheEpoch) {
+      const s = S();
+      if (Number(epoch) !== Number(s.cacheEpoch)) return;
+      s.scopeCache = s.scopeCache || {};
+      s.scopeCache[scope] = { payload, epoch };
+    }
+
+    function invalidateWordDataCache() {
+      const s = S();
+      s.cacheEpoch = Number(s.cacheEpoch || 0) + 1;
+      s.scopeCache = {};
+      s._loading = {};
+      s.itemsEpoch = s.cacheEpoch;
+    }
+
     async function fetchWords(scope, { force = false } = {}) {
       const s = S();
       s._loading = s._loading || {};
@@ -270,13 +445,14 @@
     function prefetchOtherScopes() {
       const s = S();
       s.scopeCache = s.scopeCache || {};
+      const epoch = Number(s.cacheEpoch || 0);
       const others = ["due", "active", "mastered"].filter(
-        (sc) => sc !== s.scope && !s.scopeCache[sc]
+        (sc) => sc !== s.scope && !cachedPayload(sc)
       );
       if (!others.length) return;
       const run = () => others.forEach((sc) => {
         api(`/api/writing/spelling-words?scope=${encodeURIComponent(sc)}`)
-          .then((p) => { s.scopeCache[sc] = p; })
+          .then((p) => { rememberScopePayload(sc, p, epoch); })
           .catch(() => {});
       });
       if (window.requestIdleCallback) window.requestIdleCallback(run, { timeout: 2000 });
@@ -287,9 +463,11 @@
       const s = S();
       s.items = payload.items || [];
       s.itemsScope = s.scope;
+      s.itemsEpoch = s.cacheEpoch;
       s.stats = payload.stats || {};
       s.phase = "ready";
       if (resetQueue) {
+        clearNextHintTimer();
         s.queue          = [...s.items];
         s.queuePos       = 0;
         s.requeueMap     = {};
@@ -300,6 +478,11 @@
       }
     }
 
+    function draftInputValue() {
+      const input = $("spellingTypedInput");
+      return input ? String(input.value || "") : "";
+    }
+
     async function load({ force = false, resetQueue = true, _pivoted = false } = {}) {
       const s  = S();
       // Pin the scope + a monotonic sequence for THIS load. Rapid tab switches
@@ -307,14 +490,18 @@
       // ("快速切换会乱界面"). stale() is true once a newer load() has started.
       const scope = s.scope;
       const seq   = (s._loadSeq = (s._loadSeq || 0) + 1);
+      const epoch = Number(s.cacheEpoch || 0);
       const stale = () => seq !== s._loadSeq;
 
       s.scopeCache = s.scopeCache || {};
-      const cached = s.scopeCache[scope];
+      const cached = cachedPayload(scope);
       // Paint instantly when we have data for THIS scope (a per-scope cache, or
       // s.items already holding this scope), then revalidate behind it.
       const sameScopeItems =
-        s.itemsScope === scope && Array.isArray(s.items) && s.items.length > 0;
+        s.itemsScope === scope &&
+        Number(s.itemsEpoch) === Number(s.cacheEpoch) &&
+        Array.isArray(s.items) &&
+        s.items.length > 0;
       const canRenderCached = !force && resetQueue && Boolean(cached || sameScopeItems);
 
       if (canRenderCached) {
@@ -327,12 +514,12 @@
       }
       try {
         const payload = await fetchWords(scope, { force });
-        s.scopeCache[scope] = payload;
-        if (stale()) return;            // user switched away — don't clobber
+        if (stale() || Number(epoch) !== Number(s.cacheEpoch)) return;
+        rememberScopePayload(scope, payload, epoch);
         // If the user already started answering in the cached view, don't yank
         // the queue out from under them — refresh stats/items only.
         const progressed = canRenderCached &&
-          (Number(s.doneCount || 0) > 0 || Number(s.queuePos || 0) > 0 || s.result);
+          (Number(s.doneCount || 0) > 0 || Number(s.queuePos || 0) > 0 || s.result || draftInputValue());
         ingest(payload, { resetQueue: resetQueue && !progressed });
         setStatus("");
         prefetchOtherScopes();
@@ -349,13 +536,122 @@
     // buildPromptHtml / buildInputHtml are called both in full rebuild
     // and in partial (in-place) updates so the card doesn't re-animate.
 
+    // ECDICT marks a sense's field with a bracketed code like "[经]". Render
+    // those as compact English pill tags (matching the 划词 dictionary card) so
+    // the spelling gloss reads clearly instead of showing a bare "[经]".
+    const GLOSS_DOMAIN_TAGS = {
+      "经": { en: "Economics", icon: "📈" },
+      "计": { en: "Computing", icon: "💻" },
+      "医": { en: "Medicine", icon: "⚕️" },
+      "法": { en: "Law", icon: "⚖️" },
+      "化": { en: "Chemistry", icon: "🧪" },
+      "数": { en: "Math", icon: "📐" },
+      "军": { en: "Military", icon: "🎖️" },
+      "语": { en: "Linguistics", icon: "🗣️" },
+      "物": { en: "Physics", icon: "⚛️" },
+      "植": { en: "Botany", icon: "🌿" },
+      "动": { en: "Zoology", icon: "🐾" },
+      "天": { en: "Astronomy", icon: "🔭" },
+      "地": { en: "Geography", icon: "🌍" },
+      "生": { en: "Biology", icon: "🧬" },
+      "电": { en: "Electrical", icon: "⚡" },
+      "机": { en: "Mechanics", icon: "⚙️" },
+      "建": { en: "Architecture", icon: "🏛️" },
+      "商": { en: "Business", icon: "💼" },
+      "农": { en: "Agriculture", icon: "🌾" },
+      "音": { en: "Music", icon: "🎵" },
+      "体": { en: "Sports", icon: "⚽" },
+      "宗": { en: "Religion", icon: "⛪" },
+      "心": { en: "Psychology", icon: "🧠" },
+      "解": { en: "Anatomy", icon: "🦴" },
+      "药": { en: "Pharmacy", icon: "💊" },
+      "史": { en: "History", icon: "📜" },
+      "哲": { en: "Philosophy", icon: "💭" },
+      "政": { en: "Politics", icon: "🏛️" },
+      "航": { en: "Aviation", icon: "✈️" },
+      "海": { en: "Nautical", icon: "⚓" },
+      "矿": { en: "Mining", icon: "⛏️" },
+      "林": { en: "Forestry", icon: "🌲" },
+      "摄": { en: "Photography", icon: "📷" },
+    };
+    const GLOSS_DOMAIN_BY_LABEL = Object.fromEntries(
+      Object.entries(GLOSS_DOMAIN_TAGS).map(([code, tag]) => [String(tag.en).toLowerCase(), code])
+    );
+
+    // Prefer the shared renderer (window.IELTSDictTags, exposed by corpus-takeaway)
+    // so both surfaces stay identical; fall back to the local map if unavailable.
+    function escapeGlossWithTags(text) {
+      const shared = (typeof window !== "undefined" && window.IELTSDictTags)
+        ? window.IELTSDictTags.escapeHtmlWithDomainTags
+        : null;
+      if (typeof shared === "function") return shared(text);
+      let html = escapeHtml(String(text || "")).replace(/\[([^\]]{1,4})\]\s*/g, (_m, code) => {
+        const tag = GLOSS_DOMAIN_TAGS[code];
+        const label = String(tag ? tag.en : code).toLowerCase();
+        const icon = tag ? tag.icon : "🏷️";
+        return `<span class="dict-domain-tag" data-dict-domain-code="${escapeHtml(code)}" data-dict-domain-label="${escapeHtml(label)}" contenteditable="false"><span class="dict-domain-tag-icon" aria-hidden="true">${escapeHtml(icon)}</span><span class="dict-domain-tag-text">${escapeHtml(label)}</span></span><span class="dict-domain-tag-colon" contenteditable="false">&#65306; </span>`;
+      });
+      html = html.replace(/\b([A-Za-z][A-Za-z ]{1,28})\s*[:：]\s*/g, (match, label) => {
+        const code = GLOSS_DOMAIN_BY_LABEL[String(label || "").trim().toLowerCase()];
+        if (!code) return match;
+        const tag = GLOSS_DOMAIN_TAGS[code];
+        const lower = String(tag.en).toLowerCase();
+        return `<span class="dict-domain-tag" data-dict-domain-code="${escapeHtml(code)}" data-dict-domain-label="${escapeHtml(lower)}" contenteditable="false"><span class="dict-domain-tag-icon" aria-hidden="true">${escapeHtml(tag.icon)}</span><span class="dict-domain-tag-text">${escapeHtml(lower)}</span></span><span class="dict-domain-tag-colon" contenteditable="false">&#65306; </span>`;
+      });
+      return html;
+    }
+
     // Split chinese_gloss on "；" (or ";") — first part is the Chinese meaning,
     // everything after is a spelling note (e.g. "high 的比较级需要保留 h 后的结构").
     function splitGloss(gloss) {
       const raw  = gloss || "";
+      const looksLikeSense = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return false;
+        if (/^\[[^\]]{1,4}\]/.test(text)) return true;
+        if (/^(n|v|vt|vi|adj|adv|prep|pron|conj|abbr|num|interj)\./i.test(text)) return true;
+        return /^(economics|computing|medicine|law|chemistry|math|military|linguistics|physics|botany|zoology|astronomy|geography|biology|electrical|mechanics|architecture|business|agriculture|music|sports|religion|psychology|anatomy|pharmacy|history|philosophy|politics|aviation|nautical|mining|forestry|photography)\s*[:：]/i.test(text);
+      };
+      const parts = raw.split(/[；;]/).map((part) => part.trim()).filter(Boolean);
+      if (parts.length > 1 && parts.some(looksLikeSense) && parts.slice(1).some(looksLikeSense)) {
+        return { chinese: parts.join("\n"), note: "" };
+      }
       const idx  = raw.search(/[；;]/);
       if (idx < 0) return { chinese: raw, note: "" };
       return { chinese: raw.slice(0, idx).trim(), note: raw.slice(idx + 1).trim() };
+    }
+
+    function glossDisplayParts(text) {
+      return String(text || "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    }
+
+    function glossFontSize(lines) {
+      if (!Array.isArray(lines) || lines.length <= 1) return "";
+      const maxLineChars = Math.max(...lines.map((line) => Array.from(line).length));
+      let raw = 48 - Math.max(0, lines.length - 1) * 7 - Math.max(0, maxLineChars - 18) * 0.45;
+      // Two-line glosses still read too large — shrink only that case, leave the
+      // single-line and 3+ line sizes untouched.
+      if (lines.length === 2) raw -= 6;
+      return Math.max(22, Math.min(48, Math.round(raw)));
+    }
+
+    function glossHtml(text, fallback) {
+      const value = String(text || fallback || "");
+      const lines = glossDisplayParts(value);
+      const displayLines = lines.length ? lines : [value];
+      const multiline = displayLines.length > 1;
+      const size = glossFontSize(displayLines);
+      const classes = ["nr-gloss", text ? "" : "is-fallback", multiline ? "is-multiline" : ""]
+        .filter(Boolean)
+        .join(" ");
+      const style = size ? ` style="--nr-gloss-size:${size}px"` : "";
+      const body = multiline
+        ? displayLines.map((line) => `<span class="nr-gloss-line">${escapeGlossWithTags(line)}</span>`).join("")
+        : escapeGlossWithTags(displayLines[0] || "");
+      return `<p class="${classes}"${style}>${body}</p>`;
     }
 
     function buildPromptHtml(word, s) {
@@ -373,7 +669,7 @@
         </div>`
         : "";
       return `
-        <p class="nr-gloss${chinese ? "" : " is-fallback"}">${escapeHtml(chinese || fallback)}</p>
+        ${glossHtml(chinese, fallback)}
         ${wrongPill}
       `;
     }
@@ -403,6 +699,8 @@
       const noteHtml = note
         ? `<p class="nr-note-slot nr-spell-note" aria-label="拼写提示">${escapeHtml(note)}</p>`
         : `<p class="nr-note-slot nr-note-slot--placeholder" aria-hidden="true"></p>`;
+      const nextHintVisible = Boolean(result._nextHintVisible);
+      const nextHintHtml = `<p class="nr-next-hint ${nextHintVisible ? "is-visible" : ""}" aria-live="polite" aria-hidden="${nextHintVisible ? "false" : "true"}">按 Enter 进入下一题</p>`;
 
       // ── State B: correct — show green diff, wait for Enter ──
       if (result.correct) return `
@@ -414,7 +712,7 @@
           <p class="nr-inline-correct nr-inline-correct--placeholder" aria-hidden="true">
             <span class="nr-answer-word" data-label="正解">${escapeHtml(correctSpell)}</span>
           </p>
-          <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
+          ${nextHintHtml}
         </div>
       `;
 
@@ -427,7 +725,7 @@
           <p class="nr-inline-correct">
             <span class="nr-answer-word" data-label="正解">${escapeHtml(correctSpell)}</span>
           </p>
-          <button type="button" class="nr-next-btn" data-spelling-continue>下一题 <kbd>↵</kbd></button>
+          ${nextHintHtml}
         </div>
       `;
     }
@@ -436,8 +734,9 @@
       if (!result) {
         $("spellingTypedInput")?.focus();
       } else {
-        // Both correct and wrong states show the continue button
-        root().querySelector("[data-spelling-continue]")?.focus();
+        const card = root();
+        card?.setAttribute?.("tabindex", "-1");
+        card?.focus?.({ preventScroll: true });
       }
     }
 
@@ -477,6 +776,12 @@
       const isDue = s.scope === "due";
       root().innerHTML = `
         <div class="nr-stage nr-stage-empty">
+          <button type="button" class="nr-card-tool nr-empty-add" data-spelling-card-add
+            aria-label="添加单词" title="添加单词">
+            <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15">
+              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
           <svg class="nr-empty-mark" viewBox="0 0 80 80" aria-hidden="true">
             <circle cx="40" cy="40" r="34" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.35"/>
             <path d="M24 40 L36 52 L58 28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -526,6 +831,7 @@
       const s      = S();
       const word   = currentWord();
       if (!word) return renderEmpty();
+      prepareSpeechForWord(word);
 
       const result = s.result;
       const pct    = Math.round((s.doneCount / Math.max(s.queueInitialLen, 1)) * 100);
@@ -548,6 +854,7 @@
         // Update only the input/answer area
         const bodyEl = existingCard.querySelector(".nr-drill-body");
         if (bodyEl) {
+          if (!result && draftInputValue()) return;
           bodyEl.innerHTML = buildInputHtml(word, result, s);
           focusInputArea(result, s);
           return;
@@ -634,7 +941,7 @@
                 <li class="nr-lib-item" data-spelling-word="${escapeHtml(w.word_id)}">
                   <div class="nr-lib-main">
                     <strong class="nr-lib-word">${escapeHtml(w.correct_spelling)}</strong>
-                    <span class="nr-lib-gloss">${escapeHtml(w.chinese_gloss || "-")}</span>
+                    <span class="nr-lib-gloss">${escapeGlossWithTags(w.chinese_gloss || "-")}</span>
                     ${(Array.isArray(w.wrong_forms) ? w.wrong_forms.filter(Boolean) : []).length
                       ? `<span class="nr-lib-wrong">\u8bef\uff1a${escapeHtml(wrongFormsText(w))}</span>`
                       : ""}
@@ -682,6 +989,7 @@
 
     function gotoNext() {
       const s = S();
+      clearNextHintTimer();
       s.queuePos    += 1;
       s.result       = null;
       render();
@@ -716,6 +1024,28 @@
       };
     }
 
+    function isBlankAttempt(typed) {
+      return !String(typed || "").trim();
+    }
+
+    function isTypingContinuationKey(e) {
+      if (!e || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return false;
+      return /^[A-Za-z]$/.test(String(e.key || ""));
+    }
+
+    function continueWrongResultWithTypedKey(e) {
+      const s = S();
+      if (!s.result || s.result.correct || !isTypingContinuationKey(e)) return false;
+      e.preventDefault();
+      gotoNext();
+      const input = $("spellingTypedInput");
+      if (!input) return true;
+      input.value = String(e.key || "");
+      input.focus();
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    }
+
     function mergeAttemptResultIntoWord(word, result, { countAttempt = false } = {}) {
       if (!word || !result) return;
       Object.assign(word, {
@@ -734,11 +1064,13 @@
 
     function applyAttemptResult(word, result, typed, { syncWord = false } = {}) {
       const s = S();
-      const stored = { ...result, _typed: typed };
+      const stored = { ...result, _typed: typed, _nextHintVisible: false };
       s.result = stored;
+      clearNextHintTimer();
       // Read the answer aloud the moment it's revealed (right or wrong).
       speakWord(word?.correct_spelling || word?.normalized || "");
       if (syncWord) {
+        invalidateWordDataCache();
         mergeAttemptResultIntoWord(word, result, { countAttempt: true });
       }
       if (result.correct) {
@@ -750,6 +1082,7 @@
         scheduleWrongWordReview(word);
       }
       render();
+      scheduleNextHintReveal(wordRenderKey(word), s.submitSeq);
     }
 
     function syncServerAttemptResult(word, localResult, typed, seq, renderKey) {
@@ -759,6 +1092,8 @@
       ).then((serverResult) => {
         const s = S();
         const queuedFlag = s.result?._queuedForReview;
+        const nextHintVisible = Boolean(s.result?._nextHintVisible);
+        invalidateWordDataCache();
         mergeAttemptResultIntoWord(word, serverResult, { countAttempt: false });
         if (seq !== s.submitSeq) return;
         const stillSameCard = wordRenderKey(currentWord()) === renderKey;
@@ -767,11 +1102,12 @@
           ...s.result,
           ...serverResult,
           _typed: typed,
+          _nextHintVisible: nextHintVisible || Boolean(s.result._nextHintVisible),
           _queuedForReview: queuedFlag || s.result._queuedForReview,
         };
         render();
       }).catch((_err) => {
-        if (seq === S().submitSeq) {
+        if (seq === S().submitSeq && !isBlankAttempt(typed)) {
           setStatus("同步失败，本次结果可能未记录。", true);
         }
       });
@@ -782,7 +1118,7 @@
       const word  = currentWord();
       const input = $("spellingTypedInput");
       const typed = input?.value || "";
-      if (!word || !typed.trim()) { setStatus("先输入拼写。", true); return; }
+      if (!word) { setStatus("当前没有可练习的单词。", true); return; }
       setStatus("");
       const s = S();
       const reviewCopy = isReviewCopy(word);
@@ -794,10 +1130,11 @@
       if (!reviewCopy) {
         syncServerAttemptResult(word, result, typed, seq, renderKey);
       }
-      // No auto-advance: user must press Enter on the continue button.
+      // No auto-advance: user presses Enter again anywhere on the card to continue.
     }
 
     async function updateWord(wordId, payload) {
+      invalidateWordDataCache();
       const result = await api(
         `/api/writing/spelling-words/${encodeURIComponent(wordId)}`,
         payload,
@@ -813,6 +1150,7 @@
 
     function deleteWord(wordId) {
       const s = S();
+      invalidateWordDataCache();
       // Optimistic: drop it from the UI immediately so the card never lags, then
       // confirm with the server in the background. Roll back on failure.
       const snapshot = { items: s.items, queue: s.queue, queuePos: s.queuePos, doneCount: s.doneCount };
@@ -860,11 +1198,21 @@
       el.classList.toggle("is-error", !!isError);
     }
 
+    function setAddWordBusy(isBusy) {
+      const saveBtn = $("spellingAddSaveBtn");
+      if (!saveBtn) return;
+      saveBtn.disabled = !!isBusy;
+      saveBtn.classList.toggle("is-busy", !!isBusy);
+      saveBtn.setAttribute("aria-busy", isBusy ? "true" : "false");
+      saveBtn.textContent = isBusy ? "\u6dfb\u52a0\u4e2d" : "\u6dfb\u52a0";
+    }
+
     function openAddWordDialog() {
       const dialog = $("spellingAddDialog");
       if (!dialog) return;
       if ($("spellingAddWord")) { $("spellingAddWord").value = ""; $("spellingAddWord").disabled = false; }
       if ($("spellingAddGloss")) $("spellingAddGloss").value = "";
+      setAddWordBusy(false);
       setAddWordStatus("");
       dialog.classList.remove("hidden");
       setTimeout(() => $("spellingAddWord")?.focus(), 0);
@@ -901,46 +1249,50 @@
     async function submitAddWord() {
       const word = normalizeAddWord($("spellingAddWord")?.value);
       if ($("spellingAddWord")) $("spellingAddWord").value = word;
-      if (!word) { setAddWordStatus("先输入一个英文单词。", true); return; }
+      if (!word) { setAddWordStatus("\u5148\u8f93\u5165\u4e00\u4e2a\u82f1\u6587\u5355\u8bcd\u3002", true); return; }
       // Single English word only.
-      if (!/^[A-Za-z][A-Za-z'’-]*$/.test(word)) {
-        setAddWordStatus("只能添加单个英文单词。", true);
+      if (!/^[A-Za-z][A-Za-z'\u2019]*$/.test(word)) {
+        setAddWordStatus("\u53ea\u80fd\u6dfb\u52a0\u5355\u4e2a\u82f1\u6587\u5355\u8bcd\u3002", true);
         return;
       }
       let gloss = String($("spellingAddGloss")?.value || "").trim();
-      const saveBtn = $("spellingAddSaveBtn");
-      if (saveBtn) saveBtn.disabled = true;
-      // If the learner saved straight away without pressing Enter, look up first.
-      if (!gloss) {
-        try {
-          const dict = await api(`/api/dictionary/lookup?word=${encodeURIComponent(word)}`);
-          const entry = dict && dict.found ? dict.entry : null;
-          const senses = entry
-            ? (Array.isArray(entry.senses) && entry.senses.length ? entry.senses : (entry.translation ? [entry.translation] : []))
-            : [];
-          gloss = senses.slice(0, 4).join("；");
-        } catch (_e) { /* dictionary optional; backend fills a local gloss */ }
-      }
+      if ($("spellingAddSaveBtn")?.disabled) return;
+      setAddWordBusy(true);
+      setAddWordStatus("\u6b63\u5728\u6dfb\u52a0...");
+      setStatus(`\u6b63\u5728\u6dfb\u52a0\uff1a${word}`);
+      closeAddWordDialog();
       try {
+        // If the learner saved straight away without pressing Enter, look up in
+        // the background. Closing the dialog first keeps the click response
+        // immediate; the page status carries the loading feedback.
+        if (!gloss) {
+          try {
+            const dict = await api(`/api/dictionary/lookup?word=${encodeURIComponent(word)}`);
+            const entry = dict && dict.found ? dict.entry : null;
+            const senses = entry
+              ? (Array.isArray(entry.senses) && entry.senses.length ? entry.senses : (entry.translation ? [entry.translation] : []))
+              : [];
+            gloss = senses.slice(0, 4).join("\uff1b");
+          } catch (_e) { /* dictionary optional; backend fills a local gloss */ }
+        }
         const res = await api("/api/writing/spelling-words/add", { word, chinese_gloss: gloss });
         const saved = res?.word;
         const s = S();
         if (saved && saved.word_id) {
+          invalidateWordDataCache();
           const idx = s.items.findIndex((w) => w.word_id === saved.word_id);
           if (idx >= 0) s.items[idx] = saved;
           else s.items.unshift(saved);
         }
-        closeAddWordDialog();
-        setStatus(`已加入：${word}`);
+        setStatus(`\u5df2\u52a0\u5165\uff1a${word}`);
         if (s.view === "library") render();
       } catch (err) {
-        setAddWordStatus(err.message || "加入失败", true);
+        setStatus(err.message || "\u52a0\u5165\u5931\u8d25");
       } finally {
-        if (saveBtn) saveBtn.disabled = false;
+        setAddWordBusy(false);
       }
     }
 
-    // ─── Events ──────────────────────────────────────────────────────
     function bindSpellingDrillEvents() {
       warmSpeech();
       // Scope tabs (header bar)
@@ -979,7 +1331,6 @@
         if (ansWord) { speakWord(ansWord.textContent); return; }
         if (t.closest("[data-spelling-card-add]")) { openAddWordDialog(); return; }
         if (t.closest("[data-spelling-card-del]")) { confirmRemoveCurrentWord(); return; }
-        if (t.closest("[data-spelling-continue]")) { gotoNext(); return; }
         if (t.closest("[data-open-library]"))      { S().view = "library"; render(); return; }
         if (t.closest("[data-spelling-reload]"))   { load({ force: true, resetQueue: true }); return; }
         const scopeBtn = t.closest("[data-spelling-scope]");
@@ -994,9 +1345,15 @@
       // Don't hijack Delete while the learner is mid-edit with text in the box —
       // only when the input is empty or the answer is already revealed.
       root()?.addEventListener("keydown", (e) => {
+        if (continueWrongResultWithTypedKey(e)) return;
+        if (e.key === "Enter" && !e.isComposing && S().result) {
+          e.preventDefault();
+          gotoNext();
+          return;
+        }
         // Any keystroke is a user gesture — warm the speech engine once so the
         // answer speaks with ~0 latency by the time Enter reveals it.
-        primeSpeech();
+        if (shouldPrimeSpeechFromKey(e)) primeSpeech(speechTextForWord(currentWord()));
         if (e.key !== "Delete") return;
         const s = S();
         if (s.view !== "drill") return;
@@ -1007,6 +1364,13 @@
         if (editingText) return;
         e.preventDefault();
         confirmRemoveCurrentWord();
+      });
+
+      root()?.addEventListener("input", (e) => {
+        if (e.target?.id !== "spellingTypedInput") return;
+        const text = speechTextForWord(currentWord());
+        prefetchServerTts(text);
+        primeSpeech(text);
       });
 
       // Library: back + actions

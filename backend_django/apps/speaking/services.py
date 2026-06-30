@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from django.conf import settings
-from django.db import close_old_connections, transaction
+from django.db import close_old_connections
 from django.db.utils import DatabaseError
 from django.utils import timezone
 
@@ -110,8 +110,7 @@ from .corpus_services import (
     p3_bank_corpus_batch,
     p3_bank_followup_id,
     p3_bank_followup_list,
-    p3_bank_next_round_index,
-    p3_bank_practice_completion_counts,
+    p3_bank_practice_progress,
     p3_bank_practice_rounds,
     prepared_corpus_for_turns,
     question_bank_sample,
@@ -193,6 +192,7 @@ from .p3_services import (
     _normalize_p3_focus,
     _normalize_p3_intensity,
     _p3_follow_up_for_type,
+    _infer_p3_question_type,
     _p3_questions_from_ai_payload,
     _p3_questions_from_material,
     _p3_question_type_for_index,
@@ -342,6 +342,11 @@ P1_TURN_COUNT = 10
 # practiced first) as the top priority. See select_p1_body_questions.
 P1_BODY_QUESTION_MIN = 9
 P1_BODY_QUESTION_MAX = 12
+# High-intensity P1 asks 4-6 real bank/body questions, then adds one live
+# follow-up after each body question. Intro/warm-up turns stay outside this
+# visible progress count.
+P1_HIGH_BODY_QUESTION_MIN = 5
+P1_HIGH_BODY_QUESTION_MAX = 7
 # A topic with this many bank questions or more is "big": never dumped whole, only
 # P1_SPLIT_MIN..P1_SPLIT_MAX of its questions are drawn this session (the rest waits
 # for a later one). Smaller topics ride as a whole group so they stay complete.
@@ -359,6 +364,10 @@ P3_QUICK_FOLLOW_UP_CODEX_MODEL = SPEAKING_AI_DEFAULT_HTTP_MODEL
 P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT = 8
 P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT = 12
 SPEAKING_REPORT_HTTP_TIMEOUT = 60
+# The relay occasionally stalls the TLS handshake / drops the connection on the heavy
+# report request; a fresh connection usually succeeds, so retry transient transport
+# failures this many times per prompt before giving up on the HTTP provider.
+SPEAKING_REPORT_HTTP_MAX_ATTEMPTS = 3
 # Claude CLI (headless) reasons before answering, so a full scoring + overall-review
 # prompt routinely needs more than the 60s HTTP budget. A too-short timeout makes the
 # claude path silently time out and fall back to codex (the "never see a Claude report"
@@ -375,6 +384,11 @@ P3_TURN_COUNT = 8
 # "Li Hua" is the effective value that definition produced.)
 DEFAULT_FULL_NAME = "Li Hua"
 DEFAULT_ENGLISH_NAME = "Jasper"
+
+
+def _normalize_p1_intensity(value: str | None) -> str:
+    return "high" if str(value or "").strip().lower() == "high" else "normal"
+
 
 def quick_follow_up_http_runner(
     current_question: str,
@@ -628,16 +642,34 @@ def build_p3_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     bank_cue_id = clean_report_text(str(payload.get("p2_question_id") or payload.get("cue_id") or ""))
     if cue_questions:
         rounds = p3_bank_practice_rounds(list(enumerate(cue_questions)))
-        completion_counts = {}
-        if payload.get("_user") and bank_cue_id:
-            completion_counts = p3_bank_practice_completion_counts(payload["_user"], [bank_cue_id]).get(bank_cue_id, {})
-        round_index = p3_bank_next_round_index(len(rounds), completion_counts)
-        selected_bank_questions = rounds[round_index] if rounds else []
+        progress = p3_bank_practice_progress(payload.get("_user"), bank_cue_id, cue_questions) if bank_cue_id else {}
+        round_index = int(progress.get("practice_next_round_index") or 0)
+        next_question_indexes = [
+            int(index)
+            for index in progress.get("practice_next_question_indexes") or []
+            if isinstance(index, int) or str(index).isdigit()
+        ]
+        if next_question_indexes:
+            selected_bank_questions = [
+                (index, cue_questions[index])
+                for index in next_question_indexes
+                if 0 <= index < len(cue_questions)
+            ]
+        else:
+            selected_bank_questions = rounds[round_index] if rounds and 0 <= round_index < len(rounds) else []
         cue_questions = [question for _source_index, question in selected_bank_questions]
         bank_round_metadata = {
             "p3_bank_cue_id": bank_cue_id,
             "p3_bank_round_index": round_index,
-            "p3_bank_round_count": len(rounds),
+            "p3_bank_round_count": int(progress.get("practice_round_count") or len(rounds)),
+            "p3_bank_practice_cycle": int(progress.get("practice_cycle") or 1),
+            "p3_bank_next_question_indexes": next_question_indexes,
+            "p3_bank_current_cycle_done_count": len(progress.get("practice_current_cycle_question_indexes") or []),
+            "p3_bank_cycle_question_count": len(progress.get("practice_question_counts") or cue_questions),
+            "p3_bank_will_complete_cycle": (
+                len(progress.get("practice_current_cycle_question_indexes") or []) + len(next_question_indexes)
+                >= len(progress.get("practice_question_counts") or cue_questions)
+            ),
         }
     material_questions = _p3_questions_from_material(p3_follow_up_text, question_count)
 
@@ -754,7 +786,7 @@ def _p3_ai_json_from_prompt(
                 {"role": "user", "content": prompt},
             ],
             max_tokens=max_tokens,
-            temperature=0.15,
+            temperature=0.22,
             timeout_seconds=45,
             stream=True,
         )
@@ -917,7 +949,9 @@ def _build_p1_turns(
     display_total: int | None = None,
     question_bank_scope: str | None = None,
     user: Any = None,
+    intensity: str = "normal",
 ) -> list[dict[str, Any]]:
+    normalized_intensity = _normalize_p1_intensity(intensity)
     bank = get_question_bank()
     p1_bank = bank.part1_for_scope(question_bank_scope)
     countable_intro_items = [item for item in P1_INTRO_QUESTIONS if item.get("counts_toward_total", True)]
@@ -949,27 +983,44 @@ def _build_p1_turns(
     # See select_p1_body_questions for the full strategy.
     question_counts = _p1_balanced_practice_counts(user, topics)
     topic_debt = _p1_topic_practice_debt(user, topics)
+    body_min = P1_BODY_QUESTION_MIN
+    body_max = P1_BODY_QUESTION_MAX
+    split_min = P1_SPLIT_MIN
+    split_max = P1_SPLIT_MAX
+    if normalized_intensity == "high":
+        body_min = P1_HIGH_BODY_QUESTION_MIN
+        body_max = P1_HIGH_BODY_QUESTION_MAX
+        split_min = min(P1_SPLIT_MIN, body_min)
+        split_max = min(P1_SPLIT_MAX, body_max)
     ordinary_questions = select_p1_body_questions(
         topics,
         topic_debt,
         question_counts,
-        body_min=P1_BODY_QUESTION_MIN,
-        body_max=P1_BODY_QUESTION_MAX,
+        body_min=body_min,
+        body_max=body_max,
         split_threshold=P1_SPLIT_THRESHOLD,
-        split_min=P1_SPLIT_MIN,
-        split_max=P1_SPLIT_MAX,
+        split_min=split_min,
+        split_max=split_max,
     )
     turn_items = uncounted_intro_items + countable_intro_items + ordinary_questions
     # The counted length is dynamic now, so derive the displayed "of N" total from
     # the actual questions. display_total carried an offset over `total` at the call
     # site (e.g. mock adds +1 for the upcoming P2 turn); preserve that offset.
     display_offset = (display_total - total) if display_total is not None else 0
-    counted_total = len(countable_intro_items) + len(ordinary_questions)
+    counted_total = (
+        len(ordinary_questions) * 2
+        if normalized_intensity == "high"
+        else len(countable_intro_items) + len(ordinary_questions)
+    )
     effective_display_total = counted_total + display_offset
     turns: list[dict[str, Any]] = []
     display_index = 0
-    for index, item in enumerate(turn_items):
-        counts_toward_total = bool(item.get("counts_toward_total", True))
+    for item in turn_items:
+        index = len(turns)
+        is_intro_item = item in uncounted_intro_items or item in countable_intro_items
+        counts_toward_total = bool(item.get("counts_toward_total", True)) and not (
+            normalized_intensity == "high" and is_intro_item
+        )
         if counts_toward_total:
             display_index += 1
         turn = _create_turn(
@@ -993,6 +1044,27 @@ def _build_p1_turns(
         turn["counts_toward_total"] = counts_toward_total
         turn["display_index"] = display_index if counts_toward_total else 0
         turns.append(turn)
+        if normalized_intensity == "high" and counts_toward_total and not item.get("flow"):
+            display_index += 1
+            follow_up = _create_turn(
+                "p1",
+                len(turns),
+                effective_display_total,
+                STREAM_PENDING_FOLLOW_UP_PLACEHOLDER,
+                {
+                    "topic": item["topic"],
+                    "question": STREAM_PENDING_FOLLOW_UP_PLACEHOLDER,
+                    "role": "follow_up",
+                    "after_turn": turn["id"],
+                    "source_question": item["question"],
+                    "backend": "stream_pending",
+                    "generation_status": "pending",
+                    "counts_toward_total": True,
+                },
+            )
+            follow_up["counts_toward_total"] = True
+            follow_up["display_index"] = display_index
+            turns.append(follow_up)
     return turns
 
 
@@ -1046,7 +1118,7 @@ def _build_p3_turns(
             question = clean_report_text(str(item.get("question") or ""))
             if not question:
                 continue
-            question_type = str(item.get("type") or _p3_question_type_for_index(index, focus))
+            question_type = str(item.get("type") or _infer_p3_question_type(question, index, focus))
             item_source = str(item.get("source") or plan_source_type or source_type or "topic")
             p2_question_id = clean_report_text(str(item.get("p2_question_id") or bank_p2_question_id))
             followup_id = clean_report_text(str(item.get("followup_id") or ""))
@@ -1189,7 +1261,14 @@ def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dic
             metadata["p3_follow_ups"] = cue["p3_follow_ups"]
         return "mock", "Full mock exam", turns, cue, metadata
     if mode == "p1":
-        turns = _build_p1_turns(P1_TURN_COUNT, question_bank_scope=question_bank_scope, user=payload.get("_user"))
+        p1_intensity = _normalize_p1_intensity(str(payload.get("p1_intensity") or payload.get("intensity") or ""))
+        turns = _build_p1_turns(
+            P1_TURN_COUNT,
+            question_bank_scope=question_bank_scope,
+            user=payload.get("_user"),
+            intensity=p1_intensity,
+        )
+        metadata["p1_intensity"] = p1_intensity
         return "p1", "Part 1 practice", turns, None, metadata
     if mode == "p2":
         selected_p2_cue_id = str(payload.get("p2_cue_id") or "").strip()
@@ -1861,10 +1940,42 @@ def _follow_up_stream_context(attempt: SpeakingAttempt, source_turn: SpeakingTur
             # Use higher temperature when there's no transcript so each call yields a different angle.
             "skip_provider": False,
             "skip_reason": "",
-            "temperature": 0.2 if transcript else 0.8,
+            "temperature": 0.7 if transcript else 0.8,
         }
 
     prompt = source_metadata.get("prompt") if isinstance(source_metadata.get("prompt"), dict) else {}
+    if source_turn.part == "p1" and prompt.get("role") != "follow_up":
+        target = attempt.turns.filter(metadata__prompt__after_turn=source_turn.turn_id).first()
+        if target is None:
+            raise SpeakingError("P1 follow-up turn not found.")
+        target_metadata = target.metadata if isinstance(target.metadata, dict) else {}
+        target_prompt = target_metadata.get("prompt") if isinstance(target_metadata.get("prompt"), dict) else {}
+        if target_prompt.get("role") != "follow_up":
+            raise SpeakingError("Next P1 turn is not a follow-up turn.")
+        current_question = clean_report_text(str(prompt.get("question") or source_turn.question or ""))
+        fallback = "Could you tell me a little more about that?"
+        prompt_text = (
+            "You are an IELTS Speaking Part 1 examiner.\n"
+            "Write exactly one short, natural follow-up question for this Part 1 answer.\n"
+            "Do not repeat the original question. Do not ask a Part 3 abstract discussion question.\n"
+            "Output one line only, with no labels or quotes.\n\n"
+            f"Original question:\n{current_question}\n\n"
+            f"Candidate answer:\n{transcript or '(No transcript was detected.)'}\n\n"
+            "One follow-up question:\n"
+        )
+        return {
+            "kind": "p1_dynamic",
+            "target_turn": target,
+            "prompt": prompt_text,
+            "fallback": fallback,
+            "rejected_questions": (current_question,),
+            "extract": lambda output: _extract_single_follow_up_question(output, rejected_questions=(current_question,)),
+            "system": "You are an IELTS Speaking Part 1 examiner. Return only one concise follow-up question.",
+            "skip_provider": False,
+            "skip_reason": "",
+            "temperature": 0.7 if transcript else 0.75,
+        }
+
     if source_turn.part == "p3" and prompt.get("role") == "main":
         target = (
             attempt.turns
@@ -1894,6 +2005,7 @@ def _follow_up_stream_context(attempt: SpeakingAttempt, source_turn: SpeakingTur
             "question_type": question_type,
             "skip_provider": not bool(transcript),
             "skip_reason": "missing_transcript" if not transcript else "",
+            "temperature": 0.7,
         }
 
     raise SpeakingError("This turn does not support streaming follow-up generation.")
@@ -2048,9 +2160,22 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
         try:
             if context.get("skip_provider"):
                 raise RuntimeError(str(context.get("skip_reason") or "follow-up provider skipped"))
+            # Live follow-ups are latency-sensitive and run inside the Django
+            # service process, where local CLI auth is often unavailable. Prefer
+            # the HTTP relay whenever it is enabled; CLI remains a compatibility
+            # path only when HTTP follow-ups are explicitly unavailable.
+            prefer_http_for_live_p1 = (
+                target_turn.part == "p1"
+                and _mode_allows_http("followup")
+                and not _mode_is_fallback_only("followup")
+            )
+            if prefer_http_for_live_p1:
+                yield from _stream_http_follow_up(
+                    attempt, source_turn, target_turn, context, started, parts, usage,
+                )
             # Local CLIs are one-shot here: generate the whole question, then emit
             # it as a single chunk so the live UI keeps the same event contract.
-            if _is_codex_cli_source(ai_source):
+            elif _is_codex_cli_source(ai_source):
                 combined_prompt = f"{context['system']}\n\n{context['prompt']}".strip()
                 output, codex_usage = run_codex(
                     combined_prompt,
@@ -2233,6 +2358,18 @@ def abort_attempt(user, attempt_id: str) -> dict[str, Any]:
 
 
 
+def _is_transient_transport_error(exc: Exception) -> bool:
+    """True for relay connection blips worth retrying (handshake/timeout/5xx/reset),
+    but NOT for real auth/validation rejections (401/400) which a retry can't fix."""
+    text = f"{type(exc).__name__}: {exc}".lower()
+    transient = (
+        "handshake", "timed out", "timeout", "connection reset", "connection aborted",
+        "connection refused", "remotedisconnected", "remote end closed", "eof occurred",
+        "temporarily", "bad gateway", "502", "503", "504", "max retries", "ssl",
+    )
+    return any(needle in text for needle in transient)
+
+
 def score_with_codex(
     transcript: str,
     question: str,
@@ -2297,6 +2434,8 @@ Also include a top-level object named p3_discussion_skills with:
 - dimensions: an object keyed only by the supplied dimension keys; each value has Chinese string keys evidence and next_action
 Do not change or infer dimension status values. Status is owned by the application heuristics.
 Base every sentence on the ASR-corrected transcript supplied below. Do not invent learner content.
+This card is shown to the learner as a coach's note, not as a rubric table. Explain WHY the advice matters: Part 3 rewards the ability to turn an answer into a discussion, so comments should connect the learner's exact words to missing moves such as reason chains, contrast/concession, wider social impact, or follow-up handling.
+Do not merely rephrase the heuristic evidence. Use at least two concrete details from the learner's questions/answers when possible, and vary the wording across fields so the card does not feel like a template. next_drill should be three small actions that naturally follow from THIS attempt, not generic drills that would fit every P3 report.
 
 P3 discussion input:
 {json.dumps(p3_discussion_request, ensure_ascii=False)}
@@ -2390,32 +2529,46 @@ P3 discussion input:
 
         # ── GPT / HTTP path ──────────────────────────────────────────────────
         if _mode_allows_http("report"):
-            try:
-                result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT, ai_source=ai_source).complete_chat(
-                    [
-                        {"role": "system", "content": "You are an IELTS Speaking examiner. Return JSON only."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_tokens=1800 if index == 1 else 1200,
-                    temperature=0.15,
-                    timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT,
-                    stream=True,
-                )
-                payload = extract_json_object_with_keys(
-                    result.text,
-                    {"fluency_coherence", "lexical_resource", "grammatical_range"},
-                )
-                usage = getattr(result, "usage", None)
-                provider_backend = "http_api"
-                provider_model = result.model
+            http_attempt_error: Exception | None = None
+            # The aiapis relay intermittently stalls the TLS handshake / drops the
+            # connection on the heavy report request (claude/sonnet especially). When
+            # it does connect it answers in ~15s, so a fresh connection usually
+            # succeeds — retry transient transport errors a couple of times before
+            # falling through to the compact prompt / surfacing the error.
+            for http_try in range(SPEAKING_REPORT_HTTP_MAX_ATTEMPTS):
+                try:
+                    result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT, ai_source=ai_source).complete_chat(
+                        [
+                            {"role": "system", "content": "You are an IELTS Speaking examiner. Return JSON only."},
+                            {"role": "user", "content": prompt},
+                        ],
+                        max_tokens=2600 if index == 1 else 1800,
+                        temperature=0.15,
+                        timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT,
+                        stream=True,
+                    )
+                    payload = extract_json_object_with_keys(
+                        result.text,
+                        {"fluency_coherence", "lexical_resource", "grammatical_range"},
+                    )
+                    usage = getattr(result, "usage", None)
+                    provider_backend = "http_api"
+                    provider_model = result.model
+                    http_attempt_error = None
+                    break
+                except Exception as exc:
+                    http_attempt_error = exc
+                    if http_try + 1 < SPEAKING_REPORT_HTTP_MAX_ATTEMPTS and _is_transient_transport_error(exc):
+                        continue
+                    break
+            if http_attempt_error is None and provider_backend:
                 break
-            except Exception as exc:
-                last_error = exc
-                http_error = exc
-                # Stay on the chosen HTTP provider (retry the compact prompt), then
-                # surface the error. No silent fallback to the local Codex relay —
-                # that was the "等死" path for the default GPT option.
-                continue
+            last_error = http_attempt_error or last_error
+            http_error = http_attempt_error or http_error
+            # Stay on the chosen HTTP provider (retry the compact prompt), then
+            # surface the error. No silent fallback to the local Codex relay —
+            # that was the "等死" path for the default GPT option.
+            continue
     else:
         _raise_report_provider_chain_error(
             http_error=http_error,
@@ -2632,22 +2785,27 @@ def _report_provider_json(
             raise RuntimeError(str(exc)) from exc
 
     if _mode_allows_http("report"):
-        try:
-            result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT, ai_source=ai_source).complete_chat(
-                [
-                    {"role": "system", "content": "You are an IELTS Speaking coach. Return JSON only."},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT,
-                stream=True,
-            )
-            usage = getattr(result, "usage", None)
-            return extract_json_object_with_keys(result.text, required_keys), "http_api", result.model, usage
-        except Exception as exc:
-            last_error = exc
-            http_error = exc
+        for http_try in range(SPEAKING_REPORT_HTTP_MAX_ATTEMPTS):
+            try:
+                result = _speaking_http_provider("report", timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT, ai_source=ai_source).complete_chat(
+                    [
+                        {"role": "system", "content": "You are an IELTS Speaking coach. Return JSON only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT,
+                    stream=True,
+                )
+                usage = getattr(result, "usage", None)
+                return extract_json_object_with_keys(result.text, required_keys), "http_api", result.model, usage
+            except Exception as exc:
+                last_error = exc
+                http_error = exc
+                # Retry the flaky relay handshake on a fresh connection before giving up.
+                if http_try + 1 < SPEAKING_REPORT_HTTP_MAX_ATTEMPTS and _is_transient_transport_error(exc):
+                    continue
+                break
 
     _raise_report_provider_chain_error(
         http_error=http_error,
@@ -2700,6 +2858,13 @@ def enrich_p3_discussion_skills_with_ai(
 - next_drill 必须正好 3 条。
 - 如果学员回答很短，也要基于短答指出下一步练法，不要编造不存在的内容。
 
+写作意图：
+- 这张卡不是机械评分表，而是“老师听完这次 Part 3 后给的一段复盘”。为什么：用户已经能看到分数和逐题点评，这里应该帮助他理解下一轮 discussion move 怎么练。
+- Part 3 的核心不是背更多答案，而是把一个观点推进成讨论：明确立场 → 原因链 → 例子/对比/让步 → 社会或群体影响 → 接住追问的新角度。请围绕这条能力链写，而不是套固定话术。
+- evidence 要尽量引用或转述本次具体回答里的细节；如果只写“几乎没有/比较短/需要加强”，用户会感觉像模板。
+- next_action 要告诉用户下一次说话时具体多加哪一句、放在答案哪里、为什么这样会让 Part 3 更像讨论。
+- next_drill 三条可以长短不同，允许自然口吻；不要每次都写同一类“每题用20秒/写一句however/改写成社会层面”的固定组合，除非本次回答真的最需要它。
+
 返回 JSON 结构：
 {{
   "summary": "...",
@@ -2735,7 +2900,7 @@ def enrich_p3_discussion_skills_with_ai(
                 f"{call_id}_p3_discussion_skills",
                 ai_source=ai_source,
                 max_tokens=1500,
-                temperature=0.2,
+                temperature=0.3,
             )
         else:
             payload = ai_payload if isinstance(ai_payload, dict) else {}
@@ -2842,6 +3007,9 @@ def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_
     prompt = (
         f"Write a natural IELTS Speaking Band 7 spoken version. Preserve the candidate's core ideas, "
         "but improve cohesion, vocabulary, and grammar. Do not include the original question or cue-card bullets. "
+        "It must sound like a real, fluent candidate talking to an examiner: relaxed natural spoken English, "
+        "not stiff written prose. Why: the learner will imitate this aloud, so it has to be something a person would genuinely say. "
+        "If the candidate's answer is thin, keep the core idea but add a believable reason, example, or concrete detail. "
         "Format the answer as concise Markdown paragraphs with blank lines between paragraphs. "
         "Use Markdown bold on 2-5 high-value upgraded chunks such as natural collocations, topic-specific phrases, "
         "or useful sentence frames. Bold only the key phrases, not whole sentences. "
@@ -2882,6 +3050,7 @@ def build_ai_coaching_with_codex(question: str, transcript: str, band7: str, par
 请结合当前题目、用户转写、Band 7 参考答案和学习画像，自主判断该怎么评价。
 不要套固定模板，不要强制写成固定几条，也不要按“问题/原因/替代表达/下一步”这种固定栏目组织。
 你可以自由决定分点数量、分点顺序、是否给示范句，以及每一点的详略。重点是像真人老师一样评价这一次回答。
+这是口语辅导，不是写作批改。为什么：学习者要根据你的反馈改变“怎么说”，而不是改一篇文字稿。请更多关注表达是否自然、内容是否充分、逻辑是否顺、是否直接回答题目、是否有可复用的口语搭配；不要点评大小写、标点、拼写、换行、ASR 噪声或转写显示格式。
 最后必须保留一个独立的语法纠错部分，格式为：
 语法错误纠正：无
 或：
@@ -2970,6 +3139,8 @@ Band 7 version constraints:
 - Do not bold the whole answer or full sentences.
 - Example style: Well, **as a tech enthusiast**, I **usually spend** my evenings coding or **unwinding with** video games.
 - Do not use generic template lines such as "this is quite easy for me to answer", "connects with my daily life", or "closer to Band 7".
+- The Band {target} version must sound like a real, fluent candidate talking to an examiner: relaxed natural spoken English with the personal detail and easy connectors a good speaker actually uses, not stiff written prose. Why: the learner copies this to imitate, so it has to be something a person would genuinely say out loud and that an examiner enjoys hearing.
+- Preserve the candidate's core idea, but if their answer is thin or underdeveloped, you may go beyond it: add a natural reason, example, or concrete detail so the answer is rich enough for Band {target}. A fuller believable answer is more useful to the learner than a faithful but empty one.
 - If the transcript is weak, infer a sensible direct answer from the question type instead of writing a vague template.
 
 Coaching constraints:
@@ -2996,9 +3167,10 @@ First produce display_transcript and display_transcript_markdown with confident 
 If requires_ai_coaching is true, write Chinese coaching based only on display_transcript.
 If requires_ai_coaching is false, set ai_coaching to an empty string.
 In band7_version, use Markdown bold on 2-5 reusable upgraded phrases, not whole sentences.
+The Band {target} answer should sound like relaxed natural spoken English that a real fluent candidate would say to an examiner. If the learner's answer is too thin, preserve the core idea but add a believable reason, example, or detail so the model answer is useful to imitate aloud.
 The coaching format is up to you, but when coaching is required it must include a final section named "语法错误纠正：".
 Do not use fixed labels or templates. Use the candidate's real meaning and do not invent facts.
-Bad example: if display_transcript says "at university", do not say the raw phrase "at University" should not be capitalized.
+This is spoken-English coaching, not writing correction: do not comment on capitalization, punctuation, spelling, line breaks, ASR noise, or display formatting. Bad example: if display_transcript says "at university", do not say the raw phrase "at University" should not be capitalized.
 
 {DISPLAY_TRANSCRIPT_ASR_RULES}
 
@@ -3236,7 +3408,7 @@ Input turns:
                     {"role": "system", "content": "You are an IELTS Speaking coach. Return JSON only."},
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=2600,
+                max_tokens=5200,
                 temperature=0.2,
                 timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT,
                 stream=True,
@@ -3536,6 +3708,16 @@ def generate_turn_feedback_for_report(
 # _training_relevance now lives in scoring_services.py (imported above).
 
 
+def _training_question_id_for_turn(turn: SpeakingTurn) -> str:
+    metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+    prompt = metadata.get("prompt") if isinstance(metadata.get("prompt"), dict) else {}
+    if turn.part == "p3":
+        followup_id = clean_report_text(str(prompt.get("p3_bank_followup_id") or ""))
+        if followup_id:
+            return followup_id
+    return f"{turn.part}:{hashlib.md5(turn.question.encode()).hexdigest()[:12]}"
+
+
 def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     attempt = _load_attempt_for_user(user, attempt_id)
     if report_is_valid(attempt):
@@ -3589,9 +3771,10 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
 
     # Resolve per-user AI source preference
     try:
-        _ai_source = (getattr(user, "profile", None) and user.profile.report_ai_source) or "gpt"
+        profile_source = (getattr(user, "profile", None) and user.profile.report_ai_source) or "gpt"
     except Exception:
-        _ai_source = "gpt"
+        profile_source = "gpt"
+    _ai_source = str((payload or {}).get("provider") or (payload or {}).get("ai_source") or profile_source or "gpt").strip() or "gpt"
 
     p3_discussion_base = build_p3_discussion_skills(attempt) if part == "p3" else None
     p3_discussion_request = p3_discussion_score_request(attempt, p3_discussion_base, learning_profile)
@@ -3703,7 +3886,7 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
                 "turn": turn,
                 "legacy_attempt_id": attempt.attempt_id,
                 "legacy_turn_id": turn.turn_id,
-                "question_id": f"{turn.part}:{hashlib.md5(turn.question.encode()).hexdigest()[:12]}",
+                "question_id": _training_question_id_for_turn(turn),
                 "part": turn.part,
                 "question": turn.question,
                 "transcript": turn_text,
@@ -3735,7 +3918,6 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     return runtime
 
 
-@transaction.atomic
 def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     attempt = _load_attempt_for_user(user, attempt_id)
@@ -3754,7 +3936,14 @@ def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] |
         turns = list(attempt.turns.all().order_by("sequence"))
     scoring_turns = [turn for turn in turns if turn_counts_for_scoring(turn)]
     if not scoring_turns_have_answer_text(scoring_turns):
-        raise SpeakingError("录音已保存，但没有拿到文字稿；请先重新转写录音或重录。")
+        has_audio = any(bool(turn.audio_path) for turn in scoring_turns)
+        message = (
+            "Recording saved, but no scoreable transcript was captured. Please regenerate the transcript or record again."
+            if has_audio
+            else "Recording was not saved and no scoreable transcript was captured. Please record this section again."
+        )
+        mark_attempt_analysis_failed(attempt, SpeakingError(message), f"speaking_report_{attempt.attempt_id}")
+        raise SpeakingError(message)
 
     transcript_hash = hashlib.sha1(
         "\n".join(f"{turn.turn_id}:{turn.transcript_cleaned or turn.transcript_raw}" for turn in turns).encode("utf-8")
@@ -3773,7 +3962,9 @@ def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] |
         }
     if latest_task and latest_task.status in {AITask.Status.FAILED, AITask.Status.FALLBACK, AITask.Status.CANCELLED}:
         idempotency_key = f"{idempotency_key}:retry:{uuid.uuid4().hex[:8]}"
-    requested_provider = str(payload.get("provider") or "").strip()
+    profile_obj = getattr(user, "profile", None)
+    profile_ai_source = str(getattr(profile_obj, "report_ai_source", "") or "").strip() if profile_obj is not None else ""
+    requested_provider = str(payload.get("provider") or payload.get("ai_source") or profile_ai_source or "gpt").strip()
     requested_model = str(payload.get("model") or "").strip()
     task, created = create_ai_task(
         user=user,
@@ -4095,7 +4286,7 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
                 "turn": turn,
                 "legacy_attempt_id": attempt.attempt_id,
                 "legacy_turn_id": turn.turn_id,
-                "question_id": f"{turn.part}:{hashlib.md5(turn.question.encode()).hexdigest()[:12]}",
+                "question_id": _training_question_id_for_turn(turn),
                 "part": turn.part,
                 "question": turn.question,
                 "transcript": turn_text,

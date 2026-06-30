@@ -6,6 +6,8 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 
+from apps.accounts.models import UserProfile
+
 from .models import SpeakingAttempt, SpeakingTurn
 
 
@@ -491,6 +493,91 @@ class StreamingFollowUpTests(TestCase):
         self.assertEqual(follow_up.metadata["prompt"]["usage"], {"input_tokens": 16, "output_tokens": 7})
         self.assertIn("latency_ms", follow_up.metadata["prompt"])
         self.assertEqual(follow_up.metadata["examiner_tts"]["status"], "ready")
+
+    def test_p1_stream_follow_up_uses_http_before_cli_profile_source(self):
+        UserProfile.objects.create(user=self.user, report_ai_source="codex_cli")
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="stream-p1-http-before-cli-attempt",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.STARTED,
+            metadata={"current_turn": "t1_followup"},
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="Do you often talk to your neighbors?",
+            transcript_raw="Hardly ever, because people in my building keep to themselves.",
+            transcript_cleaned="Hardly ever, because people in my building keep to themselves.",
+            metadata={
+                "status": "completed",
+                "prompt": {
+                    "topic": "neighbors",
+                    "question": "Do you often talk to your neighbors?",
+                    "role": "main",
+                    "counts_toward_total": True,
+                },
+                "display_index": 1,
+            },
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1_followup",
+            sequence=1,
+            part="p1",
+            question="Generating follow-up question...",
+            metadata={
+                "prompt": {
+                    "topic": "neighbors",
+                    "question": "Generating follow-up question...",
+                    "role": "follow_up",
+                    "after_turn": "t1",
+                    "source_question": "Do you often talk to your neighbors?",
+                    "backend": "stream_pending",
+                    "generation_status": "pending",
+                    "counts_toward_total": True,
+                },
+                "display_index": 2,
+            },
+        )
+
+        with (
+            patch(
+                "apps.speaking.services.HttpApiProvider",
+                return_value=_StreamingProvider(
+                    ["Why do you think people in apartments keep to themselves?"],
+                    usage={"input_tokens": 18, "output_tokens": 10},
+                ),
+            ) as http_provider,
+            patch("apps.speaking.services.run_codex") as run_codex,
+            patch(
+                "apps.speaking.services.volcengine_tts",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/stream-p1-http-before-cli-attempt_t1_followup_examiner.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ),
+        ):
+            stream_response = self.client.get(
+                "/api/attempts/stream-p1-http-before-cli-attempt/turns/t1/follow-up-stream"
+            )
+            payloads = _sse_payloads(stream_response)
+
+        self.assertEqual(stream_response.status_code, 200)
+        self.assertTrue(any(payload["event"] == "question_complete" for payload in payloads))
+        http_provider.assert_called_once()
+        run_codex.assert_not_called()
+        follow_up = SpeakingTurn.objects.get(attempt=attempt, turn_id="t1_followup")
+        self.assertEqual(follow_up.metadata["prompt"]["provider"], "openai_compatible_http")
+        self.assertEqual(follow_up.metadata["prompt"]["backend"], "http_api_stream")
 
     def test_p1_follow_up_stream_empty_answer_is_rejected_without_fallback_question(self):
         SpeakingAttempt.objects.create(

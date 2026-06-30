@@ -13,6 +13,55 @@ from .exceptions import SpeakingError
 from .models import SpeakingAttempt, SpeakingTrainingObservation
 
 
+def _turn_audio_payload(attempt: SpeakingAttempt, turn_id: str, audio_path: str) -> dict[str, Any] | None:
+    if not audio_path:
+        return None
+    return {"url": f"/api/audio/{attempt.attempt_id}/{turn_id}/candidate"}
+
+
+def _turn_has_text(turn) -> bool:
+    return bool(str(turn.transcript_cleaned or turn.transcript_raw or "").strip())
+
+
+def _turn_has_audio(turn) -> bool:
+    return bool(str(turn.audio_path or "").strip())
+
+
+def _attempt_has_scoreable_text(attempt: SpeakingAttempt) -> bool:
+    return any(_turn_has_text(turn) and turn.counts_toward_total for turn in attempt.turns.all())
+
+
+def _attempt_has_recoverable_audio(attempt: SpeakingAttempt) -> bool:
+    return any(_turn_has_audio(turn) and turn.counts_toward_total for turn in attempt.turns.all())
+
+
+def _attempt_has_saved_turn_data(attempt: SpeakingAttempt) -> bool:
+    return any(_turn_has_text(turn) or _turn_has_audio(turn) for turn in attempt.turns.all())
+
+
+def _hydrate_report_turns_from_db(payload: dict[str, Any], attempt: SpeakingAttempt) -> None:
+    turns_payload = payload.get("turns") if isinstance(payload.get("turns"), list) else []
+    if not turns_payload:
+        return
+    db_turns = {turn.turn_id: turn for turn in attempt.turns.all()}
+    for turn_payload in turns_payload:
+        if not isinstance(turn_payload, dict):
+            continue
+        turn_id = str(turn_payload.get("id") or turn_payload.get("turn_id") or "").strip()
+        turn = db_turns.get(turn_id)
+        if not turn:
+            continue
+        audio = _turn_audio_payload(attempt, turn.turn_id, turn.audio_path)
+        current_audio = turn_payload.get("audio") if isinstance(turn_payload.get("audio"), dict) else {}
+        if audio and not current_audio.get("url"):
+            turn_payload["audio"] = audio
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        turn_payload.setdefault("transcript_status", metadata.get("transcript_status", "captured" if _turn_has_text(turn) else "missing"))
+        turn_payload.setdefault("transcript_raw", turn.transcript_raw)
+        turn_payload.setdefault("transcript_cleaned", turn.transcript_cleaned)
+        turn_payload.setdefault("question", turn.question)
+
+
 def report_is_valid(attempt: SpeakingAttempt) -> bool:
     if attempt.status != SpeakingAttempt.Status.SCORED:
         return False
@@ -80,6 +129,7 @@ def report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
                 "display_transcript": turn.metadata.get("display_transcript", ""),
                 "display_transcript_markdown": turn.metadata.get("display_transcript_markdown", ""),
                 "transcript_status": turn.metadata.get("transcript_status", "captured" if (turn.transcript_cleaned or turn.transcript_raw) else "missing"),
+                "audio": _turn_audio_payload(attempt, turn.turn_id, turn.audio_path),
                 "pronunciation": turn.pronunciation,
                 "status": "completed",
                 "band7_version": turn.metadata.get("band7_version", ""),
@@ -88,6 +138,8 @@ def report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
             }
             for turn in attempt.turns.all().order_by("sequence")
         ]
+    else:
+        _hydrate_report_turns_from_db(payload, attempt)
     normalize_p1_report_turn_corpus_keys(payload)
     return payload
 
@@ -173,7 +225,7 @@ _FAILED_REPORT_TASK_STATUSES = {
 def report_generation_failed_by_metadata(attempt: SpeakingAttempt) -> bool:
     """Metadata-only failure check (no DB query) for cheap use in list views."""
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
-    return (
+    return _attempt_has_saved_turn_data(attempt) and (
         str(metadata.get("report_generation_status") or "") == "failed"
         or str(metadata.get("analysis_status") or "") == "failed"
     )
@@ -256,7 +308,10 @@ def _attempt_turns_payload(attempt: SpeakingAttempt) -> list[dict[str, Any]]:
             "transcript_raw": turn.transcript_raw,
             "transcript_cleaned": turn.transcript_cleaned,
             "display_transcript": turn.metadata.get("display_transcript", "") if isinstance(turn.metadata, dict) else "",
-            "status": "completed",
+            "display_transcript_markdown": turn.metadata.get("display_transcript_markdown", "") if isinstance(turn.metadata, dict) else "",
+            "transcript_status": turn.metadata.get("transcript_status", "captured" if (turn.transcript_cleaned or turn.transcript_raw) else "missing") if isinstance(turn.metadata, dict) else ("captured" if (turn.transcript_cleaned or turn.transcript_raw) else "missing"),
+            "audio": _turn_audio_payload(attempt, turn.turn_id, turn.audio_path),
+            "status": turn.metadata.get("status", "completed") if isinstance(turn.metadata, dict) else "completed",
         }
         for turn in attempt.turns.all().order_by("sequence")
     ]
@@ -307,6 +362,8 @@ def failed_report_payload(attempt: SpeakingAttempt, *, stalled: bool = False) ->
         "ielts_score": {},
         "feedback_summary": "",
         "turns": _attempt_turns_payload(attempt),
+        "can_regenerate_report": _attempt_has_scoreable_text(attempt),
+        "can_regenerate_transcript": _attempt_has_recoverable_audio(attempt),
         "ai_task": speaking_task_summary_payload(task),
     }
 

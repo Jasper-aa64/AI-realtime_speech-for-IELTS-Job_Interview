@@ -48,6 +48,10 @@
     function applyDarkMode(enabled, options = {}) {
       const active = Boolean(enabled);
       state.darkMode = active;
+      document.documentElement.classList.toggle("theme-dark", active);
+      document.documentElement.classList.remove("boot-theme-dark");
+      document.documentElement.style.background = "";
+      document.documentElement.style.colorScheme = "";
       document.body.classList.toggle("theme-dark", active);
       const toggle = document.getElementById("darkModeToggle");
       if (toggle) toggle.checked = active;

@@ -7,7 +7,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 from .dictionary_services import is_single_dictionary_word, lookup_word
 from .models import WritingFrameTemplate
 from .spelling_services import add_manual_spelling_word, delete_spelling_word, record_spelling_attempt, spelling_drill_library, update_spelling_word
-from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, get_entry, list_prompts, prompt_categories, prompt_patterns, random_prompt, save_entry, score_entry, writing_reports, writing_summary
+from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, delete_entry_report, entry_for_prompt, get_entry, list_prompts, prompt_categories, prompt_patterns, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
 def read_json_body(request) -> dict:
@@ -231,6 +231,22 @@ def entries(request):
         return writing_error(exc)
 
 
+@require_GET
+def entry_for_prompt_view(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(entry_for_prompt(
+            request.user,
+            task_type=request.GET.get("task_type", ""),
+            prompt_id=request.GET.get("prompt_id", ""),
+            prompt_text=request.GET.get("prompt", ""),
+        ))
+    except WritingError as exc:
+        return writing_error(exc)
+
+
 @require_http_methods(["GET", "DELETE"])
 def entry_detail(request, entry_id: str):
     auth_error = require_user(request)
@@ -243,6 +259,17 @@ def entry_detail(request, entry_id: str):
             return writing_error(exc, status=404 if "not found" in str(exc).lower() else 400)
     try:
         return JsonResponse(get_entry(request.user, entry_id))
+    except WritingError as exc:
+        return writing_error(exc, status=404 if "not found" in str(exc).lower() else 400)
+
+
+@require_http_methods(["DELETE"])
+def entry_report(request, entry_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(delete_entry_report(request.user, entry_id))
     except WritingError as exc:
         return writing_error(exc, status=404 if "not found" in str(exc).lower() else 400)
 

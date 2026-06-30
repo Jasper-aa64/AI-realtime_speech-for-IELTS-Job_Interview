@@ -107,6 +107,25 @@ def _p3_question_type_for_index(index: int, focus: str) -> str:
         return focus_to_type.get(focus, "comparison_concession")
     return P3_QUESTION_TYPES[(index - 1) % len(P3_QUESTION_TYPES)]
 
+def _infer_p3_question_type(question: str, index: int, focus: str) -> str:
+    """Infer a P3 discussion target from the question wording before falling back to position."""
+    text = f" {clean_report_text(question).lower()} "
+    if re.search(r"\b(?:different|difference|compare|compared|younger|older|men|women|children|adults|rich|poor|urban|rural|whereas|while others|on the other hand)\b", text):
+        return "comparison_concession"
+    if re.search(r"\b(?:future|in the future|next ten years|will .* change|become more|become less)\b", text):
+        return "future_prediction"
+    if re.search(r"\b(?:changed|change over time|in recent years|nowadays|used to|past|before|trend)\b", text):
+        return "change_trend"
+    if re.search(r"\b(?:problem|problems|solution|solve|deal with|address|improve|what can be done)\b", text):
+        return "problem_solution"
+    if re.search(r"\b(?:government|governments|school|schools|responsible|responsibility|policy|law|rules|should .* do|public)\b", text):
+        return "policy_responsibility"
+    if re.search(r"\b(?:why|reason|reasons|cause|causes|effect|effects|impact|important|benefit|benefits)\b", text):
+        return "cause_effect"
+    if re.search(r"\b(?:society|social|people in general|ordinary people|community)\b", text):
+        return "abstract_discussion"
+    return _p3_question_type_for_index(index, focus)
+
 def _p3_follow_up_for_type(question_type: str) -> str:
     follow_ups = {
         "opinion_justify": "What might be the opposite view, and why might some people agree with it?",
@@ -128,7 +147,7 @@ def _structured_p3_questions(questions: list[str], source_type: str, focus: str)
         clean_question = clean_report_text(str(question))[:260]
         if not clean_question:
             continue
-        question_type = _p3_question_type_for_index(index, focus)
+        question_type = _infer_p3_question_type(clean_question, index, focus)
         structured.append(
             {
                 "id": f"q{index + 1}",

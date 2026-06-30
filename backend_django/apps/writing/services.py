@@ -1,5 +1,7 @@
+import difflib
 import hashlib
 import math
+import re
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -77,6 +79,331 @@ def parse_practice_date(value: str | None):
         raise WritingError("Invalid practice_date") from exc
 
 
+def edited_paragraph_indices(previous_answer: str, next_answer: str) -> set[int]:
+    previous = writing_paragraphs(previous_answer)
+    current = writing_paragraphs(next_answer)
+    changed: set[int] = set()
+    for index in range(max(len(previous), len(current))):
+        if (previous[index] if index < len(previous) else "") != (current[index] if index < len(current) else ""):
+            changed.add(index + 1)
+    return changed
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split an answer into whitespace-normalized sentences for sentence-level diffing.
+
+    The annotation-preservation rule is sentence-scoped: edit a sentence at all and its
+    annotations drop; sentences left untouched keep theirs. Normalizing internal
+    whitespace keeps trivial spacing changes from falsely invalidating a sentence.
+    """
+    raw = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not raw:
+        return []
+    return [part.strip() for part in re.split(r"(?<=[.!?])\s+", raw) if part.strip()]
+
+
+def _normalize_answer_text(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def _clean_inline_suggestion(value: Any) -> str:
+    text = str(value or "").strip()
+    for prefix in ("正确：", "正确:", "correct:", "Correct:"):
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+    return text.split("（", 1)[0].split("(", 1)[0].strip()
+
+
+def _local_replacement_fix_annotation_indices(annotations: list[dict[str, Any]], previous_answer: str, next_answer: str) -> set[int]:
+    """Find inline annotations consumed by a precise local Fix action.
+
+    Normal manual sentence edits still invalidate that whole sentence. The exception is
+    the report popover Fix for `original -> suggestion`: when the new answer equals
+    the old answer with exactly one annotation span replaced by its suggestion, only
+    that annotation is consumed and nearby untouched annotations survive. This is not
+    limited to spelling words; short grammar and phrase replacements use the same rule.
+    """
+    normalized_next = _normalize_answer_text(next_answer)
+    consumed: set[int] = set()
+    for index, item in enumerate(annotations):
+        original = re.sub(r"\s+", " ", str(item.get("original") or "")).strip()
+        suggestion = _clean_inline_suggestion(item.get("suggestion"))
+        if not (original and suggestion and original != suggestion):
+            continue
+        matched = False
+        start = previous_answer.find(original)
+        while start >= 0:
+            candidate = f"{previous_answer[:start]}{suggestion}{previous_answer[start + len(original):]}"
+            if _normalize_answer_text(candidate) == normalized_next:
+                matched = True
+                break
+            start = previous_answer.find(original, start + 1)
+        if matched:
+            consumed.add(index)
+    return consumed
+
+
+def _paragraph_similarity(left: str, right: str) -> float:
+    return difflib.SequenceMatcher(None, str(left or ""), str(right or "")).ratio()
+
+
+def _paragraph_index_map(previous_paragraphs: list[str], current_paragraphs: list[str]) -> dict[int, int]:
+    mapped: dict[int, int] = {}
+    used_current: set[int] = set()
+    for old_index, old_text in enumerate(previous_paragraphs):
+        ranked = sorted(
+            (
+                (_paragraph_similarity(old_text, current_text), new_index)
+                for new_index, current_text in enumerate(current_paragraphs)
+                if new_index not in used_current
+            ),
+            key=lambda item: (-item[0], item[1]),
+        )
+        if ranked and ranked[0][0] >= 0.35:
+            mapped[old_index + 1] = ranked[0][1] + 1
+            used_current.add(ranked[0][1])
+    return mapped
+
+
+def _remap_inline_annotation(
+    item: dict[str, Any],
+    *,
+    previous_paragraphs: list[str],
+    current_paragraphs: list[str],
+    paragraph_map: dict[int, int],
+) -> dict[str, Any] | None:
+    original = str(item.get("original") or "").strip()
+    if not original:
+        return None
+    try:
+        old_paragraph_index = int(item.get("paragraph_index")) if item.get("paragraph_index") not in (None, "") else None
+    except (TypeError, ValueError):
+        old_paragraph_index = None
+
+    candidate_indices: list[int] = []
+    mapped_index = paragraph_map.get(old_paragraph_index or -1)
+    if mapped_index:
+        candidate_indices.append(mapped_index)
+    if old_paragraph_index and 0 < old_paragraph_index <= len(previous_paragraphs):
+        old_text = previous_paragraphs[old_paragraph_index - 1]
+        ranked = sorted(
+            ((_paragraph_similarity(old_text, text), index + 1) for index, text in enumerate(current_paragraphs)),
+            key=lambda value: (-value[0], value[1]),
+        )
+        candidate_indices.extend(index for _score, index in ranked)
+    candidate_indices.extend(range(1, len(current_paragraphs) + 1))
+
+    seen: set[int] = set()
+    for new_index in candidate_indices:
+        if new_index in seen or new_index < 1 or new_index > len(current_paragraphs):
+            continue
+        seen.add(new_index)
+        if original in current_paragraphs[new_index - 1]:
+            return {**item, "paragraph_index": new_index}
+    return None
+
+
+def _legacy_preserve_score_after_answer_edit(entry: WritingEntry, previous_answer: str, next_answer: str) -> None:
+    changed_indices = edited_paragraph_indices(previous_answer, next_answer)
+    if not changed_indices:
+        return
+    score = getattr(entry, "score", None) or WritingScore.objects.filter(entry=entry).first()
+    if not score:
+        return
+    analysis = dict(score.analysis_payload or {})
+    previous_paragraphs = writing_paragraphs(previous_answer)
+    current_paragraphs = writing_paragraphs(next_answer)
+    annotations = []
+    for item in analysis.get("inline_annotations") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            paragraph_index = int(item.get("paragraph_index")) if item.get("paragraph_index") not in (None, "") else None
+        except (TypeError, ValueError):
+            paragraph_index = None
+        original = str(item.get("original") or "")
+        if paragraph_index in changed_indices:
+            continue
+        if paragraph_index is None and any(original and original in (previous_paragraphs[i - 1] if i - 1 < len(previous_paragraphs) else "") for i in changed_indices):
+            continue
+        annotations.append(item)
+    analysis["inline_annotations"] = annotations
+
+    reviews = []
+    for offset, item in enumerate(analysis.get("paragraph_reviews") or []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            paragraph_index = int(item.get("index") or offset + 1)
+        except (TypeError, ValueError):
+            paragraph_index = offset + 1
+        if paragraph_index in changed_indices:
+            reviews.append({
+                **item,
+                "index": paragraph_index,
+                "learner": current_paragraphs[paragraph_index - 1] if paragraph_index - 1 < len(current_paragraphs) else "",
+                "model": "",
+                "coaching": "这一段已按你的修改保存。重新提交并生成报告后，会刷新这一段的 AI 改写与辅导。",
+                "language_correction_upgrade": "",
+            })
+        else:
+            reviews.append(item)
+    if reviews:
+        analysis["paragraph_reviews"] = reviews
+    score.analysis_payload = analysis
+    score.save(update_fields=["analysis_payload", "updated_at"])
+
+
+def preserve_score_after_answer_edit(entry: WritingEntry, previous_answer: str, next_answer: str) -> None:
+    changed_indices = edited_paragraph_indices(previous_answer, next_answer)
+    if not changed_indices:
+        return
+    score = getattr(entry, "score", None) or WritingScore.objects.filter(entry=entry).first()
+    if not score:
+        return
+    analysis = dict(score.analysis_payload or {})
+    previous_paragraphs = writing_paragraphs(previous_answer)
+    current_paragraphs = writing_paragraphs(next_answer)
+    paragraph_map = _paragraph_index_map(previous_paragraphs, current_paragraphs)
+    previous_sentences = _split_sentences(previous_answer)
+    current_sentence_set = set(_split_sentences(next_answer))
+    raw_annotations = [item for item in analysis.get("inline_annotations") or [] if isinstance(item, dict)]
+    consumed_fix_indices = _local_replacement_fix_annotation_indices(raw_annotations, previous_answer, next_answer)
+    fix_host_sentences = {
+        sentence
+        for index in consumed_fix_indices
+        for sentence in previous_sentences
+        if re.sub(r"\s+", " ", str(raw_annotations[index].get("original") or "")).strip() in sentence
+    }
+
+    annotations = []
+    for annotation_index, item in enumerate(raw_annotations):
+        original = re.sub(r"\s+", " ", str(item.get("original") or "")).strip()
+        if not original:
+            continue
+        if annotation_index in consumed_fix_indices:
+            continue
+        # Sentence-level invalidation: locate the OLD sentence that hosted this
+        # annotation; it only survives if that exact sentence is still present in the
+        # new answer. Touch a sentence at all and its annotations drop; sentences left
+        # untouched keep theirs (so fixing one sentence never disturbs another's marks).
+        host_sentence = next((sentence for sentence in previous_sentences if original in sentence), None)
+        if host_sentence is not None:
+            if host_sentence not in current_sentence_set and not (host_sentence in fix_host_sentences and original in _normalize_answer_text(next_answer)):
+                continue
+        elif not any(original in sentence for sentence in current_sentence_set):
+            continue
+        remapped = _remap_inline_annotation(
+            item,
+            previous_paragraphs=previous_paragraphs,
+            current_paragraphs=current_paragraphs,
+            paragraph_map=paragraph_map,
+        )
+        if remapped:
+            annotations.append(remapped)
+    analysis["inline_annotations"] = annotations
+
+    reviews = []
+    used_review_indices: set[int] = set()
+    for offset, item in enumerate(analysis.get("paragraph_reviews") or []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            old_paragraph_index = int(item.get("index") or offset + 1)
+        except (TypeError, ValueError):
+            old_paragraph_index = offset + 1
+        new_paragraph_index = paragraph_map.get(old_paragraph_index, old_paragraph_index)
+        if new_paragraph_index < 1 or new_paragraph_index > len(current_paragraphs) or new_paragraph_index in used_review_indices:
+            continue
+        used_review_indices.add(new_paragraph_index)
+        current_text = current_paragraphs[new_paragraph_index - 1]
+        reviews.append({**item, "index": new_paragraph_index, "learner": current_text})
+    if reviews:
+        reviews.sort(key=lambda review: int(review.get("index") or 0))
+        analysis["paragraph_reviews"] = reviews
+    score.analysis_payload = analysis
+    score.save(update_fields=["analysis_payload", "updated_at"])
+
+
+def scored_entry_for_same_prompt(user, *, task_type: str, prompt: WritingPrompt | None, prompt_text: str) -> WritingEntry | None:
+    queryset = (
+        WritingEntry.objects.select_related("prompt", "score")
+        .filter(user=user, task_type=task_type, status=WritingEntry.Status.SCORED, score__isnull=False)
+        .order_by("-updated_at", "-created_at")
+    )
+    if prompt:
+        if prompt.source_book is not None and prompt.source_test is not None and prompt.source_question is not None:
+            source_match = queryset.filter(
+                prompt__source_book=prompt.source_book,
+                prompt__source_test=prompt.source_test,
+                prompt__source_question=prompt.source_question,
+            ).first()
+            if source_match:
+                return source_match
+        return queryset.filter(prompt=prompt).first()
+    normalized_prompt_text = str(prompt_text or "").strip()
+    if normalized_prompt_text:
+        return queryset.filter(prompt__isnull=True, prompt_text=normalized_prompt_text).first()
+    return None
+
+
+def maintained_entry_for_same_prompt(user, *, task_type: str, prompt: WritingPrompt | None, prompt_text: str) -> WritingEntry | None:
+    """Return the single essay the user is maintaining for this question.
+
+    Historical duplicate rows can exist from older flows. Prefer a scored report
+    because it is the authoritative maintained essay; otherwise prefer a non-empty
+    saved draft, then the newest empty draft only when that is all that exists.
+    """
+    queryset = (
+        WritingEntry.objects.select_related("prompt", "score")
+        .filter(user=user, task_type=task_type)
+    )
+    if prompt:
+        if prompt.source_book is not None and prompt.source_test is not None and prompt.source_question is not None:
+            queryset = queryset.filter(
+                prompt__source_book=prompt.source_book,
+                prompt__source_test=prompt.source_test,
+                prompt__source_question=prompt.source_question,
+            )
+        else:
+            queryset = queryset.filter(prompt=prompt)
+    else:
+        normalized_prompt_text = str(prompt_text or "").strip()
+        if not normalized_prompt_text:
+            return None
+        queryset = queryset.filter(prompt__isnull=True, prompt_text=normalized_prompt_text)
+
+    candidates = list(queryset)
+    if not candidates:
+        return None
+    candidates.sort(
+        key=lambda entry: (
+            1 if writing_entry_is_scored(entry) else 0,
+            1 if str(entry.answer or "").strip() else 0,
+            entry.updated_at,
+            entry.created_at,
+        ),
+        reverse=True,
+    )
+    return candidates[0]
+
+
+def entry_for_prompt(user, *, task_type: str, prompt_id: str = "", prompt_text: str = "") -> dict[str, Any]:
+    """The single essay the user maintains for a given question (scored or not).
+
+    One essay per question: opening a prompt should reload whatever the user last
+    saved for it, regardless of scoring status. Returns {"entry": payload|None}.
+    """
+    normalized_task = normalize_task_type(str(task_type or ""))
+    prompt = (
+        WritingPrompt.objects.filter(prompt_id=str(prompt_id or "").strip(), task_type=normalized_task, is_active=True).first()
+        if str(prompt_id or "").strip()
+        else None
+    )
+    entry = maintained_entry_for_same_prompt(user, task_type=normalized_task, prompt=prompt, prompt_text=prompt_text)
+    return {"entry": entry_payload(entry) if entry else None}
+
+
 @transaction.atomic
 def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     answer = str(payload.get("answer") or "")
@@ -88,27 +415,44 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
         raise WritingError("Missing writing prompt")
     entry_id = str(payload.get("id") or "").strip()
     existing = WritingEntry.objects.select_related("prompt", "score").filter(user=user, entry_id=entry_id).first() if entry_id else None
+    preserve_score_requested = payload.get("preserve_score", False) is True
+    scored_same_prompt = None
+    if not existing and not entry_id:
+        maintained_same_prompt = maintained_entry_for_same_prompt(user, task_type=task_type, prompt=prompt, prompt_text=prompt_text)
+        if maintained_same_prompt:
+            existing = maintained_same_prompt
+            entry_id = existing.entry_id
+    elif existing and preserve_score_requested and not writing_entry_is_scored(existing):
+        scored_same_prompt = scored_entry_for_same_prompt(user, task_type=task_type, prompt=prompt, prompt_text=prompt_text)
+        if scored_same_prompt:
+            existing = scored_same_prompt
+            entry_id = existing.entry_id
     if not entry_id:
         entry_id = uuid.uuid4().hex
     title = str(payload.get("title") or (prompt.title if prompt else "") or WRITING_TASK_LABELS[task_type])[:200]
     now = timezone.now()
+    previous_answer = existing.answer if existing else ""
     answer_changed = bool(existing and existing.answer != answer)
-    create_revision = bool(answer_changed and existing and writing_entry_is_scored(existing))
-    entry = WritingEntry(
-        user=user,
-        entry_id=uuid.uuid4().hex,
-        task_type=task_type,
-    ) if create_revision else (existing or WritingEntry(user=user, entry_id=entry_id, task_type=task_type))
+    preserve_score = bool(
+        answer_changed
+        and existing
+        and writing_entry_is_scored(existing)
+        and preserve_score_requested
+    )
+    entry = existing or WritingEntry(user=user, entry_id=entry_id, task_type=task_type)
     entry.prompt = prompt
     entry.task_type = task_type
-    entry.practice_date = parse_practice_date(str(payload.get("practice_date") or "") or None)
+    if existing and not payload.get("practice_date"):
+        entry.practice_date = existing.practice_date
+    else:
+        entry.practice_date = parse_practice_date(str(payload.get("practice_date") or "") or None)
     entry.title = title
     entry.prompt_text = prompt_text
     entry.answer = answer
     entry.word_count = word_count(answer)
-    entry.status = WritingEntry.Status.SAVED if create_revision or answer_changed or not existing else entry.status
+    entry.status = WritingEntry.Status.SAVED if (answer_changed and not preserve_score) or not existing else entry.status
     entry.saved_at = now
-    base_metadata = entry.metadata if not create_revision else (existing.metadata if existing else {})
+    base_metadata = entry.metadata or {}
     entry.metadata = {
         **(base_metadata or {}),
         "category": str(payload.get("category") or (prompt.category if prompt else "")),
@@ -118,14 +462,13 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
             prompt_text,
         ),
     }
-    if create_revision and existing:
-        entry.metadata.update({
-            "revision_parent_entry_id": existing.entry_id,
-            "revision_source": "scored_entry_edit",
-        })
     entry.save()
-    if answer_changed and not create_revision:
+    if answer_changed and preserve_score:
+        preserve_score_after_answer_edit(entry, previous_answer, answer)
+        entry.refresh_from_db()
+    elif answer_changed:
         WritingScore.objects.filter(entry=entry).delete()
+        entry.refresh_from_db()
     return entry_payload(entry)
 
 
@@ -200,6 +543,41 @@ def delete_entry(user, entry_id: str) -> dict[str, Any]:
 
 
 @transaction.atomic
+def delete_entry_report(user, entry_id: str) -> dict[str, Any]:
+    entry = WritingEntry.objects.select_related("prompt", "score").filter(user=user, entry_id=str(entry_id or "").strip()).first()
+    if not entry:
+        raise WritingError("Writing entry not found")
+    pending_tasks = AITask.objects.filter(
+        user=user,
+        task_type="writing_score",
+        related_type="writing_entry",
+        related_id=entry.entry_id,
+        status=AITask.Status.PENDING,
+    )
+    for task in pending_tasks:
+        if task.billing_reservation_id:
+            cancel_billable_ai_task(task.task_id, reason="Writing report deleted", error_code="writing_report_deleted")
+        else:
+            task.status = AITask.Status.CANCELLED
+            task.error_code = "writing_report_deleted"
+            task.error_message = "Writing report deleted"
+            task.available_at = None
+            task.finished_at = timezone.now()
+            task.save(update_fields=["status", "error_code", "error_message", "available_at", "finished_at", "updated_at"])
+    WritingScore.objects.filter(entry=entry).delete()
+    entry.status = WritingEntry.Status.SAVED
+    # Deleting the report releases the pinned report time: the essay is kept (so the
+    # user still finds it next time they open this question), but a future re-score
+    # starts a brand-new report whose time is set fresh at that creation.
+    metadata = dict(entry.metadata or {})
+    metadata.pop("report_created_at", None)
+    entry.metadata = metadata
+    entry.save(update_fields=["status", "metadata", "updated_at"])
+    entry.refresh_from_db()
+    return entry_payload(entry)
+
+
+@transaction.atomic
 def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     entry = (
@@ -213,12 +591,30 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
         raise WritingError("Write an answer before requesting AI scoring.")
     validate_answer_paragraphs(entry.task_type, entry.answer)
     answer_hash = hashlib.sha1(entry.answer.encode("utf-8")).hexdigest()[:16]
-    idempotency_key = f"writing_score:{entry.entry_id}:{answer_hash}"
+    base_idempotency_key = f"writing_score:{entry.entry_id}:{answer_hash}"
+    idempotency_key = base_idempotency_key
+    force_regenerate = payload.get("force") is True or str(payload.get("force") or "").strip().lower() in {"1", "true", "yes"}
+    if force_regenerate:
+        active_task = (
+            AITask.objects.filter(
+                user=user,
+                task_type="writing_score",
+                related_type="writing_entry",
+                related_id=entry.entry_id,
+                request_payload__answer_hash=answer_hash,
+                status__in=[AITask.Status.PENDING, AITask.Status.RUNNING],
+            )
+            .order_by("-created_at", "-updated_at")
+            .first()
+        )
+        if active_task:
+            return {"created": False, "task": task_payload(active_task), "entry": entry_payload(entry)}
+        idempotency_key = f"{base_idempotency_key}:regen:{uuid.uuid4().hex[:12]}"
     # If a previous task with the same key failed, remove it so the user can retry.
     # Only block re-submission when the previous task succeeded (same content already scored).
     AITask.objects.filter(
         user=user,
-        idempotency_key=idempotency_key,
+        idempotency_key=base_idempotency_key if not force_regenerate else idempotency_key,
         status=AITask.Status.FAILED,
     ).delete()
     prompt_chart_facts = entry.prompt.chart_facts if entry.prompt_id and isinstance(entry.prompt.chart_facts, dict) else {}
@@ -411,6 +807,10 @@ def normalize_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> di
 def persist_score(entry: WritingEntry, score: dict[str, Any]) -> None:
     task_response_value = score.get(task_score_key(entry.task_type))
     analysis_payload = normalize_analysis_payload(entry, score)
+    now = timezone.now()
+    metadata = dict(entry.metadata or {})
+    metadata.setdefault("report_created_at", now.isoformat())
+    entry.metadata = metadata
     WritingScore.objects.update_or_create(
         entry=entry,
         defaults={
@@ -425,13 +825,13 @@ def persist_score(entry: WritingEntry, score: dict[str, Any]) -> None:
             "analysis_payload": analysis_payload,
             "source": str(score.get("backend") or "ai"),
             "billing_metadata": score.get("billing_usage") or {},
-            "scored_at": timezone.now(),
+            "scored_at": now,
         },
     )
     entry.status = WritingEntry.Status.SCORED
-    entry.saved_at = entry.saved_at or timezone.now()
+    entry.saved_at = entry.saved_at or now
     entry.practice_date = entry.practice_date or timezone.localdate()
-    entry.save(update_fields=["status", "saved_at", "practice_date", "updated_at"])
+    entry.save(update_fields=["status", "saved_at", "practice_date", "metadata", "updated_at"])
 
 
 def fallback_score(task_type: str, answer: str, reason: str = "") -> dict[str, Any]:

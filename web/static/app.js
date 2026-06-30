@@ -2937,6 +2937,57 @@ function hideFollowUpThinkingMascot() {
   document.getElementById("followUpMascot")?.remove();
 }
 
+function p3BankPlanCycleNotice(plan = {}) {
+  const sourceType = String(plan.source?.type || state.p3SourceType || "").trim();
+  if (!["bank", "season_bank"].includes(sourceType)) return null;
+  const questionCount = Array.isArray(plan.questions) ? plan.questions.length : Number(plan.question_count) || 0;
+  if (!questionCount) return null;
+  const cycle = Math.max(1, Number(plan.p3_bank_practice_cycle) || Number(state.p3PracticeSource?.practiceCycle) || 1);
+  const total = Math.max(questionCount, Number(plan.p3_bank_cycle_question_count) || 0);
+  const done = Math.max(0, Number(plan.p3_bank_current_cycle_done_count) || 0);
+  const willComplete = Boolean(plan.p3_bank_will_complete_cycle) || (total > 0 && done + questionCount >= total);
+  return {
+    cycle,
+    questionCount,
+    title: willComplete ? `本次练习结束，就可通关第 ${cycle} 周目` : `第 ${cycle} 周目继续铺开`,
+    body: `本次练习 ${questionCount} 题${total ? `，本周目已完成 ${Math.min(total, done)}/${total}` : ""}。`,
+  };
+}
+
+function confirmP3BankPracticeCycle(plan = {}) {
+  const notice = p3BankPlanCycleNotice(plan);
+  if (!notice || plan._cycleNoticeShown) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    document.querySelector(".p3-cycle-notice-overlay")?.remove();
+    const overlay = document.createElement("div");
+    overlay.className = "confirm-overlay p3-cycle-notice-overlay";
+    overlay.innerHTML = `
+      <div class="confirm-dialog p3-cycle-notice-dialog" role="dialog" aria-modal="true" aria-label="P3 练习周目提醒">
+        <span class="p3-cycle-notice-kicker">P3 Question Bank</span>
+        <h3>${escapeHtml(notice.title)}</h3>
+        <p>${escapeHtml(notice.body)}</p>
+        <div class="confirm-actions p3-cycle-notice-actions">
+          <button class="confirm-cancel" type="button" data-p3-cycle-cancel>取消</button>
+          <button class="confirm-delete p3-cycle-start" type="button" data-p3-cycle-start>开始练习</button>
+        </div>
+      </div>
+    `;
+    const close = (confirmed) => {
+      overlay.remove();
+      document.body.classList.remove("modal-open");
+      if (confirmed) plan._cycleNoticeShown = true;
+      resolve(confirmed);
+    };
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay || event.target.closest("[data-p3-cycle-cancel]")) close(false);
+      if (event.target.closest("[data-p3-cycle-start]")) close(true);
+    });
+    document.body.appendChild(overlay);
+    document.body.classList.add("modal-open");
+    overlay.querySelector("[data-p3-cycle-start]")?.focus();
+  });
+}
+
 async function startPractice() {
   if (state.status === "loading" || state.practiceLocked) return;
   // A background analysis (e.g. a P3 report still scoring) must NOT block
@@ -2965,6 +3016,7 @@ async function startPractice() {
     await generateP3Plan();
     if (!state.p3Plan) return;
   }
+  if (mode === "p3" && !(await confirmP3BankPracticeCycle(state.p3Plan))) return;
   if (mode === "p3") setP3StartPending(true);
   state.abortingAttemptId = null;
   state.practiceLocked = true;
@@ -9363,27 +9415,37 @@ function writingFixPopoverElement() {
     el = document.createElement("div");
     el.id = "writingFixPopover";
     el.className = "writing-fix-popover";
-    el.innerHTML = `<button type="button" data-writing-fix-apply>Fix</button>`;
-    document.body.appendChild(el);
+    el.innerHTML = `
+      <button type="button" data-writing-fix-apply aria-label="应用这条修改建议">
+        <span class="writing-fix-popover-icon" aria-hidden="true">Fix</span>
+        <span>Fix</span>
+      </button>`;
   }
   return el;
 }
 
 function hideWritingFixPopover() {
-  document.getElementById("writingFixPopover")?.classList.remove("is-visible");
+  const popover = document.getElementById("writingFixPopover");
+  if (!popover) return;
+  popover.classList.remove("is-visible");
+  delete popover.dataset.fixOriginal;
+  delete popover.dataset.fixSuggestion;
+  delete popover.dataset.fixEntryId;
+  delete popover.dataset.fixParagraphIndex;
 }
 
-function showWritingFixPopover(anchor, event) {
+function showWritingFixPopover(anchor) {
   const original = String(anchor?.dataset?.writingFixOriginal || "");
   const suggestion = String(anchor?.dataset?.writingFixSuggestion || "");
   if (!original || !suggestion) return;
   const popover = writingFixPopoverElement();
+  anchor.appendChild(popover);
   popover.dataset.fixOriginal = original;
   popover.dataset.fixSuggestion = suggestion;
   popover.dataset.fixEntryId = anchor.closest("[data-writing-original-cell]")?.dataset?.writingEntryId || "";
   popover.dataset.fixParagraphIndex = anchor.closest("[data-writing-original-cell]")?.dataset?.writingParagraphIndex || "";
-  popover.style.left = `${Math.min(window.innerWidth - 72, Math.max(8, event.clientX + 8))}px`;
-  popover.style.top = `${Math.min(window.innerHeight - 44, Math.max(8, event.clientY + 8))}px`;
+  popover.style.left = "";
+  popover.style.top = "";
   popover.classList.add("is-visible");
 }
 
@@ -10140,7 +10202,8 @@ function closeWritingScoreCompleteModal() {
 
 function reportHtmlStylesheetHref() {
   const link = document.querySelector('link[rel="stylesheet"][href*="styles.css"]');
-  return link?.href || `${window.location.origin}/styles.css`;
+  const href = link?.getAttribute("href") || "/styles.css";
+  return new URL(href, window.location.origin).href;
 }
 
 function reportMascotFramesHtml() {
@@ -10203,6 +10266,7 @@ function reportMascotFramesHtml() {
 
 function prepareReportHtmlContent(source) {
   const content = source.cloneNode(true);
+  content.classList.add("report-html-cloned-panel");
   content.querySelectorAll("textarea, input").forEach((el) => {
     const replacement = document.createElement("div");
     replacement.className = "report-pdf-field-value";
@@ -10210,19 +10274,42 @@ function prepareReportHtmlContent(source) {
     el.replaceWith(replacement);
   });
   content.querySelectorAll([
+    ".corpus-edit-button",
+    ".p2-report-p3-cta",
+    ".regenerate-feedback-button",
+    ".regenerate-transcript-button",
+    ".report-export-btn",
     ".history-item-menu",
     ".writing-fix-popover",
+    ".writing-inline-edit-btn",
+    ".writing-inline-undo-btn",
     ".writing-report-edit-btn",
-    ".report-export-btn",
-    "[data-writing-report-edit]",
-    "[data-report-export]",
+    "[data-edit-turn-corpus]",
     "[data-regenerate-report]",
-    "[data-regenerate-turn]",
     "[data-regenerate-transcript]",
+    "[data-regenerate-turn]",
+    "[data-report-export]",
+    "[data-start-p3-from-p2]",
+    "[data-writing-fix-apply]",
+    "[data-writing-paragraph-edit]",
+    "[data-writing-paragraph-save]",
+    "[data-writing-paragraph-undo]",
+    "[data-writing-report-edit]",
     "[data-writing-report-paragraph-edit]",
     "[data-writing-report-paragraph-save]",
   ].join(",")).forEach((node) => node.remove());
-  content.querySelectorAll("[style]").forEach((el) => {
+  content.querySelectorAll("button").forEach((button) => {
+    const label = String(button.textContent || "").trim();
+    if (/Fix|编辑|撤回|保存|重新生成|重新转写|一键重新生成|打开报告页|记入语料库|根据本次P2回答练习P3/.test(label)) {
+      button.remove();
+    }
+  });
+  content.querySelectorAll("[data-writing-fix-original], [data-writing-fix-suggestion]").forEach((el) => {
+    el.removeAttribute("data-writing-fix-original");
+    el.removeAttribute("data-writing-fix-suggestion");
+  });
+  content.querySelectorAll("[contenteditable]").forEach((el) => el.removeAttribute("contenteditable"));
+  [content, ...content.querySelectorAll("[style]")].forEach((el) => {
     const style = el.getAttribute("style") || "";
     if (!/max-height|overflow|height/i.test(style)) return;
     el.style.maxHeight = "none";
@@ -10238,10 +10325,12 @@ function openReportHtmlPage(kind, options = {}) {
   if (!source) return;
   const reportTitle = isWriting ? "IELTS Studio 写作报告" : "IELTS Studio 口语报告";
   const content = prepareReportHtmlContent(source);
-  const bodyClass = `${document.body.className || ""} report-pdf-body`.trim();
+  const htmlClass = document.documentElement.className || "";
+  const bodyClass = `${document.body.className || ""} report-html-body`.trim();
   const stylesheetHref = reportHtmlStylesheetHref();
+  const reportPanelId = isWriting ? "writingReportsPanel" : "historyPanel";
   const html = `<!doctype html>
-    <html lang="zh-CN">
+    <html lang="zh-CN" class="${escapeHtml(htmlClass)}">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10250,8 +10339,8 @@ function openReportHtmlPage(kind, options = {}) {
         <link rel="stylesheet" href="${escapeHtml(stylesheetHref)}">
         <style>
           html, body { min-height: auto !important; height: auto !important; overflow: visible !important; }
-          body.report-pdf-body { margin: 0 !important; background: var(--bg, #f7fbfa) !important; color: var(--ink, #10201d); }
-          body.report-pdf-body.theme-dark { background: #07131a !important; }
+          body.report-html-body { margin: 0 !important; background: var(--bg, #f7fbfa) !important; color: var(--ink, #10201d); }
+          body.report-html-body.theme-dark { background: var(--bg, #07131a) !important; }
           .report-html-page { width: min(1080px, 100%); margin: 0 auto; padding: 28px 30px 42px; }
           .report-html-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; padding: 16px 18px; border: 1px solid var(--line, #dbe5e2); border-radius: 16px; background: var(--panel, #fff); }
           .report-html-bar h1 { margin: 0; font-size: 22px; letter-spacing: 0; }
@@ -10276,7 +10365,7 @@ function openReportHtmlPage(kind, options = {}) {
               <button id="reportHtmlDownloadBtn" class="report-html-download-btn" type="button">下载 HTML</button>
             </div>
           </header>
-          <section class="report-html-source">${content.innerHTML}</section>
+          <section id="${escapeHtml(reportPanelId)}" class="report-html-source">${content.outerHTML}</section>
         </main>
         <script>
           document.getElementById("reportHtmlDownloadBtn")?.addEventListener("click", function () {
@@ -11395,8 +11484,8 @@ function p3TurnDiscussionMoves(turn) {
   if (!moves.length && !typeLabel) return "";
   return `
     <div class="p3-turn-moves">
-      <span>${escapeHtml(prompt.role === "follow_up" ? "追问承接" : typeLabel)}</span>
-      ${moves.slice(0, 4).map((move) => `<em>${escapeHtml(p3MoveLabel(move))}</em>`).join("")}
+      ${typeLabel ? `<em>${escapeHtml(typeLabel)}</em>` : ""}
+      ${moves.slice(0, 3).map((move) => `<em>${escapeHtml(p3MoveLabel(move))}</em>`).join("")}
     </div>
   `;
 }
@@ -11675,6 +11764,56 @@ function p2BankCardFollowUps(entry = {}) {
     });
 }
 
+function numberSet(values = []) {
+  return new Set((Array.isArray(values) ? values : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value >= 0));
+}
+
+function p3BankPracticeCycle(entry = {}) {
+  return Math.max(1, Number(entry.practice_cycle) || 1);
+}
+
+function p3BankNextQuestionIndexes(entry = {}) {
+  const explicit = (Array.isArray(entry.practice_next_question_indexes) ? entry.practice_next_question_indexes : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value >= 0);
+  if (explicit.length) return explicit;
+  const rounds = Array.isArray(entry.practice_rounds) ? entry.practice_rounds : [];
+  const nextRound = Math.max(0, Number(entry.practice_next_round_index) || 0);
+  const round = rounds.find((item) => Number(item?.round_index) === nextRound);
+  return (Array.isArray(round?.question_indexes) ? round.question_indexes : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value >= 0);
+}
+
+function p3BankRoundChipsHtml(entry = {}) {
+  const rounds = Array.isArray(entry.practice_rounds) ? entry.practice_rounds : [];
+  const doneIndexes = numberSet(entry.practice_current_cycle_question_indexes);
+  const nextIndexes = numberSet(p3BankNextQuestionIndexes(entry));
+  if (!rounds.length) return "";
+  return `
+    <div class="p3-bank-round-strip" aria-label="当前周目练习进度">
+      ${rounds.map((round, roundIndex) => {
+        const indexes = (Array.isArray(round.question_indexes) ? round.question_indexes : [])
+          .map((value) => Number(value))
+          .filter((value) => Number.isInteger(value) && value >= 0);
+        const isDone = indexes.length > 0 && indexes.every((index) => doneIndexes.has(index));
+        const isNext = indexes.some((index) => nextIndexes.has(index));
+        const label = indexes.map((index) => `Q${index + 1}`).join(" ");
+        return `<span class="p3-bank-round-chip${isDone ? " is-done" : ""}${isNext ? " is-next" : ""}">${escapeHtml(label || `R${roundIndex + 1}`)}</span>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function p3BankPracticeLabel(entry = {}) {
+  const followUps = p2BankCardFollowUps(entry);
+  const doneCount = numberSet(entry.practice_current_cycle_question_indexes).size;
+  const nextCount = p3BankNextQuestionIndexes(entry).length || Math.min(4, followUps.length);
+  return `第 ${p3BankPracticeCycle(entry)} 周目 · 已练 ${doneCount}/${followUps.length} · 本次 ${nextCount} 题`;
+}
+
 function p3BankCardsWithFollowUps() {
   return (state.p2Corpus.currentPart2Cards || [])
     .filter((item) => p2BankQuestionId(item) && p2BankCardFollowUps(item).length);
@@ -11706,6 +11845,8 @@ function setSelectedP3BankCard(entry) {
     theme: title,
     p2QuestionId: questionId,
     p3FollowUps: followUps,
+    practiceCycle: p3BankPracticeCycle(entry),
+    practiceNextQuestionIndexes: p3BankNextQuestionIndexes(entry),
     categoryLabel: entry.label || entry.category || "",
   };
   state.p3SelectedTopic = title;
@@ -11726,15 +11867,9 @@ function p3BankCardPreviewHtml(entry) {
   const title = p2BankCardTitle(entry);
   const followUps = p2BankCardFollowUps(entry);
   const bullets = (entry.bullets || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-  const roundCount = Math.max(0, Number(entry.practice_round_count) || 0);
-  const completedRoundCount = Math.min(roundCount, Math.max(0, Number(entry.practice_completed_round_count) || 0));
-  const isComplete = Boolean(entry.practice_is_complete) && roundCount > 0;
-  const progressClass = isComplete
-    ? " p3-bank-picker-card--complete"
-    : (completedRoundCount > 0 ? " p3-bank-picker-card--partial" : "");
-  const progressLabel = isComplete
-    ? "已完成"
-    : (completedRoundCount > 0 ? `已练 ${completedRoundCount}/${roundCount}` : `${followUps.length} 追问题`);
+  const completedRoundCount = Math.max(0, Number(entry.practice_completed_round_count) || 0);
+  const progressClass = completedRoundCount > 0 ? " p3-bank-picker-card--partial" : "";
+  const progressLabel = p3BankPracticeLabel(entry);
   return `
     <article class="p3-bank-picker-card${progressClass}${p2BankQuestionId(entry) === state.p3SelectedBankCardId ? " active" : ""}" tabindex="0" role="button" data-p3-bank-card="${escapeHtml(p2BankQuestionId(entry))}">
       <div class="p3-bank-card-top">
@@ -11743,6 +11878,7 @@ function p3BankCardPreviewHtml(entry) {
       </div>
       <strong>${escapeHtml(title)}</strong>
       ${bullets ? `<ul>${bullets}</ul>` : ""}
+      ${p3BankRoundChipsHtml(entry)}
     </article>
   `;
 }
@@ -11755,18 +11891,30 @@ function p3SelectedBankCardHtml(entry) {
     <article class="p3-bank-picker-card p3-bank-context-card active" tabindex="0" role="button" data-p3-bank-picker-open>
       <div class="p3-bank-card-top">
         <span>${escapeHtml(entry.label || entry.category || "P2")}</span>
-        <em>${escapeHtml(followUps.length)} 追问题 · 点击切换题卡</em>
+        <em>${escapeHtml(p3BankPracticeLabel(entry))} · 点击切换题卡</em>
       </div>
       <strong>${escapeHtml(title)}</strong>
       ${bullets ? `<ul>${bullets}</ul>` : ""}
+      ${p3BankRoundChipsHtml(entry)}
     </article>
   `;
 }
 
-async function renderP3BankPicker() {
+async function refreshP3BankPickerCorpus(force = false) {
+  if (!force && state.p2Corpus.loaded) return true;
+  try {
+    const payload = await fetchP2CorpusPayload({ force });
+    applyP2CorpusPayload(payload || {});
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function renderP3BankPicker(options = {}) {
   const list = $("#p3BankPickerList");
   if (!list) return;
-  const loaded = await ensureP2CorpusLoaded();
+  const loaded = await refreshP3BankPickerCorpus(Boolean(options.force));
   if (!loaded) {
     // Replace the loading spinner with an error note so it never hangs.
     list.innerHTML = `
@@ -11790,25 +11938,31 @@ async function renderP3BankPicker() {
   list.innerHTML = cards.map(p3BankCardPreviewHtml).join("");
 }
 
+function p3BankPickerLoadingHtml() {
+  return `
+    <div class="p3-bank-picker-loading" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <strong>正在加载题卡</strong>
+      <small>正在读取已维护固定 P3 追问的 P2 题卡…</small>
+      <div class="p3-bank-picker-loading-lines" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+}
+
 async function openP3BankPicker() {
   if (!state.account.authenticated) {
     promptGuestLogin("登录后才能浏览 P3 题卡并生成追问。");
     return;
   }
   const list = $("#p3BankPickerList");
-  // Pop the modal immediately. When the P2 corpus still needs a fetch, show a
-  // loading spinner so the click feels instant instead of stalling on the
-  // request, then renderP3BankPicker swaps in the cards once it resolves.
-  if (list && !state.p2Corpus.loaded) {
-    list.innerHTML = `
-      <div class="p3-bank-picker-loading" aria-live="polite">
-        <span class="spinner" aria-hidden="true"></span>
-        <span>正在加载题卡…</span>
-      </div>
-    `;
-  }
+  // Always seed the list with a full-size loading state before the forced refresh.
+  // Otherwise a warm local cache still opens as a header-only strip while the
+  // network refresh is pending, then suddenly expands when cards arrive.
+  if (list) list.innerHTML = p3BankPickerLoadingHtml();
   $("p3BankPickerModal")?.classList.remove("hidden");
-  await renderP3BankPicker();
+  await renderP3BankPicker({ force: true });
 }
 
 function activateP3BankPickerCard(cardButton) {

@@ -2,6 +2,7 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
@@ -52,10 +53,7 @@ class SpellingDrillTests(TestCase):
         )
 
     def aware_at(self, year: int, month: int, day: int, hour: int, minute: int = 0):
-        return timezone.make_aware(
-            datetime(year, month, day, hour, minute),
-            timezone.get_current_timezone(),
-        )
+        return datetime(year, month, day, hour, minute, tzinfo=ZoneInfo("UTC"))
 
     def review_local(self, value):
         return timezone.localtime(value, SRS_REVIEW_TIMEZONE)
@@ -175,6 +173,25 @@ class SpellingDrillTests(TestCase):
         self.assertEqual(word.attempt_count, 5)  # 1 wrong + 4 correct
         self.assertEqual(word.correct_count, 4)
         self.assertIn("next_due_human", result)
+
+    def test_blank_attempt_counts_as_wrong_answer(self):
+        self.create_score(
+            answer="This app is confortable.",
+            analysis_payload={"inline_annotations": [{"type": "spelling", "original": "confortable", "suggestion": "comfortable"}]},
+        )
+        harvest_spelling_words(self.user)
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="comfortable")
+
+        result = record_spelling_attempt(self.user, word.word_id, "")
+
+        self.assertFalse(result["correct"])
+        self.assertEqual(result["correct_spelling"], "comfortable")
+        word.refresh_from_db()
+        self.assertEqual(word.attempt_count, 1)
+        self.assertEqual(word.correct_count, 0)
+        self.assertEqual(word.current_streak, 0)
+        self.assertEqual(word.lapses, 1)
+        self.assertEqual(word.status, SpellingDrillWord.Status.ACTIVE)
 
     def test_wrong_attempt_before_four_am_returns_at_same_calendar_day_refresh(self):
         self.create_score(

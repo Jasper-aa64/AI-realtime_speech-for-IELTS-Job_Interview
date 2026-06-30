@@ -62,10 +62,24 @@
       viewCopy,
       corpusPeekWindowMargin,
       withPending,
+      setAnimatedHidden,
+      onCorpusSaved,
     } = options || {};
 
     if (!state || typeof $ !== "function" || typeof api !== "function") {
       throw new Error("Corpus/Takeaway controller requires shared app state and helpers.");
+    }
+
+    function setPeekButtonHidden(button, hidden) {
+      if (typeof setAnimatedHidden === "function") {
+        setAnimatedHidden(button, hidden, {
+          enteringClass: "peek-button-entering",
+          leavingClass: "peek-button-leaving",
+          duration: 420,
+        });
+        return;
+      }
+      button?.classList.toggle("hidden", hidden);
     }
 
     // Guest gate for corpus features: prefer the dismissible login prompt; fall
@@ -201,6 +215,13 @@
     const activeSpeechUtterances = [];
     let speechSequenceToken = 0;
     let suppressNextSpeechCancelError = false;
+    const takeawayPronunciationState = {
+      recognition: null,
+      recording: false,
+      startedAt: 0,
+      targetText: "",
+      finalTranscript: "",
+    };
     const expressionReplacementState = {
       language: { items: null, loading: false, promise: null, synced: false },
       writing: { items: null, loading: false, promise: null, synced: false },
@@ -258,6 +279,13 @@
         return parsed && parsed.payload ? parsed : null;
       } catch (_error) { return null; }
     }
+    function p2BankLsReadAny(prefix, qid) {
+      for (const id of p2EquivalentQuestionIds(qid)) {
+        const cached = p2BankLsRead(prefix, id);
+        if (cached) return cached;
+      }
+      return null;
+    }
     function p2BankLsWrite(prefix, qid, payload) {
       const key = p2BankLsKey(prefix, qid);
       if (!key || !payload) return;
@@ -281,6 +309,16 @@
       const key = p2BankLsKey(prefix, qid);
       if (!key) return;
       try { localStorage.removeItem(key); } catch (_error) { /* ignore */ }
+    }
+
+    function hasP2BankP3PayloadCached(questionId) {
+      ensureP2BankCacheScope();
+      return p2EquivalentQuestionIds(questionId).some((id) => p2BankP3Cache.has(id) || Boolean(p2BankLsRead(P3BANK_LS_PREFIX, id)));
+    }
+
+    function notifyCorpusSaved(detail = {}) {
+      if (typeof onCorpusSaved !== "function") return;
+      try { onCorpusSaved(detail); } catch (_error) { /* host notification is best effort */ }
     }
 
     // The in-memory caches are not key-scoped, so drop them whenever the logged
@@ -366,13 +404,42 @@
         }).catch(() => { /* P3 falls back to per-card fetch on open */ });
       }
     }
+    function prefetchVisibleP2BankP3Cards(limit = 3) {
+      if (!canBackgroundPrefetch()) return;
+      ensureP2BankCacheScope();
+      const cards = state.p2Corpus.currentPart2Cards || [];
+      const ids = [];
+      for (const card of cards) {
+        const id = p2BankQuestionId(card);
+        if (!id || ids.includes(id) || hasP2BankP3PayloadCached(id)) continue;
+        ids.push(id);
+        if (ids.length >= limit) break;
+      }
+      ids.forEach((id, index) => {
+        scheduleIdle(() => {
+          fetchP2BankP3Payload(id).catch(() => {
+            p2BankP3Cache.delete(id);
+          });
+        }, 900 + index * 180);
+      });
+    }
     function scheduleP2BankListPrefetch() {
       if (state.p2Corpus._bankBatchScheduled) return;
       state.p2Corpus._bankBatchScheduled = true;
       scheduleIdle(() => {
         state.p2Corpus._bankBatchScheduled = false;
         prefetchP2BankList();
-      }, 800);
+        prefetchVisibleP2BankP3Cards();
+      }, 700);
+    }
+    function scheduleP2BankP3EditorWarmup() {
+      if (!state.account.authenticated) return;
+      if (state.p2Corpus._p3EditorWarmScheduled) return;
+      state.p2Corpus._p3EditorWarmScheduled = true;
+      scheduleIdle(() => {
+        state.p2Corpus._p3EditorWarmScheduled = false;
+        ensureCorpusMarkdownEditorReady("p2CorpusP3FollowUp").catch(() => null);
+      }, 260);
     }
     const DOTS_ICON = `
       <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -819,6 +886,7 @@
         reviewedIds: new Set(),
         currentId: "",
         animatingId: "",
+        pendingLocate: false,
         previousHideEnglish,
       };
       setTakeawayReviewToast(kind, "先点一张被遮住的卡片，露出英文后再按 A / D。");
@@ -847,6 +915,7 @@
         reviewedIds: new Set(),
         currentId: "",
         animatingId: "",
+        pendingLocate: false,
         previousHideEnglish,
       };
       setTakeawayReviewToast(kind, message);
@@ -864,6 +933,13 @@
     function isTakeawayReviewEntry(kind, entryId) {
       const session = takeawayReviewSession(kind);
       return Boolean(session.active && session.ids.includes(entryId) && !session.reviewedIds.has(entryId));
+    }
+
+    function runPendingTakeawayLocate(kind = "language") {
+      const session = takeawayReviewSession(kind);
+      if (!session.active || !session.pendingLocate || session.animatingId) return;
+      session.pendingLocate = false;
+      window.requestAnimationFrame(() => triggerTakeawayLocate(kind));
     }
 
     function selectTakeawayReviewEntry(kind, entryId) {
@@ -988,6 +1064,7 @@
         else renderLanguageTakeaways();
       });
       renderTakeawayReviewSurfaces(kind);
+      runPendingTakeawayLocate(kind);
       return true;
     }
 
@@ -1154,7 +1231,6 @@
               <h3>${escapeHtml(topic.label || topic.topic)}</h3>
             </div>
             <strong>${saved}/${questions.length}</strong>
-            <button type="button" class="p1-topic-modal-close" data-p1-topic-modal-close aria-label="关闭">×</button>
           </header>
           <div class="p1-topic-modal-list">
             ${questions.map((item, index) => `
@@ -1282,6 +1358,43 @@
       state.p1Corpus.loadingPromise = null;
     }
 
+    function applyP1CorpusDraftLocal(entry, corpusText) {
+      const textValue = String(corpusText || "").trim();
+      if (!entry || !textValue) return null;
+      hydrateP1CorpusClearedIds();
+      const storage = p1CorpusStorageEntry(entry);
+      const ids = p1CorpusEntryIds({
+        question_id: storage.question_id,
+        storage_question_id: entry.storage_question_id,
+        legacy_question_id: entry.legacy_question_id,
+      });
+      ids.forEach((id) => state.p1Corpus.clearedQuestionIds?.delete?.(id));
+      persistP1CorpusClearedIds();
+      const localEntry =
+        ids.map((id) => findP1CorpusEntry(id)).find(Boolean)
+        || findExactP1CorpusEntryForTarget(entry);
+      if (!localEntry) return null;
+      localEntry.corpus_text = textValue;
+      localEntry.last_ai_answer = entry.last_ai_answer || entry.band7_version || entry.aiAnswer || localEntry.last_ai_answer || "";
+      localEntry.updated_at = localEntry.updated_at || "";
+      if (state.p1Corpus.activeEntry) {
+        state.p1Corpus.activeEntry = {
+          ...state.p1Corpus.activeEntry,
+          corpus_text: textValue,
+          last_ai_answer: localEntry.last_ai_answer,
+        };
+      }
+      state.p1Corpus.mutationSeq = (state.p1Corpus.mutationSeq || 0) + 1;
+      state.p1Corpus.loadingPromise = null;
+      renderP1CorpusTopics();
+      const topicModal = $("p1TopicCardModal");
+      if (topicModal && !topicModal.classList.contains("hidden") && topicModal.dataset.p1TopicKey) {
+        openP1TopicCardModal(topicModal.dataset.p1TopicKey);
+      }
+      updateP1CorpusPeekButton(state.currentTurn);
+      return localEntry;
+    }
+
     function normalizeP1CorpusQuestionText(value) {
       return String(value || "")
         .toLowerCase()
@@ -1353,7 +1466,7 @@
       const target = currentP1CorpusTarget(turn);
       const entry = target?.questionId ? findP1CorpusEntry(target.questionId) : null;
       const hasCorpus = !!(entry?.corpus_text || "").trim();
-      button.classList.toggle("hidden", !target);
+      setPeekButtonHidden(button, !target);
       button.classList.toggle("has-corpus", hasCorpus);
       button.title = hasCorpus ? "查看这道题的语料提示" : "这道题还没有保存语料";
       if (target) {
@@ -1483,13 +1596,14 @@
         bankButton.title = "我准备的本题正文";
         bankButton.setAttribute("aria-label", "查看我为这道题准备的题库正文");
         if (!inP2Turn || !questionId) {
-          bankButton.classList.add("hidden");
+          setPeekButtonHidden(bankButton, true);
           bankButton.classList.remove("has-corpus", "is-empty-slot", "is-loading-slot");
           bankButton.disabled = true;
           bankButton.setAttribute("aria-hidden", "true");
         } else {
           bankButton.disabled = false;
-          bankButton.classList.remove("hidden", "has-corpus", "is-empty-slot", "is-loading-slot");
+          setPeekButtonHidden(bankButton, false);
+          bankButton.classList.remove("has-corpus", "is-empty-slot", "is-loading-slot");
           bankButton.setAttribute("aria-hidden", "false");
           fetchP2BankCorpusPayload(questionId)
             .then((payload) => {
@@ -1517,7 +1631,7 @@
       const entry = visible ? currentP2CorpusEntry() : null;
       const bodyButton = $("peekP2CorpusBodyBtn");
       if (bodyButton) {
-        bodyButton.classList.toggle("hidden", !visible);
+        setPeekButtonHidden(bodyButton, !visible);
         bodyButton.classList.toggle("is-empty-slot", inP2Turn && Boolean(state.p2Corpus.selectedEntryId) && !entry);
         bodyButton.classList.toggle("has-corpus", Boolean(entry));
         bodyButton.disabled = !visible;
@@ -1565,6 +1679,19 @@
       `;
     }
 
+    function corpusPeekLoadingHtml(label = "正在加载…") {
+      return `
+        <section class="p2-corpus-peek-section p2-corpus-peek-loading" aria-live="polite">
+          <div class="corpus-peek-loading-box">
+            <strong>${escapeHtml(label)}</strong>
+            <div class="corpus-peek-loading-lines" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
     // Lightbulb → 随题目绑定的「题库正文」(我准备的本题正文): 串题灵感 + 正文,
     // loaded by the turn's bank question id (independent of any linked material).
     async function openP2CorpusPeek() {
@@ -1574,7 +1701,7 @@
       $("p2CorpusPeekHead")?.classList.add("hidden");
       // 立刻出窗口 + 加载反馈，不再等 fetch 才弹。
       const body = $("p2CorpusPeekBody");
-      if (body) body.innerHTML = '<p class="muted p2-corpus-peek-loading">正在加载本题正文…</p>';
+      if (body) body.innerHTML = corpusPeekLoadingHtml("正在加载本题正文…");
       $("p2CorpusPeekDialog")?.classList.remove("hidden");
       resetCorpusPeekWindowPosition("p2CorpusPeekDialog");
       let payload = null;
@@ -1624,7 +1751,7 @@
         || source === "p2_corpus"
       );
       const visible = state.view === "p3" && turn?.part === "p3" && hasCorpusTarget;
-      button.classList.toggle("hidden", !visible);
+      setPeekButtonHidden(button, !visible);
       button.classList.toggle("has-corpus", visible);
       button.title = visible ? "查看这次 P3 关联的已保存语料" : "没有关联的 P3 追问素材";
       // Warm the material in the background so the popup opens instantly.
@@ -1716,13 +1843,7 @@
       $("p3CorpusPeekMeta")?.classList.add("hidden");
       text("p3CorpusPeekTitle", "相关 P3 追问");
       const body = $("p3CorpusPeekBody");
-      if (body) body.innerHTML = `
-        <section class="p2-corpus-peek-section p2-corpus-peek-loading" aria-live="polite">
-          <div class="corpus-peek-loading-lines" aria-hidden="true">
-            <span></span><span></span><span></span>
-          </div>
-        </section>
-      `;
+      if (body) body.innerHTML = corpusPeekLoadingHtml("正在加载关联语料…");
       $("p3CorpusPeekDialog")?.classList.remove("hidden");
       resetCorpusPeekWindowPosition("p3CorpusPeekDialog");
       try {
@@ -2007,6 +2128,8 @@
       const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
       if (entry && !corpusText) {
         markP1CorpusEntryCleared(entry);
+        const storage = p1CorpusStorageEntry(entry);
+        notifyCorpusSaved({ kind: "p1", questionId: storage.question_id, saved: false });
         closeP1CorpusEditor(options);
         state.p1Corpus.savingPromise?.catch(() => null)
           .then(() => sendP1CorpusClearKeepalive(entry))
@@ -2015,6 +2138,11 @@
             text("p1CorpusSaveStatus", error?.message || "清空保存失败，请重试。");
           });
         return;
+      }
+      if (entry) {
+        const storage = p1CorpusStorageEntry(entry);
+        notifyCorpusSaved({ kind: "p1", questionId: storage.question_id, saved: true });
+        applyP1CorpusDraftLocal(entry, corpusText);
       }
       closeP1CorpusEditor(options);
       if (entry) {
@@ -2031,11 +2159,8 @@
       if (!entry) return;
       const nextCorpusText = (options.corpusText ?? getCorpusMarkdownValue("p1CorpusText")).trim();
       if (state.p1Corpus.saving) {
-        if (!nextCorpusText) {
-          await state.p1Corpus.savingPromise?.catch(() => null);
-          return saveP1CorpusEntry(options);
-        }
-        return;
+        await state.p1Corpus.savingPromise?.catch(() => null);
+        return saveP1CorpusEntry(options);
       }
       state.p1Corpus.saving = true;
       const button = $("saveP1CorpusBtn");
@@ -2075,6 +2200,11 @@
         }
         if (!options.silent) text("p1CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
         const updated = upsertP1CorpusEntry(saved);
+        notifyCorpusSaved({
+          kind: "p1",
+          questionId: storage.question_id || saved.question_id || "",
+          saved: Boolean(String(saved.corpus_text ?? nextCorpusText).trim()),
+        });
         const storageQuestionId = storage.question_id || saved.question_id || "";
         const localEntry = storageQuestionId ? findP1CorpusEntry(storageQuestionId) : null;
         if (localEntry) {
@@ -2105,6 +2235,12 @@
           return;
         }
         if (!options.silent) text("p1CorpusSaveStatus", error.message || String(error));
+        if (nextCorpusText) {
+          const storage = p1CorpusStorageEntry(entry);
+          notifyCorpusSaved({ kind: "p1", questionId: storage.question_id, invalidate: true });
+          state.p1Corpus.loadingPromise = null;
+          fetchP1CorpusPayload().then(applyP1CorpusPayload).catch(() => null);
+        }
         if (options.closeOnError) closeP1CorpusEditor();
       } finally {
         state.p1Corpus.saving = false;
@@ -2188,6 +2324,7 @@
       const container = $("p2CorpusTopics");
       if (!container) return;
       scheduleP2BankListPrefetch();
+      scheduleP2BankP3EditorWarmup();
       const categories = state.p2Corpus.categories || [];
       const currentCards = state.p2Corpus.currentPart2Cards || [];
       const P2_CAT_META = {
@@ -2287,9 +2424,9 @@
                 <g class="p2-brain-cloud">
                   <path class="p2-brain-cloud-puff" d="M27.3,-5 H35.7 Q37,-5 37,-3.7 V0.2 Q37,1.5 35.7,1.5 H30.6 L26.6,3.3 L27.3,1.5 Q26,1.5 26,0.2 V-3.7 Q26,-5 27.3,-5 Z"/>
                   <g class="p2-brain-cloud-dots">
-                    <circle cx="28.8" cy="-1.75" r="1.1"/>
-                    <circle cx="31.5" cy="-1.75" r="1.1"/>
-                    <circle cx="34.2" cy="-1.75" r="1.1"/>
+                    <rect x="27.8" y="-2.75" width="2" height="2"/>
+                    <rect x="30.5" y="-2.75" width="2" height="2"/>
+                    <rect x="33.2" y="-2.75" width="2" height="2"/>
                   </g>
                 </g>
                 <g class="p2-brain-bulb">
@@ -2474,7 +2611,11 @@
     // frame — so it can never go blank and always fills the host edge-to-edge.
     //   mode "grid"    — dense block grid, soft diagonal brightness wave.
     //   mode "scatter" — loose square fragments drifting rightward (the原来的特效).
-    function createPixelFlowField(host, mode = "grid") {
+    function createPixelFlowField(host, mode = "grid", options = {}) {
+      // reverse=false → original flow LEFT→RIGHT (bright on the left); reverse=true →
+      // flow RIGHT→LEFT (bright on the right). Per-instance so the P1 header can keep
+      // left→right while the P3 box runs right→left.
+      const reverse = options && options.reverse === true;
       const canvas = document.createElement("canvas");
       canvas.className = "p2-pixel-flow-canvas";
       host.appendChild(canvas);
@@ -2550,42 +2691,46 @@
       }
 
       function drawGrid(t) {
-        // Soft VERTICAL band that flows RIGHTWARD. Brightness over time comes ONLY
-        // from the rightward-moving column waves (depends on c and t, never on r →
-        // never diagonal), so it reads as a coherent flow, not random blinking. A
-        // static per-cell texture grains the band to keep its edges soft. Pixel
-        // density is EVEN across the whole bar; intensity just eases off to the
-        // right, so the left reads brighter and the right stays softer.
+        // Soft VERTICAL band. Brightness over time comes ONLY from the moving column
+        // waves (depends on c and t, never on r → never diagonal), so it reads as a
+        // coherent flow, not random blinking. A static per-cell texture grains the
+        // band to keep its edges soft. Pixel density is EVEN across the whole bar;
+        // intensity just eases off toward the trailing edge.
+        //   reverse=false (default): flow LEFT→RIGHT, bright on the LEFT  (P1 header).
+        //   reverse=true:            flow RIGHT→LEFT, bright on the RIGHT (P3 box).
         const baseA = 0.16;
         const peakA = 0.9;
+        // dir = -1 keeps the original rightward wave march (sin(c*k - t*w)); +1 flips
+        // it to march leftward.
+        const dir = reverse ? 1 : -1;
         for (let r = 0; r < rows; r += 1) {
           for (let c = 0; c < cols; c += 1) {
             const x = c * cell;
             const rnd = hash(c, r);                                // static texture, no time → no random blink
-            // Three right-moving waves at incommensurate scales sum into an
-            // irregular, non-periodic flow — keeps the rightward trend but breaks
-            // the too-regular even spacing. Raised baseline avoids hard dark gaps.
+            // Three waves at incommensurate scales sum into an irregular, non-periodic
+            // flow — keeps the directional trend but breaks the too-regular even
+            // spacing. Raised baseline avoids hard dark gaps.
             const flow = 0.5
-              + 0.22 * Math.sin(c * 0.17 - t * 8.32)
-              + 0.16 * Math.sin(c * 0.41 - t * 6.76 + 2.1)
-              + 0.12 * Math.sin(c * 0.93 - t * 9.1 + 0.7);
+              + 0.22 * Math.sin(c * 0.17 + dir * t * 8.32)
+              + 0.16 * Math.sin(c * 0.41 + dir * t * 6.76 + 2.1)
+              + 0.12 * Math.sin(c * 0.93 + dir * t * 9.1 + 0.7);
             const lit = (0.4 + 0.6 * flow) * (0.32 + 0.68 * rnd); // wider per-cell grain → more randomness
-            // Even density; the first 1/3 stays fullest, then intensity eases off,
-            // the rightmost quarter dims harder, and the last eighth goes fully dark.
-            const u = x / width;
+            // u = distance from the BRIGHT edge (left edge normally, right edge when
+            // reversed). The first 1/3 from that edge stays fullest, then intensity
+            // eases off, the far quarter dims harder, and the last eighth goes dark.
+            const uRaw = x / width;
+            const u = reverse ? 1 - uRaw : uRaw;
             let soft;
-            if (u >= 0.875) soft = 0;                              // last 1/8 fully dark
-            else if (u >= 0.75) soft = 0.55 * (1 - (u - 0.75) / 0.125); // rightmost 1/4: 0.55 → 0
+            if (u >= 0.875) soft = 0;                              // trailing 1/8 fully dark
+            else if (u >= 0.75) soft = 0.55 * (1 - (u - 0.75) / 0.125); // trailing 1/4: 0.55 → 0
             else if (u >= 1 / 3) soft = 1 - ((u - 1 / 3) / (0.75 - 1 / 3)) * 0.45; // ease 1 → 0.55
-            else soft = 1;                                         // first 1/3 stays brightest
+            else soft = 1;                                         // bright 1/3 stays brightest
             let alpha = (baseA + (peakA - baseA) * lit) * soft;
             if (alpha < 0.03) continue;
             const rgb = colorAt(c, r);
-            // A little pure white at the brightest crest cells (mostly on the bright
-            // left). The white probability eases off smoothly left→right — one
-            // continuous curve instead of the old piecewise region split, but the
-            // same overall envelope: ~0.7 at the far left, ~0.55 at 1/5, fading to
-            // 0 by 2/5. The 0.35 exponent keeps it full early then drops near 2/5.
+            // A little pure white at the brightest crest cells (on the bright edge).
+            // The white probability eases off smoothly toward the dark edge: ~0.7 at
+            // the bright edge, fading to 0 by 2/5 in.
             const leftWhite = u < 0.4 ? 0.7 * Math.pow(1 - u / 0.4, 0.35) : 0;
             const wAmt = Math.min(1, Math.max(0, (flow * rnd - (0.82 - 0.5 * leftWhite)) / 0.18)) * soft;
             const rr = Math.round(rgb[0] + (255 - rgb[0]) * wAmt);
@@ -2993,9 +3138,35 @@
       return button?.closest(".language-takeaway-card-wrap") || null;
     }
 
+    function markTakeawayLocatedCard(kind, entryId = "") {
+      const list = $(kind === "writing" ? "writingTakeawayList" : "languageTakeawayList");
+      if (!list) return;
+      list.querySelectorAll(".language-takeaway-card-wrap.is-located").forEach((wrap) => {
+        wrap.classList.remove("is-located");
+      });
+      const wrap = takeawayReviewCardWrap(kind, entryId);
+      if (wrap) wrap.classList.add("is-located");
+    }
+
     function scrollTakeawayCardIntoView(kind, entryId) {
       const wrap = takeawayReviewCardWrap(kind, entryId);
-      wrap?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (!wrap) return;
+      const list = $(kind === "writing" ? "writingTakeawayList" : "languageTakeawayList");
+      if (!list) return;
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      if (maxScroll <= 1) return;
+      const listRect = list.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      const margin = 18;
+      if (wrapRect.top >= listRect.top + margin && wrapRect.bottom <= listRect.bottom - margin) return;
+      const centeredTop = list.scrollTop
+        + (wrapRect.top - listRect.top)
+        - Math.max(0, (list.clientHeight - wrapRect.height) / 2);
+      const nextTop = Math.max(0, Math.min(maxScroll, centeredTop));
+      if (Math.abs(nextTop - list.scrollTop) < 2) return;
+      const totalCards = list.querySelectorAll(".language-takeaway-card-wrap").length;
+      const behavior = kind === "writing" && totalCards <= 6 ? "auto" : "smooth";
+      list.scrollTo({ top: nextTop, behavior });
     }
 
     // The card to jump to this session. If a card is currently revealed and
@@ -3042,10 +3213,15 @@
     function triggerTakeawayLocate(kind = "language") {
       const session = takeawayReviewSession(kind);
       if (!session.active) return;
+      if (session.animatingId) {
+        session.pendingLocate = true;
+        return;
+      }
       const target = firstTakeawayReviewTargetId(kind);
       if (!target) return;
       if (session.locatedId === target) {
         session.locatedId = "";
+        markTakeawayLocatedCard(kind, "");
         const reviewState = selectTakeawayReviewEntry(kind, target);
         // Opening via W must read the English aloud, same as clicking the card.
         if (reviewState === "selected") {
@@ -3057,8 +3233,7 @@
         return;
       }
       session.locatedId = target;
-      if (kind === "writing") renderWritingTakeaways();
-      else renderLanguageTakeaways();
+      markTakeawayLocatedCard(kind, target);
       scrollTakeawayCardIntoView(kind, target);
     }
 
@@ -3328,6 +3503,7 @@
 
     async function deleteLanguageTakeawayEntry(entryId) {
       if (!entryId) return;
+      if (guestBlockTakeawayEdit("登录后才能删除 Takeaway 内容。")) return;
       showConfirmDelete("确定要删除这条生词吗？", async () => {
         setTakeawaySpeechStatus("language", "正在删除…", { clear: false });
         try {
@@ -3407,6 +3583,50 @@
       };
     }
 
+    function nearestElementFromNode(node) {
+      if (!node) return null;
+      return node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    }
+
+    function usableClientRect(rect) {
+      return rect && (rect.width || rect.height) ? rect : null;
+    }
+
+    function vditorSelectionScope(selection, range) {
+      const anchor = nearestElementFromNode(selection?.anchorNode);
+      const focus = nearestElementFromNode(selection?.focusNode);
+      const common = nearestElementFromNode(range?.commonAncestorContainer);
+      return anchor?.closest?.(".vditor")
+        || focus?.closest?.(".vditor")
+        || common?.closest?.(".vditor")
+        || null;
+    }
+
+    function cleanMarkdownSelectionText(value) {
+      return String(value || "")
+        .replace(/\u200b/g, "")
+        .replace(/\*\*/g, "")
+        .replace(/__([^_]+)__/g, "$1")
+        .replace(/`([^`]+)`/g, "$1")
+        .trim();
+    }
+
+    function vditorSelectionRect(selection, range) {
+      const common = nearestElementFromNode(range?.commonAncestorContainer);
+      const anchor = nearestElementFromNode(selection?.anchorNode);
+      const focus = nearestElementFromNode(selection?.focusNode);
+      const scope = vditorSelectionScope(selection, range);
+      if (!scope) return null;
+      for (const node of [focus, anchor, common]) {
+        const rect = usableClientRect(node?.getBoundingClientRect?.());
+        if (rect) return rect;
+      }
+      const selectedNode = common?.closest?.("strong, b, em, span, p, li, .vditor-ir__node, .vditor-wysiwyg__block");
+      const selectedRect = usableClientRect(selectedNode?.getBoundingClientRect?.());
+      if (selectedRect) return selectedRect;
+      return usableClientRect(scope.getBoundingClientRect());
+    }
+
     function textareaSelectionEndpointRect(textarea, endOffset) {
       const hostRect = textarea.getBoundingClientRect();
       if (!hostRect.width || !hostRect.height) return null;
@@ -3461,9 +3681,12 @@
       const brainstormSelection = brainstormSelectionText();
       if (brainstormSelection) return brainstormSelection;
       const selection = window.getSelection?.();
-      const textValue = String(selection?.toString() || "").trim();
-      if (!selection || selection.rangeCount === 0 || textValue.length < 1 || textValue.length > TAKEAWAY_SELECTION_MAX_LEN) return null;
+      if (!selection || selection.rangeCount === 0) return null;
       const range = selection.getRangeAt(0);
+      const vditorScope = vditorSelectionScope(selection, range);
+      const rawText = String(selection?.toString() || range.cloneContents?.().textContent || "");
+      const textValue = vditorScope ? cleanMarkdownSelectionText(rawText) : rawText.trim();
+      if (textValue.length < 1 || textValue.length > TAKEAWAY_SELECTION_MAX_LEN) return null;
       let rect = range.getBoundingClientRect();
       // A selection that begins/ends inside a Vditor bold node (whose ** markers
       // are non-selectable spans) can report a degenerate 0×0 bounding rect.
@@ -3473,11 +3696,16 @@
           if (candidate && (candidate.width || candidate.height)) { rect = candidate; break; }
         }
       }
+      if (!rect || (rect.width === 0 && rect.height === 0)) {
+        rect = vditorSelectionRect(selection, range);
+      }
       if (!rect || (rect.width === 0 && rect.height === 0)) return null;
       const promptEl = $("writingPromptText");
       const answerEl = $("writingAnswer");
       const activeEl = document.activeElement;
-      const source = promptEl && promptEl.contains(range.commonAncestorContainer)
+      const source = vditorScope
+        ? "markdown_editor"
+        : promptEl && promptEl.contains(range.commonAncestorContainer)
         ? "writing_prompt"
         : (activeEl === answerEl ? "writing_answer" : "general");
       return {
@@ -3503,6 +3731,7 @@
     function hideLanguageTakeawayPopup() {
       $("languageTakeawayPopup")?.classList.add("hidden");
       setLanguageTakeawayStatus("");
+      resetLanguageTakeawayDictionary();
     }
 
     // Grow the English source textarea to fit its content so the whole selection
@@ -3514,8 +3743,371 @@
       el.style.height = `${el.scrollHeight}px`;
     }
 
+    function languageTakeawayDictionaryState() {
+      const target = state.languageTakeaway;
+      if (!target.dictionary) {
+        target.dictionary = {
+          active: false,
+          mode: "zh",
+          chineseText: "",
+          englishText: "",
+          hasEnglish: false,
+        };
+      }
+      return target.dictionary;
+    }
+
+    // Domain-label tags for the offline-dictionary card. ECDICT marks the field
+    // of a Chinese sense with a bracketed code like "[经]"; render those as
+    // compact English pills (icon + English label) so they read clearly.
+    const DICT_DOMAIN_TAGS = {
+      "经": { en: "Economics", icon: "📈" },
+      "计": { en: "Computing", icon: "💻" },
+      "医": { en: "Medicine", icon: "⚕️" },
+      "法": { en: "Law", icon: "⚖️" },
+      "化": { en: "Chemistry", icon: "🧪" },
+      "数": { en: "Math", icon: "📐" },
+      "军": { en: "Military", icon: "🎖️" },
+      "语": { en: "Linguistics", icon: "🗣️" },
+      "物": { en: "Physics", icon: "⚛️" },
+      "植": { en: "Botany", icon: "🌿" },
+      "动": { en: "Zoology", icon: "🐾" },
+      "天": { en: "Astronomy", icon: "🔭" },
+      "地": { en: "Geography", icon: "🌍" },
+      "生": { en: "Biology", icon: "🧬" },
+      "电": { en: "Electrical", icon: "⚡" },
+      "机": { en: "Mechanics", icon: "⚙️" },
+      "建": { en: "Architecture", icon: "🏛️" },
+      "商": { en: "Business", icon: "💼" },
+      "农": { en: "Agriculture", icon: "🌾" },
+      "音": { en: "Music", icon: "🎵" },
+      "体": { en: "Sports", icon: "⚽" },
+      "宗": { en: "Religion", icon: "⛪" },
+      "心": { en: "Psychology", icon: "🧠" },
+      "解": { en: "Anatomy", icon: "🦴" },
+      "药": { en: "Pharmacy", icon: "💊" },
+      "史": { en: "History", icon: "📜" },
+      "哲": { en: "Philosophy", icon: "💭" },
+      "政": { en: "Politics", icon: "🏛️" },
+      "航": { en: "Aviation", icon: "✈️" },
+      "海": { en: "Nautical", icon: "⚓" },
+      "矿": { en: "Mining", icon: "⛏️" },
+      "林": { en: "Forestry", icon: "🌲" },
+      "摄": { en: "Photography", icon: "📷" },
+    };
+    const DICT_DOMAIN_BY_LABEL = Object.fromEntries(
+      Object.entries(DICT_DOMAIN_TAGS).map(([code, tag]) => [String(tag.en).toLowerCase(), code])
+    );
+
+    function dictionaryDomainTagHtml(code) {
+      const tag = DICT_DOMAIN_TAGS[code];
+      const label = String(tag ? tag.en : code).toLowerCase();
+      const icon = tag ? tag.icon : "🏷️";
+      return `<span class="dict-domain-tag" data-dict-domain-code="${escapeHtml(code)}" data-dict-domain-label="${escapeHtml(label)}" contenteditable="false"><span class="dict-domain-tag-icon" aria-hidden="true">${escapeHtml(icon)}</span><span class="dict-domain-tag-text">${escapeHtml(label)}</span></span><span class="dict-domain-tag-colon" contenteditable="false">&#65306; </span>`;
+    }
+
+    function dictionaryDomainLabelTagHtml(label) {
+      const key = String(label || "").trim().toLowerCase();
+      const code = DICT_DOMAIN_BY_LABEL[key];
+      return code ? dictionaryDomainTagHtml(code) : null;
+    }
+
+    function escapeHtmlWithDictionaryDomainTags(text) {
+      let html = escapeHtml(String(text || ""));
+      html = html.replace(/\[([^\]]{1,4})\]\s*/g, (_m, code) => dictionaryDomainTagHtml(code));
+      html = html.replace(/\b([A-Za-z][A-Za-z ]{1,28})\s*[:：]\s*/g, (match, label) => {
+        return dictionaryDomainLabelTagHtml(label) || match;
+      });
+      return html;
+    }
+
+    // Chinese senses with bracketed domain codes -> one line per sense, codes
+    // swapped for pill tags. Non-domain text is escaped as-is.
+    function dictionaryChineseTagsHtml(text) {
+      const lines = String(text || "").split(/\n+/).map((s) => s.trim()).filter(Boolean);
+      if (!lines.length) return "";
+      return lines
+        .map((line) => {
+          const html = escapeHtmlWithDictionaryDomainTags(line);
+          return `<span class="dict-sense-line">${html}</span>`;
+        })
+        .join("");
+    }
+
+    if (typeof window !== "undefined") {
+      window.IELTSDictTags = {
+        escapeHtmlWithDomainTags: escapeHtmlWithDictionaryDomainTags,
+        chineseTagsHtml: dictionaryChineseTagsHtml,
+      };
+    }
+
+    function dictionaryEnglishHtml(text) {
+      const value = String(text || "").trim();
+      if (!value) return "";
+      // ECDICT separates definition senses with a literal "\n" (backslash + n),
+      // and occasionally real newlines — split on both so each English sense
+      // renders on its own line instead of showing a raw "\n".
+      const lines = value.split(/\\n|\n+/).map((s) => s.trim()).filter(Boolean);
+      if (!lines.length) return "";
+      return lines
+        .map((line) => `<span class="dict-sense-line dict-sense-en">${escapeHtml(line)}</span>`)
+        .join("");
+    }
+
+    function languageTakeawayDictNodeText(node) {
+      if (!node) return "";
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent || "";
+      if (node.nodeType !== Node.ELEMENT_NODE) return "";
+      if (node.classList?.contains("dict-domain-tag")) {
+        return node.dataset.dictDomainLabel || node.textContent || "";
+      }
+      if (node.classList?.contains("dict-domain-tag-colon")) return "：";
+      return Array.from(node.childNodes || []).map(languageTakeawayDictNodeText).join("");
+    }
+
+    function languageTakeawayDictDisplayPlainText() {
+      const display = $("languageTakeawayDictDisplay");
+      if (!display || display.classList.contains("hidden")) return "";
+      const lines = Array.from(display.querySelectorAll(".dict-sense-line"));
+      const sourceLines = lines.length ? lines : [display];
+      return sourceLines
+        .map((line) => languageTakeawayDictNodeText(line).replace(/[ \t]+/g, " ").trim())
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    // The dictionary card is a read-only, tag-rendered view that replaces the
+    // plain <textarea> while a single-word lookup is active. The textarea stays
+    // in the DOM as the hidden value carrier, so saving logic is untouched.
+    function renderLanguageTakeawayDictDisplay() {
+      const display = $("languageTakeawayDictDisplay");
+      const field = $("languageTakeawayChineseField") || $("languageTakeawayChinese")?.closest("label");
+      if (!display) return;
+      const dict = languageTakeawayDictionaryState();
+      if (!dict.active) {
+        display.classList.add("hidden");
+        display.innerHTML = "";
+        field?.classList.remove("hidden");
+        return;
+      }
+      const chineseEl = $("languageTakeawayChinese");
+      if (dict.mode === "en") {
+        display.innerHTML = dictionaryEnglishHtml(dict.englishText);
+        display.classList.add("is-dictionary-english");
+        display.classList.remove("is-dictionary-editable");
+        display.contentEditable = "false";
+        display.removeAttribute("role");
+        display.removeAttribute("aria-label");
+      } else {
+        display.innerHTML = dictionaryChineseTagsHtml(dict.chineseText);
+        display.classList.remove("is-dictionary-english");
+        display.classList.add("is-dictionary-editable");
+        display.contentEditable = "true";
+        display.setAttribute("role", "textbox");
+        display.setAttribute("aria-label", "中文释义，可编辑");
+      }
+      display.classList.remove("hidden");
+      field?.classList.add("hidden");
+    }
+
+    function dictionaryAtomElementFromNode(node, direction = "self") {
+      const element = nearestElementFromNode(node);
+      if (!element) return null;
+      if (element.classList?.contains("dict-domain-tag")) return element;
+      if (element.classList?.contains("dict-domain-tag-colon")) {
+        const sibling = direction === "next" ? element.nextElementSibling : element.previousElementSibling;
+        return sibling?.classList?.contains("dict-domain-tag") ? sibling : null;
+      }
+      return element.closest?.(".dict-domain-tag") || null;
+    }
+
+    function dictionaryAdjacentNode(node, root, direction) {
+      if (!node || !root) return null;
+      const childNode = direction === "previous" ? "lastChild" : "firstChild";
+      const siblingNode = direction === "previous" ? "previousSibling" : "nextSibling";
+      const descend = (candidate) => {
+        let current = candidate;
+        while (current?.[childNode]) current = current[childNode];
+        return current;
+      };
+      if (node[siblingNode]) return descend(node[siblingNode]);
+      let parent = node.parentNode;
+      while (parent && parent !== root) {
+        if (parent[siblingNode]) return descend(parent[siblingNode]);
+        parent = parent.parentNode;
+      }
+      return null;
+    }
+
+    function dictionaryCandidateAtCaret(container, offset, display, direction) {
+      let candidate = null;
+      if (container?.nodeType === Node.TEXT_NODE) {
+        const textLength = String(container.textContent || "").length;
+        if (direction === "previous" && offset > 0) return null;
+        if (direction === "next" && offset < textLength) return null;
+        candidate = dictionaryAdjacentNode(container, display, direction);
+      } else if (container?.nodeType === Node.ELEMENT_NODE) {
+        const child = direction === "previous"
+          ? container.childNodes[Math.max(0, offset - 1)]
+          : container.childNodes[offset];
+        candidate = child || dictionaryAdjacentNode(container, display, direction);
+        const edge = direction === "previous" ? "lastChild" : "firstChild";
+        while (candidate?.[edge]) candidate = candidate[edge];
+      }
+      while (candidate?.nodeType === Node.TEXT_NODE && !String(candidate.textContent || "").trim()) {
+        candidate = dictionaryAdjacentNode(candidate, display, direction);
+      }
+      return candidate;
+    }
+
+    function deleteDictionaryDomainAtom(tag) {
+      if (!tag?.classList?.contains("dict-domain-tag")) return false;
+      const colon = tag.nextElementSibling?.classList?.contains("dict-domain-tag-colon")
+        ? tag.nextElementSibling
+        : null;
+      const range = document.createRange();
+      range.setStartBefore(tag);
+      if (colon) range.setEndAfter(colon);
+      else range.setEndAfter(tag);
+      const selection = window.getSelection?.();
+      selection?.removeAllRanges?.();
+      selection?.addRange?.(range);
+      const deleted = document.execCommand?.("delete") !== false;
+      syncLanguageTakeawayDictionaryChineseDraft();
+      return deleted;
+    }
+
+    function handleDictionaryDomainAtomDelete(event) {
+      if (!["Backspace", "Delete"].includes(event.key)) return;
+      const display = $("languageTakeawayDictDisplay");
+      if (!display?.classList.contains("is-dictionary-editable")) return;
+      const selection = window.getSelection?.();
+      if (!selection || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      if (!display.contains(range.commonAncestorContainer) || !selection.isCollapsed) return;
+      const direction = event.key === "Backspace" ? "previous" : "next";
+      const directAtom = dictionaryAtomElementFromNode(selection.anchorNode, direction);
+      const candidate = directAtom || dictionaryAtomElementFromNode(
+        dictionaryCandidateAtCaret(selection.anchorNode, selection.anchorOffset, display, direction),
+        direction,
+      );
+      if (!candidate) return;
+      event.preventDefault();
+      deleteDictionaryDomainAtom(candidate);
+    }
+
+    function resetLanguageTakeawayDictionary() {
+      state.languageTakeaway.dictionary = {
+        active: false,
+        mode: "zh",
+        chineseText: "",
+        englishText: "",
+        hasEnglish: false,
+      };
+      const chineseEl = $("languageTakeawayChinese");
+      if (chineseEl) {
+        chineseEl.readOnly = false;
+        chineseEl.classList.remove("is-dictionary-english", "is-dictionary-transitioning");
+        chineseEl.setAttribute("aria-label", "中文");
+      }
+      renderLanguageTakeawayDictionaryToggle();
+      renderLanguageTakeawayDictDisplay();
+    }
+
+    function renderLanguageTakeawayDictionaryToggle() {
+      const btn = $("languageTakeawayDictToggle");
+      if (!btn) return;
+      const dict = languageTakeawayDictionaryState();
+      const show = dict.active && dict.hasEnglish;
+      btn.classList.toggle("hidden", !show);
+      btn.disabled = !show;
+      btn.dataset.dictionaryMode = dict.mode;
+      const isEnglish = dict.mode === "en";
+      btn.setAttribute("aria-pressed", isEnglish ? "true" : "false");
+      btn.setAttribute(
+        "aria-label",
+        isEnglish ? "当前英英词典，点击切换到翻译词典" : "当前翻译词典，点击切换到英英词典",
+      );
+      btn.title = isEnglish ? "当前英英词典 · 切换到翻译词典" : "当前翻译词典 · 切换到英英词典";
+    }
+
+    function setLanguageTakeawayDictionaryDisplay(mode, { animate = true } = {}) {
+      const dict = languageTakeawayDictionaryState();
+      const chineseEl = $("languageTakeawayChinese");
+      if (!dict.active || !chineseEl) {
+        renderLanguageTakeawayDictionaryToggle();
+        return;
+      }
+      const nextMode = mode === "en" && dict.hasEnglish ? "en" : "zh";
+      if (dict.mode === "zh") {
+        syncLanguageTakeawayDictionaryChineseDraft();
+      }
+      dict.mode = nextMode;
+      const display = $("languageTakeawayDictDisplay");
+      const apply = () => {
+        chineseEl.value = nextMode === "en" ? dict.englishText : dict.chineseText;
+        chineseEl.readOnly = nextMode === "en";
+        chineseEl.classList.toggle("is-dictionary-english", nextMode === "en");
+        chineseEl.setAttribute("aria-label", nextMode === "en" ? "英英释义（只读）" : "中文");
+        renderLanguageTakeawayDictDisplay();
+        renderLanguageTakeawayDictionaryToggle();
+      };
+      if (!animate) {
+        apply();
+        return;
+      }
+      display?.classList.add("is-dictionary-transitioning");
+      chineseEl.classList.add("is-dictionary-transitioning");
+      window.setTimeout(() => {
+        apply();
+        window.setTimeout(() => {
+          chineseEl.classList.remove("is-dictionary-transitioning");
+          display?.classList.remove("is-dictionary-transitioning");
+        }, 120);
+      }, 120);
+    }
+
+    function setLanguageTakeawayDictionaryEntry({ chineseText = "", englishText = "" } = {}) {
+      const dict = languageTakeawayDictionaryState();
+      dict.active = true;
+      dict.chineseText = String(chineseText || "").trim();
+      dict.englishText = String(englishText || "").trim();
+      dict.hasEnglish = Boolean(dict.englishText);
+      // Default to the 翻译词典 (Chinese); the toggle still lets the user switch to
+      // the 英英 definition when one exists.
+      setLanguageTakeawayDictionaryDisplay("zh", { animate: false });
+    }
+
+    function toggleLanguageTakeawayDictionaryMode() {
+      const dict = languageTakeawayDictionaryState();
+      if (!dict.active || !dict.hasEnglish) return;
+      setLanguageTakeawayDictionaryDisplay(dict.mode === "en" ? "zh" : "en");
+    }
+
+    function syncLanguageTakeawayDictionaryChineseDraft() {
+      const dict = languageTakeawayDictionaryState();
+      if (!dict.active || dict.mode !== "zh") return;
+      dict.chineseText = languageTakeawayDictDisplayPlainText() || String($("languageTakeawayChinese")?.value || "").trim();
+      const chineseEl = $("languageTakeawayChinese");
+      if (chineseEl) chineseEl.value = dict.chineseText;
+    }
+
+    function languageTakeawayChineseForSave() {
+      const dict = languageTakeawayDictionaryState();
+      if (dict.active) {
+        if (dict.mode === "zh") syncLanguageTakeawayDictionaryChineseDraft();
+        return String(dict.chineseText || "").trim();
+      }
+      return String($("languageTakeawayChinese")?.value || "").trim();
+    }
+
     function isSingleEnglishWord(value) {
       return /^[A-Za-z][A-Za-z'’-]*$/.test(String(value || "").trim());
+    }
+
+    function setLanguageTakeawaySpellingGlyph(btn, stateName = "plus") {
+      if (!btn) return;
+      btn.dataset.spellingState = stateName === "busy" || stateName === "check" ? stateName : "plus";
     }
 
     // The + button (bottom-left of the popup) only applies to a single English
@@ -3526,10 +4118,10 @@
       const single = isSingleEnglishWord($("languageTakeawaySource")?.value || "");
       btn.classList.toggle("hidden", !single);
       if (!single) return;
-      btn.classList.remove("is-added");
+      btn.classList.remove("is-added", "is-busy");
+      btn.removeAttribute("aria-busy");
       delete btn.dataset.spellingWordId;
-      const svg = btn.querySelector("svg");
-      if (svg) svg.innerHTML = '<path d="M12 5v14M5 12h14"></path>'; // back to "+"
+      setLanguageTakeawaySpellingGlyph(btn, "plus");
       btn.disabled = false;
       btn.title = "加入拼写训练";
       btn.setAttribute("aria-label", "加入拼写训练");
@@ -3546,11 +4138,16 @@
       const word = String($("languageTakeawaySource")?.value || "").trim();
       if (!isSingleEnglishWord(word)) return;
       if (guestBlockTakeawayEdit("登录后才能加入拼写训练。")) return;
-      if (btn) btn.disabled = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add("is-busy");
+        btn.setAttribute("aria-busy", "true");
+        setLanguageTakeawaySpellingGlyph(btn, "busy");
+      }
       try {
         const result = await api("/api/writing/spelling-words/add", {
           word,
-          chinese_gloss: String($("languageTakeawayChinese")?.value || "").trim(),
+          chinese_gloss: languageTakeawayChineseForSave(),
         });
         if (btn) {
           btn.dataset.spellingWordId = String(result?.word?.word_id || "");
@@ -3558,15 +4155,21 @@
           // Morph "+" → check; the green .is-added state alone is the confirm
           // (reuses the expression-replacement add button's glyph swap — no
           // bespoke scale keyframe, which read as "distorted" on click).
-          const svg = btn.querySelector("svg");
-          if (svg) svg.innerHTML = '<path d="M5 12.5l4 4 10-10"></path>';
+          setLanguageTakeawaySpellingGlyph(btn, "check");
           btn.disabled = false;
+          btn.classList.remove("is-busy");
+          btn.removeAttribute("aria-busy");
           btn.title = "已加入拼写训练 · 点击取消";
           btn.setAttribute("aria-label", "已加入拼写训练，点击取消");
         }
         setLanguageTakeawayStatus("已加入拼写训练");
       } catch (error) {
-        if (btn) btn.disabled = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove("is-busy");
+          btn.removeAttribute("aria-busy");
+          setLanguageTakeawaySpellingGlyph(btn, "plus");
+        }
         setLanguageTakeawayStatus(error.message || "加入拼写训练失败");
       }
     }
@@ -3578,27 +4181,332 @@
         updateLanguageTakeawaySpellingButton();
         return;
       }
-      if (btn) btn.disabled = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add("is-busy");
+        btn.setAttribute("aria-busy", "true");
+        setLanguageTakeawaySpellingGlyph(btn, "busy");
+      }
       try {
         await api(`/api/writing/spelling-words/${encodeURIComponent(wordId)}`, null, { method: "DELETE" });
         updateLanguageTakeawaySpellingButton();
         setLanguageTakeawayStatus("已取消加入拼写训练");
       } catch (error) {
-        if (btn) btn.disabled = false;
-        setLanguageTakeawayStatus(error.message || "取消失败");
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove("is-busy");
+          btn.removeAttribute("aria-busy");
+          setLanguageTakeawaySpellingGlyph(btn, "check");
+        }
+        setLanguageTakeawayStatus(error.message || "取消加入拼写训练失败");
       }
     }
+
 
     // Browser-TTS the English source of the 划词 popup (the popup's top-right
     // control is now a speaker button instead of a close button).
     function speakLanguageTakeawaySource() {
       const value = String($("languageTakeawaySource")?.value || "").trim();
       if (!value) return;
+      if (takeawayPronunciationState.recording) stopTakeawayPronunciationRecording({ abort: true });
       const btn = $("languageTakeawayTtsBtn");
-      const done = () => btn?.classList.remove("is-speaking");
-      btn?.classList.add("is-speaking");
-      const result = speakWithBrowserTts(value, { onEnd: done, onError: done, onNoStart: done });
+      const done = () => {
+        btn?.classList.remove("is-loading", "is-speaking");
+        if (btn) {
+          btn.disabled = false;
+          btn.removeAttribute("aria-busy");
+        }
+      };
+      btn?.classList.remove("is-speaking");
+      btn?.classList.add("is-loading");
+      if (btn) {
+        btn.disabled = true;
+        btn.setAttribute("aria-busy", "true");
+      }
+      const startSpeaking = () => {
+        btn?.classList.remove("is-loading");
+        btn?.classList.add("is-speaking");
+        if (btn) btn.disabled = false;
+      };
+      let started = false;
+      const result = speakWithBrowserTts(value, {
+        onStart: () => {
+          started = true;
+          startSpeaking();
+        },
+        onEnd: done,
+        onError: done,
+        onNoStart: done,
+      });
+      if (result?.ok && !started) {
+        window.setTimeout(() => {
+          if (btn?.classList.contains("is-loading")) startSpeaking();
+        }, 120);
+      }
       if (!result?.ok) done();
+    }
+
+    function takeawaySpeechRecognitionCtor() {
+      return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+    }
+
+    function pronunciationEscapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;",
+      }[char]));
+    }
+
+    function pronunciationTokens(value) {
+      return String(value || "")
+        .toLowerCase()
+        .replace(/[’]/g, "'")
+        .match(/[a-z]+(?:'[a-z]+)?/g) || [];
+    }
+
+    function pronunciationWordDistance(a, b) {
+      const left = String(a || "");
+      const right = String(b || "");
+      const rows = left.length + 1;
+      const cols = right.length + 1;
+      const dp = Array.from({ length: rows }, () => Array(cols).fill(0));
+      for (let i = 0; i < rows; i += 1) dp[i][0] = i;
+      for (let j = 0; j < cols; j += 1) dp[0][j] = j;
+      for (let i = 1; i < rows; i += 1) {
+        for (let j = 1; j < cols; j += 1) {
+          const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+          dp[i][j] = Math.min(
+            dp[i - 1][j] + 1,
+            dp[i][j - 1] + 1,
+            dp[i - 1][j - 1] + cost
+          );
+        }
+      }
+      return dp[left.length][right.length];
+    }
+
+    function pronunciationSimilarity(a, b) {
+      const maxLen = Math.max(String(a || "").length, String(b || "").length, 1);
+      return 1 - (pronunciationWordDistance(a, b) / maxLen);
+    }
+
+    function analyzeTakeawayPronunciation(targetText, transcript, durationMs = 0) {
+      const targetWords = pronunciationTokens(targetText);
+      const spokenWords = pronunciationTokens(transcript);
+      const matchedIndexes = new Set();
+      const wordResults = targetWords.map((word) => {
+        let bestIndex = -1;
+        let bestScore = 0;
+        for (let index = 0; index < spokenWords.length; index += 1) {
+          if (matchedIndexes.has(index)) continue;
+          const score = pronunciationSimilarity(word, spokenWords[index]);
+          if (score > bestScore) {
+            bestScore = score;
+            bestIndex = index;
+          }
+        }
+        if (bestIndex >= 0 && bestScore >= 0.72) {
+          matchedIndexes.add(bestIndex);
+          return {
+            word,
+            heard: spokenWords[bestIndex],
+            status: bestScore >= 0.92 ? "good" : "close",
+            score: bestScore,
+          };
+        }
+        return { word, heard: "", status: "missed", score: 0 };
+      });
+      const correct = wordResults.filter((item) => item.status === "good").length;
+      const close = wordResults.filter((item) => item.status === "close").length;
+      const matched = correct + close;
+      const total = Math.max(targetWords.length, 1);
+      const accuracy = Math.round(((correct + close * 0.55) / total) * 100);
+      const completeness = Math.round((matched / total) * 100);
+      const durationMin = Math.max(Number(durationMs || 0) / 60000, 0.05);
+      const wpm = spokenWords.length / durationMin;
+      const paceScore = Math.max(0, Math.min(100, 100 - Math.abs(wpm - 125) * 1.15));
+      const fluency = Math.round(Math.min(100, paceScore * 0.76 + completeness * 0.24));
+      const overall = Math.round(accuracy * 0.55 + completeness * 0.25 + fluency * 0.2);
+      return {
+        targetWords,
+        spokenWords,
+        transcript: String(transcript || "").trim(),
+        wordResults,
+        accuracy,
+        completeness,
+        fluency,
+        overall,
+        wpm: Math.round(wpm),
+      };
+    }
+
+    function setTakeawayPronunciationStatus(message = "", options = {}) {
+      const el = $("takeawayPronunciationStatus");
+      if (!el) return;
+      el.textContent = message;
+      el.classList.toggle("is-error", Boolean(options.error));
+      el.classList.toggle("is-listening", Boolean(options.listening));
+    }
+
+    function setTakeawayPronunciationRecordingState(recording) {
+      takeawayPronunciationState.recording = Boolean(recording);
+      const btn = $("takeawayPronunciationRecordBtn");
+      if (!btn) return;
+      btn.classList.toggle("is-recording", Boolean(recording));
+      const label = btn.querySelector("span");
+      if (label) label.textContent = recording ? "停止并评分" : "重新朗读";
+    }
+
+    function renderTakeawayPronunciationAnalysis(analysis) {
+      $("takeawayPronunciationScore") && ($("takeawayPronunciationScore").textContent = String(analysis.overall));
+      $("takeawayPronunciationAccuracy") && ($("takeawayPronunciationAccuracy").textContent = `${analysis.accuracy}`);
+      $("takeawayPronunciationCompleteness") && ($("takeawayPronunciationCompleteness").textContent = `${analysis.completeness}`);
+      $("takeawayPronunciationFluency") && ($("takeawayPronunciationFluency").textContent = `${analysis.fluency}`);
+      const words = $("takeawayPronunciationWords");
+      if (words) {
+        words.innerHTML = analysis.wordResults.map((item) => `
+          <span class="takeaway-pronunciation-word is-${item.status}" title="${pronunciationEscapeHtml(item.heard ? `识别为 ${item.heard}` : "未识别到")}">
+            ${pronunciationEscapeHtml(item.word)}
+          </span>
+        `).join("");
+      }
+      const transcript = $("takeawayPronunciationTranscript");
+      if (transcript) transcript.textContent = analysis.transcript || "没有识别到清晰内容";
+      $("takeawayPronunciationResult")?.classList.remove("hidden");
+      setTakeawayPronunciationStatus(`完成。语速约 ${analysis.wpm} wpm，可以继续重复练。`);
+    }
+
+    function resetTakeawayPronunciationDialog(textValue) {
+      const target = $("takeawayPronunciationTarget");
+      if (target) target.textContent = textValue;
+      $("takeawayPronunciationResult")?.classList.add("hidden");
+      const words = $("takeawayPronunciationWords");
+      if (words) words.innerHTML = "";
+      const transcript = $("takeawayPronunciationTranscript");
+      if (transcript) transcript.textContent = "";
+      ["takeawayPronunciationScore", "takeawayPronunciationAccuracy", "takeawayPronunciationCompleteness", "takeawayPronunciationFluency"].forEach((id) => {
+        const el = $(id);
+        if (el) el.textContent = "--";
+      });
+      const btn = $("takeawayPronunciationRecordBtn");
+      const label = btn?.querySelector("span");
+      if (label) label.textContent = "开始朗读";
+      btn?.classList.remove("is-recording");
+      setTakeawayPronunciationStatus("点击开始，按原句完整朗读一遍。");
+    }
+
+    function openTakeawayPronunciationDialog() {
+      const textValue = String($("languageTakeawaySource")?.value || "").trim();
+      if (!textValue) {
+        setLanguageTakeawayStatus("先选中或输入一句英文。", { error: true, clear: true });
+        return;
+      }
+      interruptTakeawaySpeechPlayback();
+      takeawayPronunciationState.targetText = textValue;
+      takeawayPronunciationState.finalTranscript = "";
+      resetTakeawayPronunciationDialog(textValue);
+      const dialog = $("takeawayPronunciationDialog");
+      dialog?.classList.remove("hidden");
+      if (!takeawaySpeechRecognitionCtor()) {
+        setTakeawayPronunciationStatus("当前浏览器不支持语音识别；请用 Chrome 或 Edge 打开后再练。", { error: true });
+      }
+    }
+
+    function stopTakeawayPronunciationRecording(options = {}) {
+      const recognition = takeawayPronunciationState.recognition;
+      if (recognition && takeawayPronunciationState.recording) {
+        try {
+          if (options.abort) recognition.abort();
+          else recognition.stop();
+        } catch (error) {
+          console.warn("Takeaway pronunciation recognition stop failed", error);
+        }
+      }
+      setTakeawayPronunciationRecordingState(false);
+    }
+
+    function closeTakeawayPronunciationDialog() {
+      stopTakeawayPronunciationRecording({ abort: true });
+      $("takeawayPronunciationDialog")?.classList.add("hidden");
+      setTakeawayPronunciationStatus("");
+    }
+
+    function startTakeawayPronunciationRecording() {
+      if (takeawayPronunciationState.recording) {
+        stopTakeawayPronunciationRecording();
+        return;
+      }
+      const Recognition = takeawaySpeechRecognitionCtor();
+      if (!Recognition) {
+        setTakeawayPronunciationStatus("当前浏览器不支持语音识别；请用 Chrome 或 Edge 打开后再练。", { error: true });
+        return;
+      }
+      const targetText = String(takeawayPronunciationState.targetText || $("languageTakeawaySource")?.value || "").trim();
+      if (!targetText) {
+        setTakeawayPronunciationStatus("没有可练习的英文句子。", { error: true });
+        return;
+      }
+      interruptTakeawaySpeechPlayback();
+      let recognition;
+      try {
+        recognition = new Recognition();
+      } catch (error) {
+        setTakeawayPronunciationStatus("语音识别启动失败，请检查浏览器麦克风权限。", { error: true });
+        return;
+      }
+      takeawayPronunciationState.recognition = recognition;
+      takeawayPronunciationState.targetText = targetText;
+      takeawayPronunciationState.finalTranscript = "";
+      takeawayPronunciationState.startedAt = performance.now();
+      recognition.lang = "en-US";
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 3;
+      recognition.onstart = () => {
+        setTakeawayPronunciationRecordingState(true);
+        setTakeawayPronunciationStatus("正在听，读完后会自动评分。", { listening: true });
+      };
+      recognition.onresult = (event) => {
+        let finalText = "";
+        let interimText = "";
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const text = result?.[0]?.transcript || "";
+          if (result?.isFinal) finalText += ` ${text}`;
+          else interimText += ` ${text}`;
+        }
+        if (finalText.trim()) takeawayPronunciationState.finalTranscript += ` ${finalText.trim()}`;
+        if (interimText.trim()) {
+          const transcript = $("takeawayPronunciationTranscript");
+          if (transcript) transcript.textContent = interimText.trim();
+          $("takeawayPronunciationResult")?.classList.remove("hidden");
+        }
+      };
+      recognition.onerror = (event) => {
+        const message = event?.error === "not-allowed"
+          ? "麦克风权限被拒绝，允许权限后再试。"
+          : `识别失败：${event?.error || "unknown"}`;
+        setTakeawayPronunciationStatus(message, { error: true });
+      };
+      recognition.onend = () => {
+        const durationMs = Math.max(1, performance.now() - takeawayPronunciationState.startedAt);
+        setTakeawayPronunciationRecordingState(false);
+        const transcript = String(takeawayPronunciationState.finalTranscript || $("takeawayPronunciationTranscript")?.textContent || "").trim();
+        if (!transcript) {
+          setTakeawayPronunciationStatus("没有识别到清晰朗读，靠近麦克风再试一次。", { error: true });
+          return;
+        }
+        renderTakeawayPronunciationAnalysis(analyzeTakeawayPronunciation(targetText, transcript, durationMs));
+      };
+      try {
+        recognition.start();
+      } catch (error) {
+        setTakeawayPronunciationRecordingState(false);
+        setTakeawayPronunciationStatus("语音识别已经在启动中，稍等一秒再点。", { error: true });
+      }
     }
 
     function placeLanguageTakeawayTrigger(left, top) {
@@ -3682,6 +4590,29 @@
       popup.style.top = `${Math.min(maxTop, Math.max(margin, top))}px`;
     }
 
+    // Re-clamp the popup at its current position. The popup grows/shrinks when the
+    // dictionary toggles EN/中文 or a translation arrives, so its size changes
+    // after placement — without this it can grow off the bottom/right edge.
+    function clampLanguageTakeawayPopupIntoView() {
+      const popup = $("languageTakeawayPopup");
+      if (!popup || popup.classList.contains("hidden")) return;
+      const rect = popup.getBoundingClientRect();
+      placeLanguageTakeawayPopup(rect.left, rect.top);
+    }
+
+    // Bind once: a ResizeObserver keeps the popup on-screen through any size
+    // change (EN/中文 swap, source auto-grow), and window resize re-clamps too.
+    function ensureLanguageTakeawayPopupClamp() {
+      const popup = $("languageTakeawayPopup");
+      if (!popup || state.languageTakeaway._popupClampBound) return;
+      if (typeof ResizeObserver !== "undefined") {
+        const observer = new ResizeObserver(() => clampLanguageTakeawayPopupIntoView());
+        observer.observe(popup);
+      }
+      window.addEventListener("resize", clampLanguageTakeawayPopupIntoView);
+      state.languageTakeaway._popupClampBound = true;
+    }
+
     async function openLanguageTakeawayPopup() {
       if (guestBlockTakeawayEdit("登录后才能把划选的表达保存到你的 Takeaway。")) return;
       const textValue = state.languageTakeaway.selectedText;
@@ -3691,9 +4622,11 @@
       if (!popup || !trigger) return;
       $("languageTakeawaySource").value = textValue;
       $("languageTakeawayChinese").value = "";
+      resetLanguageTakeawayDictionary();
       setLanguageTakeawayStatus("翻译中...", { loading: true });
       const triggerRect = trigger.getBoundingClientRect();
       popup.classList.remove("hidden");
+      ensureLanguageTakeawayPopupClamp();
       placeLanguageTakeawayPopup(triggerRect.left, triggerRect.bottom + 8);
       autosizeLanguageTakeawaySource();
       updateLanguageTakeawaySpellingButton();
@@ -3723,7 +4656,10 @@
           : (entry.translation ? [entry.translation] : []);
         if (!senses.length) return false;
         const chineseEl = $("languageTakeawayChinese");
-        if (chineseEl) chineseEl.value = senses.slice(0, 6).join("\n");
+        const chineseText = senses.slice(0, 6).join("\n");
+        const englishText = String(entry.definition || "").trim();
+        if (chineseEl) chineseEl.value = chineseText;
+        setLanguageTakeawayDictionaryEntry({ chineseText, englishText });
         autosizeLanguageTakeawaySource();
         // Keep the phonetic, drop the "离线词典" label the user found noisy.
         setLanguageTakeawayStatus(entry.phonetic ? `[${entry.phonetic}]` : "");
@@ -3758,6 +4694,7 @@
       setLanguageTakeawayStatus("翻译中...", { loading: true });
       try {
         const result = await api("/api/language-takeaways/translate", { text: sourceText });
+        resetLanguageTakeawayDictionary();
         $("languageTakeawaySource").value = result.source_text || sourceText;
         $("languageTakeawayChinese").value = result.chinese_text || "";
         autosizeLanguageTakeawaySource();
@@ -3768,8 +4705,9 @@
     }
 
     async function saveLanguageTakeaway() {
+      if (guestBlockTakeawayEdit("登录后才能保存到 Takeaway。")) return;
       const sourceText = ($("languageTakeawaySource")?.value || "").trim();
-      const chineseText = ($("languageTakeawayChinese")?.value || "").trim();
+      const chineseText = languageTakeawayChineseForSave();
       if (!sourceText) {
         setLanguageTakeawayStatus("原文为空。");
         return;
@@ -3798,8 +4736,9 @@
     }
 
     async function saveWritingTakeaway() {
+      if (guestBlockTakeawayEdit("登录后才能保存到写作积累。")) return;
       const sourceText = ($("languageTakeawaySource")?.value || "").trim();
-      const chineseText = ($("languageTakeawayChinese")?.value || "").trim();
+      const chineseText = languageTakeawayChineseForSave();
       if (!sourceText) {
         setLanguageTakeawayStatus("原文为空。");
         return;
@@ -4400,9 +5339,22 @@
         const found = (category.items || []).find((item) => String(item.entry_id || "").trim() === targetId);
         if (found) return { ...found, label: category.label || found.label };
       }
-      const card = (state.p2Corpus.currentPart2Cards || []).find((item) => p2BankQuestionId(item) === targetId);
+      const targetIds = p2EquivalentQuestionIds(targetId);
+      const card = (state.p2Corpus.currentPart2Cards || []).find((item) => {
+        const ids = p2EquivalentQuestionIds(p2BankQuestionId(item));
+        return ids.some((id) => targetIds.includes(id));
+      });
       if (card) return { ...card };
       return null;
+    }
+
+    function p2EquivalentQuestionIds(questionId) {
+      const value = String(questionId || "").trim();
+      if (!value) return [];
+      const ids = [value];
+      if (value.startsWith("p2:")) ids.push(`p2cue:${value.slice(3)}`);
+      if (value.startsWith("p2cue:")) ids.push(`p2:${value.slice(6)}`);
+      return [...new Set(ids)];
     }
 
     function p2BankQuestionId(entry = {}) {
@@ -4478,6 +5430,11 @@
       }
       const netPromise = api(`/api/p2-bank-corpus/${encodeURIComponent(key)}`).then((payload) => {
         p2BankLsWrite(P2BANK_LS_PREFIX, key, payload);
+        const canonicalKey = String(payload?.question_id || "").trim();
+        if (canonicalKey && canonicalKey !== key) {
+          p2BankCorpusCache.set(canonicalKey, Promise.resolve(payload));
+          p2BankLsWrite(P2BANK_LS_PREFIX, canonicalKey, payload);
+        }
         return payload;
       });
       p2BankCorpusCache.set(key, netPromise);
@@ -4488,8 +5445,14 @@
       const key = String(questionId || "").trim();
       if (!key) return Promise.resolve(null);
       ensureP2BankCacheScope();
-      if (p2BankP3Cache.has(key)) return p2BankP3Cache.get(key);
-      const cached = p2BankLsRead(P3BANK_LS_PREFIX, key);
+      for (const id of p2EquivalentQuestionIds(key)) {
+        if (p2BankP3Cache.has(id)) {
+          const promise = p2BankP3Cache.get(id);
+          if (id !== key) p2BankP3Cache.set(key, promise);
+          return promise;
+        }
+      }
+      const cached = p2BankLsReadAny(P3BANK_LS_PREFIX, key);
       if (cached) {
         const promise = Promise.resolve(cached.payload);
         p2BankP3Cache.set(key, promise);
@@ -4498,6 +5461,11 @@
       }
       const netPromise = api(`/api/p3-bank-corpus/${encodeURIComponent(key)}`).then((payload) => {
         p2BankLsWrite(P3BANK_LS_PREFIX, key, payload);
+        const canonicalKey = String(payload?.p2_question_id || payload?.question_id || "").trim();
+        if (canonicalKey && canonicalKey !== key) {
+          p2BankP3Cache.set(canonicalKey, Promise.resolve(payload));
+          p2BankLsWrite(P3BANK_LS_PREFIX, canonicalKey, payload);
+        }
         return payload;
       });
       p2BankP3Cache.set(key, netPromise);
@@ -4843,6 +5811,107 @@
           has_brainstorm_idea: Boolean(String(idea || "").trim()),
         };
       });
+    }
+
+    function upsertP2CorpusEntryLocal(saved = {}) {
+      const entryId = String(saved.entry_id || "").trim();
+      if (!entryId) return null;
+      let updated = null;
+      const categories = state.p2Corpus.categories || [];
+      let found = false;
+      state.p2Corpus.categories = categories.map((category) => {
+        const items = category.items || [];
+        const nextItems = items.map((item) => {
+          if (String(item.entry_id || "").trim() !== entryId) return item;
+          found = true;
+          updated = {
+            ...item,
+            ...saved,
+            label: category.label || item.label || saved.label,
+            p3_follow_up_text: saved.p3_follow_up_text ?? saved.metadata?.p3_follow_up_text ?? item.p3_follow_up_text ?? "",
+          };
+          return updated;
+        });
+        return { ...category, items: nextItems };
+      });
+      if (!found) {
+        const categoryId = saved.category || "special";
+        let inserted = false;
+        state.p2Corpus.categories = (state.p2Corpus.categories || []).map((category) => {
+          if (inserted || category.category !== categoryId) return category;
+          updated = {
+            ...saved,
+            label: category.label || saved.label,
+            p3_follow_up_text: saved.p3_follow_up_text ?? saved.metadata?.p3_follow_up_text ?? "",
+          };
+          inserted = true;
+          return { ...category, items: [updated, ...(category.items || [])] };
+        });
+        if (!inserted) {
+          updated = {
+            ...saved,
+            label: saved.label || "P2",
+            p3_follow_up_text: saved.p3_follow_up_text ?? saved.metadata?.p3_follow_up_text ?? "",
+          };
+          state.p2Corpus.categories = [
+            { category: categoryId, label: saved.label || categoryId, items: [updated] },
+            ...(state.p2Corpus.categories || []),
+          ];
+        }
+      }
+      state.p2Corpus.mutationSeq = (state.p2Corpus.mutationSeq || 0) + 1;
+      state.p2Corpus.loadingPromise = null;
+      return updated;
+    }
+
+    function applyP2BankCorpusSavedLocal(questionId, saved = {}) {
+      const targetId = String(questionId || "").trim();
+      if (!targetId) return;
+      const corpusText = saved.corpus_text ?? "";
+      const targetIds = p2EquivalentQuestionIds(targetId);
+      targetIds.forEach((id) => {
+        p2BankCorpusCache.set(id, Promise.resolve(saved));
+        p2BankLsWrite(P2BANK_LS_PREFIX, id, saved);
+        p2BankBatchRequested.add(id);
+      });
+      state.p2Corpus.currentPart2Cards = (state.p2Corpus.currentPart2Cards || []).map((item) => {
+        const ids = p2EquivalentQuestionIds(p2BankQuestionId(item));
+        if (!ids.some((id) => targetIds.includes(id))) return item;
+        return {
+          ...item,
+          corpus_text: corpusText,
+          material_text: corpusText,
+          brainstorm_idea: saved.brainstorm_idea ?? item.brainstorm_idea ?? "",
+          has_material: Boolean(String(corpusText || "").trim()),
+          has_bank_corpus: Boolean(String(corpusText || "").trim()),
+        };
+      });
+      if (state.p2Corpus.activeEntry && p2EquivalentQuestionIds(p2BankQuestionId(state.p2Corpus.activeEntry)).some((id) => targetIds.includes(id))) {
+        state.p2Corpus.activeEntry = {
+          ...state.p2Corpus.activeEntry,
+          ...saved,
+          material_text: corpusText,
+          corpus_text: corpusText,
+        };
+      }
+      state.p2Corpus.mutationSeq = (state.p2Corpus.mutationSeq || 0) + 1;
+      state.p2Corpus.loadingPromise = null;
+    }
+
+    function applyP2BankP3SavedLocal(questionId, items = []) {
+      const targetId = String(questionId || "").trim();
+      if (!targetId) return;
+      const nextItems = Array.isArray(items) ? items : [];
+      const savedCount = nextItems.filter((item) => String(item.corpus_text || "").trim()).length;
+      const payload = {
+        p2_question_id: targetId,
+        items: nextItems,
+        count: nextItems.length,
+      };
+      p2BankP3Cache.set(targetId, Promise.resolve(payload));
+      p2BankLsWrite(P3BANK_LS_PREFIX, targetId, payload);
+      p2BankBatchRequested.add(targetId);
+      updateP2CardP3CountLocal(targetId, savedCount, nextItems.length);
     }
 
     // Mirror the P1 pattern: after a P3 save, update the seasonal card's
@@ -5326,11 +6395,43 @@
       // Only a genuinely cold cache shows the loader. This removes both the
       // every-open network wait and the "blank → text jumps in" flicker on
       // reopen that the forced refetch used to cause.
-      const hasLocalCopy = Boolean(p2BankLsRead(P2BANK_LS_PREFIX, questionId));
+      const forceFresh = entry.forceFresh === true || entry.reportForceFresh === true;
+      const cachedRecord = p2BankLsReadAny(P2BANK_LS_PREFIX, questionId);
+      const cachedPayload = cachedRecord?.payload || null;
+      const cachedHasMaterial = Boolean(String(cachedPayload?.corpus_text || "").trim());
+      const canRenderCachedFirst = forceFresh && cachedHasMaterial;
+      const hasLocalCopy = canRenderCachedFirst || (!forceFresh && Boolean(cachedRecord));
       if (!hasLocalCopy) showP2BankCorpusEditorLoading(entry);
       let payload;
       try {
-        payload = await fetchP2BankCorpusPayload(questionId);
+        if (canRenderCachedFirst) {
+          payload = cachedPayload;
+          fetchP2BankCorpusPayload(questionId, { force: true })
+            .then((fresh) => {
+              if (token !== p2BankCorpusLoadToken) return;
+              if ($("p2CorpusDialog")?.classList.contains("hidden")) return;
+              const active = state.p2Corpus.activeEntry || {};
+              const activeIds = p2EquivalentQuestionIds(p2BankQuestionId(active));
+              const freshIds = p2EquivalentQuestionIds(fresh?.question_id || questionId);
+              if (!activeIds.some((id) => freshIds.includes(id))) return;
+              applyP2BankCorpusSavedLocal(fresh.question_id || questionId, fresh);
+              const cachedText = String(cachedPayload?.corpus_text || "").trim();
+              const currentDraft = getCorpusMarkdownValue("p2CorpusText").trim();
+              if (currentDraft !== cachedText) return;
+              state.p2Corpus.activeEntry = {
+                ...active,
+                ...fresh,
+                material_text: fresh.corpus_text || "",
+                linked_question: fresh.question || active.linked_question || "",
+                brainstorm_idea: fresh.brainstorm_idea ?? active.brainstorm_idea ?? "",
+              };
+              setP2CorpusBrainstormField(state.p2Corpus.activeEntry.brainstorm_idea || "");
+              setCorpusMarkdownValue("p2CorpusText", state.p2Corpus.activeEntry.material_text || "");
+            })
+            .catch(() => null);
+        } else {
+          payload = await fetchP2BankCorpusPayload(questionId, { force: forceFresh });
+        }
       } catch (error) {
         if (token === p2BankCorpusLoadToken) {
           text("p2CorpusSaveStatus", error.message || String(error));
@@ -5678,7 +6779,8 @@
       const questionId = p2BankQuestionId(entry);
       if (!questionId) return;
       const token = ++p2BankP3LoadToken;
-      showP2BankP3EditorLoading(entry);
+      const hasWarmPayload = hasP2BankP3PayloadCached(questionId);
+      if (!hasWarmPayload) showP2BankP3EditorLoading(entry);
       let payload;
       try {
         payload = await fetchP2BankP3Payload(questionId);
@@ -5760,21 +6862,24 @@
       const materialText = getCorpusMarkdownValue("p2CorpusText").trim();
       if (entry.is_bank_card) {
         const brainstormIdea = p2CorpusBrainstormIdeaValue();
+        const questionId = p2BankQuestionId(entry);
+        notifyCorpusSaved({ kind: "p2_bank", questionId, saved: Boolean(materialText) });
         closeP2CorpusEditor();
-        if (materialText || brainstormIdea.trim() !== String(entry.brainstorm_idea || "").trim()) {
-          saveP2BankCorpusEntry({
-            entry,
-            materialText,
-            brainstormIdea,
-            silent: true,
-          }).catch(() => null);
-        }
+        saveP2BankCorpusEntry({
+          entry,
+          materialText,
+          brainstormIdea,
+          silent: true,
+        }).catch(() => null);
         return;
       }
       const title = $("p2CorpusTitle")?.value || "";
       const category = $("p2CorpusCategory")?.value || entry.category || "person";
+      if (entry.entry_id) {
+        notifyCorpusSaved({ kind: "p2_corpus", entryId: entry.entry_id, saved: Boolean(materialText) });
+      }
       closeP2CorpusEditor();
-      if (materialText) {
+      if (materialText || entry.entry_id) {
         setP2CorpusFeedback(entry.entry_id ? "正在保存素材..." : "正在新增素材...", "saving");
         saveP2CorpusEntry({
           entry: { ...entry, category, title },
@@ -5789,14 +6894,27 @@
       if (state.p2Corpus.activeBankP3Entry) {
         const entry = state.p2Corpus.activeBankP3Entry;
         syncActiveP2BankP3Draft();
+        const questionId = p2BankQuestionId(entry);
+        (entry.items || []).forEach((item) => {
+          notifyCorpusSaved({
+            kind: "p3_bank",
+            questionId,
+            p2QuestionId: questionId,
+            followupId: item.followup_id || "",
+            saved: Boolean(String(item.corpus_text || "").trim()),
+          });
+        });
         closeP2CorpusP3Editor();
         saveP2BankP3Entries({ entry, silent: true }).catch(() => null);
         return;
       }
       const entry = state.p2Corpus.activeP3Entry || {};
       const p3FollowUpText = getCorpusMarkdownValue("p2CorpusP3FollowUp").trim();
+      if (entry.entry_id) {
+        notifyCorpusSaved({ kind: "p2_corpus_p3", entryId: entry.entry_id, saved: Boolean(p3FollowUpText) });
+      }
       closeP2CorpusP3Editor();
-      if (entry.entry_id && p3FollowUpText) {
+      if (entry.entry_id) {
         saveP2CorpusEntry({
           entry,
           materialText: entry.material_text,
@@ -5809,6 +6927,10 @@
 
     async function saveP2BankP3Entries(options = {}) {
       const entry = options.entry || state.p2Corpus.activeBankP3Entry || {};
+      if (state.p2Corpus.saving) {
+        await state.p2Corpus.savingPromise?.catch(() => null);
+        return saveP2BankP3Entries(options);
+      }
       const questionId = p2BankQuestionId(entry);
       if (!questionId) {
         text("p2CorpusP3SaveStatus", "缺少题卡 ID，无法保存。");
@@ -5836,13 +6958,14 @@
       const savedCount = items.filter((item) => String(item.corpus_text || "").trim()).length;
       updateP2CardP3CountLocal(questionId, savedCount, items.length);
       renderP2CorpusTopics();
+      const savePromise = (async () => {
       try {
         const drafts = items.map((item) => ({
           followup_id: item.followup_id || "",
           followup_question: item.followup_question || "",
           corpus_text: item.corpus_text || "",
         }));
-        await Promise.all(drafts.map((draft) => api(`/api/p3-bank-corpus/item/${encodeURIComponent(draft.followup_id || "")}`, {
+        const savedItems = await Promise.all(drafts.map((draft) => api(`/api/p3-bank-corpus/item/${encodeURIComponent(draft.followup_id || "")}`, {
           p2_question_id: questionId,
           followup_question: draft.followup_question || "",
           corpus_text: draft.corpus_text || "",
@@ -5850,9 +6973,21 @@
         })));
         // P3 save is per-item with no combined payload; drop both caches so the
         // next open re-fetches fresh and no stale copy covers the new content.
-        p2BankP3Cache.delete(questionId);
-        p2BankLsDelete(P3BANK_LS_PREFIX, questionId);
-        p2BankBatchRequested.delete(questionId);
+        const mergedItems = items.map((item) => {
+          const saved = savedItems.find((row) => row.followup_id === item.followup_id);
+          return saved ? { ...item, ...saved } : item;
+        });
+        entry.items = mergedItems;
+        applyP2BankP3SavedLocal(questionId, mergedItems);
+        mergedItems.forEach((item) => {
+          notifyCorpusSaved({
+            kind: "p3_bank",
+            questionId,
+            p2QuestionId: questionId,
+            followupId: item.followup_id || "",
+            saved: Boolean(String(item.corpus_text || "").trim()),
+          });
+        });
         if (!options.silent) text("p2CorpusP3SaveStatus", "已保存题库 P3 追问");
         // Reconcile in the background; the optimistic counts already match the
         // saved state, so the UI must not block on a full library refetch.
@@ -5867,11 +7002,15 @@
         if (options.closeOnError) closeP2CorpusP3Editor();
       } finally {
         state.p2Corpus.saving = false;
+        state.p2Corpus.savingPromise = null;
         if (button && !options.silent) {
           button.disabled = false;
           button.textContent = original;
         }
       }
+      })();
+      state.p2Corpus.savingPromise = savePromise;
+      return savePromise;
     }
 
     document.addEventListener("click", (event) => {
@@ -5958,6 +7097,22 @@
       if (!event.currentTarget.classList.contains("p2-corpus-title-cue-trigger")) return;
       event.preventDefault();
       toggleP2CorpusTitleCue();
+    });
+
+    $("languageTakeawayDictDisplay")?.addEventListener("input", () => {
+      const display = $("languageTakeawayDictDisplay");
+      if (!display?.classList.contains("is-dictionary-editable")) return;
+      syncLanguageTakeawayDictionaryChineseDraft();
+    });
+
+    $("languageTakeawayDictDisplay")?.addEventListener("keydown", handleDictionaryDomainAtomDelete);
+
+    $("languageTakeawayDictDisplay")?.addEventListener("paste", (event) => {
+      const display = $("languageTakeawayDictDisplay");
+      if (!display?.classList.contains("is-dictionary-editable")) return;
+      event.preventDefault();
+      const textValue = event.clipboardData?.getData("text/plain") || "";
+      document.execCommand("insertText", false, textValue);
     });
 
     $("p2BrainstormDialog")?.addEventListener("pointerdown", (event) => {
@@ -6173,7 +7328,10 @@
 
     async function saveP2CorpusEntry(options = {}) {
       const entry = options.entry || state.p2Corpus.activeEntry || {};
-      if (state.p2Corpus.saving) return;
+      if (state.p2Corpus.saving) {
+        await state.p2Corpus.savingPromise?.catch(() => null);
+        return saveP2CorpusEntry(options);
+      }
       if (entry.is_bank_card) {
         return saveP2BankCorpusEntry({ ...options, entry });
       }
@@ -6187,7 +7345,8 @@
       const nextTitle = (options.title ?? (materialDialogOpen ? $("p2CorpusTitle")?.value : "")) || entry.title || "";
       const nextLinkedQuestion = options.linkedQuestion ?? entry.linked_question ?? "";
       const nextP3FollowUpText = options.p3FollowUpText ?? (p3DialogOpen ? getCorpusMarkdownValue("p2CorpusP3FollowUp") : entry.p3_follow_up_text || "");
-      if (!nextMaterialText && !String(nextP3FollowUpText || "").trim()) {
+      const existingEntryId = String(entry.entry_id || options.entryId || "").trim();
+      if (!existingEntryId && !nextMaterialText && !String(nextP3FollowUpText || "").trim() && options.source !== "p2_corpus_p3_editor") {
         if (!options.silent) text("p2CorpusSaveStatus", "内容为空，未保存。");
         state.p2Corpus.saving = false;
         if (options.closeOnEmpty) closeP2CorpusEditor();
@@ -6198,6 +7357,7 @@
         button.textContent = "保存中...";
       }
       if (!options.silent) text("p2CorpusSaveStatus", "");
+      const savePromise = (async () => {
       try {
         const saved = await api("/api/p2-corpus", {
           entry_id: entry.entry_id || "",
@@ -6212,11 +7372,21 @@
         // Force a fresh pull so the just-saved material/P3 status replaces any
         // cached snapshot — without this a save can show stale state until a
         // manual refresh (same fix the bank path already has).
-        await loadP2Corpus({ force: true });
+        const updated = upsertP2CorpusEntryLocal(saved);
         state.p2Corpus.selectedEntryId ||= saved.entry_id;
+        notifyCorpusSaved({
+          kind: options.source === "p2_corpus_p3_editor" ? "p2_corpus_p3" : "p2_corpus",
+          entryId: saved.entry_id || entry.entry_id || "",
+          saved: options.source === "p2_corpus_p3_editor"
+            ? Boolean(String(saved.p3_follow_up_text || saved.metadata?.p3_follow_up_text || nextP3FollowUpText || "").trim())
+            : Boolean(String(saved.material_text || nextMaterialText || "").trim()),
+        });
+        renderP2CorpusTopics();
+        renderP2CorpusPrepPanel();
+        loadP2Corpus({ force: true }).catch(() => null);
         if (options.silent) {
           setP2CorpusFeedback("\u5df2\u4fdd\u5b58\u7d20\u6750", "success");
-          flashP2CorpusEntry(saved.entry_id);
+          flashP2CorpusEntry(updated?.entry_id || saved.entry_id);
         }
         if (options.closeOnSuccess) closeP2CorpusEditor();
       } catch (error) {
@@ -6225,15 +7395,23 @@
         if (options.closeOnError) closeP2CorpusEditor();
       } finally {
         state.p2Corpus.saving = false;
+        state.p2Corpus.savingPromise = null;
         if (button && !options.silent) {
           button.disabled = false;
           button.textContent = original;
         }
       }
+      })();
+      state.p2Corpus.savingPromise = savePromise;
+      return savePromise;
     }
 
     async function saveP2BankCorpusEntry(options = {}) {
       const entry = options.entry || state.p2Corpus.activeEntry || {};
+      if (state.p2Corpus.saving) {
+        await state.p2Corpus.savingPromise?.catch(() => null);
+        return saveP2BankCorpusEntry(options);
+      }
       const questionId = p2BankQuestionId(entry);
       if (!questionId) {
         text("p2CorpusSaveStatus", "缺少题卡 ID，无法保存。");
@@ -6249,6 +7427,7 @@
         button.textContent = "保存中...";
       }
       if (!options.silent) text("p2CorpusSaveStatus", "");
+      const savePromise = (async () => {
       try {
         const saved = await api(`/api/p2-bank-corpus/${encodeURIComponent(questionId)}`, {
           question: entry.linked_question || entry.question || "",
@@ -6260,25 +7439,30 @@
         updateP2BrainstormCardLocal(questionId, saved.brainstorm_idea ?? nextBrainstormIdea);
         // Push the just-saved payload into both caches so a stale copy can
         // never cover fresh content, and a reopen is instant.
-        p2BankCorpusCache.set(questionId, Promise.resolve(saved));
-        p2BankLsWrite(P2BANK_LS_PREFIX, questionId, saved);
-        p2BankBatchRequested.add(questionId);
+        applyP2BankCorpusSavedLocal(questionId, saved);
+        notifyCorpusSaved({ kind: "p2_bank", questionId, saved: Boolean(String(saved.corpus_text || nextMaterialText || "").trim()) });
         if (state.p2Corpus.activeEntry && p2BankQuestionId(state.p2Corpus.activeEntry) === questionId) {
           state.p2Corpus.activeEntry.material_text = saved.corpus_text || "";
         }
         if (!options.silent) text("p2CorpusSaveStatus", `已保存 ${saved.updated_at || ""}`);
-        await loadP2Corpus({ force: true });
+        renderP2CorpusTopics();
+        renderP2CorpusPrepPanel();
+        loadP2Corpus({ force: true }).catch(() => null);
         if (options.closeOnSuccess) closeP2CorpusEditor();
       } catch (error) {
         if (!options.silent) text("p2CorpusSaveStatus", error.message || String(error));
         if (options.closeOnError) closeP2CorpusEditor();
       } finally {
         state.p2Corpus.saving = false;
+        state.p2Corpus.savingPromise = null;
         if (button && !options.silent) {
           button.disabled = false;
           button.textContent = original;
         }
       }
+      })();
+      state.p2Corpus.savingPromise = savePromise;
+      return savePromise;
     }
 
     async function deleteP2CorpusEntry(entryId) {
@@ -6417,6 +7601,7 @@
 
     async function deleteWritingTakeawayEntry(entryId) {
       if (!entryId) return;
+      if (guestBlockTakeawayEdit("登录后才能删除写作积累内容。")) return;
       showConfirmDelete("确定要删除这条写作积累吗？", async () => {
         const previousItems = state.writingTakeaway.items || [];
         const removed = previousItems.find((item) => item.entry_id === entryId);
@@ -6506,7 +7691,14 @@
       hideLanguageTakeawayTrigger,
       hideLanguageTakeawayPopup,
       speakLanguageTakeawaySource,
+      openTakeawayPronunciationDialog,
+      closeTakeawayPronunciationDialog,
+      startTakeawayPronunciationRecording,
       autosizeLanguageTakeawaySource,
+      resetLanguageTakeawayDictionary,
+      toggleLanguageTakeawayDictionaryMode,
+      syncLanguageTakeawayDictionaryChineseDraft,
+      createPixelFlowField,
       updateLanguageTakeawaySpellingButton,
       addLanguageTakeawaySpellingWord,
       translateTakeawayEditSource,

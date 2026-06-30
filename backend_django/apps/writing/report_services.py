@@ -2,14 +2,12 @@ import calendar
 import re
 from typing import Any
 
-from django.db.models import DateTimeField, F, OuterRef, Subquery
-from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 
 from apps.ai.models import AITask
 from apps.ai.services import task_payload
 
-from .models import WritingEntry, WritingLearnerProfile, WritingScore
+from .models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
 from .prompt_services import WRITING_TASK_LABELS, prompt_source_label
 from .validation import WritingError, normalize_task_type
 
@@ -157,6 +155,19 @@ def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
     }
 
 
+def report_created_at(entry: WritingEntry):
+    value = (entry.metadata or {}).get("report_created_at")
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = timezone.datetime.fromisoformat(value.strip())
+            if timezone.is_naive(parsed):
+                parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+            return parsed
+        except ValueError:
+            return None
+    return None
+
+
 def task_summary_payload(task: AITask | None) -> dict[str, Any] | None:
     if not task:
         return None
@@ -210,8 +221,8 @@ def profile_snapshot(profile: WritingLearnerProfile | None) -> dict[str, Any] | 
     }
 
 
-def writing_score_task_payload(entry: WritingEntry) -> dict[str, Any] | None:
-    task = (
+def latest_writing_score_task(entry: WritingEntry) -> AITask | None:
+    return (
         AITask.objects.filter(
             user=entry.user,
             task_type="writing_score",
@@ -221,7 +232,20 @@ def writing_score_task_payload(entry: WritingEntry) -> dict[str, Any] | None:
         .order_by("-created_at")
         .first()
     )
+
+
+def writing_score_task_payload(entry: WritingEntry) -> dict[str, Any] | None:
+    task = latest_writing_score_task(entry)
     return task_payload(task) if task else None
+
+
+def active_writing_task_refreshes_score(task: AITask | None, score: WritingScore | None) -> bool:
+    superseding_statuses = {AITask.Status.PENDING, AITask.Status.RUNNING}
+    if not task or task.status not in superseding_statuses:
+        return False
+    if not score or not score.scored_at:
+        return True
+    return task.created_at >= score.scored_at
 
 
 def normalize_prompt_highlights(value: Any, source_text: str = "") -> list[dict[str, int]]:
@@ -247,6 +271,8 @@ def normalize_prompt_highlights(value: Any, source_text: str = "") -> list[dict[
 
 def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str, Any]:
     score = getattr(entry, "score", None)
+    ai_task = latest_writing_score_task(entry)
+    visible_score = None if active_writing_task_refreshes_score(ai_task, score) else score
     source_label = prompt_source_label(entry.prompt) if entry.prompt_id else str(entry.metadata.get("source_label") or "")
     prompt_highlights = normalize_prompt_highlights(entry.metadata.get("prompt_highlights"), entry.prompt_text)
     payload = {
@@ -271,8 +297,8 @@ def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str,
         "source_label": source_label,
         "prompt_highlights": prompt_highlights,
         "word_count": entry.word_count,
-        "score": score_payload(score),
-        "ai_task": writing_score_task_payload(entry),
+        "score": score_payload(visible_score),
+        "ai_task": task_payload(ai_task) if ai_task else None,
         "writing_profile": profile_snapshot(getattr(entry.user, "writing_learner_profile", None)),
     }
     if include_answer:
@@ -282,12 +308,20 @@ def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str,
 
 def compact_entry_payload(entry: WritingEntry) -> dict[str, Any]:
     score = getattr(entry, "score", None)
-    display_at = getattr(entry, "latest_activity_at", None) or entry.updated_at
+    display_at = report_created_at(entry) if score else None
+    # A scored report's time is pinned at first creation. If an older entry has no pin,
+    # fall back to created_at (stable) rather than updated_at/saved_at, which move on
+    # every edit and re-score — the report time must NOT track later modifications.
+    if score and not display_at:
+        display_at = entry.created_at
+    display_at = display_at or getattr(entry, "latest_activity_at", None) or entry.updated_at
+    sort_at = display_at
     source_label = prompt_source_label(entry.prompt) if entry.prompt_id else str(entry.metadata.get("source_label") or "")
     return {
         "id": entry.entry_id,
         "practice_date": entry.practice_date.isoformat(),
         "display_time": display_at.astimezone(timezone.get_current_timezone()).strftime("%Y-%m-%d %H:%M"),
+        "sort_time": sort_at.isoformat(),
         "task_type": entry.task_type,
         "task_label": WRITING_TASK_LABELS.get(entry.task_type, "Writing"),
         "prompt_id": entry.prompt.prompt_id if entry.prompt_id else "",
@@ -311,6 +345,45 @@ def report_entry_payload(entry: WritingEntry, ai_task: AITask | None = None) -> 
         **compact_entry_payload(entry),
         "ai_task": task_summary_payload(ai_task),
     }
+
+
+def writing_prompt_identity_key(prompt: WritingPrompt | None, *, task_type: str = "", prompt_text: str = "") -> tuple[str, str]:
+    if prompt and prompt.source_book is not None and prompt.source_test is not None and prompt.source_question is not None:
+        return (
+            "cambridge",
+            f"{prompt.task_type or task_type}:{prompt.source_book}:{prompt.source_test}:{prompt.source_question}",
+        )
+    if prompt:
+        return ("prompt", prompt.prompt_id)
+    return ("prompt_text", f"{task_type}:{str(prompt_text or '').strip()}")
+
+
+def writing_entry_report_group_key(entry: WritingEntry) -> tuple[str, str]:
+    if entry.prompt_id:
+        return writing_prompt_identity_key(entry.prompt, task_type=entry.task_type, prompt_text=entry.prompt_text)
+    return ("prompt_text", f"{entry.task_type}:{entry.prompt_text.strip()}")
+
+
+def dedupe_report_entries(entries: list[WritingEntry]) -> list[WritingEntry]:
+    selected: dict[tuple[str, str], WritingEntry] = {}
+    for entry in entries:
+        key = writing_entry_report_group_key(entry)
+        current = selected.get(key)
+        if not current:
+            selected[key] = entry
+            continue
+        entry_scored = entry.status == WritingEntry.Status.SCORED and getattr(entry, "score", None) is not None
+        current_scored = current.status == WritingEntry.Status.SCORED and getattr(current, "score", None) is not None
+        if entry_scored and not current_scored:
+            selected[key] = entry
+    return list(selected.values())
+
+
+def writing_report_sort_time(entry: WritingEntry):
+    score = getattr(entry, "score", None)
+    if score:
+        return report_created_at(entry) or entry.created_at
+    return entry.created_at
 
 
 def latest_writing_tasks_for_entries(user, entry_ids: list[str]) -> dict[str, AITask]:
@@ -388,36 +461,20 @@ def writing_reports(user, query: dict[str, Any] | None = None) -> dict[str, Any]
     task_type_value = str(query.get("task_type") or "").strip()
     task_type = normalize_task_type(task_type_value) if task_type_value else ""
 
-    latest_task_updated_at = Subquery(
-        AITask.objects.filter(
-            user=user,
-            task_type="writing_score",
-            related_type="writing_entry",
-            related_id=OuterRef("entry_id"),
-        )
-        .order_by("-created_at", "-updated_at")
-        .values("updated_at")[:1],
-        output_field=DateTimeField(),
-    )
     queryset = (
         WritingEntry.objects.filter(user=user)
         .select_related("prompt", "score")
-        .annotate(latest_task_updated_at=latest_task_updated_at)
-        .annotate(
-            latest_activity_at=Greatest(
-                F("updated_at"),
-                Coalesce("latest_task_updated_at", F("updated_at")),
-            )
-        )
     )
     if status:
         queryset = queryset.filter(status=status)
     if task_type:
         queryset = queryset.filter(task_type=task_type)
-    queryset = queryset.order_by("-latest_activity_at", "-updated_at", "-created_at")
+    queryset = queryset.order_by("-created_at")
 
-    count = queryset.count()
-    entries = list(queryset[:limit])
+    deduped_entries = dedupe_report_entries(list(queryset))
+    count = len(deduped_entries)
+    deduped_entries.sort(key=writing_report_sort_time, reverse=True)
+    entries = deduped_entries[:limit]
     task_map = latest_writing_tasks_for_entries(user, [entry.entry_id for entry in entries])
     return {
         "items": [report_entry_payload(entry, task_map.get(entry.entry_id)) for entry in entries],

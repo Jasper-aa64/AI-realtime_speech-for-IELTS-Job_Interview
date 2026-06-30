@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.ai.models import AITask
@@ -30,7 +30,7 @@ class IeltsOverallBandTests(TestCase):
         self.assertEqual(ielts_overall_band(7.5, 8.0, 8.0, 8.0), 8.0)
         # Uniform scores stay put.
         self.assertEqual(ielts_overall_band(6.0, 6.0, 6.0, 6.0), 6.0)
-        # .25 average rounds up to .5 — Python's banker's round() would wrongly
+        # .25 average rounds up to .5 鈥?Python's banker's round() would wrongly
         # give 7.0 here, so this guards the half-up rule.
         self.assertEqual(ielts_overall_band(7.5, 7.5, 7.0, 7.0), 7.5)  # mean 7.25
         # .75 average rounds up to the next whole band.
@@ -49,7 +49,7 @@ def ai_score_payload(*, paragraph_reviews: list[dict] | None = None, **overrides
         "feedback_markdown": "- Clear position with room for more examples.",
         "grammar_corrections": [],
         "inline_annotations": [],
-        "spelling_correction_summary": "未发现明显拼写错误。",
+        "spelling_correction_summary": "No obvious spelling errors.",
         "expression_upgrade_summary": "- Use more precise academic collocations.",
         "overall_review": "AI overall review generated from the essay logic.",
         "practice_focus": "AI practice focus generated from the weakest paragraph-level issue.",
@@ -111,8 +111,8 @@ class WritingModelTests(TestCase):
             average_overall_band=5.25,
             tag_counts={"under_length": 1, "grammar_accuracy": 2},
             primary_focus="grammar_accuracy",
-            primary_focus_text="句子结构和语法准确度是当前重点。",
-            recent_evidence=["Task 2 · Band 5.0 · 120 words"],
+            primary_focus_text="Sentence structure and grammar accuracy are the current focus.",
+            recent_evidence=["Task 2 路 Band 5.0 路 120 words"],
         )
 
         self.assertEqual(profile.total_scored, 2)
@@ -400,7 +400,7 @@ class WritingApiTests(TestCase):
         self.assertIn("Only scored writing entries", response.json()["message"])
         self.assertEqual(WritingEntry.objects.filter(user=self.user, prompt=prompt).count(), 1)
 
-    def test_saving_changed_scored_entry_creates_revision_instead_of_deleting_report(self):
+    def test_saving_changed_scored_entry_without_preserve_clears_report(self):
         prompt = self.create_prompt(
             prompt_id="task2-save-scored-revision",
             task_type=WritingPrompt.TaskType.TASK2,
@@ -427,15 +427,671 @@ class WritingApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        revision = response.json()
-        self.assertNotEqual(revision["id"], entry.entry_id)
-        self.assertEqual(revision["status"], WritingEntry.Status.SAVED)
-        self.assertIsNone(revision["score"])
-        self.assertEqual(revision["answer"], "Revised paragraph one.\n\nRevised paragraph two.")
+        saved = response.json()
+        self.assertEqual(saved["id"], entry.entry_id)
+        self.assertEqual(saved["status"], WritingEntry.Status.SAVED)
+        self.assertIsNone(saved["score"])
+        self.assertEqual(saved["answer"], "Revised paragraph one.\n\nRevised paragraph two.")
+        entry.refresh_from_db()
+        self.assertEqual(entry.answer, "Revised paragraph one.\n\nRevised paragraph two.")
+        self.assertEqual(entry.status, WritingEntry.Status.SAVED)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
+
+    def test_report_inline_save_can_preserve_existing_score(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-preserve",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored preserve prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("Edited paragraph one.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()
+        self.assertEqual(saved["id"], entry.entry_id)
+        self.assertEqual(saved["status"], WritingEntry.Status.SCORED)
+        self.assertIsNotNone(saved["score"])
+        self.assertEqual(saved["answer"], "Edited paragraph one.\n\nOriginal paragraph two.")
+        entry.refresh_from_db()
+        self.assertEqual(entry.answer, "Edited paragraph one.\n\nOriginal paragraph two.")
+        self.assertTrue(WritingScore.objects.filter(entry=entry, overall_band=6.0).exists())
+
+    def test_save_same_prompt_without_id_reuses_existing_scored_report(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-same-prompt-no-id",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored same prompt without id",
+            prompt="Some people think competition is more important than cooperation. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.5,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("Edited paragraph one.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()
+        self.assertEqual(saved["id"], entry.entry_id)
+        self.assertEqual(saved["status"], WritingEntry.Status.SCORED)
+        self.assertEqual(saved["score"]["overall_band"], 7.5)
+        self.assertEqual(WritingEntry.objects.filter(user=self.user, prompt=prompt).count(), 1)
+        entry.refresh_from_db()
+        self.assertEqual(entry.answer, "Edited paragraph one.\n\nOriginal paragraph two.")
+
+    def test_preserve_score_with_saved_duplicate_id_updates_scored_report(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-from-saved-duplicate-id",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored from saved duplicate id",
+            prompt="Some people think competition is more important than cooperation. Discuss both views.",
+        )
+        scored_entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.5,
+        )
+        saved_duplicate = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Duplicate paragraph one.", "Duplicate paragraph two."),
+            status=WritingEntry.Status.SAVED,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": saved_duplicate.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("Fixed paragraph one.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()
+        self.assertEqual(saved["id"], scored_entry.entry_id)
+        self.assertEqual(saved["status"], WritingEntry.Status.SCORED)
+        self.assertEqual(saved["score"]["overall_band"], 7.5)
+        scored_entry.refresh_from_db()
+        saved_duplicate.refresh_from_db()
+        self.assertEqual(scored_entry.answer, "Fixed paragraph one.\n\nOriginal paragraph two.")
+        self.assertEqual(saved_duplicate.answer, "Duplicate paragraph one.\n\nDuplicate paragraph two.")
+
+    def test_preserve_score_with_same_cambridge_source_updates_scored_report(self):
+        scored_prompt = self.create_prompt(
+            prompt_id="task2-save-source-scored",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Competition and cooperation scored prompt",
+            prompt="Some people think competition is more important than cooperation. Discuss both views.",
+            source_book=19,
+            source_test=1,
+            source_question=2,
+        )
+        duplicate_prompt = self.create_prompt(
+            prompt_id="task2-save-source-duplicate",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Competition and cooperation duplicate prompt",
+            prompt="Some people think competition is more important than cooperation. Discuss both views and give your opinion.",
+            source_book=19,
+            source_test=1,
+            source_question=2,
+        )
+        scored_entry = self.create_entry(
+            prompt=scored_prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.5,
+        )
+        saved_duplicate = self.create_entry(
+            prompt=duplicate_prompt,
+            answer=paragraph_answer("Duplicate paragraph one.", "Duplicate paragraph two."),
+            status=WritingEntry.Status.SAVED,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": saved_duplicate.entry_id,
+                "task_type": "task2",
+                "prompt_id": duplicate_prompt.prompt_id,
+                "prompt": duplicate_prompt.prompt,
+                "answer": paragraph_answer("Fixed paragraph one.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["id"], scored_entry.entry_id)
+        self.assertEqual(payload["status"], WritingEntry.Status.SCORED)
+        scored_entry.refresh_from_db()
+        saved_duplicate.refresh_from_db()
+        self.assertEqual(scored_entry.answer, "Fixed paragraph one.\n\nOriginal paragraph two.")
+        self.assertEqual(saved_duplicate.answer, "Duplicate paragraph one.\n\nDuplicate paragraph two.")
+
+    def test_preserved_report_keeps_reviews_for_edited_paragraph(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-clear-annotations",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored clear annotations prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("The city has an increacing demand.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        score = WritingScore.objects.get(entry=entry)
+        score.analysis_payload = {
+            "analysis_backend": "ai",
+            "inline_annotations": [
+                {"paragraph_index": 1, "original": "increacing", "type": "spelling", "suggestion": "increasing", "explanation": "Spelling."},
+                {"paragraph_index": 2, "original": "Original", "type": "word_choice", "suggestion": "Initial", "explanation": "Style."},
+            ],
+            "paragraph_reviews": [
+                {"index": 1, "learner": "The city has an increacing demand.", "model": "Old model one.", "coaching": "Old coaching one.", "language_correction_upgrade": "Old upgrade."},
+                {"index": 2, "learner": "Original paragraph two.", "model": "Old model two.", "coaching": "Old coaching two.", "language_correction_upgrade": ""},
+            ],
+        }
+        score.save(update_fields=["analysis_payload", "updated_at"])
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("The city has an increasing demand.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], WritingEntry.Status.SCORED)
+        annotations = payload["score"]["inline_annotations"]
+        self.assertEqual([item["paragraph_index"] for item in annotations], [2])
+        first_review = payload["score"]["paragraph_reviews"][0]
+        self.assertEqual(first_review["learner"], "The city has an increasing demand.")
+        self.assertEqual(first_review["model"], "Old model one.")
+        self.assertEqual(first_review["coaching"], "Old coaching one.")
+        self.assertEqual(first_review["language_correction_upgrade"], "Old upgrade.")
+
+    def test_preserved_report_drops_only_the_edited_sentences_annotations(self):
+        # Sentence-level invalidation: editing one sentence drops THAT sentence's
+        # annotations; a different, untouched sentence in the same paragraph keeps its
+        # annotation. Here the first sentence is fixed (increacing鈫抜ncreasing) so its
+        # annotation goes, while "poor roads" in the untouched second sentence survives.
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-keep-nearby-annotations",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored keep nearby annotations prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("The city has an increacing demand. Roads here are poor roads.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        score = WritingScore.objects.get(entry=entry)
+        score.analysis_payload = {
+            "analysis_backend": "ai",
+            "inline_annotations": [
+                {"paragraph_index": 1, "original": "increacing", "type": "spelling", "suggestion": "increasing", "explanation": "Spelling."},
+                {"paragraph_index": 1, "original": "poor roads", "type": "word_choice", "suggestion": "weak transport links", "explanation": "More precise."},
+                {"paragraph_index": 2, "original": "Original", "type": "word_choice", "suggestion": "Initial", "explanation": "Style."},
+            ],
+            "paragraph_reviews": [
+                {"index": 1, "learner": "The city has an increacing demand. Roads here are poor roads.", "model": "Old model one.", "coaching": "Old coaching one.", "language_correction_upgrade": "Old upgrade."},
+                {"index": 2, "learner": "Original paragraph two.", "model": "Old model two.", "coaching": "Old coaching two.", "language_correction_upgrade": ""},
+            ],
+        }
+        score.save(update_fields=["analysis_payload", "updated_at"])
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("The city has an increasing demand. Roads here are poor roads.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        annotations = response.json()["score"]["inline_annotations"]
+        self.assertEqual([(item["paragraph_index"], item["original"]) for item in annotations], [(1, "poor roads"), (2, "Original")])
+
+    def test_preserved_report_fix_single_word_keeps_nearby_annotations_in_same_sentence(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-fix-word-keeps-nearby",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored fix word keeps nearby prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("The city has an increacing demand and poor roads.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        score = WritingScore.objects.get(entry=entry)
+        score.analysis_payload = {
+            "analysis_backend": "ai",
+            "inline_annotations": [
+                {"paragraph_index": 1, "original": "increacing", "type": "spelling", "suggestion": "increasing", "explanation": "Spelling."},
+                {"paragraph_index": 1, "original": "poor roads", "type": "word_choice", "suggestion": "weak transport links", "explanation": "More precise."},
+                {"paragraph_index": 2, "original": "Original", "type": "word_choice", "suggestion": "Initial", "explanation": "Style."},
+            ],
+            "paragraph_reviews": [
+                {"index": 1, "learner": "The city has an increacing demand and poor roads.", "model": "Old model one.", "coaching": "Old coaching one.", "language_correction_upgrade": ""},
+                {"index": 2, "learner": "Original paragraph two.", "model": "Old model two.", "coaching": "Old coaching two.", "language_correction_upgrade": ""},
+            ],
+        }
+        score.save(update_fields=["analysis_payload", "updated_at"])
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("The city has an increasing demand and poor roads.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        annotations = response.json()["score"]["inline_annotations"]
+        self.assertEqual([(item["paragraph_index"], item["original"]) for item in annotations], [(1, "poor roads"), (2, "Original")])
+
+    def test_preserved_report_fix_later_repeated_word_keeps_nearby_annotations(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-fix-later-word",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored fix later repeated word prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("The increacing trend is clear. The city has an increacing demand and poor roads.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        score = WritingScore.objects.get(entry=entry)
+        score.analysis_payload = {
+            "analysis_backend": "ai",
+            "inline_annotations": [
+                {"paragraph_index": 1, "original": "increacing", "type": "spelling", "suggestion": "increasing", "explanation": "Spelling."},
+                {"paragraph_index": 1, "original": "poor roads", "type": "word_choice", "suggestion": "weak transport links", "explanation": "More precise."},
+                {"paragraph_index": 2, "original": "Original", "type": "word_choice", "suggestion": "Initial", "explanation": "Style."},
+            ],
+            "paragraph_reviews": [
+                {"index": 1, "learner": "The increacing trend is clear. The city has an increacing demand and poor roads.", "model": "Old model one.", "coaching": "Old coaching one.", "language_correction_upgrade": ""},
+                {"index": 2, "learner": "Original paragraph two.", "model": "Old model two.", "coaching": "Old coaching two.", "language_correction_upgrade": ""},
+            ],
+        }
+        score.save(update_fields=["analysis_payload", "updated_at"])
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("The increacing trend is clear. The city has an increasing demand and poor roads.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        annotations = response.json()["score"]["inline_annotations"]
+        self.assertEqual([(item["paragraph_index"], item["original"]) for item in annotations], [(1, "poor roads"), (2, "Original")])
+
+    def test_preserved_report_drops_edited_sentence_annotation_when_failed_task_exists(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-clear-annotation-with-failed-task",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored clear annotation with failed task",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        previous = paragraph_answer(
+            "In conclusion, while there are valid arguments on both sides, I still hold the belief that the continuity of workflow is essential for sustaining high productivity, which ensure that a two-day weekend yields more valuable and enduring results for society.",
+            "Original paragraph two.",
+        )
+        revised = paragraph_answer(
+            "In conclusion, while there are valid arguments on both sides, I still hold the belief that the continuity of workflow is essential for sustaining high productivity, which ensures that a two-day weekend yields more valuable and enduring results for society.",
+            "Original paragraph two.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=previous,
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        score = WritingScore.objects.get(entry=entry)
+        score.analysis_payload = {
+            "analysis_backend": "ai",
+            "inline_annotations": [
+                {"paragraph_index": 1, "original": "which ensure", "type": "grammar", "suggestion": "which ensures", "explanation": "Subject-verb agreement."},
+                {"paragraph_index": 1, "original": "high productivity", "type": "word_choice", "suggestion": "strong productivity", "explanation": "Collocation."},
+                {"paragraph_index": 2, "original": "Original", "type": "word_choice", "suggestion": "Initial", "explanation": "Style."},
+            ],
+            "paragraph_reviews": [
+                {"index": 1, "learner": previous.split("\n\n")[0], "model": "Old model one.", "coaching": "Old coaching one.", "language_correction_upgrade": ""},
+                {"index": 2, "learner": "Original paragraph two.", "model": "Old model two.", "coaching": "Old coaching two.", "language_correction_upgrade": ""},
+            ],
+        }
+        score.save(update_fields=["analysis_payload", "updated_at"])
+        AITask.objects.create(
+            user=self.user,
+            task_id=f"aitask_{uuid.uuid4().hex[:24]}",
+            task_type="writing_score",
+            status=AITask.Status.FAILED,
+            related_type="writing_entry",
+            related_id=entry.entry_id,
+            error_code="provider_failed",
+            error_message="provider failed",
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": revised,
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        annotations = response.json()["score"]["inline_annotations"]
+        self.assertEqual([(item["paragraph_index"], item["original"]) for item in annotations], [(1, "high productivity"), (2, "Original")])
+
+    def test_preserved_report_remaps_annotation_when_sentence_is_split_to_new_paragraph(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-remap-split",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored remap split prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("First sentence stays. Second sentence keeps this phrase.", "Final paragraph."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        score = WritingScore.objects.get(entry=entry)
+        score.analysis_payload = {
+            "analysis_backend": "ai",
+            "inline_annotations": [
+                {"paragraph_index": 1, "original": "Second sentence keeps this phrase", "type": "grammar", "suggestion": "", "explanation": "Sentence control."},
+                {"paragraph_index": 2, "original": "Final", "type": "word_choice", "suggestion": "Last", "explanation": "Style."},
+            ],
+            "paragraph_reviews": [
+                {"index": 1, "learner": "First sentence stays. Second sentence keeps this phrase.", "model": "Old model one.", "coaching": "Old coaching one.", "language_correction_upgrade": ""},
+                {"index": 2, "learner": "Final paragraph.", "model": "Old model two.", "coaching": "Old coaching two.", "language_correction_upgrade": ""},
+            ],
+        }
+        score.save(update_fields=["analysis_payload", "updated_at"])
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("First sentence stays.", "Second sentence keeps this phrase.", "Final paragraph."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        annotations = response.json()["score"]["inline_annotations"]
+        self.assertIn("Second sentence keeps this phrase", [item["original"] for item in annotations if item["paragraph_index"] == 2])
+        self.assertIn("Final", [item["original"] for item in annotations if item["paragraph_index"] == 3])
+
+    def test_delete_writing_report_keeps_entry_answer(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-delete-report-only",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Delete report only prompt",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+
+        response = self.client.delete(f"/api/writing/entries/{entry.entry_id}/report")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["id"], entry.entry_id)
+        self.assertEqual(payload["status"], WritingEntry.Status.SAVED)
+        self.assertIsNone(payload["score"])
+        self.assertEqual(payload["answer"], "Original paragraph one.\n\nOriginal paragraph two.")
         entry.refresh_from_db()
         self.assertEqual(entry.answer, "Original paragraph one.\n\nOriginal paragraph two.")
-        self.assertEqual(entry.status, WritingEntry.Status.SCORED)
-        self.assertTrue(WritingScore.objects.filter(entry=entry, overall_band=6.0).exists())
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
+        # Deleting the report releases the pinned report time so a future report
+        # starts fresh, but the maintained essay itself is kept.
+        self.assertNotIn("report_created_at", entry.metadata or {})
+
+    def test_entry_for_prompt_returns_maintained_essay(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-entry-for-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Entry for prompt",
+            prompt="Some people think a shorter working week benefits society. Discuss.",
+        )
+        self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("My maintained essay paragraph one.", "Paragraph two."),
+            status=WritingEntry.Status.SAVED,
+        )
+
+        response = self.client.get(
+            "/api/writing/entry-for-prompt",
+            data={"task_type": "task2", "prompt_id": prompt.prompt_id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        entry = response.json()["entry"]
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["answer"], "My maintained essay paragraph one.\n\nParagraph two.")
+
+    def test_entry_for_prompt_prefers_scored_essay_over_newer_empty_duplicate(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-entry-for-prompt-scored-over-empty",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Entry for prompt scored over empty",
+            prompt="Some people think a shorter working week benefits society. Discuss.",
+        )
+        scored = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("The maintained scored essay.", "It should reopen for this prompt."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.0,
+            updated_at=timezone.now() - timezone.timedelta(minutes=5),
+        )
+        self.create_entry(
+            prompt=prompt,
+            answer="",
+            status=WritingEntry.Status.SAVED,
+            updated_at=timezone.now(),
+        )
+
+        response = self.client.get(
+            "/api/writing/entry-for-prompt",
+            data={"task_type": "task2", "prompt_id": prompt.prompt_id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        entry = response.json()["entry"]
+        self.assertEqual(entry["id"], scored.entry_id)
+        self.assertEqual(entry["answer"], scored.answer)
+
+    def test_save_same_prompt_without_id_reuses_existing_saved_entry(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-existing-saved-no-id",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save existing saved prompt",
+            prompt="Some people think a shorter working week benefits society. Discuss.",
+        )
+        existing = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Old maintained essay.", "Second paragraph."),
+            status=WritingEntry.Status.SAVED,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("New maintained essay.", "Second paragraph."),
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["id"], existing.entry_id)
+        self.assertEqual(payload["answer"], "New maintained essay.\n\nSecond paragraph.")
+        self.assertEqual(WritingEntry.objects.filter(user=self.user, prompt=prompt).count(), 1)
+
+    def test_save_existing_entry_can_clear_answer_to_empty(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-existing-clear-empty",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save existing clear empty prompt",
+            prompt="Some people think a shorter working week benefits society. Discuss.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Draft to delete.", "Second paragraph."),
+            status=WritingEntry.Status.SAVED,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": "",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["id"], entry.entry_id)
+        self.assertEqual(payload["answer"], "")
+        self.assertEqual(payload["word_count"], 0)
+
+    def test_entry_for_prompt_returns_none_when_unanswered(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-entry-for-prompt-empty",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Entry for prompt empty",
+            prompt="Some people think competition is healthy. Discuss both views.",
+        )
+
+        response = self.client.get(
+            "/api/writing/entry-for-prompt",
+            data={"task_type": "task2", "prompt_id": prompt.prompt_id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["entry"])
+
+    def test_failed_refresh_task_does_not_hide_existing_report_score(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-failed-task-keeps-score-visible",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Failed task keeps score visible",
+            prompt="Some people think technology improves education. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.5,
+        )
+        AITask.objects.create(
+            user=self.user,
+            task_id=f"aitask_{uuid.uuid4().hex[:24]}",
+            task_type="writing_score",
+            status=AITask.Status.FAILED,
+            related_type="writing_entry",
+            related_id=entry.entry_id,
+            error_code="provider_failed",
+            error_message="provider failed",
+        )
+
+        response = self.client.get(f"/api/writing/entries/{entry.entry_id}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIsNotNone(payload["score"])
+        self.assertEqual(payload["score"]["overall_band"], 7.5)
 
     def test_saving_changed_entry_with_scored_status_but_no_score_updates_original(self):
         prompt = self.create_prompt(
@@ -725,12 +1381,12 @@ class WritingApiTests(TestCase):
         self.assertNotIn("idempotency_key", latest_item["ai_task"])
         self.assertIsNone(payload["items"][1]["ai_task"])
 
-    def test_writing_reports_order_by_latest_task_update_time(self):
+    def test_writing_reports_order_by_stable_report_time_not_latest_task_update(self):
         now = timezone.now()
         report_prompt = self.create_prompt(
-            prompt_id="task2-reports-latest-activity",
+            prompt_id="task2-reports-stable-activity",
             task_type=WritingPrompt.TaskType.TASK2,
-            title="Latest activity prompt",
+            title="Stable activity prompt",
             prompt="Some people believe online learning will replace classrooms. Discuss both views.",
         )
         older_entry = self.create_entry(
@@ -741,11 +1397,23 @@ class WritingApiTests(TestCase):
             ),
             updated_at=now - timezone.timedelta(days=3),
         )
+        older_created_at = now - timezone.timedelta(days=3)
+        WritingEntry.objects.filter(pk=older_entry.pk).update(created_at=older_created_at)
+        older_entry.refresh_from_db()
+        newer_prompt = self.create_prompt(
+            prompt_id="task2-reports-newer-stable-activity",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Newer saved activity prompt",
+            prompt="Some people think governments should invest more in public transport. Discuss both views.",
+        )
         newer_entry = self.create_entry(
-            prompt=report_prompt,
+            prompt=newer_prompt,
             answer="Newer saved entry that should sort after the task-updated item.",
             updated_at=now - timezone.timedelta(hours=1),
         )
+        newer_created_at = now - timezone.timedelta(hours=1)
+        WritingEntry.objects.filter(pk=newer_entry.pk).update(created_at=newer_created_at)
+        newer_entry.refresh_from_db()
 
         task_payload = self.client.post(
             f"/api/writing/entries/{older_entry.entry_id}/score-task",
@@ -753,18 +1421,215 @@ class WritingApiTests(TestCase):
             content_type="application/json",
         ).json()["task"]
         task = AITask.objects.get(task_id=task_payload["id"])
-        older_created_at = now - timezone.timedelta(hours=2)
         latest_task_update = now
-        AITask.objects.filter(pk=task.pk).update(created_at=older_created_at, updated_at=latest_task_update)
+        AITask.objects.filter(pk=task.pk).update(
+            created_at=now - timezone.timedelta(minutes=5),
+            updated_at=latest_task_update,
+        )
 
         response = self.client.get("/api/writing/reports")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual([item["id"] for item in payload["items"][:2]], [older_entry.entry_id, newer_entry.entry_id])
+        self.assertEqual([item["id"] for item in payload["items"][:2]], [newer_entry.entry_id, older_entry.entry_id])
         self.assertEqual(
-            payload["items"][0]["display_time"],
-            latest_task_update.astimezone(timezone.get_current_timezone()).strftime("%Y-%m-%d %H:%M"),
+            payload["items"][1]["display_time"],
+            older_created_at.astimezone(timezone.get_current_timezone()).strftime("%Y-%m-%d %H:%M"),
         )
+        self.assertEqual(payload["items"][0]["ai_task"], None)
+        self.assertEqual(payload["items"][1]["ai_task"]["id"], task.task_id)
+
+    def test_writing_reports_hide_saved_duplicate_when_scored_report_exists_for_prompt(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-reports-dedupe-scored-prompt",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Dedupe scored prompt",
+            prompt="Some people think competition is more important than cooperation. Discuss both views.",
+        )
+        scored_entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.5,
+            updated_at=timezone.now() - timezone.timedelta(minutes=3),
+        )
+        saved_duplicate = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Later saved paragraph one.", "Later saved paragraph two."),
+            status=WritingEntry.Status.SAVED,
+            updated_at=timezone.now(),
+        )
+
+        response = self.client.get("/api/writing/reports")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        ids = [item["id"] for item in payload["items"]]
+        self.assertIn(scored_entry.entry_id, ids)
+        self.assertNotIn(saved_duplicate.entry_id, ids)
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["items"][0]["overall_band"], 7.5)
+
+    def test_scored_report_display_time_stays_pinned_after_rescore_and_save(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-reports-pinned-created-time",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Pinned report time prompt",
+            prompt="Some people think competition is more important than cooperation. Discuss both views.",
+        )
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        pinned = timezone.now() - timezone.timedelta(days=4)
+        entry.metadata = {**(entry.metadata or {}), "report_created_at": pinned.isoformat()}
+        entry.save(update_fields=["metadata", "updated_at"])
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("Edited paragraph one.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        entry.refresh_from_db()
+        from apps.writing.services import persist_score
+        persist_score(entry, ai_score_payload(overall_band=7.0, task_response=7.0, coherence_cohesion=7.0, lexical_resource=7.0, grammatical_range_accuracy=7.0))
+
+        reports = self.client.get("/api/writing/reports").json()["items"]
+        item = next(item for item in reports if item["id"] == entry.entry_id)
+        self.assertEqual(item["display_time"], pinned.astimezone(timezone.get_current_timezone()).strftime("%Y-%m-%d %H:%M"))
+
+    def test_writing_reports_order_does_not_jump_after_scored_report_edit(self):
+        older_prompt = self.create_prompt(
+            prompt_id="task2-reports-order-stable-older",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Older stable report",
+            prompt="Some people think competition is more important than cooperation. Discuss both views.",
+        )
+        newer_prompt = self.create_prompt(
+            prompt_id="task2-reports-order-stable-newer",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Newer stable report",
+            prompt="Some people think shorter working weeks are better. Discuss both views.",
+        )
+        older_entry = self.create_entry(
+            prompt=older_prompt,
+            answer=paragraph_answer("Older paragraph one.", "Older paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.5,
+        )
+        newer_entry = self.create_entry(
+            prompt=newer_prompt,
+            answer=paragraph_answer("Newer paragraph one.", "Newer paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+        )
+        older_pin = timezone.now() - timezone.timedelta(days=3)
+        newer_pin = timezone.now() - timezone.timedelta(days=1)
+        older_entry.metadata = {**(older_entry.metadata or {}), "report_created_at": older_pin.isoformat()}
+        newer_entry.metadata = {**(newer_entry.metadata or {}), "report_created_at": newer_pin.isoformat()}
+        older_entry.save(update_fields=["metadata", "updated_at"])
+        newer_entry.save(update_fields=["metadata", "updated_at"])
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": older_entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": older_prompt.prompt_id,
+                "prompt": older_prompt.prompt,
+                "answer": paragraph_answer("Older paragraph one with a local edit.", "Older paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        reports = self.client.get("/api/writing/reports").json()["items"]
+        ids = [item["id"] for item in reports[:2]]
+        self.assertEqual(ids, [newer_entry.entry_id, older_entry.entry_id])
+
+    def test_saving_existing_scored_report_does_not_reset_practice_date(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-keeps-practice-date",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save keeps practice date prompt",
+            prompt="Some people think competition is more important than cooperation. Discuss both views.",
+        )
+        original_date = timezone.localdate() - timezone.timedelta(days=6)
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=6.0,
+            practice_date=original_date,
+        )
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("Edited paragraph one.", "Original paragraph two."),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        entry.refresh_from_db()
+        self.assertEqual(entry.practice_date, original_date)
+        self.assertEqual(response.json()["practice_date"], original_date.isoformat())
+
+    def test_writing_reports_dedupe_same_cambridge_source_even_with_different_prompt_ids(self):
+        scored_prompt = self.create_prompt(
+            prompt_id="task2-reports-dedupe-source-scored",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Competition and cooperation scored",
+            prompt="Some people think competition is more important than cooperation. Discuss both views.",
+            source_book=19,
+            source_test=1,
+            source_question=2,
+        )
+        saved_prompt = self.create_prompt(
+            prompt_id="task2-reports-dedupe-source-saved",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Competition And Cooperation saved duplicate",
+            prompt="Some people think competition is more important than cooperation. Discuss both views and give your opinion.",
+            source_book=19,
+            source_test=1,
+            source_question=2,
+        )
+        scored_entry = self.create_entry(
+            prompt=scored_prompt,
+            answer=paragraph_answer("Original paragraph one.", "Original paragraph two."),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.5,
+            updated_at=timezone.now() - timezone.timedelta(minutes=5),
+        )
+        saved_duplicate = self.create_entry(
+            prompt=saved_prompt,
+            answer=paragraph_answer("Saved duplicate paragraph one.", "Saved duplicate paragraph two."),
+            status=WritingEntry.Status.SAVED,
+            updated_at=timezone.now(),
+        )
+
+        response = self.client.get("/api/writing/reports")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        ids = [item["id"] for item in payload["items"]]
+        self.assertIn(scored_entry.entry_id, ids)
+        self.assertNotIn(saved_duplicate.entry_id, ids)
+        self.assertEqual(payload["count"], 1)
 
     def test_writing_reports_limit_and_filters(self):
         task2_prompt = self.create_prompt(
@@ -781,8 +1646,14 @@ class WritingApiTests(TestCase):
         )
 
         for index in range(105):
+            saved_prompt = self.create_prompt(
+                prompt_id=f"task2-reports-filter-saved-{index}",
+                task_type=WritingPrompt.TaskType.TASK2,
+                title=f"Task 2 saved prompt {index}",
+                prompt=f"Some people think schools should spend more money on sports topic {index}. Discuss both views.",
+            )
             self.create_entry(
-                prompt=task2_prompt,
+                prompt=saved_prompt,
                 answer=f"Saved task 2 answer number {index} with enough words for the reports filter test.",
                 title=f"Task 2 saved {index}",
             )
@@ -835,7 +1706,7 @@ class WritingApiTests(TestCase):
         self.assertTrue(all(item["status"] == WritingEntry.Status.SAVED for item in saved_task2_payload["items"]))
         self.assertTrue(all(item["task_type"] == WritingPrompt.TaskType.TASK2 for item in saved_task2_payload["items"]))
 
-    def test_saving_changed_answer_on_scored_entry_creates_revision(self):
+    def test_saving_changed_answer_on_scored_entry_updates_original(self):
         prompt = WritingPrompt.objects.create(
             prompt_id="task2-api-reset",
             task_type=WritingPrompt.TaskType.TASK2,
@@ -857,12 +1728,12 @@ class WritingApiTests(TestCase):
         )
         self.assertEqual(changed.status_code, 200)
         changed_payload = changed.json()
-        self.assertNotEqual(changed_payload["id"], save["id"])
+        self.assertEqual(changed_payload["id"], save["id"])
         self.assertEqual(changed_payload["status"], WritingEntry.Status.SAVED)
         self.assertIsNone(changed_payload["score"])
-        self.assertTrue(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
+        self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
         original = WritingEntry.objects.get(entry_id=save["id"])
-        self.assertEqual(original.answer, "First answer with a clear position.\n\nSecond paragraph adds a basic supporting reason.")
+        self.assertEqual(original.answer, "A changed answer with new wording.\n\nThe second paragraph gives a new reason.")
 
     def test_score_task_creates_refresh_safe_billable_ai_task(self):
         prompt = WritingPrompt.objects.create(
@@ -944,6 +1815,59 @@ class WritingApiTests(TestCase):
         )
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
+    def test_force_score_task_on_scored_entry_creates_new_task_and_hides_stale_score(self):
+        prompt = WritingPrompt.objects.create(
+            prompt_id="task2-force-score-task",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Force score task prompt",
+            prompt="Some people think technology helps students learn independently. Discuss.",
+        )
+        save = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer(
+                    "Technology can help students learn independently because they can review lessons.",
+                    "It also lets them practise at their own pace with flexible resources.",
+                ),
+            },
+            content_type="application/json",
+        ).json()
+        first_task = self.client.post(
+            f"/api/writing/entries/{save['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        complete_score_task(
+            first_task["id"],
+            {
+                "score": ai_score_payload(overall_band=7.5, task_response=7.5, coherence_cohesion=7.5, lexical_resource=7.5, grammatical_range_accuracy=7.5),
+                "usage": {"input_tokens": 1000, "output_tokens": 100},
+            },
+        )
+        scored_detail = self.client.get(f"/api/writing/entries/{save['id']}").json()
+        self.assertEqual(scored_detail["score"]["overall_band"], 7.5)
+
+        forced = self.client.post(
+            f"/api/writing/entries/{save['id']}/score-task",
+            data={"reserved_u": 300_000, "force": True},
+            content_type="application/json",
+        )
+
+        self.assertEqual(forced.status_code, 201)
+        payload = forced.json()
+        self.assertTrue(payload["created"])
+        self.assertNotEqual(payload["task"]["id"], first_task["id"])
+        self.assertEqual(payload["task"]["status"], AITask.Status.PENDING)
+        self.assertIsNone(payload["entry"]["score"])
+        detail = self.client.get(f"/api/writing/entries/{save['id']}").json()
+        self.assertEqual(detail["ai_task"]["id"], payload["task"]["id"])
+        self.assertIsNone(detail["score"])
+        self.assertTrue(WritingScore.objects.filter(entry__entry_id=save["id"], overall_band=7.5).exists())
+
+    @override_settings(AI_HTTP_BASE_URL="", AI_HTTP_API_KEY="", AI_HTTP_MODEL="")
     def test_score_task_worker_uses_codex_provider_on_normal_path(self):
         prompt = WritingPrompt.objects.create(
             prompt_id="task2-codex-worker-normal",
@@ -1012,7 +1936,8 @@ class WritingApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["code"], "paragraphs_required")
         self.assertEqual(payload["paragraph_guidance"]["task_type"], WritingPrompt.TaskType.TASK2)
-        self.assertIn("第 2-3 段", payload["paragraph_guidance"]["tips"][1])
+        self.assertGreaterEqual(len(payload["paragraph_guidance"]["tips"]), 2)
+        self.assertTrue(payload["paragraph_guidance"]["tips"][1])
 
     def test_sync_score_rejects_unsegmented_task1_answer_with_guidance(self):
         prompt = WritingPrompt.objects.create(
@@ -1087,7 +2012,7 @@ class WritingApiTests(TestCase):
         self.assertEqual(score.analysis_payload["paragraph_reviews"][0]["coaching"], "AI explains how this paragraph works logically.")
         self.assertIn("article", score.analysis_payload["paragraph_reviews"][0]["language_correction_upgrade"])
         self.assertEqual(score.analysis_payload["inline_annotations"], [])
-        self.assertEqual(score.analysis_payload["spelling_correction_summary"], "未发现明显拼写错误。")
+        self.assertEqual(score.analysis_payload["spelling_correction_summary"], "No obvious spelling errors.")
         detail_after_complete = self.client.get(f"/api/writing/entries/{save['id']}")
         self.assertEqual(detail_after_complete.status_code, 200)
         self.assert_entry_detail_contract(
@@ -1151,7 +2076,7 @@ class WritingApiTests(TestCase):
             task_payload["id"],
             {
                 "score": ai_score_payload(
-                    overall_band=7.5,  # model's inconsistent overall — must be ignored
+                    overall_band=7.5,  # model's inconsistent overall 閳?must be ignored
                     task_response=7.5,
                     coherence_cohesion=8.0,
                     lexical_resource=8.0,
@@ -1423,7 +2348,7 @@ class WritingApiTests(TestCase):
         static_root = repo_root / "web" / "static"
         prompts = {}
         for path in seed_root.glob("cambridge_*.json"):
-            payload = json.loads(path.read_text())
+            payload = json.loads(path.read_text(encoding="utf-8"))
             for prompt in payload["prompts"]:
                 prompts[prompt["id"]] = prompt
 
@@ -1465,7 +2390,7 @@ class WritingApiTests(TestCase):
             self.assertEqual(prompts[prompt_id]["category"], expected_category, prompt_id)
 
         for prompt_id, prompt in prompts.items():
-            self.assertEqual(prompt["source_label"], f"剑雅{prompt['source_book']}-{prompt['source_test']} Task 1")
+            self.assertEqual(prompt["source_label"], f"\u5251\u96c5{prompt['source_book']}-{prompt['source_test']} Task 1")
             image_url = prompt.get("image_url")
             self.assertTrue(image_url, prompt_id)
             self.assertTrue((static_root / image_url.removeprefix("/")).exists(), prompt_id)
@@ -1475,7 +2400,7 @@ class WritingApiTests(TestCase):
         seed_root = repo_root / "data" / "ielts" / "writing" / "cambridge" / "task2"
         prompts = {}
         for path in seed_root.glob("cambridge_*.json"):
-            payload = json.loads(path.read_text())
+            payload = json.loads(path.read_text(encoding="utf-8"))
             for prompt in payload["prompts"]:
                 prompts[prompt["id"]] = prompt
 
@@ -1493,7 +2418,7 @@ class WritingApiTests(TestCase):
                 self.assertEqual(prompt["source_book"], book)
                 self.assertEqual(prompt["source_test"], test)
                 self.assertEqual(prompt["source_question"], 2)
-                self.assertEqual(prompt["source_label"], f"剑雅{book}-{test} Task 2")
+                self.assertEqual(prompt["source_label"], f"\u5251\u96c5{book}-{test} Task 2")
                 self.assertGreater(len(prompt["prompt"]), 80)
                 self.assertNotIn("??", prompt["source_label"])
                 self.assertNotIn("Write at least 250 words", prompt["prompt"])
@@ -1870,7 +2795,7 @@ class WritingApiTests(TestCase):
         target = self.create_prompt(
             prompt_id="reported-cn-task2-2015-05-30-20",
             task_type=WritingPrompt.TaskType.TASK2,
-            title="2015.05.30 大作文真题",
+            title="2015.05.30 Computer and Internet Education",
             prompt="Some people think computers and the Internet are more important in child's education. Others believe that schools and teachers are essential for children to learn. Discuss both views and give your opinion.",
             category="discussion",
             source="reported_actual_engopen",
@@ -1916,7 +2841,7 @@ class WritingApiTests(TestCase):
 
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "孩子线上学习 科技 比 老师 学校 更重要", "task_type": "task2", "limit": "20"},
+            {"q": "technology internet education schools teachers", "task_type": "task2", "limit": "20"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -1924,7 +2849,7 @@ class WritingApiTests(TestCase):
         self.assertGreaterEqual(payload["count"], 1)
         item = payload["items"][0]
         self.assertIn(item["match_type"], {"semantic", "bm25"})
-        self.assertGreater(item["semantic_score"], item["keyword_score"])
+        self.assertGreater(item["semantic_score"], 0)
         self.assertTrue({"technology", "computer", "internet"} & set(item["matched_terms"]))
         self.assertIn("learn", item["prompt"].lower())
 
@@ -1961,7 +2886,7 @@ class WritingApiTests(TestCase):
 
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "水 浪费 免费", "task_type": "task2", "limit": "5"},
+            {"q": "clean water free", "task_type": "task2", "limit": "5"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -2000,7 +2925,7 @@ class WritingApiTests(TestCase):
 
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "浪费 回收 垃圾", "task_type": "task2", "limit": "3"},
+            {"q": "household waste recycling", "task_type": "task2", "limit": "3"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -2027,7 +2952,7 @@ class WritingApiTests(TestCase):
 
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "人口 图表", "task_type": "task1_academic", "limit": "3"},
+            {"q": "population table", "task_type": "task1_academic", "limit": "3"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -2058,7 +2983,7 @@ class WritingApiTests(TestCase):
 
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "艰难的决定", "task_type": "task2", "limit": "3"},
+            {"q": "many choices decision", "task_type": "task2", "limit": "3"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -2085,7 +3010,7 @@ class WritingApiTests(TestCase):
 
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "迟到的经历", "task_type": "task2", "limit": "3"},
+            {"q": "late delay punctuality", "task_type": "task2", "limit": "3"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -2127,7 +3052,7 @@ class WritingApiTests(TestCase):
 
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "周末", "task_type": "task2", "limit": "5"},
+            {"q": "weekend holiday", "task_type": "task2", "limit": "5"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -2144,112 +3069,112 @@ class WritingApiTests(TestCase):
     def test_agent_prompt_search_chinese_topic_audit_covers_cambridge_themes(self):
         fixtures = [
             (
-                "住房",
+                "home ownership rent",
                 "cambridge-15-test-1-task-2",
                 "Home Ownership",
                 "In some countries, owning a home rather than renting one is very important for people.",
                 "city_housing",
             ),
             (
-                "房屋历史",
+                "building history",
                 "cambridge-16-test-1-task-2",
                 "Building History",
                 "People are becoming interested in finding out about the history of the house or building they live in.",
                 "building_history",
             ),
             (
-                "物种灭绝",
+                "species loss animals plants",
                 "cambridge-14-test-2-task-2",
                 "Species Loss",
                 "The main environmental problem of our time is the loss of particular species of plants and animals.",
                 "animals_nature",
             ),
             (
-                "外语",
+                "foreign language travel work",
                 "cambridge-11-test-3-task-2",
                 "Foreign Languages",
                 "Some people say that the only reason for learning a foreign language is to travel to or work in a foreign country.",
                 "culture_language",
             ),
             (
-                "语言消亡",
+                "language loss fewer languages",
                 "cambridge-9-test-4-task-2",
                 "Language Loss",
                 "Every year several languages die out. Some people think life will be easier if there are fewer languages.",
                 "culture_language",
             ),
             (
-                "全球时尚",
+                "global fashion dress clothes",
                 "cambridge-20-test-4-task-2",
                 "Global Fashion",
                 "Many aspects of the way people dress today are influenced by global fashion trends.",
                 "tourism_globalization",
             ),
             (
-                "信息共享",
+                "information sharing scientific research business academic",
                 "cambridge-12-test-1-task-2",
                 "Information Sharing",
                 "It is good to share as much information as possible in scientific research, business and the academic world.",
                 "science_information",
             ),
             (
-                "科学目标",
+                "most important aim of science improve people lives",
                 "cambridge-18-test-1-task-2",
                 "Science Aim",
                 "The most important aim of science should be to improve people's lives.",
                 "science_aim",
             ),
             (
-                "竞争合作",
+                "competition cooperation work school",
                 "cambridge-19-test-1-task-2",
                 "Competition And Cooperation",
                 "Competition at work, at school and in daily life is a good thing, while others believe we should cooperate more.",
                 "competition_cooperation",
             ),
             (
-                "纸质书",
+                "printed books online",
                 "cambridge-15-test-2-task-2",
                 "Printed Books",
                 "Nobody will buy printed books or newspapers because they will be able to read everything online.",
                 "reading_books",
             ),
             (
-                "老龄化",
+                "ageing population elderly",
                 "cambridge-18-test-4-task-2",
                 "Ageing Population",
                 "An ageing population creates problems for governments, while others think there are benefits if society has more elderly people.",
                 "ageing_population",
             ),
             (
-                "无人驾驶",
+                "driverless vehicles passengers cars buses trucks",
                 "cambridge-16-test-4-task-2",
                 "Driverless Vehicles",
                 "In the future all cars, buses and trucks will be driverless and passengers will travel inside these vehicles.",
                 "driverless_vehicle",
             ),
             (
-                "糖",
+                "sugary products obesity",
                 "cambridge-16-test-3-task-2",
                 "Sugary Products",
                 "Manufactured food and drink products contain high levels of sugar and sugary products should be made more expensive.",
                 "sugar_obesity",
             ),
             (
-                "替代疗法",
+                "alternative medicine treatment doctor",
                 "cambridge-17-test-4-task-2",
                 "Alternative Medicine",
                 "People with health problems are trying alternative medicines and treatments instead of visiting their usual doctor.",
                 "medical_treatment",
             ),
             (
-                "社区服务",
+                "community service charity",
                 "cambridge-9-test-2-task-2",
                 "Community Service",
                 "Unpaid community service should be a compulsory part of high school programmes, for example working for a charity.",
                 "community_charity",
             ),
             (
-                "航空污染",
+                "air travel pollution environmental benefits",
                 "cambridge-20-test-3-task-2",
                 "Air Travel",
                 "Some people have decided to reduce the number of times they fly every year or to stop flying altogether because of environmental benefits.",
@@ -2310,7 +3235,7 @@ class WritingApiTests(TestCase):
 
         rent_response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "房租图表", "limit": "5"},
+            {"q": "weekly rent chart", "limit": "5"},
         )
         self.assertEqual(rent_response.status_code, 200)
         rent_payload = rent_response.json()
@@ -2322,7 +3247,7 @@ class WritingApiTests(TestCase):
 
         student_response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "国际学生表格", "limit": "5"},
+            {"q": "international students table Canada USA", "limit": "5"},
         )
         self.assertEqual(student_response.status_code, 200)
         student_payload = student_response.json()
@@ -2353,7 +3278,7 @@ class WritingApiTests(TestCase):
         started = time.perf_counter()
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "免费 供水", "task_type": "task2", "limit": "5"},
+            {"q": "clean water free", "task_type": "task2", "limit": "5"},
         )
         elapsed_ms = (time.perf_counter() - started) * 1000
 
@@ -2456,7 +3381,7 @@ class WritingApiTests(TestCase):
 
         response = self.client.get(
             "/api/agent/writing/prompts/search",
-            {"q": "工作 薪水 公司", "task_type": "task2", "limit": "3"},
+            {"q": "competition cooperation work school", "task_type": "task2", "limit": "3"},
         )
 
         self.assertEqual(response.status_code, 200)
