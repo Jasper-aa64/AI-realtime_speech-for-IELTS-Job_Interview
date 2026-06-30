@@ -264,6 +264,7 @@ const SPEAKING_PENDING_ANALYSIS_STORAGE_KEY = "ielts-speaking-pending-analysis";
 const SPEAKING_PENDING_ANALYSIS_VIEW_STORAGE_KEY = "ielts-speaking-pending-analysis-view";
 const SPEAKING_REPORT_REGEN_STORAGE_KEY = "ielts-speaking-report-regen";
 const WRITING_ACTION_PANEL_COLLAPSED_STORAGE_KEY = "ielts-writing-action-panel-collapsed";
+const WRITING_REPORT_UNDO_STORAGE_KEY = "ielts-writing-report-undo";
 const SPEAKING_AUDIO_IDB_NAME = "ielts-speaking";
 const SPEAKING_AUDIO_IDB_STORE = "pendingTurnAudio";
 const SPEAKING_AUDIO_IDB_VERSION = 1;
@@ -7251,14 +7252,62 @@ function writingReportUndoKey(entryId, paragraphIndex) {
   return `${String(entryId || "").trim()}::${Number.parseInt(paragraphIndex || 1, 10) || 1}`;
 }
 
+function writingReportUndoStorageUserKey() {
+  const user = state.account?.user || {};
+  return String(user.id || user.username || user.phone_number || "guest").trim() || "guest";
+}
+
+function writingReportUndoStorageKey(key) {
+  return `${WRITING_REPORT_UNDO_STORAGE_KEY}:${writingReportUndoStorageUserKey()}:${key}`;
+}
+
+function normalizeWritingReportUndoStack(value) {
+  return (Array.isArray(value) ? value : [])
+    .filter((item) => item && typeof item === "object" && Object.prototype.hasOwnProperty.call(item, "answer"))
+    .map((item) => ({
+      answer: String(item.answer || ""),
+      score: item.score && typeof item.score === "object" ? item.score : null,
+      overall_band: item.overall_band ?? item.score?.overall_band ?? null,
+      reason: String(item.reason || "edit"),
+    }))
+    .slice(-30);
+}
+
+function loadWritingReportUndoStack(key) {
+  try {
+    const raw = localStorage.getItem(writingReportUndoStorageKey(key));
+    return normalizeWritingReportUndoStack(raw ? JSON.parse(raw) : []);
+  } catch (_error) {
+    return [];
+  }
+}
+
+function saveWritingReportUndoStackByKey(key, stack) {
+  try {
+    const normalized = normalizeWritingReportUndoStack(stack);
+    if (normalized.length) {
+      localStorage.setItem(writingReportUndoStorageKey(key), JSON.stringify(normalized));
+    } else {
+      localStorage.removeItem(writingReportUndoStorageKey(key));
+    }
+  } catch (_error) {
+    // Undo persistence is best-effort; the in-memory stack still works.
+  }
+}
+
 function writingReportUndoStack(entryId, paragraphIndex, options = {}) {
   const key = writingReportUndoKey(entryId, paragraphIndex);
   let stack = state.writing.reportUndoStacks.get(key);
-  if (!stack && options.create) {
-    stack = [];
+  if (!stack) {
+    stack = loadWritingReportUndoStack(key);
+  }
+  if (!stack.length && !options.create) {
+    return [];
+  }
+  if (!state.writing.reportUndoStacks.has(key)) {
     state.writing.reportUndoStacks.set(key, stack);
   }
-  return stack || [];
+  return stack;
 }
 
 function writingReportUndoSnapshot(entryId, paragraphIndex) {
@@ -7275,9 +7324,12 @@ function moveWritingReportUndoStacks(fromEntryId, toEntryId) {
     if (!key.startsWith(prefix)) return;
     const suffix = key.slice(prefix.length);
     const nextKey = `${toId}::${suffix}`;
-    const nextStack = state.writing.reportUndoStacks.get(nextKey) || [];
-    state.writing.reportUndoStacks.set(nextKey, [...nextStack, ...stack]);
+    const nextStack = writingReportUndoStack(toId, suffix, { create: true });
+    const mergedStack = normalizeWritingReportUndoStack([...nextStack, ...stack]);
+    state.writing.reportUndoStacks.set(nextKey, mergedStack);
     state.writing.reportUndoStacks.delete(key);
+    saveWritingReportUndoStackByKey(nextKey, mergedStack);
+    saveWritingReportUndoStackByKey(key, []);
   });
 }
 
@@ -7295,6 +7347,7 @@ function rememberWritingReportUndo(entry, paragraphIndex, previousAnswer, reason
     reason,
   });
   if (stack.length > 30) stack.splice(0, stack.length - 30);
+  saveWritingReportUndoStackByKey(writingReportUndoKey(entryId, paragraphIndex), stack);
 }
 
 function writingParagraphUndoButtonHtml(entryId, paragraphIndex) {
@@ -9450,6 +9503,7 @@ async function handleWritingParagraphUndoClick(button) {
   const entryId = button.dataset.writingParagraphUndo || "";
   const paragraphIndex = Number.parseInt(button.dataset.writingParagraphIndex || "1", 10) || 1;
   const entry = cachedWritingReportEntry(entryId) || state.writing.activeReportDetail;
+  const stackKey = writingReportUndoKey(entryId, paragraphIndex);
   const stack = writingReportUndoStack(entryId, paragraphIndex);
   const currentAnswer = String(entry?.answer || "");
   let snapshot = null;
@@ -9459,6 +9513,7 @@ async function handleWritingParagraphUndoClick(button) {
       snapshot = candidate;
     }
   }
+  saveWritingReportUndoStackByKey(stackKey, stack);
   if (!entry?.id || !snapshot) return;
   button.classList.add("is-busy");
   button.disabled = true;
@@ -9473,6 +9528,7 @@ async function handleWritingParagraphUndoClick(button) {
     renderVisibleWritingReport(saved);
   } catch (error) {
     stack.push(snapshot);
+    saveWritingReportUndoStackByKey(stackKey, stack);
     button.classList.remove("is-busy");
     button.disabled = false;
     showWritingReportEditError(error);
