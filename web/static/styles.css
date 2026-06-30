@@ -38630,3 +38630,15 @@ body.theme-dark.font-academic .p3-start-button:not(:disabled) {
   color: #ffffff !important;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
 }
+
+/* P3 plan target tags: keep Q1/Q2/Q3 move chips readable in every dark theme. */
+body.theme-dark .p3-target-moves span,
+body.theme-dark.font-academic .p3-target-moves span,
+body.theme-dark.font-popular .p3-target-moves span {
+  background: rgba(10, 16, 24, 0.78) !important;
+  border: 1px solid rgba(169, 184, 201, 0.34) !important;
+  color: #e7eef7 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 6px 14px rgba(0, 0, 0, 0.18) !important;
+}
