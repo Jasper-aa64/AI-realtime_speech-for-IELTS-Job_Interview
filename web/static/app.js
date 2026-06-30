@@ -9066,7 +9066,7 @@ function writingReportDetailHtml(entry) {
   const taskLabel = entry.task_type === "task1_academic" ? "TA" : "TR";
   const paragraphReviews = Array.isArray(score?.paragraph_reviews) ? score.paragraph_reviews : [];
   const isScoredReport = isWritingEntryScored(entry);
-  const editLabel = isScoredReport ? "修改作文并重新生成报告" : "继续编辑";
+  const editLabel = isScoredReport ? "重新生成报告" : "继续编辑";
   const editAction = `<button type="button" class="primary writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}" data-writing-report-scored="${isScoredReport ? "true" : "false"}" data-writing-report-task="${escapeHtml(entry.task_type || "")}" data-writing-report-prompt="${escapeHtml(entry.prompt_id || "")}">${editLabel}</button>`;
   const taskName = entry.task_label || writingTaskLabel(entry.task_type);
   const taskSubline = entry.task_type === "task1_academic" ? "Task 1" : "Task 2";
