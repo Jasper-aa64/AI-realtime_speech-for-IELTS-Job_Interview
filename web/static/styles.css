@@ -38619,6 +38619,23 @@ body.theme-dark.font-academic .p3-source-option.active small {
   color: rgba(255, 244, 226, 0.80) !important;
 }
 
+body.theme-dark.font-popular .p3-source-option.active {
+  background: linear-gradient(180deg, rgba(13, 68, 105, 0.56), rgba(8, 38, 62, 0.66)) !important;
+  border-color: rgba(91, 177, 232, 0.66) !important;
+  color: #f0f9ff !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(191, 230, 255, 0.13),
+    0 10px 22px rgba(37, 133, 198, 0.18) !important;
+}
+
+body.theme-dark.font-popular .p3-source-option.active::before {
+  background: #78cdfb !important;
+}
+
+body.theme-dark.font-popular .p3-source-option.active small {
+  color: rgba(224, 244, 255, 0.84) !important;
+}
+
 body.theme-dark:not(.font-academic):not(.font-popular) .p3-start-button:not(:disabled) {
   background: linear-gradient(180deg, #15875f 0%, #0c6f4d 58%, #07563d 100%) !important;
   border-color: rgba(124, 244, 198, 0.46) !important;
