@@ -717,6 +717,32 @@ def p3_bank_next_round_index(round_count: int, completion_counts: dict[int, int]
     return min(range(round_count), key=lambda round_index: (counts.get(round_index, 0), round_index))
 
 
+def p3_bank_library_practice_summary(cards: list[dict[str, Any]]) -> dict[str, Any]:
+    active_cards = [card for card in cards if card.get("p3_follow_ups")]
+    question_counts: list[int] = []
+    for card in active_cards:
+        counts = card.get("practice_question_counts") if isinstance(card.get("practice_question_counts"), dict) else {}
+        followup_ids = p3_bank_followup_ids_for_questions(
+            str(card.get("cue_id") or ""),
+            [
+                clean_report_text(str(item))[:260]
+                for item in card.get("p3_follow_ups") or []
+                if clean_report_text(str(item))
+            ],
+        )
+        question_counts.extend(int(counts.get(followup_id, 0) or 0) for followup_id in followup_ids)
+    completed_cycle = min(question_counts) if question_counts else 0
+    current_cycle_done_count = sum(1 for count in question_counts if count > completed_cycle)
+    return {
+        "total_card_count": len(active_cards),
+        "total_question_count": len(question_counts),
+        "completed_cycle": completed_cycle,
+        "practice_cycle": completed_cycle + 1,
+        "current_cycle_done_count": current_cycle_done_count,
+        "current_cycle_remaining_count": max(0, len(question_counts) - current_cycle_done_count),
+    }
+
+
 def _p2_cue_id_from_any(question_id: str) -> str:
     value = clean_report_text(str(question_id or ""))
     if value.startswith("p2:"):
@@ -1034,6 +1060,7 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
         )
         for topic in selected_topics
     ]
+    p3_bank_practice_summary = p3_bank_library_practice_summary(current_part2_cards)
     return {
         "categories": categories,
         "category_count": len(categories),
@@ -1046,6 +1073,7 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
         "current_part2_count": len(selected_topics),
         "current_part2_categories": current_part2_categories,
         "current_part2_cards": current_part2_cards,
+        "p3_bank_practice_summary": p3_bank_practice_summary,
     }
 
 

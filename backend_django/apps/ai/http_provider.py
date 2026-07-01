@@ -279,7 +279,7 @@ class HttpApiProvider:
             return "", usage
         choice = choices[0] if isinstance(choices[0], dict) else {}
         finish_reason = choice.get("finish_reason")
-        if finish_reason in {"length", "content_filter"}:
+        if finish_reason == "content_filter":
             raise HttpApiProviderError(
                 f"HTTP AI provider stopped with finish_reason={finish_reason}",
                 error_code="http_api_provider_finish_reason",

@@ -1569,6 +1569,68 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(progress["practice_cycle"], 2)
         self.assertEqual(progress["practice_next_round_index"], 0)
 
+    def test_p2_corpus_returns_global_p3_bank_cycle_summary(self):
+        topics = [
+            {
+                "cue_id": "p2cue:global-cycle-a",
+                "title": "Describe a river",
+                "category": "place",
+                "p3_theme": "nature",
+                "p3_follow_ups": [
+                    "Why are rivers important?",
+                    "How do people protect rivers?",
+                    "Will rivers matter more in the future?",
+                ],
+            },
+            {
+                "cue_id": "p2cue:global-cycle-b",
+                "title": "Describe a building",
+                "category": "place",
+                "p3_theme": "architecture",
+                "p3_follow_ups": [
+                    "Why do cities build tall buildings?",
+                    "How do old and new buildings differ?",
+                    "Should governments protect historic buildings?",
+                ],
+            },
+        ]
+        bank = MagicMock()
+        bank.part2_for_scope.return_value = topics
+
+        with patch("apps.speaking.corpus_services.get_question_bank", return_value=bank):
+            initial = self.client.get("/api/p2-corpus").json()["p3_bank_practice_summary"]
+
+        self.assertEqual(initial["total_card_count"], 2)
+        self.assertEqual(initial["total_question_count"], 6)
+        self.assertEqual(initial["completed_cycle"], 0)
+        self.assertEqual(initial["practice_cycle"], 1)
+        self.assertEqual(initial["current_cycle_done_count"], 0)
+
+        now = timezone.now()
+        for topic_index, topic in enumerate(topics):
+            cue_id = topic["cue_id"]
+            for question_index, question in enumerate(topic["p3_follow_ups"]):
+                SpeakingTrainingObservation.objects.create(
+                    observation_id=f"global-cycle-{topic_index}-{question_index}",
+                    user=self.user,
+                    legacy_attempt_id=f"global-cycle-attempt-{topic_index}",
+                    legacy_turn_id=f"global-cycle-turn-{topic_index}-{question_index}",
+                    question_id=corpus_services.p3_bank_followup_id(cue_id, question, question_index),
+                    part="p3",
+                    question=question,
+                    transcript="This is a completed answer.",
+                    relevance=Decimal("1.000"),
+                    observed_at=now + timedelta(seconds=topic_index * 10 + question_index),
+                    next_due=now,
+                )
+
+        with patch("apps.speaking.corpus_services.get_question_bank", return_value=bank):
+            completed = self.client.get("/api/p2-corpus").json()["p3_bank_practice_summary"]
+
+        self.assertEqual(completed["completed_cycle"], 1)
+        self.assertEqual(completed["practice_cycle"], 2)
+        self.assertEqual(completed["current_cycle_done_count"], 0)
+
     def test_p2_corpus_category_counts_user_saved_material_not_season_topics(self):
         payload = self.client.get("/api/p2-corpus").json()
         self.assertTrue(payload["current_part2_categories"])
@@ -4736,6 +4798,71 @@ class TurnFeedbackValidationTests(TestCase):
 
         self.assertEqual(len(result), 4)
         self.assertEqual(run_codex.call_count, 2)
+
+    def test_http_turn_feedback_uses_expanded_output_budget(self):
+        from apps.accounts.models import CustomUser
+        from apps.speaking import services
+        from apps.speaking.services import turn_feedback_batch_with_codex
+
+        class CapturingHttpProvider:
+            def __init__(self):
+                self.calls = []
+
+            def complete_chat(self, *args, **kwargs):
+                self.calls.append(kwargs)
+                input_turns = json.loads(args[0][1]["content"].split("Input turns:\n", 1)[1].strip())
+                payload = {
+                    "turns": [
+                        {
+                            "turn_id": item["turn_id"],
+                            "display_transcript": item["candidate_transcript"],
+                            "display_transcript_markdown": item["candidate_transcript"],
+                            "band7_version": f"A direct model answer for {item['question']}",
+                            "ai_coaching": "",
+                        }
+                        for item in input_turns
+                    ]
+                }
+
+                class Result:
+                    text = json.dumps(payload)
+                    usage = {"input_tokens": 100, "output_tokens": 80}
+                    model = "claude-sonnet-4-6"
+
+                return Result()
+
+        user = CustomUser.objects.create_user(username="test-http-feedback-budget", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(user=user, attempt_id="test-http-feedback-budget", mode="p1", part="p1")
+        turns = [
+            SpeakingTurn.objects.create(
+                user=user,
+                attempt=attempt,
+                turn_id=f"http-budget-turn-{index}",
+                sequence=index,
+                part="p1",
+                question=f"Question {index + 1}?",
+                transcript_raw=f"Answer {index + 1}.",
+                transcript_cleaned=f"Answer {index + 1}.",
+                metadata={"status": "completed"},
+            )
+            for index in range(4)
+        ]
+        provider = CapturingHttpProvider()
+
+        with patch("apps.speaking.services._speaking_http_provider", return_value=provider):
+            result = turn_feedback_batch_with_codex(
+                turns,
+                attempt,
+                "7",
+                {},
+                "http-feedback-budget-test",
+                ai_source="claude",
+            )
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(len(provider.calls), 1)
+        self.assertEqual(provider.calls[0]["max_tokens"], services.SPEAKING_TURN_FEEDBACK_HTTP_MAX_TOKENS)
+        self.assertTrue(provider.calls[0]["stream"])
 
     def test_http_turn_feedback_failure_never_calls_codex(self):
         from apps.accounts.models import CustomUser

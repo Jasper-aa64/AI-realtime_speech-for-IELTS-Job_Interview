@@ -374,6 +374,7 @@ SPEAKING_REPORT_HTTP_MAX_ATTEMPTS = 3
 # bug), so give Claude its own, larger budget.
 SPEAKING_REPORT_CLAUDE_TIMEOUT = 360
 SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT = 90
+SPEAKING_TURN_FEEDBACK_HTTP_MAX_TOKENS = 12000
 # The claude_cli turn-feedback path asks for 4 fields per turn in a single CLI
 # call; a full P1/P3 batch (9+ turns) reliably overruns SPEAKING_REPORT_CLAUDE_TIMEOUT.
 # Generate the Claude batch in small chunks so each call stays well within budget.
@@ -3408,7 +3409,7 @@ Input turns:
                     {"role": "system", "content": "You are an IELTS Speaking coach. Return JSON only."},
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=5200,
+                max_tokens=SPEAKING_TURN_FEEDBACK_HTTP_MAX_TOKENS,
                 temperature=0.2,
                 timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT,
                 stream=True,

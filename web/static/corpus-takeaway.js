@@ -3148,6 +3148,19 @@
       if (wrap) wrap.classList.add("is-located");
     }
 
+    function takeawayCardNeedsScroll(kind, entryId) {
+      const wrap = takeawayReviewCardWrap(kind, entryId);
+      if (!wrap) return false;
+      const list = $(kind === "writing" ? "writingTakeawayList" : "languageTakeawayList");
+      if (!list) return false;
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      if (maxScroll <= 1) return false;
+      const listRect = list.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      const margin = 18;
+      return !(wrapRect.top >= listRect.top + margin && wrapRect.bottom <= listRect.bottom - margin);
+    }
+
     function scrollTakeawayCardIntoView(kind, entryId) {
       const wrap = takeawayReviewCardWrap(kind, entryId);
       if (!wrap) return;
@@ -3155,10 +3168,9 @@
       if (!list) return;
       const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
       if (maxScroll <= 1) return;
+      if (!takeawayCardNeedsScroll(kind, entryId)) return;
       const listRect = list.getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
-      const margin = 18;
-      if (wrapRect.top >= listRect.top + margin && wrapRect.bottom <= listRect.bottom - margin) return;
       const centeredTop = list.scrollTop
         + (wrapRect.top - listRect.top)
         - Math.max(0, (list.clientHeight - wrapRect.height) / 2);
@@ -3220,8 +3232,11 @@
       const target = firstTakeawayReviewTargetId(kind);
       if (!target) return;
       if (session.locatedId === target) {
-        session.locatedId = "";
-        markTakeawayLocatedCard(kind, "");
+        markTakeawayLocatedCard(kind, target);
+        if (takeawayCardNeedsScroll(kind, target)) {
+          scrollTakeawayCardIntoView(kind, target);
+          return;
+        }
         const reviewState = selectTakeawayReviewEntry(kind, target);
         // Opening via W must read the English aloud, same as clicking the card.
         if (reviewState === "selected") {

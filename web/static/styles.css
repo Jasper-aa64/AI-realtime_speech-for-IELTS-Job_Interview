@@ -15517,6 +15517,30 @@ body.theme-dark.font-popular .p3-bank-entry-icon {
   line-height: 1.55;
 }
 
+.p3-cycle-notice-dialog-complete {
+  max-width: min(620px, calc(100vw - 40px));
+  padding: 28px 30px 24px;
+  gap: 16px;
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+  box-shadow:
+    0 26px 70px rgba(0, 0, 0, 0.24),
+    0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent) inset;
+}
+
+.p3-cycle-notice-dialog-complete .p3-cycle-notice-kicker {
+  padding: 5px 12px;
+}
+
+.p3-cycle-notice-dialog-complete h3 {
+  font-size: clamp(26px, 3vw, 34px);
+  letter-spacing: 0;
+}
+
+.p3-cycle-notice-dialog-complete p {
+  max-width: 54ch;
+  font-size: 15px;
+}
+
 .p3-cycle-start {
   background: var(--accent);
   color: #fff;
@@ -29482,7 +29506,9 @@ body.view-writing .global-topbar > .writing-topbar-actions:not(.hidden) {
 }
 
 .writing-topbar-actions .topbar-random-button {
-  min-width: 150px !important;
+  min-width: 118px !important;
+  padding-inline: 11px !important;
+  gap: 6px !important;
 }
 
 .bank-selector-dialog {
@@ -30593,8 +30619,14 @@ body.theme-dark .writing-pattern-menu-option.active {
   overflow: auto;
 }
 .spelling-add-dialog {
-  background: rgba(8, 13, 22, 0.58) !important;
-  backdrop-filter: blur(10px);
+  position: fixed;
+  inset: 0;
+  z-index: 520;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: transparent !important;
+  backdrop-filter: none !important;
 }
 .p1-corpus-dialog-card.spelling-add-card {
   background: color-mix(in srgb, var(--panel, #ffffff) 96%, #ffffff) !important;
@@ -30640,13 +30672,92 @@ body.theme-dark .writing-pattern-menu-option.active {
 #spellingAddStatus.is-error { color: #dc2626 !important; }
 
 body.theme-dark .spelling-add-dialog {
-  background: rgba(2, 7, 13, 0.72) !important;
+  background: transparent !important;
 }
 
 body.theme-dark .p1-corpus-dialog-card.spelling-add-card {
   background: linear-gradient(180deg, #111a24 0%, #0b121b 100%) !important;
   border-color: rgba(148, 163, 184, 0.28) !important;
   box-shadow: 0 26px 76px rgba(0, 0, 0, 0.58) !important;
+}
+
+.spelling-add-dialog.hidden {
+  display: none !important;
+}
+.language-takeaway-popup.spelling-add-card {
+  position: relative;
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(620px, calc(100vh - 32px));
+  overflow: auto;
+}
+.spelling-add-head {
+  cursor: default !important;
+}
+.spelling-add-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.spelling-add-status {
+  max-width: min(210px, 32vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.spelling-add-status.is-error,
+#spellingAddStatus.is-error {
+  color: #dc2626 !important;
+}
+.spelling-add-save-btn {
+  width: auto !important;
+  min-width: 64px !important;
+  padding: 0 14px !important;
+  position: relative;
+}
+.spelling-add-save-btn.is-busy::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spellingAddSpin 720ms linear infinite;
+}
+.language-takeaway-popup .spelling-add-word {
+  width: 100%;
+  min-height: 46px;
+  height: 46px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 96%, #ffffff);
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 800;
+  box-sizing: border-box;
+}
+.spelling-add-gloss {
+  min-height: 84px !important;
+  max-height: 42vh !important;
+}
+.spelling-add-gloss-preview {
+  min-height: 112px;
+}
+body.theme-dark .language-takeaway-popup.spelling-add-card {
+  background: linear-gradient(180deg, var(--dark-panel-top), var(--dark-panel-bottom)) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--ink) !important;
+}
+body.theme-dark .language-takeaway-popup .spelling-add-word,
+body.theme-dark .language-takeaway-popup .spelling-add-gloss {
+  background: var(--dark-input) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--ink) !important;
 }
 
 @keyframes spellingAddSpin {
@@ -31219,6 +31330,14 @@ body.view-writingTakeawayBook .topbar-review-panel .takeaway-review-grade.is-loc
 .language-takeaway-card-wrap.is-located .language-takeaway-card {
   outline: 2px dashed var(--accent, #2563eb);
   outline-offset: -4px;
+}
+
+body.theme-dark.font-popular.view-takeawayBook .language-takeaway-card-wrap.is-located .language-takeaway-card,
+body.theme-dark.font-popular.view-writingTakeawayBook .language-takeaway-card-wrap.is-located .language-takeaway-card {
+  outline: 2px dashed rgba(191, 230, 255, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(96, 165, 250, 0.28),
+    0 0 18px rgba(96, 165, 250, 0.18);
 }
 
 /* Dark mode: the A / D / 定位 buttons have a DARK base here, so their near-white
@@ -32866,7 +32985,9 @@ body.view-writing .global-topbar > .writing-topbar-actions:not(.hidden) {
 }
 
 .writing-topbar-actions .topbar-random-button {
-  min-width: 150px !important;
+  min-width: 118px !important;
+  padding-inline: 11px !important;
+  gap: 6px !important;
 }
 
 /* FINAL OVERRIDE — clean red recording gradients.
@@ -37437,8 +37558,7 @@ body.theme-dark .nr-card,
 body.theme-dark .nr-stage,
 body.theme-dark .nr-slot,
 body.theme-dark .nr-answer,
-body.theme-dark .nr-lib-item,
-body.theme-dark .spelling-add-card {
+body.theme-dark .nr-lib-item {
   background: var(--sd-card) !important;
   border-color: var(--sd-line) !important;
   color: var(--sd-ink) !important;
@@ -38170,6 +38290,48 @@ body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table
   border-color: rgba(157, 183, 173, 0.22) !important;
 }
 
+/* Speaking P2 reports use a two-column layout, but the dark table surface must
+   match the newer P1/P3 and writing report tables. */
+body.theme-dark #historyPanel .turn-report-table.p2-report-table th,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table th,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table th {
+  background: #182126 !important;
+  border-color: rgba(157, 183, 173, 0.22) !important;
+  color: #dce7e2 !important;
+}
+
+body.theme-dark #historyPanel .turn-report-table.p2-report-table td,
+body.theme-dark #historyPanel .turn-report-table.p2-report-table td.ai-coaching-cell,
+body.theme-dark #historyPanel .turn-report-table.p2-report-table .p2-content-row > td,
+body.theme-dark #historyPanel .turn-report-table.p2-report-table .p2-coaching-row > td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table td.ai-coaching-cell,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table .p2-content-row > td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table .p2-coaching-row > td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table td.ai-coaching-cell,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .p2-content-row > td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .p2-coaching-row > td {
+  background: linear-gradient(180deg, #12191b, #0e1416) !important;
+  border-color: rgba(157, 183, 173, 0.22) !important;
+  color: #dce7e2 !important;
+}
+
+body.theme-dark #historyPanel .turn-report-table.p2-report-table .turn-report-group tr:first-child > td,
+body.theme-dark #historyPanel .turn-report-table.p2-report-table .turn-report-group tr:last-child > td,
+body.theme-dark #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:first-child,
+body.theme-dark #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:last-child,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table .turn-report-group tr:first-child > td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table .turn-report-group tr:last-child > td,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:first-child,
+body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:last-child,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr:first-child > td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr:last-child > td,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:first-child,
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:last-child {
+  border-color: rgba(157, 183, 173, 0.22) !important;
+}
+
 /* Light spelling primary action: keep the bright accent fill, but make the
    label readable on buttons like "提前练（全部词）". */
 body:not(.theme-dark) .spelling-drill-panel .nr-btn-primary {
@@ -38804,6 +38966,113 @@ body.theme-dark.font-popular #writingPanel .writing-day.scored {
   color: #d9ffed !important;
 }
 
+/* Third dark theme daily-writing layering: keep the black/graphite direction,
+   but separate page, cards, inner prompt, input, stats, and calendar surfaces. */
+body.theme-dark.font-popular #writingPanel .writing-shell {
+  background: transparent !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-editor-card,
+body.theme-dark.font-popular #writingPanel .writing-result-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.008)),
+    #0b0e11 !important;
+  border-color: rgba(226, 232, 240, 0.26) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.070),
+    0 18px 46px rgba(0, 0, 0, 0.42) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-checkin-top {
+  padding: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.006)),
+    #07090c !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-prompt-card {
+  background: linear-gradient(180deg, #15191d, #0d1013) !important;
+  border-color: rgba(226, 232, 240, 0.22) !important;
+  border-left-color: rgba(95, 166, 212, 0.72) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 10px 24px rgba(0, 0, 0, 0.22) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-answer {
+  background: #050608 !important;
+  border-color: rgba(226, 232, 240, 0.24) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.040),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.24) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-stats-grid div {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
+    #11161b !important;
+  border-color: rgba(226, 232, 240, 0.24) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.060),
+    0 5px 12px rgba(0, 0, 0, 0.20) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-calendar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.060), rgba(255, 255, 255, 0.018)),
+    #0f1419 !important;
+  border-color: rgba(226, 232, 240, 0.30) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.065),
+    0 8px 22px rgba(0, 0, 0, 0.28) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-day {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.050), rgba(255, 255, 255, 0.010)),
+    #171d23 !important;
+  border-color: rgba(226, 232, 240, 0.22) !important;
+  color: #d8e3ec !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-day.blank {
+  background: rgba(255, 255, 255, 0.020) !important;
+  border-color: rgba(226, 232, 240, 0.06) !important;
+  opacity: 0.55;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-day.saved {
+  background:
+    linear-gradient(180deg, rgba(93, 173, 226, 0.46), rgba(24, 86, 126, 0.58)),
+    #123245 !important;
+  border-color: rgba(135, 206, 250, 0.72) !important;
+  color: #ecf8ff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(56, 189, 248, 0.12),
+    0 6px 14px rgba(8, 47, 73, 0.28) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-day.scored {
+  background:
+    linear-gradient(180deg, rgba(74, 222, 128, 0.42), rgba(22, 116, 74, 0.58)),
+    #123a2a !important;
+  border-color: rgba(134, 239, 172, 0.72) !important;
+  color: #effff6 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(74, 222, 128, 0.12),
+    0 6px 14px rgba(20, 83, 45, 0.28) !important;
+}
+
+body.theme-dark.font-popular #writingPanel .writing-legend {
+  color: rgba(218, 229, 238, 0.78) !important;
+}
+
 /* P1 report -> corpus editor: brighten the Band 7 reference in the lower
    editor panel for the second/third dark themes without turning it white. */
 body.theme-dark.font-academic .p1-corpus-ai-head > strong,
@@ -39236,33 +39505,299 @@ body.theme-dark.font-popular .report-manager-filter.active {
 
 /* Third dark theme: spelling drill surfaces should be near-black, not blue. */
 body.theme-dark.font-popular .spelling-drill-panel {
-  --sd-bg: #03060a !important;
-  --sd-card: #060a10 !important;
-  --sd-card-soft: #080d14 !important;
-  --sd-line: rgba(96, 165, 250, 0.18) !important;
-  background: #03060a !important;
+  --sd-bg: #030507 !important;
+  --sd-card: #101418 !important;
+  --sd-card-soft: #080b0f !important;
+  --sd-line: rgba(226, 232, 240, 0.18) !important;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(80, 102, 126, 0.14), transparent 34%),
+    linear-gradient(180deg, #07090c, #030507 58%, #020304) !important;
+}
+
+body.theme-dark.font-popular .spelling-drill-shell {
+  background: transparent !important;
 }
 
 body.theme-dark.font-popular .spelling-drill-head,
+body.theme-dark.font-popular .spelling-drill-panel .nr-card {
+  background: linear-gradient(180deg, #15191d, #0b0e12) !important;
+  border-color: rgba(226, 232, 240, 0.22) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 16px 36px rgba(0, 0, 0, 0.30) !important;
+}
+
 body.theme-dark.font-popular .spelling-scope-switch,
+body.theme-dark.font-popular .spelling-drill-panel .nr-stage,
+body.theme-dark.font-popular .spelling-drill-panel .nr-lib-item {
+  background: linear-gradient(180deg, #11161b, #080b0f) !important;
+  border-color: rgba(226, 232, 240, 0.18) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.040),
+    0 8px 22px rgba(0, 0, 0, 0.20) !important;
+}
+
 body.theme-dark.font-popular #spellingPracticeCard,
 body.theme-dark.font-popular #spellingDrillList,
 body.theme-dark.font-popular .spelling-practice-card,
-body.theme-dark.font-popular .spelling-word-list,
+body.theme-dark.font-popular .spelling-word-list {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 body.theme-dark.font-popular .spelling-drill-panel .nr-card,
 body.theme-dark.font-popular .spelling-drill-panel .nr-drill-body,
-body.theme-dark.font-popular .spelling-drill-panel .nr-stage,
 body.theme-dark.font-popular .spelling-drill-panel .nr-slot,
 body.theme-dark.font-popular .spelling-drill-panel .nr-answer,
 body.theme-dark.font-popular .spelling-drill-panel .nr-lib-item {
-  background: #060a10 !important;
-  border-color: rgba(96, 165, 250, 0.18) !important;
+  border-color: rgba(226, 232, 240, 0.18) !important;
+}
+
+body.theme-dark.font-popular .spelling-drill-panel .nr-drill-body,
+body.theme-dark.font-popular .spelling-drill-panel .nr-slot,
+body.theme-dark.font-popular .spelling-drill-panel .nr-answer {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.030), rgba(255, 255, 255, 0.010)),
+    #090d11 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
 }
 
 body.theme-dark.font-popular .spelling-drill-panel .nr-note-slot,
 body.theme-dark.font-popular .spelling-drill-panel .nr-spell-note,
 body.theme-dark.font-popular .spelling-drill-panel .nr-input,
 body.theme-dark.font-popular .spelling-drill-panel .nr-inline-answer {
-  background: #080d14 !important;
-  border-color: rgba(96, 165, 250, 0.22) !important;
+  background: #05070a !important;
+  border-color: rgba(226, 232, 240, 0.22) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.24) !important;
+}
+
+/* Final scoped polish: P3 bank loading, dark buttons, Fix chip, light pixels,
+   and spelling add dialog opacity. Kept last to beat old theme fragments. */
+.p3-bank-picker-list:has(.p3-bank-picker-loading) {
+  min-height: min(560px, calc(100vh - 220px));
+  align-content: stretch !important;
+  grid-template-columns: 1fr !important;
+}
+
+.p3-bank-picker-loading {
+  min-height: min(520px, calc(100vh - 240px));
+  height: 100%;
+  place-self: stretch;
+  justify-content: center !important;
+  padding: 48px 24px !important;
+}
+
+body.theme-dark .spelling-scope-switch {
+  background: #0a1017 !important;
+  border-color: rgba(180, 194, 210, 0.24) !important;
+}
+
+body.theme-dark .spelling-scope-switch button {
+  color: rgba(226, 236, 246, 0.72) !important;
+}
+
+body.theme-dark .spelling-scope-switch button.is-active,
+body.theme-dark .spelling-drill-panel .nr-btn-primary,
+body.theme-dark .p3-bank-entry-btn,
+body.theme-dark .p3-bank-entry-select,
+body.theme-dark .p3-generate-button:not(:disabled),
+body.theme-dark .p3-start-button:not(:disabled) {
+  background: linear-gradient(180deg, #14543f 0%, #0d3f31 100%) !important;
+  border: 1px solid rgba(145, 231, 196, 0.38) !important;
+  color: #f7fffb !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(232, 255, 247, 0.12),
+    0 10px 22px rgba(4, 38, 28, 0.28) !important;
+}
+
+body.theme-dark.font-academic .spelling-scope-switch button.is-active,
+body.theme-dark.font-academic .spelling-drill-panel .nr-btn-primary,
+body.theme-dark.font-academic .p3-bank-entry-btn,
+body.theme-dark.font-academic .p3-bank-entry-select,
+body.theme-dark.font-academic .p3-generate-button:not(:disabled),
+body.theme-dark.font-academic .p3-start-button:not(:disabled) {
+  background: linear-gradient(180deg, #4c3525 0%, #30221a 100%) !important;
+  border-color: rgba(229, 200, 160, 0.40) !important;
+  color: #fff8ed !important;
+}
+
+body.theme-dark.font-popular .spelling-scope-switch button.is-active,
+body.theme-dark.font-popular .spelling-drill-panel .nr-btn-primary,
+body.theme-dark.font-popular .p3-bank-entry-btn,
+body.theme-dark.font-popular .p3-bank-entry-select,
+body.theme-dark.font-popular .p3-generate-button:not(:disabled),
+body.theme-dark.font-popular .p3-start-button:not(:disabled) {
+  background: linear-gradient(180deg, #075985 0%, #053b5e 100%) !important;
+  border-color: rgba(174, 221, 255, 0.46) !important;
+  color: #f4fbff !important;
+}
+
+body.theme-dark.font-popular .nr-spinner span,
+body.theme-dark.font-popular .analyzing-dots span,
+body.theme-dark.font-popular .tk-brain-cloud-dots rect,
+body.theme-dark.font-popular .p2-brain-cloud-dots rect {
+  color: #cfeeff !important;
+  fill: #cfeeff !important;
+  background: #cfeeff !important;
+  opacity: 0.92 !important;
+  filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.55));
+}
+
+.writing-fix-popover {
+  position: absolute !important;
+  left: 50% !important;
+  top: auto !important;
+  bottom: calc(100% + 6px) !important;
+  transform: translate(-50%, 2px) scale(0.98) !important;
+}
+
+.writing-fix-popover.is-visible {
+  transform: translate(-50%, 0) scale(1) !important;
+}
+
+.writing-fix-popover button {
+  min-height: 26px !important;
+  padding: 0 8px 0 6px !important;
+  gap: 5px !important;
+  border-radius: 9px !important;
+  border: 1px solid rgba(180, 111, 18, 0.40) !important;
+  background: #f4c84f !important;
+  color: #3b2a05 !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  box-shadow: 0 5px 14px rgba(119, 73, 10, 0.16) !important;
+}
+
+.writing-fix-popover button:hover,
+.writing-fix-popover button:focus-visible {
+  background: #f7d469 !important;
+  border-color: rgba(160, 89, 12, 0.58) !important;
+  transform: translateY(-1px);
+}
+
+.writing-fix-popover-icon {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  background: rgba(84, 55, 6, 0.14) !important;
+  color: #4f3505 !important;
+  font-size: 0 !important;
+}
+
+.writing-fix-popover-icon::before {
+  content: "\2713";
+  font-size: 10px;
+  line-height: 1;
+}
+
+body.theme-dark .writing-fix-popover button {
+  background: #d39b2f !important;
+  border-color: rgba(246, 205, 112, 0.42) !important;
+  color: #1f1605 !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24) !important;
+}
+
+body:not(.theme-dark) .p2-brainstorm-head-field .p2-pixel-flow-canvas,
+body:not(.theme-dark) .exam-status.p1-pixel-flow .p2-pixel-flow-canvas,
+body:not(.theme-dark) .p3-mode-row.p3-pixel-flow .p2-pixel-flow-canvas {
+  filter: saturate(5.2) brightness(5.15) contrast(1.52) drop-shadow(0 0 12px rgba(56, 189, 248, 0.42)) !important;
+}
+
+body:not(.theme-dark) .p2-brainstorm-head-field .p2-pixel-flow-canvas {
+  animation-name: p2BrainstormPixelFlowIgniteLight !important;
+}
+
+.language-takeaway-popup.spelling-add-card {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.16) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24) !important;
+  opacity: 1 !important;
+}
+
+body.theme-dark .language-takeaway-popup.spelling-add-card {
+  background: linear-gradient(180deg, #111a24 0%, #0b121b 100%) !important;
+  border-color: rgba(148, 163, 184, 0.30) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-entry .p3-bank-entry-btn {
+  background: linear-gradient(180deg, #14543f 0%, #0d3f31 100%) !important;
+  border: 1px solid rgba(145, 231, 196, 0.44) !important;
+  color: #f7fffb !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.30) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(232, 255, 247, 0.13),
+    0 10px 22px rgba(4, 38, 28, 0.30) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-entry .p3-bank-entry-btn:hover,
+body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-entry .p3-bank-entry-btn:focus-visible {
+  background: linear-gradient(180deg, #176a4e 0%, #0f4d3b 100%) !important;
+  color: #ffffff !important;
+}
+
+/* Final guard: keep P1 as the geometry source of truth. P2/mock use the same
+   full-bleed header shell so switching views does not shrink the header while
+   the pressure pixel layer is fading. */
+#practicePanel .exam-status {
+  isolation: isolate !important;
+  overflow: visible !important;
+  margin: -18px -18px 0 !important;
+  padding: 18px 18px 8px !important;
+  width: calc(100% + 36px) !important;
+  height: 82px !important;
+  min-height: 82px !important;
+  border-radius: 12px 12px 0 0 !important;
+  transition:
+    background-color 1180ms ease,
+    border-color 520ms ease,
+    box-shadow 520ms ease !important;
+}
+
+#practicePanel .exam-status.p1-pixel-flow {
+  overflow: hidden !important;
+}
+
+/* Language Takeaway popup: keep the two text save actions compact. The dict
+   toggle is excluded because it is a separate embedded switch control. */
+.language-takeaway-action-buttons {
+  grid-template-columns: repeat(2, minmax(104px, 1fr)) !important;
+  gap: 8px !important;
+  width: min(100%, 232px) !important;
+}
+
+.language-takeaway-action-buttons:has(.language-takeaway-dict-toggle:not(.hidden)) {
+  grid-template-columns: 54px minmax(116px, 1fr) minmax(116px, 1fr) !important;
+  gap: 8px !important;
+  width: min(100%, 306px) !important;
+}
+
+.language-takeaway-action-buttons button:not(.language-takeaway-dict-toggle) {
+  min-height: 40px !important;
+  padding: 0 13px !important;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  line-height: 1.1 !important;
+  font-weight: 780 !important;
+}
+
+/* P1/P2 corpus assistant icons: keep dark-theme 1/2 icons readable without
+   touching the third theme's separate blue treatment. */
+body.theme-dark:not(.font-academic):not(.font-popular) .workspace.corpus-workspace .p1-corpus-head .corpus-agent-button svg,
+body.theme-dark:not(.font-academic):not(.font-popular) .workspace.corpus-workspace .p2-corpus-head .corpus-agent-button svg,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head .corpus-agent-button svg,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head .corpus-agent-button svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .workspace.corpus-workspace .p1-corpus-head .corpus-agent-button svg *,
+body.theme-dark:not(.font-academic):not(.font-popular) .workspace.corpus-workspace .p2-corpus-head .corpus-agent-button svg *,
+body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head .corpus-agent-button svg *,
+body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head .corpus-agent-button svg * {
+  stroke: currentColor !important;
 }

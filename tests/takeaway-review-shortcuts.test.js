@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const source = fs.readFileSync(path.join(__dirname, "..", "web", "static", "corpus-takeaway.js"), "utf8");
+const css = fs.readFileSync(path.join(__dirname, "..", "web", "static", "styles.css"), "utf8");
 
 assert.match(
   source,
@@ -14,4 +15,22 @@ assert.match(
   source,
   /runPendingTakeawayLocate/,
   "Queued W locate requests should run after the current review animation commits."
+);
+
+assert.doesNotMatch(
+  source,
+  /markTakeawayLocatedCard\(kind,\s*""\)/,
+  "Pressing W on the already-located card should keep the dashed frame while opening/reading it."
+);
+
+assert.match(
+  source,
+  /takeawayCardNeedsScroll\(kind,\s*target\)[\s\S]*?scrollTakeawayCardIntoView\(kind,\s*target\)[\s\S]*?return;/,
+  "Pressing W when the located card is off-screen should only jump to it; the next press opens/reads it."
+);
+
+assert.match(
+  css,
+  /body\.theme-dark\.font-popular[^{}]*\.language-takeaway-card-wrap\.is-located \.language-takeaway-card[\s\S]*outline:\s*2px dashed rgba\(191,\s*230,\s*255,\s*0\.92\)/,
+  "The third dark theme should use a light readable dashed locate frame, not the deep-blue accent."
 );

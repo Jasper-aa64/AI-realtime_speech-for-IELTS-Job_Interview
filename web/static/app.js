@@ -83,6 +83,8 @@ const state = {
     selectedEntryId: "",
     pinnedCueId: "",
     saving: false,
+    p3BankPracticeSummary: null,
+    p3BankCompletedCycleNotified: 0,
     // Same stale-snapshot guard as p1Corpus.mutationSeq: bumped on every local
     // P2 save/clear so a GET that snapshotted the server before the mutation
     // can't clobber the optimistic card state when it resolves later.
@@ -2025,6 +2027,7 @@ function applyP2CorpusPayload(payload) {
   }
   state.p2Corpus.categories = payload.categories || [];
   state.p2Corpus.currentPart2Cards = payload.current_part2_cards || [];
+  state.p2Corpus.p3BankPracticeSummary = payload.p3_bank_practice_summary || null;
   state.p2Corpus.loaded = true;
   const stats = $("p2CorpusStats");
   if (stats) {
@@ -2052,6 +2055,17 @@ async function prefetchP2Corpus(token) {
   const payload = await fetchP2CorpusPayload();
   if (!prefetchCanApply(token)) return;
   applyP2CorpusPayload(payload);
+}
+
+async function prefetchP3BankPracticeAssets() {
+  if (!state.account.authenticated) return;
+  const payload = await fetchP2CorpusPayload({ force: false });
+  if (state.view !== "p3") return;
+  applyP2CorpusPayload(payload);
+  if (state.p3SourceType === "bank" || state.p3SourceType === "season_bank") {
+    renderP3PlanPreview();
+    syncP3LaunchPanel();
+  }
 }
 
 async function prefetchLanguageTakeaways(token) {
@@ -2336,7 +2350,7 @@ function switchView(view, options = {}) {
   if (view === "p3") {
     syncP3LaunchPanel();
     // Warm the P2 corpus the moment P3 opens so the first "浏览题卡" pops instantly.
-    ensureP2CorpusLoaded().catch(() => {});
+    prefetchP3BankPracticeAssets().catch(() => {});
   } else {
     syncP3IntensityPixelFlow();
   }
@@ -2988,6 +3002,70 @@ function confirmP3BankPracticeCycle(plan = {}) {
   });
 }
 
+function p3BankCompletedCycleFromPayload(payload = {}) {
+  const summary = payload.p3_bank_practice_summary || payload;
+  return Math.max(0, Number(summary?.completed_cycle) || 0);
+}
+
+function p3BankCycleCompleteNotice(summary = {}) {
+  const completedCycle = Math.max(0, Number(summary.completed_cycle) || 0);
+  if (!completedCycle) return null;
+  const total = Math.max(0, Number(summary.total_question_count) || 0);
+  const nextCycle = Math.max(completedCycle + 1, Number(summary.practice_cycle) || completedCycle + 1);
+  return {
+    completedCycle,
+    nextCycle,
+    total,
+    title: `P3 固定追问第 ${completedCycle} 周目已通关`,
+    body: `整套已维护固定 P3 追问的题库都已完成一次 AI 评分。本轮共覆盖 ${total || "全部"} 道追问，关闭后会进入第 ${nextCycle} 周目，灰色题目会重新点亮。`,
+  };
+}
+
+async function showP3BankCycleCompleteNotice(summary = {}) {
+  const notice = p3BankCycleCompleteNotice(summary);
+  if (!notice) return;
+  return new Promise((resolve) => {
+    document.querySelector(".p3-cycle-notice-overlay")?.remove();
+    const overlay = document.createElement("div");
+    overlay.className = "confirm-overlay p3-cycle-notice-overlay";
+    overlay.innerHTML = `
+      <div class="confirm-dialog p3-cycle-notice-dialog p3-cycle-notice-dialog-complete" role="dialog" aria-modal="true" aria-label="P3 固定追问周目完成提醒">
+        <span class="p3-cycle-notice-kicker">P3 Question Bank</span>
+        <h3>${escapeHtml(notice.title)}</h3>
+        <p>${escapeHtml(notice.body)}</p>
+        <div class="confirm-actions p3-cycle-notice-actions">
+          <button type="button" data-p3-cycle-start>进入第 ${escapeHtml(String(notice.nextCycle))} 周目</button>
+        </div>
+      </div>
+    `;
+    const close = () => {
+      overlay.remove();
+      document.body.classList.remove("modal-open");
+      resolve();
+    };
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay || event.target.closest("[data-p3-cycle-start]")) close();
+    });
+    document.body.appendChild(overlay);
+    document.body.classList.add("modal-open");
+    overlay.querySelector("[data-p3-cycle-start]")?.focus();
+  });
+}
+
+async function maybeShowP3BankCycleCompleteNotice(payload = {}) {
+  const summary = payload.p3_bank_practice_summary || {};
+  const previousSummary = state.p2Corpus.p3BankPracticeSummary || {};
+  const previousCompleted = Math.max(
+    Number(previousSummary.completed_cycle) || 0,
+    Number(state.p2Corpus.p3BankCompletedCycleNotified) || 0,
+  );
+  const nextCompleted = p3BankCompletedCycleFromPayload(payload);
+  if (nextCompleted > previousCompleted) {
+    state.p2Corpus.p3BankCompletedCycleNotified = nextCompleted;
+    await showP3BankCycleCompleteNotice(summary);
+  }
+}
+
 async function startPractice() {
   if (state.status === "loading" || state.practiceLocked) return;
   // A background analysis (e.g. a P3 report still scoring) must NOT block
@@ -3012,12 +3090,14 @@ async function startPractice() {
     return;
   }
   const mode = state.view === "mock" ? "mock" : state.view;
+  if (mode === "p3") setP3StartPending(true, state.p3Plan ? "正在进入练习..." : "正在载入追问...");
   if (mode === "p3" && !state.p3Plan) {
     await generateP3Plan();
-    if (!state.p3Plan) return;
+    if (!state.p3Plan) {
+      setP3StartPending(false);
+      return;
+    }
   }
-  if (mode === "p3" && !(await confirmP3BankPracticeCycle(state.p3Plan))) return;
-  if (mode === "p3") setP3StartPending(true);
   state.abortingAttemptId = null;
   state.practiceLocked = true;
   syncP1IntensityPanel();
@@ -5769,7 +5849,7 @@ async function scoreAttempt() {
     if (isCurrentAttempt) state.attempt = scored;
     state.historyDetailCache.set(scored.id, scored);
     await loadHistory(false);
-    invalidateP3BankPracticeProgress(scored);
+    await invalidateP3BankPracticeProgress(scored);
     if (isCurrentAttempt) state.status = "summary";
     if (isCurrentAttempt && isPracticeView(state.view)) {
       setRecordButton("summary", "Start Again", "Record another section.");
@@ -5870,14 +5950,21 @@ async function refreshWalletAfterAiUsage() {
   }
 }
 
-function invalidateP3BankPracticeProgress(attempt) {
+async function invalidateP3BankPracticeProgress(attempt) {
   const cueId = String(attempt?.p3_bank_cue_id || attempt?.p3_plan?.p3_bank_cue_id || "").trim();
   if (!cueId) return;
   state.p2Corpus.loaded = false;
   state.p2Corpus.loadingPromise = null;
-  loadP2Corpus({ force: true }).catch(() => {
+  try {
+    const payload = await fetchP2CorpusPayload({ force: true });
+    await maybeShowP3BankCycleCompleteNotice(payload);
+    applyP2CorpusPayload(payload || {});
+    if (!$("#p3BankPickerModal")?.classList.contains("hidden")) {
+      await renderP3BankPicker({ force: false });
+    }
+  } catch (_error) {
     // The next picker open retries if this background refresh fails.
-  });
+  }
 }
 
 function startSpeakingScorePolling(taskId, attemptId) {
@@ -5929,7 +6016,7 @@ function startSpeakingScorePolling(taskId, attemptId) {
         }
         state.historyDetailCache.set(attempt.id, attempt);
         await loadHistory(false);
-        invalidateP3BankPracticeProgress(attempt);
+        await invalidateP3BankPracticeProgress(attempt);
         showSpeakingScoreCompleteModal(attempt);
         return;
       }
@@ -9432,9 +9519,10 @@ function hideWritingFixPopover() {
   delete popover.dataset.fixSuggestion;
   delete popover.dataset.fixEntryId;
   delete popover.dataset.fixParagraphIndex;
+  popover.remove();
 }
 
-function showWritingFixPopover(anchor) {
+function showWritingFixPopover(anchor, event = null) {
   const original = String(anchor?.dataset?.writingFixOriginal || "");
   const suggestion = String(anchor?.dataset?.writingFixSuggestion || "");
   if (!original || !suggestion) return;
@@ -11787,6 +11875,87 @@ function p3BankNextQuestionIndexes(entry = {}) {
     .filter((value) => Number.isInteger(value) && value >= 0);
 }
 
+function p3BankFollowupIdForIndex(entry = {}, questionIndex = -1) {
+  const rounds = Array.isArray(entry.practice_rounds) ? entry.practice_rounds : [];
+  for (const round of rounds) {
+    const indexes = (Array.isArray(round.question_indexes) ? round.question_indexes : [])
+      .map((value) => Number(value));
+    const ids = Array.isArray(round.followup_ids) ? round.followup_ids : [];
+    const matchIndex = indexes.findIndex((value) => value === Number(questionIndex));
+    if (matchIndex >= 0 && ids[matchIndex]) return String(ids[matchIndex]);
+  }
+  return "";
+}
+
+function buildLocalP3BankPlanFromCard(entry = {}) {
+  const title = p2BankCardTitle(entry);
+  const questionId = p2BankQuestionId(entry);
+  const followUps = p2BankCardFollowUps(entry);
+  const selectedIndexes = p3BankNextQuestionIndexes(entry)
+    .filter((index) => index < followUps.length);
+  const fallbackIndexes = followUps
+    .map((_question, index) => index)
+    .slice(0, followUps.length === 4 ? 4 : Math.min(3, followUps.length));
+  const indexes = selectedIndexes.length ? selectedIndexes : fallbackIndexes;
+  const questions = indexes.map((sourceIndex, planIndex) => {
+    const type = planIndex === 0
+      ? (P3_FOCUS_TO_TYPE[state.p3Focus] || "comparison_concession")
+      : P3_TYPE_SEQUENCE[(planIndex - 1) % P3_TYPE_SEQUENCE.length];
+    const followupId = p3BankFollowupIdForIndex(entry, sourceIndex);
+    return {
+      id: `q${planIndex + 1}`,
+      type,
+      question: followUps[sourceIndex] || "",
+      target_moves: P3_TARGET_MOVES[type] || P3_TARGET_MOVES.opinion_justify,
+      source: "season_bank",
+      p2_question_id: questionId,
+      followup_id: followupId,
+      source_index: sourceIndex,
+    };
+  }).filter((item) => item.question);
+  const doneIndexes = numberSet(entry.practice_current_cycle_question_indexes);
+  const willCompleteCycle = Boolean(followUps.length)
+    && indexes.length
+    && followUps.every((_question, index) => doneIndexes.has(index) || indexes.includes(index));
+  return {
+    version: 1,
+    theme: title,
+    focus: state.p3Focus,
+    intensity: state.p3Intensity,
+    source: {
+      type: "season_bank",
+      theme: title,
+      p2_question_id: questionId,
+      season: entry.season || "",
+    },
+    questions,
+    question_texts: questions.map((item) => item.question),
+    follow_up: "",
+    backend: "season_bank",
+    status: "ready",
+    question_count: questions.length,
+    p3_bank_cue_id: questionId,
+    p3_bank_round_index: Math.max(0, Number(entry.practice_next_round_index) || 0),
+    p3_bank_round_count: Math.max(0, Number(entry.practice_round_count) || 0),
+    p3_bank_practice_cycle: p3BankPracticeCycle(entry),
+    p3_bank_next_question_indexes: indexes,
+    p3_bank_current_cycle_done_count: doneIndexes.size,
+    p3_bank_cycle_question_count: followUps.length,
+    p3_bank_will_complete_cycle: willCompleteCycle,
+    p3_bank_followup_ids: questions.map((item) => item.followup_id).filter(Boolean),
+  };
+}
+
+function loadP3BankPlanFromCard(entry = {}, message = "已载入固定追问，确认后可开始。") {
+  setSelectedP3BankCard(entry);
+  state.p3PlanError = "";
+  state.p3PlanLoading = false;
+  state.p3Plan = buildLocalP3BankPlanFromCard(entry);
+  renderP3PlanPreview();
+  syncP3LaunchPanel(message);
+  return state.p3Plan;
+}
+
 function p3BankRoundChipsHtml(entry = {}) {
   const rounds = Array.isArray(entry.practice_rounds) ? entry.practice_rounds : [];
   const doneIndexes = numberSet(entry.practice_current_cycle_question_indexes);
@@ -11957,20 +12126,18 @@ async function openP3BankPicker() {
     return;
   }
   const list = $("#p3BankPickerList");
-  // Always seed the list with a full-size loading state before the forced refresh.
-  // Otherwise a warm local cache still opens as a header-only strip while the
-  // network refresh is pending, then suddenly expands when cards arrive.
-  if (list) list.innerHTML = p3BankPickerLoadingHtml();
+  // Use the warm P2 corpus cache that P3 preloads on entry. Forcing a refresh here
+  // makes every Browse Card click wait on /api/p2-corpus even when cards are ready.
+  if (list && !state.p2Corpus.loaded) list.innerHTML = p3BankPickerLoadingHtml();
   $("p3BankPickerModal")?.classList.remove("hidden");
-  await renderP3BankPicker({ force: true });
+  await renderP3BankPicker({ force: false });
 }
 
 function activateP3BankPickerCard(cardButton) {
   const card = p3BankCardsWithFollowUps().find((item) => p2BankQuestionId(item) === cardButton?.dataset?.p3BankCard);
   if (!card) return false;
-  setSelectedP3BankCard(card);
+  loadP3BankPlanFromCard(card);
   closeP3BankPicker();
-  generateP3Plan().catch(showError);
   return true;
 }
 
@@ -12731,6 +12898,7 @@ function stopAllRuntime(label = "Ready") {
 
 async function exitPractice() {
   const attemptId = state.attempt?.id;
+  const shouldReturnToP3Launch = state.view === "p3";
   state.userExitedPractice = true;
   state.startRequestId += 1;
   state.practiceSessionId += 1;
@@ -12760,6 +12928,14 @@ async function exitPractice() {
   }
   state.practiceLocked = false;
   updateSidebarLock();
+  if (shouldReturnToP3Launch) {
+    resetPracticeSurface();
+    if (attemptId) {
+      if (readSpeakingAnalysisAttemptId() === attemptId) clearSpeakingAnalysisAttemptId();
+      api(`/api/attempts/${attemptId}/abort`, {}).catch(() => null);
+    }
+    return;
+  }
   if (attemptId) {
     if (readSpeakingAnalysisAttemptId() === attemptId) clearSpeakingAnalysisAttemptId();
     await api(`/api/attempts/${attemptId}/abort`, {}).catch(() => null);
@@ -14243,6 +14419,37 @@ function bindEvents() {
   $("exitPractice")?.addEventListener("click", () => exitPractice());
   bindSpeakingReportFilter();
   bindWritingReportFilter();
+  $("p3GeneratePlanButton")?.addEventListener("click", (event) => {
+    if (!(state.p3SourceType === "bank" || state.p3SourceType === "season_bank")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const loadPlan = async () => {
+      const selected = selectedP3BankCard() || await ensureSelectedP3BankCard();
+      if (selected) {
+        loadP3BankPlanFromCard(selected, "已重新载入固定追问，确认后可开始。");
+        return;
+      }
+      await generateP3Plan();
+    };
+    withPending(event.currentTarget, loadPlan, { busyText: "生成中..." }).catch(showError);
+  }, true);
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-p3-source]");
+    if (!button || button.dataset.p3Source !== "bank") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    state.p3SourceType = "bank";
+    state.p3CorpusSourceEntryId = "";
+    ensureSelectedP3BankCard()
+      .then((selected) => {
+        if (selected) return withPending(button, () => {
+          loadP3BankPlanFromCard(selected, "已载入固定追问，确认后可开始。");
+        }, { busyText: "切换中..." });
+        clearP3Plan("先选择一张带固定 P3 追问的 P2 题卡。");
+        return null;
+      })
+      .catch(showError);
+  }, true);
   $("p3GeneratePlanButton")?.addEventListener("click", (event) => {
     withPending(event.currentTarget, () => generateP3Plan(), { busyText: "生成中..." }).catch(showError);
   });

@@ -4,6 +4,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const spellingDrillSource = fs.readFileSync(path.join(__dirname, "..", "web", "static", "spelling-drill.js"), "utf8");
+const indexHtml = fs.readFileSync(path.join(__dirname, "..", "web", "static", "index.html"), "utf8");
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "web", "static", "styles.css"), "utf8");
 
 function createElement() {
   const handlers = {};
@@ -159,4 +161,40 @@ assert.match(
   spellingDrillSource,
   /continueWrongResultWithTypedKey/,
   "After a wrong spelling result, typing a letter should advance into the retry and keep that first letter."
+);
+
+assert.match(
+  indexHtml,
+  /id="spellingAddDialog"\s+class="spelling-add-dialog hidden"/,
+  "Spelling add dialog should not reuse the full-screen P1 corpus modal/backdrop."
+);
+
+assert.match(
+  indexHtml,
+  /class="language-takeaway-popup spelling-add-card"/,
+  "Spelling add dialog should reuse the Language Takeaway popup shell."
+);
+
+assert.match(
+  indexHtml,
+  /id="spellingAddGlossPreview"\s+class="language-takeaway-dict-display spelling-add-gloss-preview hidden"/,
+  "Spelling add dialog should render dictionary glosses through the shared tag card."
+);
+
+assert.doesNotMatch(
+  stylesSource,
+  /\.spelling-add-dialog\s*\{[^}]*background:\s*rgba/s,
+  "Spelling add dialog should not darken the whole page with a black overlay."
+);
+
+assert.match(
+  spellingDrillSource,
+  /renderSpellingAddGlossPreview/,
+  "Spelling add dialog should render Chinese dictionary senses with domain-tag markup."
+);
+
+assert.match(
+  spellingDrillSource,
+  /spellingAddSpeakBtn[\s\S]{0,220}addEventListener\("click"/,
+  "Spelling add dialog should expose the Language Takeaway-style pronunciation button."
 );

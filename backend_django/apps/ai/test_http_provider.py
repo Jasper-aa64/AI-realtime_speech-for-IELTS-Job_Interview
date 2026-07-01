@@ -67,7 +67,7 @@ class HttpApiProviderTests(SimpleTestCase):
             ]
         )
 
-        with patch("apps.ai.http_provider.urllib.request.urlopen", return_value=response):
+        with patch.object(provider._opener, "open", return_value=response):
             chunks = list(provider.stream_tokens([{"role": "user", "content": "Ask one question"}], max_tokens=8))
 
         self.assertEqual(chunks, ["How ", "exactly?"])
@@ -82,7 +82,7 @@ class HttpApiProviderTests(SimpleTestCase):
         provider = HttpApiProvider(config)
         response = _StreamingResponse([b'data: {"error":{"message":"bad request secret-token"}}\n\n'])
 
-        with patch("apps.ai.http_provider.urllib.request.urlopen", return_value=response):
+        with patch.object(provider._opener, "open", return_value=response):
             with self.assertRaises(HttpApiProviderError) as raised:
                 list(provider.stream_tokens([{"role": "user", "content": "Ask one question"}], max_tokens=8))
 
@@ -105,7 +105,7 @@ class HttpApiProviderTests(SimpleTestCase):
             BytesIO(b'{"error":{"message":"bad key secret-token"}}'),
         )
 
-        with patch("apps.ai.http_provider.urllib.request.urlopen", side_effect=error):
+        with patch.object(provider._opener, "open", side_effect=error):
             with self.assertRaises(HttpApiProviderError) as raised:
                 provider.complete_chat([{"role": "user", "content": "Say hello"}], max_tokens=8)
 
@@ -122,7 +122,7 @@ class HttpApiProviderTests(SimpleTestCase):
         provider = HttpApiProvider(config)
         response = _StreamingResponse([b'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n', b"data: [DONE]\n\n"])
 
-        with patch("apps.ai.http_provider.urllib.request.urlopen", return_value=response) as urlopen:
+        with patch.object(provider._opener, "open", return_value=response) as urlopen:
             result = provider.complete_chat([{"role": "user", "content": "Say hello"}], max_tokens=8)
 
         self.assertEqual(result.text, "Hello")
@@ -131,14 +131,15 @@ class HttpApiProviderTests(SimpleTestCase):
         self.assertEqual(request.full_url, "https://example.test/v1/chat/completions")
         self.assertNotIn("secret-token", repr(result.metadata))
 
-    def test_streaming_length_finish_reason_is_provider_failure(self):
+    def test_streaming_length_finish_reason_keeps_received_text(self):
         response = _StreamingResponse(
             [
                 b'data: {"choices":[{"delta":{"content":"Partial"},"finish_reason":"length"}]}\n\n',
+                b'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":8}}\n\n',
             ]
         )
 
-        with self.assertRaises(HttpApiProviderError) as raised:
-            HttpApiProvider._parse_stream_response(response)
+        text, usage = HttpApiProvider._parse_stream_response(response)
 
-        self.assertEqual(raised.exception.error_code, "http_api_provider_finish_reason")
+        self.assertEqual(text, "Partial")
+        self.assertEqual(usage, {"prompt_tokens": 10, "completion_tokens": 8})

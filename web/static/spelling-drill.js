@@ -1198,6 +1198,31 @@
       el.classList.toggle("is-error", !!isError);
     }
 
+    function renderSpellingAddGlossPreview(text) {
+      const preview = $("spellingAddGlossPreview");
+      const field = $("spellingAddGlossField");
+      const glossEl = $("spellingAddGloss");
+      if (!preview) return;
+      const raw = String(text ?? glossEl?.value ?? "").trim();
+      if (!raw) {
+        preview.classList.add("hidden");
+        preview.innerHTML = "";
+        field?.classList.remove("hidden");
+        return;
+      }
+      const lines = glossDisplayParts(raw);
+      preview.innerHTML = lines.length
+        ? lines.map((line) => `<span class="dict-sense-line">${escapeGlossWithTags(line)}</span>`).join("")
+        : "";
+      preview.classList.toggle("hidden", !lines.length);
+      field?.classList.toggle("hidden", !!lines.length);
+    }
+
+    function resetSpellingAddGlossPreview() {
+      if ($("spellingAddGloss")) $("spellingAddGloss").value = "";
+      renderSpellingAddGlossPreview("");
+    }
+
     function setAddWordBusy(isBusy) {
       const saveBtn = $("spellingAddSaveBtn");
       if (!saveBtn) return;
@@ -1211,7 +1236,7 @@
       const dialog = $("spellingAddDialog");
       if (!dialog) return;
       if ($("spellingAddWord")) { $("spellingAddWord").value = ""; $("spellingAddWord").disabled = false; }
-      if ($("spellingAddGloss")) $("spellingAddGloss").value = "";
+      resetSpellingAddGlossPreview();
       setAddWordBusy(false);
       setAddWordStatus("");
       dialog.classList.remove("hidden");
@@ -1239,7 +1264,11 @@
         const senses = entry
           ? (Array.isArray(entry.senses) && entry.senses.length ? entry.senses : (entry.translation ? [entry.translation] : []))
           : [];
-        if (senses.length && $("spellingAddGloss")) $("spellingAddGloss").value = senses.slice(0, 4).join("；");
+        if (senses.length && $("spellingAddGloss")) {
+          const text = senses.slice(0, 4).join("\n");
+          $("spellingAddGloss").value = text;
+          renderSpellingAddGlossPreview(text);
+        }
         setAddWordStatus(entry?.phonetic ? `[${entry.phonetic}]` : "");
       } catch (_e) {
         setAddWordStatus("");
@@ -1311,10 +1340,18 @@
 
       // Add-word dialog: 保存, Enter-to-lookup, backdrop / Escape close.
       $("spellingAddSaveBtn")?.addEventListener("click", () => submitAddWord());
+      $("spellingAddSpeakBtn")?.addEventListener("click", () => {
+        const word = normalizeAddWord($("spellingAddWord")?.value);
+        if (word) speakWord(word);
+      });
       $("spellingAddWord")?.addEventListener("keydown", (e) => {
         if (e.key !== "Enter" || e.isComposing) return;
         e.preventDefault();
         lookupAddWordGloss();
+      });
+      $("spellingAddWord")?.addEventListener("input", () => {
+        resetSpellingAddGlossPreview();
+        setAddWordStatus("");
       });
       $("spellingAddDialog")?.addEventListener("pointerdown", (e) => {
         if (e.target === $("spellingAddDialog")) closeAddWordDialog();
