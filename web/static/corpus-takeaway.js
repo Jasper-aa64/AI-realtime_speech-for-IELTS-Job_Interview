@@ -70,16 +70,25 @@
       throw new Error("Corpus/Takeaway controller requires shared app state and helpers.");
     }
 
-    function setPeekButtonHidden(button, hidden) {
+    function setPeekButtonHidden(button, hidden, options = {}) {
+      const replayKey = String(options.replayKey || "");
+      const shouldReplay = !hidden && replayKey && button?.dataset.peekReplayKey !== replayKey;
       if (typeof setAnimatedHidden === "function") {
         setAnimatedHidden(button, hidden, {
           enteringClass: "peek-button-entering",
           leavingClass: "peek-button-leaving",
           duration: 420,
         });
-        return;
+      } else {
+        button?.classList.toggle("hidden", hidden);
       }
-      button?.classList.toggle("hidden", hidden);
+      if (button && hidden) button.dataset.peekReplayKey = "";
+      if (button && shouldReplay) {
+        button.dataset.peekReplayKey = replayKey;
+        button.classList.remove("peek-button-entering");
+        void button.offsetWidth;
+        button.classList.add("peek-button-entering");
+      }
     }
 
     // Guest gate for corpus features: prefer the dismissible login prompt; fall
@@ -1609,7 +1618,7 @@
           bankButton.setAttribute("aria-hidden", "true");
         } else {
           bankButton.disabled = false;
-          setPeekButtonHidden(bankButton, false);
+          setPeekButtonHidden(bankButton, false, { replayKey: `p2-bank-${questionId}` });
           bankButton.classList.remove("has-corpus", "is-empty-slot", "is-loading-slot");
           bankButton.setAttribute("aria-hidden", "false");
           fetchP2BankCorpusPayload(questionId)
@@ -1638,7 +1647,7 @@
       const entry = visible ? currentP2CorpusEntry() : null;
       const bodyButton = $("peekP2CorpusBodyBtn");
       if (bodyButton) {
-        setPeekButtonHidden(bodyButton, !visible);
+        setPeekButtonHidden(bodyButton, !visible, { replayKey: visible ? `p2-body-${state.p2Corpus.selectedEntryId}` : "" });
         bodyButton.classList.toggle("is-empty-slot", inP2Turn && Boolean(state.p2Corpus.selectedEntryId) && !entry);
         bodyButton.classList.toggle("has-corpus", Boolean(entry));
         bodyButton.disabled = !visible;

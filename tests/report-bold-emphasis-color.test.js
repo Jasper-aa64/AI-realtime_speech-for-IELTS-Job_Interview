@@ -23,8 +23,8 @@ assert(
 );
 
 assert(
-  /body:not\(\.theme-dark\)\s+#historyPanel\s+\.turn-report-table\s+:is\(\.p1-p3-content-row > td:nth-child\(3\),\s*\.p2-content-row > td:nth-child\(2\)\)\s+:is\(\.model-answer-markdown\s+strong,\s*strong\)[\s\S]*color:\s*#2563eb\s*!important/.test(styles),
-  "Light mode speaking report Band 7 table cells should force bold text blue for P1/P2/P3."
+  /body:not\(\.theme-dark\)\s+:is\(#historyPanel,\s*#detailPanel\)\s+\.turn-report-table\s+:is\(\.p1-p3-content-row > td:nth-child\(3\),\s*\.p2-content-row > td:nth-child\(2\)\)\s+:is\(\.model-answer-markdown\s+strong,\s*strong\)[\s\S]*color:\s*#2563eb\s*!important/.test(styles),
+  "Light mode speaking report Band 7 table cells should force bold text blue in both the report panel and detail panel."
 );
 
 assert(

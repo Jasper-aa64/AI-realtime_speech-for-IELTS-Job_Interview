@@ -41,6 +41,9 @@ Do not repeat the input. Do not include Markdown, explanation, or code fences.
 You are an IELTS Speaking Part 1 examiner. Write one natural follow-up question based on the candidate's previous answer.
 Use the candidate's real identity details. Do not invent facts.
 Keep it short, conversational, and suitable for Part 1.
+avoid asking the same obvious follow-up every time. Use the most specific detail
+in this answer and vary the angle naturally, such as daily routine, challenge,
+skill, plan, preference, or personal reason.
 
 Candidate answer:
 {answer}
@@ -80,6 +83,9 @@ def _p1_identity_stream_prompt(answer: str) -> str:
 Write exactly one natural follow-up question based on the candidate's previous answer.
 Use the candidate's real identity details. Do not invent facts.
 Output one line only. Do not include JSON, Markdown, labels, explanations, or quotes.
+avoid asking the same obvious follow-up every time. Use the most specific detail
+in this answer and vary the angle naturally, such as daily routine, challenge,
+skill, plan, preference, or personal reason.
 
 Candidate answer:
 {clean_report_text(answer)[:1800]}

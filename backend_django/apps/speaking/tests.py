@@ -4330,6 +4330,56 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertIn("at University", prompt)
         self.assertEqual(result["ai_coaching"], bad_coaching)
 
+    def test_batch_turn_feedback_prompt_explains_asr_and_spoken_coaching_intent(self):
+        from apps.speaking.services import turn_feedback_batch_with_codex
+
+        user = get_user_model().objects.create_user(username="batch-prompt-intent", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="batch-prompt-intent-attempt",
+            mode="p1",
+            part="p1",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=0,
+            part="p1",
+            question="Do you prefer shopping online or in stores?",
+            transcript_raw="I prefer shopping online because the price is more transparent.",
+            transcript_cleaned="I prefer shopping online because the price is more transparent.",
+            metadata={"status": "completed"},
+        )
+        payload = {
+            "turns": [
+                {
+                    "turn_id": "t1",
+                    "display_transcript": "I prefer shopping online because the price is more transparent.",
+                    "display_transcript_markdown": "I prefer shopping online because the price is more transparent.",
+                    "band7_version": "I prefer shopping online because **the prices are more transparent**.",
+                    "ai_coaching": "回答方向清楚，可以补一个送货到家的结果。\n\n语法错误纠正：无",
+                }
+            ]
+        }
+
+        with patch("apps.speaking.services.run_codex", return_value=(json.dumps(payload), {"input_tokens": 100})) as mock_run:
+            turn_feedback_batch_with_codex(
+                [turn],
+                attempt,
+                "7",
+                None,
+                "batch_prompt_intent",
+                ai_source="codex_cli",
+            )
+
+        prompt = mock_run.call_args.args[0]
+        self.assertIn("a very modern, isolated way of living", prompt)
+        self.assertIn("A fuller believable answer is more useful", prompt)
+        self.assertIn("real speaking test has no capitals", prompt)
+        self.assertIn("only coach the real learner errors", prompt)
+
     def test_coaching_validator_allows_common_project_words_but_rejects_explicit_system_leak(self):
         from apps.speaking.services import acceptable_coaching_markdown
 

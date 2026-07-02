@@ -363,6 +363,10 @@ FOLLOW_UP_CLAUDE_TIMEOUT = 60
 P3_QUICK_FOLLOW_UP_CODEX_MODEL = SPEAKING_AI_DEFAULT_HTTP_MODEL
 P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT = 8
 P3_QUICK_FOLLOW_UP_CODEX_TIMEOUT = 12
+# Follow-up questions should react to the candidate's exact answer instead of
+# repeatedly asking the safest generic angle. Keep this higher than report
+# scoring/feedback temperatures, which should remain more deterministic.
+FOLLOW_UP_HTTP_TEMPERATURE = 0.6
 SPEAKING_REPORT_HTTP_TIMEOUT = 60
 # The relay occasionally stalls the TLS handshake / drops the connection on the heavy
 # report request; a fresh connection usually succeeds, so retry transient transport
@@ -415,7 +419,7 @@ def quick_follow_up_http_runner(
             {"role": "user", "content": prompt},
         ],
         max_tokens=80,
-        temperature=0.2,
+        temperature=FOLLOW_UP_HTTP_TEMPERATURE,
         timeout_seconds=P3_QUICK_FOLLOW_UP_HTTP_TIMEOUT,
         stream=True,
     )
@@ -1510,7 +1514,7 @@ def _generate_p1_identity_follow_up(answer: str, call_id: str, *, ai_source: str
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=80,
-                temperature=0.2,
+                temperature=FOLLOW_UP_HTTP_TEMPERATURE,
                 timeout_seconds=P1_FOLLOW_UP_HTTP_TIMEOUT,
                 stream=True,
             )
@@ -3352,6 +3356,8 @@ Band 7 version constraints:
 - Do not bold the whole answer or full sentences.
 - Example style: Well, **as a tech enthusiast**, I **usually spend** my evenings coding or **unwinding with** video games.
 - Do not use generic template lines such as "this is quite easy for me to answer", "connects with my daily life", or "closer to Band 7".
+- The Band {target} version must sound like a real, fluent candidate talking to an examiner: relaxed natural spoken English with the personal detail and easy connectors a good speaker actually uses, not stiff written prose. Why: the learner copies this to imitate, so it has to be something a person would genuinely say out loud and that an examiner enjoys hearing.
+- Preserve the candidate's core idea, but if their answer is thin or underdeveloped, you may go beyond it: add a natural reason, example, or concrete detail so the answer is rich enough for Band {target}. A fuller believable answer is more useful to the learner than a faithful but empty one.
 - If the transcript is weak, infer a sensible direct answer from the question type instead of writing a vague template.
 
 Coaching constraints:

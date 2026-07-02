@@ -39809,7 +39809,7 @@ body:not(.theme-dark) :is(
   font-weight: 780 !important;
 }
 
-body:not(.theme-dark) #historyPanel .turn-report-table :is(.p1-p3-content-row > td:nth-child(3), .p2-content-row > td:nth-child(2)) :is(.model-answer-markdown strong, strong) {
+body:not(.theme-dark) :is(#historyPanel, #detailPanel) .turn-report-table :is(.p1-p3-content-row > td:nth-child(3), .p2-content-row > td:nth-child(2)) :is(.model-answer-markdown strong, strong) {
   color: #2563eb !important;
   font-weight: 780 !important;
 }

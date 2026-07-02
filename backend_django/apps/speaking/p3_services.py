@@ -255,6 +255,9 @@ def _quick_follow_up_prompt(current_question: str, candidate_answer: str, focus:
 Write exactly one natural follow-up question based on the candidate's answer.
 Output one line only. Do not include JSON, Markdown, labels, explanations, or quotes.
 Do not repeat the current question. Make the follow-up more specific and deeper.
+avoid generic repeats such as asking for "an example" every time. Use the answer's
+most specific idea, then vary the angle: reason, consequence, comparison, exception,
+future change, or social impact.
 
 Current Part 3 question:
 {question}

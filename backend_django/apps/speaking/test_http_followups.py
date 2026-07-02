@@ -23,6 +23,17 @@ class _Provider:
         return _ProviderResult(self.text)
 
 
+class _CapturingProvider(_Provider):
+    def __init__(self, text: str, capture: dict):
+        super().__init__(text)
+        self.capture = capture
+
+    def complete_chat(self, *args, **kwargs):
+        self.capture["args"] = args
+        self.capture["kwargs"] = kwargs
+        return super().complete_chat(*args, **kwargs)
+
+
 @override_settings(
     AI_HTTP_BASE_URL="https://ai.example/v1",
     AI_HTTP_API_KEY="test-key",
@@ -63,6 +74,23 @@ class HttpFollowUpRoutingTests(SimpleTestCase):
 
         self.assertEqual(result["backend"], "http_api")
         self.assertEqual(captured["model"], "gpt-5.4-mini")
+
+    def test_p3_follow_up_http_uses_creative_temperature(self):
+        captured = {}
+        with patch(
+            "apps.speaking.services.HttpApiProvider",
+            return_value=_CapturingProvider("How might this affect families in the long run?", captured),
+        ):
+            result = services.quick_follow_up_http_runner(
+                "Why do some people prefer living in cities?",
+                "It gives people better jobs and services, so families can plan their lives more easily.",
+                question_type="cause_effect",
+            )
+
+        self.assertEqual(result["backend"], "http_api")
+        self.assertGreaterEqual(captured["kwargs"]["temperature"], 0.55)
+        user_prompt = captured["args"][0][1]["content"]
+        self.assertIn("avoid generic repeats", user_prompt)
 
     @override_settings(SPEAKING_FOLLOWUP_AI_CALL_MODE="codex")
     def test_p3_follow_up_can_force_codex_mode(self):
@@ -140,6 +168,22 @@ class HttpFollowUpRoutingTests(SimpleTestCase):
         self.assertEqual(result["follow_up"], "How does your internship connect with your software engineering studies?")
         self.assertEqual(result["backend"], "http_api")
         run_codex.assert_not_called()
+
+    def test_p1_identity_follow_up_http_uses_creative_temperature(self):
+        captured = {}
+        with patch(
+            "apps.speaking.services.HttpApiProvider",
+            return_value=_CapturingProvider('{"follow_up":"What part of your studies feels most useful in real life?"}', captured),
+        ):
+            result = services._generate_p1_identity_follow_up(
+                "I am a software engineering student, and I am doing an internship.",
+                "p1-temperature",
+            )
+
+        self.assertEqual(result["backend"], "http_api")
+        self.assertGreaterEqual(captured["kwargs"]["temperature"], 0.55)
+        user_prompt = captured["args"][0][1]["content"]
+        self.assertIn("avoid asking the same obvious follow-up every time", user_prompt)
 
     def test_p1_http_failure_falls_back_to_codex(self):
         with patch("apps.speaking.services.HttpApiProvider", side_effect=RuntimeError("http unavailable")), patch(
