@@ -6798,6 +6798,10 @@ body.theme-dark .language-takeaway-dict-toggle[data-dictionary-mode="en"] .dict-
   overflow: hidden !important;
 }
 
+.language-takeaway-actions-left .language-takeaway-spelling-btn.hidden {
+  display: none !important;
+}
+
 .language-takeaway-spelling-btn.is-busy::after {
   content: none !important;
   display: none !important;
@@ -9534,8 +9538,17 @@ body.is-dragging-p2-dialog * {
 }
 
 .p1-corpus-dialog-card .vditor-toolbar__item button {
-  width: 30px;
-  height: 30px;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 0 !important;
   border-radius: 6px;
 }
 
@@ -14587,6 +14600,43 @@ body.theme-dark .corpus-loading-card {
   width: 100%;
   min-width: 0;
   height: 46px;
+}
+
+.exam-status .p2-corpus-prep {
+  transition:
+    opacity 220ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 220ms ease !important;
+  will-change: opacity, transform, filter;
+}
+
+.exam-status .p2-corpus-prep.p2-prep-entering {
+  animation: p2PrepEnter 360ms cubic-bezier(0.18, 1.12, 0.28, 1) both !important;
+}
+
+.exam-status .p2-corpus-prep.p2-prep-leaving {
+  opacity: 0 !important;
+  transform: translateY(-6px) scale(0.975) !important;
+  filter: blur(1px) saturate(1.08) brightness(1.05) !important;
+  pointer-events: none !important;
+}
+
+@keyframes p2PrepEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(7px) scale(0.965);
+    filter: blur(2px) saturate(0.95) brightness(1.12);
+  }
+  54% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.012);
+    filter: blur(0) saturate(1.12) brightness(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: none;
+  }
 }
 
 .exam-status strong {
@@ -37127,6 +37177,12 @@ body.view-writingTakeawayBook .language-takeaway-card-wrap {
   position: relative !important;
 }
 
+body.view-takeawayBook .language-takeaway-card-wrap.is-review-current,
+body.view-writingTakeawayBook .language-takeaway-card-wrap.is-review-current {
+  z-index: 9999 !important;
+  overflow: visible !important;
+}
+
 body.view-takeawayBook .language-takeaway-card-wrap > .takeaway-review-mascot,
 body.view-writingTakeawayBook .language-takeaway-card-wrap > .takeaway-review-mascot {
   position: absolute !important;
@@ -37142,8 +37198,29 @@ body.view-writingTakeawayBook .language-takeaway-card-wrap > .takeaway-review-ma
   transform: translateX(-1px) !important;
   pointer-events: none !important;
   overflow: visible !important;
-  z-index: 8 !important;
-  contain: layout style !important;
+  z-index: 10000 !important;
+  contain: layout style paint size !important;
+  flex: 0 0 auto !important;
+  grid-area: auto !important;
+}
+
+.takeaway-review-mascot.is-body-layer {
+  position: fixed !important;
+  display: block !important;
+  left: 0;
+  top: 0;
+  right: auto !important;
+  bottom: auto !important;
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  min-height: 42px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  pointer-events: none !important;
+  overflow: visible !important;
+  z-index: 2147483000 !important;
+  contain: layout style paint size !important;
 }
 
 body.view-takeawayBook .language-takeaway-card-wrap > .takeaway-review-mascot .tk-brain-icon,
@@ -37151,6 +37228,11 @@ body.view-writingTakeawayBook .language-takeaway-card-wrap > .takeaway-review-ma
   width: 42px !important;
   height: 42px !important;
   transform-origin: 50% 50% !important;
+}
+
+body.view-takeawayBook .language-takeaway-card-wrap.is-review-current .language-takeaway-card,
+body.view-writingTakeawayBook .language-takeaway-card-wrap.is-review-current .language-takeaway-card {
+  padding-right: 58px !important;
 }
 
 /* P2/P1/P3 peek buttons and question progress: soften runtime appearance changes. */
@@ -39710,6 +39792,61 @@ body:not(.theme-dark) .p3-mode-row.p3-pixel-flow .p2-pixel-flow-canvas {
 
 body:not(.theme-dark) .p2-brainstorm-head-field .p2-pixel-flow-canvas {
   animation-name: p2BrainstormPixelFlowIgniteLight !important;
+}
+
+/* Report/editor markdown emphasis: make bold text visibly colored. This covers
+   P1/P2/P3 Band 7 answers, AI guidance, writing-report AI rewrites, and the
+   inline corpus markdown editor. */
+body:not(.theme-dark) :is(
+  .model-answer-markdown,
+  .coaching-content,
+  .writing-model-answer-markdown,
+  .p1-corpus-dialog-card .vditor-reset,
+  .p1-corpus-dialog-card .vditor-wysiwyg,
+  .p1-corpus-dialog-card .vditor-ir
+) :is(strong, b, [data-type="strong"]) {
+  color: #2563eb !important;
+  font-weight: 780 !important;
+}
+
+body:not(.theme-dark) #historyPanel .turn-report-table :is(.p1-p3-content-row > td:nth-child(3), .p2-content-row > td:nth-child(2)) :is(.model-answer-markdown strong, strong) {
+  color: #2563eb !important;
+  font-weight: 780 !important;
+}
+
+body.theme-dark :is(
+  .model-answer-markdown,
+  .coaching-content,
+  .writing-model-answer-markdown,
+  .p1-corpus-dialog-card .vditor-reset,
+  .p1-corpus-dialog-card .vditor-wysiwyg,
+  .p1-corpus-dialog-card .vditor-ir
+) :is(strong, b, [data-type="strong"]) {
+  color: color-mix(in srgb, var(--accent) 64%, #ffffff) !important;
+  font-weight: 780 !important;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 18%, transparent) !important;
+}
+
+body.theme-dark.font-academic :is(
+  .model-answer-markdown,
+  .coaching-content,
+  .writing-model-answer-markdown,
+  .p1-corpus-dialog-card .vditor-reset,
+  .p1-corpus-dialog-card .vditor-wysiwyg,
+  .p1-corpus-dialog-card .vditor-ir
+) :is(strong, b, [data-type="strong"]) {
+  color: #f1c7a8 !important;
+}
+
+body.theme-dark.font-popular :is(
+  .model-answer-markdown,
+  .coaching-content,
+  .writing-model-answer-markdown,
+  .p1-corpus-dialog-card .vditor-reset,
+  .p1-corpus-dialog-card .vditor-wysiwyg,
+  .p1-corpus-dialog-card .vditor-ir
+) :is(strong, b, [data-type="strong"]) {
+  color: #b7dcff !important;
 }
 
 .language-takeaway-popup.spelling-add-card {

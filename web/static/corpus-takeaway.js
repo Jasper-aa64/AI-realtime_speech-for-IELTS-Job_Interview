@@ -232,6 +232,10 @@
     let p1TopicModalResumeKey = "";
     let p2BankCorpusLoadToken = 0;
     let p2BankP3LoadToken = 0;
+    let takeawayReviewMascotPortal = null;
+    let takeawayReviewMascotAnchor = null;
+    let takeawayReviewMascotPositionRaf = 0;
+    let takeawayReviewMascotEventsBound = false;
 
     // ── P2/P3 bank corpus: persistent SWR cache + batch prefetch ──────────────
     // Memory cache holds resolved Promises; localStorage gives stale-while-
@@ -866,6 +870,7 @@
     function renderTakeawayReviewSurfaces(kind = "language") {
       updateTakeawayReviewDots();
       renderTakeawayReviewPanel(kind);
+      syncTakeawayReviewMascotPortal(kind);
     }
 
     function startTakeawayReview(kind = "language") {
@@ -1073,7 +1078,9 @@
     // there's no mascot to animate so the caller can commit immediately.
     function playTakeawayMascotFlyAway(kind, entryId, result, onDone) {
       const wrap = takeawayReviewCardWrap(kind, entryId);
-      const mascot = wrap?.querySelector(".takeaway-review-mascot");
+      const mascot = takeawayReviewMascotAnchor === wrap
+        ? takeawayReviewMascotPortal
+        : wrap?.querySelector(".takeaway-review-mascot");
       if (!mascot) return false;
       const session = takeawayReviewSession(kind);
       session.animatingId = String(entryId || "").trim();
@@ -2007,6 +2014,7 @@
         ? String(entry.last_ai_answer || entry.aiAnswer || entry.band7_version || "")
         : "";
       const wasCleared = openedIds.some((id) => state.p1Corpus.clearedQuestionIds?.has?.(id));
+      const needsSavedCorpusLookup = Boolean((storage.question_id || storage.question || preparedEntry.display_question) && !preparedEntry.corpus_text && !wasCleared);
       if (wasCleared) {
         preparedEntry = {
           ...preparedEntry,
@@ -2016,6 +2024,7 @@
           aiAnswer: reportReferenceAnswer,
         };
       }
+      preparedEntry._corpusHydrating = needsSavedCorpusLookup;
       state.p1Corpus.activeEntry = preparedEntry;
       const initialTopic = preparedEntry.topic || preparedEntry.prompt?.topic || "";
       const initialQuestion = preparedEntry.display_question || preparedEntry.question || "";
@@ -2032,7 +2041,7 @@
       }
       text("p1CorpusSaveStatus", preparedEntry.corpus_text || wasCleared ? "" : "正在查找已保存语料...");
       $("p1CorpusDialog")?.classList.remove("hidden");
-      if (!preparedEntry.corpus_text && !wasCleared) {
+      if (needsSavedCorpusLookup) {
         setCorpusEditorLoading("p1CorpusText", true, {
           title: "正在查找已保存语料",
           detail: "没有找到也可以直接开始编辑。",
@@ -2043,7 +2052,7 @@
         if (!editor) setCorpusEditorLoading("p1CorpusText", false);
         setTimeout(() => editor?.focus?.() || $("p1CorpusText")?.focus(), 0);
       });
-      if ((storage.question_id || storage.question || preparedEntry.display_question) && !preparedEntry.corpus_text && !wasCleared) {
+      if (needsSavedCorpusLookup) {
         let refreshedCorpus = false;
         if (!(state.p1Corpus.topics || []).length) {
           try {
@@ -2080,6 +2089,7 @@
           };
         }
       }
+      preparedEntry._corpusHydrating = false;
       if (token !== p1CorpusEditorLoadToken) return;
       if (!$("p1CorpusDialog") || $("p1CorpusDialog").classList.contains("hidden")) return;
       const activeStorage = p1CorpusStorageEntry(state.p1Corpus.activeEntry || {});
@@ -2110,6 +2120,10 @@
       text("p1CorpusSaveStatus", "");
     }
 
+    function p1CorpusEditorIsHydrating() {
+      return Boolean(state.p1Corpus.activeEntry?._corpusHydrating);
+    }
+
     function closeP1CorpusEditor(options = {}) {
       const restoreTopic = options.restoreTopic !== false;
       const resumeTopicKey = restoreTopic ? p1TopicModalResumeKey : "";
@@ -2126,6 +2140,10 @@
       if (!$("p1CorpusDialog") || $("p1CorpusDialog").classList.contains("hidden")) return;
       const entry = state.p1Corpus.activeEntry;
       const corpusText = getCorpusMarkdownValue("p1CorpusText").trim();
+      if (p1CorpusEditorIsHydrating() && !corpusText) {
+        closeP1CorpusEditor(options);
+        return;
+      }
       if (entry && !corpusText) {
         markP1CorpusEntryCleared(entry);
         const storage = p1CorpusStorageEntry(entry);
@@ -2328,11 +2346,11 @@
       const categories = state.p2Corpus.categories || [];
       const currentCards = state.p2Corpus.currentPart2Cards || [];
       const P2_CAT_META = {
-        place:   { label: "地点", color: "#059669", order: 1 },
-        special: { label: "特殊", color: "#db2777", order: 2 },
-        person:  { label: "人物", color: "#7c3aed", order: 3 },
-        event:   { label: "事件", color: "#d97706", order: 4 },
-        object:  { label: "物品", color: "#0284c7", order: 5 },
+        person:  { label: "人物", color: "#7c3aed", order: 1 },
+        place:   { label: "地点", color: "#059669", order: 2 },
+        event:   { label: "事件", color: "#d97706", order: 3 },
+        object:  { label: "物品", color: "#0284c7", order: 4 },
+        special: { label: "特殊", color: "#db2777", order: 5 },
       };
       const normalizeSeasonalCategory = (value) => {
         const raw = String(value || "").trim();
@@ -3115,13 +3133,76 @@
       `;
     }
 
+    function removeTakeawayReviewMascotPortal() {
+      if (takeawayReviewMascotPositionRaf) {
+        window.cancelAnimationFrame?.(takeawayReviewMascotPositionRaf);
+        takeawayReviewMascotPositionRaf = 0;
+      }
+      takeawayReviewMascotPortal?.remove();
+      takeawayReviewMascotPortal = null;
+      takeawayReviewMascotAnchor = null;
+    }
+
+    function positionTakeawayReviewMascotPortal() {
+      takeawayReviewMascotPositionRaf = 0;
+      const mascot = takeawayReviewMascotPortal;
+      const anchor = takeawayReviewMascotAnchor;
+      if (!mascot || !anchor || !anchor.isConnected) {
+        removeTakeawayReviewMascotPortal();
+        return;
+      }
+      const rect = anchor.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > window.innerHeight) {
+        mascot.style.opacity = "0";
+        return;
+      }
+      mascot.style.opacity = "";
+      mascot.style.left = `${Math.round(rect.right - 54)}px`;
+      mascot.style.top = `${Math.round(rect.bottom - 54)}px`;
+    }
+
+    function scheduleTakeawayReviewMascotPosition() {
+      if (takeawayReviewMascotPositionRaf) return;
+      takeawayReviewMascotPositionRaf = window.requestAnimationFrame(positionTakeawayReviewMascotPortal);
+    }
+
+    function bindTakeawayReviewMascotViewportEvents() {
+      if (takeawayReviewMascotEventsBound) return;
+      takeawayReviewMascotEventsBound = true;
+      window.addEventListener("scroll", scheduleTakeawayReviewMascotPosition, true);
+      window.addEventListener("resize", scheduleTakeawayReviewMascotPosition);
+    }
+
+    function ensureTakeawayReviewMascotPortal(wrap) {
+      if (!wrap || !document.body) return null;
+      if (!takeawayReviewMascotPortal) {
+        const template = document.createElement("template");
+        template.innerHTML = takeawayReviewMascotHtml().trim();
+        takeawayReviewMascotPortal = template.content.firstElementChild;
+        takeawayReviewMascotPortal.classList.add("is-body-layer");
+        document.body.appendChild(takeawayReviewMascotPortal);
+        bindTakeawayReviewMascotViewportEvents();
+      }
+      takeawayReviewMascotAnchor = wrap;
+      scheduleTakeawayReviewMascotPosition();
+      return takeawayReviewMascotPortal;
+    }
+
+    function syncTakeawayReviewMascotPortal(kind = "language") {
+      const session = takeawayReviewSession(kind);
+      const wrap = session.active && session.currentId ? takeawayReviewCardWrap(kind, session.currentId) : null;
+      if (wrap) ensureTakeawayReviewMascotPortal(wrap);
+      else removeTakeawayReviewMascotPortal();
+    }
+
     function setTakeawayReviewMascot(wrap, on) {
       if (!wrap) return;
       const existing = wrap.querySelector(".takeaway-review-mascot");
+      existing?.remove();
       if (on) {
-        if (!existing) wrap.insertAdjacentHTML("beforeend", takeawayReviewMascotHtml());
-      } else if (existing) {
-        existing.remove();
+        ensureTakeawayReviewMascotPortal(wrap);
+      } else if (takeawayReviewMascotAnchor === wrap) {
+        removeTakeawayReviewMascotPortal();
       }
     }
 
@@ -3282,7 +3363,6 @@
             deleteAttr: "data-takeaway-delete",
             entryId: item.entry_id,
           })}
-          ${isCurrent ? takeawayReviewMascotHtml() : ""}
         </div>
       `;
       };
@@ -6366,6 +6446,7 @@
       state.p2Corpus.activeEntry = {
         ...entry,
         is_bank_card: true,
+        _corpusHydrating: true,
         entry_id: entry.entry_id || questionId,
         cue_id: entry.cue_id || questionId,
         title: titleText,
@@ -6462,6 +6543,7 @@
         ...entry,
         ...payload,
         is_bank_card: true,
+        _corpusHydrating: false,
         entry_id: entry.entry_id || payload.question_id || questionId,
         cue_id: payload.question_id || entry.cue_id || questionId,
         title,
@@ -6752,6 +6834,7 @@
       state.p2Corpus.activeBankP3Entry = {
         ...entry,
         is_bank_card: true,
+        _corpusHydrating: true,
         question_id: questionId,
         title,
         cue_title: title,
@@ -6813,6 +6896,7 @@
       state.p2Corpus.activeBankP3Entry = {
         ...entry,
         is_bank_card: true,
+        _corpusHydrating: false,
         question_id: payload.p2_question_id || questionId,
         title,
         cue_title: title,
@@ -6875,6 +6959,10 @@
       if (!$("p2CorpusDialog") || $("p2CorpusDialog").classList.contains("hidden")) return;
       const entry = state.p2Corpus.activeEntry || {};
       const materialText = getCorpusMarkdownValue("p2CorpusText").trim();
+      if (entry._corpusHydrating && !materialText) {
+        closeP2CorpusEditor();
+        return;
+      }
       if (entry.is_bank_card) {
         const brainstormIdea = p2CorpusBrainstormIdeaValue();
         const questionId = p2BankQuestionId(entry);
@@ -6908,6 +6996,11 @@
       if (!$("p2CorpusP3Dialog") || $("p2CorpusP3Dialog").classList.contains("hidden")) return;
       if (state.p2Corpus.activeBankP3Entry) {
         const entry = state.p2Corpus.activeBankP3Entry;
+        const activeText = getCorpusMarkdownValue("p2CorpusP3FollowUp").trim();
+        if (entry._corpusHydrating && !activeText) {
+          closeP2CorpusP3Editor();
+          return;
+        }
         syncActiveP2BankP3Draft();
         const questionId = p2BankQuestionId(entry);
         (entry.items || []).forEach((item) => {
@@ -7573,7 +7666,6 @@
             deleteAttr: "data-writing-takeaway-delete",
             entryId: item.entry_id,
           })}
-          ${isCurrent ? takeawayReviewMascotHtml() : ""}
         </div>
       `;
       };

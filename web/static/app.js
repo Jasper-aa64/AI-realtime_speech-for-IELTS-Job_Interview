@@ -1691,6 +1691,7 @@ const corpusMarkdownEditorController = window.IELTSCorpusMarkdownEditor?.createC
 if (!corpusMarkdownEditorController) {
   throw new Error("IELTSCorpusMarkdownEditor module failed to initialize.");
 }
+prefetchCorpusEditor(state.prefetch.token).catch(() => {});
 
 const realtimePcmUplinkController = window.IELTSRealtimePcmUplink?.createRealtimePcmUplinkController?.({
   state,
@@ -3306,6 +3307,25 @@ function renderCueCardInPrompt(cue) {
   setPromptHtml(cueCardHtml(cue), "cue");
 }
 
+function setP2PrepPanelHidden(panel, hidden, options = {}) {
+  if (!panel) return;
+  window.clearTimeout(panel._p2PrepClearTimer);
+  panel._p2PrepClearTimer = null;
+  setAnimatedHidden(panel, hidden, {
+    enteringClass: "p2-prep-entering",
+    leavingClass: "p2-prep-leaving",
+    duration: 360,
+  });
+  if (hidden && options.clear) {
+    panel._p2PrepClearTimer = window.setTimeout(() => {
+      if (panel.classList.contains("hidden") || panel.classList.contains("p2-prep-leaving")) {
+        panel.innerHTML = "";
+      }
+      panel._p2PrepClearTimer = null;
+    }, 380);
+  }
+}
+
 async function renderP2CorpusPrepPanel(renderOptions = {}) {
   const panel = $("p2CorpusPrepPanel");
   const expectedSessionId = renderOptions.sessionId ?? state.practiceSessionId;
@@ -3317,8 +3337,7 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
     return true;
   };
   if (!isCurrentP2Prep()) {
-    panel?.classList.add("hidden");
-    if (panel) panel.innerHTML = "";
+    setP2PrepPanelHidden(panel, true, { clear: true });
     return;
   }
   if (!(state.p2Corpus.categories || []).length) {
@@ -3362,7 +3381,6 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
       </button>`;
     }),
   ].join("");
-  panel.classList.remove("hidden");
   panel.innerHTML = `
     <div class="p2-corpus-prep-copy">
       <strong>本次 P2 回答链接素材</strong>
@@ -3378,6 +3396,7 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
       </div>
     </div>
   `;
+  setP2PrepPanelHidden(panel, false);
   updateP2CorpusPeekButton(state.currentTurn);
   const trigger = $("p2CorpusPrepTrigger");
   const menu = $("p2CorpusPrepMenu");
@@ -9428,7 +9447,7 @@ function writingParagraphReviewHtml(entry, score, reviews) {
             </div>
           </td>
           <td>
-            <p>${escapeHtml(item.model || "暂无 AI 改写。").replace(/\n/g, "<br>")}</p>
+            <div class="writing-model-answer-markdown">${renderMarkdown(item.model || "暂无 AI 改写。")}</div>
           </td>
         </tr>
         <tr class="writing-paragraph-coaching-row">
@@ -10963,6 +10982,8 @@ function renderDetail(attempt, updateView = true, options = {}) {
     button.addEventListener("click", () => regenerateTurnTranscript(button));
   });
   document.querySelectorAll("[data-edit-turn-corpus]").forEach((button) => {
+    button.addEventListener("pointerenter", warmReportCorpusEditing, { once: true });
+    button.addEventListener("focus", warmReportCorpusEditing, { once: true });
     button.addEventListener("click", () => {
       if (!state.account.authenticated) {
         promptGuestLogin("登录后才能编辑语料库并保存到你的账号。");
@@ -10998,8 +11019,23 @@ function renderDetail(attempt, updateView = true, options = {}) {
   } else {
     detailPanel.scrollTo({ top: 0, behavior: "smooth" });
   }
+  warmReportCorpusEditing();
   refreshReportCorpusButtonStates();
   hydrateModelTtsPlaceholders();
+}
+
+function warmReportCorpusEditing() {
+  if (!state.account.authenticated) return;
+  const buttons = Array.from(document.querySelectorAll("#detailPanel [data-edit-turn-corpus]"));
+  if (!buttons.length) return;
+  const token = state.prefetch.token;
+  prefetchCorpusEditor(token).catch(() => {});
+  if (buttons.some((button) => (button.dataset.corpusKind || "") === "p1")) {
+    prefetchP1Corpus(token).catch(() => {});
+  }
+  if (buttons.some((button) => /^p2|p3_bank|p2_corpus_p3/.test(button.dataset.corpusKind || ""))) {
+    prefetchP2Corpus(token).catch(() => {});
+  }
 }
 
 // After a report renders, ask the backend which 编辑语料库 targets already have
