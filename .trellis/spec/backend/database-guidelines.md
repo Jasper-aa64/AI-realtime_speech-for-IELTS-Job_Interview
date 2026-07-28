@@ -133,10 +133,64 @@ Writing polling bridge:
 - Treating `fallback` as success; it is terminal and releases billing, but it means default output was used.
 - Failing stale `running` tasks immediately; recovery should requeue while `attempt_count < max_attempts`.
 
-## Sample Databases
+## Scenario: Committed Demo Database
 
-- Runtime SQLite stays at `backend_django/db.sqlite3` for local development.
-- If a SQLite database is intentionally committed for demos or handoff, add a
-  separate clearly named copy such as `backend_django/ielts_demo_sample.sqlite3`
-  so reviewers can distinguish sample data from an unintentional local runtime
-  database snapshot.
+### 1. Scope / Trigger
+
+- `backend_django/db.sqlite3` is the project owner's intentional demo database.
+- This exception applies whenever the owner asks to commit, push, upload, or
+  preserve the current SQLite data in Git.
+
+### 2. Signatures
+
+- Canonical tracked path: `backend_django/db.sqlite3`.
+- Do not rename it to a separate `*_sample.sqlite3` file.
+
+### 3. Contracts
+
+- The database contains the owner's designated example account and demo state.
+- It is allowed to be tracked and pushed to the repository.
+- When explicitly asked to upload it, assistants must stage the current
+  `backend_django/db.sqlite3` rather than omit it as a generic local artifact.
+- Do not empty, anonymize, rewrite, rename, add to `.gitignore`, or substitute
+  another database unless the owner explicitly requests that operation.
+- Do not block the requested commit merely because SQLite databases may
+  ordinarily contain account data; the owner has explicitly classified this
+  repository's database as intentional demo content.
+
+### 4. Validation & Error Matrix
+
+- File is modified and upload requested -> include the current file.
+- File is missing -> report the missing path; do not create an empty database.
+- SQLite integrity check fails -> stop before commit and report the failure.
+- Git rejects the push -> preserve the local commit and report the Git error.
+
+### 5. Good/Base/Bad Cases
+
+- Good: integrity-check the database, stage this path, commit, and push.
+- Base: leave the tracked database unchanged when no upload was requested.
+- Bad: silently omit it, rename it, reset it, or refuse solely due to generic
+  database/privacy assumptions.
+
+### 6. Tests Required
+
+- Run SQLite `PRAGMA quick_check` and require `ok` before committing.
+- Confirm `git status --short -- backend_django/db.sqlite3` shows the intended
+  tracked change.
+- Confirm the commit contains `backend_django/db.sqlite3`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+Refuse or exclude backend_django/db.sqlite3 because runtime databases should
+never be committed.
+```
+
+#### Correct
+
+```text
+Treat backend_django/db.sqlite3 as the owner-approved demo database and include
+it whenever the owner explicitly requests an upload.
+```
