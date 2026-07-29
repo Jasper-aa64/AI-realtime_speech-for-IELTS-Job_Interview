@@ -590,15 +590,9 @@ def p3_bank_followup_ids_for_questions(cue_id: str, questions: list[str]) -> lis
     ]
 
 
-def p3_bank_practice_question_counts(user, cue_id: str, questions: list[str]) -> dict[str, int]:
-    """Balanced per-follow-up counts for fixed P3 bank practice.
-
-    SpeakingTrainingObservation is the durable source: it is written only after
-    AI report feedback completes and survives user report deletion. Repeated
-    bridge/grey questions in the same coverage round do not advance above their
-    siblings' current minimum count.
-    """
-    followup_ids = p3_bank_followup_ids_for_questions(cue_id, questions)
+def _balanced_p3_bank_question_counts(user, followup_ids: list[str]) -> dict[str, int]:
+    """Count scored fixed-bank follow-ups without letting repeats skip a cycle."""
+    followup_ids = list(dict.fromkeys(followup_ids))
     if not followup_ids:
         return {}
     counts = {followup_id: 0 for followup_id in followup_ids}
@@ -635,12 +629,60 @@ def p3_bank_practice_question_counts(user, cue_id: str, questions: list[str]) ->
     return counts
 
 
-def p3_bank_practice_progress(user, cue_id: str, questions: list[str]) -> dict[str, Any]:
+def p3_bank_practice_question_counts(user, cue_id: str, questions: list[str]) -> dict[str, int]:
+    """Balanced per-follow-up counts for one fixed P3 card."""
+    return _balanced_p3_bank_question_counts(
+        user,
+        p3_bank_followup_ids_for_questions(cue_id, questions),
+    )
+
+
+def p3_bank_library_question_counts(
+    user,
+    topics: list[dict[str, Any]],
+) -> dict[str, int]:
+    """Return one shared-cycle count map for every fixed P3 question in scope.
+
+    A cycle belongs to the complete eligible bank, not to an individual P2
+    card. Processing all observation sessions together prevents a repeatedly
+    practised card from receiving credit for cycle N+1 while another card is
+    still unfinished in cycle N.
+    """
+    followup_ids: list[str] = []
+    for topic in topics:
+        cue_id = str(topic.get("cue_id") or p2_cue_id(topic))
+        questions = [
+            clean_report_text(str(item))[:260]
+            for item in topic.get("p3_follow_ups") or []
+            if clean_report_text(str(item))
+        ]
+        followup_ids.extend(p3_bank_followup_ids_for_questions(cue_id, questions))
+    return _balanced_p3_bank_question_counts(user, followup_ids)
+
+
+def p3_bank_practice_progress(
+    user,
+    cue_id: str,
+    questions: list[str],
+    *,
+    library_question_counts: dict[str, int] | None = None,
+    library_cycle_floor: int | None = None,
+) -> dict[str, Any]:
     clean_questions = [clean_report_text(str(question))[:260] for question in questions if clean_report_text(str(question))]
     followup_ids = p3_bank_followup_ids_for_questions(cue_id, clean_questions)
     rounds = p3_bank_practice_rounds(list(range(len(clean_questions))))
-    counts = p3_bank_practice_question_counts(user, cue_id, clean_questions)
-    min_count = min((counts.get(followup_id, 0) for followup_id in followup_ids), default=0)
+    if library_question_counts is None:
+        counts = p3_bank_practice_question_counts(user, cue_id, clean_questions)
+    else:
+        counts = {
+            followup_id: int(library_question_counts.get(followup_id, 0) or 0)
+            for followup_id in followup_ids
+        }
+    min_count = (
+        max(0, int(library_cycle_floor))
+        if library_cycle_floor is not None
+        else min((counts.get(followup_id, 0) for followup_id in followup_ids), default=0)
+    )
     current_cycle_indexes = [
         index for index, followup_id in enumerate(followup_ids)
         if counts.get(followup_id, 0) > min_count
@@ -662,6 +704,13 @@ def p3_bank_practice_progress(user, cue_id: str, questions: list[str]) -> dict[s
         for round_index, round_items in enumerate(rounds)
         if round_items and all(index in current_cycle_indexes for index in round_items)
     ]
+    completed_count = len(current_cycle_indexes)
+    if not completed_count:
+        progress_state = "none"
+    elif completed_count >= len(followup_ids):
+        progress_state = "complete"
+    else:
+        progress_state = "partial"
     return {
         "practice_round_count": len(rounds),
         "practice_rounds": [
@@ -675,6 +724,8 @@ def p3_bank_practice_progress(user, cue_id: str, questions: list[str]) -> dict[s
         ],
         "practice_question_counts": counts,
         "practice_cycle": min_count + 1,
+        "practice_progress_state": progress_state,
+        "practice_current_cycle_completed_count": completed_count,
         "practice_current_cycle_question_indexes": current_cycle_indexes,
         "practice_completed_round_indexes": completed_round_indexes,
         "practice_completed_round_count": len(completed_round_indexes),
@@ -969,6 +1020,8 @@ def p2_topic_card_payload(
             "practice_rounds": [],
             "practice_question_counts": {},
             "practice_cycle": 1,
+            "practice_progress_state": "none",
+            "practice_current_cycle_completed_count": 0,
             "practice_current_cycle_question_indexes": [],
             "practice_completed_round_indexes": completed_round_indexes,
             "practice_completed_round_count": len(completed_round_indexes),
@@ -1043,6 +1096,8 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
         entry.followup_id: entry
         for entry in P3BankFollowupCorpusEntry.objects.filter(user=user, p2_question_id__in=topic_cue_ids)
     }
+    library_question_counts = p3_bank_library_question_counts(user, selected_topics)
+    library_cycle_floor = min(library_question_counts.values(), default=0)
     current_part2_cards = [
         p2_topic_card_payload(
             topic,
@@ -1056,6 +1111,8 @@ def p2_corpus_library(user, scope: str | None = None) -> dict[str, Any]:
                     for item in topic.get("p3_follow_ups") or []
                     if clean_report_text(str(item))
                 ],
+                library_question_counts=library_question_counts,
+                library_cycle_floor=library_cycle_floor,
             ),
         )
         for topic in selected_topics

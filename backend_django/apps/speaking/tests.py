@@ -1590,15 +1590,19 @@ class QuestionBankApiTests(TestCase):
         add_observed_round(0, "round-0")
         completed = self.client.get("/api/p2-corpus").json()
         progress = next(item for item in completed["current_part2_cards"] if item["cue_id"] == cue_id)
-        self.assertEqual(progress["practice_completed_round_indexes"], [])
-        self.assertFalse(progress["practice_is_complete"])
-        self.assertEqual(progress["practice_cycle"], 2)
+        self.assertEqual(progress["practice_completed_round_indexes"], [0, 1])
+        self.assertTrue(progress["practice_is_complete"])
+        self.assertEqual(progress["practice_progress_state"], "complete")
+        self.assertEqual(progress["practice_cycle"], 1)
         self.assertEqual(progress["practice_next_round_index"], 0)
+        self.assertEqual(progress["practice_next_question_indexes"], [])
 
         add_observed_round(0, "round-0-cycle-2")
         repeated = self.client.get("/api/p2-corpus").json()
         progress = next(item for item in repeated["current_part2_cards"] if item["cue_id"] == cue_id)
-        self.assertEqual(progress["practice_next_round_index"], 1)
+        self.assertEqual(progress["practice_cycle"], 1)
+        self.assertEqual(progress["practice_progress_state"], "complete")
+        self.assertTrue(all(count == 1 for count in progress["practice_question_counts"].values()))
 
     def test_p2_corpus_p3_progress_uses_observations_after_report_delete(self):
         cards = self.client.get("/api/p2-corpus").json()["current_part2_cards"]
@@ -1683,7 +1687,8 @@ class QuestionBankApiTests(TestCase):
         progress = next(item for item in updated["current_part2_cards"] if item["cue_id"] == cue_id)
 
         self.assertEqual(progress["practice_question_counts"], {followup_id: 1 for followup_id in followup_ids})
-        self.assertEqual(progress["practice_cycle"], 2)
+        self.assertEqual(progress["practice_cycle"], 1)
+        self.assertEqual(progress["practice_progress_state"], "complete")
         self.assertEqual(progress["practice_next_round_index"], 0)
 
     def test_p2_corpus_returns_global_p3_bank_cycle_summary(self):
@@ -1747,6 +1752,66 @@ class QuestionBankApiTests(TestCase):
         self.assertEqual(completed["completed_cycle"], 1)
         self.assertEqual(completed["practice_cycle"], 2)
         self.assertEqual(completed["current_cycle_done_count"], 0)
+
+    def test_p2_corpus_keeps_completed_card_in_global_cycle_until_whole_bank_is_done(self):
+        topics = [
+            {
+                "cue_id": "p2cue:global-card-a",
+                "title": "Describe a river",
+                "category": "place",
+                "p3_theme": "nature",
+                "p3_follow_ups": [
+                    "Why are rivers important?",
+                    "How do people protect rivers?",
+                    "Will rivers matter more in the future?",
+                ],
+            },
+            {
+                "cue_id": "p2cue:global-card-b",
+                "title": "Describe a building",
+                "category": "place",
+                "p3_theme": "architecture",
+                "p3_follow_ups": [
+                    "Why do cities build tall buildings?",
+                    "How do old and new buildings differ?",
+                    "Should governments protect historic buildings?",
+                ],
+            },
+        ]
+        bank = MagicMock()
+        bank.part2_for_scope.return_value = topics
+        now = timezone.now()
+        first_topic = topics[0]
+        for question_index, question in enumerate(first_topic["p3_follow_ups"]):
+            SpeakingTrainingObservation.objects.create(
+                observation_id=f"global-card-a-{question_index}",
+                user=self.user,
+                legacy_attempt_id="global-card-a-attempt",
+                legacy_turn_id=f"global-card-a-turn-{question_index}",
+                question_id=corpus_services.p3_bank_followup_id(
+                    first_topic["cue_id"],
+                    question,
+                    question_index,
+                ),
+                part="p3",
+                question=question,
+                transcript="This is a completed answer.",
+                relevance=Decimal("1.000"),
+                observed_at=now + timedelta(seconds=question_index),
+                next_due=now,
+            )
+
+        with patch("apps.speaking.corpus_services.get_question_bank", return_value=bank):
+            payload = self.client.get("/api/p2-corpus").json()
+
+        first_card, second_card = payload["current_part2_cards"]
+        self.assertEqual(payload["p3_bank_practice_summary"]["practice_cycle"], 1)
+        self.assertEqual(first_card["practice_cycle"], 1)
+        self.assertEqual(first_card["practice_progress_state"], "complete")
+        self.assertEqual(first_card["practice_current_cycle_completed_count"], 3)
+        self.assertEqual(second_card["practice_cycle"], 1)
+        self.assertEqual(second_card["practice_progress_state"], "none")
+        self.assertEqual(second_card["practice_current_cycle_completed_count"], 0)
 
     def test_p2_corpus_category_counts_user_saved_material_not_season_topics(self):
         payload = self.client.get("/api/p2-corpus").json()

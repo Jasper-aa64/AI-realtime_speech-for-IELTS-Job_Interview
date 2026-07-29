@@ -12466,8 +12466,45 @@ function numberSet(values = []) {
     .filter((value) => Number.isInteger(value) && value >= 0));
 }
 
-function p3BankPracticeCycle(entry = {}) {
-  return Math.max(1, Number(entry.practice_cycle) || 1);
+function p3BankPracticeSummary() {
+  return state.p2Corpus.p3BankPracticeSummary || {};
+}
+
+function p3BankPracticeCycle() {
+  return Math.max(1, Number(p3BankPracticeSummary().practice_cycle) || 1);
+}
+
+function p3BankCardProgressState(entry = {}) {
+  const explicit = String(entry.practice_progress_state || "").trim();
+  if (["none", "partial", "complete"].includes(explicit)) return explicit;
+  const total = p2BankCardFollowUps(entry).length;
+  const completed = Math.max(
+    0,
+    Number(entry.practice_current_cycle_completed_count)
+      || numberSet(entry.practice_current_cycle_question_indexes).size,
+  );
+  if (!completed) return "none";
+  return completed >= total ? "complete" : "partial";
+}
+
+function p3BankCardProgressLabel(entry = {}) {
+  return {
+    none: "未完成",
+    partial: "完成一半",
+    complete: "全部完成",
+  }[p3BankCardProgressState(entry)] || "未完成";
+}
+
+function syncP3BankPickerCycleStatus() {
+  const status = $("#p3BankPickerCycleStatus");
+  if (!status) return;
+  const summary = p3BankPracticeSummary();
+  const cycle = p3BankPracticeCycle();
+  const total = Math.max(0, Number(summary.total_question_count) || 0);
+  const done = Math.max(0, Number(summary.current_cycle_done_count) || 0);
+  status.textContent = total
+    ? `第 ${cycle} 周目 · 已完成 ${Math.min(done, total)}/${total} 道追问`
+    : `第 ${cycle} 周目`;
 }
 
 function p3BankNextQuestionIndexes(entry = {}) {
@@ -12522,9 +12559,12 @@ function buildLocalP3BankPlanFromCard(entry = {}) {
     };
   }).filter((item) => item.question);
   const doneIndexes = numberSet(entry.practice_current_cycle_question_indexes);
-  const willCompleteCycle = Boolean(followUps.length)
-    && indexes.length
-    && followUps.every((_question, index) => doneIndexes.has(index) || indexes.includes(index));
+  const summary = p3BankPracticeSummary();
+  const globalDoneCount = Math.max(0, Number(summary.current_cycle_done_count) || 0);
+  const globalQuestionCount = Math.max(0, Number(summary.total_question_count) || 0);
+  const newQuestionCount = indexes.filter((index) => !doneIndexes.has(index)).length;
+  const willCompleteCycle = globalQuestionCount > 0
+    && globalDoneCount + newQuestionCount >= globalQuestionCount;
   return {
     version: 1,
     theme: title,
@@ -12545,10 +12585,10 @@ function buildLocalP3BankPlanFromCard(entry = {}) {
     p3_bank_cue_id: questionId,
     p3_bank_round_index: Math.max(0, Number(entry.practice_next_round_index) || 0),
     p3_bank_round_count: Math.max(0, Number(entry.practice_round_count) || 0),
-    p3_bank_practice_cycle: p3BankPracticeCycle(entry),
+    p3_bank_practice_cycle: p3BankPracticeCycle(),
     p3_bank_next_question_indexes: indexes,
-    p3_bank_current_cycle_done_count: doneIndexes.size,
-    p3_bank_cycle_question_count: followUps.length,
+    p3_bank_current_cycle_done_count: globalDoneCount,
+    p3_bank_cycle_question_count: globalQuestionCount,
     p3_bank_will_complete_cycle: willCompleteCycle,
     p3_bank_followup_ids: questions.map((item) => item.followup_id).filter(Boolean),
   };
@@ -12562,33 +12602,6 @@ function loadP3BankPlanFromCard(entry = {}, message = "已载入固定追问，�
   renderP3PlanPreview();
   syncP3LaunchPanel(message);
   return state.p3Plan;
-}
-
-function p3BankRoundChipsHtml(entry = {}) {
-  const rounds = Array.isArray(entry.practice_rounds) ? entry.practice_rounds : [];
-  const doneIndexes = numberSet(entry.practice_current_cycle_question_indexes);
-  const nextIndexes = numberSet(p3BankNextQuestionIndexes(entry));
-  if (!rounds.length) return "";
-  return `
-    <div class="p3-bank-round-strip" aria-label="当前周目练习进度">
-      ${rounds.map((round, roundIndex) => {
-        const indexes = (Array.isArray(round.question_indexes) ? round.question_indexes : [])
-          .map((value) => Number(value))
-          .filter((value) => Number.isInteger(value) && value >= 0);
-        const isDone = indexes.length > 0 && indexes.every((index) => doneIndexes.has(index));
-        const isNext = indexes.some((index) => nextIndexes.has(index));
-        const label = indexes.map((index) => `Q${index + 1}`).join(" ");
-        return `<span class="p3-bank-round-chip${isDone ? " is-done" : ""}${isNext ? " is-next" : ""}">${escapeHtml(label || `R${roundIndex + 1}`)}</span>`;
-      }).join("")}
-    </div>
-  `;
-}
-
-function p3BankPracticeLabel(entry = {}) {
-  const followUps = p2BankCardFollowUps(entry);
-  const doneCount = numberSet(entry.practice_current_cycle_question_indexes).size;
-  const nextCount = p3BankNextQuestionIndexes(entry).length || Math.min(4, followUps.length);
-  return `第 ${p3BankPracticeCycle(entry)} 周目 · 已练 ${doneCount}/${followUps.length} · 本次 ${nextCount} 题`;
 }
 
 function p3BankCardsWithFollowUps() {
@@ -12622,7 +12635,7 @@ function setSelectedP3BankCard(entry) {
     theme: title,
     p2QuestionId: questionId,
     p3FollowUps: followUps,
-    practiceCycle: p3BankPracticeCycle(entry),
+    practiceCycle: p3BankPracticeCycle(),
     practiceNextQuestionIndexes: p3BankNextQuestionIndexes(entry),
     categoryLabel: entry.label || entry.category || "",
   };
@@ -12642,37 +12655,33 @@ async function ensureSelectedP3BankCard() {
 
 function p3BankCardPreviewHtml(entry) {
   const title = p2BankCardTitle(entry);
-  const followUps = p2BankCardFollowUps(entry);
   const bullets = (entry.bullets || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-  const completedRoundCount = Math.max(0, Number(entry.practice_completed_round_count) || 0);
-  const progressClass = completedRoundCount > 0 ? " p3-bank-picker-card--partial" : "";
-  const progressLabel = p3BankPracticeLabel(entry);
+  const progressState = p3BankCardProgressState(entry);
+  const progressLabel = p3BankCardProgressLabel(entry);
   return `
-    <article class="p3-bank-picker-card${progressClass}${p2BankQuestionId(entry) === state.p3SelectedBankCardId ? " active" : ""}" tabindex="0" role="button" data-p3-bank-card="${escapeHtml(p2BankQuestionId(entry))}">
+    <article class="p3-bank-picker-card p3-bank-picker-card--${progressState}${p2BankQuestionId(entry) === state.p3SelectedBankCardId ? " active" : ""}" tabindex="0" role="button" data-p3-bank-card="${escapeHtml(p2BankQuestionId(entry))}">
       <div class="p3-bank-card-top">
         <span>${escapeHtml(entry.label || entry.category || "P2")}</span>
         <em>${escapeHtml(progressLabel)}</em>
       </div>
       <strong>${escapeHtml(title)}</strong>
       ${bullets ? `<ul>${bullets}</ul>` : ""}
-      ${p3BankRoundChipsHtml(entry)}
     </article>
   `;
 }
 
 function p3SelectedBankCardHtml(entry) {
   const title = p2BankCardTitle(entry);
-  const followUps = p2BankCardFollowUps(entry);
   const bullets = (entry.bullets || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const progressState = p3BankCardProgressState(entry);
   return `
-    <article class="p3-bank-picker-card p3-bank-context-card active" tabindex="0" role="button" data-p3-bank-picker-open>
+    <article class="p3-bank-picker-card p3-bank-picker-card--${progressState} p3-bank-context-card active" tabindex="0" role="button" data-p3-bank-picker-open>
       <div class="p3-bank-card-top">
         <span>${escapeHtml(entry.label || entry.category || "P2")}</span>
-        <em>${escapeHtml(p3BankPracticeLabel(entry))} · 点击切换题卡</em>
+        <em>${escapeHtml(p3BankCardProgressLabel(entry))} · 点击切换题卡</em>
       </div>
       <strong>${escapeHtml(title)}</strong>
       ${bullets ? `<ul>${bullets}</ul>` : ""}
-      ${p3BankRoundChipsHtml(entry)}
     </article>
   `;
 }
@@ -12692,6 +12701,7 @@ async function renderP3BankPicker(options = {}) {
   const list = $("#p3BankPickerList");
   if (!list) return;
   const loaded = await refreshP3BankPickerCorpus(Boolean(options.force));
+  syncP3BankPickerCycleStatus();
   if (!loaded) {
     // Replace the loading spinner with an error note so it never hangs.
     list.innerHTML = `
