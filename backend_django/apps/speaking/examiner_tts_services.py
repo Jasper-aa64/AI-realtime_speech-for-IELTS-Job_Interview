@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import sys
 import threading
@@ -9,7 +10,7 @@ from typing import Any
 from django.db import close_old_connections, transaction
 from django.db.utils import DatabaseError
 
-from .models import SpeakingAttempt
+from .models import SpeakingAttempt, SpeakingTurn
 from .runtime_payload_services import _find_turn, _load_attempt_for_user
 from .text_utils import clean_report_text
 from .tts_services import cached_tts_url as _cached_tts_url
@@ -212,6 +213,29 @@ def _cached_examiner_tts_for_turn(attempt_id: str, turn_id: str, examiner_text: 
     return None
 
 
+def _generate_fixed_examiner_tts_now(fixed_item: dict[str, str], examiner_text: str) -> dict[str, Any]:
+    cached_url = _cached_examiner_url("examiner", fixed_item["key"])
+    if cached_url:
+        return _with_examiner_tts_identity(
+            {
+                "provider": "volcengine",
+                "status": "cached",
+                "audio_url": cached_url,
+                "content_type": "audio/mpeg",
+            },
+            examiner_text,
+            fixed_item["key"],
+        )
+    try:
+        tts = _warm_fixed_examiner_tts_item_facade(fixed_item)
+    except Exception as exc:
+        tts = {
+            **_fixed_examiner_fallback(fixed_item["key"]),
+            "message": f"Fixed examiner audio unavailable: {exc}",
+        }
+    return _with_examiner_tts_identity(tts, examiner_text, fixed_item["key"])
+
+
 def warm_fixed_examiner_tts() -> dict[str, Any]:
     """Ensure fixed examiner prompts are cached before the learner starts."""
     items = []
@@ -233,6 +257,62 @@ def warm_fixed_examiner_tts() -> dict[str, Any]:
     }
 
 
+def warm_examiner_tts_for_attempt(user, attempt_id: str, turn_ids: list[str] | None = None) -> dict[str, Any]:
+    """Queue every known examiner turn once and return its durable TTS state.
+
+    This deliberately does not synthesize in the request thread: practice can
+    enter its first question immediately while the bounded background pool
+    prepares the remaining known P1/P3 prompts.
+    """
+    attempt = _load_attempt_for_user(user, attempt_id)
+    requested_ids = list(dict.fromkeys(str(value or "").strip() for value in (turn_ids or []) if str(value or "").strip()))
+    turns = list(attempt.turns.order_by("sequence"))
+    by_id = {turn.turn_id: turn for turn in turns}
+    selected_ids = requested_ids or [turn.turn_id for turn in turns]
+    queued_ids: list[str] = []
+    items: list[dict[str, Any]] = []
+
+    for turn_id in selected_ids:
+        turn = by_id.get(turn_id)
+        if not turn:
+            continue
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
+        examiner_text = str(metadata.get("examiner_text") or turn.question)
+        if _is_stream_pending_follow_up_metadata(metadata):
+            tts = {
+                "provider": "volcengine",
+                "status": "pending",
+                "audio_url": None,
+                "message": "Follow-up text is still generating; server TTS waits for the finalized question.",
+            }
+        elif not clean_report_text(examiner_text):
+            tts = _examiner_tts_not_started()
+        else:
+            cached = _cached_examiner_tts_for_turn(attempt.attempt_id, turn.turn_id, examiner_text)
+            if cached:
+                tts = cached
+            elif current.get("audio_url") and _examiner_tts_matches_text(current, examiner_text):
+                tts = current
+            else:
+                fixed_item = _fixed_examiner_item_for_text(examiner_text)
+                cache_key = (fixed_item or {}).get("key") or _examiner_tts_cache_key(attempt.attempt_id, turn.turn_id, examiner_text)
+                tts = _with_examiner_tts_identity(
+                    {"provider": "volcengine", "status": "pending", "audio_url": None},
+                    examiner_text,
+                    cache_key,
+                )
+                queued_ids.append(turn.turn_id)
+        metadata["examiner_tts"] = tts
+        turn.metadata = metadata
+        turn.save(update_fields=["metadata", "updated_at"])
+        items.append({"turn_id": turn.turn_id, "examiner_tts": tts})
+
+    if queued_ids:
+        _generate_remaining_examiner_tts_after_commit(attempt.attempt_id, queued_ids)
+    return {"attempt_id": attempt.attempt_id, "items": items, "queued_turn_ids": queued_ids}
+
+
 def _generate_remaining_examiner_tts_after_commit(attempt_id: str, turn_ids: list[str]) -> None:
     clean_turn_ids = [str(turn_id) for turn_id in turn_ids if turn_id]
     if not clean_turn_ids:
@@ -249,12 +329,17 @@ def _generate_remaining_examiner_tts_after_commit(attempt_id: str, turn_ids: lis
 
 
 def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> None:
+    unique_turn_ids = list(dict.fromkeys(str(turn_id) for turn_id in turn_ids if turn_id))
+    if not unique_turn_ids:
+        return
     close_old_connections()
     try:
-        attempt = SpeakingAttempt.objects.filter(attempt_id=attempt_id).first()
-        if not attempt:
-            return
-        for db_turn in attempt.turns.filter(turn_id__in=turn_ids).order_by("sequence"):
+        db_turns = list(
+            SpeakingTurn.objects.filter(attempt__attempt_id=attempt_id, turn_id__in=unique_turn_ids)
+            .order_by("sequence")
+        )
+        work_items = []
+        for db_turn in db_turns:
             metadata = db_turn.metadata if isinstance(db_turn.metadata, dict) else {}
             current = metadata.get("examiner_tts") if isinstance(metadata.get("examiner_tts"), dict) else {}
             examiner_text = str(metadata.get("examiner_text") or db_turn.question)
@@ -272,30 +357,56 @@ def _generate_remaining_examiner_tts(attempt_id: str, turn_ids: list[str]) -> No
                 (_fixed_examiner_item_for_text(examiner_text) or {}).get("key")
                 or _examiner_tts_cache_key(attempt_id, db_turn.turn_id, examiner_text)
             )
-            generating_state = {
+            metadata["examiner_tts"] = {
                 **(current or {}),
                 "provider": "volcengine",
                 "status": "generating",
                 "audio_url": None,
                 **_examiner_tts_identity(examiner_text, cache_key),
             }
-            metadata["examiner_tts"] = generating_state
             db_turn.metadata = metadata
             db_turn.save(update_fields=["metadata", "updated_at"])
-            turn_data = {
-                "id": db_turn.turn_id,
-                "question": db_turn.question,
-                "examiner_text": examiner_text,
-                "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
-            }
-            ensure_examiner_tts(attempt_id, turn_data)
-            metadata["examiner_tts"] = turn_data.get("examiner_tts")
-            db_turn.metadata = metadata
-            db_turn.save(update_fields=["metadata"])
+            work_items.append((db_turn, examiner_text))
+
+        if not work_items:
+            return
+        with ThreadPoolExecutor(
+            max_workers=min(3, len(work_items)),
+            thread_name_prefix="speaking-examiner-tts",
+        ) as executor:
+            futures = [executor.submit(_synthesize_examiner_tts, attempt_id, db_turn, examiner_text) for db_turn, examiner_text in work_items]
+            for (db_turn, examiner_text), future in zip(work_items, futures):
+                try:
+                    tts = future.result()
+                except Exception as exc:
+                    cache_key = _examiner_tts_cache_key(attempt_id, db_turn.turn_id, examiner_text)
+                    tts = _with_examiner_tts_identity(
+                        {"provider": "volcengine", "status": "fallback", "audio_url": None, "message": f"Server TTS unavailable: {exc}"},
+                        examiner_text,
+                        cache_key,
+                    )
+                metadata = db_turn.metadata if isinstance(db_turn.metadata, dict) else {}
+                metadata["examiner_tts"] = tts
+                db_turn.metadata = metadata
+                db_turn.save(update_fields=["metadata", "updated_at"])
     except DatabaseError:
         return
     finally:
         close_old_connections()
+
+
+def _synthesize_examiner_tts(attempt_id: str, db_turn: SpeakingTurn, examiner_text: str) -> dict[str, Any]:
+    fixed_item = _fixed_examiner_item_for_text(examiner_text)
+    if fixed_item:
+        return _generate_fixed_examiner_tts_now(fixed_item, examiner_text)
+    turn_data = {
+        "id": db_turn.turn_id,
+        "question": db_turn.question,
+        "examiner_text": examiner_text,
+        "examiner_tts": {"provider": "volcengine", "status": "pending", "audio_url": None},
+    }
+    ensure_examiner_tts(attempt_id, turn_data)
+    return turn_data.get("examiner_tts") or _examiner_tts_not_started()
 
 
 def _is_stream_pending_follow_up_metadata(metadata: dict[str, Any]) -> bool:
@@ -372,19 +483,23 @@ def examiner_tts_status(user, attempt_id: str, turn_id: str) -> dict[str, Any]:
             (_fixed_examiner_item_for_text(examiner_text) or {}).get("key")
             or _examiner_tts_cache_key(attempt.attempt_id, turn.turn_id, examiner_text)
         )
-        turn_data = {
-            "id": turn.turn_id,
-            "question": turn.question,
-            "examiner_text": examiner_text,
-            "examiner_tts": {
-                "provider": "volcengine",
-                "status": "pending",
-                "audio_url": None,
-                **_examiner_tts_identity(examiner_text, cache_key),
-            },
-        }
-        ensure_examiner_tts(attempt.attempt_id, turn_data)
-        tts = turn_data.get("examiner_tts") or tts
+        fixed_item = _fixed_examiner_item_for_text(examiner_text)
+        if fixed_item:
+            tts = _generate_fixed_examiner_tts_now(fixed_item, examiner_text)
+        else:
+            turn_data = {
+                "id": turn.turn_id,
+                "question": turn.question,
+                "examiner_text": examiner_text,
+                "examiner_tts": {
+                    "provider": "volcengine",
+                    "status": "pending",
+                    "audio_url": None,
+                    **_examiner_tts_identity(examiner_text, cache_key),
+                },
+            }
+            ensure_examiner_tts(attempt.attempt_id, turn_data)
+            tts = turn_data.get("examiner_tts") or tts
         metadata["examiner_tts"] = tts
         turn.metadata = metadata
         turn.save(update_fields=["metadata", "updated_at"])
@@ -413,6 +528,7 @@ __all__ = [
     "ensure_examiner_tts",
     "_cached_examiner_tts_for_turn",
     "warm_fixed_examiner_tts",
+    "warm_examiner_tts_for_attempt",
     "_generate_remaining_examiner_tts_after_commit",
     "_generate_remaining_examiner_tts",
     "_is_stream_pending_follow_up_metadata",

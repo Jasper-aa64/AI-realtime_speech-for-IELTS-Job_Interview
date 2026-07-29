@@ -7,6 +7,7 @@ from apps.ai.http_provider import HttpApiProvider, HttpApiProviderConfig
 
 from .ai_config import (
     SPEAKING_AI_DEFAULT_HTTP_MODEL,
+    speaking_ai_model_for_source,
     _float_setting_or_env,
     _setting_or_env,
     speaking_ai_http_model,
@@ -25,11 +26,12 @@ SPEAKING_CLAUDE_CLI_SOURCES = frozenset({"claude_cli", "claude_cli_haiku"})
 SPEAKING_CODEX_CLI_SOURCES = frozenset({"codex_cli"})
 SPEAKING_READY_AI_BACKENDS = frozenset({"codex", "codex_cli", "http_api", "claude_cli"})
 
-# Reasoning-effort budget for the HTTP (sonnet) path. Thinking models are slow at
-# full effort, so interactive calls (follow-ups) run "low"; only the heavier report
-# generation gets "medium". Both overridable via env.
+# Reasoning-effort budget for the HTTP path. Interactive follow-ups can use the
+# low-latency hint, but long JSON reports omit it by default: some OpenAI-compatible
+# Claude relays spend the completion budget on reasoning tokens and stream no final
+# JSON content when this field is set. Both paths remain overridable via env.
 SPEAKING_HTTP_REASONING_EFFORT_DEFAULT = "low"
-SPEAKING_HTTP_REPORT_REASONING_EFFORT = "medium"
+SPEAKING_HTTP_REPORT_REASONING_EFFORT = ""
 
 
 def _reasoning_effort_for(kind: str) -> str:
@@ -88,7 +90,7 @@ def _speaking_http_provider(
     else:
         base_url = _setting_or_env("AI_HTTP_BASE_URL")
         api_key = _setting_or_env("AI_HTTP_API_KEY")
-        model = speaking_ai_http_model(kind)
+        model = speaking_ai_model_for_source(ai_source, kind)
         missing = [name for name, value in (("AI_HTTP_BASE_URL", base_url), ("AI_HTTP_API_KEY", api_key)) if not value]
         if missing:
             raise RuntimeError(f"HTTP speaking AI provider is not configured: missing {', '.join(missing)}")
@@ -150,6 +152,7 @@ def _follow_up_generation_provenance(result: dict[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "SPEAKING_AI_DEFAULT_HTTP_MODEL",
+    "speaking_ai_model_for_source",
     "SPEAKING_CLAUDE_HTTP_DEFAULT_MODEL",
     "SPEAKING_CLAUDE_HAIKU_HTTP_DEFAULT_MODEL",
     "SPEAKING_CLAUDE_CLI_DEFAULT_MODEL",

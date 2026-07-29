@@ -211,6 +211,7 @@ const state = {
     pendingAnalysis: null,
     reportRegen: null,
     reportRegenPollTimer: null,
+    historyTaskPolls: new Map(),
     pendingTurnCompletions: new Map(),
     turnCompletionErrors: new Map(),
     retryCompletion: null,
@@ -228,6 +229,7 @@ const state = {
     realtimePcmMetrics: null,
     examinerTtsRefreshPromises: new Map(),
     examinerTtsPrefetched: new Set(),
+    examinerAudioPreloads: new Map(),
     captureDevice: null,
   },
   account: {
@@ -275,6 +277,7 @@ const QUESTION_BANK_SCOPES = new Set(["current", "new", "retained", "archive", "
 const PRACTICE_VIEWS = new Set(["mock", "p1", "p2", "p3"]);
 const SPEAKING_PART_VIEWS = new Set(["p1", "p2", "p3", "mock"]);
 const SPEAKING_REPORT_FILTERS = new Set(["all", "p1", "p2", "p3", "mock"]);
+const SPEAKING_REPORT_STATUSES = new Set(["unscored", "scoring", "failed", "ready"]);
 const SPEAKING_REPORT_FILTER_LABELS = {
   all: "全部",
   p1: "P1",
@@ -322,6 +325,7 @@ const UI_LANGUAGES = new Set(["zh", "en"]);
 const RECORD_CONTROL_DISABLED_STATUSES = new Set(["loading", "examiner_loading", "examiner_playing", "processing", "scoring", "turn_saved"]);
 const PRACTICE_BUSY_STATUSES = new Set(["preparing", "recording", "processing", "scoring"]);
 const TURN_RENDER_BUSY_STATUSES = new Set(["examiner_loading", "examiner_playing", "preparing", "recording", "processing"]);
+const EXAMINER_PLAYBACK_STATUSES = new Set(["examiner_loading", "examiner_playing"]);
 const RECOVERABLE_PRACTICE_ERROR_STATUSES = new Set(["recording", "preparing", "processing", "turn_saved", "completion_failed"]);
 const EXAMINER_TTS_PENDING_STATUSES = new Set(["pending", "warming", "generating"]);
 const AI_TASK_ACTIVE_STATUSES = new Set(["pending", "running"]);
@@ -420,7 +424,10 @@ const uiTranslations = {
     "settings.language": "界面语言",
     "settings.languageAria": "选择界面语言",
     "settings.aiSource": "AI 评分来源",
-    "settings.aiSource.gpt": "GPT（默认）",
+    "settings.aiSource.gpt": "gpt-5.4 mini（默认）",
+    "settings.aiSource.gpt56Terra": "gpt-5.6-terra",
+    "settings.aiSource.gpt56Luna": "gpt-5.6-luna",
+    "settings.aiSource.gpt56Sol": "gpt-5.6-sol",
     "settings.aiSource.claude": "Claude Sonnet",
     "settings.aiSource.claudeHaiku": "Claude Haiku",
     "settings.aiSource.claudeCli": "Claude CLI (Sonnet)",
@@ -558,7 +565,10 @@ const uiTranslations = {
     "settings.language": "Interface language",
     "settings.languageAria": "Choose interface language",
     "settings.aiSource": "AI scoring source",
-    "settings.aiSource.gpt": "GPT (default)",
+    "settings.aiSource.gpt": "gpt-5.4 mini (default)",
+    "settings.aiSource.gpt56Terra": "gpt-5.6-terra",
+    "settings.aiSource.gpt56Luna": "gpt-5.6-luna",
+    "settings.aiSource.gpt56Sol": "gpt-5.6-sol",
     "settings.aiSource.claude": "Claude Sonnet",
     "settings.aiSource.claudeHaiku": "Claude Haiku",
     "settings.aiSource.claudeCli": "Claude CLI (Sonnet)",
@@ -1007,10 +1017,18 @@ const workspaceHeaderHiddenViews = new Set(["home", "history", "writing", "writi
 const agentAssistantViews = new Set(["writing"]);
 
 const EXAMINER_AUDIO_LOAD_TIMEOUT_MS = 15000;
+const EXAMINER_AUDIO_PLAY_START_TIMEOUT_MS = 5000;
+const EXAMINER_AUDIO_RETRY_DELAYS_MS = [650];
 const EXAMINER_AUDIO_INPUT_RELEASE_TIMEOUT_MS = 1800;
 const EXAMINER_AUDIO_BLUETOOTH_DRAIN_MS = 320;
 const EXAMINER_TTS_REFRESH_WAIT_MS = 4200;
 const EXAMINER_TTS_REFRESH_INTERVAL_MS = 550;
+const EXAMINER_TTS_REQUEST_TIMEOUT_MS = 3500;
+const FIXED_EXAMINER_TEXT_BY_KEY = Object.freeze({
+  fixed_examiner_what_is_your_full_name: "What is your full name?",
+  fixed_examiner_do_you_work_or_do_you_study: "Do you work or do you study?",
+  fixed_examiner_p2_cue_card_instruction: "I'm going to give you a topic and I would like you to talk about it for one to two minutes. You have one minute to think about what you are going to say. You can make some notes if you wish.",
+});
 const CORPUS_PEEK_WINDOW_MARGIN = 16;
 const P3_SOURCE_LABELS = {
   bank: "题库固定追问",
@@ -1770,6 +1788,17 @@ function prefetchCanApply(token) {
   return state.account.authenticated && state.prefetch.token === token;
 }
 
+async function prefetchWallet(token) {
+  try {
+    const wallet = await fetchWalletPayload({ maxAgeMs: 60000 });
+    if (prefetchCanApply(token) && state.view === "accountProfile") {
+      renderWalletPayload(wallet);
+    }
+  } catch (_error) {
+    // Account page owns the visible error state; idle prefetch stays silent.
+  }
+}
+
 function prefetchTakeawayBackgroundAssets() {
   if (typeof Image !== "function") return;
   for (const url of TAKEAWAY_BACKGROUND_ASSETS) {
@@ -1785,6 +1814,10 @@ function clearUserScopedCaches() {
   state.historyItems = [];
   state.historyDetailCache.clear();
   state.historyDetailPromises.clear();
+  state.speaking.historyTaskPolls.forEach((poll) => {
+    if (poll?.timer) clearTimeout(poll.timer);
+  });
+  state.speaking.historyTaskPolls.clear();
   state.activeHistoryId = null;
   state.languageTakeaway.items = [];
   state.languageTakeaway.loaded = false;
@@ -1840,6 +1873,10 @@ function clearUserScopedCaches() {
   state.prefetch.fixedExaminerTtsPromise = null;
   state.prefetch.corpusEditorWarmPromise = null;
   state.p3PracticeSource = null;
+  state.wallet.payload = null;
+  state.wallet.loaded = false;
+  state.wallet.loadingPromise = null;
+  state.wallet.fetchedAt = 0;
 }
 
 function scheduleAuthenticatedPrefetch() {
@@ -1848,6 +1885,7 @@ function scheduleAuthenticatedPrefetch() {
   state.prefetch.token += 1;
   const token = state.prefetch.token;
   prefetchFixedExaminerTts(token);
+  scheduleIdleTask(() => prefetchWallet(token), 180);
   scheduleIdleTask(() => prefetchTakeawayBackgroundAssets(), 450);
   scheduleIdleTask(() => prefetchWritingSummary(token), 520);
   scheduleIdleTask(() => prefetchSpeakingHistory(token), 550);
@@ -1925,6 +1963,25 @@ async function prefetchFixedExaminerTts(token) {
     count: (payload.audio_urls || []).length,
   });
   state.prefetch.fixedExaminerTtsWarmed = true;
+  preloadFixedExaminerAudioItems(payload);
+}
+
+function preloadFixedExaminerAudioItems(payload = {}) {
+  for (const item of payload.items || []) {
+    const textValue = FIXED_EXAMINER_TEXT_BY_KEY[String(item?.key || "")];
+    if (!textValue || !item?.audio_url) continue;
+    const fixedTurn = {
+      id: String(item.key),
+      question: textValue,
+      examiner_text: textValue,
+      examiner_tts: {
+        ...item,
+        role: "examiner",
+        tts_source_text: textValue,
+      },
+    };
+    runExaminerPrefetch(() => preloadExaminerAudio(fixedTurn).catch(() => null));
+  }
 }
 
 function warmFixedExaminerTtsNow() {
@@ -2104,6 +2161,8 @@ async function prefetchSpeakingHistory(token) {
   if (!prefetchCanApply(token)) return;
   const items = payload.items || [];
   state.historyItems = items;
+  reconcileSpeakingHistoryDetailCache(items);
+  syncPersistedSpeakingReportTaskPolling(items);
   const activeId = state.activeHistoryId && items.some((item) => item.id === state.activeHistoryId)
     ? state.activeHistoryId
     : items[0]?.id;
@@ -3090,6 +3149,7 @@ async function startPractice() {
     promptGuestLogin("登录后才能开始练习并保存完整报告。");
     return;
   }
+  warmFixedExaminerTtsNow();
   const mode = state.view === "mock" ? "mock" : state.view;
   if (mode === "p3") setP3StartPending(true, state.p3Plan ? "正在进入练习..." : "正在载入追问...");
   if (mode === "p3" && !state.p3Plan) {
@@ -3175,6 +3235,7 @@ async function startPractice() {
     // Warm the whole section's examiner audio in the background right away so later
     // questions never wait, no matter how fast the learner answers.
     prefetchAllMainExaminerTts(attempt);
+    prefetchP3CorpusPeekMaterialsForAttempt(attempt);
   } catch (error) {
     if (error?.name === "AbortError" || state.startRequestId !== requestId || state.practiceSessionId !== sessionId) return;
     state.practiceLocked = false;
@@ -3328,6 +3389,9 @@ function setP2PrepPanelHidden(panel, hidden, options = {}) {
 
 async function renderP2CorpusPrepPanel(renderOptions = {}) {
   const panel = $("p2CorpusPrepPanel");
+  document.body.querySelectorAll("#p2CorpusPrepMenu").forEach((node) => {
+    if (!panel?.contains(node)) node.remove();
+  });
   const expectedSessionId = renderOptions.sessionId ?? state.practiceSessionId;
   const expectedTurnId = renderOptions.turnId ?? state.currentTurn?.id ?? "";
   const isCurrentP2Prep = () => {
@@ -3400,6 +3464,12 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
   updateP2CorpusPeekButton(state.currentTurn);
   const trigger = $("p2CorpusPrepTrigger");
   const menu = $("p2CorpusPrepMenu");
+  const menuHome = menu?.parentElement;
+  const restoreMenuHome = () => {
+    if (menu && menuHome && menu.parentElement !== menuHome) {
+      menuHome.appendChild(menu);
+    }
+  };
   const positionMenu = () => {
     if (!trigger || !menu || menu.classList.contains("hidden")) return;
     const rect = trigger.getBoundingClientRect();
@@ -3418,13 +3488,16 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
   };
   let outsideClickActive = false;
   const closeOnDocumentClick = (event) => {
-    if (!panel.contains(event.target)) setOpen(false);
+    if (!panel.contains(event.target) && !menu.contains(event.target)) setOpen(false);
   };
   const setOpen = (open) => {
     if (!trigger || !menu) return;
     trigger.setAttribute("aria-expanded", open ? "true" : "false");
     menu.classList.toggle("hidden", !open);
     if (open) {
+      if (menu.parentElement !== document.body) {
+        document.body.appendChild(menu);
+      }
       positionMenu();
       window.addEventListener("resize", positionMenu);
       window.addEventListener("scroll", positionMenu, true);
@@ -3439,6 +3512,7 @@ async function renderP2CorpusPrepPanel(renderOptions = {}) {
         document.removeEventListener("click", closeOnDocumentClick);
         outsideClickActive = false;
       }
+      restoreMenuHome();
     }
   };
   trigger?.addEventListener("click", (event) => {
@@ -3520,10 +3594,12 @@ function exposeExaminerAudioDiagnostics() {
 // other connections free for the audio the learner is actually waiting on. We also
 // hold warming entirely while an examiner clip is mid-load, so nothing competes with
 // the question currently being prepared.
-const examinerPrefetchGate = { active: 0, max: 1, queue: [] };
+const examinerPrefetchGate = { active: 0, max: 1, queue: [], retryTimer: null };
 
 function examinerAudioIsLoading() {
-  return state.activeExaminerAudioPlayer?.status === "loading";
+  return state.status === "loading"
+    || state.status === "examiner_loading"
+    || state.activeExaminerAudioPlayer?.status === "loading";
 }
 
 function runExaminerPrefetch(task) {
@@ -3536,8 +3612,17 @@ function drainExaminerPrefetchGate() {
   // Never warm in the background while the current question's audio is still
   // loading — that is exactly the moment the connections must stay free.
   if (examinerAudioIsLoading()) {
-    window.setTimeout(drainExaminerPrefetchGate, 250);
+    if (!examinerPrefetchGate.retryTimer) {
+      examinerPrefetchGate.retryTimer = window.setTimeout(() => {
+        examinerPrefetchGate.retryTimer = null;
+        drainExaminerPrefetchGate();
+      }, 250);
+    }
     return;
+  }
+  if (examinerPrefetchGate.retryTimer) {
+    window.clearTimeout(examinerPrefetchGate.retryTimer);
+    examinerPrefetchGate.retryTimer = null;
   }
   const task = examinerPrefetchGate.queue.shift();
   if (!task) return;
@@ -3564,10 +3649,14 @@ function prefetchUpcomingExaminerTts(currentTurn = state.currentTurn) {
   const idx = turns.findIndex((item) => item.id === currentTurn.id);
   if (idx < 0) return;
   let warmed = 0;
-  for (let i = idx + 1; i < turns.length && warmed < 3; i += 1) {
+  for (let i = idx + 1; i < turns.length && warmed < 1; i += 1) {
     const next = turns[i];
     if (!next) continue;
-    if (next.examiner_tts?.audio_url) continue;
+    if (next.examiner_tts?.audio_url) {
+      warmed += 1;
+      runExaminerPrefetch(() => preloadExaminerAudio(next).catch(() => null));
+      continue;
+    }
     if (shouldStreamFollowUpTurn(next) || next.prompt?.role === "follow_up") continue;
     if (!hasUsableTurnQuestion(next)) continue;
     const key = `${attemptId}:${next.id}`;
@@ -3599,7 +3688,10 @@ function prefetchUpcomingExaminerTts(currentTurn = state.currentTurn) {
           ) {
             next.examiner_tts = readyTts;
             traceExaminerAudio("prefetch:next-warmed", { turnId: next.id });
+            return preloadExaminerAudio(next);
           }
+          if (!readyTts?.audio_url) state.speaking.examinerTtsPrefetched.delete(key);
+          return null;
         })
         .catch(() => {
           // Let a later on-demand activation retry if the warm-up failed.
@@ -3608,44 +3700,13 @@ function prefetchUpcomingExaminerTts(currentTurn = state.currentTurn) {
   }
 }
 
-// Warm EVERY known main question's examiner audio up front, the moment the section
-// starts. The per-turn prefetch above only warms 1-2 turns ahead and is paced by how
-// far the learner has got — so a learner who answers quickly outruns it and still
-// waits. Warming the whole set at session start (while they're hearing the fixed
-// first question) means each turn's audio is already synthesized AND persisted into
-// its metadata, so the server's `next_turn` payload after every answer already
-// carries audio_url — no per-question wait regardless of answer speed. Live follow-ups
-// are skipped (their text is generated on the fly and cannot be pre-synthesized).
+// Attempt creation already starts server-side synthesis for all known main questions.
+// At startup, only preload future clips whose URL is already available. Starting a
+// second client-side synthesis sweep races the current turn's direct audio path and
+// can starve or overwrite the only clip the learner is waiting to hear.
 function prefetchAllMainExaminerTts(attempt = state.attempt) {
-  const attemptId = attempt?.id;
-  if (!attemptId || !state.practiceSessionId) return;
-  for (const turn of attempt.turns || []) {
-    if (!turn) continue;
-    if (turn.examiner_tts?.audio_url) continue;
-    if (shouldStreamFollowUpTurn(turn) || turn.prompt?.role === "follow_up") continue;
-    if (!hasUsableTurnQuestion(turn)) continue;
-    const key = `${attemptId}:${turn.id}`;
-    if (state.speaking.examinerTtsPrefetched.has(key)) continue;
-    state.speaking.examinerTtsPrefetched.add(key);
-    // One-at-a-time through the gate: the whole section is queued but only a single
-    // warm request is ever in flight, so the connection pool stays free for the audio
-    // the learner is currently waiting on. The backend also warms all turns server-side
-    // in parallel, so this queue is just a persistence nudge, not the critical path.
-    runExaminerPrefetch(() =>
-      api(`/api/attempts/${encodeURIComponent(attemptId)}/turns/${encodeURIComponent(turn.id)}/examiner-tts`)
-        .then((payload) => {
-          const readyTts = payload?.examiner_tts;
-          // Same safe in-place hint as the per-turn prefetch: set one field on one
-          // existing turn object; never replace state.attempt or the turns array, and
-          // never touch the turn that is currently playing.
-          if (readyTts?.audio_url && turn.id !== state.currentTurn?.id && !turn.examiner_tts?.audio_url) {
-            turn.examiner_tts = readyTts;
-          }
-        })
-        .catch(() => {
-          state.speaking.examinerTtsPrefetched.delete(key);
-        }));
-  }
+  if (!attempt?.id || !state.practiceSessionId) return;
+  prefetchUpcomingExaminerTts(state.currentTurn);
 }
 
 function renderExaminerAudio(turn) {
@@ -3695,21 +3756,18 @@ function clearExaminerAudioPreloads() {
     if (item.playbackUrl) URL.revokeObjectURL(item.playbackUrl);
   }
   state.examinerAudioBlobUrls.clear();
+  for (const entry of state.speaking.examinerAudioPreloads.values()) {
+    if (entry.persistent) continue;
+    entry.player?.unload("clear-examiner-audio-preloads");
+  }
+  for (const [key, entry] of state.speaking.examinerAudioPreloads.entries()) {
+    if (!entry.persistent) state.speaking.examinerAudioPreloads.delete(key);
+  }
 }
 
 function examinerPlayerSnapshot(player = state.activeExaminerAudioPlayer) {
   if (!player) return {};
   return player.snapshot();
-}
-
-function inferHowlerFormat(url) {
-  const path = String(url || "").split("?")[0].toLowerCase();
-  if (path.endsWith(".mp3") || path.endsWith(".mpeg")) return ["mp3"];
-  if (path.endsWith(".wav")) return ["wav"];
-  if (path.endsWith(".m4a") || path.endsWith(".mp4") || path.endsWith(".aac")) return ["mp4"];
-  if (path.endsWith(".ogg") || path.endsWith(".oga")) return ["ogg"];
-  if (path.endsWith(".webm")) return ["webm"];
-  return ["mp3"];
 }
 
 function normalizeHowlerError(error) {
@@ -3729,6 +3787,7 @@ class ExaminerAudioPlayer {
     this._playResolve = null;
     this._playReject = null;
     this._onPlay = null;
+    this.playStartTimer = null;
   }
 
   load(source) {
@@ -3773,17 +3832,21 @@ class ExaminerAudioPlayer {
           html5: true,
           preload: true,
           autoplay: false,
-          format: inferHowlerFormat(playbackUrl),
           onload: ready,
           onloaderror: failLoad,
           onplay: (id) => {
+            if (!this._isCurrentPlayEvent(id)) return;
+            this._clearPlayStartTimeout();
             this.playId = id;
             this.status = "started";
             this._onPlay?.({ id, player: this, source });
           },
-          onplayerror: (_id, error) => this._fail("play", error),
-          onend: () => this._finish("ended"),
-          onstop: () => this._finish("stopped"),
+          onplayerror: (id, error) => {
+            if (!this._isCurrentPlayEvent(id)) return;
+            this._fail("play", error);
+          },
+          onend: (id) => this._finish("ended", id),
+          onstop: (id) => this._finish("stopped", id),
         });
       } catch (error) {
         clearLoadTimeout();
@@ -3796,10 +3859,15 @@ class ExaminerAudioPlayer {
 
   playToEnd({ onPlay } = {}) {
     if (!this.howl) return Promise.reject(new Error("Examiner audio is not loaded"));
+    this.playId = null;
     this._onPlay = onPlay || null;
     return new Promise((resolve, reject) => {
       this._playResolve = resolve;
       this._playReject = reject;
+      this._clearPlayStartTimeout();
+      this.playStartTimer = window.setTimeout(() => {
+        this._fail("play", `Timed out starting examiner audio after ${EXAMINER_AUDIO_PLAY_START_TIMEOUT_MS}ms`);
+      }, EXAMINER_AUDIO_PLAY_START_TIMEOUT_MS);
       try {
         this.playId = this.howl.play();
       } catch (error) {
@@ -3808,8 +3876,32 @@ class ExaminerAudioPlayer {
     });
   }
 
-  _finish(result) {
+  resetForPlayback() {
+    if (!this.howl) return;
+    try {
+      // Preloaded clips are idle. Calling stop() on one can emit a delayed
+      // onstop event after the next play promise has been installed.
+      if (this.playing()) this.howl.stop(this.playId ?? undefined);
+      this.howl.seek(0);
+    } catch {
+      // A cached player can be cleared during a competing navigation.
+    }
+    this.playId = null;
+    this.status = "ready";
+  }
+
+  _isCurrentPlayEvent(eventPlayId) {
+    return Boolean(
+      this._playResolve
+      && this.playId !== null
+      && eventPlayId === this.playId
+    );
+  }
+
+  _finish(result, eventPlayId = null) {
+    if (eventPlayId !== null && !this._isCurrentPlayEvent(eventPlayId)) return;
     if (!this._playResolve) return;
+    this._clearPlayStartTimeout();
     this.status = result;
     const resolve = this._playResolve;
     this._playResolve = null;
@@ -3820,6 +3912,7 @@ class ExaminerAudioPlayer {
 
   _fail(stage, error) {
     const message = normalizeHowlerError(error);
+    this._clearPlayStartTimeout();
     this.status = "failed";
     traceExaminerAudio("howler:error", { stage, error: message, player: this.snapshot() });
     if (stage === "load" && this._loadReject) {
@@ -3847,8 +3940,23 @@ class ExaminerAudioPlayer {
     this._finish("stopped");
   }
 
+  _cancelPendingLoad(reason = "cancelled") {
+    if (!this._loadReject) return;
+    const reject = this._loadReject;
+    this._loadReject = null;
+    if (this.loadTimer) window.clearTimeout(this.loadTimer);
+    this.loadTimer = null;
+    reject(new Error(`Examiner audio load cancelled: ${reason}`));
+  }
+
+  _clearPlayStartTimeout() {
+    if (this.playStartTimer) window.clearTimeout(this.playStartTimer);
+    this.playStartTimer = null;
+  }
+
   unload(reason = "unload") {
     this.stop(reason);
+    this._cancelPendingLoad(reason);
     if (this.howl) {
       traceExaminerAudio("howler:unload", { reason, player: this.snapshot() });
       try {
@@ -3858,6 +3966,7 @@ class ExaminerAudioPlayer {
       }
     }
     if (this.loadTimer) window.clearTimeout(this.loadTimer);
+    this._clearPlayStartTimeout();
     this.howl = null;
     this.playId = null;
     this.loadTimer = null;
@@ -3875,6 +3984,10 @@ class ExaminerAudioPlayer {
     } catch {
       return false;
     }
+  }
+
+  hasPendingPlayback() {
+    return Boolean(this._playResolve);
   }
 
   snapshot() {
@@ -3932,8 +4045,18 @@ function stopExaminerPlayback(reason = "stop-playback") {
     playback.cancelled = true;
     playback.promise = null;
   }
+  const playersToStop = new Set();
+  if (playback?.player) playersToStop.add(playback.player);
   const activePlayer = state.activeExaminerAudioPlayer;
-  if (activePlayer) activePlayer.unload(reason);
+  if (activePlayer) playersToStop.add(activePlayer);
+  for (const entry of state.speaking.examinerAudioPreloads.values()) {
+    if (entry.player?.playing?.() || entry.player?.hasPendingPlayback?.()) {
+      playersToStop.add(entry.player);
+    }
+  }
+  for (const player of playersToStop) {
+    evictExaminerAudioPlayer(player, reason);
+  }
   state.activeExaminerAudio = null;
   state.activeExaminerAudioPlayer = null;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -3978,6 +4101,16 @@ function wait(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+async function apiWithAbortTimeout(path, timeoutMs) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs) || 1));
+  try {
+    return await api(path, null, { signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 async function refreshPendingExaminerTts(turn, sessionId) {
   if (!turn || !state.attempt?.id || !isPendingExaminerTts(turn.examiner_tts)) return turn;
   const attemptId = state.attempt.id;
@@ -3994,7 +4127,14 @@ async function refreshPendingExaminerTts(turn, sessionId) {
     while (Date.now() <= deadline && isActivePracticeSession(sessionId) && state.currentTurn?.id === turn.id) {
       if (delay > 0) await wait(delay);
       try {
-        const payload = await api(`/api/attempts/${encodeURIComponent(attemptId)}/turns/${encodeURIComponent(turn.id)}/examiner-tts`);
+        const requestTimeoutMs = Math.min(
+          EXAMINER_TTS_REQUEST_TIMEOUT_MS,
+          Math.max(250, deadline - Date.now()),
+        );
+        const payload = await apiWithAbortTimeout(
+          `/api/attempts/${encodeURIComponent(attemptId)}/turns/${encodeURIComponent(turn.id)}/examiner-tts`,
+          requestTimeoutMs,
+        );
         const refreshedTts = payload?.examiner_tts || null;
         if (refreshedTts) {
           traceExaminerAudio("tts-refresh:payload", {
@@ -4054,6 +4194,9 @@ function examinerListeningStatus(turn) {
 
 function beginPreparationWithoutExaminerAudio(sessionId, turn, reason = "no-examiner-audio") {
   if (!isActivePracticeSession(sessionId) || !turn || state.currentTurn?.id !== turn.id) return false;
+  if (canUseBrowserExaminerFallback()) {
+    return playBrowserExaminerFallback(sessionId, turn, reason);
+  }
   clearAutoNextTimeout();
   stopExaminerPlayback(reason);
   traceExaminerAudio("playback:prepare-without-audio", {
@@ -4066,6 +4209,47 @@ function beginPreparationWithoutExaminerAudio(sessionId, turn, reason = "no-exam
     ? "Follow-up audio is not ready. Prepare your answer directly."
     : "Examiner audio is not ready. Prepare your answer directly.");
   beginPreparation(sessionId, { reason, turnId: turn.id });
+  return true;
+}
+
+function canUseBrowserExaminerFallback() {
+  return Boolean(
+    typeof window.SpeechSynthesisUtterance === "function"
+    && window.speechSynthesis
+    && typeof window.speechSynthesis.speak === "function",
+  );
+}
+
+function playBrowserExaminerFallback(sessionId, turn, reason = "browser-fallback") {
+  if (!isActivePracticeSession(sessionId) || !turn || state.currentTurn?.id !== turn.id) return false;
+  const utteranceText = resolvedExaminerText(turn).trim();
+  if (!utteranceText || !canUseBrowserExaminerFallback()) {
+    clearAutoNextTimeout();
+    stopExaminerPlayback(reason);
+    beginPreparation(sessionId, { reason, turnId: turn.id });
+    return true;
+  }
+  clearAutoNextTimeout();
+  stopExaminerPlayback(reason);
+  setExaminerListeningUi(turn);
+  text("recordStatus", "Examiner audio is reconnecting. Using a browser voice for this question.");
+  const utterance = new window.SpeechSynthesisUtterance(utteranceText);
+  state.browserTtsUtterance = utterance;
+  let settled = false;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    if (!isActivePracticeSession(sessionId) || state.currentTurn?.id !== turn.id || state.browserTtsUtterance !== utterance) return;
+    state.browserTtsUtterance = null;
+    beginPreparation(sessionId, { reason, turnId: turn.id });
+  };
+  utterance.onend = finish;
+  utterance.onerror = finish;
+  try {
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    finish();
+  }
   return true;
 }
 
@@ -4088,7 +4272,8 @@ function setExaminerListeningUi(turn) {
 
 function currentExaminerTurnStillMatches(sessionId, turnId, playback) {
   return Boolean(
-    isActivePracticeSession(sessionId)
+    EXAMINER_PLAYBACK_STATUSES.has(state.status)
+    && isActivePracticeSession(sessionId)
     && state.currentTurn?.id === turnId
     && isCurrentExaminerPlayback(playback)
   );
@@ -4194,44 +4379,26 @@ async function playExaminerTurn(turn, sessionId = state.practiceSessionId) {
       tts = currentTurn?.examiner_tts || {};
     }
 
-    if (!tts.audio_url) {
-      return beginPreparationWithoutExaminerAudio(sessionId, currentTurn, "no-audio");
-    }
-
-    const source = resolveExaminerAudioPlaybackSource(tts.audio_url);
-    if (!source || !currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
-
-    const player = new ExaminerAudioPlayer();
-    playback.player = player;
-    state.activeExaminerAudio = null;
-    state.activeExaminerAudioPlayer = player;
-
     try {
-      await player.load(source);
-      if (!currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
-      const outcome = await player.playToEnd({
-        onPlay: () => {
-          if (currentExaminerTurnStillMatches(sessionId, turnId, playback)) {
-            setExaminerListeningUi(currentTurn);
-          }
-        },
+      const player = await playExaminerAudioWithRetry(currentTurn, tts, playback, () => {
+        if (currentExaminerTurnStillMatches(sessionId, turnId, playback)) {
+          setExaminerListeningUi(currentTurn);
+        }
       });
-      if (!currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
-      if (outcome === "ended") {
-        player.unload("ended");
-        if (state.activeExaminerAudioPlayer === player) state.activeExaminerAudioPlayer = null;
-        beginPreparation(sessionId, { reason: "ended", turnId });
-        return true;
-      }
-      return false;
+      if (!player || !currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
+      playback.player = player;
+      state.activeExaminerAudio = null;
+      state.activeExaminerAudioPlayer = player;
+      if (state.activeExaminerAudioPlayer === player) state.activeExaminerAudioPlayer = null;
+      beginPreparation(sessionId, { reason: "ended", turnId });
+      return true;
     } catch (error) {
-      traceExaminerAudio("playback:error", {
+      traceExaminerAudio("playback:audio-retries-exhausted", {
         turnId,
         error: error instanceof Error ? error.message : String(error),
-        player: player.snapshot(),
       });
       if (!currentExaminerTurnStillMatches(sessionId, turnId, playback)) return false;
-      return beginPreparationWithoutExaminerAudio(sessionId, currentTurn, "playback-error");
+      return playBrowserExaminerFallback(sessionId, currentTurn, "examiner-audio-retries-exhausted");
     } finally {
       if (state.examinerPlayback === playback) {
         playback.promise = null;
@@ -4278,7 +4445,7 @@ function beginPreparation(sessionId = state.practiceSessionId, options = {}) {
     playbackTurnId: state.examinerPlayback?.turnId || "",
     player: examinerPlayerSnapshot(options.player || state.activeExaminerAudioPlayer),
   });
-  state.examinerPlayback = null;
+  stopExaminerPlayback("begin-preparation");
   const seconds = state.currentTurn?.timers?.prep_seconds || 3;
   const isP2 = state.currentTurn?.part === "p2";
   setRecordButton("preparing", isP2 ? "Skip" : "Prepare", isP2 ? "Click to start recording now." : "Recording starts automatically.");
@@ -5160,6 +5327,7 @@ async function streamFollowUpForCompletedTurn(attempt, completedTurn, nextTurn, 
         followUpTtsReadyAfterStreamMs: realtimeMetricElapsed("followUpStreamStartedAt", "followUpTtsReadyAt"),
       });
       applyTurnPatch({ examiner_tts: payload.examiner_tts || { audio_url: payload.audio_url, status: "ready", provider: "volcengine" } });
+      preloadExaminerAudio(currentNextTurn).catch(() => null);
       text("recordStatus", "考官音频已准备好。");
       startExaminerOnce();
       return;
@@ -5995,8 +6163,11 @@ function startSpeakingScorePolling(taskId, attemptId) {
   // that wedges gets a longer ceiling. Both route to the normal failure UI,
   // which keeps the recording and offers 重新分析.
   const startedAt = Date.now();
-  const PENDING_DEADLINE_MS = 90_000;   // queued but no worker picks it up
-  const OVERALL_DEADLINE_MS = 240_000;  // claimed but never finishes
+  // Backend task/history state, not a local browser deadline, decides failure.
+  // Keep polling until the persisted task becomes terminal or history exposes a
+  // durable stalled/failure state after refresh.
+  const PENDING_DEADLINE_MS = Number.POSITIVE_INFINITY;
+  const OVERALL_DEADLINE_MS = Number.POSITIVE_INFINITY;
   let sawRunning = false;
   const poll = async () => {
     try {
@@ -6416,6 +6587,185 @@ function setWritingPageLoading(isLoading, title = "正在加载每日写作", de
   }
 }
 
+function examinerAudioCacheKey(turn, tts = turn?.examiner_tts || {}) {
+  const role = String(tts.role || "examiner").trim().toLowerCase() || "examiner";
+  const voice = String(tts.voice || tts.provider || "default").trim().toLowerCase() || "default";
+  const normalizedText = normalizeExaminerTtsText(tts.tts_source_text || resolvedExaminerText(turn));
+  return `${role}:${voice}:${normalizedText}`;
+}
+
+function isFixedExaminerAudioTurn(turn) {
+  const normalizedText = normalizeExaminerTtsText(resolvedExaminerText(turn));
+  return Object.values(FIXED_EXAMINER_TEXT_BY_KEY).some(
+    (fixedText) => normalizeExaminerTtsText(fixedText) === normalizedText,
+  );
+}
+
+function isCachedExaminerAudioPlayer(player) {
+  return Array.from(state.speaking.examinerAudioPreloads.values()).some((entry) => entry.player === player);
+}
+
+function evictExaminerAudioPlayer(player, reason = "evict-examiner-audio") {
+  if (!player) return;
+  for (const [key, entry] of state.speaking.examinerAudioPreloads.entries()) {
+    if (entry.player === player) state.speaking.examinerAudioPreloads.delete(key);
+  }
+  player.unload(reason);
+}
+
+function preloadExaminerAudio(turn, tts = turn?.examiner_tts || {}) {
+  if (!tts.audio_url) return Promise.reject(new Error("Missing examiner audio URL"));
+  const source = resolveExaminerAudioPlaybackSource(tts.audio_url);
+  if (!source) return Promise.reject(new Error("Missing examiner audio source"));
+  const key = examinerAudioCacheKey(turn, tts);
+  const existing = state.speaking.examinerAudioPreloads.get(key);
+  if (existing?.sourceUrl === source.sourceUrl && existing.promise) {
+    traceExaminerAudio("howler:preload-reuse", { key, url: source.sourceUrl });
+    return existing.promise;
+  }
+  existing?.player?.unload("replace-stale-examiner-preload");
+  const player = new ExaminerAudioPlayer();
+  const entry = {
+    player,
+    sourceUrl: source.sourceUrl,
+    promise: null,
+    persistent: isFixedExaminerAudioTurn(turn),
+  };
+  const promise = player.load(source)
+    .then(() => player)
+    .catch((error) => {
+      if (state.speaking.examinerAudioPreloads.get(key) === entry) {
+        state.speaking.examinerAudioPreloads.delete(key);
+      }
+      player.unload("failed-examiner-preload");
+      throw error;
+    });
+  entry.promise = promise;
+  state.speaking.examinerAudioPreloads.set(key, entry);
+  traceExaminerAudio("howler:preload-start", { key, url: source.sourceUrl });
+  return promise;
+}
+
+async function playExaminerAudioWithRetry(turn, tts, playback, onPlay) {
+  let lastError = new Error("Examiner audio did not start");
+  const attempts = EXAMINER_AUDIO_RETRY_DELAYS_MS.length + 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (!currentExaminerTurnStillMatches(playback.sessionId, playback.turnId, playback)) return null;
+    let player = null;
+    try {
+      player = await preloadExaminerAudio(turn, tts);
+      if (!currentExaminerTurnStillMatches(playback.sessionId, playback.turnId, playback)) {
+        evictExaminerAudioPlayer(player, "stale-examiner-audio-after-load");
+        return null;
+      }
+      playback.player = player;
+      state.activeExaminerAudioPlayer = player;
+      player.resetForPlayback();
+      const outcome = await player.playToEnd({ onPlay });
+      if (outcome === "ended") return player;
+      lastError = new Error(`Examiner audio ended with ${outcome || "unknown"}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+    evictExaminerAudioPlayer(player, `examiner-audio-attempt-${attempt + 1}-failed`);
+    if (!currentExaminerTurnStillMatches(playback.sessionId, playback.turnId, playback)) return null;
+    const retryDelay = EXAMINER_AUDIO_RETRY_DELAYS_MS[attempt];
+    if (Number.isFinite(retryDelay)) {
+      traceExaminerAudio("playback:retry", { turnId: playback.turnId, attempt: attempt + 1, delayMs: retryDelay });
+      await wait(retryDelay);
+    }
+  }
+  throw lastError;
+}
+
+function clearPersistedSpeakingReportTaskPolling(attemptId) {
+  const id = String(attemptId || "").trim();
+  if (!id) return;
+  const poll = state.speaking.historyTaskPolls.get(id);
+  if (poll?.timer) clearTimeout(poll.timer);
+  state.speaking.historyTaskPolls.delete(id);
+}
+
+function schedulePersistedSpeakingReportTaskPolling(attemptId, taskId, delay = 2500) {
+  const id = String(attemptId || "").trim();
+  const persistedTaskId = String(taskId || "").trim();
+  if (!id || !persistedTaskId) return;
+  clearPersistedSpeakingReportTaskPolling(id);
+  const poll = { taskId: persistedTaskId, timer: null };
+  poll.timer = setTimeout(() => {
+    const current = state.speaking.historyTaskPolls.get(id);
+    if (!current || current.taskId !== persistedTaskId) return;
+    current.timer = null;
+    pollPersistedSpeakingReportTask(id, persistedTaskId);
+  }, delay);
+  state.speaking.historyTaskPolls.set(id, poll);
+}
+
+async function pollPersistedSpeakingReportTask(attemptId, taskId) {
+  const id = String(attemptId || "").trim();
+  const persistedTaskId = String(taskId || "").trim();
+  const current = state.speaking.historyTaskPolls.get(id);
+  if (!id || !persistedTaskId || !current || current.taskId !== persistedTaskId) return;
+  try {
+    const task = await api(`/api/ai/tasks/${encodeURIComponent(persistedTaskId)}`);
+    const latest = state.speaking.historyTaskPolls.get(id);
+    if (!latest || latest.taskId !== persistedTaskId) return;
+    if (isSpeakingTaskActive(task)) {
+      schedulePersistedSpeakingReportTaskPolling(id, persistedTaskId);
+      return;
+    }
+    clearPersistedSpeakingReportTaskPolling(id);
+    state.historyDetailCache.delete(id);
+    await loadHistory(false);
+    if (state.activeHistoryId === id) {
+      const detail = await fetchHistoryDetail(id);
+      if (detail && state.activeHistoryId === id) renderDetail(detail, false, { preserveScroll: true });
+    }
+  } catch (error) {
+    if (error?.status === 401) {
+      clearPersistedSpeakingReportTaskPolling(id);
+      return;
+    }
+    schedulePersistedSpeakingReportTaskPolling(id, persistedTaskId, 3500);
+  }
+}
+
+function syncPersistedSpeakingReportTaskPolling(items = []) {
+  const persisted = new Map();
+  items.forEach((item) => {
+    if (speakingReportStatus(item) !== "scoring") return;
+    const taskId = String(item?.ai_task?.id || "").trim();
+    if (item?.id && taskId) persisted.set(String(item.id), taskId);
+  });
+  Array.from(state.speaking.historyTaskPolls.entries()).forEach(([attemptId, poll]) => {
+    if (persisted.get(attemptId) !== poll.taskId) clearPersistedSpeakingReportTaskPolling(attemptId);
+  });
+  persisted.forEach((taskId, attemptId) => {
+    const current = state.speaking.historyTaskPolls.get(attemptId);
+    if (!current || current.taskId !== taskId) {
+      clearPersistedSpeakingReportTaskPolling(attemptId);
+      schedulePersistedSpeakingReportTaskPolling(attemptId, taskId, 0);
+    }
+  });
+}
+
+function reconcileSpeakingHistoryDetailCache(items = []) {
+  const byId = new Map(items.map((item) => [String(item?.id || ""), item]));
+  Array.from(state.historyDetailCache.keys()).forEach((id) => {
+    const item = byId.get(String(id));
+    const cached = state.historyDetailCache.get(id);
+    if (!item || (
+      cached
+      && (
+        cached.report_status !== item.report_status
+        || cached.ai_task?.id !== item?.ai_task?.id
+      )
+    )) {
+      state.historyDetailCache.delete(id);
+    }
+  });
+}
+
 async function loadHistory(showBusy = true) {
   if (!state.account.authenticated) {
     state.historyItems = [];
@@ -6426,10 +6776,11 @@ async function loadHistory(showBusy = true) {
   }
   const navScroll = captureNavScrollState();
   const action = async () => {
-    if (state.historyItems.length) renderHistoryList(state.historyItems, { refreshActive: true });
     const payload = await api("/api/history");
     state.historyItems = payload.items || [];
+    reconcileSpeakingHistoryDetailCache(state.historyItems);
     renderHistoryList(state.historyItems);
+    syncPersistedSpeakingReportTaskPolling(state.historyItems);
   };
   const currentActiveId = state.activeHistoryId && state.historyItems.some((item) => item.id === state.activeHistoryId)
     ? state.activeHistoryId
@@ -6470,6 +6821,12 @@ function scrollReportRail(listId, direction) {
 
 function speakingReportPart(item = {}) {
   return String(item.mode || item.part || "").toLowerCase().trim();
+}
+
+function speakingReportStatus(item = {}) {
+  const status = String(item.report_status || "").trim().toLowerCase();
+  if (SPEAKING_REPORT_STATUSES.has(status)) return status;
+  return item.ielts_score || item.overall_band != null ? "ready" : "unscored";
 }
 
 function visibleSpeakingHistoryItems(items = state.historyItems) {
@@ -6780,10 +7137,16 @@ function renderHistoryList(items, options = {}) {
     const part = (item.mode || item.part || "").toLowerCase();
     const tagClass = isSpeakingPartView(part) ? part : "";
     const toneClass = part === "mock" ? "tone-mock" : `tone-${tagClass || "neutral"}`;
-    const isFailed = item.report_status === "failed";
-    const isScoring = isFailed && isSpeakingReportRegenInFlight(item.id);
-    const bandClass = isFailed ? (isScoring ? " is-scoring" : " is-unscored") : "";
-    const bandText = isFailed ? (isScoring ? "评分中" : "未评分") : `Band ${escapeHtml(item.overall_band ?? "—")}`;
+    const reportStatus = speakingReportStatus(item);
+    const isFailed = reportStatus === "failed";
+    const isUnscored = reportStatus === "unscored";
+    const isScoring = isSpeakingReportScoringItem(item);
+    const bandClass = isScoring
+      ? " is-scoring"
+      : (isFailed ? " is-failed" : (isUnscored ? " is-unscored" : ""));
+    const bandText = isScoring
+      ? "评分中"
+      : (isFailed ? "评分失败" : (isUnscored ? "未评分" : `Band ${escapeHtml(item.overall_band ?? "—")}`));
     return `
     <div class="history-item-wrap">
       <button class="history-item ${toneClass} ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
@@ -7046,15 +7409,17 @@ function reportManagerFilterItems() {
 function reportManagerItemFields(item) {
   if (reportManagerState.tab === "speaking") {
     const part = String(item.mode || item.part || "").toUpperCase();
-    const isFailed = item.report_status === "failed";
-    const isScoring = isFailed && isSpeakingReportRegenInFlight(item.id);
+    const reportStatus = speakingReportStatus(item);
+    const isFailed = reportStatus === "failed";
+    const isUnscored = reportStatus === "unscored";
+    const isScoring = isSpeakingReportScoringItem(item);
     return {
       id: item.id,
       tag: part || "—",
       title: item.title || item.question || "Untitled",
       time: formatReportTime(item.display_time || item.timestamp || ""),
-      band: isFailed ? (isScoring ? "评分中" : "未评分") : `Band ${item.overall_band ?? "—"}`,
-      unscored: isFailed && !isScoring,
+      band: isScoring ? "评分中" : (isFailed ? "评分失败" : (isUnscored ? "未评分" : `Band ${item.overall_band ?? "—"}`)),
+      unscored: (isFailed || isUnscored) && !isScoring,
       scoring: isScoring,
     };
   }
@@ -8301,15 +8666,25 @@ async function runWritingAutosave() {
   }
 }
 
-function setWritingPending(isPending, title = "", detail = "") {
+function setWritingPending(isPending, title = "", detail = "", options = {}) {
   const wait = $("writingInlineWait");
   wait?.classList.toggle("hidden", !isPending);
   if (title) text("writingInlineWaitTitle", title);
   if (detail) text("writingInlineWaitText", detail);
-  ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptPickerBtn", "writingAnswer"].forEach((id) => {
+  const allowEditing = isPending && options.allowEditing === true;
+  const lockedControlIds = allowEditing
+    ? ["writingScoreBtn", "writingRandomBtn", "writingPromptPickerBtn"]
+    : ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptPickerBtn", "writingAnswer"];
+  lockedControlIds.forEach((id) => {
     const element = $(id);
     if (element) element.disabled = isPending;
   });
+  if (allowEditing) {
+    ["writingSaveBtn", "writingAnswer"].forEach((id) => {
+      const element = $(id);
+      if (element) element.disabled = false;
+    });
+  }
   document.querySelectorAll("[data-writing-task]").forEach((button) => {
     button.disabled = isPending;
   });
@@ -9270,6 +9645,38 @@ async function deleteWritingReport(entryId) {
   }
 }
 
+function writingReportScoringStateHtml(entry, task) {
+  const taskSubline = entry.task_type === "task1_academic" ? "Task 1" : "Task 2";
+  const displayTitle = writingEntryDisplayTitle(entry) || writingTaskLabel(entry.task_type);
+  const wordCount = Number.isFinite(Number(entry.word_count)) ? Number(entry.word_count) : 0;
+  const editAction = `<button type="button" class="primary writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}" data-writing-report-scored="false" data-writing-report-task="${escapeHtml(entry.task_type || "")}" data-writing-report-prompt="${escapeHtml(entry.prompt_id || "")}">继续编辑</button>`;
+  return `
+    <div class="detail-card writing-saved-report-card speaking-report-regen-card writing-report-scoring-card" data-writing-report-id="${escapeHtml(entry.id || "")}" data-report-status="scoring">
+      <div class="writing-saved-report-head">
+        <div>
+          <span class="section-label">IELTS Writing 练习估分</span>
+          <h2>${escapeHtml(displayTitle)}</h2>
+          <p>${escapeHtml(taskSubline)} · ${escapeHtml(wordCount)} words · ${escapeHtml(entry.display_time || entry.practice_date || "")}</p>
+        </div>
+        <strong><span>Report</span><span class="speaking-report-regen-chip">评分中</span></strong>
+      </div>
+      <div class="writing-saved-report-body writing-draft-summary">
+        <section class="writing-draft-primary">
+          <span>正在评分</span>
+          <h3><span class="spinner" aria-hidden="true"></span>${escapeHtml(writingTaskStatusTitle(task))}</h3>
+          <p>${escapeHtml(writingTaskStatusText(task))}</p>
+        </section>
+        <section>
+          <span>当前作文</span>
+          <h3>仍可继续编辑</h3>
+          <p>评分在后台进行。可以继续修改并保存，当前任务结束后会按最新作文重新评分。</p>
+        </section>
+      </div>
+      <div class="writing-saved-report-actions">${editAction}</div>
+    </div>
+  `;
+}
+
 function writingReportDetailHtml(entry) {
   const score = entry?.score || null;
   const task = entry?.ai_task || null;
@@ -9277,7 +9684,8 @@ function writingReportDetailHtml(entry) {
   const taskLabel = entry.task_type === "task1_academic" ? "TA" : "TR";
   const paragraphReviews = Array.isArray(score?.paragraph_reviews) ? score.paragraph_reviews : [];
   const isScoredReport = isWritingEntryScored(entry);
-  const editLabel = isScoredReport ? "重新生成报告" : "继续编辑";
+  const isScoringReport = isWritingTaskActive(task);
+  const editLabel = isScoringReport ? "继续编辑" : (isScoredReport ? "重新生成报告" : "继续编辑");
   const editAction = `<button type="button" class="primary writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}" data-writing-report-scored="${isScoredReport ? "true" : "false"}" data-writing-report-task="${escapeHtml(entry.task_type || "")}" data-writing-report-prompt="${escapeHtml(entry.prompt_id || "")}">${editLabel}</button>`;
   const taskName = entry.task_label || writingTaskLabel(entry.task_type);
   const taskSubline = entry.task_type === "task1_academic" ? "Task 1" : "Task 2";
@@ -9302,7 +9710,7 @@ function writingReportDetailHtml(entry) {
       ` : ""}
     </div>
   `;
-  const taskBlock = !score && task ? `
+  const taskBlock = isScoringReport ? writingReportScoringStateHtml(entry, task) : (!score && task ? `
     <div class="detail-card writing-task-state-card">
       <div class="detail-header">
         <div>
@@ -9312,7 +9720,7 @@ function writingReportDetailHtml(entry) {
         <strong class="overall-badge muted-badge">${escapeHtml(task.status || "pending")}</strong>
       </div>
     </div>
-  ` : "";
+  ` : "");
   const scoreBlock = score ? `
     <div class="detail-card writing-score-summary-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
       <div class="writing-score-summary-head">
@@ -9339,7 +9747,7 @@ function writingReportDetailHtml(entry) {
     <div class="detail-card overall-review-card writing-overall-review-card">
       <div class="writing-overall-head">
         <h3>Overall Review & Practice Focus</h3>
-        <div class="writing-report-actions">${editAction}</div>
+        ${isScoringReport ? "" : `<div class="writing-report-actions">${editAction}</div>`}
       </div>
       <div class="overall-review-content writing-overall-content">
         <section>
@@ -9381,7 +9789,7 @@ function writingReportDetailHtml(entry) {
           <p>${answerText ? "已保存正文，可以继续修改或发起评分。" : "这篇记录目前没有正文内容，建议先补全文本再评分。"}</p>
         </section>
       </div>
-      <div class="writing-saved-report-actions">${editAction}</div>
+      ${isScoringReport ? "" : `<div class="writing-saved-report-actions">${editAction}</div>`}
     </div>
   `;
   return `
@@ -9420,12 +9828,7 @@ function writingStructureAdviceHtml(score, entry) {
 function writingParagraphReviewHtml(entry, score, reviews) {
   const answerParagraphs = writingParagraphs(entry.answer || "");
   const inlineAnnotations = writingInlineAnnotations(score || {});
-  const items = reviews.length ? reviews : answerParagraphs.map((paragraph, index) => ({
-    index: index + 1,
-    learner: paragraph,
-    model: "",
-    coaching: "这一段可以继续优化中心句、展开和连接方式。",
-  }));
+  const items = writingParagraphReviewItems(answerParagraphs, reviews);
   if (!items.length) return "";
   const rows = items.map((item, index) => {
     const paragraphIndex = Number.parseInt(item.index || index + 1, 10);
@@ -9539,6 +9942,33 @@ function hideWritingFixPopover() {
   delete popover.dataset.fixEntryId;
   delete popover.dataset.fixParagraphIndex;
   popover.remove();
+}
+
+function writingParagraphReviewItems(answerParagraphs, reviews) {
+  const availableReviews = Array.isArray(reviews) ? reviews : [];
+  const usedReviews = new Set();
+  const normalizedLearner = (value) => String(value || "").replace(/\s+/g, " ").trim();
+
+  return answerParagraphs.map((paragraph, index) => {
+    const paragraphIndex = index + 1;
+    const exactReview = availableReviews.find((item) => (
+      !usedReviews.has(item)
+      && normalizedLearner(item?.learner) === normalizedLearner(paragraph)
+    ));
+    const indexedReview = availableReviews.find((item, reviewIndex) => (
+      !usedReviews.has(item)
+      && Number.parseInt(item?.index || reviewIndex + 1, 10) === paragraphIndex
+    ));
+    const review = exactReview || indexedReview || {};
+    if (exactReview || indexedReview) usedReviews.add(review);
+    return {
+      ...review,
+      index: paragraphIndex,
+      learner: paragraph,
+      model: String(review.model || ""),
+      coaching: String(review.coaching || "重新生成报告后，AI 会补充这一段的改写与辅导。"),
+    };
+  });
 }
 
 function showWritingFixPopover(anchor, event = null) {
@@ -10722,7 +11152,7 @@ function startWritingScorePolling(entryId, options = {}) {
         if (notifyOnComplete) showWritingScoreCompleteModal(entry, task);
         return;
       }
-      setWritingPending(true, writingTaskStatusTitle(task), writingTaskStatusText(task));
+      setWritingPending(true, writingTaskStatusTitle(task), writingTaskStatusText(task), { allowEditing: true });
       state.writing.scorePollTimer = setTimeout(poll, 2500);
     } catch (error) {
       clearWritingScorePolling();
@@ -10915,6 +11345,33 @@ function renderDetail(attempt, updateView = true, options = {}) {
   const previousScrollTop = detailPanel?.scrollTop || 0;
   state.activeHistoryId = attempt.id;
   syncUrlForCurrentState({ replace: Boolean(options.replaceUrl) });
+  if (attempt.report_status === "scoring") {
+    detailPanel.innerHTML = speakingReportScoringLoadingHtml(attempt);
+    if (preserveScroll) {
+      detailPanel.scrollTop = previousScrollTop;
+    } else {
+      detailPanel.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return;
+  }
+  if (attempt.report_status === "unscored") {
+    if (isSpeakingReportRegenInFlight(attempt.id)) {
+      detailPanel.innerHTML = speakingReportRegenLoadingHtml(attempt);
+      if (preserveScroll) detailPanel.scrollTop = previousScrollTop;
+      else detailPanel.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    detailPanel.innerHTML = unscoredSpeakingReportHtml(attempt);
+    detailPanel.querySelector("[data-regenerate-report]")?.addEventListener("click", (event) => {
+      regenerateSpeakingReport(event.currentTarget);
+    });
+    if (preserveScroll) {
+      detailPanel.scrollTop = previousScrollTop;
+    } else {
+      detailPanel.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return;
+  }
   if (attempt.report_status === "failed") {
     // A regen already in flight for this attempt → show 加载中 instead of the
     // failed card (handles switching away and back without losing the state).
@@ -10948,7 +11405,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
   const p3Skills = p3DiscussionSkillsSection(attempt.p3_discussion_skills);
 
   detailPanel.innerHTML = `
-    <div class="detail-card speaking-score-summary-card">
+    <div class="detail-card speaking-score-summary-card speaking-report-ready-card" data-report-status="ready">
       <div class="speaking-score-summary-head">
         <div class="speaking-score-summary-copy">
           <span class="section-label">IELTS Speaking 练习估分${attempt.is_sample ? ` <span class="report-sample-badge">示例</span>` : ""}</span>
@@ -11075,6 +11532,10 @@ function refreshReportCorpusButtonStates() {
         const saved = local !== null ? local : Boolean(statuses[button.dataset.corpusKey]);
         applyCorpusButtonState(button, saved);
       });
+      new Set(buttons.map((button) => button.closest("table")).filter(Boolean)).forEach((table) => {
+        table.dataset.corpusStatusResolved = "true";
+      });
+      updateReportCorpusHeaderCounts();
     })
     .catch(() => null);
 }
@@ -11168,6 +11629,7 @@ async function hydrateModelTtsPlaceholders() {
 }
 
 function applyCorpusButtonState(button, saved) {
+  button.dataset.corpusSaved = saved ? "true" : "false";
   button.classList.toggle("is-corpus-saved", saved);
   button.classList.toggle("is-corpus-new", !saved);
   const label = button.querySelector(".corpus-edit-label");
@@ -11178,6 +11640,82 @@ function applyCorpusButtonState(button, saved) {
       ? '<path d="M5 12.5l4 4 10-10"></path>'
       : '<path d="M4 7h11M4 12h7M4 17h5"></path><path d="m15.5 15.5 4-4a1.4 1.4 0 0 1 2 2l-4 4-2.6.6z"></path>';
   }
+  updateReportCorpusHeaderCounts();
+}
+
+function updateReportCorpusHeaderCounts(root = document) {
+  root.querySelectorAll("#detailPanel [data-report-corpus-count]").forEach((label) => {
+    const table = label.closest("table");
+    const buttons = table
+      ? Array.from(table.querySelectorAll("[data-edit-turn-corpus]"))
+      : [];
+    const resolved = table?.dataset.corpusStatusResolved === "true";
+    const hasCompleteState = buttons.every((button) => ["true", "false"].includes(button.dataset.corpusSaved || ""));
+    if (!resolved || !buttons.length || !hasCompleteState) {
+      label.textContent = "Question";
+      return;
+    }
+    const savedCount = buttons.filter((button) => button.dataset.corpusSaved === "true").length;
+    label.textContent = `Question (${savedCount}/${buttons.length})`;
+  });
+}
+
+function speakingReportSavedAnswersCardHtml(attempt) {
+  const turns = Array.isArray(attempt.turns) ? attempt.turns : [];
+  const answered = turns.filter((turn) => String(turn.transcript_cleaned || turn.transcript_raw || "").trim());
+  const transcriptList = answered.length
+    ? answered.map((turn, index) => `
+        <article class="speaking-failed-turn">
+          <h4>Q${index + 1}${turn.question ? ` · ${escapeHtml(turn.question)}` : ""}</h4>
+          <p>${escapeHtml(String(turn.transcript_cleaned || turn.transcript_raw || "")).replace(/\n/g, "<br>")}</p>
+        </article>`).join("")
+    : `<p class="muted">这次练习没有保存到可用的文字稿。</p>`;
+  return `
+    <div class="detail-card speaking-failed-answers-card">
+      <div class="writing-saved-answer-head">
+        <h3>你的回答</h3>
+        <span>${answered.length} 段</span>
+      </div>
+      ${transcriptList}
+    </div>
+  `;
+}
+
+function unscoredSpeakingReportHtml(attempt) {
+  const part = String(attempt.mode || attempt.part || "").toUpperCase();
+  const turns = Array.isArray(attempt.turns) ? attempt.turns : [];
+  const answeredCount = turns.filter((turn) => String(turn.transcript_cleaned || turn.transcript_raw || "").trim()).length;
+  const canGenerate = attempt.can_regenerate_report !== false;
+  return `
+    <div class="detail-card writing-saved-report-card speaking-unscored-report-card" data-attempt-id="${escapeHtml(attempt.id || "")}" data-report-status="unscored">
+      <div class="writing-saved-report-head">
+        <div>
+          <span class="section-label">IELTS Speaking 练习</span>
+          <h2>${escapeHtml(attempt.title || `${part} practice`)}</h2>
+          <p>${escapeHtml(part)} · ${answeredCount} question${answeredCount === 1 ? "" : "s"} · ${escapeHtml(attempt.display_time || "")}</p>
+        </div>
+        <strong><span>Report</span><span class="speaking-report-status-chip is-unscored">未评分</span></strong>
+      </div>
+      <div class="writing-saved-report-body writing-draft-summary">
+        <section class="writing-draft-primary">
+          <span>尚未评分</span>
+          <h3>这次练习还没有 AI 报告</h3>
+          <p>练习内容和原始回答已经保存。你可以稍后手动生成报告，不会重新开始这场练习。</p>
+        </section>
+        <section>
+          <span>报告状态</span>
+          <h3>等待你的操作</h3>
+          <p>生成后，这张记录会更新为正式报告；刷新页面也会保留这次练习。</p>
+        </section>
+      </div>
+      ${canGenerate ? `
+        <div class="writing-saved-report-actions">
+          <button type="button" class="primary writing-report-edit-btn" data-regenerate-report="${escapeHtml(attempt.id || "")}">生成报告</button>
+        </div>
+      ` : ""}
+    </div>
+    ${speakingReportSavedAnswersCardHtml(attempt)}
+  `;
 }
 
 function failedSpeakingReportHtml(attempt) {
@@ -11193,14 +11731,14 @@ function failedSpeakingReportHtml(attempt) {
         </article>`).join("")
     : `<p class="muted">这次练习没有保存到可用的文字稿。</p>`;
   return `
-    <div class="detail-card writing-saved-report-card speaking-failed-report-card" data-attempt-id="${escapeHtml(attempt.id || "")}">
+    <div class="detail-card writing-saved-report-card speaking-failed-report-card" data-attempt-id="${escapeHtml(attempt.id || "")}" data-report-status="failed">
       <div class="writing-saved-report-head">
         <div>
           <span class="section-label">IELTS Speaking 估分</span>
           <h2>${escapeHtml(attempt.title || `${part} report`)}</h2>
           <p>${escapeHtml(part)} · ${answered.length} question${answered.length === 1 ? "" : "s"} · ${escapeHtml(attempt.display_time || "")}</p>
         </div>
-        <strong><span>Report</span>未评分</strong>
+        <strong><span>Report</span><span class="speaking-report-status-chip is-failed">评分失败</span></strong>
       </div>
       <div class="writing-saved-report-body writing-draft-summary">
         <section class="writing-draft-primary">
@@ -11256,6 +11794,12 @@ function clearSpeakingReportRegenPoll() {
     clearTimeout(state.speaking.reportRegenPollTimer);
     state.speaking.reportRegenPollTimer = null;
   }
+}
+
+function isSpeakingReportScoringItem(item = {}) {
+  return item.report_status === "scoring" || (
+    ["failed", "unscored"].includes(speakingReportStatus(item)) && isSpeakingReportRegenInFlight(item.id)
+  );
 }
 
 function isSpeakingReportRegenInFlight(attemptId) {
@@ -11377,10 +11921,21 @@ function failSpeakingReportRegen(attemptId, error) {
   alert(message || "重新生成报告失败，可能是额度用尽或网络波动，请稍后重试。");
 }
 
-function speakingReportRegenLoadingHtml(attempt) {
+function speakingReportScoringLoadingHtml(attempt) {
+  return speakingReportRegenLoadingHtml(attempt, { initialScoring: true });
+}
+
+function speakingReportRegenLoadingHtml(attempt, options = {}) {
   const part = String(attempt.mode || attempt.part || "").toUpperCase();
   const turns = Array.isArray(attempt.turns) ? attempt.turns : [];
   const answered = turns.filter((turn) => String(turn.transcript_cleaned || turn.transcript_raw || "").trim());
+  const initialScoring = Boolean(options.initialScoring);
+  const chipText = initialScoring ? "评分中" : "加载中";
+  const statusText = initialScoring ? "正在评分" : "正在重新生成";
+  const headingText = initialScoring ? "AI 正在分析并生成报告" : "AI 正在重新生成报告";
+  const bodyText = initialScoring
+    ? "这次练习已经进入后台评分，完成后会自动更新到正式报告。评分期间不会开放重新评分，避免重复扣费或生成冲突。"
+    : "任务已经在后台运行，可以切换页面或刷新——完成后会自动更新并弹窗通知，不会重开整场练习。";
   const transcriptList = answered.length
     ? answered.map((turn, index) => `
         <article class="speaking-failed-turn">
@@ -11389,20 +11944,20 @@ function speakingReportRegenLoadingHtml(attempt) {
         </article>`).join("")
     : `<p class="muted">这次练习没有保存到可用的文字稿。</p>`;
   return `
-    <div class="detail-card writing-saved-report-card speaking-failed-report-card speaking-report-regen-card" data-attempt-id="${escapeHtml(attempt.id || "")}">
+    <div class="detail-card writing-saved-report-card speaking-failed-report-card speaking-report-regen-card" data-attempt-id="${escapeHtml(attempt.id || "")}" data-report-status="scoring">
       <div class="writing-saved-report-head">
         <div>
           <span class="section-label">IELTS Speaking 估分</span>
           <h2>${escapeHtml(attempt.title || `${part} report`)}</h2>
           <p>${escapeHtml(part)} · ${answered.length} question${answered.length === 1 ? "" : "s"} · ${escapeHtml(attempt.display_time || "")}</p>
         </div>
-        <strong><span>Report</span><span class="speaking-report-regen-chip">加载中</span></strong>
+        <strong><span>Report</span><span class="speaking-report-regen-chip">${chipText}</span></strong>
       </div>
       <div class="writing-saved-report-body writing-draft-summary">
         <section class="writing-draft-primary">
-          <span>正在重新生成</span>
-          <h3><span class="spinner" aria-hidden="true"></span>AI 正在重新生成报告</h3>
-          <p>任务已经在后台运行，可以切换页面或刷新——完成后会自动更新并弹窗通知，不会重开整场练习。</p>
+          <span>${statusText}</span>
+          <h3><span class="spinner" aria-hidden="true"></span>${headingText}</h3>
+          <p>${bodyText}</p>
         </section>
         <section>
           <span>辅导内容</span>
@@ -11553,6 +12108,17 @@ function partScoreBlock(part, item = {}) {
 
 function p3DiscussionSkillsSection(skills) {
   if (!skills || !Array.isArray(skills.dimensions) || !skills.dimensions.length) return "";
+  const supportedDimensionKeys = new Set([
+    "abstract_extension",
+    "reasoning",
+    "comparison_concession",
+    "specific_support",
+  ]);
+  const dimensions = skills.dimensions.filter((item) => {
+    const key = String(item?.key || "");
+    return key !== "follow_up_handling" && supportedDimensionKeys.has(key);
+  });
+  if (!dimensions.length) return "";
   const statusLabel = {
     strong: "稳定",
     developing: "待加强",
@@ -11585,7 +12151,7 @@ function p3DiscussionSkillsSection(skills) {
         ${nextDrill}
       </div>
       <div class="p3-skills-grid">
-        ${skills.dimensions.map((item) => `
+        ${dimensions.map((item) => `
           <article class="p3-skill-item ${escapeHtml(item.status || "developing")}">
             <div>
               <strong>${escapeHtml(item.label || "")}</strong>
@@ -11614,12 +12180,18 @@ function p3TurnDiscussionMoves(turn) {
   `;
 }
 
+function reportQuestionHeaderHtml(countCorpus) {
+  return countCorpus
+    ? '<th><span data-report-corpus-count>Question</span></th>'
+    : "<th>Question</th>";
+}
+
 function turnTableSection(attempt, turns, isP2 = false) {
   const reportTurns = turns.filter(shouldRenderReportTurn);
   const tableClass = isP2 ? "turn-report-table p2-report-table" : "turn-report-table p1-p3-report-table";
   const headers = isP2
     ? '<th>我的原文</th><th class="band7-head">7分回答参考</th>'
-    : '<th>Question</th><th>Your recording</th><th class="band7-head">7分回答参考</th>';
+    : `${reportQuestionHeaderHtml(!isP2)}<th>Your recording</th><th class="band7-head">7分回答参考</th>`;
   const bodyHtml = reportTurns.map((turn) => turnReportGroup(attempt.id, turn, attempt, isP2)).join("");
   return `
     <div class="detail-card turn-report-card${isP2 ? " p2-report-card" : ""}">
@@ -11669,7 +12241,7 @@ function mockTurnSections(attempt, turns) {
     const tableClass = isP2 ? "turn-report-table" : "turn-report-table p1-p3-report-table";
     const headers = isP2
       ? '<th>Your recording</th><th class="band7-head">7分回答参考</th>'
-      : '<th>Question</th><th>Your recording</th><th class="band7-head">7分回答参考</th>';
+      : `${reportQuestionHeaderHtml(!isP2)}<th>Your recording</th><th class="band7-head">7分回答参考</th>`;
     return `
       <div class="detail-section">
         <h3>${escapeHtml(part.toUpperCase())}</h3>
@@ -12237,6 +12809,10 @@ function updateP3CorpusPeekButton(...args) {
   return corpusTakeawayController.updateP3CorpusPeekButton(...args);
 }
 
+function prefetchP3CorpusPeekMaterialsForAttempt(...args) {
+  return corpusTakeawayController.prefetchP3CorpusPeekMaterialsForAttempt(...args);
+}
+
 function openP3CorpusPeek(...args) {
   return corpusTakeawayController.openP3CorpusPeek(...args);
 }
@@ -12413,6 +12989,10 @@ function takeawayReviewFeedback(...args) {
 
 function updateTakeawayReviewDots(...args) {
   return corpusTakeawayController.updateTakeawayReviewDots(...args);
+}
+
+function startTakeawayReviewDayWatcher(...args) {
+  return corpusTakeawayController.startTakeawayReviewDayWatcher(...args);
 }
 
 function speakLanguageTakeaway(...args) {
@@ -13061,7 +13641,37 @@ function accountProfileNames(user) {
   };
 }
 
-const AI_SOURCE_VALUES = new Set(["gpt", "claude", "claude_haiku", "claude_cli", "claude_cli_haiku", "codex_cli"]);
+const AI_SOURCE_VALUES = new Set([
+  "gpt",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "gpt-5.6-sol",
+  "claude",
+  "claude_haiku",
+  "claude_cli",
+  "claude_cli_haiku",
+  "codex_cli",
+]);
+
+const AI_SOURCE_OPTION_LABELS = {
+  gpt: "gpt-5.4 mini",
+  "gpt-5.6-terra": "gpt-5.6-terra",
+  "gpt-5.6-luna": "gpt-5.6-luna",
+  "gpt-5.6-sol": "gpt-5.6-sol",
+};
+
+function ensureAiSourceOptions(select) {
+  if (!select) return;
+  for (const [value, label] of Object.entries(AI_SOURCE_OPTION_LABELS)) {
+    let option = Array.from(select.options).find((item) => item.value === value);
+    if (!option) {
+      option = document.createElement("option");
+      option.value = value;
+      select.appendChild(option);
+    }
+    option.textContent = label;
+  }
+}
 
 function normalizeAiSource(value) {
   const v = String(value || "").trim();
@@ -13069,6 +13679,9 @@ function normalizeAiSource(value) {
 }
 
 const AI_SOURCE_SAVED_LABELS = {
+  "gpt-5.6-terra": "AI 评分来源已切换为 gpt-5.6-terra。",
+  "gpt-5.6-luna": "AI 评分来源已切换为 gpt-5.6-luna。",
+  "gpt-5.6-sol": "AI 评分来源已切换为 gpt-5.6-sol。",
   claude: "AI 评分来源已切换为 Claude Sonnet。",
   claude_haiku: "AI 评分来源已切换为 Claude Haiku。",
   claude_cli: "AI 评分来源已切换为 Claude CLI (Sonnet)。",
@@ -13080,7 +13693,10 @@ const AI_SOURCE_SAVED_LABELS = {
 function syncAiSourceControls(value) {
   const aiSource = normalizeAiSource(value);
   const aiSourceSelect = $("aiSourceSelect");
-  if (aiSourceSelect) aiSourceSelect.value = aiSource;
+  if (aiSourceSelect) {
+    ensureAiSourceOptions(aiSourceSelect);
+    aiSourceSelect.value = aiSource;
+  }
 }
 
 function currentAiSourcePreference() {
@@ -13341,21 +13957,25 @@ function resetAccountProfileLoadingUi() {
     status.textContent = t("account.profileLoading");
     status.classList.remove("error");
   }
-  const walletStatus = $("walletStatus");
-  if (walletStatus) {
-    walletStatus.classList.remove("is-error");
-    walletStatus.classList.add("is-loading");
-    walletStatus.innerHTML = `
-      <article class="wallet-balance-card wallet-balance-skeleton" aria-label="${escapeHtml(t("wallet.loading"))}">
-        <span class="wallet-skeleton-line wallet-skeleton-line-label"></span>
-        <span class="wallet-skeleton-line wallet-skeleton-line-amount"></span>
-        <span class="wallet-skeleton-line wallet-skeleton-line-hint"></span>
-      </article>
-    `;
-  }
-  const ledgerList = $("ledgerList");
-  if (ledgerList) {
-    ledgerList.innerHTML = `<div class="account-ledger-loading" aria-label="${escapeHtml(t("wallet.reading"))}"><span class="wallet-loading-spinner" aria-hidden="true"></span></div>`;
+  if (state.wallet.loaded && state.wallet.payload) {
+    renderWalletPayload(state.wallet.payload);
+  } else {
+    const walletStatus = $("walletStatus");
+    if (walletStatus) {
+      walletStatus.classList.remove("is-error");
+      walletStatus.classList.add("is-loading");
+      walletStatus.innerHTML = `
+        <article class="wallet-balance-card wallet-balance-skeleton" aria-label="${escapeHtml(t("wallet.loading"))}">
+          <span class="wallet-skeleton-line wallet-skeleton-line-label"></span>
+          <span class="wallet-skeleton-line wallet-skeleton-line-amount"></span>
+          <span class="wallet-skeleton-line wallet-skeleton-line-hint"></span>
+        </article>
+      `;
+    }
+    const ledgerList = $("ledgerList");
+    if (ledgerList) {
+      ledgerList.innerHTML = `<div class="account-ledger-loading" aria-label="${escapeHtml(t("wallet.reading"))}"><span class="wallet-loading-spinner" aria-hidden="true"></span></div>`;
+    }
   }
   renderQuestionBankSelector(state.account.questionBankSummary);
 }
@@ -13408,6 +14028,7 @@ async function submitLogin() {
     state.account.backendAvailable = true;
     state.account.authenticated = true;
     state.account.user = result.user || null;
+    clearUserScopedCaches();
     resetCsrfToken();
     await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
@@ -13471,6 +14092,7 @@ async function submitRegister() {
     state.account.backendAvailable = true;
     state.account.authenticated = true;
     state.account.user = result.user || null;
+    clearUserScopedCaches();
     resetCsrfToken();
     await ensureCsrfToken();
     applyCandidateNames(accountProfileNames(state.account.user), true);
@@ -13684,12 +14306,13 @@ function bindEvents() {
     });
   });
   const handleAccountNavigation = (event) => {
-    // The account profile page has a guest-local mode, so visitors can open it
-    // too (to browse appearance/account settings); login-only actions inside it
-    // prompt at the point of use.
     if (openViewInNewTabForModifier(event, "accountProfile")) return;
     if (event.type === "auxclick") return;
     event.preventDefault();
+    if (!state.account.authenticated) {
+      promptGuestLogin("登录后即可管理账号资料、查看钱包与考季设置。", { returnView: state.view });
+      return;
+    }
     switchView("accountProfile", { preservePractice: true, fromView: state.view });
   };
   document.querySelectorAll(".avatar-settings-button").forEach((button) => {
@@ -13835,6 +14458,13 @@ function bindEvents() {
     translateTakeawayEditSource().catch(showError);
   });
   $("p1CorpusTopics")?.addEventListener("click", (event) => {
+    const copyButton = event.target.closest("[data-p1-topic-copy]");
+    if (copyButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      corpusTakeawayController.copyP1TopicForAi(copyButton.dataset.p1TopicCopy || "").catch(showError);
+      return;
+    }
     const button = event.target.closest("[data-p1-corpus-question]");
     if (button) {
       openP1CorpusEditor(findP1CorpusEntry(button.dataset.p1CorpusQuestion || ""));
@@ -14604,6 +15234,9 @@ function bindEvents() {
   });
   $("agentAssistantBtn")?.addEventListener("click", openAgentAssistant);
   $("p1CorpusAgentBtn")?.addEventListener("click", () => openAgentAssistant("p1Corpus"));
+  $("p1CorpusPodcastBtn")?.addEventListener("click", () => {
+    corpusTakeawayController.copyP1PodcastPrompt().catch(showError);
+  });
   $("p2CorpusAgentBtn")?.addEventListener("click", () => openAgentAssistant("p2Corpus"));
   $("agentAssistantForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -15805,16 +16438,21 @@ async function openAgentAssistantPrompt(promptId, taskType) {
 
 async function loadAccountProfile() {
   resetAccountProfileLoadingUi();
+  const prefetchedWallet = state.account.authenticated
+    ? loadWallet({ maxAgeMs: 60000 })
+    : null;
   await loadAccount();
   renderAccountStatus();
   // Entering the account page as a guest always offers a login prompt once.
   if (!state.account.authenticated) {
     promptGuestLogin("登录后即可管理账号资料、查看钱包与考季设置。", { returnView: "accountProfile" });
   }
-  loadQuestionBankSummary({ force: true })
+  loadQuestionBankSummary()
     .then(renderQuestionBankSelector)
     .catch(renderQuestionBankSelectorError);
-  await loadWallet();
+  if (state.account.authenticated) {
+    await (prefetchedWallet || loadWallet({ maxAgeMs: 60000 }));
+  }
 }
 
 let questionBankScopeSwitching = false;
@@ -15922,9 +16560,15 @@ function renderWalletPayload(wallet) {
     : `<p class="account-empty-state">${escapeHtml(t("wallet.emptyLedger"))}</p>`;
 }
 
-async function loadWallet() {
+async function loadWallet(options = {}) {
   try {
-    const wallet = await fetchWalletPayload({ force: true });
+    if (state.wallet.loaded && state.wallet.payload) {
+      renderWalletPayload(state.wallet.payload);
+    }
+    const wallet = await fetchWalletPayload({
+      force: Boolean(options.force),
+      maxAgeMs: Number(options.maxAgeMs ?? 60000),
+    });
     renderWalletPayload(wallet);
   } catch (error) {
     const walletStatus = $("walletStatus");
@@ -16055,6 +16699,7 @@ async function init() {
   setupReportRails();
   await loadAccount();
   maybeShowGuestTakeawayDots();
+  startTakeawayReviewDayWatcher();
   // Keep general audio playback exclusive, but do not let report/player audio interrupt
   // the in-flow examiner prompt once it has started.
   document.addEventListener("play", (e) => {

@@ -37,7 +37,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20260702-report-p2-motion-prompt-1">
+    <link rel="stylesheet" href="/styles.css?v=20260728-p3-natural-four-grid-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -456,6 +456,14 @@
                 <h2>P1 短答语料库</h2>
               </div>
               <div class="corpus-head-actions">
+                <button id="p1CorpusPodcastBtn" class="p1-corpus-podcast-button" type="button" title="复制 Podcast 提示词" aria-label="复制 Podcast 提示词">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <circle cx="12" cy="11" r="1"></circle>
+                    <path d="M17.03 18.37A6.98 6.98 0 0 0 19 13.5a7 7 0 0 0-14 0c0 1.9.76 3.62 1.99 4.88"></path>
+                    <path d="M15.5 15.5a4.95 4.95 0 0 0 1-3 4.5 4.5 0 0 0-9 0c0 1.13.42 2.17 1.12 2.96"></path>
+                    <path d="M9 22h6l-2-7h-2z"></path>
+                  </svg>
+                </button>
                 <button id="p1CorpusAgentBtn" class="agent-assistant-trigger corpus-agent-button" type="button" title="题库助手" aria-label="P1 题库助手">
                   <svg aria-hidden="true" viewBox="0 0 24 24">
                     <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path>
@@ -465,6 +473,7 @@
                 </button>
                 <span id="p1CorpusStats" class="corpus-page-stat">Loading...</span>
               </div>
+              <div id="p1CorpusCopyToast" class="p1-corpus-copy-toast" role="status" aria-live="polite"></div>
             </header>
             <div id="p1CorpusTopics" class="p1-corpus-topics"></div>
           </div>
@@ -850,8 +859,15 @@
             </div>
           </div>
           <article id="detailPanel" class="detail-panel">
-            <h2>Attempt Details</h2>
-            <p class="muted">Select a history item to review the full report.</p>
+            <div class="page-center-loading" role="status" aria-live="polite">
+              <div>
+                <span class="spinner" aria-hidden="true"></span>
+                <div>
+                  <strong>正在加载口语报告</strong>
+                  <span>正在读取历史记录和报告详情。</span>
+                </div>
+              </div>
+            </div>
           </article>
         </section>
 
@@ -933,22 +949,30 @@
         </div>
         <div id="spellingAddDialog" class="spelling-add-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="spellingAddTitle">
           <div class="language-takeaway-popup spelling-add-card">
-            <header class="p1-corpus-dialog-head spelling-add-head">
+            <header class="spelling-add-head">
               <div>
                 <span>拼写训练</span>
                 <h3 id="spellingAddTitle">添加单词</h3>
               </div>
-              <button id="spellingAddSpeakBtn" class="language-takeaway-speak-btn" type="button" aria-label="朗读单词" title="朗读单词">♪</button>
-              <button id="spellingAddSaveBtn" type="button">添加</button>
+              <div class="spelling-add-head-actions">
+                <span id="spellingAddStatus" class="spelling-add-status"></span>
+                <button id="spellingAddSpeakBtn" class="language-takeaway-tts-btn spelling-add-tts-btn" type="button" aria-label="朗读单词" title="朗读单词">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M11 5 6 9H3v6h3l5 4z"></path>
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+                    <path d="M18.5 6a8 8 0 0 1 0 12"></path>
+                  </svg>
+                </button>
+                <button id="spellingAddSaveBtn" class="spelling-add-save-btn" type="button">添加</button>
+              </div>
             </header>
             <label class="p1-corpus-label" for="spellingAddWord">英文单词</label>
             <input id="spellingAddWord" class="p1-corpus-textarea spelling-add-word" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="输入一个英文单词，回车查词">
-            <label class="p1-corpus-label" for="spellingAddGloss">中文</label>
-            <textarea id="spellingAddGloss" class="p1-corpus-textarea spelling-add-gloss" spellcheck="true"></textarea>
+            <label id="spellingAddGlossField" class="p1-corpus-label" for="spellingAddGloss">
+              中文
+              <textarea id="spellingAddGloss" class="p1-corpus-textarea spelling-add-gloss" spellcheck="true"></textarea>
+            </label>
             <div id="spellingAddGlossPreview" class="language-takeaway-dict-display spelling-add-gloss-preview hidden"></div>
-            <div class="p1-corpus-dialog-actions">
-              <span id="spellingAddStatus"></span>
-            </div>
           </div>
         </div>
         <div id="expressionReplacementDialog" class="p1-corpus-dialog expression-replacement-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="expressionReplacementTitle">
@@ -1167,7 +1191,7 @@
 
         <div id="writingScoreCompleteModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="writingScoreCompleteTitle">
           <div class="modal-backdrop" data-writing-score-complete-close></div>
-          <article class="modal-card writing-score-complete-card">
+          <article class="modal-card score-complete-card writing-score-complete-card">
             <header class="modal-head">
               <div>
                 <span class="section-label">Writing score</span>
@@ -1181,17 +1205,26 @@
               </button>
             </header>
             <div class="writing-score-complete-body">
-              <strong id="writingScoreCompleteBand">Band —</strong>
-              <div id="writingScoreCompleteCriteria" class="writing-score-complete-criteria hidden" aria-label="Writing criterion scores"></div>
-              <p id="writingScoreCompleteText">写作报告已经生成，可以在方便的时候查看详细反馈。</p>
-              <button id="writingScoreCompleteReportBtn" type="button">查看详细报告</button>
+              <div class="score-complete-main">
+                <div class="score-complete-band">
+                  <span>OVERALL</span>
+                  <strong id="writingScoreCompleteBand">Band —</strong>
+                </div>
+                <div id="writingScoreCompleteCriteria" class="writing-score-complete-criteria hidden" aria-label="Writing criterion scores"></div>
+              </div>
+              <div class="score-complete-footer">
+                <p id="writingScoreCompleteText">写作报告已经生成，可以在方便的时候查看详细反馈。</p>
+                <div class="score-complete-actions">
+                  <button id="writingScoreCompleteReportBtn" type="button">查看详细报告</button>
+                </div>
+              </div>
             </div>
           </article>
         </div>
 
         <div id="speakingScoreCompleteModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="speakingScoreCompleteTitle">
           <div class="modal-backdrop" data-speaking-score-complete-close></div>
-          <article class="modal-card writing-score-complete-card speaking-score-complete-card">
+          <article class="modal-card score-complete-card writing-score-complete-card speaking-score-complete-card">
             <header class="modal-head">
               <div>
                 <span class="section-label">Speaking score</span>
@@ -1212,9 +1245,11 @@
                 </div>
                 <div id="speakingScoreCompleteCriteria" class="writing-score-complete-criteria speaking-score-complete-criteria hidden" aria-label="Speaking criterion scores"></div>
               </div>
-              <p id="speakingScoreCompleteText">口语报告已经生成，可以在方便的时候查看详细反馈。</p>
-              <div class="score-complete-actions">
-                <button id="speakingScoreCompleteReportBtn" type="button">查看详细口语报告</button>
+              <div class="score-complete-footer">
+                <p id="speakingScoreCompleteText">口语报告已经生成，可以在方便的时候查看详细反馈。</p>
+                <div class="score-complete-actions">
+                  <button id="speakingScoreCompleteReportBtn" type="button">查看详细口语报告</button>
+                </div>
               </div>
             </div>
           </article>
@@ -1442,7 +1477,10 @@
                   <div class="account-ai-source-row">
                     <label class="account-ai-source-label" for="aiSourceSelect" data-i18n="settings.aiSource">AI 评分来源</label>
                     <select id="aiSourceSelect" class="account-ai-source-select" aria-label="AI 评分来源" data-i18n-aria="settings.aiSource">
-                      <option value="gpt" data-i18n="settings.aiSource.gpt">GPT（默认）</option>
+                      <option value="gpt" data-i18n="settings.aiSource.gpt">gpt-5.4 mini（默认）</option>
+                      <option value="gpt-5.6-terra" data-i18n="settings.aiSource.gpt56Terra">gpt-5.6-terra</option>
+                      <option value="gpt-5.6-luna" data-i18n="settings.aiSource.gpt56Luna">gpt-5.6-luna</option>
+                      <option value="gpt-5.6-sol" data-i18n="settings.aiSource.gpt56Sol">gpt-5.6-sol</option>
                       <option value="claude" data-i18n="settings.aiSource.claude">Claude Sonnet</option>
                       <option value="claude_haiku" data-i18n="settings.aiSource.claudeHaiku">Claude Haiku</option>
                       <option value="claude_cli" data-i18n="settings.aiSource.claudeCli">Claude CLI (Sonnet)</option>
@@ -1566,8 +1604,8 @@
     <script src="/writing-prompt-picker.js?v=20260614-img-ready-instant-1"></script>
     <script src="/corpus-markdown-editor.js?v=20260629-md-wysiwyg-undo-stack-1"></script>
     <script src="/assets/guest-samples.js?v=20260623-ux-batch-3"></script>
-    <script src="/corpus-takeaway.js?v=20260702-report-p2-motion-prompt-1"></script>
-    <script src="/spelling-drill.js?v=20260630-writing-random-btn-compact-1"></script>
+    <script src="/corpus-takeaway.js?v=20260729-takeaway-delete-review-state-1"></script>
+    <script src="/spelling-drill.js?v=20260727-spelling-daily-single-round-1"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
@@ -1575,7 +1613,7 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20260702-corpus-editor-guard-bold-1"></script>
+    <script src="/app.js?v=20260728-report-corpus-count-1"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
   </body>
 </html>

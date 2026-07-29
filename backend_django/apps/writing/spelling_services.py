@@ -373,7 +373,13 @@ def harvest_spelling_words(user) -> int:
     return changed
 
 
-def add_manual_spelling_word(user, *, word: str, chinese_gloss: str = "") -> dict[str, Any]:
+def add_manual_spelling_word(
+    user,
+    *,
+    word: str,
+    chinese_gloss: str = "",
+    replace_existing_gloss: bool = False,
+) -> dict[str, Any]:
     """Add a single English word to the user's spelling training on demand
     (from the 划词 popup's + button). Re-activates an existing/mastered entry
     rather than duplicating it."""
@@ -395,9 +401,14 @@ def add_manual_spelling_word(user, *, word: str, chinese_gloss: str = "") -> dic
                 existing.status = SpellingDrillWord.Status.ACTIVE
                 existing.due_at = now
                 update_fields += ["status", "due_at"]
-            if gloss and not existing.chinese_gloss:
+            if gloss and (replace_existing_gloss or not existing.chinese_gloss):
                 existing.chinese_gloss = gloss[:200]
                 update_fields.append("chinese_gloss")
+                if replace_existing_gloss:
+                    metadata = dict(existing.metadata or {})
+                    metadata["gloss_edited"] = True
+                    existing.metadata = metadata
+                    update_fields.append("metadata")
             existing.save(update_fields=list(dict.fromkeys(update_fields)))
             return {"ok": True, "created": False, "word": spelling_word_payload(existing)}
         word_obj = SpellingDrillWord.objects.create(
@@ -440,6 +451,19 @@ def spelling_word_payload(word: SpellingDrillWord) -> dict[str, Any]:
         "status": word.status,
         "last_practiced_at": word.last_practiced_at.isoformat() if word.last_practiced_at else None,
     }
+
+
+def spelling_word_for_lookup(user, word: str) -> dict[str, Any] | None:
+    normalized = normalize_spelling_display(word)
+    if not normalized:
+        return None
+    existing = (
+        SpellingDrillWord.objects
+        .filter(user=user, normalized=normalized)
+        .exclude(status=SpellingDrillWord.Status.DISMISSED)
+        .first()
+    )
+    return spelling_word_payload(existing) if existing else None
 
 
 def due_word_ids_for_cutoff(user, cutoff) -> list[str]:

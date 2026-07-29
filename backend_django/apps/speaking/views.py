@@ -52,6 +52,7 @@ from .services import (
     update_writing_takeaway,
     upload_turn_audio,
     warm_fixed_examiner_tts,
+    warm_examiner_tts_for_attempt,
     weak_items,
     writing_takeaway_library,
 )
@@ -397,6 +398,22 @@ def turn_examiner_tts_view(request, attempt_id: str, turn_id: str):
         return auth_error
     try:
         return JsonResponse(examiner_tts_status(request.user, attempt_id, turn_id))
+    except SpeakingError as exc:
+        msg = str(exc)
+        status = 404 if "not found" in msg.lower() else 400
+        return JsonResponse({"error": msg}, status=status)
+
+
+@require_http_methods(["POST"])
+def attempt_examiner_tts_warmup_view(request, attempt_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    payload = _json_payload(request)
+    raw_turn_ids = payload.get("turn_ids")
+    turn_ids = raw_turn_ids if isinstance(raw_turn_ids, list) else []
+    try:
+        return JsonResponse(warm_examiner_tts_for_attempt(request.user, attempt_id, turn_ids))
     except SpeakingError as exc:
         msg = str(exc)
         status = 404 if "not found" in msg.lower() else 400

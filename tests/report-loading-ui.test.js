@@ -13,7 +13,10 @@ assert.match(cssSource, /body\.theme-dark:not\(\.font-academic\):not\(\.font-pop
 assert.match(appSource, /function centeredLoadingHtml/, "Reports should use the shared centered loading renderer.");
 assert.match(appSource, /detailPanel"\)\.innerHTML\s*=\s*centeredLoadingHtml\(/, "Speaking report detail should show centered loading before history resolves.");
 assert.match(appSource, /writingReportDetail"[\s\S]{0,220}centeredLoadingHtml\(/, "Writing report detail should show centered loading before reports resolve.");
+assert.match(htmlSource, /<article id="detailPanel" class="detail-panel">[\s\S]{0,420}<div class="page-center-loading" role="status" aria-live="polite">[\s\S]{0,260}正在加载口语报告/, "Initial speaking report detail should render the centered loading state before JavaScript history loading begins.");
+assert.doesNotMatch(htmlSource, /Attempt Details|Select a history item to review the full report\./, "Initial speaking report detail must not expose the legacy English placeholder.");
 assert.match(cssSource, /#detailPanel\s*>\s*\.page-center-loading[\s\S]{0,160}height:\s*100%/, "Speaking report loading should fill and center in the detail panel.");
 assert.match(cssSource, /\.report-rail-loading-card/, "Report rail loading should have a dedicated visual treatment.");
+assert.match(cssSource, /\.report-rail-loading-card\s*{[\s\S]{0,180}height:\s*118px;[\s\S]{0,100}min-height:\s*118px;/, "Speaking and writing rail loaders should match the 118px report-card height.");
 assert.match(cssSource, /\.speaking-report-rail-shell,\s*[\r\n]+\.writing-report-rail-shell\s*{[\s\S]{0,140}padding:\s*8px 10px 8px 12px/, "Speaking and writing report rails should share the same shell size.");
 assert.doesNotMatch(htmlSource, /<div id="writingReportList"[^>]*>[^<]*<\/div>/, "Initial writing report rail must not render an empty state before data loads.");

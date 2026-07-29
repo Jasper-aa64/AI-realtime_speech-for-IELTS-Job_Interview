@@ -81,8 +81,16 @@ def volcengine_tts(
 
     key = _safe_slug(cache_key or f"{role}_{uuid.uuid4().hex}")
     audio_path = folder / f"{key}.mp3"
+    cache_id = hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
+    started = time.monotonic()
 
     if audio_path.exists():
+        _log.info(
+            "examiner_tts cache=hit role=%s cache_id=%s elapsed_ms=%d",
+            safe_role,
+            cache_id,
+            int((time.monotonic() - started) * 1000),
+        )
         return {
             "provider": "volcengine",
             "status": "cached",
@@ -92,6 +100,7 @@ def volcengine_tts(
         }
 
     payload = json.dumps({"text": text, "speaker": voice, "language": "en"}).encode("utf-8")
+    _log.info("examiner_tts cache=miss role=%s cache_id=%s", safe_role, cache_id)
     request = urllib.request.Request(
         "https://translate.volcengine.com/crx/tts/v1/",
         data=payload,
@@ -114,6 +123,12 @@ def volcengine_tts(
             if not encoded:
                 raise ValueError(f"VolcEngine TTS returned no audio: {data}")  # noqa: TRY301
             audio_path.write_bytes(base64.b64decode(encoded))
+            _log.info(
+                "examiner_tts completed role=%s cache_id=%s elapsed_ms=%d",
+                safe_role,
+                cache_id,
+                int((time.monotonic() - started) * 1000),
+            )
             return {
                 "provider": "volcengine",
                 "status": "ready",
@@ -126,6 +141,12 @@ def volcengine_tts(
             if attempt < max(0, retries):
                 time.sleep(0.4 * (attempt + 1))
 
+    _log.warning(
+        "examiner_tts failed role=%s cache_id=%s elapsed_ms=%d",
+        safe_role,
+        cache_id,
+        int((time.monotonic() - started) * 1000),
+    )
     return {
         "provider": "browser",
         "status": "fallback",

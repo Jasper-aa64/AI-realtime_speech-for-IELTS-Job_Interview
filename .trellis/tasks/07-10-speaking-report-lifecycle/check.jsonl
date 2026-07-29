@@ -1,0 +1,6 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check persisted Attempt/task lifecycle and idempotency."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check failure status and error response contracts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check backend tests and cross-layer requirements."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check frontend state, polling, and syntax requirements."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check report rendering/accessibility behavior."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify history/detail/backend/frontend data flow."}

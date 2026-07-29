@@ -18,6 +18,27 @@
   when no process remains listening. A stale `.runlogs/stack-status.json` is an
   advertised target, not a liveness proof.
 
+### Windows Production-Like Override
+
+On the user's Windows machine, the steady-state public stack is not the generic
+local helper:
+
+- `ielts-django`: NSSM service serving Daphne/Django on `127.0.0.1:8767`.
+- `ielts-cloudflared`: NSSM service running a Cloudflare quick tunnel to
+  `127.0.0.1:8767`; it depends on `ielts-django`.
+- `IELTS Studio Claude AI Worker`: scheduled task that stays stopped unless the
+  user explicitly asks for queued AI worker processing.
+- `ielts-worker`: legacy LocalSystem service; keep disabled.
+
+Public URL preservation is part of the contract. A trycloudflare URL may change
+after sleep, network changes, or a real tunnel restart, but ordinary code edits
+must not churn it. Frontend/static work uses cache-buster updates and browser
+reload only. Backend work may reload Django only when needed, and must not
+restart `ielts-cloudflared` just to apply code. Avoid
+`Restart-Service ielts-django -Force`: because `ielts-cloudflared` depends on
+`ielts-django`, forceful Django restarts can bounce the tunnel and create a new
+public URL.
+
 ### 2. Signatures
 
 Preferred local startup:
@@ -56,13 +77,25 @@ Public tunnel startup:
 IELTS_PUBLIC=1 scripts/start-local-stack.sh
 ```
 
+Windows public URL lookup:
+
+```powershell
+.\scripts\windows\get-tunnel-url.ps1
+```
+
 ### 3. Contracts
 
 - Local app URL: `http://127.0.0.1:8767/`.
 - Django must listen on `127.0.0.1:8767` before saying the site is usable.
+- On Windows, `ielts-cloudflared` must stay running across routine edits. Do not
+  restart it unless local `8767` is healthy and the tunnel itself is proven
+  broken/stale, or the user explicitly accepts a tunnel restart.
 - AI worker must have exactly one live `run_ai_worker` process for normal local
   operation. Multiple workers can race on AI tasks and make debugging
   nondeterministic.
+- On Windows, the AI worker is not part of the always-on stack. Do not start
+  `IELTS Studio Claude AI Worker`, `IELTS Stack Watchdog`, `IELTS Stack Auto
+  Start`, or LocalSystem `ielts-worker` without an explicit user request.
 - Use `.venv-django/bin/python` when it exists. Do not assume plain `python3`
   has the same dependencies.
 - The worker and Django must share the same AI environment:
@@ -110,6 +143,8 @@ Without `--noproxy '*'`, local checks may return unrelated proxy errors such as
 | Condition | Meaning | Correct action |
 |---|---|---|
 | `127.0.0.1 refused to connect` | Nothing is listening on `8767` | Check `lsof`; start Django foreground if helper failed |
+| Windows quick-tunnel URL changed after a routine code edit | The tunnel was restarted unnecessarily or a dependent service restart bounced it | Do not restart `ielts-cloudflared`; avoid `Restart-Service ielts-django -Force`; use `get-tunnel-url.ps1` only to read the current URL |
+| Windows public URL returns 1033 but local `8767` is healthy | The browser likely has a stale quick-tunnel URL | Run `scripts\windows\get-tunnel-url.ps1`; do not restart the tunnel unless the helper/logs prove the tunnel is dead |
 | `stack-status.json` exists but `lsof` is empty | Helper wrote status but process died or never stayed up | Ignore status file; inspect logs and start manually |
 | `curl` returns `502 Bad Gateway` without `--noproxy` | Probe likely went through proxy handling | Retry with `curl --noproxy '*'` |
 | Two or more `run_ai_worker` processes | Worker duplication | Stop extra workers; keep one |
@@ -125,6 +160,9 @@ Without `--noproxy '*'`, local checks may return unrelated proxy errors such as
 
 - Good: `lsof -nP -iTCP:8767 -sTCP:LISTEN` shows one Django process and
   `curl -I --noproxy '*' http://127.0.0.1:8767/` returns `HTTP/1.1 200 OK`.
+- Good on Windows: `Get-Service ielts-django, ielts-cloudflared` shows both
+  services `Running`, and `scripts\windows\get-tunnel-url.ps1` prints the current
+  public URL without restarting anything.
 - Good: `ps aux | rg 'manage.py (runserver|run_ai_worker)'` shows one
   `runserver` and one `run_ai_worker`.
 - Base: Django is alive but worker is not. The site can load, but async writing
@@ -132,6 +170,8 @@ Without `--noproxy '*'`, local checks may return unrelated proxy errors such as
 - Bad: Trusting "IELTS stack requested" or `.runlogs/stack-status.json` without
   proving the port is listening.
 - Bad: Leaving two worker processes running after manual recovery.
+- Bad on Windows: restarting `ielts-cloudflared` or force-restarting
+  `ielts-django` after frontend/CSS/JS edits and thereby changing the public URL.
 
 ### 6. Tests Required
 
@@ -143,11 +183,19 @@ curl -I --noproxy '*' --max-time 5 http://127.0.0.1:8767/
 ps aux | rg 'manage.py (runserver|run_ai_worker)|daphne' | rg -v rg
 ```
 
+On Windows NSSM setup:
+
+```powershell
+Get-Service ielts-django, ielts-cloudflared
+.\scripts\windows\get-tunnel-url.ps1
+```
+
 Assertion points:
 
 - `lsof` contains `TCP 127.0.0.1:8767 (LISTEN)`.
 - `curl` returns `HTTP/1.1 200 OK` or a concrete Django response.
 - Process list has one Django server and at most one AI worker.
+- On Windows, public URL checks must not restart `ielts-cloudflared`.
 - If testing AI output, the worker process must exist and its env must be
   configured; otherwise do not claim AI-path validation.
 
@@ -210,3 +258,30 @@ launchctl print gui/$(id -u)/com.ielts.local.aiworker | rg 'state = running|pid 
 lsof -nP -iTCP:8767 -sTCP:LISTEN
 curl -I --noproxy '*' --max-time 5 http://127.0.0.1:8767/
 ```
+
+#### Wrong On Windows
+
+```powershell
+# CSS/JS changed, so bounce the stack.
+Restart-Service ielts-django -Force
+Restart-Service ielts-cloudflared
+Start-ScheduledTask -TaskName "IELTS Studio Claude AI Worker"
+```
+
+This can change the trycloudflare URL, can open or run the wrong worker path,
+and does not prove the public issue was caused by the tunnel.
+
+#### Correct On Windows
+
+```powershell
+# CSS/JS changed.
+# 1. Bump the static ?v= cache key.
+# 2. Reload the browser.
+# 3. Read the current URL only if the user asks for it.
+.\scripts\windows\get-tunnel-url.ps1
+```
+
+For backend changes, restart only what is necessary and preserve
+`ielts-cloudflared` unless the tunnel itself is proven unhealthy. If a
+service-level Django restart may affect the dependent tunnel, warn the user
+before doing it.

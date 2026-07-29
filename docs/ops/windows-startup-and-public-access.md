@@ -17,11 +17,13 @@ If `127.0.0.1:8767` is down, every public tunnel will eventually show `502 Bad G
 Current deployed setup on this Windows machine:
 
 - `ielts-django`: Daphne/Django on `127.0.0.1:8767`
-- `IELTS Studio Claude AI Worker`: AI worker scheduled task running as the
-  logged-in user, so Claude CLI and Codex CLI share the user's authenticated
-  configuration. Its action includes `-WindowStyle Hidden`, so it must not open
-  a visible terminal. The legacy `ielts-worker` LocalSystem service stays disabled.
-- `ielts-cloudflared`: Cloudflare Quick Tunnel to `127.0.0.1:8767`
+- `ielts-cloudflared`: Cloudflare Quick Tunnel to `127.0.0.1:8767`, managed as
+  an NSSM service and dependent on `ielts-django`
+- `IELTS Studio Claude AI Worker`: AI worker scheduled task exists but stays
+  stopped by default. Start it only when the user explicitly asks for queued AI
+  worker processing. Its action must include `-WindowStyle Hidden`, so it must
+  not open a visible terminal. The legacy `ielts-worker` LocalSystem service
+  stays disabled.
 - `IELTS Stack Watchdog`: currently disabled and not used. Do not start or
   enable it unless the user explicitly asks to restore watchdog operation.
 
@@ -33,10 +35,11 @@ Get-ScheduledTask -TaskName "IELTS Studio Claude AI Worker"
 Get-ScheduledTask -TaskName "IELTS Stack Watchdog"
 ```
 
-Expected state: both NSSM services are `Running`; the watchdog remains disabled.
-Only start the dedicated AI worker task when queued AI work is intentionally in
-use. Do not enable the LocalSystem `ielts-worker` service: local Claude/Codex CLI
-authentication belongs to the interactive Windows user.
+Expected state: `ielts-django` and `ielts-cloudflared` are `Running`; the worker
+task is `Ready`/stopped; the watchdog remains disabled. Only start the dedicated
+AI worker task when queued AI work is intentionally in use and the user asked
+for it. Do not enable the LocalSystem `ielts-worker` service: local Claude/Codex
+CLI authentication belongs to the interactive Windows user.
 
 The current public URL is a trycloudflare quick-tunnel URL. It can change when
 `cloudflared` restarts. Use the helper below instead of copying the last URL
@@ -46,14 +49,36 @@ from the log, because the log can contain stale URLs that now return 530/1033:
 .\scripts\windows\get-tunnel-url.ps1
 ```
 
-Latest verified public URL:
-
-```text
-https://directly-contacting-typically-cassette.trycloudflare.com
-```
-
 This quick-tunnel setup is intended to be stable during one boot/session while
 the machine stays on. It is not a permanent fixed-domain deployment.
+
+### Public URL Preservation Rule
+
+The quick-tunnel URL should not change as a side effect of normal code changes.
+A URL change is normal after the computer sleeps, the network changes, or
+`ielts-cloudflared` actually restarts; it is not acceptable as a routine outcome
+of editing CSS, JavaScript, Python, prompts, or tests.
+
+Do this:
+
+- Frontend/static edits: bump the `?v=` cache key and reload the browser. Do not
+  restart `ielts-django` or `ielts-cloudflared`.
+- Backend edits: first decide whether a Django reload is truly needed. If it is,
+  preserve the tunnel process and tell the user before any service-level restart
+  that can affect the public URL.
+- Public URL lookup: run `.\scripts\windows\get-tunnel-url.ps1`; do not copy a
+  random old URL from `.runlogs\cloudflared.log`.
+- Tunnel recovery: restart `ielts-cloudflared` only when local `8767` is healthy
+  and the tunnel itself is proven dead/stale, or when the user explicitly asks.
+
+Do not do this:
+
+- Do not restart `ielts-cloudflared` merely to apply code changes.
+- Do not use `Restart-Service ielts-django -Force` for routine work. Because
+  `ielts-cloudflared` depends on `ielts-django`, forceful Django service restarts
+  can bounce the tunnel and create a new trycloudflare URL.
+- Do not start `IELTS Stack Watchdog`, `IELTS Stack Auto Start`, or
+  `IELTS Studio Claude AI Worker` as a default recovery step.
 
 ## Legacy Watchdog (currently disabled)
 
@@ -100,6 +125,10 @@ Invoke-WebRequest http://127.0.0.1:8767/ -UseBasicParsing   # back to 200
 ```
 
 ## Quick Manual Start
+
+This is a legacy/debug path, not the current public steady state. For daily
+public access, prefer the NSSM services `ielts-django` + `ielts-cloudflared`
+above. Do not use this launcher to keep the public site alive long-term.
 
 From the project root:
 
@@ -152,19 +181,21 @@ cd C:\Users\liangjunming\Desktop\AI_Project
 Service names:
 
 - `ielts-django`
-- `ielts-worker`
+- `ielts-cloudflared`
+- `ielts-worker` (legacy LocalSystem worker; keep disabled)
 
 Useful commands:
 
 ```powershell
-Get-Service ielts-django, ielts-worker
+Get-Service ielts-django, ielts-cloudflared, ielts-worker
 Start-Service ielts-django
-Start-Service ielts-worker
-Restart-Service ielts-django
-Restart-Service ielts-worker
-Stop-Service ielts-django
-Stop-Service ielts-worker
+Start-Service ielts-cloudflared
+.\scripts\windows\get-tunnel-url.ps1
 ```
+
+Avoid routine `Restart-Service`/`Stop-Service` commands here. In the current
+setup `ielts-cloudflared` depends on `ielts-django`; forceful restarts can churn
+the quick-tunnel URL. The legacy `ielts-worker` service should remain disabled.
 
 Logs:
 
@@ -226,14 +257,18 @@ Note: this helper expects a cloudflared log file. If the tunnel is started manua
 
 For daily development:
 
-1. Use `scripts\windows\start-ielts-stack.ps1` manually.
-2. Start `cloudflared tunnel --url http://127.0.0.1:8767` only when public preview is needed.
+1. Keep `ielts-django` and `ielts-cloudflared` running as NSSM services.
+2. Use `.\scripts\windows\get-tunnel-url.ps1` to report the active public URL.
+3. For frontend/static changes, bump cache keys and reload; do not restart either
+   service.
 
 For "do not drop" local availability:
 
-1. Install the interactive user scheduled tasks if AI CLI auth is required.
-2. Or install NSSM services if all credentials are in `.env` and do not depend on the interactive user.
-3. Use Tailscale Funnel or Cloudflare Named Tunnel for a stable public address.
+1. Keep the NSSM Django + cloudflared services healthy.
+2. Start the interactive-user AI worker task only when the user explicitly asks
+   for queued AI worker processing.
+3. Use Tailscale Funnel or Cloudflare Named Tunnel only if a truly fixed public
+   address is required.
 
 Avoid relying on a random `trycloudflare.com` quick tunnel for long-term stable access.
 
@@ -247,26 +282,31 @@ When the public URL shows `Bad gateway Error code 502`:
    Invoke-WebRequest http://127.0.0.1:8767/ -UseBasicParsing
    ```
 
-2. If local fails, restart Django and trigger the user worker:
+2. If local fails, inspect Django first:
 
    ```powershell
-   Restart-Service ielts-django
-   Start-ScheduledTask -TaskName "IELTS Studio Claude AI Worker"
+   Get-Service ielts-django, ielts-cloudflared
+   Get-Content .runlogs\django.err.log -Tail 80
    ```
 
-   Or if using manual start, run:
+   If a Django service restart is truly needed, warn that it may affect the
+   dependent quick tunnel. Do not use `Restart-Service ielts-django -Force` as a
+   routine fix.
+
+3. If local succeeds but public still fails, first print the active tunnel URL:
 
    ```powershell
-   .\scripts\windows\start-ielts-stack.ps1
+   .\scripts\windows\get-tunnel-url.ps1
    ```
 
-3. If local succeeds but public still fails, restart the tunnel.
+   Restart `ielts-cloudflared` only if the tunnel process is unhealthy or the
+   user explicitly accepts a URL change.
 
 4. Check logs:
 
    ```powershell
    Get-Content .runlogs\django.err.log -Tail 80
-   Get-Content .runlogs\worker-user.err.log -Tail 80
+   Get-Content .runlogs\cloudflared.log -Tail 80
    ```
 
 ## Report Stuck On `Analyzing`
@@ -284,17 +324,17 @@ Get-CimInstance Win32_Process | Where-Object {
 }
 ```
 
-- Task `Ready` plus no `run_ai_worker` process: the worker is down. Trigger the
-  watchdog or worker task; queued reports will then be claimed.
+- Task `Ready` plus no `run_ai_worker` process: the worker is down. Do not start
+  it automatically; tell the user the worker is stopped and start the hidden
+  worker task only if the user explicitly asks.
 - Task `Running` plus a worker process: the AI provider is still executing. Do
   not repeatedly submit the same report.
 - `LastTaskResult = 0xC000013A`: the interactive worker was externally
   interrupted (Ctrl+C or terminal close), not cleanly completed.
 
-Recovery commands run without a visible terminal:
+If the user explicitly asks to run the worker, use the hidden scheduled task:
 
 ```powershell
-Start-ScheduledTask -TaskName "IELTS Stack Watchdog"
 Start-ScheduledTask -TaskName "IELTS Studio Claude AI Worker"
 ```
 
@@ -308,4 +348,5 @@ A P1 report stayed at `Analyzing` because its task was still `pending` with
 the interactive-user worker had stopped with `0xC000013A`; the watchdog was
 disabled, so nothing restarted it. The task was safely re-queued, the worker
 completed it (`succeeded`, 100%), the worker action was changed to hidden mode,
-and the watchdog was re-enabled to prevent recurrence.
+and later deployment policy changed again: the watchdog and worker now stay
+stopped unless the user explicitly asks for them.

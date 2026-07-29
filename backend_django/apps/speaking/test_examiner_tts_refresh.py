@@ -1,15 +1,189 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
 from apps.accounts.models import CustomUser
 from apps.speaking.models import SpeakingAttempt, SpeakingTurn
-from apps.speaking.services import _examiner_tts_text_hash, complete_turn
+from apps.speaking.services import (
+    _examiner_tts_text_hash,
+    _generate_remaining_examiner_tts,
+    complete_turn,
+)
+from apps.speaking.turn_building_services import FIXED_EXAMINER_TTS_ITEMS
 
 
 class ExaminerTtsRefreshTests(TestCase):
+    def test_attempt_warmup_batches_known_turns_without_generating_each_request(self):
+        owner = CustomUser.objects.create_user(username="tts-warmup-owner", password="pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=owner,
+            attempt_id="tts-warmup-attempt",
+            mode="p3",
+            part="p3",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        for sequence, item in enumerate(FIXED_EXAMINER_TTS_ITEMS[:3]):
+            SpeakingTurn.objects.create(
+                user=owner,
+                attempt=attempt,
+                turn_id=f"t{sequence + 1}",
+                sequence=sequence,
+                part="p3",
+                question=item["text"],
+                metadata={"examiner_text": item["text"], "examiner_tts": {"status": "pending", "audio_url": None}},
+            )
+
+        self.client.force_login(owner)
+        with (
+            patch("apps.speaking.services._cached_tts_url", return_value=None),
+            patch("apps.speaking.examiner_tts_services._generate_remaining_examiner_tts_after_commit") as enqueue,
+        ):
+            response = self.client.post(
+                "/api/attempts/tts-warmup-attempt/examiner-tts/warmup",
+                data={"turn_ids": ["t1", "t2", "t3"]},
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["turn_id"] for item in response.json()["items"]], ["t1", "t2", "t3"])
+        enqueue.assert_called_once_with("tts-warmup-attempt", ["t1", "t2", "t3"])
+
+    def test_remaining_known_questions_uses_a_bounded_batch_executor(self):
+        owner = CustomUser.objects.create_user(username="tts-batch-owner", password="pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=owner,
+            attempt_id="tts-batch-attempt",
+            mode="p3",
+            part="p3",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        items = FIXED_EXAMINER_TTS_ITEMS[:3]
+        for sequence, item in enumerate(items):
+            SpeakingTurn.objects.create(
+                user=owner,
+                attempt=attempt,
+                turn_id=f"t{sequence + 1}",
+                sequence=sequence,
+                part="p3",
+                question=item["text"],
+                metadata={"examiner_text": item["text"], "examiner_tts": {"status": "pending", "audio_url": None}},
+            )
+
+        with patch("apps.speaking.examiner_tts_services.ThreadPoolExecutor") as executor:
+            future = MagicMock()
+            future.result.return_value = {"provider": "volcengine", "status": "ready", "audio_url": "/api/tts-audio/examiner/batch.mp3"}
+            executor.return_value.__enter__.return_value.submit.return_value = future
+            _generate_remaining_examiner_tts("tts-batch-attempt", ["t1", "t2", "t3"])
+
+        executor.assert_called_once_with(max_workers=3, thread_name_prefix="speaking-examiner-tts")
+        self.assertEqual(executor.return_value.__enter__.return_value.submit.call_count, 3)
+
+    def test_remaining_fixed_examiner_tts_prewarm_persists_ready_audio(self):
+        owner = CustomUser.objects.create_user(username="tts-fixed-prewarm-owner", password="pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=owner,
+            attempt_id="tts-fixed-prewarm-attempt",
+            mode="p3",
+            part="p3",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        fixed_item = FIXED_EXAMINER_TTS_ITEMS[1]
+        SpeakingTurn.objects.create(
+            user=owner,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=1,
+            part="p3",
+            question=fixed_item["text"],
+            metadata={
+                "examiner_text": fixed_item["text"],
+                "examiner_tts": {
+                    "provider": "volcengine",
+                    "status": "pending",
+                    "audio_url": None,
+                },
+            },
+        )
+
+        with (
+            patch("apps.speaking.services._cached_tts_url", return_value=None),
+            patch(
+                "apps.speaking.services._warm_fixed_examiner_tts_item",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/fixed-work-study.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ) as mock_warm,
+        ):
+            _generate_remaining_examiner_tts("tts-fixed-prewarm-attempt", ["t2"])
+
+        mock_warm.assert_called_once_with(fixed_item)
+        turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2")
+        self.assertEqual(turn.metadata["examiner_tts"]["status"], "ready")
+        self.assertEqual(
+            turn.metadata["examiner_tts"]["audio_url"],
+            "/api/tts-audio/examiner/fixed-work-study.mp3",
+        )
+        self.assertEqual(turn.metadata["examiner_tts"]["cache_key"], fixed_item["key"])
+        self.assertEqual(turn.metadata["examiner_tts"]["text_hash"], _examiner_tts_text_hash(fixed_item["text"]))
+
+    def test_examiner_tts_refresh_for_fixed_question_generates_ready_audio_when_cache_misses(self):
+        owner = CustomUser.objects.create_user(username="tts-fixed-refresh-owner", password="pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=owner,
+            attempt_id="tts-fixed-refresh-attempt",
+            mode="p3",
+            part="p3",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        fixed_item = FIXED_EXAMINER_TTS_ITEMS[1]
+        SpeakingTurn.objects.create(
+            user=owner,
+            attempt=attempt,
+            turn_id="t2",
+            sequence=1,
+            part="p3",
+            question=fixed_item["text"],
+            metadata={
+                "examiner_text": fixed_item["text"],
+                "examiner_tts": {
+                    "provider": "volcengine",
+                    "status": "warming",
+                    "audio_url": None,
+                    "cache_key": fixed_item["key"],
+                    "text_hash": _examiner_tts_text_hash(fixed_item["text"]),
+                },
+            },
+        )
+
+        self.client.force_login(owner)
+        with (
+            patch("apps.speaking.services._cached_tts_url", return_value=None),
+            patch(
+                "apps.speaking.services._warm_fixed_examiner_tts_item",
+                return_value={
+                    "provider": "volcengine",
+                    "status": "ready",
+                    "audio_url": "/api/tts-audio/examiner/fixed-refresh.mp3",
+                    "content_type": "audio/mpeg",
+                },
+            ) as mock_warm,
+        ):
+            response = self.client.get("/api/attempts/tts-fixed-refresh-attempt/turns/t2/examiner-tts")
+
+        self.assertEqual(response.status_code, 200)
+        mock_warm.assert_called_once_with(fixed_item)
+        payload = response.json()
+        self.assertEqual(payload["examiner_tts"]["status"], "ready")
+        self.assertEqual(payload["examiner_tts"]["audio_url"], "/api/tts-audio/examiner/fixed-refresh.mp3")
+        self.assertEqual(payload["examiner_tts"]["cache_key"], fixed_item["key"])
+        turn = SpeakingTurn.objects.get(attempt=attempt, turn_id="t2")
+        self.assertEqual(turn.metadata["examiner_tts"]["audio_url"], "/api/tts-audio/examiner/fixed-refresh.mp3")
+
     def test_examiner_tts_refresh_requires_owner_and_generates_pending_audio(self):
         owner = CustomUser.objects.create_user(username="tts-owner", password="pass")
         other = CustomUser.objects.create_user(username="tts-other", password="pass")

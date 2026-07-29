@@ -11,6 +11,7 @@ from django.utils import timezone
 from apps.writing.models import SpellingDrillDailyBatch, SpellingDrillWord, WritingEntry, WritingPrompt, WritingScore
 from apps.writing.spelling_services import (
     SRS_REVIEW_TIMEZONE,
+    add_manual_spelling_word,
     harvest_spelling_words,
     record_spelling_attempt,
     review_day_start,
@@ -51,6 +52,84 @@ class SpellingDrillTests(TestCase):
             analysis_payload=analysis_payload,
             scored_at=timezone.now(),
         )
+
+    def test_manual_add_can_replace_existing_gloss_after_popup_edit(self):
+        add_manual_spelling_word(
+            self.user,
+            word="notably",
+            chinese_gloss="adv. 显著地, 尤其",
+        )
+
+        result = add_manual_spelling_word(
+            self.user,
+            word="notably",
+            chinese_gloss="adv. 显著地, 尤其（not always）",
+            replace_existing_gloss=True,
+        )
+
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="notably")
+        self.assertFalse(result["created"])
+        self.assertEqual(word.chinese_gloss, "adv. 显著地, 尤其（not always）")
+        self.assertTrue(word.metadata["gloss_edited"])
+
+    @patch("apps.writing.views.lookup_word")
+    def test_dictionary_lookup_returns_existing_spelling_word_and_saved_gloss(self, lookup_word):
+        lookup_word.return_value = {
+            "word": "notably",
+            "translation": "dictionary gloss",
+            "senses": ["dictionary gloss"],
+            "definition": "in a notable manner",
+        }
+        added = add_manual_spelling_word(
+            self.user,
+            word="notably",
+            chinese_gloss="saved gloss (personal note)",
+        )
+        client = Client()
+        client.force_login(self.user)
+
+        response = client.get("/api/dictionary/lookup?word=notably")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["found"])
+        self.assertEqual(payload["spelling_word"]["word_id"], added["word"]["word_id"])
+        self.assertEqual(payload["spelling_word"]["chinese_gloss"], "saved gloss (personal note)")
+
+    @patch("apps.writing.views.lookup_word")
+    def test_dictionary_lookup_hides_dismissed_spelling_word(self, lookup_word):
+        lookup_word.return_value = {
+            "word": "notably",
+            "translation": "dictionary gloss",
+            "senses": ["dictionary gloss"],
+            "definition": "in a notable manner",
+        }
+        added = add_manual_spelling_word(self.user, word="notably", chinese_gloss="saved gloss")
+        client = Client()
+        client.force_login(self.user)
+        deleted = client.delete(f"/api/writing/spelling-words/{added['word']['word_id']}")
+        self.assertEqual(deleted.status_code, 200)
+
+        response = client.get("/api/dictionary/lookup?word=notably")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["spelling_word"])
+
+        readded = client.post(
+            "/api/writing/spelling-words/add",
+            data=json.dumps({
+                "word": "notably",
+                "chinese_gloss": "saved gloss (revised note)",
+                "replace_existing_gloss": True,
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(readded.status_code, 200)
+        self.assertEqual(readded.json()["word"]["chinese_gloss"], "saved gloss (revised note)")
+
+        refreshed = client.get("/api/dictionary/lookup?word=notably")
+        self.assertEqual(refreshed.status_code, 200)
+        self.assertEqual(refreshed.json()["spelling_word"]["chinese_gloss"], "saved gloss (revised note)")
 
     def aware_at(self, year: int, month: int, day: int, hour: int, minute: int = 0):
         return datetime(year, month, day, hour, minute, tzinfo=ZoneInfo("UTC"))

@@ -2,13 +2,14 @@ import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone as datetime_timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from .models import CodexUsageEvent, MICRO_RMB_PER_RMB, PriceSnapshot, TokenWallet, WalletLedgerEntry, WalletReservation
+from .models import CodexUsageEvent, MICRO_RMB_PER_RMB, PaymentOrder, PriceSnapshot, TokenWallet, WalletLedgerEntry, WalletReservation
 
 
 DEFAULT_INITIAL_GRANT_U = 5 * MICRO_RMB_PER_RMB
@@ -122,7 +123,11 @@ def ensure_wallet(user) -> TokenWallet:
 
 def wallet_payload(user) -> dict[str, Any]:
     wallet = ensure_wallet(user)
-    entries = WalletLedgerEntry.objects.filter(user=user).order_by("-created_at")[:20]
+    entries = (
+        WalletLedgerEntry.objects.filter(user=user)
+        .select_related("snapshot", "usage")
+        .order_by("-created_at")[:20]
+    )
     return {
         "user_id": str(user.pk),
         "username": user.get_username(),
@@ -151,29 +156,136 @@ def ledger_entry_payload(entry: WalletLedgerEntry) -> dict[str, Any]:
     }
 
 
-@transaction.atomic
-def recharge_wallet(user, amount_rmb: float) -> dict[str, Any]:
-    if amount_rmb <= 0:
+def amount_rmb_to_u(amount_rmb: Any) -> int:
+    try:
+        amount = Decimal(str(amount_rmb))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise BillingError("Amount must be a valid number") from exc
+    if not amount.is_finite() or amount <= 0:
         raise BillingError("Amount must be positive")
-    amount_u = int(amount_rmb * MICRO_RMB_PER_RMB)
-    wallet = TokenWallet.objects.select_for_update().get(user=ensure_wallet(user).user)
-    wallet.balance_u = F("balance_u") + amount_u
+    amount_u = int(amount * MICRO_RMB_PER_RMB)
+    if amount_u <= 0:
+        raise BillingError("Amount is below the minimum supported unit")
+    return amount_u
+
+
+def payment_order_payload(order: PaymentOrder) -> dict[str, Any]:
+    return {
+        "order_id": order.order_id,
+        "provider": order.provider,
+        "provider_order_id": order.provider_order_id or "",
+        "amount_u": order.amount_u,
+        "amount_rmb": round(order.amount_u / MICRO_RMB_PER_RMB, 6),
+        "status": order.status,
+        "metadata": order.metadata,
+        "created_at": order.created_at.isoformat(),
+        "updated_at": order.updated_at.isoformat(),
+    }
+
+
+@transaction.atomic
+def create_payment_order(
+    user,
+    amount_rmb: Any,
+    *,
+    provider: str,
+    idempotency_key: str,
+    metadata: dict[str, Any] | None = None,
+) -> tuple[PaymentOrder, bool]:
+    provider = str(provider or "").strip().lower()
+    idempotency_key = str(idempotency_key or "").strip()
+    if not provider:
+        raise BillingError("Payment provider is required")
+    if not idempotency_key:
+        raise BillingError("Payment idempotency_key is required")
+    amount_u = amount_rmb_to_u(amount_rmb)
+    order_id = f"pay_{hashlib.sha1(f'{user.pk}:{idempotency_key}'.encode('utf-8')).hexdigest()[:24]}"
+    order = PaymentOrder.objects.select_for_update().filter(order_id=order_id).first()
+    if order:
+        if order.user_id != user.pk or order.provider != provider or order.amount_u != amount_u:
+            raise BillingError("Payment idempotency_key conflicts with an existing order")
+        return order, False
+    order = PaymentOrder.objects.create(
+        order_id=order_id,
+        user=user,
+        provider=provider,
+        amount_u=amount_u,
+        metadata={**(metadata or {}), "idempotency_key": idempotency_key},
+    )
+    return order, True
+
+
+@transaction.atomic
+def complete_payment_order(
+    order_id: str,
+    *,
+    provider_order_id: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    order = PaymentOrder.objects.select_for_update().select_related("user").filter(order_id=str(order_id or "").strip()).first()
+    if not order:
+        raise BillingError("Payment order not found")
+    provider_order_id = str(provider_order_id or "").strip()
+    if provider_order_id and PaymentOrder.objects.exclude(pk=order.pk).filter(provider_order_id=provider_order_id).exists():
+        raise BillingError("Provider payment reference is already in use")
+    if order.status == PaymentOrder.Status.PAID:
+        wallet = ensure_wallet(order.user)
+        payload = payment_order_payload(order)
+        payload.update(
+            {
+                "entry_id": str((order.metadata or {}).get("ledger_entry_id") or ""),
+                "new_balance_u": wallet.balance_u,
+                "new_balance_rmb": round(wallet.balance_u / MICRO_RMB_PER_RMB, 6),
+            }
+        )
+        return payload
+    if order.status != PaymentOrder.Status.CREATED:
+        raise BillingError(f"Payment order cannot be completed from status {order.status}")
+
+    wallet = TokenWallet.objects.select_for_update().get(user=ensure_wallet(order.user).user)
+    wallet.balance_u = F("balance_u") + order.amount_u
     wallet.save(update_fields=["balance_u", "updated_at"])
     wallet.refresh_from_db()
     entry = append_ledger_entry(
-        user=user,
+        user=order.user,
         entry_type=WalletLedgerEntry.EntryType.RECHARGE,
-        amount_u=amount_u,
-        idempotency_key=f"recharge:{user.pk}:{uuid.uuid4().hex}",
-        metadata={"reason": f"manual recharge ¥{amount_rmb:.2f}"},
+        amount_u=order.amount_u,
+        idempotency_key=f"payment:{order.order_id}:paid",
+        metadata={
+            "order_id": order.order_id,
+            "provider": order.provider,
+            "provider_order_id": provider_order_id,
+        },
     )
-    return {
-        "entry_id": entry.entry_id,
-        "amount_u": amount_u,
-        "amount_rmb": round(amount_u / MICRO_RMB_PER_RMB, 6),
-        "new_balance_u": wallet.balance_u,
-        "new_balance_rmb": round(wallet.balance_u / MICRO_RMB_PER_RMB, 6),
+    order.provider_order_id = provider_order_id or order.provider_order_id
+    order.status = PaymentOrder.Status.PAID
+    order.metadata = {
+        **(order.metadata or {}),
+        **(metadata or {}),
+        "ledger_entry_id": entry.entry_id,
+        "paid_at": timezone.now().isoformat(),
     }
+    order.save(update_fields=["provider_order_id", "status", "metadata", "updated_at"])
+    payload = payment_order_payload(order)
+    payload.update(
+        {
+            "entry_id": entry.entry_id,
+            "new_balance_u": wallet.balance_u,
+            "new_balance_rmb": round(wallet.balance_u / MICRO_RMB_PER_RMB, 6),
+        }
+    )
+    return payload
+
+
+def recharge_wallet(user, amount_rmb: float) -> dict[str, Any]:
+    order, _created = create_payment_order(
+        user,
+        amount_rmb,
+        provider="manual",
+        idempotency_key=f"manual:{uuid.uuid4().hex}",
+        metadata={"reason": "manual recharge"},
+    )
+    return complete_payment_order(order.order_id)
 
 
 def normalize_usage(usage: dict[str, Any] | None) -> BillingUsage:
@@ -222,6 +334,24 @@ def normalize_usage(usage: dict[str, Any] | None) -> BillingUsage:
         output_tokens=output,
         reasoning_output_tokens=reasoning,
     )
+
+
+def combine_usage_records(*records: dict[str, Any] | None) -> dict[str, int]:
+    totals = {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0,
+    }
+    for record in records:
+        if not record:
+            continue
+        normalized = normalize_usage(record)
+        totals["input_tokens"] += normalized.input_tokens
+        totals["cached_input_tokens"] += normalized.cached_input_tokens
+        totals["output_tokens"] += normalized.output_tokens
+        totals["reasoning_output_tokens"] += normalized.reasoning_output_tokens
+    return totals
 
 
 def normalize_usage_event_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:

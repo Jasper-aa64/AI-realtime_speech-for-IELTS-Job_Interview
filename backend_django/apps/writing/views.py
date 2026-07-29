@@ -6,7 +6,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from .dictionary_services import is_single_dictionary_word, lookup_word
 from .models import WritingFrameTemplate
-from .spelling_services import add_manual_spelling_word, delete_spelling_word, record_spelling_attempt, spelling_drill_library, update_spelling_word
+from .spelling_services import add_manual_spelling_word, delete_spelling_word, record_spelling_attempt, spelling_drill_library, spelling_word_for_lookup, update_spelling_word
 from .services import WritingError, agent_find_writing_prompts, cambridge_catalog, clone_entry_for_revision, create_score_task, delete_entry, delete_entry_report, entry_for_prompt, get_entry, list_prompts, prompt_categories, prompt_patterns, random_prompt, save_entry, score_entry, writing_reports, writing_summary
 
 
@@ -121,6 +121,7 @@ def spelling_word_add(request):
             request.user,
             word=body.get("word") or body.get("text") or "",
             chinese_gloss=body.get("chinese_gloss") or body.get("gloss") or "",
+            replace_existing_gloss=body.get("replace_existing_gloss") is True,
         ))
     except WritingError as exc:
         return writing_error(exc)
@@ -135,7 +136,13 @@ def dictionary_lookup(request):
     if not is_single_dictionary_word(word):
         return JsonResponse({"ok": True, "found": False, "entry": None, "word": word})
     entry = lookup_word(word)
-    return JsonResponse({"ok": True, "found": bool(entry), "entry": entry, "word": word})
+    return JsonResponse({
+        "ok": True,
+        "found": bool(entry),
+        "entry": entry,
+        "word": word,
+        "spelling_word": spelling_word_for_lookup(request.user, word),
+    })
 
 
 @csrf_exempt

@@ -27,6 +27,28 @@
     ].filter(Boolean).join("\n");
   }
 
+  function formatP1TopicCorpusCopyBlock({ label = "", questions = [] } = {}) {
+    const topicLabel = String(label || "Untitled topic").trim();
+    const topicQuestions = Array.isArray(questions) ? questions : [];
+    const preparedCount = topicQuestions.filter((item) => String(item?.corpus_text || "").trim()).length;
+    const blocks = topicQuestions.map((item, index) => {
+      const question = String(item?.question || "").trim() || `Question ${index + 1}`;
+      const learnerAnswer = String(item?.corpus_text || "").trim() || "(not prepared yet)";
+      return [
+        `## Q${index + 1}`,
+        `Question: ${question}`,
+        "My answer:",
+        learnerAnswer,
+      ].join("\n");
+    });
+    return [
+      "# IELTS Speaking Part 1 Corpus Context",
+      `Topic: ${topicLabel}`,
+      `Prepared: ${preparedCount}/${topicQuestions.length}`,
+      ...blocks,
+    ].join("\n\n");
+  }
+
   function createCorpusTakeawayController(options) {
     const {
       state,
@@ -68,6 +90,60 @@
 
     if (!state || typeof $ !== "function" || typeof api !== "function") {
       throw new Error("Corpus/Takeaway controller requires shared app state and helpers.");
+    }
+
+    let p1CorpusCopyToastTimer = 0;
+
+    function showP1CorpusCopyToast(message, options = {}) {
+      const toast = $("p1CorpusCopyToast");
+      if (!toast) return;
+      window.clearTimeout(p1CorpusCopyToastTimer);
+      toast.textContent = String(message || "");
+      toast.classList.toggle("is-error", options.error === true);
+      toast.classList.add("is-visible");
+      p1CorpusCopyToastTimer = window.setTimeout(() => {
+        toast.classList.remove("is-visible", "is-error");
+      }, Math.max(1600, Number(options.duration || 3000)));
+    }
+
+    function p1PodcastPrompt() {
+      return `Create an all-English learning podcast from the IELTS Speaking Part 1 corpus context that I will paste after this prompt.
+
+The purpose is to help me remember and retrieve my own answers fluently in a real IELTS interview. Keep my personal facts, ideas, and useful wording as the memory anchors instead of replacing them with unrelated model answers; familiar material is easier to recall under pressure and therefore improves fluency.
+
+Make the podcast natural, lively, and easy to follow. Use one tutor-style host or two friendly hosts. Connect the questions into a coherent conversation rather than reading a list mechanically. Explain memorable chunks, collocations, idioms, and natural spoken expressions from my material, including when and why they sound natural. Add brief recall cues, paraphrase drills, and spaced recap moments so I actively retrieve the language instead of only listening to it.
+
+Use English only. Do not add Chinese translation. Do not invent personal experiences that contradict my corpus. Keep the teaching practical and concise, with enough repetition to support memory without sounding robotic.
+
+I will paste one topic's corpus context next.`;
+    }
+
+    async function copyP1PodcastPrompt() {
+      const copied = await copyPlainTextToClipboard(p1PodcastPrompt());
+      showP1CorpusCopyToast(
+        copied
+          ? "Podcast 提示词已复制；再复制下方话题内容，一起粘贴给 AI。"
+          : "复制失败，请检查浏览器剪贴板权限。",
+        { error: !copied, duration: copied ? 3600 : 3000 }
+      );
+      return copied;
+    }
+
+    async function copyP1TopicForAi(topicKey) {
+      const key = String(topicKey || "").trim();
+      const topic = (state.p1Corpus.topics || []).find((item) => String(item.topic || item.label || "").trim() === key);
+      if (!topic) return false;
+      const copied = await copyPlainTextToClipboard(formatP1TopicCorpusCopyBlock({
+        label: topic.label || topic.topic,
+        questions: topic.questions || [],
+      }));
+      showP1CorpusCopyToast(
+        copied
+          ? `已复制“${topic.label || topic.topic}”全部语料，可作为 AI 上下文粘贴。`
+          : "复制失败，请检查浏览器剪贴板权限。",
+        { error: !copied }
+      );
+      return copied;
     }
 
     function setPeekButtonHidden(button, hidden, options = {}) {
@@ -241,11 +317,6 @@
     let p1TopicModalResumeKey = "";
     let p2BankCorpusLoadToken = 0;
     let p2BankP3LoadToken = 0;
-    let takeawayReviewMascotPortal = null;
-    let takeawayReviewMascotAnchor = null;
-    let takeawayReviewMascotPositionRaf = 0;
-    let takeawayReviewMascotEventsBound = false;
-
     // ── P2/P3 bank corpus: persistent SWR cache + batch prefetch ──────────────
     // Memory cache holds resolved Promises; localStorage gives stale-while-
     // revalidate across reloads; a batch endpoint warms the whole visible list.
@@ -536,11 +607,37 @@
       return calendarDayKey(next);
     }
 
+    function msUntilNextTakeawayReviewDay(date = new Date()) {
+      const current = new Date(date);
+      const nextBoundary = new Date(current);
+      nextBoundary.setHours(4, 0, 0, 0);
+      if (current >= nextBoundary) nextBoundary.setDate(nextBoundary.getDate() + 1);
+      return Math.max(0, nextBoundary.getTime() - current.getTime());
+    }
+
+    function isGuestTakeawayReviewDemo() {
+      return !state.account?.authenticated;
+    }
+
+    function guestTakeawayReviewState(kind = "language") {
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      if (!target.guestReviewState || typeof target.guestReviewState !== "object") {
+        target.guestReviewState = {};
+      }
+      return target.guestReviewState;
+    }
+
+    function takeawayReviewStorageUserKey() {
+      const user = state.account?.authenticated ? state.account?.user : null;
+      return String(user?.id || user?.username || user?.phone_number || "anonymous").trim() || "anonymous";
+    }
+
     function takeawayReviewStorageKey(kind = "language") {
-      return `${TAKEAWAY_SRS_STORAGE_KEY}:${kind === "writing" ? "writing" : "language"}`;
+      return `${TAKEAWAY_SRS_STORAGE_KEY}:${kind === "writing" ? "writing" : "language"}:${takeawayReviewStorageUserKey()}`;
     }
 
     function takeawayReviewState(kind = "language") {
+      if (isGuestTakeawayReviewDemo()) return guestTakeawayReviewState(kind);
       try {
         const raw = window.localStorage?.getItem(takeawayReviewStorageKey(kind));
         const parsed = raw ? JSON.parse(raw) : {};
@@ -552,6 +649,7 @@
     }
 
     function saveTakeawayReviewState(kind, value) {
+      if (isGuestTakeawayReviewDemo()) return;
       try {
         window.localStorage?.setItem(takeawayReviewStorageKey(kind), JSON.stringify(value || {}));
       } catch (_error) {
@@ -609,6 +707,7 @@
     }
 
     function applyRemoteTakeawayReviewState(kind, value) {
+      if (isGuestTakeawayReviewDemo()) return;
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
       const local = takeawayReviewState(kind);
       if (!hasTakeawayReviewData(value)) {
@@ -631,6 +730,7 @@
     }
 
     function syncTakeawayReviewState(kind, value) {
+      if (isGuestTakeawayReviewDemo()) return;
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
       api(`/api/takeaway-review-state/${kind === "writing" ? "writing" : "language"}`, { state: value })
         .catch((error) => {
@@ -827,6 +927,50 @@
       }
     }
 
+    let takeawayReviewDayTimer = 0;
+    let takeawayReviewDayWatcherStarted = false;
+    let observedTakeawayReviewDay = "";
+
+    function refreshTakeawayReviewDay(options = {}) {
+      const day = todayKey();
+      if (!options.force && day === observedTakeawayReviewDay) return false;
+      observedTakeawayReviewDay = day;
+      updateTakeawayReviewDots();
+      if (state.view === "takeawayBook" && takeawayKindLoaded("language")) {
+        renderTakeawayReviewPanel("language");
+      }
+      if (state.view === "writingTakeawayBook" && takeawayKindLoaded("writing")) {
+        renderTakeawayReviewPanel("writing");
+      }
+      return true;
+    }
+
+    function scheduleTakeawayReviewDayRefresh() {
+      window.clearTimeout(takeawayReviewDayTimer);
+      takeawayReviewDayTimer = window.setTimeout(() => {
+        refreshTakeawayReviewDay();
+        scheduleTakeawayReviewDayRefresh();
+      }, msUntilNextTakeawayReviewDay() + 250);
+    }
+
+    function startTakeawayReviewDayWatcher() {
+      if (takeawayReviewDayWatcherStarted) {
+        scheduleTakeawayReviewDayRefresh();
+        return;
+      }
+      takeawayReviewDayWatcherStarted = true;
+      observedTakeawayReviewDay = todayKey();
+      const recoverAfterClockPause = () => {
+        if (document.hidden) return;
+        refreshTakeawayReviewDay();
+        scheduleTakeawayReviewDayRefresh();
+      };
+      document.addEventListener("visibilitychange", recoverAfterClockPause);
+      window.addEventListener("focus", recoverAfterClockPause);
+      window.addEventListener("pageshow", recoverAfterClockPause);
+      scheduleTakeawayReviewDayRefresh();
+    }
+
     function reviewPanelId(kind = "language") {
       return kind === "writing" ? "writingTakeawayReviewPanel" : "languageTakeawayReviewPanel";
     }
@@ -879,7 +1023,7 @@
     function renderTakeawayReviewSurfaces(kind = "language") {
       updateTakeawayReviewDots();
       renderTakeawayReviewPanel(kind);
-      syncTakeawayReviewMascotPortal(kind);
+      syncTakeawayReviewMascot(kind);
     }
 
     function startTakeawayReview(kind = "language") {
@@ -947,6 +1091,45 @@
     function isTakeawayReviewEntry(kind, entryId) {
       const session = takeawayReviewSession(kind);
       return Boolean(session.active && session.ids.includes(entryId) && !session.reviewedIds.has(entryId));
+    }
+
+    function snapshotTakeawayReviewSession(kind = "language") {
+      const session = takeawayReviewSession(kind);
+      return {
+        ...session,
+        ids: [...(session.ids || [])],
+        reviewedIds: new Set(session.reviewedIds || []),
+      };
+    }
+
+    function restoreTakeawayReviewSession(kind = "language", snapshot = null) {
+      if (!snapshot) return;
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      target.reviewSession = {
+        ...snapshot,
+        ids: [...(snapshot.ids || [])],
+        reviewedIds: new Set(snapshot.reviewedIds || []),
+      };
+    }
+
+    function removeDeletedTakeawayReviewEntry(kind = "language", entryId = "") {
+      const id = String(entryId || "").trim();
+      const session = takeawayReviewSession(kind);
+      if (!session.active || !id) return false;
+      const target = kind === "writing" ? state.writingTakeaway : state.languageTakeaway;
+      session.ids = (session.ids || []).filter((candidate) => candidate !== id);
+      session.reviewedIds.delete(id);
+      if (session.currentId === id) session.currentId = "";
+      if (session.locatedId === id) session.locatedId = "";
+      if (session.animatingId === id) session.animatingId = "";
+      session.pendingLocate = false;
+      target.revealedEntryIds.delete(id);
+      const hasRemaining = session.ids.some((candidate) => !session.reviewedIds.has(candidate));
+      if (!hasRemaining) {
+        endTakeawayReview(kind, "当前复习项已删除。");
+        return true;
+      }
+      return false;
     }
 
     function runPendingTakeawayLocate(kind = "language") {
@@ -1087,9 +1270,7 @@
     // there's no mascot to animate so the caller can commit immediately.
     function playTakeawayMascotFlyAway(kind, entryId, result, onDone) {
       const wrap = takeawayReviewCardWrap(kind, entryId);
-      const mascot = takeawayReviewMascotAnchor === wrap
-        ? takeawayReviewMascotPortal
-        : wrap?.querySelector(".takeaway-review-mascot");
+      const mascot = wrap?.querySelector(".takeaway-review-mascot");
       if (!mascot) return false;
       const session = takeawayReviewSession(kind);
       session.animatingId = String(entryId || "").trim();
@@ -1204,11 +1385,16 @@
         return `
           ${divider}
           <article class="p1-topic-card ${opensInModal ? "is-modal-only" : "is-complete-list"}" data-p1-progress="${progress}" data-p1-topic-card="${escapeHtml(topicKey)}">
-            <header>
+            <header class="p1-topic-export-header">
               <div>
                 <h3>${escapeHtml(topic.label || topic.topic)}</h3>
               </div>
-              <span class="p1-topic-count">${saved}/${questions.length}</span>
+              <div class="p1-topic-card-actions">
+                <button type="button" class="p1-topic-copy-button" data-p1-topic-copy="${escapeHtml(topicKey)}" title="复制该话题全部语料" aria-label="复制 ${escapeHtml(topic.label || topic.topic)} 的全部语料">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+                </button>
+                <span class="p1-topic-count">${saved}/${questions.length}</span>
+              </div>
             </header>
             <div class="p1-topic-progress" aria-label="完成进度 ${progress}%" data-progress="${progress}"><span style="width: ${progress}%"></span></div>
             <div class="p1-topic-question-list">
@@ -1780,7 +1966,7 @@
       const p2QuestionId = String(prompt.p2_question_id || prompt.cue_id || "").trim();
       const followupId = String(prompt.p3_bank_followup_id || prompt.followup_id || "").trim();
       if ((source === "season_bank" || source === "bank") && p2QuestionId && followupId) {
-        const payload = await api(`/api/p3-bank-corpus/${encodeURIComponent(p2QuestionId)}`);
+        const payload = await fetchP2BankP3Payload(p2QuestionId);
         const item = (payload.items || []).find((entry) => entry.followup_id === followupId);
         return {
           meta: payload.question || state.p3PracticeSource?.title || "题库 P3 追问",
@@ -1813,7 +1999,7 @@
     // Prefetch cache: warm the P3 material the moment the peek button becomes
     // visible so clicking it opens instantly instead of waiting on a network
     // round-trip. Keyed by the turn's corpus identity so a new turn re-fetches.
-    let p3CorpusPeekPrefetch = null; // { key, promise }
+    let p3CorpusPeekPrefetch = new Map(); // key -> promise
 
     function p3CorpusPeekTurnKey(turn = state.currentTurn) {
       const prompt = turn?.prompt || {};
@@ -1828,16 +2014,32 @@
 
     function prefetchP3CorpusPeekMaterial(turn = state.currentTurn) {
       const key = p3CorpusPeekTurnKey(turn);
-      if (p3CorpusPeekPrefetch && p3CorpusPeekPrefetch.key === key) {
-        return p3CorpusPeekPrefetch.promise;
-      }
+      if (p3CorpusPeekPrefetch.has(key)) return p3CorpusPeekPrefetch.get(key);
       const promise = p3CorpusPeekMaterialForTurn(turn).catch((err) => {
         // Drop a failed prefetch so a real open (or retry) fetches again.
-        if (p3CorpusPeekPrefetch && p3CorpusPeekPrefetch.key === key) p3CorpusPeekPrefetch = null;
+        if (p3CorpusPeekPrefetch.get(key) === promise) p3CorpusPeekPrefetch.delete(key);
         throw err;
       });
-      p3CorpusPeekPrefetch = { key, promise };
+      p3CorpusPeekPrefetch.set(key, promise);
       return promise;
+    }
+
+    function prefetchP3CorpusPeekMaterialsForAttempt(attempt = state.attempt) {
+      if (!attempt || state.view !== "p3") return;
+      for (const turn of attempt.turns || []) {
+        if (turn?.part !== "p3") continue;
+        const prompt = turn.prompt || {};
+        const source = String(prompt.source || state.p3PracticeSource?.sourceType || "").trim();
+        if (
+          source === "season_bank"
+          || source === "bank"
+          || source === "p2_report"
+          || source === "p2_corpus"
+          || prompt.p2_corpus_entry_id
+        ) {
+          prefetchP3CorpusPeekMaterial(turn).catch(() => {});
+        }
+      }
     }
 
     function renderP3CorpusPeekSource(source) {
@@ -3142,66 +3344,20 @@
       `;
     }
 
-    function removeTakeawayReviewMascotPortal() {
-      if (takeawayReviewMascotPositionRaf) {
-        window.cancelAnimationFrame?.(takeawayReviewMascotPositionRaf);
-        takeawayReviewMascotPositionRaf = 0;
-      }
-      takeawayReviewMascotPortal?.remove();
-      takeawayReviewMascotPortal = null;
-      takeawayReviewMascotAnchor = null;
+    function removeTakeawayReviewMascotBodyLayers() {
+      document.querySelectorAll(".takeaway-review-mascot.is-body-layer").forEach((node) => node.remove());
     }
 
-    function positionTakeawayReviewMascotPortal() {
-      takeawayReviewMascotPositionRaf = 0;
-      const mascot = takeawayReviewMascotPortal;
-      const anchor = takeawayReviewMascotAnchor;
-      if (!mascot || !anchor || !anchor.isConnected) {
-        removeTakeawayReviewMascotPortal();
-        return;
-      }
-      const rect = anchor.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > window.innerHeight) {
-        mascot.style.opacity = "0";
-        return;
-      }
-      mascot.style.opacity = "";
-      mascot.style.left = `${Math.round(rect.right - 54)}px`;
-      mascot.style.top = `${Math.round(rect.bottom - 54)}px`;
-    }
-
-    function scheduleTakeawayReviewMascotPosition() {
-      if (takeawayReviewMascotPositionRaf) return;
-      takeawayReviewMascotPositionRaf = window.requestAnimationFrame(positionTakeawayReviewMascotPortal);
-    }
-
-    function bindTakeawayReviewMascotViewportEvents() {
-      if (takeawayReviewMascotEventsBound) return;
-      takeawayReviewMascotEventsBound = true;
-      window.addEventListener("scroll", scheduleTakeawayReviewMascotPosition, true);
-      window.addEventListener("resize", scheduleTakeawayReviewMascotPosition);
-    }
-
-    function ensureTakeawayReviewMascotPortal(wrap) {
-      if (!wrap || !document.body) return null;
-      if (!takeawayReviewMascotPortal) {
-        const template = document.createElement("template");
-        template.innerHTML = takeawayReviewMascotHtml().trim();
-        takeawayReviewMascotPortal = template.content.firstElementChild;
-        takeawayReviewMascotPortal.classList.add("is-body-layer");
-        document.body.appendChild(takeawayReviewMascotPortal);
-        bindTakeawayReviewMascotViewportEvents();
-      }
-      takeawayReviewMascotAnchor = wrap;
-      scheduleTakeawayReviewMascotPosition();
-      return takeawayReviewMascotPortal;
-    }
-
-    function syncTakeawayReviewMascotPortal(kind = "language") {
+    function syncTakeawayReviewMascot(kind = "language") {
+      removeTakeawayReviewMascotBodyLayers();
       const session = takeawayReviewSession(kind);
       const wrap = session.active && session.currentId ? takeawayReviewCardWrap(kind, session.currentId) : null;
-      if (wrap) ensureTakeawayReviewMascotPortal(wrap);
-      else removeTakeawayReviewMascotPortal();
+      document
+        .querySelectorAll("#languageTakeawayList .takeaway-review-mascot, #writingTakeawayList .takeaway-review-mascot")
+        .forEach((node) => {
+          if (!wrap || !wrap.contains(node)) node.remove();
+        });
+      if (wrap) setTakeawayReviewMascot(wrap, true);
     }
 
     function setTakeawayReviewMascot(wrap, on) {
@@ -3209,9 +3365,7 @@
       const existing = wrap.querySelector(".takeaway-review-mascot");
       existing?.remove();
       if (on) {
-        ensureTakeawayReviewMascotPortal(wrap);
-      } else if (takeawayReviewMascotAnchor === wrap) {
-        removeTakeawayReviewMascotPortal();
+        wrap.insertAdjacentHTML("beforeend", takeawayReviewMascotHtml());
       }
     }
 
@@ -3251,14 +3405,14 @@
       return !(wrapRect.top >= listRect.top + margin && wrapRect.bottom <= listRect.bottom - margin);
     }
 
-    function scrollTakeawayCardIntoView(kind, entryId) {
+    function scrollTakeawayCardIntoView(kind, entryId, options = {}) {
       const wrap = takeawayReviewCardWrap(kind, entryId);
       if (!wrap) return;
       const list = $(kind === "writing" ? "writingTakeawayList" : "languageTakeawayList");
       if (!list) return;
       const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
       if (maxScroll <= 1) return;
-      if (!takeawayCardNeedsScroll(kind, entryId)) return;
+      if (!options.forceCenter && !takeawayCardNeedsScroll(kind, entryId)) return;
       const listRect = list.getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
       const centeredTop = list.scrollTop
@@ -3323,10 +3477,6 @@
       if (!target) return;
       if (session.locatedId === target) {
         markTakeawayLocatedCard(kind, target);
-        if (takeawayCardNeedsScroll(kind, target)) {
-          scrollTakeawayCardIntoView(kind, target);
-          return;
-        }
         const reviewState = selectTakeawayReviewEntry(kind, target);
         // Opening via W must read the English aloud, same as clicking the card.
         if (reviewState === "selected") {
@@ -3334,12 +3484,12 @@
           const item = (items || []).find((entry) => entry.entry_id === target);
           speakLanguageTakeaway(item?.source_text || "", { kind });
         }
-        scrollTakeawayCardIntoView(kind, target);
+        scrollTakeawayCardIntoView(kind, target, { forceCenter: true });
         return;
       }
       session.locatedId = target;
       markTakeawayLocatedCard(kind, target);
-      scrollTakeawayCardIntoView(kind, target);
+      scrollTakeawayCardIntoView(kind, target, { forceCenter: true });
     }
 
     function renderLanguageTakeaways() {
@@ -3609,16 +3759,27 @@
       if (!entryId) return;
       if (guestBlockTakeawayEdit("登录后才能删除 Takeaway 内容。")) return;
       showConfirmDelete("确定要删除这条生词吗？", async () => {
+        const previousItems = state.languageTakeaway.items || [];
+        const previousReviewSession = snapshotTakeawayReviewSession("language");
+        const removed = previousItems.find((item) => item.entry_id === entryId);
+        state.languageTakeaway.items = previousItems.filter((item) => item.entry_id !== entryId);
+        state.languageTakeaway.revealedEntryIds.delete(entryId);
+        removeDeletedTakeawayReviewEntry("language", entryId);
+        renderLanguageTakeaways();
+        text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
+        renderTakeawayReviewSurfaces("language");
         setTakeawaySpeechStatus("language", "正在删除…", { clear: false });
         try {
           await api(`/api/language-takeaways/${encodeURIComponent(entryId)}`, null, { method: "DELETE" });
-          state.languageTakeaway.items = (state.languageTakeaway.items || []).filter((item) => item.entry_id !== entryId);
-          state.languageTakeaway.revealedEntryIds.delete(entryId);
-          renderLanguageTakeaways();
-          text("languageTakeawayStats", `${state.languageTakeaway.items.length} 条`);
-          renderTakeawayReviewSurfaces("language");
           setTakeawaySpeechStatus("language", "");
         } catch (error) {
+          if (removed) {
+            state.languageTakeaway.items = previousItems;
+            restoreTakeawayReviewSession("language", previousReviewSession);
+            renderLanguageTakeaways();
+            text("languageTakeawayStats", `${previousItems.length} 条`);
+            renderTakeawayReviewSurfaces("language");
+          }
           setTakeawaySpeechStatus("language", error.message || "删除失败", { error: true, clear: false });
         }
       });
@@ -3854,6 +4015,7 @@
           active: false,
           mode: "zh",
           chineseText: "",
+          chineseDirty: false,
           englishText: "",
           hasEnglish: false,
         };
@@ -3972,12 +4134,34 @@
     function languageTakeawayDictDisplayPlainText() {
       const display = $("languageTakeawayDictDisplay");
       if (!display || display.classList.contains("hidden")) return "";
-      const lines = Array.from(display.querySelectorAll(".dict-sense-line"));
-      const sourceLines = lines.length ? lines : [display];
-      return sourceLines
-        .map((line) => languageTakeawayDictNodeText(line).replace(/[ \t]+/g, " ").trim())
-        .filter(Boolean)
-        .join("\n");
+      const lines = [];
+      let currentLine = "";
+      const flush = () => {
+        const value = currentLine.replace(/[ \t]+/g, " ").trim();
+        if (value) lines.push(value);
+        currentLine = "";
+      };
+      Array.from(display.childNodes || []).forEach((node) => {
+        const element = node.nodeType === Node.ELEMENT_NODE ? node : null;
+        if (element?.classList?.contains("dict-sense-line")) {
+          flush();
+          currentLine = languageTakeawayDictNodeText(node);
+          return;
+        }
+        if (element?.tagName === "BR") {
+          flush();
+          return;
+        }
+        if (element && ["DIV", "P", "LI"].includes(element.tagName)) {
+          flush();
+          currentLine = languageTakeawayDictNodeText(node);
+          flush();
+          return;
+        }
+        currentLine += languageTakeawayDictNodeText(node);
+      });
+      flush();
+      return lines.join("\n");
     }
 
     // The dictionary card is a read-only, tag-rendered view that replaces the
@@ -4077,7 +4261,7 @@
       selection?.removeAllRanges?.();
       selection?.addRange?.(range);
       const deleted = document.execCommand?.("delete") !== false;
-      syncLanguageTakeawayDictionaryChineseDraft();
+      syncLanguageTakeawayDictionaryChineseDraft({ markDirty: true });
       return deleted;
     }
 
@@ -4105,6 +4289,7 @@
         active: false,
         mode: "zh",
         chineseText: "",
+        chineseDirty: false,
         englishText: "",
         hasEnglish: false,
       };
@@ -4175,6 +4360,7 @@
       const dict = languageTakeawayDictionaryState();
       dict.active = true;
       dict.chineseText = String(chineseText || "").trim();
+      dict.chineseDirty = false;
       dict.englishText = String(englishText || "").trim();
       dict.hasEnglish = Boolean(dict.englishText);
       // Default to the 翻译词典 (Chinese); the toggle still lets the user switch to
@@ -4188,10 +4374,11 @@
       setLanguageTakeawayDictionaryDisplay(dict.mode === "en" ? "zh" : "en");
     }
 
-    function syncLanguageTakeawayDictionaryChineseDraft() {
+    function syncLanguageTakeawayDictionaryChineseDraft({ markDirty = false } = {}) {
       const dict = languageTakeawayDictionaryState();
       if (!dict.active || dict.mode !== "zh") return;
       dict.chineseText = languageTakeawayDictDisplayPlainText() || String($("languageTakeawayChinese")?.value || "").trim();
+      if (markDirty) dict.chineseDirty = true;
       const chineseEl = $("languageTakeawayChinese");
       if (chineseEl) chineseEl.value = dict.chineseText;
     }
@@ -4214,6 +4401,27 @@
       btn.dataset.spellingState = stateName === "busy" || stateName === "check" ? stateName : "plus";
     }
 
+    function setLanguageTakeawaySpellingButtonState(spellingWord = null) {
+      const btn = $("languageTakeawaySpellingBtn");
+      if (!btn) return;
+      const wordId = String(spellingWord?.word_id || "").trim();
+      btn.disabled = false;
+      btn.classList.remove("is-busy");
+      btn.classList.toggle("is-added", Boolean(wordId));
+      btn.removeAttribute("aria-busy");
+      if (wordId) {
+        btn.dataset.spellingWordId = wordId;
+        setLanguageTakeawaySpellingGlyph(btn, "check");
+        btn.title = "已加入拼写训练 · 点击取消";
+        btn.setAttribute("aria-label", "已加入拼写训练，点击取消");
+        return;
+      }
+      delete btn.dataset.spellingWordId;
+      setLanguageTakeawaySpellingGlyph(btn, "plus");
+      btn.title = "加入拼写训练";
+      btn.setAttribute("aria-label", "加入拼写训练");
+    }
+
     // The + button (bottom-left of the popup) only applies to a single English
     // word; it adds that word to spelling training.
     function updateLanguageTakeawaySpellingButton() {
@@ -4222,13 +4430,7 @@
       const single = isSingleEnglishWord($("languageTakeawaySource")?.value || "");
       btn.classList.toggle("hidden", !single);
       if (!single) return;
-      btn.classList.remove("is-added", "is-busy");
-      btn.removeAttribute("aria-busy");
-      delete btn.dataset.spellingWordId;
-      setLanguageTakeawaySpellingGlyph(btn, "plus");
-      btn.disabled = false;
-      btn.title = "加入拼写训练";
-      btn.setAttribute("aria-label", "加入拼写训练");
+      setLanguageTakeawaySpellingButtonState();
     }
 
     // Toggle the current word in/out of spelling training. First click adds it
@@ -4249,23 +4451,13 @@
         setLanguageTakeawaySpellingGlyph(btn, "busy");
       }
       try {
+        const dict = languageTakeawayDictionaryState();
         const result = await api("/api/writing/spelling-words/add", {
           word,
           chinese_gloss: languageTakeawayChineseForSave(),
+          replace_existing_gloss: Boolean(dict.active && dict.chineseDirty),
         });
-        if (btn) {
-          btn.dataset.spellingWordId = String(result?.word?.word_id || "");
-          btn.classList.add("is-added");
-          // Morph "+" → check; the green .is-added state alone is the confirm
-          // (reuses the expression-replacement add button's glyph swap — no
-          // bespoke scale keyframe, which read as "distorted" on click).
-          setLanguageTakeawaySpellingGlyph(btn, "check");
-          btn.disabled = false;
-          btn.classList.remove("is-busy");
-          btn.removeAttribute("aria-busy");
-          btn.title = "已加入拼写训练 · 点击取消";
-          btn.setAttribute("aria-label", "已加入拼写训练，点击取消");
-        }
+        setLanguageTakeawaySpellingButtonState(result?.word || null);
         setLanguageTakeawayStatus("已加入拼写训练");
       } catch (error) {
         if (btn) {
@@ -4293,7 +4485,7 @@
       }
       try {
         await api(`/api/writing/spelling-words/${encodeURIComponent(wordId)}`, null, { method: "DELETE" });
-        updateLanguageTakeawaySpellingButton();
+        setLanguageTakeawaySpellingButtonState();
         setLanguageTakeawayStatus("已取消加入拼写训练");
       } catch (error) {
         if (btn) {
@@ -4754,19 +4946,22 @@
       try {
         const result = await api(`/api/dictionary/lookup?word=${encodeURIComponent(w)}`);
         const entry = result && result.found ? result.entry : null;
-        if (!entry) return false;
-        const senses = Array.isArray(entry.senses) && entry.senses.length
+        const spellingWord = result?.spelling_word || null;
+        if (!entry && !spellingWord) return false;
+        const senses = Array.isArray(entry?.senses) && entry.senses.length
           ? entry.senses
-          : (entry.translation ? [entry.translation] : []);
-        if (!senses.length) return false;
+          : (entry?.translation ? [entry.translation] : []);
+        const savedGloss = String(spellingWord?.chinese_gloss || "").trim();
+        if (!savedGloss && !senses.length) return false;
         const chineseEl = $("languageTakeawayChinese");
-        const chineseText = senses.slice(0, 6).join("\n");
-        const englishText = String(entry.definition || "").trim();
+        const chineseText = savedGloss || senses.slice(0, 6).join("\n");
+        const englishText = String(entry?.definition || "").trim();
         if (chineseEl) chineseEl.value = chineseText;
         setLanguageTakeawayDictionaryEntry({ chineseText, englishText });
+        setLanguageTakeawaySpellingButtonState(spellingWord);
         autosizeLanguageTakeawaySource();
         // Keep the phonetic, drop the "离线词典" label the user found noisy.
-        setLanguageTakeawayStatus(entry.phonetic ? `[${entry.phonetic}]` : "");
+        setLanguageTakeawayStatus(entry?.phonetic ? `[${entry.phonetic}]` : "");
         return true;
       } catch (_error) {
         return false;
@@ -5744,8 +5939,10 @@
         return;
       }
       bar.hidden = false;
-      const chip = (label, value) =>
-        `<button type="button" class="p2-brainstorm-filter-chip${p2BrainstormActiveFilter === value ? " is-active" : ""}" data-p2-brainstorm-filter="${escapeHtml(value)}">${escapeHtml(label)}</button>`;
+      const chip = (label, value) => {
+        const active = p2BrainstormActiveFilter === value;
+        return `<button type="button" class="p2-brainstorm-filter-chip${active ? " is-active" : ""}" data-p2-brainstorm-filter="${escapeHtml(value)}" aria-pressed="${active ? "true" : "false"}">${escapeHtml(label)}</button>`;
+      };
       bar.innerHTML =
         `<span class="p2-brainstorm-filter-label">筛选</span>` +
         chip("全部", "") +
@@ -5755,42 +5952,71 @@
       updateP2BrainstormCopyLabel();
     }
 
-    // Bumped on every filter pass so a stale exit-animation handler can't hide a
-    // row that a newer pass has since decided to keep visible.
+    function syncP2BrainstormFilterBarSelection() {
+      const bar = $("p2BrainstormFilterBar");
+      if (!bar) { updateP2BrainstormCopyLabel(); return; }
+      bar.querySelectorAll("[data-p2-brainstorm-filter]").forEach((button) => {
+        const active = (button.dataset.p2BrainstormFilter || "") === p2BrainstormActiveFilter;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      const count = bar.querySelector(".p2-brainstorm-filter-count");
+      if (count) count.textContent = `共 ${p2BrainstormFilteredCount()} 道「${p2BrainstormFilterLabel()}」`;
+      updateP2BrainstormCopyLabel();
+    }
+
+    function p2BrainstormRowMatchesActiveFilter(row) {
+      if (!p2BrainstormActiveFilter) return true;
+      if (p2BrainstormActiveFilter === P2_BRAINSTORM_EMPTY_FILTER) return p2BrainstormRowIsEmpty(row);
+      return p2BrainstormRowTags(row).includes(p2BrainstormActiveFilter);
+    }
+
+    function commitP2BrainstormFilterVisibility(rows) {
+      rows.forEach((row) => {
+        const show = p2BrainstormRowMatchesActiveFilter(row);
+        row.classList.remove("is-filtering-in", "is-filtering-out");
+        row.classList.toggle("is-filtered-out", !show);
+      });
+    }
+
+    // Filter changes use one list-level transition. The old result set fades as
+    // a unit, visibility is committed in a single hidden frame, then the final
+    // set enters together. This avoids dozens of independent display changes.
     let p2BrainstormFilterGen = 0;
+    let p2BrainstormFilterSwapTimer = 0;
+    let p2BrainstormFilterEnterTimer = 0;
 
     function applyP2BrainstormFilter(options = {}) {
+      const list = $("p2BrainstormList");
+      if (!list) return;
       const animate = options.animate !== false;
       const gen = ++p2BrainstormFilterGen;
-      Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row")).forEach((row) => {
-        let show;
-        if (!p2BrainstormActiveFilter) show = true;
-        else if (p2BrainstormActiveFilter === P2_BRAINSTORM_EMPTY_FILTER) show = p2BrainstormRowIsEmpty(row);
-        else show = p2BrainstormRowTags(row).includes(p2BrainstormActiveFilter);
-        const hidden = row.classList.contains("is-filtered-out");
-        if (!animate) {
-          row.classList.remove("is-filtering-in", "is-filtering-out");
-          row.classList.toggle("is-filtered-out", !show);
-          return;
-        }
-        if (show && hidden) {
-          // Reveal: drop the hide flag and play the fade-in.
-          row.classList.remove("is-filtered-out", "is-filtering-out");
-          row.classList.add("is-filtering-in");
-          row.addEventListener("animationend", (e) => {
-            if (e.animationName === "p2BrainstormFilterIn") row.classList.remove("is-filtering-in");
-          }, { once: true });
-        } else if (!show && !hidden) {
-          // Hide: play the fade-out, then collapse it once the animation ends.
-          row.classList.remove("is-filtering-in");
-          row.classList.add("is-filtering-out");
-          row.addEventListener("animationend", (e) => {
-            if (e.animationName !== "p2BrainstormFilterOut") return;
-            row.classList.remove("is-filtering-out");
-            if (gen === p2BrainstormFilterGen) row.classList.add("is-filtered-out");
-          }, { once: true });
-        }
-      });
+      const rows = Array.from(list.querySelectorAll(".p2-brainstorm-row"));
+      window.clearTimeout(p2BrainstormFilterSwapTimer);
+      window.clearTimeout(p2BrainstormFilterEnterTimer);
+      list.classList.remove("is-entering", "is-filter-switching-out", "is-filter-switching-in");
+
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      if (!animate || reduceMotion || !rows.length) {
+        commitP2BrainstormFilterVisibility(rows);
+        return;
+      }
+
+      // Restart cleanly when the user taps several tags quickly. Only the newest
+      // generation is allowed to perform the hidden-frame swap.
+      void list.offsetWidth;
+      list.classList.add("is-filter-switching-out");
+      p2BrainstormFilterSwapTimer = window.setTimeout(() => {
+        if (gen !== p2BrainstormFilterGen) return;
+        commitP2BrainstormFilterVisibility(rows);
+        list.scrollTop = 0;
+        list.classList.remove("is-filter-switching-out");
+        void list.offsetWidth;
+        list.classList.add("is-filter-switching-in");
+        p2BrainstormFilterEnterTimer = window.setTimeout(() => {
+          if (gen === p2BrainstormFilterGen) list.classList.remove("is-filter-switching-in");
+        }, 240);
+      }, 140);
     }
 
     function p2BrainstormRows() {
@@ -7219,7 +7445,7 @@
     $("languageTakeawayDictDisplay")?.addEventListener("input", () => {
       const display = $("languageTakeawayDictDisplay");
       if (!display?.classList.contains("is-dictionary-editable")) return;
-      syncLanguageTakeawayDictionaryChineseDraft();
+      syncLanguageTakeawayDictionaryChineseDraft({ markDirty: true });
     });
 
     $("languageTakeawayDictDisplay")?.addEventListener("keydown", handleDictionaryDomainAtomDelete);
@@ -7230,6 +7456,7 @@
       event.preventDefault();
       const textValue = event.clipboardData?.getData("text/plain") || "";
       document.execCommand("insertText", false, textValue);
+      syncLanguageTakeawayDictionaryChineseDraft({ markDirty: true });
     });
 
     $("p2BrainstormDialog")?.addEventListener("pointerdown", (event) => {
@@ -7417,8 +7644,10 @@
     $("p2BrainstormFilterBar")?.addEventListener("click", (event) => {
       const btn = event.target.closest("[data-p2-brainstorm-filter]");
       if (!btn) return;
-      p2BrainstormActiveFilter = btn.dataset.p2BrainstormFilter || "";
-      renderP2BrainstormFilterBar();
+      const nextFilter = btn.dataset.p2BrainstormFilter || "";
+      if (nextFilter === p2BrainstormActiveFilter) return;
+      p2BrainstormActiveFilter = nextFilter;
+      syncP2BrainstormFilterBarSelection();
       applyP2BrainstormFilter();
     });
 
@@ -7720,9 +7949,11 @@
       if (guestBlockTakeawayEdit("登录后才能删除写作积累内容。")) return;
       showConfirmDelete("确定要删除这条写作积累吗？", async () => {
         const previousItems = state.writingTakeaway.items || [];
+        const previousReviewSession = snapshotTakeawayReviewSession("writing");
         const removed = previousItems.find((item) => item.entry_id === entryId);
         state.writingTakeaway.items = previousItems.filter((item) => item.entry_id !== entryId);
         state.writingTakeaway.revealedEntryIds.delete(entryId);
+        removeDeletedTakeawayReviewEntry("writing", entryId);
         refreshTakeawayList("writing");
         setTakeawaySpeechStatus("writing", "正在删除…", { clear: false });
         try {
@@ -7731,6 +7962,7 @@
         } catch (error) {
           if (removed) {
             state.writingTakeaway.items = previousItems;
+            restoreTakeawayReviewSession("writing", previousReviewSession);
             refreshTakeawayList("writing");
           }
           setTakeawaySpeechStatus("writing", error.message || "删除失败", { error: true, clear: false });
@@ -7741,6 +7973,8 @@
     return {
       loadP1Corpus,
       renderP1CorpusTopics,
+      copyP1TopicForAi,
+      copyP1PodcastPrompt,
       openP1TopicCardModal,
       findP1CorpusEntry,
       p1CorpusEntryIds,
@@ -7764,6 +7998,7 @@
       openP2CorpusBodyPeek,
       closeP2CorpusPeek,
       updateP3CorpusPeekButton,
+      prefetchP3CorpusPeekMaterialsForAttempt,
       openP3CorpusPeek,
       closeP3CorpusPeek,
       p1CorpusStorageEntry,
@@ -7794,6 +8029,7 @@
       triggerTakeawayLocate,
       takeawayReviewFeedback,
       updateTakeawayReviewDots,
+      startTakeawayReviewDayWatcher,
       applyRemoteTakeawayReviewState,
       speakLanguageTakeaway,
       setTakeawaySpeechStatus,
@@ -7867,5 +8103,6 @@
   window.IELTSCorpusTakeaway = {
     createCorpusTakeawayController,
     formatP2BrainstormCopyBlock,
+    formatP1TopicCorpusCopyBlock,
   };
 })();

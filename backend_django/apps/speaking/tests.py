@@ -859,8 +859,10 @@ class SpeakingHistoryApiTests(TestCase):
 
         history = self.client.get("/api/history")
         self.assertEqual(history.status_code, 200)
-        ids = [item["id"] for item in history.json()["items"]]
-        self.assertEqual(ids, [valid.attempt_id])
+        items = {item["id"]: item for item in history.json()["items"]}
+        self.assertEqual(items[valid.attempt_id]["report_status"], "ready")
+        self.assertEqual(items["attempt-incomplete"]["report_status"], "unscored")
+        self.assertNotIn("attempt-started", items)
 
         detail = self.client.get(f"/api/history/{valid.attempt_id}")
         self.assertEqual(detail.status_code, 200)
@@ -868,7 +870,8 @@ class SpeakingHistoryApiTests(TestCase):
         self.assertEqual(detail.json()["turns"][0]["question"], "What is your full name?")
 
         invalid_detail = self.client.get("/api/history/attempt-incomplete")
-        self.assertEqual(invalid_detail.status_code, 404)
+        self.assertEqual(invalid_detail.status_code, 200)
+        self.assertEqual(invalid_detail.json()["report_status"], "unscored")
 
     def create_failed_attempt(self, attempt_id="attempt-failed-1"):
         attempt = SpeakingAttempt.objects.create(
@@ -991,10 +994,115 @@ class SpeakingHistoryApiTests(TestCase):
         empty = self.create_empty_failed_attempt()
 
         history = self.client.get("/api/history")
-        self.assertNotIn(empty.attempt_id, [item["id"] for item in history.json()["items"]])
+        items = {item["id"]: item for item in history.json()["items"]}
+        self.assertIn(empty.attempt_id, items)
+        self.assertEqual(items[empty.attempt_id]["report_status"], "failed")
 
         detail = self.client.get(f"/api/history/{empty.attempt_id}")
-        self.assertEqual(detail.status_code, 404)
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        self.assertEqual(body["report_status"], "failed")
+        self.assertFalse(body["can_regenerate_report"])
+
+    def test_completed_attempt_without_report_or_ai_task_is_visible_as_unscored(self):
+        attempt = SpeakingAttempt.objects.create(
+            user=self.user,
+            attempt_id="b34cd8f984354f288d47ddf82d0a48bd",
+            legacy_attempt_id="b34cd8f984354f288d47ddf82d0a48bd",
+            mode=SpeakingAttempt.Mode.P1,
+            part="p1",
+            title="Part 1 practice",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+            english_name="Jasper",
+        )
+        SpeakingTurn.objects.create(
+            user=self.user,
+            attempt=attempt,
+            turn_id="t1",
+            sequence=1,
+            part="p1",
+            question="What is your full name?",
+            transcript_raw="My full name is Jasper.",
+            transcript_cleaned="My full name is Jasper.",
+            audio_path="audio/b34cd8f984354f288d47ddf82d0a48bd/t1.webm",
+            metadata={"status": "completed", "transcript_status": "captured"},
+        )
+
+        history = self.client.get("/api/history")
+        self.assertEqual(history.status_code, 200)
+        items = {item["id"]: item for item in history.json()["items"]}
+        self.assertEqual(len([item for item in history.json()["items"] if item["id"] == attempt.attempt_id]), 1)
+        self.assertEqual(items[attempt.attempt_id]["report_status"], "unscored")
+        self.assertIsNone(items[attempt.attempt_id]["overall_band"])
+
+        detail = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        self.assertEqual(body["report_status"], "unscored")
+        self.assertEqual(body["report_status"], items[attempt.attempt_id]["report_status"])
+        self.assertTrue(body["can_regenerate_report"])
+        self.assertEqual(body["turns"][0]["transcript_cleaned"], "My full name is Jasper.")
+        self.assertEqual(body["turns"][0]["audio"]["url"], f"/api/audio/{attempt.attempt_id}/t1/candidate")
+
+        # A second request is the refresh/re-login equivalent: no frontend cache
+        # or task creation is needed to recover the same persisted state.
+        refreshed = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(refreshed.json()["report_status"], "unscored")
+        self.assertEqual(SpeakingAttempt.objects.filter(attempt_id=attempt.attempt_id).count(), 1)
+
+    def test_running_report_task_is_scoring_in_history_and_detail(self):
+        attempt = self.create_stalled_attempt("attempt-running-report", task_status="running", age_seconds=5)
+
+        history = self.client.get("/api/history")
+        item = next(item for item in history.json()["items"] if item["id"] == attempt.attempt_id)
+        self.assertEqual(item["report_status"], "scoring")
+        self.assertEqual(item["ai_task"]["status"], "running")
+
+        detail = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["report_status"], "scoring")
+        self.assertEqual(detail.json()["ai_task"]["status"], "running")
+        self.assertFalse(detail.json()["can_regenerate_report"])
+
+    def test_insufficient_account_balance_is_failed_without_losing_source_data(self):
+        from apps.ai.models import AITask
+
+        attempt = self.create_stalled_attempt("attempt-balance-failure", task_status=AITask.Status.FAILED, age_seconds=5)
+        task = AITask.objects.get(related_id=attempt.attempt_id)
+        task.error_code = "speaking_report_failed"
+        task.error_message = (
+            'AI analysis failed: HTTP AI provider returned 403: '
+            '{"error":{"message":"Insufficient account balance"}}'
+        )
+        task.save(update_fields=["error_code", "error_message", "updated_at"])
+
+        history = self.client.get("/api/history")
+        item = next(item for item in history.json()["items"] if item["id"] == attempt.attempt_id)
+        self.assertEqual(item["report_status"], "failed")
+
+        detail = self.client.get(f"/api/history/{attempt.attempt_id}")
+        body = detail.json()
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(body["report_status"], "failed")
+        self.assertIn("余额不足", body["report_error"])
+        self.assertIn("重新生成", body["report_error"])
+        self.assertTrue(body["can_regenerate_report"])
+        self.assertEqual(body["turns"][0]["transcript_cleaned"], "My full name is Jasper.")
+        self.assertTrue(SpeakingAttempt.objects.filter(pk=attempt.pk).exists())
+        self.assertEqual(attempt.turns.count(), 1)
+
+    def test_deleting_another_report_does_not_hide_unscored_attempt(self):
+        from apps.ai.models import AITask
+
+        kept = self.create_stalled_attempt("attempt-kept-unscored", task_status=None, age_seconds=5)
+        task = AITask.objects.filter(related_id=kept.attempt_id, task_type="speaking_report").first()
+        task.delete()
+        removed = self.create_scored_attempt("attempt-removed-report")
+
+        self.assertEqual(self.client.delete(f"/api/history/{removed.attempt_id}").status_code, 200)
+        items = {item["id"]: item for item in self.client.get("/api/history").json()["items"]}
+        self.assertIn(kept.attempt_id, items)
+        self.assertNotIn(removed.attempt_id, items)
 
     def test_failed_history_detail_is_owner_scoped(self):
         failed = self.create_failed_attempt("attempt-owner-failed")
@@ -1086,18 +1194,27 @@ class SpeakingHistoryApiTests(TestCase):
         self.assertTrue(body["report_error"])
         self.assertEqual(body["turns"][0]["transcript_cleaned"], "My full name is Jasper.")
 
-    def test_fresh_pending_report_still_loads_and_is_not_marked_unscored(self):
-        # A report queued seconds ago (worker about to claim it) must NOT be
-        # flagged as stalled — the report screen should keep loading, not flip to
-        # a premature 未评分 card.
+    def test_fresh_pending_report_surfaces_as_scoring_not_unscored(self):
+        # A report queued seconds ago (worker about to claim it) must appear in
+        # reports immediately as scoring, not vanish until it fails and not show
+        # a premature regenerate button.
         fresh = self.create_stalled_attempt("attempt-fresh-pending", age_seconds=5)
 
         history = self.client.get("/api/history")
-        ids = [item["id"] for item in history.json()["items"]]
-        self.assertNotIn(fresh.attempt_id, ids)
+        items = {item["id"]: item for item in history.json()["items"]}
+        self.assertIn(fresh.attempt_id, items)
+        self.assertEqual(items[fresh.attempt_id]["report_status"], "scoring")
+        self.assertIsNone(items[fresh.attempt_id]["overall_band"])
+        self.assertEqual(items[fresh.attempt_id]["ai_task"]["status"], "pending")
 
         detail = self.client.get(f"/api/history/{fresh.attempt_id}")
-        self.assertEqual(detail.status_code, 404)
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        self.assertEqual(body["report_status"], "scoring")
+        self.assertEqual(body["ielts_score"], {})
+        self.assertFalse(body["can_regenerate_report"])
+        self.assertEqual(body["ai_task"]["status"], "pending")
+        self.assertEqual(body["turns"][0]["transcript_cleaned"], "My full name is Jasper.")
 
     def test_friendly_report_error_maps_no_available_accounts_to_quota(self):
         from apps.speaking.report_services import friendly_report_error
@@ -3055,10 +3172,12 @@ class SpeakingRuntimeApiTests(TestCase):
         self.assertEqual(attempt.status, SpeakingAttempt.Status.READY_TO_SCORE)
         self.assertEqual(attempt.metadata["analysis_status"], "failed")
         history = self.client.get("/api/history")
-        self.assertNotIn(attempt.attempt_id, [item["id"] for item in history.json()["items"]])
+        history_items = {item["id"]: item for item in history.json()["items"]}
+        self.assertEqual(history_items[attempt.attempt_id]["report_status"], "failed")
 
         detail = self.client.get(f"/api/history/{attempt.attempt_id}")
-        self.assertEqual(detail.status_code, 404)
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["report_status"], "failed")
 
     def test_score_failure_with_audio_keeps_unscored_report_and_audio_recovery(self):
         attempt, turn1, _turn2 = self.create_attempt(attempt_id="runtime-audio-only")
@@ -3163,7 +3282,16 @@ class SpeakingRuntimeApiTests(TestCase):
         self.assertFalse(SpeakingReport.objects.filter(attempt=attempt).exists())
 
         history = self.client.get("/api/history")
-        self.assertNotIn(attempt.attempt_id, [item["id"] for item in history.json()["items"]])
+        self.assertEqual(history.status_code, 200)
+        items = {item["id"]: item for item in history.json()["items"]}
+        self.assertIn(attempt.attempt_id, items)
+        self.assertEqual(items[attempt.attempt_id]["report_status"], "scoring")
+        self.assertEqual(items[attempt.attempt_id]["ai_task"]["status"], "pending")
+
+        detail = self.client.get(f"/api/history/{attempt.attempt_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["report_status"], "scoring")
+        self.assertFalse(detail.json()["can_regenerate_report"])
 
     def test_score_self_heals_dropped_turn_instead_of_blocking(self):
         # turn1 is answered, turn2 dropped (no transcript / never completed). The
@@ -3661,6 +3789,10 @@ class CodexValidationTests(TestCase):
             metadata={"status": "completed", "prompt": {"role": "main"}},
         )
         base = build_p3_discussion_skills(attempt)
+        self.assertEqual(
+            [item["key"] for item in base["dimensions"]],
+            ["abstract_extension", "reasoning", "comparison_concession", "specific_support"],
+        )
         original_status = {
             item["key"]: item["status"]
             for item in base["dimensions"]
@@ -3675,7 +3807,6 @@ class CodexValidationTests(TestCase):
                 "reasoning": {"evidence": "AI 证据：两题都用了 because。", "next_action": "把 because 后面的结果再说完整。"},
                 "comparison_concession": {"evidence": "AI 证据：没有明显 however 或 whereas。", "next_action": "先用 whereas 补一个对比。"},
                 "specific_support": {"evidence": "AI 证据：第二题用了 in my city。", "next_action": "例子要补人物或场景。"},
-                "follow_up_handling": {"evidence": "AI 证据：这轮没有追问。", "next_action": "追问先回应新角度。"},
             },
         }
 
@@ -3696,6 +3827,8 @@ class CodexValidationTests(TestCase):
         self.assertIn("老师听完这次 Part 3 后给的一段复盘", prompt)
         self.assertIn("为什么这样会让 Part 3 更像讨论", prompt)
         self.assertIn("不要每次都写同一类", prompt)
+        self.assertNotIn("follow_up_handling", prompt)
+        self.assertNotIn("追问承接", prompt)
         self.assertEqual(enriched["generation_backend"], "codex_cli")
         self.assertEqual(enriched["summary"], ai_payload["summary"])
         self.assertEqual(enriched["next_drill"], ai_payload["next_drill"])
@@ -3973,6 +4106,15 @@ class CodexValidationTests(TestCase):
         self.assertEqual(result["ielts_score"]["backend"], "codex_cli")
         self.assertEqual(result["ielts_score"]["generation_status"], "ready")
         self.assertEqual(result["ielts_score"]["overall_band"], 6.0)
+        self.assertEqual(
+            result["billing_usage"],
+            {
+                "input_tokens": 380,
+                "cached_input_tokens": 0,
+                "output_tokens": 220,
+                "reasoning_output_tokens": 0,
+            },
+        )
         self.assertEqual(result["feedback_summary"], "Codex scored this exact speaking response.")
         self.assertEqual(result["overall_review"]["backend"], "codex_cli")
         self.assertEqual(result["overall_review"]["markdown"], score_payload["overall_review"]["markdown"])
@@ -4050,6 +4192,7 @@ class CodexValidationTests(TestCase):
         self.assertEqual(task.related_type, "speaking_attempt")
         self.assertEqual(task.related_id, attempt.attempt_id)
         self.assertEqual(task.request_payload["attempt_id"], attempt.attempt_id)
+        self.assertEqual(task.metadata["billing_policy"], "balance_gate_then_usage_settlement")
 
     def test_speaking_report_task_keeps_worker_adapter_when_http_requested(self):
         from apps.ai.models import AITask
@@ -4190,6 +4333,99 @@ class CodexValidationTests(TestCase):
 
 class TurnFeedbackValidationTests(TestCase):
     """Test validation logic for turn feedback and AI coaching generation."""
+
+    def test_p3_model_answer_contract_is_shared_by_all_generation_paths(self):
+        from apps.speaking.services import (
+            build_turn_band7_with_codex,
+            turn_feedback_batch_with_codex,
+            turn_feedback_with_codex,
+        )
+
+        user = get_user_model().objects.create_user(username="p3-model-contract", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="p3-model-contract-attempt",
+            mode="p3",
+            part="p3",
+            status=SpeakingAttempt.Status.READY_TO_SCORE,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="p3-model-contract-turn",
+            sequence=0,
+            part="p3",
+            question="Are young people under more pressure today?",
+            transcript_raw="I think they are because competition is stronger.",
+            transcript_cleaned="I think they are because competition is stronger.",
+            metadata={"status": "completed"},
+        )
+        single_payload = {
+            "display_transcript": turn.transcript_cleaned,
+            "display_transcript_markdown": turn.transcript_cleaned,
+            "band7_version": "Well, I would say they are under more pressure today.",
+            "ai_coaching": "观点明确，可以增加现实观察。\n\n语法错误纠正：无",
+        }
+        batch_payload = {"turns": [{"turn_id": turn.turn_id, **single_payload}]}
+
+        captured_prompts = []
+        with (
+            override_settings(SPEAKING_REPORT_AI_CALL_MODE="codex"),
+            patch(
+                "apps.speaking.services.run_codex",
+                return_value=("Well, I would say they are under more pressure today.", {"input_tokens": 10}),
+            ) as standalone_run,
+        ):
+            build_turn_band7_with_codex(
+                turn.question,
+                turn.transcript_cleaned,
+                "p3",
+                "p3_contract_standalone",
+            )
+            captured_prompts.append(standalone_run.call_args.args[0])
+
+        with patch(
+            "apps.speaking.services.run_codex",
+            return_value=(json.dumps(single_payload, ensure_ascii=False), {"input_tokens": 10}),
+        ) as single_run:
+            turn_feedback_with_codex(
+                turn.question,
+                turn.transcript_cleaned,
+                "p3",
+                "7",
+                None,
+                "p3_contract_single",
+                ai_source="codex_cli",
+            )
+            captured_prompts.append(single_run.call_args.args[0])
+
+        with patch(
+            "apps.speaking.services.run_codex",
+            return_value=(json.dumps(batch_payload, ensure_ascii=False), {"input_tokens": 10}),
+        ) as batch_run:
+            turn_feedback_batch_with_codex(
+                [turn],
+                attempt,
+                "7",
+                None,
+                "p3_contract_batch",
+                ai_source="codex_cli",
+            )
+            captured_prompts.append(batch_run.call_args.args[0])
+
+        required_clauses = (
+            "45-70 seconds",
+            "natural conversation",
+            "active listening",
+            "personal lens",
+            "China",
+            "diplomatic",
+            "Do not mechanically",
+            "spoken English answer only",
+        )
+        for prompt in captured_prompts:
+            for clause in required_clauses:
+                self.assertIn(clause, prompt)
 
     def test_turn_feedback_rejects_missing_band7(self):
         """turn_feedback_with_codex should reject output missing band7_version."""
@@ -4912,7 +5148,78 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertEqual(len(result), 4)
         self.assertEqual(len(provider.calls), 1)
         self.assertEqual(provider.calls[0]["max_tokens"], services.SPEAKING_TURN_FEEDBACK_HTTP_MAX_TOKENS)
-        self.assertTrue(provider.calls[0]["stream"])
+        self.assertFalse(provider.calls[0]["stream"])
+
+    def test_sonnet_turn_feedback_uses_one_nonstream_json_request_with_exact_turn_ids(self):
+        from apps.accounts.models import CustomUser
+        from apps.speaking.services import turn_feedback_batch_with_codex
+
+        class CapturingHttpProvider:
+            def __init__(self):
+                self.messages = []
+                self.kwargs = []
+
+            def complete_chat(self, messages, **kwargs):
+                self.messages.append(messages)
+                self.kwargs.append(kwargs)
+                input_turns = json.loads(messages[1]["content"].split("Input turns:\n", 1)[1].strip())
+                payload = {
+                    "turns": [
+                        {
+                            "turn_id": item["turn_id"],
+                            "display_transcript": item["candidate_transcript"],
+                            "display_transcript_markdown": item["candidate_transcript"],
+                            "band7_version": f"A complete model answer for {item['question']}",
+                            "ai_coaching": "",
+                        }
+                        for item in input_turns
+                    ]
+                }
+
+                class Result:
+                    text = json.dumps(payload)
+                    usage = {"input_tokens": 100, "output_tokens": 80}
+                    model = "claude-sonnet-4-6"
+
+                return Result()
+
+        user = CustomUser.objects.create_user(username="test-sonnet-single-report", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(user=user, attempt_id="test-sonnet-single-report", mode="p1", part="p1")
+        turns = [
+            SpeakingTurn.objects.create(
+                user=user,
+                attempt=attempt,
+                turn_id=f"sonnet-turn-{index}",
+                sequence=index,
+                part="p1",
+                question=f"Question {index + 1}?",
+                transcript_raw=f"Answer {index + 1}.",
+                transcript_cleaned=f"Answer {index + 1}.",
+                metadata={"status": "completed"},
+            )
+            for index in range(14)
+        ]
+        provider = CapturingHttpProvider()
+
+        with patch("apps.speaking.services._speaking_http_provider", return_value=provider):
+            result = turn_feedback_batch_with_codex(
+                turns,
+                attempt,
+                "7",
+                {},
+                "sonnet-single-report",
+                ai_source="claude",
+            )
+
+        self.assertEqual(len(result), 14)
+        self.assertEqual(len(provider.messages), 1)
+        self.assertFalse(provider.kwargs[0]["stream"])
+        self.assertEqual(provider.kwargs[0]["response_format"], {"type": "json_object"})
+        self.assertIn(
+            'Required turn IDs in exact order: ["sonnet-turn-0", "sonnet-turn-1", "sonnet-turn-2"',
+            provider.messages[0][1]["content"],
+        )
+        self.assertIn("Large-batch output budget (mandatory):", provider.messages[0][1]["content"])
 
     def test_http_turn_feedback_failure_never_calls_codex(self):
         from apps.accounts.models import CustomUser

@@ -50,6 +50,7 @@ urlpatterns = [
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/follow-up-stream", speaking_views.turn_follow_up_stream_view, name="turn-follow-up-stream"),
     path("api/speaking/realtime-asr/status", speaking_views.realtime_asr_status_view, name="speaking-realtime-asr-status"),
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/examiner-tts", speaking_views.turn_examiner_tts_view, name="turn-examiner-tts"),
+    path("api/attempts/<str:attempt_id>/examiner-tts/warmup", speaking_views.attempt_examiner_tts_warmup_view, name="attempt-examiner-tts-warmup"),
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/model-tts", speaking_views.turn_model_tts_view, name="turn-model-tts"),
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/feedback/regenerate", speaking_views.turn_feedback_regenerate_view, name="turn-feedback-regenerate"),
     path("api/attempts/<str:attempt_id>/turns/<str:turn_id>/transcript/regenerate", speaking_views.turn_transcript_regenerate_view, name="turn-transcript-regenerate"),

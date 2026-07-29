@@ -181,6 +181,12 @@ assert.match(
   "Spelling add dialog should render dictionary glosses through the shared tag card."
 );
 
+assert.match(
+  indexHtml,
+  /id="spellingAddGlossField"[\s\S]{0,180}for="spellingAddGloss"[\s\S]{0,180}<textarea id="spellingAddGloss"/,
+  "Spelling add dialog should have one hideable Chinese field so the tag editor can replace it instead of rendering two boxes."
+);
+
 assert.doesNotMatch(
   stylesSource,
   /\.spelling-add-dialog\s*\{[^}]*background:\s*rgba/s,
@@ -197,4 +203,22 @@ assert.match(
   spellingDrillSource,
   /spellingAddSpeakBtn[\s\S]{0,220}addEventListener\("click"/,
   "Spelling add dialog should expose the Language Takeaway-style pronunciation button."
+);
+
+assert.match(
+  indexHtml,
+  /id="spellingAddSpeakBtn"\s+class="language-takeaway-tts-btn spelling-add-tts-btn"[\s\S]{0,260}<svg viewBox="0 0 24 24"/,
+  "Spelling add dialog should reuse the single-word Language Takeaway speaker button, not a text glyph."
+);
+
+assert.match(
+  indexHtml,
+  /<div class="spelling-add-head-actions">[\s\S]*id="spellingAddStatus"[\s\S]*id="spellingAddSpeakBtn"[\s\S]*id="spellingAddSaveBtn"/,
+  "Spelling add header actions should be ordered as status, speaker, then the rectangular Add button."
+);
+
+assert.match(
+  spellingDrillSource,
+  /function\s+renderSpellingAddGlossPreview\([\s\S]*preview\.contentEditable\s*=\s*"true"/,
+  "Spelling add dictionary card should be directly editable like the Language Takeaway word card."
 );

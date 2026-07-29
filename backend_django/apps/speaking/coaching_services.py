@@ -172,6 +172,23 @@ def build_personalized_coaching(profile: dict[str, Any], attempt: SpeakingAttemp
         "habit_tags": tags[:8],
     }
 
+def p3_model_answer_constraints() -> str:
+    """Shared quality contract for every generated Part 3 model answer."""
+    return (
+        "This is IELTS Speaking Part 3. Produce a Band 7.5+ quality answer that lasts about 45-70 seconds "
+        "at a natural speaking pace. The final value must contain the spoken English answer only; put any "
+        "Chinese explanation or phrase analysis in AI coaching instead, because this answer is read aloud by TTS. "
+        "It must sound like a natural conversation with the examiner, not a memorised essay or a chain of writing "
+        "templates. Use active listening or thinking aloud when it fits, but vary the wording and position: "
+        "Do not mechanically start every answer with the same opener. Move naturally from engaging with the "
+        "question to a clear position, then develop a reason or background, a grounded real-world observation, "
+        "a diplomatic concession or limitation, and a light, open ending that leaves room for the examiner to "
+        "continue. When relevant and supportable, add cautious China-context reality and a small personal lens "
+        "such as something the speaker has noticed around them. Do not invent specific personal facts merely to "
+        "satisfy those moves. Use Markdown bold only for 2-5 reusable spoken expressions inside the answer."
+    )
+
+
 def model_answer_constraints(part: str) -> str:
     """Get part-specific constraints for Band 7 model answer."""
     if part == "p1":
@@ -182,13 +199,12 @@ def model_answer_constraints(part: str) -> str:
     if part == "p2":
         return (
             "This is IELTS Speaking Part 2. Write a natural long-turn answer in Markdown paragraphs. "
-            "Cover the cue-card points without copying the bullet list."
+            "Cover the cue-card points without copying the bullet list. Aim for 180-230 English words, "
+            "roughly 1.5-2 minutes at a natural speaking pace. Do not shorten it into a Part 1/Part 3 "
+            "answer or inflate it into a written essay."
         )
     if part == "p3":
-        return (
-            "This is IELTS Speaking Part 3. Write a developed discussion answer, about 4-6 sentences, "
-            "with an opinion, reasoning, and one concrete example or contrast."
-        )
+        return p3_model_answer_constraints()
     return "Write an answer appropriate to the IELTS Speaking part shown by the questions."
 
 def target_band_label(attempt: SpeakingAttempt | dict[str, Any]) -> str:

@@ -21,7 +21,9 @@ from django.utils import timezone
 
 from apps.ai.http_provider import HttpApiProvider, HttpApiProviderConfig
 from apps.ai.models import AITask
-from apps.ai.services import create_ai_task, task_payload
+from apps.ai.orchestration import AIOrchestrationError, create_billable_ai_task
+from apps.ai.services import task_payload
+from apps.billing.services import combine_usage_records
 from .ai_config import (
     SPEAKING_AI_CALL_MODE_HTTP,
     SPEAKING_AI_DEFAULT_HTTP_MODEL,
@@ -147,6 +149,7 @@ from .examiner_tts_services import (
     _with_examiner_tts_identity,
     ensure_examiner_tts,
     examiner_tts_status,
+    warm_examiner_tts_for_attempt,
     warm_fixed_examiner_tts,
 )
 from .analysis_status_services import (
@@ -2370,7 +2373,7 @@ def _is_transient_transport_error(exc: Exception) -> bool:
     transient = (
         "handshake", "timed out", "timeout", "connection reset", "connection aborted",
         "connection refused", "remotedisconnected", "remote end closed", "eof occurred",
-        "temporarily", "bad gateway", "502", "503", "504", "max retries", "ssl",
+        "temporarily", "upstream request failed", "bad gateway", "500", "502", "503", "504", "max retries", "ssl",
     )
     return any(needle in text for needle in transient)
 
@@ -2421,7 +2424,7 @@ Overall Review 写法要求：
 - 学习画像只作内部参考，严禁在输出里复述画像标签名（如 answer_development、short_answer、limited_development）或照搬通用结论句；不要写“你的学习画像里提到”这类话。
 - 不要输出类似“回答基本相关，但展开偏短”这种过短 fallback 文案
 - 如果练习部分是 p2，必须结合 cue card 与学员长回答的真实片段，指出内容组织、细节展开和可迁移到 P3 的讨论角度；不要只写“长回答不够展开”这类模板句。
-- 如果练习部分是 p3，必须围绕 Part 3 的抽象讨论能力复盘：观点是否明确、原因链是否完整、是否有对比/让步、是否能从个人例子上升到社会层面、追问是否承接新角度；复盘重点要给出可直接练的 discussion move 和示范句。
+- 如果练习部分是 p3，必须围绕 Part 3 的抽象讨论能力复盘：观点是否明确、原因链是否完整、是否有对比/让步、是否能用具体场景支撑并从个人观察上升到社会层面；复盘重点要给出可直接练的 discussion move 和示范句。
 
 本次成绩会由你在同一个 JSON 中给出。
 练习部分：{part}
@@ -2439,7 +2442,7 @@ Also include a top-level object named p3_discussion_skills with:
 - dimensions: an object keyed only by the supplied dimension keys; each value has Chinese string keys evidence and next_action
 Do not change or infer dimension status values. Status is owned by the application heuristics.
 Base every sentence on the ASR-corrected transcript supplied below. Do not invent learner content.
-This card is shown to the learner as a coach's note, not as a rubric table. Explain WHY the advice matters: Part 3 rewards the ability to turn an answer into a discussion, so comments should connect the learner's exact words to missing moves such as reason chains, contrast/concession, wider social impact, or follow-up handling.
+This card is shown to the learner as a coach's note, not as a rubric table. Explain WHY the advice matters: Part 3 rewards the ability to turn an answer into a discussion, so comments should connect the learner's exact words to missing moves such as reason chains, contrast/concession, concrete support, or wider social impact.
 Do not merely rephrase the heuristic evidence. Use at least two concrete details from the learner's questions/answers when possible, and vary the wording across fields so the card does not feel like a template. next_drill should be three small actions that naturally follow from THIS attempt, not generic drills that would fit every P3 report.
 
 P3 discussion input:
@@ -2550,7 +2553,10 @@ P3 discussion input:
                         max_tokens=2600 if index == 1 else 1800,
                         temperature=0.15,
                         timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT,
-                        stream=True,
+                        # Worker-side report scoring has no token-stream
+                        # consumer. Use one normal JSON response so a relay
+                        # cannot leave a completed SSE connection hanging.
+                        stream=False,
                     )
                     payload = extract_json_object_with_keys(
                         result.text,
@@ -2653,7 +2659,6 @@ def build_p3_discussion_skills(attempt: SpeakingAttempt) -> dict[str, Any] | Non
     if not turns:
         return None
     main_turns = []
-    follow_turns = []
     all_words = 0
     concession_hits = 0
     reason_hits = 0
@@ -2666,9 +2671,7 @@ def build_p3_discussion_skills(attempt: SpeakingAttempt) -> dict[str, Any] | Non
         text = transcript.lower()
         words = re.findall(r"[A-Za-z']+", text)
         all_words += len(words)
-        if prompt.get("role") == "follow_up":
-            follow_turns.append(turn)
-        else:
+        if prompt.get("role") != "follow_up":
             main_turns.append(turn)
         if any(token in text for token in ("however", "although", "whereas", "on the other hand", "while some")):
             concession_hits += 1
@@ -2713,19 +2716,12 @@ def build_p3_discussion_skills(attempt: SpeakingAttempt) -> dict[str, Any] | Non
             "evidence": f"{example_hits}/{main_count} 个主问题用了例子或具体场景。",
             "next_action": "每个抽象观点后面补一个生活场景，不要只停在大词。",
         },
-        {
-            "key": "follow_up_handling",
-            "label": "追问承接",
-            "status": "strong" if len(follow_turns) >= main_count and average_words >= 35 else ("developing" if follow_turns else "weak"),
-            "evidence": f"完成 {len(follow_turns)} 个追问，平均回答约 {average_words} 词。",
-            "next_action": "追问不要重复主问题答案，直接回应新角度后再补理由。",
-        },
     ]
     weakest = next((item for item in dimensions if item["status"] == "weak"), None) or next((item for item in dimensions if item["status"] == "developing"), dimensions[0])
     best = next((item for item in dimensions if item["status"] == "strong"), None)
     return {
         "title": "P3 Discussion Skills",
-        "summary": f"这次 P3 平均每题约 {average_words} 词。P3 的关键不是讲个人经历，而是把观点扩展成原因、对比、社会影响和追问承接。",
+        "summary": f"这次 P3 平均每题约 {average_words} 词。P3 的关键不是堆个人经历，而是把观点扩展成原因、对比、具体支撑和社会影响。",
         "dimensions": dimensions,
         "best_moment": best["label"] if best else "回答完整度",
         "fix_next": weakest["next_action"],
@@ -2800,7 +2796,7 @@ def _report_provider_json(
                     max_tokens=max_tokens,
                     temperature=temperature,
                     timeout_seconds=SPEAKING_REPORT_HTTP_TIMEOUT,
-                    stream=True,
+                    stream=False,
                 )
                 usage = getattr(result, "usage", None)
                 return extract_json_object_with_keys(result.text, required_keys), "http_api", result.model, usage
@@ -2865,7 +2861,7 @@ def enrich_p3_discussion_skills_with_ai(
 
 写作意图：
 - 这张卡不是机械评分表，而是“老师听完这次 Part 3 后给的一段复盘”。为什么：用户已经能看到分数和逐题点评，这里应该帮助他理解下一轮 discussion move 怎么练。
-- Part 3 的核心不是背更多答案，而是把一个观点推进成讨论：明确立场 → 原因链 → 例子/对比/让步 → 社会或群体影响 → 接住追问的新角度。请围绕这条能力链写，而不是套固定话术。
+- Part 3 的核心不是背更多答案，而是把一个观点推进成讨论：明确立场 → 原因链 → 具体例子 → 对比/让步 → 社会或群体影响。请围绕这条能力链写，而不是套固定话术。
 - evidence 要尽量引用或转述本次具体回答里的细节；如果只写“几乎没有/比较短/需要加强”，用户会感觉像模板。
 - next_action 要告诉用户下一次说话时具体多加哪一句、放在答案哪里、为什么这样会让 Part 3 更像讨论。
 - next_drill 三条可以长短不同，允许自然口吻；不要每次都写同一类“每题用20秒/写一句however/改写成社会层面”的固定组合，除非本次回答真的最需要它。
@@ -2880,8 +2876,7 @@ def enrich_p3_discussion_skills_with_ai(
     "abstract_extension": {{"evidence": "...", "next_action": "..."}},
     "reasoning": {{"evidence": "...", "next_action": "..."}},
     "comparison_concession": {{"evidence": "...", "next_action": "..."}},
-    "specific_support": {{"evidence": "...", "next_action": "..."}},
-    "follow_up_handling": {{"evidence": "...", "next_action": "..."}}
+    "specific_support": {{"evidence": "...", "next_action": "..."}}
   }}
 }}
 
@@ -2989,25 +2984,7 @@ def p3_discussion_score_request(
 
 def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_id: str) -> str:
     """Generate Band 7 model answer using the configured speaking AI route."""
-    part_constraints = ""
-    if part == "p1":
-        part_constraints = (
-            "This is IELTS Speaking Part 1. Write a short natural answer, normally 1-3 sentences, maximum 3 sentences. "
-            "Do not turn it into a long Part 2-style speech. One concise Markdown paragraph is preferred."
-        )
-    elif part == "p2":
-        part_constraints = (
-            "This is IELTS Speaking Part 2. Write a natural long-turn answer in Markdown paragraphs. "
-            "Cover the cue-card points without copying the bullet list."
-        )
-    elif part == "p3":
-        part_constraints = (
-            "This is IELTS Speaking Part 3. Write a developed discussion answer, about 4-6 sentences, "
-            "with a clear position, reasoning, one concrete example or contrast, and a wider social implication. "
-            "Do not make it a Part 2 personal story."
-        )
-    else:
-        part_constraints = "Write an answer appropriate to the IELTS Speaking part shown by the questions."
+    part_constraints = model_answer_constraints(part)
 
     prompt = (
         f"Write a natural IELTS Speaking Band 7 spoken version. Preserve the candidate's core ideas, "
@@ -3173,6 +3150,8 @@ If requires_ai_coaching is true, write Chinese coaching based only on display_tr
 If requires_ai_coaching is false, set ai_coaching to an empty string.
 In band7_version, use Markdown bold on 2-5 reusable upgraded phrases, not whole sentences.
 The Band {target} answer should sound like relaxed natural spoken English that a real fluent candidate would say to an examiner. If the learner's answer is too thin, preserve the core idea but add a believable reason, example, or detail so the model answer is useful to imitate aloud.
+Part-specific Band answer constraints:
+{model_answer_constraints(part)}
 The coaching format is up to you, but when coaching is required it must include a final section named "语法错误纠正：".
 Do not use fixed labels or templates. Use the candidate's real meaning and do not invent facts.
 This is spoken-English coaching, not writing correction: do not comment on capitalization, punctuation, spelling, line breaks, ASR noise, or display formatting. Bad example: if display_transcript says "at university", do not say the raw phrase "at University" should not be capitalized.
@@ -3307,15 +3286,34 @@ def turn_feedback_batch_with_codex(
     if not items:
         return {}
 
+    required_turn_ids = [item["turn_id"] for item in items]
     parts = sorted({item["part"] for item in items})
     coaching_constraints = "\n\n".join(
         f"For {part.upper()} coaching:\n{coaching_prompt_constraints(part)}"
         for part in parts
     )
+    model_answer_constraints_by_part = "\n\n".join(
+        f"For {part.upper()} model answers:\n{model_answer_constraints(part)}"
+        for part in parts
+    )
+    large_batch_output_budget = ""
+    if len(items) >= 8:
+        large_batch_output_budget = """
+Large-batch output budget (mandatory):
+- Keep every item compact so the complete JSON closes within the provider output limit.
+- For Part 1, band7_version must be one or two natural spoken sentences, at most 55 English words.
+- For Part 2, keep the Band 7 version focused on the required ideas; do not add optional elaboration.
+- For ai_coaching, write at most two short Chinese bullet lines, together at most 180 Chinese characters. Give one specific issue and one next action only.
+- Do not add headings, a grammar-correction section, a strengths section, a restatement of the answer, or repeated explanations. The server adds the required grammar-correction line after parsing.
+"""
     prompt = f"""Return JSON only. The top-level object must contain key turns.
 Do not repeat the input JSON. Do not include Markdown outside string values, explanation, or code fences.
 turns must be an array with one item for every input turn.
 Each item must contain string keys turn_id, display_transcript, display_transcript_markdown, band7_version, and ai_coaching.
+
+Required turn IDs in exact order: {json.dumps(required_turn_ids, ensure_ascii=False)}
+The turns array must contain exactly {len(required_turn_ids)} objects. Include every required turn_id exactly once and in that order.
+Before sending the JSON, silently verify the turns count and every required turn_id. Never omit a later input turn.
 
 Task:
 - For each turn, first produce display_transcript and display_transcript_markdown: correct confident ASR mis-recognitions while preserving the learner's actual wording and errors.
@@ -3328,8 +3326,11 @@ Task:
 prepared_corpus usage:
 - Some P2 turns include prepared_corpus from the learner's P2 串题素材库 only when the learner explicitly linked a material during preparation.
 - P1 语料库 content is not passed into this prompt.
-- When prepared_corpus is present and relevant to the P2 cue card, build the Band 7 version on top of the prepared material: reuse it as much as possible with minimal changes to its storyline, ideas, and reusable chunks, then combine it with what the candidate actually said this time so the answer still directly fits this exact cue card.
-- Do not throw the material away and write a fresh unrelated answer; do not invent facts beyond the prepared material plus the candidate_transcript.
+- When prepared_corpus is present and relevant, treat it as the primary scaffold for band7_version, not merely as background inspiration. Keep its storyline, order of ideas, paragraph progression, and structure wherever they can answer this cue card.
+- Reuse its original wording, collocations, sentence frames, and other reusable chunks as much as naturally possible. Make only the minimum changes needed for grammar, natural speech, cue-card fit, and the Part 2 time limit. Combine it with useful details from display_transcript instead of replacing it with a newly invented answer.
+- Why: this is a rehearsal-and-reuse task, not a creative-writing exercise. The learner deliberately linked and rehearsed this material to build one stable story and one stable set of language chunks that work across related P2 topics. Repeating the same structure and wording lowers retrieval load during the test, makes those expressions more automatic, and improves fluency.
+- Every unnecessary paraphrase creates multiple competing versions for the learner to remember under time pressure. That makes retrieval slower and speech less fluent. Therefore, when wording from prepared_corpus is already correct, natural, and relevant, do not replace it merely to show variety or more sophisticated vocabulary. Change it only when there is a real language problem or this cue card requires adaptation.
+- The exact cue card and truthful supplied details still come first. Skip or adapt only the parts that genuinely do not fit; do not force irrelevant material into the answer and do not invent facts beyond prepared_corpus plus candidate_transcript.
 - When prepared_corpus is present, the coaching should also help the learner reuse it as 串题素材 — for example how to keep most of it and stretch the same material onto this cue card and nearby P2 topics. Decide the angle, wording, and depth yourself; do not follow a fixed checklist, fixed labels, or a template.
 
 display_transcript constraints:
@@ -3347,9 +3348,9 @@ Use display_transcript as the source of truth:
 - Bad example: if display_transcript says "at university", do not say the raw phrase "at University" should not be capitalized.
 
 Band 7 version constraints:
+{model_answer_constraints_by_part}
 - For Part 1, write only 1-3 natural spoken sentences.
-- For Part 2, write a natural long-turn answer in Markdown paragraphs and cover the cue-card points.
-- For Part 3, write a developed discussion answer with a clear position, reasoning, one concrete example or contrast, and a wider social implication. Do not make it a Part 2 personal story.
+- For Part 2, write a natural long-turn answer in Markdown paragraphs, cover the cue-card points, and aim for 180-230 English words — roughly 1.5-2 minutes at a natural speaking pace. Keep it spoken and personal rather than turning it into a written essay.
 - If candidate_transcript is empty, keep display_transcript and display_transcript_markdown empty, but still write a direct Band {target} spoken version that answers the examiner question from the question alone; ai_coaching must remain an empty string.
 - Use Markdown bold inside band7_version to mark the phrases the learner should notice and reuse.
 - Bold 2-5 useful upgraded chunks per answer, such as natural collocations, idiomatic spoken links, or topic-specific phrases.
@@ -3362,6 +3363,7 @@ Band 7 version constraints:
 
 Coaching constraints:
 {coaching_constraints}
+{large_batch_output_budget}
 - Do not explain how the Band 7 version was rewritten.
 - Do not create a long line-by-line correction list outside the grammar/expression correction section.
 
@@ -3418,7 +3420,15 @@ Input turns:
                 max_tokens=SPEAKING_TURN_FEEDBACK_HTTP_MAX_TOKENS,
                 temperature=0.2,
                 timeout_seconds=SPEAKING_TURN_FEEDBACK_HTTP_TIMEOUT,
-                stream=True,
+                # Report generation is a worker-side batch; no browser consumes
+                # token deltas. A normal JSON response keeps Sonnet as one request
+                # while avoiding relays that finish content but leave SSE open.
+                stream=False,
+                # OpenAI-compatible HTTP models otherwise occasionally return
+                # explanatory prose or a truncated non-object response. The
+                # prompt still owns the report schema; this only guarantees the
+                # outer assistant message is a JSON object.
+                response_format={"type": "json_object"},
             )
             usage = getattr(result, "usage", None)
             provider_backend = "http_api"
@@ -3436,11 +3446,15 @@ Input turns:
     if not isinstance(raw_turns, list):
         raise RuntimeError(f"codex batch turn feedback missing turns for {call_id}")
 
+    returned_turn_ids: set[str] = set()
+    unusable_turn_ids: set[str] = set()
     by_id: dict[str, dict[str, str]] = {}
     for item in raw_turns:
         if not isinstance(item, dict):
             continue
         turn_id = clean_report_text(str(item.get("turn_id") or ""))
+        if turn_id in required_turn_ids:
+            returned_turn_ids.add(turn_id)
         display_transcript = clean_report_text(str(item.get("display_transcript") or ""))
         source_item = next((source for source in items if source["turn_id"] == turn_id), {})
         # Empty answers must stay empty: never let the model invent a transcript
@@ -3458,6 +3472,8 @@ Input turns:
         coaching = clean_coaching_markdown_text(str(item.get("ai_coaching") or ""))
         requires_ai_coaching = source_item.get("requires_ai_coaching") != "no"
         if not turn_id or not clean_report_text(band7):
+            if turn_id in required_turn_ids:
+                unusable_turn_ids.add(turn_id)
             continue
         if requires_ai_coaching:
             coaching = ensure_grammar_correction_bullet(
@@ -3481,7 +3497,16 @@ Input turns:
     if len(by_id) != len(items):
         required_missing = [item["turn_id"] for item in items if item["turn_id"] not in by_id]
         if required_missing:
-            raise RuntimeError(f"codex batch turn feedback missing usable output for turns: {', '.join(required_missing)}")
+            absent = [turn_id for turn_id in required_missing if turn_id not in returned_turn_ids]
+            unusable = [turn_id for turn_id in required_missing if turn_id in unusable_turn_ids]
+            details: list[str] = []
+            if absent:
+                details.append(f"missing turn IDs: {', '.join(absent)}")
+            if unusable:
+                details.append(f"unusable turn IDs: {', '.join(unusable)}")
+            if not details:
+                details.append(f"invalid turn IDs: {', '.join(required_missing)}")
+            raise RuntimeError(f"speaking turn feedback incomplete ({'; '.join(details)})")
     return by_id
 
 
@@ -3657,7 +3682,8 @@ def generate_turn_feedback_for_report(
     scoring_turns: list[SpeakingTurn],
     learning_profile: dict[str, Any],
     call_id: str,
-) -> None:
+    ai_source: str = "",
+) -> dict[str, int]:
     """Generate per-turn Band 7 answers and coaching before publishing report payload."""
     pending_turns = [
         turn
@@ -3666,10 +3692,15 @@ def generate_turn_feedback_for_report(
         and not _turn_feedback_ready(turn)
     ]
     if not pending_turns:
-        return
+        return {}
 
-    profile_obj = getattr(attempt.user, "profile", None)
-    ai_source = str(getattr(profile_obj, "report_ai_source", "") or "").strip() if profile_obj is not None else ""
+    # A queued report freezes its provider when the task is created. Respect that
+    # source for the per-turn pass as well as the later overall-score pass; reading
+    # the profile here would make one report charge and fail under two models.
+    ai_source = str(ai_source or "").strip()
+    if not ai_source:
+        profile_obj = getattr(attempt.user, "profile", None)
+        ai_source = str(getattr(profile_obj, "report_ai_source", "") or "").strip() if profile_obj is not None else ""
     try:
         prepared_corpus_by_turn = prepared_corpus_for_turns(attempt.user, pending_turns)
         generated_by_turn = turn_feedback_batch_with_codex(
@@ -3689,8 +3720,14 @@ def generate_turn_feedback_for_report(
         _mark_turn_feedback_failed(pending_turns, exc)
         raise
 
+    usage_records = []
+    seen_usage_objects = set()
     for turn in pending_turns:
         generated = generated_by_turn.get(turn.turn_id) or {}
+        generated_usage = generated.get("usage")
+        if isinstance(generated_usage, dict) and id(generated_usage) not in seen_usage_objects:
+            usage_records.append(generated_usage)
+            seen_usage_objects.add(id(generated_usage))
         feedback = build_turn_feedback(
             turn,
             attempt,
@@ -3710,6 +3747,16 @@ def generate_turn_feedback_for_report(
                 metadata["feedback_generation_model"] = generated["model"]
         turn.metadata = metadata
         turn.save(update_fields=["metadata", "updated_at"])
+    return combine_usage_records(*usage_records)
+
+
+def _persist_attempt_report_billing_usage(attempt: SpeakingAttempt, usage: dict[str, Any] | None) -> dict[str, int]:
+    combined = combine_usage_records(usage)
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    if combined != metadata.get("report_billing_usage"):
+        attempt.metadata = {**metadata, "report_billing_usage": combined}
+        attempt.save(update_fields=["metadata", "updated_at"])
+    return combined
 
 
 # _training_relevance now lives in scoring_services.py (imported above).
@@ -3741,6 +3788,15 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     call_id = f"score_attempt_{attempt_id}"
     part = attempt.part or attempt.mode or ""
 
+    # Resolve once, before any provider call. The same frozen task selection must
+    # govern the per-turn feedback and the overall report even if the profile has
+    # changed while the task was waiting in the queue.
+    try:
+        profile_source = (getattr(user, "profile", None) and user.profile.report_ai_source) or "gpt"
+    except Exception:
+        profile_source = "gpt"
+    _ai_source = str((payload or {}).get("provider") or (payload or {}).get("ai_source") or profile_source or "gpt").strip() or "gpt"
+
     mark_missing_turn_feedback_pending(turns)
     attempt.refresh_from_db()
     turns = list(attempt.turns.all().order_by("sequence"))
@@ -3755,8 +3811,15 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     # learner's grammar (e.g. "where I was a child" when they clearly said "when"). Per
     # the rule "if the first pass fails, don't run the second", abort the whole report so
     # the user retries cleanly instead of getting a misleading half-report.
+    existing_metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    billing_usage = combine_usage_records(existing_metadata.get("report_billing_usage"))
     try:
-        generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id)
+        turn_billing_usage = generate_turn_feedback_for_report(attempt, scoring_turns, learning_profile, call_id, ai_source=_ai_source)
+        if turn_billing_usage:
+            billing_usage = _persist_attempt_report_billing_usage(
+                attempt,
+                combine_usage_records(billing_usage, turn_billing_usage),
+            )
     except ClaudeCliQuotaError as exc:
         raise SpeakingError("ai_quota_exhausted") from exc
     except Exception as exc:
@@ -3776,13 +3839,6 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
         for index, turn in enumerate(answered_turns)
     )
 
-    # Resolve per-user AI source preference
-    try:
-        profile_source = (getattr(user, "profile", None) and user.profile.report_ai_source) or "gpt"
-    except Exception:
-        profile_source = "gpt"
-    _ai_source = str((payload or {}).get("provider") or (payload or {}).get("ai_source") or profile_source or "gpt").strip() or "gpt"
-
     p3_discussion_base = build_p3_discussion_skills(attempt) if part == "p3" else None
     p3_discussion_request = p3_discussion_score_request(attempt, p3_discussion_base, learning_profile)
     try:
@@ -3795,6 +3851,13 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
             p3_discussion_request=p3_discussion_request,
         )
         score = calibrate_realistic_score(score, questions_text, transcript, part)
+        billing_usage = _persist_attempt_report_billing_usage(
+            attempt,
+            combine_usage_records(
+                billing_usage,
+                score.get("billing_usage") if isinstance(score.get("billing_usage"), dict) else None,
+            ),
+        )
     except ClaudeCliQuotaError as exc:
         raise SpeakingError("ai_quota_exhausted") from exc
     except Exception as exc:
@@ -3856,6 +3919,7 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
             "overall_review": overall_review,
             "personalized_coaching": personalized_coaching,
             "p3_discussion_skills": p3_discussion_skills,
+            "billing_usage": billing_usage,
         }
     )
 
@@ -3973,32 +4037,36 @@ def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] |
     profile_ai_source = str(getattr(profile_obj, "report_ai_source", "") or "").strip() if profile_obj is not None else ""
     requested_provider = str(payload.get("provider") or payload.get("ai_source") or profile_ai_source or "gpt").strip()
     requested_model = str(payload.get("model") or "").strip()
-    task, created = create_ai_task(
-        user=user,
-        task_type="speaking_report",
-        idempotency_key=idempotency_key,
-        provider="codex",
-        model="",
-        related_type="speaking_attempt",
-        related_id=attempt.attempt_id,
-        call_id=f"speaking_report_{attempt.attempt_id}",
-        prompt_version=str(payload.get("prompt_version") or "speaking_report_v1"),
-        request_payload={
-            "attempt_id": attempt.attempt_id,
-            "mode": attempt.mode,
-            "part": attempt.part,
-            "title": attempt.title,
-            "transcript_hash": transcript_hash,
-            "requested_provider": requested_provider,
-            "requested_model": requested_model,
-        },
-        metadata={
-            "source": "speaking_report_task",
-            "requested_provider": requested_provider,
-            "requested_model": requested_model,
-        },
-        max_attempts=int(payload.get("max_attempts") or 1),
-    )
+    try:
+        task, created = create_billable_ai_task(
+            user=user,
+            task_type="speaking_report",
+            reserved_u=0,
+            idempotency_key=idempotency_key,
+            provider="codex",
+            model="",
+            related_type="speaking_attempt",
+            related_id=attempt.attempt_id,
+            call_id=f"speaking_report_{attempt.attempt_id}",
+            prompt_version=str(payload.get("prompt_version") or "speaking_report_v1"),
+            request_payload={
+                "attempt_id": attempt.attempt_id,
+                "mode": attempt.mode,
+                "part": attempt.part,
+                "title": attempt.title,
+                "transcript_hash": transcript_hash,
+                "requested_provider": requested_provider,
+                "requested_model": requested_model,
+            },
+            metadata={
+                "source": "speaking_report_task",
+                "requested_provider": requested_provider,
+                "requested_model": requested_model,
+            },
+            max_attempts=int(payload.get("max_attempts") or 1),
+        )
+    except AIOrchestrationError as exc:
+        raise SpeakingError(str(exc)) from exc
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
     metadata.update(
         {

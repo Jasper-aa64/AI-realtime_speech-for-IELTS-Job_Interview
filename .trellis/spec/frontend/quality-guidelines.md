@@ -189,6 +189,10 @@ await api("/api/score", {
   `/api/language-takeaways*` and `/api/writing-takeaways*` detail endpoints for
   edit/delete actions. Do not let shared card-menu UI route writing-scoped rows
   through the ordinary Takeaway endpoint, or vice versa.
+- Guest Takeaway and writing-takeaway review is a presentation-only demo. A/D
+  feedback may update page memory and play the existing animation, but it must
+  not read or write browser storage, call review-state APIs, show sync errors,
+  or affect the authenticated account's SRS state.
 - Sketchbook / pencil-draft themed UI must stay academic and restrained. Use
   warm paper surfaces, low-saturation graphite/brown/teal lines, subtle dashed
   connectors, serif-led typography, and light hand-drawn irregularity. Do not
@@ -224,6 +228,22 @@ await api("/api/score", {
   microphone tracks, then wait a short drain interval before calling
   `Howl.play()`. This avoids Bluetooth headsets being held in hands-free /
   microphone mode while the examiner audio is playing.
+- Cached examiner players have two distinct states: an idle preloaded clip and
+  an active clip. Resetting an idle preloaded clip may seek it to zero, but must
+  not call `Howl.stop()` because a delayed `onstop` can resolve the next
+  playback Promise as interrupted. Any non-ended playback result that still
+  belongs to the active turn must immediately enter the normal preparation
+  countdown; it must never remain in `examiner_loading` waiting only for an
+  outer timeout guard. Keep `tests/speaking-examiner-audio-playback-watchdog.test.js`
+  covering both the idle-reset and interrupted-playback paths.
+- A shared or preloaded Howler instance must accept `onplay`, `onplayerror`,
+  `onend`, and `onstop` only when the callback sound id matches the id returned
+  by the current `play()` call. A delayed callback from an older sound id must
+  never advance or finish the current turn.
+- Entering `Preparing` or `Recording` is a hard examiner-audio boundary. Stop
+  every cached examiner player that is still playing or has a pending `play()`
+  promise, not only the player held by the active-player pointer, before
+  starting the countdown or microphone.
 - Speaking capture should avoid Bluetooth headset microphones when another
   usable input device is available. Enumerate `audioinput` devices, prefer
   built-in/internal/non-Bluetooth microphones for `getUserMedia`, and expose the

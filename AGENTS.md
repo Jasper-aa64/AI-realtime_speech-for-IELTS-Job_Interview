@@ -65,3 +65,14 @@ the LocalSystem `ielts-worker` service stays disabled). Use
 URL, because `.runlogs\cloudflared.log` may contain stale 530/1033 URLs after
 quick-tunnel restarts (a stale URL is the usual cause of a 1033, not a real
 outage).
+
+Public URL preservation rule, updated 2026-07-08: routine code edits must not
+churn the trycloudflare URL. Frontend/static changes require only a cache-buster
+and browser reload; do not restart `ielts-django` or `ielts-cloudflared`.
+Backend edits may require Django reloads, but never restart `ielts-cloudflared`
+just to apply code. Avoid `Restart-Service ielts-django -Force`: because
+`ielts-cloudflared` depends on `ielts-django`, forceful service restarts can
+bounce the tunnel and produce a new public URL. Only restart the tunnel when the
+local site is healthy and the tunnel itself is proven dead/stale, or when the
+user explicitly asks. A URL change is normal after machine/network/tunnel
+restart; it is not acceptable as a side effect of ordinary fixes.

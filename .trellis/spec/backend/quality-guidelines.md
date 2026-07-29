@@ -981,3 +981,89 @@ task = fail_billable_ai_task(
 - Does stale recovery preserve reservations for retryable requeues and release only terminal failures?
 - Are task reads scoped by authenticated user?
 - Are tests asserting wallet `balance_u`, `reserved_u`, reservation status, and task status together?
+
+---
+
+## Scenario: Frozen Speaking Report Provider and Terminal HTTP Streams
+
+### 1. Scope / Trigger
+
+- Trigger: a durable `speaking_report` task invokes more than one provider call
+  (per-turn feedback followed by the overall score) or receives a streamed
+  OpenAI-compatible response.
+- Applies to `create_speaking_report_task`, `CodexSpeakingReportAdapter`,
+  `score_attempt_sync`, `generate_turn_feedback_for_report`, and
+  `HttpApiProvider`.
+
+### 2. Signatures
+
+- `AITask.request_payload.requested_provider: str` is the durable model source
+  selected at task creation.
+- `score_attempt_sync(user, attempt_id, payload)` resolves `payload.ai_source`
+  once and passes it to every report-provider subcall.
+- `generate_turn_feedback_for_report(..., ai_source: str = "")` must use its
+  explicit source before consulting a profile preference.
+- Worker-side speaking report HTTP calls, including per-turn feedback and the
+  overall score, must use `stream=False`; their consumers need complete JSON,
+  not incremental browser-visible tokens.
+- `HttpApiProvider._iter_stream_payloads(response)` treats
+  `type=response.completed` and `type=message_stop` as terminal stream events.
+
+### 3. Contracts
+
+- The source frozen in the task is authoritative for the worker run. A changed
+  profile must not make per-turn feedback use a different model from the
+  overall score.
+- A provider must never silently fall back to another model after a transport,
+  JSON, quota, or HTTP failure; the same attempt remains retryable through a
+  new explicit user action.
+- Once a terminal SSE event is received, return the assembled text and usage
+  immediately. Do not wait for the relay to close its socket or send `[DONE]`.
+- A single report request must state its required turn IDs and require each
+  exactly once, so a provider omission is rejected with a precise error rather
+  than being mistaken for a missing recording.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Task source differs from current profile | Both per-turn and overall calls use the task source |
+| Terminal SSE followed by a blocking socket | Preserve text/usage; do not raise a read-timeout failure |
+| Stream has no usable text | Raise the existing explicit empty-output error |
+| Provider returns malformed report JSON | Mark the report task failed; retain the attempt for manual retry |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a queued `gpt-5.6-luna` task still uses Luna after the user changes the
+  profile default to another model.
+- Base: a normal `[DONE]` stream behaves unchanged.
+- Bad: per-turn feedback reads `user.profile.report_ai_source` unconditionally,
+  or a completed relay response is read until it times out and is discarded.
+
+### 6. Tests Required
+
+- Adapter test: frozen `requested_provider` becomes `score_attempt_sync`'s
+  `ai_source`.
+- Per-turn test: an explicit `ai_source` overrides a conflicting profile model.
+- HTTP provider test: a `response.completed` event followed by `TimeoutError`
+  returns the collected response rather than timing out.
+- Routing tests: each selectable speaking source resolves to its configured
+  HTTP model without a Codex/default fallback.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+ai_source = attempt.user.profile.report_ai_source
+for raw_line in response:  # waits forever when the relay omits [DONE]
+    ...
+```
+
+#### Correct
+
+```python
+generate_turn_feedback_for_report(..., ai_source=frozen_task_source)
+if event_type in {"response.completed", "message_stop"}:
+    return
+```

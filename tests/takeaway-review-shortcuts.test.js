@@ -25,8 +25,20 @@ assert.doesNotMatch(
 
 assert.match(
   source,
-  /takeawayCardNeedsScroll\(kind,\s*target\)[\s\S]*?scrollTakeawayCardIntoView\(kind,\s*target\)[\s\S]*?return;/,
-  "Pressing W when the located card is off-screen should only jump to it; the next press opens/reads it."
+  /scrollTakeawayCardIntoView\(kind,\s*target,\s*\{\s*forceCenter:\s*true\s*\}\)/,
+  "Pressing W should always request a centered scroll for the located card, clamped naturally near the bottom."
+);
+
+assert.doesNotMatch(
+  source,
+  /if\s*\(takeawayCardNeedsScroll\(kind,\s*target\)\)\s*\{[\s\S]{0,140}return;\s*\}/,
+  "Pressing W on the already-located card must not stop at scrolling; the second press should reveal/read it."
+);
+
+assert.match(
+  source,
+  /function scrollTakeawayCardIntoView\(kind,\s*entryId,\s*options\s*=\s*\{\}\)/,
+  "Card centering should accept options so W can force-center while other call sites keep existing behavior."
 );
 
 assert.match(

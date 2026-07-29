@@ -9940,6 +9940,7 @@ body.is-dragging-p2-dialog * {
 .p2-brainstorm-list {
   min-height: 0;
   overflow: auto;
+  overflow-anchor: none;
   display: grid;
   align-content: start;
   gap: 12px;
@@ -10081,32 +10082,34 @@ body.is-dragging-p2-dialog * {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Filter reveal / hide: rows fade-slide in when a filter brings them back and
-   fade-slide out before collapsing, instead of snapping on/off. */
-.p2-brainstorm-row.is-filtering-in {
-  animation: p2BrainstormFilterIn 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.p2-brainstorm-row.is-filtering-out {
-  animation: p2BrainstormFilterOut 150ms ease both;
+/* Filter changes move as one stable result set. The row grid is only swapped
+   while fully faded, so no intermediate reflow is visible. */
+.p2-brainstorm-list.is-filter-switching-out > .p2-brainstorm-row:not(.is-filtered-out) {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 140ms ease-out, transform 140ms ease-out;
   pointer-events: none;
 }
 
-@keyframes p2BrainstormFilterIn {
-  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+.p2-brainstorm-list.is-filter-switching-in > .p2-brainstorm-row:not(.is-filtered-out) {
+  animation: p2BrainstormFilterIn 230ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes p2BrainstormFilterOut {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(-6px) scale(0.985); }
+@keyframes p2BrainstormFilterIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .p2-brainstorm-cue-detail.is-detail-in,
-  .p2-brainstorm-row.is-filtering-in,
-  .p2-brainstorm-row.is-filtering-out {
+  .p2-brainstorm-list.is-filter-switching-in > .p2-brainstorm-row:not(.is-filtered-out) {
     animation: none;
+  }
+
+  .p2-brainstorm-list.is-filter-switching-out > .p2-brainstorm-row:not(.is-filtered-out) {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
 
@@ -10223,6 +10226,7 @@ body.is-dragging-p2-dialog * {
 }
 
 .p2-brainstorm-filter-count {
+  flex: 0 0 168px;
   margin-left: auto;      /* 推到同行最右 */
   padding: 3px 10px;
   border-radius: 999px;
@@ -10232,6 +10236,7 @@ body.is-dragging-p2-dialog * {
   font-weight: 760;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .p2-brainstorm-filter-chip {
@@ -11718,24 +11723,37 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
   justify-self: end;
 }
 
-.writing-score-complete-card {
-  width: min(460px, 100%);
+.modal-card.writing-score-complete-card {
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(620px, calc(100vh - 32px));
+  overflow: hidden;
+  border-radius: 16px;
 }
 
-.speaking-score-complete-card {
-  width: min(560px, 100%);
+.score-complete-card .modal-head {
+  align-items: center;
+  padding: 18px 20px 15px;
 }
 
-.speaking-score-complete-main {
-  grid-template-columns: 132px minmax(0, 1fr);
+.score-complete-card .modal-head h2 {
+  margin-top: 3px;
+  font-size: 22px;
+  line-height: 1.2;
 }
 
-.speaking-score-complete-criteria {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.score-complete-card .modal-head .section-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
 }
 
-.speaking-score-complete-criteria .score-cell {
-  min-height: 88px;
+.score-complete-card .modal-head .icon-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  box-sizing: border-box;
 }
 
 .writing-score-complete-body {
@@ -11787,6 +11805,10 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
   align-self: stretch;
 }
 
+.speaking-score-complete-criteria {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .writing-score-complete-criteria.hidden {
   display: none;
 }
@@ -11828,6 +11850,15 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
   line-height: 1.45;
 }
 
+.score-complete-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
 .score-complete-actions {
   display: flex;
   justify-content: flex-end;
@@ -11837,6 +11868,30 @@ body.theme-dark .writing-highlight-menu.is-delete button:hover {
 .writing-score-complete-body button {
   min-width: 142px;
   min-height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.modal:not(.hidden) .score-complete-card {
+  animation: score-complete-enter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes score-complete-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal:not(.hidden) .score-complete-card {
+    animation: none;
+  }
 }
 
 .writing-report-prompt-card {
@@ -13984,7 +14039,8 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
 /* Match the bare-text 未评分 size; the selector is scoped under the strong so it
    out-specifies .writing-saved-report-head > strong span (the small uppercase
    label style) which would otherwise shrink it to 10px. */
-.writing-saved-report-head > strong span.speaking-report-regen-chip {
+.writing-saved-report-head > strong span.speaking-report-regen-chip,
+.writing-saved-report-head > strong span.speaking-report-status-chip {
   font-size: 18px;
   font-weight: 850;
   letter-spacing: normal;
@@ -14235,8 +14291,8 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
 
 .report-rail-loading-card {
   min-width: 220px;
-  height: 100%;
-  min-height: 86px;
+  height: 118px;
+  min-height: 118px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -18003,7 +18059,7 @@ body.font-popular .record-control.recording {
 
 .p3-skills-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 16px;
 }
@@ -22778,17 +22834,6 @@ body.theme-dark.font-academic .writing-score-complete-body button {
   color: #0d1012;
 }
 
-body.theme-dark .writing-score-complete-body > strong {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--dark-secondary) 66%, var(--dark-surface)), color-mix(in srgb, var(--dark-primary-strong) 44%, var(--dark-surface)));
-  border: 1px solid var(--dark-primary-border);
-  color: #ffffff;
-}
-
-body.theme-dark.font-academic .writing-score-complete-body > strong {
-  background: linear-gradient(180deg, rgba(157, 183, 173, 0.82), rgba(83, 101, 96, 0.92));
-  color: #0d1012;
-}
-
 body.theme-dark .score-complete-band {
   background: linear-gradient(180deg, color-mix(in srgb, var(--dark-secondary) 44%, var(--dark-card)), color-mix(in srgb, var(--dark-primary) 22%, var(--dark-surface)));
   border-color: var(--dark-primary-border);
@@ -22823,6 +22868,10 @@ body.theme-dark .writing-score-complete-criteria .score-cell span {
 
 body.theme-dark .writing-score-complete-criteria .score-cell strong {
   color: var(--ink);
+}
+
+body.theme-dark .score-complete-footer {
+  border-top-color: var(--dark-border);
 }
 
 body.theme-dark .language-takeaway-trigger {
@@ -24505,6 +24554,10 @@ body.theme-dark.font-academic .history-item:hover {
 }
 
 @media (max-width: 640px) {
+  .p3-skills-grid {
+    grid-template-columns: 1fr;
+  }
+
   .practice-header-progress {
     width: 68px;
     height: 34px;
@@ -24769,7 +24822,13 @@ body.theme-dark.font-academic .history-item:hover {
   .writing-score-complete-criteria {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .speaking-score-complete-criteria {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .score-complete-main {
+    grid-template-columns: 1fr;
+  }
+  .score-complete-footer {
     grid-template-columns: 1fr;
   }
   .score-complete-band,
@@ -30740,8 +30799,12 @@ body.theme-dark .p1-corpus-dialog-card.spelling-add-card {
   max-height: min(620px, calc(100vh - 32px));
   overflow: auto;
 }
-.spelling-add-head {
+.language-takeaway-popup.spelling-add-card .spelling-add-head {
   cursor: default !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .spelling-add-head-actions {
   display: inline-flex;
@@ -30766,8 +30829,23 @@ body.theme-dark .p1-corpus-dialog-card.spelling-add-card {
 .spelling-add-save-btn {
   width: auto !important;
   min-width: 64px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 14px !important;
+  border-radius: 8px !important;
   position: relative;
+  font-size: 14px !important;
+  font-weight: 850 !important;
+  white-space: nowrap;
+}
+.language-takeaway-popup.spelling-add-card .spelling-add-tts-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  flex: 0 0 32px;
 }
 .spelling-add-save-btn.is-busy::before {
   content: "";
@@ -36643,7 +36721,7 @@ body:has(#writingReportsPanel:not(.hidden)) .ob-launch {
     var(--sd-accent)) !important;
 }
 
-/* Primary action ("下一题" / "再来一轮") — a top-lit accent gradient for a
+/* Primary action ("下一题") — a top-lit accent gradient for a
    more finished fill; existing white label is kept. */
 .spelling-drill-panel .nr-btn-primary {
   background: linear-gradient(180deg,
@@ -37179,7 +37257,7 @@ body.view-writingTakeawayBook .language-takeaway-card-wrap {
 
 body.view-takeawayBook .language-takeaway-card-wrap.is-review-current,
 body.view-writingTakeawayBook .language-takeaway-card-wrap.is-review-current {
-  z-index: 9999 !important;
+  z-index: 3 !important;
   overflow: visible !important;
 }
 
@@ -37198,29 +37276,9 @@ body.view-writingTakeawayBook .language-takeaway-card-wrap > .takeaway-review-ma
   transform: translateX(-1px) !important;
   pointer-events: none !important;
   overflow: visible !important;
-  z-index: 10000 !important;
-  contain: layout style paint size !important;
+  z-index: 4 !important;
   flex: 0 0 auto !important;
   grid-area: auto !important;
-}
-
-.takeaway-review-mascot.is-body-layer {
-  position: fixed !important;
-  display: block !important;
-  left: 0;
-  top: 0;
-  right: auto !important;
-  bottom: auto !important;
-  width: 42px !important;
-  height: 42px !important;
-  min-width: 42px !important;
-  min-height: 42px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  pointer-events: none !important;
-  overflow: visible !important;
-  z-index: 2147483000 !important;
-  contain: layout style paint size !important;
 }
 
 body.view-takeawayBook .language-takeaway-card-wrap > .takeaway-review-mascot .tk-brain-icon,
@@ -37228,11 +37286,6 @@ body.view-writingTakeawayBook .language-takeaway-card-wrap > .takeaway-review-ma
   width: 42px !important;
   height: 42px !important;
   transform-origin: 50% 50% !important;
-}
-
-body.view-takeawayBook .language-takeaway-card-wrap.is-review-current .language-takeaway-card,
-body.view-writingTakeawayBook .language-takeaway-card-wrap.is-review-current .language-takeaway-card {
-  padding-right: 58px !important;
 }
 
 /* P2/P1/P3 peek buttons and question progress: soften runtime appearance changes. */
@@ -39505,6 +39558,16 @@ body:not(.theme-dark) .p2-brainstorm-head-field .p2-pixel-flow-canvas {
     0 0 14px rgba(125, 211, 252, 0.18) !important;
 }
 
+body:not(.theme-dark) .p2-brainstorm-entry-card[data-category="brainstorm"] > header > .p2-topic-count {
+  color: #0f172a !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  border: 1px solid rgba(148, 163, 184, 0.38) !important;
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+  text-shadow: none !important;
+}
+
 .report-filter-compact {
   width: 62px !important;
   max-width: 62px !important;
@@ -39719,14 +39782,37 @@ body.theme-dark.font-popular .p3-start-button:not(:disabled) {
 }
 
 body.theme-dark.font-popular .nr-spinner span,
-body.theme-dark.font-popular .analyzing-dots span,
-body.theme-dark.font-popular .tk-brain-cloud-dots rect,
-body.theme-dark.font-popular .p2-brain-cloud-dots rect {
+body.theme-dark.font-popular .analyzing-dots span {
   color: #cfeeff !important;
   fill: #cfeeff !important;
   background: #cfeeff !important;
   opacity: 0.92 !important;
   filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.55));
+}
+
+/* Spelling add dialog color scope: only the small add-word popup, not the full spelling page. */
+body:not(.theme-dark) .spelling-add-dialog .language-takeaway-popup.spelling-add-card {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.16) !important;
+  color: #0f172a !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24) !important;
+  opacity: 1 !important;
+}
+
+body.theme-dark .spelling-add-dialog .language-takeaway-popup.spelling-add-card {
+  background: linear-gradient(180deg, #111a24 0%, #0b121b 100%) !important;
+  border-color: rgba(148, 163, 184, 0.30) !important;
+  color: #eef7ff !important;
+  box-shadow: 0 26px 76px rgba(0, 0, 0, 0.58) !important;
+  opacity: 1 !important;
+}
+
+body.theme-dark .spelling-add-dialog .spelling-add-word,
+body.theme-dark .spelling-add-dialog .spelling-add-gloss,
+body.theme-dark .spelling-add-dialog .spelling-add-gloss-preview {
+  background: #08111a !important;
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  color: #eef7ff !important;
 }
 
 .writing-fix-popover {
@@ -39922,6 +40008,69 @@ body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-e
   font-weight: 780 !important;
 }
 
+.spelling-add-dialog .spelling-add-save-btn {
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 13px !important;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  line-height: 1.1 !important;
+  font-weight: 780 !important;
+}
+
+body.theme-dark .spelling-add-dialog .spelling-add-save-btn {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dark-primary) 36%, var(--dark-surface-2)), color-mix(in srgb, var(--dark-primary-strong) 28%, var(--dark-surface))) !important;
+  border-color: color-mix(in srgb, var(--dark-primary-border) 82%, var(--dark-border)) !important;
+  color: var(--dark-primary-text) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 24px rgba(0, 0, 0, 0.22) !important;
+}
+
+body.theme-dark.font-academic .spelling-add-dialog .spelling-add-save-btn {
+  background:
+    linear-gradient(180deg, rgba(199, 184, 168, 0.34), rgba(148, 133, 116, 0.28)),
+    #2f2721 !important;
+  border-color: rgba(199, 184, 168, 0.50) !important;
+  color: #fff2e6 !important;
+}
+
+body.theme-dark.font-popular .spelling-add-dialog .spelling-add-save-btn {
+  background: linear-gradient(180deg, #235b86 0%, #184870 62%, #0f3e62 100%) !important;
+  border-color: rgba(93, 153, 197, 0.46) !important;
+  color: #f4faff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 14px 30px rgba(0, 0, 0, 0.28),
+    0 0 24px rgba(24, 72, 112, 0.20) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .spelling-add-dialog .spelling-add-save-btn {
+  background: linear-gradient(180deg, #1f4f47 0%, #173c37 62%, #102c2a 100%) !important;
+  border-color: rgba(111, 231, 189, 0.46) !important;
+  color: #f4fff9 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 14px 30px rgba(0, 0, 0, 0.24),
+    0 0 24px rgba(52, 211, 153, 0.18) !important;
+}
+
+body.theme-dark:not(.font-academic):not(.font-popular) .language-takeaway-action-buttons button:last-child {
+  background: linear-gradient(180deg, #1f4f47 0%, #173c37 62%, #102c2a 100%) !important;
+  border-color: rgba(111, 231, 189, 0.46) !important;
+  color: #f4fff9 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 14px 30px rgba(0, 0, 0, 0.24),
+    0 0 24px rgba(52, 211, 153, 0.18) !important;
+}
+
+.spelling-add-dialog .spelling-add-save-btn:not(:disabled):hover,
+.spelling-add-dialog .spelling-add-save-btn:not(:disabled):focus-visible {
+  transform: translateY(-1px);
+}
+
 /* P1/P2 corpus assistant icons: keep dark-theme 1/2 icons readable without
    touching the third theme's separate blue treatment. */
 body.theme-dark:not(.font-academic):not(.font-popular) .workspace.corpus-workspace .p1-corpus-head .corpus-agent-button svg,
@@ -39937,4 +40086,228 @@ body.theme-dark:not(.font-academic):not(.font-popular) .workspace.corpus-workspa
 body.theme-dark.font-academic .workspace.corpus-workspace .p1-corpus-head .corpus-agent-button svg *,
 body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head .corpus-agent-button svg * {
   stroke: currentColor !important;
+}
+
+/* Account profile settings: compact utility controls, with extra room for
+   provider names. Keep the fixed card height so switching settings never
+   shifts the account dashboard. */
+#accountProfilePanel .account-card-footer {
+  grid-template-columns: 112px 148px minmax(0, 1fr) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#accountProfilePanel .account-theme-toggle,
+#accountProfilePanel .account-language-row,
+#accountProfilePanel .account-ai-source-row {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  align-content: stretch !important;
+  justify-items: stretch !important;
+  justify-content: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#accountProfilePanel .account-theme-toggle span,
+#accountProfilePanel .account-language-label,
+#accountProfilePanel .account-ai-source-label {
+  align-self: flex-start !important;
+  justify-self: flex-start !important;
+  width: auto !important;
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+#accountProfilePanel .account-theme-toggle i {
+  grid-row: 2 !important;
+  place-self: center !important;
+}
+
+#accountProfilePanel .account-language-options,
+#accountProfilePanel .account-ai-source-select {
+  align-self: center !important;
+  justify-self: stretch !important;
+}
+
+#accountProfilePanel .account-language-options {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+#accountProfilePanel .account-language-options button {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  padding-inline: 8px !important;
+}
+
+#accountProfilePanel .account-ai-source-select {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  padding-right: 38px !important;
+  padding-left: 14px !important;
+  font-size: 13.5px !important;
+  text-overflow: clip !important;
+}
+
+@media (max-width: 860px) {
+  #accountProfilePanel .account-card-footer {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* P1 corpus AI export controls. Keep topic titles left-aligned and actions stable. */
+.p1-corpus-head {
+  position: relative;
+  overflow: visible;
+}
+
+.p1-topic-card header > .p1-topic-card-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.p1-topic-card header.p1-topic-export-header {
+  justify-content: space-between !important;
+}
+
+.p1-topic-card header.p1-topic-export-header > div:first-child {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.p1-topic-card header.p1-topic-export-header h3 {
+  text-align: left;
+}
+
+.p1-topic-card header.p1-topic-export-header > .p1-topic-card-actions {
+  position: static;
+  flex: 0 0 auto;
+}
+
+.p1-topic-card header.p1-topic-export-header > .p1-topic-card-actions .p1-topic-count {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+}
+
+.p1-topic-copy-button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--p1-corpus-accent) 30%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--p1-corpus-accent) 9%, var(--panel));
+  color: color-mix(in srgb, var(--p1-corpus-accent) 78%, var(--ink));
+  box-shadow: none;
+  transform: none;
+}
+
+.p1-topic-copy-button:hover {
+  border-color: color-mix(in srgb, var(--p1-corpus-accent) 52%, var(--line));
+  background: color-mix(in srgb, var(--p1-corpus-accent) 15%, var(--panel));
+  transform: none;
+}
+
+.p1-topic-copy-button svg,
+.p1-corpus-podcast-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.p1-corpus-podcast-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--p1-corpus-accent) 36%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--p1-corpus-accent) 12%, var(--panel));
+  color: color-mix(in srgb, var(--p1-corpus-accent) 82%, var(--ink));
+  box-shadow: none;
+  transform: none;
+}
+
+.p1-corpus-podcast-button:hover {
+  border-color: color-mix(in srgb, var(--p1-corpus-accent) 58%, var(--line));
+  background: color-mix(in srgb, var(--p1-corpus-accent) 18%, var(--panel));
+  transform: none;
+}
+
+.p1-corpus-copy-toast {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 40;
+  width: max-content;
+  min-width: 260px;
+  max-width: min(520px, calc(100vw - 48px));
+  box-sizing: border-box;
+  padding: 9px 14px;
+  border: 1.5px solid color-mix(in srgb, var(--p1-corpus-accent) 34%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 96%, var(--p1-corpus-accent));
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.p1-corpus-copy-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+.p1-corpus-copy-toast.is-error {
+  border-color: color-mix(in srgb, #dc2626 44%, var(--line));
+  color: color-mix(in srgb, #dc2626 72%, var(--ink));
+}
+
+body.theme-dark .p1-topic-copy-button,
+body.theme-dark .p1-corpus-podcast-button {
+  background: color-mix(in srgb, var(--p1-corpus-accent) 14%, #10161a);
+  color: color-mix(in srgb, var(--p1-corpus-accent) 62%, #ffffff);
+}
+
+body.theme-dark .p1-corpus-copy-toast {
+  background: color-mix(in srgb, #10161a 95%, var(--p1-corpus-accent));
+  color: #eef7f4;
 }

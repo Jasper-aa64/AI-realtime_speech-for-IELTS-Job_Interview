@@ -1079,7 +1079,7 @@ class AIWorkerCommandTests(TestCase):
             transcript_cleaned="I study software engineering.",
             metadata={"status": "completed"},
         )
-        task, _created = create_ai_task(
+        task, _created = create_billable_ai_task(
             user=user,
             task_type="speaking_report",
             idempotency_key="worker-speaking-report",
@@ -1090,11 +1090,14 @@ class AIWorkerCommandTests(TestCase):
         report_payload = {
             "id": attempt.attempt_id,
             "status": "scored",
+            "billing_usage": {"input_tokens": 1200, "cached_input_tokens": 200, "output_tokens": 300},
+            "report_generation_backend": "http_api",
             "ielts_score": {
                 "overall_band": 6.0,
                 "fluency_coherence": 6.0,
                 "lexical_resource": 6.0,
                 "grammatical_range": 6.0,
+                "model": "claude-sonnet-4-6",
             },
         }
         out = StringIO()
@@ -1107,6 +1110,12 @@ class AIWorkerCommandTests(TestCase):
         task.refresh_from_db()
         self.assertEqual(task.status, AITask.Status.SUCCEEDED)
         self.assertEqual(task.result_payload["attempt"], report_payload)
+        self.assertEqual(task.result_payload["billing"]["status"], "settled")
+        self.assertIsNotNone(task.usage_id)
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertLess(wallet.balance_u, DEFAULT_INITIAL_GRANT_U)
+        self.assertEqual(task.usage.provider, "http_api")
+        self.assertEqual(task.usage.model, "claude-sonnet-4-6")
 
     def test_run_ai_tasks_marks_speaking_attempt_failed_when_report_generation_fails(self):
         from apps.speaking.models import SpeakingAttempt, SpeakingTurn

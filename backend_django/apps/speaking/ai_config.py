@@ -8,6 +8,12 @@ import re
 from django.conf import settings
 
 SPEAKING_AI_DEFAULT_HTTP_MODEL = "gpt-5.4-mini"
+SPEAKING_AI_MODEL_BY_SOURCE = {
+    "gpt": SPEAKING_AI_DEFAULT_HTTP_MODEL,
+    "gpt-5.6-terra": "gpt-5.6-terra",
+    "gpt-5.6-luna": "gpt-5.6-luna",
+    "gpt-5.6-sol": "gpt-5.6-sol",
+}
 SPEAKING_AI_CALL_MODE_CHAIN = "chain"
 SPEAKING_AI_CALL_MODE_HTTP = "http"
 SPEAKING_AI_CALL_MODE_CODEX = "codex"
@@ -71,6 +77,11 @@ def speaking_ai_http_model(kind: str = "speaking") -> str:
         or _setting_or_env("SPEAKING_AI_MODEL")
         or _setting_or_env("AI_HTTP_PREFERRED_MODEL")
     ) or SPEAKING_AI_DEFAULT_HTTP_MODEL
+
+
+def speaking_ai_model_for_source(ai_source: str, kind: str = "speaking") -> str:
+    source = str(ai_source or "").strip().lower()
+    return SPEAKING_AI_MODEL_BY_SOURCE.get(source) or speaking_ai_http_model(kind)
 
 
 def _mode_allows_http(kind: str) -> bool:

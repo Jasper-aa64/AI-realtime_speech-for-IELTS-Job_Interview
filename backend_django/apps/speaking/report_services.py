@@ -221,17 +221,22 @@ _FAILED_REPORT_TASK_STATUSES = {
     AITask.Status.CANCELLED,
 }
 
+_ACTIVE_REPORT_TASK_STATUSES = {
+    AITask.Status.PENDING,
+    AITask.Status.RUNNING,
+}
+
 
 def report_generation_failed_by_metadata(attempt: SpeakingAttempt) -> bool:
     """Metadata-only failure check (no DB query) for cheap use in list views."""
     metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
-    return _attempt_has_saved_turn_data(attempt) and (
+    return (
         str(metadata.get("report_generation_status") or "") == "failed"
         or str(metadata.get("analysis_status") or "") == "failed"
     )
 
 
-def report_generation_failed(attempt: SpeakingAttempt) -> bool:
+def report_generation_failed(attempt: SpeakingAttempt, task: AITask | None = None) -> bool:
     """Whether report generation terminally failed and no valid report exists.
 
     A re-queued retry overwrites ``analysis_status`` with ``queued``/``running``,
@@ -241,7 +246,7 @@ def report_generation_failed(attempt: SpeakingAttempt) -> bool:
         return False
     if report_generation_failed_by_metadata(attempt):
         return True
-    task = latest_speaking_report_task(attempt)
+    task = task if task is not None else latest_speaking_report_task(attempt)
     return bool(task and task.status in _FAILED_REPORT_TASK_STATUSES)
 
 
@@ -257,7 +262,7 @@ STALLED_PENDING_REPORT_AFTER_SECONDS = 180
 STALLED_RUNNING_REPORT_AFTER_SECONDS = 900
 
 
-def report_generation_stalled(attempt: SpeakingAttempt) -> bool:
+def report_generation_stalled(attempt: SpeakingAttempt, task: AITask | None = None) -> bool:
     """Whether a queued report is stuck because no worker is processing it.
 
     Distinct from :func:`report_generation_failed`: the task never reached a
@@ -265,7 +270,7 @@ def report_generation_stalled(attempt: SpeakingAttempt) -> bool:
     """
     if report_is_valid(attempt):
         return False
-    task = latest_speaking_report_task(attempt)
+    task = task if task is not None else latest_speaking_report_task(attempt)
     if task is None:
         return False
     if task.status == AITask.Status.PENDING:
@@ -281,9 +286,42 @@ def report_generation_stalled(attempt: SpeakingAttempt) -> bool:
     return (timezone.now() - reference).total_seconds() >= threshold
 
 
+def report_generation_active(attempt: SpeakingAttempt, task: AITask | None = None) -> bool:
+    """Whether a report task is still actively waiting/generating."""
+    if report_is_valid(attempt):
+        return False
+    if report_generation_stalled(attempt, task):
+        return False
+    task = task if task is not None else latest_speaking_report_task(attempt)
+    return bool(task and task.status in _ACTIVE_REPORT_TASK_STATUSES)
+
+
 def friendly_report_error(raw: str) -> str:
     text = str(raw or "").strip()
     lowered = text.lower()
+    if (
+        "insufficient account balance" in lowered
+        or "insufficient balance" in lowered
+        or "account balance" in lowered
+        or "balance is insufficient" in lowered
+    ):
+        return "中转站 AI 账户余额不足（上游返回 403），暂时无法生成报告。请补充余额后点击「重新生成报告」；本次录音和转写已保留。"
+    if "401" in lowered or "invalid token" in lowered or "authentication" in lowered or "unauthorized" in lowered:
+        return "AI 评分服务鉴权失败（上游返回 401），请检查密钥或切换模型后点击「重新生成报告」；本次录音和转写已保留。"
+    if "403" in lowered or "forbidden" in lowered or "request not allowed" in lowered:
+        return "AI 评分服务拒绝了请求（上游返回 403），请检查账户权限或额度后点击「重新生成报告」；本次录音和转写已保留。"
+    if "timeout" in lowered or "timed out" in lowered or "time limit" in lowered:
+        return "AI 评分等待超时，报告没有生成；本次录音和转写已保留，请手动点击「重新生成报告」重试。"
+    if "finish_reason" in lowered and "length" in lowered:
+        return "AI 输出被截断（finish_reason=length），报告没有生成；本次录音和转写已保留，请手动点击「重新生成报告」重试。"
+    if (
+        "json object" in lowered
+        or "parse" in lowered
+        or "malformed" in lowered
+        or "missing usable output" in lowered
+        or "required keys" in lowered
+    ):
+        return "AI 返回的报告内容无法解析，报告没有生成；本次录音和转写已保留，请手动点击「重新生成报告」重试。"
     # "no available accounts" is the HTTP AI gateway's 503 when its whole account
     # pool is exhausted — the same quota wall as the codex CLI usage limit, so map
     # it to the quota message rather than the generic "network" fallback below.
@@ -317,7 +355,15 @@ def _attempt_turns_payload(attempt: SpeakingAttempt) -> list[dict[str, Any]]:
     ]
 
 
-def failed_history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
+def failed_history_item(attempt: SpeakingAttempt, task: AITask | None = None) -> dict[str, Any]:
+    task = task if task is not None else latest_speaking_report_task(attempt)
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    raw_error = (
+        (task.error_message if task else "")
+        or metadata.get("report_generation_error")
+        or metadata.get("analysis_error")
+        or ""
+    )
     return {
         "id": attempt.attempt_id,
         "timestamp": attempt.created_at.isoformat(),
@@ -330,6 +376,43 @@ def failed_history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
         "overall_band": None,
         "report_status": "failed",
         "turn_count": attempt.turns.count(),
+        "report_error": friendly_report_error(raw_error),
+        "ai_task": speaking_task_summary_payload(task),
+    }
+
+
+def unscored_history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
+    return {
+        "id": attempt.attempt_id,
+        "timestamp": attempt.created_at.isoformat(),
+        "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
+        "mode": attempt.mode,
+        "part": attempt.part,
+        "title": attempt.title or attempt.mode.upper(),
+        "question": attempt.title,
+        "status": attempt.status,
+        "overall_band": None,
+        "report_status": "unscored",
+        "turn_count": attempt.turns.count(),
+        "ai_task": None,
+    }
+
+
+def scoring_history_item(attempt: SpeakingAttempt, task: AITask | None = None) -> dict[str, Any]:
+    task = task if task is not None else latest_speaking_report_task(attempt)
+    return {
+        "id": attempt.attempt_id,
+        "timestamp": attempt.created_at.isoformat(),
+        "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
+        "mode": attempt.mode,
+        "part": attempt.part,
+        "title": attempt.title or attempt.mode.upper(),
+        "question": attempt.title,
+        "status": attempt.status,
+        "overall_band": None,
+        "report_status": "scoring",
+        "turn_count": attempt.turns.count(),
+        "ai_task": speaking_task_summary_payload(task),
     }
 
 
@@ -368,6 +451,74 @@ def failed_report_payload(attempt: SpeakingAttempt, *, stalled: bool = False) ->
     }
 
 
+def unscored_report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
+    return {
+        "id": attempt.attempt_id,
+        "mode": attempt.mode,
+        "part": attempt.part,
+        "title": attempt.title,
+        "status": attempt.status,
+        "report_status": "unscored",
+        "report_error": "",
+        "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
+        "candidate": attempt.english_name,
+        "full_name": attempt.full_name,
+        "english_name": attempt.english_name,
+        "ielts_score": {},
+        "feedback_summary": "",
+        "turns": _attempt_turns_payload(attempt),
+        "can_regenerate_report": _attempt_has_scoreable_text(attempt),
+        "can_regenerate_transcript": _attempt_has_recoverable_audio(attempt),
+        "ai_task": None,
+    }
+
+
+def attempt_is_completed(attempt: SpeakingAttempt) -> bool:
+    """Return whether the persisted Attempt has crossed the practice boundary."""
+    return attempt.status in {
+        SpeakingAttempt.Status.READY_TO_SCORE,
+        SpeakingAttempt.Status.SCORED,
+    }
+
+
+def speaking_report_status(attempt: SpeakingAttempt, task: AITask | None = None) -> str | None:
+    """Derive report lifecycle from durable Attempt/report/task state only."""
+    if report_is_valid(attempt):
+        return "ready"
+    if not attempt_is_completed(attempt):
+        return None
+    if report_generation_active(attempt, task):
+        return "scoring"
+    if report_generation_failed(attempt, task) or report_generation_stalled(attempt, task):
+        return "failed"
+    if attempt_is_completed(attempt):
+        return "unscored"
+    return None
+
+
+def scoring_report_payload(attempt: SpeakingAttempt) -> dict[str, Any]:
+    task = latest_speaking_report_task(attempt)
+    return {
+        "id": attempt.attempt_id,
+        "mode": attempt.mode,
+        "part": attempt.part,
+        "title": attempt.title,
+        "status": attempt.status,
+        "report_status": "scoring",
+        "report_error": "",
+        "display_time": timezone.localtime(attempt.created_at).strftime("%Y-%m-%d %H:%M"),
+        "candidate": attempt.english_name,
+        "full_name": attempt.full_name,
+        "english_name": attempt.english_name,
+        "ielts_score": {},
+        "feedback_summary": "",
+        "turns": _attempt_turns_payload(attempt),
+        "can_regenerate_report": False,
+        "can_regenerate_transcript": False,
+        "ai_task": speaking_task_summary_payload(task),
+    }
+
+
 def history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
     payload = attempt.report.report_payload if isinstance(attempt.report.report_payload, dict) else {}
     score = payload.get("ielts_score") if isinstance(payload.get("ielts_score"), dict) else {}
@@ -387,26 +538,41 @@ def history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
 
 
 def history(user) -> dict[str, Any]:
-    attempts = (
+    attempts = list(
         SpeakingAttempt.objects.filter(user=user)
         .exclude(status=SpeakingAttempt.Status.ABORTED)
         .select_related("report")
         .prefetch_related("turns")
         .order_by("-created_at")
     )
+    task_by_attempt: dict[str, AITask] = {}
+    attempt_ids = [attempt.attempt_id for attempt in attempts]
+    if attempt_ids:
+        report_tasks = AITask.objects.filter(
+            user=user,
+            task_type="speaking_report",
+            related_type="speaking_attempt",
+            related_id__in=attempt_ids,
+        ).order_by("-created_at", "-updated_at")
+        for task in report_tasks:
+            task_by_attempt.setdefault(task.related_id, task)
     items: list[dict[str, Any]] = []
     for attempt in attempts:
-        if report_is_valid(attempt):
+        task = task_by_attempt.get(attempt.attempt_id)
+        report_status = speaking_report_status(attempt, task)
+        if report_status == "ready":
             items.append(history_item(attempt))
-        elif report_generation_failed_by_metadata(attempt):
+        elif report_status == "scoring":
+            items.append(scoring_history_item(attempt, task))
+        elif report_status == "failed":
             # Surface failed analyses as "未评分" cards with a 重新生成 button instead
             # of silently dropping them — otherwise the attempt vanishes from history.
-            items.append(failed_history_item(attempt))
-        elif report_generation_stalled(attempt):
+            items.append(failed_history_item(attempt, task))
+        elif report_status == "unscored":
             # Worker offline / wedged: the report task is stuck pending and will
             # never resolve on its own. Show it as 未评分 too so the just-recorded
             # attempt does not silently disappear from the list.
-            items.append(failed_history_item(attempt))
+            items.append(unscored_history_item(attempt))
     return {"items": items}
 
 
@@ -421,10 +587,14 @@ def detail(user, attempt_id: str) -> dict[str, Any]:
         raise SpeakingError("Speaking report not found")
     if report_is_valid(attempt):
         return report_payload(attempt)
+    if report_generation_active(attempt):
+        return scoring_report_payload(attempt)
     if report_generation_failed(attempt):
         return failed_report_payload(attempt)
     if report_generation_stalled(attempt):
         return failed_report_payload(attempt, stalled=True)
+    if attempt_is_completed(attempt):
+        return unscored_report_payload(attempt)
     raise SpeakingError("Speaking report not found")
 
 

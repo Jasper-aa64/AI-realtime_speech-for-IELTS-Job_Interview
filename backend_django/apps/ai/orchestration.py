@@ -127,7 +127,14 @@ def create_billable_ai_task(
 
 
 @transaction.atomic
-def succeed_billable_ai_task(task_id: str, result_payload: dict[str, Any] | None, usage: dict[str, Any] | None) -> AITask:
+def succeed_billable_ai_task(
+    task_id: str,
+    result_payload: dict[str, Any] | None,
+    usage: dict[str, Any] | None,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+) -> AITask:
     task = AITask.objects.select_for_update().select_related("user", "billing_reservation").filter(task_id=clean_text(task_id)).first()
     if not task:
         raise AIOrchestrationError("AI task not found")
@@ -135,8 +142,8 @@ def succeed_billable_ai_task(task_id: str, result_payload: dict[str, Any] | None
         raise AIOrchestrationError("AI task has no user")
     if task.is_terminal:
         return task
-    provider = clean_text(task.provider) or DEFAULT_USAGE_PROVIDER
-    model = clean_text(task.model) or DEFAULT_USAGE_MODEL
+    provider = clean_text(provider) or clean_text(task.provider) or DEFAULT_USAGE_PROVIDER
+    model = clean_text(model) or clean_text(task.model) or DEFAULT_USAGE_MODEL
     try:
         settlement = settle_usage(
             task.user,

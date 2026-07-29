@@ -1,9 +1,21 @@
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import Client, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.billing.models import CodexUsageEvent, LegacyBillingUser, PriceSnapshot, TokenWallet, WalletLedgerEntry, WalletReservation
-from apps.billing.services import DEFAULT_INITIAL_GRANT_U, BillingError, ensure_wallet, reserve_usage, settle_usage
+from apps.billing.models import CodexUsageEvent, LegacyBillingUser, PaymentOrder, PriceSnapshot, TokenWallet, WalletLedgerEntry, WalletReservation
+from apps.billing.services import (
+    DEFAULT_INITIAL_GRANT_U,
+    BillingError,
+    combine_usage_records,
+    complete_payment_order,
+    create_payment_order,
+    ensure_wallet,
+    reserve_usage,
+    settle_usage,
+    wallet_payload,
+)
 
 
 class BillingModelTests(TestCase):
@@ -48,6 +60,87 @@ class BillingModelTests(TestCase):
 
 
 class BillingServiceTests(TestCase):
+    def test_wallet_payload_uses_bounded_queries_for_related_ledger_data(self):
+        user = get_user_model().objects.create_user(username="wallet-query-user", password="test-pass")
+        ensure_wallet(user)
+        snapshot = PriceSnapshot.objects.create(
+            snapshot_id="wallet-query-snapshot",
+            model="test-model",
+            input_price_u_per_1m_tokens=1,
+            cached_input_price_u_per_1m_tokens=1,
+            output_price_u_per_1m_tokens=1,
+            reasoning_price_u_per_1m_tokens=0,
+            effective_from=timezone.now(),
+            source="test",
+        )
+        usage = CodexUsageEvent.objects.create(
+            usage_id="wallet-query-usage",
+            call_id="wallet-query-call",
+            provider="test",
+            model="test-model",
+            captured_at=timezone.now(),
+        )
+        for index in range(20):
+            WalletLedgerEntry.objects.create(
+                entry_id=f"wallet-query-entry-{index}",
+                user=user,
+                call_id=f"wallet-query-call-{index}",
+                entry_type=WalletLedgerEntry.EntryType.SETTLE,
+                amount_u=-100,
+                snapshot=snapshot,
+                usage=usage,
+                idempotency_key=f"wallet-query-idempotency-{index}",
+            )
+
+        with CaptureQueriesContext(connection) as queries:
+            payload = wallet_payload(user)
+
+        self.assertEqual(len(payload["entries"]), 20)
+        self.assertLessEqual(len(queries), 4)
+
+    def test_combine_usage_records_sums_distinct_report_provider_calls(self):
+        combined = combine_usage_records(
+            {"input_tokens": 1000, "cache_read_input_tokens": 250, "output_tokens": 100},
+            {"prompt_tokens": 800, "completion_tokens": 200, "prompt_tokens_details": {"cached_tokens": 100}},
+        )
+
+        self.assertEqual(
+            combined,
+            {
+                "input_tokens": 2050,
+                "cached_input_tokens": 350,
+                "output_tokens": 300,
+                "reasoning_output_tokens": 0,
+            },
+        )
+
+    def test_payment_order_completion_credits_wallet_exactly_once(self):
+        user = get_user_model().objects.create_user(username="payment-order-user", password="test-pass")
+        initial_balance = ensure_wallet(user).balance_u
+        order, created = create_payment_order(
+            user,
+            amount_rmb=8.0,
+            provider="manual",
+            idempotency_key="manual-payment-1",
+        )
+
+        first = complete_payment_order(order.order_id, provider_order_id="manual-provider-1")
+        second = complete_payment_order(order.order_id, provider_order_id="manual-provider-1")
+
+        self.assertTrue(created)
+        self.assertEqual(first["status"], PaymentOrder.Status.PAID)
+        self.assertEqual(second["status"], PaymentOrder.Status.PAID)
+        wallet = TokenWallet.objects.get(user=user)
+        self.assertEqual(wallet.balance_u, initial_balance + 8_000_000)
+        self.assertEqual(
+            WalletLedgerEntry.objects.filter(
+                user=user,
+                entry_type=WalletLedgerEntry.EntryType.RECHARGE,
+                idempotency_key=f"payment:{order.order_id}:paid",
+            ).count(),
+            1,
+        )
+
     def test_reserve_and_settle_usage_are_idempotent(self):
         user = get_user_model().objects.create_user(username="service-user", password="test-pass")
         wallet = ensure_wallet(user)

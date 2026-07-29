@@ -655,6 +655,63 @@ class WritingApiTests(TestCase):
         self.assertEqual(first_review["coaching"], "Old coaching one.")
         self.assertEqual(first_review["language_correction_upgrade"], "Old upgrade.")
 
+    def test_preserved_report_includes_new_paragraph_review(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-save-scored-insert-paragraph",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Save scored inserted paragraph prompt",
+            prompt="Some people think cities should invest in public transport. Discuss both views.",
+        )
+        original_paragraphs = ["Original paragraph one.", "Original paragraph two.", "Original paragraph three."]
+        current_paragraphs = [
+            "Original paragraph one.",
+            "A newly inserted paragraph.",
+            "Original paragraph two.",
+            "Original paragraph three.",
+        ]
+        entry = self.create_entry(
+            prompt=prompt,
+            answer=paragraph_answer(*original_paragraphs),
+            status=WritingEntry.Status.SCORED,
+            overall_band=7.0,
+        )
+        score = WritingScore.objects.get(entry=entry)
+        score.analysis_payload = {
+            "analysis_backend": "ai",
+            "paragraph_reviews": [
+                {"index": index, "learner": paragraph, "model": f"Model {index}.", "coaching": f"Coaching {index}."}
+                for index, paragraph in enumerate(original_paragraphs, start=1)
+            ],
+        }
+        score.save(update_fields=["analysis_payload", "updated_at"])
+
+        response = self.client.post(
+            "/api/writing/entries",
+            data={
+                "id": entry.entry_id,
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer(*current_paragraphs),
+                "preserve_score": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        reviews = payload["score"]["paragraph_reviews"]
+        self.assertEqual([item["index"] for item in reviews], [1, 2, 3, 4])
+        self.assertEqual([item["learner"] for item in reviews], current_paragraphs)
+        self.assertEqual(reviews[1]["model"], "")
+        self.assertIn("重新生成报告", reviews[1]["coaching"])
+
+        detail = self.client.get(f"/api/writing/entries/{entry.entry_id}")
+        self.assertEqual(detail.status_code, 200)
+        detail_payload = detail.json()
+        self.assertEqual(detail_payload["answer"], paragraph_answer(*current_paragraphs))
+        self.assertEqual(len(detail_payload["score"]["paragraph_reviews"]), 4)
+
     def test_preserved_report_drops_only_the_edited_sentences_annotations(self):
         # Sentence-level invalidation: editing one sentence drops THAT sentence's
         # annotations; a different, untouched sentence in the same paragraph keeps its
@@ -930,6 +987,16 @@ class WritingApiTests(TestCase):
         # Deleting the report releases the pinned report time so a future report
         # starts fresh, but the maintained essay itself is kept.
         self.assertNotIn("report_created_at", entry.metadata or {})
+
+        reports_payload = self.client.get("/api/writing/reports").json()
+        self.assertNotIn(entry.entry_id, [item["id"] for item in reports_payload["items"]])
+
+        maintained_response = self.client.get(
+            "/api/writing/entry-for-prompt",
+            data={"task_type": "task2", "prompt_id": prompt.prompt_id},
+        )
+        self.assertEqual(maintained_response.status_code, 200)
+        self.assertEqual(maintained_response.json()["entry"]["id"], entry.entry_id)
 
     def test_entry_for_prompt_returns_maintained_essay(self):
         prompt = self.create_prompt(

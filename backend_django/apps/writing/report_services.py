@@ -379,6 +379,10 @@ def dedupe_report_entries(entries: list[WritingEntry]) -> list[WritingEntry]:
     return list(selected.values())
 
 
+def report_was_deleted(entry: WritingEntry) -> bool:
+    return bool((entry.metadata or {}).get("report_deleted_at"))
+
+
 def writing_report_sort_time(entry: WritingEntry):
     score = getattr(entry, "score", None)
     if score:
@@ -471,7 +475,8 @@ def writing_reports(user, query: dict[str, Any] | None = None) -> dict[str, Any]
         queryset = queryset.filter(task_type=task_type)
     queryset = queryset.order_by("-created_at")
 
-    deduped_entries = dedupe_report_entries(list(queryset))
+    report_entries = [entry for entry in queryset if not report_was_deleted(entry)]
+    deduped_entries = dedupe_report_entries(report_entries)
     count = len(deduped_entries)
     deduped_entries.sort(key=writing_report_sort_time, reverse=True)
     entries = deduped_entries[:limit]

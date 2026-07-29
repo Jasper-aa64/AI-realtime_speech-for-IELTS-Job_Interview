@@ -38,8 +38,7 @@ class HttpApiProviderConfig:
     model: str
     timeout_seconds: float = DEFAULT_HTTP_TIMEOUT_SECONDS
     # OpenAI-style reasoning budget hint ("low" / "medium" / "high"). Empty = omit
-    # the field entirely (keeps backward-compatible request bodies). For thinking
-    # models like claude-sonnet, "low" cuts the per-call latency noticeably.
+    # the field entirely (keeps backward-compatible request bodies).
     reasoning_effort: str = ""
 
     @property
@@ -74,6 +73,85 @@ def _float_setting_or_env(name: str, default: float) -> float:
         return max(0.5, float(raw))
     except (TypeError, ValueError):
         return default
+
+
+_TEXT_CONTENT_KEYS = (
+    "text",
+    "output_text",
+    "content",
+    "value",
+    "delta",
+    "part",
+    "content_block",
+    "message",
+    "response",
+    "output",
+)
+_FINAL_STREAM_EVENT_TYPES = {
+    "response.completed",
+    "response.output_text.done",
+    "response.content_part.done",
+    "message_stop",
+    "content_block_stop",
+}
+
+
+def _content_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        content_type = str(value.get("type") or "").strip().lower()
+        if "reasoning" in content_type or content_type in {"thinking", "redacted_thinking"}:
+            return ""
+        for key in _TEXT_CONTENT_KEYS:
+            text = _content_text(value.get(key))
+            if text:
+                return text
+        return ""
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if not isinstance(item, dict):
+                continue
+            text = _content_text(item)
+            if text:
+                parts.append(text)
+        return "".join(parts)
+    return ""
+
+
+def _payload_usage(payload: dict[str, Any]) -> dict[str, Any] | None:
+    usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else None
+    if usage is not None:
+        return usage
+    for key in ("message", "response"):
+        nested = payload.get(key)
+        if isinstance(nested, dict) and isinstance(nested.get("usage"), dict):
+            return nested["usage"]
+    return None
+
+
+def _is_final_stream_payload(payload: dict[str, Any]) -> bool:
+    event_type = str(payload.get("type") or "").strip().lower()
+    if not event_type:
+        return False
+    return event_type in _FINAL_STREAM_EVENT_TYPES or event_type.endswith(".completed") or event_type.endswith(".done")
+
+
+def _choice_text(choice: dict[str, Any]) -> str:
+    delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+    content = _content_text(delta.get("content"))
+    if not content:
+        content = _content_text(delta.get("text") or delta.get("output_text"))
+    if not content:
+        message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+        content = _content_text(message.get("content") or message.get("text"))
+    if not content:
+        content = _content_text(choice.get("text") or choice.get("content"))
+    return content
 
 
 def load_http_api_provider_config() -> HttpApiProviderConfig:
@@ -127,6 +205,7 @@ class HttpApiProvider:
         max_tokens: int = 120,
         timeout_seconds: float | None = None,
         stream: bool = True,
+        response_format: dict[str, Any] | None = None,
     ) -> HttpApiProviderResult:
         started = time.monotonic()
         body = {
@@ -138,6 +217,11 @@ class HttpApiProvider:
         }
         if self.config.reasoning_effort:
             body["reasoning_effort"] = self.config.reasoning_effort
+        if response_format is not None:
+            # OpenAI-compatible chat-completions relays use this to constrain the
+            # assistant message itself. Keep it opt-in because some existing
+            # callers intentionally request ordinary prose or token streams.
+            body["response_format"] = dict(response_format)
         if stream:
             body["stream_options"] = {"include_usage": True}
         request = urllib.request.Request(
@@ -219,7 +303,11 @@ class HttpApiProvider:
             with self._opener.open(request, timeout=timeout_seconds or self.config.timeout_seconds) as response:
                 yielded = False
                 for payload in self._iter_stream_payloads(response):
-                    content, usage = self._stream_payload_content(payload, extra_secrets=(self.config.api_key,))
+                    content, usage = self._stream_payload_content(
+                        payload,
+                        extra_secrets=(self.config.api_key,),
+                        include_final_response=not yielded,
+                    )
                     if usage is not None and on_usage is not None:
                         on_usage(usage)
                     if content:
@@ -253,7 +341,10 @@ class HttpApiProvider:
         usage: dict[str, Any] | None = None
 
         for payload in HttpApiProvider._iter_stream_payloads(response):
-            content, payload_usage = HttpApiProvider._stream_payload_content(payload)
+            content, payload_usage = HttpApiProvider._stream_payload_content(
+                payload,
+                include_final_response=not bool(parts),
+            )
             if payload_usage is not None:
                 usage = payload_usage
             if content:
@@ -265,6 +356,7 @@ class HttpApiProvider:
         payload: dict[str, Any],
         *,
         extra_secrets: tuple[str, ...] = (),
+        include_final_response: bool = True,
     ) -> tuple[str, dict[str, Any] | None]:
         if isinstance(payload.get("error"), dict):
             error = payload["error"]
@@ -273,20 +365,27 @@ class HttpApiProvider:
                 f"HTTP AI provider stream error: {_safe_error_detail(message, extra_secrets=extra_secrets)}",
                 error_code="http_api_provider_stream_error",
             )
-        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else None
-        choices = payload.get("choices")
-        if not isinstance(choices, list) or not choices:
-            return "", usage
-        choice = choices[0] if isinstance(choices[0], dict) else {}
-        finish_reason = choice.get("finish_reason")
-        if finish_reason == "content_filter":
+        if isinstance(payload.get("error"), str):
             raise HttpApiProviderError(
-                f"HTTP AI provider stopped with finish_reason={finish_reason}",
-                error_code="http_api_provider_finish_reason",
+                f"HTTP AI provider stream error: {_safe_error_detail(payload['error'], extra_secrets=extra_secrets)}",
+                error_code="http_api_provider_stream_error",
             )
-        delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
-        content = delta.get("content")
-        return (content if isinstance(content, str) else ""), usage
+        usage = _payload_usage(payload)
+        if _is_final_stream_payload(payload) and not include_final_response:
+            return "", usage
+        choices = payload.get("choices")
+        if isinstance(choices, list) and choices:
+            choice = choices[0] if isinstance(choices[0], dict) else {}
+            finish_reason = choice.get("finish_reason")
+            if finish_reason == "content_filter":
+                raise HttpApiProviderError(
+                    f"HTTP AI provider stopped with finish_reason={finish_reason}",
+                    error_code="http_api_provider_finish_reason",
+                )
+            content = _choice_text(choice)
+            return content, usage
+        content = _content_text(payload)
+        return content, usage
 
     @staticmethod
     def _iter_stream_payloads(response: Any) -> Iterator[dict[str, Any]]:
@@ -314,6 +413,14 @@ class HttpApiProvider:
                         return
                     if isinstance(payload, dict):
                         yield payload
+                        # Some OpenAI-compatible relays emit the terminal
+                        # Responses/Anthropic event but keep the HTTP socket
+                        # open instead of sending [DONE]. Once the response is
+                        # complete, waiting for another line can turn an
+                        # already-billed successful answer into a read timeout.
+                        event_type = str(payload.get("type") or "").strip().lower()
+                        if event_type in {"response.completed", "message_stop"}:
+                            return
                     continue
                 if event_line.startswith(":"):
                     continue
@@ -329,13 +436,16 @@ class HttpApiProvider:
             payload = json.loads(raw_body.decode("utf-8", errors="replace"))
         except ValueError as exc:
             raise HttpApiProviderError("HTTP AI provider returned invalid JSON", error_code="http_api_provider_invalid_json") from exc
-        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else None
+        usage = _payload_usage(payload)
         choices = payload.get("choices")
-        if not isinstance(choices, list) or not choices:
-            return "", usage
-        message = choices[0].get("message") if isinstance(choices[0], dict) else {}
-        content = message.get("content") if isinstance(message, dict) else ""
-        return str(content or ""), usage
+        if isinstance(choices, list) and choices:
+            message = choices[0].get("message") if isinstance(choices[0], dict) else {}
+            content = _content_text(message.get("content") or message.get("text")) if isinstance(message, dict) else ""
+            if not content and isinstance(choices[0], dict):
+                content = _choice_text(choices[0])
+            return content, usage
+        content = _content_text(payload)
+        return content, usage
 
 
 __all__ = [

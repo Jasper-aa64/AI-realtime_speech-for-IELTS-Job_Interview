@@ -27,8 +27,8 @@ from apps.ai.provider_config import (
     ProviderRoute,
     resolve_provider_route,
 )
-from apps.ai.orchestration import fail_billable_ai_task, fallback_billable_ai_task
-from apps.ai.services import fail_ai_task, succeed_ai_task
+from apps.ai.orchestration import fail_billable_ai_task, fallback_billable_ai_task, succeed_billable_ai_task
+from apps.ai.services import fail_ai_task
 from apps.writing.services import WritingEntryDeleted, complete_score_task, fallback_score_task
 
 
@@ -842,7 +842,18 @@ class CodexSpeakingReportAdapter(AiTaskTemplate):
                 "Speaking report task is missing attempt_id",
                 error_code="missing_attempt_id",
             )
-        attempt_payload = score_attempt_sync(task.user, attempt_id, request_payload)
+        # The user choice is frozen when the durable task is created. Do not
+        # reread a mutable profile preference in the worker: it can change while
+        # queued, and older profile code can normalize new provider values back
+        # to the default model. ``score_attempt_sync`` accepts ``ai_source``.
+        score_payload = dict(request_payload)
+        requested_provider = str(score_payload.get("requested_provider") or "").strip()
+        if requested_provider and not score_payload.get("provider") and not score_payload.get("ai_source"):
+            score_payload["ai_source"] = requested_provider
+        requested_model = str(score_payload.get("requested_model") or "").strip()
+        if requested_model and not score_payload.get("model"):
+            score_payload["model"] = requested_model
+        attempt_payload = score_attempt_sync(task.user, attempt_id, score_payload)
         usage = attempt_payload.get("billing_usage") if isinstance(attempt_payload.get("billing_usage"), dict) else {}
         return {"attempt": attempt_payload}, usage
 
@@ -1024,7 +1035,30 @@ def apply_provider_run_result(task: AITask, result: ProviderRunResult) -> Applie
 def _apply_speaking_report_result(task: AITask, result: ProviderRunResult) -> AppliedProviderRunResult:
     if result.outcome == ProviderRunOutcome.SUCCESS:
         payload = dict(result.result_payload or {})
-        succeed_ai_task(task.task_id, payload, None)
+        attempt_payload = payload.get("attempt") if isinstance(payload.get("attempt"), dict) else {}
+        score_payload = attempt_payload.get("ielts_score") if isinstance(attempt_payload.get("ielts_score"), dict) else {}
+        request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
+        actual_provider = str(
+            attempt_payload.get("report_generation_backend")
+            or score_payload.get("generation_backend")
+            or score_payload.get("backend")
+            or request_payload.get("requested_provider")
+            or task.provider
+            or ""
+        ).strip()
+        actual_model = str(
+            score_payload.get("model")
+            or request_payload.get("requested_model")
+            or task.model
+            or ""
+        ).strip()
+        succeed_billable_ai_task(
+            task.task_id,
+            payload,
+            result.usage,
+            provider=actual_provider,
+            model=actual_model,
+        )
         return _refreshed_task_result(task, AITask.Status.SUCCEEDED)
     if result.outcome == ProviderRunOutcome.RETRYABLE_FAILURE:
         return _apply_failure_result(task, result, retryable=True)

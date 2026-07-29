@@ -6,6 +6,24 @@ from apps.billing.models import TokenWallet
 
 
 class AccountsApiTests(TestCase):
+    def test_profile_persists_each_supported_gpt_5_6_speaking_source(self):
+        user = get_user_model().objects.create_user(username="model-choice-user", password="test-pass-12345")
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(user)
+
+        for source in ("gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol"):
+            csrf = client.get("/api/accounts/csrf/").json()["csrfToken"]
+            response = client.patch(
+                "/api/accounts/me/",
+                data={"report_ai_source": source},
+                content_type="application/json",
+                HTTP_X_CSRFTOKEN=csrf,
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["user"]["profile"]["report_ai_source"], source)
+            self.assertEqual(UserProfile.objects.get(user=user).report_ai_source, source)
+
     def test_register_login_me_and_profile_update(self):
         client = Client(enforce_csrf_checks=True)
 

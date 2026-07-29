@@ -28,6 +28,7 @@ class _JsonProvider:
     def complete_chat(self, *args, **kwargs):
         self.captured["messages"] = args[0] if args else kwargs.get("messages")
         self.captured["max_tokens"] = kwargs.get("max_tokens")
+        self.captured["stream"] = kwargs.get("stream")
         return _ProviderResult(self.text, model=self.captured.get("model") or "gpt-5.4-mini")
 
 
@@ -37,6 +38,10 @@ class _JsonProvider:
     AI_HTTP_MODEL="legacy-model",
     SPEAKING_AI_MODEL="",
     SPEAKING_REPORT_AI_MODEL="gpt-5.4-mini",
+    SPEAKING_CLAUDE_HTTP_BASE_URL="https://claude.example/v1",
+    SPEAKING_CLAUDE_HTTP_API_KEY="claude-key",
+    SPEAKING_CLAUDE_HTTP_MODEL="claude-test",
+    AI_HTTP_REPORT_REASONING_EFFORT="",
 )
 class SpeakingAiProviderRoutingTests(SimpleTestCase):
     def test_explicit_codex_cli_score_does_not_use_http(self):
@@ -139,7 +144,13 @@ class SpeakingAiProviderRoutingTests(SimpleTestCase):
         self.assertEqual(result["generation_backend"], "http_api")
         self.assertEqual(result["model"], "gpt-5.4-mini")
         self.assertEqual(captured["model"], "gpt-5.4-mini")
+        self.assertFalse(captured["stream"])
         run_codex.assert_not_called()
+
+    def test_speaking_report_http_omits_reasoning_effort_by_default(self):
+        provider = services._speaking_http_provider("report", ai_source="claude")
+
+        self.assertEqual(provider.config.reasoning_effort, "")
 
     def test_speaking_report_claude_failure_does_not_fall_back(self):
         # User picked Claude CLI: a failure must surface as an error, never
@@ -211,6 +222,46 @@ class SpeakingAiProviderRoutingTests(SimpleTestCase):
                 )
         run_codex.assert_not_called()
 
+    def test_sonnet_http_retries_transient_502_and_500_before_success(self):
+        payload = {
+            "fluency_coherence": 6,
+            "lexical_resource": 6,
+            "grammatical_range": 6,
+            "overall_band": 6,
+            "feedback": "Sonnet recovered after transient upstream failures.",
+        }
+        failures = [
+            HttpApiProviderError("status_code=502, bad response status code 502", status_code=502),
+            HttpApiProviderError("status_code=500, Upstream request failed", status_code=500),
+        ]
+
+        class _FlakySonnetProvider:
+            def __init__(self):
+                self.calls = 0
+                self.max_tokens = []
+
+            def complete_chat(self, *args, **kwargs):
+                self.calls += 1
+                self.max_tokens.append(kwargs.get("max_tokens"))
+                if failures:
+                    raise failures.pop(0)
+                return _ProviderResult(json.dumps(payload), model="claude-sonnet-4-6")
+
+        provider = _FlakySonnetProvider()
+        with patch("apps.speaking.services._speaking_http_provider", return_value=provider):
+            result = services.score_with_codex(
+                "Q1: Do you work or study?\nA: I study software engineering.",
+                "Q1: Do you work or study?",
+                "p1",
+                "score-sonnet-transient-recovery",
+                ai_source="claude",
+            )
+
+        self.assertEqual(result["backend"], "http_api")
+        self.assertEqual(result["model"], "claude-sonnet-4-6")
+        self.assertEqual(provider.calls, 3)
+        self.assertEqual(provider.max_tokens, [2600, 2600, 2600])
+
     def test_report_provider_json_http_failure_never_calls_codex(self):
         class _FailingHttpProvider:
             def complete_chat(self, *args, **kwargs):
@@ -229,6 +280,26 @@ class SpeakingAiProviderRoutingTests(SimpleTestCase):
                     "report-json-http-token-expired",
                 )
         run_codex.assert_not_called()
+
+    def test_report_provider_json_keeps_luna_route_non_streaming(self):
+        captured = {}
+
+        def fake_provider(config=None):
+            return _JsonProvider(json.dumps({"feedback": "Keep the selected route."}), captured, config=config)
+
+        with patch("apps.speaking.services.HttpApiProvider", side_effect=fake_provider):
+            payload, backend, model, _usage = services._report_provider_json(
+                "Return JSON.",
+                {"feedback"},
+                "report-json-luna-non-streaming",
+                ai_source="gpt-5.6-luna",
+            )
+
+        self.assertEqual(payload["feedback"], "Keep the selected route.")
+        self.assertEqual(backend, "http_api")
+        self.assertEqual(model, "gpt-5.6-luna")
+        self.assertEqual(captured["model"], "gpt-5.6-luna")
+        self.assertFalse(captured["stream"])
 
     def test_report_provider_json_claude_cli_failure_never_changes_provider(self):
         with patch(

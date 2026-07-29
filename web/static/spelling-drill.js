@@ -806,6 +806,7 @@
 
     function renderDone() {
       const s = S();
+      const isDue = s.scope === "due";
       root().innerHTML = `
         <div class="nr-stage nr-stage-done">
           <div class="nr-done-seal">
@@ -815,12 +816,12 @@
               <path d="M40 62 L54 76 L82 46" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <h3 class="nr-done-title">本轮收笔</h3>
+          <h3 class="nr-done-title">${isDue ? "今日复习完成" : "本轮收笔"}</h3>
           <p class="nr-done-meta">
             复习 <b>${s.doneCount}</b> 词 · 重练 <b>${Object.values(s.requeueMap).reduce((a, b) => a + b, 0)}</b> 次
           </p>
+          ${isDue ? '<p class="nr-done-note">今日这一轮已完成，明天再来。</p>' : ""}
           <div class="nr-empty-actions">
-            <button class="nr-btn nr-btn-primary" data-spelling-reload>再来一轮</button>
             <button class="nr-btn nr-btn-ghost" data-open-library>翻看词库</button>
           </div>
         </div>
@@ -1214,8 +1215,35 @@
       preview.innerHTML = lines.length
         ? lines.map((line) => `<span class="dict-sense-line">${escapeGlossWithTags(line)}</span>`).join("")
         : "";
+      preview.contentEditable = "true";
+      preview.setAttribute("role", "textbox");
+      preview.setAttribute("aria-label", "中文释义，可编辑");
+      preview.classList.add("is-dictionary-editable");
       preview.classList.toggle("hidden", !lines.length);
       field?.classList.toggle("hidden", !!lines.length);
+    }
+
+    function spellingAddGlossNodeText(node) {
+      if (!node) return "";
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent || "";
+      if (node.nodeType !== Node.ELEMENT_NODE) return "";
+      if (node.classList?.contains("dict-domain-tag")) {
+        return node.dataset.dictDomainLabel || node.textContent || "";
+      }
+      if (node.classList?.contains("dict-domain-tag-colon")) return "：";
+      return Array.from(node.childNodes || []).map(spellingAddGlossNodeText).join("");
+    }
+
+    function syncSpellingAddGlossFromPreview() {
+      const preview = $("spellingAddGlossPreview");
+      const glossEl = $("spellingAddGloss");
+      if (!preview || preview.classList.contains("hidden") || !glossEl) return;
+      const lines = Array.from(preview.querySelectorAll(".dict-sense-line"));
+      const sourceLines = lines.length ? lines : [preview];
+      glossEl.value = sourceLines
+        .map((line) => spellingAddGlossNodeText(line).replace(/[ \t]+/g, " ").trim())
+        .filter(Boolean)
+        .join("\n");
     }
 
     function resetSpellingAddGlossPreview() {
@@ -1285,6 +1313,8 @@
         return;
       }
       let gloss = String($("spellingAddGloss")?.value || "").trim();
+      syncSpellingAddGlossFromPreview();
+      gloss = String($("spellingAddGloss")?.value || "").trim();
       if ($("spellingAddSaveBtn")?.disabled) return;
       setAddWordBusy(true);
       setAddWordStatus("\u6b63\u5728\u6dfb\u52a0...");
@@ -1353,6 +1383,15 @@
         resetSpellingAddGlossPreview();
         setAddWordStatus("");
       });
+      $("spellingAddGlossPreview")?.addEventListener("input", () => {
+        syncSpellingAddGlossFromPreview();
+      });
+      $("spellingAddGlossPreview")?.addEventListener("paste", (e) => {
+        e.preventDefault();
+        const textValue = e.clipboardData?.getData("text/plain") || "";
+        document.execCommand?.("insertText", false, textValue);
+        syncSpellingAddGlossFromPreview();
+      });
       $("spellingAddDialog")?.addEventListener("pointerdown", (e) => {
         if (e.target === $("spellingAddDialog")) closeAddWordDialog();
       });
@@ -1369,7 +1408,6 @@
         if (t.closest("[data-spelling-card-add]")) { openAddWordDialog(); return; }
         if (t.closest("[data-spelling-card-del]")) { confirmRemoveCurrentWord(); return; }
         if (t.closest("[data-open-library]"))      { S().view = "library"; render(); return; }
-        if (t.closest("[data-spelling-reload]"))   { load({ force: true, resetQueue: true }); return; }
         const scopeBtn = t.closest("[data-spelling-scope]");
         if (scopeBtn) {
           S().scope = scopeBtn.dataset.spellingScope;

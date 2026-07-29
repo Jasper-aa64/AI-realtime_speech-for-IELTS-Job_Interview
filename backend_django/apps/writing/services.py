@@ -303,11 +303,10 @@ def preserve_score_after_answer_edit(entry: WritingEntry, previous_answer: str, 
             annotations.append(remapped)
     analysis["inline_annotations"] = annotations
 
+    raw_reviews = [item for item in analysis.get("paragraph_reviews") or [] if isinstance(item, dict)]
     reviews = []
     used_review_indices: set[int] = set()
-    for offset, item in enumerate(analysis.get("paragraph_reviews") or []):
-        if not isinstance(item, dict):
-            continue
+    for offset, item in enumerate(raw_reviews):
         try:
             old_paragraph_index = int(item.get("index") or offset + 1)
         except (TypeError, ValueError):
@@ -318,7 +317,17 @@ def preserve_score_after_answer_edit(entry: WritingEntry, previous_answer: str, 
         used_review_indices.add(new_paragraph_index)
         current_text = current_paragraphs[new_paragraph_index - 1]
         reviews.append({**item, "index": new_paragraph_index, "learner": current_text})
-    if reviews:
+    if raw_reviews:
+        for paragraph_index, current_text in enumerate(current_paragraphs, start=1):
+            if paragraph_index in used_review_indices:
+                continue
+            reviews.append({
+                "index": paragraph_index,
+                "learner": current_text,
+                "model": "",
+                "coaching": "这一段已保存。重新生成报告后，AI 会补充这一段的改写与辅导。",
+                "language_correction_upgrade": "",
+            })
         reviews.sort(key=lambda review: int(review.get("index") or 0))
         analysis["paragraph_reviews"] = reviews
     score.analysis_payload = analysis
@@ -571,6 +580,7 @@ def delete_entry_report(user, entry_id: str) -> dict[str, Any]:
     # starts a brand-new report whose time is set fresh at that creation.
     metadata = dict(entry.metadata or {})
     metadata.pop("report_created_at", None)
+    metadata["report_deleted_at"] = timezone.now().isoformat()
     entry.metadata = metadata
     entry.save(update_fields=["status", "metadata", "updated_at"])
     entry.refresh_from_db()
@@ -810,6 +820,7 @@ def persist_score(entry: WritingEntry, score: dict[str, Any]) -> None:
     now = timezone.now()
     metadata = dict(entry.metadata or {})
     metadata.setdefault("report_created_at", now.isoformat())
+    metadata.pop("report_deleted_at", None)
     entry.metadata = metadata
     WritingScore.objects.update_or_create(
         entry=entry,
