@@ -5919,7 +5919,7 @@ I will paste one topic's corpus context next.`;
 
     function p2BrainstormFilterCountLabel() {
       const stats = p2BrainstormFilteredBodyStats();
-      return `共 ${stats.total} 道「${p2BrainstormFilterLabel()}」 · P2 正文已填 ${stats.filled}/${stats.total}`;
+      return `「${p2BrainstormFilterLabel()}」共 ${stats.total} 道 · P2 正文已填 ${stats.filled}/${stats.total}`;
     }
 
     // 当前筛选对应的复制标签：无筛选→全部、空筛选→没灵感、否则就是标签名。

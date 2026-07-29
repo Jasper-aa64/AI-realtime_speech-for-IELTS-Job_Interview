@@ -31,6 +31,7 @@
 | [scoring-calibration-change-report-2026-05-12.md](reports/scoring-calibration-change-report-2026-05-12.md) | 评分校准变更报告(2026-05-12) |
 | [stage-consolidation-changes.md](reports/stage-consolidation-changes.md) | stage 收口改动记录 |
 | [speaking-2026-may-august-bank-review.md](reports/speaking-2026-may-august-bank-review.md) | 口语 2026 年 5–8 月题库 review |
+| [development-handoff-2026-07-29.md](reports/development-handoff-2026-07-29.md) | 当前开发状态、示例数据库和 P3 周目/复练逻辑交接提示词 |
 
 ## research/ — 标准 · 研究
 

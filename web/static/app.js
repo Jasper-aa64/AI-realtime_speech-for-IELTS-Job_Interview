@@ -3014,6 +3014,7 @@ function hideFollowUpThinkingMascot() {
 function p3BankPlanCycleNotice(plan = {}) {
   const sourceType = String(plan.source?.type || state.p3SourceType || "").trim();
   if (!["bank", "season_bank"].includes(sourceType)) return null;
+  if (plan.p3_bank_replay) return null;
   const questionCount = Array.isArray(plan.questions) ? plan.questions.length : Number(plan.question_count) || 0;
   if (!questionCount) return null;
   const cycle = Math.max(1, Number(plan.p3_bank_practice_cycle) || Number(state.p3PracticeSource?.practiceCycle) || 1);
@@ -12477,6 +12478,19 @@ function p3BankPracticeCycle() {
 function p3BankCardProgressState(entry = {}) {
   const explicit = String(entry.practice_progress_state || "").trim();
   if (["none", "partial", "complete"].includes(explicit)) return explicit;
+  const legacyRoundCount = Math.max(0, Number(entry.practice_round_count) || 0);
+  const legacyCompletedRoundCount = Math.max(
+    0,
+    Number(entry.practice_completed_round_count)
+      || numberSet(entry.practice_completed_round_indexes).size,
+  );
+  if (
+    entry.practice_is_complete === true
+    || (legacyRoundCount > 0 && legacyCompletedRoundCount >= legacyRoundCount)
+  ) {
+    return "complete";
+  }
+  if (legacyCompletedRoundCount > 0) return "partial";
   const total = p2BankCardFollowUps(entry).length;
   const completed = Math.max(
     0,
@@ -12520,6 +12534,33 @@ function p3BankNextQuestionIndexes(entry = {}) {
     .filter((value) => Number.isInteger(value) && value >= 0);
 }
 
+function p3BankRoundLabel(indexes = []) {
+  return indexes
+    .map((index) => Number(index))
+    .filter((index) => Number.isInteger(index) && index >= 0)
+    .map((index) => `Q${index + 1}`)
+    .join(" ");
+}
+
+function p3BankRoundChipsHtml(entry = {}) {
+  const rounds = Array.isArray(entry.practice_rounds) ? entry.practice_rounds : [];
+  if (!rounds.length) return "";
+  const isComplete = p3BankCardProgressState(entry) === "complete";
+  const nextIndexes = numberSet(p3BankNextQuestionIndexes(entry));
+  return `
+    <div class="p3-bank-round-strip" aria-label="本周目追问分组">
+      ${rounds.map((round, roundIndex) => {
+        const indexes = (Array.isArray(round.question_indexes) ? round.question_indexes : [])
+          .map((value) => Number(value))
+          .filter((value) => Number.isInteger(value) && value >= 0);
+        const isNext = !isComplete && indexes.some((index) => nextIndexes.has(index));
+        const label = p3BankRoundLabel(indexes) || `第 ${roundIndex + 1} 组`;
+        return `<span class="p3-bank-round-chip${isNext ? " is-next" : " is-dim"}">${escapeHtml(label)}</span>`;
+      }).join("")}
+    </div>
+  `;
+}
+
 function p3BankFollowupIdForIndex(entry = {}, questionIndex = -1) {
   const rounds = Array.isArray(entry.practice_rounds) ? entry.practice_rounds : [];
   for (const round of rounds) {
@@ -12532,11 +12573,18 @@ function p3BankFollowupIdForIndex(entry = {}, questionIndex = -1) {
   return "";
 }
 
-function buildLocalP3BankPlanFromCard(entry = {}) {
+function buildLocalP3BankPlanFromCard(entry = {}, options = {}) {
   const title = p2BankCardTitle(entry);
   const questionId = p2BankQuestionId(entry);
   const followUps = p2BankCardFollowUps(entry);
-  const selectedIndexes = p3BankNextQuestionIndexes(entry)
+  const requestedRoundIndex = Number.isInteger(Number(options.roundIndex)) ? Number(options.roundIndex) : null;
+  const requestedRound = requestedRoundIndex === null
+    ? null
+    : (Array.isArray(entry.practice_rounds) ? entry.practice_rounds : [])
+      .find((round) => Number(round?.round_index) === requestedRoundIndex);
+  const selectedIndexes = (Array.isArray(requestedRound?.question_indexes)
+    ? requestedRound.question_indexes
+    : p3BankNextQuestionIndexes(entry))
     .filter((index) => index < followUps.length);
   const fallbackIndexes = followUps
     .map((_question, index) => index)
@@ -12562,7 +12610,8 @@ function buildLocalP3BankPlanFromCard(entry = {}) {
   const summary = p3BankPracticeSummary();
   const globalDoneCount = Math.max(0, Number(summary.current_cycle_done_count) || 0);
   const globalQuestionCount = Math.max(0, Number(summary.total_question_count) || 0);
-  const newQuestionCount = indexes.filter((index) => !doneIndexes.has(index)).length;
+  const isReplay = Boolean(options.replay);
+  const newQuestionCount = isReplay ? 0 : indexes.filter((index) => !doneIndexes.has(index)).length;
   const willCompleteCycle = globalQuestionCount > 0
     && globalDoneCount + newQuestionCount >= globalQuestionCount;
   return {
@@ -12583,7 +12632,7 @@ function buildLocalP3BankPlanFromCard(entry = {}) {
     status: "ready",
     question_count: questions.length,
     p3_bank_cue_id: questionId,
-    p3_bank_round_index: Math.max(0, Number(entry.practice_next_round_index) || 0),
+    p3_bank_round_index: requestedRoundIndex ?? Math.max(0, Number(entry.practice_next_round_index) || 0),
     p3_bank_round_count: Math.max(0, Number(entry.practice_round_count) || 0),
     p3_bank_practice_cycle: p3BankPracticeCycle(),
     p3_bank_next_question_indexes: indexes,
@@ -12591,14 +12640,15 @@ function buildLocalP3BankPlanFromCard(entry = {}) {
     p3_bank_cycle_question_count: globalQuestionCount,
     p3_bank_will_complete_cycle: willCompleteCycle,
     p3_bank_followup_ids: questions.map((item) => item.followup_id).filter(Boolean),
+    p3_bank_replay: isReplay,
   };
 }
 
-function loadP3BankPlanFromCard(entry = {}, message = "已载入固定追问，确认后可开始。") {
+function loadP3BankPlanFromCard(entry = {}, message = "已载入固定追问，确认后可开始。", options = {}) {
   setSelectedP3BankCard(entry);
   state.p3PlanError = "";
   state.p3PlanLoading = false;
-  state.p3Plan = buildLocalP3BankPlanFromCard(entry);
+  state.p3Plan = buildLocalP3BankPlanFromCard(entry, options);
   renderP3PlanPreview();
   syncP3LaunchPanel(message);
   return state.p3Plan;
@@ -12666,6 +12716,7 @@ function p3BankCardPreviewHtml(entry) {
       </div>
       <strong>${escapeHtml(title)}</strong>
       ${bullets ? `<ul>${bullets}</ul>` : ""}
+      ${p3BankRoundChipsHtml(entry)}
     </article>
   `;
 }
@@ -12682,6 +12733,7 @@ function p3SelectedBankCardHtml(entry) {
       </div>
       <strong>${escapeHtml(title)}</strong>
       ${bullets ? `<ul>${bullets}</ul>` : ""}
+      ${p3BankRoundChipsHtml(entry)}
     </article>
   `;
 }
@@ -12751,9 +12803,61 @@ async function openP3BankPicker() {
   await renderP3BankPicker({ force: false });
 }
 
+function openP3BankReplayPicker(card) {
+  const rounds = Array.isArray(card?.practice_rounds) ? card.practice_rounds : [];
+  if (!rounds.length) return false;
+  if (rounds.length === 1) {
+    const roundIndex = Number(rounds[0]?.round_index) || 0;
+    loadP3BankPlanFromCard(card, "已载入复练追问，不计入本周目次数。", { roundIndex, replay: true });
+    closeP3BankPicker();
+    return true;
+  }
+  document.querySelector(".p3-bank-replay-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.className = "confirm-overlay p3-bank-replay-overlay";
+  overlay.innerHTML = `
+    <section class="confirm-dialog p3-bank-replay-dialog" role="dialog" aria-modal="true" aria-labelledby="p3BankReplayTitle">
+      <span class="p3-cycle-notice-kicker">本题卡本周目已完成</span>
+      <h3 id="p3BankReplayTitle">选择要复练的追问组</h3>
+      <p>复练仍会生成完整报告，但不会增加本周目次数。</p>
+      <div class="p3-bank-replay-options">
+        ${rounds.map((round, roundIndex) => {
+          const indexes = (Array.isArray(round.question_indexes) ? round.question_indexes : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value >= 0);
+          const label = p3BankRoundLabel(indexes) || `第 ${roundIndex + 1} 组`;
+          return `<button type="button" class="p3-bank-replay-option" data-p3-bank-replay-round="${Number(round.round_index) || 0}">${escapeHtml(label)}</button>`;
+        }).join("")}
+      </div>
+      <div class="confirm-actions"><button type="button" class="ghost-btn" data-p3-bank-replay-cancel>取消</button></div>
+    </section>
+  `;
+  const close = () => {
+    overlay.remove();
+    document.body.classList.remove("modal-open");
+  };
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay || event.target.closest("[data-p3-bank-replay-cancel]")) {
+      close();
+      return;
+    }
+    const option = event.target.closest("[data-p3-bank-replay-round]");
+    if (!option) return;
+    const roundIndex = Number(option.dataset.p3BankReplayRound);
+    loadP3BankPlanFromCard(card, "已载入复练追问，不计入本周目次数。", { roundIndex, replay: true });
+    close();
+    closeP3BankPicker();
+  });
+  document.body.append(overlay);
+  document.body.classList.add("modal-open");
+  overlay.querySelector("[data-p3-bank-replay-round]")?.focus();
+  return true;
+}
+
 function activateP3BankPickerCard(cardButton) {
   const card = p3BankCardsWithFollowUps().find((item) => p2BankQuestionId(item) === cardButton?.dataset?.p3BankCard);
   if (!card) return false;
+  if (p3BankCardProgressState(card) === "complete") return openP3BankReplayPicker(card);
   loadP3BankPlanFromCard(card);
   closeP3BankPicker();
   return true;

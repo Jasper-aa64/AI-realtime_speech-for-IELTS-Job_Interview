@@ -603,10 +603,12 @@ def _balanced_p3_bank_question_counts(user, followup_ids: list[str]) -> dict[str
         SpeakingTrainingObservation.objects.filter(user=user, part="p3", question_id__in=followup_ids)
         .exclude(transcript="")
         .order_by("observed_at", "created_at", "id")
-        .values_list("question_id", "observed_at", "legacy_attempt_id", "attempt_id", "id")
+        .values_list("question_id", "observed_at", "legacy_attempt_id", "attempt_id", "id", "attempt__metadata")
     )
     sessions: dict[str, list[str]] = {}
-    for question_id, _observed_at, legacy_attempt_id, attempt_id, observation_pk in rows:
+    for question_id, _observed_at, legacy_attempt_id, attempt_id, observation_pk, attempt_metadata in rows:
+        if isinstance(attempt_metadata, dict) and attempt_metadata.get("p3_bank_replay") is True:
+            continue
         followup_id = clean_report_text(str(question_id or ""))
         if followup_id not in id_set:
             continue

@@ -15528,40 +15528,26 @@ body.theme-dark.font-popular .p3-bank-entry-icon {
 
 .p3-bank-picker-card {
   --p3-bank-progress-fill: 0%;
+  --p3-bank-progress-color: color-mix(in srgb, var(--accent) 14%, #ffffff);
   width: 100%;
   appearance: none;
   cursor: pointer;
   text-align: left;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: var(--panel);
+  background: linear-gradient(
+    90deg,
+    var(--p3-bank-progress-color) 0 var(--p3-bank-progress-fill),
+    var(--panel) var(--p3-bank-progress-fill) 100%
+  );
   padding: 18px;
   display: grid;
   gap: 12px;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  transition: border-color 180ms ease, box-shadow 180ms ease;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.p3-bank-picker-card::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  inset: 0 auto 0 0;
-  width: var(--p3-bank-progress-fill);
-  background: color-mix(in srgb, var(--accent) 14%, #ffffff);
-  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1), background 180ms ease;
-  pointer-events: none;
-}
-
-body.theme-dark .p3-bank-picker-card::before {
-  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
-}
-
-.p3-bank-picker-card > * {
-  position: relative;
-  z-index: 1;
+body.theme-dark .p3-bank-picker-card {
+  --p3-bank-progress-color: color-mix(in srgb, var(--accent) 16%, var(--panel));
 }
 
 .p3-bank-picker-card--none {
@@ -15574,10 +15560,6 @@ body.theme-dark .p3-bank-picker-card::before {
 
 .p3-bank-picker-card--complete {
   --p3-bank-progress-fill: 100%;
-}
-
-.p3-bank-picker-card--partial::before {
-  box-shadow: 1px 0 0 color-mix(in srgb, var(--accent) 28%, var(--line));
 }
 
 .p3-bank-card-top {
@@ -15623,6 +15605,85 @@ body.theme-dark .p3-bank-picker-card::before {
   align-items: center;
   font-size: 12px;
   font-weight: 850;
+}
+
+.p3-bank-round-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.p3-bank-round-chip {
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease, opacity 180ms ease;
+}
+
+.p3-bank-round-chip.is-next {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent);
+}
+
+.p3-bank-round-chip.is-dim {
+  border-color: color-mix(in srgb, var(--line) 82%, transparent);
+  background: color-mix(in srgb, var(--panel) 88%, var(--muted));
+  color: color-mix(in srgb, var(--muted) 74%, var(--panel));
+  opacity: 0.74;
+}
+
+.p3-bank-replay-dialog {
+  width: min(480px, calc(100vw - 40px));
+  display: grid;
+  gap: 12px;
+}
+
+.p3-bank-replay-dialog h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.p3-bank-replay-dialog p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.p3-bank-replay-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.p3-bank-replay-option {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.p3-bank-replay-option:hover,
+.p3-bank-replay-option:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  color: var(--accent);
+  outline: none;
 }
 
 .p3-cycle-notice-dialog {
@@ -15727,11 +15788,17 @@ body.theme-dark .p3-bank-picker-card::before {
 }
 
 .p3-bank-picker-card:hover,
-.p3-bank-picker-card:focus-visible,
+.p3-bank-picker-card:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent),
+    0 12px 28px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .p3-bank-picker-card.active {
   outline: none;
   border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
-  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent),
     0 12px 28px color-mix(in srgb, var(--accent) 12%, transparent);
@@ -37575,32 +37642,26 @@ body.theme-dark:not(.font-academic):not(.font-popular) .language-takeaway-action
 }
 
 body.theme-dark:not(.font-academic):not(.font-popular) .p3-source-option:hover,
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-focus-option:hover,
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-picker-card:hover,
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-picker-card:focus-visible {
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-focus-option:hover {
   background: color-mix(in srgb, var(--ds-l2-bg) 84%, #34d399) !important;
   border-color: rgba(110, 231, 183, 0.48) !important;
 }
 
 body.theme-dark:not(.font-academic):not(.font-popular) .p3-source-option.active,
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-focus-option.active,
-body.theme-dark:not(.font-academic):not(.font-popular) .p3-bank-picker-card.active {
+body.theme-dark:not(.font-academic):not(.font-popular) .p3-focus-option.active {
   background: color-mix(in srgb, var(--ds-l2-bg) 82%, #34d399) !important;
   border-color: rgba(167, 243, 208, 0.54) !important;
   color: #eafff7 !important;
 }
 
 body.theme-dark.font-popular .p3-source-option:hover,
-body.theme-dark.font-popular .p3-focus-option:hover,
-body.theme-dark.font-popular .p3-bank-picker-card:hover,
-body.theme-dark.font-popular .p3-bank-picker-card:focus-visible {
+body.theme-dark.font-popular .p3-focus-option:hover {
   background: color-mix(in srgb, var(--ds-l2-bg) 84%, #184870) !important;
   border-color: rgba(76, 137, 183, 0.50) !important;
 }
 
 body.theme-dark.font-popular .p3-source-option.active,
-body.theme-dark.font-popular .p3-focus-option.active,
-body.theme-dark.font-popular .p3-bank-picker-card.active {
+body.theme-dark.font-popular .p3-focus-option.active {
   background: color-mix(in srgb, var(--ds-l2-bg) 82%, #184870) !important;
   border-color: rgba(93, 153, 197, 0.56) !important;
   color: #eaf6ff !important;
@@ -39396,12 +39457,51 @@ body.theme-dark.font-popular .p3-plan-card-top em {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
 
-/* P3 fixed-bank selected cue card: deepen the card surface and keep the
-   category label readable in the third dark theme only. */
+/* P3 fixed-bank cards in the third dark theme keep their own readable blue
+   scale. The global accent is intentionally deep here, so it cannot serve as
+   progress or text colour on the almost-black card surface. */
+body.theme-dark.font-popular .p3-bank-picker-card {
+  --p3-bank-progress-color: #1e5078;
+  border-color: rgba(130, 180, 220, 0.32);
+}
+
+body.theme-dark.font-popular .p3-bank-picker-card .p3-bank-card-top {
+  color: #c8e6ff;
+}
+
+body.theme-dark.font-popular .p3-bank-picker-card .p3-bank-card-top em,
+body.theme-dark.font-popular .p3-bank-picker-card--partial .p3-bank-card-top em,
+body.theme-dark.font-popular .p3-bank-picker-card--complete .p3-bank-card-top em {
+  color: #b7ddff;
+}
+
+body.theme-dark.font-popular .p3-bank-picker-card strong {
+  color: #f1f7ff;
+}
+
+body.theme-dark.font-popular .p3-bank-picker-card ul {
+  color: #c8d8e8;
+}
+
+body.theme-dark.font-popular .p3-bank-round-chip.is-next {
+  border-color: rgba(133, 204, 247, 0.58);
+  background: #1e5078;
+  color: #e0f2ff;
+}
+
+body.theme-dark.font-popular .p3-bank-round-chip.is-dim {
+  border-color: rgba(130, 180, 220, 0.20);
+  background: rgba(12, 25, 38, 0.78);
+  color: #9ab0c3;
+}
+
+/* Keep selection visible by its border only so it never replaces progress. */
 body.theme-dark.font-popular .p3-bank-picker-card.active,
 body.theme-dark.font-popular .p3-bank-context-card.active {
-  background: linear-gradient(180deg, rgba(7, 22, 34, 0.94), rgba(4, 10, 16, 0.98)) !important;
   border-color: rgba(91, 177, 232, 0.50) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(151, 211, 248, 0.14),
+    0 12px 28px rgba(0, 0, 0, 0.24) !important;
 }
 
 body.theme-dark.font-popular .p3-bank-picker-card.active .p3-bank-card-top span,

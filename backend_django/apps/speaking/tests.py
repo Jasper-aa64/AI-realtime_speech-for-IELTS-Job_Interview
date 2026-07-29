@@ -548,6 +548,41 @@ class P3BankPracticeRoundTests(TestCase):
         self.assertEqual([len(items) for items in build_rounds(list(range(7)))], [3, 3, 1])
         self.assertEqual([len(items) for items in build_rounds(list(range(10)))], [3, 3, 3, 1])
 
+    def test_replayed_p3_bank_observation_does_not_advance_coverage_count(self):
+        from apps.speaking import corpus_services
+
+        user = get_user_model().objects.create_user(username="p3-bank-replay-count", password="test-pass")
+        cue_id = "p2cue:replay-count"
+        question = "Why do cities need public parks?"
+        followup_id = corpus_services.p3_bank_followup_id(cue_id, question, 0)
+        replay_attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="p3-bank-replay-count",
+            mode=SpeakingAttempt.Mode.P3,
+            part="p3",
+            status=SpeakingAttempt.Status.SCORED,
+            metadata={"p3_bank_cue_id": cue_id, "p3_bank_replay": True},
+        )
+        SpeakingTrainingObservation.objects.create(
+            observation_id="p3-bank-replay-count-q1",
+            user=user,
+            attempt=replay_attempt,
+            legacy_attempt_id=replay_attempt.attempt_id,
+            legacy_turn_id="t1",
+            question_id=followup_id,
+            part="p3",
+            question=question,
+            transcript="Parks give people a quiet place to exercise and relax.",
+            relevance=Decimal("1.000"),
+            observed_at=timezone.now(),
+            next_due=timezone.now(),
+        )
+
+        self.assertEqual(
+            corpus_services.p3_bank_practice_question_counts(user, cue_id, [question]),
+            {followup_id: 0},
+        )
+
 
 class P1PracticeCountTests(TestCase):
     def test_ai_training_observation_keeps_count_after_report_is_deleted(self):

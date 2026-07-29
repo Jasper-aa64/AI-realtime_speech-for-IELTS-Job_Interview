@@ -32,8 +32,8 @@ assert.match(
 
 assert.match(
   source,
-  /P2 正文已填 \$\{stats\.filled\}\/\$\{stats\.total\}/,
-  "The filter badge must show the scoped edited-body numerator and denominator.",
+  /return `「\$\{p2BrainstormFilterLabel\(\)\}」共 \$\{stats\.total\} 道 · P2 正文已填 \$\{stats\.filled\}\/\$\{stats\.total\}`;/,
+  "The filter badge must show filter, total, then edited-body progress in that order.",
 );
 
 console.log("P2 Brainstorm edited-body status checks passed.");

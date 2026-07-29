@@ -1233,7 +1233,7 @@ def _build_p3_turns(
         "p3_focus": focus,
         "p3_plan": plan,
     }
-    for key in ("p3_bank_cue_id", "p3_bank_round_index", "p3_bank_round_count", "p3_bank_followup_ids"):
+    for key in ("p3_bank_cue_id", "p3_bank_round_index", "p3_bank_round_count", "p3_bank_followup_ids", "p3_bank_replay"):
         if key in plan:
             metadata[key] = plan[key]
     if plan.get("error"):
@@ -3772,6 +3772,12 @@ def _training_question_id_for_turn(turn: SpeakingTurn) -> str:
     return f"{turn.part}:{hashlib.md5(turn.question.encode()).hexdigest()[:12]}"
 
 
+def _attempt_records_training_observations(attempt: SpeakingAttempt) -> bool:
+    """A completed P3 bank replay gets feedback but must not advance coverage."""
+    metadata = attempt.metadata if isinstance(attempt.metadata, dict) else {}
+    return not (attempt.part == "p3" and metadata.get("p3_bank_replay") is True)
+
+
 def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     attempt = _load_attempt_for_user(user, attempt_id)
     if report_is_valid(attempt):
@@ -3938,51 +3944,52 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
     )
 
     observations = []
-    for turn in scoring_turns:
-        turn_text = turn_display_transcript(turn)
-        word_count = _word_count(turn_text)
-        reasons = []
-        if score["overall_band"] < 5.5:
-            reasons.append("low_band")
-        if word_count < 25:
-            reasons.append("short_answer")
-        relevance = _training_relevance(turn.question, turn_text)
-        if relevance < Decimal("0.200"):
-            reasons.append("off_topic")
-        observation, _ = SpeakingTrainingObservation.objects.update_or_create(
-            user=user,
-            observation_id=f"{attempt.attempt_id}_{turn.turn_id}",
-            defaults={
-                "attempt": attempt,
-                "turn": turn,
-                "legacy_attempt_id": attempt.attempt_id,
-                "legacy_turn_id": turn.turn_id,
-                "question_id": _training_question_id_for_turn(turn),
-                "part": turn.part,
-                "question": turn.question,
-                "transcript": turn_text,
-                "overall_band": Decimal(str(score["overall_band"])),
-                "fluency_coherence": Decimal(str(score["fluency_coherence"])),
-                "lexical_resource": Decimal(str(score["lexical_resource"])),
-                "grammar_range_accuracy": Decimal(str(score["grammatical_range"])),
-                "pronunciation": None,
-                "relevance": relevance,
-                "weak_item_flag": bool(reasons),
-                "weak_reasons": reasons,
-                "model_version": f"django_{score.get('backend', 'unknown')}",
-                "observed_at": timezone.now(),
-                "next_due": timezone.now() + timezone.timedelta(days=1 if reasons else 14),
-            },
-        )
-        observations.append(
-            {
-                "observation_id": observation.observation_id,
-                "question_id": observation.question_id,
-                "part": observation.part,
-                "weak_item_flag": observation.weak_item_flag,
-                "weak_reasons": observation.weak_reasons,
-            }
-        )
+    if _attempt_records_training_observations(attempt):
+        for turn in scoring_turns:
+            turn_text = turn_display_transcript(turn)
+            word_count = _word_count(turn_text)
+            reasons = []
+            if score["overall_band"] < 5.5:
+                reasons.append("low_band")
+            if word_count < 25:
+                reasons.append("short_answer")
+            relevance = _training_relevance(turn.question, turn_text)
+            if relevance < Decimal("0.200"):
+                reasons.append("off_topic")
+            observation, _ = SpeakingTrainingObservation.objects.update_or_create(
+                user=user,
+                observation_id=f"{attempt.attempt_id}_{turn.turn_id}",
+                defaults={
+                    "attempt": attempt,
+                    "turn": turn,
+                    "legacy_attempt_id": attempt.attempt_id,
+                    "legacy_turn_id": turn.turn_id,
+                    "question_id": _training_question_id_for_turn(turn),
+                    "part": turn.part,
+                    "question": turn.question,
+                    "transcript": turn_text,
+                    "overall_band": Decimal(str(score["overall_band"])),
+                    "fluency_coherence": Decimal(str(score["fluency_coherence"])),
+                    "lexical_resource": Decimal(str(score["lexical_resource"])),
+                    "grammar_range_accuracy": Decimal(str(score["grammatical_range"])),
+                    "pronunciation": None,
+                    "relevance": relevance,
+                    "weak_item_flag": bool(reasons),
+                    "weak_reasons": reasons,
+                    "model_version": f"django_{score.get('backend', 'unknown')}",
+                    "observed_at": timezone.now(),
+                    "next_due": timezone.now() + timezone.timedelta(days=1 if reasons else 14),
+                },
+            )
+            observations.append(
+                {
+                    "observation_id": observation.observation_id,
+                    "question_id": observation.question_id,
+                    "part": observation.part,
+                    "weak_item_flag": observation.weak_item_flag,
+                    "weak_reasons": observation.weak_reasons,
+                }
+            )
     runtime["training_observations"] = observations
     report.report_payload = runtime
     report.save(update_fields=["report_payload", "updated_at"])
@@ -4342,42 +4349,43 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     )
 
     # Update training observations
-    for turn in scoring_turns:
-        turn_text = turn_display_transcript(turn)
-        word_count = _word_count(turn_text)
-        reasons = []
-        if score["overall_band"] < 5.5:
-            reasons.append("low_band")
-        if word_count < 25:
-            reasons.append("short_answer")
-        relevance = _training_relevance(turn.question, turn_text)
-        if relevance < Decimal("0.200"):
-            reasons.append("off_topic")
-        SpeakingTrainingObservation.objects.update_or_create(
-            user=user,
-            observation_id=f"{attempt.attempt_id}_{turn.turn_id}",
-            defaults={
-                "attempt": attempt,
-                "turn": turn,
-                "legacy_attempt_id": attempt.attempt_id,
-                "legacy_turn_id": turn.turn_id,
-                "question_id": _training_question_id_for_turn(turn),
-                "part": turn.part,
-                "question": turn.question,
-                "transcript": turn_text,
-                "overall_band": Decimal(str(score["overall_band"])),
-                "fluency_coherence": Decimal(str(score["fluency_coherence"])),
-                "lexical_resource": Decimal(str(score["lexical_resource"])),
-                "grammar_range_accuracy": Decimal(str(score["grammatical_range"])),
-                "pronunciation": None,
-                "relevance": relevance,
-                "weak_item_flag": bool(reasons),
-                "weak_reasons": reasons,
-                "model_version": f"django_{score.get('backend', 'unknown')}",
-                "observed_at": timezone.now(),
-                "next_due": timezone.now() + timezone.timedelta(days=1 if reasons else 14),
-            },
-        )
+    if _attempt_records_training_observations(attempt):
+        for turn in scoring_turns:
+            turn_text = turn_display_transcript(turn)
+            word_count = _word_count(turn_text)
+            reasons = []
+            if score["overall_band"] < 5.5:
+                reasons.append("low_band")
+            if word_count < 25:
+                reasons.append("short_answer")
+            relevance = _training_relevance(turn.question, turn_text)
+            if relevance < Decimal("0.200"):
+                reasons.append("off_topic")
+            SpeakingTrainingObservation.objects.update_or_create(
+                user=user,
+                observation_id=f"{attempt.attempt_id}_{turn.turn_id}",
+                defaults={
+                    "attempt": attempt,
+                    "turn": turn,
+                    "legacy_attempt_id": attempt.attempt_id,
+                    "legacy_turn_id": turn.turn_id,
+                    "question_id": _training_question_id_for_turn(turn),
+                    "part": turn.part,
+                    "question": turn.question,
+                    "transcript": turn_text,
+                    "overall_band": Decimal(str(score["overall_band"])),
+                    "fluency_coherence": Decimal(str(score["fluency_coherence"])),
+                    "lexical_resource": Decimal(str(score["lexical_resource"])),
+                    "grammar_range_accuracy": Decimal(str(score["grammatical_range"])),
+                    "pronunciation": None,
+                    "relevance": relevance,
+                    "weak_item_flag": bool(reasons),
+                    "weak_reasons": reasons,
+                    "model_version": f"django_{score.get('backend', 'unknown')}",
+                    "observed_at": timezone.now(),
+                    "next_due": timezone.now() + timezone.timedelta(days=1 if reasons else 14),
+                },
+            )
 
     return {"ok": True, "attempt": runtime, "report": report_payload(attempt)}
 
