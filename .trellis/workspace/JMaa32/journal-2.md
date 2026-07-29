@@ -1073,3 +1073,36 @@ Aggregated browser realtime PCM frames to provider-sized chunks, preserved stop 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 89: P3 bank progress and machine handoff
+
+**Date**: 2026-07-29
+**Task**: P3 bank progress and machine handoff
+**Branch**: `refactor/speaking-services-continue`
+
+### Summary
+
+Published P2 Brainstorm status ordering, P3 fixed-bank global cycle progress, Q-group replay without count increments, the committed demo database, and a copyable development handoff prompt.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f7514f1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
