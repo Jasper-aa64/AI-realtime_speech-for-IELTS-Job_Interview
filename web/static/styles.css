@@ -10161,6 +10161,12 @@ body.is-dragging-p2-dialog * {
   font-weight: 880;
 }
 
+.p2-brainstorm-index.has-p2-bank-body {
+  background: #dcfce7;
+  color: #15803d;
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.2);
+}
+
 .p2-brainstorm-input {
   width: 100%;
   min-width: 0;
@@ -10226,7 +10232,10 @@ body.is-dragging-p2-dialog * {
 }
 
 .p2-brainstorm-filter-count {
-  flex: 0 0 168px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: 0;
   margin-left: auto;      /* 推到同行最右 */
   padding: 3px 10px;
   border-radius: 999px;
@@ -10236,7 +10245,9 @@ body.is-dragging-p2-dialog * {
   font-weight: 760;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .p2-brainstorm-filter-chip {
@@ -21802,6 +21813,12 @@ body.theme-dark .p2-brainstorm-index {
   background: var(--dark-primary-soft);
   border-color: var(--dark-primary-border);
   color: var(--dark-primary-text);
+}
+
+body.theme-dark .p2-brainstorm-index.has-p2-bank-body {
+  background: rgba(45, 212, 191, 0.18);
+  color: #5eead4;
+  box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.28);
 }
 
 body.theme-dark .p2-brainstorm-card-mark {

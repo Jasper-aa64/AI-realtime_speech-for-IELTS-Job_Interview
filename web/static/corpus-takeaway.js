@@ -5901,12 +5901,25 @@ I will paste one topic's corpus context next.`;
       return Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row")).some(p2BrainstormRowIsEmpty);
     }
 
-    // 当前筛选命中的题数。
-    function p2BrainstormFilteredCount() {
+    function p2BrainstormHasEditedBody(item = {}) {
+      return Boolean(
+        String(item.corpus_text || item.material_text || "").trim()
+        || item.has_bank_corpus,
+      );
+    }
+
+    function p2BrainstormFilteredBodyStats() {
       const rows = Array.from(document.querySelectorAll("#p2BrainstormList .p2-brainstorm-row"));
-      if (!p2BrainstormActiveFilter) return rows.length;
-      if (p2BrainstormActiveFilter === P2_BRAINSTORM_EMPTY_FILTER) return rows.filter(p2BrainstormRowIsEmpty).length;
-      return rows.filter((row) => p2BrainstormRowTags(row).includes(p2BrainstormActiveFilter)).length;
+      const filteredRows = rows.filter(p2BrainstormRowMatchesActiveFilter);
+      return {
+        total: filteredRows.length,
+        filled: filteredRows.filter((row) => row.querySelector(".p2-brainstorm-index")?.classList.contains("has-p2-bank-body")).length,
+      };
+    }
+
+    function p2BrainstormFilterCountLabel() {
+      const stats = p2BrainstormFilteredBodyStats();
+      return `共 ${stats.total} 道「${p2BrainstormFilterLabel()}」 · P2 正文已填 ${stats.filled}/${stats.total}`;
     }
 
     // 当前筛选对应的复制标签：无筛选→全部、空筛选→没灵感、否则就是标签名。
@@ -5948,7 +5961,7 @@ I will paste one topic's corpus context next.`;
         chip("全部", "") +
         tags.map((t) => chip(t, t)).join("") +
         (hasEmpty ? chip("没灵感", P2_BRAINSTORM_EMPTY_FILTER) : "") +
-        `<span class="p2-brainstorm-filter-count">共 ${p2BrainstormFilteredCount()} 道「${escapeHtml(p2BrainstormFilterLabel())}」</span>`;
+        `<span class="p2-brainstorm-filter-count">${escapeHtml(p2BrainstormFilterCountLabel())}</span>`;
       updateP2BrainstormCopyLabel();
     }
 
@@ -5961,7 +5974,7 @@ I will paste one topic's corpus context next.`;
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
       const count = bar.querySelector(".p2-brainstorm-filter-count");
-      if (count) count.textContent = `共 ${p2BrainstormFilteredCount()} 道「${p2BrainstormFilterLabel()}」`;
+      if (count) count.textContent = p2BrainstormFilterCountLabel();
       updateP2BrainstormCopyLabel();
     }
 
@@ -6058,7 +6071,7 @@ I will paste one topic's corpus context next.`;
               ${hasCue ? `data-p2-brainstorm-toggle="${escapeHtml(questionId)}" role="button" tabindex="0" aria-expanded="false"` : ""}
             >
               <div class="p2-brainstorm-question">
-                <span class="p2-brainstorm-index">${item._rowIndex}</span>
+                <span class="p2-brainstorm-index${p2BrainstormHasEditedBody(item) ? " has-p2-bank-body" : ""}">${item._rowIndex}</span>
                 <span class="p2-brainstorm-stem">${stem}</span>
               </div>
               ${hasCue ? `
