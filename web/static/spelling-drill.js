@@ -39,10 +39,20 @@
         sd.completedWordIds = new Set();
         sd.doneCount      = 0;
         sd.queueInitialLen= 0;
+        sd.sessionReviewDayStart = String(sd.sessionReviewDayStart || "");
         sd.result         = null;
         sd.loadingPromise = sd.loadingPromise || null;
         sd.submitSeq      = Number(sd.submitSeq || 0);
         sd.nextHintTimer  = sd.nextHintTimer || null;
+        sd.pendingReviewDayPayload = sd.pendingReviewDayPayload || null;
+        sd.dueDotOverride = sd.dueDotOverride !== null
+          && sd.dueDotOverride !== undefined
+          && Number.isFinite(Number(sd.dueDotOverride))
+          ? Number(sd.dueDotOverride)
+          : null;
+        sd.reviewDayRefreshPromise = sd.reviewDayRefreshPromise || null;
+        sd.reviewDayRefreshSeq = Number(sd.reviewDayRefreshSeq || 0);
+        sd.reviewDayRefreshBound = Boolean(sd.reviewDayRefreshBound);
         sd._drillReady    = true;
       }
       return sd;
@@ -387,9 +397,12 @@
         s.scope === "due" &&
         s.itemsScope === "due" &&
         Number(s.queueInitialLen || 0) > 0;
-      const due = useQueue
-        ? Math.max(0, Number(s.queueInitialLen || 0) - Number(s.doneCount || 0))
-        : Number(s.stats?.due || 0);
+      const hasOverride = s.dueDotOverride !== null && Number.isFinite(Number(s.dueDotOverride));
+      const due = hasOverride
+        ? Math.max(0, Number(s.dueDotOverride))
+        : useQueue
+          ? Math.max(0, Number(s.queueInitialLen || 0) - Number(s.doneCount || 0))
+          : Number(s.stats?.due || 0);
       const dot = $("spellingDrillDueDot");
       if (!dot) return;
       dot.classList.toggle("hidden", due <= 0);
@@ -468,12 +481,15 @@
       s.phase = "ready";
       if (resetQueue) {
         clearNextHintTimer();
+        s.pendingReviewDayPayload = null;
+        s.dueDotOverride = null;
         s.queue          = [...s.items];
         s.queuePos       = 0;
         s.requeueMap     = {};
         s.completedWordIds = new Set();
         s.doneCount      = 0;
         s.queueInitialLen= s.items.length;
+        s.sessionReviewDayStart = String(payload?.stats?.review_day_start || "");
         s.result         = null;
       }
     }
@@ -481,6 +497,31 @@
     function draftInputValue() {
       const input = $("spellingTypedInput");
       return input ? String(input.value || "") : "";
+    }
+
+    function shouldPreserveSameDaySession(payload) {
+      const s = S();
+      if (
+        s.phase !== "ready"
+        || s.view !== "drill"
+        || s.itemsScope !== s.scope
+        || !Array.isArray(s.queue)
+        || Number(s.queueInitialLen || 0) <= 0
+      ) {
+        return false;
+      }
+
+      // A 4 AM rollover waits for an answer already in progress. Navigating
+      // away and back must not accidentally apply that queued payload early.
+      if (s.pendingReviewDayPayload && s.scope === "due") return true;
+
+      const sessionDay = String(
+        s.sessionReviewDayStart || s.stats?.review_day_start || ""
+      );
+      const incomingDay = String(payload?.stats?.review_day_start || "");
+      // Older cached payloads may not carry the cutoff yet. Preserve the
+      // existing round rather than destroying user input in that case.
+      return !sessionDay || !incomingDay || sessionDay === incomingDay;
     }
 
     async function load({ force = false, resetQueue = true, _pivoted = false } = {}) {
@@ -505,7 +546,9 @@
       const canRenderCached = !force && resetQueue && Boolean(cached || sameScopeItems);
 
       if (canRenderCached) {
-        ingest(cached || { items: s.items, stats: s.stats || {} }, { resetQueue: true });
+        const cachedPayload = cached || { items: s.items, stats: s.stats || {} };
+        const preserveSession = shouldPreserveSameDaySession(cachedPayload);
+        ingest(cachedPayload, { resetQueue: resetQueue && !preserveSession });
         render();
         setStatus("正在同步最新错词本…");
       } else {
@@ -518,9 +561,10 @@
         rememberScopePayload(scope, payload, epoch);
         // If the user already started answering in the cached view, don't yank
         // the queue out from under them — refresh stats/items only.
+        const preserveSession = resetQueue && shouldPreserveSameDaySession(payload);
         const progressed = canRenderCached &&
           (Number(s.doneCount || 0) > 0 || Number(s.queuePos || 0) > 0 || s.result || draftInputValue());
-        ingest(payload, { resetQueue: resetQueue && !progressed });
+        ingest(payload, { resetQueue: resetQueue && !preserveSession && !progressed });
         setStatus("");
         prefetchOtherScopes();
       } catch (err) {
@@ -530,6 +574,75 @@
       }
       if (stale()) return;
       render();
+    }
+
+    function dueSessionHasLearnerProgress() {
+      const s = S();
+      return state.view === "spellingDrill"
+        && s.view === "drill"
+        && s.scope === "due"
+        && s.phase === "ready"
+        && Boolean(currentWord())
+        && (
+          Number(s.queuePos || 0) > 0
+          || Number(s.doneCount || 0) > 0
+          || Boolean(s.result)
+          || Boolean(draftInputValue().trim())
+        );
+    }
+
+    function refreshSpellingReviewDay() {
+      const s = S();
+      if (!state.account?.authenticated) return Promise.resolve(null);
+      if (s.reviewDayRefreshPromise) return s.reviewDayRefreshPromise;
+
+      const refreshSeq = ++s.reviewDayRefreshSeq;
+      const epoch = Number(s.cacheEpoch || 0) + 1;
+      s.cacheEpoch = epoch;
+      s.scopeCache = {};
+      s._loading = {};
+      s._loadSeq = Number(s._loadSeq || 0) + 1;
+
+      const request = fetchWords("due", { force: true })
+        .then((payload) => {
+          if (refreshSeq !== s.reviewDayRefreshSeq || epoch !== Number(s.cacheEpoch)) return null;
+          rememberScopePayload("due", payload, epoch);
+          s.stats = payload.stats || {};
+          s.loaded = true;
+
+          if (state.view === "spellingDrill" && s.scope === "due") {
+            if (dueSessionHasLearnerProgress()) {
+              s.pendingReviewDayPayload = payload;
+              s.dueDotOverride = Math.max(0, Number(payload.stats?.due || 0));
+              setHeaderStats();
+              updateDueDot();
+            } else {
+              ingest(payload, { resetQueue: true });
+              render();
+            }
+          } else {
+            s.dueDotOverride = Math.max(0, Number(payload.stats?.due || 0));
+            setHeaderStats();
+            updateDueDot();
+          }
+          return payload;
+        })
+        .catch((error) => {
+          console.warn("Spelling review-day refresh failed", error);
+          return null;
+        })
+        .finally(() => {
+          if (s.reviewDayRefreshPromise === request) s.reviewDayRefreshPromise = null;
+        });
+      s.reviewDayRefreshPromise = request;
+      return request;
+    }
+
+    function bindSpellingReviewDayRefresh() {
+      const s = S();
+      if (s.reviewDayRefreshBound || typeof window.addEventListener !== "function") return;
+      s.reviewDayRefreshBound = true;
+      window.addEventListener("ielts:review-day-change", () => refreshSpellingReviewDay());
     }
 
     // ─── Render helpers ───────────────────────────────────────────────
@@ -742,6 +855,15 @@
 
     // ─── Render ──────────────────────────────────────────────────────
     function render() {
+      const pendingState = S();
+      if (
+        pendingState.pendingReviewDayPayload
+        && pendingState.view === "drill"
+        && pendingState.scope === "due"
+        && pendingState.queuePos >= pendingState.queue.length
+      ) {
+        ingest(pendingState.pendingReviewDayPayload, { resetQueue: true });
+      }
       setHeaderStats();
       updateDueDot();
       syncScopeTabs();
@@ -1354,6 +1476,7 @@
 
     function bindSpellingDrillEvents() {
       warmSpeech();
+      bindSpellingReviewDayRefresh();
       // Scope tabs (header bar)
       document.querySelectorAll("[data-spelling-scope]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1479,6 +1602,8 @@
       loadSpellingDrill: load,
       renderSpellingDrill: render,
       bindSpellingDrillEvents,
+      bindSpellingReviewDayRefresh,
+      refreshSpellingReviewDay,
     };
   }
 

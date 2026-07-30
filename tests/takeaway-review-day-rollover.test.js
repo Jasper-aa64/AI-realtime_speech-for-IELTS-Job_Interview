@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const source = fs.readFileSync(
   path.join(__dirname, "..", "web", "static", "corpus-takeaway.js"),
@@ -59,6 +60,74 @@ assert.match(
   appSource,
   /startTakeawayReviewDayWatcher\(\);/,
   "App initialization must start exactly one review-day watcher."
+);
+
+let now = new Date(2026, 6, 17, 3, 59, 0, 0).getTime();
+const scheduled = [];
+const emitted = [];
+class FakeDate extends Date {
+  constructor(...args) {
+    super(...(args.length ? args : [now]));
+  }
+  static now() {
+    return now;
+  }
+}
+class FakeEvent {
+  constructor(type) {
+    this.type = type;
+  }
+}
+class FakeCustomEvent extends FakeEvent {
+  constructor(type, options = {}) {
+    super(type);
+    this.detail = options.detail;
+  }
+}
+const browserWindow = {
+  addEventListener() {},
+  clearTimeout() {},
+  dispatchEvent(event) {
+    emitted.push(event);
+  },
+  setTimeout(callback, delay) {
+    scheduled.push({ callback, delay });
+    return scheduled.length;
+  },
+};
+const context = {
+  window: browserWindow,
+  document: {
+    hidden: false,
+    addEventListener() {},
+  },
+  Date: FakeDate,
+  Event: FakeEvent,
+  CustomEvent: FakeCustomEvent,
+  console,
+  Map,
+  Set,
+  Promise,
+};
+vm.runInNewContext(source, context, { filename: "corpus-takeaway.js" });
+const controller = browserWindow.IELTSCorpusTakeaway.createCorpusTakeawayController({
+  state: {
+    view: "home",
+    account: { authenticated: true },
+    languageTakeaway: { items: [], loaded: false },
+    writingTakeaway: { items: [], loaded: false },
+  },
+  $: () => null,
+  api: async () => ({}),
+});
+controller.startTakeawayReviewDayWatcher();
+assert.equal(scheduled.length, 1);
+now = new Date(2026, 6, 17, 4, 0, 1, 0).getTime();
+scheduled.shift().callback();
+assert.equal(
+  emitted.some((event) => event.type === "ielts:review-day-change" && event.detail?.day === "2026-07-17"),
+  true,
+  "The working Takeaway watcher must publish the shared review-day event for spelling."
 );
 
 console.log("Takeaway review day rollover checks passed.");

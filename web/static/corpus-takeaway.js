@@ -942,6 +942,10 @@ I will paste one topic's corpus context next.`;
       if (state.view === "writingTakeawayBook" && takeawayKindLoaded("writing")) {
         renderTakeawayReviewPanel("writing");
       }
+      const reviewDayEvent = typeof CustomEvent === "function"
+        ? new CustomEvent("ielts:review-day-change", { detail: { day } })
+        : new Event("ielts:review-day-change");
+      window.dispatchEvent(reviewDayEvent);
       return true;
     }
 
