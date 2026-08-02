@@ -478,7 +478,8 @@ def _convert_to_pcm(audio_path: Path) -> bytes:
     ffmpeg_path = shutil.which(ffmpeg) or (ffmpeg if Path(ffmpeg).exists() else "")
     if not ffmpeg_path:
         raise VolcengineAsrError("ffmpeg is not installed or VOLCENGINE_ASR_FFMPEG is not configured.")
-    with tempfile.NamedTemporaryFile(suffix=".pcm") as tmp:
+    with tempfile.TemporaryDirectory(prefix="ielts-asr-") as tmp_dir:
+        output_path = Path(tmp_dir) / "audio.pcm"
         command = [
             ffmpeg_path,
             "-y",
@@ -490,12 +491,12 @@ def _convert_to_pcm(audio_path: Path) -> bytes:
             "16000",
             "-f",
             "s16le",
-            tmp.name,
+            str(output_path),
         ]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
         if result.returncode != 0:
             raise VolcengineAsrError(f"ffmpeg audio conversion failed: {result.stderr[-300:]}")
-        return Path(tmp.name).read_bytes()
+        return output_path.read_bytes()
 
 
 def transcribe_audio(audio_path: Path) -> dict[str, Any]:

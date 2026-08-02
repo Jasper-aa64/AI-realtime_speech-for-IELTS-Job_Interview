@@ -288,6 +288,7 @@ from .text_utils import (
     extract_json_object_with_keys,
     infer_grammar_corrections,
     normalize_coaching_markdown,
+    p3_plain_spoken_text,
     plain_spoken_text,
     spoken_markdown,
 )
@@ -2985,16 +2986,25 @@ def p3_discussion_score_request(
 def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_id: str) -> str:
     """Generate Band 7 model answer using the configured speaking AI route."""
     part_constraints = model_answer_constraints(part)
+    if part == "p3":
+        question_format_rule = (
+            "Include the original question only in the required **Q: <question>** study heading, then follow the exact "
+            "numbered P3 Markdown structure below. Use Markdown bold on 3-5 reusable spoken expressions. "
+        )
+    else:
+        question_format_rule = (
+            "Do not include the original question or cue-card bullets. Format the answer as concise Markdown "
+            "paragraphs with blank lines between paragraphs. Use Markdown bold on 2-5 high-value upgraded chunks. "
+        )
 
     prompt = (
         f"Write a natural IELTS Speaking Band 7 spoken version. Preserve the candidate's core ideas, "
-        "but improve cohesion, vocabulary, and grammar. Do not include the original question or cue-card bullets. "
+        "but improve cohesion, vocabulary, and grammar. "
         "It must sound like a real, fluent candidate talking to an examiner: relaxed natural spoken English, "
         "not stiff written prose. Why: the learner will imitate this aloud, so it has to be something a person would genuinely say. "
         "If the candidate's answer is thin, keep the core idea but add a believable reason, example, or concrete detail. "
-        "Format the answer as concise Markdown paragraphs with blank lines between paragraphs. "
-        "Use Markdown bold on 2-5 high-value upgraded chunks such as natural collocations, topic-specific phrases, "
-        "or useful sentence frames. Bold only the key phrases, not whole sentences. "
+        + question_format_rule
+        + "Use bold for natural collocations, topic-specific phrases, or useful sentence frames. Bold only the key phrases, not whole sentences. "
         "Example style: Well, **as a tech enthusiast**, I **usually spend** my evenings coding or **unwinding with** video games. "
         + part_constraints
         + "\n\nQuestion:\n"
@@ -3095,6 +3105,12 @@ def turn_feedback_with_codex(question: str, transcript: str, part: str, target: 
 
     Raises RuntimeError if the output is invalid or missing required fields.
     """
+    model_answer_format_rule = (
+        "- For P3, include the question in the required **Q: <question>** heading and follow the exact numbered P3 study structure.\n"
+        "- For P3, bold 3-5 reusable spoken expressions; do not use the generic 2-5 range."
+        if part == "p3"
+        else "- Do not include the original question, cue-card bullets, titles, or labels.\n- Bold 2-5 useful upgraded chunks."
+    )
     prompt = f"""Return JSON only. The top-level object must contain keys display_transcript, display_transcript_markdown, band7_version and ai_coaching.
 Do not repeat the input. Do not include Markdown outside string values, explanation, or code fences.
 
@@ -3104,7 +3120,8 @@ Task:
 - Write Chinese Markdown coaching for this same turn only if requires_ai_coaching is true.
 - Answer the exact examiner question directly and preserve the candidate's likely intent.
 - Reuse the candidate's concrete idea when it is relevant; improve cohesion, vocabulary, and grammar.
-- Do not include the original question, cue-card bullets, titles, labels, code fences, or logs.
+- Do not include code fences or logs.
+{model_answer_format_rule}
 - Base band7_version and ai_coaching on display_transcript, not noisy candidate transcript.
 - Bad example: if display_transcript says "at university", do not say the raw phrase "at University" should not be capitalized.
 - If requires_ai_coaching is false, set ai_coaching to an empty string.
@@ -3117,7 +3134,6 @@ Band 7 version constraints:
 {model_answer_constraints(part)}
 - For Part 1, write only 1-3 natural spoken sentences.
 - Use Markdown bold inside band7_version to mark the phrases the learner should notice and reuse.
-- Bold 2-5 useful upgraded chunks, such as natural collocations, idiomatic spoken links, or topic-specific phrases.
 - Do not bold the whole answer or full sentences.
 - Example style: Well, **as a tech enthusiast**, I **usually spend** my evenings coding or **unwinding with** video games.
 - Do not use generic template lines such as "this is quite easy for me to answer", "connects with my daily life", or "closer to Band 7".
@@ -3148,7 +3164,8 @@ Do not repeat the input. Do not include Markdown outside string values, explanat
 First produce display_transcript and display_transcript_markdown with confident ASR mis-recognition fixes only, then write a natural IELTS Speaking Band {target} answer for the question.
 If requires_ai_coaching is true, write Chinese coaching based only on display_transcript.
 If requires_ai_coaching is false, set ai_coaching to an empty string.
-In band7_version, use Markdown bold on 2-5 reusable upgraded phrases, not whole sentences.
+{model_answer_format_rule}
+In band7_version, use Markdown bold only on the reusable upgraded phrases, not whole sentences.
 The Band {target} answer should sound like relaxed natural spoken English that a real fluent candidate would say to an examiner. If the learner's answer is too thin, preserve the core idea but add a believable reason, example, or detail so the model answer is useful to imitate aloud.
 Part-specific Band answer constraints:
 {model_answer_constraints(part)}
@@ -3296,6 +3313,13 @@ def turn_feedback_batch_with_codex(
         f"For {part.upper()} model answers:\n{model_answer_constraints(part)}"
         for part in parts
     )
+    includes_p3 = "p3" in parts
+    batch_model_answer_format_rule = (
+        "- For P3 items, include the question in the required **Q: <question>** heading and follow the exact numbered P3 study structure.\n"
+        "- For P3 items, bold 3-5 reusable spoken expressions; do not use the generic 2-5 range."
+        if includes_p3
+        else "- Do not include the original question, cue-card bullets, titles, or labels.\n- Bold 2-5 useful upgraded chunks per answer."
+    )
     large_batch_output_budget = ""
     if len(items) >= 8:
         large_batch_output_budget = """
@@ -3320,7 +3344,8 @@ Task:
 - Then write one natural IELTS Speaking Band {target} spoken version based on that display_transcript.
 - Preserve the candidate's likely meaning and answer the exact examiner question directly.
 - Write Chinese coaching only when requires_ai_coaching is "yes".
-- Do not include the original question, cue-card bullets, titles, labels, code fences, or logs.
+- Do not include code fences or logs.
+{batch_model_answer_format_rule}
 - If requires_ai_coaching is "no", set ai_coaching to an empty string.
 
 prepared_corpus usage:
@@ -3353,7 +3378,6 @@ Band 7 version constraints:
 - For Part 2, write a natural long-turn answer in Markdown paragraphs, cover the cue-card points, and aim for 180-230 English words — roughly 1.5-2 minutes at a natural speaking pace. Keep it spoken and personal rather than turning it into a written essay.
 - If candidate_transcript is empty, keep display_transcript and display_transcript_markdown empty, but still write a direct Band {target} spoken version that answers the examiner question from the question alone; ai_coaching must remain an empty string.
 - Use Markdown bold inside band7_version to mark the phrases the learner should notice and reuse.
-- Bold 2-5 useful upgraded chunks per answer, such as natural collocations, idiomatic spoken links, or topic-specific phrases.
 - Do not bold the whole answer or full sentences.
 - Example style: Well, **as a tech enthusiast**, I **usually spend** my evenings coding or **unwinding with** video games.
 - Do not use generic template lines such as "this is quite easy for me to answer", "connects with my daily life", or "closer to Band 7".
@@ -3604,7 +3628,7 @@ def build_turn_feedback(
         result["feedback_generation_status"] = "failed" if result.get("feedback_generation_error") else "pending"
         result["feedback_generation_error"] = result.get("feedback_generation_error") or "AI turn feedback has not been generated yet."
 
-    result["band7_version"] = plain_spoken_text(band7)
+    result["band7_version"] = p3_plain_spoken_text(band7) if part == "p3" else plain_spoken_text(band7)
     result["band7_markdown"] = spoken_markdown(band7, part)
     result["target_band_version"] = result["band7_version"]
     result["target_band_markdown"] = result["band7_markdown"]
@@ -3778,9 +3802,64 @@ def _attempt_records_training_observations(attempt: SpeakingAttempt) -> bool:
     return not (attempt.part == "p3" and metadata.get("p3_bank_replay") is True)
 
 
+def recover_missing_turn_transcripts_from_audio(turns: list[SpeakingTurn]) -> int:
+    """Backfill late-arriving recordings before a report is reused or generated."""
+    recovered = 0
+    for turn in turns:
+        if (turn.transcript_cleaned or turn.transcript_raw or "").strip() or not turn.audio_path:
+            continue
+        server_asr = transcribe_turn_audio_with_server_asr(turn)
+        transcript = str(server_asr.get("transcript") or "").strip()
+        if not server_asr.get("ok") or not transcript:
+            continue
+
+        cleaned = _clean_report_text(transcript)
+        if not cleaned:
+            continue
+        metadata = turn.metadata if isinstance(turn.metadata, dict) else {}
+        metadata = {
+            **metadata,
+            "server_asr": {key: value for key, value in server_asr.items() if key != "transcript"},
+            "status": "completed",
+            "transcript_status": "captured",
+            "transcript_source": str(server_asr.get("provider") or "volcengine_realtime_asr"),
+            "transcript_markdown": _spoken_markdown(cleaned),
+            "feedback_generation_backend": "codex",
+            "feedback_generation_status": "pending",
+            "band7_version": "",
+            "band7_markdown": "",
+            "target_band_version": "",
+            "target_band_markdown": "",
+            "ai_coaching": "",
+            "model_audio": {"provider": "none", "status": "pending", "audio_url": None},
+            "late_audio_recovered_at": timezone.now().isoformat(),
+        }
+        metadata.pop("dropped_empty", None)
+        turn.transcript_raw = transcript
+        turn.transcript_cleaned = cleaned
+        turn.transcript_source = metadata["transcript_source"]
+        turn.metadata = metadata
+        turn.save(
+            update_fields=[
+                "transcript_raw",
+                "transcript_cleaned",
+                "transcript_source",
+                "metadata",
+                "updated_at",
+            ]
+        )
+        recovered += 1
+    return recovered
+
+
 def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     attempt = _load_attempt_for_user(user, attempt_id)
-    if report_is_valid(attempt):
+    turns = list(attempt.turns.all().order_by("sequence"))
+    recovered_turns = recover_missing_turn_transcripts_from_audio(turns)
+    if recovered_turns and attempt.status == SpeakingAttempt.Status.SCORED:
+        attempt.status = SpeakingAttempt.Status.READY_TO_SCORE
+        attempt.save(update_fields=["status", "updated_at"])
+    if report_is_valid(attempt) and not recovered_turns:
         return report_payload(attempt)
     if attempt.status == SpeakingAttempt.Status.ABORTED:
         raise SpeakingError("Aborted attempts cannot be scored.")
@@ -3999,7 +4078,12 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
 def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     attempt = _load_attempt_for_user(user, attempt_id)
-    if report_is_valid(attempt):
+    turns = list(attempt.turns.all().order_by("sequence"))
+    recovered_turns = recover_missing_turn_transcripts_from_audio(turns)
+    if recovered_turns and attempt.status == SpeakingAttempt.Status.SCORED:
+        attempt.status = SpeakingAttempt.Status.READY_TO_SCORE
+        attempt.save(update_fields=["status", "updated_at"])
+    if report_is_valid(attempt) and not recovered_turns:
         report = report_payload(attempt)
         report["ai_task"] = speaking_task_summary_payload(latest_speaking_report_task(attempt))
         return report
@@ -4219,6 +4303,8 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
     if attempt.status != SpeakingAttempt.Status.SCORED:
         raise SpeakingError("Only scored attempts can be regenerated.")
 
+    turns = list(attempt.turns.all().order_by("sequence"))
+    recover_missing_turn_transcripts_from_audio(turns)
     turns = list(attempt.turns.all().order_by("sequence"))
     incomplete = [turn for turn in turns if _turn_status(turn) != "completed"]
     if incomplete:

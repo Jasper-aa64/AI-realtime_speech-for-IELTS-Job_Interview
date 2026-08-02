@@ -20,3 +20,5 @@ assert.match(cssSource, /\.report-rail-loading-card/, "Report rail loading shoul
 assert.match(cssSource, /\.report-rail-loading-card\s*{[\s\S]{0,180}height:\s*118px;[\s\S]{0,100}min-height:\s*118px;/, "Speaking and writing rail loaders should match the 118px report-card height.");
 assert.match(cssSource, /\.speaking-report-rail-shell,\s*[\r\n]+\.writing-report-rail-shell\s*{[\s\S]{0,140}padding:\s*8px 10px 8px 12px/, "Speaking and writing report rails should share the same shell size.");
 assert.doesNotMatch(htmlSource, /<div id="writingReportList"[^>]*>[^<]*<\/div>/, "Initial writing report rail must not render an empty state before data loads.");
+assert.match(appSource, /const reportTurns = turns\.map\(\(turn, index\) => \(\{ turn, index \}\)\);/, "Speaking report regeneration must preserve every original turn and its question number.");
+assert.match(appSource, /录音已保存，正在补充转写/, "A late-audio turn must remain visible while its transcript is recovered.");

@@ -317,6 +317,27 @@ def plain_spoken_text(value: str) -> str:
     return clean_report_text(text)
 
 
+def p3_plain_spoken_text(value: str) -> str:
+    """Extract only the speakable answer from the structured P3 study format."""
+    answer_lines: list[str] = []
+    for raw_line in clean_band7_output(value).splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if re.match(r"^\*{0,2}\s*Q\s*:", line, flags=re.I):
+            continue
+        if re.match(r"^\*{0,2}\s*[1-5](?:\.\d+)?\.\s*", line):
+            continue
+        if re.match(
+            r"^[*_(\s]*[≈~]?\s*\d+\s*(?:词|words?)\s*/\s*\d+(?:\s*[-–]\s*\d+)?\s*(?:秒|seconds?|secs?)",
+            line,
+            flags=re.I,
+        ):
+            continue
+        answer_lines.append(re.sub(r"^[-•]\s+", "", line))
+    return plain_spoken_text("\n".join(answer_lines))
+
+
 def clean_coaching_markdown_text(value: str) -> str:
     text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
     text = re.sub(r"```(?:[a-zA-Z0-9_-]+)?", "", text)

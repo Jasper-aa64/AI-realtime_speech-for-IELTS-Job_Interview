@@ -4522,10 +4522,17 @@ class TurnFeedbackValidationTests(TestCase):
             "diplomatic",
             "Do not mechanically",
             "spoken English answer only",
+            "**1. 接题（复述/改写题目本身）**",
+            "**3.3 让步限定**",
+            "**5. 自然收尾**",
+            "3-5 reusable spoken expressions",
+            "Why this structure matters",
         )
         for prompt in captured_prompts:
             for clause in required_clauses:
                 self.assertIn(clause, prompt)
+            self.assertNotIn("Bold 2-5", prompt)
+            self.assertNotIn("bold on 2-5", prompt)
 
     def test_turn_feedback_rejects_missing_band7(self):
         """turn_feedback_with_codex should reject output missing band7_version."""
@@ -4633,6 +4640,66 @@ class TurnFeedbackValidationTests(TestCase):
         self.assertIn("as a tech enthusiast", feedback["band7_version"])
         self.assertIn("**as a tech enthusiast**", feedback["band7_markdown"])
         self.assertIn("**usually spend**", feedback["band7_markdown"])
+
+    def test_build_p3_turn_feedback_keeps_study_structure_out_of_tts(self):
+        """P3 reports keep the study scaffold while model audio reads only the answer."""
+        from apps.speaking.services import build_turn_feedback
+
+        user = get_user_model().objects.create_user(username="p3-band7-structure-user", password="test-pass")
+        attempt = SpeakingAttempt.objects.create(
+            user=user,
+            attempt_id="p3-band7-structure-attempt",
+            mode="p3",
+            part="p3",
+            status=SpeakingAttempt.Status.STARTED,
+        )
+        turn = SpeakingTurn.objects.create(
+            user=user,
+            attempt=attempt,
+            turn_id="p3-structure-turn",
+            sequence=0,
+            part="p3",
+            question="Why do many children find education boring?",
+            transcript_raw="Maybe it is because classes repeat the same things.",
+            metadata={"status": "completed"},
+        )
+        structured_answer = """**Q: Why do many children find education boring?**
+
+**1. 接题（复述/改写题目本身）**
+- That's an interesting one because I remember feeling that way myself.
+
+**2. 观点**
+- I'd say it **mostly comes down to how lessons are taught**.
+
+**3.1 原因/背景**
+- **Let me put it this way** — repetition can make curiosity disappear.
+
+**3.2 现实观察**
+- Practical classes were the ones I remembered.
+
+**3.3 让步限定**
+- **That said**, teachers often have packed curriculums.
+
+**5. 自然收尾**
+- So the delivery matters more than the subject itself.
+
+*(≈70词/45-50秒)*"""
+        generated = {
+            "display_transcript": "Maybe it is because classes repeat the same things.",
+            "band7_version": structured_answer,
+            "ai_coaching": "这个回答需要更具体。\n\n语法错误纠正：无",
+        }
+
+        with patch("apps.speaking.services.volcengine_tts", return_value={"status": "pending"}) as mock_tts:
+            feedback = build_turn_feedback(turn, attempt, generated_feedback=generated)
+
+        self.assertIn("**Q: Why do many children", feedback["band7_markdown"])
+        self.assertIn("**3.3 让步限定**", feedback["band7_markdown"])
+        self.assertNotIn("Why do many children", feedback["band7_version"])
+        self.assertNotIn("接题", feedback["band7_version"])
+        self.assertNotIn("70词", feedback["band7_version"])
+        self.assertIn("mostly comes down to how lessons are taught", feedback["band7_version"])
+        self.assertEqual(mock_tts.call_args.args[0], feedback["band7_version"])
 
     def test_turn_feedback_keeps_non_speaking_noise_coaching_visible(self):
         """Formatting comments are bad coaching, but should remain visible instead of being hard-blocked."""

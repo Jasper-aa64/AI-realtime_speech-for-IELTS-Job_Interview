@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import types
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -14,6 +15,7 @@ from .volcengine_asr import (
     SERVER_ERROR_RESPONSE,
     SERVER_FULL_RESPONSE,
     SESSION_FINISHED,
+    _convert_to_pcm,
     _header,
     _u32,
     stream_pcm_chunks,
@@ -95,6 +97,22 @@ class RealtimeAsrStatusTests(TestCase):
 
 
 class RealtimeAsrProviderTests(TestCase):
+    def test_pcm_conversion_gives_ffmpeg_an_unlocked_output_path(self):
+        source = Path(__file__)
+        expected = b"\x01\x02\x03\x04"
+
+        def fake_run(command, **_kwargs):
+            output_path = Path(command[-1])
+            self.assertFalse(output_path.exists())
+            output_path.write_bytes(expected)
+            return types.SimpleNamespace(returncode=0, stderr="")
+
+        with patch("apps.speaking.volcengine_asr.shutil.which", return_value="ffmpeg"), patch(
+            "apps.speaking.volcengine_asr.subprocess.run",
+            side_effect=fake_run,
+        ):
+            self.assertEqual(_convert_to_pcm(source), expected)
+
     @override_settings(
         VOLCENGINE_ASR_ENABLED=True,
         VOLCENGINE_ASR_WS_URL="wss://example.invalid/realtime",

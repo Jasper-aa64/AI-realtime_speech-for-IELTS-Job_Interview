@@ -5422,6 +5422,7 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
   const audioChunks = retrySnapshot?.audioChunks?.slice() || state.audioChunks.slice();
   const blob = new Blob(audioChunks, { type: mimeType });
   const transcriptSnapshot = retrySnapshot?.transcript ?? state.transcript;
+  const requiresAudioBeforeComplete = !String(transcriptSnapshot || "").trim() && blob.size > 0;
   const transcriptStatusSnapshot = retrySnapshot?.transcriptStatus || state.transcriptStatus;
   const transcriptSourceSnapshot = retrySnapshot?.transcriptSource || state.transcriptSource || "browser_dictation";
   const p2CorpusEntrySnapshot = retrySnapshot?.p2CorpusEntryId || state.p2Corpus.selectedEntryId;
@@ -5457,7 +5458,7 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
   };
   try {
     const localNextTurn = localNextTurnAfter(turn, attempt);
-    const requiresSyncComplete = turnRequiresSynchronousComplete(turn, localNextTurn);
+    const requiresSyncComplete = turnRequiresSynchronousComplete(turn, localNextTurn) || requiresAudioBeforeComplete;
     const completeRequest = async (streamFollowUp = false) => {
       let lastError = null;
       for (let tryIndex = 1; tryIndex <= 3; tryIndex += 1) {
@@ -5517,6 +5518,14 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
         await wait(700 * tryIndex);
       }
       throw lastError || new Error("Audio upload failed");
+    };
+    const uploadAudioAndAttach = async () => {
+      const uploadPayload = await uploadAudio();
+      if (uploadPayload?.audio && state.attempt?.id === attempt.id) {
+        state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, audio: uploadPayload.audio });
+      }
+      await deletePendingTurnAudio(attempt.id, turn.id).catch(() => null);
+      return uploadPayload;
     };
 
     if (!requiresSyncComplete) {
@@ -5584,14 +5593,13 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
       // scoreAttempt() does not wait on it. On success attach the audio and drop the
       // IndexedDB copy; on failure the copy stays and resumePendingTurnAudioUploads()
       // re-uploads it on the next page load.
-      uploadAudio()
-        .then((uploadPayload) => {
-          if (uploadPayload?.audio && state.attempt?.id === attempt.id) {
-            state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, audio: uploadPayload.audio });
-          }
-          return deletePendingTurnAudio(attempt.id, turn.id).catch(() => null);
-        })
-        .catch(() => { /* stays in IndexedDB; resume retries on the next page load */ });
+      if (requiresAudioBeforeComplete) {
+        text("recordStatus", "正在上传录音并补充转写...");
+        await uploadAudioAndAttach();
+      } else {
+        uploadAudioAndAttach()
+          .catch(() => { /* stays in IndexedDB; resume retries on the next page load */ });
+      }
       recordRealtimePhaseMetric({ turnCompleteStartedAt: Date.now() });
       const completePayload = await completeRequest(requiresSyncComplete);
       recordRealtimePhaseMetric({
@@ -5616,14 +5624,13 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
     // DETACHED (blob stays in IndexedDB; resumePendingTurnAudioUploads re-uploads on the
     // next page load if it fails) and go straight to /complete — the slow "正在上传回答音频"
     // no longer blocks follow-up generation.
-    uploadAudio()
-      .then((uploadPayload) => {
-        if (uploadPayload?.audio && state.attempt?.id === attempt.id) {
-          state.attempt = mergeCompletedTurnPayload(state.attempt, { id: turn.id, audio: uploadPayload.audio });
-        }
-        return deletePendingTurnAudio(attempt.id, turn.id).catch(() => null);
-      })
-      .catch(() => { /* stays in IndexedDB; resume retries on the next page load */ });
+    if (requiresAudioBeforeComplete) {
+      text("recordStatus", "正在上传录音并补充转写...");
+      await uploadAudioAndAttach();
+    } else {
+      uploadAudioAndAttach()
+        .catch(() => { /* stays in IndexedDB; resume retries on the next page load */ });
+    }
     const identityAnswerMissing = isP1WorkStudyIdentityTurn(turn) && !String(transcriptSnapshot || "").trim();
     const completionStatus = identityAnswerMissing
       ? "没有检测到回答，已跳过追问。"
@@ -11930,6 +11937,7 @@ function speakingReportRegenLoadingHtml(attempt, options = {}) {
   const part = String(attempt.mode || attempt.part || "").toUpperCase();
   const turns = Array.isArray(attempt.turns) ? attempt.turns : [];
   const answered = turns.filter((turn) => String(turn.transcript_cleaned || turn.transcript_raw || "").trim());
+  const reportTurns = turns.map((turn, index) => ({ turn, index }));
   const initialScoring = Boolean(options.initialScoring);
   const chipText = initialScoring ? "评分中" : "加载中";
   const statusText = initialScoring ? "正在评分" : "正在重新生成";
@@ -11937,12 +11945,27 @@ function speakingReportRegenLoadingHtml(attempt, options = {}) {
   const bodyText = initialScoring
     ? "这次练习已经进入后台评分，完成后会自动更新到正式报告。评分期间不会开放重新评分，避免重复扣费或生成冲突。"
     : "任务已经在后台运行，可以切换页面或刷新——完成后会自动更新并弹窗通知，不会重开整场练习。";
-  const transcriptList = answered.length
-    ? answered.map((turn, index) => `
+  const transcriptList = reportTurns.length
+    ? reportTurns.map(({ turn, index }) => {
+        const transcript = String(turn.transcript_cleaned || turn.transcript_raw || "").trim();
+        const hasSavedAudio = Boolean(
+          turn.audio_url
+          || turn.audio_path
+          || turn.audio?.url
+          || turn.audio?.audio_url
+          || turn.audio?.path
+        );
+        const transcriptHtml = transcript
+          ? escapeHtml(transcript).replace(/\n/g, "<br>")
+          : hasSavedAudio
+            ? '<span class="muted">录音已保存，正在补充转写...</span>'
+            : '<span class="muted">本题未检测到回答。</span>';
+        return `
         <article class="speaking-failed-turn">
           <h4>Q${index + 1}${turn.question ? ` · ${escapeHtml(turn.question)}` : ""}</h4>
-          <p>${escapeHtml(String(turn.transcript_cleaned || turn.transcript_raw || "")).replace(/\n/g, "<br>")}</p>
-        </article>`).join("")
+          <p>${transcriptHtml}</p>
+        </article>`;
+      }).join("")
     : `<p class="muted">这次练习没有保存到可用的文字稿。</p>`;
   return `
     <div class="detail-card writing-saved-report-card speaking-failed-report-card speaking-report-regen-card" data-attempt-id="${escapeHtml(attempt.id || "")}" data-report-status="scoring">
@@ -11950,7 +11973,7 @@ function speakingReportRegenLoadingHtml(attempt, options = {}) {
         <div>
           <span class="section-label">IELTS Speaking 估分</span>
           <h2>${escapeHtml(attempt.title || `${part} report`)}</h2>
-          <p>${escapeHtml(part)} · ${answered.length} question${answered.length === 1 ? "" : "s"} · ${escapeHtml(attempt.display_time || "")}</p>
+          <p>${escapeHtml(part)} · ${turns.length} question${turns.length === 1 ? "" : "s"} · ${escapeHtml(attempt.display_time || "")}</p>
         </div>
         <strong><span>Report</span><span class="speaking-report-regen-chip">${chipText}</span></strong>
       </div>
@@ -11970,7 +11993,7 @@ function speakingReportRegenLoadingHtml(attempt, options = {}) {
     <div class="detail-card speaking-failed-answers-card">
       <div class="writing-saved-answer-head">
         <h3>你的回答</h3>
-        <span>${answered.length} 段</span>
+        <span>${answered.length}/${turns.length} 段已转写</span>
       </div>
       ${transcriptList}
     </div>

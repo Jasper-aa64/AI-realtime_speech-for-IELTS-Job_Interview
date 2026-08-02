@@ -40437,3 +40437,9 @@ body.theme-dark .p1-corpus-copy-toast {
   background: color-mix(in srgb, #10161a 95%, var(--p1-corpus-accent));
   color: #eef7f4;
 }
+
+/* P3 source selection: flat active state */
+.p3-source-option.active {
+  box-shadow: none !important;
+  filter: none !important;
+}

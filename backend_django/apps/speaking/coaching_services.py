@@ -174,19 +174,54 @@ def build_personalized_coaching(profile: dict[str, Any], attempt: SpeakingAttemp
 
 def p3_model_answer_constraints() -> str:
     """Shared quality contract for every generated Part 3 model answer."""
-    return (
-        "This is IELTS Speaking Part 3. Produce a Band 7.5+ quality answer that lasts about 45-70 seconds "
-        "at a natural speaking pace. The final value must contain the spoken English answer only; put any "
-        "Chinese explanation or phrase analysis in AI coaching instead, because this answer is read aloud by TTS. "
-        "It must sound like a natural conversation with the examiner, not a memorised essay or a chain of writing "
-        "templates. Use active listening or thinking aloud when it fits, but vary the wording and position: "
-        "Do not mechanically start every answer with the same opener. Move naturally from engaging with the "
-        "question to a clear position, then develop a reason or background, a grounded real-world observation, "
-        "a diplomatic concession or limitation, and a light, open ending that leaves room for the examiner to "
-        "continue. When relevant and supportable, add cautious China-context reality and a small personal lens "
-        "such as something the speaker has noticed around them. Do not invent specific personal facts merely to "
-        "satisfy those moves. Use Markdown bold only for 2-5 reusable spoken expressions inside the answer."
-    )
+    return """This is IELTS Speaking Part 3. Produce a Band 7.5+ quality answer that lasts about 45-70 seconds
+at a natural speaking pace (normally about 125-170 English words).
+
+Return band7_version in this exact Markdown study format:
+**Q: <question>**
+
+**1. 接题（复述/改写题目本身）**
+- <natural active-listening or thinking-aloud response in spoken English>
+
+**2. 观点**
+- <clear but nuanced position in spoken English>
+
+**3.1 原因/背景**
+- <reason or relevant background in spoken English>
+
+**3.2 现实观察**
+- <grounded observation, China context, or a small personal lens in spoken English>
+
+**3.3 让步限定**
+- <diplomatic concession, limitation, or exception in spoken English>
+
+**4. 个人评价（可选）**
+- <brief personal evaluation when it genuinely adds something; otherwise omit this whole section>
+
+**5. 自然收尾**
+- <light conclusion that leaves room for the examiner to continue>
+
+*(≈N词/X-Y秒)*
+
+Why this structure matters: Part 3 is an interaction, not a miniature written essay. Engaging with the exact
+question first shows active listening; a clear position gives the examiner an immediate answer; reasons,
+real-world observation and a personal lens make the idea believable rather than generic; a diplomatic
+concession shows mature judgement; and a light ending keeps the exchange open instead of sounding memorised.
+Treat these as conversational moves, not fixed sentence templates. Vary the wording and rhythm. Do not mechanically
+start every answer with the same opener.
+
+The Markdown labels are visual study scaffolding only. The content under each label must be the spoken English answer only;
+put Chinese explanation or phrase analysis in AI coaching instead. This distinction matters because
+the learner studies the reasoning path on screen while TTS reads only the actual answer.
+
+Bold 3-5 reusable spoken expressions inside the English answer, such as a natural conversational link,
+collocation, diplomatic qualifier, or topic-specific chunk. Do not bold headings, whole sentences, or generic
+filler. Why: the learner will scan and rehearse these chunks for fast retrieval under exam pressure; 3-5 creates
+clear memory anchors without turning the whole answer into visual noise or giving several competing versions to learn.
+
+Keep the voice relaxed and genuinely conversational, with natural spoken phrasing and a little unplanned texture.
+Use China-context reality and a personal lens only when relevant and supportable. Never invent a specific personal
+fact merely to tick a structural box."""
 
 
 def model_answer_constraints(part: str) -> str:

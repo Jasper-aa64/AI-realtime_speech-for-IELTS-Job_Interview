@@ -150,6 +150,31 @@ def normalize_user_visible_text(...):
 - If server TTS fails, the payload must keep explicit fallback metadata instead of silently reintroducing browser TTS as the normal path.
 - Owner scoping must be enforced for any TTS refresh endpoint.
 
+### Convention: Speaking reports wait for or recover late candidate audio
+
+**What**: A speaking turn with an empty client transcript and a non-empty
+recording must upload that recording before `/complete` can start report
+generation. Before reusing a cached report or creating a replacement task, the
+backend must run server ASR for any empty turn whose audio has since arrived.
+
+**Why**: Candidate audio uploads and report scoring are separate requests. If
+scoring wins the race, an answered question can be marked `dropped_empty` and
+persist forever as an empty report row even though its recording arrives a few
+seconds later.
+
+**Required**:
+- Empty-transcript recordings use upload-before-complete ordering; turns with a
+  usable client transcript may keep detached uploads for responsiveness.
+- Successful late-audio ASR clears `dropped_empty` and stale per-turn coaching,
+  marks feedback pending, and prevents the old report from being returned as a
+  valid cache hit.
+- Report loading and retry UI preserves original turn numbering. An empty turn
+  with saved audio remains visible as "recording saved, transcript pending"
+  instead of being filtered out and renumbering later questions.
+- Recovery may enqueue a fresh billable report only after the user requests
+  scoring/retry; background repair must not silently spend provider credit.
+- Tests cover both browser request ordering and backend cached-report recovery.
+
 ### Convention: Spelling Drill review days use China 04:00 boundaries
 
 **What**: Spelling Drill SRS batches must compute review days in
