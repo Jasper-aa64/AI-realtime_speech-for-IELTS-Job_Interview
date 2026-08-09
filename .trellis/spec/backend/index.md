@@ -100,6 +100,20 @@ topic's current minimum count while sibling questions remain on a lower tier.
 Combination scoring must use the questions that will actually be selected, not an
 approximation from topic-level debt.
 
+### Convention: Treat writing spelling mistakes as append-only training evidence
+
+**What**: Persist spelling candidates into `SpellingDrillWord` as part of saving
+a completed writing score. After that, editing an essay, applying Fix, replacing
+or deleting a report must never remove, reset, or overwrite the existing word's
+SRS state. Later reports may add a newly seen wrong form or source example only.
+
+**Why**: A report is editable feedback; a misspelled word is a durable learning
+event. Deleting or regenerating feedback must not erase a review obligation the
+learner has already earned.
+
+**Exception**: A learner can still explicitly dismiss a spelling word from the
+spelling library.
+
 ---
 
 ## Guidelines Index

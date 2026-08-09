@@ -18,4 +18,10 @@ assert.match(
   "The completed daily queue should clearly end for the day instead of inviting another round."
 );
 
+assert.match(
+  source,
+  /\/api\/writing\/spelling-words\/complete-daily-batch/,
+  "Finishing the visible daily queue must persist that boundary before a reload can reopen it."
+);
+
 console.log("Spelling daily single-round checks passed.");

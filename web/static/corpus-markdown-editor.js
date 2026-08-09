@@ -219,6 +219,45 @@
       (frame || textarea.parentElement)?.appendChild(mount);
       const valueAtCreate = textarea.value || "";
       let editor;
+      let nativeInputSyncFrame = 0;
+
+      function publishCorpusMarkdownInput(value) {
+        textarea.value = value || "";
+        textarea.dispatchEvent(new Event("corpusmarkdowninput", { bubbles: true }));
+      }
+
+      function publishCorpusMarkdownPresence(editable) {
+        const rawText = editable?.innerText || editable?.textContent || "";
+        textarea.dispatchEvent(new CustomEvent("corpusmarkdowninput", {
+          bubbles: true,
+          detail: {
+            presenceOnly: true,
+            hasContent: Boolean(String(rawText).trim()),
+          },
+        }));
+      }
+
+      function scheduleNativeCorpusMarkdownPresence(editable) {
+        if (!editable || !mount.contains(editable)) return;
+        if (nativeInputSyncFrame) {
+          if (window.cancelAnimationFrame) window.cancelAnimationFrame(nativeInputSyncFrame);
+          else window.clearTimeout(nativeInputSyncFrame);
+        }
+        const publish = () => {
+          nativeInputSyncFrame = 0;
+          publishCorpusMarkdownPresence(editable);
+        };
+        nativeInputSyncFrame = window.requestAnimationFrame
+          ? window.requestAnimationFrame(publish)
+          : window.setTimeout(publish, 0);
+      }
+
+      function syncNativeCorpusMarkdownInput(event) {
+        scheduleNativeCorpusMarkdownPresence(
+          event.target.closest?.('pre[contenteditable="true"]'),
+        );
+      }
+
       editor = new Vditor(mount, {
         value: valueAtCreate,
         mode: "wysiwyg",
@@ -240,10 +279,24 @@
           "link",
         ],
         input(value) {
-          textarea.value = value || "";
+          publishCorpusMarkdownInput(value);
         },
         after() {
           editor._corpusReady = true;
+          if (mount.querySelector('pre[contenteditable="true"]')) {
+            frame?.addEventListener("input", syncNativeCorpusMarkdownInput, true);
+            const nativePresenceObserver = new MutationObserver(() => {
+              scheduleNativeCorpusMarkdownPresence(
+                mount.querySelector('pre[contenteditable="true"]'),
+              );
+            });
+            nativePresenceObserver.observe(mount, {
+              childList: true,
+              characterData: true,
+              subtree: true,
+            });
+            editor._corpusNativePresenceObserver = nativePresenceObserver;
+          }
           if (editor._pendingCorpusValue !== undefined) {
             const pendingValue = editor._pendingCorpusValue || "";
             const userEditedTextarea = textarea.value !== (editor._corpusValueAtCreate || "");

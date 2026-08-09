@@ -174,54 +174,90 @@ def build_personalized_coaching(profile: dict[str, Any], attempt: SpeakingAttemp
 
 def p3_model_answer_constraints() -> str:
     """Shared quality contract for every generated Part 3 model answer."""
-    return """This is IELTS Speaking Part 3. Produce a Band 7.5+ quality answer that lasts about 45-70 seconds
-at a natural speaking pace (normally about 125-170 English words).
+    return """This is IELTS Speaking Part 3. Produce one Band 7.5+ spoken answer that lasts about 45-70 seconds
+at a natural speaking pace (normally about 130-175 English words). This is a conversation, not a miniature Task 2 essay.
 
-Return band7_version in this exact Markdown study format:
+Question-type choice (make this choice before writing the answer):
+- Opinion / comparison: questions such as "Do you think...", "Which is more...", or "Should A or B..." need a clear
+  answer with nuance. Use the six-step opinion route below.
+- Listing Group A: questions such as "What sports / factors / ways / things do..." ask for concrete things that exist.
+  Select the listing route that fits the amount of believable detail you have: Parallel explanation, Two-camp contrast,
+  or Hourglass.
+- Category Group B: "What kind(s) of..." asks for types or styles, not named examples. Use one of the same three listing
+  routes, but keep the examples at category level (for example, "comedies" or "feel-good films"), never individual
+  film, video, book, or celebrity names.
+
+Why these choices matter: forcing every question through one opinion structure produces the polished but artificial
+answers learners often memorise. A real speaker answers the question that was asked: they take a position when a position
+is needed, list naturally when the question asks for a range, and classify when the question asks for types.
+
+Return band7_version in this exact Markdown study format. Start with one concise Chinese study line, then keep every
+answer section as spoken English answer only:
+
+**题目分析：** <一两句中文：题型、所选骨架，以及为什么这个骨架适合这道题>
+
 **Q: <question>**
 
+For Opinion / comparison, use this six-step route:
 **1. 接题（复述/改写题目本身）**
-- <natural active-listening or thinking-aloud response in spoken English>
-
+- <spoken opening>
 **2. 观点**
-- <clear but nuanced position in spoken English>
-
+- <clear but qualified position>
 **3.1 原因/背景**
-- <reason or relevant background in spoken English>
-
+- <reason or background>
 **3.2 现实观察**
-- <grounded observation, China context, or a small personal lens in spoken English>
-
+- <specific observation>
 **3.3 让步限定**
-- <diplomatic concession, limitation, or exception in spoken English>
-
+- <concession or exception>
 **4. 个人评价（可选）**
-- <brief personal evaluation when it genuinely adds something; otherwise omit this whole section>
-
+- <only when it genuinely adds a new angle>
 **5. 自然收尾**
-- <light conclusion that leaves room for the examiner to continue>
+- <light ending>
 
-*(≈N词/X-Y秒)*
+For Listing Group A or Category Group B, choose exactly one route and use its labels instead of empty opinion slots:
+- Parallel explanation: 1. 接题; 2. 选项一 + 半句原因; 3. 选项二 + 半句原因; 4. 选项三 + 半句原因;
+  5. 分寸/让步; 6. 自然收尾. Use it when several points are useful but none has credible depth.
+- Two-camp contrast: 1. 接题 + 分类信号; 2. 阵营A; 3. 阵营B + 轻微让步; 4. 微观视角（可选）;
+  5. 分布判断收尾. Use it when two groups create a natural contrast.
+- Hourglass: 1. 接题; 2. S1 列举（快速带过3-4项）; 3. S2 聚焦（用 especially / actually 自然收窄）;
+  4. S3 证据; 5. S4 个人评价; 6. 自然收尾. Use it only when one point has a credible detail, scene, or number.
+  Do not announce a plan such as "let me focus on..."; let the focus happen in the flow instead.
 
-Why this structure matters: Part 3 is an interaction, not a miniature written essay. Engaging with the exact
-question first shows active listening; a clear position gives the examiner an immediate answer; reasons,
-real-world observation and a personal lens make the idea believable rather than generic; a diplomatic
-concession shows mature judgement; and a light ending keeps the exchange open instead of sounding memorised.
-Treat these as conversational moves, not fixed sentence templates. Vary the wording and rhythm. Do not mechanically
-start every answer with the same opener.
+Answer-quality rules, with the reason for each:
+- Open by restating or lightly rephrasing the actual question, never by announcing an answer plan. Why: this is active listening:
+  it shows the examiner that the speaker is engaging with the question; explaining an exam strategy exposes
+  rehearsal and does not answer anything.
+- Keep natural conversation rather than writing prose. Avoid "rapid development", "plays a vital role", "with the advent
+  of", "it is widely believed", "moreover", "furthermore", and "in conclusion". Why: these are writing connectors;
+  spoken logic is usually carried by simple links such as and, but, so, actually, and that said.
+- Include one small self-correction or thinking trace when it sounds natural, and never pile up hesitations. Why: one
+  genuine adjustment makes the answer sound live; repeated performance of hesitation sounds insecure rather than natural.
+- Ground the answer in a credible China context and one small personal lens (self, friend, classmate, neighbour, or family;
+  vary the lens when possible). Why: a specific human observation is more believable and discussable than abstract claims
+  about "people in China". Do not invent a detailed personal fact merely to fill a slot.
+- For evidence, use one specific detail plus one qualitative observation, not two precise statistics. Why: a single detail
+  anchors a real observation, while stacked exact figures sound fabricated or pre-written.
+- Include a diplomatic limitation with varied language such as "I wouldn't go so far as to say...", "It's not always the
+  case...", or "That said, I wouldn't write off...". Why: Part 3 rewards measured judgement, while a single repetitive
+  "but" makes the reasoning sound flat.
+- End by reframing the judgement or giving a conditional distribution, not "To sum up" or "In conclusion". Why: a live
+  discussion should leave a useful opening for the examiner's next question instead of closing like an essay.
+- Do not mechanically recycle the same opener, concession, personal lens, or ending across answers. Why: fluent speakers
+  adapt the same discussion moves to the question in front of them, whereas repeated wording makes good ideas sound learnt.
 
-The Markdown labels are visual study scaffolding only. The content under each label must be the spoken English answer only;
-put Chinese explanation or phrase analysis in AI coaching instead. This distinction matters because
-the learner studies the reasoning path on screen while TTS reads only the actual answer.
+After the spoken answer, add:
+**本题新增的可复用表达**
+- <3-5 bolded expressions copied exactly from the answer, no translations or Chinese explanations>
 
-Bold 3-5 reusable spoken expressions inside the English answer, such as a natural conversational link,
-collocation, diplomatic qualifier, or topic-specific chunk. Do not bold headings, whole sentences, or generic
-filler. Why: the learner will scan and rehearse these chunks for fast retrieval under exam pressure; 3-5 creates
-clear memory anchors without turning the whole answer into visual noise or giving several competing versions to learn.
+Bold 3-5 reusable spoken expressions inside the English answer itself, then repeat only those chunks in the final list.
+Choose natural collocations, diplomatic qualifiers, conversational links, or topic-specific chunks; never bold headings,
+whole sentences, or generic filler. Why: the learner needs a few clear retrieval anchors for exam pressure, but too many
+highlighted items or competing alternative versions make recall slower and the answer look mechanically taught.
 
-Keep the voice relaxed and genuinely conversational, with natural spoken phrasing and a little unplanned texture.
-Use China-context reality and a personal lens only when relevant and supportable. Never invent a specific personal
-fact merely to tick a structural box."""
+The Markdown labels, Chinese question analysis, expression list, and timing footer are visual study scaffolding only.
+TTS reads only the spoken English answer. This distinction matters because the learner can study the reasoning path on
+screen without hearing a lesson plan instead of an answer. Do not add Chinese difficulty analysis. End with
+*(≈N词/X-Y秒)*."""
 
 
 def model_answer_constraints(part: str) -> str:

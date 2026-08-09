@@ -167,7 +167,9 @@ const state = {
     activeReportDetail: null,
     reportDetailCache: new Map(),
     reportDetailPromises: new Map(),
+    reportDetailEpochs: new Map(),
     reportUndoStacks: new Map(),
+    pendingFix: null,
     reportEditLoading: false,
     reportEditRequestId: 0,
     scorePollTimer: null,
@@ -1851,6 +1853,7 @@ function clearUserScopedCaches() {
   state.writing.activeReportDetail = null;
   state.writing.reportDetailCache.clear();
   state.writing.reportDetailPromises.clear();
+  state.writing.reportDetailEpochs.clear();
   state.writing.scoreCompletionModalEntry = null;
   state.writing.scoreCompletionNotifiedIds.clear();
   state.writing.promptLoadingPromises = {};
@@ -2071,6 +2074,19 @@ function applyP1CorpusPayload(payload) {
 }
 
 function applyP2CorpusPayload(payload) {
+  // A GET can finish while an optimistic P3 snapshot is still being committed.
+  // Never render that mid-save server snapshot (for example 3/6 between local
+  // 4/6 and committed 4/6); reconcile once, after the atomic save settles.
+  if (state.p2Corpus.saving) {
+    if (!state.p2Corpus._reconcileAfterSave) {
+      state.p2Corpus._reconcileAfterSave = true;
+      Promise.resolve(state.p2Corpus.savingPromise).finally(() => {
+        state.p2Corpus._reconcileAfterSave = false;
+        fetchP2CorpusPayload({ force: true }).then(applyP2CorpusPayload).catch(() => null);
+      });
+    }
+    return;
+  }
   // Guard against a stale GET clobbering a freshly-saved card (e.g. a P3 progress
   // decrement that already rendered optimistically). If a save/clear bumped
   // mutationSeq after this request was issued, it's a pre-save snapshot — discard
@@ -2181,8 +2197,7 @@ async function prefetchWritingReports(token) {
     ? state.writing.activeReportId
     : items[0]?.id;
   if (activeId && !state.writing.reportDetailCache.has(activeId)) {
-    const detail = await fetchWritingReportDetail(activeId);
-    if (prefetchCanApply(token)) state.writing.reportDetailCache.set(activeId, detail);
+    await fetchWritingReportDetail(activeId);
   }
 }
 
@@ -2468,7 +2483,8 @@ function applyWritingTakeawaysPayload(payload) {
 }
 
 function updateSpellingDrillDueDot(stats = state.spellingDrill?.stats || {}) {
-  const due = Number(stats?.due || 0);
+  const liveDue = spellingDrillController?.getLiveDueDotCount?.();
+  const due = Number.isFinite(liveDue) ? liveDue : Number(stats?.due || 0);
   const dot = $("spellingDrillDueDot");
   if (!dot) return;
   dot.classList.toggle("hidden", due <= 0);
@@ -2530,21 +2546,42 @@ function prefetchVisibleHistoryDetails(items, limit = 4) {
   }
 }
 
-async function fetchWritingReportDetail(entryId) {
+function writingReportDetailEpoch(entryId) {
+  return state.writing.reportDetailEpochs.get(String(entryId || "").trim()) || 0;
+}
+
+function advanceWritingReportDetailEpoch(entryId) {
+  const id = String(entryId || "").trim();
+  if (!id) return 0;
+  const nextEpoch = writingReportDetailEpoch(id) + 1;
+  state.writing.reportDetailEpochs.set(id, nextEpoch);
+  return nextEpoch;
+}
+
+async function fetchWritingReportDetail(entryId, options = {}) {
   const id = String(entryId || "").trim();
   if (!id) return null;
-  if (state.writing.reportDetailCache.has(id)) return state.writing.reportDetailCache.get(id);
-  if (!state.writing.reportDetailPromises.has(id)) {
-    state.writing.reportDetailPromises.set(id, api(`/api/writing/entries/${encodeURIComponent(id)}`)
+  const force = options.force === true;
+  if (!force && state.writing.reportDetailCache.has(id)) return state.writing.reportDetailCache.get(id);
+  if (!force && state.writing.reportDetailPromises.has(id)) return state.writing.reportDetailPromises.get(id);
+  const requestEpoch = force ? advanceWritingReportDetailEpoch(id) : writingReportDetailEpoch(id);
+  const path = `/api/writing/entries/${encodeURIComponent(id)}${force ? `?cache_bust=${Date.now()}` : ""}`;
+  let request = null;
+  request = api(path)
       .then((entry) => {
+        if (writingReportDetailEpoch(id) !== requestEpoch) {
+          return state.writing.reportDetailCache.get(id) || entry;
+        }
         state.writing.reportDetailCache.set(id, entry);
         return entry;
       })
       .finally(() => {
-        state.writing.reportDetailPromises.delete(id);
-      }));
-  }
-  return state.writing.reportDetailPromises.get(id);
+        if (state.writing.reportDetailPromises.get(id) === request) {
+          state.writing.reportDetailPromises.delete(id);
+        }
+      });
+  state.writing.reportDetailPromises.set(id, request);
+  return request;
 }
 
 function isWritingEntryScored(entry = {}) {
@@ -7652,7 +7689,7 @@ function writingInlineAnnotations(score = {}) {
       if (normalized) annotations.push(normalized);
     });
   }
-  if (!annotations.length && Array.isArray(score.grammar_corrections)) {
+  if (Array.isArray(score.grammar_corrections)) {
     score.grammar_corrections.forEach((item) => {
       const normalized = normalizeWritingAnnotation({
         ...item,
@@ -9659,29 +9696,27 @@ function writingReportScoringStateHtml(entry, task) {
   const wordCount = Number.isFinite(Number(entry.word_count)) ? Number(entry.word_count) : 0;
   const editAction = `<button type="button" class="primary writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}" data-writing-report-scored="false" data-writing-report-task="${escapeHtml(entry.task_type || "")}" data-writing-report-prompt="${escapeHtml(entry.prompt_id || "")}">继续编辑</button>`;
   return `
-    <div class="detail-card writing-saved-report-card speaking-report-regen-card writing-report-scoring-card" data-writing-report-id="${escapeHtml(entry.id || "")}" data-report-status="scoring">
-      <div class="writing-saved-report-head">
+    <section class="detail-card writing-report-scoring-card" data-writing-report-id="${escapeHtml(entry.id || "")}" data-report-status="scoring">
+      <div class="writing-report-scoring-head">
         <div>
           <span class="section-label">IELTS Writing 练习估分</span>
           <h2>${escapeHtml(displayTitle)}</h2>
           <p>${escapeHtml(taskSubline)} · ${escapeHtml(wordCount)} words · ${escapeHtml(entry.display_time || entry.practice_date || "")}</p>
         </div>
-        <strong><span>Report</span><span class="speaking-report-regen-chip">评分中</span></strong>
+        <span class="writing-report-scoring-chip">评分中</span>
       </div>
-      <div class="writing-saved-report-body writing-draft-summary">
-        <section class="writing-draft-primary">
-          <span>正在评分</span>
-          <h3><span class="spinner" aria-hidden="true"></span>${escapeHtml(writingTaskStatusTitle(task))}</h3>
+      <div class="writing-report-scoring-progress" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <div>
+          <strong>${escapeHtml(writingTaskStatusTitle(task))}</strong>
           <p>${escapeHtml(writingTaskStatusText(task))}</p>
-        </section>
-        <section>
-          <span>当前作文</span>
-          <h3>仍可继续编辑</h3>
-          <p>评分在后台进行。可以继续修改并保存，当前任务结束后会按最新作文重新评分。</p>
-        </section>
+        </div>
       </div>
-      <div class="writing-saved-report-actions">${editAction}</div>
-    </div>
+      <div class="writing-report-scoring-actions">
+        <span>评分在后台继续，修改后的最新作文会重新进入评分。</span>
+        ${editAction}
+      </div>
+    </section>
   `;
 }
 
@@ -9718,7 +9753,10 @@ function writingReportDetailHtml(entry) {
       ` : ""}
     </div>
   `;
-  const taskBlock = isScoringReport ? writingReportScoringStateHtml(entry, task) : (!score && task ? `
+  if (isScoringReport) {
+    return `${writingReportScoringStateHtml(entry, task)}${promptCard}`;
+  }
+  const taskBlock = !score && task ? `
     <div class="detail-card writing-task-state-card">
       <div class="detail-header">
         <div>
@@ -9728,7 +9766,7 @@ function writingReportDetailHtml(entry) {
         <strong class="overall-badge muted-badge">${escapeHtml(task.status || "pending")}</strong>
       </div>
     </div>
-  ` : "");
+  ` : "";
   const scoreBlock = score ? `
     <div class="detail-card writing-score-summary-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
       <div class="writing-score-summary-head">
@@ -9842,6 +9880,8 @@ function writingParagraphReviewHtml(entry, score, reviews) {
     const paragraphIndex = Number.parseInt(item.index || index + 1, 10);
     const learnerText = item.learner || answerParagraphs[index] || "";
     const paragraphAnnotations = writingAnnotationsForParagraph(inlineAnnotations, learnerText, paragraphIndex);
+    const isFixSaving = String(state.writing.pendingFix?.entryId || "") === String(entry.id || "")
+      && Number(state.writing.pendingFix?.paragraphIndex) === Number(paragraphIndex);
     return `
       <tbody class="turn-report-group writing-paragraph-group">
         <tr class="writing-paragraph-content-row">
@@ -9849,6 +9889,7 @@ function writingParagraphReviewHtml(entry, score, reviews) {
             <div class="question-header writing-original-cell-head">
               <strong>Paragraph ${escapeHtml(paragraphIndex || index + 1)}</strong>
               <span class="writing-inline-edit-actions">
+                ${isFixSaving ? `<span class="writing-fix-saving-status"><span class="spinner" aria-hidden="true"></span>正在保存修改</span>` : ""}
                 ${writingParagraphUndoButtonHtml(entry.id || "", paragraphIndex || index + 1)}
                 ${writingParagraphEditButtonHtml(entry.id || "", paragraphIndex || index + 1)}
               </span>
@@ -9924,6 +9965,26 @@ async function saveWritingReportAnswer(entry, answer, options = {}) {
   state.writing.activeReportDetail = merged;
   syncWritingReportEntryCache(merged, { renderList: state.view === "writingReports" });
   return merged;
+}
+
+function optimisticWritingFixEntry(entry, answer, original, suggestion) {
+  const matchesAppliedFix = (item) => (
+    String(item?.original || "").trim() === original
+    && String(item?.suggestion || "").trim() === suggestion
+  );
+  const score = entry?.score ? {
+    ...entry.score,
+    inline_annotations: (Array.isArray(entry.score.inline_annotations) ? entry.score.inline_annotations : [])
+      .filter((item) => !matchesAppliedFix(item)),
+    grammar_corrections: (Array.isArray(entry.score.grammar_corrections) ? entry.score.grammar_corrections : [])
+      .filter((item) => !matchesAppliedFix(item)),
+  } : entry?.score;
+  return {
+    ...entry,
+    answer,
+    word_count: String(answer || "").trim() ? String(answer).trim().split(/\s+/).length : 0,
+    score,
+  };
 }
 
 function writingFixPopoverElement() {
@@ -10011,12 +10072,25 @@ async function applyWritingFixFromPopover() {
     hideWritingFixPopover();
     return;
   }
+  const applyButton = popover.querySelector("[data-writing-fix-apply]");
+  if (applyButton) {
+    applyButton.disabled = true;
+    applyButton.classList.add("is-busy");
+    applyButton.innerHTML = `<span class="writing-fix-popover-spinner" aria-hidden="true"></span><span>正在应用</span>`;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  const optimisticEntry = optimisticWritingFixEntry(entry, nextAnswer, original, suggestion);
+  state.writing.pendingFix = { entryId: entry.id, paragraphIndex };
+  renderVisibleWritingReport(optimisticEntry);
   hideWritingFixPopover();
   try {
     const saved = await saveWritingReportAnswer(entry, nextAnswer, { preserveScore: true });
     rememberWritingReportUndo(entry, paragraphIndex, previousAnswer, "fix");
+    state.writing.pendingFix = null;
     renderVisibleWritingReport(saved);
   } catch (error) {
+    state.writing.pendingFix = null;
+    renderVisibleWritingReport(entry);
     showWritingReportEditError(error);
   }
 }
@@ -10549,6 +10623,7 @@ async function saveWritingEntry(keepPending = false, options = {}) {
     practice_date: previousEntry?.practice_date || "",
     answer,
     prompt_highlights: currentWritingPromptHighlightsPayload(),
+    preserve_score: isWritingEntryScored(previousEntry),
   };
   const saveButton = $("writingSaveBtn");
   const originalSaveText = saveButton?.textContent || "\u4fdd\u5b58\u4f5c\u6587";
@@ -10945,14 +11020,23 @@ function openReportHtmlPage(kind, options = {}) {
   win.document.close();
 }
 
-function openWritingScoreCompleteReport() {
+async function openWritingScoreCompleteReport() {
   const entry = state.writing.scoreCompletionModalEntry;
   if (!entry?.id) return closeWritingScoreCompleteModal();
   state.writing.activeReportId = entry.id;
   state.writing.activeReportDetail = entry;
-  state.writing.reportDetailCache.set(entry.id, entry);
+  syncWritingReportEntryCache(entry);
   closeWritingScoreCompleteModal();
   switchView("writingReports");
+  try {
+    const freshEntry = await fetchWritingReportDetail(entry.id, { force: true });
+    if (state.view === "writingReports" && String(state.writing.activeReportId || "") === String(entry.id)) {
+      renderVisibleWritingReport(freshEntry);
+    }
+  } catch (_error) {
+    // The completed polling payload is already rendered; a revalidation failure
+    // must not replace it with an older cached report.
+  }
 }
 
 function clearWritingScorePolling() {
@@ -11045,6 +11129,7 @@ function mergeWritingReportEntryMetadata(entry) {
 function syncWritingReportEntryCache(entry, options = {}) {
   const id = String(entry?.id || "").trim();
   if (!id) return false;
+  advanceWritingReportDetailEpoch(id);
   state.writing.reportDetailPromises.delete(id);
   state.writing.reportDetailCache.set(id, entry);
   if (String(state.writing.activeReportDetail?.id || "") === id) state.writing.activeReportDetail = entry;
@@ -11136,7 +11221,6 @@ function startWritingScorePolling(entryId, options = {}) {
     try {
       const entry = await api(`/api/writing/entries/${entryId}`);
       if (state.writing.scorePollingEntryId !== entryId) return;
-      if (entry?.id) state.writing.reportDetailCache.set(entry.id, entry);
       renderVisibleWritingReport(entry);
       if (state.view === "writing" && state.writing.entry?.id === entry.id && !state.writing.dirty) {
         await recoverWritingEntry(entry);
@@ -11212,7 +11296,7 @@ async function scoreWritingEntry() {
       // Backend scoring still handles billing/fallback; keep the writing flow usable.
     }
     try {
-      const result = await withBusy("AI 评分任务已提交...", () => api(`/api/writing/entries/${entry.id}/score-task`, {}));
+      const result = await withBusy("AI 评分任务已提交...", () => api(`/api/writing/entries/${entry.id}/score-task`, { force: writingReportScored(entry) }));
       const savedEntry = result.entry || entry;
       // Clear entry-level dedup so the completion/failure modal can show even if this
       // entry had a previous (failed) attempt whose notification was already displayed.
@@ -15410,6 +15494,10 @@ function bindEvents() {
   $("writingScoreBtn")?.addEventListener("click", () => scoreWritingEntry().catch(showWritingError));
   $("writingRefreshBtn")?.addEventListener("click", () => loadWriting().catch(showWritingError));
   document.addEventListener("mouseover", (event) => {
+    if (event.target?.closest?.("#writingFixPopover")) {
+      hideWritingInlineTooltip();
+      return;
+    }
     const anchor = event.target?.closest?.("[data-writing-tooltip]");
     if (anchor) showWritingInlineTooltip(anchor);
   });
@@ -15421,6 +15509,10 @@ function bindEvents() {
     hideWritingInlineTooltip();
   });
   document.addEventListener("focusin", (event) => {
+    if (event.target?.closest?.("#writingFixPopover")) {
+      hideWritingInlineTooltip();
+      return;
+    }
     const anchor = event.target?.closest?.("[data-writing-tooltip]");
     if (anchor) showWritingInlineTooltip(anchor);
   });

@@ -342,7 +342,13 @@ def harvest_spelling_words(user) -> int:
             gloss = (word.chinese_gloss if word else "") or next((item.gloss for item in candidates if item.gloss), "") or first_local_gloss(first.correct)
             if word and (word.metadata or {}).get("gloss_edited"):
                 gloss = word.chinese_gloss
-            explanation = next((item.explanation for item in reversed(candidates) if item.explanation), "")
+            # Later reports may add wrong forms and examples for this word, but
+            # they must not rewrite the learner's established review record.
+            explanation = (
+                word.explanation
+                if word and word.explanation
+                else next((item.explanation for item in candidates if item.explanation), "")
+            )
             metadata["harvest_keys"] = sorted(seen_keys)
             defaults = {
                 "correct_spelling": word.correct_spelling if word else first.correct,
@@ -487,7 +493,7 @@ def get_or_create_spelling_daily_batch(user, *, now=None) -> SpellingDrillDailyB
     with transaction.atomic():
         batch = SpellingDrillDailyBatch.objects.select_for_update().filter(user=user, review_day=day).first()
         if batch:
-            if not batch.word_ids:
+            if not batch.word_ids and not batch.completed_at:
                 word_ids = due_word_ids_for_cutoff(user, cutoff)
                 if word_ids:
                     batch.word_ids = word_ids
@@ -503,6 +509,8 @@ def get_or_create_spelling_daily_batch(user, *, now=None) -> SpellingDrillDailyB
 def spelling_daily_batch_remaining_words(user, *, now=None):
     now = now or timezone.now()
     batch = get_or_create_spelling_daily_batch(user, now=now)
+    if batch.completed_at:
+        return SpellingDrillWord.objects.none(), batch
     word_ids = [str(word_id or "").strip() for word_id in (batch.word_ids or []) if str(word_id or "").strip()]
     if not word_ids:
         return SpellingDrillWord.objects.none(), batch
@@ -522,6 +530,19 @@ def spelling_daily_batch_remaining_words(user, *, now=None):
     ]
     remaining.sort(key=lambda word: ordering.get(word.word_id, len(ordering)))
     return remaining, batch
+
+
+def complete_spelling_daily_batch(user, *, now=None) -> dict[str, Any]:
+    now = now or timezone.now()
+    with transaction.atomic():
+        batch = get_or_create_spelling_daily_batch(user, now=now)
+        if not batch.completed_at:
+            batch.completed_at = now
+            batch.save(update_fields=["completed_at", "updated_at"])
+    return {
+        "ok": True,
+        "review_day_start": current_review_batch_cutoff(now).isoformat(),
+    }
 
 
 def spelling_drill_library(user, *, scope: str = "due") -> dict[str, Any]:

@@ -2041,6 +2041,46 @@ class QuestionBankApiTests(TestCase):
         self.assertTrue(updated_card["has_p3_follow_up"])
         self.assertEqual(updated_card["p3_follow_up_saved_count"], 1)
 
+    def test_p3_bank_followup_corpus_bulk_save_is_atomic_and_returns_canonical_snapshot(self):
+        library = self.client.get("/api/p2-corpus").json()
+        card = next(item for item in library["current_part2_cards"] if len(item.get("p3_follow_ups") or []) >= 2)
+        list_response = self.client.get(f"/api/p3-bank-corpus/{card['cue_id']}")
+        self.assertEqual(list_response.status_code, 200)
+        items = list_response.json()["items"]
+
+        first_snapshot = [
+            {
+                "followup_id": item["followup_id"],
+                "followup_question": item["followup_question"],
+                "corpus_text": f"Prepared answer {index + 1}." if index < 2 else "",
+            }
+            for index, item in enumerate(items)
+        ]
+        save_response = self.client.put(
+            f"/api/p3-bank-corpus/{card['cue_id']}",
+            data={"items": first_snapshot, "source": "p3_bank_corpus_editor"},
+            content_type="application/json",
+        )
+        self.assertEqual(save_response.status_code, 200)
+        saved = save_response.json()
+        self.assertEqual(saved["count"], len(items))
+        self.assertEqual(saved["saved_count"], 2)
+        self.assertEqual([item["corpus_text"] for item in saved["items"][:2]], ["Prepared answer 1.", "Prepared answer 2."])
+
+        invalid_snapshot = [dict(item) for item in first_snapshot]
+        invalid_snapshot[-1]["followup_id"] = "not-a-real-followup"
+        invalid_snapshot[0]["corpus_text"] = "This must not be partially saved."
+        invalid_response = self.client.put(
+            f"/api/p3-bank-corpus/{card['cue_id']}",
+            data={"items": invalid_snapshot, "source": "p3_bank_corpus_editor"},
+            content_type="application/json",
+        )
+        self.assertEqual(invalid_response.status_code, 400)
+
+        unchanged = self.client.get(f"/api/p3-bank-corpus/{card['cue_id']}").json()
+        self.assertEqual(unchanged["saved_count"], 2)
+        self.assertEqual(unchanged["items"][0]["corpus_text"], "Prepared answer 1.")
+
     def test_report_saved_status_uses_p2_corpus_p3_text_not_material_text(self):
         entry = P2CorpusEntry.objects.create(
             user=self.user,
@@ -4522,11 +4562,18 @@ class TurnFeedbackValidationTests(TestCase):
             "diplomatic",
             "Do not mechanically",
             "spoken English answer only",
+            "**题目分析：**",
+            "Question-type choice",
+            "Listing Group A",
+            "Category Group B",
+            "Parallel explanation",
+            "Two-camp contrast",
+            "Hourglass",
             "**1. 接题（复述/改写题目本身）**",
             "**3.3 让步限定**",
             "**5. 自然收尾**",
             "3-5 reusable spoken expressions",
-            "Why this structure matters",
+            "Why these choices matter",
         )
         for prompt in captured_prompts:
             for clause in required_clauses:

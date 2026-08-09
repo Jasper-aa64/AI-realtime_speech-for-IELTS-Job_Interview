@@ -313,10 +313,13 @@ I will paste one topic's corpus context next.`;
     };
     const p2BankCorpusCache = new Map();
     const p2BankP3Cache = new Map();
+    const p2BankP3Revisions = new Map();
+    let p2BankP3RevisionSeq = 0;
     let p1CorpusEditorLoadToken = 0;
     let p1TopicModalResumeKey = "";
     let p2BankCorpusLoadToken = 0;
     let p2BankP3LoadToken = 0;
+    let p2BankP3DraftSyncFrame = 0;
     // ── P2/P3 bank corpus: persistent SWR cache + batch prefetch ──────────────
     // Memory cache holds resolved Promises; localStorage gives stale-while-
     // revalidate across reloads; a batch endpoint warms the whole visible list.
@@ -400,6 +403,16 @@ I will paste one topic's corpus context next.`;
       return p2EquivalentQuestionIds(questionId).some((id) => p2BankP3Cache.has(id) || Boolean(p2BankLsRead(P3BANK_LS_PREFIX, id)));
     }
 
+    function p2BankP3Revision(questionId) {
+      return Math.max(0, ...p2EquivalentQuestionIds(questionId).map((id) => p2BankP3Revisions.get(id) || 0));
+    }
+
+    function bumpP2BankP3Revision(questionId) {
+      const revision = ++p2BankP3RevisionSeq;
+      p2EquivalentQuestionIds(questionId).forEach((id) => p2BankP3Revisions.set(id, revision));
+      return revision;
+    }
+
     function notifyCorpusSaved(detail = {}) {
       if (typeof onCorpusSaved !== "function") return;
       try { onCorpusSaved(detail); } catch (_error) { /* host notification is best effort */ }
@@ -415,6 +428,7 @@ I will paste one topic's corpus context next.`;
       p2BankCacheScope = scope;
       p2BankCorpusCache.clear();
       p2BankP3Cache.clear();
+      p2BankP3Revisions.clear();
       p2BankBatchRequested.clear();
     }
 
@@ -426,7 +440,9 @@ I will paste one topic's corpus context next.`;
       }).catch(() => { /* keep cached copy on failure */ });
     }
     function revalidateP2BankP3(questionId) {
+      const revision = p2BankP3Revision(questionId);
       api(`/api/p3-bank-corpus/${encodeURIComponent(questionId)}`).then((fresh) => {
+        if (revision !== p2BankP3Revision(questionId)) return;
         p2BankP3Cache.set(questionId, Promise.resolve(fresh));
         p2BankLsWrite(P3BANK_LS_PREFIX, questionId, fresh);
         maybeApplyFreshP2BankP3(questionId, fresh);
@@ -446,19 +462,27 @@ I will paste one topic's corpus context next.`;
       if (freshText === rendered && freshIdea === renderedIdea) return;
       text("p2CorpusSaveStatus", "\u670d\u52a1\u5668\u4e0a\u6709\u66f4\u65b0\uff0c\u5f53\u524d\u7f16\u8f91\u7a97\u53e3\u5df2\u4fdd\u6301\u4e0d\u53d8");
     }
+
+    function p2BankP3ItemsSignature(items) {
+      return JSON.stringify((items || []).map((item) => [item.followup_id, String(item.corpus_text || "")]));
+    }
+
     function maybeApplyFreshP2BankP3(questionId, fresh) {
       if ($("p2CorpusP3Dialog")?.classList.contains("hidden")) return;
       const active = state.p2Corpus.activeBankP3Entry;
       if (!active || String(active.question_id) !== String(questionId)) return;
-      const signature = (items) => JSON.stringify((items || []).map((item) => [item.followup_id, item.corpus_text]));
-      if (signature(active.items) === signature(fresh.items)) return;
-      const selected = (active.items || []).find((item) => item.followup_id === active.selectedFollowupId);
-      const current = String(getCorpusMarkdownValue("p2CorpusP3FollowUp") || "");
-      if (selected && current.trim() !== String(selected.corpus_text || "").trim()) {
-        text("p2CorpusP3SaveStatus", "服务器上有更新版本（未覆盖你的修改）");
+      const freshSignature = p2BankP3ItemsSignature(fresh.items);
+      if (p2BankP3ItemsSignature(active.items) === freshSignature) return;
+      const selected = activeP2BankP3Item(active);
+      const editorText = String(getCorpusMarkdownValue("p2CorpusP3FollowUp") || "").trim();
+      const selectedDirty = Boolean(selected) && editorText !== String(selected.corpus_text || "").trim();
+      const switchedDraftDirty = p2BankP3ItemsSignature(active.items) !== String(active._loadedSignature || "");
+      if (selectedDirty || switchedDraftDirty) {
+        text("p2CorpusP3SaveStatus", "服务器上有更新版本（当前编辑内容保持不变）");
         return;
       }
-      active.items = fresh.items || [];
+      active.items = (fresh.items || []).map((item) => ({ ...item }));
+      active._loadedSignature = freshSignature;
       renderP2BankP3Entries(fresh);
     }
 
@@ -482,6 +506,7 @@ I will paste one topic's corpus context next.`;
         api("/api/p3-bank-corpus/batch", { question_ids: chunk }).then((response) => {
           const items = (response && response.items) || {};
           Object.keys(items).forEach((qid) => {
+            if (p2BankP3Revision(qid) !== 0) return;
             if (!p2BankP3Cache.has(qid)) p2BankP3Cache.set(qid, Promise.resolve(items[qid]));
             p2BankLsWrite(P3BANK_LS_PREFIX, qid, items[qid]);
           });
@@ -5762,7 +5787,14 @@ I will paste one topic's corpus context next.`;
         scheduleIdle(() => revalidateP2BankP3(key), 50);
         return promise;
       }
-      const netPromise = api(`/api/p3-bank-corpus/${encodeURIComponent(key)}`).then((payload) => {
+      const revision = p2BankP3Revision(key);
+      let netPromise;
+      netPromise = api(`/api/p3-bank-corpus/${encodeURIComponent(key)}`).then((payload) => {
+        if (revision !== p2BankP3Revision(key)) {
+          const latest = p2BankP3Cache.get(key);
+          if (latest && latest !== netPromise) return latest;
+          return payload;
+        }
         p2BankLsWrite(P3BANK_LS_PREFIX, key, payload);
         const canonicalKey = String(payload?.p2_question_id || payload?.question_id || "").trim();
         if (canonicalKey && canonicalKey !== key) {
@@ -6255,9 +6287,12 @@ I will paste one topic's corpus context next.`;
         items: nextItems,
         count: nextItems.length,
       };
-      p2BankP3Cache.set(targetId, Promise.resolve(payload));
-      p2BankLsWrite(P3BANK_LS_PREFIX, targetId, payload);
-      p2BankBatchRequested.add(targetId);
+      bumpP2BankP3Revision(targetId);
+      p2EquivalentQuestionIds(targetId).forEach((id) => {
+        p2BankP3Cache.set(id, Promise.resolve(payload));
+        p2BankLsWrite(P3BANK_LS_PREFIX, id, payload);
+        p2BankBatchRequested.add(id);
+      });
       updateP2CardP3CountLocal(targetId, savedCount, nextItems.length);
     }
 
@@ -7017,15 +7052,20 @@ I will paste one topic's corpus context next.`;
 
     function syncActiveP2BankP3Draft() {
       const entry = state.p2Corpus.activeBankP3Entry;
-      if (!entry) return;
+      if (!entry) return false;
       const followupId = entry.selectedFollowupId || "";
-      if (!followupId) return;
+      if (!followupId) return false;
       const items = Array.isArray(entry.items) ? entry.items : [];
       const target = items.find((item) => item.followup_id === followupId);
-      if (!target) return;
-      target.corpus_text = isCorpusEditorReady("p2CorpusP3FollowUp")
+      if (!target) return false;
+      const previousText = String(target.corpus_text || "").trim();
+      const nextText = isCorpusEditorReady("p2CorpusP3FollowUp")
         ? getCorpusMarkdownValue("p2CorpusP3FollowUp").trim()
         : ($("p2CorpusP3FollowUp")?.value || "").trim();
+      if (previousText === nextText) return false;
+      target.corpus_text = nextText;
+      syncP2BankP3SelectedItemStatus(entry, target);
+      return previousText !== nextText;
     }
 
     function p2BankP3ItemStatus(item = {}) {
@@ -7037,6 +7077,24 @@ I will paste one topic's corpus context next.`;
       if (!items.length) return null;
       const selectedId = entry.selectedFollowupId || items[0]?.followup_id || "";
       return items.find((item) => item.followup_id === selectedId) || items[0] || null;
+    }
+
+    function syncP2BankP3SelectedItemStatus(
+      entry = state.p2Corpus.activeBankP3Entry || {},
+      item = activeP2BankP3Item(entry),
+      options = {},
+    ) {
+      if (!item?.followup_id) return;
+      const list = $("p2BankP3EntryList");
+      const button = [...(list?.querySelectorAll("[data-p2-bank-p3-select]") || [])]
+        .find((candidate) => candidate.dataset.p2BankP3Select === String(item.followup_id));
+      if (!button) return;
+      const saved = typeof options.hasContent === "boolean"
+        ? options.hasContent
+        : Boolean(String(item.corpus_text || "").trim());
+      button.classList.toggle("is-ready", saved);
+      const status = button.querySelector("em");
+      if (status) status.textContent = saved ? "已填" : "待填";
     }
 
     function renderP2BankP3Entries(payload = {}) {
@@ -7153,6 +7211,7 @@ I will paste one topic's corpus context next.`;
         title,
         cue_title: title,
         items: payload.items || [],
+        _loadedSignature: p2BankP3ItemsSignature(payload.items || []),
         selectedFollowupId: entry.selectedFollowupId || payload.items?.[0]?.followup_id || "",
       };
       text("p2CorpusP3DialogCategory", entry.label ? `题库素材 · ${entry.label}` : "题库素材");
@@ -7177,8 +7236,6 @@ I will paste one topic's corpus context next.`;
       }
       ensureCorpusMarkdownEditorReady("p2CorpusP3FollowUp").then((editor) => {
         if (!editor) setCorpusEditorLoading("p2CorpusP3FollowUp", false);
-        const selected = activeP2BankP3Item(state.p2Corpus.activeBankP3Entry);
-        setCorpusMarkdownValue("p2CorpusP3FollowUp", selected?.corpus_text || "");
         setTimeout(() => editor?.focus?.() || $("p2CorpusP3FollowUp")?.focus(), 0);
       });
     }
@@ -7254,18 +7311,14 @@ I will paste one topic's corpus context next.`;
           return;
         }
         syncActiveP2BankP3Draft();
-        const questionId = p2BankQuestionId(entry);
-        (entry.items || []).forEach((item) => {
-          notifyCorpusSaved({
-            kind: "p3_bank",
-            questionId,
-            p2QuestionId: questionId,
-            followupId: item.followup_id || "",
-            saved: Boolean(String(item.corpus_text || "").trim()),
-          });
-        });
-        closeP2CorpusP3Editor();
-        saveP2BankP3Entries({ entry, silent: true }).catch(() => null);
+        if (
+          typeof entry._loadedSignature === "string"
+          && p2BankP3ItemsSignature(entry.items) === entry._loadedSignature
+        ) {
+          closeP2CorpusP3Editor();
+          return;
+        }
+        await saveP2BankP3Entries({ entry, closeOnSuccess: true });
         return;
       }
       const entry = state.p2Corpus.activeP3Entry || {};
@@ -7325,19 +7378,13 @@ I will paste one topic's corpus context next.`;
           followup_question: item.followup_question || "",
           corpus_text: item.corpus_text || "",
         }));
-        const savedItems = await Promise.all(drafts.map((draft) => api(`/api/p3-bank-corpus/item/${encodeURIComponent(draft.followup_id || "")}`, {
-          p2_question_id: questionId,
-          followup_question: draft.followup_question || "",
-          corpus_text: draft.corpus_text || "",
+        const savedPayload = await api(`/api/p3-bank-corpus/${encodeURIComponent(questionId)}`, {
+          items: drafts,
           source: "p3_bank_corpus_editor",
-        })));
-        // P3 save is per-item with no combined payload; drop both caches so the
-        // next open re-fetches fresh and no stale copy covers the new content.
-        const mergedItems = items.map((item) => {
-          const saved = savedItems.find((row) => row.followup_id === item.followup_id);
-          return saved ? { ...item, ...saved } : item;
-        });
+        }, { method: "PUT" });
+        const mergedItems = Array.isArray(savedPayload?.items) ? savedPayload.items : items;
         entry.items = mergedItems;
+        entry._loadedSignature = p2BankP3ItemsSignature(mergedItems);
         applyP2BankP3SavedLocal(questionId, mergedItems);
         mergedItems.forEach((item) => {
           notifyCorpusSaved({
@@ -7349,9 +7396,6 @@ I will paste one topic's corpus context next.`;
           });
         });
         if (!options.silent) text("p2CorpusP3SaveStatus", "已保存题库 P3 追问");
-        // Reconcile in the background; the optimistic counts already match the
-        // saved state, so the UI must not block on a full library refetch.
-        loadP2Corpus({ force: true }).catch(() => null);
         if (options.closeOnSuccess) closeP2CorpusP3Editor();
       } catch (error) {
         if (!options.silent) text("p2CorpusP3SaveStatus", error.message || String(error));
@@ -7687,6 +7731,33 @@ I will paste one topic's corpus context next.`;
       if (!bankP3Button) return;
       event.preventDefault();
       selectP2BankP3Question(bankP3Button.dataset.p2BankP3Select || "");
+    });
+
+    function scheduleActiveP2BankP3DraftSync() {
+      if (!state.p2Corpus.activeBankP3Entry) return;
+      if (p2BankP3DraftSyncFrame) window.cancelAnimationFrame?.(p2BankP3DraftSyncFrame);
+      const sync = () => {
+        p2BankP3DraftSyncFrame = 0;
+        syncActiveP2BankP3Draft();
+      };
+      p2BankP3DraftSyncFrame = window.requestAnimationFrame
+        ? window.requestAnimationFrame(sync)
+        : window.setTimeout(sync, 0);
+    }
+
+    $("p2CorpusP3FollowUp")?.addEventListener("corpusmarkdowninput", (event) => {
+      if (event.detail?.presenceOnly) {
+        syncP2BankP3SelectedItemStatus(undefined, undefined, {
+          hasContent: event.detail.hasContent,
+        });
+        return;
+      }
+      scheduleActiveP2BankP3DraftSync();
+    });
+
+    $("p2CorpusP3Dialog")?.addEventListener("input", (event) => {
+      if (!event.target.closest(".vditor-wysiwyg")) return;
+      scheduleActiveP2BankP3DraftSync();
     });
 
     async function saveP2CorpusEntry(options = {}) {

@@ -320,13 +320,22 @@ def plain_spoken_text(value: str) -> str:
 def p3_plain_spoken_text(value: str) -> str:
     """Extract only the speakable answer from the structured P3 study format."""
     answer_lines: list[str] = []
+    in_reusable_expression_list = False
     for raw_line in clean_band7_output(value).splitlines():
         line = raw_line.strip()
         if not line:
             continue
+        unbolded_line = line.replace("**", "")
+        if re.match(r"^(?:题目分析|题型判断)\s*[:：]", unbolded_line):
+            continue
+        if re.match(r"^(?:本题新增的)?可复用(?:口语)?表达\s*[:：]?$", unbolded_line, flags=re.I):
+            in_reusable_expression_list = True
+            continue
+        if in_reusable_expression_list:
+            continue
         if re.match(r"^\*{0,2}\s*Q\s*:", line, flags=re.I):
             continue
-        if re.match(r"^\*{0,2}\s*[1-5](?:\.\d+)?\.\s*", line):
+        if re.match(r"^\*{0,2}\s*\d{1,2}(?:\.\d+)?\.\s*", line):
             continue
         if re.match(
             r"^[*_(\s]*[≈~]?\s*\d+\s*(?:词|words?)\s*/\s*\d+(?:\s*[-–]\s*\d+)?\s*(?:秒|seconds?|secs?)",

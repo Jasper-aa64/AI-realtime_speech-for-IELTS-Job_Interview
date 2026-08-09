@@ -1882,7 +1882,7 @@ class WritingApiTests(TestCase):
         )
         self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
 
-    def test_force_score_task_on_scored_entry_creates_new_task_and_hides_stale_score(self):
+    def test_force_score_task_replaces_old_report_with_pending_report(self):
         prompt = WritingPrompt.objects.create(
             prompt_id="task2-force-score-task",
             task_type=WritingPrompt.TaskType.TASK2,
@@ -1932,7 +1932,50 @@ class WritingApiTests(TestCase):
         detail = self.client.get(f"/api/writing/entries/{save['id']}").json()
         self.assertEqual(detail["ai_task"]["id"], payload["task"]["id"])
         self.assertIsNone(detail["score"])
-        self.assertTrue(WritingScore.objects.filter(entry__entry_id=save["id"], overall_band=7.5).exists())
+        self.assertEqual(detail["status"], WritingEntry.Status.SAVED)
+        self.assertFalse(WritingScore.objects.filter(entry__entry_id=save["id"]).exists())
+        report = next(item for item in self.client.get("/api/writing/reports").json()["items"] if item["id"] == save["id"])
+        self.assertEqual(report["ai_task"]["id"], payload["task"]["id"])
+        self.assertIsNone(report["overall_band"])
+
+    def test_late_score_result_for_old_answer_never_overwrites_latest_essay(self):
+        prompt = self.create_prompt(
+            prompt_id="task2-late-score-result",
+            task_type=WritingPrompt.TaskType.TASK2,
+            title="Late score prompt",
+            prompt="Some people think technology helps students learn independently. Discuss.",
+        )
+        saved = self.client.post(
+            "/api/writing/entries",
+            data={
+                "task_type": "task2",
+                "prompt_id": prompt.prompt_id,
+                "prompt": prompt.prompt,
+                "answer": paragraph_answer("Original paragraph one has enough detail.", "Original paragraph two completes the answer."),
+            },
+            content_type="application/json",
+        ).json()
+        task = self.client.post(
+            f"/api/writing/entries/{saved['id']}/score-task",
+            data={"reserved_u": 300_000},
+            content_type="application/json",
+        ).json()["task"]
+        entry = WritingEntry.objects.get(entry_id=saved["id"])
+        entry.answer = paragraph_answer("Latest paragraph one replaces the submitted draft.", "Latest paragraph two must be the only report source.")
+        entry.word_count = len(entry.answer.split())
+        entry.save(update_fields=["answer", "word_count", "updated_at"])
+
+        completed = complete_score_task(
+            task["id"],
+            {"score": ai_score_payload(), "usage": {"input_tokens": 1000, "output_tokens": 100}},
+        )
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.answer, "Latest paragraph one replaces the submitted draft.\n\nLatest paragraph two must be the only report source.")
+        self.assertEqual(entry.status, WritingEntry.Status.SAVED)
+        self.assertFalse(WritingScore.objects.filter(entry=entry).exists())
+        self.assertIsNone(completed["score"])
+        self.assertEqual(completed["ai_task"]["status"], AITask.Status.SUCCEEDED)
 
     @override_settings(AI_HTTP_BASE_URL="", AI_HTTP_API_KEY="", AI_HTTP_MODEL="")
     def test_score_task_worker_uses_codex_provider_on_normal_path(self):

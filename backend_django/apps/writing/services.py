@@ -656,6 +656,23 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
         )
     except AIOrchestrationError as exc:
         raise WritingError(str(exc)) from exc
+    if created:
+        original_metadata = dict(entry.metadata or {})
+        metadata = dict(original_metadata)
+        # A successfully queued task is a live report again, even when the user
+        # previously deleted its report while keeping the maintained essay.
+        metadata.pop("report_deleted_at", None)
+        if force_regenerate:
+            # Replace the report only after a new task exists so a rejected task
+            # submission never destroys a report the learner can still read.
+            WritingScore.objects.filter(entry=entry).delete()
+            entry.status = WritingEntry.Status.SAVED
+            metadata.pop("report_created_at", None)
+            metadata["report_regeneration_started_at"] = timezone.now().isoformat()
+        if force_regenerate or metadata != original_metadata:
+            entry.metadata = metadata
+            entry.save(update_fields=["status", "metadata", "updated_at"])
+            entry.refresh_from_db()
     return {"created": created, "task": task_payload(task), "entry": entry_payload(entry)}
 
 
@@ -843,6 +860,12 @@ def persist_score(entry: WritingEntry, score: dict[str, Any]) -> None:
     entry.saved_at = entry.saved_at or now
     entry.practice_date = entry.practice_date or timezone.localdate()
     entry.save(update_fields=["status", "saved_at", "practice_date", "metadata", "updated_at"])
+
+    # Spelling mistakes are historical training evidence. Archive them while
+    # this score still exists so report edits, regeneration, and deletion can
+    # never retract a word the learner has already misspelled.
+    from .spelling_services import harvest_spelling_words
+    harvest_spelling_words(entry.user)
 
 
 def fallback_score(task_type: str, answer: str, reason: str = "") -> dict[str, Any]:
@@ -1033,10 +1056,33 @@ def get_writing_score_task_and_entry(task_id: str) -> tuple[AITask, WritingEntry
     return task, entry
 
 
+def score_task_matches_current_entry(task: AITask, entry: WritingEntry) -> bool:
+    """A task may finish after the learner has already saved a newer essay."""
+    request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
+    expected_hash = str(request_payload.get("answer_hash") or "").strip()
+    if not expected_hash:
+        # Older tasks did not persist a snapshot hash. Keep their legacy behavior
+        # instead of calling them stale without evidence.
+        return True
+    current_hash = hashlib.sha1(str(entry.answer or "").encode("utf-8")).hexdigest()[:16]
+    return expected_hash == current_hash
+
+
 @transaction.atomic
 def complete_score_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     task, entry = get_writing_score_task_and_entry(task_id)
     if task.is_terminal:
+        return entry_payload(entry)
+    if not score_task_matches_current_entry(task, entry):
+        try:
+            succeed_billable_ai_task(
+                task.task_id,
+                {"entry_id": entry.entry_id, "stale_result": True},
+                payload.get("usage") if isinstance(payload.get("usage"), dict) else {},
+            )
+        except AIOrchestrationError as exc:
+            raise WritingError(str(exc)) from exc
+        entry.refresh_from_db()
         return entry_payload(entry)
     score = normalize_score_payload(entry, payload)
     persist_score(entry, score)

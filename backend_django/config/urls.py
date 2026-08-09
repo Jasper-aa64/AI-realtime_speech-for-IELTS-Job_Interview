@@ -101,6 +101,7 @@ urlpatterns = [
     path("api/dictionary/lookup", writing_views.dictionary_lookup, name="dictionary-lookup"),
     path("api/writing/spelling-words", writing_views.spelling_words, name="writing-spelling-words"),
     path("api/writing/spelling-words/add", writing_views.spelling_word_add, name="writing-spelling-word-add"),
+    path("api/writing/spelling-words/complete-daily-batch", writing_views.spelling_daily_batch_complete, name="writing-spelling-daily-batch-complete"),
     path("api/writing/spelling-words/<str:word_id>/attempt", writing_views.spelling_word_attempt, name="writing-spelling-word-attempt"),
     path("api/writing/spelling-words/<str:word_id>", writing_views.spelling_word_detail, name="writing-spelling-word-detail"),
     path("api/agent/writing/prompts/search", writing_views.agent_prompt_search, name="agent-writing-prompt-search"),

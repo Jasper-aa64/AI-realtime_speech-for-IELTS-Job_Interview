@@ -204,6 +204,62 @@ current = timezone.localtime(value or timezone.now())
 current = timezone.localtime(value or timezone.now(), SRS_REVIEW_TIMEZONE)
 ```
 
+## Scenario: Spelling Daily Batch Completion Is Durable
+
+### 1. Scope / Trigger
+
+- Trigger: a learner reaches the final word in the signed-in `due` queue.
+- Scope: `SpellingDrillDailyBatch`, `/api/writing/spelling-words/complete-daily-batch`, and the Spelling Drill completion UI.
+
+### 2. Signatures
+
+- `SpellingDrillDailyBatch.completed_at: DateTimeField | None`
+- `complete_spelling_daily_batch(user, *, now=None) -> dict[str, Any]`
+- `POST /api/writing/spelling-words/complete-daily-batch -> { ok, review_day_start }`
+
+### 3. Contracts
+
+- A non-empty due batch is immutable for one China 04:00 review day.
+- When the visible queue is complete, the frontend persists `completed_at` without blocking its completion screen.
+- A batch with `completed_at` returns no due items until the next review day. Late words remain in SRS and join the next day's batch; they are never deleted or marked practised.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+|---|---|
+| Anonymous completion request | 401 authentication required |
+| Completed batch reloaded on the same day | Empty due queue |
+| New review day | Fresh batch can include deferred words |
+| Completion persistence temporarily fails | Completion UI stays visible; a later refresh may retry |
+
+### 5. Good / Base / Bad Cases
+
+- Good: the UI completes a 49-word snapshot and a delayed `flustered` record appears tomorrow, not as a same-day second wave.
+- Base: an empty batch can still be populated if due words are first discovered before the user completes a non-empty queue.
+- Bad: only keeping the completed state in browser memory, so a refresh reopens the old batch.
+
+### 6. Tests Required
+
+- Service test: `completed_at` hides the same-day due queue and releases deferred words at the next 04:00 boundary.
+- API test: the completion endpoint is authenticated and persists the batch close.
+- Frontend regression: a same-day refresh cannot replace a completed queue with a late response, and completion calls the durable endpoint.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+# Recompute today's remaining words after every reload.
+return active_words.filter(due_at__lte=timezone.now())
+```
+
+#### Correct
+
+```python
+if batch.completed_at:
+    return SpellingDrillWord.objects.none(), batch
+```
+
 ## Scenario: IELTS Speaking CLI Simulator
 
 ### 1. Scope / Trigger

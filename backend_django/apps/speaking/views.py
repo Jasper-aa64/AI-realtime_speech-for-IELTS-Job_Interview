@@ -38,6 +38,7 @@ from .services import (
     save_p2_bank_corpus,
     save_p2_corpus,
     save_p3_bank_followup_corpus,
+    save_p3_bank_followup_snapshot,
     save_expression_replacement,
     save_language_takeaway,
     save_writing_takeaway,
@@ -196,13 +197,15 @@ def p2_bank_corpus_detail_view(request, question_id: str):
         return JsonResponse({"error": str(exc)}, status=400)
 
 
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "PUT"])
 def p3_bank_corpus_view(request, p2_question_id: str):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
     try:
-        return JsonResponse(p3_bank_followup_list(request.user, p2_question_id))
+        if request.method == "GET":
+            return JsonResponse(p3_bank_followup_list(request.user, p2_question_id))
+        return JsonResponse(save_p3_bank_followup_snapshot(request.user, p2_question_id, _json_payload(request)))
     except SpeakingError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 

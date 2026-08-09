@@ -149,7 +149,7 @@ assert.equal(
       active: 5,
       mastered: 2,
       accuracy: 0.8,
-      review_day_start: "2026-07-30T04:00:00+08:00",
+      review_day_start: "2026-07-31T04:00:00+08:00",
     },
   };
 
@@ -173,6 +173,19 @@ assert.equal(
   );
 
   state.spellingDrill.pendingReviewDayPayload = null;
+  nextPayload = {
+    items: [{ word_id: "same-day", correct_spelling: "same-day" }],
+    stats: {
+      due: 1,
+      active: 5,
+      mastered: 2,
+      accuracy: 0.8,
+      review_day_start: "2026-07-30T04:00:00+08:00",
+    },
+  };
+  state.spellingDrill.scopeCache = {
+    due: { payload: nextPayload, epoch: state.spellingDrill.cacheEpoch },
+  };
   await controller.loadSpellingDrill({ force: false, resetQueue: true });
   assert.strictEqual(
     state.spellingDrill.queue,
@@ -202,6 +215,63 @@ assert.equal(
     state.spellingDrill.queue[0]?.word_id,
     "next-day",
     "A genuinely new review day must replace the previous day's queue."
+  );
+
+  Object.assign(state.spellingDrill, {
+    phase: "ready",
+    scope: "due",
+    itemsScope: "due",
+    queueInitialLen: 6,
+    doneCount: 6,
+    dueDotOverride: null,
+  });
+  assert.equal(
+    typeof controller.getLiveDueDotCount,
+    "function",
+    "The app shell needs the controller's live queue count so a late prefetch cannot restore a completed red dot."
+  );
+  assert.equal(
+    controller.getLiveDueDotCount(),
+    0,
+    "Finishing the local due queue must report zero immediately, before server attempt writes settle."
+  );
+
+  const completedQueue = [
+    { word_id: "completed-a", correct_spelling: "completed-a" },
+    { word_id: "completed-b", correct_spelling: "completed-b" },
+  ];
+  Object.assign(state.spellingDrill, {
+    view: "drill",
+    phase: "ready",
+    scope: "due",
+    itemsScope: "due",
+    queue: completedQueue,
+    queuePos: completedQueue.length,
+    queueInitialLen: completedQueue.length,
+    doneCount: completedQueue.length,
+    sessionReviewDayStart: "2026-07-31T04:00:00+08:00",
+    pendingReviewDayPayload: null,
+  });
+  nextPayload = {
+    items: [{ word_id: "late-same-day", correct_spelling: "flustered" }],
+    stats: {
+      due: 1,
+      active: 5,
+      mastered: 2,
+      accuracy: 0.8,
+      review_day_start: "2026-07-31T04:00:00+08:00",
+    },
+  };
+  await controller.refreshSpellingReviewDay();
+  assert.strictEqual(
+    state.spellingDrill.queue,
+    completedQueue,
+    "A same-day background refresh must not reopen a completed daily queue with a late server word."
+  );
+  assert.equal(
+    state.spellingDrill.queuePos,
+    completedQueue.length,
+    "A same-day refresh must preserve the completed state instead of starting a second wave."
   );
 
   console.log("Spelling review day rollover checks passed.");

@@ -119,6 +119,7 @@ from .corpus_services import (
     question_bank_summary,
     save_p2_bank_corpus,
     save_p3_bank_followup_corpus,
+    save_p3_bank_followup_snapshot,
     save_expression_replacement,
     save_language_takeaway,
     save_p1_corpus,
@@ -2988,8 +2989,8 @@ def build_turn_band7_with_codex(question: str, transcript: str, part: str, call_
     part_constraints = model_answer_constraints(part)
     if part == "p3":
         question_format_rule = (
-            "Include the original question only in the required **Q: <question>** study heading, then follow the exact "
-            "numbered P3 Markdown structure below. Use Markdown bold on 3-5 reusable spoken expressions. "
+            "Include the required **题目分析：** line and **Q: <question>** study heading, then choose the matching "
+            "P3 study structure from the shared question-type guidance. Use Markdown bold on 3-5 reusable spoken expressions. "
         )
     else:
         question_format_rule = (
@@ -3106,7 +3107,7 @@ def turn_feedback_with_codex(question: str, transcript: str, part: str, target: 
     Raises RuntimeError if the output is invalid or missing required fields.
     """
     model_answer_format_rule = (
-        "- For P3, include the question in the required **Q: <question>** heading and follow the exact numbered P3 study structure.\n"
+        "- For P3, include the required **题目分析：** line and **Q: <question>** heading, then choose the matching P3 study structure.\n"
         "- For P3, bold 3-5 reusable spoken expressions; do not use the generic 2-5 range."
         if part == "p3"
         else "- Do not include the original question, cue-card bullets, titles, or labels.\n- Bold 2-5 useful upgraded chunks."
@@ -3315,7 +3316,7 @@ def turn_feedback_batch_with_codex(
     )
     includes_p3 = "p3" in parts
     batch_model_answer_format_rule = (
-        "- For P3 items, include the question in the required **Q: <question>** heading and follow the exact numbered P3 study structure.\n"
+        "- For P3 items, include the required **题目分析：** line and **Q: <question>** heading, then choose the matching P3 study structure.\n"
         "- For P3 items, bold 3-5 reusable spoken expressions; do not use the generic 2-5 range."
         if includes_p3
         else "- Do not include the original question, cue-card bullets, titles, or labels.\n- Bold 2-5 useful upgraded chunks per answer."

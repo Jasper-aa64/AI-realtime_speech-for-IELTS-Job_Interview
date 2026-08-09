@@ -39989,6 +39989,109 @@ body.theme-dark .spelling-add-dialog .spelling-add-gloss-preview {
   line-height: 1;
 }
 
+.writing-fix-popover button.is-busy {
+  cursor: wait;
+  opacity: 0.9;
+}
+
+.writing-fix-popover-spinner {
+  width: 12px;
+  height: 12px;
+  min-width: 12px;
+  min-height: 12px;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+.writing-fix-saving-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.writing-fix-saving-status .spinner {
+  width: 12px;
+  height: 12px;
+  min-width: 12px;
+  min-height: 12px;
+  border-width: 2px;
+}
+
+.writing-report-scoring-card {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.writing-report-scoring-head,
+.writing-report-scoring-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.writing-report-scoring-head h2 {
+  margin: 5px 0 4px;
+}
+
+.writing-report-scoring-head p,
+.writing-report-scoring-progress p,
+.writing-report-scoring-actions > span {
+  margin: 0;
+  color: var(--muted);
+}
+
+.writing-report-scoring-chip {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.writing-report-scoring-progress {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+}
+
+.writing-report-scoring-progress .spinner {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin-top: 2px;
+}
+
+.writing-report-scoring-progress strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 680px) {
+  .writing-report-scoring-head,
+  .writing-report-scoring-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 body.theme-dark .writing-fix-popover button {
   background: #d39b2f !important;
   border-color: rgba(246, 205, 112, 0.42) !important;

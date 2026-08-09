@@ -53,6 +53,8 @@
         sd.reviewDayRefreshPromise = sd.reviewDayRefreshPromise || null;
         sd.reviewDayRefreshSeq = Number(sd.reviewDayRefreshSeq || 0);
         sd.reviewDayRefreshBound = Boolean(sd.reviewDayRefreshBound);
+        sd.dailyBatchCompletionDay = String(sd.dailyBatchCompletionDay || "");
+        sd.dailyBatchCompletionPromise = sd.dailyBatchCompletionPromise || null;
         sd._drillReady    = true;
       }
       return sd;
@@ -386,8 +388,9 @@
       `;
     }
 
-    function updateDueDot() {
+    function getLiveDueDotCount() {
       const s = S();
+      if (!s?._drillReady) return null;
       // Only trust the live queue-progress count once the queue is actually
       // loaded FOR THE CURRENT SCOPE. During a scope switch the scope flips to
       // "due" immediately while queueInitialLen still holds the previous scope's
@@ -398,11 +401,16 @@
         s.itemsScope === "due" &&
         Number(s.queueInitialLen || 0) > 0;
       const hasOverride = s.dueDotOverride !== null && Number.isFinite(Number(s.dueDotOverride));
-      const due = hasOverride
+      if (!hasOverride && !useQueue) return null;
+      return hasOverride
         ? Math.max(0, Number(s.dueDotOverride))
-        : useQueue
-          ? Math.max(0, Number(s.queueInitialLen || 0) - Number(s.doneCount || 0))
-          : Number(s.stats?.due || 0);
+        : Math.max(0, Number(s.queueInitialLen || 0) - Number(s.doneCount || 0));
+    }
+
+    function updateDueDot() {
+      const s = S();
+      const liveDue = getLiveDueDotCount();
+      const due = liveDue === null ? Number(s.stats?.due || 0) : liveDue;
       const dot = $("spellingDrillDueDot");
       if (!dot) return;
       dot.classList.toggle("hidden", due <= 0);
@@ -607,11 +615,30 @@
         .then((payload) => {
           if (refreshSeq !== s.reviewDayRefreshSeq || epoch !== Number(s.cacheEpoch)) return null;
           rememberScopePayload("due", payload, epoch);
+          const sessionDay = String(
+            s.sessionReviewDayStart || s.stats?.review_day_start || ""
+          );
+          const incomingDay = String(payload?.stats?.review_day_start || "");
           s.stats = payload.stats || {};
           s.loaded = true;
 
           if (state.view === "spellingDrill" && s.scope === "due") {
-            if (dueSessionHasLearnerProgress()) {
+            const hasSameDayQueue = sessionDay === incomingDay
+              && s.view === "drill"
+              && s.phase === "ready"
+              && s.itemsScope === "due"
+              && Number(s.queueInitialLen || 0) > 0;
+            if (hasSameDayQueue) {
+              // The daily batch is a snapshot. A late refresh on the same day
+              // may see writes that had not settled when the session began,
+              // but it must never create a second wave of review words.
+              s.stats = {
+                ...(payload.stats || {}),
+                due: Math.max(0, Number(s.queueInitialLen || 0) - Number(s.doneCount || 0)),
+              };
+              setHeaderStats();
+              updateDueDot();
+            } else if (dueSessionHasLearnerProgress()) {
               s.pendingReviewDayPayload = payload;
               s.dueDotOverride = Math.max(0, Number(payload.stats?.due || 0));
               setHeaderStats();
@@ -880,8 +907,37 @@
       // frame before the words arrive ("进入为空，然后突然跳出来单词").
       if (s.phase !== "ready")   return renderLoading();
       if (!s.queue.length)       return renderEmpty();
-      if (s.queuePos >= s.queue.length) return renderDone();
+      if (s.queuePos >= s.queue.length) {
+        persistCompletedDueBatch();
+        return renderDone();
+      }
       renderDrill();
+    }
+
+    function persistCompletedDueBatch() {
+      const s = S();
+      if (
+        !state.account?.authenticated
+        || s.scope !== "due"
+        || s.view !== "drill"
+        || s.phase !== "ready"
+        || Number(s.queueInitialLen || 0) <= 0
+        || Number(s.queuePos || 0) < Number(s.queue.length || 0)
+      ) {
+        return;
+      }
+      const reviewDay = String(s.sessionReviewDayStart || s.stats?.review_day_start || "");
+      if (!reviewDay || s.dailyBatchCompletionDay === reviewDay || s.dailyBatchCompletionPromise) return;
+
+      s.dailyBatchCompletionDay = reviewDay;
+      const request = api("/api/writing/spelling-words/complete-daily-batch", {}, { method: "POST" })
+        .catch(() => {
+          if (s.dailyBatchCompletionDay === reviewDay) s.dailyBatchCompletionDay = "";
+        })
+        .finally(() => {
+          if (s.dailyBatchCompletionPromise === request) s.dailyBatchCompletionPromise = null;
+        });
+      s.dailyBatchCompletionPromise = request;
     }
 
     function renderLoading() {
@@ -1601,6 +1657,7 @@
     return {
       loadSpellingDrill: load,
       renderSpellingDrill: render,
+      getLiveDueDotCount,
       bindSpellingDrillEvents,
       bindSpellingReviewDayRefresh,
       refreshSpellingReviewDay,

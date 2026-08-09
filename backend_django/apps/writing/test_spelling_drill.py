@@ -12,12 +12,14 @@ from apps.writing.models import SpellingDrillDailyBatch, SpellingDrillWord, Writ
 from apps.writing.spelling_services import (
     SRS_REVIEW_TIMEZONE,
     add_manual_spelling_word,
+    complete_spelling_daily_batch,
     harvest_spelling_words,
     record_spelling_attempt,
     review_day_start,
     spelling_drill_library,
     update_spelling_word,
 )
+from apps.writing.services import persist_score
 
 
 class SpellingDrillTests(TestCase):
@@ -52,6 +54,37 @@ class SpellingDrillTests(TestCase):
             analysis_payload=analysis_payload,
             scored_at=timezone.now(),
         )
+
+    def ai_score_payload(self, *, wrong: str, correct: str, explanation: str) -> dict:
+        return {
+            "overall_band": 6.0,
+            "task_response": 6.0,
+            "coherence_cohesion": 6.0,
+            "lexical_resource": 6.0,
+            "grammatical_range_accuracy": 6.0,
+            "feedback_markdown": "Clear response with room to improve.",
+            "overall_review": "The response is clear overall.",
+            "practice_focus": "Keep checking spelling before you submit.",
+            "model_answer": "A concise model answer.",
+            "paragraph_reviews": [
+                {
+                    "index": 1,
+                    "learner": "Learner paragraph.",
+                    "model": "Model paragraph.",
+                    "coaching": "Check the spelling carefully.",
+                }
+            ],
+            "inline_annotations": [
+                {
+                    "type": "spelling",
+                    "original": wrong,
+                    "suggestion": correct,
+                    "explanation": explanation,
+                    "paragraph_index": 1,
+                }
+            ],
+            "backend": "ai",
+        }
 
     def test_manual_add_can_replace_existing_gloss_after_popup_edit(self):
         add_manual_spelling_word(
@@ -251,7 +284,79 @@ class SpellingDrillTests(TestCase):
         self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
         self.assertEqual(word.attempt_count, 5)  # 1 wrong + 4 correct
         self.assertEqual(word.correct_count, 4)
-        self.assertIn("next_due_human", result)
+
+    def test_persisted_score_archives_spelling_before_the_report_is_deleted(self):
+        entry = WritingEntry.objects.create(
+            user=self.user,
+            entry_id=uuid.uuid4().hex,
+            prompt=self.prompt,
+            task_type=self.prompt.task_type,
+            practice_date=timezone.localdate(),
+            title=self.prompt.title,
+            prompt_text=self.prompt.prompt,
+            answer="I watched several vidios online.",
+            word_count=6,
+            status=WritingEntry.Status.SAVED,
+            saved_at=timezone.now(),
+        )
+
+        persist_score(entry, self.ai_score_payload(
+            wrong="vidios",
+            correct="videos",
+            explanation="The word should be spelled videos.",
+        ))
+        WritingScore.objects.filter(entry=entry).delete()
+        entry.status = WritingEntry.Status.SAVED
+        entry.save(update_fields=["status", "updated_at"])
+        harvest_spelling_words(self.user)
+
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="videos")
+        self.assertEqual(word.wrong_forms, ["vidios"])
+
+    def test_later_reports_only_add_spelling_evidence_without_rewriting_progress(self):
+        self.create_score(
+            answer="I watched many vidios online.",
+            analysis_payload={
+                "inline_annotations": [
+                    {
+                        "type": "spelling",
+                        "original": "vidios",
+                        "suggestion": "videos",
+                        "explanation": "Keep the first explanation.",
+                        "paragraph_index": 1,
+                    }
+                ],
+            },
+        )
+        harvest_spelling_words(self.user)
+        word = SpellingDrillWord.objects.get(user=self.user, normalized="videos")
+        word.status = SpellingDrillWord.Status.MASTERED
+        word.review_stage = 4
+        word.current_streak = 4
+        word.save(update_fields=["status", "review_stage", "current_streak", "updated_at"])
+
+        self.create_score(
+            answer="I watched many viedos online.",
+            analysis_payload={
+                "inline_annotations": [
+                    {
+                        "type": "spelling",
+                        "original": "viedos",
+                        "suggestion": "videos",
+                        "explanation": "Do not replace the first explanation.",
+                        "paragraph_index": 1,
+                    }
+                ],
+            },
+        )
+        harvest_spelling_words(self.user)
+
+        word.refresh_from_db()
+        self.assertCountEqual(word.wrong_forms, ["vidios", "viedos"])
+        self.assertEqual(word.explanation, "Keep the first explanation.")
+        self.assertEqual(word.status, SpellingDrillWord.Status.MASTERED)
+        self.assertEqual(word.review_stage, 4)
+        self.assertEqual(word.current_streak, 4)
 
     def test_blank_attempt_counts_as_wrong_answer(self):
         self.create_score(
@@ -383,6 +488,71 @@ class SpellingDrillTests(TestCase):
         )
         batch = SpellingDrillDailyBatch.objects.get(user=self.user, review_day=now.date())
         self.assertEqual(batch.word_ids, [word.word_id])
+
+    def test_completed_daily_batch_stays_closed_until_the_next_review_day(self):
+        now = self.aware_at(2026, 6, 7, 10, 30)
+        first = SpellingDrillWord.objects.create(
+            user=self.user,
+            word_id="sp:first",
+            correct_spelling="comfortable",
+            normalized="comfortable",
+            wrong_forms=["confortable"],
+            first_seen_at=now - timedelta(days=3),
+            last_seen_at=now - timedelta(days=3),
+            due_at=now.replace(hour=4, minute=0, second=0, microsecond=0),
+            status=SpellingDrillWord.Status.ACTIVE,
+        )
+        late = SpellingDrillWord.objects.create(
+            user=self.user,
+            word_id="sp:late",
+            correct_spelling="flustered",
+            normalized="flustered",
+            wrong_forms=["flusterd"],
+            first_seen_at=now - timedelta(days=2),
+            last_seen_at=now - timedelta(days=2),
+            due_at=now.replace(hour=4, minute=0, second=0, microsecond=0),
+            status=SpellingDrillWord.Status.ACTIVE,
+        )
+
+        with patch("apps.writing.spelling_services.timezone.now", return_value=now):
+            initial = spelling_drill_library(self.user, scope="due")
+            complete_spelling_daily_batch(self.user)
+            same_day = spelling_drill_library(self.user, scope="due")
+
+        self.assertEqual({item["word_id"] for item in initial["items"]}, {first.word_id, late.word_id})
+        self.assertEqual(same_day["items"], [])
+        batch = SpellingDrillDailyBatch.objects.get(user=self.user, review_day=review_day_start(now).date())
+        self.assertIsNotNone(batch.completed_at)
+
+        tomorrow = self.aware_at(2026, 6, 8, 4, 1)
+        with patch("apps.writing.spelling_services.timezone.now", return_value=tomorrow):
+            next_day = spelling_drill_library(self.user, scope="due")
+
+        self.assertIn(late.word_id, {item["word_id"] for item in next_day["items"]})
+
+    def test_complete_daily_batch_endpoint_persists_today_completion(self):
+        now = self.aware_at(2026, 6, 7, 10, 30)
+        SpellingDrillWord.objects.create(
+            user=self.user,
+            word_id="sp:complete-endpoint",
+            correct_spelling="comfortable",
+            normalized="comfortable",
+            wrong_forms=["confortable"],
+            first_seen_at=now - timedelta(days=3),
+            last_seen_at=now - timedelta(days=3),
+            due_at=now.replace(hour=4, minute=0, second=0, microsecond=0),
+            status=SpellingDrillWord.Status.ACTIVE,
+        )
+        with patch("apps.writing.spelling_services.timezone.now", return_value=now):
+            spelling_drill_library(self.user, scope="due")
+            client = Client()
+            client.force_login(self.user)
+            response = client.post("/api/writing/spelling-words/complete-daily-batch")
+            same_day = spelling_drill_library(self.user, scope="due")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertEqual(same_day["items"], [])
 
     def test_empty_today_batch_reopens_when_due_words_exist_after_timezone_fix(self):
         now = self.aware_at(2026, 6, 11, 23, 30)

@@ -138,6 +138,7 @@ class SpellingDrillDailyBatch(UserOwnedModel):
     user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="spelling_drill_daily_batches")
     review_day = models.DateField()
     word_ids = models.JSONField(default=list, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [

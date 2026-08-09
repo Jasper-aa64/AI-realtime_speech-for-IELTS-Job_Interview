@@ -25,8 +25,8 @@ assert.match(
 
 assert.match(
   app,
-  /const\s+taskBlock\s*=\s*isScoringReport\s*\?[\s\S]{0,300}writingReportScoringStateHtml\(/,
-  "Active writing scoring must render independently of whether the entry already has a score.",
+  /if \(isScoringReport\) \{[\s\S]{0,1800}return `[^`]*writingReportScoringStateHtml\(entry, task\)/,
+  "Active writing scoring must return one dedicated surface instead of stacking a pending card with the old report or saved draft.",
 );
 
 assert.doesNotMatch(

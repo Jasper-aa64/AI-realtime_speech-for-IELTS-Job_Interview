@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
@@ -907,6 +908,7 @@ def p3_bank_followup_list(user, p2_question_id: str) -> dict[str, Any]:
         "question": p2_bank_question_text(topic, cue_id),
         "items": items,
         "count": len(items),
+        "saved_count": sum(1 for item in items if item["corpus_text"].strip()),
     }
 
 
@@ -1225,6 +1227,68 @@ def language_takeaway_payload(entry: LanguageTakeawayEntry) -> dict[str, Any]:
         "created_at": timezone.localtime(entry.created_at).isoformat() if entry.created_at else "",
         "updated_at": timezone.localtime(entry.updated_at).strftime("%Y-%m-%d %H:%M"),
     }
+
+
+def save_p3_bank_followup_snapshot(user, p2_question_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Atomically replace the editable P3 corpus snapshot for one P2 card."""
+    cue_id = _p2_cue_id_from_any(p2_question_id)
+    topic = p2_bank_topic_for_question_id(cue_id)
+    questions = [
+        clean_report_text(str(item))[:260]
+        for item in (topic or {}).get("p3_follow_ups", [])
+        if clean_report_text(str(item))
+    ]
+    if not cue_id or not questions:
+        raise SpeakingError("P3 follow-up questions not found.")
+
+    submitted = payload.get("items")
+    if not isinstance(submitted, list):
+        raise SpeakingError("P3 follow-up items must be a list.")
+    expected = [
+        (p3_bank_followup_id(cue_id, question, index), question)
+        for index, question in enumerate(questions)
+    ]
+    expected_ids = {followup_id for followup_id, _question in expected}
+    submitted_by_id: dict[str, dict[str, Any]] = {}
+    for raw in submitted:
+        if not isinstance(raw, dict):
+            raise SpeakingError("Each P3 follow-up item must be an object.")
+        followup_id = clean_report_text(str(raw.get("followup_id") or ""))
+        if not followup_id or followup_id in submitted_by_id:
+            raise SpeakingError("P3 follow-up snapshot contains a missing or duplicate id.")
+        submitted_by_id[followup_id] = raw
+    if set(submitted_by_id) != expected_ids:
+        raise SpeakingError("P3 follow-up snapshot is stale or incomplete. Reopen the editor and retry.")
+
+    existing = {
+        entry.followup_id: entry
+        for entry in P3BankFollowupCorpusEntry.objects.filter(
+            user=user,
+            p2_question_id=cue_id,
+            followup_id__in=expected_ids,
+        )
+    }
+    with transaction.atomic():
+        for followup_id, question in expected:
+            raw = submitted_by_id[followup_id]
+            corpus_text = clean_markdown_text(str(raw.get("corpus_text") or ""))[:12000]
+            current = existing.get(followup_id)
+            if not corpus_text:
+                if current:
+                    current.delete()
+                continue
+            P3BankFollowupCorpusEntry.objects.update_or_create(
+                user=user,
+                followup_id=followup_id,
+                defaults={
+                    "p2_question_id": cue_id,
+                    "followup_question": question,
+                    "corpus_text": corpus_text,
+                    "last_ai_answer": current.last_ai_answer if current else "",
+                    "metadata": current.metadata if current and isinstance(current.metadata, dict) else {},
+                },
+            )
+    return p3_bank_followup_list(user, cue_id)
 
 
 def language_takeaway_queryset(user):
