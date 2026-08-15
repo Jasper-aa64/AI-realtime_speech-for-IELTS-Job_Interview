@@ -49,6 +49,32 @@ from the log, because the log can contain stale URLs that now return 530/1033:
 .\scripts\windows\get-tunnel-url.ps1
 ```
 
+### Quick Tunnel Disconnect Incident Rule
+
+P3 start-up can make a pre-existing quick-tunnel transport failure visible by
+requesting the attempt, several examiner-TTS files, and preload data together.
+Do not diagnose that as a P3, TTS, database, or Django failure before checking
+the boundaries below:
+
+```powershell
+Invoke-WebRequest http://127.0.0.1:8767/ -UseBasicParsing
+Get-Service ielts-django, ielts-cloudflared
+Get-Content .runlogs\cloudflared.log -Tail 120
+```
+
+If localhost is `200`, both services are `Running`, and the tunnel log contains
+`Serve tunnel error`, `connection with edge closed`, `client disconnected`, or
+`control stream`, the incident is a Cloudflare edge/transport disconnect. The
+quick tunnel may recover seconds later; do not restart it during an active user
+practice session, and do not restart Django as a response.
+
+The NSSM quick-tunnel command must use `--protocol auto`, never a forced
+`--protocol http2`. `auto` prefers QUIC and falls back to HTTP/2 only when the
+network requires it. A controlled future restart is required for that command
+change and will create a new quick-tunnel URL, so announce it before performing
+it. The permanent solution for a public app is a Cloudflare Named Tunnel with a
+stable hostname; quick tunnels have no uptime guarantee.
+
 This quick-tunnel setup is intended to be stable during one boot/session while
 the machine stays on. It is not a permanent fixed-domain deployment.
 
@@ -267,8 +293,9 @@ For "do not drop" local availability:
 1. Keep the NSSM Django + cloudflared services healthy.
 2. Start the interactive-user AI worker task only when the user explicitly asks
    for queued AI worker processing.
-3. Use Tailscale Funnel or Cloudflare Named Tunnel only if a truly fixed public
-   address is required.
+3. Use a Cloudflare Named Tunnel when the public app needs stable availability
+   or a fixed address; do not treat a trycloudflare quick tunnel as production
+   transport.
 
 Avoid relying on a random `trycloudflare.com` quick tunnel for long-term stable access.
 
