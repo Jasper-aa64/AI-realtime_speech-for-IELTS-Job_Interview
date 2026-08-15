@@ -13,7 +13,8 @@ from apps.ai.models import AITask
 from apps.ai.orchestration import AIOrchestrationError, cancel_billable_ai_task, create_billable_ai_task, fallback_billable_ai_task, succeed_billable_ai_task
 from apps.ai.services import task_payload
 
-from .models import WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
+from .custom_prompt_services import get_custom_prompt
+from .models import CustomWritingPrompt, WritingEntry, WritingLearnerProfile, WritingPrompt, WritingScore
 from .validation import WRITING_TASK_TYPES, WritingEntryDeleted, WritingError, normalize_task_type, paragraph_guidance, validate_answer_paragraphs, word_count, writing_entry_is_scored, writing_paragraphs
 
 
@@ -334,12 +335,21 @@ def preserve_score_after_answer_edit(entry: WritingEntry, previous_answer: str, 
     score.save(update_fields=["analysis_payload", "updated_at"])
 
 
-def scored_entry_for_same_prompt(user, *, task_type: str, prompt: WritingPrompt | None, prompt_text: str) -> WritingEntry | None:
+def scored_entry_for_same_prompt(
+    user,
+    *,
+    task_type: str,
+    prompt: WritingPrompt | None,
+    prompt_text: str,
+    custom_prompt: CustomWritingPrompt | None = None,
+) -> WritingEntry | None:
     queryset = (
-        WritingEntry.objects.select_related("prompt", "score")
+        WritingEntry.objects.select_related("prompt", "custom_prompt", "score")
         .filter(user=user, task_type=task_type, status=WritingEntry.Status.SCORED, score__isnull=False)
         .order_by("-updated_at", "-created_at")
     )
+    if custom_prompt:
+        return queryset.filter(custom_prompt=custom_prompt).first()
     if prompt:
         if prompt.source_book is not None and prompt.source_test is not None and prompt.source_question is not None:
             source_match = queryset.filter(
@@ -356,7 +366,14 @@ def scored_entry_for_same_prompt(user, *, task_type: str, prompt: WritingPrompt 
     return None
 
 
-def maintained_entry_for_same_prompt(user, *, task_type: str, prompt: WritingPrompt | None, prompt_text: str) -> WritingEntry | None:
+def maintained_entry_for_same_prompt(
+    user,
+    *,
+    task_type: str,
+    prompt: WritingPrompt | None,
+    prompt_text: str,
+    custom_prompt: CustomWritingPrompt | None = None,
+) -> WritingEntry | None:
     """Return the single essay the user is maintaining for this question.
 
     Historical duplicate rows can exist from older flows. Prefer a scored report
@@ -364,10 +381,12 @@ def maintained_entry_for_same_prompt(user, *, task_type: str, prompt: WritingPro
     saved draft, then the newest empty draft only when that is all that exists.
     """
     queryset = (
-        WritingEntry.objects.select_related("prompt", "score")
+        WritingEntry.objects.select_related("prompt", "custom_prompt", "score")
         .filter(user=user, task_type=task_type)
     )
-    if prompt:
+    if custom_prompt:
+        queryset = queryset.filter(custom_prompt=custom_prompt)
+    elif prompt:
         if prompt.source_book is not None and prompt.source_test is not None and prompt.source_question is not None:
             queryset = queryset.filter(
                 prompt__source_book=prompt.source_book,
@@ -397,7 +416,14 @@ def maintained_entry_for_same_prompt(user, *, task_type: str, prompt: WritingPro
     return candidates[0]
 
 
-def entry_for_prompt(user, *, task_type: str, prompt_id: str = "", prompt_text: str = "") -> dict[str, Any]:
+def entry_for_prompt(
+    user,
+    *,
+    task_type: str,
+    prompt_id: str = "",
+    prompt_text: str = "",
+    custom_prompt_id: str = "",
+) -> dict[str, Any]:
     """The single essay the user maintains for a given question (scored or not).
 
     One essay per question: opening a prompt should reload whatever the user last
@@ -409,7 +435,17 @@ def entry_for_prompt(user, *, task_type: str, prompt_id: str = "", prompt_text: 
         if str(prompt_id or "").strip()
         else None
     )
-    entry = maintained_entry_for_same_prompt(user, task_type=normalized_task, prompt=prompt, prompt_text=prompt_text)
+    custom_id = str(custom_prompt_id or "").strip()
+    if not custom_id and not prompt and str(prompt_id or "").strip():
+        custom_id = str(prompt_id).strip()
+    custom_prompt = get_custom_prompt(user, custom_id) if custom_id else None
+    entry = maintained_entry_for_same_prompt(
+        user,
+        task_type=normalized_task,
+        prompt=prompt,
+        prompt_text=prompt_text,
+        custom_prompt=custom_prompt,
+    )
     return {"entry": entry_payload(entry) if entry else None}
 
 
@@ -417,28 +453,76 @@ def entry_for_prompt(user, *, task_type: str, prompt_id: str = "", prompt_text: 
 def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     answer = str(payload.get("answer") or "")
     task_type = normalize_task_type(str(payload.get("task_type") or ""))
+    entry_id = str(payload.get("id") or "").strip()
+    existing = (
+        WritingEntry.objects.select_related("prompt", "custom_prompt", "score")
+        .filter(user=user, entry_id=entry_id)
+        .first()
+        if entry_id else None
+    )
+    existing_custom_id = str((existing.metadata or {}).get("custom_prompt_id") or "") if existing else ""
+    custom_prompt_id = str(payload.get("custom_prompt_id") or "").strip()
+    custom_prompt = None
+    if custom_prompt_id:
+        try:
+            custom_prompt = get_custom_prompt(user, custom_prompt_id)
+        except WritingError:
+            if not existing or existing_custom_id != custom_prompt_id or (existing.metadata or {}).get("source") != "custom":
+                raise
+    if custom_prompt and custom_prompt.task_type != task_type:
+        raise WritingError("Custom writing prompt task type does not match entry")
     prompt_id = str(payload.get("prompt_id") or "").strip()
     prompt = WritingPrompt.objects.filter(prompt_id=prompt_id, task_type=task_type, is_active=True).first() if prompt_id else None
-    prompt_text = str(payload.get("prompt") or (prompt.prompt if prompt else "")).strip()
+    if custom_prompt and prompt:
+        raise WritingError("Choose either a formal or custom writing prompt")
+    prompt_text = (
+        custom_prompt.prompt_markdown
+        if custom_prompt
+        else str(payload.get("prompt") or (prompt.prompt if prompt else "")).strip()
+    )
+    if existing and existing_custom_id == custom_prompt_id and custom_prompt_id:
+        prompt_text = existing.prompt_text
     if not prompt_text:
         raise WritingError("Missing writing prompt")
-    entry_id = str(payload.get("id") or "").strip()
-    existing = WritingEntry.objects.select_related("prompt", "score").filter(user=user, entry_id=entry_id).first() if entry_id else None
     preserve_score_requested = payload.get("preserve_score", False) is True
     scored_same_prompt = None
     if not existing and not entry_id:
-        maintained_same_prompt = maintained_entry_for_same_prompt(user, task_type=task_type, prompt=prompt, prompt_text=prompt_text)
+        maintained_same_prompt = maintained_entry_for_same_prompt(
+            user,
+            task_type=task_type,
+            prompt=prompt,
+            prompt_text=prompt_text,
+            custom_prompt=custom_prompt,
+        )
         if maintained_same_prompt:
             existing = maintained_same_prompt
             entry_id = existing.entry_id
+            existing_custom_id = str((existing.metadata or {}).get("custom_prompt_id") or "")
+            if existing_custom_id == custom_prompt_id and custom_prompt_id:
+                prompt_text = existing.prompt_text
     elif existing and preserve_score_requested and not writing_entry_is_scored(existing):
-        scored_same_prompt = scored_entry_for_same_prompt(user, task_type=task_type, prompt=prompt, prompt_text=prompt_text)
+        scored_same_prompt = scored_entry_for_same_prompt(
+            user,
+            task_type=task_type,
+            prompt=prompt,
+            prompt_text=prompt_text,
+            custom_prompt=custom_prompt,
+        )
         if scored_same_prompt:
             existing = scored_same_prompt
             entry_id = existing.entry_id
+            existing_custom_id = str((existing.metadata or {}).get("custom_prompt_id") or "")
+            if existing_custom_id == custom_prompt_id and custom_prompt_id:
+                prompt_text = existing.prompt_text
     if not entry_id:
         entry_id = uuid.uuid4().hex
-    title = str(payload.get("title") or (prompt.title if prompt else "") or WRITING_TASK_LABELS[task_type])[:200]
+    title = str(
+        existing.title
+        if existing and existing_custom_id == custom_prompt_id and custom_prompt_id
+        else custom_prompt.title
+        if custom_prompt
+        else payload.get("title") or (prompt.title if prompt else "") or WRITING_TASK_LABELS[task_type]
+    )[:200]
     now = timezone.now()
     previous_answer = existing.answer if existing else ""
     answer_changed = bool(existing and existing.answer != answer)
@@ -450,6 +534,7 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     )
     entry = existing or WritingEntry(user=user, entry_id=entry_id, task_type=task_type)
     entry.prompt = prompt
+    entry.custom_prompt = custom_prompt
     entry.task_type = task_type
     if existing and not payload.get("practice_date"):
         entry.practice_date = existing.practice_date
@@ -462,15 +547,31 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
     entry.status = WritingEntry.Status.SAVED if (answer_changed and not preserve_score) or not existing else entry.status
     entry.saved_at = now
     base_metadata = entry.metadata or {}
-    entry.metadata = {
+    metadata = {
         **(base_metadata or {}),
-        "category": str(payload.get("category") or (prompt.category if prompt else "")),
+        "category": str(payload.get("category") or (custom_prompt.category if custom_prompt else (prompt.category if prompt else ""))),
         "image_url": str(payload.get("image_url") or (prompt.image_url if prompt else "")),
         "prompt_highlights": normalize_prompt_highlights(
             payload.get("prompt_highlights") if "prompt_highlights" in payload else (base_metadata or {}).get("prompt_highlights"),
             prompt_text,
         ),
     }
+    is_custom_snapshot = bool(
+        custom_prompt
+        or (custom_prompt_id and existing_custom_id == custom_prompt_id and base_metadata.get("source") == "custom")
+    )
+    if is_custom_snapshot:
+        metadata["source"] = "custom"
+        metadata["source_label"] = "自定义练习"
+        metadata["custom_prompt_id"] = custom_prompt_id or str(custom_prompt.id)
+    else:
+        metadata.pop("custom_prompt_id", None)
+        if metadata.get("source") == "custom":
+            metadata.pop("source", None)
+            metadata.pop("source_label", None)
+        if prompt:
+            metadata["source"] = prompt.source
+    entry.metadata = metadata
     entry.save()
     if answer_changed and preserve_score:
         preserve_score_after_answer_edit(entry, previous_answer, answer)
@@ -483,7 +584,7 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
 
 def get_entry(user, entry_id: str) -> dict[str, Any]:
     entry = (
-        WritingEntry.objects.select_related("user", "prompt", "score")
+        WritingEntry.objects.select_related("user", "prompt", "custom_prompt", "score")
         .filter(user=user, entry_id=str(entry_id or "").strip())
         .first()
     )
@@ -495,7 +596,7 @@ def get_entry(user, entry_id: str) -> dict[str, Any]:
 @transaction.atomic
 def clone_entry_for_revision(user, entry_id: str) -> dict[str, Any]:
     source = (
-        WritingEntry.objects.select_related("prompt", "score")
+        WritingEntry.objects.select_related("prompt", "custom_prompt", "score")
         .filter(user=user, entry_id=str(entry_id or "").strip())
         .first()
     )
@@ -508,6 +609,7 @@ def clone_entry_for_revision(user, entry_id: str) -> dict[str, Any]:
         user=user,
         entry_id=uuid.uuid4().hex,
         prompt=source.prompt,
+        custom_prompt=source.custom_prompt,
         task_type=source.task_type,
         practice_date=timezone.localdate(),
         title=source.title,
@@ -553,7 +655,7 @@ def delete_entry(user, entry_id: str) -> dict[str, Any]:
 
 @transaction.atomic
 def delete_entry_report(user, entry_id: str) -> dict[str, Any]:
-    entry = WritingEntry.objects.select_related("prompt", "score").filter(user=user, entry_id=str(entry_id or "").strip()).first()
+    entry = WritingEntry.objects.select_related("prompt", "custom_prompt", "score").filter(user=user, entry_id=str(entry_id or "").strip()).first()
     if not entry:
         raise WritingError("Writing entry not found")
     pending_tasks = AITask.objects.filter(
@@ -591,7 +693,7 @@ def delete_entry_report(user, entry_id: str) -> dict[str, Any]:
 def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     entry = (
-        WritingEntry.objects.select_related("user", "prompt", "score")
+        WritingEntry.objects.select_related("user", "prompt", "custom_prompt", "score")
         .filter(user=user, entry_id=str(entry_id or "").strip())
         .first()
     )
@@ -644,6 +746,7 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
                 "entry_id": entry.entry_id,
                 "task_type": entry.task_type,
                 "prompt_id": entry.prompt.prompt_id if entry.prompt_id else "",
+                "custom_prompt_id": str(entry.custom_prompt_id) if entry.custom_prompt_id else str((entry.metadata or {}).get("custom_prompt_id") or ""),
                 "title": entry.title,
                 "prompt": entry.prompt_text,
                 "answer": entry.answer,

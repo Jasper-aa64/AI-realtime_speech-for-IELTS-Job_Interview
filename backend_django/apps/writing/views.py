@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
+from .custom_prompt_services import create_custom_prompt, delete_custom_prompt, list_custom_prompts, update_custom_prompt
 from .dictionary_services import is_single_dictionary_word, lookup_word
 from .models import WritingFrameTemplate
 from .spelling_services import add_manual_spelling_word, complete_spelling_daily_batch, delete_spelling_word, record_spelling_attempt, spelling_drill_library, spelling_word_for_lookup, update_spelling_word
@@ -200,6 +201,47 @@ def prompts(request):
         return writing_error(exc)
 
 
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def custom_prompts(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        if request.method == "POST":
+            return JsonResponse(create_custom_prompt(request.user, read_json_body(request)), status=201)
+        return JsonResponse(list_custom_prompts(request.user, request.GET.get("task_type")))
+    except WritingError as exc:
+        return writing_error(exc)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def custom_prompt_create(request):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        return JsonResponse(create_custom_prompt(request.user, read_json_body(request)), status=201)
+    except WritingError as exc:
+        return writing_error(exc)
+
+
+@csrf_exempt
+@require_http_methods(["PATCH", "DELETE"])
+def custom_prompt_detail(request, prompt_id: str):
+    auth_error = require_user(request)
+    if auth_error:
+        return auth_error
+    try:
+        if request.method == "PATCH":
+            return JsonResponse(update_custom_prompt(request.user, prompt_id, read_json_body(request)))
+        return JsonResponse(delete_custom_prompt(request.user, prompt_id))
+    except WritingError as exc:
+        status = 404 if "not found" in str(exc).lower() else 400
+        return writing_error(exc, status=status)
+
+
 @require_GET
 def agent_prompt_search(request):
     query = str(request.GET.get("q") or request.GET.get("query") or "").strip()
@@ -261,6 +303,7 @@ def entry_for_prompt_view(request):
             task_type=request.GET.get("task_type", ""),
             prompt_id=request.GET.get("prompt_id", ""),
             prompt_text=request.GET.get("prompt", ""),
+            custom_prompt_id=request.GET.get("custom_prompt_id", ""),
         ))
     except WritingError as exc:
         return writing_error(exc)

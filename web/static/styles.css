@@ -40546,3 +40546,178 @@ body.theme-dark .p1-corpus-copy-toast {
   box-shadow: none !important;
   filter: none !important;
 }
+/* Custom writing prompts share the existing question-bank geometry. */
+.writing-custom-add-card {
+  min-height: 210px;
+  border-style: dashed;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+  background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
+}
+
+.writing-custom-add-icon {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line));
+  border-radius: 50%;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
+}
+
+.writing-custom-add-icon svg,
+.writing-custom-prompt-menu-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.writing-custom-prompt-choice {
+  position: relative;
+  overflow: visible;
+}
+
+.writing-custom-prompt-choice .writing-prompt-choice-body {
+  min-width: 0;
+}
+
+.writing-custom-prompt-choice .writing-prompt-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  line-height: 1.55;
+}
+
+.writing-custom-prompt-choice .writing-prompt-preview > :first-child { margin-top: 0; }
+.writing-custom-prompt-choice .writing-prompt-preview > :last-child { margin-bottom: 0; }
+
+.writing-custom-prompt-choice .writing-prompt-choice-main {
+  width: 100%;
+  min-height: inherit;
+  padding: inherit;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.writing-custom-prompt-menu-wrap {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 8;
+}
+
+.writing-custom-prompt-menu-button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+}
+
+.writing-custom-prompt-menu-button svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+.writing-custom-prompt-menu {
+  top: 38px;
+  right: 0;
+  z-index: 90;
+  min-width: 112px;
+}
+
+.custom-writing-prompt-card {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 36px));
+  overflow: auto;
+}
+
+.custom-writing-prompt-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.custom-writing-prompt-form {
+  display: grid;
+  gap: 16px;
+  padding: 18px 22px 22px;
+}
+
+.custom-writing-prompt-meta-row {
+  display: grid;
+  grid-template-columns: minmax(150px, .7fr) minmax(260px, 1.3fr);
+  gap: 14px;
+}
+
+.custom-writing-prompt-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.custom-writing-prompt-form label small {
+  font-weight: 500;
+  opacity: .72;
+}
+
+.custom-writing-prompt-form input,
+.custom-writing-prompt-form select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0 12px;
+}
+
+.custom-writing-prompt-editor-label .corpus-markdown-editor-frame,
+.custom-writing-prompt-editor-label textarea {
+  min-height: 300px;
+}
+
+.custom-writing-prompt-error {
+  min-height: 18px;
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.custom-writing-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+body.theme-dark .writing-custom-add-card,
+body.theme-dark .custom-writing-prompt-card {
+  background: color-mix(in srgb, var(--panel) 94%, #000 6%);
+}
+
+@media (max-width: 680px) {
+  .custom-writing-prompt-meta-row { grid-template-columns: 1fr; }
+  .custom-writing-prompt-form { padding: 14px; }
+  .custom-writing-prompt-editor-label .corpus-markdown-editor-frame,
+  .custom-writing-prompt-editor-label textarea { min-height: 250px; }
+}

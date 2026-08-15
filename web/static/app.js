@@ -139,6 +139,12 @@ const state = {
   writing: {
     taskType: "task2",
     prompts: {},
+    customPrompts: {},
+    customPromptLoaded: {},
+    customPromptLoadingPromises: {},
+    customPromptCreatePromise: null,
+    customPromptSavePromise: null,
+    customPromptErrors: {},
     prompt: null,
     requestedPromptId: "",
     promptHighlights: {},
@@ -1374,13 +1380,88 @@ function task2FixedQuestionRanges(textValue = "") {
     .filter((range, index, sorted) => !sorted.slice(0, index).some((prev) => range.start >= prev.start && range.end <= prev.end));
 }
 
+function visibleWritingPromptTextWithMap(value = "") {
+  const source = String(value || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  let visible = "";
+  const map = [];
+  let cursor = 0;
+  let lineStart = true;
+  while (cursor < source.length) {
+    if (lineStart) {
+      const prefix = source.slice(cursor).match(/^\s{0,3}(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/);
+      if (prefix) {
+        cursor += prefix[0].length;
+        lineStart = false;
+        continue;
+      }
+    }
+    const character = source[cursor];
+    if ("`*_~".includes(character)) {
+      cursor += 1;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      const nextNonWhitespace = source.slice(cursor).match(/^\s*([?.!,;:])/);
+      if (visible && !visible.endsWith(" ") && !nextNonWhitespace) {
+        visible += " ";
+        map.push(cursor);
+      }
+      lineStart = character === "\n";
+      cursor += 1;
+      continue;
+    }
+    visible += character;
+    map.push(cursor);
+    lineStart = false;
+    cursor += 1;
+  }
+  return { text: visible.trim(), map };
+}
+
+function sourceRangesForVisiblePromptText(sourceText, ranges) {
+  const source = String(sourceText || "");
+  const map = visibleWritingPromptTextWithMap(source).map;
+  if (!map.length) return [];
+  return ranges
+    .map((range) => {
+      const startIndex = Math.max(0, Math.min(map.length - 1, range.start));
+      const endIndex = Math.max(startIndex + 1, Math.min(map.length, range.end));
+      const start = map[startIndex];
+      const end = map[Math.min(map.length, endIndex) - 1] + 1;
+      return { start, end };
+    })
+    .filter((range) => Number.isFinite(range.start) && range.end > range.start);
+}
+
+function renderMarkdownWithFixedQuestionRanges(markdown, ranges) {
+  let marked = String(markdown || "");
+  const sorted = [...ranges].sort((a, b) => b.start - a.start || b.end - a.end);
+  sorted.forEach((range, index) => {
+    marked = `${marked.slice(0, range.end)}WRITINGFIXEDEND${index}${marked.slice(range.end)}`;
+    marked = `${marked.slice(0, range.start)}WRITINGFIXEDSTART${index}${marked.slice(range.start)}`;
+  });
+  let rendered = renderMarkdown(marked);
+  sorted.forEach((_range, index) => {
+    rendered = rendered
+      .replaceAll(`WRITINGFIXEDSTART${index}`, '<strong class="writing-prompt-segment writing-prompt-fixed-question">')
+      .replaceAll(`WRITINGFIXEDEND${index}`, "</strong>");
+  });
+  return `<span class="writing-prompt-text-structured">${rendered}</span>`;
+}
+
 function task2FixedQuestionDisplayLabel(questionText = "") {
   const text = String(questionText || "").replace(/\s+/g, " ").trim();
   return text;
 }
 
-function renderTask2PromptTextWithHighlights(textValue, ranges = []) {
+function renderTask2PromptTextWithHighlights(textValue, ranges = [], options = {}) {
   const text = String(textValue || "");
+  if (options.markdown) {
+    const visible = visibleWritingPromptTextWithMap(text).text;
+    const fixedRanges = task2FixedQuestionRanges(visible);
+    if (!fixedRanges.length) return renderMarkdown(text);
+    return renderMarkdownWithFixedQuestionRanges(text, sourceRangesForVisiblePromptText(text, fixedRanges));
+  }
   const fixedRanges = task2FixedQuestionRanges(text);
   if (!fixedRanges.length) return renderWritingPromptTextWithHighlights(text, ranges);
   let output = "";
@@ -1677,6 +1758,8 @@ const writingPromptPickerController = window.IELTSWritingPromptPicker?.createWri
   escapeHtml,
   centeredLoadingHtml,
   loadWritingPrompts,
+  loadCustomWritingPrompts,
+  renderMarkdown,
   writingPromptPickerTitle,
   writingPromptDisplayTitle,
   writingPromptMeta,
@@ -1695,6 +1778,8 @@ const writingPromptPickerController = window.IELTSWritingPromptPicker?.createWri
   ensureWritingPromptImageReady,
   warmWritingPromptThumbnails,
   setWritingPrompt,
+  openCustomWritingPromptEditor,
+  deleteCustomWritingPrompt,
   eagerImageCount: WRITING_PROMPT_PICKER_EAGER_IMAGE_COUNT,
 });
 if (!writingPromptPickerController) {
@@ -1857,6 +1942,12 @@ function clearUserScopedCaches() {
   state.writing.scoreCompletionModalEntry = null;
   state.writing.scoreCompletionNotifiedIds.clear();
   state.writing.promptLoadingPromises = {};
+  state.writing.customPrompts = {};
+  state.writing.customPromptLoaded = {};
+  state.writing.customPromptLoadingPromises = {};
+  state.writing.customPromptCreatePromise = null;
+  state.writing.customPromptSavePromise = null;
+  state.writing.customPromptErrors = {};
   state.writing.promptImagePreloads.clear();
   state.writing.promptImagePreloadPromises.clear();
   state.writing.promptOriginalPreloads.clear();
@@ -8751,6 +8842,8 @@ function writingCategoryLabel(category = "") {
     opinion: "\u89c2\u70b9\u7c7b",
     discussion: "\u8ba8\u8bba\u7c7b",
     problem_solution: "\u95ee\u9898\u89e3\u51b3\u7c7b",
+    causes_solutions: "\u539f\u56e0\u89e3\u51b3\u7c7b",
+    causes_effects: "\u539f\u56e0\u5f71\u54cd\u7c7b",
     advantages_disadvantages: "\u5229\u5f0a\u7c7b",
     two_part: "\u53cc\u95ee\u9898\u7c7b",
   };
@@ -9003,6 +9096,7 @@ function writingPromptMeta(prompt) {
 function writingPromptTopbarTitle(prompt) {
   const sourceLabel = String(prompt?.source_label || prompt?.display_source_label || "").trim();
   if (writingPromptSourceKey(prompt || {}) === "cambridge") return writingPromptPickerTitle(prompt);
+  if (writingPromptSourceKey(prompt || {}) === "custom") return writingPromptDisplayTitle(prompt);
   if (sourceLabel) return sourceLabel;
   return writingPromptDisplayTitle(prompt);
 }
@@ -9158,6 +9252,7 @@ function writingPromptSourceKey(prompt = {}) {
   const source = String(prompt.source || "").trim();
   const id = String(prompt.id || prompt.display_catalog_id || "").trim();
   const label = String(prompt.source_label || prompt.display_source_label || "").trim();
+  if (source === "custom" || prompt.custom_prompt_id) return "custom";
   if (
     (prompt.source_book && prompt.source_test) ||
     source === "cambridge_ielts" ||
@@ -9173,6 +9268,7 @@ function writingPromptSourceLabel(source) {
   return {
     cambridge: "\u5251\u96c5\u771f\u9898",
     reported: "\u4e2d\u56fd\u8003\u533a\u673a\u7ecf",
+    custom: "\u81ea\u5b9a\u4e49\u7ec3\u4e60",
     other: "\u5176\u4ed6\u7ec3\u4e60",
   }[source] || source;
 }
@@ -9219,9 +9315,15 @@ function writingUsablePromptsForSource(taskType, source) {
 function resolveWritingPickerSource(taskType) {
   const selected = state.writing.pickerSourceFilters[taskType] || "cambridge";
   if (selected === "cambridge" && !writingUsablePromptsForSource(taskType, "cambridge").length) {
-    const fallback = writingUsablePromptsForSource(taskType, "reported").length ? "reported" : "other";
+    const fallback = writingUsablePromptsForSource(taskType, "reported").length
+      ? "reported"
+      : (state.writing.customPromptLoaded?.[taskType] && state.writing.customPrompts?.[taskType]?.length ? "custom" : "other");
     state.writing.pickerSourceFilters[taskType] = fallback;
     return fallback;
+  }
+  if (!["cambridge", "reported", "custom", "other"].includes(selected)) {
+    state.writing.pickerSourceFilters[taskType] = "cambridge";
+    return "cambridge";
   }
   return selected;
 }
@@ -9325,6 +9427,13 @@ async function resolveRequestedWritingPrompt() {
   const preferredTask = state.writing.taskType || "task1_academic";
   const orderedTasks = [preferredTask, ...taskTypes.filter((taskType) => taskType !== preferredTask)];
   for (const taskType of orderedTasks) {
+    const customPrompts = await loadCustomWritingPrompts(taskType).catch(() => []);
+    const customFound = customPrompts.find((prompt) => prompt.id === promptId);
+    if (customFound) {
+      state.writing.taskType = customFound.task_type || taskType;
+      state.writing.requestedPromptId = "";
+      return customFound;
+    }
     const prompts = await loadWritingPrompts(taskType);
     const found = prompts.find((prompt) => prompt.id === promptId);
     if (found) {
@@ -9383,10 +9492,132 @@ async function loadWritingPrompts(taskType) {
   return state.writing.prompts[normalized];
 }
 
+function normalizeCustomWritingPrompts(taskType, prompts = []) {
+  const normalizedTaskType = taskType || "task2";
+  return (Array.isArray(prompts) ? prompts : [])
+    .map((prompt) => {
+      const markdown = String(prompt?.prompt_markdown || prompt?.prompt || "").trim();
+      const id = String(prompt?.id || prompt?.custom_prompt_id || "").trim();
+      return {
+        ...prompt,
+        id,
+        custom_prompt_id: id,
+        prompt_id: "",
+        task_type: prompt?.task_type || normalizedTaskType,
+        prompt: markdown,
+        prompt_markdown: markdown,
+        source: "custom",
+        source_label: prompt?.source_label || "\u81ea\u5b9a\u4e49\u7ec3\u4e60",
+        title: String(prompt?.title || "").trim(),
+      };
+    })
+    .filter((prompt) => prompt.id && prompt.prompt);
+}
+
+async function loadCustomWritingPrompts(taskType, options = {}) {
+  const normalized = taskType || "task2";
+  if (!options.force && state.writing.customPromptLoaded[normalized]) {
+    return state.writing.customPrompts[normalized] || [];
+  }
+  if (!state.writing.customPromptLoadingPromises[normalized]) {
+    state.writing.customPromptLoadingPromises[normalized] = api(`/api/writing/custom-prompts?task_type=${encodeURIComponent(normalized)}`)
+      .then((payload) => {
+        state.writing.customPrompts[normalized] = normalizeCustomWritingPrompts(normalized, payload?.items || []);
+        state.writing.customPromptLoaded[normalized] = true;
+        state.writing.customPromptErrors[normalized] = null;
+        return state.writing.customPrompts[normalized];
+      })
+      .catch((error) => {
+        state.writing.customPromptErrors[normalized] = error;
+        throw error;
+      })
+      .finally(() => {
+        state.writing.customPromptLoadingPromises[normalized] = null;
+      });
+  }
+  return state.writing.customPromptLoadingPromises[normalized];
+}
+
+async function createCustomWritingPrompt(payload) {
+  if (state.writing.customPromptCreatePromise) return state.writing.customPromptCreatePromise;
+  state.writing.customPromptCreatePromise = api("/api/writing/custom-prompts/create", payload)
+    .then((created) => {
+      const taskType = created?.task_type || payload?.task_type || "task2";
+      const prompt = normalizeCustomWritingPrompts(taskType, [created])[0];
+      const current = state.writing.customPrompts[taskType] || [];
+      state.writing.customPrompts[taskType] = [prompt, ...current.filter((item) => item.id !== prompt.id)];
+      state.writing.customPromptLoaded[taskType] = true;
+      return prompt;
+    })
+    .finally(() => {
+      state.writing.customPromptCreatePromise = null;
+    });
+  return state.writing.customPromptCreatePromise;
+}
+
+async function updateCustomWritingPrompt(promptId, payload) {
+  if (state.writing.customPromptSavePromise) return state.writing.customPromptSavePromise;
+  state.writing.customPromptSavePromise = api(
+    `/api/writing/custom-prompts/${encodeURIComponent(promptId)}`,
+    payload,
+    { method: "PATCH" }
+  ).then((updated) => {
+    const taskType = updated?.task_type || payload?.task_type || "task2";
+    const prompt = normalizeCustomWritingPrompts(taskType, [updated])[0];
+    Object.keys(state.writing.customPrompts).forEach((key) => {
+      state.writing.customPrompts[key] = (state.writing.customPrompts[key] || []).filter((item) => item.id !== promptId);
+    });
+    state.writing.customPrompts[taskType] = [
+      prompt,
+      ...(state.writing.customPrompts[taskType] || []).filter((item) => item.id !== prompt.id),
+    ];
+    if (String(state.writing.prompt?.id || "") === String(promptId)) {
+      state.writing.prompt = prompt;
+      renderWritingSurface();
+    }
+    return prompt;
+  }).finally(() => {
+    state.writing.customPromptSavePromise = null;
+  });
+  return state.writing.customPromptSavePromise;
+}
+
+async function deleteCustomWritingPrompt(prompt) {
+  const promptId = String(prompt?.id || prompt?.custom_prompt_id || "").trim();
+  if (!promptId) return false;
+  showConfirmDelete("\u5220\u9664\u8fd9\u9053\u81ea\u5b9a\u4e49\u9898\u76ee\uff1f\u5df2\u5199\u7684\u4f5c\u6587\u548c\u62a5\u544a\u4f1a\u4fdd\u7559\u3002", async () => {
+    const snapshots = {};
+    Object.keys(state.writing.customPrompts).forEach((key) => {
+      snapshots[key] = [...(state.writing.customPrompts[key] || [])];
+      state.writing.customPrompts[key] = (state.writing.customPrompts[key] || []).filter((item) => item.id !== promptId);
+    });
+    writingPromptPickerController?.render?.();
+    try {
+      await api(`/api/writing/custom-prompts/${encodeURIComponent(promptId)}`, null, { method: "DELETE" });
+      if (String(state.writing.prompt?.id || "") === promptId) {
+        state.writing.prompt = null;
+        state.writing.entry = null;
+        state.writing.dirty = false;
+        if ($("writingAnswer")) $("writingAnswer").value = "";
+        renderWritingSurface();
+      }
+    } catch (error) {
+      Object.keys(snapshots).forEach((key) => {
+        state.writing.customPrompts[key] = snapshots[key];
+      });
+      writingPromptPickerController?.render?.();
+      throw error;
+    }
+  });
+  return true;
+}
+
 async function prefetchWritingPrompts(token) {
   await Promise.all([
     loadWritingPrompts("task2").catch(() => []),
     loadWritingPrompts("task1_academic").catch(() => []),
+    loadCustomWritingPrompts("task2").catch(() => []),
+    loadCustomWritingPrompts("task1_academic").catch(() => []),
   ]);
   if (!prefetchCanApply(token)) return;
   loadWritingPrompts("task1_academic")
@@ -10253,9 +10484,10 @@ function setWritingPrompt(prompt, clearAnswer = true, options = {}) {
 async function loadMaintainedEntryForPrompt(prompt) {
   if (!prompt || !state.account.authenticated) return;
   const promptId = String(prompt.id || "").trim();
+  const isCustomPrompt = writingPromptSourceKey(prompt) === "custom";
   const taskType = prompt.task_type || state.writing.taskType || "task2";
   const params = new URLSearchParams({ task_type: taskType });
-  if (promptId) params.set("prompt_id", promptId);
+  if (promptId) params.set(isCustomPrompt ? "custom_prompt_id" : "prompt_id", promptId);
   if (prompt.prompt) params.set("prompt", String(prompt.prompt));
   let result;
   try {
@@ -10297,9 +10529,10 @@ function renderWritingSurface() {
   }
   const promptText = prompt?.prompt || "\u8bf7\u9009\u62e9\u4e00\u9053\u9898\uff0c\u6216\u70b9\u51fb\u968f\u673a\u9898\u5f00\u59cb\u3002";
   const highlightRanges = writingPromptHighlightKey(prompt) ? currentWritingPromptHighlightState() : [];
+  const isCustomPrompt = writingPromptSourceKey(prompt || {}) === "custom";
   $("writingPromptText").innerHTML = taskType === "task2"
-    ? renderTask2PromptTextWithHighlights(promptText, highlightRanges)
-    : renderWritingPromptTextWithHighlights(promptText, highlightRanges);
+    ? renderTask2PromptTextWithHighlights(promptText, highlightRanges, { markdown: isCustomPrompt })
+    : (isCustomPrompt ? renderMarkdown(promptText) : renderWritingPromptTextWithHighlights(promptText, highlightRanges));
   hideWritingHighlightMenu();
 
   // Render Task 1 image if available
@@ -10588,6 +10821,85 @@ function closeWritingPromptPicker() {
   writingPromptPickerController.close();
 }
 
+function customWritingPromptDialogTaskType() {
+  return $("customWritingPromptTaskType")?.value || state.writing.pickerTaskType || state.writing.taskType || "task2";
+}
+
+function closeCustomWritingPromptEditor() {
+  $("customWritingPromptDialog")?.classList.add("hidden");
+  document.body.classList.toggle("modal-open", Boolean(document.querySelector(".modal:not(.hidden)")));
+  text("customWritingPromptError", "");
+}
+
+async function openCustomWritingPromptEditor(taskType = "task2", prompt = null) {
+  if (!state.account.authenticated) {
+    promptGuestLogin("登录后才能保存自己的写作题目。");
+    return;
+  }
+  const normalizedTaskType = prompt?.task_type || taskType || "task2";
+  const dialog = $("customWritingPromptDialog");
+  if (!dialog) return;
+  $("customWritingPromptId").value = String(prompt?.id || "");
+  $("customWritingPromptTaskType").value = normalizedTaskType;
+  $("customWritingPromptTitle").value = String(prompt?.title || "");
+  $("customWritingPromptTaskType").disabled = Boolean(prompt?.id);
+  text("customWritingPromptDialogTitle", prompt?.id ? "修改自定义题" : "新建自定义题");
+  text("customWritingPromptDialogHint", prompt?.id
+    ? "修改后会更新题库中的题目；已经写过的作文与报告仍保留原题快照。"
+    : "保存后会自动识别题型，并和题库题目一样进入每日写作。");
+  text("customWritingPromptError", "");
+  const markdown = String(prompt?.prompt_markdown || prompt?.prompt || "");
+  $("customWritingPromptMarkdown").value = markdown;
+  dialog.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  setCorpusEditorLoading("customWritingPromptMarkdown", true, { label: "正在准备题目编辑器" });
+  try {
+    await ensureCorpusMarkdownEditorReady("customWritingPromptMarkdown");
+    setCorpusMarkdownValue("customWritingPromptMarkdown", markdown);
+  } catch (error) {
+    text("customWritingPromptError", error?.message || "编辑器加载失败，可以直接在文本框中输入题目。");
+  } finally {
+    setCorpusEditorLoading("customWritingPromptMarkdown", false);
+  }
+}
+
+async function saveCustomWritingPromptFromDialog() {
+  const saveButton = $("customWritingPromptSaveBtn");
+  const promptId = String($("customWritingPromptId")?.value || "").trim();
+  const taskType = customWritingPromptDialogTaskType();
+  const title = String($("customWritingPromptTitle")?.value || "").trim();
+  const promptMarkdown = String(getCorpusMarkdownValue("customWritingPromptMarkdown") || $("customWritingPromptMarkdown")?.value || "").trim();
+  if (!promptMarkdown) {
+    text("customWritingPromptError", "请输入作文题目。");
+    return;
+  }
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = "保存中";
+  }
+  text("customWritingPromptError", "");
+  try {
+    const payload = { task_type: taskType, title, prompt_markdown: promptMarkdown };
+    const savedPrompt = promptId
+      ? await updateCustomWritingPrompt(promptId, payload)
+      : await createCustomWritingPrompt(payload);
+    state.writing.pickerTaskType = savedPrompt.task_type;
+    state.writing.pickerSourceFilters[savedPrompt.task_type] = "custom";
+    writingPromptPickerController?.render?.();
+    const isCurrentPrompt = String(state.writing.prompt?.id || "") === String(savedPrompt.id || "");
+    setWritingPrompt(savedPrompt, !isCurrentPrompt, { replaceUrl: true });
+    closeCustomWritingPromptEditor();
+    closeWritingPromptPicker();
+  } catch (error) {
+    text("customWritingPromptError", error?.message || "保存失败，请稍后重试。");
+  } finally {
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = "保存并使用";
+    }
+  }
+}
+
 function renderWritingPromptPicker() {
   writingPromptPickerController.render();
 }
@@ -10612,10 +10924,12 @@ async function saveWritingEntry(keepPending = false, options = {}) {
   const previousEntry = state.writing.entry || null;
   const previousEntryId = String(previousEntry?.id || "").trim();
   const savingExistingUnscoredEntry = Boolean(previousEntryId) && !isWritingEntryScored(previousEntry);
+  const isCustomPrompt = writingPromptSourceKey(prompt) === "custom";
   const payload = {
     id: previousEntry?.id,
     task_type: prompt.task_type || state.writing.taskType,
-    prompt_id: prompt.id,
+    prompt_id: isCustomPrompt ? "" : prompt.id,
+    custom_prompt_id: isCustomPrompt ? (prompt.custom_prompt_id || prompt.id) : "",
     prompt: prompt.prompt,
     title: writingPromptDisplayTitle(prompt),
     category: prompt.category,
@@ -11177,22 +11491,30 @@ function renderVisibleWritingReport(entry) {
 async function recoverWritingEntry(entry) {
   state.writing.entry = entry;
   state.writing.taskType = entry.task_type || state.writing.taskType || "task2";
-  await loadWritingPrompts(state.writing.taskType);
+  const customPromptId = String(entry.custom_prompt_id || "").trim();
+  if (customPromptId) {
+    await loadCustomWritingPrompts(state.writing.taskType).catch(() => []);
+  } else {
+    await loadWritingPrompts(state.writing.taskType);
+  }
   state.writing.prompt = withWritingPromptPattern({
-    id: entry.prompt_id,
+    id: customPromptId || entry.prompt_id,
+    custom_prompt_id: customPromptId,
+    prompt_id: customPromptId ? "" : entry.prompt_id,
     task_type: entry.task_type,
     task_label: entry.task_label,
     title: entry.title,
     prompt: entry.prompt,
     category: entry.category,
     image_url: entry.image_url || "",
-    source: entry.source || "",
+    source: customPromptId ? "custom" : (entry.source || ""),
     source_book: entry.source_book,
     source_test: entry.source_test,
     source_question: entry.source_question,
     source_label: entry.source_label || "",
     display_source_label: entry.display_source_label || "",
     prompt_highlights: entry.prompt_highlights || [],
+    prompt_markdown: customPromptId ? entry.prompt : "",
   });
   const highlightKey = writingPromptHighlightKey(state.writing.prompt);
   if (highlightKey) {
@@ -15452,6 +15774,13 @@ function bindEvents() {
   $("writingPromptCloseBtn")?.addEventListener("click", closeWritingPromptPicker);
   document.querySelectorAll("[data-writing-prompt-close]").forEach((button) => {
     button.addEventListener("click", closeWritingPromptPicker);
+  });
+  document.querySelectorAll("[data-custom-writing-prompt-close]").forEach((button) => {
+    button.addEventListener("click", closeCustomWritingPromptEditor);
+  });
+  $("customWritingPromptForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveCustomWritingPromptFromDialog().catch(showWritingError);
   });
   $("agentAssistantBtn")?.addEventListener("click", openAgentAssistant);
   $("p1CorpusAgentBtn")?.addEventListener("click", () => openAgentAssistant("p1Corpus"));

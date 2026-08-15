@@ -269,12 +269,22 @@ def normalize_prompt_highlights(value: Any, source_text: str = "") -> list[dict[
     return ranges
 
 
+def entry_custom_prompt_id(entry: WritingEntry) -> str:
+    return str(entry.custom_prompt_id or (entry.metadata or {}).get("custom_prompt_id") or "")
+
+
+def entry_is_custom_prompt(entry: WritingEntry) -> bool:
+    return bool(entry_custom_prompt_id(entry) or (entry.metadata or {}).get("source") == "custom")
+
+
 def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str, Any]:
     score = getattr(entry, "score", None)
     ai_task = latest_writing_score_task(entry)
     visible_score = None if active_writing_task_refreshes_score(ai_task, score) else score
-    source_label = prompt_source_label(entry.prompt) if entry.prompt_id else str(entry.metadata.get("source_label") or "")
-    prompt_highlights = normalize_prompt_highlights(entry.metadata.get("prompt_highlights"), entry.prompt_text)
+    metadata = entry.metadata or {}
+    is_custom = entry_is_custom_prompt(entry)
+    source_label = "自定义练习" if is_custom else (prompt_source_label(entry.prompt) if entry.prompt_id else str(metadata.get("source_label") or ""))
+    prompt_highlights = normalize_prompt_highlights(metadata.get("prompt_highlights"), entry.prompt_text)
     payload = {
         "id": entry.entry_id,
         "user_id": str(entry.user_id),
@@ -286,14 +296,15 @@ def entry_payload(entry: WritingEntry, include_answer: bool = True) -> dict[str,
         "task_type": entry.task_type,
         "task_label": WRITING_TASK_LABELS.get(entry.task_type, "Writing"),
         "prompt_id": entry.prompt.prompt_id if entry.prompt_id else "",
+        "custom_prompt_id": entry_custom_prompt_id(entry),
         "title": entry.title,
-        "category": entry.prompt.category if entry.prompt_id else entry.metadata.get("category", ""),
+        "category": entry.prompt.category if entry.prompt_id else metadata.get("category", ""),
         "prompt": entry.prompt_text,
-        "image_url": entry.prompt.image_url if entry.prompt_id else entry.metadata.get("image_url", ""),
-        "source": entry.prompt.source if entry.prompt_id else entry.metadata.get("source", ""),
-        "source_book": entry.prompt.source_book if entry.prompt_id else entry.metadata.get("source_book"),
-        "source_test": entry.prompt.source_test if entry.prompt_id else entry.metadata.get("source_test"),
-        "source_question": entry.prompt.source_question if entry.prompt_id else entry.metadata.get("source_question"),
+        "image_url": entry.prompt.image_url if entry.prompt_id else metadata.get("image_url", ""),
+        "source": entry.prompt.source if entry.prompt_id else metadata.get("source", ""),
+        "source_book": entry.prompt.source_book if entry.prompt_id else metadata.get("source_book"),
+        "source_test": entry.prompt.source_test if entry.prompt_id else metadata.get("source_test"),
+        "source_question": entry.prompt.source_question if entry.prompt_id else metadata.get("source_question"),
         "source_label": source_label,
         "prompt_highlights": prompt_highlights,
         "word_count": entry.word_count,
@@ -316,7 +327,9 @@ def compact_entry_payload(entry: WritingEntry) -> dict[str, Any]:
         display_at = entry.created_at
     display_at = display_at or getattr(entry, "latest_activity_at", None) or entry.updated_at
     sort_at = display_at
-    source_label = prompt_source_label(entry.prompt) if entry.prompt_id else str(entry.metadata.get("source_label") or "")
+    metadata = entry.metadata or {}
+    is_custom = entry_is_custom_prompt(entry)
+    source_label = "自定义练习" if is_custom else (prompt_source_label(entry.prompt) if entry.prompt_id else str(metadata.get("source_label") or ""))
     return {
         "id": entry.entry_id,
         "practice_date": entry.practice_date.isoformat(),
@@ -325,6 +338,7 @@ def compact_entry_payload(entry: WritingEntry) -> dict[str, Any]:
         "task_type": entry.task_type,
         "task_label": WRITING_TASK_LABELS.get(entry.task_type, "Writing"),
         "prompt_id": entry.prompt.prompt_id if entry.prompt_id else "",
+        "custom_prompt_id": entry_custom_prompt_id(entry),
         "title": entry.title or (entry.prompt.title if entry.prompt_id else "Writing"),
         "category": entry.prompt.category if entry.prompt_id else entry.metadata.get("category", ""),
         "prompt": entry.prompt_text,
@@ -359,6 +373,9 @@ def writing_prompt_identity_key(prompt: WritingPrompt | None, *, task_type: str 
 
 
 def writing_entry_report_group_key(entry: WritingEntry) -> tuple[str, str]:
+    custom_prompt_id = entry_custom_prompt_id(entry)
+    if custom_prompt_id:
+        return ("custom_prompt", custom_prompt_id)
     if entry.prompt_id:
         return writing_prompt_identity_key(entry.prompt, task_type=entry.task_type, prompt_text=entry.prompt_text)
     return ("prompt_text", f"{entry.task_type}:{entry.prompt_text.strip()}")

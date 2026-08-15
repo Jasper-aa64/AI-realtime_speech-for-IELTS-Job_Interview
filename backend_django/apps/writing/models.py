@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.utils import timezone
 
@@ -37,6 +39,34 @@ class WritingPrompt(models.Model):
         return self.title
 
 
+class CustomWritingPrompt(UserOwnedModel):
+    user = models.ForeignKey(
+        "accounts.CustomUser",
+        on_delete=models.CASCADE,
+        related_name="custom_writing_prompts",
+    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    task_type = models.CharField(max_length=32, choices=WritingPrompt.TaskType.choices)
+    title = models.CharField(max_length=200)
+    prompt_markdown = models.TextField()
+    category = models.CharField(max_length=120, blank=True, default="")
+    content_hash = models.CharField(max_length=64, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "task_type", "content_hash"],
+                name="unique_custom_prompt_content_per_user",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "task_type", "updated_at"], name="writing_cus_user_id_3c90b2_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+
 class WritingEntry(UserOwnedModel):
     class Status(models.TextChoices):
         SAVED = "saved", "Saved"
@@ -45,6 +75,13 @@ class WritingEntry(UserOwnedModel):
     user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="writing_entries")
     entry_id = models.CharField(max_length=80, unique=True, blank=True)
     prompt = models.ForeignKey(WritingPrompt, null=True, blank=True, on_delete=models.SET_NULL, related_name="entries")
+    custom_prompt = models.ForeignKey(
+        CustomWritingPrompt,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="entries",
+    )
     legacy_entry_id = models.CharField(max_length=80, blank=True, db_index=True)
     task_type = models.CharField(max_length=32, choices=WritingPrompt.TaskType.choices)
     practice_date = models.DateField()

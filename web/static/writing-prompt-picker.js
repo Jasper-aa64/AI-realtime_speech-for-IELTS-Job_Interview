@@ -9,6 +9,8 @@
       escapeHtml,
       centeredLoadingHtml,
       loadWritingPrompts,
+      loadCustomWritingPrompts,
+      renderMarkdown,
       writingPromptPickerTitle,
       writingPromptDisplayTitle,
       writingPromptMeta,
@@ -27,6 +29,8 @@
       ensureWritingPromptImageReady,
       warmWritingPromptThumbnails,
       setWritingPrompt,
+      openCustomWritingPromptEditor,
+      deleteCustomWritingPrompt,
       eagerImageCount,
     } = options || {};
 
@@ -52,6 +56,57 @@
       return (state.writing.prompts?.[taskType] || []).length > 0;
     }
 
+    function hasCachedCustomWritingPrompts(taskType) {
+      return Boolean(state.writing.customPromptLoaded?.[taskType]);
+    }
+
+    async function loadPickerTaskSources(taskType) {
+      const prompts = await loadWritingPrompts(taskType);
+      state.writing.customPromptErrors ||= {};
+      if (!loadCustomWritingPrompts) {
+        state.writing.customPromptErrors[taskType] = null;
+        return prompts;
+      }
+      try {
+        await loadCustomWritingPrompts(taskType);
+        state.writing.customPromptErrors[taskType] = null;
+      } catch (error) {
+        if (error && typeof error === "object") {
+          error.customPrompt = true;
+          error.customPromptTaskType = taskType;
+        }
+        state.writing.customPromptErrors[taskType] = error;
+      }
+      return prompts;
+    }
+
+    function customPromptsForTask(taskType) {
+      return (state.writing.customPrompts?.[taskType] || [])
+        .filter((prompt) => prompt?.task_type === taskType && String(prompt.prompt_markdown || prompt.prompt || "").trim());
+    }
+
+    function customPromptPreviewHtml(prompt) {
+      const markdown = String(prompt?.prompt_markdown || prompt?.prompt || "").trim();
+      if (typeof renderMarkdown === "function") return renderMarkdown(markdown);
+      return escapeHtml(markdown);
+    }
+
+    function customCreateCardHtml(taskType) {
+      const isTask1 = taskType === "task1_academic";
+      return `
+        <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} writing-custom-add-card" data-writing-custom-create="${escapeHtml(taskType)}" aria-label="新建自定义练习">
+          <span class="writing-custom-add-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+          </span>
+          <span class="writing-prompt-choice-body">
+            <strong>新建自定义题</strong>
+            <small>自定义练习 · ${escapeHtml(taskType === "task1_academic" ? "Task 1" : "Task 2")}</small>
+            <span>输入自己的题目，保存后可直接开始每日写作。</span>
+          </span>
+        </button>
+      `;
+    }
+
     function open(taskType = state.writing.taskType || "task1_academic") {
       state.writing.pickerTaskType = taskType;
       $("writingPromptModal")?.classList.remove("hidden");
@@ -59,7 +114,7 @@
       // Already loaded this session → render straight from memory. Skipping the
       // skeleton + nextPaint avoids the blank flash on every reopen. The grid
       // still holds the previous render, so this updates it in place.
-      if (hasCachedPrompts(taskType)) {
+      if (hasCachedPrompts(taskType) && hasCachedCustomWritingPrompts(taskType)) {
         renderShell(taskType);
         render();
         if (taskType === "task1_academic") warmWritingPromptThumbnails?.(state.writing.prompts[taskType], { hintLimit: 18 });
@@ -72,12 +127,12 @@
       }
       renderShell(taskType);
       nextPaint()
-        .then(() => loadWritingPrompts(taskType))
+        .then(() => loadPickerTaskSources(taskType))
         .then((prompts) => {
           if (taskType === "task1_academic") warmWritingPromptThumbnails?.(prompts, { hintLimit: 18 });
           render();
         })
-        .catch(renderError);
+        .catch((error) => renderError(error, taskType));
     }
 
     function promptWithPattern(prompt) {
@@ -94,6 +149,10 @@
 
     function task2UsablePromptsForSource(taskType, source) {
       return writingUsablePromptsForSource(taskType, source).map(promptWithPattern);
+    }
+
+    function pickerPromptsForSource(taskType, source) {
+      return source === "custom" ? customPromptsForTask(taskType).map(promptWithPattern) : task2UsablePromptsForSource(taskType, source);
     }
 
     function fixedQuestionDisplayText(textValue = "") {
@@ -240,27 +299,65 @@
       image?.remove();
     }
 
+    function customPromptActionsHtml(prompt) {
+      const promptId = escapeHtml(prompt.id);
+      return `
+        <span class="writing-custom-prompt-menu-wrap">
+          <button type="button" class="corpus-menu-button writing-custom-prompt-menu-button" data-writing-custom-menu="${promptId}" aria-label="管理自定义题目" aria-haspopup="menu" aria-expanded="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle></svg>
+          </button>
+          <span class="corpus-card-action-menu writing-custom-prompt-menu hidden" data-writing-custom-action-menu="${promptId}" role="menu">
+            <button type="button" role="menuitem" data-writing-custom-edit="${promptId}">修改</button>
+            <button type="button" role="menuitem" class="danger" data-writing-custom-delete="${promptId}">删除</button>
+          </span>
+        </span>
+      `;
+    }
+
     function choiceHtml(prompt, active = false, index = 0) {
       const isTask1 = prompt.task_type === "task1_academic";
+      const isCustomPrompt = String(prompt.source || "") === "custom" || Boolean(prompt.custom_prompt_id);
       const isCambridgePrompt = writingPromptSourceKey(prompt) === "cambridge";
-      const choiceTitle = isCambridgePrompt
+      const choiceTitle = isCustomPrompt
+        ? String(prompt.title || "自定义题目")
+        : isCambridgePrompt
         ? writingPromptPickerTitle(prompt)
         : writingPromptDisplayTitle(prompt);
-      const choiceMeta = isCambridgePrompt ? "" : writingPromptMeta(prompt);
+      const choiceMeta = isCustomPrompt
+        ? `${prompt.task_label || (isTask1 ? "Task 1" : "Task 2")} · 自定义练习`
+        : (isCambridgePrompt ? "" : writingPromptMeta(prompt));
+      const categoryLabel = isCustomPrompt
+        ? String(prompt.category_label || writingCategoryLabel?.(prompt.category) || "").trim()
+        : "";
+      const previewTag = isCustomPrompt ? "div" : "span";
       const loadImmediately = isTask1 && index < eagerImageCount;
       const imageLoading = loadImmediately ? "eager" : "lazy";
       const imagePriority = loadImmediately ? "auto" : "low";
       const imageHtml = isTask1
         ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${promptChoiceImageHtml(prompt, imageLoading, imagePriority)}</span>`
         : "";
+      const bodyHtml = `
+        ${imageHtml}
+        <span class="writing-prompt-choice-body">
+          <strong>${escapeHtml(choiceTitle)}</strong>
+          ${choiceMeta ? `<small class="writing-prompt-choice-subtitle">${escapeHtml(choiceMeta)}</small>` : ""}
+          ${categoryLabel ? `<span class="writing-prompt-category-tag">${escapeHtml(categoryLabel)}</span>` : ""}
+          <${previewTag} class="writing-prompt-preview">${isCustomPrompt ? customPromptPreviewHtml(prompt) : (isTask1 ? escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "") : cachedPromptPreviewHtml(prompt))}</${previewTag}>
+        </span>
+      `;
+      if (isCustomPrompt) {
+        return `
+          <article class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} writing-custom-prompt-choice ${active ? "active" : ""}" data-writing-custom-card="${escapeHtml(prompt.id)}">
+            <button type="button" class="writing-prompt-choice-main" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
+              ${bodyHtml}
+            </button>
+            ${customPromptActionsHtml(prompt)}
+          </article>
+        `;
+      }
       return `
         <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
-          ${imageHtml}
-          <span class="writing-prompt-choice-body">
-            <strong>${escapeHtml(choiceTitle)}</strong>
-            ${choiceMeta ? `<small class="writing-prompt-choice-subtitle">${escapeHtml(choiceMeta)}</small>` : ""}
-            <span class="writing-prompt-preview">${isTask1 ? escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "") : cachedPromptPreviewHtml(prompt)}</span>
-          </span>
+          ${bodyHtml}
         </button>
       `;
     }
@@ -280,6 +377,51 @@
       `;
     }
 
+    function closeCustomPromptMenus() {
+      document.querySelectorAll("[data-writing-custom-action-menu]").forEach((menu) => {
+        menu.classList.add("hidden");
+      });
+      document.querySelectorAll("[data-writing-custom-menu]").forEach((button) => {
+        button.setAttribute("aria-expanded", "false");
+        button.closest("[data-writing-custom-card]")?.classList.remove("is-menu-open");
+      });
+    }
+
+    function bindCustomPromptMenus(grid, prompts, taskType) {
+      grid.querySelectorAll("[data-writing-custom-menu]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const menu = button.parentElement?.querySelector("[data-writing-custom-action-menu]");
+          const isOpen = Boolean(menu && !menu.classList.contains("hidden"));
+          closeCustomPromptMenus();
+          if (!isOpen && menu) {
+            menu.classList.remove("hidden");
+            button.setAttribute("aria-expanded", "true");
+            button.closest("[data-writing-custom-card]")?.classList.add("is-menu-open");
+          }
+        });
+      });
+      grid.querySelectorAll("[data-writing-custom-edit]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const prompt = prompts.find((item) => item.id === button.dataset.writingCustomEdit);
+          closeCustomPromptMenus();
+          if (prompt) openCustomWritingPromptEditor?.(taskType, prompt);
+        });
+      });
+      grid.querySelectorAll("[data-writing-custom-delete]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const prompt = prompts.find((item) => item.id === button.dataset.writingCustomDelete);
+          closeCustomPromptMenus();
+          if (prompt) deleteCustomWritingPrompt?.(prompt);
+        });
+      });
+    }
+
     function render() {
       const taskType = state.writing.pickerTaskType || state.writing.taskType || "task1_academic";
       renderShell(taskType);
@@ -287,23 +429,36 @@
       renderSourceFilters(taskType);
       renderPatternFilters(taskType);
       renderTypeFilters(taskType);
+      const customError = state.writing.customPromptErrors?.[taskType];
+      if (selectedSource === "custom" && customError) {
+        renderError(customError, taskType);
+        return;
+      }
       const selectedCategory = state.writing.pickerCategoryFilters[taskType] || "";
       const selectedPattern = state.writing.pickerPromptPatternFilters?.[taskType] || "";
-      const prompts = task2UsablePromptsForSource(taskType, selectedSource)
-        .filter((prompt) => taskType !== "task1_academic" || !selectedCategory || prompt.category === selectedCategory)
+      const sourcePrompts = selectedSource === "custom"
+        ? customPromptsForTask(taskType)
+        : task2UsablePromptsForSource(taskType, selectedSource);
+      const prompts = sourcePrompts
+        .filter((prompt) => !selectedCategory || prompt.category === selectedCategory)
         .filter((prompt) => taskType !== "task2" || !selectedPattern || prompt.prompt_pattern === selectedPattern);
       const missingSlots = [];
       const grid = $("writingPromptGrid");
       if (!grid) return;
       grid.classList.remove("is-loading");
-      if (!prompts.length && !missingSlots.length) {
+      if (!prompts.length && !missingSlots.length && selectedSource !== "custom") {
         grid.innerHTML = '<p class="muted writing-prompt-empty">当前筛选下没有可用题目。</p>';
         return;
       }
       grid.innerHTML = [
+        ...(selectedSource === "custom" ? [customCreateCardHtml(taskType)] : []),
         ...prompts.map((prompt, index) => choiceHtml(prompt, prompt.id === state.writing.prompt?.id, index)),
         ...missingSlots.map((slot) => catalogSlotHtml(slot)),
       ].join("");
+      grid.querySelector("[data-writing-custom-create]")?.addEventListener("click", () => {
+        openCustomWritingPromptEditor?.(taskType);
+      });
+      if (selectedSource === "custom") bindCustomPromptMenus(grid, prompts, taskType);
       grid.querySelectorAll("[data-writing-prompt-choice]").forEach((button) => {
         button.querySelectorAll(".writing-prompt-choice-image img").forEach((image) => {
           image.addEventListener("error", () => handlePromptThumbError(image));
@@ -331,12 +486,12 @@
       const target = $("writingPromptSourceFilters");
       if (!target) return;
       const counts = {
-        cambridge: task2UsablePromptsForSource(taskType, "cambridge").length,
-        reported: task2UsablePromptsForSource(taskType, "reported").length,
-        other: task2UsablePromptsForSource(taskType, "other").length,
+        cambridge: pickerPromptsForSource(taskType, "cambridge").length,
+        reported: pickerPromptsForSource(taskType, "reported").length,
+        custom: customPromptsForTask(taskType).length,
       };
       const selected = state.writing.pickerSourceFilters[taskType] || "cambridge";
-      target.innerHTML = ["cambridge", "reported", "other"].map((source) => `
+      target.innerHTML = ["cambridge", "reported", "custom"].map((source) => `
         <button type="button" class="writing-source-filter ${selected === source ? "active" : ""}" data-writing-prompt-source="${escapeHtml(source)}">
           ${escapeHtml(writingPromptSourceLabel(source))}
           <span>${escapeHtml(counts[source] || 0)}</span>
@@ -352,16 +507,38 @@
       });
     }
 
-    function renderError(error) {
+    function renderError(error, taskType = state.writing.pickerTaskType || state.writing.taskType || "task1_academic") {
       const grid = $("writingPromptGrid");
+      const isCustomPromptError = Boolean(error?.customPrompt);
+      const status = Number(error?.status || 0);
+      const title = isCustomPromptError ? "自定义练习加载失败" : "写作题库加载失败";
+      const message = isCustomPromptError && status === 404
+        ? "自定义题接口返回 404，请刷新页面后重试。"
+        : (error?.message || String(error || "请稍后重试。"));
       if (grid) {
         grid.classList.remove("is-loading");
         grid.innerHTML = `
-          <div class="writing-prompt-load-error">
-            <strong>写作题库加载失败</strong>
-            <span>${escapeHtml(error?.message || String(error || "请稍后重试。"))}</span>
+          <div class="writing-prompt-load-error ${isCustomPromptError ? "is-custom-prompt-error" : ""}">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(message)}</span>
+            ${isCustomPromptError && loadCustomWritingPrompts ? '<button type="button" class="secondary writing-prompt-retry" data-writing-custom-retry>重新加载自定义练习</button>' : ""}
           </div>
         `;
+        grid.querySelector("[data-writing-custom-retry]")?.addEventListener("click", async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          state.writing.customPromptLoaded[taskType] = false;
+          state.writing.customPromptLoadingPromises[taskType] = null;
+          state.writing.customPromptErrors ||= {};
+          state.writing.customPromptErrors[taskType] = null;
+          try {
+            await loadCustomWritingPrompts(taskType);
+            render();
+          } catch (retryError) {
+            state.writing.customPromptErrors[taskType] = retryError;
+            renderError(retryError, taskType);
+          }
+        });
       }
       showWritingError(error);
     }
@@ -382,6 +559,31 @@
       const panel = $("writingPromptPatternPanel");
       const toggle = $("writingPromptPatternToggle");
       if (!target) return;
+      if (taskType === "task2") {
+        if (!legacyTarget) return;
+        const selectedSource = state.writing.pickerSourceFilters[taskType] || "cambridge";
+        const basePrompts = pickerPromptsForSource(taskType, selectedSource);
+        const categories = inferWritingCategories(basePrompts);
+        const selected = state.writing.pickerCategoryFilters[taskType] || "";
+        legacyTarget.innerHTML = [
+          `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category=""><strong>全部类型</strong><span>${escapeHtml(basePrompts.length)}</span></button>`,
+          ...categories.map((item) => `
+            <button type="button" class="writing-type-filter ${selected === item.category ? "active" : ""}" data-writing-prompt-category="${escapeHtml(item.category)}">
+              <strong>${escapeHtml(item.label || writingCategoryLabel?.(item.category) || item.category)}</strong>
+              <span>${escapeHtml(item.count ?? "")}</span>
+            </button>
+          `),
+        ].join("");
+        legacyTarget.classList.remove("hidden");
+        legacyTarget.classList.add("is-task2");
+        legacyTarget.querySelectorAll("[data-writing-prompt-category]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.writing.pickerCategoryFilters[taskType] = button.dataset.writingPromptCategory || "";
+            render();
+          });
+        });
+        return;
+      }
       if (taskType !== "task1_academic") {
         legacyTarget?.classList.add("hidden");
         return;
@@ -390,7 +592,7 @@
       legacyTarget?.classList.add("hidden");
       panel?.classList.remove("hidden");
       const selectedSource = state.writing.pickerSourceFilters[taskType] || "cambridge";
-      const basePrompts = task2UsablePromptsForSource(taskType, selectedSource);
+      const basePrompts = pickerPromptsForSource(taskType, selectedSource);
       const categories = inferWritingCategories(basePrompts);
       const selected = state.writing.pickerCategoryFilters[taskType] || "";
       text("writingPromptFilterLabel", "");
@@ -438,7 +640,7 @@
       panel?.classList.remove("hidden");
       clearTypeFilters();
       const selectedSource = state.writing.pickerSourceFilters[taskType] || "cambridge";
-      const basePrompts = task2UsablePromptsForSource(taskType, selectedSource);
+      const basePrompts = pickerPromptsForSource(taskType, selectedSource);
       const patterns = inferWritingPromptPatterns(basePrompts);
       const selected = state.writing.pickerPromptPatternFilters?.[taskType] || "";
       const selectedItem = patterns.find((item) => item.pattern === selected);
@@ -509,7 +711,7 @@
       renderShell(taskType);
       // Same as open(): if this task's prompts are cached, render immediately
       // with no skeleton flash when flipping between Task 1 and Task 2.
-      if (hasCachedPrompts(taskType)) {
+      if (hasCachedPrompts(taskType) && hasCachedCustomWritingPrompts(taskType)) {
         render();
         if (taskType === "task1_academic") warmWritingPromptThumbnails?.(state.writing.prompts[taskType], { hintLimit: 18 });
         return;
@@ -520,9 +722,13 @@
         grid.innerHTML = centeredLoadingHtml("正在加载写作题库", "题目和 Task 1 图表正在准备。");
       }
       await nextPaint();
-      const prompts = await loadWritingPrompts(taskType).catch(renderError);
-      if (taskType === "task1_academic") warmWritingPromptThumbnails?.(prompts || [], { hintLimit: 18 });
-      render();
+      try {
+        const prompts = await loadPickerTaskSources(taskType);
+        if (taskType === "task1_academic") warmWritingPromptThumbnails?.(prompts || [], { hintLimit: 18 });
+        render();
+      } catch (error) {
+        renderError(error, taskType);
+      }
     }
 
     return {
