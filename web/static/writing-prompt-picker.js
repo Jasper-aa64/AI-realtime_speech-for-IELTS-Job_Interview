@@ -10,7 +10,6 @@
       centeredLoadingHtml,
       loadWritingPrompts,
       loadCustomWritingPrompts,
-      renderMarkdown,
       writingPromptPickerTitle,
       writingPromptDisplayTitle,
       writingPromptMeta,
@@ -82,26 +81,36 @@
 
     function customPromptsForTask(taskType) {
       return (state.writing.customPrompts?.[taskType] || [])
-        .filter((prompt) => prompt?.task_type === taskType && String(prompt.prompt_markdown || prompt.prompt || "").trim());
+        .filter((prompt) => prompt?.task_type === taskType && String(prompt.prompt || prompt.prompt_markdown || "").trim());
+    }
+
+    // The trailing "Give reasons…" boilerplate repeats on every Task 2 card and
+    // adds no signal in the picker list — strip it from card previews only.
+    const WRITING_PROMPT_GIVE_REASONS_BOILERPLATE = /give reasons for your answer and include any relevant examples from your own knowledge or experience\.?/gi;
+    function stripWritingPromptBoilerplate(value) {
+      return String(value || "").replace(WRITING_PROMPT_GIVE_REASONS_BOILERPLATE, "");
     }
 
     function customPromptPreviewHtml(prompt) {
-      const markdown = String(prompt?.prompt_markdown || prompt?.prompt || "").trim();
-      if (typeof renderMarkdown === "function") return renderMarkdown(markdown);
-      return escapeHtml(markdown);
+      // Plain text like fixed bank prompts — no markdown rendering. Newlines
+      // become <br> so a multi-line question previews naturally.
+      const text = stripWritingPromptBoilerplate(prompt?.prompt || prompt?.prompt_markdown || "").trim();
+      return escapeHtml(text).replace(/\n/g, "<br>");
     }
 
     function customCreateCardHtml(taskType) {
       const isTask1 = taskType === "task1_academic";
       return `
-        <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} writing-custom-add-card" data-writing-custom-create="${escapeHtml(taskType)}" aria-label="新建自定义练习">
-          <span class="writing-custom-add-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
-          </span>
-          <span class="writing-prompt-choice-body">
-            <strong>新建自定义题</strong>
-            <small>自定义练习 · ${escapeHtml(taskType === "task1_academic" ? "Task 1" : "Task 2")}</small>
-            <span>输入自己的题目，保存后可直接开始每日写作。</span>
+        <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} writing-custom-add-card" data-writing-custom-create="${escapeHtml(taskType)}" aria-label="新建自定义题">
+          <span class="writing-prompt-choice-body writing-custom-add-body">
+            <div class="writing-custom-add-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+            </div>
+            <div class="writing-custom-add-titles">
+              <strong>写一道自己的题</strong>
+              <small>${escapeHtml(isTask1 ? "Task 1" : "Task 2")} · 自定义练习</small>
+            </div>
+            <div class="writing-custom-add-hint">把想练的题目存进来，和题库题一样直接开始每日写作。</div>
           </span>
         </button>
       `;
@@ -238,7 +247,7 @@
     }
 
     function promptPreviewHtml(prompt) {
-      const text = String(prompt.prompt || "").replace(/\s+/g, " ").trim();
+      const text = stripWritingPromptBoilerplate(String(prompt.prompt || "")).replace(/\s+/g, " ").trim();
       const fixedText = fixedQuestionDisplayText(text);
       if (!fixedText) return escapeHtml(text);
       const escaped = escapeHtml(text);
@@ -326,13 +335,29 @@
       const choiceMeta = isCustomPrompt
         ? `${prompt.task_label || (isTask1 ? "Task 1" : "Task 2")} · 自定义练习`
         : (isCambridgePrompt ? "" : writingPromptMeta(prompt));
-      const categoryLabel = isCustomPrompt
-        ? String(prompt.category_label || writingCategoryLabel?.(prompt.category) || "").trim()
-        : "";
       const previewTag = isCustomPrompt ? "div" : "span";
       const loadImmediately = isTask1 && index < eagerImageCount;
       const imageLoading = loadImmediately ? "eager" : "lazy";
       const imagePriority = loadImmediately ? "auto" : "low";
+      if (isCustomPrompt) {
+        const statusKey = String(prompt.practice_status || "unpracticed");
+        const statusLabel = String(prompt.practice_status_label || "未练习");
+        return `
+          <article class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} writing-custom-prompt-choice ${active ? "active" : ""}" data-writing-custom-card="${escapeHtml(prompt.id)}">
+            <button type="button" class="writing-prompt-choice-main" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
+              <span class="writing-prompt-choice-body">
+                <strong>${escapeHtml(choiceTitle)}</strong>
+                <small class="writing-custom-meta">
+                  <em>${escapeHtml(prompt.task_label || (isTask1 ? "Task 1" : "Task 2"))} · 自定义题</em>
+                  <i class="writing-prompt-status status-${escapeHtml(statusKey)}">${escapeHtml(statusLabel)}</i>
+                </small>
+                <div class="writing-prompt-preview">${customPromptPreviewHtml(prompt)}</div>
+              </span>
+            </button>
+            ${customPromptActionsHtml(prompt)}
+          </article>
+        `;
+      }
       const imageHtml = isTask1
         ? `<span class="writing-prompt-choice-image${prompt.image_url ? "" : " placeholder"}">${promptChoiceImageHtml(prompt, imageLoading, imagePriority)}</span>`
         : "";
@@ -341,20 +366,9 @@
         <span class="writing-prompt-choice-body">
           <strong>${escapeHtml(choiceTitle)}</strong>
           ${choiceMeta ? `<small class="writing-prompt-choice-subtitle">${escapeHtml(choiceMeta)}</small>` : ""}
-          ${categoryLabel ? `<span class="writing-prompt-category-tag">${escapeHtml(categoryLabel)}</span>` : ""}
-          <${previewTag} class="writing-prompt-preview">${isCustomPrompt ? customPromptPreviewHtml(prompt) : (isTask1 ? escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "") : cachedPromptPreviewHtml(prompt))}</${previewTag}>
+          <${previewTag} class="writing-prompt-preview">${isTask1 ? escapeHtml(String(prompt.prompt || "").split(/\n+/)[0] || "") : cachedPromptPreviewHtml(prompt)}</${previewTag}>
         </span>
       `;
-      if (isCustomPrompt) {
-        return `
-          <article class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} writing-custom-prompt-choice ${active ? "active" : ""}" data-writing-custom-card="${escapeHtml(prompt.id)}">
-            <button type="button" class="writing-prompt-choice-main" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
-              ${bodyHtml}
-            </button>
-            ${customPromptActionsHtml(prompt)}
-          </article>
-        `;
-      }
       return `
         <button type="button" class="writing-prompt-choice ${isTask1 ? "task1-choice" : "task2-choice"} ${active ? "active" : ""}" data-writing-prompt-choice="${escapeHtml(prompt.id)}">
           ${bodyHtml}
@@ -434,13 +448,11 @@
         renderError(customError, taskType);
         return;
       }
-      const selectedCategory = state.writing.pickerCategoryFilters[taskType] || "";
       const selectedPattern = state.writing.pickerPromptPatternFilters?.[taskType] || "";
       const sourcePrompts = selectedSource === "custom"
         ? customPromptsForTask(taskType)
         : task2UsablePromptsForSource(taskType, selectedSource);
       const prompts = sourcePrompts
-        .filter((prompt) => !selectedCategory || prompt.category === selectedCategory)
         .filter((prompt) => taskType !== "task2" || !selectedPattern || prompt.prompt_pattern === selectedPattern);
       const missingSlots = [];
       const grid = $("writingPromptGrid");
@@ -559,14 +571,36 @@
       const panel = $("writingPromptPatternPanel");
       const toggle = $("writingPromptPatternToggle");
       if (!target) return;
-      if (taskType === "task2") {
-        if (!legacyTarget) return;
+      if (taskType !== "task2") {
+        // Task 2's 题型 row (全部类型/利弊类/…) must never appear outside Task 2.
+        if (legacyTarget) {
+          legacyTarget.innerHTML = "";
+          legacyTarget.classList.add("hidden");
+        }
+        if (taskType !== "task1_academic") {
+          target.innerHTML = "";
+          target.classList.add("hidden");
+          panel?.classList.add("hidden");
+          toggle?.setAttribute("aria-expanded", "false");
+          text("writingPromptFilterLabel", "");
+          text("writingPromptCurrentPattern", "");
+          return;
+        }
+        // Task 1 keeps its own chart-type filters, computed from the CURRENT
+        // source's Task 1 prompts.
+        panel?.classList.remove("hidden");
         const selectedSource = state.writing.pickerSourceFilters[taskType] || "cambridge";
         const basePrompts = pickerPromptsForSource(taskType, selectedSource);
         const categories = inferWritingCategories(basePrompts);
-        const selected = state.writing.pickerCategoryFilters[taskType] || "";
-        legacyTarget.innerHTML = [
-          `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category=""><strong>全部类型</strong><span>${escapeHtml(basePrompts.length)}</span></button>`,
+        let selected = state.writing.pickerCategoryFilters[taskType] || "";
+        if (selected && !categories.some((item) => item.category === selected)) {
+          selected = "";
+          state.writing.pickerCategoryFilters[taskType] = "";
+        }
+        text("writingPromptFilterLabel", "");
+        text("writingPromptCurrentPattern", "");
+        target.innerHTML = [
+          `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category=""><strong>全部</strong><span>${escapeHtml(basePrompts.length)}</span></button>`,
           ...categories.map((item) => `
             <button type="button" class="writing-type-filter ${selected === item.category ? "active" : ""}" data-writing-prompt-category="${escapeHtml(item.category)}">
               <strong>${escapeHtml(item.label || writingCategoryLabel?.(item.category) || item.category)}</strong>
@@ -574,9 +608,13 @@
             </button>
           `),
         ].join("");
-        legacyTarget.classList.remove("hidden");
-        legacyTarget.classList.add("is-task2");
-        legacyTarget.querySelectorAll("[data-writing-prompt-category]").forEach((button) => {
+        target.classList.remove("hidden");
+        target.classList.add("is-task1");
+        target.classList.remove("is-task2", "is-open");
+        toggle?.setAttribute("aria-expanded", "true");
+        if (toggle) toggle.onclick = null;
+        panel?.classList.remove("is-open");
+        target.querySelectorAll("[data-writing-prompt-category]").forEach((button) => {
           button.addEventListener("click", () => {
             state.writing.pickerCategoryFilters[taskType] = button.dataset.writingPromptCategory || "";
             render();
@@ -584,40 +622,13 @@
         });
         return;
       }
-      if (taskType !== "task1_academic") {
-        legacyTarget?.classList.add("hidden");
-        return;
-      }
-      if (legacyTarget) legacyTarget.innerHTML = "";
-      legacyTarget?.classList.add("hidden");
-      panel?.classList.remove("hidden");
-      const selectedSource = state.writing.pickerSourceFilters[taskType] || "cambridge";
-      const basePrompts = pickerPromptsForSource(taskType, selectedSource);
-      const categories = inferWritingCategories(basePrompts);
-      const selected = state.writing.pickerCategoryFilters[taskType] || "";
+      if (!legacyTarget) return;
+      // Task 2 filters by fixed-question pattern (问法) only — the category
+      // chip row (利弊类/讨论类/观点类 etc.) is intentionally gone.
+      legacyTarget.innerHTML = "";
+      legacyTarget.classList.add("hidden");
+      legacyTarget.classList.remove("is-task2");
       text("writingPromptFilterLabel", "");
-      text("writingPromptCurrentPattern", "");
-      target.innerHTML = [
-        `<button type="button" class="writing-type-filter ${selected ? "" : "active"}" data-writing-prompt-category=""><strong>全部</strong><span>${escapeHtml(basePrompts.length)}</span></button>`,
-        ...categories.map((item) => `
-          <button type="button" class="writing-type-filter ${selected === item.category ? "active" : ""}" data-writing-prompt-category="${escapeHtml(item.category)}">
-            <strong>${escapeHtml(item.label || writingCategoryLabel?.(item.category) || item.category)}</strong>
-            <span>${escapeHtml(item.count ?? "")}</span>
-          </button>
-        `),
-      ].join("");
-      target.classList.remove("hidden");
-      target.classList.add("is-task1");
-      target.classList.remove("is-task2", "is-open");
-      toggle?.setAttribute("aria-expanded", "true");
-      if (toggle) toggle.onclick = null;
-      panel?.classList.remove("is-open");
-      target.querySelectorAll("[data-writing-prompt-category]").forEach((button) => {
-        button.addEventListener("click", () => {
-          state.writing.pickerCategoryFilters[taskType] = button.dataset.writingPromptCategory || "";
-          render();
-        });
-      });
     }
 
     function clearTypeFilters() {
@@ -633,16 +644,27 @@
       const panel = $("writingPromptPatternPanel");
       const toggle = $("writingPromptPatternToggle");
       if (taskType !== "task2") {
+        // Task 1: this row is filled by renderTypeFilters with chart-type
+        // chips right after; anything else stays hidden.
         target.innerHTML = "";
         target.classList.add("hidden");
+        panel?.classList.add("hidden");
+        toggle?.setAttribute("aria-expanded", "false");
         return;
       }
       panel?.classList.remove("hidden");
       clearTypeFilters();
+      // Task 2 问法 computed strictly from the CURRENT source — custom
+      // questions keep their own auto-detected patterns.
       const selectedSource = state.writing.pickerSourceFilters[taskType] || "cambridge";
       const basePrompts = pickerPromptsForSource(taskType, selectedSource);
       const patterns = inferWritingPromptPatterns(basePrompts);
-      const selected = state.writing.pickerPromptPatternFilters?.[taskType] || "";
+      let selected = state.writing.pickerPromptPatternFilters?.[taskType] || "";
+      if (selected && !patterns.some((item) => item.pattern === selected)) {
+        // Stale selection from another source — reset to 全部问法.
+        selected = "";
+        if (state.writing.pickerPromptPatternFilters) state.writing.pickerPromptPatternFilters[taskType] = "";
+      }
       const selectedItem = patterns.find((item) => item.pattern === selected);
       text("writingPromptFilterLabel", "");
       text("writingPromptCurrentPattern", selectedItem

@@ -94,6 +94,107 @@
 
     let p1CorpusCopyToastTimer = 0;
 
+    // ─── Voice dictation (ASR) for corpus editors ────────────────────────
+    // Browser Web Speech API turns speech into text and appends it to the
+    // target corpus textarea. Used by the mic buttons in the P1 and P3 editors.
+    const corpusDictation = {
+      recognition: null,
+      targetId: "",
+      finalText: "",
+      active: false,
+    };
+
+    function corpusDictateButtonFor(targetId) {
+      return document.querySelector(`[data-corpus-dictate="${targetId}"]`);
+    }
+
+    function corpusDictateStatusId(targetId) {
+      return targetId === "p2CorpusP3FollowUp" ? "p2CorpusP3SaveStatus" : "p1CorpusSaveStatus";
+    }
+
+    function setCorpusDictateActive(targetId, active) {
+      const button = corpusDictateButtonFor(targetId);
+      button?.classList.toggle("is-recording", active);
+      button?.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+
+    function stopCorpusDictation({ commit = true } = {}) {
+      const recognition = corpusDictation.recognition;
+      const targetId = corpusDictation.targetId;
+      const finalText = String(corpusDictation.finalText || "").trim();
+      corpusDictation.recognition = null;
+      corpusDictation.targetId = "";
+      corpusDictation.finalText = "";
+      corpusDictation.active = false;
+      if (targetId) setCorpusDictateActive(targetId, false);
+      if (recognition) {
+        recognition.onresult = null;
+        recognition.onend = null;
+        recognition.onerror = null;
+        try { recognition.stop(); } catch (_e) { /* ignore */ }
+      }
+      if (commit && targetId && finalText) {
+        const existing = String(getCorpusMarkdownValue(targetId) || "").trim();
+        const next = existing ? `${existing} ${finalText}` : finalText;
+        setCorpusMarkdownValue(targetId, next);
+      }
+    }
+
+    function toggleCorpusDictation(targetId) {
+      if (!targetId) return;
+      if (corpusDictation.active && corpusDictation.targetId === targetId) {
+        stopCorpusDictation();
+        return;
+      }
+      if (corpusDictation.active) stopCorpusDictation();
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        text(corpusDictateStatusId(targetId), "当前浏览器不支持语音转写，请改用 Chrome 或 Edge。");
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+      corpusDictation.recognition = recognition;
+      corpusDictation.targetId = targetId;
+      corpusDictation.finalText = "";
+      corpusDictation.active = true;
+      setCorpusDictateActive(targetId, true);
+      recognition.onresult = (event) => {
+        let interim = "";
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          const result = event.results[i];
+          const transcript = String(result[0]?.transcript || "");
+          if (result.isFinal) {
+            corpusDictation.finalText = `${corpusDictation.finalText} ${transcript}`.trim();
+          } else {
+            interim = transcript;
+          }
+        }
+        const live = corpusDictation.finalText || interim;
+        const button = corpusDictateButtonFor(targetId);
+        if (button) button.title = live || "正在听…";
+      };
+      recognition.onend = () => {
+        if (corpusDictation.active && corpusDictation.targetId === targetId) {
+          stopCorpusDictation();
+        }
+      };
+      recognition.onerror = (event) => {
+        if (String(event?.error || "") === "aborted") return;
+        if (corpusDictation.active && corpusDictation.targetId === targetId) {
+          stopCorpusDictation();
+        }
+      };
+      try {
+        recognition.start();
+      } catch (_e) {
+        stopCorpusDictation({ commit: false });
+        text(corpusDictateStatusId(targetId), "语音转写启动失败，请重试。");
+      }
+    }
+
     function showP1CorpusCopyToast(message, options = {}) {
       const toast = $("p1CorpusCopyToast");
       if (!toast) return;
@@ -4938,10 +5039,17 @@ I will paste one topic's corpus context next.`;
       state.languageTakeaway._popupClampBound = true;
     }
 
+    // 划词自动填入时，把跨行的选中文本折叠成一行 —— 这是唯一允许自动取消换行的
+    // 时机（把一段选中文字当作一个表达）。之后任何手动输入 / 编辑换行都要原样保留。
+    function collapseTakeawaySelection(value) {
+      return String(value || "").replace(/\s+/g, " ").trim();
+    }
+
     async function openLanguageTakeawayPopup() {
       if (guestBlockTakeawayEdit("登录后才能把划选的表达保存到你的 Takeaway。")) return;
-      const textValue = state.languageTakeaway.selectedText;
-      if (!textValue) return;
+      const selectedText = state.languageTakeaway.selectedText;
+      if (!selectedText) return;
+      const textValue = collapseTakeawaySelection(selectedText);
       const popup = $("languageTakeawayPopup");
       const trigger = $("languageTakeawayTrigger");
       if (!popup || !trigger) return;
@@ -7133,7 +7241,7 @@ I will paste one topic's corpus context next.`;
           ${listHtml}
         </div>
       `;
-      if ($("p2CorpusP3FollowUpLabel")) $("p2CorpusP3FollowUpLabel").textContent = "回答正文";
+      if ($("p2CorpusP3FollowUpLabel")) $("p2CorpusP3FollowUpLabel").textContent = String(selected?.followup_question || "").trim() || "P3 追问";
       setCorpusMarkdownValue("p2CorpusP3FollowUp", selected?.corpus_text || "");
     }
 
@@ -7418,6 +7526,13 @@ I will paste one topic's corpus context next.`;
     }
 
     document.addEventListener("click", (event) => {
+      const dictateButton = event.target.closest("[data-corpus-dictate]");
+      if (dictateButton) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        toggleCorpusDictation(dictateButton.dataset.corpusDictate || "");
+        return;
+      }
       const titleCueTrigger = event.target.closest("#p2CorpusDialogTitle");
       if (titleCueTrigger?.classList.contains("p2-corpus-title-cue-trigger")) {
         event.preventDefault();

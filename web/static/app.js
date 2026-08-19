@@ -180,7 +180,6 @@ const state = {
     reportEditRequestId: 0,
     scorePollTimer: null,
     scorePollingEntryId: null,
-    rescoreAfterActiveTask: false,
     scoreCompletionModalEntry: null,
     scoreCompletionNotifiedIds: new Set(),
     pickerTaskType: "task1_academic",
@@ -1470,7 +1469,10 @@ function renderTask2PromptTextWithHighlights(textValue, ranges = [], options = {
     if (range.start > cursor) {
       output += `<span class="writing-prompt-segment writing-prompt-context">${renderWritingPromptSliceWithHighlights(text, ranges, cursor, range.start)}</span>`;
     }
-    output += `<strong class="writing-prompt-segment writing-prompt-fixed-question">${escapeHtml(task2FixedQuestionDisplayLabel(text.slice(range.start, range.end)))}</strong>`;
+    // Auto-emphasis (bold) and manual 划词 highlights must stack, not swallow
+    // each other: slice the RAW text so both share the same plain-text offsets
+    // and the user's <mark> ranges render inside the <strong>.
+    output += `<strong class="writing-prompt-segment writing-prompt-fixed-question">${renderWritingPromptSliceWithHighlights(text, ranges, range.start, range.end)}</strong>`;
     cursor = range.end;
   });
   if (cursor < text.length) {
@@ -7974,20 +7976,15 @@ function writingReportUndoSnapshot(entryId, paragraphIndex) {
   return stack.length ? stack[stack.length - 1] : null;
 }
 
-function moveWritingReportUndoStacks(fromEntryId, toEntryId) {
-  const fromId = String(fromEntryId || "").trim();
-  const toId = String(toEntryId || "").trim();
-  if (!fromId || !toId || fromId === toId) return;
-  const prefix = `${fromId}::`;
-  [...state.writing.reportUndoStacks.entries()].forEach(([key, stack]) => {
+function clearWritingReportUndoStacks(entryId) {
+  // A rewrite+rescore creates a NEW report node: the previous node's undo
+  // history must never be reachable from the new one.
+  const id = String(entryId || "").trim();
+  if (!id) return;
+  const prefix = `${id}::`;
+  [...state.writing.reportUndoStacks.entries()].forEach(([key, _stack]) => {
     if (!key.startsWith(prefix)) return;
-    const suffix = key.slice(prefix.length);
-    const nextKey = `${toId}::${suffix}`;
-    const nextStack = writingReportUndoStack(toId, suffix, { create: true });
-    const mergedStack = normalizeWritingReportUndoStack([...nextStack, ...stack]);
-    state.writing.reportUndoStacks.set(nextKey, mergedStack);
     state.writing.reportUndoStacks.delete(key);
-    saveWritingReportUndoStackByKey(nextKey, mergedStack);
     saveWritingReportUndoStackByKey(key, []);
   });
 }
@@ -8776,6 +8773,7 @@ function maybeScheduleWritingAutosave() {
   if (writingAutosaveReady()) state.writing.autosaveEnabled = true;
   if (!state.writing.autosaveEnabled || !state.writing.dirty || !state.writing.prompt) return;
   if (state.writing.scorePollingEntryId) return;
+  if (writingEntryHasActiveScoreTask()) return;
   clearWritingAutosaveTimer();
   state.writing.autosaveTimer = setTimeout(() => {
     state.writing.autosaveTimer = null;
@@ -8785,6 +8783,7 @@ function maybeScheduleWritingAutosave() {
 
 async function runWritingAutosave() {
   if (!state.writing.autosaveEnabled || !state.writing.dirty || !state.writing.prompt) return;
+  if (writingEntryHasActiveScoreTask()) return;
   if (state.writing.autosaveSaving) {
     state.writing.autosaveQueued = true;
     return;
@@ -8802,28 +8801,53 @@ async function runWritingAutosave() {
   }
 }
 
-function setWritingPending(isPending, title = "", detail = "", options = {}) {
+function writingEntryHasActiveScoreTask(entry = state.writing.entry) {
+  return Boolean(entry?.ai_task && isWritingTaskActive(entry.ai_task));
+}
+
+function lockWritingComposerControls() {
+  ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptPickerBtn", "writingAnswer"].forEach((id) => {
+    const element = $(id);
+    if (element) element.disabled = true;
+  });
+  document.querySelectorAll("[data-writing-task]").forEach((button) => {
+    button.disabled = true;
+  });
+}
+
+function applyWritingScoreLock() {
+  // Single source of truth for the lock: this entry has an active AI score task.
+  // Every re-render (poll data, recoverWritingEntry, surface refresh) reapplies
+  // the same state, so the composer can never transiently unlock mid-scoring.
+  const locked = writingEntryHasActiveScoreTask();
+  ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptPickerBtn", "writingAnswer"].forEach((id) => {
+    const element = $(id);
+    if (element) element.disabled = locked;
+  });
+  document.querySelectorAll("[data-writing-task]").forEach((button) => {
+    button.disabled = locked;
+  });
+  if (locked) {
+    clearWritingAutosaveTimer();
+    state.writing.autosaveQueued = false;
+  }
+  return locked;
+}
+
+function setWritingPending(isPending, title = "", detail = "") {
   const wait = $("writingInlineWait");
   wait?.classList.toggle("hidden", !isPending);
   if (title) text("writingInlineWaitTitle", title);
   if (detail) text("writingInlineWaitText", detail);
-  const allowEditing = isPending && options.allowEditing === true;
-  const lockedControlIds = allowEditing
-    ? ["writingScoreBtn", "writingRandomBtn", "writingPromptPickerBtn"]
-    : ["writingSaveBtn", "writingScoreBtn", "writingRandomBtn", "writingPromptPickerBtn", "writingAnswer"];
-  lockedControlIds.forEach((id) => {
-    const element = $(id);
-    if (element) element.disabled = isPending;
-  });
-  if (allowEditing) {
-    ["writingSaveBtn", "writingAnswer"].forEach((id) => {
-      const element = $(id);
-      if (element) element.disabled = false;
-    });
+  if (isPending) {
+    // Submission just started and the entry may not carry an active task yet —
+    // lock everything immediately and never unlock until a terminal state.
+    lockWritingComposerControls();
+    clearWritingAutosaveTimer();
+    state.writing.autosaveQueued = false;
+    return;
   }
-  document.querySelectorAll("[data-writing-task]").forEach((button) => {
-    button.disabled = isPending;
-  });
+  applyWritingScoreLock();
 }
 
 function writingTaskLabel(taskType) {
@@ -9496,7 +9520,15 @@ function normalizeCustomWritingPrompts(taskType, prompts = []) {
   const normalizedTaskType = taskType || "task2";
   return (Array.isArray(prompts) ? prompts : [])
     .map((prompt) => {
-      const markdown = String(prompt?.prompt_markdown || prompt?.prompt || "").trim();
+      // `prompt` is the standard plain-text field; `prompt_markdown` only
+      // survives as a legacy fallback for older stored data. Runs of blank
+      // lines are collapsed to a single break so pasted multi-paragraph
+      // questions don't render with oversized gaps.
+      const text = String(prompt?.prompt || prompt?.prompt_markdown || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/\n{2,}/g, "\n")
+        .trim();
       const id = String(prompt?.id || prompt?.custom_prompt_id || "").trim();
       return {
         ...prompt,
@@ -9504,8 +9536,8 @@ function normalizeCustomWritingPrompts(taskType, prompts = []) {
         custom_prompt_id: id,
         prompt_id: "",
         task_type: prompt?.task_type || normalizedTaskType,
-        prompt: markdown,
-        prompt_markdown: markdown,
+        prompt: text,
+        prompt_markdown: text,
         source: "custom",
         source_label: prompt?.source_label || "\u81ea\u5b9a\u4e49\u7ec3\u4e60",
         title: String(prompt?.title || "").trim(),
@@ -9925,7 +9957,6 @@ function writingReportScoringStateHtml(entry, task) {
   const taskSubline = entry.task_type === "task1_academic" ? "Task 1" : "Task 2";
   const displayTitle = writingEntryDisplayTitle(entry) || writingTaskLabel(entry.task_type);
   const wordCount = Number.isFinite(Number(entry.word_count)) ? Number(entry.word_count) : 0;
-  const editAction = `<button type="button" class="primary writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}" data-writing-report-scored="false" data-writing-report-task="${escapeHtml(entry.task_type || "")}" data-writing-report-prompt="${escapeHtml(entry.prompt_id || "")}">继续编辑</button>`;
   return `
     <section class="detail-card writing-report-scoring-card" data-writing-report-id="${escapeHtml(entry.id || "")}" data-report-status="scoring">
       <div class="writing-report-scoring-head">
@@ -9944,11 +9975,81 @@ function writingReportScoringStateHtml(entry, task) {
         </div>
       </div>
       <div class="writing-report-scoring-actions">
-        <span>评分在后台继续，修改后的最新作文会重新进入评分。</span>
-        ${editAction}
+        <span>评分在后台继续，完成后会自动写入写作报告；结果出来前不能修改这篇作文。</span>
       </div>
+      ${reportScoringModelMetaHtml({ provider: task?.provider, model: task?.model }, task?.model ? "（评分中）" : "")}
     </section>
   `;
+}
+
+function scoringModelDisplayName(provider = "", model = "") {
+  // Real model ids → user-facing names:
+  //   claude-sonnet-4-6 → Claude Sonnet 4.6
+  //   gpt-5.6-terra     → GPT-5.6 Terra
+  //   sonnet            → Claude Sonnet (provider prefix applied)
+  // Never fabricates a model: empty input stays empty.
+  const rawModel = String(model || "").trim();
+  const rawProvider = String(provider || "").trim().toLowerCase();
+  if (!rawModel) return "";
+  const tokens = rawModel.split(/[-_.]+/).filter(Boolean);
+  const parts = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (/^\d+$/.test(tokens[i])) {
+      let version = tokens[i];
+      while (i + 1 < tokens.length && /^\d+$/.test(tokens[i + 1])) {
+        version += `.${tokens[i + 1]}`;
+        i += 1;
+      }
+      parts.push(version);
+    } else {
+      parts.push(tokens[i]);
+    }
+  }
+  const words = parts.map((part) => {
+    if (/^[\d.]+$/.test(part)) return part;
+    const lower = part.toLowerCase();
+    if (lower === "gpt") return "GPT";
+    if (lower === "claude") return "Claude";
+    if (lower === "codex") return "Codex";
+    if (lower === "opus" || lower === "sonnet" || lower === "haiku") return lower.charAt(0).toUpperCase() + lower.slice(1);
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  });
+  let display = words.join(" ");
+  if (/^GPT \d/.test(display)) display = display.replace(/^GPT /, "GPT-");
+  if (rawProvider === "claude" && !/^claude/i.test(rawModel)) display = `Claude ${display}`;
+  return display;
+}
+
+function reportScoringModelLabel(provenance = {}) {
+  // Shared provenance display for writing AND speaking reports. Reads only
+  // the immutable scoring_provider/scoring_model snapshot; never the task's
+  // internal adapter default (codex must never appear).
+  const provider = String(provenance.provider || provenance.scoring_provider || "").trim();
+  const model = String(provenance.model || provenance.scoring_model || "").trim();
+  if (provider === "fallback") return "本地兜底";
+  return scoringModelDisplayName(provider, model) || "历史记录未保存";
+}
+
+function reportScoringModelMetaHtml(provenance = {}, suffix = "") {
+  const label = reportScoringModelLabel(provenance);
+  if (!label) return "";
+  return `<footer class="writing-report-model-meta"><span>评分模型</span><strong>${escapeHtml(label)}${suffix ? escapeHtml(suffix) : ""}</strong></footer>`;
+}
+
+function writingReportScoringModelLabel(entry) {
+  const score = entry?.score || {};
+  return reportScoringModelLabel({
+    provider: score.scoring_provider,
+    model: score.scoring_model,
+  });
+}
+
+function writingReportScoringModelMetaHtml(entry, options = {}) {
+  const score = entry?.score || {};
+  return reportScoringModelMetaHtml(
+    { provider: score.scoring_provider, model: score.scoring_model },
+    options.suffix || "",
+  );
 }
 
 function writingReportDetailHtml(entry) {
@@ -9959,7 +10060,9 @@ function writingReportDetailHtml(entry) {
   const paragraphReviews = Array.isArray(score?.paragraph_reviews) ? score.paragraph_reviews : [];
   const isScoredReport = isWritingEntryScored(entry);
   const isScoringReport = isWritingTaskActive(task);
-  const editLabel = isScoringReport ? "继续编辑" : (isScoredReport ? "重新生成报告" : "继续编辑");
+  // Scoring reports never expose an edit action — the composer is locked while
+  // the task runs; only scored/unscored reports get 重新生成报告 / 继续编辑.
+  const editLabel = isScoredReport ? "重新生成报告" : "继续编辑";
   const editAction = `<button type="button" class="primary writing-report-edit-btn" data-writing-report-edit="${escapeHtml(entry.id || "")}" data-writing-report-scored="${isScoredReport ? "true" : "false"}" data-writing-report-task="${escapeHtml(entry.task_type || "")}" data-writing-report-prompt="${escapeHtml(entry.prompt_id || "")}">${editLabel}</button>`;
   const taskName = entry.task_label || writingTaskLabel(entry.task_type);
   const taskSubline = entry.task_type === "task1_academic" ? "Task 1" : "Task 2";
@@ -10039,6 +10142,7 @@ function writingReportDetailHtml(entry) {
     </div>
     ${promptCard}
     ${score.structure_advice_only ? writingStructureAdviceHtml(score, entry) : writingParagraphReviewHtml(entry, score, paragraphReviews)}
+    ${writingReportScoringModelMetaHtml(entry)}
   ` : `
     <div class="detail-card writing-saved-report-card" data-writing-report-id="${escapeHtml(entry.id || "")}">
       <div class="writing-saved-report-head">
@@ -10191,7 +10295,8 @@ async function saveWritingReportAnswer(entry, answer, options = {}) {
     state.writing.reportDetailCache.delete(originalId);
     state.writing.reportEntries = state.writing.reportEntries.filter((item) => String(item?.id || "") !== originalId);
     if (String(state.writing.activeReportId || "") === originalId) state.writing.activeReportId = savedId;
-    moveWritingReportUndoStacks(originalId, savedId);
+    // A new node: the previous report's undo history must not follow.
+    clearWritingReportUndoStacks(originalId);
   }
   state.writing.activeReportDetail = merged;
   syncWritingReportEntryCache(merged, { renderList: state.view === "writingReports" });
@@ -10529,10 +10634,12 @@ function renderWritingSurface() {
   }
   const promptText = prompt?.prompt || "\u8bf7\u9009\u62e9\u4e00\u9053\u9898\uff0c\u6216\u70b9\u51fb\u968f\u673a\u9898\u5f00\u59cb\u3002";
   const highlightRanges = writingPromptHighlightKey(prompt) ? currentWritingPromptHighlightState() : [];
-  const isCustomPrompt = writingPromptSourceKey(prompt || {}) === "custom";
+  // Custom prompts are plain text, exactly like fixed bank prompts \u2014 never
+  // markdown-rendered, so the \u5212\u8bcd highlight range math always matches the raw
+  // prompt text (markdown parsing used to break it for custom questions).
   $("writingPromptText").innerHTML = taskType === "task2"
-    ? renderTask2PromptTextWithHighlights(promptText, highlightRanges, { markdown: isCustomPrompt })
-    : (isCustomPrompt ? renderMarkdown(promptText) : renderWritingPromptTextWithHighlights(promptText, highlightRanges));
+    ? renderTask2PromptTextWithHighlights(promptText, highlightRanges)
+    : renderWritingPromptTextWithHighlights(promptText, highlightRanges);
   hideWritingHighlightMenu();
 
   // Render Task 1 image if available
@@ -10577,6 +10684,9 @@ function renderWritingSurface() {
   const entry = state.writing.entry;
   renderWritingScore(entry);
   updateWritingWordCount({ reset: true });
+  // Reapply the score lock on every render — poll data or surface refreshes
+  // must never transiently unlock the composer while the AI task is active.
+  applyWritingScoreLock();
   if (entry?.ai_task && isWritingTaskActive(entry.ai_task)) {
     text("writingSaveStatus", writingTaskStatusTitle(entry.ai_task));
   } else if (!entry?.id) {
@@ -10848,19 +10958,13 @@ async function openCustomWritingPromptEditor(taskType = "task2", prompt = null) 
     ? "修改后会更新题库中的题目；已经写过的作文与报告仍保留原题快照。"
     : "保存后会自动识别题型，并和题库题目一样进入每日写作。");
   text("customWritingPromptError", "");
-  const markdown = String(prompt?.prompt_markdown || prompt?.prompt || "");
+  // Custom prompts are plain text, not markdown — just fill the textarea. The
+  // dialog's own <textarea id="customWritingPromptMarkdown"> stays a plain
+  // input, same as the fixed bank questions, so nothing needs a Vditor mount.
+  const markdown = String(prompt?.prompt || prompt?.prompt_markdown || "");
   $("customWritingPromptMarkdown").value = markdown;
   dialog.classList.remove("hidden");
   document.body.classList.add("modal-open");
-  setCorpusEditorLoading("customWritingPromptMarkdown", true, { label: "正在准备题目编辑器" });
-  try {
-    await ensureCorpusMarkdownEditorReady("customWritingPromptMarkdown");
-    setCorpusMarkdownValue("customWritingPromptMarkdown", markdown);
-  } catch (error) {
-    text("customWritingPromptError", error?.message || "编辑器加载失败，可以直接在文本框中输入题目。");
-  } finally {
-    setCorpusEditorLoading("customWritingPromptMarkdown", false);
-  }
 }
 
 async function saveCustomWritingPromptFromDialog() {
@@ -10868,7 +10972,7 @@ async function saveCustomWritingPromptFromDialog() {
   const promptId = String($("customWritingPromptId")?.value || "").trim();
   const taskType = customWritingPromptDialogTaskType();
   const title = String($("customWritingPromptTitle")?.value || "").trim();
-  const promptMarkdown = String(getCorpusMarkdownValue("customWritingPromptMarkdown") || $("customWritingPromptMarkdown")?.value || "").trim();
+  const promptMarkdown = String($("customWritingPromptMarkdown")?.value || "").trim();
   if (!promptMarkdown) {
     text("customWritingPromptError", "请输入作文题目。");
     return;
@@ -10879,7 +10983,7 @@ async function saveCustomWritingPromptFromDialog() {
   }
   text("customWritingPromptError", "");
   try {
-    const payload = { task_type: taskType, title, prompt_markdown: promptMarkdown };
+    const payload = { task_type: taskType, title, prompt: promptMarkdown };
     const savedPrompt = promptId
       ? await updateCustomWritingPrompt(promptId, payload)
       : await createCustomWritingPrompt(payload);
@@ -11361,19 +11465,6 @@ function clearWritingScorePolling() {
   state.writing.scorePollingEntryId = null;
 }
 
-function shouldRescoreWritingAfterActiveTask() {
-  return Boolean(state.writing.rescoreAfterActiveTask && state.writing.dirty && state.view === "writing");
-}
-
-async function rescoreWritingAfterActiveTaskIfNeeded() {
-  if (!shouldRescoreWritingAfterActiveTask()) return false;
-  state.writing.rescoreAfterActiveTask = false;
-  clearWritingScorePolling();
-  setWritingPending(true, "正在使用最新作文重新评分", "刚才评分过程中作文已被修改，旧结果不会作为最终报告。");
-  await scoreWritingEntry();
-  return true;
-}
-
 function isScoreTaskUnsupported(error) {
   const message = String(error?.message || "");
   return error?.status === 404 && /Unknown API endpoint/i.test(message);
@@ -11514,7 +11605,6 @@ async function recoverWritingEntry(entry) {
     source_label: entry.source_label || "",
     display_source_label: entry.display_source_label || "",
     prompt_highlights: entry.prompt_highlights || [],
-    prompt_markdown: customPromptId ? entry.prompt : "",
   });
   const highlightKey = writingPromptHighlightKey(state.writing.prompt);
   if (highlightKey) {
@@ -11550,7 +11640,6 @@ function startWritingScorePolling(entryId, options = {}) {
       await loadWritingSummary();
       const task = entry.ai_task || null;
       if (entry.score || (task && isAiTaskCompletedWithResultStatus(task.status))) {
-        if (await rescoreWritingAfterActiveTaskIfNeeded()) return;
         clearWritingScorePolling();
         setWritingPending(false);
         await refreshWalletAfterAiUsage();
@@ -11558,7 +11647,6 @@ function startWritingScorePolling(entryId, options = {}) {
         return;
       }
       if (task && isWritingTaskTerminal(task)) {
-        if (await rescoreWritingAfterActiveTaskIfNeeded()) return;
         clearWritingScorePolling();
         setWritingPending(false);
         text("writingSaveStatus", writingTaskStatusTitle(task));
@@ -11566,7 +11654,7 @@ function startWritingScorePolling(entryId, options = {}) {
         if (notifyOnComplete) showWritingScoreCompleteModal(entry, task);
         return;
       }
-      setWritingPending(true, writingTaskStatusTitle(task), writingTaskStatusText(task), { allowEditing: true });
+      setWritingPending(true, writingTaskStatusTitle(task), writingTaskStatusText(task));
       state.writing.scorePollTimer = setTimeout(poll, 2500);
     } catch (error) {
       clearWritingScorePolling();
@@ -11597,7 +11685,9 @@ function syncWritingScorePolling(entry, options = {}) {
 }
 
 async function scoreWritingEntry() {
-  state.writing.rescoreAfterActiveTask = false;
+  // A new scoring round is a new report node — the previous node's paragraph
+  // undo history must not be reachable from here.
+  clearWritingReportUndoStacks(state.writing.entry?.id);
   const currentAnswer = $("writingAnswer")?.value || "";
   if (!ensureWritingParagraphsBeforeScore(currentAnswer, state.writing.taskType || "task1_academic")) return;
   setWritingPending(true, "AI 正在评分与生成辅导", "正在分析题目、你的作文和 IELTS 写作评分标准。");
@@ -11841,6 +11931,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
         ${scoreCell("GRA", score.grammatical_range, "语法准确")}
       </div>
     </div>
+    ${reportScoringModelMetaHtml({ provider: score.scoring_provider, model: score.scoring_model || score.model })}
     ${overallReview}
     ${p3Skills}
     ${p2CueCard}
@@ -15914,11 +16005,8 @@ function bindEvents() {
       return;
     }
     state.writing.dirty = true;
-    if (state.writing.scorePollingEntryId) {
-      state.writing.rescoreAfterActiveTask = true;
-    }
     updateWritingWordCount({ preserveScroll: true });
-    text("writingSaveStatus", state.writing.rescoreAfterActiveTask ? "已修改 · 当前评分结束后会按最新作文重新评分" : "未保存的修改");
+    text("writingSaveStatus", "未保存的修改");
   });
   document.querySelectorAll("[data-frame-cmd]").forEach((btn) => {
     btn.addEventListener("click", () => {

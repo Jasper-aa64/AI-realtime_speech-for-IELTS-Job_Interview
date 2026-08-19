@@ -16,7 +16,7 @@ assert.match(
   "P3 exits should be detected before async abort cleanup starts.",
 );
 
-const p3ExitBlock = /if \(shouldReturnToP3Launch\) \{([\s\S]*?)\n  \}\n  if \(attemptId\)/.exec(exitSource)?.[1] || "";
+const p3ExitBlock = /if \(shouldReturnToP3Launch\) \{([\s\S]*?)\r?\n  \}\r?\n  if \(attemptId\)/.exec(exitSource)?.[1] || "";
 assert.match(
   p3ExitBlock,
   /resetPracticeSurface\(\);/,

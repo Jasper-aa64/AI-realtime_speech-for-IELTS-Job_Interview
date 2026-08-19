@@ -43,7 +43,7 @@ assert.doesNotMatch(
   "Rows must not run independent exit callbacks that repeatedly reflow the list.",
 );
 
-assert.match(index, /styles\.css\?v=20260729-p3-bank-replay-groups-2/);
-assert.match(index, /corpus-takeaway\.js\?v=20260729-brainstorm-filter-order-1/);
+assert.match(index, /styles\.css\?v=20260818-card-corner-clip-1/);
+assert.match(index, /corpus-takeaway\.js\?v=20260816-corpus-voice-dictation-1/);
 
 console.log("P2 Brainstorm filter motion checks passed.");

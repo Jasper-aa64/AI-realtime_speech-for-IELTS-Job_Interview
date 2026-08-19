@@ -37,7 +37,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20260814-custom-writing-recovery-1">
+    <link rel="stylesheet" href="/styles.css?v=20260818-card-corner-clip-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -485,7 +485,12 @@
             <header class="p1-corpus-dialog-head">
               <div>
                 <span id="p1CorpusDialogTopic"></span>
-                <h3 id="p1CorpusDialogTitle">编辑语料</h3>
+                <div class="corpus-dialog-title-line">
+                  <button type="button" class="corpus-dictate-button" data-corpus-dictate="p1CorpusText" aria-pressed="false" title="语音转写：点我开始说，再点一下停止">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                  </button>
+                  <h3 id="p1CorpusDialogTitle">编辑语料</h3>
+                </div>
               </div>
               <button id="saveP1CorpusBtn" type="button">保存语料</button>
             </header>
@@ -783,7 +788,12 @@
               </div>
               <div id="p2BankP3EntryList" class="p2-bank-p3-entry-list hidden"></div>
             </div>
-            <label id="p2CorpusP3FollowUpLabel" class="p1-corpus-label" for="p2CorpusP3FollowUp">相关 P3 追问</label>
+            <div class="corpus-dictate-label-row">
+              <button type="button" class="corpus-dictate-button" data-corpus-dictate="p2CorpusP3FollowUp" aria-pressed="false" title="语音转写：点我开始说，再点一下停止">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+              </button>
+              <label id="p2CorpusP3FollowUpLabel" class="p1-corpus-label" for="p2CorpusP3FollowUp">相关 P3 追问</label>
+            </div>
             <textarea id="p2CorpusP3FollowUp" class="p1-corpus-textarea p2-p3-follow-up" spellcheck="true"></textarea>
             <div class="p1-corpus-dialog-actions">
               <span id="p2CorpusP3SaveStatus"></span>
@@ -1144,7 +1154,7 @@
                 </label>
               </div>
               <label class="custom-writing-prompt-editor-label" for="customWritingPromptMarkdown">
-                <span>作文题目</span>
+                <span>题目文本</span>
                 <textarea id="customWritingPromptMarkdown" rows="11" spellcheck="true" placeholder="粘贴或输入题目。系统会自动识别 Discuss both views、To what extent 等问法。"></textarea>
               </label>
               <p id="customWritingPromptError" class="custom-writing-prompt-error" role="alert"></p>
@@ -1643,10 +1653,10 @@
     <script src="/shared-ui.js?v=20260612-writing-takeaway-optimistic-1"></script>
     <script src="/writing-image-preload.js?v=20260614-img-ready-instant-1"></script>
     <script src="/writing-image-viewer.js?v=20260613-img-original-preload-1"></script>
-    <script src="/writing-prompt-picker.js?v=20260814-custom-writing-recovery-1"></script>
+    <script src="/writing-prompt-picker.js?v=20260818-custom-picker-clean-2"></script>
     <script src="/corpus-markdown-editor.js?v=20260803-p3-live-status-6"></script>
     <script src="/assets/guest-samples.js?v=20260623-ux-batch-3"></script>
-    <script src="/corpus-takeaway.js?v=20260803-p3-noop-save-live-status-2"></script>
+    <script src="/corpus-takeaway.js?v=20260816-corpus-voice-dictation-1"></script>
     <script src="/spelling-drill.js?v=20260809-spelling-daily-batch-complete-1"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
@@ -1655,7 +1665,7 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20260814-custom-writing-recovery-1"></script>
+    <script src="/app.js?v=20260818-scoring-model-provenance-1"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
   </body>
 </html>
