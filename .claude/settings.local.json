@@ -22,7 +22,16 @@
       "Bash(git push:*)",
       "Bash(python3 *)",
       "Bash(codex --version)",
-      "Bash(claude --version)"
+      "Bash(claude --version)",
+      "Bash(git config *)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(git restore *)",
+      "Bash(echo \"check-ignore exit=$?\")",
+      "Bash(python *)",
+      "Bash(where ffmpeg *)",
+      "Bash(echo \"which-exit=$?\")",
+      "Bash(powershell -NoProfile -Command \"\\(Get-Command ffmpeg -ErrorAction SilentlyContinue\\).Source\")"
     ]
   }
 }
