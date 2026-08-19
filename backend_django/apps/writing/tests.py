@@ -2503,7 +2503,9 @@ class WritingApiTests(TestCase):
             self.assertEqual(prompt["source_label"], f"\u5251\u96c5{prompt['source_book']}-{prompt['source_test']} Task 1")
             image_url = prompt.get("image_url")
             self.assertTrue(image_url, prompt_id)
-            self.assertTrue((static_root / image_url.removeprefix("/")).exists(), prompt_id)
+            # Cache-buster query strings (?v=\u2026) are legal in image URLs; strip
+            # them before the disk existence check.
+            self.assertTrue((static_root / image_url.split("?")[0].removeprefix("/")).exists(), prompt_id)
 
     def test_cambridge_task2_seed_bank_is_complete_from_book_5(self):
         repo_root = Path(__file__).resolve().parents[3]

@@ -1,11 +1,13 @@
 import difflib
 import hashlib
 import math
+import os
 import re
 import uuid
 from decimal import Decimal
 from typing import Any
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -469,19 +471,27 @@ def save_entry(user, payload: dict[str, Any]) -> dict[str, Any]:
         except WritingError:
             if not existing or existing_custom_id != custom_prompt_id or (existing.metadata or {}).get("source") != "custom":
                 raise
+    elif existing and existing.custom_prompt:
+        # Scoring / report updates don't resend the custom id — keep the
+        # linkage so the maintained-essay lookup and practice status still
+        # resolve to this prompt instead of flipping back to 未练习.
+        custom_prompt = existing.custom_prompt
     if custom_prompt and custom_prompt.task_type != task_type:
         raise WritingError("Custom writing prompt task type does not match entry")
     prompt_id = str(payload.get("prompt_id") or "").strip()
     prompt = WritingPrompt.objects.filter(prompt_id=prompt_id, task_type=task_type, is_active=True).first() if prompt_id else None
     if custom_prompt and prompt:
         raise WritingError("Choose either a formal or custom writing prompt")
-    prompt_text = (
-        custom_prompt.prompt_markdown
-        if custom_prompt
-        else str(payload.get("prompt") or (prompt.prompt if prompt else "")).strip()
-    )
-    if existing and existing_custom_id == custom_prompt_id and custom_prompt_id:
-        prompt_text = existing.prompt_text
+    if custom_prompt:
+        # Keep the entry's prompt snapshot when the same custom prompt is
+        # re-saved; otherwise snapshot the prompt's current text.
+        prompt_text = (
+            existing.prompt_text
+            if existing and existing.custom_prompt_id == custom_prompt.id
+            else custom_prompt.prompt_markdown
+        )
+    else:
+        prompt_text = str(payload.get("prompt") or (prompt.prompt if prompt else "")).strip()
     if not prompt_text:
         raise WritingError("Missing writing prompt")
     preserve_score_requested = payload.get("preserve_score", False) is True
@@ -703,6 +713,19 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
         raise WritingError("Write an answer before requesting AI scoring.")
     validate_answer_paragraphs(entry.task_type, entry.answer)
     answer_hash = hashlib.sha1(entry.answer.encode("utf-8")).hexdigest()[:16]
+    # Freeze the user's chosen AI source as the task's requested intent so the
+    # completion path can fall back to it when the response lacks a model, and
+    # so the task row never silently records the internal codex default.
+    profile_source = str(getattr(getattr(user, "profile", None), "report_ai_source", "") or "").strip().lower()
+    requested_provider = str(payload.get("provider") or "").strip()
+    if not requested_provider:
+        requested_provider = "claude" if profile_source == "claude" else ("openai" if profile_source in {"gpt", "openai"} else "")
+    requested_model = str(payload.get("model") or "").strip()
+    if not requested_model:
+        if requested_provider == "claude":
+            requested_model = str(os.environ.get("CLAUDE_CLI_MODEL") or "").strip() or "sonnet"
+        elif requested_provider == "openai":
+            requested_model = str(getattr(settings, "AI_HTTP_MODEL", "") or "").strip()
     base_idempotency_key = f"writing_score:{entry.entry_id}:{answer_hash}"
     idempotency_key = base_idempotency_key
     force_regenerate = payload.get("force") is True or str(payload.get("force") or "").strip().lower() in {"1", "true", "yes"}
@@ -737,13 +760,15 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
             task_type="writing_score",
             reserved_u=DEFAULT_WRITING_SCORE_RESERVATION_U,
             idempotency_key=idempotency_key,
-            provider=payload.get("provider"),
-            model=str(payload.get("model") or ""),
+            provider=requested_provider or None,
+            model=requested_model,
             related_type="writing_entry",
             related_id=entry.entry_id,
             prompt_version=str(payload.get("prompt_version") or "writing_score_v1"),
             request_payload={
                 "entry_id": entry.entry_id,
+                "requested_provider": requested_provider,
+                "requested_model": requested_model,
                 "task_type": entry.task_type,
                 "prompt_id": entry.prompt.prompt_id if entry.prompt_id else "",
                 "custom_prompt_id": str(entry.custom_prompt_id) if entry.custom_prompt_id else str((entry.metadata or {}).get("custom_prompt_id") or ""),
@@ -886,13 +911,27 @@ def normalize_inline_annotations(value: Any) -> list[dict[str, Any]]:
     return annotations
 
 
+def scoring_provenance(score: dict[str, Any]) -> dict[str, str]:
+    """Immutable provenance keys copied into the report snapshot.
+
+    The completion path sets ``score["scoring_provider"]``/``score["scoring_model"]``
+    from the REAL executed provider/model; fallback scoring sets provider
+    "fallback" and an empty model. Reports must never infer a model later.
+    """
+    return {
+        "scoring_provider": str(score.get("scoring_provider") or "").strip(),
+        "scoring_model": str(score.get("scoring_model") or "").strip(),
+    }
+
+
 def normalize_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> dict[str, Any]:
     backend = str(score.get("backend") or "ai")
+    provenance = scoring_provenance(score)
     if backend == "fallback":
         supplied = score.get("analysis_payload")
         if isinstance(supplied, dict):
-            return {**supplied, "analysis_backend": "fallback"}
-        return fallback_analysis_payload(entry, str(score.get("fallback_reason") or ""))
+            return {**supplied, "analysis_backend": "fallback", **provenance}
+        return {**fallback_analysis_payload(entry, str(score.get("fallback_reason") or "")), **provenance}
 
     overall_review = str(score.get("overall_review") or "").strip()
     practice_focus = str(score.get("practice_focus") or "").strip()
@@ -931,6 +970,7 @@ def normalize_analysis_payload(entry: WritingEntry, score: dict[str, Any]) -> di
         "structure_advice_only": advice_only,
         "structure_advice": structure_advice,
         "analysis_backend": "ai",
+        **provenance,
     }
 
 
@@ -1172,7 +1212,7 @@ def score_task_matches_current_entry(task: AITask, entry: WritingEntry) -> bool:
 
 
 @transaction.atomic
-def complete_score_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+def complete_score_task(task_id: str, payload: dict[str, Any], provider: str = "", model: str = "") -> dict[str, Any]:
     task, entry = get_writing_score_task_and_entry(task_id)
     if task.is_terminal:
         return entry_payload(entry)
@@ -1182,16 +1222,29 @@ def complete_score_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]
                 task.task_id,
                 {"entry_id": entry.entry_id, "stale_result": True},
                 payload.get("usage") if isinstance(payload.get("usage"), dict) else {},
+                provider=provider or None,
+                model=model or None,
             )
         except AIOrchestrationError as exc:
             raise WritingError(str(exc)) from exc
         entry.refresh_from_db()
         return entry_payload(entry)
     score = normalize_score_payload(entry, payload)
+    # Freeze the actual scoring model into the immutable report snapshot. A
+    # later rescore replaces this score wholesale, so old tasks can never
+    # pollute the new report's provenance.
+    score["scoring_provider"] = str(provider or "").strip()
+    score["scoring_model"] = str(model or "").strip()
     persist_score(entry, score)
     score["writing_profile"] = update_profile(entry, score)
     try:
-        succeed_billable_ai_task(task.task_id, {"entry_id": entry.entry_id, "score": score}, payload.get("usage") if isinstance(payload.get("usage"), dict) else {})
+        succeed_billable_ai_task(
+            task.task_id,
+            {"entry_id": entry.entry_id, "score": score},
+            payload.get("usage") if isinstance(payload.get("usage"), dict) else {},
+            provider=provider or None,
+            model=model or None,
+        )
     except AIOrchestrationError as exc:
         raise WritingError(str(exc)) from exc
     entry.refresh_from_db()
@@ -1204,6 +1257,10 @@ def fallback_score_task(task_id: str, reason: str = "") -> dict[str, Any]:
     if task.is_terminal:
         return entry_payload(entry)
     score = fallback_score(entry.task_type, entry.answer, reason=reason)
+    # Local fallback scoring has no AI model — record that honestly instead of
+    # leaving any stale or default model name behind.
+    score["scoring_provider"] = "fallback"
+    score["scoring_model"] = ""
     persist_score(entry, score)
     score["writing_profile"] = update_profile(entry, score)
     try:

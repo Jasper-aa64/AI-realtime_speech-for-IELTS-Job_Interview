@@ -77,13 +77,21 @@ def generated_custom_prompt_title(task_type: str, category: str, *, created_at=N
 
 def validated_custom_prompt_values(payload: dict[str, Any], *, existing=None):
     task_type = normalize_task_type(str(payload.get("task_type") or (existing.task_type if existing else "")))
-    content = normalize_custom_prompt_text(
-        payload.get("prompt_markdown") if "prompt_markdown" in payload else (existing.prompt_markdown if existing else "")
-    )
+    # New requests send the plain-text `prompt` field; `prompt_markdown` stays
+    # accepted for legacy callers and old stored data. Both carry the same
+    # user-authored text — custom prompts are plain text, never parsed as
+    # Markdown.
+    if "prompt" in payload:
+        raw_content = payload.get("prompt")
+    elif "prompt_markdown" in payload:
+        raw_content = payload.get("prompt_markdown")
+    else:
+        raw_content = existing.prompt_markdown if existing else ""
+    content = normalize_custom_prompt_text(raw_content)
     if not content:
-        raise WritingError("prompt_markdown is required")
+        raise WritingError("prompt is required")
     if len(content) > MAX_CUSTOM_PROMPT_LENGTH:
-        raise WritingError(f"prompt_markdown must be {MAX_CUSTOM_PROMPT_LENGTH} characters or fewer")
+        raise WritingError(f"prompt must be {MAX_CUSTOM_PROMPT_LENGTH} characters or fewer")
     raw_title = str(payload.get("title") or "").strip() if "title" in payload else ""
     if len(raw_title) > 200:
         raise WritingError("title must be 200 characters or fewer")

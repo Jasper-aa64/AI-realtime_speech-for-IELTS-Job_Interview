@@ -127,3 +127,62 @@ class CustomWritingPromptApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(duplicate.status_code, 400)
+
+    def test_plain_text_prompt_field_is_the_standard(self):
+        # `prompt` is the plain-text field new clients send; content is stored
+        # and returned verbatim — Markdown markers and newlines are content.
+        content = "**Discuss both views** and give your own opinion.\n\nSecond line."
+        response = self.client.post(
+            "/api/writing/custom-prompts",
+            data=json.dumps({"task_type": "task2", "prompt": content}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        prompt = response.json()
+        self.assertEqual(prompt["prompt"], content)
+        self.assertEqual(prompt["prompt_markdown"], content)
+        self.assertEqual(prompt["category"], "discussion")
+
+        changed = self.client.patch(
+            f"/api/writing/custom-prompts/{prompt['id']}",
+            data=json.dumps({"prompt": "To what extent do you agree or disagree?"}),
+            content_type="application/json",
+        )
+        self.assertEqual(changed.status_code, 200, changed.content)
+        self.assertEqual(changed.json()["prompt"], "To what extent do you agree or disagree?")
+
+    def test_legacy_prompt_markdown_field_still_accepted(self):
+        response = self.client.post(
+            "/api/writing/custom-prompts",
+            data=json.dumps({"task_type": "task2", "prompt_markdown": "Do the advantages outweigh the disadvantages?"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["prompt"], "Do the advantages outweigh the disadvantages?")
+
+    def test_prompt_field_edit_keeps_entry_snapshot(self):
+        prompt = self.create_prompt(content="To what extent do you agree or disagree?")
+        saved = self.client.post(
+            "/api/writing/entries",
+            data=json.dumps({
+                "task_type": "task2",
+                "custom_prompt_id": prompt["id"],
+                "prompt": prompt["prompt"],
+                "title": prompt["title"],
+                "answer": "Snapshot answer that must survive prompt edits.",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        entry_id = saved.json()["id"]
+
+        changed = self.client.patch(
+            f"/api/writing/custom-prompts/{prompt['id']}",
+            data=json.dumps({"prompt": "A completely different prompt **with markers**."}),
+            content_type="application/json",
+        )
+        self.assertEqual(changed.status_code, 200, changed.content)
+
+        entry = WritingEntry.objects.get(entry_id=entry_id)
+        self.assertEqual(entry.prompt_text, "To what extent do you agree or disagree?")
+        self.assertEqual(entry.answer, "Snapshot answer that must survive prompt edits.")

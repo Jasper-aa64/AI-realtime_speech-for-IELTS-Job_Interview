@@ -516,7 +516,10 @@ class ClaudeCliClient:
             if raw_usage:
                 usage = _claude_usage_payload(
                     {**raw_usage, "total_cost_usd": parsed.get("total_cost_usd")},
-                    model=self.model,
+                    # The CLI response's model field is the real executed model
+                    # (e.g. claude-sonnet-4-6); the requested model is only a
+                    # fallback when the CLI omits it.
+                    model=str(parsed.get("model") or self.model),
                 )
             return text, usage
 
@@ -788,7 +791,12 @@ class HttpWritingScoreAdapter(CodexWritingScoreAdapter):
             wrapped = ProviderExecutionError(str(exc), error_code=exc.error_code)
             wrapped.status_code = exc.status_code
             raise wrapped from exc
-        return extract_json_object(result.text), result.usage or {}
+        # Carry the real executed model so the completion path can freeze it
+        # into the score's provenance instead of guessing from adapters.
+        usage = dict(result.usage or {})
+        usage["provider"] = "openai"
+        usage["model"] = str(result.model or "").strip()
+        return extract_json_object(result.text), usage
 
     def _failure_message(self, exc: Exception) -> str:
         return f"HTTP writing report generation failed: {exc}"
@@ -1066,13 +1074,47 @@ def _apply_speaking_report_result(task: AITask, result: ProviderRunResult) -> Ap
     return _apply_terminal_failure_for_claimed_task(task, result)
 
 
+def _writing_score_provenance(task: AITask, result: ProviderRunResult) -> tuple[str, str]:
+    """Resolve the actual provider/model that produced this writing result.
+
+    Order of truth: the adapter's own usage metadata (the real executed model,
+    e.g. claude-sonnet-4-6 from the CLI JSON response or the HTTP config model),
+    then the task's requested intent, then the task's stored provider/model.
+    Never invent a value — unknown provenance stays empty.
+    """
+    usage = result.usage if isinstance(result.usage, dict) else {}
+    metadata = result.metadata if isinstance(result.metadata, dict) else {}
+    request_payload = task.request_payload if isinstance(task.request_payload, dict) else {}
+    adapter_providers = {
+        "writing_score_claude": "claude",
+        "writing_score_http": "openai",
+        "writing_score_codex": "codex",
+        "writing_score_mock_success": "mock_success",
+    }
+    provider = str(
+        usage.get("provider")
+        or adapter_providers.get(str(metadata.get("adapter") or ""), "")
+        or request_payload.get("requested_provider")
+        or task.provider
+        or ""
+    ).strip()
+    model = str(
+        usage.get("model")
+        or request_payload.get("requested_model")
+        or task.model
+        or ""
+    ).strip()
+    return provider, model
+
+
 def _apply_writing_score_result(task: AITask, result: ProviderRunResult) -> AppliedProviderRunResult:
     if result.outcome == ProviderRunOutcome.SUCCESS:
         payload = dict(result.result_payload or {})
         if result.usage:
             payload["usage"] = result.usage
+        provider, model = _writing_score_provenance(task, result)
         try:
-            complete_score_task(task.task_id, payload)
+            complete_score_task(task.task_id, payload, provider=provider, model=model)
         except WritingEntryDeleted:
             fallback_billable_ai_task(task.task_id, "Writing entry was deleted before scoring completed.", {"entry_id": task.related_id})
             return _refreshed_task_result(task, AITask.Status.FALLBACK)

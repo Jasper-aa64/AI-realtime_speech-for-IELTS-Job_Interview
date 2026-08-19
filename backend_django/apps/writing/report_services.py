@@ -149,6 +149,8 @@ def score_payload(score: WritingScore | None) -> dict[str, Any] | None:
         "structure_advice": analysis.get("structure_advice", ""),
         "analysis_backend": analysis.get("analysis_backend", score.source),
         "fallback_reason": analysis.get("fallback_reason", ""),
+        "scoring_provider": analysis.get("scoring_provider", ""),
+        "scoring_model": analysis.get("scoring_model", ""),
         "backend": score.source,
         "billing_usage": score.billing_metadata,
         "scored_at": score.scored_at.isoformat() if score.scored_at else None,
