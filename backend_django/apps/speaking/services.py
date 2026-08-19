@@ -396,6 +396,24 @@ DEFAULT_FULL_NAME = "Li Hua"
 DEFAULT_ENGLISH_NAME = "Jasper"
 
 
+def _speaking_score_provenance(score: dict) -> tuple[str, str]:
+    """Actual provider/model that produced a speaking score snapshot.
+
+    The real model name is recorded by the provider call itself (e.g.
+    claude-sonnet-4-6, gpt-5.6-terra). Reports must never guess a model from
+    profile defaults or adapter names.
+    """
+    model_name = str(score.get("model") or "").strip()
+    lowered = model_name.lower()
+    if lowered.startswith("claude"):
+        provider = "claude"
+    elif lowered.startswith("gpt"):
+        provider = "gpt"
+    else:
+        provider = str(score.get("generation_backend") or score.get("backend") or "").strip()
+    return provider, model_name
+
+
 def _normalize_p1_intensity(value: str | None) -> str:
     return "high" if str(value or "").strip().lower() == "high" else "normal"
 
@@ -3980,11 +3998,16 @@ def score_attempt_sync(user, attempt_id: str, payload: dict[str, Any] | None = N
         allow_provider_call=False,
     )
 
+    scoring_provider, scoring_model = _speaking_score_provenance(score)
+    score["scoring_provider"] = scoring_provider
+    score["scoring_model"] = scoring_model
     runtime.update(
         {
             "status": "scored",
             "transcript_cleaned": transcript,
             "ielts_score": score,
+            "scoring_provider": scoring_provider,
+            "scoring_model": scoring_model,
             "score_generation_backend": score.get("generation_backend", score.get("backend")),
             "score_generation_status": score.get("generation_status", "ready" if score.get("backend") in SPEAKING_READY_AI_BACKENDS else "fallback"),
             "score_generation_error": score.get("fallback_reason", ""),
@@ -4392,11 +4415,16 @@ def regenerate_attempt_report(user, attempt_id: str) -> dict[str, Any]:
         allow_provider_call=False,
     )
 
+    scoring_provider, scoring_model = _speaking_score_provenance(score)
+    score["scoring_provider"] = scoring_provider
+    score["scoring_model"] = scoring_model
     runtime.update(
         {
             "status": "scored",
             "transcript_cleaned": transcript,
             "ielts_score": score,
+            "scoring_provider": scoring_provider,
+            "scoring_model": scoring_model,
             "score_generation_backend": score.get("generation_backend", score.get("backend")),
             "score_generation_status": score.get("generation_status", "ready" if score.get("backend") in SPEAKING_READY_AI_BACKENDS else "fallback"),
             "score_generation_error": score.get("fallback_reason", ""),

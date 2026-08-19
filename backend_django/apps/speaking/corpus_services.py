@@ -36,7 +36,7 @@ from .models import (
     SpeakingTurn,
     TakeawayReviewState,
 )
-from .text_utils import clean_markdown_text, clean_report_text
+from .text_utils import clean_markdown_text, clean_report_text, clean_takeaway_text
 
 
 P1_INTRO_QUESTIONS: list[dict[str, Any]] = [
@@ -1516,7 +1516,7 @@ CAIYUN_COMPAT_DEVICE_ID = "F1F902F7-1780-4C88-848D-71F35D88A602"
 
 
 def local_takeaway_translate_text(text: str, target: str = "zh") -> dict[str, Any]:
-    source = clean_report_text(str(text or ""))[:1000]
+    source = clean_takeaway_text(str(text or ""))[:1000]
     if not source:
         raise SpeakingError("Missing text to translate.")
     if (target or "zh") != "zh":
@@ -1560,7 +1560,7 @@ def local_takeaway_translate_text(text: str, target: str = "zh") -> dict[str, An
 
 
 def caiyun_translate_text(text: str, target: str = "zh") -> dict[str, Any]:
-    source = clean_report_text(str(text or ""))[:1000]
+    source = clean_takeaway_text(str(text or ""))[:1000]
     if not source:
         raise SpeakingError("Missing text to translate.")
     token = os.environ.get("CAIYUN_TOKEN") or os.environ.get("CAIYUN_TRANSLATE_TOKEN") or CAIYUN_COMPAT_TOKEN
@@ -1614,7 +1614,7 @@ def caiyun_translate_text(text: str, target: str = "zh") -> dict[str, Any]:
 
 
 def save_language_takeaway(user, payload: dict[str, Any]) -> dict[str, Any]:
-    source_text = clean_report_text(str(payload.get("source_text") or ""))[:1000]
+    source_text = clean_takeaway_text(str(payload.get("source_text") or ""))[:1000]
     if not source_text:
         raise SpeakingError("Source text is empty.")
     chinese_text = clean_report_text(str(payload.get("chinese_text") or ""))[:1000]

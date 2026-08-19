@@ -177,7 +177,7 @@ def stable_tts_audio_path(role: str, filename: str) -> tuple[Path | None, str]:
     if stable_path.exists() and stable_path.stat().st_mtime >= source_path.stat().st_mtime:
         return stable_path, "audio/mp4"
 
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = shutil.which(str(getattr(settings, "VOLCENGINE_ASR_FFMPEG", "ffmpeg") or "ffmpeg")) or shutil.which("ffmpeg")
     if not ffmpeg:
         _log.warning(
             "tts_stable: ffmpeg not found — serving mp3 directly (no transcoder available). "

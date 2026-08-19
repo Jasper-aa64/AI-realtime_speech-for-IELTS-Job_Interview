@@ -390,13 +390,21 @@ def stream_pcm_chunks(
         if final_segments or latest_interim:
             if hasattr(ws, "settimeout"):
                 try:
-                    ws.settimeout(max(0.001, receive_timeout_seconds))
+                    ws.settimeout(0.5)
                 except Exception:
                     pass
-            drain_deadline = time.monotonic() + min(0.5, max(0.05, receive_timeout_seconds * 4))
+            drain_deadline = time.monotonic() + 3.0
             while time.monotonic() < drain_deadline:
                 try:
                     raw = ws.recv()
+                except VolcengineAsrError:
+                    break
+                except Exception:
+                    # Socket timeout with no data: keep polling for the final
+                    # (smoothed) result until the drain deadline.
+                    time.sleep(0.05)
+                    continue
+                try:
                     response = _parse_response(raw)
                     event = _asr_event_from_response(response, final_segments, latest_interim)
                 except VolcengineAsrError:
@@ -405,7 +413,7 @@ def stream_pcm_chunks(
                     break
                 if event:
                     yield event
-                if response.event in {USER_STOP_SPEAKING, SESSION_FINISHED, SESSION_ENDED}:
+                if response.event in {SESSION_FINISHED, SESSION_ENDED}:
                     break
         else:
             try:
@@ -540,10 +548,15 @@ def _transcribe_audio(audio_path: Path) -> dict[str, Any]:
             ws.send_binary(_build_audio_request(TASK_REQUEST, session_id, pcm[offset:offset + chunk_size]))
             time.sleep(0.02)
 
+        stop_seen = False
         while time.monotonic() < deadline:
             try:
                 raw = ws.recv()
             except Exception:
+                if stop_seen:
+                    # No data within the short socket timeout after the stop
+                    # signal; keep polling until the extended deadline.
+                    continue
                 break
             response = _parse_response(raw)
             if response.message_type == "SERVER_ERROR":
@@ -555,7 +568,18 @@ def _transcribe_audio(audio_path: Path) -> dict[str, Any]:
                         final_segments.append(text)
                 if interim:
                     latest_interim = interim
-            if response.event in {USER_STOP_SPEAKING, SESSION_FINISHED, SESSION_ENDED} and final_segments:
+            if response.event == USER_STOP_SPEAKING:
+                # VolcEngine smooths the end of speech (end_smooth_window_ms=2000),
+                # so the final segment can arrive *after* USER_STOP_SPEAKING. Give
+                # it a short window instead of breaking immediately and truncating.
+                stop_seen = True
+                deadline = min(deadline, time.monotonic() + 3.0)
+                if hasattr(ws, "settimeout"):
+                    try:
+                        ws.settimeout(0.5)
+                    except Exception:
+                        pass
+            if response.event in {SESSION_FINISHED, SESSION_ENDED} and final_segments:
                 break
         transcript = " ".join(segment for segment in final_segments if segment).strip() or latest_interim.strip()
         if not transcript:

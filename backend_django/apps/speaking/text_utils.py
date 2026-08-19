@@ -297,6 +297,20 @@ def clean_report_text(value: str) -> str:
     return text
 
 
+def clean_takeaway_text(value: str) -> str:
+    """Normalize user-authored takeaway text WITHOUT collapsing newlines.
+
+    ``clean_report_text`` collapses all whitespace to single spaces, which
+    silently strips the line breaks a learner intentionally keeps in a takeaway
+    source snippet (or in the Chinese gloss). Takeaway text is user content, not
+    AI output, so we only normalize line endings and trim — every manual line
+    break is preserved.
+    """
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text
+
+
 def clean_markdown_text(value: str) -> str:
     text = clean_band7_output(value)
     text = re.sub(r"[ \t]+", " ", text).replace("\r\n", "\n").replace("\r", "\n")
