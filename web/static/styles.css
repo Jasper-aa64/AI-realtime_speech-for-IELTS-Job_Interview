@@ -9528,6 +9528,7 @@ button.corpus-dictate-button.is-recording svg {
 }
 
 .corpus-dialog-title-line h3 {
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -9539,7 +9540,8 @@ button.corpus-dictate-button.is-recording svg {
 }
 
 .corpus-dictate-label-row .p1-corpus-label {
-  flex: 1 1 auto;
+  /* 按钮紧跟在题目文字右边，不推到行尾。 */
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 14px;
   font-weight: 600;
@@ -10087,18 +10089,17 @@ button.corpus-dictate-button.is-recording svg {
   border-radius: 10px;
 }
 
-.p2-brainstorm-left.is-clickable {
+/* 整行都可点击展开 cue 浮层（输入框/按钮除外） */
+.p2-brainstorm-row.is-clickable {
   cursor: pointer;
-  padding: 2px 0;
-  outline: none;
 }
 
-.p2-brainstorm-left.is-clickable:hover .p2-brainstorm-stem,
-.p2-brainstorm-left.is-clickable:focus-visible .p2-brainstorm-stem {
+.p2-brainstorm-row.is-clickable:hover .p2-brainstorm-stem,
+.p2-brainstorm-row.is-clickable:focus-visible .p2-brainstorm-stem {
   color: #3730a3;
 }
 
-.p2-brainstorm-left.is-clickable:focus-visible {
+.p2-brainstorm-row.is-clickable:focus-visible {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
@@ -21961,12 +21962,12 @@ body.theme-dark .p2-brainstorm-row.is-search-current {
     0 14px 28px rgba(0, 0, 0, 0.3);
 }
 
-body.theme-dark .p2-brainstorm-left.is-clickable:hover .p2-brainstorm-stem,
-body.theme-dark .p2-brainstorm-left.is-clickable:focus-visible .p2-brainstorm-stem {
+body.theme-dark .p2-brainstorm-row.is-clickable:hover .p2-brainstorm-stem,
+body.theme-dark .p2-brainstorm-row.is-clickable:focus-visible .p2-brainstorm-stem {
   color: var(--ink);
 }
 
-body.theme-dark .p2-brainstorm-left.is-clickable:focus-visible {
+body.theme-dark .p2-brainstorm-row.is-clickable:focus-visible {
   box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.1);
 }
 

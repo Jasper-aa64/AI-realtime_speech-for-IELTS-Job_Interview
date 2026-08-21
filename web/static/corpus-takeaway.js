@@ -5932,7 +5932,8 @@ I will paste one topic's corpus context next.`;
 
     function p2NormalizeBrainstormTag(token) {
       const t = String(token || "").trim().toUpperCase();
-      return /^[A-Z]\d?$/.test(t) ? t : "";
+      // "I" 是英语人称代词（"I think…"），不算标签，避免开头打 I 空格就被吞成 chip。
+      return /^[A-Z]\d?$/.test(t) && t !== "I" ? t : "";
     }
 
     // 把存储字符串解析成 { tags:[], text:"" }：开头连续的“字母+可选一位数字 + 空格”视为标签。
@@ -6208,12 +6209,12 @@ I will paste one topic's corpus context next.`;
         const stem = escapeHtml(p2CleanCueTitle(item));
         const hasCue = (Array.isArray(item.bullets) && item.bullets.length > 0) || String(item.rounding || "").trim();
         const detailHtml = hasCue ? p2CueQuestionHtml(item) : "";
+        const toggleAttrs = hasCue
+          ? `data-p2-brainstorm-toggle="${escapeHtml(questionId)}" role="button" tabindex="0" aria-expanded="false"`
+          : "";
         return `
-          <div class="p2-brainstorm-row" data-p2-brainstorm-row="${escapeHtml(questionId)}">
-            <div
-              class="p2-brainstorm-left${hasCue ? " is-clickable" : ""}"
-              ${hasCue ? `data-p2-brainstorm-toggle="${escapeHtml(questionId)}" role="button" tabindex="0" aria-expanded="false"` : ""}
-            >
+          <div class="p2-brainstorm-row${hasCue ? " is-clickable" : ""}" data-p2-brainstorm-row="${escapeHtml(questionId)}" ${toggleAttrs}>
+            <div class="p2-brainstorm-left">
               <div class="p2-brainstorm-question">
                 <span class="p2-brainstorm-index${p2BrainstormHasEditedBody(item) ? " has-p2-bank-body" : ""}">${item._rowIndex}</span>
                 <span class="p2-brainstorm-stem">${stem}</span>
@@ -7655,6 +7656,10 @@ I will paste one topic's corpus context next.`;
         const expanded = Boolean(activeId && trigger.dataset.p2BrainstormToggle === activeId);
         trigger.setAttribute("aria-expanded", String(expanded));
         trigger.classList.toggle("is-expanded", expanded);
+        // The row is the toggle now; mirror the state onto the left column so
+        // the existing `:has(.p2-brainstorm-left.is-expanded)` row styles apply.
+        const left = trigger.querySelector(".p2-brainstorm-left");
+        left?.classList.toggle("is-expanded", expanded);
       });
       list.querySelectorAll("[data-p2-brainstorm-detail]").forEach((detail) => {
         const isActive = Boolean(activeId && detail.dataset.p2BrainstormDetail === activeId);
@@ -7740,6 +7745,8 @@ I will paste one topic's corpus context next.`;
         });
         return;
       }
+      // Clicking the idea input must focus it, never toggle the cue popover.
+      if (event.target.closest("[data-p2-brainstorm-input]")) return;
       const trigger = event.target.closest("[data-p2-brainstorm-toggle]");
       if (!trigger) return;
       openP2BrainstormDetail(trigger);
@@ -7751,6 +7758,8 @@ I will paste one topic's corpus context next.`;
         return;
       }
       if (event.target.closest("button")) return;
+      // 输入框里的 Enter/Space 是打字，不能触发整行的浮层开关。
+      if (event.target.closest("[data-p2-brainstorm-input], input, textarea")) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       const trigger = event.target.closest("[data-p2-brainstorm-toggle]");
       if (!trigger) return;
