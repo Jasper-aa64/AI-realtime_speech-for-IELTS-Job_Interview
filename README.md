@@ -3,7 +3,7 @@
 AI-assisted practice for IELTS Speaking and Writing, plus a C++ real-time voice core for IELTS and job-interview simulation.
 AI 辅助的雅思口语与写作练习平台，另含用于雅思与求职面试模拟的 C++ 实时语音核心。
 
-> 🔗 **Live demo · 在线体验:** <https://speech-colour-videos-ata.trycloudflare.com/?view=takeawayBook>
+> 🔗 **Live demo · 在线体验:** <https://speech-colour-videos-ata.trycloudflare.com>
 > Served through a Cloudflare quick tunnel, so the address may change after a restart. · 通过 Cloudflare 临时隧道提供，服务重启后地址可能变化。
 
 ## Screenshots · 界面截图
