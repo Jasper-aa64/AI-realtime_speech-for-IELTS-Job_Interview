@@ -3,7 +3,7 @@
 AI-assisted practice for IELTS Speaking and Writing, plus a C++ real-time voice core for IELTS and job-interview simulation.
 AI 辅助的雅思口语与写作练习平台，另含用于雅思与求职面试模拟的 C++ 实时语音核心。
 
-> 🔗 **Live demo:** <https://ellen-windsor-wife-boats.trycloudflare.com>
+> 🔗 **Live demo:** <https://parental-vic-scheduling-period.trycloudflare.com>
 
 ## Screenshots · 界面截图
 
