@@ -5,7 +5,7 @@
 
 ## Public Preview
 
-- Current public URL: https://neither-exploring-miniature-wrestling.trycloudflare.com
+- Current public URL: https://parental-vic-scheduling-period.trycloudflare.com
 - Local service URL: http://127.0.0.1:8767/
 - Note: this uses a Cloudflare quick tunnel, so the URL may change if the tunnel process restarts.
 - Windows startup / NSSM / public tunnel guide: [docs/ops/windows-startup-and-public-access.md](docs/ops/windows-startup-and-public-access.md)
