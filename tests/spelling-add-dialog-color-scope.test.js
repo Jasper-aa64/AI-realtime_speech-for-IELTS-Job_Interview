@@ -68,7 +68,7 @@ assert.match(
 
 assert.match(
   index,
-  /styles\.css\?v=20261005-ui-redesign-88/,
+  /styles\.css\?v=20261005-ui-redesign-90/,
   "The stylesheet cache-buster should change when the add-word button color changes.",
 );
 
