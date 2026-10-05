@@ -7,30 +7,40 @@
 
 我们在把 IELTS Studio 做成 Qt 桌面端，并新增「模拟面试」模式（雅思口语的改编版）。先读：
 1. docs/reports/qt-desktop-mock-interview-handoff-2026-10-05.md（本交接）
-2. docs/superpowers/specs/2026-10-05-qt-desktop-studio-design.md（设计，§3 是已确认决定）
+2. docs/superpowers/specs/2026-10-05-qt-desktop-studio-design.md（设计，§3 区分用户决定与本次建议）
 3. docs/superpowers/plans/2026-10-05-qt-desktop-shell.md（阶段 0–1 计划 + 末尾执行记录）
-4. desktop/README.md（构建、运行、冒烟、调试）
+4. docs/superpowers/plans/2026-10-05-native-voice-performance.md（阶段 2 的建议计划，尚未实现）
+5. desktop/README.md（构建、运行、冒烟、调试）
 
-阶段 0–1（桌面外壳）已完成并经用户验收。下一步按交接文档「接下来做什么」推进：
-先为阶段 2（原生实时语音桥）写计划，第一件事是查清火山引擎实时对话是否支持临时凭证；
+阶段 0–1（桌面外壳）已完成并经用户验收；网页/桌面共享的浅色、深色、跟随系统三档已实现，保留旧手动偏好。
+用户要以原生 C++ 低延迟语音作为技术作品；不因减少依赖就选 Qt，也不假定 Qt 比 PortAudio 慢。
+阶段 2 已完成代码审计和组件/鉴权文档研究，写好了建议计划，语音引擎尚未实现、组件尚未最终批准。
+先看两份研究（.trellis/tasks/10-05-desktop-voice-performance/research/），再按计划做同设备 Qt 6.11 callback 与 PortAudio callback 对照实验。
+旧 C++ 是半双工原型，不能原样复用；优先独立 C++ 引擎、Qt 控制适配器、成熟音频/传输组件。
+火山文档有控制台 Access Token，但未查到该端点短期/限定范围凭证的公开签发契约；先向供应商核实。
+本次审计建议用登录鉴权、有界实时转发的服务器 relay 替换此前“服务器下发长期密钥”退路，待阶段 2 方案审阅；不下发服务器密钥，也不伪造 expires_at。
+后端建议同一 Django 服务内新建 apps.interview，共享 AI/媒体基础设施和报告版式，保持独立面试模型与评分 schema。
+VPS 先不买，完成本地效果验证再评估。
 模式切换器（阶段 3）和模拟面试（阶段 4）各自单独写 spec 补充 + 计划，动手前要用户确认。
 用中文和用户沟通。
 ```
 
 ## 一句话现状
 
-桌面外壳能用了：`desktop/` 下独立的 Qt 6 工程，双击 `build-desktop/IELTS Studio.app` 打开，里面是服务器上的现有网页 UI（开发期连 `http://127.0.0.1:8767/`）。模拟面试、模式切换器、原生实时语音都还没开始写代码。
+桌面外壳能用了：`desktop/` 下独立的 Qt 6 工程，双击 `build-desktop/IELTS Studio.app` 打开，里面是服务器上的现有网页 UI（开发期连 `http://127.0.0.1:8767/`）。模拟面试、模式切换器、原生实时语音都还没开始写代码；语音审计和建议计划已完成。设置已加入「浅色 / 深色 / 跟随系统」，网页和桌面共享此实现。
 
-## 已确认的决定（设计文档 §3）
+## 已确认决定与本次建议（设计文档 §3）
 
 | # | 结论 |
 |---|------|
 | D1 | Qt 外壳 + QtWebEngine 承载现有网页 UI；实时语音走原生 C++，经 QWebChannel 和页面通信。 |
-| D2 | 后端放云服务器（VPS）；桌面端只是客户端，不内置 Python/Django；服务器地址可配置。 |
-| D2′ | 客户端直连火山引擎；连接凭证由服务器下发、只放内存。火山若不支持临时凭证 → 只对登录用户下发长期密钥并限频。 |
+| D2 | 最终后端放云服务器（VPS）；桌面端不内置 Python/Django，地址可配置。**购买和部署推迟到本地效果验证之后**。 |
+| D2′ | **本次审计建议替换历史“下发长期密钥”退路，待阶段 2 方案审阅**。短期、限定范围的供应商凭证尚未证实；现阶段建议已登录客户端通过有界流式服务器 relay 连接供应商，长期密钥留服务器。直连须先验证供应商凭证契约。此方案是研究建议，尚未实现。 |
 | D3 | **模拟面试和左上角切换器只在桌面端出现**；浏览器打开时保持静态品牌位，不出面试入口。 |
 | D4 | 题源两种：日常练习用**通用面试题库**；「**定制面试**」= 上传简历 PDF + 岗位描述，LLM 出题。 |
-| D5 | Qt 用 `brew install qt`（已装，6.11.2）。 |
+| D5 | Qt 已装，6.11.2；Qt 6.11 有原生音频 callback API，可与 PortAudio callback 公平实测。最终音频组件尚未选定。 |
+| D6 | 已同意并实现浅色 / 深色 / 跟随系统；旧手动浅/深色选择保留，仅 system 模式响应系统变化。 |
+| D7 | 语音保持 C++，性能目标通过可复现实验、尾延迟和稳定性数据验证；后端建议独立 `apps.interview`，共享基础设施。 |
 
 ## 已完成（阶段 0–1）
 
@@ -50,21 +60,25 @@
 2. **登录在快速退出时丢失。** Chromium 约 30 秒才把 Cookie 写盘；macOS 的 Quit 会直接 `exit()`。现在主窗口 `closeEvent` 拒绝关闭并让事件循环退出，`main()` 按「窗口 → 排空事件 → profile → 排空事件」顺序销毁。改退出逻辑时保持这个顺序。
 3. **后台点不到网页内容。** 测桌面端页面要用 `QTWEBENGINE_REMOTE_DEBUGGING=9333` 启动，再用 Chrome DevTools 协议驱动（脚本示例思路：取 `http://127.0.0.1:9333/json/list` 的 websocket，`Runtime.evaluate` 带 `replMode: true`）。原生菜单 / 对话框用无障碍工具操作即可。
 4. 冒烟测「不可达」用普通空闲端口（59999）；端口 9 之类会被 Chromium 以 `ERR_UNSAFE_PORT` 拒绝。
-5. **深色模式不跟随系统是网页本身的设计**：网页从不使用 `prefers-color-scheme`，只有设置里的「深色外观」开关（`localStorage["ielts-dark-mode"]`）。是否加「跟随系统」三档选项，**待用户决定**。
+5. **外观已更新为三档**：`ielts-appearance-mode` 保存 light/dark/system；旧 `ielts-dark-mode=1/0` 分别保留深色/浅色，新用户默认 system。首次绘制前应用外观，只有 system 模式响应实时系统变化。不要又退回单一手动开关。
 6. Bash 里 `LANG` 为空，`pbpaste`/`pbcopy` 会把中文变成 `?`；碰剪贴板一律加 `LANG=en_US.UTF-8`，测试尽量别碰用户剪贴板。
 7. 本地开发服务器（8767）若由 agent 后台启动，会被时长上限停掉；用户可以自己在终端跑：
    `set -a && . ./.env && set +a && .venv-django/bin/python backend_django/manage.py runserver 127.0.0.1:8767 --noreload`
 
 ## 接下来做什么（按顺序）
 
-### 阶段 2 — 原生实时语音桥（模拟面试的前提）
+### 阶段 2 — 原生 C++ 实时语音（研究与计划完成，未实现）
 
-1. **先查**：火山引擎实时对话（`wss://openspeech.bytedance.com/api/v3/realtime/dialogue`，现有 C++ 用 `X-Api-App-ID` / `X-Api-Access-Key` 头，见 `include/services/realtime_client.h`）是否支持临时 / STS 凭证。结论决定 `POST /api/realtime/credentials` 返回什么。
-2. 服务器：新增凭证接口（需登录、限频）。
-3. 桌面：`NativeAudioBridge`（QObject，经 QWebChannel 注册为 `native`）= `AudioEngine`（PortAudio 采集 / 播放 + `src/ielts/audio_core.cpp` 的 VAD，libfvad 已在 `third_party/`）+ `RealtimeClient`（复用 `src/services/realtime_client.cpp`）+ `SessionDriver`。
-   - 注意：现有 C++ 依赖 vcpkg（boost-beast、portaudio、spdlog 等，根 `CMakeLists.txt`），而 `desktop/` 目前只依赖 Qt。要决定：把需要的依赖改用 brew 装进 `desktop/`，还是用 Qt 自带的 `QWebSocket` / `QAudioSource` 重写客户端（后者依赖更少，倾向于此，需和用户确认）。
-4. 网页：新增 `web/static/native-bridge.js`（检测 `window.qt && qt.webChannelTransport`，封装 `capabilities()` / `startSession` / `stop` / `interrupt` 与 `partial` / `final` / `aiSpeaking` / `level` / `error` 信号），`app.js` 只改录音入口调用点。
-5. 验收：桌面端 P1 实时练习可打断、延迟明显低于网页端，报告正常生成。
+详细执行切片和验收见 [原生语音性能计划](../superpowers/plans/2026-10-05-native-voice-performance.md)。证据见 [旧 C++ 审计](../../.trellis/tasks/10-05-desktop-voice-performance/research/cpp-voice-audit.md) 与 [组件/鉴权研究](../../.trellis/tasks/10-05-desktop-voice-performance/research/native-voice-components.md)。
+
+- **旧代码能借什么**：协议 fixture、RMS/peak 等纯函数、简历出题/追问的业务思路。音频设备和网络已有原生实现，但当前阻塞采集一块是 3,200/16,000 = **200 ms**；麦克风与提示词并发写同一 socket、TLS 未验证证书、脱离管理的结束线程捕获 this，停止先 join 再解除阻塞。播放 TTS 时发送静音并忽略开口事件，是半双工。新 `desktop/` 尚未链接这条语音链路；现有测试多为协议/构造/空会话测试，不能当作实时落地或工业性能证明。
+- **建议结构**：独立 C++ 引擎拥有设备、DSP、网络、session 状态和指标；Qt/QWebChannel 只传控制、转写、合并后的电平和状态。音频 callback 不分配、不等待锁、不做网络/日志；预分配有界缓冲，每条 SPSC 明确唯一 producer/consumer，网络单 owner 串行 write/close；线程可取消并由 owner 回收。打断提升 turn epoch、丢旧音频，并测设备中尚未播完的声音。
+- **组件实验**：先用已有 PortAudio 依赖做 callback 后端，与 **Qt 6.11 QAudioSource/QAudioSink callback** 在同一有线设备、格式、采样率、负载下 A/B。Qt 也是 C++，两者快慢由测量决定。miniaudio 是包装/跨平台备选；不一次引入三套后端。成熟库解决设备、传输、AEC 等部件，产品 session/取消契约仍需自己实现。
+- **帧与指标**：设备/DSP 试验用 10 ms 块，供应商推荐 **20 ms/640 bytes、16 kHz mono S16LE** 上行包；不要把两种帧混为一谈。记录 capture → ring → DSP → packet/write → ASR → 可观测的 LLM 首 token → TTS 首包 → 播放队列 → 实际声输出的单调时钟数据；未公开的内部推理阶段标不可观测，不编造 token 时间；报告 P50/P95/P99、样本数、CPU、内存、队列年龄和 underrun/overrun。以初步捕获积压 40–60 ms、播放缓冲 40–80 ms、有线设备打断到静音 P95 <100 ms 为实验假设，未达到前不宣称工业标准或领先。
+- **原生全双工云端 baseline**：另有[官方全双工实时语音接口](https://docs.volcengine.com/docs/DoubaoVoice/endtoend-realtime-voice-full-duplex-version?lang=zh)，端点 `/api/v3/duplex/realtime/dialogue`，使用 `X-Api-Key` 和独立协议，20 ms 包按真实时间节奏发送。先验证独立 adapter，与原 ASR→LLM→TTS 链路对照；不能只改旧客户端 URL。该 API 是否符合实际插话、费用和报告要求还未实测。
+- **鉴权**：[火山官方实时语音接口](https://docs.volcengine.com/docs/DoubaoVoice/End-to-endreal-timespeechlargemodelAPIaccessdocument?lang=zh) 的 `X-Api-Access-Key` 是控制台 Access Token，未查到此 WebSocket 的临时签发/过期/资源范围文档，**不是已证实不支持**。向供应商核实；未确认前建议登录、session/turn 所有权校验、限并发/用量、有界队列的流式 relay。本地可先跑 relay，密钥在服务器环境；应用短期 relay ticket 不是火山临时凭证，不返回长期密钥或虚构过期时间。
+- **先耳机后外放**：持续采集才有真正打断；本地 VAD 不是 AEC。耳机链路先验收，外放另评估 WebRTC APM，以实际播放音频作为回声参考，并验证双讲、时钟漂移和识别质量。
+- **验收方向**：相同设备/供应商/提示词/网络的对照和长稳测试；快开快关、网络背压、鉴权过期、设备变更不僵死、不重播旧回合；转写/录音/报告继续正常。云端 endpointing、推理和 WAN 单独统计，不能保证整体响应必然低于网页版。
 
 ### 阶段 3 — 左上角模式切换器（只在桌面端）
 
@@ -85,19 +99,28 @@
 | 语料库 | 「我的故事库」：可复用的项目故事与回答 |
 
 - 面试模式侧栏（初稿）：首页 / 题库练习 / 定制面试（简历 + 岗位）/ 面试报告 / 我的故事库。
-- 后端（Django，新 app 或放进 `apps/speaking` 旁边，需定）：通用题库模型（类别分组，首批题目由 agent 起草、用户审）；定制面试 = 服务器端解析 PDF + 走现有 `apps/ai` 的 LLM 路由出题（密钥留在服务器）；面试会话 / 报告尽量复用 `apps/speaking` 的 `SpeakingAttempt` / `SpeakingTurn` / `SpeakingReport` 生命周期与报告版式。
+- 后端建议：在同一个 Django 服务内新增 `apps.interview`，不拆微服务。独立面试 session/turn/report、简历/岗位与技术评分 schema；共享 `apps/ai` 的 provider、AITask、计费/账号，以及可抽取的媒体存储和报告版式。`SpeakingReport` 的 Band 7/FC/LR/GRA/P 契约不适合直接套技术评分；不要强行新增 speaking 模式。题库按类别分组，首批题目用户审；定制面试在服务器解析 PDF 和生成题目。
 - 可参考的旧 C++ 逻辑（只借思路，出题移植到 Python）：`src/interview/interview_manager.cpp`（`LoadQuestionsFromResume`、`GenerateDefaultQuestions`、`ShouldFollowUp` / `GetFollowUpQuestion`）、`src/interview/dialog_session.cpp`（实时对话中的追问，迁到 `SessionDriver`）、`src/services/pdf_parser.cpp`。
 - 前端：面试首页、题库练习、简历与岗位上传、面试进行页（复用练习页布局）、面试报告页（复用口语报告版式）。
 - 验收：题库练习和一份测试简历的定制面试各完整走一场并出报告。
 
 ### 并行 / 之后
 
-- 阶段 5 — VPS 部署（需要用户先买服务器）：Linux + Daphne + Nginx + HTTPS；AI worker 用 systemd；从办公室 Windows 机迁 `db.sqlite3` 与 `media/`；国内 VPS 要域名备案。
+- 阶段 5 — VPS 部署（**用户决定先做完看效果，本地验证前不买、不部署**）：Linux + Daphne + Nginx + HTTPS；AI worker 用 systemd；从办公室 Windows 机迁 `db.sqlite3` 与 `media/`；国内 VPS 要域名备案。
 - 阶段 6 — `macdeployqt` 打包、签名 / 公证；`brew pin qt` 固定版本；补 app 图标。
 
-## 待用户决定
+## 下一步需要验证的选择
 
-1. 深色模式要不要加「跟随系统」（浅色 / 深色 / 跟随系统，网页版和桌面版同时生效）。
-2. 阶段 2 的音频 / WebSocket 依赖：复用 vcpkg 的旧 C++，还是在 `desktop/` 里用 Qt 自带模块重写客户端。
-3. 模拟面试后端放新 Django app 还是并入 `apps/speaking`。
-4. 何时购买 VPS（决定阶段 5 何时开始、桌面端默认服务器地址何时换成生产域名）。
+四项反馈已记录：外观同意并实现；语音保留 C++、以性能证据选成熟组件；后端给出独立 app 的建议；VPS 延后。不要重复询问这四项。
+
+1. 按阶段 2 计划做 PortAudio callback 与 Qt 6.11 callback 的同设备实验后，审阅最终组件选择；用户尚未批准最终音频组件。
+2. 核实火山临时/限定范围凭证的准确签发、续期、撤销与权限文档；未确认前用服务器 relay 建议作为计划基线。
+3. 模式切换器和模拟面试的详细交互/题库/评分另行审阅，后端独立 app 仍是建议，尚未实施。
+
+本交接更新不意味着原生实时语音已经上线，也不意味着已测得工业水准。当前任务的实际测试/提交结果以本次执行记录为准；上方阶段 0–1 的 67/67 等属于历史验收。
+
+## 本次验证记录（2026-10-05）
+
+- 网页测试：一次完整运行 66/68 文件通过，修复后对两项失败文件单独重跑 2/2 通过；不是修复后再次全量 68/68。
+- 桌面 QtTest：3/3；桌面三档外观的可见布局已检查，未做物理 OS 深浅色切换验收。
+- 原生语音尚未实施，未运行真实设备/provider 性能 benchmark。新引擎和面试 app 均不能标成已完成。

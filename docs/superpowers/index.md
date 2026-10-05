@@ -8,6 +8,7 @@
 
 | 文档 | 说明 |
 | --- | --- |
+| [2026-10-05-native-voice-performance.md](plans/2026-10-05-native-voice-performance.md) | 原生 C++ 语音：callback 对照、鉴权 relay 建议、缓冲/取消契约和性能实验（未实施） |
 | [2026-06-19-p3-bank-practice-progress.md](plans/2026-06-19-p3-bank-practice-progress.md) | P3 题库练习进度 |
 | [2026-06-19-brainstorm-practice-particles.md](plans/2026-06-19-brainstorm-practice-particles.md) | brainstorm 练习粒子动效 |
 | [2026-06-18-p2-brainstorm-copy-requirements.md](plans/2026-06-18-p2-brainstorm-copy-requirements.md) | P2 串题灵感文案需求 |

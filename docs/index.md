@@ -20,6 +20,7 @@
 | 文档 | 用途 |
 | --- | --- |
 | [../desktop/README.md](../desktop/README.md) | 桌面端构建、运行、冒烟检查、调试 |
+| [原生 C++ 实时语音计划](superpowers/plans/2026-10-05-native-voice-performance.md) | callback 组件对照、relay 建议、缓冲/取消契约和性能验收（未实施） |
 
 ## product/ — 产品 · 业务
 
@@ -38,7 +39,7 @@
 | [stage-consolidation-changes.md](reports/stage-consolidation-changes.md) | stage 收口改动记录 |
 | [speaking-2026-may-august-bank-review.md](reports/speaking-2026-may-august-bank-review.md) | 口语 2026 年 5–8 月题库 review |
 | [development-handoff-2026-07-29.md](reports/development-handoff-2026-07-29.md) | 当前开发状态、示例数据库和 P3 周目/复练逻辑交接提示词 |
-| [qt-desktop-mock-interview-handoff-2026-10-05.md](reports/qt-desktop-mock-interview-handoff-2026-10-05.md) | **Qt 桌面端 + 模拟面试交接**:已确认决定、已完成的桌面外壳、坑、阶段 2–6 待办、待用户决定 |
+| [qt-desktop-mock-interview-handoff-2026-10-05.md](reports/qt-desktop-mock-interview-handoff-2026-10-05.md) | **Qt 桌面端 + 模拟面试交接**:用户决定与架构建议、外壳/系统外观、原生 C++ 语音审计、阶段 2–6 待办 |
 
 ## research/ — 标准 · 研究
 
