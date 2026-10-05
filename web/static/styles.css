@@ -43956,10 +43956,19 @@ body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusP
   display: none !important;
 }
 
+/* The wordmark carries the theme colour: ink on "IELTS" melting into the accent on "Studio". */
 body:not(#_) #homePanel .hx-title-main {
-  background: none !important;
-  -webkit-text-fill-color: currentColor !important;
-  color: var(--ink) !important;
+  background: linear-gradient(100deg, var(--ink) 8%, var(--accent) 62%, color-mix(in srgb, var(--accent) 70%, var(--ink)) 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
+}
+
+body.theme-dark:not(#_) #homePanel .hx-title-main {
+  background: linear-gradient(100deg, var(--ink) 8%, color-mix(in srgb, var(--accent) 70%, #fff) 62%, var(--accent) 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
 }
 
 body:not(#_) #homePanel .hx-topics i {
@@ -45141,4 +45150,466 @@ body:not(#_) #practicePanel .exam-status.p1-pixel-flow {
   body:not(#_) .shell .nav .nav-section-label {
     margin: 6px 12px 3px !important;
   }
+}
+
+/* 标准 / 追问 slider: the pill has a 1px border, so with content-box sizing it came out 2px
+   wider than each half and sat off-centre (flush against the right edge in 追问压力). */
+.exam-actions .p1-mode-switch::before,
+.p3-mode-row .p3-mode-switch::before,
+.writing-task-switch::before {
+  box-sizing: border-box !important;
+}
+
+/* ---------- Sidebar brand: the blog's mascot + a wordmark that fits the narrowest sidebar (152px) ---------- */
+@media (min-width: 981px) {
+  body:not(#_) .shell .nav .brand {
+    gap: 7px !important;
+    min-width: 0 !important;
+  }
+
+  body:not(#_) .shell .nav .brand-mark {
+    flex: none;
+    width: 28px !important;
+    height: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body:not(#_) .shell .nav .brand span {
+    min-width: 0;
+    overflow: visible !important;
+    font-family: "Instrument Serif", "Charter", Georgia, serif !important;
+    font-size: clamp(16px, calc(var(--sidebar-width, 176px) * 0.105), 19px) !important;
+    font-weight: 400 !important;
+    letter-spacing: -0.01em !important;
+    white-space: nowrap !important;
+    text-overflow: clip !important;
+  }
+}
+
+/* =====================================================================
+   CARDS WITHOUT THE LEFT STRIPE — P1 topic cards, P2 material cards, P2
+   seasonal cue cards, the cue card in P2 reports and the per-question
+   rows in speaking reports. Same sheet as everywhere else: hairline,
+   16px radius, white; state reads from a small mark, not a coloured edge.
+   ===================================================================== */
+
+/* page heads of the two libraries: the same flat sheet */
+body:not(#_) :is(.p1-corpus-head, .p2-corpus-head) {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) :is(.p1-corpus-head, .p2-corpus-head) h2 {
+  font-family: var(--ed-serif) !important;
+  font-weight: 400 !important;
+}
+
+body:not(#_) :is(#p1CorpusStats, #p2CorpusStats) {
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11.5px !important;
+}
+
+/* ---------- the cards ---------- */
+body:not(#_) :is(.p1-topic-card, .p2-topic-card:not(.p2-brainstorm-entry-card), .p2-seasonal-card) {
+  overflow: hidden !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body:not(#_) :is(.p1-topic-card, .p2-topic-card:not(.p2-brainstorm-entry-card), .p2-seasonal-card):hover {
+  border-color: var(--ui-hover-line) !important;
+}
+
+/* the dashed red margin line and paper grain of the old notebook look */
+body:not(#_) :is(.p1-topic-card, .p2-topic-card:not(.p2-brainstorm-entry-card), .p2-seasonal-card)::before {
+  display: none !important;
+}
+
+body:not(#_) :is(.p1-topic-card, .p2-category-entry-card:not(.p2-brainstorm-entry-card)) header {
+  min-height: 64px !important;
+  padding: 16px 18px 14px !important;
+  border-bottom: 1px solid var(--line) !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+body:not(#_) :is(.p1-topic-card, .p2-category-entry-card:not(.p2-brainstorm-entry-card)) header h3 {
+  font-family: var(--ed-serif) !important;
+  font-size: 22px !important;
+  font-weight: 400 !important;
+  color: var(--ink) !important;
+}
+
+/* counts: small mono pill */
+body:not(#_) :is(.p1-topic-count, .p2-category-entry-card:not(.p2-brainstorm-entry-card) .p2-topic-count) {
+  min-width: 0 !important;
+  height: 26px !important;
+  padding: 0 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+body:not(#_) .p1-topic-copy-button {
+  width: 28px !important;
+  height: 28px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--panel) !important;
+  color: var(--muted) !important;
+  box-shadow: none !important;
+}
+
+/* progress: a 3px line under the head */
+body:not(#_) .p1-topic-progress {
+  height: 3px !important;
+  margin: 0 18px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--ink) 7%, transparent) !important;
+  background-image: none !important;
+}
+
+body:not(#_) .p1-topic-progress > * {
+  border-radius: 999px !important;
+  background: var(--accent) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* ---------- rows: hairline-separated, no fill, no stripe ---------- */
+body:not(#_) .p1-topic-question-list button,
+body:not(#_) :is(.p2-material-row, .p2-material-entry-button, .p2-add-material-button) {
+  border: 0 !important;
+  border-left: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .p2-material-entry-button {
+  border-bottom: 0 !important;
+}
+
+body:not(#_) .p1-topic-question-list button:last-child,
+body:not(#_) .p2-add-material-button {
+  border-bottom: 0 !important;
+}
+
+body:not(#_) .p1-topic-question-list button:hover,
+body:not(#_) :is(.p2-material-entry-button, .p2-add-material-button):hover {
+  background: var(--ui-well) !important;
+}
+
+body:not(#_) .p1-topic-question-list button,
+body:not(#_) .p1-topic-question-list button * {
+  font-family: var(--ed-sans) !important;
+  color: var(--ink) !important;
+}
+
+/* status mark: an outline ring; answered = filled accent disc with a white tick */
+body:not(#_) .p1-topic-question-list button strong {
+  width: 20px !important;
+  height: 20px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 9.5px !important;
+}
+
+body:not(#_) .p1-topic-question-list button.has-corpus strong {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+}
+
+body:not(#_) .p1-topic-question-list button.has-corpus strong::after {
+  content: "" !important;
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border: solid #fff;
+  border-width: 0 0 1.6px 1.6px;
+  transform: rotate(-45deg);
+  font-size: 0 !important;
+}
+
+body:not(#_) .p1-topic-question-list button.has-corpus::after {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.04em;
+}
+
+/* "点击卡片查看全部" footer: a plain hairline pill */
+body:not(#_) .p1-topic-card.is-modal-only::after {
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-sans) !important;
+  font-size: 12.5px !important;
+  font-weight: 400 !important;
+}
+
+/* P2 material rows: the index keeps the category colour as a thin ring only */
+body:not(#_) .p2-material-index,
+body:not(#_) .p2-add-material-button strong {
+  border-width: 1px !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+body:not(#_) .p2-material-title {
+  font-family: var(--ed-sans) !important;
+  color: var(--ink) !important;
+}
+
+body:not(#_) .p2-material-status {
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  color: var(--muted) !important;
+}
+
+body:not(#_) :is(.p2-follow-up-edit-button, .p2-material-actions .corpus-menu-button) {
+  width: 32px !important;
+  height: 32px !important;
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  box-shadow: none !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+}
+
+/* ---------- P2 seasonal cue cards ---------- */
+body:not(#_) .p2-seasonal-card {
+  border-left-width: 1px !important;
+  border-left-color: var(--line) !important;
+}
+
+body:not(#_) .p2-seasonal-card-kicker {
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+  color: var(--muted) !important;
+}
+
+body:not(#_) .p2-seasonal-card :is(h3, h4, .p2-seasonal-card-title) {
+  font-family: var(--ed-serif) !important;
+  font-weight: 400 !important;
+}
+
+body:not(#_) .p2-seasonal-cue {
+  border: 0 !important;
+  border-left: 0 !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--ui-well) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .p2-seasonal-card-state {
+  border: 1px solid var(--line) !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+}
+
+body:not(#_) .p2-seasonal-card-state.is-ready {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line)) !important;
+  color: var(--accent) !important;
+}
+
+/* ---------- the cue card itself (P2 reports, P2 practice) ----------
+   Laid out like a printed exam card: mono kicker, serif topic, a quiet
+   "You should say" label, dotted prompts, and the closing line set off
+   by a hairline. */
+body:not(#_) .cue-detail,
+body:not(#_) .p2-cue-card > .cue-detail,
+body:not(#_) .turn-report-card .cue-detail {
+  position: relative !important;
+  padding: 24px 28px 22px !important;
+  border: 1px solid var(--line) !important;
+  border-left: 1px solid var(--line) !important;
+  border-radius: var(--ui-r) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .p2-cue-card {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .cue-detail::before {
+  content: "Part 2 · Cue card";
+  display: block;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-family: var(--ed-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+body:not(#_) .cue-detail h2 {
+  margin: 0 0 16px !important;
+  color: var(--ink) !important;
+  font-family: var(--ed-serif) !important;
+  font-size: 26px !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+}
+
+body:not(#_) .cue-detail p:first-of-type {
+  margin: 0 0 8px !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body:not(#_) .cue-detail ul {
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+}
+
+body:not(#_) .cue-detail li {
+  position: relative;
+  margin: 0 !important;
+  padding: 6px 0 6px 20px !important;
+  color: var(--ink) !important;
+  font-size: 15.5px !important;
+  line-height: 1.5 !important;
+}
+
+body:not(#_) .cue-detail li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+body:not(#_) .cue-detail li::marker {
+  content: none;
+}
+
+body:not(#_) .cue-detail p:last-of-type:not(:first-of-type) {
+  margin: 14px 0 0 !important;
+  padding-top: 14px !important;
+  border-top: 1px solid var(--line) !important;
+  color: var(--ink) !important;
+  font-size: 15.5px !important;
+}
+
+/* ---------- report rows: one hairline card per question, no accent stripe ---------- */
+body:not(#_) .turn-report-group :is(tr.p1-p3-content-row, tr.p2-content-row) > td,
+body:not(#_) .turn-report-group .ai-coaching-cell {
+  border-left-width: 1px !important;
+  border-left-color: var(--line) !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .turn-report-group .ai-coaching-cell {
+  background: var(--ui-well) !important;
+}
+
+/* skill notes and "下次优先改": a well, not a stripe */
+body:not(#_) .p3-skill-item > small,
+body:not(#_) .p3-skills-card .p3-fix-next {
+  padding: 10px 12px !important;
+  border: 0 !important;
+  border-left: 0 !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--ui-well) !important;
+}
+
+body:not(#_) .p1-topic-question-list button strong {
+  display: inline-grid !important;
+  place-items: center !important;
+  flex: none;
+}
+
+body:not(#_) .p1-topic-question-list button.has-corpus strong {
+  color: transparent !important;
+  font-size: 0 !important;
+}
+
+body:not(#_) .p1-topic-question-list button.has-corpus strong::after {
+  display: block !important;
+  position: static !important;
+  color: transparent !important;
+}
+
+body:not(#_) .p1-topic-question-list button.has-corpus strong::after {
+  margin-top: 0 !important;
+  transform: translateY(-1.5px) rotate(-45deg) !important;
+}
+
+/* dark theme: the category cards and seasonal cards had their own tinted fills/borders at
+   higher specificity — same flat sheet as light. */
+body:not(#_):not(#__) :is(.p1-topic-card, .p2-topic-card:not(.p2-brainstorm-entry-card), .p2-seasonal-card) {
+  border-color: var(--line) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+}
+
+body:not(#_):not(#__) .p2-category-entry-card:not(.p2-brainstorm-entry-card) header,
+body:not(#_):not(#__) .p2-topic-material-list,
+body:not(#_):not(#__) :is(.p2-material-row, .p2-material-entry-button, .p2-add-material-button, .p2-topic-empty) {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+body:not(#_):not(#__) .p2-material-status {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+body:not(#_):not(#__) .p2-seasonal-card-kicker {
+  padding: 0 !important;
+  background: transparent !important;
 }
