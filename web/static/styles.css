@@ -45755,3 +45755,46 @@ body:not(#_):not(#__) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible .p3-launc
   color: rgba(226, 232, 240, 0.82) !important;
 }
 
+
+/* ---------- 记入语料库 / 语料库已存: two states you can scan for gaps ----------
+   Saved = a soft green fill with a green tick (done); not yet saved = a dashed outline
+   (something missing here). */
+body:not(#_):not(#__) .workspace button.corpus-edit-button.is-corpus-saved {
+  border: 1px solid color-mix(in srgb, #16a34a 45%, transparent) !important;
+  background: color-mix(in srgb, #16a34a 12%, var(--panel)) !important;
+  background-image: none !important;
+  color: #15803d !important;
+}
+
+body:not(#_):not(#__) .workspace button.corpus-edit-button.is-corpus-saved:hover {
+  border-color: color-mix(in srgb, #16a34a 70%, transparent) !important;
+  background: color-mix(in srgb, #16a34a 18%, var(--panel)) !important;
+}
+
+body:not(#_):not(#__) .workspace button.corpus-edit-button.is-corpus-saved .corpus-edit-icon {
+  color: #16a34a !important;
+  stroke: currentColor;
+}
+
+body:not(#_):not(#__) .workspace button.corpus-edit-button.is-corpus-new {
+  border: 1px dashed color-mix(in srgb, var(--ink) 32%, var(--line)) !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--muted) !important;
+}
+
+body:not(#_):not(#__) .workspace button.corpus-edit-button.is-corpus-new:hover {
+  border-style: solid !important;
+  border-color: var(--accent) !important;
+  color: var(--ink) !important;
+}
+
+body.theme-dark:not(#_):not(#__) .workspace button.corpus-edit-button.is-corpus-saved {
+  border-color: color-mix(in srgb, #22c55e 45%, transparent) !important;
+  background: color-mix(in srgb, #22c55e 16%, var(--panel)) !important;
+  color: #86efac !important;
+}
+
+body.theme-dark:not(#_):not(#__) .workspace button.corpus-edit-button.is-corpus-saved .corpus-edit-icon {
+  color: #4ade80 !important;
+}
