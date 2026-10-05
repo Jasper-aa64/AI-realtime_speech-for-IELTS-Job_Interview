@@ -23,6 +23,7 @@
 
 | 文档 | 说明 |
 | --- | --- |
+| [2026-10-05-qt-desktop-studio-design.md](specs/2026-10-05-qt-desktop-studio-design.md) | Qt 桌面端：IELTS Studio + 模拟面试（设计 + 分阶段计划） |
 | [2026-06-19-p3-bank-practice-progress-design.md](specs/2026-06-19-p3-bank-practice-progress-design.md) | P3 题库练习进度设计 |
 | [2026-06-19-brainstorm-practice-particles-design.md](specs/2026-06-19-brainstorm-practice-particles-design.md) | brainstorm 粒子动效设计 |
 | [2026-06-18-p2-brainstorm-copy-requirements-design.md](specs/2026-06-18-p2-brainstorm-copy-requirements-design.md) | P2 串题灵感文案设计 |
