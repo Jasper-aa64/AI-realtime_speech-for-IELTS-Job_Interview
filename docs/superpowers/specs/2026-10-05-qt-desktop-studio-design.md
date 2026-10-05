@@ -118,7 +118,7 @@
 
 **阶段 0 — 环境**
 1. `brew install qt`（我来跑）。
-2. 验证 CMake 能找到 `Qt6::WebEngineWidgets` / `Qt6::WebChannel`，旧目标 `CppInterviewSystemQt` 仍能编过。
+2. 桌面端是独立 CMake 工程 `desktop/`（只依赖 Qt，不依赖 vcpkg），验证它能找到 `Qt6::WebEngineWidgets` 并跑通单测；根目录旧目标不动。
 
 **阶段 1 — 桌面外壳（能打开现有网页）**
 1. 新目标 `IELTSStudioDesktop`：`MainWindow` + `QWebEngineView`（持久化 profile）+ 设置里的服务器地址（开发期默认 `http://127.0.0.1:8767`）。
