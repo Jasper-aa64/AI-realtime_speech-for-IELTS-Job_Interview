@@ -42679,6 +42679,16 @@ body.theme-dark #homePanel .hx-slide-media img {
   letter-spacing: -0.015em;
 }
 
+/* Training paths: the eyebrow is the whole heading, so it shares a row with the link */
+#homePanel .hx-areas .hx-sec-head {
+  align-items: center;
+}
+
+#homePanel .hx-areas .hx-eyebrow {
+  flex-basis: auto;
+  margin: 0;
+}
+
 #homePanel .hx-sec-more {
   display: inline-flex;
   gap: 6px;
@@ -43021,7 +43031,7 @@ body :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter.ha
   .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-home-title {
     margin: 0 !important;
     color: var(--ink) !important;
-    font-size: clamp(44px, 4.4vw, 64px) !important;
+    font-size: 42px !important;
     line-height: 1 !important;
   }
 
@@ -43449,5 +43459,917 @@ body :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter.ha
   #homePanel .hx-sec-head {
     margin-bottom: 18px;
     padding-bottom: 14px;
+  }
+}
+
+/* =====================================================================
+   ONE DESIGN LANGUAGE (2026-10-05) — the last word on surfaces, type and
+   controls, so every page speaks the same way. Rules:
+     1. Ground   flat page colour (--bg). No dots, grids, glows or paper tints.
+     2. Sheet    one card: --panel, 1px --line, 16px radius, no shadow, no lift.
+     3. Well     a block inside a sheet: faint ink tint, no border, 12px radius.
+     4. Type     serif = voice (titles, headings, big figures); Inter = reading;
+                 mono = labels, tags, small figures.
+     5. Actions  primary = ink pill; secondary = hairline pill; segmented
+                 control = hairline track with an ink thumb.
+     6. Accent   only for state: active, progress, meters, links, focus.
+     7. Ornament the gold dash before eyebrows — nothing else.
+   ===================================================================== */
+body {
+  --ui-r: 16px;
+  --ui-r-sm: 12px;
+  --ui-h: 36px;
+  --ui-well: color-mix(in srgb, var(--ink) 3.5%, var(--panel));
+  --ui-hover-line: color-mix(in srgb, var(--ink) 28%, var(--line));
+  --ui-label-size: 11px;
+}
+
+body.theme-dark {
+  --ui-well: color-mix(in srgb, var(--ink) 5%, var(--panel));
+}
+
+/* ---------- 1. Ground ---------- */
+body:not(#_) .workspace,
+body:not(#_) .workspace:has(#homePanel:not(.hidden)),
+body:not(#_) .workspace:not(:has(#practicePanel:not(.hidden))),
+body:not(#_) :is(.language-takeaway-panel, .language-book-shell, #writingReportsPanel, #historyPanel, #writingPanel) {
+  background: var(--bg) !important;
+  background-image: none !important;
+}
+
+/* ---------- 2. Sheets ---------- */
+body:not(#_) :is(
+  #practicePanel,
+  .hx-show, .hx-panel, .hx-area-grid,
+  .detail-card, .history-rail-shell,
+  .writing-editor-card, .writing-result-card,
+  .corpus-top-cards,
+  .language-book-head, .spelling-practice-card > .nr-card,
+  .modal-card, .p1-corpus-dialog-card
+) {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Wrappers that used to draw a second box around a sheet */
+body:not(#_) :is(#spellingPracticeCard, .turn-report-wrap, #p3TopicPanel) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* No hover lift anywhere: hover darkens the hairline instead */
+body:not(#_) :is(.history-list .history-item, .corpus-home-card, .corpus-review-link,
+  .language-takeaway-card-wrap, .p3-source-option, .writing-day, .score-cell.has-meter,
+  .hx-area, .hx-link):hover {
+  transform: none !important;
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+/* ---------- 3. Wells ---------- */
+body:not(#_) :is(
+  #promptPane, #recorderPane,
+  .writing-prompt-card, .writing-calendar,
+  .nr-prompt,
+  .writing-draft-summary > section, .writing-draft-flow > span,
+  .p3-launch-section, .p3-plan-preview
+) {
+  border: 0 !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--ui-well) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) #promptPane #promptCard {
+  background: transparent !important;
+}
+
+body:not(#_) .writing-prompt-card::before,
+body:not(#_) #promptPane #promptCard::before,
+body:not(#_) .nr-prompt::before {
+  display: none !important;
+}
+
+/* the left rule beside the P1/P2 prompt */
+body:not(#_) #promptPane #promptCard {
+  border-left: 0 !important;
+  box-shadow: none !important;
+}
+
+/* completed step in the writing draft flow keeps an accent tick, not a tint */
+body:not(#_) .writing-draft-flow > span.is-done {
+  color: var(--ink) !important;
+}
+
+/* ---------- 4. Type ---------- */
+/* labels */
+body:not(#_) :is(.section-label, .modal-eyebrow, .writing-answer-label, .p3-launch-label,
+  .history-rail-head strong, .writing-stats-grid span, .nr-stat, .writing-weekday,
+  .score-cell small, .hx-label, .p3-fix-next > span:first-child, .p3-skill-highlight > span:first-child) {
+  font-family: var(--ed-mono) !important;
+  font-size: var(--ui-label-size) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+
+/* voice: page titles share one size; card headings share one size */
+@media (min-width: 981px) {
+  body:not(#_):not(.view-home) #viewTitleBlock #viewTitle,
+  body:not(#_) #corpusPanel .corpus-home-title {
+    font-family: var(--ed-serif) !important;
+    font-size: 42px !important;
+    font-weight: 400 !important;
+    line-height: 1.04 !important;
+    letter-spacing: -0.01em !important;
+  }
+}
+
+body:not(#_) :is(.detail-card h2, .detail-card > h3, .p3-skills-head h3, .writing-saved-report-head h2,
+  .language-book-head h2, .spelling-drill-head h2, #writingPromptTitle, .writing-card-head h2,
+  .takeaway-section-heading, .hx-area-name, .hx-show-title) {
+  font-family: var(--ed-serif) !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.005em !important;
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--ink) !important;
+}
+
+body:not(#_) :is(.language-book-head h2, .spelling-drill-head h2, .detail-card h2, .writing-saved-report-head h2) {
+  font-size: 28px !important;
+}
+
+body:not(#_) :is(#writingPromptTitle, .writing-card-head h2, .p3-skills-head h3, .detail-card > h3) {
+  font-size: 22px !important;
+}
+
+body:not(#_) .takeaway-section-heading {
+  font-size: 24px !important;
+}
+
+body:not(#_) .takeaway-section-heading .tk-sec-num {
+  font-family: var(--ed-mono) !important;
+  font-size: 13px !important;
+  color: var(--muted) !important;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+/* the question itself reads in the serif voice */
+body:not(#_) #promptPane #promptCard,
+body:not(#_) #promptPane #promptCard :is(h1, h2, h3, p, strong) {
+  font-family: var(--ed-serif) !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.005em !important;
+}
+
+/* big figures → serif; clocks and small counts → mono */
+body:not(#_) :is(.writing-stats-grid strong, .nr-gloss, .score-cell.has-meter strong) {
+  font-family: var(--ed-serif) !important;
+  font-weight: 400 !important;
+}
+
+body:not(#_) :is(#timerValue, .inline-timer, .nr-progress-text, .nr-stat b, #spellingDrillStats b) {
+  font-family: var(--ed-mono) !important;
+  font-weight: 500 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* takeaway phrases: English in the serif, Chinese quiet below */
+body:not(#_) .language-takeaway-card :is(.takeaway-source, > :first-child:not(.takeaway-chinese)) {
+  font-family: var(--ed-serif) !important;
+  font-size: 21px !important;
+  font-weight: 400 !important;
+  line-height: 1.3 !important;
+  color: var(--ink) !important;
+}
+
+body:not(#_) .language-takeaway-card .takeaway-chinese {
+  color: var(--muted) !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
+/* ---------- 5. Actions ---------- */
+/* primary: ink pill */
+body:not(#_) :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
+  .writing-report-edit-btn, #loginSubmitBtn, .hx-cta-primary, .workspace button.primary) {
+  min-height: var(--ui-h) !important;
+  padding: 0 18px !important;
+  border: 1px solid var(--ink) !important;
+  border-radius: 999px !important;
+  background: var(--ink) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--panel) !important;
+  font-family: var(--ed-sans) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  transition: opacity 160ms ease !important;
+}
+
+body:not(#_) :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
+  .writing-report-edit-btn, #loginSubmitBtn, .workspace button.primary):hover {
+  opacity: 0.86;
+  transform: none !important;
+}
+
+body:not(#_) :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
+  .writing-report-edit-btn, .workspace button.primary):disabled {
+  opacity: 0.4;
+}
+
+/* secondary: hairline pill */
+body:not(#_) :is(#writingSaveBtn, .language-action-button, .language-hide-toggle, .topbar-back-button,
+  #writingRandomBtn, .writing-picker-button, .p1-corpus-entry, .corpus-entry-button, .report-export-btn,
+  .nr-lib-btn, .takeaway-review-start, .agent-assistant-trigger:not(.floating-agent-assistant-trigger),
+  #languageTakeawayStats, #writingTakeawayStats, .workspace button.ghost:not(.icon-button)) {
+  min-height: 32px !important;
+  padding: 0 14px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  font-family: var(--ed-sans) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  transition: border-color 160ms ease !important;
+}
+
+body:not(#_) :is(#writingSaveBtn, .language-action-button, .language-hide-toggle, .topbar-back-button,
+  #writingRandomBtn, .writing-picker-button, .p1-corpus-entry, .corpus-entry-button, .report-export-btn,
+  .nr-lib-btn, .takeaway-review-start, .workspace button.ghost:not(.icon-button)):hover {
+  border-color: var(--ui-hover-line) !important;
+  transform: none !important;
+}
+
+body:not(#_) :is(#writingSaveBtn, #writingScoreBtn) {
+  min-height: 40px !important;
+}
+
+body:not(#_) :is(.p1-corpus-entry, .corpus-entry-button) svg {
+  color: var(--muted) !important;
+}
+
+/* small square tool buttons: hairline, no fill */
+body:not(#_) :is(.nr-card-tool, .history-rail-nav, .corpus-menu-button, .history-item-menu-btn, .report-filter-button) {
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .history-rail-actions {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* segmented controls: hairline track, ink thumb */
+body:not(#_) :is(.p3-mode-switch, .spelling-scope-switch, .writing-task-switch) {
+  padding: 3px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) :is(.p3-mode-switch .p3-mode-option, .spelling-scope-switch > button, .writing-task-option) {
+  min-height: 30px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-sans) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+body:not(#_) :is(.p3-mode-switch .p3-mode-option.active, .spelling-scope-switch > button.is-active, .writing-task-option.active) {
+  background: var(--ink) !important;
+  color: var(--panel) !important;
+}
+
+/* P3 launch: the intensity switch spans its row */
+body:not(#_) #p3TopicPanel .p3-mode-switch .p3-mode-option {
+  min-height: 36px !important;
+}
+
+/* selectable tiles (P3 source): hairline; accent ring = selected */
+body:not(#_) #p3TopicPanel .p3-source-option {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--panel) !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) #p3TopicPanel .p3-source-option.active {
+  border-color: var(--accent) !important;
+  background: var(--panel) !important;
+  box-shadow: inset 0 0 0 1px var(--accent) !important;
+}
+
+body:not(#_) #p3TopicPanel .p3-source-option.active strong {
+  color: var(--ink) !important;
+}
+
+body:not(#_) #p3TopicPanel .p3-launch-label::before {
+  background: transparent !important;
+  border: 1px solid var(--line);
+  color: var(--muted) !important;
+  font-family: var(--ed-mono);
+  font-weight: 500 !important;
+}
+
+/* the P3 launch steps are wells; separate them with air, not boxes */
+body:not(#_) #p3TopicPanel .p3-mode-row {
+  border: 0 !important;
+  background: var(--ui-well) !important;
+  box-shadow: none !important;
+  border-radius: var(--ui-r-sm) !important;
+}
+
+/* ---------- Tags, chips, badges ---------- */
+/* report rail: tone tags become neutral mono; the band reads in ink */
+body:not(#_) .history-item {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--panel) !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .history-item::before {
+  display: none !important;
+}
+
+body:not(#_) .history-item.active {
+  border-color: var(--ink) !important;
+  box-shadow: inset 0 0 0 1px var(--ink) !important;
+}
+
+body:not(#_) :is(.history-item-tag, .writing-pill, .speaking-pill) {
+  padding: 2px 8px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em !important;
+}
+
+body:not(#_) .history-item-band {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  font-family: var(--ed-serif) !important;
+  font-size: 18px !important;
+  font-weight: 400 !important;
+}
+
+body:not(#_) .history-item-title {
+  font-weight: 500 !important;
+  color: var(--ink) !important;
+}
+
+/* writing draft badge (blue gradient block) → quiet stamp */
+body:not(#_) :is(.writing-saved-report-head, .writing-score-summary-head) :is(.writing-draft-badge, .writing-score-badge, strong:has(> span)) {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+}
+
+body:not(#_) .takeaway-review-start-badge {
+  background: var(--accent) !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  font-family: var(--ed-mono) !important;
+  font-weight: 600 !important;
+}
+
+/* the top-bar review panel: a plain hairline pill */
+body:not(#_) .topbar-review-panel:not(.hidden) {
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Fields ---------- */
+body:not(#_) .workspace :is(textarea, input[type="text"], input[type="search"], input:not([type]), select):not(.hidden) {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r-sm) !important;
+  background-color: var(--panel) !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .workspace :is(textarea, input, select):focus {
+  border-color: var(--accent) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent) !important;
+}
+
+/* the writing sheet: no ruled paper, generous plain field */
+body:not(#_) #writingPanel #writingAnswer {
+  padding: 16px 18px !important;
+  background-image: none !important;
+  line-height: 1.75 !important;
+  font-family: var(--ed-sans) !important;
+}
+
+body:not(#_) #spellingPracticeCard .nr-input {
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  font-family: var(--ed-mono) !important;
+  font-style: normal !important;
+}
+
+/* ---------- Meters & figures: accent, flat ---------- */
+body:not(#_) :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter {
+  box-shadow: none !important;
+}
+
+body:not(#_) .p3-skills-card {
+  background: var(--panel) !important;
+  background-image: none !important;
+}
+
+body:not(#_) .p3-skills-card :is(.p3-fix-next, .p3-fix-next *) {
+  color: var(--ink) !important;
+}
+
+body:not(#_) .p3-skills-card .p3-fix-next {
+  padding-left: 16px !important;
+  border-left: 2px solid var(--accent) !important;
+  background: transparent !important;
+}
+
+body:not(#_) .turn-report-table th {
+  background: var(--ui-well) !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .turn-report-table,
+body:not(#_) .turn-report-group {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Practice: flat record button, quiet header ---------- */
+body:not(#_) #recordControl {
+  box-shadow: none !important;
+}
+
+body:not(#_) #practicePanel .phase-meter {
+  height: 3px !important;
+  background: color-mix(in srgb, var(--ink) 7%, transparent) !important;
+}
+
+body:not(#_) #practicePanel .exam-status {
+  border: 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) #practicePanel #progressTrack {
+  font-family: var(--ed-serif) !important;
+  font-size: 20px !important;
+  font-weight: 400 !important;
+}
+
+body:not(#_) #practicePanel #phaseLabel,
+body:not(#_) #practicePanel .p1-mode-help {
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted) !important;
+}
+
+/* ---------- Ornaments: only the eyebrow dash survives ---------- */
+body:not(#_) #homePanel .hx-area::before,
+body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-home-card::after {
+  display: none !important;
+}
+
+body:not(#_) #homePanel .hx-title-main {
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--ink) !important;
+}
+
+body:not(#_) #homePanel .hx-topics i {
+  color: var(--line) !important;
+}
+
+body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-home-card {
+  box-shadow: none !important;
+}
+
+body:not(#_) #corpusPanel .corpus-card-mark {
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+}
+
+/* ---------- Sidebar: same rules (ink/accent state, mono labels, flat) ---------- */
+@media (min-width: 981px) {
+  body:not(#_) .shell .nav .nav-exam-group {
+    border: 1px solid color-mix(in srgb, currentColor 14%, transparent) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body:not(#_) .shell .nav .nav-pgroup {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body:not(#_) .shell .nav .brand-mark {
+    background: transparent !important;
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  }
+}
+
+/* ---------- Weight: bold is the exception, not the default ----------
+   Reading text 400, emphasis and controls 500, the active/primary state 600.
+   Nothing heavier. Serif voice stays at 400. */
+body:not(#_) .shell :is(strong, b, h1, h2, h3, h4, h5, h6, th, label, button, summary, dt, legend, a) {
+  font-weight: 500 !important;
+}
+
+body:not(#_) .shell :is(p, li, td, span, small, em, div) {
+  font-synthesis: none;
+}
+
+body:not(#_) .shell .nav .nav-button[data-view] {
+  font-weight: 500 !important;
+}
+
+body:not(#_) .shell .nav .nav-button[data-view].active {
+  font-weight: 600 !important;
+}
+
+body:not(#_) .shell :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
+  .writing-report-edit-btn, .workspace button.primary, #recordTitle) {
+  font-weight: 600 !important;
+}
+
+/* the serif voice never goes bold */
+body:not(#_) .shell :is(#viewTitle, .corpus-home-title, .detail-card h2, .detail-card > h3, .p3-skills-head h3,
+  .writing-saved-report-head h2, .language-book-head h2, .spelling-drill-head h2, #writingPromptTitle,
+  .writing-card-head h2, .takeaway-section-heading, .hx-area-name, .hx-show-title, .hx-title-main, .hx-title-top,
+  #progressTrack, .history-item-band, .writing-stats-grid strong, .nr-gloss, .score-cell strong,
+  .corpus-home-card strong, .corpus-review-lane-head strong, .nav-exam-lead-title, .brand span,
+  .overall-review-card h3, .writing-overall-head h3, .hx-stat strong, .language-takeaway-card .takeaway-source,
+  #promptCard, #promptCard *) {
+  font-weight: 400 !important;
+}
+
+/* emphasis inside prose: colour, not weight or fill */
+body:not(#_) .writing-prompt-fixed-question {
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--ink) !important;
+  font-style: italic;
+}
+
+/* ---------- Leftovers from the old layers ---------- */
+body:not(#_) :is(.p1-corpus-entry, .corpus-entry-button) :is(span, svg) {
+  color: var(--ink) !important;
+}
+
+body:not(#_) #writingPanel .writing-stats-grid > div {
+  border: 0 !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--ui-well) !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) #writingPanel .writing-calendar {
+  padding: 10px !important;
+}
+
+body:not(#_) #writingPanel .writing-day {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+}
+
+body:not(#_) #writingPanel .writing-day.saved {
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+
+body:not(#_) #writingPanel .writing-day.scored {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+
+body:not(#_) #writingPanel .writing-day.today {
+  box-shadow: inset 0 0 0 1px var(--ink) !important;
+}
+
+body:not(#_) #writingPanel .writing-legend i.saved { background: color-mix(in srgb, var(--accent) 12%, transparent) !important; border: 0 !important; }
+body:not(#_) #writingPanel .writing-legend i.scored { background: var(--accent) !important; border: 0 !important; }
+
+/* top bar controls on the writing page: same pill height */
+body:not(#_) .global-topbar :is(.writing-task-switch, #writingPromptPickerBtn, #writingRandomBtn) {
+  min-height: 36px !important;
+  height: 36px !important;
+}
+
+body:not(#_) #writingPromptPickerBtn {
+  font-weight: 500 !important;
+}
+
+body:not(#_) #writingPromptPickerBtn .writing-picker-chip {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+}
+
+body:not(#_) .writing-frame-cmd code {
+  background: var(--ui-well) !important;
+  color: var(--ink) !important;
+}
+
+body:not(#_) .writing-frame-cmd {
+  color: var(--muted) !important;
+}
+
+/* floating assistant + avatar: hairline, flat */
+body:not(#_) :is(.floating-agent-assistant-trigger, .global-topbar .agent-assistant-trigger) {
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+}
+
+body:not(#_) .user-avatar {
+  background: var(--ink) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--panel) !important;
+  font-family: var(--ed-serif) !important;
+  font-weight: 400 !important;
+  font-size: 18px !important;
+}
+
+body:not(#_) .avatar-settings-button {
+  box-shadow: none !important;
+}
+
+/* ---------- Takeaway books: sheets, no paper texture, no margin rule ---------- */
+body:not(#_) :is(.view-takeawayBook, .view-writingTakeawayBook) .language-takeaway-card,
+body:not(#_).view-takeawayBook .language-takeaway-card,
+body:not(#_).view-writingTakeawayBook .language-takeaway-card {
+  padding: 16px 52px 16px 20px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body:not(#_).view-takeawayBook .language-takeaway-card::before,
+body:not(#_).view-writingTakeawayBook .language-takeaway-card::before {
+  display: none !important;
+}
+
+body:not(#_).view-takeawayBook .language-takeaway-card :is(strong, .takeaway-source),
+body:not(#_).view-writingTakeawayBook .language-takeaway-card :is(strong, .takeaway-source) {
+  font-family: var(--ed-serif) !important;
+  font-size: 21px !important;
+  font-weight: 400 !important;
+  color: var(--ink) !important;
+}
+
+body:not(#_) .language-takeaway-card :is(hr, .takeaway-divider) {
+  border-color: var(--line) !important;
+}
+
+body:not(#_) .language-takeaway-card-wrap:hover .language-takeaway-card {
+  border-color: var(--ui-hover-line) !important;
+}
+
+body:not(#_) .language-takeaway-card-wrap.is-review-due .language-takeaway-card {
+  animation: none !important;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line)) !important;
+}
+
+body:not(#_) .language-takeaway-card-wrap:is(.is-reviewing, .is-review-current) .language-takeaway-card {
+  transform: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: inset 0 0 0 1px var(--accent) !important;
+}
+
+body:not(#_) .language-hide-toggle > * {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .takeaway-speech-status {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* ---------- Writing report: numbered steps and stamps in one style ---------- */
+body:not(#_) .writing-draft-flow > span > strong {
+  display: inline-grid !important;
+  place-items: center;
+  width: 22px !important;
+  height: 22px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 50% !important;
+  background: var(--panel) !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+body:not(#_) .writing-draft-flow > span.is-done > strong {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+
+body:not(#_) .writing-saved-report-head > strong {
+  display: grid !important;
+  gap: 2px;
+  padding: 10px 18px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r-sm) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  font-family: var(--ed-serif) !important;
+  font-size: 22px !important;
+  font-weight: 400 !important;
+  text-align: center;
+}
+
+body:not(#_) .writing-saved-report-head > strong > span {
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+body:not(#_) .writing-draft-summary > section > span:first-child {
+  font-family: var(--ed-mono) !important;
+  font-size: var(--ui-label-size) !important;
+  letter-spacing: 0.08em;
+  color: var(--muted) !important;
+}
+
+body:not(#_) :is(.writing-saved-answer-head, .speaking-saved-answer-head) > span {
+  padding: 2px 10px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-family: var(--ed-mono) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+body:not(#_) .writing-saved-answer-head h3 {
+  font-family: var(--ed-serif) !important;
+  font-size: 22px !important;
+  font-weight: 400 !important;
+}
+
+/* ---------- Corpus: marks in ink, not gold; less air above the head ---------- */
+body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel :is(.corpus-card-mark, .corpus-review-link > span:first-child, .corpus-review-link b, .corpus-review-link em) {
+  color: var(--muted) !important;
+}
+
+/* ---------- Sidebar text: regular weight; the active row gets 500 ---------- */
+@media (min-width: 981px) {
+  body:not(#_) .shell .nav .nav-button[data-view]:not(.nav-pgroup-item):not(.nav-exam-lead) {
+    font-weight: 400 !important;
+  }
+
+  body:not(#_) .shell .nav .nav-button[data-view]:not(.nav-pgroup-item):not(.nav-exam-lead).active {
+    font-weight: 500 !important;
+  }
+
+  body:not(#_) .shell .nav :is(.nav-pgroup-item, .nav-exam-lead-sub) {
+    font-weight: 400 !important;
+  }
+}
+
+body:not(#_) .shell :is(.nr-stage-text, .nr-stage-text b, #writingSaveStatus) {
+  font-weight: 400 !important;
+}
+
+/* ---------- Weight, enforced: everything reads at 400; headings, labels,
+   buttons and <strong> at 500; primary actions 600 (set above, id-weighted). ---------- */
+body:not(#_) :is(.workspace, .global-topbar, .modal, .p1-corpus-dialog) *:not(svg):not(svg *) {
+  font-weight: 400 !important;
+}
+
+body:not(#_) :is(.workspace, .global-topbar, .modal, .p1-corpus-dialog) :is(strong, b, h1, h2, h3, h4, h5, h6, th, dt, label, button, summary, legend),
+body:not(#_) :is(.workspace, .global-topbar, .modal, .p1-corpus-dialog) :is(button, h1, h2, h3, h4, h5, h6, th, label, legend) *:not(svg):not(svg *) {
+  font-weight: 500 !important;
+}
+
+/* index labels ("01 · Speaking", "01 · P1"): muted mono, gold stays on the eyebrow dash only */
+body:not(#_) #homePanel .hx-area-index,
+body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-card-mark {
+  color: var(--muted) !important;
+}
+
+/* dark-mode leftovers in report interiors: no tinted cells, bars or label chips */
+body:not(#_) :is(.speaking-score-summary-grid, .writing-score-summary-grid) .score-cell {
+  border-left: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:not(#_) .detail-card .section-label,
+body:not(#_) :is(.p3-next-drill, .p3-skill-highlight, .p3-skill-item) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Narrow screens ---------- */
+@media (max-width: 980px) {
+  /* the sidebar section labels belong to the desktop column only */
+  body:not(#_) .nav .nav-section-label {
+    display: none !important;
+  }
+
+  /* practice header: status above, controls below, nothing squeezed */
+  body:not(#_) #practicePanel .exam-status {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    height: auto !important;
+  }
+
+  body:not(#_) #practicePanel #examStatusText {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+    writing-mode: horizontal-tb !important;
+  }
+
+  body:not(#_) #practicePanel .exam-actions {
+    flex: 1 1 100% !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+    min-width: 0 !important;
+  }
+
+  body:not(#_) #practicePanel,
+  body:not(#_) #practicePanel #practiceGrid {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 760px) {
+  body:not(#_) #practicePanel #practiceGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  body:not(#_) #practicePanel :is(#promptPane, #recorderPane) {
+    min-width: 0 !important;
+  }
+
+  body:not(#_) #promptPane #promptCard {
+    font-size: 26px !important;
+    overflow-wrap: anywhere;
   }
 }

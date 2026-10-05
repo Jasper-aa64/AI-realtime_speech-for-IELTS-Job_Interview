@@ -37,7 +37,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261005-ui-redesign-26">
+    <link rel="stylesheet" href="/styles.css?v=20261005-ui-redesign-37">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -298,8 +298,7 @@
 
           <section class="hx-areas" aria-labelledby="hxAreasTitle">
             <header class="hx-sec-head">
-              <p class="hx-eyebrow">Training paths</p>
-              <h2 id="hxAreasTitle">三条训练线</h2>
+              <p class="hx-eyebrow" id="hxAreasTitle">Training paths</p>
               <a class="hx-sec-more" data-view="corpus" href="?view=corpus">进入语料库 <span aria-hidden="true">→</span></a>
             </header>
             <div class="hx-area-grid">
@@ -640,18 +639,73 @@
             </div>
             <div class="corpus-top-cards">
               <a class="corpus-home-card corpus-card-p1" data-corpus-home-target="p1Corpus" href="?view=p1Corpus">
-                <span class="corpus-card-mark">P1</span>
-                <span class="corpus-card-type">Speaking corpus</span>
-                <strong>我的 P1 语料库</strong>
-                <small>按话题整理短答素材，练习时可直接调出对应语料。</small>
-                <span class="corpus-card-cta">进入</span>
+                <span class="corpus-card-text">
+                  <span class="corpus-card-eyebrow"><span class="corpus-card-mark">P1</span><span class="corpus-card-type">Speaking corpus</span></span>
+                  <strong>我的 P1 语料库</strong>
+                  <small>按话题整理短答素材，练习时可直接调出对应语料。</small>
+                  <span class="corpus-card-cta">进入</span>
+                </span>
+                <span class="corpus-card-art" aria-hidden="true">
+                  <svg class="cca cca-p1" viewBox="0 0 260 170" focusable="false">
+                    <g class="cca-topics">
+                      <rect class="cca-hl" x="6" y="22" width="92" height="30" rx="15"/>
+                      <rect class="cca-chip" x="6" y="22" width="92" height="30" rx="15"/>
+                      <rect class="cca-chip" x="6" y="64" width="92" height="30" rx="15"/>
+                      <rect class="cca-chip" x="6" y="106" width="92" height="30" rx="15"/>
+                      <text x="52" y="41">Hometown</text>
+                      <text x="52" y="83">Work</text>
+                      <text x="52" y="125">Music</text>
+                    </g>
+                    <path class="cca-link" d="M100 79 C 116 79, 116 79, 130 79"/>
+                    <rect class="cca-sheet" x="132" y="14" width="122" height="142" rx="12"/>
+                    <text class="cca-tag" x="146" y="36">P1 · answer</text>
+                    <g class="cca-lines">
+                      <rect class="l1" x="146" y="50" width="94" height="6" rx="3"/>
+                      <rect class="l2" x="146" y="64" width="78" height="6" rx="3"/>
+                      <rect class="l3" x="146" y="78" width="88" height="6" rx="3"/>
+                      <rect class="l4" x="146" y="92" width="56" height="6" rx="3"/>
+                    </g>
+                    <g class="cca-wave">
+                      <rect x="146" y="120" width="4" height="22" rx="2"/>
+                      <rect x="154" y="120" width="4" height="22" rx="2"/>
+                      <rect x="162" y="120" width="4" height="22" rx="2"/>
+                      <rect x="170" y="120" width="4" height="22" rx="2"/>
+                      <rect x="178" y="120" width="4" height="22" rx="2"/>
+                      <rect x="186" y="120" width="4" height="22" rx="2"/>
+                      <rect x="194" y="120" width="4" height="22" rx="2"/>
+                    </g>
+                    <circle class="cca-mic" cx="232" cy="131" r="10"/>
+                  </svg>
+                </span>
               </a>
               <a class="corpus-home-card corpus-card-p2" data-corpus-home-target="p2Corpus" href="?view=p2Corpus">
-                <span class="corpus-card-mark">P2</span>
-                <span class="corpus-card-type">Cue-card system</span>
-                <strong>P2串题+P3追问</strong>
-                <small>维护 P2 串题正文，并给每张素材补好可复用的 P3 追问。</small>
-                <span class="corpus-card-cta">进入</span>
+                <span class="corpus-card-text">
+                  <span class="corpus-card-eyebrow"><span class="corpus-card-mark">P2</span><span class="corpus-card-type">Cue-card system</span></span>
+                  <strong>P2 串题 + P3 追问</strong>
+                  <small>维护 P2 串题正文，并给每张素材补好可复用的 P3 追问。</small>
+                  <span class="corpus-card-cta">进入</span>
+                </span>
+                <span class="corpus-card-art" aria-hidden="true">
+                  <svg class="cca cca-p2" viewBox="0 0 260 170" focusable="false">
+                    <rect class="cca-sheet" x="6" y="22" width="112" height="126" rx="12"/>
+                    <text class="cca-tag" x="20" y="44">P2 · cue card</text>
+                    <rect class="cca-bar" x="20" y="54" width="84" height="7" rx="3.5"/>
+                    <g class="cca-bullets">
+                      <circle cx="23" cy="78" r="2.5"/><rect x="31" y="75" width="66" height="6" rx="3"/>
+                      <circle cx="23" cy="96" r="2.5"/><rect x="31" y="93" width="54" height="6" rx="3"/>
+                      <circle cx="23" cy="114" r="2.5"/><rect x="31" y="111" width="62" height="6" rx="3"/>
+                      <circle cx="23" cy="132" r="2.5"/><rect x="31" y="129" width="44" height="6" rx="3"/>
+                    </g>
+                    <g class="cca-branches">
+                      <path class="b1" d="M120 85 C 150 85, 150 36, 176 36"/>
+                      <path class="b2" d="M120 85 C 150 85, 150 85, 176 85"/>
+                      <path class="b3" d="M120 85 C 150 85, 150 134, 176 134"/>
+                    </g>
+                    <g class="cca-q q1"><rect x="178" y="22" width="76" height="28" rx="14"/><text x="216" y="40">Why?</text></g>
+                    <g class="cca-q q2"><rect x="178" y="71" width="76" height="28" rx="14"/><text x="216" y="89">Compare</text></g>
+                    <g class="cca-q q3"><rect x="178" y="120" width="76" height="28" rx="14"/><text x="216" y="138">In future</text></g>
+                  </svg>
+                </span>
               </a>
             </div>
             <div class="corpus-review-lane">
@@ -1720,9 +1774,9 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20261005-ui-redesign-26"></script>
-    <script src="/onboarding.js?v=20260615-onboarding-13"></script>
-    <script src="/home-dashboard.js?v=20261005-ui-redesign-26"></script>
-    <script src="/report-meters.js?v=20261005-ui-redesign-26"></script>
+    <script src="/app.js?v=20261005-ui-redesign-31"></script>
+    <script src="/onboarding.js?v=20261005-onboarding-14"></script>
+    <script src="/home-dashboard.js?v=20261005-ui-redesign-31"></script>
+    <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>
   </body>
 </html>

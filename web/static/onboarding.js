@@ -700,17 +700,13 @@
   }
 
   function boot() {
-    waitForReady(function () {
-      // Only mount the floating "教程" launcher. The tour no longer auto-opens
-      // on first visit — guests (and anyone demoing the app) can browse freely,
-      // and start the walkthrough on demand via the launcher or
-      // window.IELTSOnboarding.start().
-      addLauncher();
-    });
+    // The "教程" launcher is retired until the video tutorial ships; the tour
+    // stays reachable via window.IELTSOnboarding.start() / .showLauncher().
   }
 
   window.IELTSOnboarding = {
     start: function () { start(true); },
+    showLauncher: function () { waitForReady(addLauncher); },
     finish: finish,
     reset: function () { try { localStorage.removeItem(DONE_KEY); } catch (e) {} },
   };
