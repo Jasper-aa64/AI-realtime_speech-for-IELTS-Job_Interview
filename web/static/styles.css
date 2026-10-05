@@ -41840,44 +41840,6 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
 }
 
 /* =====================================================================
-   ENTRANCE MOTION: in-flow content cards rise in when a view (or a report)
-   is shown. Only in-flow blocks animate — never the panels themselves,
-   since a transform there would re-anchor their fixed-position children.
-   ===================================================================== */
-@keyframes ui-rise {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  #homePanel:not(.hidden) :is(.hx-hero, .hx-lanes),
-  #corpusPanel:not(.hidden) :is(.corpus-home-kicker-bar, .corpus-top-cards > *, .corpus-review-lane),
-  :is(#detailPanel, #writingReportDetail) > :is(.detail-card, section),
-  #writingPanel:not(.hidden) .writing-shell > *,
-  #spellingPracticeCard .nr-prompt {
-    animation: ui-rise 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  }
-
-  #homePanel:not(.hidden) .hx-lanes,
-  #corpusPanel:not(.hidden) .corpus-top-cards > :nth-child(1),
-  #writingPanel:not(.hidden) .writing-shell > :nth-child(2),
-  :is(#detailPanel, #writingReportDetail) > :nth-child(2) {
-    animation-delay: 70ms;
-  }
-
-  #corpusPanel:not(.hidden) .corpus-top-cards > :nth-child(2),
-  #writingPanel:not(.hidden) .writing-shell > :nth-child(3),
-  :is(#detailPanel, #writingReportDetail) > :nth-child(3) {
-    animation-delay: 140ms;
-  }
-
-  #corpusPanel:not(.hidden) .corpus-review-lane,
-  :is(#detailPanel, #writingReportDetail) > :nth-child(n + 4) {
-    animation-delay: 200ms;
-  }
-}
-
-/* =====================================================================
    P3 LAUNCH: setup steps as numbered sections, source options as
    selectable tiles with a check mark (theme accent).
    ===================================================================== */
@@ -42711,7 +42673,7 @@ body.theme-dark #homePanel .hx-slide-media img {
 #homePanel .hx-sec-head h2 {
   margin: 0;
   font-family: var(--ed-serif);
-  font-size: clamp(34px, 3.6vw, 48px);
+  font-size: clamp(24px, 2vw, 30px);
   font-weight: 400;
   line-height: 1;
   letter-spacing: -0.015em;
@@ -42781,9 +42743,9 @@ body.theme-dark #homePanel .hx-slide-media img {
   margin: 0;
   padding-bottom: 4px;
   font-family: var(--ed-serif);
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 400;
-  line-height: 1.05;
+  line-height: 1.1;
   background: linear-gradient(var(--accent), var(--accent)) left bottom / 0 2px no-repeat;
   transition: background-size 450ms var(--ed-ease), color 200ms ease;
 }
