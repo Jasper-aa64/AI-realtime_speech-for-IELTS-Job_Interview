@@ -37,7 +37,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261005-ui-redesign-26">
+    <link rel="stylesheet" href="/styles.css?v=20261005-ui-redesign-29">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -189,152 +189,113 @@
           </div>
         </div>
 
-        <section id="homePanel" class="panel hx-home" aria-label="首页">
-          <div class="hx-hero">
-            <div class="hx-intro">
-              <p class="hx-kicker">IELTS Sketchbook</p>
-              <h2 class="hx-title">
-                <span class="hx-title-top">练习真题，沉淀成自己的语料库</span>
-                <em class="hx-title-main">IELTS Studio</em>
-              </h2>
-              <p class="hx-topics"><span>口语</span><i aria-hidden="true">|</i><span>写作</span><i aria-hidden="true">|</i><span>语料</span><i aria-hidden="true">|</i><span>复习</span></p>
-              <div class="hx-actions" aria-label="快速开始">
-                <a class="hx-btn hx-btn--solid" data-home-mode="p1" href="?view=p1">开始口语练习 <span aria-hidden="true">→</span></a>
-                <a class="hx-btn" data-view="writing" href="?view=writing">写一篇作文 <span aria-hidden="true">→</span></a>
-              </div>
-            </div>
+        <section id="homePanel" class="panel dz-home" aria-label="首页">
+          <header class="dz-home-head">
+            <h2 class="dz-home-title">练习真题，沉淀成自己的语料库。<span>口语、写作、语料和复习，放在同一个工作台里。</span></h2>
+            <nav class="dz-pills" aria-label="快速开始">
+              <a class="dz-pill dz-pill--solid" data-home-mode="p1" href="?view=p1">开始口语练习</a>
+              <a class="dz-pill" data-home-mode="p2" href="?view=p2">P2 Cue Card</a>
+              <a class="dz-pill" data-home-mode="p3" href="?view=p3">P3 讨论</a>
+              <a class="dz-pill" id="startFullMockBtn" data-home-mode="mock" href="?view=mock">完整模考</a>
+              <a class="dz-pill" data-view="writing" href="?view=writing">写一篇作文</a>
+            </nav>
+          </header>
 
-            <section class="hx-show" data-hx-show aria-roledescription="carousel" aria-label="功能一览">
-              <div class="hx-stage">
-              <a class="hx-slide is-active" data-view="history" href="?view=history" aria-roledescription="slide">
-                <span class="hx-slide-media">
-                  <img src="/assets/home/showcase/speaking-report-overview.jpg" alt="" decoding="async">
-                  <span class="hx-slide-chip">Speaking</span>
-                </span>
-                <span class="hx-slide-body">
-                  <strong>口语报告</strong>
-                  <span>总分、逐题点评和复盘重点，一页看完这次练习哪里丢分。</span>
-                </span>
-              </a>
-              <a class="hx-slide" data-home-mode="p3" href="?view=p3" aria-roledescription="slide" aria-hidden="true" tabindex="-1">
-                <span class="hx-slide-media">
-                  <img src="/assets/home/showcase/speaking-p3-feedback.jpg" alt="" loading="lazy" decoding="async">
-                  <span class="hx-slide-chip">Speaking</span>
-                </span>
-                <span class="hx-slide-body">
-                  <strong>P3 论证点评</strong>
-                  <span>按论证方式拆开每一段回答，告诉你下一句该怎么展开。</span>
-                </span>
-              </a>
-              <a class="hx-slide" data-view="writingReports" href="?view=writingReports" aria-roledescription="slide" aria-hidden="true" tabindex="-1">
-                <span class="hx-slide-media">
-                  <img src="/assets/home/showcase/writing-task1-report.jpg" alt="" loading="lazy" decoding="async">
-                  <span class="hx-slide-chip">Writing</span>
-                </span>
-                <span class="hx-slide-body">
-                  <strong>写作批改</strong>
-                  <span>四项评分加段落级讲评，拼写和语法错误直接标在原文上。</span>
-                </span>
-              </a>
-              <a class="hx-slide" data-view="corpus" href="?view=corpus" aria-roledescription="slide" aria-hidden="true" tabindex="-1">
-                <span class="hx-slide-media">
-                  <img src="/assets/home/showcase/corpus-p2-story-bank.jpg" alt="" loading="lazy" decoding="async">
-                  <span class="hx-slide-chip">Corpus</span>
-                </span>
-                <span class="hx-slide-body">
-                  <strong>P2 串题素材</strong>
-                  <span>一个故事串多道 Cue Card，练过的答案沉淀成自己的素材库。</span>
-                </span>
-              </a>
-              <a class="hx-slide" data-view="takeawayBook" href="?view=takeawayBook" aria-roledescription="slide" aria-hidden="true" tabindex="-1">
-                <span class="hx-slide-media">
-                  <img src="/assets/home/showcase/takeaway-review.jpg" alt="" loading="lazy" decoding="async">
-                  <span class="hx-slide-chip">Review</span>
-                </span>
-                <span class="hx-slide-body">
-                  <strong>Takeaway 复习</strong>
-                  <span>收藏的好表达按间隔复习，到期提醒，越用越熟。</span>
-                </span>
-              </a>
-                <span class="hx-count" aria-hidden="true"><b data-hx-count>01</b><i>/</i>05</span>
-              </div>
-              <div class="hx-bar">
-                <div class="hx-progress"><button type="button" class="hx-seg is-on" data-go="0" aria-label="1 / 5"><i></i></button><button type="button" class="hx-seg" data-go="1" aria-label="2 / 5"><i></i></button><button type="button" class="hx-seg" data-go="2" aria-label="3 / 5"><i></i></button><button type="button" class="hx-seg" data-go="3" aria-label="4 / 5"><i></i></button><button type="button" class="hx-seg" data-go="4" aria-label="5 / 5"><i></i></button></div>
-                <button type="button" class="hx-nav" data-step="-1" aria-label="上一张"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M10 3 5 8l5 5"></path></svg></button>
-                <button type="button" class="hx-nav" data-step="1" aria-label="下一张"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="m6 3 5 5-5 5"></path></svg></button>
-              </div>
-            </section>
-
-            <aside class="hx-panel" aria-label="练习数据">
-              <dl class="hx-stats">
-                <div class="hx-stat">
-                  <dt>口语报告</dt>
-                  <dd><a data-view="history" href="?view=history" data-hx-stat="speaking">–</a></dd>
-                </div>
-                <div class="hx-stat">
-                  <dt>写作篇数</dt>
-                  <dd><a data-view="writingReports" href="?view=writingReports" data-hx-stat="writing">–</a></dd>
-                </div>
-                <div class="hx-stat">
-                  <dt>最近练习</dt>
-                  <dd class="hx-stat-date" data-hx-stat="last">–</dd>
-                </div>
+          <div class="dz-grid">
+            <article class="dz-card dz-card--stats" aria-label="练习数据">
+              <span class="dz-card-label">Progress</span>
+              <strong class="dz-card-title">练习数据</strong>
+              <dl class="dz-stats">
+                <div><dt>口语报告</dt><dd><a data-view="history" href="?view=history" data-hx-stat="speaking">–</a></dd></div>
+                <div><dt>写作篇数</dt><dd><a data-view="writingReports" href="?view=writingReports" data-hx-stat="writing">–</a></dd></div>
+                <div><dt>最近练习</dt><dd class="dz-stat-date" data-hx-stat="last">–</dd></div>
               </dl>
-              <p class="hx-panel-label">待复习</p>
-              <div class="hx-chips">
-                <a class="hx-chip" data-view="takeawayBook" href="?view=takeawayBook">Takeaway<sup data-hx-due="languageTakeawayDueDot"></sup></a>
-                <a class="hx-chip" data-view="writingTakeawayBook" href="?view=writingTakeawayBook">写作积累<sup data-hx-due="writingTakeawayDueDot"></sup></a>
-                <a class="hx-chip" data-view="spellingDrill" href="?view=spellingDrill">拼写训练<sup data-hx-due="spellingDrillDueDot"></sup></a>
+              <span class="dz-card-label dz-card-label--sub">待复习</span>
+              <div class="dz-chips">
+                <a class="dz-chip hx-chip" data-view="takeawayBook" href="?view=takeawayBook">Takeaway<sup data-hx-due="languageTakeawayDueDot"></sup></a>
+                <a class="dz-chip hx-chip" data-view="writingTakeawayBook" href="?view=writingTakeawayBook">写作积累<sup data-hx-due="writingTakeawayDueDot"></sup></a>
+                <a class="dz-chip hx-chip" data-view="spellingDrill" href="?view=spellingDrill">拼写训练<sup data-hx-due="spellingDrillDueDot"></sup></a>
               </div>
-              <p class="hx-panel-label">题库 · <span data-hx-bank="label">当前考季</span></p>
-              <div class="hx-chips">
-                <a class="hx-chip" data-home-mode="p1" href="?view=p1">P1 短问短答<sup data-hx-bank="p1"></sup></a>
-                <a class="hx-chip" data-home-mode="p2" href="?view=p2">P2 Cue Card<sup data-hx-bank="p2"></sup></a>
-                <a class="hx-chip" data-home-mode="p3" href="?view=p3">P3 追问<sup data-hx-bank="p3"></sup></a>
-                <a class="hx-chip hx-chip--more" data-view="corpus" href="?view=corpus">语料库 →</a>
-              </div>
-            </aside>
-          </div>
+            </article>
 
-          <section class="hx-areas" aria-labelledby="hxAreasTitle">
-            <header class="hx-sec-head">
-              <p class="hx-eyebrow">Training paths</p>
-              <h2 id="hxAreasTitle">三条训练线</h2>
-              <a class="hx-sec-more" data-view="corpus" href="?view=corpus">进入语料库 <span aria-hidden="true">→</span></a>
-            </header>
-            <div class="hx-area-grid">
-              <article class="hx-area">
-                <span class="hx-area-index">01 · Speaking</span>
-                <h3 class="hx-area-name">口语训练</h3>
-                <p class="hx-area-blurb">按考季真题抽题，录音作答，AI 追问、转写和评分。</p>
-                <ul class="hx-area-links">
-                  <li><a data-home-mode="p1" href="?view=p1"><b>P1</b><span>短问短答</span><i aria-hidden="true">→</i></a></li>
-                  <li><a data-home-mode="p2" href="?view=p2"><b>P2</b><span>Cue Card</span><i aria-hidden="true">→</i></a></li>
-                  <li><a data-home-mode="p3" href="?view=p3"><b>P3</b><span>深入讨论</span><i aria-hidden="true">→</i></a></li>
-                  <li><a id="startFullMockBtn" data-home-mode="mock" href="?view=mock"><b>Mock</b><span>完整模拟</span><i aria-hidden="true">→</i></a></li>
-                </ul>
-              </article>
-              <article class="hx-area">
-                <span class="hx-area-index">02 · Writing</span>
-                <h3 class="hx-area-name">写作闭环</h3>
-                <p class="hx-area-blurb">每日一篇，段落级讲评，拼写和语法错误标在原文上。</p>
-                <ul class="hx-area-links">
-                  <li><a data-view="writing" href="?view=writing"><b>Task</b><span>每日写作</span><i aria-hidden="true">→</i></a></li>
-                  <li><a data-view="writingReports" href="?view=writingReports"><b>Report</b><span>批改报告</span><i aria-hidden="true">→</i></a></li>
-                </ul>
-              </article>
-              <article class="hx-area">
-                <span class="hx-area-index">03 · Review</span>
-                <h3 class="hx-area-name">语料与复习</h3>
-                <p class="hx-area-blurb">练过的答案和好表达沉淀下来，按间隔复习到期提醒。</p>
-                <ul class="hx-area-links">
-                  <li><a data-view="corpus" href="?view=corpus"><b>Corpus</b><span>语料库</span><i aria-hidden="true">→</i></a></li>
-                  <li><a data-view="writingTakeawayBook" href="?view=writingTakeawayBook"><b>Takeaway</b><span>写作积累</span><i aria-hidden="true">→</i></a></li>
-                  <li><a data-view="spellingDrill" href="?view=spellingDrill"><b>Drill</b><span>拼写错词</span><i aria-hidden="true">→</i></a></li>
-                </ul>
-              </article>
-            </div>
-          </section>
+              <a class="dz-card dz-card--media" data-view="history" href="?view=history">
+                <span class="dz-card-media"><img src="/assets/home/showcase/speaking-report-overview.jpg" alt="" loading="lazy" decoding="async"></span>
+                <span class="dz-card-body">
+                  <span class="dz-card-label">Speaking · Report</span>
+                  <strong class="dz-card-title">口语报告</strong>
+                  <span class="dz-card-desc">总分、逐题点评和复盘重点，一页看完这次练习哪里丢分。</span>
+                </span>
+              </a>
+
+            <article class="dz-card dz-card--list">
+              <span class="dz-card-label">Speaking</span>
+              <strong class="dz-card-title">口语训练</strong>
+              <span class="dz-card-desc">按考季真题抽题，录音作答，AI 追问、转写和评分。</span>
+              <ul class="dz-rows">
+                <li><a data-home-mode="p1" href="?view=p1"><b>P1</b><span>短问短答</span></a></li>
+                <li><a data-home-mode="p2" href="?view=p2"><b>P2</b><span>Cue Card</span></a></li>
+                <li><a data-home-mode="p3" href="?view=p3"><b>P3</b><span>深入讨论</span></a></li>
+                <li><a data-home-mode="mock" href="?view=mock"><b>Mock</b><span>完整模拟</span></a></li>
+              </ul>
+            </article>
+
+              <a class="dz-card dz-card--media" data-view="writingReports" href="?view=writingReports">
+                <span class="dz-card-media"><img src="/assets/home/showcase/writing-task1-report.jpg" alt="" loading="lazy" decoding="async"></span>
+                <span class="dz-card-body">
+                  <span class="dz-card-label">Writing · Feedback</span>
+                  <strong class="dz-card-title">写作批改</strong>
+                  <span class="dz-card-desc">四项评分加段落级讲评，拼写和语法错误直接标在原文上。</span>
+                </span>
+              </a>
+
+              <a class="dz-card dz-card--media" data-home-mode="p3" href="?view=p3">
+                <span class="dz-card-media"><img src="/assets/home/showcase/speaking-p3-feedback.jpg" alt="" loading="lazy" decoding="async"></span>
+                <span class="dz-card-body">
+                  <span class="dz-card-label">Speaking · Part 3</span>
+                  <strong class="dz-card-title">按论证方式点评</strong>
+                  <span class="dz-card-desc">把每一段回答拆开，告诉你下一句该怎么展开。</span>
+                </span>
+              </a>
+
+            <article class="dz-card dz-card--list">
+              <span class="dz-card-label">Question bank · <span data-hx-bank="label">当前考季</span></span>
+              <strong class="dz-card-title">题库</strong>
+              <ul class="dz-rows">
+                <li><a data-home-mode="p1" href="?view=p1"><b>P1</b><span>短问短答</span><em data-hx-bank="p1"></em></a></li>
+                <li><a data-home-mode="p2" href="?view=p2"><b>P2</b><span>Cue Card</span><em data-hx-bank="p2"></em></a></li>
+                <li><a data-home-mode="p3" href="?view=p3"><b>P3</b><span>追问</span><em data-hx-bank="p3"></em></a></li>
+              </ul>
+            </article>
+
+              <a class="dz-card dz-card--media" data-view="corpus" href="?view=corpus">
+                <span class="dz-card-media"><img src="/assets/home/showcase/corpus-p2-story-bank.jpg" alt="" loading="lazy" decoding="async"></span>
+                <span class="dz-card-body">
+                  <span class="dz-card-label">Corpus</span>
+                  <strong class="dz-card-title">P2 串题素材</strong>
+                  <span class="dz-card-desc">一个故事串多道 Cue Card，练过的答案沉淀成自己的素材库。</span>
+                </span>
+              </a>
+
+            <a class="dz-card dz-card--text" data-view="writing" href="?view=writing">
+              <span class="dz-card-label">Writing · Daily</span>
+              <strong class="dz-card-title">每日写作</strong>
+              <span class="dz-card-desc">剑雅真题和考季题库，写完保存，再发起 AI 评分与辅导。</span>
+            </a>
+              <a class="dz-card dz-card--media" data-view="takeawayBook" href="?view=takeawayBook">
+                <span class="dz-card-media"><img src="/assets/home/showcase/takeaway-review.jpg" alt="" loading="lazy" decoding="async"></span>
+                <span class="dz-card-body">
+                  <span class="dz-card-label">Review</span>
+                  <strong class="dz-card-title">Takeaway 复习</strong>
+                  <span class="dz-card-desc">收藏的好表达按间隔复习，到期提醒，越用越熟。</span>
+                </span>
+              </a>
+
+            <a class="dz-card dz-card--text" data-view="spellingDrill" href="?view=spellingDrill">
+              <span class="dz-card-label">Review · Spelling</span>
+              <strong class="dz-card-title">拼写训练</strong>
+              <span class="dz-card-desc">作文里拼错的词自动收进来，按记忆曲线反复默写。</span>
+            </a>
+          </div>
         </section>
 
         <section id="practicePanel" class="panel practice-panel hidden">
@@ -1720,9 +1681,9 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20261005-ui-redesign-26"></script>
+    <script src="/app.js?v=20261005-ui-redesign-29"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
-    <script src="/home-dashboard.js?v=20261005-ui-redesign-26"></script>
-    <script src="/report-meters.js?v=20261005-ui-redesign-26"></script>
+    <script src="/home-dashboard.js?v=20261005-ui-redesign-29"></script>
+    <script src="/report-meters.js?v=20261005-ui-redesign-29"></script>
   </body>
 </html>
