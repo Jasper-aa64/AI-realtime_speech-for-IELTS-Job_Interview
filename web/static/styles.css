@@ -40525,6 +40525,30 @@ body.theme-dark.font-academic .workspace.corpus-workspace .p2-corpus-head .corpu
   text-overflow: clip !important;
 }
 
+#accountProfilePanel .account-appearance-select {
+  grid-row: 2;
+  align-self: center;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#accountProfilePanel .account-appearance-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 @media (max-width: 860px) {
   #accountProfilePanel .account-card-footer {
     grid-template-columns: 1fr !important;

@@ -6,8 +6,8 @@ const htmlSource = fs.readFileSync(path.join(__dirname, "..", "web", "static", "
 const cssSource = fs.readFileSync(path.join(__dirname, "..", "web", "static", "styles.css"), "utf8");
 const appearanceSource = fs.readFileSync(path.join(__dirname, "..", "web", "static", "appearance.js"), "utf8");
 
-assert.match(htmlSource, /localStorage\.getItem\("ielts-dark-mode"\)\s*===\s*"1"/, "Boot should read the saved dark-mode preference before CSS paints.");
-assert.match(htmlSource, /classList\.add\("theme-dark",\s*"boot-theme-dark"\)/, "Boot should mark the document as dark before body scripts run.");
+assert.match(htmlSource, /<script src="\/appearance\.js\?[^\"]+"><\/script>\s*<script>window\.IELTSAppearance\.bootstrapAppearance\(\);<\/script>[\s\S]*?<link rel="stylesheet"/, "Boot should use the shared appearance resolver before CSS paints.");
+assert.match(appearanceSource, /classList\.add\("theme-dark",\s*"boot-theme-dark"\)/, "Boot should mark the document as dark before body scripts run.");
 assert.match(htmlSource, /<style id="boot-critical-style">[\s\S]*body\.app-booting \.shell \{ visibility: hidden; \}/, "Boot should hide the unrendered shell before the main stylesheet loads.");
 assert.match(htmlSource, /html\.boot-theme-dark body\.app-booting \{ background: #071119; \}/, "Boot critical CSS should keep hard-refresh dark mode dark before the main CSS loads.");
 assert.match(cssSource, /html\.boot-theme-dark body\.app-booting::before/, "Boot overlay should have a first-paint dark selector independent of body.theme-dark.");

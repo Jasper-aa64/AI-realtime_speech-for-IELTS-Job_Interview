@@ -46,6 +46,47 @@ Questions to answer:
 
 ## Common Mistakes
 
+### Appearance Preference Must Stay Separate from Effective Darkness
+
+**Scope:** Shared web/Qt page appearance in `web/static/appearance.js`.
+
+**Signatures:** `bootstrapAppearance()` runs in the document head before styles;
+`createAppearanceControls({ state }).applyAppearanceMode(mode, { skipPersist })`
+updates the runtime selection.
+
+**Contract:** `state.appearanceMode` is `light`, `dark`, or `system`;
+`state.darkMode` is the effective boolean driving `theme-dark` on html/body.
+Persist the chosen mode in `ielts-appearance-mode`. A valid new preference wins
+over legacy `ielts-dark-mode` (`1` = manual dark, `0` = manual light).
+Explicit manual changes also update the legacy key; system changes never do.
+Use the same resolver for first paint and runtime. Update cache-busters when
+changing appearance, app bindings, or stylesheet assets.
+
+**Validation / errors:** Invalid/missing new mode falls back to valid legacy
+manual choice, then system. Denied storage follows system and allows session-only
+changes. Missing `matchMedia` resolves system to light. Only system mode reacts
+to `(prefers-color-scheme: dark)` changes; events must not write storage.
+
+**Cases:** Good: a saved system choice follows OS changes after reload even when
+legacy storage says dark. Base: fresh user follows OS. Bad: OS dark writes `1`
+and accidentally turns system mode into a manual preference.
+
+**Tests:** `tests/appearance-mode.test.js` covers first-paint/runtime agreement,
+legacy/new precedence, invalid data, manual/system transitions, persistence,
+storage denial, and media-query compatibility. Keep boot overlay checks green.
+
+**Wrong vs correct:**
+
+```js
+// Wrong: treats an OS event as a persisted manual selection.
+applyDarkMode(systemQuery.matches);
+
+// Correct: refresh effective darkness only for system mode.
+if (state.appearanceMode === "system") {
+  applyAppearanceMode("system", { skipPersist: true });
+}
+```
+
 <!-- State management mistakes your team has made -->
 
 ### Takeaway Daily Recall Uses 4 AM Review Days

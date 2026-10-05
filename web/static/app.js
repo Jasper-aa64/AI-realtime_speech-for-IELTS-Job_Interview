@@ -35,6 +35,7 @@ const state = {
   userExitedPractice: false,
   practiceViewBeforeSettings: null,
   darkMode: false,
+  appearanceMode: "system",
   uiLanguage: "zh",
   p3Topics: [],
   p3SelectedTopic: "",
@@ -426,8 +427,11 @@ const uiTranslations = {
     "bank.archiveSelect": "选择历史考季",
     "bank.defaultLabel": "当季全部",
     "bank.followups": "P3 参考追问",
-    "settings.darkMode": "深色外观",
-    "settings.darkModeAria": "切换深色外观",
+    "settings.appearance": "外观",
+    "settings.appearanceAria": "选择外观",
+    "settings.appearance.light": "浅色",
+    "settings.appearance.dark": "深色",
+    "settings.appearance.system": "跟随系统",
     "settings.language": "界面语言",
     "settings.languageAria": "选择界面语言",
     "settings.aiSource": "AI 评分来源",
@@ -567,8 +571,11 @@ const uiTranslations = {
     "bank.archiveSelect": "Choose past season",
     "bank.defaultLabel": "Current bank",
     "bank.followups": "P3 follow-ups",
-    "settings.darkMode": "Dark mode",
-    "settings.darkModeAria": "Toggle dark mode",
+    "settings.appearance": "Appearance",
+    "settings.appearanceAria": "Choose appearance",
+    "settings.appearance.light": "Light",
+    "settings.appearance.dark": "Dark",
+    "settings.appearance.system": "System",
     "settings.language": "Interface language",
     "settings.languageAria": "Choose interface language",
     "settings.aiSource": "AI scoring source",
@@ -1164,7 +1171,7 @@ if (!appearance) {
 }
 const {
   applyFontStyle,
-  applyDarkMode,
+  applyAppearanceMode,
   loadDarkMode,
   loadFontStyle,
 } = appearance;
@@ -14966,7 +14973,7 @@ function bindEvents() {
   $("aiSourceSelect")?.addEventListener("change", (event) => {
     saveAiSourcePreference(event.target.value).catch(showError);
   });
-  $("darkModeToggle")?.addEventListener("change", (event) => applyDarkMode(event.target.checked));
+  $("appearanceModeSelect")?.addEventListener("change", (event) => applyAppearanceMode(event.target.value));
   document.querySelectorAll("[data-ui-language-option]").forEach((button) => {
     button.addEventListener("click", () => applyUiLanguage(button.dataset.uiLanguageOption));
   });

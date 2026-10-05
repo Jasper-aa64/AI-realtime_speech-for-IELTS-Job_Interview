@@ -68,8 +68,8 @@ assert.match(
 
 assert.match(
   index,
-  /styles\.css\?v=20261005-ui-redesign-90/,
-  "The stylesheet cache-buster should change when the add-word button color changes.",
+  /<link rel="stylesheet" href="\/styles\.css\?v=[^"]+">/,
+  "The stylesheet must retain a cache-buster as later UI changes update its version.",
 );
 
 console.log("Spelling add dialog color scope checks passed.");
