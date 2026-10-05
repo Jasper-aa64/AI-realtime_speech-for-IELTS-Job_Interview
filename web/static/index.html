@@ -37,7 +37,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261005-ui-redesign-13">
+    <link rel="stylesheet" href="/styles.css?v=20261005-ui-redesign-17">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -194,13 +194,13 @@
             <div class="hx-intro">
               <p class="hx-kicker">IELTS Sketchbook</p>
               <h2 class="hx-title">
-                <span class="hx-title-top">练习真题</span>
-                <em class="hx-title-main">沉淀成自己的语料库</em>
+                <span class="hx-title-top">练习真题，沉淀成自己的语料库</span>
+                <em class="hx-title-main">IELTS Studio</em>
               </h2>
               <p class="hx-topics"><span>口语</span><i aria-hidden="true">|</i><span>写作</span><i aria-hidden="true">|</i><span>语料</span><i aria-hidden="true">|</i><span>复习</span></p>
               <div class="hx-actions" aria-label="快速开始">
                 <a class="hx-btn hx-btn--solid" data-home-mode="p1" href="?view=p1">开始口语练习 <span aria-hidden="true">→</span></a>
-                <a class="hx-btn" data-view="writing" href="?view=writing">写一篇作文</a>
+                <a class="hx-btn" data-view="writing" href="?view=writing">写一篇作文 <span aria-hidden="true">→</span></a>
               </div>
             </div>
 
@@ -296,43 +296,45 @@
             </aside>
           </div>
 
-          <div class="hx-lanes" aria-label="训练工作流">
-            <section class="hx-lane">
-              <header class="hx-lane-head">
-                <span>Speaking</span>
-                <strong>口语训练</strong>
-              </header>
-              <div class="hx-links hx-links--4">
-                <a data-home-mode="p1" href="?view=p1"><b>P1</b><span>短问短答</span></a>
-                <a data-home-mode="p2" href="?view=p2"><b>P2</b><span>Cue Card</span></a>
-                <a data-home-mode="p3" href="?view=p3"><b>P3</b><span>深入讨论</span></a>
-                <a id="startFullMockBtn" data-home-mode="mock" href="?view=mock"><b>Mock</b><span>完整模拟</span></a>
-              </div>
-            </section>
-
-            <section class="hx-lane">
-              <header class="hx-lane-head">
-                <span>Writing</span>
-                <strong>写作闭环</strong>
-              </header>
-              <div class="hx-links hx-links--2">
-                <a data-view="writing" href="?view=writing"><b>Task</b><span>每日写作</span></a>
-                <a data-view="writingReports" href="?view=writingReports"><b>Report</b><span>批改报告</span></a>
-              </div>
-            </section>
-
-            <section class="hx-lane">
-              <header class="hx-lane-head">
-                <span>Review</span>
-                <strong>语料与复习</strong>
-              </header>
-              <div class="hx-links hx-links--3">
-                <a data-view="corpus" href="?view=corpus"><b>Corpus</b><span>语料库</span></a>
-                <a data-view="writingTakeawayBook" href="?view=writingTakeawayBook"><b>Takeaway</b><span>写作积累</span></a>
-                <a data-view="spellingDrill" href="?view=spellingDrill"><b>Drill</b><span>拼写错词</span></a>
-              </div>
-            </section>
-          </div>
+          <section class="hx-areas" aria-labelledby="hxAreasTitle">
+            <header class="hx-sec-head">
+              <p class="hx-eyebrow">Training paths</p>
+              <h2 id="hxAreasTitle">三条训练线</h2>
+              <a class="hx-sec-more" data-view="corpus" href="?view=corpus">进入语料库 <span aria-hidden="true">→</span></a>
+            </header>
+            <div class="hx-area-grid">
+              <article class="hx-area">
+                <span class="hx-area-index">01 · Speaking</span>
+                <h3 class="hx-area-name">口语训练</h3>
+                <p class="hx-area-blurb">按考季真题抽题，录音作答，AI 追问、转写和评分。</p>
+                <ul class="hx-area-links">
+                  <li><a data-home-mode="p1" href="?view=p1"><b>P1</b><span>短问短答</span><i aria-hidden="true">→</i></a></li>
+                  <li><a data-home-mode="p2" href="?view=p2"><b>P2</b><span>Cue Card</span><i aria-hidden="true">→</i></a></li>
+                  <li><a data-home-mode="p3" href="?view=p3"><b>P3</b><span>深入讨论</span><i aria-hidden="true">→</i></a></li>
+                  <li><a id="startFullMockBtn" data-home-mode="mock" href="?view=mock"><b>Mock</b><span>完整模拟</span><i aria-hidden="true">→</i></a></li>
+                </ul>
+              </article>
+              <article class="hx-area">
+                <span class="hx-area-index">02 · Writing</span>
+                <h3 class="hx-area-name">写作闭环</h3>
+                <p class="hx-area-blurb">每日一篇，段落级讲评，拼写和语法错误标在原文上。</p>
+                <ul class="hx-area-links">
+                  <li><a data-view="writing" href="?view=writing"><b>Task</b><span>每日写作</span><i aria-hidden="true">→</i></a></li>
+                  <li><a data-view="writingReports" href="?view=writingReports"><b>Report</b><span>批改报告</span><i aria-hidden="true">→</i></a></li>
+                </ul>
+              </article>
+              <article class="hx-area">
+                <span class="hx-area-index">03 · Review</span>
+                <h3 class="hx-area-name">语料与复习</h3>
+                <p class="hx-area-blurb">练过的答案和好表达沉淀下来，按间隔复习到期提醒。</p>
+                <ul class="hx-area-links">
+                  <li><a data-view="corpus" href="?view=corpus"><b>Corpus</b><span>语料库</span><i aria-hidden="true">→</i></a></li>
+                  <li><a data-view="writingTakeawayBook" href="?view=writingTakeawayBook"><b>Takeaway</b><span>写作积累</span><i aria-hidden="true">→</i></a></li>
+                  <li><a data-view="spellingDrill" href="?view=spellingDrill"><b>Drill</b><span>拼写错词</span><i aria-hidden="true">→</i></a></li>
+                </ul>
+              </article>
+            </div>
+          </section>
         </section>
 
         <section id="practicePanel" class="panel practice-panel hidden">
@@ -1718,9 +1720,9 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20261005-ui-redesign-13"></script>
+    <script src="/app.js?v=20261005-ui-redesign-17"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
-    <script src="/home-dashboard.js?v=20261005-ui-redesign-13"></script>
-    <script src="/report-meters.js?v=20261005-ui-redesign-13"></script>
+    <script src="/home-dashboard.js?v=20261005-ui-redesign-17"></script>
+    <script src="/report-meters.js?v=20261005-ui-redesign-17"></script>
   </body>
 </html>

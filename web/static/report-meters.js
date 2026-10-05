@@ -12,13 +12,16 @@
   };
 
   const apply = (el, prop) => {
-    const value = readBand(el.querySelector("strong")?.textContent);
+    const strong = el.querySelector("strong");
+    const value = readBand(strong?.textContent);
     if (value === null) {
       el.style.removeProperty(prop);
       el.classList.remove("has-meter");
       return;
     }
     if (el.style.getPropertyValue(prop) !== String(value)) el.style.setProperty(prop, String(value));
+    // The ring prints the bare number from this attribute (centred by CSS).
+    if (strong && strong.dataset.band !== String(value)) strong.dataset.band = String(value);
     el.classList.add("has-meter");
   };
 
