@@ -10,6 +10,7 @@ qt_standard_project_setup()
 add_library(studio_core STATIC
     src/server_settings.cpp src/server_settings.h
     src/navigation_policy.cpp src/navigation_policy.h
+    src/error_page.cpp src/error_page.h
 )
 target_include_directories(studio_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(studio_core PUBLIC Qt6::Widgets Qt6::WebEngineWidgets)
@@ -25,3 +26,4 @@ endfunction()
 
 studio_test(server_settings_test)
 studio_test(navigation_policy_test)
+studio_test(error_page_test)
