@@ -1,4 +1,6 @@
 const state = {
+  productMode: "ielts",
+  desktopCapabilities: null,
   view: "home",
   viewHistory: [],
   routeApplying: false,
@@ -637,6 +639,7 @@ const uiTranslations = {
   },
 };
 const viewCopy = {
+  interview: ["模拟面试", "技术问题、项目经历与针对岗位的练习。"],
   home: ["首页", "口语、写作和语料复习的综合训练工作台。"],
   mock: ["Mock 模考", "完整模拟 P1、P2 和 P3 的口语考试流程。"],
   p1: ["Part 1 短问短答", "练习 IELTS 风格的短问短答流程。"],
@@ -658,6 +661,7 @@ const viewCopy = {
   accountSecurity: ["账号安全", "修改密码并管理账号安全设置。"],
 };
 const viewCopyEn = {
+  interview: ["Mock interview", "Technical questions, project experience, and role-specific practice."],
   home: ["Home", "A focused workspace for speaking, writing, and corpus review."],
   mock: ["Mock", "Run a full P1, P2, and P3 speaking exam flow."],
   p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
@@ -1175,6 +1179,11 @@ const {
   loadDarkMode,
   loadFontStyle,
 } = appearance;
+
+const interview = window.IELTSInterview?.createInterview?.({
+  state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin,
+  escapeHtml, currentAiSourcePreference,
+});
 
 const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy });
 if (!viewRouter) {
@@ -1907,6 +1916,7 @@ function prefetchTakeawayBackgroundAssets() {
 }
 
 function clearUserScopedCaches() {
+  interview?.resetForAccount();
   state.historyItems = [];
   state.historyDetailCache.clear();
   state.historyDetailPromises.clear();
@@ -2358,6 +2368,9 @@ function setWritingActionPanelCollapsed(collapsed, { persist = false } = {}) {
 }
 
 function switchView(view, options = {}) {
+  if (view === "interview" && !state.desktopCapabilities?.mock_interview) view = "home";
+  if (view === "interview") interview?.setProductMode("interview");
+  else if (!accountViews.has(view) && !authViews.has(view)) interview?.setProductMode("ielts");
   if (!isKnownView(view)) view = "home";
   if (protectedViews.has(view) && !state.account.authenticated && !options.skipAuthGate) {
     state.account.returnView = view;
@@ -2443,6 +2456,7 @@ function switchView(view, options = {}) {
   $("#topbarBackCorpusBtn")?.classList.toggle("hidden", !corpusBackButtonViews.has(view));
   $("#accountBackBtn")?.classList.toggle("hidden", !accountViews.has(view));
   $("#homePanel")?.classList.toggle("hidden", view !== "home");
+  $("#interviewPanel")?.classList.toggle("hidden", view !== "interview");
   $("#practicePanel").classList.toggle("hidden", !isPracticeView(view));
   $("#practicePanel")?.classList.toggle("p3-launch-mode", view === "p3" && !state.practiceLocked);
   $("#corpusPanel")?.classList.toggle("hidden", view !== "corpus");
@@ -2477,6 +2491,7 @@ function switchView(view, options = {}) {
   updatePracticeHeaderProgress();
   syncP1IntensityPanel();
   if (view === "history") loadHistory();
+  if (view === "interview") interview?.show();
   if (view === "corpus") loadCorpusHome();
   if (view === "takeawayBook") {
     prefetchTakeawayBackgroundAssets();
@@ -17353,6 +17368,7 @@ async function init() {
   bindEvents();
   setupReportRails();
   await loadAccount();
+  await interview?.initialize();
   maybeShowGuestTakeawayDots();
   startTakeawayReviewDayWatcher();
   // Keep general audio playback exclusive, but do not let report/player audio interrupt
@@ -17372,7 +17388,7 @@ async function init() {
   const route = requestedRouteState();
   applyRouteState(route);
   const urlView = route.view;
-  let savedView = urlView || "home";
+  let savedView = urlView || (state.productMode === "interview" ? "interview" : "home");
   if (!isKnownView(savedView)) savedView = "home";
   switchView(savedView, { force: true, skipPersist: Boolean(urlView), skipUrl: true });
   if (route.autoStartP2 && route.p2CueId) {

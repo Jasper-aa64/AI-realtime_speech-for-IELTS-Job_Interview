@@ -45859,3 +45859,921 @@ body:not(#_):not(#__) .history-item:is(.tone-p1, .tone-p2, .tone-p3, .tone-mock)
 body.theme-dark:not(#_):not(#__) .history-item:is(.tone-p1, .tone-p2, .tone-p3, .tone-mock) .history-item-band .history-item-band-value {
   color: color-mix(in srgb, var(--rail-tone) 55%, #fff) !important;
 }
+
+/* =====================================================================
+   MOCK INTERVIEW (desktop only) — mode switcher + interview workspace.
+   Same editorial language as the home dashboard: mono kickers with gold
+   rules, serif display type, hairline-ruled cards, pill actions.
+   ===================================================================== */
+
+/* ---------- Mode switcher: the brand grows into a card in place (detail.design corner morph) ---------- */
+.studio-mode-control { position: relative; width: 100%; min-width: 0; }
+.studio-mode-control.hidden { display: none !important; }
+.nav-top-left:has(.studio-mode-control:not(.hidden)) > .brand { display: none !important; }
+
+.studio-mode-control {
+  /* --switch-surface / --switch-ink are read from the sidebar at runtime (interview.js syncSwitchPalette). */
+  --switch-surface: #171717;
+  --switch-ink: #eef5f3;
+  --switch-bg: color-mix(in srgb, var(--switch-surface) 55%, #000);
+  --switch-closed: var(--switch-surface);
+  --switch-line: color-mix(in srgb, var(--switch-ink) 12%, transparent);
+  --switch-soft: color-mix(in srgb, var(--switch-ink) 7%, transparent);
+  --switch-hover: color-mix(in srgb, var(--switch-ink) 6%, var(--switch-surface));
+  --switch-shadow: 0 22px 60px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.studio-mode-control[data-switch-tone="light"] {
+  --switch-bg: color-mix(in srgb, var(--switch-surface) 55%, #fff);
+  --switch-shadow: 0 22px 60px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.studio-switch-trigger,
+.studio-switch-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.studio-switch-trigger { color: inherit; }
+.studio-switch-head { color: var(--switch-ink); }
+
+body:not(#_) .studio-switch-trigger {
+  position: relative;
+  width: calc(100% + 8px);
+  height: 46px;
+  box-sizing: border-box;
+  margin: 0 -4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+body:not(#_) .studio-switch-trigger:hover,
+body:not(#_) .studio-mode-control.is-open .studio-switch-trigger {
+  background: var(--switch-hover);
+}
+
+body:not(#_) .studio-switch-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+body:not(#_) :is(.studio-switch-trigger, .studio-switch-head) .brand-mark {
+  flex: none;
+  width: clamp(28px, calc(var(--sidebar-width, 176px) * 0.18), 34px);
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body:not(#_) :is(.studio-switch-trigger, .studio-switch-head) > span {
+  min-width: 0;
+  overflow: visible;
+  font-family: "Instrument Serif", "Charter", Georgia, serif;
+  font-size: clamp(22px, calc(var(--sidebar-width, 176px) * 0.145), 26px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+body.interview-mode:not(#_) :is(.studio-switch-trigger, .studio-switch-head) > span {
+  font-family: var(--ed-serif);
+  font-size: clamp(17px, calc(var(--sidebar-width, 176px) * 0.1), 21px);
+  letter-spacing: 0.02em;
+}
+
+.studio-switch-chevron {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  --chevron-bg: var(--switch-hover);
+  background: var(--chevron-bg);
+  box-shadow: -12px 0 10px var(--chevron-bg);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 200ms ease;
+}
+
+/* The wordmark keeps the full sidebar width at rest; the affordance appears on intent. */
+.studio-switch-trigger:is(:hover, :focus-visible) .studio-switch-chevron,
+.studio-mode-control.is-open .studio-switch-chevron { opacity: 0.85; }
+
+body:not(#_) .studio-switch-card {
+  position: fixed;
+  z-index: 1200;
+  width: 272px;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--switch-line);
+  border-radius: 18px;
+  background: var(--switch-bg);
+  box-shadow: var(--switch-shadow);
+  color: var(--switch-ink);
+  transform-origin: top left;
+}
+
+body:not(#_) .studio-switch-card[hidden] { display: none !important; }
+body:not(#_) .studio-switch-card[inert] { pointer-events: none; }
+
+body:not(#_) .studio-switch-head,
+body:not(#_) .studio-switch-body { width: 270px; box-sizing: border-box; }
+
+body:not(#_) .studio-switch-head {
+  /* Same box as the trigger (46px incl. its 1px border, 4px inset) so the brand does not move when the card takes over. */
+  height: 44px;
+  padding: 4.5px 12px 3.5px 4px; /* a <button> centres half a pixel lower than a <div>; match it exactly */
+  box-sizing: border-box;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+}
+
+.studio-switch-head kbd {
+  margin-left: auto;
+  flex: none;
+}
+
+.studio-switch-card kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--switch-ink) 8%, transparent);
+  color: color-mix(in srgb, var(--switch-ink) 62%, transparent);
+  font-family: var(--ed-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.studio-switch-body { padding: 4px 8px 10px; }
+
+.studio-switch-label {
+  margin: 6px 8px 8px;
+  color: color-mix(in srgb, var(--switch-ink) 50%, transparent);
+  font-family: var(--ed-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+body:not(#_) .studio-switch-body [role="menuitemradio"] {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  margin: 0 0 2px;
+  padding: 8px 10px 8px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--switch-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+body:not(#_) .studio-switch-body [role="menuitemradio"]:is(:hover, :focus-visible) {
+  outline: none;
+  background: color-mix(in srgb, var(--switch-ink) 7%, transparent);
+}
+
+.studio-switch-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--switch-ink) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--switch-ink) 7%, transparent);
+}
+
+.studio-switch-icon svg,
+.studio-switch-check {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+[role="menuitemradio"][aria-checked="true"] .studio-switch-icon {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+  color: color-mix(in srgb, var(--accent) 55%, #fff);
+}
+
+.studio-switch-text { display: grid; gap: 3px; min-width: 0; }
+.studio-switch-text strong { font-size: 14px; font-weight: 500; line-height: 1.2; }
+.studio-switch-text small { overflow: hidden; color: color-mix(in srgb, var(--switch-ink) 55%, transparent); font-size: 12px; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
+
+.studio-switch-check { opacity: 0; color: color-mix(in srgb, var(--accent) 55%, #fff); }
+[role="menuitemradio"][aria-checked="true"] .studio-switch-check { opacity: 1; }
+
+.studio-switch-foot {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 8px 0;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--switch-ink) 8%, transparent);
+  color: color-mix(in srgb, var(--switch-ink) 45%, transparent);
+  font-size: 11.5px;
+}
+
+.studio-switch-foot span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* ---------- Sidebar in interview mode: the IELTS rows step aside, interview rows reuse .nav-button ---------- */
+body.interview-mode .nav-primary:not(#interviewNav),
+body.interview-mode .nav-secondary,
+body.interview-mode #bankStatus,
+body.interview-mode .nav-bottom > .nav-divider { display: none !important; }
+#interviewNav.hidden { display: none !important; }
+
+.shell .nav .nav-button[data-interview-pane="home"] { --nav-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3%2010.5%2012%203l9%207.5'/%3E%3Cpath%20d='M5%209.5V20h14V9.5'/%3E%3Cpath%20d='M10%2020v-5h4v5'/%3E%3C/svg%3E"); }
+.shell .nav .nav-button[data-interview-pane="bank"] { --nav-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%206h11M9%2012h11M9%2018h11'/%3E%3Cpath%20d='M4%206h.01M4%2012h.01M4%2018h.01'/%3E%3C/svg%3E"); }
+.shell .nav .nav-button[data-interview-pane="custom"] { --nav-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M14%203H6a1%201%200%200%200-1%201v16a1%201%200%200%200%201%201h12a1%201%200%200%200%201-1V8z'/%3E%3Cpath%20d='M14%203v5h5'/%3E%3Ccircle%20cx='12'%20cy='12.5'%20r='2'/%3E%3Cpath%20d='M8.5%2018a3.5%203.5%200%200%201%207%200'/%3E%3C/svg%3E"); }
+.shell .nav .nav-button[data-interview-pane="history"] { --nav-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='8.5'/%3E%3Cpath%20d='M12%207.5V12l3%202'/%3E%3C/svg%3E"); }
+
+/* ---------- Page chrome ---------- */
+/* .workspace is a fixed 100dvh grid that clips; like the home view, the interview pages scroll the document. */
+body:not(#_) .workspace:has(#interviewPanel:not(.hidden)) {
+  display: block;
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+body:not(#_) .workspace:has(#interviewPanel:not(.hidden)) > .topbar { margin-bottom: clamp(18px, 2vw, 28px); }
+body.interview-bare:has(#interviewPanel:not(.hidden)) .topbar,
+body.interview-bare:has(#interviewPanel:not(.hidden)) #viewTitleBlock { display: none !important; }
+body[data-interview-pane]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview"; }
+body[data-interview-pane="bank"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Question bank"; }
+body[data-interview-pane="custom"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Tailored"; }
+body[data-interview-pane="history"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Records"; }
+body[data-interview-pane="session"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Session"; }
+
+body:not(#_) #interviewPanel {
+  --iv-rule: var(--line);
+  --iv-card: var(--panel);
+  --iv-link: var(--accent);
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 0 0 56px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink);
+}
+
+body.theme-dark:not(#_) #interviewPanel { --iv-link: color-mix(in srgb, var(--accent) 55%, #fff); }
+#interviewPanel.hidden { display: none !important; }
+#interviewPanel :is(h2, h3, p, ol, ul, dl, dd) { margin: 0; }
+#interviewPanel :is(ol, ul) { padding: 0; list-style: none; }
+#interviewPanel .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.iv-status-line { display: flex; align-items: center; gap: 8px; min-height: 0; color: var(--muted); font-size: 12.5px; }
+.iv-status-line:not(:empty) { min-height: 28px; margin-bottom: 8px; }
+.iv-spinner { width: 12px; height: 12px; border: 1.5px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: ivSpin 700ms linear infinite; }
+@keyframes ivSpin { to { transform: rotate(360deg); } }
+
+#interviewPanel .iv-error {
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--danger, #d9534f) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--danger, #d9534f) 7%, var(--iv-card));
+  color: var(--ink);
+  font-size: 14px;
+}
+
+/* Kickers / eyebrows */
+#interviewPanel :is(.iv-kicker, .iv-eyebrow) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-family: var(--ed-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#interviewPanel .iv-kicker::before,
+#interviewPanel .iv-kicker::after,
+#interviewPanel .iv-eyebrow::before { content: ""; width: 22px; height: 1px; background: var(--ed-gold); }
+
+/* Buttons */
+body:not(#_) #interviewPanel .iv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font-size: 14.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 250ms var(--ed-ease), color 250ms var(--ed-ease), border-color 250ms var(--ed-ease), transform 250ms var(--ed-ease);
+}
+
+body:not(#_) #interviewPanel .iv-btn:hover:not(:disabled) { border-color: var(--ink); }
+body:not(#_) #interviewPanel .iv-btn:active:not(:disabled) { transform: scale(0.98); }
+body:not(#_) #interviewPanel .iv-btn--solid { border-color: var(--ink); background: var(--ink); color: var(--panel); }
+body:not(#_) #interviewPanel .iv-btn--solid:hover:not(:disabled) { border-color: var(--accent); background: var(--accent); color: #fff; }
+#interviewPanel .iv-arrow { transition: transform 250ms var(--ed-ease); }
+#interviewPanel :is(.iv-btn, .iv-link, .iv-area-links button):hover:not(:disabled) .iv-arrow { transform: translateX(3px); }
+body:not(#_) #interviewPanel :is(button, a):disabled { opacity: 0.45; cursor: default; }
+
+body:not(#_) #interviewPanel .iv-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  min-height: 32px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--iv-link);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+body:not(#_) #interviewPanel .iv-link:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 4px; }
+body:not(#_) #interviewPanel :is(button, input, textarea, label):focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 3px; }
+
+/* Chips + segmented counts */
+#interviewPanel .iv-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+body:not(#_) #interviewPanel .iv-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--iv-rule);
+  border-radius: 999px;
+  background: var(--iv-card);
+  box-shadow: none;
+  color: color-mix(in srgb, var(--ink) 85%, transparent);
+  font-size: 13.5px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
+}
+
+body:not(#_) #interviewPanel .iv-chip:hover:not(:disabled) { border-color: var(--iv-link); color: var(--iv-link); }
+body:not(#_) #interviewPanel .iv-chip.is-on { border-color: var(--ink); background: var(--ink); color: var(--panel); }
+#interviewPanel .iv-chip sup { top: 0; margin-left: 5px; color: inherit; opacity: 0.55; font-family: var(--ed-mono); font-size: 11px; }
+
+#interviewPanel .iv-seg { display: inline-flex; padding: 3px; border: 1px solid var(--iv-rule); border-radius: 999px; background: var(--iv-card); }
+
+body:not(#_) #interviewPanel .iv-seg button {
+  min-width: 46px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-family: var(--ed-mono);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 200ms ease, color 200ms ease;
+}
+
+body:not(#_) #interviewPanel .iv-seg button.is-on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }
+
+#interviewPanel .iv-voice-note { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+#interviewPanel .iv-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ed-gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ed-gold) 20%, transparent); }
+
+/* ---------- Home: hero + setup panel, then ruled practice paths ---------- */
+#interviewPanel .iv-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr);
+  gap: clamp(28px, 4vw, 64px);
+  align-items: center;
+  padding: 0 0 clamp(32px, 4vw, 56px);
+}
+
+#interviewPanel .iv-intro { display: flex; flex-direction: column; min-width: 0; }
+#interviewPanel .iv-intro .iv-kicker { margin-bottom: 22px; }
+#interviewPanel .iv-title { display: flex; flex-direction: column; font-weight: 400; }
+
+#interviewPanel .iv-title-top {
+  color: var(--muted);
+  font-family: var(--ed-serif);
+  font-size: clamp(19px, 1.6vw, 24px);
+  line-height: 1.35;
+}
+
+#interviewPanel .iv-title-main {
+  display: inline-block;
+  align-self: flex-start;
+  margin: 6px 0 -0.14em -0.06em;
+  padding: 0 0.12em 0.14em 0.06em;
+  font-family: "Instrument Serif", var(--ed-serif);
+  font-size: clamp(54px, 5.4vw, 88px);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+  background: linear-gradient(100deg, var(--ink) 30%, var(--accent) 115%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+#interviewPanel .iv-title-main::after { content: "."; font-style: normal; color: var(--accent); -webkit-text-fill-color: var(--accent); }
+
+#interviewPanel .iv-topics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  margin-top: 22px;
+  color: color-mix(in srgb, var(--ink) 82%, transparent);
+  font-size: clamp(15px, 1.2vw, 17px);
+}
+
+#interviewPanel .iv-topics i { color: var(--ed-gold); font-style: normal; font-weight: 300; }
+#interviewPanel .iv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 28px; }
+#interviewPanel .iv-intro .iv-voice-note { margin-top: 22px; }
+
+#interviewPanel .iv-panel {
+  min-width: 0;
+  padding: clamp(20px, 2.2vw, 28px);
+  border: 1px solid var(--iv-rule);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--iv-card) 88%, transparent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+#interviewPanel .iv-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--iv-rule);
+}
+
+#interviewPanel .iv-stat { position: relative; display: flex; flex-direction: column; min-width: 0; }
+#interviewPanel .iv-stat + .iv-stat::before { content: ""; position: absolute; top: 0; bottom: 0; left: -12px; border-left: 1px solid var(--iv-rule); }
+#interviewPanel .iv-stat dt { color: var(--muted); font-family: var(--ed-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+#interviewPanel .iv-stat dd { margin-top: auto; padding-top: 8px; font-family: var(--ed-serif); font-size: clamp(32px, 2.8vw, 42px); line-height: 1; white-space: nowrap; }
+#interviewPanel .iv-stat-date { font-size: clamp(24px, 2vw, 30px) !important; }
+
+#interviewPanel .iv-panel-label { margin: 18px 0 10px; color: var(--muted); font-family: var(--ed-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+#interviewPanel .iv-resume {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 12px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+#interviewPanel .iv-resume span { grid-column: 1; color: var(--muted); font-family: var(--ed-mono); font-size: 11.5px; letter-spacing: 0.06em; }
+#interviewPanel .iv-resume strong { grid-column: 1; overflow: hidden; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+#interviewPanel .iv-resume .iv-link { grid-column: 2; grid-row: 1 / span 2; }
+
+#interviewPanel .iv-areas { padding-top: clamp(8px, 2vw, 20px); }
+#interviewPanel .iv-sec-head { display: flex; align-items: center; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--iv-rule); }
+
+#interviewPanel .iv-area-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 14px;
+  background: var(--iv-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+#interviewPanel .iv-area { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 24px 24px 18px; border-right: 1px solid var(--iv-rule); }
+#interviewPanel .iv-area:last-child { border-right: 0; }
+#interviewPanel .iv-area::before { content: ""; position: absolute; top: 16px; right: 20px; width: 38px; height: 10px; border-top: 2px solid color-mix(in srgb, var(--ed-gold) 45%, transparent); transform: rotate(-1.8deg); }
+#interviewPanel .iv-area-index { color: var(--ed-gold); font-family: var(--ed-mono); font-size: 12px; letter-spacing: 0.04em; }
+
+#interviewPanel .iv-area-name {
+  align-self: flex-start;
+  padding-bottom: 4px;
+  font-family: var(--ed-serif);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.1;
+  background: linear-gradient(var(--accent), var(--accent)) left bottom / 0 2px no-repeat;
+  transition: background-size 450ms var(--ed-ease), color 200ms ease;
+}
+
+#interviewPanel .iv-area:hover .iv-area-name { background-size: 100% 2px; color: var(--iv-link); }
+#interviewPanel .iv-area-blurb { color: var(--muted); font-size: 14.5px; line-height: 1.6; }
+#interviewPanel .iv-area-links { margin-top: 4px; padding-top: 8px; }
+#interviewPanel .iv-area-links li + li { border-top: 1px dashed var(--iv-rule); }
+
+body:not(#_) #interviewPanel .iv-area-links button {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: auto;
+  padding: 11px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+#interviewPanel .iv-area-links b { color: var(--muted); font-family: var(--ed-mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+#interviewPanel .iv-area-links span { overflow: hidden; font-size: 15px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+
+#interviewPanel .iv-area-links i,
+#interviewPanel .iv-history-row i {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--iv-rule);
+  border-radius: 999px;
+  color: var(--muted);
+  font-style: normal;
+  font-size: 13px;
+  transition: all 300ms var(--ed-ease);
+}
+
+#interviewPanel :is(.iv-area-links button, .iv-history-row):hover:not(:disabled) span { color: var(--iv-link); }
+#interviewPanel :is(.iv-area-links button, .iv-history-row):hover:not(:disabled) i { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+/* ---------- Toolbars, lists, docks ---------- */
+#interviewPanel .iv-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 18px; }
+#interviewPanel .iv-toolbar-note { color: var(--muted); font-family: var(--ed-mono); font-size: 12px; letter-spacing: 0.06em; }
+#interviewPanel .iv-dock-spacer { flex: 1 1 auto; }
+#interviewPanel .iv-q-index { color: var(--ed-gold); font-family: var(--ed-mono); font-size: 12px; letter-spacing: 0.04em; }
+
+#interviewPanel .iv-qlist {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 14px;
+  background: var(--iv-card);
+}
+
+#interviewPanel .iv-qlist li + li { border-top: 1px solid var(--iv-rule); }
+
+#interviewPanel .iv-q {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 22px;
+  align-items: start;
+  gap: 14px;
+  padding: 18px 22px;
+  cursor: pointer;
+  transition: background 200ms ease;
+}
+
+#interviewPanel .iv-q:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+#interviewPanel .iv-q.is-on { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+#interviewPanel .iv-q .iv-q-index { padding-top: 3px; }
+#interviewPanel .iv-q-input { position: absolute; opacity: 0; pointer-events: none; }
+#interviewPanel .iv-q-body { display: grid; gap: 6px; min-width: 0; }
+#interviewPanel .iv-q-body strong { font-size: 15.5px; font-weight: 500; line-height: 1.6; }
+#interviewPanel .iv-q-body small { color: var(--muted); font-size: 12.5px; }
+
+#interviewPanel .iv-q-check {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  box-sizing: border-box;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  border-radius: 50%;
+  transition: all 200ms ease;
+}
+
+#interviewPanel .iv-q.is-on .iv-q-check {
+  border-color: var(--accent);
+  background: var(--accent) url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='white'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%2012.5%204%204L18%208'/%3E%3C/svg%3E") center / 13px no-repeat;
+}
+
+#interviewPanel .iv-q:has(.iv-q-input:focus-visible) { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: -2px; }
+
+#interviewPanel .iv-dock {
+  position: sticky;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 10px 10px 10px 22px;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--iv-card) 90%, transparent);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.12);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+#interviewPanel .iv-dock-count { color: var(--muted); font-family: var(--ed-mono); font-size: 12.5px; letter-spacing: 0.04em; }
+#interviewPanel .iv-dock-count b { color: var(--ink); font-family: var(--ed-serif); font-size: 22px; font-weight: 400; letter-spacing: 0; }
+#interviewPanel .iv-empty { padding: 22px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+/* ---------- Tailored ---------- */
+#interviewPanel .iv-lede { max-width: 760px; margin-bottom: 22px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+#interviewPanel .iv-custom { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+
+#interviewPanel .iv-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: clamp(20px, 2.2vw, 28px);
+  border: 1px solid var(--iv-rule);
+  border-radius: 18px;
+  background: var(--iv-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+
+#interviewPanel .iv-step { display: flex; align-items: baseline; gap: 12px; }
+#interviewPanel .iv-step + * { margin-top: -4px; }
+#interviewPanel .iv-sheet > .iv-empty { padding: 0; }
+#interviewPanel .iv-sheet > .iv-step:not(:first-child) { margin-top: 10px; padding-top: 20px; border-top: 1px solid var(--iv-rule); }
+#interviewPanel .iv-step span { color: var(--ed-gold); font-family: var(--ed-mono); font-size: 12px; }
+#interviewPanel .iv-step h3 { font-family: var(--ed-serif); font-size: 22px; font-weight: 400; line-height: 1.1; }
+#interviewPanel .iv-step em { margin-left: auto; color: var(--muted); font-family: var(--ed-mono); font-size: 12px; font-style: normal; }
+
+#interviewPanel .iv-field { display: flex; flex-direction: column; gap: 8px; color: var(--muted); font-size: 12.5px; }
+
+body:not(#_) #interviewPanel :is(.iv-field textarea, .iv-custom-item textarea, .iv-answer) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--iv-rule);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 60%, var(--iv-card));
+  box-shadow: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.7;
+  resize: vertical;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+body:not(#_) #interviewPanel :is(.iv-field textarea, .iv-custom-item textarea, .iv-answer):focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+#interviewPanel .iv-drop {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 22px 16px;
+  border: 1.5px dashed color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: 14px;
+  color: var(--ink);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+#interviewPanel .iv-drop:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 4%, transparent); }
+#interviewPanel .iv-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+#interviewPanel .iv-drop strong { font-size: 14.5px; font-weight: 500; }
+#interviewPanel .iv-drop small { color: var(--muted); font-size: 12px; }
+#interviewPanel .iv-drop:has(input:focus-visible) { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 3px; }
+#interviewPanel .iv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+#interviewPanel .iv-row-label { color: var(--muted); font-family: var(--ed-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+#interviewPanel .iv-custom-list { display: grid; gap: 12px; }
+#interviewPanel .iv-custom-item { display: grid; grid-template-columns: 26px minmax(0, 1fr) 34px; gap: 10px; align-items: start; }
+#interviewPanel .iv-custom-item .iv-q-index { padding-top: 26px; }
+#interviewPanel .iv-custom-item > div { display: grid; gap: 6px; }
+#interviewPanel .iv-custom-item small { color: var(--muted); font-size: 12px; }
+
+body:not(#_) #interviewPanel .iv-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-top: 22px;
+  padding: 0;
+  border: 1px solid var(--iv-rule);
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+body:not(#_) #interviewPanel .iv-icon-btn:hover:not(:disabled) { border-color: var(--danger, #d9534f); color: var(--danger, #d9534f); }
+
+/* ---------- History ---------- */
+#interviewPanel .iv-history {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 14px;
+  background: var(--iv-card);
+}
+
+#interviewPanel .iv-history li + li { border-top: 1px solid var(--iv-rule); }
+
+body:not(#_) #interviewPanel .iv-history-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  height: auto;
+  padding: 16px 22px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 200ms ease;
+}
+
+body:not(#_) #interviewPanel .iv-history-row:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+#interviewPanel .iv-history-row time { color: var(--muted); font-family: var(--ed-mono); font-size: 12.5px; }
+#interviewPanel .iv-history-title { display: grid; gap: 4px; min-width: 0; }
+#interviewPanel .iv-history-title strong { overflow: hidden; font-size: 15.5px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+#interviewPanel .iv-history-title small { color: var(--muted); font-size: 12.5px; }
+#interviewPanel .iv-status { padding: 3px 10px; border: 1px solid var(--iv-rule); border-radius: 999px; color: var(--muted); font-size: 12px; font-style: normal; white-space: nowrap; }
+#interviewPanel .iv-status.is-active { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--iv-link); }
+#interviewPanel .iv-status.is-completed { color: var(--ink); }
+#interviewPanel .iv-empty-card { display: grid; justify-items: start; gap: 18px; padding: 32px; border: 1px dashed color-mix(in srgb, var(--ink) 20%, transparent); border-radius: 18px; color: var(--muted); }
+
+/* ---------- Session ---------- */
+#interviewPanel .iv-session { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 22vw, 300px); gap: clamp(24px, 3vw, 44px); align-items: start; }
+#interviewPanel .iv-session-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+#interviewPanel .iv-session-head { display: grid; gap: 16px; padding-top: clamp(8px, 2vw, 24px); }
+#interviewPanel .iv-session-side { padding-top: clamp(8px, 2vw, 24px); }
+#interviewPanel .iv-session-head h2 { margin-top: 8px; font-family: var(--ed-serif); font-size: clamp(24px, 2.2vw, 32px); font-weight: 400; line-height: 1.15; }
+#interviewPanel .iv-progress { display: flex; gap: 4px; }
+#interviewPanel .iv-progress span { flex: 1 1 0; height: 3px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 12%, transparent); transition: background 300ms ease; }
+#interviewPanel .iv-progress span.is-completed { background: var(--accent); }
+#interviewPanel .iv-progress span.is-skipped { background: color-mix(in srgb, var(--ed-gold) 70%, transparent); }
+#interviewPanel .iv-progress span.is-current { background: color-mix(in srgb, var(--ink) 55%, transparent); }
+
+#interviewPanel .iv-follow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 18px;
+  padding: 16px 18px 16px 20px;
+  border: 1px solid color-mix(in srgb, var(--ed-gold) 45%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ed-gold) 7%, var(--iv-card));
+}
+
+#interviewPanel .iv-follow > div { display: grid; gap: 4px; }
+#interviewPanel .iv-follow strong { font-family: var(--ed-serif); font-size: 18px; font-weight: 400; }
+#interviewPanel .iv-follow span { color: var(--muted); font-size: 13.5px; }
+
+#interviewPanel .iv-question {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: clamp(22px, 2.6vw, 34px);
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 18px;
+  background: var(--iv-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 14px 36px rgba(15, 23, 42, 0.07);
+}
+
+#interviewPanel .iv-question-kind { color: var(--ed-gold); font-family: var(--ed-mono); font-size: 12px; letter-spacing: 0.06em; }
+#interviewPanel .iv-question-kind.is-follow { color: var(--iv-link); }
+#interviewPanel .iv-question h3 { font-family: var(--ed-serif); font-size: clamp(22px, 2.1vw, 30px); font-weight: 400; line-height: 1.35; letter-spacing: -0.005em; }
+body:not(#_) #interviewPanel .iv-answer { min-height: 220px; font-size: 15.5px; line-height: 1.75; }
+#interviewPanel .iv-answer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#interviewPanel .iv-count { color: var(--muted); font-family: var(--ed-mono); font-size: 12px; }
+#interviewPanel .iv-session-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding-top: 4px; }
+
+#interviewPanel .iv-session-side { position: sticky; top: 24px; display: grid; gap: 14px; }
+
+#interviewPanel .iv-rail { display: grid; border-left: 1px solid var(--iv-rule); }
+#interviewPanel .iv-rail li { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; padding: 9px 0 9px 16px; color: var(--muted); }
+#interviewPanel .iv-rail li::before { content: ""; position: absolute; top: 15px; left: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 25%, transparent); }
+#interviewPanel .iv-rail li.is-completed::before { background: var(--accent); box-shadow: none; }
+#interviewPanel .iv-rail li.is-skipped::before { background: color-mix(in srgb, var(--ed-gold) 70%, transparent); box-shadow: none; }
+#interviewPanel .iv-rail li.is-current { color: var(--ink); }
+#interviewPanel .iv-rail li.is-current::before { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 0 0 1.5px var(--accent); }
+#interviewPanel .iv-rail li.is-follow { padding-left: 26px; }
+#interviewPanel .iv-rail span { font-family: var(--ed-mono); font-size: 11.5px; padding-top: 2px; }
+#interviewPanel .iv-rail p { display: -webkit-box; overflow: hidden; font-size: 13px; line-height: 1.5; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* ---------- Report ---------- */
+#interviewPanel .iv-pane--session:has(.iv-report-head) { display: grid; gap: 22px; max-width: 920px; }
+#interviewPanel .iv-report-head { display: grid; gap: 10px; padding-top: clamp(8px, 2vw, 24px); }
+#interviewPanel .iv-report-head h2 { font-family: var(--ed-serif); font-size: clamp(30px, 3vw, 44px); font-weight: 400; line-height: 1.1; }
+#interviewPanel .iv-report-head p { color: var(--muted); font-family: var(--ed-mono); font-size: 12.5px; }
+
+#interviewPanel .iv-report-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 160px));
+  padding: 18px 0;
+  border-block: 1px solid var(--iv-rule);
+}
+
+#interviewPanel .iv-report-stats div + div { padding-left: 24px; border-left: 1px solid var(--iv-rule); }
+#interviewPanel .iv-report-stats dt { color: var(--muted); font-family: var(--ed-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+#interviewPanel .iv-report-stats dd { padding-top: 6px; font-family: var(--ed-serif); font-size: 40px; line-height: 1; }
+#interviewPanel .iv-coaching { display: grid; gap: 14px; padding: 24px 26px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--accent) 5%, var(--iv-card)); }
+#interviewPanel .iv-feedback { color: var(--ink); font-size: 15px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+#interviewPanel .iv-pane--session > .iv-actions { margin-top: 0; }
+
+#interviewPanel .iv-transcript { border-top: 1px solid var(--iv-rule); }
+#interviewPanel .iv-transcript li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 22px 0; border-bottom: 1px solid var(--iv-rule); }
+#interviewPanel .iv-transcript li.is-follow { padding-left: 28px; }
+#interviewPanel .iv-transcript .iv-q-index { padding-top: 4px; }
+#interviewPanel .iv-transcript li > div { display: grid; gap: 8px; min-width: 0; }
+#interviewPanel .iv-transcript small { color: var(--muted); font-size: 12px; }
+#interviewPanel .iv-transcript h3 { font-family: var(--ed-serif); font-size: 21px; font-weight: 400; line-height: 1.4; }
+#interviewPanel .iv-transcript p { color: var(--ink); font-size: 15px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+#interviewPanel .iv-transcript li.is-skipped p { color: var(--muted); font-style: italic; }
+
+/* ---------- Guest ---------- */
+#interviewPanel .iv-guest { display: grid; justify-items: start; gap: 22px; max-width: 640px; padding: clamp(40px, 8vh, 96px) 0; }
+#interviewPanel .iv-guest > p:not(.iv-kicker):not(.iv-voice-note) { color: var(--muted); font-size: 16px; line-height: 1.7; }
+
+/* ---------- Responsive + motion ---------- */
+@media (max-width: 1100px) {
+  #interviewPanel .iv-hero,
+  #interviewPanel .iv-custom,
+  #interviewPanel .iv-session { grid-template-columns: minmax(0, 1fr); }
+  #interviewPanel .iv-session-side { position: static; }
+}
+
+@media (max-width: 860px) {
+  #interviewPanel .iv-area-grid { grid-template-columns: minmax(0, 1fr); }
+  #interviewPanel .iv-area { border-right: 0; border-bottom: 1px solid var(--iv-rule); }
+  #interviewPanel .iv-area:last-child { border-bottom: 0; }
+  body:not(#_) #interviewPanel .iv-history-row { grid-template-columns: minmax(0, 1fr) auto; }
+  #interviewPanel .iv-history-row time { grid-column: 1 / -1; }
+  #interviewPanel .iv-history-row i { display: none; }
+  #interviewPanel .iv-dock { border-radius: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #interviewPanel *,
+  .studio-switch-trigger,
+  .studio-switch-card * { transition: none !important; }
+  .iv-spinner { animation-duration: 2s; }
+}
+
+.studio-mode-control[data-switch-tone="light"] [role="menuitemradio"][aria-checked="true"] :is(.studio-switch-icon, .studio-switch-check) { color: var(--accent); }

@@ -26,7 +26,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261005-system-appearance-1">
+    <link rel="stylesheet" href="/styles.css?v=20261005-interview-14">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -100,6 +100,18 @@
       <aside class="nav" aria-label="IELTS practice navigation">
         <div class="nav-top">
           <div class="nav-top-left">
+            <div id="studioModeControl" class="studio-mode-control hidden">
+              <button id="studioModeTrigger" class="studio-switch-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="studioModeMenu"><img class="brand-mark" src="/assets/brand/studio-logo.svg?v=20261005-blog-logo-2" alt="" aria-hidden="true"><span id="studioModeLabel">IELTS Studio</span><svg class="studio-switch-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4-4 4 4M8 14l4 4 4-4"/></svg></button>
+              <div id="studioModeMenu" class="studio-switch-card" role="menu" aria-label="切换工作区" hidden>
+                <div class="studio-switch-head" data-studio-close><img class="brand-mark" src="/assets/brand/studio-logo.svg?v=20261005-blog-logo-2" alt="" aria-hidden="true"><span id="studioModeCurrent">IELTS Studio</span><kbd>esc</kbd></div>
+                <div class="studio-switch-body">
+                  <p class="studio-switch-label">工作区</p>
+                  <button type="button" role="menuitemradio" aria-checked="true" data-studio-mode="ielts"><span class="studio-switch-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5C4 5 5 4 6.5 4H12v16H6.5C5 20 4 19 4 17.5zM12 4h5.5C19 4 20 5 20 6.5v11c0 1.5-1 2.5-2.5 2.5H12"/><path d="M7 8.5h2M15 8.5h2M15 12h2"/></svg></span><span class="studio-switch-text"><strong>IELTS Studio</strong><small>口语 · 写作 · 语料</small></span><svg class="studio-switch-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></button>
+                  <button type="button" role="menuitemradio" aria-checked="false" data-studio-mode="interview"><span class="studio-switch-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="12.5" rx="2.5"/><path d="M9 7V5.5C9 4.7 9.7 4 10.5 4h3c.8 0 1.5.7 1.5 1.5V7M3.5 12.5h17"/></svg></span><span class="studio-switch-text"><strong>模拟面试</strong><small>题库 · 简历定制 · 追问</small></span><svg class="studio-switch-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></button>
+                  <div class="studio-switch-foot" aria-hidden="true"><span><kbd>↑</kbd><kbd>↓</kbd> 选择</span><span><kbd>↵</kbd> 进入</span></div>
+                </div>
+              </div>
+            </div>
             <div class="brand">
               <img class="brand-mark" src="/assets/brand/studio-logo.svg?v=20261005-blog-logo-2" alt="" aria-hidden="true">
               <span data-i18n="app.title">IELTS Studio</span>
@@ -133,6 +145,14 @@
             <span class="nav-section-label" aria-hidden="true">写作</span>
             <a class="nav-button" data-view="writing" href="?view=writing" data-i18n="nav.dailyWriting">每日写作</a>
             <a class="nav-button" data-view="writingReports" href="?view=writingReports" data-i18n="nav.writingReports">写作报告</a>
+          </nav>
+          <nav id="interviewNav" class="nav-primary interview-nav hidden" aria-label="模拟面试">
+            <span class="nav-section-label" aria-hidden="true">练习</span>
+            <a class="nav-button" data-view="interview" data-interview-pane="home" href="?view=interview">面试首页</a>
+            <a class="nav-button" data-view="interview" data-interview-pane="bank" href="?view=interview">通用题库</a>
+            <a class="nav-button" data-view="interview" data-interview-pane="custom" href="?view=interview">简历定制</a>
+            <span class="nav-section-label" aria-hidden="true">记录</span>
+            <a class="nav-button" data-view="interview" data-interview-pane="history" href="?view=interview">面试记录</a>
           </nav>
         </div>
         <div class="nav-bottom">
@@ -178,6 +198,7 @@
           </div>
         </div>
 
+        <section id="interviewPanel" class="panel interview-panel hidden" aria-label="模拟面试"></section>
         <section id="homePanel" class="panel hx-home" aria-label="首页">
           <div class="hx-hero">
             <div class="hx-intro">
@@ -1756,8 +1777,10 @@
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
+    <script src="/native-bridge.js?v=20261005-interview-14"></script>
+    <script src="/interview.js?v=20261005-interview-14"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20261005-system-appearance-1"></script>
+    <script src="/app.js?v=20261005-interview-14"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
     <script src="/home-dashboard.js?v=20261005-ui-redesign-31"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>
