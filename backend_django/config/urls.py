@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 
 from apps.accounts import views as account_views
 from apps.ai import views as ai_views
@@ -9,6 +9,9 @@ from apps.speaking import views as speaking_views
 from apps.writing import views as writing_views
 
 urlpatterns = [
+    path("api/interview/", include("apps.interview.urls")),
+    path("native-bridge.js", frontend_asset, {"asset_path": "native-bridge.js"}, name="frontend-native-bridge-js"),
+    path("interview.js", frontend_asset, {"asset_path": "interview.js"}, name="frontend-interview-js"),
     path("", frontend_asset, name="frontend-index"),
     path("index.html", frontend_asset, name="frontend-index-html"),
     path("shared-ui.js", frontend_asset, {"asset_path": "shared-ui.js"}, name="frontend-shared-ui-js"),

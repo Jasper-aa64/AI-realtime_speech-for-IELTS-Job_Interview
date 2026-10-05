@@ -46,6 +46,8 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "speaking-audio-preprocessor-runtime.js": "text/javascript; charset=utf-8",
         "api-client.js": "text/javascript; charset=utf-8",
         "appearance.js": "text/javascript; charset=utf-8",
+        "native-bridge.js": "text/javascript; charset=utf-8",
+        "interview.js": "text/javascript; charset=utf-8",
         "view-router.js": "text/javascript; charset=utf-8",
         "app.js": "text/javascript; charset=utf-8",
         "onboarding.js": "text/javascript; charset=utf-8",
@@ -61,6 +63,15 @@ def frontend_asset(request, asset_path: str = "index.html"):
     response = FileResponse(open(path, "rb"), content_type=allowed[normalized])
     response["Cache-Control"] = frontend_cache_control(request, is_index=normalized == "index.html")
     return response
+
+
+def csrf_failure(request, reason=""):
+    if request.path.startswith("/api/interview/"):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "authentication required", "code": "authentication_required"}, status=401)
+        return JsonResponse({"error": "CSRF verification failed; refresh and retry", "code": "csrf_failed"}, status=403)
+    from django.views.csrf import csrf_failure as default_failure
+    return default_failure(request, reason=reason)
 
 
 def frontend_cache_control(request, *, is_index: bool = False) -> str:

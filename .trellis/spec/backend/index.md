@@ -126,6 +126,7 @@ spelling library.
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | AI task lifecycle filled |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 | [Local Stack Startup](./local-stack-startup.md) | Django/AI worker startup and liveness checks | Filled |
+| [Interview Workflow](./interview-workflow.md) | Desktop interview APIs, typed reports, atomic transitions, AI/PDF limits | Active |
 | [P3 Bank Practice Progress](./p3-bank-practice-progress.md) | Stable 3-4 question rounds and report-backed completion | Active |
 
 ---

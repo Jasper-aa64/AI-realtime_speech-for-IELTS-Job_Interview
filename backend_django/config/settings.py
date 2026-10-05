@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     "apps.ai",
     "apps.billing",
     "apps.speaking",
+    "apps.interview",
     "apps.writing",
 ]
 
@@ -101,6 +102,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'config.urls'
+CSRF_FAILURE_VIEW = "apps.common.views.csrf_failure"
 
 TEMPLATES = [
     {
