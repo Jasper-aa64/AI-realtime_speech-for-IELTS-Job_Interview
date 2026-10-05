@@ -5,7 +5,7 @@ from django.db import OperationalError
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 
-from . import services
+from . import corpus, services
 from .validation import InterviewError
 
 
@@ -91,3 +91,43 @@ def abort(request, session_id):
 @api("POST")
 def report(request, session_id):
     return services.coach(request.user, session_id, json_body(request).get("ai_source", ""))
+
+
+def form_or_json(request):
+    return json_body(request) if request.content_type == "application/json" else request.POST.dict()
+
+
+@api("GET")
+def profile(request):
+    get_token(request)
+    return {"profile": corpus.profile_payload(corpus.profile_for(request.user))}
+
+
+@api("POST")
+def profile_resume(request):
+    return corpus.import_resume(request.user, form_or_json(request), request.FILES.get("resume_file"))
+
+
+@api("POST")
+def profile_jd(request):
+    return corpus.import_jd(request.user, json_body(request))
+
+
+@api("GET", "POST")
+def corpus_entries(request):
+    if request.method == "GET":
+        get_token(request)
+        return corpus.corpus_listing(request.user, request.GET.get("kind", ""))
+    return corpus.create_entry(request.user, json_body(request))
+
+
+@api("PATCH", "DELETE")
+def corpus_entry(request, entry_id):
+    if request.method == "DELETE":
+        return corpus.delete_entry(request.user, entry_id)
+    return corpus.update_entry(request.user, entry_id, json_body(request))
+
+
+@api("POST")
+def corpus_draft(request, entry_id):
+    return corpus.generate_draft(request.user, entry_id, json_body(request).get("ai_source", ""))
