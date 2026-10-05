@@ -45649,3 +45649,109 @@ body.theme-dark:not(#_):not(#__) .workspace.corpus-workspace .p2-seasonal-card f
   background: transparent !important;
   color: color-mix(in srgb, var(--cat-color, var(--accent)) 55%, #fff) !important;
 }
+
+/* ---------- Change-password dialog: a centred 440px sheet, not a full-width strip ---------- */
+body:not(#_) #accountSecurityPanel:not(.hidden) {
+  place-items: center !important;
+  padding: 24px !important;
+}
+
+body:not(#_) #accountSecurityPanel .account-security-card {
+  width: min(440px, 100%) !important;
+  max-width: 440px !important;
+  margin: 0 auto !important;
+  padding: 26px 28px 24px !important;
+  gap: 14px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r, 16px) !important;
+  background: var(--panel) !important;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18) !important;
+}
+
+body:not(#_) #accountSecurityPanel .account-security-card-head h2 {
+  margin: 0 0 4px !important;
+  font-family: var(--ed-serif) !important;
+  font-size: 24px !important;
+  font-weight: 400 !important;
+}
+
+body:not(#_) #accountSecurityPanel .account-security-card-head .muted {
+  font-size: 13px !important;
+}
+
+body:not(#_) #accountSecurityPanel label {
+  display: grid !important;
+  gap: 6px !important;
+}
+
+body:not(#_) #accountSecurityPanel label > span {
+  color: var(--muted) !important;
+  font-size: 12.5px !important;
+}
+
+body:not(#_) #accountSecurityPanel input {
+  height: 40px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--ui-r-sm, 12px) !important;
+  background: var(--panel) !important;
+}
+
+body:not(#_) #accountSecurityPanel #securityStatus {
+  min-height: 0 !important;
+  color: var(--muted) !important;
+  font-size: 13px !important;
+}
+
+body:not(#_) #accountSecurityPanel .account-action-row {
+  justify-content: flex-end !important;
+  gap: 10px !important;
+}
+
+/* ---------- Sidebar Mock / P1–P3: the selected item keeps the same weight and box,
+   so nothing reflows when it lights up — only colour and fill change. ---------- */
+@media (min-width: 981px) {
+  body:not(#_) .shell .nav .nav-exam-group :is(.nav-exam-lead, .nav-pgroup-item),
+  body:not(#_) .shell .nav .nav-exam-group :is(.nav-exam-lead, .nav-pgroup-item).active,
+  body:not(#_) .shell .nav .nav-exam-group :is(.nav-exam-lead, .nav-pgroup-item) * {
+    font-weight: 500 !important;
+    transform: none !important;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease !important;
+  }
+
+  body:not(#_) .shell .nav .nav-exam-group .nav-pgroup-item {
+    height: 33px !important;
+    border-width: 1px !important;
+  }
+
+  body:not(#_) .shell .nav .nav-exam-group .nav-exam-lead {
+    height: 46px !important;
+    min-height: 46px !important;
+    border-width: 1px !important;
+  }
+
+  body:not(#_) .shell .nav #bankStatus {
+    height: 27px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+}
+
+/* ---------- 追问压力 in light mode: the header turns dark (#0a1322), so its text turns light ---------- */
+body:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible :is(#progressTrack, #examStatusText strong) {
+  color: #f1f5f9 !important;
+}
+
+body:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible :is(#phaseLabel, .p1-mode-help, #examStatusText span) {
+  color: rgba(226, 232, 240, 0.78) !important;
+}
+
+body:not(#_):not(#__) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible :is(.p3-launch-label, .p3-mode-help) {
+  color: rgba(226, 232, 240, 0.82) !important;
+}
+
+body:not(#_):not(#__) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible .p3-launch-label::before {
+  border-color: rgba(226, 232, 240, 0.4) !important;
+  color: rgba(226, 232, 240, 0.82) !important;
+}
+
