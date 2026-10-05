@@ -2926,7 +2926,7 @@ function resetPracticeSurface() {
   text("timerValue", "00:00");
   $("#phaseMeter").style.width = "0%";
   text("promptKicker", "Prompt");
-  setPromptHtml("Start a voice practice session to load a question.", "short");
+  setPromptHtml('<span class="prompt-idle">Start a voice practice session to load a question.</span>', "short");
   text("followUp", "");
   setRecordButton("ready", "Start", "Record the full section. No typing.");
   text("recordStatus", "Click Start. The examiner will load the questions automatically.");
@@ -14139,7 +14139,7 @@ function stopAllRuntime(label = "Ready") {
   if (summaryPanel) summaryPanel.innerHTML = "";
   $("exitPractice")?.classList.add("hidden");
   text("promptKicker", "Prompt");
-  setPromptHtml("Start a voice practice session to load a question.", "short");
+  setPromptHtml('<span class="prompt-idle">Start a voice practice session to load a question.</span>', "short");
   text("followUp", "");
   setRecordButton("ready", label, "Record the full section. No typing.");
   text("recordStatus", "Click Start. The examiner will load the questions automatically.");

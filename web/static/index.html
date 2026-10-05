@@ -37,7 +37,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20260819-mic-right-of-title-1">
+    <link rel="stylesheet" href="/styles.css?v=20261005-ui-104118">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -186,70 +186,120 @@
           </div>
         </div>
 
-        <section id="homePanel" class="panel home-panel home-v3-panel" aria-label="首页">
-          <div class="home-v3-hero">
-            <div class="home-v3-copy">
-              <div class="home-v3-eyebrow">IELTS Sketchbook</div>
-              <h2 class="home-v3-route-title">
-                <span>练习真题</span>
-                <svg aria-hidden="true" viewBox="0 0 42 38">
-                  <path d="M21 4v24"></path>
-                  <path d="M10 18l11 11 11-11"></path>
-                </svg>
-                <span>沉淀成自己的语料库</span>
+        <section id="homePanel" class="panel hx-home" aria-label="首页">
+          <div class="hx-hero">
+            <div class="hx-intro">
+              <p class="hx-kicker">IELTS Sketchbook</p>
+              <h2 class="hx-title">
+                <span class="hx-title-top">练习真题</span>
+                <em class="hx-title-main">沉淀成自己的语料库</em>
               </h2>
-              <div class="home-v3-actions" aria-label="快速开始">
-                <a class="home-v3-primary" data-home-mode="p1" href="?view=p1">开始口语练习</a>
-                <a class="home-v3-secondary" data-view="writing" href="?view=writing">写一篇作文</a>
+              <p class="hx-topics"><span>口语</span><i aria-hidden="true">|</i><span>写作</span><i aria-hidden="true">|</i><span>语料</span><i aria-hidden="true">|</i><span>复习</span></p>
+              <div class="hx-actions" aria-label="快速开始">
+                <a class="hx-btn hx-btn--solid" data-home-mode="p1" href="?view=p1">开始口语练习 <span aria-hidden="true">→</span></a>
+                <a class="hx-btn" data-view="writing" href="?view=writing">写一篇作文</a>
               </div>
             </div>
 
-            <aside class="home-v3-today" aria-label="今日训练流程">
-              <span>Today</span>
-              <svg class="home-loop-cycle" viewBox="0 0 460 410" role="img" aria-label="每日训练循环：输入真题练习，得到反馈报告，再复用语料与错词，回到输入。">
-                <defs>
-                  <marker id="homeLoopArrow" markerWidth="7" markerHeight="7" refX="3.6" refY="3" orient="auto" markerUnits="strokeWidth">
-                    <path d="M0.6 0.4 L6 3 L0.6 5.6 Z" fill="var(--accent, #2f806d)"></path>
-                  </marker>
-                </defs>
-                <circle cx="230" cy="220" r="135" fill="none" stroke="var(--line, #d9d4c7)" stroke-width="1.5" stroke-dasharray="2 7" stroke-linecap="round"></circle>
-                <g fill="none" stroke="var(--accent, #2f806d)" stroke-width="3" stroke-linecap="round" marker-end="url(#homeLoopArrow)">
-                  <path d="M280.5 94.8 A135 135 0 0 1 363.7 238.8"></path>
-                  <path d="M313.2 326.4 A135 135 0 0 1 146.8 326.4"></path>
-                  <path d="M96.3 238.8 A135 135 0 0 1 179.4 94.9"></path>
-                </g>
-                <g class="home-loop-node">
-                  <rect x="160" y="55" width="140" height="60" rx="16" fill="var(--panel, #fff)" stroke="rgba(47,128,109,0.22)" stroke-width="1.5"></rect>
-                  <circle cx="185" cy="85" r="15" fill="var(--accent, #2f806d)"></circle>
-                  <text x="185" y="91" text-anchor="middle" fill="#fff" class="home-loop-num">1</text>
-                  <text x="209" y="81" class="home-loop-title" fill="var(--ink, #2b2b2b)">输入</text>
-                  <text x="209" y="100" class="home-loop-sub" fill="var(--muted, #8a8478)">真题 · 练习</text>
-                </g>
-                <g class="home-loop-node">
-                  <rect x="278" y="257" width="140" height="60" rx="16" fill="var(--panel, #fff)" stroke="rgba(47,128,109,0.22)" stroke-width="1.5"></rect>
-                  <circle cx="303" cy="287" r="15" fill="var(--accent, #2f806d)"></circle>
-                  <text x="303" y="293" text-anchor="middle" fill="#fff" class="home-loop-num">2</text>
-                  <text x="327" y="283" class="home-loop-title" fill="var(--ink, #2b2b2b)">反馈</text>
-                  <text x="327" y="302" class="home-loop-sub" fill="var(--muted, #8a8478)">报告 · 批改</text>
-                </g>
-                <g class="home-loop-node">
-                  <rect x="42" y="257" width="140" height="60" rx="16" fill="var(--panel, #fff)" stroke="rgba(47,128,109,0.22)" stroke-width="1.5"></rect>
-                  <circle cx="67" cy="287" r="15" fill="var(--accent, #2f806d)"></circle>
-                  <text x="67" y="293" text-anchor="middle" fill="#fff" class="home-loop-num">3</text>
-                  <text x="91" y="283" class="home-loop-title" fill="var(--ink, #2b2b2b)">复用</text>
-                  <text x="91" y="302" class="home-loop-sub" fill="var(--muted, #8a8478)">语料 · 错词本</text>
-                </g>
-              </svg>
+            <section class="hx-show" data-hx-show aria-roledescription="carousel" aria-label="功能一览">
+              <div class="hx-stage">
+              <a class="hx-slide is-active" data-view="history" href="?view=history" aria-roledescription="slide">
+                <span class="hx-slide-media">
+                  <img src="/assets/home/showcase/speaking-report-overview.jpg" alt="" decoding="async">
+                  <span class="hx-slide-chip">Speaking</span>
+                </span>
+                <span class="hx-slide-body">
+                  <strong>口语报告</strong>
+                  <span>总分、逐题点评和复盘重点，一页看完这次练习哪里丢分。</span>
+                </span>
+              </a>
+              <a class="hx-slide" data-home-mode="p3" href="?view=p3" aria-roledescription="slide" aria-hidden="true" tabindex="-1">
+                <span class="hx-slide-media">
+                  <img src="/assets/home/showcase/speaking-p3-feedback.jpg" alt="" loading="lazy" decoding="async">
+                  <span class="hx-slide-chip">Speaking</span>
+                </span>
+                <span class="hx-slide-body">
+                  <strong>P3 论证点评</strong>
+                  <span>按论证方式拆开每一段回答，告诉你下一句该怎么展开。</span>
+                </span>
+              </a>
+              <a class="hx-slide" data-view="writingReports" href="?view=writingReports" aria-roledescription="slide" aria-hidden="true" tabindex="-1">
+                <span class="hx-slide-media">
+                  <img src="/assets/home/showcase/writing-task1-report.jpg" alt="" loading="lazy" decoding="async">
+                  <span class="hx-slide-chip">Writing</span>
+                </span>
+                <span class="hx-slide-body">
+                  <strong>写作批改</strong>
+                  <span>四项评分加段落级讲评，拼写和语法错误直接标在原文上。</span>
+                </span>
+              </a>
+              <a class="hx-slide" data-view="corpus" href="?view=corpus" aria-roledescription="slide" aria-hidden="true" tabindex="-1">
+                <span class="hx-slide-media">
+                  <img src="/assets/home/showcase/corpus-p2-story-bank.jpg" alt="" loading="lazy" decoding="async">
+                  <span class="hx-slide-chip">Corpus</span>
+                </span>
+                <span class="hx-slide-body">
+                  <strong>P2 串题素材</strong>
+                  <span>一个故事串多道 Cue Card，练过的答案沉淀成自己的素材库。</span>
+                </span>
+              </a>
+              <a class="hx-slide" data-view="takeawayBook" href="?view=takeawayBook" aria-roledescription="slide" aria-hidden="true" tabindex="-1">
+                <span class="hx-slide-media">
+                  <img src="/assets/home/showcase/takeaway-review.jpg" alt="" loading="lazy" decoding="async">
+                  <span class="hx-slide-chip">Review</span>
+                </span>
+                <span class="hx-slide-body">
+                  <strong>Takeaway 复习</strong>
+                  <span>收藏的好表达按间隔复习，到期提醒，越用越熟。</span>
+                </span>
+              </a>
+                <span class="hx-count" aria-hidden="true"><b data-hx-count>01</b><i>/</i>05</span>
+              </div>
+              <div class="hx-bar">
+                <div class="hx-progress"><button type="button" class="hx-seg is-on" data-go="0" aria-label="1 / 5"><i></i></button><button type="button" class="hx-seg" data-go="1" aria-label="2 / 5"><i></i></button><button type="button" class="hx-seg" data-go="2" aria-label="3 / 5"><i></i></button><button type="button" class="hx-seg" data-go="3" aria-label="4 / 5"><i></i></button><button type="button" class="hx-seg" data-go="4" aria-label="5 / 5"><i></i></button></div>
+                <button type="button" class="hx-nav" data-step="-1" aria-label="上一张"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M10 3 5 8l5 5"></path></svg></button>
+                <button type="button" class="hx-nav" data-step="1" aria-label="下一张"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="m6 3 5 5-5 5"></path></svg></button>
+              </div>
+            </section>
+
+            <aside class="hx-panel" aria-label="练习数据">
+              <dl class="hx-stats">
+                <div class="hx-stat">
+                  <dt>口语报告</dt>
+                  <dd><a data-view="history" href="?view=history" data-hx-stat="speaking">–</a></dd>
+                </div>
+                <div class="hx-stat">
+                  <dt>写作篇数</dt>
+                  <dd><a data-view="writingReports" href="?view=writingReports" data-hx-stat="writing">–</a></dd>
+                </div>
+                <div class="hx-stat">
+                  <dt>最近练习</dt>
+                  <dd class="hx-stat-date" data-hx-stat="last">–</dd>
+                </div>
+              </dl>
+              <p class="hx-panel-label">待复习</p>
+              <div class="hx-chips">
+                <a class="hx-chip" data-view="takeawayBook" href="?view=takeawayBook">Takeaway<sup data-hx-due="languageTakeawayDueDot"></sup></a>
+                <a class="hx-chip" data-view="writingTakeawayBook" href="?view=writingTakeawayBook">写作积累<sup data-hx-due="writingTakeawayDueDot"></sup></a>
+                <a class="hx-chip" data-view="spellingDrill" href="?view=spellingDrill">拼写训练<sup data-hx-due="spellingDrillDueDot"></sup></a>
+              </div>
+              <p class="hx-panel-label">题库 · <span data-hx-bank="label">当前考季</span></p>
+              <div class="hx-chips">
+                <a class="hx-chip" data-home-mode="p1" href="?view=p1">P1 短问短答<sup data-hx-bank="p1"></sup></a>
+                <a class="hx-chip" data-home-mode="p2" href="?view=p2">P2 Cue Card<sup data-hx-bank="p2"></sup></a>
+                <a class="hx-chip" data-home-mode="p3" href="?view=p3">P3 追问<sup data-hx-bank="p3"></sup></a>
+                <a class="hx-chip hx-chip--more" data-view="corpus" href="?view=corpus">语料库 →</a>
+              </div>
             </aside>
           </div>
 
-          <div class="home-v3-workbench" aria-label="训练工作流">
-            <section class="home-v3-lane">
-              <div class="home-v3-lane-head">
+          <div class="hx-lanes" aria-label="训练工作流">
+            <section class="hx-lane">
+              <header class="hx-lane-head">
                 <span>Speaking</span>
                 <strong>口语训练</strong>
-              </div>
-              <div class="home-v3-links">
+              </header>
+              <div class="hx-links hx-links--4">
                 <a data-home-mode="p1" href="?view=p1"><b>P1</b><span>短问短答</span></a>
                 <a data-home-mode="p2" href="?view=p2"><b>P2</b><span>Cue Card</span></a>
                 <a data-home-mode="p3" href="?view=p3"><b>P3</b><span>深入讨论</span></a>
@@ -257,26 +307,26 @@
               </div>
             </section>
 
-            <section class="home-v3-lane">
-              <div class="home-v3-lane-head">
+            <section class="hx-lane">
+              <header class="hx-lane-head">
                 <span>Writing</span>
                 <strong>写作闭环</strong>
-              </div>
-              <div class="home-v3-links">
-                <a href="?view=writing" data-view="writing"><b>Task</b><span>每日写作</span></a>
-                <a href="?view=writingReports"><b>Report</b><span>批改报告</span></a>
+              </header>
+              <div class="hx-links hx-links--2">
+                <a data-view="writing" href="?view=writing"><b>Task</b><span>每日写作</span></a>
+                <a data-view="writingReports" href="?view=writingReports"><b>Report</b><span>批改报告</span></a>
               </div>
             </section>
 
-            <section class="home-v3-lane">
-              <div class="home-v3-lane-head">
+            <section class="hx-lane">
+              <header class="hx-lane-head">
                 <span>Review</span>
                 <strong>语料与复习</strong>
-              </div>
-              <div class="home-v3-links">
-                <a href="?view=corpus"><b>Corpus</b><span>语料库</span></a>
-                <a href="?view=writingTakeawayBook"><b>Takeaway</b><span>写作积累</span></a>
-                <a href="?view=spellingDrill"><b>Drill</b><span>拼写错词</span></a>
+              </header>
+              <div class="hx-links hx-links--3">
+                <a data-view="corpus" href="?view=corpus"><b>Corpus</b><span>语料库</span></a>
+                <a data-view="writingTakeawayBook" href="?view=writingTakeawayBook"><b>Takeaway</b><span>写作积累</span></a>
+                <a data-view="spellingDrill" href="?view=spellingDrill"><b>Drill</b><span>拼写错词</span></a>
               </div>
             </section>
           </div>
@@ -397,7 +447,7 @@
           <div id="practiceGrid" class="practice-grid">
             <article id="promptPane" class="prompt-pane">
               <div class="section-label" id="promptKicker">Prompt</div>
-              <div id="promptCard" class="prompt-card short-prompt">Start a voice practice session to load a question.</div>
+              <div id="promptCard" class="prompt-card short-prompt"><span class="prompt-idle">Start a voice practice session to load a question.</span></div>
               <div id="followUp" class="follow-up"></div>
               <button id="browserTtsFallback" class="ghost hidden">Play with browser voice</button>
             </article>
@@ -1665,7 +1715,8 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20260818-scoring-model-provenance-1"></script>
+    <script src="/app.js?v=20261005-ui-104118"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
+    <script src="/home-dashboard.js?v=20261005-home-104118"></script>
   </body>
 </html>

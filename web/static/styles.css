@@ -41128,3 +41128,1052 @@ body.theme-dark .writing-custom-prompt-choice,
 body.theme-dark .writing-custom-prompt-choice .writing-prompt-choice-body {
   background: var(--panel);
 }
+
+/* =====================================================================
+   HOME (hx) — three-column hero after the personal blog: intro | feature
+   carousel | practice-stats panel, then the three training lanes.
+   Colours are the existing sketchbook palette (paper, ink, sage green).
+   ===================================================================== */
+body.view-home #homePanel.hx-home {
+  --hx-paper: #fffdf6;
+  --hx-ink: #172033;
+  --hx-muted: #667487;
+  --hx-faint: #94a0ad;
+  --hx-line: rgba(45, 55, 72, 0.13);
+  --hx-line-soft: rgba(45, 55, 72, 0.08);
+  --hx-grid: rgba(45, 55, 72, 0.032);
+  --hx-green: #2f806d;
+  --hx-green-ink: #276f60;
+  --hx-green-soft: rgba(47, 128, 109, 0.09);
+  --hx-card: rgba(255, 255, 255, 0.72);
+  --hx-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 18px 48px rgba(49, 59, 73, 0.08);
+  --hx-serif: "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  color: var(--hx-ink);
+}
+
+body.theme-dark.view-home #homePanel.hx-home {
+  --hx-paper: #141923;
+  --hx-ink: #f3eee6;
+  --hx-muted: rgba(226, 232, 240, 0.7);
+  --hx-faint: rgba(226, 232, 240, 0.46);
+  --hx-line: rgba(255, 255, 255, 0.12);
+  --hx-line-soft: rgba(255, 255, 255, 0.07);
+  --hx-grid: rgba(255, 255, 255, 0.035);
+  --hx-green: #89dcc1;
+  --hx-green-ink: #9fe6cf;
+  --hx-green-soft: rgba(137, 220, 193, 0.12);
+  --hx-card: rgba(255, 255, 255, 0.045);
+  --hx-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 22px 54px rgba(0, 0, 0, 0.32);
+}
+
+/* Dark + Academic remaps the home teal onto the theme's warm accent (as the
+   previous home did); default and popular keep the sketchbook teal. */
+body.theme-dark.font-academic.view-home #homePanel.hx-home {
+  --hx-green: var(--accent);
+  --hx-green-ink: var(--accent-dark);
+  --hx-green-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* Shared paper surface: faint 28px grid, soft border, quiet shadow. */
+#homePanel .hx-hero,
+#homePanel .hx-lanes {
+  border: 1px solid var(--hx-line);
+  border-radius: 22px;
+  background:
+    linear-gradient(90deg, var(--hx-grid) 1px, transparent 1px),
+    linear-gradient(180deg, var(--hx-grid) 1px, transparent 1px),
+    var(--hx-paper);
+  background-size: 28px 28px;
+  box-shadow: var(--hx-shadow);
+}
+
+#homePanel .hx-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.3fr) minmax(0, 0.98fr);
+  grid-template-areas: "intro show panel";
+  gap: clamp(20px, 2.4vw, 34px);
+  align-items: stretch;
+  padding: clamp(24px, 2.8vw, 38px);
+}
+
+/* ---------- Intro ---------- */
+#homePanel .hx-intro {
+  grid-area: intro;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+#homePanel .hx-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  color: var(--hx-green);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+#homePanel .hx-kicker::before {
+  content: "";
+  width: 22px;
+  height: 1.5px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+#homePanel .hx-title {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--hx-serif);
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+#homePanel .hx-title-top {
+  color: var(--hx-muted);
+  font-size: clamp(20px, 1.7vw, 26px);
+  line-height: 1.2;
+}
+
+#homePanel .hx-title-top::after {
+  content: " →";
+  color: var(--hx-green);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 500;
+}
+
+#homePanel .hx-title-main {
+  color: var(--hx-ink);
+  font-size: clamp(26px, 2.3vw, 36px);
+  font-style: normal;
+  line-height: 1.16;
+  white-space: nowrap;
+}
+
+#homePanel .hx-topics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 0;
+  color: var(--hx-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#homePanel .hx-topics i {
+  color: var(--hx-faint);
+  font-style: normal;
+  font-weight: 400;
+}
+
+#homePanel .hx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+#homePanel .hx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--hx-line);
+  border-radius: 999px;
+  background: var(--hx-card);
+  color: var(--hx-ink);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+#homePanel .hx-btn:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--hx-green) 45%, transparent);
+}
+
+#homePanel .hx-btn--solid {
+  border-color: transparent;
+  background: var(--hx-green);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(47, 128, 109, 0.22);
+}
+
+body.theme-dark #homePanel .hx-btn--solid {
+  color: #10241e;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+
+#homePanel .hx-btn--solid:hover {
+  border-color: transparent;
+  box-shadow: 0 14px 28px rgba(47, 128, 109, 0.28);
+}
+
+#homePanel .hx-btn--solid span {
+  transition: transform 160ms ease;
+}
+
+#homePanel .hx-btn--solid:hover span {
+  transform: translateX(2px);
+}
+
+#homePanel :is(.hx-btn, .hx-chip, .hx-links a, .hx-slide, .hx-nav, .hx-seg, .hx-stat a):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--hx-green) 60%, transparent);
+  outline-offset: 3px;
+}
+
+/* ---------- Carousel ---------- */
+#homePanel .hx-show {
+  grid-area: show;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+#homePanel .hx-stage {
+  position: relative;
+  flex: 1;
+  display: grid;
+  min-height: 0;
+}
+
+#homePanel .hx-slide {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: opacity 420ms ease, transform 420ms ease, visibility 0s linear 420ms;
+}
+
+#homePanel .hx-slide.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 420ms ease, transform 420ms ease, visibility 0s;
+}
+
+#homePanel .hx-slide-media {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--hx-line);
+  border-radius: 14px;
+  background: var(--hx-card);
+  box-shadow: 0 12px 30px rgba(49, 59, 73, 0.1);
+}
+
+#homePanel .hx-slide-media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: top left;
+  transition: transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+body.theme-dark #homePanel .hx-slide-media img {
+  filter: brightness(0.86) saturate(0.9);
+}
+
+#homePanel .hx-slide:hover .hx-slide-media img {
+  transform: scale(1.025);
+}
+
+#homePanel .hx-slide-chip {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(23, 32, 51, 0.72);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+#homePanel .hx-slide-body {
+  display: grid;
+  gap: 4px;
+  padding-right: 64px;
+}
+
+#homePanel .hx-slide-body strong {
+  font-family: var(--hx-serif);
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+#homePanel .hx-slide:hover .hx-slide-body strong {
+  color: var(--hx-green-ink);
+}
+
+#homePanel .hx-slide-body span {
+  color: var(--hx-muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+#homePanel .hx-count {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--hx-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+#homePanel .hx-count b {
+  color: var(--hx-ink);
+  font-family: var(--hx-serif);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+#homePanel .hx-count i {
+  font-style: normal;
+}
+
+#homePanel .hx-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#homePanel .hx-progress {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+}
+
+#homePanel .hx-seg {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+#homePanel .hx-seg::before,
+#homePanel .hx-seg i {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 3px;
+}
+
+#homePanel .hx-seg::before {
+  background: var(--hx-line);
+}
+
+#homePanel .hx-seg i {
+  background: var(--hx-green);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+#homePanel .hx-seg.is-done i {
+  transform: scaleX(1);
+  opacity: 0.45;
+}
+
+#homePanel .hx-seg.is-on i {
+  animation: hx-seg-fill 5s linear forwards;
+}
+
+#homePanel .hx-show.is-paused .hx-seg.is-on i,
+#homePanel .hx-show.is-hidden .hx-seg.is-on i {
+  animation-play-state: paused;
+}
+
+#homePanel .hx-show.no-auto .hx-seg.is-on i {
+  animation: none;
+  transform: scaleX(1);
+}
+
+@keyframes hx-seg-fill {
+  to { transform: scaleX(1); }
+}
+
+#homePanel .hx-nav {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--hx-line);
+  border-radius: 50%;
+  background: var(--hx-card);
+  color: var(--hx-muted);
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+#homePanel .hx-nav:hover {
+  color: var(--hx-green);
+  border-color: color-mix(in srgb, var(--hx-green) 45%, transparent);
+}
+
+#homePanel .hx-nav svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Stats panel ---------- */
+#homePanel .hx-panel {
+  grid-area: panel;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px 20px 18px;
+  border: 1px solid var(--hx-line);
+  border-radius: 16px;
+  background: var(--hx-card);
+}
+
+#homePanel .hx-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 0 4px;
+}
+
+#homePanel .hx-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+#homePanel .hx-stat:first-child {
+  padding-left: 0;
+}
+
+#homePanel .hx-stat + .hx-stat::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: var(--hx-line);
+}
+
+#homePanel .hx-stat dt {
+  color: var(--hx-faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+#homePanel .hx-stat dd {
+  margin: auto 0 0;
+  padding-top: 8px;
+  color: var(--hx-ink);
+  font-family: var(--hx-serif);
+  font-size: clamp(28px, 2.4vw, 36px);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+#homePanel .hx-stat dd a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+#homePanel .hx-stat dd a:hover {
+  color: var(--hx-green);
+}
+
+#homePanel .hx-stat-date {
+  font-size: clamp(22px, 1.9vw, 28px) !important;
+}
+
+#homePanel .hx-stat-date time {
+  display: block;
+  white-space: nowrap;
+}
+
+#homePanel .hx-stat-year {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--hx-faint);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+#homePanel .hx-stat-sep {
+  margin: 0 -1px;
+  color: var(--hx-green);
+}
+
+#homePanel .hx-panel-label {
+  margin: 20px 0 10px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--hx-line);
+  color: var(--hx-faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+#homePanel .hx-panel-label span {
+  letter-spacing: 0.02em;
+}
+
+#homePanel .hx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+#homePanel .hx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--hx-line);
+  border-radius: 999px;
+  background: var(--hx-paper);
+  color: var(--hx-ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+#homePanel .hx-chip:hover {
+  border-color: color-mix(in srgb, var(--hx-green) 45%, transparent);
+  color: var(--hx-green-ink);
+}
+
+#homePanel .hx-chip sup {
+  top: 0;
+  color: var(--hx-faint);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+#homePanel .hx-chip sup:empty {
+  display: none;
+}
+
+#homePanel .hx-chip.is-due {
+  border-color: color-mix(in srgb, var(--hx-green) 32%, transparent);
+  background: var(--hx-green-soft);
+}
+
+#homePanel .hx-chip.is-due sup {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--hx-green);
+  color: #fff;
+  text-align: center;
+}
+
+body.theme-dark #homePanel .hx-chip.is-due sup {
+  color: #10241e;
+}
+
+#homePanel .hx-chip--more {
+  border-style: dashed;
+  background: transparent;
+  color: var(--hx-green-ink);
+}
+
+/* ---------- Training lanes ---------- */
+#homePanel .hx-lanes {
+  display: grid;
+  overflow: hidden;
+}
+
+#homePanel .hx-lane {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.24fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+  padding: 20px clamp(20px, 2.4vw, 30px);
+}
+
+#homePanel .hx-lane + .hx-lane {
+  border-top: 1px solid var(--hx-line-soft);
+}
+
+#homePanel .hx-lane-head {
+  display: grid;
+  gap: 6px;
+}
+
+#homePanel .hx-lane-head span {
+  color: var(--hx-green);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+#homePanel .hx-lane-head strong {
+  font-family: var(--hx-serif);
+  font-size: clamp(22px, 1.8vw, 28px);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+#homePanel .hx-links {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#homePanel .hx-links--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#homePanel .hx-links--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+#homePanel .hx-links a {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-height: 74px;
+  align-content: center;
+  padding: 14px 40px 14px 18px;
+  border: 1px solid var(--hx-line);
+  border-radius: 14px;
+  background: var(--hx-card);
+  color: var(--hx-ink);
+  text-decoration: none;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+#homePanel .hx-links a::after {
+  content: "→";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  color: var(--hx-faint);
+  transform: translate(-4px, -50%);
+  opacity: 0;
+  transition: opacity 160ms ease, transform 160ms ease, color 160ms ease;
+}
+
+#homePanel .hx-links a:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--hx-green) 40%, transparent);
+  background: var(--hx-paper);
+  box-shadow: 0 12px 26px rgba(49, 59, 73, 0.08);
+}
+
+#homePanel .hx-links a:hover::after {
+  color: var(--hx-green);
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+#homePanel .hx-links b {
+  color: var(--hx-green);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+#homePanel .hx-links span {
+  font-size: 16.5px;
+  font-weight: 700;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1240px) {
+  #homePanel .hx-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "intro panel" "show show";
+  }
+
+  #homePanel .hx-show {
+    padding-top: 6px;
+    border-top: 1px dashed var(--hx-line);
+  }
+
+  #homePanel .hx-stage {
+    padding-top: 14px;
+  }
+
+  #homePanel .hx-slide {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 22px;
+  }
+}
+
+@media (max-width: 760px) {
+  #homePanel .hx-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "intro" "panel" "show";
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  #homePanel .hx-slide {
+    display: flex;
+  }
+
+  #homePanel .hx-lane {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  #homePanel .hx-links,
+  #homePanel .hx-links--3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #homePanel .hx-links a {
+    min-height: 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #homePanel .hx-slide,
+  #homePanel .hx-slide-media img,
+  #homePanel .hx-links a,
+  #homePanel .hx-btn {
+    transition: none;
+  }
+}
+
+/* =====================================================================
+   UI POLISH (2026-10-05) — finish and texture only; layout, behaviour and
+   the per-theme colour tokens (--accent, --ink, --muted, --line …) stay.
+   ===================================================================== */
+
+/* ---------- Practice: idle prompt ---------- */
+.prompt-card .prompt-idle {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  max-width: 340px;
+  margin: 0 auto;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.prompt-card .prompt-idle::before {
+  content: "";
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0M12 18v3'/%3E%3C/svg%3E") center / 24px no-repeat;
+  background-color: var(--accent);
+  -webkit-mask: none;
+  opacity: 0.9;
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 12%, transparent);
+  /* tint the glyph white over the accent disc */
+  filter: none;
+}
+
+.prompt-card .prompt-idle::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0M12 18v3'/%3E%3C/svg%3E");
+}
+
+/* ---------- Practice: panes and the big record button ---------- */
+#practiceGrid .prompt-pane,
+#practiceGrid .recorder-pane {
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 10px 28px rgba(15, 23, 42, 0.04);
+}
+
+#practiceGrid .section-label {
+  letter-spacing: 0.12em;
+}
+
+#practicePanel .phase-meter {
+  height: 4px;
+  overflow: hidden;
+}
+
+#phaseMeter {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent));
+  transition: width 400ms ease;
+}
+
+body:not(.font-popular) .record-control.ready {
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.22), transparent 55%),
+    var(--accent);
+  box-shadow:
+    0 0 0 12px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 0 0 26px color-mix(in srgb, var(--accent) 5%, transparent),
+    0 22px 44px color-mix(in srgb, var(--accent) 28%, transparent),
+    inset 0 -10px 24px rgba(0, 0, 0, 0.08);
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+
+body:not(.font-popular) .record-control.ready:hover {
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.26), transparent 55%),
+    var(--accent);
+  transform: scale(1.015);
+  box-shadow:
+    0 0 0 14px color-mix(in srgb, var(--accent) 13%, transparent),
+    0 0 0 30px color-mix(in srgb, var(--accent) 6%, transparent),
+    0 26px 50px color-mix(in srgb, var(--accent) 32%, transparent),
+    inset 0 -10px 24px rgba(0, 0, 0, 0.08);
+}
+
+.record-control.ready #recordTitle {
+  letter-spacing: 0.02em;
+}
+
+.record-control.ready #recordHint {
+  opacity: 0.86;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .record-control.ready,
+  .record-control.ready:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ---------- Corpus landing ---------- */
+body:not(.font-popular) #corpusPanel .corpus-home-title {
+  font-family: "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+#corpusPanel .corpus-home-card {
+  position: relative;
+  min-height: 228px;
+  height: auto;
+  border-width: 1px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 16px 40px rgba(49, 59, 73, 0.07);
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+
+#corpusPanel .corpus-home-card::before {
+  width: 3px;
+  top: 22px;
+  bottom: 22px;
+  border-radius: 0 3px 3px 0;
+}
+
+#corpusPanel .corpus-home-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 24px 52px rgba(49, 59, 73, 0.11);
+}
+
+#corpusPanel .corpus-home-card strong {
+  letter-spacing: 0;
+}
+
+#corpusPanel .corpus-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  padding: 7px 14px;
+  font-weight: 700;
+  transition: background 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+
+#corpusPanel .corpus-card-cta::after {
+  content: "→";
+  transition: transform 200ms ease;
+}
+
+#corpusPanel .corpus-home-card:hover .corpus-card-cta {
+  border-color: transparent;
+  background: var(--corpus-accent, var(--accent));
+  color: #fff;
+}
+
+#corpusPanel .corpus-card-p2:hover .corpus-card-cta {
+  background: var(--p2-corpus-accent, var(--accent));
+}
+
+#corpusPanel .corpus-home-card:hover .corpus-card-cta::after {
+  transform: translateX(3px);
+}
+
+#corpusPanel .corpus-review-lane {
+  border-radius: 20px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 12px 32px rgba(15, 23, 42, 0.05);
+}
+
+#corpusPanel .corpus-review-link {
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+#corpusPanel .corpus-review-link:hover {
+  transform: translateY(-1px);
+}
+
+body.theme-dark #corpusPanel .corpus-home-card {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 44px rgba(0, 0, 0, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #corpusPanel .corpus-home-card,
+  #corpusPanel .corpus-review-link {
+    transition: none;
+  }
+}
+
+/* Narrow screens: the review lane stacked its head beside three 54px columns
+   (text ran vertically). Stack the head above, links share the full width. */
+@media (max-width: 900px) {
+  .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-review-lane {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px;
+  }
+
+  .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-review-links {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-review-links {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* The draggable sidebar writes --sidebar-width inline on <html>, which beat the
+   980px breakpoint's 0px and left a 176px blank strip once the nav moved to the
+   top bar. !important in the stylesheet outranks a non-important inline value. */
+@media (max-width: 980px) {
+  html {
+    --sidebar-width: 0px !important;
+  }
+}
+
+/* ≤980px the nav carries its own avatar (.nav-user-mobile); hide the floating
+   top-bar copy so the account button is not shown twice. */
+@media (max-width: 980px) {
+  .global-topbar-actions > .avatar-settings-button {
+    display: none !important;
+  }
+}
+
+/* ---------- Writing report: AI coaching rewrites ----------
+   "original → better" pairs were grey monospace boxes; read them as text:
+   the original quietly struck through, the suggestion tinted with the accent. */
+.coaching-content li > code {
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.95em;
+  line-height: 1.7;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.coaching-content li > code:first-child {
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  text-decoration-thickness: 1px;
+}
+
+.coaching-content li > code:nth-of-type(2) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+body.theme-dark .coaching-content li > code:nth-of-type(2) {
+  color: var(--accent);
+}
+
+.coaching-content li + li {
+  margin-top: 4px;
+}
+
+/* Corpus cards: earlier rules pin height with !important at :has(#corpusPanel)
+   specificity; match it so the cards size to their content. */
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-card-p1,
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-card-p2 {
+  height: auto !important;
+  min-height: 228px !important;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-home-card {
+  border-width: 1px;
+  border-radius: 20px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 16px 40px rgba(49, 59, 73, 0.07) !important;
+}
+
+.workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-home-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 24px 52px rgba(49, 59, 73, 0.11) !important;
+}
+
+body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-home-card {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 44px rgba(0, 0, 0, 0.3) !important;
+}
