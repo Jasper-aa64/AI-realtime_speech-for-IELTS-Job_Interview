@@ -3,6 +3,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDesktopServices>
 #include <QInputDialog>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -15,6 +16,7 @@
 
 #include "error_page.h"
 #include "navigation_policy.h"
+#include "popup_relay.h"
 #include "server_settings.h"
 #include "studio_page.h"
 
@@ -24,8 +26,8 @@ namespace {
 const QString kGeometryKey = QStringLiteral("window/geometry");
 }
 
-BrowserWindow::BrowserWindow(QWebEngineProfile *profile, const QUrl &server, Role role, QWidget *parent)
-    : QMainWindow(parent), m_profile(profile), m_server(server), m_role(role),
+BrowserWindow::BrowserWindow(QWebEngineProfile *profile, const QUrl &server, QWidget *parent)
+    : QMainWindow(parent), m_profile(profile), m_server(server),
       m_stack(new QStackedWidget(this)), m_view(new QWebEngineView(this)),
       m_page(new StudioPage(profile, server, m_view)), m_error(new ErrorPage(this)) {
     setWindowTitle(QStringLiteral("IELTS Studio"));
@@ -40,22 +42,13 @@ BrowserWindow::BrowserWindow(QWebEngineProfile *profile, const QUrl &server, Rol
     });
     statusBar()->hide();
 
-    m_page->setWindowFactory([this] { return openPopup(); });
+    m_page->setWindowFactory([this] { return openRelay(); });
     connect(m_page, &QWebEnginePage::loadingChanged, this, &BrowserWindow::onLoadingChanged);
-    connect(m_page, &QWebEnginePage::titleChanged, this, [this](const QString &title) {
-        if (m_role == Role::Popup && !title.isEmpty()) setWindowTitle(title);
-    });
-    connect(m_page, &QWebEnginePage::windowCloseRequested, this, &QWidget::close);
     connect(m_page, &QWebEnginePage::renderProcessTerminated, this,
             [this](QWebEnginePage::RenderProcessTerminationStatus status, int) {
         // Spec §8: a crashed renderer reloads the page instead of leaving a blank window.
         if (status != QWebEnginePage::NormalTerminationStatus)
             QTimer::singleShot(0, m_page, [this] { m_page->triggerAction(QWebEnginePage::Reload); });
-    });
-    connect(m_page, &StudioPage::openedExternally, this, [this] {
-        // A popup created only to reach an external site has nothing left to show.
-        if (m_role == Role::Popup && (m_page->url().isEmpty() || m_page->url().scheme() == QStringLiteral("about")))
-            close();
     });
     connect(m_error, &ErrorPage::retryRequested, this, [this] {
         m_stack->setCurrentWidget(m_view);
@@ -63,14 +56,9 @@ BrowserWindow::BrowserWindow(QWebEngineProfile *profile, const QUrl &server, Rol
     });
     connect(m_error, &ErrorPage::changeServerRequested, this, &BrowserWindow::promptForServer);
 
-    if (m_role == Role::Main) {
-        buildMenus();
-        QSettings settings;
-        if (!restoreGeometry(settings.value(kGeometryKey).toByteArray())) resize(1360, 880);
-    } else {
-        setAttribute(Qt::WA_DeleteOnClose);
-        if (parent) resize(parent->size() * 0.9);
-    }
+    buildMenus();
+    QSettings settings;
+    if (!restoreGeometry(settings.value(kGeometryKey).toByteArray())) resize(1360, 880);
 }
 
 StudioPage *BrowserWindow::page() const {
@@ -86,7 +74,7 @@ void BrowserWindow::onLoadingChanged(const QWebEngineLoadingInfo &info) {
     if (info.status() == QWebEngineLoadingInfo::LoadSucceededStatus) {
         m_failedUrl.clear();
         m_stack->setCurrentWidget(m_view);
-        if (m_role == Role::Main) emit loadResult(true, info.url());
+        emit loadResult(true, info.url());
         return;
     }
     if (info.status() != QWebEngineLoadingInfo::LoadFailedStatus) return;
@@ -94,7 +82,7 @@ void BrowserWindow::onLoadingChanged(const QWebEngineLoadingInfo &info) {
     m_failedUrl = info.url();
     m_error->showFor(m_server, info.errorString());
     m_stack->setCurrentWidget(m_error);
-    if (m_role == Role::Main) emit loadResult(false, info.url());
+    emit loadResult(false, info.url());
 }
 
 void BrowserWindow::promptForServer() {
@@ -154,24 +142,25 @@ void BrowserWindow::buildMenus() {
     closeWindow->setShortcut(QKeySequence::Close);
 }
 
-QWebEnginePage *BrowserWindow::openPopup() {
-    QWidget *host = m_role == Role::Main ? this : parentWidget();
-    auto *popup = new BrowserWindow(m_profile, m_server, Role::Popup, host);
-    popup->show();
-    return popup->page();
+QWebEnginePage *BrowserWindow::openRelay() {
+    auto *relay = new PopupRelay(m_profile, m_server, this);
+    connect(relay, &PopupRelay::routed, this, [this, relay](PopupRoute route, const QUrl &url) {
+        if (route == PopupRoute::LoadInMain) m_page->load(url);
+        else if (route == PopupRoute::OpenExternally) QDesktopServices::openUrl(url);
+        relay->deleteLater();
+    });
+    // An opener that writes into about:blank never navigates; don't keep its relay around.
+    QTimer::singleShot(15000, relay, &QObject::deleteLater);
+    return relay;
 }
 
 void BrowserWindow::closeEvent(QCloseEvent *event) {
-    if (m_role == Role::Main) {
-        QSettings settings;
-        settings.setValue(kGeometryKey, saveGeometry());
-        // Refuse the close and end the event loop instead: AppKit's own terminate path calls exit()
-        // without returning from exec(), which skips main()'s ordered teardown and loses the cookie flush.
-        event->ignore();
-        QMetaObject::invokeMethod(qApp, [] { QCoreApplication::exit(0); }, Qt::QueuedConnection);
-        return;
-    }
-    QMainWindow::closeEvent(event);
+    QSettings settings;
+    settings.setValue(kGeometryKey, saveGeometry());
+    // Refuse the close and end the event loop instead: AppKit's own terminate path calls exit()
+    // without returning from exec(), which skips main()'s ordered teardown and loses the cookie flush.
+    event->ignore();
+    QMetaObject::invokeMethod(qApp, [] { QCoreApplication::exit(0); }, Qt::QueuedConnection);
 }
 
 } // namespace studio

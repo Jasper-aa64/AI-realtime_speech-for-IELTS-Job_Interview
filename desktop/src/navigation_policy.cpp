@@ -23,6 +23,18 @@ NavigationTarget classifyNavigation(const QUrl &target, const QUrl &server) {
     return NavigationTarget::Blocked;
 }
 
+PopupRoute routePopupNavigation(const QUrl &target, const QUrl &server) {
+    const QString scheme = target.scheme().toLower();
+    if (target.isEmpty() || scheme == QStringLiteral("about")) return PopupRoute::Wait;
+    if (scheme == QStringLiteral("blob") || scheme == QStringLiteral("data")) return PopupRoute::Drop;
+    switch (classifyNavigation(target, server)) {
+    case NavigationTarget::InApp: return PopupRoute::LoadInMain;
+    case NavigationTarget::External: return PopupRoute::OpenExternally;
+    case NavigationTarget::Blocked: return PopupRoute::Drop;
+    }
+    return PopupRoute::Drop;
+}
+
 bool shouldGrantPermission(QWebEnginePermission::PermissionType type, const QUrl &origin, const QUrl &server) {
     if (!isSameOrigin(origin, server)) return false;
     return type == QWebEnginePermission::PermissionType::MediaAudioCapture

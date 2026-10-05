@@ -38,6 +38,23 @@ private slots:
         QCOMPARE(int(classifyNavigation(QUrl(target), kServer)), expected);
     }
 
+    void popupRoute_data() {
+        QTest::addColumn<QString>("target");
+        QTest::addColumn<int>("expected");
+        QTest::newRow("opener still preparing") << "about:blank" << int(PopupRoute::Wait);
+        QTest::newRow("no url yet") << "" << int(PopupRoute::Wait);
+        QTest::newRow("app view opens in main") << "http://127.0.0.1:8767/?view=p1Corpus" << int(PopupRoute::LoadInMain);
+        QTest::newRow("other site to browser") << "https://detail.design/" << int(PopupRoute::OpenExternally);
+        QTest::newRow("blob document dropped") << "blob:http://127.0.0.1:8767/1234" << int(PopupRoute::Drop);
+        QTest::newRow("data document dropped") << "data:text/html,hi" << int(PopupRoute::Drop);
+        QTest::newRow("file dropped") << "file:///etc/hosts" << int(PopupRoute::Drop);
+    }
+    void popupRoute() {
+        QFETCH(QString, target);
+        QFETCH(int, expected);
+        QCOMPARE(int(routePopupNavigation(QUrl(target), kServer)), expected);
+    }
+
     void permissions() {
         const QUrl own(QStringLiteral("http://127.0.0.1:8767"));
         const QUrl other(QStringLiteral("https://evil.example"));

@@ -15,6 +15,7 @@ add_library(studio_core STATIC
     src/studio_page.cpp src/studio_page.h
     src/browser_window.cpp src/browser_window.h
     src/native_bridge.cpp src/native_bridge.h
+    src/popup_relay.cpp src/popup_relay.h
 )
 target_include_directories(studio_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(studio_core PUBLIC Qt6::Widgets Qt6::WebEngineWidgets Qt6::WebChannel)

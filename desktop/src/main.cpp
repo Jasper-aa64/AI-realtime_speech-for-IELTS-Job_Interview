@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
     // Window and profile are torn down explicitly below, while QApplication is still alive:
     // destroying the profile after the app skips Chromium's final cookie flush (login lost on quick quit).
     QWebEngineProfile *profile = studio::createStudioProfile(nullptr, parser.isSet(testProfileOption));
-    auto *window = new studio::BrowserWindow(profile, server, studio::BrowserWindow::Role::Main);
+    auto *window = new studio::BrowserWindow(profile, server);
 
     if (parser.isSet(smokeOption)) {
         QObject::connect(window, &studio::BrowserWindow::loadResult, &app, [](bool ok, const QUrl &url) {

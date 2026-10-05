@@ -8,7 +8,7 @@
 namespace studio {
 
 // Keeps the shell on the server's origin, sends other links to the system browser,
-// opens popups through a window factory, and grants mic/clipboard to the server only.
+// hands window.open() to a factory (a redirecting PopupRelay), and grants mic/clipboard to the server only.
 class StudioPage : public QWebEnginePage {
     Q_OBJECT
 public:
