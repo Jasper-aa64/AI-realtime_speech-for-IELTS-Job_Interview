@@ -54,7 +54,7 @@ def _knowledge_items(user, material, payload, amount, *, full=False):
     if entry_ids is not None or question_ids is not None:
         entry_ids, question_ids = entry_ids or [], question_ids or []
         if not isinstance(entry_ids, list) or not isinstance(question_ids, list) or not 1 <= len(entry_ids) + len(question_ids) <= 10:
-            raise InterviewError("Pick between 1 and 10 questions")
+            raise InterviewError("请选择 1 到 10 道题。")
         if any(q not in BY_ID for q in question_ids) or len(set(question_ids)) != len(question_ids):
             raise InterviewError("Question IDs must be known and unique")
         owned = {e.entry_id: e for e in Entry.objects.filter(user=user, entry_id__in=entry_ids, kind__in=["knowledge", "jd_question"])}
@@ -64,7 +64,7 @@ def _knowledge_items(user, material, payload, amount, *, full=False):
                [_main("knowledge", BY_ID[q]["prompt"], question=BY_ID[q]) for q in question_ids]
     category = text(payload.get("category"), "category", 32)
     if category and category not in {c["id"] for c in CATEGORIES}:
-        raise InterviewError("Unknown question category")
+        raise InterviewError("未知的题目方向。")
     items = []
     if not category:
         # Resume tech-stack questions first, then the role's own questions, then the curated bank.
@@ -104,7 +104,7 @@ def build_plan(user, payload):
             raise InterviewError("project_ids must be a list of corpus ids")
         projects = [p for p in projects if p.entry_id in set(wanted)]
     if part in {"full", "project"} and not projects:
-        raise InterviewError("Upload your resume first so the interviewer can ask about your projects", code="resume_required")
+        raise InterviewError("请先上传简历，面试官才能就你的项目提问。", code="resume_required")
     turns = []
     if part == "full":
         intro = next(iter(material["self_intro"]), None)
@@ -119,7 +119,7 @@ def build_plan(user, payload):
     if part in {"full", "reverse"}:
         turns.append(_main("reverse", REVERSE_OPEN))
     if not turns:
-        raise InterviewError("No questions available for this practice", code="empty_plan")
+        raise InterviewError("这次练习没有可用的题目。", code="empty_plan")
     return part, intensity, turns
 
 
@@ -183,7 +183,7 @@ def answer(user, session_id, turn_id, value, *, answer_source="typed", ai_source
         _not_busy(session)
         current = _pending(session)
         if current is None or current.pk != turn.pk:
-            raise InterviewError("This turn is no longer current", code="stale_turn", status=409)
+            raise InterviewError("这道题已经不是当前题目了，请刷新后继续。", code="stale_turn", status=409)
         turn.answer, turn.status, turn.answer_source = value, "completed", answer_source
         turn.save(update_fields=["answer", "status", "answer_source", "updated_at"])
         root, depth = _root(turn)
@@ -213,7 +213,7 @@ def answer(user, session_id, turn_id, value, *, answer_source="typed", ai_source
         with transaction.atomic():
             session = _owned(user, session_id, lock=True)
             if session.ai_busy_token != token:
-                raise InterviewError("This decision belongs to an older request", code="stale_generation", status=409)
+                raise InterviewError("面试官的判断已过期，请刷新后继续。", code="stale_generation", status=409)
             turn = _turn(session, turn_id)
             if failure is not None:
                 _record_decision(turn, {"status": "failed", "action": "next", "error": str(failure), "code": failure.code})
@@ -238,14 +238,14 @@ def answer(user, session_id, turn_id, value, *, answer_source="typed", ai_source
 
 def upload_audio(user, session_id, turn_id, upload):
     if upload is None or not 0 < upload.size <= AUDIO_LIMIT:
-        raise InterviewError("Upload a recording up to 15 MB", code="invalid_audio")
+        raise InterviewError("请上传 15 MB 以内的录音。", code="invalid_audio")
     with transaction.atomic():
         session = _owned(user, session_id, lock=True)
         _active(session)
         turn = _turn(session, turn_id)
         current = _pending(session)
         if current is None or current.pk != turn.pk:
-            raise InterviewError("This turn is no longer current", code="stale_turn", status=409)
+            raise InterviewError("这道题已经不是当前题目了，请刷新后继续。", code="stale_turn", status=409)
         relative = Path("interview_audio") / str(user.pk) / session.public_id / f"{turn.public_id}-{uuid.uuid4().hex[:8]}.webm"
         target = Path(settings.MEDIA_ROOT) / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -265,7 +265,7 @@ def save_to_corpus(user, session_id, turn_id):
     session = _owned(user, session_id)
     turn = _turn(session, turn_id)
     if turn.status != "completed" or not turn.answer:
-        raise InterviewError("Only answered questions can be saved to the corpus")
+        raise InterviewError("只有已回答的题目才能存进语料库。")
     if turn.stage == "reverse":
         return corpus.create_entry(user, {"kind": "reverse_question", "question": turn.answer,
                                           "corpus_text": (turn.metadata or {}).get("reply", "")})
@@ -286,13 +286,13 @@ def score(user, session_id, ai_source=""):
     with transaction.atomic():
         session = _owned(user, session_id, lock=True)
         if session.status != "completed":
-            raise InterviewError("Finish the interview before scoring", code="session_not_completed", status=409)
+            raise InterviewError("请先完成面试，再生成评分。", code="session_not_completed", status=409)
         if (session.score or {}).get("status") == "ready":
             return detail(user, session_id)
         _not_busy(session)
         turns = list(session.turns.filter(status="completed"))
         if not turns:
-            raise InterviewError("Answer at least one question before scoring")
+            raise InterviewError("至少回答一道题才能评分。")
         profile = corpus.profile_for(user)
         inputs = {"part": session.part, "intensity": session.intensity, "has_jd": bool(profile.jd_text),
                   "jd_summary": profile.jd_summary, "turn_ids": [t.public_id for t in turns],

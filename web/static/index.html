@@ -26,7 +26,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261005-interview-17">
+    <link rel="stylesheet" href="/styles.css?v=20261005-interview-22">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -162,12 +162,23 @@
             <a class="nav-button" data-view="writingReports" href="?view=writingReports" data-i18n="nav.writingReports">写作报告</a>
           </nav>
           <nav id="interviewNav" class="nav-primary interview-nav hidden" aria-label="模拟面试">
-            <span class="nav-section-label" aria-hidden="true">练习</span>
             <a class="nav-button" data-view="interview" data-interview-pane="home" href="?view=interview">面试首页</a>
-            <a class="nav-button" data-view="interview" data-interview-pane="bank" href="?view=interview">通用题库</a>
-            <a class="nav-button" data-view="interview" data-interview-pane="custom" href="?view=interview">简历定制</a>
-            <span class="nav-section-label" aria-hidden="true">记录</span>
-            <a class="nav-button" data-view="interview" data-interview-pane="history" href="?view=interview">面试记录</a>
+            <span class="nav-section-label" aria-hidden="true">练习</span>
+            <div class="nav-exam-group" role="group" aria-label="面试练习">
+              <a class="nav-button nav-exam-lead" data-view="interview" data-interview-pane="practice" data-interview-part="full" href="?view=interview">
+                <span class="nav-exam-lead-title">完整面试</span>
+                <span class="nav-exam-lead-sub">自我介绍 → 反问</span>
+              </a>
+              <div class="nav-pgroup">
+                <a class="nav-button nav-pgroup-item" data-view="interview" data-interview-pane="practice" data-interview-part="project" href="?view=interview">项目</a>
+                <a class="nav-button nav-pgroup-item" data-view="interview" data-interview-pane="practice" data-interview-part="knowledge" href="?view=interview">知识点</a>
+                <a class="nav-button nav-pgroup-item" data-view="interview" data-interview-pane="practice" data-interview-part="reverse" href="?view=interview">反问</a>
+              </div>
+            </div>
+            <a class="nav-button" data-view="interview" data-interview-pane="reports" href="?view=interview">面试报告</a>
+            <span class="nav-section-label" aria-hidden="true">积累</span>
+            <a class="nav-button" data-view="interview" data-interview-pane="corpus" href="?view=interview">面试语料库</a>
+            <a class="nav-button" data-view="interview" data-interview-pane="custom" href="?view=interview">简历 / JD 定制</a>
           </nav>
         </div>
         <div class="nav-bottom">
@@ -1792,10 +1803,10 @@
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
-    <script src="/native-bridge.js?v=20261005-interview-17"></script>
-    <script src="/interview.js?v=20261005-interview-17"></script>
+    <script src="/native-bridge.js?v=20261005-interview-22"></script>
+    <script src="/interview.js?v=20261005-interview-22"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>
-    <script src="/app.js?v=20261005-interview-17"></script>
+    <script src="/app.js?v=20261005-interview-22"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
     <script src="/home-dashboard.js?v=20261005-ui-redesign-31"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>

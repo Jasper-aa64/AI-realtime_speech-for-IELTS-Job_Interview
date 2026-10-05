@@ -25,14 +25,14 @@ def api(*methods):
             except InterviewError as exc:
                 return JsonResponse({"error": str(exc), "code": exc.code}, status=exc.status)
             except OperationalError:
-                return JsonResponse({"error": "Session is busy; retry shortly", "code": "session_busy"}, status=409)
+                return JsonResponse({"error": "面试正忙，请稍后重试。", "code": "session_busy"}, status=409)
         return wrapped
     return decorate
 
 
 def json_body(request):
     if len(request.body) > 256000:
-        raise InterviewError("Request exceeds the supported limit")
+        raise InterviewError("内容超出长度限制。")
     try:
         value = json.loads(request.body.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):

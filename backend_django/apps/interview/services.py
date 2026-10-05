@@ -15,7 +15,7 @@ REPORT_LIMITATION = "仅根据文字回答生成，不含语音、发音或真�
 def questions(category=""):
     category = text(category, "category", 32)
     if category and category not in {item["id"] for item in CATEGORIES}:
-        raise InterviewError("Unknown question category")
+        raise InterviewError("未知的题目方向。")
     return {"questions": [dict(q) for q in QUESTIONS if not category or q["category"] == category], "categories": CATEGORIES}
 
 
@@ -25,25 +25,25 @@ def _owned(user, public_id, *, lock=False):
         query = query.select_for_update()
     session = query.first()
     if session is None:
-        raise InterviewError("Interview session not found", code="not_found", status=404)
+        raise InterviewError("找不到这场面试。", code="not_found", status=404)
     return session
 
 
 def _turn(session, public_id):
     turn = session.turns.filter(user=session.user, public_id=public_id).first()
     if turn is None:
-        raise InterviewError("Interview turn not found", code="not_found", status=404)
+        raise InterviewError("找不到这道题。", code="not_found", status=404)
     return turn
 
 
 def _active(session):
     if session.status != "active":
-        raise InterviewError("This session is no longer active", code="session_closed", status=409)
+        raise InterviewError("这场面试已经结束。", code="session_closed", status=409)
 
 
 def _not_busy(session):
     if session.ai_busy_since and session.ai_busy_since > timezone.now() - timedelta(seconds=180):
-        raise InterviewError("An AI request is still processing; retry shortly", code="ai_busy", status=409)
+        raise InterviewError("上一个 AI 请求还在处理中，请稍后再试。", code="ai_busy", status=409)
     # A crashed synchronous request expires; late output is rejected by token.
     if session.ai_busy_since:
         session.ai_busy_since = None
@@ -144,7 +144,7 @@ def answer(user, session_id, turn_id, value, *, skip=False):
     _not_busy(session)
     current = _pending(session)
     if current is None or current.pk != turn.pk or turn.status != "pending":
-        raise InterviewError("This turn is no longer current", code="stale_turn", status=409)
+        raise InterviewError("这道题已经不是当前题目了，请刷新后继续。", code="stale_turn", status=409)
     turn.answer = value
     turn.status = expected
     turn.save(update_fields=["answer", "status", "updated_at"])
@@ -233,7 +233,7 @@ def follow_up(user, public_id, parent_id, ai_source=""):
             session = _owned(user, public_id, lock=True)
             _active(session)
             if session.ai_busy_token != token:
-                raise InterviewError("This generation belongs to an older request", code="stale_generation", status=409)
+                raise InterviewError("这次生成已过期，请刷新后重试。", code="stale_generation", status=409)
             parent = _turn(session, parent_id)
             for turn in session.turns.filter(order__gt=parent.order).order_by("-order"):
                 turn.order += 1
@@ -257,7 +257,7 @@ def coach(user, public_id, ai_source=""):
         with transaction.atomic():
             session = _owned(user, public_id, lock=True)
             if session.ai_busy_token != token or session.status != "completed":
-                raise InterviewError("This generation belongs to an older request", code="stale_generation", status=409)
+                raise InterviewError("这次生成已过期，请刷新后重试。", code="stale_generation", status=409)
             session.report = {**session.report, "ai_feedback": {"status": "ready", **result, "limitations": REPORT_LIMITATION}}
             session.save(update_fields=["report", "updated_at"])
     except InterviewError as exc:

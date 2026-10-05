@@ -1,11 +1,33 @@
 (function () {
   const MODES = new Set(["ielts", "interview"]);
-  const PANES = new Set(["home", "bank", "custom", "history", "session"]);
+  const PANES = new Set(["home", "practice", "reports", "report", "corpus", "custom"]);
   const MODE_KEY = "ielts-product-mode";
-  const COUNTS = [3, 5, 8];
   // detail.design's corner morph: spring stiffness 300, damping 30, mass 1 (ζ≈0.87), sampled over 500 ms.
   const SPRING = "linear(0, 0.0458, 0.1512, 0.2813, 0.4144, 0.5381, 0.6461, 0.7364, 0.8091, 0.8658, 0.9089, 0.9407, 0.9636, 0.9794, 0.99, 0.9968, 1.0009, 1.0031, 1.0041, 1.0043, 1.0041, 1.0036, 1.003, 1.0025, 1.0019, 1.0015, 1)";
   const ARROW = '<span class="iv-arrow" aria-hidden="true">→</span>';
+  // The interview counterpart of Mock + P1/P2/P3.
+  const PARTS = {
+    full: { zh: "完整面试", en: "Full interview", hint: ["自我介绍 → 项目 → 知识点 → 奖项 → 反问", "Intro → projects → knowledge → awards → your questions"], corpus: "project" },
+    project: { zh: "项目深挖", en: "Projects", hint: ["介绍项目，再接受追问。", "Present a project, then take follow-ups."], corpus: "project" },
+    knowledge: { zh: "知识点", en: "Knowledge", hint: ["技术栈与通用题库连续问答。", "Rapid questions from your stack and the bank."], corpus: "knowledge" },
+    reverse: { zh: "反问环节", en: "Your questions", hint: ["你来提问，面试官回答并点评。", "You ask; the interviewer answers and reviews."], corpus: "jd" },
+  };
+  const STAGES = { self_intro: ["自我介绍", "Intro"], project: ["项目", "Projects"], knowledge: ["知识点", "Knowledge"], award: ["奖项", "Awards"], reverse: ["反问", "Questions"] };
+  const CORPUS_TABS = [
+    { id: "project", zh: "项目", en: "Projects", kinds: ["project", "project_followup"] },
+    { id: "knowledge", zh: "知识点", en: "Knowledge", kinds: ["knowledge"] },
+    { id: "story", zh: "自我介绍与奖项", en: "Intro & awards", kinds: ["self_intro", "award"] },
+    { id: "jd", zh: "JD 与反问", en: "JD & questions", kinds: ["jd_question", "reverse_question"] },
+  ];
+  const KIND_LABELS = { self_intro: ["自我介绍", "Self intro"], project: ["项目讲述", "Project story"], project_followup: ["项目追问", "Project follow-up"], knowledge: ["知识点", "Knowledge"], award: ["奖项", "Award"], jd_question: ["岗位题", "Role question"], reverse_question: ["反问", "Question to ask"] };
+  const SOURCE_LABELS = { curated: ["精选题库", "Curated"], resume: ["简历", "Resume"], jd: ["JD", "JD"], custom: ["自定义", "Custom"], practice: ["练习", "Practice"] };
+  const SIGNALS = { strong: ["答得扎实", "Strong"], adequate: ["基本到位", "Adequate"], weak: ["还有缺口", "Gaps"] };
+  const SLIDES = [
+    { kicker: "Mock interview", title: ["完整面试", "Full interview"], body: ["自我介绍、项目、知识点、奖项、反问，一场走完。", "Intro, projects, knowledge, awards and your questions in one run."], pane: "practice", part: "full" },
+    { kicker: "Projects", title: ["项目讲述", "Project stories"], body: ["每个项目一份讲述稿，面试官现场追问。", "One story per project, then live follow-ups."], pane: "practice", part: "project" },
+    { kicker: "Knowledge", title: ["知识点", "Knowledge"], body: ["技术栈题与精选题库，答完可存成你的标准答法。", "Stack and curated questions; keep your best answers."], pane: "practice", part: "knowledge" },
+    { kicker: "Report", title: ["百分制报告", "100-point report"], body: ["五个维度打分，标出能力边界和下一步。", "Five dimensions, your knowledge boundary and next steps."], pane: "reports" },
+  ];
 
   function createInterview({ state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin, escapeHtml, currentAiSourcePreference }) {
     let epoch = 0;
@@ -15,17 +37,21 @@
     let menuOpen = false;
     let hoverOpened = false;
     let hoverTimer = null;
+    let slideTimer = null;
+    let recorder = null;
     let data = freshState();
     const byId = (id) => document.getElementById(id);
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
+    const pick = (pair) => copy(pair[0], pair[1]);
     const esc = (value) => escapeHtml(String(value ?? ""));
     const pad = (value) => String(value).padStart(2, "0");
-    const label = (value) => ({ active: copy("进行中", "In progress"), completed: copy("已完成", "Completed"), aborted: copy("已结束", "Ended"), pending: copy("待回答", "Pending"), skipped: copy("已跳过", "Skipped"), main: copy("主问题", "Main question"), follow_up: copy("追问", "Follow-up"), intermediate: copy("进阶", "Intermediate"), medium: copy("进阶", "Intermediate"), advanced: copy("深入", "Advanced"), beginner: copy("基础", "Beginner"), easy: copy("基础", "Basic"), hard: copy("深入", "Advanced"), general: copy("通用题库", "Question bank"), custom: copy("简历定制", "Tailored") })[value] || data.categories.find((item) => item.id === value)?.label || String(value || "");
-    const button = (action, text, { cls = "", attrs = "", disabled = false } = {}) => `<button type="button" class="${cls}" data-interview-action="${action}" ${attrs} ${data.busy || disabled ? "disabled" : ""}>${text}</button>`;
-    const solid = (action, text, options = {}) => button(action, `${esc(text)}${ARROW}`, { ...options, cls: `iv-btn iv-btn--solid interview-primary ${options.cls || ""}` });
+    const button = (action, content, { cls = "", attrs = "", disabled = false } = {}) => `<button type="button" class="${cls}" data-interview-action="${action}" ${attrs} ${data.busy || disabled ? "disabled" : ""}>${content}</button>`;
+    const solid = (action, text, options = {}) => button(action, `${esc(text)}${ARROW}`, { ...options, cls: `iv-btn iv-btn--solid ${options.cls || ""}` });
     const outline = (action, text, options = {}) => button(action, esc(text), { ...options, cls: `iv-btn ${options.cls || ""}` });
     const quiet = (action, text, options = {}) => button(action, esc(text), { ...options, cls: `iv-link ${options.cls || ""}` });
     const kicker = (text) => `<p class="iv-eyebrow">${esc(text)}</p>`;
+    const partName = (part) => (PARTS[part] ? copy(PARTS[part].zh, PARTS[part].en) : "");
+    const stageName = (stage) => (STAGES[stage] ? pick(STAGES[stage]) : "");
     const dateText = (value, withTime = true) => {
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return "–";
@@ -33,13 +59,20 @@
     };
 
     function freshState() {
-      return { pane: "home", busy: false, error: "", notice: "", questions: [], categories: [], selected: new Set(), category: "", count: 5, sessions: [], sessionsLoaded: false, current: null, lastAnswered: null, answers: {}, resume: "", job: "", file: null, custom: [], manualPrompt: "" };
+      return {
+        pane: "home", part: "full", intensity: "standard", busy: false, error: "", notice: "",
+        questions: [], categories: [], sessions: [], sessionsLoaded: false, current: null, report: null,
+        corpus: null, corpusTab: "project", profile: null, customSide: "resume", resumeText: "", file: null, jdText: "",
+        editor: null, launch: { category: "", count: 5, projectIds: new Set() },
+        answer: { state: "idle", text: "", source: "typed", typing: false, error: "", peek: false }, slide: 0,
+      };
     }
 
     function resetForAccount() {
       epoch += 1;
       requestController?.abort();
       requestController = null;
+      stopRecorder();
       data = freshState();
       if (byId("interviewPanel")) render();
     }
@@ -186,13 +219,17 @@
         if (event.key === "Tab") menu(false);
       });
       document.addEventListener("pointerdown", (event) => { if (!byId("studioModeControl")?.contains(event.target)) menu(false); });
-      document.addEventListener("keydown", (event) => { if (event.key === "Escape") menu(false, menuOpen); });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (data.editor) { data.editor = null; render(); return; }
+        menu(false, menuOpen);
+      });
       window.addEventListener?.("resize", () => menu(false));
       byId("interviewNav")?.addEventListener("click", (event) => {
         const item = event.target.closest("[data-interview-pane]");
         if (!item) return;
         event.preventDefault?.();
-        setPane(item.dataset.interviewPane);
+        setPane(item.dataset.interviewPane, { part: item.dataset.interviewPart });
       });
       byId("interviewPanel")?.addEventListener("click", handleAction);
       byId("interviewPanel")?.addEventListener("input", captureInput);
@@ -200,7 +237,8 @@
       window.addEventListener("ielts:ui-language-change", () => { setProductMode(state.productMode); render(); });
     }
 
-    async function perform(task, apply) {
+    // ---- Requests: one at a time, discarded when the account changes underneath them.
+    async function perform(task, apply, { busy = true } = {}) {
       if (data.busy) return;
       if (!state.account.authenticated) {
         promptGuestLogin(copy("登录后保存面试记录与回答。", "Sign in to save interview sessions and answers."), { returnView: "interview" });
@@ -209,7 +247,7 @@
       const generation = epoch;
       const owner = state.account.user?.id;
       requestController = new AbortController();
-      data.busy = true;
+      data.busy = busy;
       data.error = "";
       data.notice = "";
       render();
@@ -224,220 +262,434 @@
       }
     }
 
-    function request(path, body = null) {
-      return api(path, body, { signal: requestController?.signal });
+    function request(path, body = null, options = {}) {
+      return api(path, body, { ...options, signal: requestController?.signal });
+    }
+
+    async function upload(path, form) {
+      const token = await ensureCsrfToken();
+      const response = await fetch(path, { method: "POST", credentials: "same-origin", headers: token ? { "X-CSRFToken": token } : {}, body: form, signal: requestController?.signal });
+      let payload = {};
+      try { payload = JSON.parse(await response.text()); } catch (_error) { throw new Error(copy("服务未返回有效数据，请重试。", "Invalid server response; please retry.")); }
+      if (!response.ok) throw new Error(payload.error || copy("请求失败，请重试。", "Request failed; please retry."));
+      return payload;
+    }
+
+    function acceptOverview([bank, history, profile, corpus]) {
+      data.questions = bank?.questions || [];
+      data.categories = bank?.categories || [];
+      if (history) { data.sessions = history.sessions || []; data.sessionsLoaded = true; }
+      if (profile) data.profile = profile.profile;
+      if (corpus) data.corpus = corpus.entries || [];
+      const active = data.sessions.find((item) => item.status === "active" && item.part);
+      if (active && !data.current) data.pendingResumeId = active.id;
+    }
+
+    function loadOverview() {
+      return perform(() => Promise.all([
+        request("/api/interview/questions/"), request("/api/interview/sessions/"),
+        request("/api/interview/profile/"), request("/api/interview/corpus/"),
+      ]), acceptOverview);
+    }
+
+    function loadHistory() {
+      return perform(() => request("/api/interview/sessions/"), (payload) => { data.sessions = payload.sessions || []; data.sessionsLoaded = true; });
+    }
+
+    function loadCorpus() {
+      return perform(() => request("/api/interview/corpus/"), (payload) => { data.corpus = payload.entries || []; });
     }
 
     function show() {
       if (!state.desktopCapabilities?.mock_interview) return;
       render();
-      if (state.account.authenticated && !data.questions.length && !data.busy) loadOverview();
+      if (state.account.authenticated && !data.corpus && !data.busy) loadOverview();
     }
 
-    function setPane(pane) {
+    function setPane(pane, { part } = {}) {
       if (!PANES.has(pane) || data.busy) return;
+      if (data.answer.state === "recording") stopRecorder();
+      if (part && PARTS[part]) data.part = part;
       data.pane = pane;
       data.error = "";
+      data.editor = null;
+      if (pane === "practice") {
+        const session = data.current?.session;
+        if (!session || session.status !== "active" || session.part !== data.part) {
+          if (session?.status !== "active") data.current = null;
+          resetAnswer();
+        }
+      }
       switchView("interview", { force: state.view !== "interview" });
       render();
-      if (pane === "history") loadHistory();
-      else if (!data.questions.length && state.account.authenticated) loadOverview();
-    }
-
-    function acceptOverview([bankPayload, historyPayload]) {
-      data.questions = bankPayload?.questions || [];
-      data.categories = bankPayload?.categories || [];
-      if (historyPayload) { data.sessions = historyPayload.sessions || []; data.sessionsLoaded = true; }
-    }
-
-    function loadOverview() {
-      return perform(() => Promise.all([request("/api/interview/questions/"), request("/api/interview/sessions/")]), acceptOverview);
-    }
-    function loadBank() {
-      return perform(() => request("/api/interview/questions/"), (payload) => acceptOverview([payload, null]));
-    }
-    function loadHistory() {
-      return perform(() => request("/api/interview/sessions/"), (payload) => { data.sessions = payload.sessions || []; data.sessionsLoaded = true; });
+      if (pane === "reports") loadHistory();
+      else if (!data.corpus && state.account.authenticated) loadOverview();
     }
 
     function acceptSession(payload) {
       data.current = payload;
-      data.pane = "session";
-      const turns = payload.turns || [];
-      const latest = [...turns].reverse().find((turn) => turn.status !== "pending");
-      data.lastAnswered = latest?.kind === "main" && latest.status === "completed" && !turns.some((turn) => turn.parent_turn_id === latest.id) ? latest.id : null;
-      const summary = data.sessions.find((item) => item.id === payload.session?.id);
-      if (summary) Object.assign(summary, payload.session);
-      else if (payload.session && data.sessionsLoaded) data.sessions.unshift(payload.session);
+      const session = payload.session || {};
+      if (session.part) data.part = session.part;
+      const summary = data.sessions.find((item) => item.id === session.id);
+      if (summary) Object.assign(summary, session);
+      else if (session.id && data.sessionsLoaded) data.sessions.unshift(session);
+      data.pane = session.status === "active" ? "practice" : "report";
     }
 
-    // ---- Shared pieces
-    function voiceNote() {
-      return `<p class="iv-voice-note interview-voice-note"><span class="iv-dot" aria-hidden="true"></span>${esc(copy("当前支持文字作答；语音作答正在准备中。", "Written answers are available; voice answers are being prepared."))}</p>`;
+    // ---- Corpus helpers
+    function corpusEntries(kinds) {
+      return (data.corpus || []).filter((entry) => kinds.includes(entry.kind));
     }
 
-    function categoryChips(action = "pick-category") {
-      const all = [{ id: "", label: copy("综合", "Mixed") }, ...data.categories];
-      return all.map((item) => {
-        const count = item.id ? data.questions.filter((q) => q.category === item.id).length : data.questions.length;
-        return button(action, `${esc(item.label)}${count ? `<sup>${count}</sup>` : ""}`, { cls: `iv-chip${data.category === item.id ? " is-on" : ""}`, attrs: `data-category="${esc(item.id)}" aria-pressed="${data.category === item.id}"` });
-      }).join("");
+    function corpusStats() {
+      const entries = data.corpus || [];
+      return { total: entries.length, ready: entries.filter((entry) => entry.corpus_text).length };
     }
 
-    function countSeg() {
-      return `<div class="iv-seg" role="group" aria-label="${esc(copy("题目数量", "Questions"))}">${COUNTS.map((n) => button("pick-count", String(n), { cls: data.count === n ? "is-on" : "", attrs: `data-count="${n}" aria-pressed="${data.count === n}"` })).join("")}</div>`;
+    function entryFor(id) {
+      return (data.corpus || []).find((entry) => entry.id === id) || null;
     }
 
-    // ---- Panes
+    // ---- Home: hero + carousel + data panel, then practice paths (mirrors the IELTS home).
     function home() {
-      const sessions = data.sessions;
-      const answered = sessions.reduce((sum, item) => sum + (Number(item.report?.completed_count) || 0), 0);
-      const active = (data.current?.session?.status === "active" && data.current) || null;
-      const activeSummary = active ? null : sessions.find((item) => item.status === "active");
-      const recent = sessions.slice(0, 3);
+      const studio = data.sessions.filter((item) => item.part);
+      const scored = studio.filter((item) => item.score?.status === "ready");
+      const average = scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score.total, 0) / scored.length) : null;
+      const stats = corpusStats();
+      const resume = data.profile?.resume?.updated_at;
       const stat = (dt, dd, attrs = "") => `<div class="iv-stat"><dt>${esc(dt)}</dt><dd ${attrs}>${dd}</dd></div>`;
-      const resumeCard = active
-        ? `<div class="iv-resume"><span>${esc(copy("进行中", "In progress"))} · ${active.turns.filter((t) => t.status !== "pending").length}/${active.turns.length}</span><strong>${esc(active.session.title)}</strong>${button("resume", `${esc(copy("继续回答", "Resume"))}${ARROW}`, { cls: "iv-link" })}</div>`
-        : activeSummary
-          ? `<div class="iv-resume"><span>${esc(copy("进行中", "In progress"))}</span><strong>${esc(activeSummary.title)}</strong>${button("open-session", `${esc(copy("继续回答", "Resume"))}${ARROW}`, { cls: "iv-link", attrs: `data-session-id="${esc(activeSummary.id)}"` })}</div>`
-          : "";
-      const categoryLinks = data.categories.map((item, index) => `<li>${button("bank-category", `<b>${pad(index + 1)}</b><span>${esc(item.label)}</span><i aria-hidden="true">→</i>`, { attrs: `data-category="${esc(item.id)}"` })}</li>`).join("")
-        || `<li>${button("bank", `<b>ALL</b><span>${esc(copy("浏览全部题目", "Browse all"))}</span><i aria-hidden="true">→</i>`)}</li>`;
-      const recentLinks = recent.map((item) => `<li>${button("open-session", `<b>${esc(dateText(item.created_at, false))}</b><span>${esc(item.title)}</span><i aria-hidden="true">→</i>`, { attrs: `data-session-id="${esc(item.id)}"` })}</li>`).join("");
+      const slides = SLIDES.map((slide, index) => `<button type="button" class="iv-slide${index === data.slide ? " is-active" : ""}" data-interview-action="slide-open" data-index="${index}" aria-hidden="${index !== data.slide}" tabindex="${index === data.slide ? 0 : -1}">
+          <span class="iv-slide-art iv-slide-art--${index}" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span class="iv-slide-kicker">${esc(slide.kicker)}</span><strong>${esc(pick(slide.title))}</strong><small>${esc(pick(slide.body))}</small></button>`).join("");
       return `<section class="iv-hero">
           <div class="iv-intro">
             <p class="iv-kicker">Interview Studio</p>
             <h2 class="iv-title"><span class="iv-title-top">${esc(copy("把做过的系统，讲成面试官想听的答案", "Turn the systems you built into answers that land"))}</span><span class="iv-title-main">Mock Interview</span></h2>
-            <p class="iv-topics">C++ <i>/</i> ${esc(copy("低延迟", "Low latency"))} <i>/</i> ${esc(copy("系统并发", "Concurrency"))} <i>/</i> ${esc(copy("项目深挖", "Projects"))} <i>/</i> ${esc(copy("行为面", "Behavioral"))}</p>
-            <div class="iv-actions">${solid("start-general", copy("开始一场面试", "Start an interview"))}${outline("custom", copy("按简历定制", "Tailor to my resume"))}</div>
-            ${voiceNote()}
+            <p class="iv-topics">${esc(copy("自我介绍", "Intro"))} <i>/</i> ${esc(copy("项目", "Projects"))} <i>/</i> ${esc(copy("知识点", "Knowledge"))} <i>/</i> ${esc(copy("奖项", "Awards"))} <i>/</i> ${esc(copy("反问", "Your questions"))}</p>
+            <div class="iv-actions">${solid("go-practice", copy("开始完整面试", "Start a full interview"), { attrs: 'data-part="full"' })}${outline("go-custom", resume ? copy("更新简历 / JD", "Update resume / JD") : copy("上传简历", "Upload resume"))}</div>
           </div>
-          <aside class="iv-panel" aria-label="${esc(copy("面试设置", "Interview setup"))}">
-            <dl class="iv-stats">${stat(copy("面试场次", "Sessions"), data.sessionsLoaded ? sessions.length : "–")}${stat(copy("已答题", "Answered"), data.sessionsLoaded ? answered : "–")}${stat(copy("最近练习", "Last"), sessions[0] ? esc(dateText(sessions[0].created_at, false)) : "–", 'class="iv-stat-date"')}</dl>
-            <p class="iv-panel-label">${esc(copy("方向", "Topic"))}</p>
-            <div class="iv-chips">${categoryChips()}</div>
-            <p class="iv-panel-label">${esc(copy("题量", "Questions"))}</p>
-            ${countSeg()}
-            ${resumeCard}
+          <div class="iv-show" aria-roledescription="carousel" aria-label="${esc(copy("功能轮播", "Highlights"))}">
+            <div class="iv-slides">${slides}</div>
+            <div class="iv-show-foot"><div class="iv-dots">${SLIDES.map((_slide, index) => `<span class="${index === data.slide ? "is-active" : ""}"></span>`).join("")}</div><span class="iv-show-count">${pad(data.slide + 1)} / ${pad(SLIDES.length)}</span>
+              ${button("slide-prev", "‹", { cls: "iv-icon-btn", attrs: `aria-label="${esc(copy("上一张", "Previous"))}"` })}${button("slide-next", "›", { cls: "iv-icon-btn", attrs: `aria-label="${esc(copy("下一张", "Next"))}"` })}</div>
+          </div>
+          <aside class="iv-panel" aria-label="${esc(copy("面试数据", "Interview data"))}">
+            <dl class="iv-stats">${stat(copy("面试场次", "Sessions"), data.sessionsLoaded ? studio.length : "–")}${stat(copy("平均分", "Average"), average ?? "–")}${stat(copy("最近练习", "Last"), studio[0] ? esc(dateText(studio[0].created_at, false)) : "–", 'class="iv-stat-date"')}</dl>
+            <p class="iv-panel-label">${esc(copy("语料准备", "Corpus"))}</p>
+            <div class="iv-meter"><span style="width:${stats.total ? Math.round((stats.ready / stats.total) * 100) : 0}%"></span></div>
+            <p class="iv-meter-text">${esc(copy(`已备 ${stats.ready} / ${stats.total} 题`, `${stats.ready} of ${stats.total} ready`))}</p>
+            <p class="iv-panel-label">${esc(copy("简历", "Resume"))}</p>
+            <p class="iv-meter-text">${resume ? esc(copy(`已拆分 · ${dateText(resume, false)}`, `Split · ${dateText(resume, false)}`)) : esc(copy("还没上传简历，完整面试和项目练习需要它。", "Upload a resume to unlock the full interview and project practice."))}</p>
+            <div class="iv-chips">${Object.keys(PARTS).map((part) => button("go-practice", esc(partName(part)), { cls: "iv-chip", attrs: `data-part="${part}"` })).join("")}</div>
           </aside>
         </section>
         <section class="iv-areas" aria-label="${esc(copy("练习路径", "Practice paths"))}">
           <header class="iv-sec-head">${kicker("Practice paths")}</header>
           <div class="iv-area-grid">
-            <article class="iv-area"><span class="iv-area-index">01 · Bank</span><h3 class="iv-area-name">${esc(copy("通用题库", "Question bank"))}</h3><p class="iv-area-blurb">${esc(copy(`${data.questions.length || 30} 道精选技术题，按方向抽题，回答随时保存。`, `${data.questions.length || 30} curated technical questions by topic; every answer is saved.`))}</p><ul class="iv-area-links">${categoryLinks}</ul></article>
-            <article class="iv-area"><span class="iv-area-index">02 · Tailored</span><h3 class="iv-area-name">${esc(copy("简历定制", "Tailored"))}</h3><p class="iv-area-blurb">${esc(copy("简历加岗位描述，AI 出题后你可以逐条修改，也能手动补题。", "Resume plus job description; edit every AI question or add your own."))}</p><ul class="iv-area-links"><li>${button("custom", `<b>PDF</b><span>${esc(copy("上传简历 + 岗位描述", "Resume + job description"))}</span><i aria-hidden="true">→</i>`)}</li><li>${button("custom", `<b>DIY</b><span>${esc(copy("手动出题", "Write your own"))}</span><i aria-hidden="true">→</i>`)}</li></ul></article>
-            <article class="iv-area"><span class="iv-area-index">03 · Review</span><h3 class="iv-area-name">${esc(copy("面试记录", "Records"))}</h3><p class="iv-area-blurb">${esc(copy("每场的问题、回答和追问都留档，完成后可生成 AI 文字建议。", "Every question, answer and follow-up is kept; ask for AI text coaching when done."))}</p><ul class="iv-area-links">${recentLinks}<li>${button("history", `<b>ALL</b><span>${esc(copy("全部记录", "All records"))}</span><i aria-hidden="true">→</i>`)}</li></ul></article>
+            <article class="iv-area"><span class="iv-area-index">01 · Practice</span><h3 class="iv-area-name">${esc(copy("面试练习", "Practice"))}</h3><p class="iv-area-blurb">${esc(copy("面试官会根据你的回答决定追问还是换题，追问压力模式会一直问到你的边界。", "The interviewer follows up or moves on from your answers; pressure mode digs until it finds your limit."))}</p><ul class="iv-area-links">${Object.keys(PARTS).map((part) => `<li>${button("go-practice", `<b>${esc(part === "full" ? "MOCK" : part.toUpperCase())}</b><span>${esc(partName(part))}</span><i aria-hidden="true">→</i>`, { attrs: `data-part="${part}"` })}</li>`).join("")}</ul></article>
+            <article class="iv-area"><span class="iv-area-index">02 · Corpus</span><h3 class="iv-area-name">${esc(copy("面试语料", "Corpus"))}</h3><p class="iv-area-blurb">${esc(copy("项目讲述稿、知识点答法、自我介绍和反问问题，像雅思语料一样随时调出。", "Project stories, knowledge answers, intro and reverse questions, ready like the IELTS corpus."))}</p><ul class="iv-area-links">${CORPUS_TABS.map((tab) => `<li>${button("open-corpus", `<b>${esc(tab.id.toUpperCase())}</b><span>${esc(copy(tab.zh, tab.en))}</span><i aria-hidden="true">→</i>`, { attrs: `data-tab="${tab.id}"` })}</li>`).join("")}</ul></article>
+            <article class="iv-area"><span class="iv-area-index">03 · Review</span><h3 class="iv-area-name">${esc(copy("面试报告", "Reports"))}</h3><p class="iv-area-blurb">${esc(copy("百分制五维打分，标出能力边界，每题点评后可直接存成你的答法。", "Five-dimension 100-point score, your boundary, and per-question notes you can save."))}</p><ul class="iv-area-links">${studio.slice(0, 3).map((item) => `<li>${button("open-session", `<b>${esc(item.score?.total ?? "—")}</b><span>${esc(item.title)}</span><i aria-hidden="true">→</i>`, { attrs: `data-session-id="${esc(item.id)}"` })}</li>`).join("")}<li>${button("reports", `<b>ALL</b><span>${esc(copy("全部报告", "All reports"))}</span><i aria-hidden="true">→</i>`)}</li></ul></article>
           </div>
         </section>`;
     }
 
-    function bank() {
-      const questions = data.questions.filter((item) => !data.category || item.category === data.category);
-      const rows = questions.map((item, index) => {
-        const id = String(item.id);
-        const on = data.selected.has(id);
-        return `<li><label class="iv-q${on ? " is-on" : ""}"><input type="checkbox" class="iv-q-input" data-interview-question="${esc(id)}" ${on ? "checked" : ""} ${data.busy ? "disabled" : ""}><span class="iv-q-index">${pad(index + 1)}</span><span class="iv-q-body"><strong>${esc(item.prompt)}</strong><small>${esc(label(item.category))} · ${esc(label(item.difficulty))}</small></span><span class="iv-q-check" aria-hidden="true"></span></label></li>`;
-      }).join("");
-      return `<div class="iv-toolbar"><div class="iv-chips" role="group" aria-label="${esc(copy("方向", "Topic"))}">${categoryChips("filter-category")}</div>${quiet("reload-bank", copy("刷新", "Refresh"))}</div>
-        <ol class="iv-qlist">${rows || `<li class="iv-empty">${esc(copy("暂无可显示的问题。", "No questions to display."))}</li>`}</ol>
-        <div class="iv-dock"><span class="iv-dock-count"><b>${data.selected.size}</b> / 10 ${esc(copy("已选", "selected"))}</span>${data.selected.size ? quiet("clear-selection", copy("清空", "Clear")) : ""}<span class="iv-dock-spacer"></span>${outline("start-general", copy(`随机 ${data.count} 题`, `Random ${data.count}`))}${solid("start-selected", copy(`开始所选 ${data.selected.size} 题`, `Practice ${data.selected.size} selected`), { disabled: !data.selected.size })}</div>`;
+    // ---- Practice: the IELTS practice panel, with the interviewer in the prompt pane.
+    function activeSession() {
+      const current = data.current;
+      return current?.session?.status === "active" && current.session.part === data.part ? current : null;
     }
 
-    function custom() {
-      const list = data.custom.map((question, index) => `<li class="iv-custom-item interview-custom-question"><span class="iv-q-index">${pad(index + 1)}</span><div><small>${esc(question.source === "manual" ? copy("手动", "Manual") : copy("AI 生成", "AI generated"))}</small><textarea rows="2" maxlength="1500" aria-label="${esc(copy(`问题 ${index + 1}`, `Question ${index + 1}`))}" data-interview-custom-index="${index}">${esc(question.prompt)}</textarea></div>${button("remove-custom", "×", { cls: "iv-icon-btn", attrs: `data-index="${index}" aria-label="${esc(copy("移除", "Remove"))}"` })}</li>`).join("");
-      return `<p class="iv-lede">${esc(copy("简历与岗位描述会发送到你在设置里选择的 AI 服务，只填写你愿意用于练习的内容。服务器不保存简历文件。", "Your resume and job description go to the AI service chosen in settings. Include only what you want to practice with; resume files are not stored."))}</p>
-        <div class="iv-custom">
-          <section class="iv-sheet" aria-label="${esc(copy("输入材料", "Inputs"))}">
-            <div class="iv-step"><span>01</span><h3>${esc(copy("简历", "Resume"))}</h3></div>
-            <label class="iv-drop"><input type="file" accept="application/pdf,.pdf" data-interview-field="file"><strong>${esc(data.file?.name || copy("选择 PDF 简历", "Choose a PDF resume"))}</strong><small>${esc(copy("最多 2 MB · 扫描件请改用下方粘贴文字", "Up to 2 MB · paste text below for scanned files"))}</small></label>
-            <label class="iv-field">${esc(copy("或粘贴简历文字", "Or paste resume text"))}<textarea rows="6" maxlength="24000" data-interview-field="resume">${esc(data.resume)}</textarea></label>
-            <div class="iv-step"><span>02</span><h3>${esc(copy("岗位描述", "Job description"))}</h3></div>
-            <label class="iv-field"><span class="sr-only">${esc(copy("岗位描述", "Job description"))}</span><textarea rows="6" maxlength="12000" data-interview-field="job">${esc(data.job)}</textarea></label>
-            <div class="iv-row"><span class="iv-row-label">${esc(copy("题量", "Questions"))}</span>${countSeg()}<span class="iv-dock-spacer"></span>${solid("generate", copy("生成定制问题", "Generate questions"))}</div>
-          </section>
-          <section class="iv-sheet" aria-label="${esc(copy("问题清单", "Question list"))}">
-            <div class="iv-step"><span>03</span><h3>${esc(copy("问题清单", "Question list"))}</h3><em>${data.custom.length} / 10</em></div>
-            ${list ? `<ol class="iv-custom-list">${list}</ol>` : `<p class="iv-empty">${esc(copy("生成后的问题会出现在这里，可以逐条修改。也可以直接手动添加。", "Generated questions appear here for editing. You can also add your own."))}</p>`}
-            <label class="iv-field">${esc(copy("手动添加一题", "Add a question"))}<textarea rows="2" maxlength="1500" data-interview-field="manualPrompt">${esc(data.manualPrompt)}</textarea></label>
-            <div class="iv-row">${outline("add-custom", copy("添加问题", "Add question"))}<span class="iv-dock-spacer"></span>${solid("start-custom", copy("开始定制面试", "Start tailored interview"), { disabled: !data.custom.length })}</div>
-          </section>
-        </div>`;
+    function stageTrack(session, turns) {
+      const plan = session?.plan?.length ? session.plan : data.part === "full" ? ["self_intro", "project", "knowledge", "award", "reverse"] : [];
+      if (!plan.length) return "";
+      const currentStage = data.current?.current_turn?.stage;
+      return `<ol class="iv-stage-track">${plan.map((stage) => {
+        const ofStage = turns.filter((turn) => turn.stage === stage);
+        const done = ofStage.length && ofStage.every((turn) => turn.status !== "pending");
+        const cls = stage === currentStage ? "is-current" : done ? "is-done" : "";
+        return `<li class="${cls}"><span>${esc(stageName(stage))}</span>${ofStage.length ? `<small>${ofStage.filter((turn) => turn.status !== "pending").length}/${ofStage.length}</small>` : ""}</li>`;
+      }).join("")}</ol>`;
     }
 
-    function history() {
-      const rows = data.sessions.map((session) => `<li>${button("open-session", `<time>${esc(dateText(session.created_at))}</time><span class="iv-history-title"><strong>${esc(session.title)}</strong><small>${esc(label(session.mode))}${session.report?.completed_count != null ? ` · ${esc(copy(`答 ${session.report.completed_count} 题`, `${session.report.completed_count} answered`))}` : ""}</small></span><em class="iv-status is-${esc(session.status)}">${esc(label(session.status))}</em><i aria-hidden="true">→</i>`, { cls: "iv-history-row", attrs: `data-session-id="${esc(session.id)}" aria-label="${esc(`${session.title} · ${session.status === "active" ? copy("继续", "Resume") : copy("查看记录", "View report")}`)}"` })}</li>`).join("");
-      return `<div class="iv-toolbar"><span class="iv-toolbar-note">${esc(copy(`共 ${data.sessions.length} 场`, `${data.sessions.length} sessions`))}</span>${quiet("reload-history", copy("刷新", "Refresh"))}</div>
-        ${rows ? `<ol class="iv-history">${rows}</ol>` : `<div class="iv-empty-card"><p>${esc(copy("还没有面试记录。完成一次练习后，问题和回答会留在这里。", "No sessions yet. Questions and answers will be kept here after your first practice."))}</p>${solid("home", copy("开始练习", "Start practice"))}</div>`}`;
+    function launchOptions() {
+      const part = data.part;
+      const projects = corpusEntries(["project"]).filter((entry) => !entry.orphaned);
+      if ((part === "full" || part === "project") && !projects.length) {
+        return `<div class="iv-launch-note"><strong>${esc(copy("先上传简历", "Upload your resume first"))}</strong><p>${esc(copy("完整面试和项目练习会按你简历里的每个项目提问。", "The full interview and project practice ask about each project on your resume."))}</p>${solid("go-custom", copy("去上传简历", "Upload resume"))}</div>`;
+      }
+      if (part === "project") {
+        return `<div class="iv-launch-options"><p class="iv-panel-label">${esc(copy("选择项目（不选则全部）", "Projects (none = all)"))}</p>${projects.map((entry) => `<label class="iv-check"><input type="checkbox" data-interview-field="project" value="${esc(entry.id)}" ${data.launch.projectIds.has(entry.id) ? "checked" : ""}><span>${esc(entry.title || entry.question)}</span></label>`).join("")}</div>`;
+      }
+      if (part === "knowledge") {
+        const chips = [{ id: "", label: copy("综合（技术栈优先）", "Mixed (stack first)") }, ...data.categories].map((item) => button("launch-category", esc(item.label), { cls: `iv-chip${data.launch.category === item.id ? " is-on" : ""}`, attrs: `data-category="${esc(item.id)}"` })).join("");
+        return `<div class="iv-launch-options"><p class="iv-panel-label">${esc(copy("方向", "Topic"))}</p><div class="iv-chips">${chips}</div><p class="iv-panel-label">${esc(copy("题量", "Questions"))}</p><div class="iv-seg">${[3, 5, 8].map((n) => button("launch-count", String(n), { cls: data.launch.count === n ? "is-on" : "", attrs: `data-count="${n}"` })).join("")}</div></div>`;
+      }
+      return "";
     }
 
-    function rail(turns, currentId) {
-      return `<ol class="iv-rail" aria-label="${esc(copy("题目进度", "Progress"))}">${turns.map((item) => `<li class="is-${esc(item.status)}${item.id === currentId ? " is-current" : ""}${item.kind === "follow_up" ? " is-follow" : ""}"><span>${item.kind === "follow_up" ? "↳" : pad(item.order)}</span><p>${esc(item.prompt)}</p></li>`).join("")}</ol>`;
+    // Same length classes as the IELTS prompt card (short / medium / long).
+    function promptCard(textValue, extra = "") {
+      const size = textValue.length <= 36 ? "short-prompt" : textValue.length <= 90 ? "medium-prompt" : "long-prompt";
+      return `<div class="prompt-card ${size} ${extra}">${esc(textValue)}</div>`;
     }
 
-    function report(session, turns, completed, skipped) {
-      const feedback = session.report?.ai_feedback;
-      const feedbackText = typeof feedback === "string" ? feedback : feedback?.feedback || feedback?.text || feedback?.coaching || "";
-      const follows = turns.filter((item) => item.kind === "follow_up").length;
-      const coach = session.status === "completed" && !feedbackText && completed > 0 ? solid("coach", copy("生成 AI 文字建议", "Generate AI coaching")) : "";
-      return `<header class="iv-report-head">${kicker(`${label(session.mode)} · ${label(session.status)}`)}<h2>${esc(session.title)}</h2><p>${esc(dateText(session.created_at))}</p></header>
-        <dl class="iv-report-stats"><div><dt>${esc(copy("已回答", "Answered"))}</dt><dd>${completed}</dd></div><div><dt>${esc(copy("跳过", "Skipped"))}</dt><dd>${skipped}</dd></div><div><dt>${esc(copy("追问", "Follow-ups"))}</dt><dd>${follows}</dd></div></dl>
-        <p class="iv-voice-note interview-report-limit"><span class="iv-dot" aria-hidden="true"></span>${esc(copy("文字练习记录：仅根据你输入的回答整理，不评估发音、声音表现或真实面试结果。", "Text practice report: based only on your written answers. No pronunciation, vocal delivery, or hiring outcome assessment."))}</p>
-        ${feedback?.status === "failed" ? `<div class="iv-error interview-error" role="alert">${esc(feedback.error || copy("AI 建议生成失败，请重试。", "AI coaching failed; please retry."))}</div>` : ""}
-        ${feedbackText ? `<article class="iv-coaching"><p class="iv-eyebrow">AI coaching</p><div class="iv-feedback interview-feedback">${esc(feedbackText)}</div></article>` : ""}
-        <div class="iv-actions">${coach}${outline("home", copy("再练一场", "Practice again"))}${quiet("history", copy("返回记录", "Back to records"))}</div>
-        <ol class="iv-transcript">${turns.map((item) => `<li class="is-${esc(item.status)}${item.kind === "follow_up" ? " is-follow" : ""}"><span class="iv-q-index">${item.kind === "follow_up" ? "↳" : pad(item.order)}</span><div><small>${esc(label(item.kind))} · ${esc(label(item.status))}</small><h3>${esc(item.prompt)}</h3><p>${esc(item.answer || copy("本题未回答。", "No answer saved."))}</p></div></li>`).join("")}</ol>`;
+    function promptPane(current) {
+      if (!current) {
+        const part = PARTS[data.part];
+        return `<div class="section-label">${esc(copy("面试官", "Interviewer"))}</div>
+          ${promptCard(copy(`点击「开始」，${data.part === "reverse" ? "面试官会请你提问。" : data.part === "knowledge" ? "面试官会连续问知识点。" : "面试官会先请你做自我介绍。"}`, `Press Start. ${pick(part.hint)}`), "iv-prompt-idle")}
+          <p class="iv-prompt-hint">${esc(pick(part.hint))}</p>${launchOptions()}`;
+      }
+      const turns = current.turns || [];
+      const turn = current.current_turn;
+      const previous = [...turns].reverse().find((item) => item.status !== "pending");
+      const parentDecision = turn?.parent_turn_id ? turns.find((item) => item.id === turn.parent_turn_id)?.decision : null;
+      const tag = turn?.kind === "follow_up"
+        ? `<span class="iv-follow-tag ${parentDecision?.action === "probe" ? "is-probe" : ""}">${esc(parentDecision?.action === "probe" ? copy("换个角度 · 摸清边界", "New angle · finding the limit") : copy("追问 · 往深处挖", "Follow-up · going deeper"))}</span>` : "";
+      const reply = previous?.stage === "reverse" && previous.reply ? `<div class="iv-reply"><span>${esc(copy("面试官", "Interviewer"))}</span><p>${esc(previous.reply)}</p></div>` : "";
+      const failed = previous?.decision?.status === "failed" ? `<p class="iv-prompt-hint">${esc(copy("面试官这次没能追问，已进入下一题。", "The interviewer could not follow up this time; moved on."))}</p>` : "";
+      const corpus = turn?.corpus_entry_id ? entryFor(turn.corpus_entry_id) : null;
+      const peek = corpus && (corpus.corpus_text || corpus.ai_draft)
+        ? `<div class="iv-peek">${button("toggle-peek", esc(data.answer.peek ? copy("收起我的答法", "Hide my answer") : copy("看看我的答法", "Peek at my answer")), { cls: "iv-link" })}${data.answer.peek ? `<div class="iv-peek-body"><small>${esc(corpus.corpus_text ? copy("我的答法", "My answer") : copy("AI 参考", "AI reference"))}</small><p>${esc(corpus.corpus_text || corpus.ai_draft)}</p></div>` : ""}</div>` : "";
+      const saveLast = previous && previous.status === "completed" ? `<div class="iv-save-last">${button("save-corpus", esc(copy("把上一题回答存为我的答法", "Save last answer to my corpus")), { cls: "iv-link", attrs: `data-turn-id="${esc(previous.id)}"` })}</div>` : "";
+      if (!turn) {
+        return `<div class="section-label">${esc(copy("面试官", "Interviewer"))}</div>${reply}${promptCard(copy("今天就到这里，辛苦了。", "That's all for today — thank you."))}<p class="iv-prompt-hint">${esc(copy("点击「完成」生成百分制报告。", "Press Finish to get your 100-point report."))}</p>${saveLast}`;
+      }
+      return `<div class="section-label">${esc(copy("面试官", "Interviewer"))} · ${esc(stageName(turn.stage))}</div>${failed}${reply}${tag}
+        ${promptCard(turn.prompt)}${peek}${saveLast}`;
     }
 
-    function session() {
-      if (!data.current) return home();
-      const { session, turns = [], current_turn: turn } = data.current;
-      const completed = turns.filter((item) => item.status === "completed").length;
-      const skipped = turns.filter((item) => item.status === "skipped").length;
-      if (session.status !== "active") return report(session, turns, completed, skipped);
-      const last = data.lastAnswered && turns.find((item) => item.id === data.lastAnswered);
-      const canFollow = last?.kind === "main" && !turns.some((item) => item.parent_turn_id === last.id);
-      const done = turns.filter((item) => item.status !== "pending").length;
-      const draft = turn ? data.answers[turn.id] || "" : "";
-      const progress = `<div class="iv-progress" aria-hidden="true">${turns.map((item) => `<span class="is-${esc(item.status)}${turn && item.id === turn.id ? " is-current" : ""}"></span>`).join("")}</div>`;
-      const followUp = canFollow ? `<div class="iv-follow interview-follow-up"><div><strong>${esc(copy("面试官可能会追问", "The interviewer may dig deeper"))}</strong><span>${esc(copy("上一题已保存。先针对你的回答追问一次，再继续下一题。", "Answer saved. Take one follow-up on it before moving on."))}</span></div>${outline("follow-up", copy("追问上一题", "Follow up"))}</div>` : "";
-      const question = turn
-        ? `<article class="iv-question interview-answer-card"><span class="iv-question-kind${turn.kind === "follow_up" ? " is-follow" : ""}">${turn.kind === "follow_up" ? `↳ ${esc(copy("AI 追问", "AI follow-up"))}` : `Q${pad(turn.order)} · ${esc(copy("主问题", "Main question"))}`}</span><h3>${esc(turn.prompt)}</h3>
-            <label class="sr-only" for="interviewAnswer">${esc(copy("你的回答", "Your answer"))}</label><textarea id="interviewAnswer" class="iv-answer" rows="10" maxlength="6000" placeholder="${esc(copy("先说结论，再讲背景、你做了什么、结果和取舍……", "Lead with the conclusion, then context, what you did, results and trade-offs…"))}" data-interview-field="answer" ${data.busy ? "disabled" : ""}>${esc(draft)}</textarea>
-            <div class="iv-answer-foot"><span id="interviewAnswerCount" class="iv-count">${draft.length} / 6000</span><span class="iv-dock-spacer"></span>${outline("skip", copy("跳过本题", "Skip"))}${solid("answer", copy("保存，下一题", "Save and continue"))}</div></article>`
-        : `<article class="iv-question iv-question--done"><span class="iv-question-kind">${esc(copy("本轮完成", "All answered"))}</span><h3>${esc(copy("问题都答完了。可以对最后一个回答追问，或结束并生成记录。", "Every question is answered. Follow up on the last answer, or finish to save the record."))}</h3><div class="iv-answer-foot"><span class="iv-dock-spacer"></span>${solid("finish", copy("完成并查看记录", "Finish and view record"))}</div></article>`;
-      return `<div class="iv-session">
-          <div class="iv-session-main">
-            <header class="iv-session-head"><div>${kicker(`${label(session.mode)} · ${done}/${turns.length}`)}<h2>${esc(session.title)}</h2></div>${progress}</header>
-            ${followUp}${question}
-            <footer class="iv-session-foot">${voiceNote()}<span class="iv-dock-spacer"></span>${turn ? quiet("finish", copy("提前完成并保存记录", "Finish early and save")) : ""}${quiet("abort", copy("结束本轮（保留已答内容）", "End session (keep answers)"))}</footer>
+    function recordControl(current) {
+      const turn = current?.current_turn;
+      const stateName = data.answer.state;
+      let cls = "";
+      let title = copy("开始", "Start");
+      let hint = copy("面试官会马上提问", "The interviewer will ask right away");
+      let action = "start-session";
+      let disabled = false;
+      if (data.busy && !current) { cls = "loading"; title = copy("准备中", "Preparing"); hint = copy("正在生成面试计划…", "Building the interview plan…"); disabled = true; }
+      else if (current && !turn) { cls = "turn"; title = copy("完成", "Finish"); hint = copy("生成百分制报告", "Get the 100-point report"); action = "finish"; }
+      else if (current) {
+        action = "record-start";
+        title = copy("回答", "Answer"); hint = copy("点击开始录音", "Tap to start recording"); cls = "turn";
+        if (stateName === "recording") { cls = "recording"; title = copy("结束", "Stop"); hint = copy("再次点击结束录音", "Tap again to stop"); action = "record-stop"; }
+        if (stateName === "processing") { cls = "processing"; title = copy("转写中", "Transcribing"); hint = copy("正在把录音转成文字…", "Turning your recording into text…"); disabled = true; }
+        if (stateName === "review") { title = copy("重录", "Re-record"); hint = copy("或修改下方文字后提交", "Or edit the text below and submit"); }
+        if (stateName === "thinking") { cls = "examiner"; title = copy("面试官", "Interviewer"); hint = copy("正在判断下一步…", "Deciding what to ask next…"); disabled = true; }
+      }
+      return `<button type="button" class="record-control ${cls}" data-interview-action="${action}" ${disabled || (data.busy && stateName !== "thinking") ? "disabled" : ""}><span class="iv-record-icon" aria-hidden="true"></span><strong>${esc(title)}</strong><small>${esc(hint)}</small>${cls === "examiner" || cls === "processing" || cls === "loading" ? '<div class="analyzing-dots"><span></span><span></span><span></span></div>' : ""}</button>`;
+    }
+
+    function recorderPane(current) {
+      const turn = current?.current_turn;
+      const showText = turn && (data.answer.state === "review" || data.answer.typing);
+      const status = data.answer.error ? `<div class="record-status iv-record-error" role="alert">${esc(data.answer.error)}</div>`
+        : `<div class="record-status">${esc(!current ? copy("麦克风会在开始录音时请求权限。", "The microphone is requested when you start recording.")
+          : data.answer.state === "review" ? copy("转写完成，可以修改后提交。", "Transcribed — edit if needed, then submit.")
+          : data.answer.typing ? copy("打字作答：写好后提交。", "Typing: submit when ready.")
+          : turn ? copy("录音结束后自动转写；也可以改为打字。", "Recordings are transcribed automatically; you can also type.") : "")}</div>`;
+      const editor = showText ? `<div class="iv-answer-box"><textarea id="interviewAnswer" rows="6" maxlength="6000" data-interview-field="answer" placeholder="${esc(copy("先说结论，再讲背景、你做了什么、结果和取舍……", "Conclusion first, then context, what you did, results and trade-offs…"))}">${esc(data.answer.text)}</textarea>
+          <div class="iv-answer-foot"><span id="interviewAnswerCount" class="iv-count">${data.answer.text.length} / 6000</span><span class="iv-dock-spacer"></span>${quiet("skip", copy("跳过本题", "Skip"))}${solid("submit-answer", copy("提交回答", "Submit"))}</div></div>`
+        : turn && data.answer.state === "idle" ? `<div class="iv-answer-alt">${quiet("type-answer", copy("改为打字作答", "Type instead"))}${quiet("skip", copy("跳过本题", "Skip"))}</div>` : "";
+      return `<div class="section-label">${esc(copy("你的回答", "Your answer"))}</div>
+        <div class="inline-timer" id="interviewTimer">${timerText()}</div>
+        <div class="record-row">${recordControl(current)}${current ? `<button type="button" class="icon-exit-button" data-interview-action="abort" aria-label="${esc(copy("结束本场", "End session"))}" title="${esc(copy("结束本场（保留已答内容）", "End session (keeps answers)"))}"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"></path></svg></button>` : ""}</div>
+        <div class="recorder-status-zone">${status}</div>${editor}`;
+    }
+
+    function practice() {
+      const current = activeSession();
+      const turns = current?.turns || [];
+      const done = turns.filter((turn) => turn.status !== "pending").length;
+      const pressure = (current?.session?.intensity || data.intensity) === "pressure";
+      const tab = PARTS[data.part].corpus;
+      const tabLabel = CORPUS_TABS.find((item) => item.id === tab);
+      return `<section class="iv-practice">
+          <div class="iv-practice-head">
+            <div class="iv-practice-title"><strong>${esc(partName(data.part))} ${esc(current ? `· ${stageName(current.current_turn?.stage) || copy("收尾", "Wrap-up")}` : copy("准备就绪", "Ready"))}</strong><small>${current ? `${done} / ${turns.length}` : "READY"}</small></div>
+            <div class="iv-practice-tools"><span class="iv-mode-label">${esc(copy("面试节奏", "Pace"))}</span>
+              <div class="p3-mode-switch${pressure ? " high-intensity" : ""}" role="group" aria-label="${esc(copy("面试强度", "Intensity"))}">
+                ${button("intensity", esc(copy("标准模式", "Standard")), { cls: `p3-mode-option${pressure ? "" : " active"}`, attrs: 'data-intensity="standard"', disabled: !!current })}
+                ${button("intensity", esc(copy("追问压力", "Pressure")), { cls: `p3-mode-option${pressure ? " active" : ""}`, attrs: 'data-intensity="pressure"', disabled: !!current })}
+              </div>
+              <button type="button" class="p1-corpus-entry" data-interview-action="open-corpus" data-tab="${tab}"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg><span>${esc(copy(`我的${tabLabel.zh}语料`, `My ${tabLabel.en.toLowerCase()} corpus`))}</span></button>
+            </div>
           </div>
-          <aside class="iv-session-side"><p class="iv-eyebrow">${esc(copy(`已答 ${completed} · 跳过 ${skipped}`, `${completed} answered · ${skipped} skipped`))}</p>${rail(turns, turn?.id)}</aside>
-        </div>`;
+          ${stageTrack(current?.session, turns)}
+          <div class="practice-grid iv-practice-grid">
+            <article class="prompt-pane">${promptPane(current)}</article>
+            <article class="recorder-pane">${recorderPane(current)}</article>
+          </div>
+        </section>`;
+    }
+
+    // ---- Report: 100-point score with dimensions, boundary and per-turn notes.
+    function reportPane() {
+      const current = data.current;
+      if (!current) return reports();
+      const { session, turns = [] } = current;
+      const score = session.score;
+      const comments = Object.fromEntries((score?.per_turn || []).map((item) => [item.turn_id, item.comment]));
+      const hero = score?.status === "ready"
+        ? `<div class="iv-score"><div class="iv-score-total"><strong>${score.total}</strong><span>/ 100</span></div><p>${esc(score.summary)}</p></div>
+          <div class="iv-dimensions">${score.dimensions.map((dim) => `<div class="iv-dimension"><div><span>${esc(dim.label)}</span><b>${dim.score}<small> / ${dim.max}</small></b></div><div class="iv-meter"><span style="width:${Math.round((dim.score / dim.max) * 100)}%"></span></div><p>${esc(dim.evidence)}</p></div>`).join("")}</div>
+          ${score.boundary ? `<article class="iv-boundary"><p class="iv-eyebrow">${esc(copy("能力边界", "Boundary"))}</p><p>${esc(score.boundary)}</p></article>` : ""}
+          ${score.next_steps?.length ? `<article class="iv-boundary"><p class="iv-eyebrow">${esc(copy("下一步", "Next steps"))}</p><ul>${score.next_steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ul></article>` : ""}`
+        : score?.status === "failed"
+          ? `<div class="iv-error" role="alert">${esc(score.error || copy("评分生成失败。", "Scoring failed."))}</div>${solid("score", copy("重新生成百分制报告", "Retry scoring"))}`
+          : session.status === "completed"
+            ? `<div class="iv-score iv-score--pending"><p>${esc(data.busy ? copy("正在生成百分制报告…", "Scoring…") : copy("还没有评分。", "Not scored yet."))}</p>${data.busy ? "" : solid("score", copy("生成百分制报告", "Get the 100-point report"))}</div>` : "";
+      const rows = turns.map((turn) => {
+        const decision = turn.decision?.signal ? `<em class="iv-signal is-${esc(turn.decision.signal)}">${esc(pick(SIGNALS[turn.decision.signal] || SIGNALS.adequate))}</em>` : "";
+        return `<li class="is-${esc(turn.status)}${turn.kind === "follow_up" ? " is-follow" : ""}"><span class="iv-q-index">${turn.kind === "follow_up" ? "↳" : pad(turn.order)}</span><div>
+          <small>${esc(stageName(turn.stage) || "")}${turn.kind === "follow_up" ? ` · ${esc(copy("追问", "Follow-up"))}` : ""}${turn.answer_source === "voice" ? ` · ${esc(copy("语音", "Voice"))}` : ""} ${decision}</small>
+          <h3>${esc(turn.prompt)}</h3><p>${esc(turn.answer || copy("本题未回答。", "No answer."))}</p>
+          ${turn.reply ? `<div class="iv-reply"><span>${esc(copy("面试官", "Interviewer"))}</span><p>${esc(turn.reply)}</p></div>` : ""}
+          ${turn.decision?.evidence ? `<p class="iv-note">${esc(turn.decision.evidence)}</p>` : ""}
+          ${comments[turn.id] ? `<p class="iv-note iv-note--comment">${esc(comments[turn.id])}</p>` : ""}
+          ${turn.status === "completed" ? button("save-corpus", esc(copy("存为我的答法", "Save to my corpus")), { cls: "iv-link", attrs: `data-turn-id="${esc(turn.id)}"` }) : ""}
+        </div></li>`;
+      }).join("");
+      return `<header class="iv-report-head">${kicker(`${partName(session.part) || session.title} · ${session.intensity === "pressure" ? copy("追问压力", "Pressure") : copy("标准模式", "Standard")}`)}<h2>${esc(session.title)}</h2><p>${esc(dateText(session.created_at))}</p></header>
+        ${hero}
+        <p class="iv-voice-note"><span class="iv-dot" aria-hidden="true"></span>${esc(score?.limitations || copy("百分制由 AI 根据本次文字回答（含语音转写稿）估计，不评估发音，也不代表真实招聘结果。", "The score is an AI estimate from this session's text answers; no pronunciation, and not a hiring decision."))}</p>
+        <div class="iv-actions">${solid("go-practice", copy("再练一场", "Practice again"), { attrs: `data-part="${esc(session.part || "knowledge")}"` })}${quiet("reports", copy("全部报告", "All reports"))}</div>
+        <ol class="iv-transcript">${rows}</ol>`;
+    }
+
+    function reports() {
+      const rows = data.sessions.map((session) => `<li>${button("open-session", `<time>${esc(dateText(session.created_at))}</time><span class="iv-history-title"><strong>${esc(session.title)}</strong><small>${esc(partName(session.part) || copy("文字练习", "Text practice"))}${session.intensity === "pressure" ? ` · ${esc(copy("追问压力", "Pressure"))}` : ""}</small></span><em class="iv-status is-${esc(session.status)}">${esc(session.status === "active" ? copy("进行中", "In progress") : session.status === "completed" ? copy("已完成", "Completed") : copy("已结束", "Ended"))}</em><b class="iv-history-score">${session.score?.status === "ready" ? esc(session.score.total) : "—"}</b><i aria-hidden="true">→</i>`, { cls: "iv-history-row", attrs: `data-session-id="${esc(session.id)}"` })}</li>`).join("");
+      return `<div class="iv-toolbar"><span class="iv-toolbar-note">${esc(copy(`共 ${data.sessions.length} 场`, `${data.sessions.length} sessions`))}</span>${quiet("reload-history", copy("刷新", "Refresh"))}</div>
+        ${rows ? `<ol class="iv-history">${rows}</ol>` : `<div class="iv-empty-card"><p>${esc(copy("还没有面试报告。练完一场就会出现在这里。", "No reports yet. Finish a session to see it here."))}</p>${solid("go-practice", copy("开始练习", "Start practice"), { attrs: 'data-part="full"' })}</div>`}`;
+    }
+
+    // ---- Corpus library: grouped cards like "我的 P1 语料库".
+    function corpusGroups(tabId) {
+      const tab = CORPUS_TABS.find((item) => item.id === tabId) || CORPUS_TABS[0];
+      const entries = corpusEntries(tab.kinds);
+      if (tabId === "project") {
+        return entries.filter((entry) => entry.kind === "project").map((project) => ({
+          title: project.title || project.question, orphaned: project.orphaned, project,
+          rows: [project, ...entries.filter((entry) => entry.parent_id === project.id)],
+        }));
+      }
+      if (tabId === "story") {
+        return [{ title: copy("自我介绍", "Self intro"), rows: entries.filter((e) => e.kind === "self_intro"), kind: "self_intro" },
+                { title: copy("奖项与竞赛", "Awards"), rows: entries.filter((e) => e.kind === "award"), kind: "award" }];
+      }
+      if (tabId === "jd") {
+        return [{ title: copy("岗位题", "Role questions"), rows: entries.filter((e) => e.kind === "jd_question"), kind: "jd_question" },
+                { title: copy("反问环节", "Questions to ask"), rows: entries.filter((e) => e.kind === "reverse_question"), kind: "reverse_question" }];
+      }
+      const groups = new Map();
+      entries.forEach((entry) => {
+        const key = entry.group || copy("自定义", "Custom");
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(entry);
+      });
+      return [...groups].map(([title, rows]) => ({ title, rows, kind: "knowledge", group: title }));
+    }
+
+    function corpusPane() {
+      if (!data.corpus) return `<p class="iv-empty">${esc(copy("正在载入语料…", "Loading corpus…"))}</p>`;
+      const stats = corpusStats();
+      const tab = data.corpusTab;
+      const groups = corpusGroups(tab);
+      const rowHtml = (entry, index) => {
+        const ready = !!entry.corpus_text;
+        const ref = entry.id ? `data-entry-id="${esc(entry.id)}"` : `data-source-key="${esc(entry.source_key)}"`;
+        const lead = entry.kind === "project" ? copy("稿", "S") : entry.kind === "project_followup" ? copy("追", "F") : `Q${index + 1}`;
+        return `<li>${button("edit-entry", `<span class="iv-row-mark${ready ? " is-ready" : ""}">${ready ? "✓" : esc(lead)}</span><span class="iv-row-text">${esc(entry.kind === "project" ? copy("项目讲述稿", "Project story") : entry.question)}</span>${ready ? `<em>${esc(copy("已备", "Ready"))}</em>` : entry.ai_draft ? `<em class="is-draft">${esc(copy("有 AI 稿", "AI draft"))}</em>` : ""}`, { cls: "iv-corpus-row", attrs: ref })}</li>`;
+      };
+      const cards = groups.map((group) => {
+        const ready = group.rows.filter((row) => row.corpus_text).length;
+        const add = group.project ? button("new-entry", `＋ ${esc(copy("追问", "Follow-up"))}`, { cls: "iv-link", attrs: `data-kind="project_followup" data-parent="${esc(group.project.id)}"` })
+          : group.kind ? button("new-entry", `＋ ${esc(copy("添加", "Add"))}`, { cls: "iv-link", attrs: `data-kind="${esc(group.kind)}" data-group="${esc(group.group || "")}"` }) : "";
+        return `<article class="iv-corpus-card"><header><h3>${esc(group.title)}${group.orphaned ? `<small class="iv-orphan">${esc(copy("简历中已移除", "Removed from resume"))}</small>` : ""}</h3><span class="iv-count-badge">${ready}/${group.rows.length}</span></header>
+          <div class="iv-meter"><span style="width:${group.rows.length ? Math.round((ready / group.rows.length) * 100) : 0}%"></span></div>
+          <ol>${group.rows.map(rowHtml).join("") || `<li class="iv-empty">${esc(copy("还没有内容。", "Nothing here yet."))}</li>`}</ol>
+          <footer>${add}</footer></article>`;
+      }).join("");
+      const empty = tab === "project" && !groups.length
+        ? `<div class="iv-empty-card"><p>${esc(copy("上传简历后，每个项目会自动生成一份讲述稿和预判追问。", "Upload your resume to get a story and likely follow-ups for every project."))}</p>${solid("go-custom", copy("上传简历", "Upload resume"))}</div>`
+        : tab === "jd" && !groups.some((group) => group.rows.length)
+          ? `<div class="iv-empty-card"><p>${esc(copy("粘贴目标岗位的 JD，会生成岗位题和反问环节要问的问题。", "Paste a job description to get role questions and questions to ask."))}</p>${solid("go-custom", copy("添加 JD", "Add a JD"), { attrs: 'data-side="jd"' })}</div>` : "";
+      return `<header class="iv-library-head"><div><p class="iv-eyebrow">Interview library</p><h2>${esc(copy("面试语料库", "Interview corpus"))}</h2></div>
+          <div class="iv-library-meta"><span>${esc(copy(`已备 ${stats.ready} / ${stats.total}`, `${stats.ready} / ${stats.total} ready`))}</span>${button("new-entry", `＋ ${esc(copy("自定义题", "Custom question"))}`, { cls: "iv-btn", attrs: `data-kind="${tab === "jd" ? "reverse_question" : tab === "story" ? "self_intro" : tab === "project" ? "project" : "knowledge"}"` })}</div></header>
+        <div class="iv-tabs" role="tablist">${CORPUS_TABS.map((item) => button("corpus-tab", `${esc(copy(item.zh, item.en))}<sup>${corpusEntries(item.kinds).length}</sup>`, { cls: `iv-chip${item.id === tab ? " is-on" : ""}`, attrs: `role="tab" aria-selected="${item.id === tab}" data-tab="${item.id}"` })).join("")}</div>
+        ${empty || `<div class="iv-corpus-grid">${cards}</div>`}`;
+    }
+
+    function editorModal() {
+      const editor = data.editor;
+      if (!editor) return "";
+      const entry = editor.entry;
+      const editableQuestion = !entry.source || entry.source !== "curated";
+      const isProject = entry.kind === "project";
+      return `<div class="iv-modal" role="dialog" aria-modal="true" aria-label="${esc(copy("编辑语料", "Edit corpus entry"))}">
+        <div class="iv-modal-backdrop" data-interview-action="close-editor"></div>
+        <article class="iv-modal-card">
+          <header><div><p class="iv-eyebrow">${esc(pick(KIND_LABELS[entry.kind] || KIND_LABELS.knowledge))} · ${esc(pick(SOURCE_LABELS[entry.source] || SOURCE_LABELS.custom))}</p>
+            ${isProject && entry.title ? `<h3>${esc(entry.title)}</h3>` : ""}</div>${button("close-editor", "×", { cls: "iv-icon-btn", attrs: `aria-label="${esc(copy("关闭", "Close"))}"` })}</header>
+          <label class="iv-field">${esc(copy("题目", "Question"))}${editableQuestion ? `<textarea rows="2" maxlength="1500" data-interview-field="editor-question">${esc(editor.question)}</textarea>` : `<p class="iv-readonly">${esc(editor.question)}</p>`}</label>
+          ${entry.summary ? `<p class="iv-note">${esc(entry.summary)}</p>` : ""}
+          <div class="iv-editor-cols">
+            <label class="iv-field">${esc(copy("我的答法", "My answer"))}<textarea rows="12" maxlength="12000" data-interview-field="editor-text" placeholder="${esc(copy("用你自己的话写，面试时照着这个思路讲。", "Write it in your own words — the way you'd say it."))}">${esc(editor.text)}</textarea></label>
+            <div class="iv-field">${esc(copy("AI 参考", "AI reference"))}<div class="iv-draft">${entry.ai_draft ? esc(entry.ai_draft) : `<span class="iv-muted">${esc(copy("还没有 AI 参考。", "No AI reference yet."))}</span>`}</div>
+              <div class="iv-row">${entry.ai_draft ? quiet("adopt-draft", copy("采用到我的答法", "Use as my answer")) : ""}${entry.id ? quiet("draft-entry", entry.ai_draft ? copy("重新生成", "Regenerate") : copy("生成 AI 参考", "Generate reference")) : ""}</div></div>
+          </div>
+          <footer class="iv-row">${entry.id && entry.source !== "curated" ? quiet("delete-entry", copy("删除", "Delete"), { cls: "iv-danger" }) : ""}<span class="iv-dock-spacer"></span>${outline("close-editor", copy("取消", "Cancel"))}${solid("save-entry", copy("保存", "Save"))}</footer>
+        </article></div>`;
+    }
+
+    // ---- Tailored: resume | JD switch.
+    function customPane() {
+      const side = data.customSide;
+      const profile = data.profile || { resume: {}, jd: {} };
+      const modules = profile.resume?.modules || [];
+      const count = (kind) => modules.filter((item) => item.kind === kind).length;
+      const resumeSummary = profile.resume?.updated_at
+        ? `<div class="iv-summary-card"><p class="iv-eyebrow">${esc(copy("已拆分", "Split"))} · ${esc(dateText(profile.resume.updated_at))}</p><p>${esc(copy(`自我介绍 · ${count("project")} 个项目 · 技术栈 ${count("tech_stack")} 组 · 奖项 ${count("award")} 项`, `Intro · ${count("project")} projects · ${count("tech_stack")} stack areas · ${count("award")} awards`))}</p><div class="iv-chips">${modules.filter((item) => item.kind === "project").map((item) => `<span class="iv-chip">${esc(item.title)}</span>`).join("")}</div>${button("open-corpus", `${esc(copy("去语料库修改讲述稿", "Edit stories in the corpus"))}${ARROW}`, { cls: "iv-link", attrs: 'data-tab="project"' })}</div>` : "";
+      const jdSummary = profile.jd?.updated_at
+        ? `<div class="iv-summary-card"><p class="iv-eyebrow">${esc(copy("岗位", "Role"))} · ${esc(dateText(profile.jd.updated_at))}</p><p><strong>${esc(profile.jd.summary?.role || "")}</strong></p><ul>${(profile.jd.summary?.requirements || []).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>${button("open-corpus", `${esc(copy("查看岗位题与反问", "See role questions"))}${ARROW}`, { cls: "iv-link", attrs: 'data-tab="jd"' })}</div>` : "";
+      const form = side === "resume"
+        ? `<section class="iv-sheet"><div class="iv-step"><span>01</span><h3>${esc(copy("简历", "Resume"))}</h3></div>
+            <label class="iv-drop"><input type="file" accept="application/pdf,.pdf" data-interview-field="file"><strong>${esc(data.file?.name || copy("选择 PDF 简历", "Choose a PDF resume"))}</strong><small>${esc(copy("最多 2 MB · 扫描件请改用下方粘贴文字", "Up to 2 MB · paste text for scanned files"))}</small></label>
+            <label class="iv-field">${esc(copy("或粘贴简历文字", "Or paste resume text"))}<textarea rows="10" maxlength="24000" data-interview-field="resumeText">${esc(data.resumeText)}</textarea></label>
+            <p class="iv-note">${esc(copy("拆成：自我介绍、每个项目的讲述稿与预判追问、技术栈知识点、奖项。重新拆分不会覆盖你已经改写的答法。", "Splits into intro, a story and likely follow-ups per project, stack questions and awards. Re-splitting never overwrites what you wrote."))}</p>
+            <div class="iv-row"><span class="iv-dock-spacer"></span>${solid("import-resume", profile.resume?.updated_at ? copy("重新拆分简历", "Split again") : copy("拆分简历", "Split resume"))}</div></section>`
+        : `<section class="iv-sheet"><div class="iv-step"><span>01</span><h3>${esc(copy("岗位描述（JD）", "Job description"))}</h3></div>
+            <label class="iv-field"><span class="sr-only">JD</span><textarea rows="14" maxlength="12000" data-interview-field="jdText" placeholder="${esc(copy("粘贴目标岗位的职责与要求……", "Paste the role's responsibilities and requirements…"))}">${esc(data.jdText)}</textarea></label>
+            <p class="iv-note">${esc(copy("生成岗位相关题和反问环节的问题，都会进入语料库。", "Creates role questions and questions to ask; both go to your corpus."))}</p>
+            <div class="iv-row"><span class="iv-dock-spacer"></span>${solid("import-jd", profile.jd?.updated_at ? copy("重新生成", "Regenerate") : copy("生成岗位题与反问", "Generate"))}</div></section>`;
+      return `<div class="iv-switch-row"><div class="iv-seg iv-seg--wide" role="tablist">${button("custom-side", esc(copy("简历", "Resume")), { cls: side === "resume" ? "is-on" : "", attrs: `role="tab" aria-selected="${side === "resume"}" data-side="resume"` })}${button("custom-side", "JD", { cls: side === "jd" ? "is-on" : "", attrs: `role="tab" aria-selected="${side === "jd"}" data-side="jd"` })}</div>
+          <p class="iv-lede">${esc(copy("内容会发送到你选择的 AI 服务；服务器不保存简历文件。", "Content goes to your selected AI service; resume files are not stored."))}</p></div>
+        <div class="iv-custom">${form}<div class="iv-custom-side">${(side === "resume" ? resumeSummary : jdSummary) || `<div class="iv-empty-card"><p>${esc(side === "resume" ? copy("拆分完成后，这里会列出识别到的项目和模块。", "Projects and modules appear here after splitting.") : copy("生成后，这里会显示岗位方向和核心要求。", "The role and its core requirements appear here."))}</p></div>`}</div></div>`;
     }
 
     const PANE_COPY = {
-      bank: ["Interview · Question bank", ["通用题库", "Question bank"], ["勾选想练的题目开始，或按方向随机抽题。", "Pick the questions you want, or draw at random by topic."]],
-      custom: ["Interview · Tailored", ["简历定制", "Tailored interview"], ["根据你的简历和目标岗位生成问题，开始前可以逐条修改。", "Questions from your resume and target role, editable before you start."]],
-      history: ["Interview · Records", ["面试记录", "Interview records"], ["每一场的问题、回答与追问。", "Questions, answers and follow-ups from every session."]],
+      practice: () => [partName(data.part), pick(PARTS[data.part].hint)],
+      reports: () => [copy("面试报告", "Interview reports"), copy("每一场的百分制、能力边界和逐题点评。", "Scores, boundaries and per-question notes for every session.")],
+      custom: () => [copy("简历 / JD 定制", "Resume / JD"), copy("把简历和目标岗位拆成可练的语料。", "Turn your resume and target role into practice material.")],
     };
 
     function syncChrome() {
       const pane = data.pane;
-      // Home and the live session carry their own headings; the shared page title would repeat them.
-      const bare = pane === "home" || pane === "session";
+      const bare = pane === "home" || pane === "report" || pane === "corpus";
       document.body.classList.toggle("interview-bare", state.view === "interview" && bare);
-      if (document.body.dataset) document.body.dataset.interviewPane = pane;
+      if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
       document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
-        const active = item.dataset.interviewPane === pane || (pane === "session" && item.dataset.interviewPane === (data.current?.session?.status === "active" ? "home" : "history"));
+        const itemPane = item.dataset.interviewPane;
+        const active = itemPane === "practice" ? pane === "practice" && item.dataset.interviewPart === data.part
+          : itemPane === pane || (pane === "report" && itemPane === "reports");
         item.classList.toggle("active", active && state.view === "interview");
-        item.classList.toggle("is-active", active);
         item.setAttribute("aria-current", active ? "page" : "false");
         item.setAttribute("aria-disabled", String(data.busy));
       });
-      const entry = PANE_COPY[pane];
+      const entry = PANE_COPY[pane]?.();
       if (!entry || state.view !== "interview") return;
-      if (byId("viewTitle")) byId("viewTitle").textContent = copy(...entry[1]);
-      if (byId("viewSubtitle")) byId("viewSubtitle").textContent = copy(...entry[2]);
+      if (byId("viewTitle")) byId("viewTitle").textContent = entry[0];
+      if (byId("viewSubtitle")) byId("viewSubtitle").textContent = entry[1];
     }
 
     function render() {
@@ -445,94 +697,275 @@
       if (!panel || !state.desktopCapabilities?.mock_interview) return;
       syncChrome();
       if (!state.account.authenticated) {
-        panel.innerHTML = `<div class="iv-guest"><p class="iv-kicker">Interview Studio</p><h2 class="iv-title"><span class="iv-title-main">Mock Interview</span></h2><p>${esc(copy("登录同一个 IELTS Studio 账号，保存面试回答与练习记录。", "Sign in with your Studio account to save answers and interview history."))}</p>${solid("login", copy("登录并开始", "Sign in and start"))}${voiceNote()}</div>`;
+        panel.innerHTML = `<div class="iv-guest"><p class="iv-kicker">Interview Studio</p><h2 class="iv-title"><span class="iv-title-main">Mock Interview</span></h2><p>${esc(copy("登录同一个 IELTS Studio 账号，保存面试回答与练习记录。", "Sign in with your Studio account to save answers and interview history."))}</p>${solid("login", copy("登录并开始", "Sign in and start"))}</div>`;
         return;
       }
-      const content = ({ home, bank, custom, history, session })[data.pane]();
-      const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
-      panel.innerHTML = `${status}${data.error ? `<div class="iv-error interview-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>`;
-      panel.querySelectorAll("input, select, textarea").forEach((el) => { el.disabled = data.busy; });
+      if (data.pendingResumeId && data.pane === "practice" && !data.current && !data.busy) {
+        const id = data.pendingResumeId;
+        data.pendingResumeId = null;
+        perform(() => request(`/api/interview/sessions/${encodeURIComponent(id)}/`), (payload) => { if (payload.session.part === data.part) acceptSession(payload); });
+        return;
+      }
+      const content = ({ home, practice, reports, report: reportPane, corpus: corpusPane, custom: customPane })[data.pane]();
+      const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy && data.answer.state !== "thinking" ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
+      panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>${editorModal()}`;
+      if (data.pane === "home") scheduleSlides();
+      else window.clearInterval?.(slideTimer);
     }
 
-    function captureInput(event) {
-      if (data.busy) return;
-      const el = event.target;
-      const field = el.dataset.interviewField;
-      if (field === "answer" && data.current?.current_turn) {
-        data.answers[data.current.current_turn.id] = el.value;
-        const counter = byId("interviewAnswerCount");
-        if (counter) counter.textContent = `${el.value.length} / 6000`;
-      } else if (field === "file") { data.file = el.files?.[0] || null; render(); }
-      else if (field === "count") data.count = Math.max(1, Math.min(10, Number(el.value) || 1));
-      else if (field && ["resume", "job", "category", "manualPrompt"].includes(field)) data[field] = el.value;
-      if (el.dataset.interviewCustomIndex !== undefined) data.custom[Number(el.dataset.interviewCustomIndex)].prompt = el.value;
-      if (el.dataset.interviewQuestion !== undefined && event.type === "change") {
-        if (el.checked && data.selected.size >= 10 && !data.selected.has(el.dataset.interviewQuestion)) {
-          el.checked = false;
-          data.error = copy("每轮最多选择 10 个问题。", "Select up to 10 questions per session.");
-        } else { el.checked ? data.selected.add(el.dataset.interviewQuestion) : data.selected.delete(el.dataset.interviewQuestion); data.error = ""; }
+    // ---- Carousel: advances itself without re-rendering the page.
+    function showSlide(index) {
+      data.slide = (index + SLIDES.length) % SLIDES.length;
+      const panel = byId("interviewPanel");
+      panel?.querySelectorAll?.(".iv-slide").forEach((slide, i) => {
+        slide.classList.toggle("is-active", i === data.slide);
+        slide.setAttribute("aria-hidden", String(i !== data.slide));
+        slide.tabIndex = i === data.slide ? 0 : -1;
+      });
+      panel?.querySelectorAll?.(".iv-dots span").forEach((dot, i) => dot.classList.toggle("is-active", i === data.slide));
+      const counter = panel?.querySelector?.(".iv-show-count");
+      if (counter) counter.textContent = `${pad(data.slide + 1)} / ${pad(SLIDES.length)}`;
+    }
+
+    function scheduleSlides() {
+      window.clearInterval?.(slideTimer);
+      slideTimer = window.setInterval?.(() => {
+        if (data.pane !== "home" || state.view !== "interview") return window.clearInterval?.(slideTimer);
+        showSlide(data.slide + 1);
+      }, 6000);
+    }
+
+    // ---- Recording: MediaRecorder -> upload -> server ASR -> editable transcript.
+    function timerText() {
+      if (!recorder?.startedAt) return "00:00";
+      const seconds = Math.floor((Date.now() - recorder.startedAt) / 1000);
+      return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
+    }
+
+    function resetAnswer() {
+      data.answer = { state: "idle", text: "", source: "typed", typing: false, error: "", peek: false };
+    }
+
+    function stopRecorder() {
+      if (!recorder) return;
+      window.clearInterval?.(recorder.tick);
+      try { if (recorder.media?.state === "recording") recorder.media.stop(); } catch (_error) { /* already stopped */ }
+      recorder.stream?.getTracks?.().forEach((track) => track.stop());
+      recorder = null;
+    }
+
+    async function startRecording() {
+      const devices = typeof navigator !== "undefined" ? navigator.mediaDevices : null;
+      if (!devices?.getUserMedia || typeof MediaRecorder !== "function") {
+        data.answer.error = copy("当前环境不支持录音，请改为打字作答。", "Recording is unavailable here; please type your answer.");
+        data.answer.typing = true;
+        render();
+        return;
+      }
+      try {
+        const stream = await devices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        const mimeType = MediaRecorder.isTypeSupported?.("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+        const media = new MediaRecorder(stream, { mimeType });
+        recorder = { stream, media, chunks: [], startedAt: Date.now(), mimeType };
+        media.ondataavailable = (event) => { if (event.data?.size) recorder?.chunks.push(event.data); };
+        media.start(250);
+        recorder.tick = window.setInterval(() => { const el = byId("interviewTimer"); if (el) el.textContent = timerText(); }, 250);
+        data.answer = { ...data.answer, state: "recording", error: "", typing: false };
+        render();
+      } catch (_error) {
+        stopRecorder();
+        data.answer.error = copy("无法使用麦克风，请检查权限，或改为打字作答。", "Microphone unavailable — check permission or type instead.");
         render();
       }
-      if (field === "category" && data.pane === "bank") render();
     }
 
-    async function uploadQuestions() {
-      const signal = requestController?.signal;
+    async function stopRecording() {
+      const active = recorder;
+      if (!active) return;
+      window.clearInterval(active.tick);
+      await new Promise((resolve) => { active.media.onstop = resolve; active.media.stop(); });
+      active.stream.getTracks().forEach((track) => track.stop());
+      recorder = null;
+      const blob = new Blob(active.chunks, { type: active.mimeType });
+      const turn = data.current?.current_turn;
+      if (!turn || !blob.size) { resetAnswer(); render(); return; }
+      data.answer.state = "processing";
       const form = new FormData();
-      form.append("resume_text", data.resume);
-      form.append("job_description", data.job);
-      form.append("count", String(data.count));
-      form.append("ai_source", currentAiSourcePreference());
-      if (data.file) form.append("resume_file", data.file);
-      const token = await ensureCsrfToken();
-      const response = await fetch("/api/interview/custom-questions/", { method: "POST", credentials: "same-origin", headers: token ? { "X-CSRFToken": token } : {}, body: form, signal });
-      const raw = await response.text();
-      let payload;
-      try { payload = JSON.parse(raw); } catch (_error) { throw new Error(copy("服务未返回有效数据，请重试。", "Invalid server response; please retry.")); }
-      if (!response.ok) throw new Error(payload.error || payload.message || copy("定制问题生成失败。", "Question generation failed."));
-      return payload;
+      form.append("audio", blob, "answer.webm");
+      await perform(() => upload(`/api/interview/sessions/${encodeURIComponent(data.current.session.id)}/turns/${encodeURIComponent(turn.id)}/audio/`, form), (payload) => {
+        data.answer = { ...data.answer, state: "review", text: payload.transcript, source: "voice", error: "" };
+      }, { busy: false });
+      if (data.answer.state === "processing") {
+        data.answer = { ...data.answer, state: "idle", typing: true, error: data.error || copy("转写失败，请重录或打字作答。", "Transcription failed; record again or type.") };
+        data.error = "";
+        render();
+      }
+    }
+
+    function submitAnswer() {
+      const session = data.current?.session;
+      const turn = data.current?.current_turn;
+      const answer = data.answer.text.trim();
+      if (!session || !turn) return;
+      if (!answer) { data.answer.error = copy("回答是空的：录一段或打几句再提交。", "Your answer is empty."); render(); return; }
+      data.answer.state = "thinking";
+      perform(() => request(`/api/interview/sessions/${encodeURIComponent(session.id)}/turns/${encodeURIComponent(turn.id)}/answer/`, { answer, answer_source: data.answer.source, ai_source: currentAiSourcePreference() }),
+        (payload) => { acceptSession(payload); resetAnswer(); }).then(() => {
+        // A failed submit keeps the text so it can be sent again.
+        if (data.answer.state === "thinking") { data.answer.state = "review"; render(); }
+      });
+    }
+
+    // ---- Inputs and actions
+    function captureInput(event) {
+      const el = event.target;
+      const field = el.dataset.interviewField;
+      if (field === "answer") {
+        data.answer.text = el.value;
+        if (data.answer.state !== "review") data.answer.source = "typed";
+        const counter = byId("interviewAnswerCount");
+        if (counter) counter.textContent = `${el.value.length} / 6000`;
+      } else if (field === "editor-text" && data.editor) data.editor.text = el.value;
+      else if (field === "editor-question" && data.editor) data.editor.question = el.value;
+      else if (field === "file") { data.file = el.files?.[0] || null; render(); }
+      else if (field === "resumeText" || field === "jdText") data[field] = el.value;
+      else if (field === "project" && event.type === "change") {
+        el.checked ? data.launch.projectIds.add(el.value) : data.launch.projectIds.delete(el.value);
+      }
+    }
+
+    function openEditor(entry) {
+      data.editor = { entry, text: entry.corpus_text || "", question: entry.question || "" };
+      render();
+      byId("interviewPanel")?.querySelector?.('[data-interview-field="editor-text"]')?.focus?.();
+    }
+
+    function saveEditor() {
+      const { entry, text, question } = data.editor;
+      const upsert = (payload) => {
+        const index = data.corpus.findIndex((item) => (entry.id ? item.id === entry.id : item.source_key === entry.source_key && !item.id));
+        if (index >= 0) data.corpus.splice(index, 1, payload.entry);
+        else data.corpus.push(payload.entry);
+        data.editor = null;
+        data.notice = copy("已保存到语料库。", "Saved to your corpus.");
+      };
+      if (entry.id) {
+        const body = { corpus_text: text };
+        if (entry.source !== "curated" && question.trim() && question !== entry.question) body.question = question;
+        perform(() => request(`/api/interview/corpus/${encodeURIComponent(entry.id)}/`, body, { method: "PATCH" }), upsert);
+      } else if (entry.source_key) {
+        perform(() => request("/api/interview/corpus/", { kind: "knowledge", source_key: entry.source_key, corpus_text: text }), upsert);
+      } else {
+        if (!question.trim()) { data.error = copy("请先写题目。", "Write the question first."); render(); return; }
+        perform(() => request("/api/interview/corpus/", { kind: entry.kind, question, corpus_text: text, group: entry.group || "", parent_id: entry.parent_id || undefined }), upsert);
+      }
     }
 
     function handleAction(event) {
       const el = event.target.closest("[data-interview-action]");
-      if (!el || data.busy) return;
+      if (!el || (data.busy && !["close-editor"].includes(el.dataset.interviewAction))) return;
       const action = el.dataset.interviewAction;
-      if (PANES.has(action)) { setPane(action); return; }
-      if (action === "login") { promptGuestLogin(copy("登录后保存面试记录与回答。", "Sign in to save interview practice."), { returnView: "interview" }); return; }
-      if (action === "resume") { data.pane = "session"; render(); return; }
-      if (action === "reload-bank") { loadBank(); return; }
-      if (action === "reload-history") { loadHistory(); return; }
-      if (action === "pick-category" || action === "filter-category") { data.category = el.dataset.category || ""; render(); return; }
-      if (action === "bank-category") { data.category = el.dataset.category || ""; setPane("bank"); return; }
-      if (action === "pick-count") { data.count = Number(el.dataset.count) || 5; render(); return; }
-      if (action === "clear-selection") { data.selected.clear(); render(); return; }
-      if (action === "add-custom") {
-        if (!data.manualPrompt.trim()) { data.error = copy("请先输入问题。", "Enter a question first."); render(); return; }
-        if (data.custom.length >= 10) { data.error = copy("每轮最多 10 个问题。", "Up to 10 questions per session."); render(); return; }
-        data.custom.push({ prompt: data.manualPrompt.trim(), category: "projects", difficulty: "medium", source: "manual" }); data.manualPrompt = ""; data.error = ""; render(); return;
-      }
-      if (action === "remove-custom") { data.custom.splice(Number(el.dataset.index), 1); render(); return; }
-      if (action === "generate") { perform(uploadQuestions, (payload) => { data.custom = payload.questions || []; data.notice = copy("问题已生成，请检查后开始。", "Questions generated. Review before starting."); }); return; }
-      if (action === "start-general" || action === "start-selected" || action === "start-custom") {
-        const body = action === "start-custom" ? { mode: "custom", questions: data.custom } : { mode: "general", category: data.category, count: action === "start-selected" ? data.selected.size : data.count, ...(action === "start-selected" ? { question_ids: [...data.selected] } : {}) };
-        perform(() => request("/api/interview/sessions/", body), (payload) => { acceptSession(payload); if (action === "start-selected") data.selected.clear(); }); return;
-      }
-      if (action === "open-session") { perform(() => request(`/api/interview/sessions/${encodeURIComponent(el.dataset.sessionId)}/`), acceptSession); return; }
       const sessionId = data.current?.session?.id;
-      const turn = data.current?.current_turn;
-      if (!sessionId) return;
-      const base = `/api/interview/sessions/${encodeURIComponent(sessionId)}/`;
-      if (action === "answer" && turn) {
-        const answer = (data.answers[turn.id] || "").trim();
-        if (!answer) { data.error = copy("请输入回答，或选择跳过。", "Enter an answer or skip this question."); render(); return; }
-        perform(() => request(`${base}turns/${encodeURIComponent(turn.id)}/answer/`, { answer }), (payload) => { acceptSession(payload); data.lastAnswered = turn.id; delete data.answers[turn.id]; });
-      } else if (action === "skip" && turn) {
-        perform(() => request(`${base}turns/${encodeURIComponent(turn.id)}/skip/`, {}), (payload) => { acceptSession(payload); data.lastAnswered = null; delete data.answers[turn.id]; });
-      } else if (action === "follow-up" && data.lastAnswered) {
-        perform(() => request(`${base}turns/${encodeURIComponent(data.lastAnswered)}/follow-up/`, { ai_source: currentAiSourcePreference() }), (payload) => { acceptSession(payload); data.lastAnswered = null; });
-      } else if (["finish", "abort", "coach"].includes(action)) {
-        const endpoint = action === "coach" ? "report" : action;
-        perform(() => request(`${base}${endpoint}/`, action === "coach" ? { ai_source: currentAiSourcePreference() } : {}), acceptSession);
+      const base = sessionId ? `/api/interview/sessions/${encodeURIComponent(sessionId)}/` : "";
+      switch (action) {
+        case "login": promptGuestLogin(copy("登录后保存面试记录与回答。", "Sign in to save interview practice."), { returnView: "interview" }); return;
+        case "go-practice": setPane("practice", { part: el.dataset.part || "full" }); return;
+        case "go-custom": data.customSide = el.dataset.side || data.customSide; setPane("custom"); return;
+        case "reports": setPane("reports"); return;
+        case "reload-history": loadHistory(); return;
+        case "slide-prev": showSlide(data.slide - 1); scheduleSlides(); return;
+        case "slide-next": showSlide(data.slide + 1); scheduleSlides(); return;
+        case "slide-open": { const slide = SLIDES[Number(el.dataset.index)] || SLIDES[0]; setPane(slide.pane, { part: slide.part }); return; }
+        case "open-corpus": data.corpusTab = el.dataset.tab || data.corpusTab; setPane("corpus"); return;
+        case "corpus-tab": data.corpusTab = el.dataset.tab; render(); return;
+        case "custom-side": data.customSide = el.dataset.side; render(); return;
+        case "intensity": data.intensity = el.dataset.intensity; render(); return;
+        case "launch-category": data.launch.category = el.dataset.category || ""; render(); return;
+        case "launch-count": data.launch.count = Number(el.dataset.count) || 5; render(); return;
+        case "toggle-peek": data.answer.peek = !data.answer.peek; render(); return;
+        case "type-answer": data.answer.typing = true; data.answer.error = ""; render(); byId("interviewAnswer")?.focus?.(); return;
+        case "start-session": {
+          const body = { part: data.part, intensity: data.intensity };
+          if (data.part === "knowledge") Object.assign(body, { category: data.launch.category, count: data.launch.count });
+          if (data.part === "project" && data.launch.projectIds.size) body.project_ids = [...data.launch.projectIds];
+          resetAnswer();
+          perform(() => request("/api/interview/sessions/", body), acceptSession);
+          return;
+        }
+        case "record-start": startRecording(); return;
+        case "record-stop": stopRecording(); return;
+        case "submit-answer": submitAnswer(); return;
+        case "skip": {
+          const turn = data.current?.current_turn;
+          if (!turn) return;
+          stopRecorder();
+          perform(() => request(`${base}turns/${encodeURIComponent(turn.id)}/skip/`, {}), (payload) => { acceptSession(payload); resetAnswer(); });
+          return;
+        }
+        case "finish":
+          perform(() => request(`${base}finish/`, {}), acceptSession).then(() => {
+            // Ask for the 100-point score once, right after the transcript is saved.
+            const session = data.current?.session;
+            if (session?.status === "completed" && !session.score) {
+              perform(() => request(`/api/interview/sessions/${encodeURIComponent(session.id)}/report/`, { ai_source: currentAiSourcePreference() }), acceptSession);
+            }
+          });
+          return;
+        case "abort": stopRecorder(); perform(() => request(`${base}abort/`, {}), (payload) => { acceptSession(payload); data.current = null; data.pane = "practice"; resetAnswer(); }); return;
+        case "score": perform(() => request(`${base}report/`, { ai_source: currentAiSourcePreference() }), acceptSession); return;
+        case "open-session": perform(() => request(`/api/interview/sessions/${encodeURIComponent(el.dataset.sessionId)}/`), (payload) => { acceptSession(payload); resetAnswer(); }); return;
+        case "save-corpus": perform(() => request(`${base}turns/${encodeURIComponent(el.dataset.turnId)}/save-corpus/`, {}), (payload) => {
+          const index = (data.corpus || []).findIndex((item) => item.id === payload.entry.id);
+          if (data.corpus) index >= 0 ? data.corpus.splice(index, 1, payload.entry) : data.corpus.push(payload.entry);
+          data.notice = copy("已存为你的答法。", "Saved to your corpus.");
+        }); return;
+        case "edit-entry": {
+          const entry = el.dataset.entryId ? entryFor(el.dataset.entryId) : (data.corpus || []).find((item) => !item.id && item.source_key === el.dataset.sourceKey);
+          if (entry) openEditor(entry);
+          return;
+        }
+        case "new-entry": openEditor({ id: null, kind: el.dataset.kind || "knowledge", source: "custom", group: el.dataset.group || "", parent_id: el.dataset.parent || null, question: "", corpus_text: "", ai_draft: "" }); return;
+        case "close-editor": data.editor = null; render(); return;
+        case "adopt-draft": if (data.editor) { data.editor.text = data.editor.entry.ai_draft; render(); } return;
+        case "save-entry": saveEditor(); return;
+        case "draft-entry": {
+          const entry = data.editor?.entry;
+          if (!entry?.id) return;
+          perform(() => request(`/api/interview/corpus/${encodeURIComponent(entry.id)}/draft/`, { ai_source: currentAiSourcePreference() }), (payload) => {
+            const index = data.corpus.findIndex((item) => item.id === payload.entry.id);
+            if (index >= 0) data.corpus.splice(index, 1, payload.entry);
+            if (data.editor) data.editor.entry = payload.entry;
+          });
+          return;
+        }
+        case "delete-entry": {
+          const entry = data.editor?.entry;
+          if (!entry?.id) return;
+          perform(() => request(`/api/interview/corpus/${encodeURIComponent(entry.id)}/`, null, { method: "DELETE" }), () => {
+            data.corpus = data.corpus.filter((item) => item.id !== entry.id && item.parent_id !== entry.id);
+            data.editor = null;
+          });
+          return;
+        }
+        case "import-resume": {
+          const form = new FormData();
+          form.append("resume_text", data.resumeText);
+          form.append("ai_source", currentAiSourcePreference());
+          if (data.file) form.append("resume_file", data.file);
+          perform(() => upload("/api/interview/profile/resume/", form), (payload) => {
+            data.profile = payload.profile; data.corpus = payload.entries; data.file = null;
+            data.notice = copy("简历已拆分，讲述稿都在语料库里。", "Resume split — your stories are in the corpus.");
+          });
+          return;
+        }
+        case "import-jd":
+          perform(() => request("/api/interview/profile/jd/", { job_description: data.jdText, ai_source: currentAiSourcePreference() }), (payload) => {
+            data.profile = payload.profile; data.corpus = payload.entries;
+            data.notice = copy("已生成岗位题与反问问题。", "Role questions and questions to ask are ready.");
+          });
+          return;
+        default:
+          if (PANES.has(action)) setPane(action);
       }
     }
 

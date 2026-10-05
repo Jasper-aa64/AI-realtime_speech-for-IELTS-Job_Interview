@@ -52,7 +52,7 @@ def _owned(user, entry_id, *, lock=False):
     queryset = Entry.objects.select_for_update() if lock else Entry.objects
     entry = queryset.select_related("parent").filter(user=user, entry_id=entry_id).first()
     if not entry:
-        raise InterviewError("Corpus entry not found", code="not_found", status=404)
+        raise InterviewError("找不到这条语料。", code="not_found", status=404)
     return entry
 
 
@@ -176,7 +176,7 @@ def create_entry(user, payload):
     if payload.get("parent_id"):
         parent = _owned(user, text(payload.get("parent_id"), "parent_id", 40))
         if parent.kind != Entry.Kind.PROJECT or kind != Entry.Kind.PROJECT_FOLLOWUP:
-            raise InterviewError("Follow-ups attach to a project", code="invalid_parent")
+            raise InterviewError("追问只能挂在项目下面。", code="invalid_parent")
     with transaction.atomic():
         if curated:
             existing = Entry.objects.select_for_update().filter(user=user, source_key=source_key).first()
@@ -202,7 +202,7 @@ def update_entry(user, entry_id, payload):
             fields.append("corpus_text")
         if "question" in payload:
             if entry.source not in EDITABLE_QUESTION_SOURCES:
-                raise InterviewError("Curated questions cannot be reworded", code="read_only_question")
+                raise InterviewError("精选题库的题目不能改写。", code="read_only_question")
             entry.question = text(payload.get("question"), "question", 1500, required=True)
             fields.append("question")
         for name, limit in (("title", 200), ("group", 80)):

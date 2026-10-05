@@ -84,7 +84,7 @@ def run_generation(user, kind, inputs, *, ai_source="", related_id=""):
         if source not in {"codex_cli", "claude_cli", "claude_cli_haiku"}:
             provider = _speaking_http_provider("interview", timeout_seconds=timeout, ai_source=source)
     except Exception:
-        raise InterviewError("AI provider is not configured; curated practice remains available", code="ai_unavailable", status=502) from None
+        raise InterviewError("AI 服务还没有配置，暂时无法生成；精选题库练习不受影响。", code="ai_unavailable", status=502) from None
     backend = "http_api" if provider is not None else source
     model = provider.config.model if provider is not None else ("haiku" if source == "claude_cli_haiku" else source)
     try:
@@ -98,7 +98,7 @@ def run_generation(user, kind, inputs, *, ai_source="", related_id=""):
             )
             claim_ai_task(task.task_id, worker_id="interview-sync-request")
     except AIOrchestrationError:
-        raise InterviewError("AI work requires an available account balance", code="ai_balance_required") from None
+        raise InterviewError("账户余额不足，无法调用 AI。", code="ai_balance_required") from None
     try:
         started = time.monotonic()
         if provider is not None:
@@ -119,4 +119,4 @@ def run_generation(user, kind, inputs, *, ai_source="", related_id=""):
         return {**payload, **provenance}
     except Exception:
         fail_billable_ai_task(task.task_id, "Interview AI generation failed", error_code="interview_ai_failed", retryable=False)
-        raise InterviewError("AI generation failed; your saved answers are unchanged. Please retry.", code="ai_generation_failed", status=502) from None
+        raise InterviewError("AI 生成失败，已保存的回答没有变化，请重试。", code="ai_generation_failed", status=502) from None
