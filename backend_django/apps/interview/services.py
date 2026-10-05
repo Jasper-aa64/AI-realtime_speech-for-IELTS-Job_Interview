@@ -61,10 +61,13 @@ def _touch(session):
 
 
 def turn_payload(turn):
+    meta = turn.metadata or {}
     return {"id": turn.public_id, "order": turn.order, "kind": turn.kind, "question_id": turn.question_id or None,
             "parent_turn_id": turn.parent.public_id if turn.parent_id else None,
             "prompt": turn.prompt, "answer": turn.answer, "status": turn.status, "source": turn.source,
-            "category": turn.category, "difficulty": turn.difficulty}
+            "category": turn.category, "difficulty": turn.difficulty, "stage": turn.stage or None,
+            "answer_source": turn.answer_source, "corpus_entry_id": turn.corpus_entry_id or None,
+            "has_audio": bool(turn.audio_path), "decision": meta.get("decision"), "reply": meta.get("reply")}
 
 
 def session_payload(session, turns=None, *, summary=False):
@@ -74,7 +77,11 @@ def session_payload(session, turns=None, *, summary=False):
     if summary and report:
         report = {key: report[key] for key in ("status", "completed_count", "skipped_count", "limitations") if key in report}
         report["ai_feedback_status"] = (session.report.get("ai_feedback") or {}).get("status")
-    return {"id": session.public_id, "mode": session.mode, "title": session.title, "status": session.status,
+    score = session.score or None
+    if summary and score:
+        score = {key: score[key] for key in ("status", "total") if key in score}
+    return {"id": session.public_id, "mode": session.mode, "part": session.part if session.mode == "studio" else None,
+            "intensity": session.intensity, "plan": session.plan, "score": score, "title": session.title, "status": session.status,
             "current_turn_id": current.public_id if current else None, "created_at": session.created_at.isoformat(),
             "updated_at": session.updated_at.isoformat(), "report": report}
 

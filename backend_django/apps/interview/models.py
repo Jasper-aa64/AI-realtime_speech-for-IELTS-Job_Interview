@@ -91,7 +91,7 @@ class InterviewSession(UserOwnedModel):
         PRESSURE = "pressure", "追问压力"
 
     public_id = models.CharField(max_length=40, unique=True, default=session_id)
-    mode = models.CharField(max_length=16, choices=[("general", "General"), ("custom", "Custom")])
+    mode = models.CharField(max_length=16, choices=[("general", "General"), ("custom", "Custom"), ("studio", "Studio")])
     part = models.CharField(max_length=16, choices=Part.choices, default=Part.KNOWLEDGE)
     intensity = models.CharField(max_length=16, choices=Intensity.choices, default=Intensity.STANDARD)
     plan = models.JSONField(default=list, blank=True)

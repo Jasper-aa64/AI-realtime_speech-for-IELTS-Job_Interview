@@ -238,5 +238,6 @@ def generate_draft(user, entry_id, ai_source=""):
 
 def practice_material(user):
     """What a session plan can draw on: projects with their stories, awards, knowledge and JD items."""
-    entries = list(Entry.objects.filter(user=user).exclude(metadata__orphaned=True).select_related("parent"))
+    # Filtered in Python: a JSON-key exclude also drops rows that simply lack the key (NULL comparison).
+    entries = [e for e in Entry.objects.filter(user=user).select_related("parent") if not (e.metadata or {}).get("orphaned")]
     return {kind: [e for e in entries if e.kind == kind] for kind in KINDS}

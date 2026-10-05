@@ -5,7 +5,8 @@ from django.db import OperationalError
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 
-from . import corpus, services
+from . import corpus, engine, services
+from .models import InterviewSession
 from .validation import InterviewError
 
 
@@ -55,7 +56,10 @@ def custom_questions(request):
 
 @api("GET", "POST")
 def sessions(request):
-    return services.history(request.user) if request.method == "GET" else services.create(request.user, json_body(request))
+    if request.method == "GET":
+        return services.history(request.user)
+    payload = json_body(request)
+    return engine.create(request.user, payload) if "part" in payload else services.create(request.user, payload)
 
 
 @api("GET")
@@ -63,9 +67,27 @@ def session_detail(request, session_id):
     return services.detail(request.user, session_id)
 
 
+def _studio(request, session_id):
+    return InterviewSession.objects.filter(user=request.user, public_id=session_id, mode="studio").exists()
+
+
 @api("POST")
 def answer(request, session_id, turn_id):
-    return services.answer(request.user, session_id, turn_id, json_body(request).get("answer"))
+    payload = json_body(request)
+    if _studio(request, session_id):
+        return engine.answer(request.user, session_id, turn_id, payload.get("answer"),
+                             answer_source=payload.get("answer_source", "typed"), ai_source=payload.get("ai_source", ""))
+    return services.answer(request.user, session_id, turn_id, payload.get("answer"))
+
+
+@api("POST")
+def audio(request, session_id, turn_id):
+    return engine.upload_audio(request.user, session_id, turn_id, request.FILES.get("audio"))
+
+
+@api("POST")
+def save_corpus(request, session_id, turn_id):
+    return engine.save_to_corpus(request.user, session_id, turn_id)
 
 
 @api("POST")
@@ -90,7 +112,10 @@ def abort(request, session_id):
 
 @api("POST")
 def report(request, session_id):
-    return services.coach(request.user, session_id, json_body(request).get("ai_source", ""))
+    ai_source = json_body(request).get("ai_source", "")
+    if _studio(request, session_id):
+        return engine.score(request.user, session_id, ai_source)
+    return services.coach(request.user, session_id, ai_source)
 
 
 def form_or_json(request):
