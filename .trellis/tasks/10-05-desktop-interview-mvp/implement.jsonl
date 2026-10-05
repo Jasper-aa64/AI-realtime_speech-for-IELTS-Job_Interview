@@ -1,0 +1,14 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Product UI conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "UI composition"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Appearance and session state"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend checks"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend conventions"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Module separation"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Persistence and transactions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Safe errors"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Meaningful backend tests"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Contracts"}
+{"file": "docs/frontend-ui-conventions.md", "reason": "Square controls and interaction"}
+{"file": "docs/superpowers/plans/2026-10-05-native-voice-performance.md", "reason": "Validated voice design"}
+{"file": ".trellis/tasks/10-05-desktop-voice-performance/research/cpp-voice-audit.md", "reason": "Audited C++ constraints and verified current APIs"}
+{"file": ".trellis/tasks/10-05-desktop-voice-performance/research/native-voice-components.md", "reason": "Audited C++ constraints and verified current APIs"}

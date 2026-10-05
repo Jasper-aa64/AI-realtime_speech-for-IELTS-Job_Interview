@@ -27,7 +27,7 @@ VPS 先不买，完成本地效果验证再评估。
 
 ## 一句话现状
 
-桌面外壳能用了：`desktop/` 下独立的 Qt 6 工程，双击 `build-desktop/IELTS Studio.app` 打开，里面是服务器上的现有网页 UI（开发期连 `http://127.0.0.1:8767/`）。模拟面试、模式切换器、原生实时语音都还没开始写代码；语音审计和建议计划已完成。设置已加入「浅色 / 深色 / 跟随系统」，网页和桌面共享此实现。
+桌面外壳、左上角模式切换器和**文字版模拟面试**已能用（2026-10-05 晚）：桌面端 `IELTS Studio ⇄ 模拟面试` 切换，面试模式有首页 / 通用题库（30 题、5 个方向）/ 简历定制 / 面试记录，答题、跳过、一次 AI 追问、结束、文字报告、AI 文字建议都走 `apps.interview`。浏览器版本不出现切换器和面试入口。**原生实时语音仍未接入**：`native_voice/` 只有经过测试的 C++ 缓冲/生命周期内核和设备适配器，桥接能力里 `native_audio` 明确为 false，面试页写明「当前支持文字作答」。
 
 ## 已确认决定与本次建议（设计文档 §3）
 
@@ -80,7 +80,10 @@ VPS 先不买，完成本地效果验证再评估。
 - **先耳机后外放**：持续采集才有真正打断；本地 VAD 不是 AEC。耳机链路先验收，外放另评估 WebRTC APM，以实际播放音频作为回声参考，并验证双讲、时钟漂移和识别质量。
 - **验收方向**：相同设备/供应商/提示词/网络的对照和长稳测试；快开快关、网络背压、鉴权过期、设备变更不僵死、不重播旧回合；转写/录音/报告继续正常。云端 endpointing、推理和 WAN 单独统计，不能保证整体响应必然低于网页版。
 
-### 阶段 3 — 左上角模式切换器（只在桌面端）
+### 阶段 3 — 左上角模式切换器（只在桌面端）— **已实现**
+
+已按 detail.design 实测参数实现（见 `.trellis/tasks/10-05-desktop-interview-mvp/research/mode-switcher-reference.md`）：品牌按钮位置不动，`#studioModeMenu` 作为 fixed 卡片从按钮矩形用弹簧（stiffness 300 / damping 30 → CSS `linear()` 500 ms）长到 272px 卡片，内容按最终宽度排好、由容器裁切，列表 200 ms 透明 + 4px 模糊淡入；关闭 380 ms 反向。平时品牌位与原 `.brand` 视觉一致，悬停/展开才出现 ⇕ 箭头。下面是原计划，留作对照：
+
 
 - 动手前**用浏览器逐帧观察 https://detail.design/ 左上角**：品牌按钮原地形变成浮层卡（共享元素 + 弹簧曲线），参考文案是它的 Share Feedback 卡。记录时长、曲线、内容淡入顺序。
 - 卡内两项：`IELTS Studio`（雅思口语与写作）/ `模拟面试`（题库练习 · 定制面试 · 实时追问），当前项带对勾；Esc / 点外部收回；↑↓ + 回车；`prefers-reduced-motion` 时只淡入淡出。
@@ -88,7 +91,10 @@ VPS 先不买，完成本地效果验证再评估。
 - 品牌位现状：`web/static/index.html` 的 `.brand`（logo `/assets/brand/studio-logo.svg`），样式在 `styles.css` 末尾「ONE DESIGN LANGUAGE」段之后（`.brand-mark` / `.brand span` 的 clamp 尺寸）。新规则沿用 `body:not(#_)` 提权写法和 `--ui-r` / `--ed-serif` 等 token。
 - 用户的硬性 UI 偏好：P1/P2/P3 颜色只用在侧栏按钮；保留原练习布局、滑动开关和像素流动效果；图标按钮必须正方形（`docs/frontend-ui-conventions.md`）。
 
-### 阶段 4 — 模拟面试（雅思口语改编）
+### 阶段 4 — 模拟面试（雅思口语改编）— **文字版已实现，语音与评分待做**
+
+已实现：`apps.interview`（题库、定制出题、session/turn、追问、finish/abort、文字报告、AI 文字建议，21 个测试）+ `web/static/interview.js`（首页 hero + 设置面板 + Practice paths、题库多选浮条、简历定制三步、答题页进度轨、报告与记录，沿用首页的 mono kicker / 金线 / 衬线标题语言）。侧栏面试入口复用 `.nav-button` 样式。未做：「我的故事库」、P2 式「准备 + 陈述」、技术评分维度、语音作答。下面是原计划：
+
 
 | 雅思口语 | 模拟面试 |
 |----------|----------|
@@ -124,3 +130,12 @@ VPS 先不买，完成本地效果验证再评估。
 - 网页测试：一次完整运行 66/68 文件通过，修复后对两项失败文件单独重跑 2/2 通过；不是修复后再次全量 68/68。
 - 桌面 QtTest：3/3；桌面三档外观的可见布局已检查，未做物理 OS 深浅色切换验收。
 - 原生语音尚未实施，未运行真实设备/provider 性能 benchmark。新引擎和面试 app 均不能标成已完成。
+
+## 本次验证记录（2026-10-05 晚，Claude 接手 Codex 的未提交工作后）
+
+- 网页 `node --test tests/*.test.js`：76/76（修了浏览器模式下面试模块仍请求题库接口的问题）。
+- Django `manage.py test apps.interview`：21/21；桌面 `ctest --test-dir build-desktop`：4/4（含 `native_bridge_test`）；`native_voice` ctest 4/4，合成基准 3 s：capture→render P99 22.4 ms（软件环回，非设备/端到端延迟）。
+- 实机 UI：独立 QA 服务 8768 + 独立 SQLite（Codex work 目录）+ `--test-profile`，CDP 截图检查：切换器逐帧（暂停 Web Animations 取 0/40/90/150/240/500 ms）、面试首页、题库、简历定制、答题、追问提示、报告（浅/深色）、记录、切回 IELTS、浏览器版无入口。
+- 未做：真实麦克风/外放、AI 追问与 AI 建议的真实调用（会产生费用，只测了失败路径与接口）、PDF 解析的真实简历。
+- **用户自己的 `db.sqlite3` 还没有 `interview_*` 表**：用 8767 正常跑之前需要 `manage.py migrate interview`（只新增表；按约定先问用户再迁移）。
+
