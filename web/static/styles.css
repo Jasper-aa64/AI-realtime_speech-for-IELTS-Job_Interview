@@ -45169,7 +45169,7 @@ body:not(#_) #practicePanel .exam-status.p1-pixel-flow {
 
   body:not(#_) .shell .nav .brand-mark {
     flex: none;
-    width: 28px !important;
+    width: clamp(30px, calc(var(--sidebar-width, 176px) * 0.195), 36px) !important;
     height: auto !important;
     padding: 0 !important;
     border: 0 !important;
@@ -45182,7 +45182,8 @@ body:not(#_) #practicePanel .exam-status.p1-pixel-flow {
     min-width: 0;
     overflow: visible !important;
     font-family: "Instrument Serif", "Charter", Georgia, serif !important;
-    font-size: clamp(16px, calc(var(--sidebar-width, 176px) * 0.105), 19px) !important;
+    font-size: clamp(22px, calc(var(--sidebar-width, 176px) * 0.145), 26px) !important;
+    line-height: 1 !important;
     font-weight: 400 !important;
     letter-spacing: -0.01em !important;
     white-space: nowrap !important;
