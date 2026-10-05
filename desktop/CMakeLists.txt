@@ -11,9 +11,24 @@ add_library(studio_core STATIC
     src/server_settings.cpp src/server_settings.h
     src/navigation_policy.cpp src/navigation_policy.h
     src/error_page.cpp src/error_page.h
+    src/studio_profile.cpp src/studio_profile.h
+    src/studio_page.cpp src/studio_page.h
+    src/browser_window.cpp src/browser_window.h
 )
 target_include_directories(studio_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(studio_core PUBLIC Qt6::Widgets Qt6::WebEngineWidgets)
+
+qt_add_executable(IELTSStudio MACOSX_BUNDLE src/main.cpp)
+set_target_properties(IELTSStudio PROPERTIES
+    OUTPUT_NAME "IELTS Studio"
+    MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
+    MACOSX_BUNDLE_GUI_IDENTIFIER com.ieltsstudio.desktop
+    MACOSX_BUNDLE_BUNDLE_NAME "IELTS Studio"
+    MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
+    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+)
+target_compile_definitions(IELTSStudio PRIVATE STUDIO_VERSION="${PROJECT_VERSION}")
+target_link_libraries(IELTSStudio PRIVATE studio_core)
 
 enable_testing()
 

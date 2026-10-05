@@ -857,6 +857,7 @@ QWebEnginePage *StudioPage::createWindow(WebWindowType) {
 
 class QStackedWidget;
 class QWebEngineLoadingInfo;
+class QWebEnginePage;
 class QWebEngineProfile;
 class QWebEngineView;
 
@@ -1218,8 +1219,8 @@ Expected: prints `LOAD_OK http://127.0.0.1:8767/` (possibly with a query string)
 
 - [ ] **Step 7: Smoke — unreachable server**
 
-Run: `"build-desktop/IELTS Studio.app/Contents/MacOS/IELTS Studio" --server http://127.0.0.1:9 --smoke; echo "exit=$?"`
-Expected: prints `LOAD_FAIL http://127.0.0.1:9/` then `exit=1`.
+Run: `"build-desktop/IELTS Studio.app/Contents/MacOS/IELTS Studio" --server http://127.0.0.1:59999 --smoke; echo "exit=$?"`
+Expected: prints `LOAD_FAIL http://127.0.0.1:59999/` then `exit=1`. (Use a closed ordinary port: Chromium blocks ports like 9 with `ERR_UNSAFE_PORT`, which is not a connection error.)
 
 - [ ] **Step 8: Commit**
 
@@ -1256,7 +1257,7 @@ Use the computer-use tools (or `screencapture -l`) on the `IELTS Studio` window.
 6. In a speaking report, use the export/download action → the status bar shows `已下载：…` and the file exists in `~/Downloads`.
 7. Copy something via an in-app copy button, paste into another app → clipboard works; Cmd+C / Cmd+V work in text fields.
 8. System dark mode on → the page switches to the dark theme (`prefers-color-scheme`). If it does not, record it as a follow-up for phase 3 instead of blocking.
-9. Cmd+, → change the server to `http://127.0.0.1:9` → native error page "连不上 IELTS Studio 服务器" with 重试 / 更改服务器地址…; change back to `http://127.0.0.1:8767` → app loads again.
+9. Cmd+, → change the server to `http://127.0.0.1:59999` → native error page "连不上 IELTS Studio 服务器" with 重试 / 更改服务器地址…; change back to `http://127.0.0.1:8767` → app loads again.
 10. Clicking a link to another site opens it in the default browser, not inside the app.
 11. Renderer crash recovery: run `pkill -f QtWebEngineProcess` while the app is open → the page reloads by itself.
 
