@@ -1,18 +1,38 @@
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QEventLoop>
+#include <QLibraryInfo>
+#include <QLocale>
 #include <QSettings>
 #include <QTextStream>
 #include <QTimer>
+#include <QTranslator>
+#include <QWebEngineProfile>
 
 #include "browser_window.h"
 #include "server_settings.h"
 #include "studio_profile.h"
+
+namespace {
+// Let Chromium finish asynchronous teardown (WebContents release, cookie-store flush).
+void drainEvents() {
+    QEventLoop loop;
+    QTimer::singleShot(400, &loop, &QEventLoop::quit);
+    loop.exec();
+}
+} // namespace
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("IELTS Studio"));
     QApplication::setOrganizationName(QStringLiteral("IELTS Studio"));
     QApplication::setApplicationVersion(QStringLiteral(STUDIO_VERSION));
+
+    // Chinese titles for Qt's own strings (macOS app menu: 隐藏、退出…).
+    QTranslator qtTranslator;
+    if (qtTranslator.load(QLocale(QLocale::Chinese, QLocale::China), QStringLiteral("qtbase"), QStringLiteral("_"),
+                          QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+        QApplication::installTranslator(&qtTranslator);
 
     QCommandLineParser parser;
     parser.addHelpOption();
@@ -34,11 +54,13 @@ int main(int argc, char *argv[]) {
         server = *override;
     }
 
-    QWebEngineProfile *profile = studio::createStudioProfile(&app);
-    studio::BrowserWindow window(profile, server, studio::BrowserWindow::Role::Main);
+    // Window and profile are torn down explicitly below, while QApplication is still alive:
+    // destroying the profile after the app skips Chromium's final cookie flush (login lost on quick quit).
+    QWebEngineProfile *profile = studio::createStudioProfile(nullptr);
+    auto *window = new studio::BrowserWindow(profile, server, studio::BrowserWindow::Role::Main);
 
     if (parser.isSet(smokeOption)) {
-        QObject::connect(&window, &studio::BrowserWindow::loadResult, &app, [](bool ok, const QUrl &url) {
+        QObject::connect(window, &studio::BrowserWindow::loadResult, &app, [](bool ok, const QUrl &url) {
             QTextStream(stdout) << (ok ? "LOAD_OK " : "LOAD_FAIL ") << url.toString() << Qt::endl;
             QCoreApplication::exit(ok ? 0 : 1);
         });
@@ -48,7 +70,12 @@ int main(int argc, char *argv[]) {
         });
     }
 
-    window.show();
-    window.loadServer();
-    return app.exec();
+    window->show();
+    window->loadServer();
+    const int code = app.exec();
+    delete window;
+    drainEvents();
+    delete profile;
+    drainEvents();
+    return code;
 }

@@ -1328,3 +1328,19 @@ Each phase gets its own plan when we reach it, because each depends on findings 
 - Phase 4 — mock interview (question bank, resume/JD custom interview, reports).
 - Phase 5 — VPS deployment (parallel track, needs a purchased server).
 - Phase 6 — packaging (`macdeployqt`, signing).
+
+---
+
+## Execution notes (2026-10-05)
+
+Deviations found while executing; the code in `desktop/` is the source of truth.
+
+- `browser_window.h` needed `class QWebEnginePage;` forward-declared (compile error otherwise).
+- Smoke "unreachable" must use an ordinary closed port (59999). Port 9 fails with `ERR_UNSAFE_PORT` (`HttpErrorDomain`), which is deliberately not treated as "server unreachable".
+- **Login lost on quick quit.** Chromium flushes cookies to disk every ~30 s; the final flush only happens if the page and profile are destroyed in order while `QApplication` is alive. Fixes:
+  - `main.cpp` creates the profile without a parent, deletes the main window, drains events, deletes the profile, drains again, then returns.
+  - On macOS, AppKit's Quit path closes windows and calls `exit()` without returning from `exec()`. The main window's `closeEvent` therefore ignores the close and queues `QCoreApplication::exit(0)`, so every quit path returns through `main()`.
+- Menus: our menu titled "IELTS Studio" duplicated the macOS application menu → renamed **视图**. "服务器地址…" uses `ApplicationSpecificRole` (PreferencesRole renamed it to "Preferences..."). `qtbase_zh_CN` translations are loaded so 隐藏/退出/取消/确定 are Chinese.
+
+Acceptance (Task 5), driven through `QTWEBENGINE_REMOTE_DEBUGGING` + accessibility:
+1 ✅ unified design renders · 2 ✅ login survives Cmd+Q (after the fix above) · 3 ✅ all 10 sidebar views · 4 ⏳ mic: page permission granted, macOS TCC prompt needs the user to click Allow · 5 ✅ popup window opens/closes, page freed · 6 ✅ download + status bar · 7 ⏳ clipboard: blocked only because the window was not focused during background testing; needs a focused manual check · 8 ⏳ dark mode: shell follows Qt's colour scheme; real system-dark check needs the user (fallback if it fails: `--blink-settings=preferredColorScheme=0` chosen at launch from `QStyleHints::colorScheme()`) · 9 ✅ error page + server dialog + saved setting · 10 ✅ external link → system browser · 11 ✅ renderer crash → auto reload, still logged in.

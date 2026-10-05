@@ -119,16 +119,18 @@ void BrowserWindow::promptForServer() {
 }
 
 void BrowserWindow::buildMenus() {
-    QMenu *app = menuBar()->addMenu(QStringLiteral("IELTS Studio"));
-    QAction *server = app->addAction(QStringLiteral("服务器地址…"), this, &BrowserWindow::promptForServer);
+    // On macOS the server and quit items move into the application menu; the rest stays under 视图.
+    QMenu *view = menuBar()->addMenu(QStringLiteral("视图"));
+    QAction *server = view->addAction(QStringLiteral("服务器地址…"), this, &BrowserWindow::promptForServer);
     server->setShortcut(QKeySequence::Preferences);
-    server->setMenuRole(QAction::PreferencesRole);
-    QAction *reload = app->addAction(QStringLiteral("重新加载"), this, [this] {
+    // ApplicationSpecificRole keeps our Chinese title (PreferencesRole would rename it "Preferences...").
+    server->setMenuRole(QAction::ApplicationSpecificRole);
+    QAction *reload = view->addAction(QStringLiteral("重新加载"), this, [this] {
         if (m_stack->currentWidget() == m_error) emit m_error->retryRequested();
         else m_page->triggerAction(QWebEnginePage::Reload);
     });
     reload->setShortcut(QKeySequence::Refresh);
-    QAction *quit = app->addAction(QStringLiteral("退出"), qApp, &QApplication::quit);
+    QAction *quit = view->addAction(QStringLiteral("退出"), qApp, &QApplication::quit);
     quit->setShortcut(QKeySequence::Quit);
     quit->setMenuRole(QAction::QuitRole);
 
@@ -163,8 +165,10 @@ void BrowserWindow::closeEvent(QCloseEvent *event) {
     if (m_role == Role::Main) {
         QSettings settings;
         settings.setValue(kGeometryKey, saveGeometry());
-        event->accept();
-        QApplication::quit();
+        // Refuse the close and end the event loop instead: AppKit's own terminate path calls exit()
+        // without returning from exec(), which skips main()'s ordered teardown and loses the cookie flush.
+        event->ignore();
+        QMetaObject::invokeMethod(qApp, [] { QCoreApplication::exit(0); }, Qt::QueuedConnection);
         return;
     }
     QMainWindow::closeEvent(event);

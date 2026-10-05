@@ -15,6 +15,12 @@
 | [windows-deployment-handoff.md](ops/windows-deployment-handoff.md) | Windows 部署交接说明 |
 | [legacy-server-retirement.md](ops/legacy-server-retirement.md) | 旧 `web/ielts_server.py` 退役约束与允许调试的边界 |
 
+## desktop/ — Qt 桌面端
+
+| 文档 | 用途 |
+| --- | --- |
+| [../desktop/README.md](../desktop/README.md) | 桌面端构建、运行、冒烟检查、调试 |
+
 ## product/ — 产品 · 业务
 
 | 文档 | 用途 |
