@@ -41134,102 +41134,6 @@ body.theme-dark .writing-custom-prompt-choice .writing-prompt-choice-body {
    the per-theme colour tokens (--accent, --ink, --muted, --line …) stay.
    ===================================================================== */
 
-/* ---------- Practice: idle prompt ---------- */
-.prompt-card .prompt-idle {
-  display: grid;
-  justify-items: center;
-  gap: 14px;
-  max-width: 340px;
-  margin: 0 auto;
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.55;
-  letter-spacing: 0;
-  text-align: center;
-}
-
-.prompt-card .prompt-idle::before {
-  content: "";
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0M12 18v3'/%3E%3C/svg%3E") center / 24px no-repeat;
-  background-color: var(--part-tone, var(--accent));
-  -webkit-mask: none;
-  opacity: 0.9;
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--part-tone, var(--accent)) 12%, transparent);
-  /* tint the glyph white over the accent disc */
-  filter: none;
-}
-
-.prompt-card .prompt-idle::before {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0M12 18v3'/%3E%3C/svg%3E");
-}
-
-/* ---------- Practice: panes and the big record button ---------- */
-#practiceGrid .prompt-pane,
-#practiceGrid .recorder-pane {
-  border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 10px 28px rgba(15, 23, 42, 0.04);
-}
-
-#practiceGrid .section-label {
-  letter-spacing: 0.12em;
-}
-
-#practicePanel .phase-meter {
-  height: 4px;
-  overflow: hidden;
-}
-
-#phaseMeter {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent));
-  transition: width 400ms ease;
-}
-
-body:not(.font-popular) .record-control.ready {
-  background:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.22), transparent 55%),
-    var(--accent);
-  box-shadow:
-    0 0 0 12px color-mix(in srgb, var(--accent) 10%, transparent),
-    0 0 0 26px color-mix(in srgb, var(--accent) 5%, transparent),
-    0 22px 44px color-mix(in srgb, var(--accent) 28%, transparent),
-    inset 0 -10px 24px rgba(0, 0, 0, 0.08);
-  transition: transform 220ms ease, box-shadow 220ms ease;
-}
-
-body:not(.font-popular) .record-control.ready:hover {
-  background:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.26), transparent 55%),
-    var(--accent);
-  transform: scale(1.015);
-  box-shadow:
-    0 0 0 14px color-mix(in srgb, var(--accent) 13%, transparent),
-    0 0 0 30px color-mix(in srgb, var(--accent) 6%, transparent),
-    0 26px 50px color-mix(in srgb, var(--accent) 32%, transparent),
-    inset 0 -10px 24px rgba(0, 0, 0, 0.08);
-}
-
-.record-control.ready #recordTitle {
-  letter-spacing: 0.02em;
-}
-
-.record-control.ready #recordHint {
-  opacity: 0.86;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .record-control.ready,
-  .record-control.ready:hover {
-    transition: none;
-    transform: none;
-  }
-}
-
 /* ---------- Corpus landing ---------- */
 body:not(.font-popular) #corpusPanel .corpus-home-title {
   font-family: "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
@@ -41604,123 +41508,10 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corp
 
 /* Workspace texture: a faint dot grid behind every page except home
    (home has its own paper grid). Uses the theme's --line colour. */
-body:not(.view-home) .workspace {
+body:not(.view-home) .workspace:not(:has(#practicePanel:not(.hidden))) {
   background-image: radial-gradient(color-mix(in srgb, var(--muted) 22%, transparent) 1px, transparent 1.2px);
   background-size: 22px 22px;
   background-attachment: local;
-}
-
-/* =====================================================================
-   PRACTICE PAGE RE-LAYOUT (P1 / P2 / P3 / Mock)
-   The panel stops being one big white box: the status bar, the prompt
-   stage and the recorder float as separate cards on the dotted workspace.
-   ===================================================================== */
-@media (min-width: 981px) {
-  #practicePanel.practice-panel {
-    margin-top: 22px;
-    gap: 14px;
-    padding: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-
-  #practicePanel > .exam-status {
-    padding: 14px 16px 14px 20px !important;
-    border: 1px solid var(--line) !important;
-    border-radius: 16px !important;
-    background: var(--panel) !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 8px 24px rgba(15, 23, 42, 0.04) !important;
-  }
-
-  #practicePanel > .phase-meter {
-    margin: -4px 18px 0;
-    background: color-mix(in srgb, var(--muted) 18%, transparent) !important;
-  }
-
-  #practicePanel #practiceGrid {
-    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr);
-    gap: 16px;
-  }
-
-  /* P1/P2/P3 tones stay on the sidebar buttons only; inside the page everything uses the theme accent. */
-  #practicePanel {
-    --part-tone: var(--accent);
-  }
-
-
-  #practiceGrid .prompt-pane,
-  #practiceGrid .recorder-pane {
-    position: relative;
-    overflow: hidden;
-    padding: 22px 24px !important;
-    border: 1px solid var(--line) !important;
-    border-radius: 20px !important;
-    background: var(--panel) !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 14px 36px rgba(15, 23, 42, 0.05) !important;
-  }
-
-  /* Accent hairline across the top of both cards */
-  #practiceGrid .prompt-pane::before,
-  #practiceGrid .recorder-pane::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto;
-    height: 3px;
-    background: linear-gradient(90deg, var(--part-tone), color-mix(in srgb, var(--part-tone) 0%, transparent));
-    opacity: 0.85;
-  }
-
-  #practiceGrid .recorder-pane::before {
-    background: linear-gradient(270deg, var(--part-tone), color-mix(in srgb, var(--part-tone) 0%, transparent));
-  }
-
-  /* Section labels become small chips */
-  #practiceGrid .section-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    width: max-content;
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--part-tone) 11%, transparent);
-    color: color-mix(in srgb, var(--part-tone) 80%, var(--ink));
-    font-size: 10.5px;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-  }
-
-  body.theme-dark #practiceGrid .section-label {
-    color: var(--part-tone);
-  }
-
-  #practiceGrid .section-label::before {
-    content: "";
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--part-tone);
-  }
-
-  /* Prompt stage: no heavy left bar; a faint ruled-paper field instead */
-  #practiceGrid #promptCard {
-    border-left: 0 !important;
-    border-radius: 14px;
-    background:
-      repeating-linear-gradient(180deg, transparent 0 31px, color-mix(in srgb, var(--line) 45%, transparent) 31px 32px),
-      color-mix(in srgb, var(--bg) 55%, var(--panel)) !important;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent);
-  }
-
-  #practiceGrid #promptCard.cue-prompt {
-    background: color-mix(in srgb, var(--bg) 40%, var(--panel)) !important;
-  }
-
-  /* Recorder: big tabular timer */
-  #practiceGrid #timerValue {
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-  }
 }
 
 /* =====================================================================
@@ -42060,7 +41851,6 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
 
 @media (prefers-reduced-motion: no-preference) {
   #homePanel:not(.hidden) :is(.hx-hero, .hx-lanes),
-  #practicePanel:not(.hidden) > :is(.exam-status, #practiceGrid),
   #corpusPanel:not(.hidden) :is(.corpus-home-kicker-bar, .corpus-top-cards > *, .corpus-review-lane),
   :is(#detailPanel, #writingReportDetail) > :is(.detail-card, section),
   #writingPanel:not(.hidden) .writing-shell > *,
@@ -42069,7 +41859,6 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
   }
 
   #homePanel:not(.hidden) .hx-lanes,
-  #practicePanel:not(.hidden) > #practiceGrid,
   #corpusPanel:not(.hidden) .corpus-top-cards > :nth-child(1),
   #writingPanel:not(.hidden) .writing-shell > :nth-child(2),
   :is(#detailPanel, #writingReportDetail) > :nth-child(2) {
@@ -42206,7 +41995,7 @@ body:not(.font-academic):not(.__ed) {
 
 /* Small caps-style labels → mono, tracked, muted */
 :is(.section-label, .corpus-page-kicker, .corpus-card-type, .p3-launch-label, .history-rail-head strong,
-    .writing-stats-grid span, .font-tool-label, .nav-section-label) {
+    .writing-stats-grid span, .font-tool-label, .nav-section-label):not(#practicePanel *) {
   font-family: var(--ed-mono) !important;
   font-weight: 500 !important;
   letter-spacing: 0.08em !important;
@@ -42223,7 +42012,7 @@ body:not(.font-academic):not(.__ed) {
 }
 
 /* Figures → mono */
-:is(#timerValue, .history-item-time, .hx-count, .writing-day, #writingWordCount) {
+:is(.history-item-time, .hx-count, .writing-day, #writingWordCount) {
   font-family: var(--ed-mono) !important;
   font-variant-numeric: tabular-nums;
 }
@@ -43227,36 +43016,6 @@ body :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter.ha
 }
 
 /* =====================================================================
-   PRACTICE — status line becomes a ruled strip (no box); English
-   questions are set in the display serif.
-   ===================================================================== */
-@media (min-width: 981px) {
-  #practicePanel > .exam-status {
-    padding: 4px 0 14px !important;
-    border: 0 !important;
-    border-bottom: 1px solid var(--line) !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-
-  #practicePanel > .phase-meter {
-    margin: -15px 0 0 !important;
-    height: 2px !important;
-  }
-
-  #practiceGrid #promptCard p {
-    font-family: var(--ed-serif);
-    font-weight: 400;
-    letter-spacing: -0.005em;
-  }
-
-  #practiceGrid #promptCard .prompt-idle {
-    font-family: var(--ed-sans);
-  }
-}
-
-/* =====================================================================
    CORPUS LANDING — blog section head, the two libraries as one ruled
    grid (no card-in-card), review links as a hairline-divided row.
    ===================================================================== */
@@ -43649,4 +43408,84 @@ body :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter.ha
   font-family: var(--ed-mono);
   font-size: 11.5px;
   letter-spacing: 0.04em;
+}
+
+/* Short windows: the section labels made the sidebar taller than the
+   viewport and hid 每日写作 / 写作报告 — drop them and tighten the rows. */
+@media (min-width: 981px) and (max-height: 860px) {
+  .shell .nav .nav-section-label {
+    display: none !important;
+  }
+
+  .shell .nav .nav-button[data-view]:not(.nav-pgroup-item):not(.nav-exam-lead) {
+    min-height: 32px;
+  }
+}
+
+/* Practice recorder: the 280px button let the hint below run into it on
+   short windows. Scale the button with the viewport height and keep a gap. */
+@media (min-width: 981px) {
+  #recorderPane #recordControl {
+    width: clamp(168px, calc(100vh - 430px), 280px) !important;
+    height: clamp(168px, calc(100vh - 430px), 280px) !important;
+  }
+
+  #recorderPane .recorder-status-zone {
+    margin-top: 16px;
+  }
+}
+
+/* Home density: three equal-height columns (no floating short column),
+   tighter top/bottom spacing. */
+@media (min-width: 861px) {
+  body.view-home .workspace,
+  body.view-home .workspace:has(#homePanel:not(.hidden)) {
+    padding-top: calc(56px + var(--safe-top)) !important;
+  }
+
+  #homePanel .hx-hero {
+    align-items: stretch;
+    padding: 6px 0 30px;
+  }
+
+  #homePanel .hx-intro {
+    justify-content: space-between;
+    padding: 10px 0 4px;
+  }
+
+  #homePanel .hx-kicker {
+    margin-bottom: 0;
+  }
+
+  #homePanel .hx-title {
+    margin: 18px 0 0;
+  }
+
+  #homePanel .hx-actions {
+    margin-top: 22px;
+  }
+
+  #homePanel .hx-stage {
+    flex: 1;
+    min-height: 0;
+  }
+
+  #homePanel .hx-slide {
+    min-height: 0;
+  }
+
+  #homePanel .hx-slide-media {
+    flex: 1;
+    min-height: 180px;
+    aspect-ratio: auto;
+  }
+
+  #homePanel .hx-areas {
+    padding-top: 0;
+  }
+
+  #homePanel .hx-sec-head {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+  }
 }
