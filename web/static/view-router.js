@@ -55,6 +55,8 @@
     }
 
     function isNewTabNavigationEvent(event) {
+      // The desktop shell has one window: modifier and middle clicks navigate in place.
+      if (state.desktopCapabilities?.desktop === true) return false;
       return Boolean(event?.metaKey || event?.ctrlKey || event?.button === 1);
     }
 

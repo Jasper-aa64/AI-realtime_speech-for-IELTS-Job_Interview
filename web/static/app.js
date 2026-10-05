@@ -129,6 +129,7 @@ const state = {
     hintLevel: 0,
   },
   practiceLocked: false,
+  corpusReturnView: "",
   startRequestId: 0,
   practiceSessionId: 0,
   startAbortController: null,
@@ -2723,8 +2724,43 @@ function restoreRouteFromLocation() {
   }
 }
 
+// The desktop shell keeps a single window: "new tab" affordances open in place instead,
+// and stay unavailable while a practice flow owns the page (leaving would end the recording).
+function isDesktopShell() {
+  return state.desktopCapabilities?.desktop === true;
+}
+
+function syncDesktopFlowLock() {
+  const held = isDesktopShell() && !!state.practiceLocked;
+  ["openP1CorpusBtn", "openP2CorpusBtn"].forEach((id) => {
+    const button = $(id);
+    if (!button) return;
+    button.disabled = held;
+    button.classList.toggle("locked", held);
+    if (held) button.title = "流程进行中，先结束当前练习";
+    else button.removeAttribute("title");
+  });
+}
+
+function downloadHtmlDocument(html, filename) {
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
 function openCorpusWindow(view) {
   if (!isStandaloneCorpusView(view)) return;
+  if (isDesktopShell()) {
+    if (state.practiceLocked) return;
+    state.corpusReturnView = state.view;
+    switchView(view, { force: true });
+    return;
+  }
   const url = new URL(window.location.href);
   url.searchParams.set("view", view);
   const opened = window.open(url.toString(), "_blank");
@@ -2745,6 +2781,12 @@ function closeCorpusWindowOrReturn() {
   hideLanguageTakeawayTrigger();
   if (requestedStandaloneView() && window.opener) {
     window.close();
+    return;
+  }
+  const returnView = state.corpusReturnView;
+  state.corpusReturnView = "";
+  if (isDesktopShell() && returnView && returnView !== state.view && isKnownView(returnView)) {
+    switchView(returnView, { force: true });
     return;
   }
   switchView("corpus", { force: true, skipHistory: true });
@@ -6395,6 +6437,7 @@ function updateSidebarLock() {
   const hint = $("navLockHint");
   hint?.classList.add("hidden");
   $("viewTitleBlock")?.classList.toggle("locked-flow", locked);
+  syncDesktopFlowLock();
 }
 
 function showNavLockHint(button) {
@@ -11451,6 +11494,11 @@ function openReportHtmlPage(kind, options = {}) {
         </script>
       </body>
     </html>`;
+  if (isDesktopShell()) {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    downloadHtmlDocument(`<!doctype html>\n${html}`, `ielts-studio-${isWriting ? "writing" : "speaking"}-report-${stamp}.html`);
+    return;
+  }
   const win = window.open("about:blank", "_blank");
   if (!win) {
     alert("浏览器拦截了新标签页，请允许弹窗后再试。");
@@ -14360,6 +14408,89 @@ function syncAiSourceControls(value) {
   }
 }
 
+// Hovering the top-right avatar offers the two settings people change most (appearance, AI scoring
+// source) without leaving the page. The controls drive the account page's own selects, so saving,
+// validation and sync stay in one place.
+function setupQuickSettings() {
+  const root = $("quickSettings");
+  const card = $("quickSettingsCard");
+  const avatar = root?.querySelector(".avatar-settings-button");
+  if (!root || !card || !avatar) return;
+  let open = false;
+  let timer = 0;
+  const sync = () => {
+    const mode = $("appearanceModeSelect")?.value || "system";
+    card.querySelectorAll("[data-quick-appearance]").forEach((button) => {
+      const on = button.dataset.quickAppearance === mode;
+      button.classList.toggle("is-on", on);
+      button.setAttribute("aria-pressed", String(on));
+    });
+    const source = $("aiSourceSelect");
+    const quick = $("quickAiSource");
+    if (source && quick) {
+      if (quick.options.length !== source.options.length) quick.innerHTML = source.innerHTML;
+      quick.value = source.value;
+      quick.disabled = !state.account.authenticated || source.disabled;
+    }
+    $("quickAiSourceNote")?.classList.toggle("hidden", !!state.account.authenticated);
+  };
+  const show = (value) => {
+    window.clearTimeout(timer);
+    if (open === value) return;
+    open = value;
+    avatar.setAttribute("aria-expanded", String(value));
+    root.classList.toggle("is-open", value);
+    if (value) {
+      sync();
+      card.hidden = false;
+      card.animate?.([{ opacity: 0, transform: "translateY(-6px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" });
+    } else {
+      const fade = card.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: "ease-out", fill: "forwards" });
+      if (fade) fade.finished.then(() => { if (!open) { card.hidden = true; fade.cancel(); } }, () => {});
+      else card.hidden = true;
+    }
+  };
+  root.addEventListener("pointerenter", (event) => {
+    if (event.pointerType !== "mouse") return;
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => show(true), 90);
+  });
+  root.addEventListener("pointerleave", (event) => {
+    if (event.pointerType !== "mouse") return;
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => show(false), 240);
+  });
+  avatar.addEventListener("focus", () => { if (avatar.matches(":focus-visible")) show(true); });
+  root.addEventListener("focusout", (event) => { if (!root.contains(event.relatedTarget)) show(false); });
+  root.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !open) return;
+    show(false);
+    avatar.focus();
+  });
+  card.addEventListener("click", (event) => {
+    const mode = event.target.closest("[data-quick-appearance]");
+    if (mode) {
+      const select = $("appearanceModeSelect");
+      if (select) {
+        select.value = mode.dataset.quickAppearance;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      sync();
+      return;
+    }
+    if (event.target.closest("[data-quick-account]")) {
+      show(false);
+      avatar.click();
+    }
+  });
+  $("quickAiSource")?.addEventListener("change", (event) => {
+    const select = $("aiSourceSelect");
+    if (!select) return;
+    select.value = event.target.value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
 function currentAiSourcePreference() {
   const selectValue = $("aiSourceSelect")?.value;
   return normalizeAiSource(selectValue || state.account.user?.profile?.report_ai_source);
@@ -14989,6 +15120,7 @@ function bindEvents() {
     saveAiSourcePreference(event.target.value).catch(showError);
   });
   $("appearanceModeSelect")?.addEventListener("change", (event) => applyAppearanceMode(event.target.value));
+  setupQuickSettings();
   document.querySelectorAll("[data-ui-language-option]").forEach((button) => {
     button.addEventListener("click", () => applyUiLanguage(button.dataset.uiLanguageOption));
   });

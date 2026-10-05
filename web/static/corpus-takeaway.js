@@ -6527,6 +6527,11 @@
       url.searchParams.set("view", "p2");
       url.searchParams.set("p2_cue_id", normalizedCueId);
       url.searchParams.set("autostart", "1");
+      if (state.desktopCapabilities?.desktop === true) {
+        // One window on desktop: reload in place; the URL's autostart path starts the cue.
+        if (!state.practiceLocked) window.location.assign(url.toString());
+        return;
+      }
       const opened = window.open(url.toString(), "_blank", "noopener");
       if (!opened) text("p2BrainstormStatus", "浏览器阻止了新标签页，请允许弹窗后重试。");
     }
