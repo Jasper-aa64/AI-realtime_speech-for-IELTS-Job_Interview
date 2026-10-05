@@ -26,7 +26,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261005-interview-15">
+    <link rel="stylesheet" href="/styles.css?v=20261005-interview-17">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -85,8 +85,9 @@
                 <button type="button" data-quick-appearance="dark" aria-pressed="false">深色</button>
                 <button type="button" data-quick-appearance="system" aria-pressed="false">跟随系统</button>
               </div>
-              <label class="quick-settings-label" for="quickAiSource">AI 评分来源</label>
-              <select id="quickAiSource" class="quick-settings-select"></select>
+              <p class="quick-settings-label" id="quickAiSourceLabel">AI 评分来源</p>
+              <button type="button" id="quickAiSource" class="quick-settings-select" aria-haspopup="listbox" aria-expanded="false" aria-controls="quickAiSourceList" aria-labelledby="quickAiSourceLabel quickAiSource"><span id="quickAiSourceValue"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
+              <div id="quickAiSourceList" class="quick-settings-options" role="listbox" aria-labelledby="quickAiSourceLabel" hidden></div>
               <p id="quickAiSourceNote" class="quick-settings-note hidden">登录后可选择 AI 评分来源。</p>
               <button type="button" class="quick-settings-link" data-quick-account>账号设置<span aria-hidden="true">→</span></button>
             </div>
@@ -1791,10 +1792,10 @@
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
-    <script src="/native-bridge.js?v=20261005-interview-15"></script>
-    <script src="/interview.js?v=20261005-interview-15"></script>
+    <script src="/native-bridge.js?v=20261005-interview-17"></script>
+    <script src="/interview.js?v=20261005-interview-17"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>
-    <script src="/app.js?v=20261005-interview-15"></script>
+    <script src="/app.js?v=20261005-interview-17"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
     <script src="/home-dashboard.js?v=20261005-ui-redesign-31"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>

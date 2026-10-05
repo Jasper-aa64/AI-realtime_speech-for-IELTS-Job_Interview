@@ -14415,9 +14415,18 @@ function setupQuickSettings() {
   const root = $("quickSettings");
   const card = $("quickSettingsCard");
   const avatar = root?.querySelector(".avatar-settings-button");
-  if (!root || !card || !avatar) return;
+  const sourceButton = $("quickAiSource");
+  const sourceList = $("quickAiSourceList");
+  if (!root || !card || !avatar || !sourceButton || !sourceList) return;
   let open = false;
   let timer = 0;
+  // A native <select> popup lives outside the page, so hovering it would count as leaving the card;
+  // the source list is drawn inside the card instead.
+  const toggleList = (value) => {
+    sourceList.hidden = !value;
+    sourceButton.setAttribute("aria-expanded", String(value));
+    if (value) (sourceList.querySelector('[aria-selected="true"]') || sourceList.firstElementChild)?.focus();
+  };
   const sync = () => {
     const mode = $("appearanceModeSelect")?.value || "system";
     card.querySelectorAll("[data-quick-appearance]").forEach((button) => {
@@ -14426,12 +14435,11 @@ function setupQuickSettings() {
       button.setAttribute("aria-pressed", String(on));
     });
     const source = $("aiSourceSelect");
-    const quick = $("quickAiSource");
-    if (source && quick) {
-      if (quick.options.length !== source.options.length) quick.innerHTML = source.innerHTML;
-      quick.value = source.value;
-      quick.disabled = !state.account.authenticated || source.disabled;
-    }
+    const options = source ? [...source.options] : [];
+    const current = options.find((option) => option.value === source.value) || options[0];
+    text("quickAiSourceValue", current?.textContent || "");
+    sourceList.innerHTML = options.map((option) => `<button type="button" role="option" data-quick-source="${escapeHtml(option.value)}" aria-selected="${option.value === source.value}">${escapeHtml(option.textContent)}</button>`).join("");
+    sourceButton.disabled = !state.account.authenticated || !!source?.disabled;
     $("quickAiSourceNote")?.classList.toggle("hidden", !!state.account.authenticated);
   };
   const show = (value) => {
@@ -14442,6 +14450,7 @@ function setupQuickSettings() {
     root.classList.toggle("is-open", value);
     if (value) {
       sync();
+      toggleList(false);
       card.hidden = false;
       card.animate?.([{ opacity: 0, transform: "translateY(-6px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" });
     } else {
@@ -14453,7 +14462,7 @@ function setupQuickSettings() {
   root.addEventListener("pointerenter", (event) => {
     if (event.pointerType !== "mouse") return;
     window.clearTimeout(timer);
-    timer = window.setTimeout(() => show(true), 90);
+    if (!open) timer = window.setTimeout(() => show(true), 90);
   });
   root.addEventListener("pointerleave", (event) => {
     if (event.pointerType !== "mouse") return;
@@ -14461,11 +14470,20 @@ function setupQuickSettings() {
     timer = window.setTimeout(() => show(false), 240);
   });
   avatar.addEventListener("focus", () => { if (avatar.matches(":focus-visible")) show(true); });
-  root.addEventListener("focusout", (event) => { if (!root.contains(event.relatedTarget)) show(false); });
+  root.addEventListener("focusout", (event) => { if (event.relatedTarget && !root.contains(event.relatedTarget)) show(false); });
   root.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !open) return;
-    show(false);
-    avatar.focus();
+    if (event.key === "Escape" && open) {
+      if (!sourceList.hidden) { toggleList(false); sourceButton.focus(); return; }
+      show(false);
+      avatar.focus();
+      return;
+    }
+    if (!sourceList.hidden && ["ArrowDown", "ArrowUp"].includes(event.key)) {
+      event.preventDefault();
+      const items = [...sourceList.querySelectorAll("[role=option]")];
+      const index = items.indexOf(document.activeElement);
+      items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+    }
   });
   card.addEventListener("click", (event) => {
     const mode = event.target.closest("[data-quick-appearance]");
@@ -14478,16 +14496,21 @@ function setupQuickSettings() {
       sync();
       return;
     }
+    if (event.target.closest("#quickAiSource")) { toggleList(sourceList.hidden); return; }
+    const choice = event.target.closest("[data-quick-source]");
+    if (choice) {
+      toggleList(false);
+      sourceButton.focus();
+      if ($("aiSourceSelect")?.value === choice.dataset.quickSource) return;
+      // Same save path as the account page; re-sync once it settles (the page select is disabled meanwhile).
+      saveAiSourcePreference(choice.dataset.quickSource).catch(showError).finally(sync);
+      sync();
+      return;
+    }
     if (event.target.closest("[data-quick-account]")) {
       show(false);
       avatar.click();
     }
-  });
-  $("quickAiSource")?.addEventListener("change", (event) => {
-    const select = $("aiSourceSelect");
-    if (!select) return;
-    select.value = event.target.value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
 

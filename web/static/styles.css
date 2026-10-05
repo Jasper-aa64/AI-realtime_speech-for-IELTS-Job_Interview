@@ -46122,16 +46122,43 @@ body.interview-mode .nav-bottom > .nav-divider { display: none !important; }
 .shell .nav .nav-button[data-interview-pane="history"] { --nav-icon: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='8.5'/%3E%3Cpath%20d='M12%207.5V12l3%202'/%3E%3C/svg%3E"); }
 
 /* ---------- Page chrome ---------- */
-/* .workspace is a fixed 100dvh grid that clips; like the home view, the interview pages scroll the document. */
+/* Like the IELTS practice pages: the window does not scroll. Headings, filters and action docks stay put;
+   each pane names one region that scrolls (the question list, the records, the transcript…). */
 body:not(#_) .workspace:has(#interviewPanel:not(.hidden)) {
-  display: block;
-  height: auto;
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
-body:not(#_) .workspace:has(#interviewPanel:not(.hidden)) > .topbar { margin-bottom: clamp(18px, 2vw, 28px); }
+body:not(#_) .workspace:has(#interviewPanel:not(.hidden)) > .topbar { flex: none; margin-bottom: clamp(14px, 1.6vw, 22px); }
+
+body:not(#_) #interviewPanel:not(.hidden) {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+}
+
+#interviewPanel > .iv-status-line,
+#interviewPanel > .iv-error { flex: none; }
+
+#interviewPanel .iv-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+#interviewPanel .iv-pane > * { flex: none; }
+
+/* Scroll regions */
+#interviewPanel .iv-pane--home,
+#interviewPanel .iv-pane--session:has(.iv-report-head) { overflow-y: auto; overscroll-behavior: contain; }
+#interviewPanel .iv-pane > :is(.iv-qlist, .iv-history) { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+#interviewPanel .iv-pane > .iv-custom { flex: 1 1 auto; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+#interviewPanel .iv-custom > .iv-sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+#interviewPanel .iv-pane > .iv-session { flex: 1 1 auto; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+#interviewPanel .iv-session-main,
+#interviewPanel .iv-session-side { max-height: 100%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
 body.interview-bare:has(#interviewPanel:not(.hidden)) .topbar,
 body.interview-bare:has(#interviewPanel:not(.hidden)) #viewTitleBlock { display: none !important; }
 body[data-interview-pane]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview"; }
@@ -46146,7 +46173,7 @@ body:not(#_) #interviewPanel {
   --iv-link: var(--accent);
   width: min(100%, 1320px);
   margin: 0 auto;
-  padding: 0 0 56px !important;
+  padding: 0 0 16px !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -46502,14 +46529,13 @@ body:not(#_) #interviewPanel .iv-area-links button {
 #interviewPanel .iv-q:has(.iv-q-input:focus-visible) { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: -2px; }
 
 #interviewPanel .iv-dock {
-  position: sticky;
-  bottom: 16px;
+  position: relative;
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-top: 18px;
+  margin: 14px 0 2px;
   padding: 10px 10px 10px 22px;
   border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
   border-radius: 999px;
@@ -46658,7 +46684,7 @@ body:not(#_) #interviewPanel .iv-history-row:hover:not(:disabled) { background: 
 #interviewPanel .iv-empty-card { display: grid; justify-items: start; gap: 18px; padding: 32px; border: 1px dashed color-mix(in srgb, var(--ink) 20%, transparent); border-radius: 18px; color: var(--muted); }
 
 /* ---------- Session ---------- */
-#interviewPanel .iv-session { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 22vw, 300px); gap: clamp(24px, 3vw, 44px); align-items: start; }
+#interviewPanel .iv-session { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 22vw, 300px); gap: clamp(24px, 3vw, 44px); align-items: stretch; }
 #interviewPanel .iv-session-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 #interviewPanel .iv-session-head { display: grid; gap: 16px; padding-top: clamp(8px, 2vw, 24px); }
 #interviewPanel .iv-session-side { padding-top: clamp(8px, 2vw, 24px); }
@@ -46704,7 +46730,7 @@ body:not(#_) #interviewPanel .iv-answer { min-height: 220px; font-size: 15.5px; 
 #interviewPanel .iv-count { color: var(--muted); font-family: var(--ed-mono); font-size: 12px; }
 #interviewPanel .iv-session-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding-top: 4px; }
 
-#interviewPanel .iv-session-side { position: sticky; top: 24px; display: grid; gap: 14px; }
+#interviewPanel .iv-session-side { display: grid; align-content: start; gap: 14px; }
 
 #interviewPanel .iv-rail { display: grid; border-left: 1px solid var(--iv-rule); }
 #interviewPanel .iv-rail li { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; padding: 9px 0 9px 16px; color: var(--muted); }
@@ -46834,16 +46860,62 @@ body:not(#_) .quick-settings-seg button {
 body:not(#_) .quick-settings-seg button.is-on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); font-weight: 500; }
 
 body:not(#_) .quick-settings-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
   height: 38px;
-  padding: 0 12px;
+  padding: 0 10px 0 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg);
+  box-shadow: none;
   color: var(--ink);
   font: inherit;
   font-size: 13.5px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
 }
+
+body:not(#_) .quick-settings-select:disabled { opacity: 0.55; cursor: default; }
+.quick-settings-select span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.quick-settings-select svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: 0.6; transition: transform 200ms ease; }
+.quick-settings-select[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+body:not(#_) .quick-settings-options {
+  display: grid;
+  gap: 1px;
+  max-height: 232px;
+  margin-top: -4px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+body:not(#_) .quick-settings-options[hidden] { display: none; }
+
+body:not(#_) .quick-settings-options [role="option"] {
+  position: relative;
+  min-height: 32px;
+  padding: 6px 28px 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+body:not(#_) .quick-settings-options [role="option"]:is(:hover, :focus-visible) { outline: none; background: color-mix(in srgb, var(--accent) 9%, transparent); }
+body:not(#_) .quick-settings-options [role="option"][aria-selected="true"] { color: var(--accent); font-weight: 500; }
+.quick-settings-options [role="option"][aria-selected="true"]::after { content: "✓"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
 
 .quick-settings-note { margin: -4px 0 0; color: var(--muted); font-size: 12px; }
 
