@@ -449,11 +449,16 @@
         return;
       }
       const selectedPattern = state.writing.pickerPromptPatternFilters?.[taskType] || "";
+      // Task 1 chart-type chips (柱状图 / 折线图 …) narrow the grid by prompt.category.
+      const selectedCategory = taskType === "task1_academic" && selectedSource !== "custom"
+        ? state.writing.pickerCategoryFilters?.[taskType] || ""
+        : "";
       const sourcePrompts = selectedSource === "custom"
         ? customPromptsForTask(taskType)
         : task2UsablePromptsForSource(taskType, selectedSource);
       const prompts = sourcePrompts
-        .filter((prompt) => taskType !== "task2" || !selectedPattern || prompt.prompt_pattern === selectedPattern);
+        .filter((prompt) => taskType !== "task2" || !selectedPattern || prompt.prompt_pattern === selectedPattern)
+        .filter((prompt) => !selectedCategory || String(prompt.category || "").trim() === selectedCategory);
       const missingSlots = [];
       const grid = $("writingPromptGrid");
       if (!grid) return;

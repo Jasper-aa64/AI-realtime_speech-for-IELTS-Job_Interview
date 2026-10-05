@@ -37,7 +37,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261005-ui-redesign-37">
+    <link rel="stylesheet" href="/styles.css?v=20261005-ui-redesign-74">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -126,8 +126,8 @@
           </div>
           <div id="navLockHint" class="nav-lock-hint hidden" data-i18n="nav.lockHint">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
           <nav class="nav-primary" aria-label="Practice modes">
-            <span class="nav-section-label" aria-hidden="true">练习</span>
             <a class="nav-button active" data-view="home" href="?view=home" data-i18n="nav.home">首页</a>
+            <span class="nav-section-label" aria-hidden="true">口语</span>
             <div class="nav-exam-group" role="group" aria-label="口语练习">
               <a class="nav-button nav-exam-lead" data-view="mock" href="?view=mock">
                 <span class="nav-exam-lead-title">Mock</span>
@@ -511,14 +511,6 @@
                 <h2>P1 短答语料库</h2>
               </div>
               <div class="corpus-head-actions">
-                <button id="p1CorpusPodcastBtn" class="p1-corpus-podcast-button" type="button" title="复制 Podcast 提示词" aria-label="复制 Podcast 提示词">
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <circle cx="12" cy="11" r="1"></circle>
-                    <path d="M17.03 18.37A6.98 6.98 0 0 0 19 13.5a7 7 0 0 0-14 0c0 1.9.76 3.62 1.99 4.88"></path>
-                    <path d="M15.5 15.5a4.95 4.95 0 0 0 1-3 4.5 4.5 0 0 0-9 0c0 1.13.42 2.17 1.12 2.96"></path>
-                    <path d="M9 22h6l-2-7h-2z"></path>
-                  </svg>
-                </button>
                 <button id="p1CorpusAgentBtn" class="agent-assistant-trigger corpus-agent-button" type="button" title="题库助手" aria-label="P1 题库助手">
                   <svg aria-hidden="true" viewBox="0 0 24 24">
                     <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path>
@@ -1762,10 +1754,10 @@
     <script src="/shared-ui.js?v=20260612-writing-takeaway-optimistic-1"></script>
     <script src="/writing-image-preload.js?v=20260614-img-ready-instant-1"></script>
     <script src="/writing-image-viewer.js?v=20260613-img-original-preload-1"></script>
-    <script src="/writing-prompt-picker.js?v=20260818-custom-picker-clean-2"></script>
+    <script src="/writing-prompt-picker.js?v=20261005-task1-filter-1"></script>
     <script src="/corpus-markdown-editor.js?v=20260803-p3-live-status-6"></script>
     <script src="/assets/guest-samples.js?v=20260623-ux-batch-3"></script>
-    <script src="/corpus-takeaway.js?v=20260819-brainstorm-input-space-1"></script>
+    <script src="/corpus-takeaway.js?v=20261005-no-podcast-1"></script>
     <script src="/spelling-drill.js?v=20260809-spelling-daily-batch-complete-1"></script>
     <script src="/vendor/howler.min.js?v=2.2.4"></script>
     <script src="/candidate-profile.js?v=20260530-candidate-profile"></script>
@@ -1774,7 +1766,7 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20261005-ui-redesign-31"></script>
+    <script src="/app.js?v=20261005-ui-redesign-64"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
     <script src="/home-dashboard.js?v=20261005-ui-redesign-31"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>

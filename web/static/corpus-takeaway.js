@@ -207,29 +207,6 @@
       }, Math.max(1600, Number(options.duration || 3000)));
     }
 
-    function p1PodcastPrompt() {
-      return `Create an all-English learning podcast from the IELTS Speaking Part 1 corpus context that I will paste after this prompt.
-
-The purpose is to help me remember and retrieve my own answers fluently in a real IELTS interview. Keep my personal facts, ideas, and useful wording as the memory anchors instead of replacing them with unrelated model answers; familiar material is easier to recall under pressure and therefore improves fluency.
-
-Make the podcast natural, lively, and easy to follow. Use one tutor-style host or two friendly hosts. Connect the questions into a coherent conversation rather than reading a list mechanically. Explain memorable chunks, collocations, idioms, and natural spoken expressions from my material, including when and why they sound natural. Add brief recall cues, paraphrase drills, and spaced recap moments so I actively retrieve the language instead of only listening to it.
-
-Use English only. Do not add Chinese translation. Do not invent personal experiences that contradict my corpus. Keep the teaching practical and concise, with enough repetition to support memory without sounding robotic.
-
-I will paste one topic's corpus context next.`;
-    }
-
-    async function copyP1PodcastPrompt() {
-      const copied = await copyPlainTextToClipboard(p1PodcastPrompt());
-      showP1CorpusCopyToast(
-        copied
-          ? "Podcast 提示词已复制；再复制下方话题内容，一起粘贴给 AI。"
-          : "复制失败，请检查浏览器剪贴板权限。",
-        { error: !copied, duration: copied ? 3600 : 3000 }
-      );
-      return copied;
-    }
-
     async function copyP1TopicForAi(topicKey) {
       const key = String(topicKey || "").trim();
       const topic = (state.p1Corpus.topics || []).find((item) => String(item.topic || item.label || "").trim() === key);
@@ -8186,7 +8163,6 @@ I will paste one topic's corpus context next.`;
       loadP1Corpus,
       renderP1CorpusTopics,
       copyP1TopicForAi,
-      copyP1PodcastPrompt,
       openP1TopicCardModal,
       findP1CorpusEntry,
       p1CorpusEntryIds,

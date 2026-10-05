@@ -7284,7 +7284,7 @@ function renderHistoryList(items, options = {}) {
       : (isFailed ? " is-failed" : (isUnscored ? " is-unscored" : ""));
     const bandText = isScoring
       ? "评分中"
-      : (isFailed ? "评分失败" : (isUnscored ? "未评分" : `Band ${escapeHtml(item.overall_band ?? "—")}`));
+      : (isFailed ? "评分失败" : (isUnscored ? "未评分" : reportBandScoreHtml(item.overall_band ?? "—")));
     return `
     <div class="history-item-wrap">
       <button class="history-item ${toneClass} ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
@@ -9898,23 +9898,29 @@ function renderWritingReportList(items) {
   requestAnimationFrame(() => updateReportRailState("writingReportList"));
 }
 
+// Report rail score: a small "BAND" label over the number, so the score reads as a figure.
+function reportBandScoreHtml(band) {
+  return `<em class="history-item-band-label">Band</em><b class="history-item-band-value">${escapeHtml(band)}</b>`;
+}
+
 function writingReportTabHtml(item, active = false) {
   const task = item?.ai_task || null;
   const part = item.task_type === "task1_academic" ? "T1" : "T2";
-  const band = item.overall_band != null ? `Band ${item.overall_band}` : (isWritingTaskActive(task) ? "评分中" : "未评分");
+  const bandHtml = item.overall_band != null
+    ? reportBandScoreHtml(item.overall_band)
+    : escapeHtml(isWritingTaskActive(task) ? "评分中" : "未评分");
   const toneClass = item.task_type === "task1_academic" ? "tone-p1" : "tone-p2";
   const tagClass = item.task_type === "task1_academic" ? "p1" : "p2";
   const displayTitle = writingEntryDisplayTitle(item);
-  const wordCount = Number.isFinite(Number(item.word_count)) ? Number(item.word_count) : 0;
   return `
     <button class="history-item writing-report-tab ${toneClass} ${active ? "active" : ""}" data-writing-report-tab="${escapeHtml(item.id || "")}">
       <div class="history-item-top">
         <span class="history-item-tag ${tagClass}">${part}</span>
         ${item.is_sample ? `<span class="report-sample-badge">示例</span>` : ""}
-        <span class="history-item-band">${escapeHtml(band)}</span>
+        <span class="history-item-band${item.overall_band != null ? "" : " is-unscored"}">${bandHtml}</span>
       </div>
       <strong class="history-item-title">${escapeHtml(displayTitle || writingTaskLabel(item.task_type))}</strong>
-      <small class="history-item-time">${escapeHtml(item.display_time || item.practice_date || "")} · ${escapeHtml(wordCount)} words</small>
+      <small class="history-item-time">${escapeHtml(item.display_time || item.practice_date || "")}</small>
     </button>
   `;
 }
@@ -11924,7 +11930,6 @@ function renderDetail(attempt, updateView = true, options = {}) {
           </div>
         </div>
       </div>
-      <p class="feedback">${renderMarkdown(attempt.feedback_summary || "")}</p>
       <div class="score-row compact speaking-score-summary-grid">
         ${scoreCell("FC", score.fluency_coherence, "流利连贯")}
         ${scoreCell("LR", score.lexical_resource, "词汇资源")}
@@ -15875,9 +15880,6 @@ function bindEvents() {
   });
   $("agentAssistantBtn")?.addEventListener("click", openAgentAssistant);
   $("p1CorpusAgentBtn")?.addEventListener("click", () => openAgentAssistant("p1Corpus"));
-  $("p1CorpusPodcastBtn")?.addEventListener("click", () => {
-    corpusTakeawayController.copyP1PodcastPrompt().catch(showError);
-  });
   $("p2CorpusAgentBtn")?.addEventListener("click", () => openAgentAssistant("p2Corpus"));
   $("agentAssistantForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -16110,7 +16112,7 @@ function p3ReportContextCard(source = state.p3PracticeSource || {}) {
     <article class="p3-source-report-card tone-p2">
       <div class="history-item-top">
         <span class="history-item-tag p2">P2</span>
-        ${band !== "" ? `<span class="history-item-band">Band ${escapeHtml(band)}</span>` : ""}
+        ${band !== "" ? `<span class="history-item-band">${reportBandScoreHtml(band)}</span>` : ""}
       </div>
       <button type="button" class="p3-source-card-menu" data-p3-source-report-menu aria-label="P2 来源操作" title="P2 来源操作">
         <span aria-hidden="true"></span>
