@@ -37,7 +37,7 @@
     </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261005-ui-104118">
+    <link rel="stylesheet" href="/styles.css?v=20261005-ui-110412">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -126,6 +126,7 @@
           </div>
           <div id="navLockHint" class="nav-lock-hint hidden" data-i18n="nav.lockHint">流程进行中，先点右侧叉号结束，再切换左侧模式。</div>
           <nav class="nav-primary" aria-label="Practice modes">
+            <span class="nav-section-label" aria-hidden="true">练习</span>
             <a class="nav-button active" data-view="home" href="?view=home" data-i18n="nav.home">首页</a>
             <div class="nav-exam-group" role="group" aria-label="口语练习">
               <a class="nav-button nav-exam-lead" data-view="mock" href="?view=mock">
@@ -140,12 +141,14 @@
             </div>
             <a class="nav-button" data-view="history" href="?view=history" data-i18n="nav.speakingReports">口语报告</a>
             <div class="nav-divider" aria-hidden="true"></div>
+            <span class="nav-section-label" aria-hidden="true">写作</span>
             <a class="nav-button" data-view="writing" href="?view=writing" data-i18n="nav.dailyWriting">每日写作</a>
             <a class="nav-button" data-view="writingReports" href="?view=writingReports" data-i18n="nav.writingReports">写作报告</a>
           </nav>
         </div>
         <div class="nav-bottom">
           <nav class="nav-secondary" aria-label="Libraries">
+            <span class="nav-section-label" aria-hidden="true">积累</span>
             <a class="nav-button" data-view="corpus" href="?view=corpus" data-i18n="nav.corpus">语料库</a>
             <a class="nav-button" data-view="takeawayBook" href="?view=takeawayBook">Takeaway<span id="languageTakeawayDueDot" class="nav-review-dot hidden" aria-label="Takeaway 有到期复习"></span></a>
             <a class="nav-button" data-view="writingTakeawayBook" href="?view=writingTakeawayBook"><span data-i18n="nav.writingTakeaway">写作积累</span><span id="writingTakeawayDueDot" class="nav-review-dot hidden" aria-label="写作积累有到期复习"></span></a>
@@ -1715,8 +1718,8 @@
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
     <script src="/appearance.js?v=20260627-pencil-boot-2"></script>
     <script src="/view-router.js?v=20260619-p2-direct-practice"></script>
-    <script src="/app.js?v=20261005-ui-104118"></script>
+    <script src="/app.js?v=20261005-ui-110412"></script>
     <script src="/onboarding.js?v=20260615-onboarding-13"></script>
-    <script src="/home-dashboard.js?v=20261005-home-104118"></script>
+    <script src="/home-dashboard.js?v=20261005-home-110412"></script>
   </body>
 </html>
