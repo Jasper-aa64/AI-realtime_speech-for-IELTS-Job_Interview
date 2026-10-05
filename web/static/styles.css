@@ -42214,7 +42214,7 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corp
   .shell .nav .nav-section-label {
     display: block;
     margin: 14px 12px 6px;
-    color: color-mix(in srgb, currentColor 46%, transparent);
+    color: color-mix(in srgb, currentColor 62%, transparent);
     font-size: 10.5px;
     font-weight: 700;
     letter-spacing: 0.18em;
@@ -42401,6 +42401,7 @@ body:not(.view-home) .workspace {
 
   #practicePanel > .phase-meter {
     margin: -4px 18px 0;
+    background: color-mix(in srgb, var(--muted) 18%, transparent) !important;
   }
 
   #practicePanel #practiceGrid {
@@ -42508,12 +42509,26 @@ body:not(.view-home) .workspace {
   initial-value: 0;
 }
 
+/* Meter colour: the theme accent; lifted toward white on dark surfaces. */
+:is(.detail-panel, #writingReportDetail) {
+  --meter: var(--accent);
+}
+
+body.theme-dark :is(.detail-panel, #writingReportDetail) {
+  --meter: color-mix(in srgb, var(--accent) 62%, #fff);
+}
+
+/* dark Popular's accent is a deep navy; its bright blue token reads better on dark cards */
+body.theme-dark.font-popular :is(.detail-panel, #writingReportDetail) {
+  --meter: var(--blue, #7bb7ff);
+}
+
 @keyframes ring-fill-in { to { --ring-fill: var(--band); } }
 @keyframes bar-fill-in { to { --bar-fill: var(--score); } }
 
 /* Overall band → a ring gauge. "Band" sits small on the first line, the number below. */
-:is(.speaking-score-summary-band, .writing-score-summary-band).has-meter {
-  --ring: var(--accent);
+body :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter.has-meter.has-meter.has-meter {
+  --ring: var(--meter, var(--accent));
   position: relative;
   display: grid !important;
   place-items: center;
@@ -42536,7 +42551,7 @@ body:not(.view-home) .workspace {
   animation: ring-fill-in 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-:is(.speaking-score-summary-band, .writing-score-summary-band).has-meter > span {
+body :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter.has-meter.has-meter.has-meter > span {
   color: var(--muted) !important;
   font-size: 10px !important;
   font-weight: 800;
@@ -42545,7 +42560,7 @@ body:not(.view-home) .workspace {
   opacity: 1 !important;
 }
 
-:is(.speaking-score-summary-band, .writing-score-summary-band).has-meter > strong {
+body :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter.has-meter.has-meter.has-meter > strong {
   display: block;
   width: 70px;
   max-width: 70px;
@@ -42564,7 +42579,7 @@ body:not(.view-home) .workspace {
   font-variant-numeric: tabular-nums;
 }
 
-:is(.speaking-score-summary-band, .writing-score-summary-band).has-meter > strong::first-line {
+body :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter.has-meter.has-meter.has-meter > strong::first-line {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -42598,7 +42613,7 @@ body:not(.font-popular) :is(.speaking-score-summary-band, .writing-score-summary
   height: 5px;
   border-radius: 5px;
   background:
-    linear-gradient(90deg, var(--accent) 0 calc(var(--bar-fill) / 9 * 100%), color-mix(in srgb, var(--accent) 13%, transparent) 0);
+    linear-gradient(90deg, var(--meter) 0 calc(var(--bar-fill) / 9 * 100%), color-mix(in srgb, var(--meter) 16%, transparent) 0);
   animation: bar-fill-in 900ms 150ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
@@ -42656,4 +42671,164 @@ body:not(.font-popular) :is(.speaking-score-summary-copy, .writing-score-summary
   align-items: center !important;
   align-self: center !important;
   overflow: visible !important;
+}
+
+/* =====================================================================
+   WRITING DESK: ruled-paper answer sheet, exam-paper prompt, calmer
+   check-in calendar.
+   ===================================================================== */
+@media (min-width: 981px) {
+  /* Answer sheet: ruled lines that scroll with the text */
+  #writingPanel #writingAnswer {
+    padding-top: 14px !important;
+    line-height: 30px !important;
+    background-color: var(--panel) !important;
+    background-image:
+      linear-gradient(90deg, transparent 0 46px, color-mix(in srgb, var(--danger) 40%, transparent) 46px 47px, transparent 47px),
+      repeating-linear-gradient(180deg, transparent 0 29px, color-mix(in srgb, var(--line) 55%, transparent) 29px 30px) !important;
+    background-position: 0 0, 0 14px !important;
+    background-attachment: local !important;
+    padding-left: 60px !important;
+  }
+
+  #writingPanel .writing-editor-card,
+  #writingPanel .writing-result-card {
+    border-radius: 20px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 14px 36px rgba(15, 23, 42, 0.05) !important;
+  }
+
+  /* Prompt: exam-paper card — no heavy left bar, a header rule instead */
+  #writingPanel .writing-prompt-card {
+    position: relative;
+    border-left: 0 !important;
+    border-radius: 16px !important;
+    padding-top: 18px !important;
+    box-shadow: inset 0 0 0 1px var(--line) !important;
+  }
+
+  #writingPanel .writing-prompt-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 0%, transparent));
+  }
+
+  body:not(.font-popular) #writingPanel .writing-prompt-card h3,
+  body:not(.font-popular) #writingPanel #writingPromptTitle {
+    font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  }
+
+  /* Check-in: stats as a three-up strip, calendar days as soft tiles */
+  #writingPanel .writing-stats-grid > div {
+    border-radius: 12px !important;
+  }
+
+  #writingPanel .writing-stats-grid strong {
+    font-size: 24px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #writingPanel .writing-calendar {
+    gap: 5px !important;
+  }
+
+  #writingPanel .writing-day {
+    border-radius: 9px !important;
+    font-variant-numeric: tabular-nums;
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+
+  #writingPanel .writing-day:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+  }
+
+  #writingPanel .writing-day.saved,
+  #writingPanel .writing-day.scored {
+    font-weight: 800;
+  }
+}
+
+/* =====================================================================
+   TAKEAWAY / WRITING TAKEAWAY CARDS: phrase-first hierarchy, lift on hover
+   ===================================================================== */
+.language-takeaway-card-wrap {
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.language-takeaway-card-wrap:hover {
+  transform: translateY(-2px);
+  filter: drop-shadow(0 12px 18px rgba(45, 55, 72, 0.1));
+}
+
+body:not(.font-popular) .language-takeaway-card .takeaway-source,
+body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chinese) {
+  font-family: "Noto Serif SC", Georgia, "Times New Roman", serif;
+  letter-spacing: 0.005em;
+}
+
+.language-takeaway-card .takeaway-chinese {
+  letter-spacing: 0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .language-takeaway-card-wrap,
+  #writingPanel .writing-day {
+    transition: none;
+  }
+}
+
+/* =====================================================================
+   SPELLING DRILL: the practice card reads as a flashcard on a stage.
+   ===================================================================== */
+@media (min-width: 981px) {
+  #spellingPracticeCard {
+    border-radius: 22px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 18px 44px rgba(15, 23, 42, 0.06) !important;
+  }
+
+  #spellingPracticeCard .nr-prompt {
+    position: relative;
+    width: min(560px, 100%);
+    margin-inline: auto;
+    padding: 34px 28px 30px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 60%),
+      var(--panel);
+    align-self: center;
+    justify-self: center;
+    /* a second sheet peeking out underneath, like a deck of cards */
+    box-shadow:
+      0 2px 0 color-mix(in srgb, var(--accent) 30%, transparent) inset,
+      0 9px 0 -4px color-mix(in srgb, var(--panel) 90%, var(--bg)),
+      0 9px 0 -3px var(--line),
+      0 22px 44px rgba(15, 23, 42, 0.08);
+  }
+
+  body:not(.font-popular) #spellingPracticeCard .nr-gloss {
+    font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  }
+
+  #spellingPracticeCard .nr-input {
+    min-height: 52px;
+    border-radius: 14px !important;
+    font-size: 18px !important;
+    letter-spacing: 0.04em;
+    text-align: center;
+    transition: box-shadow 160ms ease, border-color 160ms ease;
+  }
+
+  #spellingPracticeCard .nr-input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent) !important;
+    outline: none;
+  }
+
+  #spellingPracticeCard .nr-stage-dot {
+    transition: transform 200ms ease, background 200ms ease;
+  }
 }
