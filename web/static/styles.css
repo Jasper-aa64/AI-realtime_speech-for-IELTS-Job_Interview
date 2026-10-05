@@ -42490,3 +42490,170 @@ body:not(.view-home) .workspace {
     letter-spacing: 0.02em;
   }
 }
+
+/* =====================================================================
+   REPORT PAGES (speaking + writing): overall ring, criterion meters,
+   tone-striped report rail. Values come from report-meters.js (--band /
+   --score on the elements); without it the original blocks still show.
+   ===================================================================== */
+@property --ring-fill {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --bar-fill {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@keyframes ring-fill-in { to { --ring-fill: var(--band); } }
+@keyframes bar-fill-in { to { --bar-fill: var(--score); } }
+
+/* Overall band → a ring gauge. "Band" sits small on the first line, the number below. */
+:is(.speaking-score-summary-band, .writing-score-summary-band).has-meter {
+  --ring: var(--accent);
+  position: relative;
+  display: grid !important;
+  place-items: center;
+  align-content: center;
+  gap: 0;
+  width: 128px;
+  height: 128px;
+  min-width: 128px;
+  margin: 4px 0 !important;
+  padding: 0 !important;
+  flex: none;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background:
+    radial-gradient(closest-side, var(--panel) 80%, transparent 81% 100%),
+    conic-gradient(from -90deg, var(--ring) calc(var(--ring-fill) / 9 * 360deg), color-mix(in srgb, var(--ring) 13%, transparent) 0) !important;
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--ring) 18%, transparent) !important;
+  color: var(--ink) !important;
+  text-align: center;
+  animation: ring-fill-in 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+:is(.speaking-score-summary-band, .writing-score-summary-band).has-meter > span {
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 1 !important;
+}
+
+:is(.speaking-score-summary-band, .writing-score-summary-band).has-meter > strong {
+  display: block;
+  width: 70px;
+  max-width: 70px;
+  margin-top: 2px;
+  white-space: normal !important;
+  overflow-wrap: normal;
+  /* forces "Band" and the number onto separate lines (the small ::first-line
+     would otherwise fit both words on one line) */
+  word-spacing: 80px;
+  color: var(--ink) !important;
+  font-size: 34px !important;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+:is(.speaking-score-summary-band, .writing-score-summary-band).has-meter > strong::first-line {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+}
+
+body:not(.font-popular) :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter > strong {
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+}
+
+/* Criterion cells → value + meter bar */
+:is(.speaking-score-summary-grid, .writing-score-summary-grid) .score-cell.has-meter {
+  position: relative;
+  padding-bottom: 22px !important;
+  overflow: hidden;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+:is(.speaking-score-summary-grid, .writing-score-summary-grid) .score-cell.has-meter:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+}
+
+:is(.speaking-score-summary-grid, .writing-score-summary-grid) .score-cell.has-meter::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 11px;
+  height: 5px;
+  border-radius: 5px;
+  background:
+    linear-gradient(90deg, var(--accent) 0 calc(var(--bar-fill) / 9 * 100%), color-mix(in srgb, var(--accent) 13%, transparent) 0);
+  animation: bar-fill-in 900ms 150ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Summary title in the serif voice used across the app */
+body:not(.font-popular) :is(.speaking-score-summary-copy, .writing-score-summary-copy) h2 {
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Report rail: frosted shelf, cards carry a part-tone stripe */
+.history-rail-shell {
+  border-radius: 18px !important;
+  background: color-mix(in srgb, var(--panel) 84%, transparent) !important;
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.history-list .history-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px !important;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.history-list .history-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--item-tone, var(--accent));
+  opacity: 0.85;
+}
+
+.history-list .history-item.tone-p1 { --item-tone: var(--tone-p1-border, #16a34a); }
+.history-list .history-item.tone-p2 { --item-tone: var(--tone-p2-border, #2563eb); }
+.history-list .history-item.tone-p3 { --item-tone: var(--tone-p3-border, #7c3aed); }
+
+.history-list .history-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.speaking-score-summary-band, .writing-score-summary-band).has-meter,
+  :is(.speaking-score-summary-grid, .writing-score-summary-grid) .score-cell.has-meter::after {
+    animation-duration: 1ms;
+  }
+}
+
+:is(.speaking-score-summary-side, .writing-score-summary-side):has(.has-meter) {
+  align-items: center !important;
+  align-self: center !important;
+  overflow: visible !important;
+}
