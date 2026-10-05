@@ -45614,3 +45614,38 @@ body:not(#_):not(#__) .p2-seasonal-card-kicker {
   padding: 0 !important;
   background: transparent !important;
 }
+
+/* ---------- P2 card footer colours: no pure black / pure white ----------
+   正文 = a soft fill in the card's category tone; P3 追问 = the same tone as an outline.
+   Both read as one pair, and the card's category colour carries through. */
+body:not(#_):not(#__) .workspace.corpus-workspace .p2-seasonal-card footer .p2-seasonal-action.primary {
+  border-color: color-mix(in srgb, var(--cat-color, var(--accent)) 28%, transparent) !important;
+  background: color-mix(in srgb, var(--cat-color, var(--accent)) 13%, var(--panel)) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: color-mix(in srgb, var(--cat-color, var(--accent)) 82%, var(--ink)) !important;
+}
+
+body:not(#_):not(#__) .workspace.corpus-workspace .p2-seasonal-card footer .p2-seasonal-action:not(.primary) {
+  border-color: color-mix(in srgb, var(--cat-color, var(--accent)) 34%, var(--line)) !important;
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: color-mix(in srgb, var(--cat-color, var(--accent)) 82%, var(--ink)) !important;
+}
+
+body:not(#_):not(#__) .workspace.corpus-workspace .p2-seasonal-card footer .p2-seasonal-action:hover {
+  border-color: color-mix(in srgb, var(--cat-color, var(--accent)) 55%, transparent) !important;
+}
+
+body.theme-dark:not(#_):not(#__) .workspace.corpus-workspace .p2-seasonal-card footer .p2-seasonal-action.primary {
+  border-color: color-mix(in srgb, var(--cat-color, var(--accent)) 40%, transparent) !important;
+  background: color-mix(in srgb, var(--cat-color, var(--accent)) 22%, var(--panel)) !important;
+  color: color-mix(in srgb, var(--cat-color, var(--accent)) 55%, #fff) !important;
+}
+
+body.theme-dark:not(#_):not(#__) .workspace.corpus-workspace .p2-seasonal-card footer .p2-seasonal-action:not(.primary) {
+  border-color: color-mix(in srgb, var(--cat-color, var(--accent)) 45%, transparent) !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--cat-color, var(--accent)) 55%, #fff) !important;
+}
