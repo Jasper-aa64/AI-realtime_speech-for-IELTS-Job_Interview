@@ -42832,3 +42832,43 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
     transition: transform 200ms ease, background 200ms ease;
   }
 }
+
+/* =====================================================================
+   ENTRANCE MOTION: in-flow content cards rise in when a view (or a report)
+   is shown. Only in-flow blocks animate — never the panels themselves,
+   since a transform there would re-anchor their fixed-position children.
+   ===================================================================== */
+@keyframes ui-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #homePanel:not(.hidden) :is(.hx-hero, .hx-lanes),
+  #practicePanel:not(.hidden) > :is(.exam-status, #practiceGrid),
+  #corpusPanel:not(.hidden) :is(.corpus-home-kicker-bar, .corpus-top-cards > *, .corpus-review-lane),
+  :is(#detailPanel, #writingReportDetail) > :is(.detail-card, section),
+  #writingPanel:not(.hidden) .writing-shell > *,
+  #spellingPracticeCard .nr-prompt {
+    animation: ui-rise 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  #homePanel:not(.hidden) .hx-lanes,
+  #practicePanel:not(.hidden) > #practiceGrid,
+  #corpusPanel:not(.hidden) .corpus-top-cards > :nth-child(1),
+  #writingPanel:not(.hidden) .writing-shell > :nth-child(2),
+  :is(#detailPanel, #writingReportDetail) > :nth-child(2) {
+    animation-delay: 70ms;
+  }
+
+  #corpusPanel:not(.hidden) .corpus-top-cards > :nth-child(2),
+  #writingPanel:not(.hidden) .writing-shell > :nth-child(3),
+  :is(#detailPanel, #writingReportDetail) > :nth-child(3) {
+    animation-delay: 140ms;
+  }
+
+  #corpusPanel:not(.hidden) .corpus-review-lane,
+  :is(#detailPanel, #writingReportDetail) > :nth-child(n + 4) {
+    animation-delay: 200ms;
+  }
+}
