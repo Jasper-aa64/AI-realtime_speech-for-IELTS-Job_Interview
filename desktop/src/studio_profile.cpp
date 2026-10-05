@@ -41,9 +41,10 @@ QWebEngineScript hideSpeechRecognitionScript() {
 }
 }
 
-QWebEngineProfile *createStudioProfile(QObject *parent) {
-    auto *profile = new QWebEngineProfile(QStringLiteral("IELTSStudio"), parent);
-    profile->setPersistentCookiesPolicy(QWebEngineProfile::ForcePersistentCookies);
+QWebEngineProfile *createStudioProfile(QObject *parent, bool testProfile) {
+    auto *profile = testProfile ? new QWebEngineProfile(parent)
+                               : new QWebEngineProfile(QStringLiteral("IELTSStudio"), parent);
+    if (!testProfile) profile->setPersistentCookiesPolicy(QWebEngineProfile::ForcePersistentCookies);
     profile->setHttpUserAgent(profile->httpUserAgent() + QStringLiteral(" IELTSStudioDesktop/")
                               + QCoreApplication::applicationVersion());
 

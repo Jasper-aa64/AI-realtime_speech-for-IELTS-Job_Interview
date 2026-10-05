@@ -40,7 +40,9 @@ int main(int argc, char *argv[]) {
                                     QStringLiteral("Use this server for this run only."), QStringLiteral("url"));
     QCommandLineOption smokeOption(QStringLiteral("smoke"),
                                    QStringLiteral("Load the server once, print LOAD_OK/LOAD_FAIL and exit."));
-    parser.addOptions({serverOption, smokeOption});
+    QCommandLineOption testProfileOption(QStringLiteral("test-profile"),
+                                         QStringLiteral("Use an isolated in-memory profile for QA; no saved login data."));
+    parser.addOptions({serverOption, smokeOption, testProfileOption});
     parser.process(app);
 
     QSettings settings;
@@ -56,7 +58,7 @@ int main(int argc, char *argv[]) {
 
     // Window and profile are torn down explicitly below, while QApplication is still alive:
     // destroying the profile after the app skips Chromium's final cookie flush (login lost on quick quit).
-    QWebEngineProfile *profile = studio::createStudioProfile(nullptr);
+    QWebEngineProfile *profile = studio::createStudioProfile(nullptr, parser.isSet(testProfileOption));
     auto *window = new studio::BrowserWindow(profile, server, studio::BrowserWindow::Role::Main);
 
     if (parser.isSet(smokeOption)) {

@@ -21,6 +21,9 @@ Qt 6 + QtWebEngine 外壳，加载服务器上的 IELTS Studio 网页界面。�
 - 冒烟检查：加 `--smoke`，加载成功打印 `LOAD_OK` 退出码 0，服务器不可达打印 `LOAD_FAIL` 退出码 1，30 秒超时退出码 3。
   测不可达请用普通的空闲端口（如 59999）；9 这类端口会被 Chromium 以 `ERR_UNSAFE_PORT` 拒绝，不算连接错误。
 - 调试页面：`QTWEBENGINE_REMOTE_DEBUGGING=9333` 启动后，可用 Chrome DevTools 协议连 `http://127.0.0.1:9333`。
+- 隔离验收：加 `--test-profile` 使用不落盘的临时 profile；搭配 `--server http://127.0.0.1:8768/` 验证独立测试服务，不修改已有登录 Cookie。不要同时用同一个持久 profile 启动两个实例。
+
+模拟面试通过 QWebChannel 的 `studioNative.capabilities()` 确认桌面能力；普通浏览器没有面试模式。当前支持文字回答、题库、定制问题和持久记录，`native_audio` 明确为 false，尚未连接真实语音引擎。Qt 注入其自带的 WebChannel JavaScript 资源，不依赖 UA 或网址参数来授权桌面功能。
 
 登录状态、localStorage 存在 Qt 的持久化 profile `IELTSStudio` 里
 （`~/Library/Application Support/IELTS Studio/IELTS Studio/QtWebEngine/IELTSStudio/`）。
