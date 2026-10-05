@@ -37,7 +37,6 @@
     let menuOpen = false;
     let hoverOpened = false;
     let hoverTimer = null;
-    let slideTimer = null;
     let recorder = null;
     let data = freshState();
     const byId = (id) => document.getElementById(id);
@@ -232,6 +231,12 @@
         setPane(item.dataset.interviewPane, { part: item.dataset.interviewPart });
       });
       byId("interviewPanel")?.addEventListener("click", handleAction);
+      byId("interviewPanel")?.addEventListener("animationend", (event) => {
+        if (data.pane === "home" && event.target.closest?.(".hx-seg.is-on")) showSlide(data.slide + 1);
+      });
+      const hold = (event, on) => event.target.closest?.(".hx-show")?.classList.toggle("is-paused", on);
+      byId("interviewPanel")?.addEventListener("pointerover", (event) => hold(event, true));
+      byId("interviewPanel")?.addEventListener("pointerout", (event) => { if (!event.relatedTarget?.closest?.(".hx-show")) hold(event, false); });
       byId("interviewPanel")?.addEventListener("input", captureInput);
       byId("interviewPanel")?.addEventListener("change", captureInput);
       window.addEventListener("ielts:ui-language-change", () => { setProductMode(state.productMode); render(); });
@@ -350,46 +355,55 @@
       return (data.corpus || []).find((entry) => entry.id === id) || null;
     }
 
-    // ---- Home: hero + carousel + data panel, then practice paths (mirrors the IELTS home).
+    // ---- Home: the IELTS home markup (hx-*), styled by the shared #homePanel/#interviewHome rules.
+    const link = (action, content, { cls = "", attrs = "" } = {}) => `<a class="${cls}" href="?view=interview" data-interview-action="${action}" ${attrs}>${content}</a>`;
+
     function home() {
       const studio = data.sessions.filter((item) => item.part);
       const scored = studio.filter((item) => item.score?.status === "ready");
       const average = scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score.total, 0) / scored.length) : null;
       const stats = corpusStats();
       const resume = data.profile?.resume?.updated_at;
-      const stat = (dt, dd, attrs = "") => `<div class="iv-stat"><dt>${esc(dt)}</dt><dd ${attrs}>${dd}</dd></div>`;
-      const slides = SLIDES.map((slide, index) => `<button type="button" class="iv-slide${index === data.slide ? " is-active" : ""}" data-interview-action="slide-open" data-index="${index}" aria-hidden="${index !== data.slide}" tabindex="${index === data.slide ? 0 : -1}">
-          <span class="iv-slide-art iv-slide-art--${index}" aria-hidden="true"><span></span><span></span><span></span></span>
-          <span class="iv-slide-kicker">${esc(slide.kicker)}</span><strong>${esc(pick(slide.title))}</strong><small>${esc(pick(slide.body))}</small></button>`).join("");
-      return `<section class="iv-hero">
-          <div class="iv-intro">
-            <p class="iv-kicker">Interview Studio</p>
-            <h2 class="iv-title"><span class="iv-title-top">${esc(copy("把做过的系统，讲成面试官想听的答案", "Turn the systems you built into answers that land"))}</span><span class="iv-title-main">Mock Interview</span></h2>
-            <p class="iv-topics">${esc(copy("自我介绍", "Intro"))} <i>/</i> ${esc(copy("项目", "Projects"))} <i>/</i> ${esc(copy("知识点", "Knowledge"))} <i>/</i> ${esc(copy("奖项", "Awards"))} <i>/</i> ${esc(copy("反问", "Your questions"))}</p>
-            <div class="iv-actions">${solid("go-practice", copy("开始完整面试", "Start a full interview"), { attrs: 'data-part="full"' })}${outline("go-custom", resume ? copy("更新简历 / JD", "Update resume / JD") : copy("上传简历", "Upload resume"))}</div>
+      const stat = (dt, dd, attrs = "") => `<div class="hx-stat"><dt>${esc(dt)}</dt><dd ${attrs}>${dd}</dd></div>`;
+      const slides = SLIDES.map((slide, index) => link("slide-open", `
+          <span class="hx-slide-media"><span class="iv-slide-art iv-slide-art--${index}" aria-hidden="true"><span></span><span></span><span></span></span><span class="hx-slide-chip">${esc(slide.kicker)}</span></span>
+          <span class="hx-slide-body"><strong>${esc(pick(slide.title))}</strong><span>${esc(pick(slide.body))}</span></span>`,
+        { cls: `hx-slide${index === data.slide ? " is-active" : ""}`, attrs: `data-index="${index}" aria-roledescription="slide" ${index === data.slide ? "" : 'aria-hidden="true" tabindex="-1"'}` })).join("");
+      const segs = SLIDES.map((_slide, index) => `<button type="button" class="hx-seg${index === data.slide ? " is-on" : ""}${index < data.slide ? " is-done" : ""}" data-interview-action="slide-go" data-index="${index}" aria-label="${index + 1} / ${SLIDES.length}"><i></i></button>`).join("");
+      const areaLink = (action, label, text, attrs = "") => `<li>${link(action, `<b>${esc(label)}</b><span>${esc(text)}</span><i aria-hidden="true">→</i>`, { attrs })}</li>`;
+      return `<section id="interviewHome" class="hx-home" aria-label="${esc(copy("面试首页", "Interview home"))}">
+          <div class="hx-hero">
+            <div class="hx-intro">
+              <p class="hx-kicker">Interview Studio</p>
+              <h2 class="hx-title"><span class="hx-title-top">${esc(copy("把做过的系统，讲成面试官想听的答案", "Turn what you built into answers that land"))}</span><em class="hx-title-main">Mock Interview</em></h2>
+              <p class="hx-topics"><span>${esc(copy("项目", "Projects"))}</span><i aria-hidden="true">|</i><span>${esc(copy("知识点", "Knowledge"))}</span><i aria-hidden="true">|</i><span>${esc(copy("语料", "Corpus"))}</span><i aria-hidden="true">|</i><span>${esc(copy("报告", "Reports"))}</span></p>
+              <div class="hx-actions">${link("go-practice", `${esc(copy("开始完整面试", "Start a full interview"))} <span aria-hidden="true">→</span>`, { cls: "hx-btn hx-btn--solid", attrs: 'data-part="full"' })}${link("go-custom", `${esc(resume ? copy("更新简历 / JD", "Update resume / JD") : copy("上传简历", "Upload resume"))} <span aria-hidden="true">→</span>`, { cls: "hx-btn" })}</div>
+            </div>
+            <section class="hx-show" aria-roledescription="carousel" aria-label="${esc(copy("功能一览", "Highlights"))}">
+              <div class="hx-stage">${slides}<span class="hx-count" aria-hidden="true"><b data-hx-count>${pad(data.slide + 1)}</b><i>/</i>${pad(SLIDES.length)}</span></div>
+              <div class="hx-bar"><div class="hx-progress">${segs}</div>
+                <button type="button" class="hx-nav" data-interview-action="slide-prev" aria-label="${esc(copy("上一张", "Previous"))}"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M10 3 5 8l5 5"></path></svg></button>
+                <button type="button" class="hx-nav" data-interview-action="slide-next" aria-label="${esc(copy("下一张", "Next"))}"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="m6 3 5 5-5 5"></path></svg></button></div>
+            </section>
+            <aside class="hx-panel" aria-label="${esc(copy("面试数据", "Interview data"))}">
+              <dl class="hx-stats">${stat(copy("面试场次", "Sessions"), data.sessionsLoaded ? link("reports", String(studio.length)) : "–")}${stat(copy("平均分", "Average"), average ?? "–")}${stat(copy("最近练习", "Last"), studio[0] ? esc(dateText(studio[0].created_at, false)) : "–", 'class="hx-stat-date"')}</dl>
+              <p class="hx-panel-label">${esc(copy("语料待完善", "Corpus to finish"))}</p>
+              <div class="hx-chips">${CORPUS_TABS.map((tab) => { const entries = corpusEntries(tab.kinds); const left = entries.filter((e) => !e.corpus_text).length; return link("open-corpus", `${esc(copy(tab.zh, tab.en))}<sup>${left || ""}</sup>`, { cls: `hx-chip${left ? " is-due" : ""}`, attrs: `data-tab="${tab.id}"` }); }).join("")}</div>
+              <p class="hx-panel-label">${esc(copy("练习", "Practice"))} · <span>${esc(resume ? copy(`简历已拆分 · 已备 ${stats.ready}/${stats.total}`, `Resume split · ${stats.ready}/${stats.total} ready`) : copy("还没上传简历", "No resume yet"))}</span></p>
+              <div class="hx-chips">${Object.keys(PARTS).map((part) => link("go-practice", esc(partName(part)), { cls: "hx-chip", attrs: `data-part="${part}"` })).join("")}${link("go-custom", `${esc(copy("简历 / JD", "Resume / JD"))} →`, { cls: "hx-chip hx-chip--more" })}</div>
+            </aside>
           </div>
-          <div class="iv-show" aria-roledescription="carousel" aria-label="${esc(copy("功能轮播", "Highlights"))}">
-            <div class="iv-slides">${slides}</div>
-            <div class="iv-show-foot"><div class="iv-dots">${SLIDES.map((_slide, index) => `<span class="${index === data.slide ? "is-active" : ""}"></span>`).join("")}</div><span class="iv-show-count">${pad(data.slide + 1)} / ${pad(SLIDES.length)}</span>
-              ${button("slide-prev", "‹", { cls: "iv-icon-btn", attrs: `aria-label="${esc(copy("上一张", "Previous"))}"` })}${button("slide-next", "›", { cls: "iv-icon-btn", attrs: `aria-label="${esc(copy("下一张", "Next"))}"` })}</div>
-          </div>
-          <aside class="iv-panel" aria-label="${esc(copy("面试数据", "Interview data"))}">
-            <dl class="iv-stats">${stat(copy("面试场次", "Sessions"), data.sessionsLoaded ? studio.length : "–")}${stat(copy("平均分", "Average"), average ?? "–")}${stat(copy("最近练习", "Last"), studio[0] ? esc(dateText(studio[0].created_at, false)) : "–", 'class="iv-stat-date"')}</dl>
-            <p class="iv-panel-label">${esc(copy("语料准备", "Corpus"))}</p>
-            <div class="iv-meter"><span style="width:${stats.total ? Math.round((stats.ready / stats.total) * 100) : 0}%"></span></div>
-            <p class="iv-meter-text">${esc(copy(`已备 ${stats.ready} / ${stats.total} 题`, `${stats.ready} of ${stats.total} ready`))}</p>
-            <p class="iv-panel-label">${esc(copy("简历", "Resume"))}</p>
-            <p class="iv-meter-text">${resume ? esc(copy(`已拆分 · ${dateText(resume, false)}`, `Split · ${dateText(resume, false)}`)) : esc(copy("还没上传简历，完整面试和项目练习需要它。", "Upload a resume to unlock the full interview and project practice."))}</p>
-            <div class="iv-chips">${Object.keys(PARTS).map((part) => button("go-practice", esc(partName(part)), { cls: "iv-chip", attrs: `data-part="${part}"` })).join("")}</div>
-          </aside>
-        </section>
-        <section class="iv-areas" aria-label="${esc(copy("练习路径", "Practice paths"))}">
-          <header class="iv-sec-head">${kicker("Practice paths")}</header>
-          <div class="iv-area-grid">
-            <article class="iv-area"><span class="iv-area-index">01 · Practice</span><h3 class="iv-area-name">${esc(copy("面试练习", "Practice"))}</h3><p class="iv-area-blurb">${esc(copy("面试官会根据你的回答决定追问还是换题，追问压力模式会一直问到你的边界。", "The interviewer follows up or moves on from your answers; pressure mode digs until it finds your limit."))}</p><ul class="iv-area-links">${Object.keys(PARTS).map((part) => `<li>${button("go-practice", `<b>${esc(part === "full" ? "MOCK" : part.toUpperCase())}</b><span>${esc(partName(part))}</span><i aria-hidden="true">→</i>`, { attrs: `data-part="${part}"` })}</li>`).join("")}</ul></article>
-            <article class="iv-area"><span class="iv-area-index">02 · Corpus</span><h3 class="iv-area-name">${esc(copy("面试语料", "Corpus"))}</h3><p class="iv-area-blurb">${esc(copy("项目讲述稿、知识点答法、自我介绍和反问问题，像雅思语料一样随时调出。", "Project stories, knowledge answers, intro and reverse questions, ready like the IELTS corpus."))}</p><ul class="iv-area-links">${CORPUS_TABS.map((tab) => `<li>${button("open-corpus", `<b>${esc(tab.id.toUpperCase())}</b><span>${esc(copy(tab.zh, tab.en))}</span><i aria-hidden="true">→</i>`, { attrs: `data-tab="${tab.id}"` })}</li>`).join("")}</ul></article>
-            <article class="iv-area"><span class="iv-area-index">03 · Review</span><h3 class="iv-area-name">${esc(copy("面试报告", "Reports"))}</h3><p class="iv-area-blurb">${esc(copy("百分制五维打分，标出能力边界，每题点评后可直接存成你的答法。", "Five-dimension 100-point score, your boundary, and per-question notes you can save."))}</p><ul class="iv-area-links">${studio.slice(0, 3).map((item) => `<li>${button("open-session", `<b>${esc(item.score?.total ?? "—")}</b><span>${esc(item.title)}</span><i aria-hidden="true">→</i>`, { attrs: `data-session-id="${esc(item.id)}"` })}</li>`).join("")}<li>${button("reports", `<b>ALL</b><span>${esc(copy("全部报告", "All reports"))}</span><i aria-hidden="true">→</i>`)}</li></ul></article>
-          </div>
+          <section class="hx-areas" aria-label="${esc(copy("练习路径", "Practice paths"))}">
+            <header class="hx-sec-head"><p class="hx-eyebrow">Practice paths</p>${link("open-corpus", `${esc(copy("进入面试语料库", "Open the corpus"))} <span aria-hidden="true">→</span>`, { cls: "hx-sec-more", attrs: 'data-tab="project"' })}</header>
+            <div class="hx-area-grid">
+              <article class="hx-area"><span class="hx-area-index">01 · Interview</span><h3 class="hx-area-name">${esc(copy("面试练习", "Practice"))}</h3><p class="hx-area-blurb">${esc(copy("面试官按你的回答追问或换题，追问压力会一直问到你的边界。", "The interviewer follows up or moves on; pressure mode digs to your limit."))}</p>
+                <ul class="hx-area-links">${areaLink("go-practice", "Mock", copy("完整面试", "Full interview"), 'data-part="full"')}${areaLink("go-practice", "Project", copy("项目深挖", "Projects"), 'data-part="project"')}${areaLink("go-practice", "Stack", copy("知识点", "Knowledge"), 'data-part="knowledge"')}${areaLink("go-practice", "Ask", copy("反问环节", "Your questions"), 'data-part="reverse"')}</ul></article>
+              <article class="hx-area"><span class="hx-area-index">02 · Corpus</span><h3 class="hx-area-name">${esc(copy("面试语料", "Corpus"))}</h3><p class="hx-area-blurb">${esc(copy("项目讲述稿、知识点答法、自我介绍和反问，像雅思语料一样随时调出。", "Stories, answers, intro and questions to ask — ready like the IELTS corpus."))}</p>
+                <ul class="hx-area-links">${CORPUS_TABS.map((tab) => areaLink("open-corpus", tab.id === "story" ? "Intro" : tab.id === "jd" ? "JD" : tab.id === "project" ? "Project" : "Stack", copy(tab.zh, tab.en), `data-tab="${tab.id}"`)).join("")}</ul></article>
+              <article class="hx-area"><span class="hx-area-index">03 · Review</span><h3 class="hx-area-name">${esc(copy("面试报告", "Reports"))}</h3><p class="hx-area-blurb">${esc(copy("百分制五维打分，标出能力边界，逐题点评可直接存成你的答法。", "100-point score in five dimensions, your boundary, notes you can keep."))}</p>
+                <ul class="hx-area-links">${studio.slice(0, 2).map((item) => areaLink("open-session", item.score?.status === "ready" ? String(item.score.total) : "—", item.title, `data-session-id="${esc(item.id)}"`)).join("")}${areaLink("reports", "All", copy("全部报告", "All reports"))}${areaLink("go-custom", "CV", copy("简历 / JD 定制", "Resume / JD"))}</ul></article>
+            </div>
+          </section>
         </section>`;
     }
 
@@ -595,51 +609,70 @@
       const stats = corpusStats();
       const tab = data.corpusTab;
       const groups = corpusGroups(tab);
-      const rowHtml = (entry, index) => {
-        const ready = !!entry.corpus_text;
+      const question = (entry, index) => {
         const ref = entry.id ? `data-entry-id="${esc(entry.id)}"` : `data-source-key="${esc(entry.source_key)}"`;
-        const lead = entry.kind === "project" ? copy("稿", "S") : entry.kind === "project_followup" ? copy("追", "F") : `Q${index + 1}`;
-        return `<li>${button("edit-entry", `<span class="iv-row-mark${ready ? " is-ready" : ""}">${ready ? "✓" : esc(lead)}</span><span class="iv-row-text">${esc(entry.kind === "project" ? copy("项目讲述稿", "Project story") : entry.question)}</span>${ready ? `<em>${esc(copy("已备", "Ready"))}</em>` : entry.ai_draft ? `<em class="is-draft">${esc(copy("有 AI 稿", "AI draft"))}</em>` : ""}`, { cls: "iv-corpus-row", attrs: ref })}</li>`;
+        const lead = entry.kind === "project" ? copy("讲", "S") : entry.kind === "project_followup" ? copy("追", "F") : `Q${index + 1}`;
+        const textValue = entry.kind === "project" ? copy("项目讲述稿", "Project story") : entry.question;
+        return `<button type="button" class="${entry.corpus_text ? "has-corpus" : ""}" data-interview-action="edit-entry" ${ref}><strong>${esc(lead)}</strong><span>${esc(textValue)}</span></button>`;
       };
       const cards = groups.map((group) => {
         const ready = group.rows.filter((row) => row.corpus_text).length;
+        const progress = group.rows.length ? Math.round((ready / group.rows.length) * 100) : 0;
         const add = group.project ? button("new-entry", `＋ ${esc(copy("追问", "Follow-up"))}`, { cls: "iv-link", attrs: `data-kind="project_followup" data-parent="${esc(group.project.id)}"` })
           : group.kind ? button("new-entry", `＋ ${esc(copy("添加", "Add"))}`, { cls: "iv-link", attrs: `data-kind="${esc(group.kind)}" data-group="${esc(group.group || "")}"` }) : "";
-        return `<article class="iv-corpus-card"><header><h3>${esc(group.title)}${group.orphaned ? `<small class="iv-orphan">${esc(copy("简历中已移除", "Removed from resume"))}</small>` : ""}</h3><span class="iv-count-badge">${ready}/${group.rows.length}</span></header>
-          <div class="iv-meter"><span style="width:${group.rows.length ? Math.round((ready / group.rows.length) * 100) : 0}%"></span></div>
-          <ol>${group.rows.map(rowHtml).join("") || `<li class="iv-empty">${esc(copy("还没有内容。", "Nothing here yet."))}</li>`}</ol>
-          <footer>${add}</footer></article>`;
+        return `<article class="p1-topic-card is-complete-list" data-p1-progress="${progress}">
+            <header class="p1-topic-export-header"><div><h3>${esc(group.title)}</h3>${group.orphaned ? `<small class="iv-orphan">${esc(copy("简历中已移除", "Removed from resume"))}</small>` : ""}</div>
+              <div class="p1-topic-card-actions"><span class="p1-topic-count">${ready}/${group.rows.length}</span></div></header>
+            <div class="p1-topic-progress" data-progress="${progress}"><span style="width: ${progress}%"></span></div>
+            <div class="p1-topic-question-list">${group.rows.map(question).join("") || `<p class="iv-empty">${esc(copy("还没有内容。", "Nothing here yet."))}</p>`}</div>
+            <footer class="iv-topic-foot">${add}</footer>
+          </article>`;
       }).join("");
       const empty = tab === "project" && !groups.length
         ? `<div class="iv-empty-card"><p>${esc(copy("上传简历后，每个项目会自动生成一份讲述稿和预判追问。", "Upload your resume to get a story and likely follow-ups for every project."))}</p>${solid("go-custom", copy("上传简历", "Upload resume"))}</div>`
         : tab === "jd" && !groups.some((group) => group.rows.length)
           ? `<div class="iv-empty-card"><p>${esc(copy("粘贴目标岗位的 JD，会生成岗位题和反问环节要问的问题。", "Paste a job description to get role questions and questions to ask."))}</p>${solid("go-custom", copy("添加 JD", "Add a JD"), { attrs: 'data-side="jd"' })}</div>` : "";
-      return `<header class="iv-library-head"><div><p class="iv-eyebrow">Interview library</p><h2>${esc(copy("面试语料库", "Interview corpus"))}</h2></div>
-          <div class="iv-library-meta"><span>${esc(copy(`已备 ${stats.ready} / ${stats.total}`, `${stats.ready} / ${stats.total} ready`))}</span>${button("new-entry", `＋ ${esc(copy("自定义题", "Custom question"))}`, { cls: "iv-btn", attrs: `data-kind="${tab === "jd" ? "reverse_question" : tab === "story" ? "self_intro" : tab === "project" ? "project" : "knowledge"}"` })}</div></header>
-        <div class="iv-tabs" role="tablist">${CORPUS_TABS.map((item) => button("corpus-tab", `${esc(copy(item.zh, item.en))}<sup>${corpusEntries(item.kinds).length}</sup>`, { cls: `iv-chip${item.id === tab ? " is-on" : ""}`, attrs: `role="tab" aria-selected="${item.id === tab}" data-tab="${item.id}"` })).join("")}</div>
-        ${empty || `<div class="iv-corpus-grid">${cards}</div>`}`;
+      const newKind = tab === "jd" ? "reverse_question" : tab === "story" ? "self_intro" : tab === "project" ? "project" : "knowledge";
+      return `<section id="interviewCorpus" class="p1-corpus-panel" aria-label="${esc(copy("面试语料库", "Interview corpus"))}">
+          <div class="p1-corpus-shell">
+            <header class="p1-corpus-head">
+              <div class="p1-corpus-head-copy"><span class="corpus-page-kicker">Interview Library</span><h2>${esc(copy("面试语料库", "Interview corpus"))}</h2></div>
+              <div class="corpus-head-actions">
+                <button type="button" class="agent-assistant-trigger corpus-agent-button" data-interview-action="new-entry" data-kind="${newKind}"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg><span>${esc(copy("自定义题", "Custom question"))}</span></button>
+                <span class="corpus-page-stat">${esc(copy(`${stats.total} 条 · 已保存 ${stats.ready}`, `${stats.total} items · ${stats.ready} saved`))}</span>
+              </div>
+            </header>
+            <div class="iv-tabs" role="tablist">${CORPUS_TABS.map((item) => button("corpus-tab", `${esc(copy(item.zh, item.en))}<sup>${corpusEntries(item.kinds).length}</sup>`, { cls: `iv-chip${item.id === tab ? " is-on" : ""}`, attrs: `role="tab" aria-selected="${item.id === tab}" data-tab="${item.id}"` })).join("")}</div>
+            ${empty || `<div class="p1-corpus-topics">${cards}</div>`}
+          </div>
+        </section>`;
     }
 
+    // Same shell as the IELTS P1 corpus dialog: header with save, "my answer", then the AI reference box.
     function editorModal() {
       const editor = data.editor;
       if (!editor) return "";
       const entry = editor.entry;
-      const editableQuestion = !entry.source || entry.source !== "curated";
-      const isProject = entry.kind === "project";
-      return `<div class="iv-modal" role="dialog" aria-modal="true" aria-label="${esc(copy("编辑语料", "Edit corpus entry"))}">
-        <div class="iv-modal-backdrop" data-interview-action="close-editor"></div>
-        <article class="iv-modal-card">
-          <header><div><p class="iv-eyebrow">${esc(pick(KIND_LABELS[entry.kind] || KIND_LABELS.knowledge))} · ${esc(pick(SOURCE_LABELS[entry.source] || SOURCE_LABELS.custom))}</p>
-            ${isProject && entry.title ? `<h3>${esc(entry.title)}</h3>` : ""}</div>${button("close-editor", "×", { cls: "iv-icon-btn", attrs: `aria-label="${esc(copy("关闭", "Close"))}"` })}</header>
-          <label class="iv-field">${esc(copy("题目", "Question"))}${editableQuestion ? `<textarea rows="2" maxlength="1500" data-interview-field="editor-question">${esc(editor.question)}</textarea>` : `<p class="iv-readonly">${esc(editor.question)}</p>`}</label>
-          ${entry.summary ? `<p class="iv-note">${esc(entry.summary)}</p>` : ""}
-          <div class="iv-editor-cols">
-            <label class="iv-field">${esc(copy("我的答法", "My answer"))}<textarea rows="12" maxlength="12000" data-interview-field="editor-text" placeholder="${esc(copy("用你自己的话写，面试时照着这个思路讲。", "Write it in your own words — the way you'd say it."))}">${esc(editor.text)}</textarea></label>
-            <div class="iv-field">${esc(copy("AI 参考", "AI reference"))}<div class="iv-draft">${entry.ai_draft ? esc(entry.ai_draft) : `<span class="iv-muted">${esc(copy("还没有 AI 参考。", "No AI reference yet."))}</span>`}</div>
-              <div class="iv-row">${entry.ai_draft ? quiet("adopt-draft", copy("采用到我的答法", "Use as my answer")) : ""}${entry.id ? quiet("draft-entry", entry.ai_draft ? copy("重新生成", "Regenerate") : copy("生成 AI 参考", "Generate reference")) : ""}</div></div>
+      const editableQuestion = entry.source !== "curated";
+      return `<div class="p1-corpus-dialog iv-corpus-dialog" role="dialog" aria-modal="true" aria-label="${esc(copy("编辑语料", "Edit corpus entry"))}">
+        <div class="iv-dialog-backdrop" data-interview-action="close-editor"></div>
+        <div class="p1-corpus-dialog-card">
+          <header class="p1-corpus-dialog-head">
+            <div><span>${esc(pick(KIND_LABELS[entry.kind] || KIND_LABELS.knowledge))} · ${esc(pick(SOURCE_LABELS[entry.source] || SOURCE_LABELS.custom))}${entry.title ? ` · ${esc(entry.title)}` : ""}</span>
+              <div class="corpus-dialog-title-line">${editableQuestion ? `<textarea class="iv-question-input" rows="1" maxlength="1500" data-interview-field="editor-question" aria-label="${esc(copy("题目", "Question"))}" placeholder="${esc(copy("写下题目……", "Write the question…"))}">${esc(editor.question)}</textarea>` : `<h3>${esc(editor.question)}</h3>`}</div>
+              ${entry.summary ? `<p class="iv-note">${esc(entry.summary)}</p>` : ""}</div>
+            <div class="iv-dialog-actions">${button("close-editor", "×", { cls: "iv-icon-btn", attrs: `aria-label="${esc(copy("关闭", "Close"))}"` })}${button("save-entry", esc(copy("保存语料", "Save")), { cls: "iv-save-entry" })}</div>
+          </header>
+          <label class="p1-corpus-label" for="interviewCorpusText">${esc(copy("我的语料", "My answer"))}</label>
+          <textarea id="interviewCorpusText" class="p1-corpus-textarea" spellcheck="true" data-interview-field="editor-text" placeholder="${esc(copy("用你自己的话写，面试时照着这个思路讲。", "Write it in your own words — the way you'd say it."))}">${esc(editor.text)}</textarea>
+          <div class="p1-corpus-ai-box">
+            <div class="p1-corpus-ai-head"><strong>${esc(copy("AI 参考", "AI reference"))}</strong>
+              <span class="iv-ai-tools">${entry.ai_draft ? button("adopt-draft", '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg>', { attrs: `title="${esc(copy("采用到我的语料", "Use as my answer"))}" aria-label="${esc(copy("采用到我的语料", "Use as my answer"))}"` }) : ""}${entry.id ? button("draft-entry", '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-4M4 4v4h4M4 13a8 8 0 0 0 14.9 4M20 20v-4h-4"></path></svg>', { attrs: `title="${esc(entry.ai_draft ? copy("重新生成 AI 参考", "Regenerate") : copy("生成 AI 参考", "Generate"))}" aria-label="${esc(entry.ai_draft ? copy("重新生成 AI 参考", "Regenerate") : copy("生成 AI 参考", "Generate"))}"` }) : ""}</span></div>
+            <div class="iv-draft-text">${entry.ai_draft ? esc(entry.ai_draft) : `<span class="iv-muted">${esc(copy("还没有 AI 参考。", "No AI reference yet."))}</span>`}</div>
           </div>
-          <footer class="iv-row">${entry.id && entry.source !== "curated" ? quiet("delete-entry", copy("删除", "Delete"), { cls: "iv-danger" }) : ""}<span class="iv-dock-spacer"></span>${outline("close-editor", copy("取消", "Cancel"))}${solid("save-entry", copy("保存", "Save"))}</footer>
-        </article></div>`;
+          <div class="p1-corpus-dialog-actions">${entry.id && entry.source !== "curated" ? quiet("delete-entry", copy("删除这条语料", "Delete"), { cls: "iv-danger" }) : ""}</div>
+        </div>
+      </div>`;
     }
 
     // ---- Tailored: resume | JD switch.
@@ -677,6 +710,7 @@
       const pane = data.pane;
       const bare = pane === "home" || pane === "report" || pane === "corpus";
       document.body.classList.toggle("interview-bare", state.view === "interview" && bare);
+      document.querySelector?.(".workspace")?.classList.toggle("interview-corpus-workspace", state.view === "interview" && pane === "corpus");
       if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
       document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
         const itemPane = item.dataset.interviewPane;
@@ -709,30 +743,28 @@
       const content = ({ home, practice, reports, report: reportPane, corpus: corpusPane, custom: customPane })[data.pane]();
       const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy && data.answer.state !== "thinking" ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
       panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>${editorModal()}`;
-      if (data.pane === "home") scheduleSlides();
-      else window.clearInterval?.(slideTimer);
     }
 
-    // ---- Carousel: advances itself without re-rendering the page.
+    // ---- Carousel: same behaviour as home-dashboard.js — the active segment fills (CSS animation)
+    // and its animationend advances; hover/focus pauses. Classes only, no re-render.
     function showSlide(index) {
       data.slide = (index + SLIDES.length) % SLIDES.length;
-      const panel = byId("interviewPanel");
-      panel?.querySelectorAll?.(".iv-slide").forEach((slide, i) => {
-        slide.classList.toggle("is-active", i === data.slide);
-        slide.setAttribute("aria-hidden", String(i !== data.slide));
-        slide.tabIndex = i === data.slide ? 0 : -1;
+      const show = byId("interviewPanel")?.querySelector?.("#interviewHome .hx-show");
+      if (!show) return;
+      show.querySelectorAll(".hx-slide").forEach((slide, i) => {
+        const on = i === data.slide;
+        slide.classList.toggle("is-active", on);
+        slide.toggleAttribute("aria-hidden", !on);
+        slide.tabIndex = on ? 0 : -1;
       });
-      panel?.querySelectorAll?.(".iv-dots span").forEach((dot, i) => dot.classList.toggle("is-active", i === data.slide));
-      const counter = panel?.querySelector?.(".iv-show-count");
-      if (counter) counter.textContent = `${pad(data.slide + 1)} / ${pad(SLIDES.length)}`;
-    }
-
-    function scheduleSlides() {
-      window.clearInterval?.(slideTimer);
-      slideTimer = window.setInterval?.(() => {
-        if (data.pane !== "home" || state.view !== "interview") return window.clearInterval?.(slideTimer);
-        showSlide(data.slide + 1);
-      }, 6000);
+      show.querySelectorAll(".hx-seg").forEach((seg, i) => {
+        seg.classList.toggle("is-on", i === data.slide);
+        seg.classList.toggle("is-done", i < data.slide);
+        const bar = seg.querySelector("i");
+        if (bar && i === data.slide) { bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = ""; }
+      });
+      const count = show.querySelector("[data-hx-count]");
+      if (count) count.textContent = pad(data.slide + 1);
     }
 
     // ---- Recording: MediaRecorder -> upload -> server ASR -> editable transcript.
@@ -864,6 +896,7 @@
     function handleAction(event) {
       const el = event.target.closest("[data-interview-action]");
       if (!el || (data.busy && !["close-editor"].includes(el.dataset.interviewAction))) return;
+      if (el.tagName === "A") event.preventDefault?.();
       const action = el.dataset.interviewAction;
       const sessionId = data.current?.session?.id;
       const base = sessionId ? `/api/interview/sessions/${encodeURIComponent(sessionId)}/` : "";
@@ -873,8 +906,9 @@
         case "go-custom": data.customSide = el.dataset.side || data.customSide; setPane("custom"); return;
         case "reports": setPane("reports"); return;
         case "reload-history": loadHistory(); return;
-        case "slide-prev": showSlide(data.slide - 1); scheduleSlides(); return;
-        case "slide-next": showSlide(data.slide + 1); scheduleSlides(); return;
+        case "slide-prev": showSlide(data.slide - 1); return;
+        case "slide-next": showSlide(data.slide + 1); return;
+        case "slide-go": showSlide(Number(el.dataset.index) || 0); return;
         case "slide-open": { const slide = SLIDES[Number(el.dataset.index)] || SLIDES[0]; setPane(slide.pane, { part: slide.part }); return; }
         case "open-corpus": data.corpusTab = el.dataset.tab || data.corpusTab; setPane("corpus"); return;
         case "corpus-tab": data.corpusTab = el.dataset.tab; render(); return;
