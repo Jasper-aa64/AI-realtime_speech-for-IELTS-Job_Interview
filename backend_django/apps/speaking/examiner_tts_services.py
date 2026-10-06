@@ -29,8 +29,14 @@ def _cached_examiner_url(role: str, cache_key: str) -> str | None:
     return _facade_attr("_cached_tts_url", _cached_tts_url)(role, cache_key)
 
 
-def _volcengine_examiner_tts(text: str, *, role: str = "examiner", cache_key: str) -> dict[str, Any]:
-    return _facade_attr("volcengine_tts", volcengine_tts)(text, role=role, cache_key=cache_key)
+def _volcengine_examiner_tts(text: str, *, role: str = "examiner", cache_key: str, language: str = "en") -> dict[str, Any]:
+    tts = _facade_attr("volcengine_tts", volcengine_tts)
+    if language == "en":
+        return tts(text, role=role, cache_key=cache_key)
+    # Interview turns are read in Chinese with the interviewer's voice.
+    from apps.interview.runtime import examiner_voice
+
+    return tts(text, role=role, cache_key=f"{language}_{cache_key}", voice=examiner_voice(), language=language)
 
 
 def _threading_module() -> Any:
@@ -159,11 +165,13 @@ def ensure_examiner_tts(attempt_id: str, turn: dict[str, Any]) -> None:
             )
             return
         cache_key = _examiner_tts_cache_key(attempt_id, str(turn["id"]), examiner_text)
+        prompt = turn.get("prompt") if isinstance(turn.get("prompt"), dict) else {}
         turn["examiner_tts"] = _with_examiner_tts_identity(
             _volcengine_examiner_tts(
                 examiner_text,
                 role="examiner",
                 cache_key=cache_key,
+                language=str(prompt.get("language") or "en"),
             ),
             examiner_text,
             cache_key,

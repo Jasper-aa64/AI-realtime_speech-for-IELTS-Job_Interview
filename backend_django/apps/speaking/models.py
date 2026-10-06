@@ -15,6 +15,10 @@ class SpeakingAttempt(UserOwnedModel):
         P2 = "p2", "Part 2"
         P3 = "p3", "Part 3"
         MOCK = "mock", "Mock"
+        IV_FULL = "iv_full", "Interview · full"
+        IV_PROJECT = "iv_project", "Interview · projects"
+        IV_KNOWLEDGE = "iv_knowledge", "Interview · knowledge"
+        IV_REVERSE = "iv_reverse", "Interview · your questions"
 
     user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="speaking_attempts")
     attempt_id = models.CharField(max_length=80, unique=True, blank=True)

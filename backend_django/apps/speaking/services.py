@@ -1272,6 +1272,10 @@ def _sample_p2_cue(question_bank_scope: str | None = None) -> dict[str, Any]:
 
 
 def _build_turns(mode: str, payload: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], dict[str, Any] | None, dict[str, Any]]:
+    from apps.interview import runtime as interview_runtime
+
+    if interview_runtime.is_interview_mode(mode):
+        return interview_runtime.build_turns(payload.get("_user"), mode, payload)
     question_bank_scope = normalize_question_bank_scope(str(payload.get("question_bank_scope") or payload.get("bank_scope") or ""))
     metadata: dict[str, Any] = {"question_bank_scope": question_bank_scope}
     if mode == "mock":
@@ -1363,7 +1367,9 @@ def start_attempt(user, payload: dict[str, Any]) -> dict[str, Any]:
     mode = str(payload.get("mode") or payload.get("part") or "p1").lower().strip()
     if mode == "full":
         mode = "mock"
-    if mode not in {"p1", "p2", "p3", "mock"}:
+    from apps.interview import runtime as interview_runtime
+
+    if mode not in {"p1", "p2", "p3", "mock"} and not interview_runtime.is_interview_mode(mode):
         raise ValueError(f"Invalid mode: {mode}")
     attempt_id = uuid.uuid4().hex
     full_name, english_name = _candidate_names_from_payload(payload)

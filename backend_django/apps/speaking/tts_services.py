@@ -59,6 +59,7 @@ def volcengine_tts(
     *,
     retries: int = 0,
     timeout: float = 4.0,
+    language: str = "en",
 ) -> dict[str, Any]:
     """Generate TTS audio using VolcEngine API, with caching.
 
@@ -99,7 +100,7 @@ def volcengine_tts(
             "content_type": "audio/mpeg",
         }
 
-    payload = json.dumps({"text": text, "speaker": voice, "language": "en"}).encode("utf-8")
+    payload = json.dumps({"text": text, "speaker": voice, "language": language}).encode("utf-8")
     _log.info("examiner_tts cache=miss role=%s cache_id=%s", safe_role, cache_id)
     request = urllib.request.Request(
         "https://translate.volcengine.com/crx/tts/v1/",
