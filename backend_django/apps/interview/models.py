@@ -147,6 +147,8 @@ class InterviewAssistantThread(UserOwnedModel):
 
     thread_id = models.CharField(max_length=40, unique=True, default=thread_id)
     title = models.CharField(max_length=80, blank=True)
+    # interview (the interview corpus) or ielts (the IELTS speaking corpora): each mode keeps its own chats.
+    domain = models.CharField(max_length=16, default="interview")
 
     class Meta:
         indexes = [models.Index(fields=["user", "updated_at"])]

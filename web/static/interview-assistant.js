@@ -4,8 +4,9 @@
 //          switch, and the chat;
 //   dock — a small button in the bottom-right corner of every interview page that grows into a compact chat on hover
 //          (corner-morph.js, like the mode switcher); its ⋮ menu picks a recent thread — no rename / delete there.
-// In Agent mode the assistant creates, edits and deletes cards in 知识点语料库 / 简历题卡 / JD 与反问 (the server
-// validates and applies its actions); each reply carries links to the cards, a one-click undo and the agent trace.
+// It follows the product mode: in interview mode Agent edits 知识点语料库 / 简历题卡 / JD 与反问, in IELTS mode the
+// P1 / P2 / P3 corpora and Takeaway (the server validates and applies its actions); each reply carries links to what
+// it changed, a one-click undo and the agent trace. Each mode keeps its own chats.
 (function () {
   const DEEP_CHAT = "/vendor/deep-chat-2.5.1.bundle.js";
   const HIGHLIGHT = "/vendor/highlight-11.12.0.min.js";
@@ -13,14 +14,22 @@
   const DOCK_RECENT = 8;
   const MODES = [
     { id: "chat", zh: "聊天", en: "Chat", note: ["只回答，不改语料库", "Answers only; your corpus is untouched"] },
-    { id: "agent", zh: "Agent", en: "Agent", note: ["可以新建、修改、删除你的题卡；每次修改都能一键撤销", "Creates, edits and deletes your cards; every change can be undone"] },
+    { id: "agent", zh: "Agent", en: "Agent", note: ["可以新建、修改、删除你的语料；每次修改都能一键撤销", "Creates, edits and deletes your corpus items; every change can be undone"] },
   ];
-  const EXAMPLES = [
-    { mode: "chat", zh: "讲讲 SPSC 无锁队列怎么实现，为什么要做缓存行对齐", en: "How does an SPSC lock-free queue work?" },
-    { mode: "agent", zh: "把我知识点里低延迟相关的题卡整理一下：合并重复的，答得太短的补全", en: "Tidy my low-latency cards: merge duplicates, fill in thin answers" },
-    { mode: "agent", zh: "用 STAR 法则把我简历里的实习经历写成项目描述，并预判 3 个追问", en: "Write my internship up with the STAR method and predict 3 follow-ups" },
-    { mode: "agent", zh: "下面是一个 JD：……  帮我建一张 JD 卡，出 3 道岗位题和 2 个反问", en: "Here is a JD: … make a JD card with 3 role questions and 2 to ask" },
-  ];
+  const EXAMPLES = {
+    interview: [
+      { mode: "chat", zh: "讲讲 SPSC 无锁队列怎么实现，为什么要做缓存行对齐", en: "How does an SPSC lock-free queue work?" },
+      { mode: "agent", zh: "把我知识点里低延迟相关的题卡整理一下：合并重复的，答得太短的补全", en: "Tidy my low-latency cards: merge duplicates, fill in thin answers" },
+      { mode: "agent", zh: "用 STAR 法则把我简历里的实习经历写成项目描述，并预判 3 个追问", en: "Write my internship up with the STAR method and predict 3 follow-ups" },
+      { mode: "agent", zh: "下面是一个 JD：……  帮我建一张 JD 卡，出 3 道岗位题和 2 个反问", en: "Here is a JD: … make a JD card with 3 role questions and 2 to ask" },
+    ],
+    ielts: [
+      { mode: "chat", zh: "P2 讲一个人物题，怎么在 2 分钟里讲得有细节又不跑题？", en: "How do I keep a Part 2 person story detailed but on topic?" },
+      { mode: "agent", zh: "帮我写一个「人物」类 P2 通用素材：我的外公，教我下象棋，能套用到多个题", en: "Write a reusable Part 2 person story about my grandfather" },
+      { mode: "agent", zh: "把这期 P1 里关于 hometown 的题都写上 7 分答法", en: "Write band-7 answers for this season's hometown Part 1 questions" },
+      { mode: "agent", zh: "把这几个表达存进 Takeaway：a far cry from / on a whim / it dawned on me", en: "Save these to Takeaway: a far cry from / on a whim / it dawned on me" },
+    ],
+  };
   const STEP_MARK = { library: "◎", model: "✦", validate: "✓", create: "＋", update: "✎", delete: "✕", skip: "!" };
   const OP_MARK = { create: "✓", update: "✎", delete: "✕" };
   const svg = (paths, size = 16) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
@@ -53,7 +62,7 @@
     return libraryPromise;
   }
 
-  function create({ state, escapeHtml, request, popup, toast, setCorpus, openApplied, openPage = () => {}, currentAiSourcePreference }) {
+  function create({ state, escapeHtml, request, popup, toast, setCorpus, openApplied, openPage = () => {}, onIeltsChanged = () => {}, currentAiSourcePreference }) {
     let threads = null; // [{id, title, updated_at}]
     let engine = "";
     let current = null; // thread id, null = new chat
@@ -68,9 +77,12 @@
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
     const esc = (value) => escapeHtml(String(value ?? ""));
     try { mode = localStorage.getItem(MODE_KEY) === "agent" ? "agent" : "chat"; } catch (_error) { /* per-viewer convenience only */ }
+    const domain = () => (state.productMode === "ielts" ? "ielts" : "interview");
+    const examples = () => EXAMPLES[domain()];
 
+    // Chats belong to an account and a mode; switching either starts from that pair's own list.
     function ensureOwner() {
-      const id = state.account.user?.id || null;
+      const id = `${state.account.user?.id || ""}:${domain()}`;
       if (id === owner) return;
       owner = id;
       threads = null;
@@ -82,7 +94,7 @@
     async function loadThreads() {
       const generation = epoch;
       try {
-        const payload = await request("/api/interview/assistant/threads/");
+        const payload = await request(`/api/interview/assistant/threads/?domain=${domain()}`);
         if (generation !== epoch) return;
         threads = payload.threads || [];
         engine = payload.engine || "";
@@ -136,11 +148,26 @@
     }
 
     // Colours come from the app's tokens at mount time, so every appearance style (and dark mode) carries over.
-    function palette() {
+    // In the dock the "panel" is the dock's lifted surface, so the chat sits on the card, not on the page colour.
+    function palette(compact = false) {
       const css = getComputedStyle(document.body);
       const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+      const lifted = compact && dock ? getComputedStyle(dock.root).getPropertyValue("--dock-bg").trim() : "";
       return { ink: token("--ink", "#0d0d0d"), muted: token("--muted", "#6e6e80"), line: token("--line", "#ececf1"),
-               panel: token("--panel", "#ffffff"), bg: token("--bg", "#f7f7f8"), accent: token("--accent", "#10a37f") };
+               panel: lifted || token("--panel", "#ffffff"), bg: token("--bg", "#f7f7f8"), accent: token("--accent", "#10a37f") };
+    }
+
+    // Like the mode switcher (interview.js syncSwitchPalette): read the colour the dock floats over and lift the card
+    // off it — lighter on a dark page, white on a light one — so it never blends into the background.
+    function liftDock() {
+      if (!dock) return;
+      const read = (el) => (getComputedStyle(el).backgroundColor.match(/[\d.]+/g) || []).map(Number);
+      let channels = read(document.querySelector(".workspace") || document.body);
+      if (channels.length < 3 || channels[3] === 0) channels = read(document.body);
+      if (channels.length < 3) return;
+      const light = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2] > 150;
+      dock.root.style.setProperty("--dock-surface", `rgb(${channels[0]}, ${channels[1]}, ${channels[2]})`);
+      dock.root.dataset.tone = light ? "light" : "dark";
     }
 
     function auxiliaryStyle(c, compact) {
@@ -174,6 +201,15 @@
         .iv-trace li span { width: 14px; color: ${c.accent}; } .iv-trace li strong { color: ${c.ink}; font-weight: 500; }
         .iv-trace li em { font-style: normal; }
         .iv-trace li.is-skip span, .iv-trace li.is-delete span { color: #dc2626; }
+        .iv-thinking { display: inline-flex; align-items: center; gap: 10px; color: ${c.muted}; font-size: ${compact ? 12.5 : 13}px; }
+        .iv-thinking-dots { display: inline-flex; gap: 4px; }
+        .iv-thinking-dots i { width: 6px; height: 6px; border-radius: 50%; background: ${c.accent}; animation: iv-dot 1.2s ease-in-out infinite; }
+        .iv-thinking-dots i:nth-child(2) { animation-delay: 0.15s; } .iv-thinking-dots i:nth-child(3) { animation-delay: 0.3s; }
+        .iv-thinking-text { background: linear-gradient(90deg, ${c.muted} 0%, ${c.ink} 50%, ${c.muted} 100%); background-size: 200% 100%;
+          -webkit-background-clip: text; background-clip: text; color: transparent; animation: iv-shimmer 1.8s linear infinite; }
+        @keyframes iv-dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+        @keyframes iv-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+        @media (prefers-reduced-motion: reduce) { .iv-thinking-dots i, .iv-thinking-text { animation: none; } .iv-thinking-text { color: ${c.muted}; } }
         .outer-message-container .message-bubble pre { border-radius: 10px; font-size: ${compact ? 12 : 13}px; }
         .outer-message-container .message-bubble code { font-size: 0.92em; }
         .outer-message-container .message-bubble table { border-collapse: collapse; }
@@ -184,21 +220,21 @@
     }
 
     function introPanel(compact) {
-      const c = palette();
+      const c = palette(compact);
       const intro = document.createElement("div");
       intro.className = "iv-assistant-intro";
       intro.style.cssText = `display:grid;justify-items:center;gap:${compact ? 8 : 10}px;text-align:center;padding:${compact ? "12px 14px" : "24px 12px"};max-width:640px;width:100%;box-sizing:border-box;font-family:inherit`;
-      const examples = compact ? EXAMPLES.slice(0, 2) : EXAMPLES;
+      const shown = compact ? examples().slice(0, 2) : examples();
       const note = MODES.find((item) => item.id === mode).note;
       intro.innerHTML = `
         <div style="width:${compact ? 34 : 44}px;height:${compact ? 34 : 44}px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb, ${c.accent} 14%, ${c.panel});color:${c.accent}">${ICON.spark}</div>
         <div style="font-size:${compact ? 16 : 21}px;font-weight:650;color:${c.ink}">${esc(copy("有什么想问的？", "What would you like to ask?"))}</div>
         <div style="font-size:${compact ? 12.5 : 13.5}px;color:${c.muted};line-height:1.6;max-width:460px">${esc(copy(`当前是${mode === "agent" ? " Agent 模式" : "聊天模式"}：${note[0]}。`, `${mode === "agent" ? "Agent" : "Chat"} mode: ${note[1]}.`))}</div>
         <div style="display:grid;grid-template-columns:${compact ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:8px;width:100%;margin-top:${compact ? 4 : 10}px">
-          ${examples.map((item, index) => `<button type="button" data-example="${index}" style="padding:${compact ? "9px 12px" : "12px 14px"};border:1px solid ${c.line};border-radius:10px;background:${c.panel};color:${c.ink};text-align:left;font:inherit;font-size:${compact ? 12.5 : 13.5}px;line-height:1.5;cursor:pointer"><span style="display:block;font-size:11px;color:${c.muted};margin-bottom:2px">${item.mode === "agent" ? "Agent" : copy("聊天", "Chat")}</span>${esc(copy(item.zh, item.en))}</button>`).join("")}
+          ${shown.map((item, index) => `<button type="button" data-example="${index}" style="padding:${compact ? "9px 12px" : "12px 14px"};border:1px solid ${c.line};border-radius:10px;background:${c.panel};color:${c.ink};text-align:left;font:inherit;font-size:${compact ? 12.5 : 13.5}px;line-height:1.5;cursor:pointer"><span style="display:block;font-size:11px;color:${c.muted};margin-bottom:2px">${item.mode === "agent" ? "Agent" : copy("聊天", "Chat")}</span>${esc(copy(item.zh, item.en))}</button>`).join("")}
         </div>`;
       intro.addEventListener("click", (event) => {
-        const example = EXAMPLES[Number(event.target.closest?.("[data-example]")?.dataset.example)];
+        const example = examples()[Number(event.target.closest?.("[data-example]")?.dataset.example)];
         if (!example || !chat) return;
         setMode(example.mode);
         chat.submitUserMessage({ text: copy(example.zh, example.en) });
@@ -207,7 +243,7 @@
     }
 
     function buildChat(compact) {
-      const c = palette();
+      const c = palette(compact);
       const dark = document.documentElement.classList.contains("theme-dark");
       const size = compact ? "13.5px" : "14.5px";
       const el = document.createElement("deep-chat");
@@ -221,15 +257,19 @@
           ai: { bubble: { backgroundColor: "transparent", color: c.ink, padding: "2px 0", maxWidth: "100%" } },
         },
         html: { shared: { bubble: { backgroundColor: "transparent", padding: "0", maxWidth: "100%" } } },
-        loading: { message: { styles: { bubble: { backgroundColor: "transparent", color: c.accent, padding: "6px 0" } } } },
+        loading: { message: { html: `<div class="iv-thinking"><span class="iv-thinking-dots"><i></i><i></i><i></i></span><span class="iv-thinking-text">${esc(copy("正在思考…", "Thinking…"))}</span></div>`,
+                              styles: { bubble: { backgroundColor: "transparent", padding: "6px 0" } } } },
         error: { bubble: { backgroundColor: dark ? "#3a1d1d" : "#fef2f2", color: dark ? "#fecaca" : "#b91c1c", borderRadius: "10px", fontSize: "13px" } },
       };
       el.textInput = {
         characterLimit: 8000,
-        placeholder: { text: compact ? copy("问点什么…", "Ask something…") : copy("问一个问题，或粘贴一段经历 / JD…", "Ask, or paste an experience / a JD…"), style: { color: c.muted } },
+        placeholder: { text: compact ? copy("问点什么…", "Ask something…")
+          : domain() === "ielts" ? copy("问一个口语 / 写作问题，或贴一段你的回答…", "Ask about speaking / writing, or paste an answer…")
+          : copy("问一个问题，或粘贴一段经历 / JD…", "Ask, or paste an experience / a JD…"), style: { color: c.muted } },
         styles: {
           container: { width: compact ? "calc(100% - 24px)" : "calc(100% - 48px)", maxHeight: compact ? "140px" : "220px", border: `1px solid ${c.line}`, borderRadius: compact ? "12px" : "14px",
-                       backgroundColor: c.panel, boxShadow: compact ? "none" : "0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06)", padding: "2px 42px 2px 4px" },
+                       backgroundColor: compact ? `color-mix(in srgb, ${c.ink} 4%, ${c.panel})` : c.panel,
+                       boxShadow: compact ? "none" : "0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06)", padding: "2px 42px 2px 4px" },
           text: { color: c.ink, padding: compact ? "8px 10px" : "11px 12px", fontSize: size },
           focus: { border: `1px solid color-mix(in srgb, ${c.accent} 70%, ${c.line})` },
         },
@@ -263,8 +303,9 @@
         loadLibrary().then(() => mount(host, { force: true })).catch((error) => { host.innerHTML = ""; popup(error.message); });
         return;
       }
-      if (!force && chat && chat.parentElement === host) return;
+      if (!force && chat && chat.parentElement === host && chat.dataset.owner === owner) return;
       chat = buildChat(host.id === "ivDockChat");
+      chat.dataset.owner = owner;
       host.replaceChildren(chat);
     }
 
@@ -279,10 +320,11 @@
       const log = history;
       const origin = chat;
       try {
-        const payload = await request("/api/interview/assistant/", { message: text, mode, thread_id: thread || undefined, ai_source: currentAiSourcePreference?.() || "" });
+        const payload = await request("/api/interview/assistant/", { message: text, mode, domain: domain(), thread_id: thread || undefined, ai_source: currentAiSourcePreference?.() || "" });
         if (generation !== epoch) return;
         log.push(payload.message, payload.reply);
         if (payload.entries) setCorpus(payload.entries);
+        if (payload.ielts_changed) onIeltsChanged();
         threads = [payload.thread, ...(threads || []).filter((item) => item.id !== payload.thread.id)];
         // The candidate may have switched threads while waiting; the reply still lands in its own thread.
         if (history === log) {
@@ -306,6 +348,7 @@
         const message = history.find((item) => item.id === id);
         if (message) Object.assign(message, { undone: true, undoable: false });
         if (payload.entries) setCorpus(payload.entries);
+        if (payload.ielts_changed) onIeltsChanged();
         button.closest(".iv-agent")?.classList.add("is-undone");
         button.outerHTML = `<span class="iv-undone">${esc(copy("已撤销这些修改", "Changes undone"))}</span>`;
         toast(copy("已撤销", "Undone"));
@@ -394,7 +437,7 @@
       if (threads === null) loadThreads();
       // Mount after the pane is in the DOM.
       window.setTimeout(() => { const host = pageHost(); if (host && !host.firstChild) mount(host, { force: true }); }, 0);
-      return `<section id="ivAssistant" class="iv-assistant">
+      return `<section id="ivAssistant" class="iv-assistant" data-domain="${domain()}">
           <aside class="iv-as-side" aria-label="${esc(copy("对话列表", "Chats"))}">
             <div class="iv-as-side-head">
               <span class="iv-as-brand">${ICON.spark}<span>${esc(copy("AI 助手", "AI assistant"))}</span></span>
@@ -536,7 +579,7 @@
       dock.morph = window.IELTSCornerMorph.create({
         trigger: root.querySelector("#ivDockTrigger"), card, body: root.querySelector(".iv-dock-body"), root, anchor: "bottom-right",
         closedRadius: "10px", openRadius: "16px", closedBackground: "var(--dock-closed)", hoverBackground: "var(--dock-hover)",
-        keepOpen: () => dock.pinned,
+        keepOpen: () => dock.pinned, palette: liftDock,
         onOpenChange: (open) => {
           if (open) {
             ensureOwner();
@@ -574,7 +617,13 @@
       if (!dock) return;
       if (!visible && dock.morph.isOpen()) dock.morph.close();
       dock.root.hidden = !visible;
-      if (visible && dock.morph.isOpen() && !pageHost()) mount(byId("ivDockChat"));
+      if (visible) liftDock();
+      // A mode switch while the dock is open swaps in that mode's chats.
+      if (visible && dock.morph.isOpen() && !pageHost()) {
+        ensureOwner();
+        if (threads === null) loadThreads();
+        mount(byId("ivDockChat"));
+      }
     }
 
     function reset() {
@@ -588,6 +637,14 @@
       closeDock();
       if (byId("ivDockChat")) byId("ivDockChat").replaceChildren();
     }
+
+    // The page wires its own events (it lives in #assistantPanel, outside the interview panel).
+    document.addEventListener?.("click", (event) => { handleClick(event); });
+    document.addEventListener?.("input", (event) => { handleInput(event); });
+    document.addEventListener?.("dblclick", (event) => {
+      const el = event.target.closest?.("#ivAssistant .iv-as-thread-open");
+      if (el) renameThread(el.dataset.thread);
+    });
 
     return { render, handleClick, handleInput, handleKey: () => false, reset, syncDock };
   }

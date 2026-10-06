@@ -12,7 +12,8 @@
   };
   const STAGES = { self_intro: ["自我介绍", "Intro"], project: ["项目", "Projects"], knowledge: ["知识点", "Knowledge"], award: ["奖项", "Awards"], reverse: ["反问", "Questions"] };
 
-  function createInterview({ state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin, escapeHtml, currentAiSourcePreference, markdown, renderMarkdown }) {
+  function createInterview({ state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin, escapeHtml, currentAiSourcePreference, markdown, renderMarkdown,
+    onIeltsCorpusChanged = () => {}, openIeltsCorpus = () => {} }) {
     let epoch = 0;
     let initialized = false;
     let requestController = null;
@@ -45,12 +46,25 @@
       toast: (message) => toast(message),
       setCorpus: (list) => { data.corpus = list; window.IELTSInterviewHome?.refresh(); },
       openApplied: (item) => openApplied(item),
-      openPage: () => setPane("assistant"),
+      openPage: () => openAssistantPage(),
+      onIeltsChanged: () => onIeltsCorpusChanged(),
     }) || null;
-    // The corner dock (the assistant in miniature) is on every interview page but the AI 助手 pane itself.
+    // The AI 助手 is its own view (shared by both modes); the corner dock is on every other page.
     function syncDock() {
-      assistantChat?.syncDock({ visible: state.productMode === "interview" && Boolean(state.account.authenticated)
-        && Boolean(state.desktopCapabilities?.mock_interview) && !(state.view === "interview" && data.pane === "assistant") });
+      byId("ieltsAssistantNav")?.classList.toggle("hidden", !state.desktopCapabilities?.mock_interview);
+      assistantChat?.syncDock({ visible: Boolean(state.account.authenticated) && Boolean(state.desktopCapabilities?.mock_interview)
+        && state.view !== "assistant" && !(state.view || "").startsWith("login") });
+    }
+    function openAssistantPage() {
+      data.pane = "assistant";
+      switchView("assistant", { force: state.view !== "assistant" });
+    }
+    // Renders the page into #assistantPanel; a page already showing this mode's chats is left as it is.
+    function showAssistant() {
+      const panel = byId("assistantPanel");
+      if (!panel || !assistantChat) return;
+      if (panel.querySelector(`#ivAssistant[data-domain="${state.productMode === "ielts" ? "ielts" : "interview"}"]`)) return;
+      panel.innerHTML = assistantChat.render();
     }
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
     const pick = (pair) => copy(pair[0], pair[1]);
@@ -110,6 +124,8 @@
       window.IELTSInterviewHome?.apply(mode);
       if (mode === "interview") ensureOverview();
       syncDock();
+      // The AI 助手 page follows the mode: interview chats in interview mode, IELTS chats in IELTS mode.
+      if (state.view === "assistant") showAssistant();
       try { localStorage.setItem(MODE_KEY, mode); } catch (_error) { /* Session-only preference. */ }
     }
 
@@ -200,8 +216,7 @@
         event.preventDefault?.();
         setPane(item.dataset.interviewPane, { part: item.dataset.interviewPart });
       });
-      byId("interviewPanel")?.addEventListener("click", (event) => { if (!assistantChat?.handleClick(event)) handleAction(event); });
-      byId("interviewPanel")?.addEventListener("keydown", (event) => assistantChat?.handleKey(event));
+      byId("interviewPanel")?.addEventListener("click", handleAction);
       // Links on the shared home panel carry data-iv-target ("pane" or "pane:part") in interview mode. Capture
       // phase, so the IELTS router never sees them and the href never navigates.
       document.addEventListener("click", (event) => {
@@ -220,7 +235,7 @@
         setPane("corpus");
       }, true);
       window.IELTSInterviewHome?.setSource(homeNumbers);
-      byId("interviewPanel")?.addEventListener("input", (event) => { if (!assistantChat?.handleInput(event)) captureInput(event); });
+      byId("interviewPanel")?.addEventListener("input", captureInput);
       byId("interviewPanel")?.addEventListener("change", captureInput);
       window.addEventListener("ielts:ui-language-change", () => { setProductMode(state.productMode); render({ force: true }); });
     }
@@ -354,6 +369,7 @@
 
     function setPane(pane, { part, tab } = {}) {
       if (!PANES.has(pane) || data.busy) return;
+      if (pane === "assistant") { openAssistantPage(); return; }
       if (pane === "corpus" && !tab) {
         // 面试语料库 is the IELTS 语料库 hub with interview copy (interview-home.js); its cards open the screens.
         data.pane = "library";
@@ -519,7 +535,6 @@
     const PANE_COPY = {
       practice: () => [partName(data.part), pick(PARTS[data.part].hint)],
       custom: () => [copy("简历 / JD 定制", "Resume / JD"), copy("把简历和目标岗位拆成可练的语料。", "Turn your resume and target role into practice material.")],
-      assistant: () => [copy("AI 助手", "AI assistant"), copy("随时提问；让它整理进知识点、简历题卡或 JD 与反问。", "Ask anything; have it filed into your knowledge, resume cards or JD questions.")],
     };
 
     function syncNav() {
@@ -527,9 +542,10 @@
       if (practiceView) { data.pane = "practice"; data.part = state.view.slice(3); }
       if (state.view === "history") data.pane = "reports";
       if (state.view === "corpus") data.pane = "library";
+      if (state.view === "assistant") data.pane = "assistant";
       const pane = data.pane;
       if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
-      const shown = practiceView || state.view === "history" || state.view === "corpus" || (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
+      const shown = practiceView || state.view === "history" || state.view === "corpus" || state.view === "assistant" || (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
       document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
         const itemPane = item.dataset.interviewPane;
         const active = itemPane === "practice" ? pane === "practice" && item.dataset.interviewPart === data.part
@@ -543,8 +559,7 @@
 
     function syncChrome() {
       const pane = data.pane;
-      // Corpus screens and the AI 助手 use the whole page (no title block).
-      document.body.classList.toggle("interview-bare", state.view === "interview" && (pane === "corpus" || pane === "assistant"));
+      document.body.classList.toggle("interview-bare", state.view === "interview" && pane === "corpus");
       // Corpus screens sit in the IELTS corpus workspace (its chrome and the many .corpus-workspace rules) too.
       document.querySelector?.(".workspace")?.classList.toggle("interview-corpus-workspace", state.view === "interview" && pane === "corpus");
       if (state.view === "interview") document.querySelector?.(".workspace")?.classList.toggle("corpus-workspace", pane === "corpus");
@@ -566,10 +581,8 @@
         panel.innerHTML = `<div class="iv-guest"><p class="iv-kicker">Interview Studio</p><h2 class="iv-title"><span class="iv-title-main">Mock Interview</span></h2><p>${esc(copy("登录同一个 IELTS Studio 账号，保存面试回答与练习记录。", "Sign in with your Studio account to save answers and interview history."))}</p>${solid("login", copy("登录并开始", "Sign in and start"))}</div>`;
         return;
       }
-      // The AI 助手 chat is a live component (a reply may be on its way): background refreshes leave it alone.
-      if (data.pane === "assistant" && panel.querySelector("#ivAssistant") && !force) return;
       // Home, practice and reports are shared IELTS panels (home, iv_* and history views), not #interviewPanel.
-      const paneView = ({ corpus: () => corpusScreens?.render(data.corpusTab) || "", custom: customPane, assistant: () => assistantChat?.render() || "" })[data.pane];
+      const paneView = ({ corpus: () => corpusScreens?.render(data.corpusTab) || "", custom: customPane })[data.pane];
       if (!paneView) { panel.innerHTML = ""; return; }
       const content = paneView();
       panel.innerHTML = `<div class="iv-pane iv-pane--${data.pane}">${content}</div>`;
@@ -669,6 +682,8 @@
 
     // A "已写入 …" link under an assistant reply: that corpus screen, with the written card or answer open.
     function openApplied({ where, entryId }) {
+      // IELTS links (P1 / P2 / Takeaway) open the IELTS corpus pages.
+      if (["p1", "p2", "takeaway"].includes(where)) { openIeltsCorpus(where); return; }
       setPane("corpus", { tab: where });
       const entry = (data.corpus || []).find((item) => item.id === entryId);
       if (!entry) return;
@@ -685,6 +700,7 @@
     return {
       initialize, setProductMode, show, resetForAccount, setPane, launchOptions, renderLaunch, hideLaunch: () => launch?.hide(),
       openCorpusFor, openCorpusFromReport, corpusSavedForTarget: (target) => corpusScreens?.savedForTarget(target) ?? null, syncNav,
+      showAssistant, syncDock,
     };
   }
   window.IELTSInterview = { createInterview };

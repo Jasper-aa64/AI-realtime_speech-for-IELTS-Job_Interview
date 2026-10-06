@@ -145,7 +145,7 @@ def assistant_chat(request):
 
 @api("GET")
 def assistant_threads(request):
-    return assistant.threads(request.user)
+    return assistant.threads(request.user, request.GET.get("domain", "interview"))
 
 
 @api("GET", "PATCH", "DELETE")

@@ -668,6 +668,7 @@ const viewCopy = {
   history: ["口语报告", ""],
   writing: ["", ""],
   writingReports: ["写作报告", ""],
+  assistant: ["AI 助手", ""],
   login: ["Sign in", "Sign in to access your reports, wallet, and personalized training."],
   register: ["Create account", "Create an account to save your practice history and access personalized features."],
   forgotPassword: ["Reset password", "Reset your password via email if configured."],
@@ -694,6 +695,7 @@ const viewCopyEn = {
   history: ["Speaking Reports", ""],
   writing: ["", ""],
   writingReports: ["Writing Reports", ""],
+  assistant: ["AI assistant", ""],
   login: ["Sign in", "Sign in to access your reports, wallet, and personalized training."],
   register: ["Create account", "Create an account to save your practice history and access personalized features."],
   forgotPassword: ["Reset password", "Reset your password via email if configured."],
@@ -1052,12 +1054,12 @@ const authViews = new Set(["login", "register", "forgotPassword"]);
 // browsable as a visitor: real features prompt for login at the point of use
 // (see promptGuestLogin) instead of walling off the whole screen. Only the
 // security page is kept gated, since a guest has no account to act on there.
-const protectedViews = new Set(["accountSecurity"]);
+const protectedViews = new Set(["accountSecurity", "assistant"]);
 const corpusViews = new Set(["corpus", "p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
 const accountViews = new Set(["accountProfile", "accountSecurity"]);
 const corpusBackButtonViews = new Set(["p1Corpus", "p2Corpus", "takeawayBook", "writingTakeawayBook", "spellingDrill"]);
 const topPinnedViews = new Set(["home", "corpus", "p1Corpus", "p2Corpus"]);
-const workspaceHeaderHiddenViews = new Set(["home", "history", "writing", "writingReports", ...corpusViews, ...authViews, ...accountViews]);
+const workspaceHeaderHiddenViews = new Set(["home", "history", "writing", "writingReports", "assistant", ...corpusViews, ...authViews, ...accountViews]);
 const agentAssistantViews = new Set(["writing"]);
 
 const EXAMINER_AUDIO_LOAD_TIMEOUT_MS = 15000;
@@ -1210,6 +1212,14 @@ const interview = window.IELTSInterview?.createInterview?.({
   state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin,
   escapeHtml, currentAiSourcePreference, renderMarkdown: renderSpokenAnswerMarkdown,
   markdown: { ready: ensureCorpusMarkdownEditorReady, get: getCorpusMarkdownValue, set: setCorpusMarkdownValue },
+  // The AI 助手 in IELTS mode edits the speaking corpora and Takeaway: drop the cached copies, reload what is showing.
+  onIeltsCorpusChanged: () => {
+    clearQuestionBankScopedCaches();
+    state.languageTakeaway.items = [];
+    state.languageTakeaway.loaded = false;
+    state.languageTakeaway.loadingPromise = null;
+  },
+  openIeltsCorpus: (where) => switchView({ p1: "p1Corpus", p2: "p2Corpus", takeaway: "takeawayBook" }[where] || "corpus", { force: true }),
 });
 
 const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy });
@@ -2394,10 +2404,11 @@ function setWritingActionPanelCollapsed(collapsed, { persist = false } = {}) {
   }
 }
 
-const SHARED_MODE_VIEWS = new Set(["home", "history", "corpus"]);
+// The AI 助手 is shared too: it works on the interview corpus in interview mode and the IELTS corpora in IELTS mode.
+const SHARED_MODE_VIEWS = new Set(["home", "history", "corpus", "assistant"]);
 
 function switchView(view, options = {}) {
-  if ((view === "interview" || isInterviewView(view)) && !state.desktopCapabilities?.mock_interview) view = "home";
+  if ((view === "interview" || view === "assistant" || isInterviewView(view)) && !state.desktopCapabilities?.mock_interview) view = "home";
   // Views both modes share (the home panel swaps its copy) keep the current mode; IELTS-only views switch to IELTS.
   if (view === "interview" || isInterviewView(view)) interview?.setProductMode("interview");
   else if (!SHARED_MODE_VIEWS.has(view) && !accountViews.has(view) && !authViews.has(view)) interview?.setProductMode("ielts");
@@ -2487,6 +2498,8 @@ function switchView(view, options = {}) {
   $("#accountBackBtn")?.classList.toggle("hidden", !accountViews.has(view));
   $("#homePanel")?.classList.toggle("hidden", view !== "home");
   $("#interviewPanel")?.classList.toggle("hidden", view !== "interview");
+  $("#assistantPanel")?.classList.toggle("hidden", view !== "assistant");
+  document.body.classList.toggle("view-assistant", view === "assistant");
   $("#practicePanel").classList.toggle("hidden", !isPracticeView(view));
   $("#practicePanel")?.classList.toggle("p3-launch-mode", view === "p3" && !state.practiceLocked);
   $("#corpusPanel")?.classList.toggle("hidden", view !== "corpus");
@@ -2524,7 +2537,9 @@ function switchView(view, options = {}) {
   syncP1IntensityPanel();
   if (view === "history") loadHistory();
   if (view === "interview") interview?.show();
+  if (view === "assistant") interview?.showAssistant?.();
   if (state.productMode === "interview") interview?.syncNav?.();
+  interview?.syncDock?.();
   if (view === "corpus") loadCorpusHome();
   if (view === "takeawayBook") {
     prefetchTakeawayBackgroundAssets();
@@ -2840,6 +2855,7 @@ function loginReasonForView(view) {
     takeawayBook: "登录后才能查看和复习你的 Takeaway。",
     writing: "登录后才能保存每日写作、签到和 AI 评分记录。",
     writingReports: "登录后才能查看你的写作报告。",
+    assistant: "登录后才能使用 AI 助手。",
     accountProfile: "请先登录后管理账号资料。",
     accountSecurity: "请先登录后修改账号安全设置。",
   };

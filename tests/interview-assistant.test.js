@@ -10,13 +10,13 @@ const interview = fs.readFileSync(path.join(__dirname, "../web/static/interview.
 const urls = fs.readFileSync(path.join(__dirname, "../backend_django/config/urls.py"), "utf8");
 
 // A stand-in for the Deep Chat element: the module only sets properties on it and calls its handler.
-function harness(responses = {}) {
+function harness(responses = {}, { productMode = "interview" } = {}) {
   const ids = {};
   const element = (id) => ({ id, innerHTML: "", textContent: "", firstChild: null, isConnected: true, children: [], appendChild(child) { this.children.push(child); },
     replaceChildren(child) { this.firstChild = child; }, addEventListener() {} });
   const document = {
     getElementById: (id) => (ids[id] ||= element(id)),
-    createElement: (tag) => ({ tag, style: {}, children: [], appendChild(child) { this.children.push(child); }, addEventListener() {} }),
+    createElement: (tag) => ({ tag, style: {}, dataset: {}, children: [], appendChild(child) { this.children.push(child); }, addEventListener() {} }),
     documentElement: { classList: { contains: () => false } },
     body: {},
     querySelector: () => null,
@@ -31,18 +31,20 @@ function harness(responses = {}) {
   };
   const opened = [];
   const corpus = [];
+  const ieltsChanges = [];
   const context = vm.createContext({
     window: { setTimeout: (fn) => fn() }, document, customElements: { get: () => true },
     getComputedStyle: () => ({ getPropertyValue: () => "" }), CSS: { escape: (v) => v }, encodeURIComponent,
   });
   vm.runInContext(source, context);
   const assistant = context.window.IELTSInterviewAssistant.create({
-    state: { uiLanguage: "zh", account: { authenticated: true, user: { id: 7 } } },
+    state: { uiLanguage: "zh", productMode, account: { authenticated: true, user: { id: 7 } } },
     escapeHtml: (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"),
     request, popup: () => {}, toast: () => {}, setCorpus: (list) => corpus.push(list), openApplied: (item) => opened.push(item),
+    onIeltsChanged: () => ieltsChanges.push(true),
     currentAiSourcePreference: () => "gpt",
   });
-  return { assistant, ids, calls, opened, corpus, context, chat: () => ids.ivAssistantChat.firstChild };
+  return { assistant, ids, calls, opened, corpus, ieltsChanges, context, chat: () => ids.ivAssistantChat.firstChild };
 }
 
 const reply = {
@@ -56,7 +58,7 @@ const reply = {
 };
 
 test("the page lists threads and mounts a Deep Chat with the chat / agent switch", async () => {
-  const env = harness({ "/api/interview/assistant/threads/": { threads: [{ id: "iat_1", title: "RAII", updated_at: "" }], engine: "本机 Codex · gpt-6-luna · medium" } });
+  const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [{ id: "iat_1", title: "RAII", updated_at: "" }], engine: "本机 Codex · gpt-6-luna · medium" } });
   const page = env.assistant.render();
   assert.match(page, /data-mode="chat"/);
   assert.match(page, /data-mode="agent"/);
@@ -69,7 +71,7 @@ test("the page lists threads and mounts a Deep Chat with the chat / agent switch
 });
 
 test("a message goes to the assistant API with the mode; the reply carries links, undo and the agent trace", async () => {
-  const env = harness({ "/api/interview/assistant/threads/": { threads: [] }, "/api/interview/assistant/": reply });
+  const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [] }, "/api/interview/assistant/": reply });
   env.assistant.render();
   env.assistant.handleClick({ target: { closest: () => ({ dataset: { ivAssistant: "mode", mode: "agent" } }) } });
   let answered;
@@ -93,7 +95,7 @@ test("a message goes to the assistant API with the mode; the reply carries links
 });
 
 test("failures come back as a Deep Chat error bubble; links open the written card", async () => {
-  const env = harness({ "/api/interview/assistant/threads/": { threads: [] }, "/api/interview/assistant/": new Error("AI 生成失败") });
+  const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [] }, "/api/interview/assistant/": new Error("AI 生成失败") });
   env.assistant.render();
   let answered;
   await env.chat().connect.handler({ messages: [{ role: "user", text: "你好" }] }, { onResponse: async (message) => { answered = message; } });
@@ -104,7 +106,7 @@ test("failures come back as a Deep Chat error bubble; links open the written car
 });
 
 test("undo posts to the message's undo endpoint and marks the changes undone", async () => {
-  const env = harness({ "/api/interview/assistant/threads/": { threads: [] }, "/api/interview/assistant/": reply,
+  const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [] }, "/api/interview/assistant/": reply,
                         "/api/interview/assistant/messages/iam_2/undo/": { message: { id: "iam_2", undone: true }, entries: [] } });
   env.assistant.render();
   await env.chat().connect.handler({ messages: [{ role: "user", text: "整理" }] }, { onResponse: async () => {} });
@@ -118,7 +120,7 @@ test("undo posts to the message's undo endpoint and marks the changes undone", a
 });
 
 test("copy puts the reply's Markdown on the clipboard", async () => {
-  const env = harness({ "/api/interview/assistant/threads/": { threads: [] }, "/api/interview/assistant/": reply });
+  const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [] }, "/api/interview/assistant/": reply });
   env.assistant.render();
   await env.chat().connect.handler({ messages: [{ role: "user", text: "整理" }] }, { onResponse: async () => {} });
   const copied = [];
@@ -133,11 +135,36 @@ test("copy puts the reply's Markdown on the clipboard", async () => {
 
 test("the dock is wired: syncDock is called from the interview router; the dock grows from the bottom-right corner", () => {
   assert.match(interview, /assistantChat\?\.syncDock\(\{ visible:/);
-  assert.match(interview, /data\.pane === "assistant"/);
+  assert.match(interview, /state\.view !== "assistant"/);
   assert.match(source, /anchor: "bottom-right"/);
   assert.match(source, /keepOpen: \(\) => dock\.pinned/);
   const morph = fs.readFileSync(path.join(__dirname, "../web/static/corner-morph.js"), "utf8");
   assert.match(morph, /anchor\.startsWith\("bottom"\)/);
+});
+
+test("in IELTS mode the assistant uses the IELTS chats, sends domain=ielts and refreshes the IELTS corpora", async () => {
+  const ieltsReply = { ...reply, thread: { ...reply.thread, id: "iat_9" }, entries: undefined, ielts_changed: true,
+    reply: { ...reply.reply, applied: [{ op: "create", where: "p1", label: "P1 语料 · Hometown · Where is your hometown?", entry_id: "p1:p1q:1" }] } };
+  const env = harness({ "/api/interview/assistant/threads/?domain=ielts": { threads: [] }, "/api/interview/assistant/": ieltsReply }, { productMode: "ielts" });
+  const page = env.assistant.render();
+  assert.match(page, /data-domain="ielts"/);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(env.calls.some((call) => call.url === "/api/interview/assistant/threads/?domain=ielts"));
+  let answered;
+  await env.chat().connect.handler({ messages: [{ role: "user", text: "写 P1" }] }, { onResponse: async (message) => { answered = message; } });
+  assert.equal(env.calls.find((call) => call.url === "/api/interview/assistant/").body.domain, "ielts");
+  assert.deepEqual(env.ieltsChanges, [true]);
+  assert.equal(env.corpus.length, 0, "the interview corpus is untouched");
+  assert.match(answered.html, /data-where="p1"/);
+});
+
+test("the AI 助手 is a shared view: IELTS nav above 积累, its own panel, mode-aware app hooks", () => {
+  const app = fs.readFileSync(path.join(__dirname, "../web/static/app.js"), "utf8");
+  assert.match(html, /<a id="ieltsAssistantNav" class="nav-button hidden" data-view="assistant"[^>]*>AI 助手<\/a>\s*<span class="nav-section-label" aria-hidden="true">积累<\/span>/);
+  assert.match(html, /<section id="assistantPanel"/);
+  assert.match(app, /const SHARED_MODE_VIEWS = new Set\(\["home", "history", "corpus", "assistant"\]\)/);
+  assert.match(app, /if \(view === "assistant"\) interview\?\.showAssistant\?\.\(\)/);
+  assert.match(app, /onIeltsCorpusChanged: \(\) =>/);
 });
 
 test("the AI 助手 pane is wired into the interview nav, router and asset routes", () => {
