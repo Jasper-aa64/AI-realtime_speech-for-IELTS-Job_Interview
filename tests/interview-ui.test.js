@@ -107,7 +107,11 @@ test("full interview: start, type an answer, interviewer moves on, finish and au
   assert.match(env.html(), /data-interview-action="finish"/);
   await env.action("finish");
   assert.ok(env.requests.some((request) => request.url.endsWith("/report/")));
-  assert.match(env.html(), /<strong>72<\/strong>/);
+  // The report reuses the IELTS speaking-report layout: rail card + score summary + turn table.
+  assert.match(env.html(), /id="interviewReports"/);
+  assert.match(env.html(), /history-item-band-value">72</);
+  assert.match(env.html(), /<strong>72 \/ 100<\/strong>/);
+  assert.match(env.html(), /turn-report-table/);
   assert.match(env.html(), /并发细节/);
   assert.match(env.html(), /&lt;script>/);
   assert.doesNotMatch(env.html(), /<script>x/);

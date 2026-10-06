@@ -62,6 +62,7 @@
         pane: "home", part: "full", intensity: "standard", busy: false, error: "", notice: "",
         questions: [], categories: [], sessions: [], sessionsLoaded: false, current: null, report: null,
         corpus: null, corpusTab: "project", profile: null, customSide: "resume", resumeText: "", file: null, jdText: "",
+        reportFilter: "all", reportFilterOpen: false, railScroll: 0,
         editor: null, launch: { category: "", count: 5, projectIds: new Set() },
         answer: { state: "idle", text: "", source: "typed", typing: false, error: "", peek: false }, slide: 0,
       };
@@ -301,6 +302,13 @@
       return perform(() => request("/api/interview/sessions/"), (payload) => { data.sessions = payload.sessions || []; data.sessionsLoaded = true; });
     }
 
+    // The reports page opens the newest finished session, like the IELTS report rail.
+    function openFirstReport() {
+      if (!["reports", "report"].includes(data.pane) || selectedReport() || data.busy) return;
+      const first = visibleReports()[0];
+      if (first) perform(() => request(`/api/interview/sessions/${encodeURIComponent(first.id)}/`), acceptSession);
+    }
+
     function loadCorpus() {
       return perform(() => request("/api/interview/corpus/"), (payload) => { data.corpus = payload.entries || []; });
     }
@@ -327,7 +335,7 @@
       }
       switchView("interview", { force: state.view !== "interview" });
       render();
-      if (pane === "reports") loadHistory();
+      if (pane === "reports") loadHistory().then(openFirstReport);
       else if (!data.corpus && state.account.authenticated) loadOverview();
     }
 
@@ -537,44 +545,182 @@
         </section>`;
     }
 
-    // ---- Report: 100-point score with dimensions, boundary and per-turn notes.
-    function reportPane() {
+    // ---- Reports: the IELTS speaking-report layout (#historyPanel) — a horizontal rail of report
+    // cards, then the score summary, overall review and per-question table for the selected session.
+    const REPORT_TAGS = { full: ["mock", "MOCK"], project: ["p2", "PROJ"], knowledge: ["p1", "STACK"], reverse: ["p3", "ASK"] };
+    const REPORT_FILTERS = ["all", "full", "project", "knowledge", "reverse"];
+    const RAIL_ICON = (path) => `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="${path}"></path></svg>`;
+
+    function selectedReport() {
       const current = data.current;
-      if (!current) return reports();
-      const { session, turns = [] } = current;
-      const score = session.score;
-      const comments = Object.fromEntries((score?.per_turn || []).map((item) => [item.turn_id, item.comment]));
-      const hero = score?.status === "ready"
-        ? `<div class="iv-score"><div class="iv-score-total"><strong>${score.total}</strong><span>/ 100</span></div><p>${esc(score.summary)}</p></div>
-          <div class="iv-dimensions">${score.dimensions.map((dim) => `<div class="iv-dimension"><div><span>${esc(dim.label)}</span><b>${dim.score}<small> / ${dim.max}</small></b></div><div class="iv-meter"><span style="width:${Math.round((dim.score / dim.max) * 100)}%"></span></div><p>${esc(dim.evidence)}</p></div>`).join("")}</div>
-          ${score.boundary ? `<article class="iv-boundary"><p class="iv-eyebrow">${esc(copy("能力边界", "Boundary"))}</p><p>${esc(score.boundary)}</p></article>` : ""}
-          ${score.next_steps?.length ? `<article class="iv-boundary"><p class="iv-eyebrow">${esc(copy("下一步", "Next steps"))}</p><ul>${score.next_steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ul></article>` : ""}`
-        : score?.status === "failed"
-          ? `<div class="iv-error" role="alert">${esc(score.error || copy("评分生成失败。", "Scoring failed."))}</div>${solid("score", copy("重新生成百分制报告", "Retry scoring"))}`
-          : session.status === "completed"
-            ? `<div class="iv-score iv-score--pending"><p>${esc(data.busy ? copy("正在生成百分制报告…", "Scoring…") : copy("还没有评分。", "Not scored yet."))}</p>${data.busy ? "" : solid("score", copy("生成百分制报告", "Get the 100-point report"))}</div>` : "";
-      const rows = turns.map((turn) => {
-        const decision = turn.decision?.signal ? `<em class="iv-signal is-${esc(turn.decision.signal)}">${esc(pick(SIGNALS[turn.decision.signal] || SIGNALS.adequate))}</em>` : "";
-        return `<li class="is-${esc(turn.status)}${turn.kind === "follow_up" ? " is-follow" : ""}"><span class="iv-q-index">${turn.kind === "follow_up" ? "↳" : pad(turn.order)}</span><div>
-          <small>${esc(stageName(turn.stage) || "")}${turn.kind === "follow_up" ? ` · ${esc(copy("追问", "Follow-up"))}` : ""}${turn.answer_source === "voice" ? ` · ${esc(copy("语音", "Voice"))}` : ""} ${decision}</small>
-          <h3>${esc(turn.prompt)}</h3><p>${esc(turn.answer || copy("本题未回答。", "No answer."))}</p>
-          ${turn.reply ? `<div class="iv-reply"><span>${esc(copy("面试官", "Interviewer"))}</span><p>${esc(turn.reply)}</p></div>` : ""}
-          ${turn.decision?.evidence ? `<p class="iv-note">${esc(turn.decision.evidence)}</p>` : ""}
-          ${comments[turn.id] ? `<p class="iv-note iv-note--comment">${esc(comments[turn.id])}</p>` : ""}
-          ${turn.status === "completed" ? button("save-corpus", esc(copy("存为我的答法", "Save to my corpus")), { cls: "iv-link", attrs: `data-turn-id="${esc(turn.id)}"` }) : ""}
-        </div></li>`;
-      }).join("");
-      return `<header class="iv-report-head">${kicker(`${partName(session.part) || session.title} · ${session.intensity === "pressure" ? copy("追问压力", "Pressure") : copy("标准模式", "Standard")}`)}<h2>${esc(session.title)}</h2><p>${esc(dateText(session.created_at))}</p></header>
-        ${hero}
-        <p class="iv-voice-note"><span class="iv-dot" aria-hidden="true"></span>${esc(score?.limitations || copy("百分制由 AI 根据本次文字回答（含语音转写稿）估计，不评估发音，也不代表真实招聘结果。", "The score is an AI estimate from this session's text answers; no pronunciation, and not a hiring decision."))}</p>
-        <div class="iv-actions">${solid("go-practice", copy("再练一场", "Practice again"), { attrs: `data-part="${esc(session.part || "knowledge")}"` })}${quiet("reports", copy("全部报告", "All reports"))}</div>
-        <ol class="iv-transcript">${rows}</ol>`;
+      return current?.session && current.session.status !== "active" ? current : null;
     }
 
-    function reports() {
-      const rows = data.sessions.map((session) => `<li>${button("open-session", `<time>${esc(dateText(session.created_at))}</time><span class="iv-history-title"><strong>${esc(session.title)}</strong><small>${esc(partName(session.part) || copy("文字练习", "Text practice"))}${session.intensity === "pressure" ? ` · ${esc(copy("追问压力", "Pressure"))}` : ""}</small></span><em class="iv-status is-${esc(session.status)}">${esc(session.status === "active" ? copy("进行中", "In progress") : session.status === "completed" ? copy("已完成", "Completed") : copy("已结束", "Ended"))}</em><b class="iv-history-score">${session.score?.status === "ready" ? esc(session.score.total) : "—"}</b><i aria-hidden="true">→</i>`, { cls: "iv-history-row", attrs: `data-session-id="${esc(session.id)}"` })}</li>`).join("");
-      return `<div class="iv-toolbar"><span class="iv-toolbar-note">${esc(copy(`共 ${data.sessions.length} 场`, `${data.sessions.length} sessions`))}</span>${quiet("reload-history", copy("刷新", "Refresh"))}</div>
-        ${rows ? `<ol class="iv-history">${rows}</ol>` : `<div class="iv-empty-card"><p>${esc(copy("还没有面试报告。练完一场就会出现在这里。", "No reports yet. Finish a session to see it here."))}</p>${solid("go-practice", copy("开始练习", "Start practice"), { attrs: 'data-part="full"' })}</div>`}`;
+    function visibleReports() {
+      // Before the list loads (straight after finishing a session), the rail shows just that session.
+      const sessions = data.sessionsLoaded ? data.sessions : [selectedReport()?.session].filter(Boolean);
+      return sessions.filter((session) => session.status !== "active" && (data.reportFilter === "all" || session.part === data.reportFilter));
+    }
+
+    function reportFilterLabel(filter) {
+      return filter === "all" ? copy("全部", "All") : partName(filter);
+    }
+
+    function reportRail(items, selectedId) {
+      const cards = items.map((session) => {
+        const [tag, label] = REPORT_TAGS[session.part] || ["", "TEXT"];
+        const score = session.score;
+        const scoring = data.busy && selectedId === session.id && session.status === "completed" && score?.status !== "ready";
+        const band = scoring ? ["is-scoring", esc(copy("评分中", "Scoring"))]
+          : score?.status === "ready" ? ["", `<em class="history-item-band-label">${esc(copy("得分", "Score"))}</em><b class="history-item-band-value">${esc(score.total)}</b>`]
+          : score?.status === "failed" ? ["is-failed", esc(copy("评分失败", "Failed"))]
+          : ["is-unscored", esc(session.status === "completed" ? copy("未评分", "Unscored") : copy("已结束", "Ended"))];
+        return `<div class="history-item-wrap"><button type="button" class="history-item tone-${tag || "neutral"}${selectedId === session.id ? " active" : ""}" data-interview-action="open-session" data-session-id="${esc(session.id)}" ${data.busy ? "disabled" : ""}>
+            <div class="history-item-top"><span class="history-item-tag ${tag}">${label}</span>${session.intensity === "pressure" ? `<span class="report-sample-badge">${esc(copy("压力", "Pressure"))}</span>` : ""}<span class="history-item-band ${band[0]}">${band[1]}</span></div>
+            <strong class="history-item-title">${esc(session.title || partName(session.part))}</strong>
+            <small class="history-item-time">${esc(dateText(session.created_at))}</small>
+          </button></div>`;
+      }).join("");
+      const empty = `<div class="history-empty-state report-empty-rail-card"><span class="report-empty-rail-icon" aria-hidden="true">${RAIL_ICON("M7 8h10M7 12h6M5 4h14a2 2 0 0 1 2 2v11.5a2 2 0 0 1-2 2H8l-5 3V6a2 2 0 0 1 2-2Z")}</span>
+          <strong>${esc(data.reportFilter === "all" ? copy("还没有面试报告", "No reports yet") : copy("这个分类暂无报告", "Nothing in this filter"))}</strong>
+          <small>${esc(data.reportFilter === "all" ? copy("练完一场面试，报告会出现在这里。", "Finish a session to see its report here.") : copy("换个分类看看，或练一场对应的面试。", "Try another filter or practise this part."))}</small></div>`;
+      const loading = `<div class="report-rail-loading-card" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><strong>${esc(copy("正在加载面试报告", "Loading reports"))}</strong><small>${esc(copy("正在读取练习记录。", "Reading your sessions."))}</small></div>`;
+      const options = REPORT_FILTERS.map((filter) => `<button type="button" role="option" aria-selected="${data.reportFilter === filter}" data-interview-action="report-filter" data-filter="${filter}">${esc(reportFilterLabel(filter))}</button>`).join("");
+      return `<div class="history-rail-shell speaking-report-rail-shell at-start">
+          <div class="history-rail-head">
+            <div><strong>Reports</strong><span>${esc(copy("横向滑动", "Swipe"))}</span></div>
+            <div class="report-filter speaking-report-filter report-filter-compact">
+              <button type="button" class="report-filter-button" data-interview-action="report-filter-toggle" aria-haspopup="listbox" aria-expanded="${!!data.reportFilterOpen}"><span>${esc(reportFilterLabel(data.reportFilter))}</span>${RAIL_ICON("m7 10 5 5 5-5")}</button>
+              <div class="report-filter-menu${data.reportFilterOpen ? "" : " hidden"}" role="listbox" aria-label="${esc(copy("筛选面试报告", "Filter reports"))}">${options}</div>
+            </div>
+            <div class="history-rail-actions" aria-label="${esc(copy("报告滚动", "Report rail controls"))}">
+              <button type="button" class="history-rail-nav" data-interview-action="rail-step" data-step="-1" aria-label="${esc(copy("上一组", "Previous"))}">${RAIL_ICON("m15 18-6-6 6-6")}</button>
+              <button type="button" class="history-rail-nav" data-interview-action="rail-step" data-step="1" aria-label="${esc(copy("下一组", "Next"))}">${RAIL_ICON("m9 18 6-6-6-6")}</button>
+            </div>
+          </div>
+          <div class="history-rail-window"><div id="interviewReportList" class="history-list">${cards || (data.sessionsLoaded ? empty : loading)}</div></div>
+        </div>`;
+    }
+
+    function emptyDetail() {
+      const none = data.sessionsLoaded && !data.busy && !visibleReports().length;
+      if (!none) return `<div class="page-center-loading" role="status" aria-live="polite"><div><span class="spinner" aria-hidden="true"></span><div><strong>${esc(copy("正在加载面试报告", "Loading the report"))}</strong><span>${esc(copy("正在读取报告详情。", "Reading the report details."))}</span></div></div></div>`;
+      const all = data.reportFilter === "all";
+      return `<section class="detail-card report-empty-detail-card">
+          <div class="report-empty-orbit" aria-hidden="true"><span></span><svg viewBox="0 0 24 24"><path d="M8 9h8M8 13h5"></path><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7l-5 3v-3H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path></svg></div>
+          <div class="report-empty-copy"><span class="section-label">Interview Reports</span>
+            <h2>${esc(all ? copy("还没有面试报告", "No interview reports yet") : copy("这个分类下还没有报告", "No reports in this filter"))}</h2>
+            <p>${esc(all ? copy("练完一场完整面试或分段练习后，这里会沉淀百分制评分、能力边界和逐题点评。", "Finish a full interview or a single part to get a 100-point score, your boundary and per-question notes.") : copy("当前筛选没有匹配的报告。可以切换到全部，或者练一场对应的面试。", "Nothing matches this filter. Show all, or practise this part."))}</p></div>
+          <div class="report-empty-actions">${all
+            ? `${link("go-practice", esc(copy("开始完整面试", "Start a full interview")), { cls: "report-empty-primary", attrs: 'data-part="full"' })}${link("go-practice", esc(copy("练一个项目", "Practise a project")), { cls: "report-empty-secondary", attrs: 'data-part="project"' })}`
+            : `<button type="button" class="report-empty-primary" data-interview-action="report-filter" data-filter="all">${esc(copy("查看全部报告", "Show all reports"))}</button>${link("go-practice", esc(copy("去练一场", "Practise now")), { cls: "report-empty-secondary", attrs: `data-part="${esc(data.reportFilter)}"` })}`}</div>
+        </section>`;
+    }
+
+    function scoreSummary(session, turns) {
+      const score = session.score;
+      const ready = score?.status === "ready";
+      const answered = turns.filter((turn) => turn.status === "completed").length;
+      const cells = ready
+        ? score.dimensions.map((dim) => `<div class="score-cell"><span>${esc(dim.label)}<small>${esc(copy(`满分 ${dim.max}`, `of ${dim.max}`))}</small></span><strong>${esc(dim.score)}</strong></div>`).join("")
+        : "";
+      const pending = score?.status === "failed"
+        ? `<div class="iv-report-pending"><p role="alert">${esc(score.error || copy("评分生成失败。", "Scoring failed."))}</p>${solid("score", copy("重新生成百分制报告", "Retry scoring"))}</div>`
+        : session.status === "completed"
+          ? `<div class="iv-report-pending"><p>${esc(data.busy ? copy("正在生成百分制报告…", "Scoring…") : copy("这一场还没有评分。", "This session is not scored yet."))}</p>${data.busy ? "" : solid("score", copy("生成百分制报告", "Get the 100-point report"))}</div>`
+          : `<div class="iv-report-pending"><p>${esc(copy("这一场提前结束了，只保留了已答内容，不生成评分。", "This session ended early; answers are kept but not scored."))}</p></div>`;
+      return `<div class="detail-card speaking-score-summary-card${ready ? " speaking-report-ready-card" : ""}" data-report-status="${esc(score?.status || "none")}">
+          <div class="speaking-score-summary-head">
+            <div class="speaking-score-summary-copy">
+              <span class="section-label">${esc(copy("模拟面试 · 百分制估分", "Mock interview · 100-point estimate"))}</span>
+              <h2>${esc(partName(session.part) || session.title)} ${esc(copy("报告", "report"))}</h2>
+              <p class="muted">${esc(session.title)} · ${esc(copy(`${answered} 题已答`, `${answered} answered`))} · ${esc(session.intensity === "pressure" ? copy("追问压力", "Pressure") : copy("标准模式", "Standard"))} · ${esc(dateText(session.created_at))}</p>
+            </div>
+            <div class="speaking-score-summary-side">
+              ${button("go-practice", esc(copy("再练一场", "Practice again")), { cls: "report-export-btn", attrs: `data-part="${esc(session.part || "full")}"` })}
+              <div class="speaking-score-summary-band"><span>Overall</span><strong>${ready ? `${esc(score.total)} / 100` : "—"}</strong></div>
+            </div>
+          </div>
+          ${ready ? `<div class="score-row compact speaking-score-summary-grid iv-score-grid">${cells}</div>` : pending}
+        </div>`;
+    }
+
+    function overallReview(score) {
+      if (score?.status !== "ready") return "";
+      const body = `${score.summary ? `<h4>${esc(copy("总体点评", "Overall"))}</h4><p>${esc(score.summary)}</p>` : ""}
+        ${score.dimensions?.some((dim) => dim.evidence) ? `<h4>${esc(copy("评分依据", "Why these scores"))}</h4><ul>${score.dimensions.filter((dim) => dim.evidence).map((dim) => `<li><strong>${esc(dim.label)} ${esc(dim.score)}/${esc(dim.max)}</strong> ${esc(dim.evidence)}</li>`).join("")}</ul>` : ""}
+        ${score.boundary ? `<h4>${esc(copy("能力边界", "Knowledge boundary"))}</h4><p>${esc(score.boundary)}</p>` : ""}
+        ${score.next_steps?.length ? `<h4>${esc(copy("下一步练习", "Next steps"))}</h4><ul>${score.next_steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ul>` : ""}`;
+      return `<div class="detail-card overall-review-card"><div class="overall-review-head"><h3>Overall Review & Practice Focus</h3></div><div class="overall-review-content">${body}</div></div>`;
+    }
+
+    function turnTable(turns, score) {
+      const comments = Object.fromEntries((score?.per_turn || []).map((item) => [item.turn_id, item.comment]));
+      const counters = {};
+      const rows = turns.filter((turn) => turn.status !== "pending").map((turn) => {
+        const follow = turn.kind === "follow_up";
+        if (!follow) counters[turn.stage] = (counters[turn.stage] || 0) + 1;
+        const signal = turn.decision?.signal ? `<em class="iv-signal is-${esc(turn.decision.signal)}">${esc(pick(SIGNALS[turn.decision.signal] || SIGNALS.adequate))}</em>` : "";
+        const save = turn.status === "completed"
+          ? `<div class="question-cell-actions"><button type="button" class="ghost corpus-edit-button" data-interview-action="save-corpus" data-turn-id="${esc(turn.id)}" ${data.busy ? "disabled" : ""}><svg class="corpus-edit-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11M4 12h7M4 17h5"></path><path d="m15.5 15.5 4-4a1.4 1.4 0 0 1 2 2l-4 4-2.6.6z"></path></svg><span class="corpus-edit-label">${esc(copy("存为我的答法", "Save to corpus"))}</span></button></div>` : "";
+        const notes = [
+          turn.reply ? `<p><strong>${esc(copy("面试官回答", "Interviewer"))}</strong>${esc(turn.reply)}</p>` : "",
+          turn.decision?.evidence ? `<p>${signal}${esc(turn.decision.evidence)}</p>` : signal ? `<p>${signal}</p>` : "",
+          turn.decision?.boundary ? `<p class="muted">${esc(copy("边界：", "Boundary: "))}${esc(turn.decision.boundary)}</p>` : "",
+          comments[turn.id] ? `<p>${esc(comments[turn.id])}</p>` : "",
+        ].join("");
+        return `<tbody class="turn-report-group p1-p3-turn-group"><tr class="p1-p3-content-row">
+            <td><div class="question-header"><strong>${esc(stageName(turn.stage) || copy("问题", "Question"))}${follow ? "" : ` ${counters[turn.stage]}`}</strong>${follow ? `<span class="follow-up-pill">${esc(copy("追问", "Follow-up"))}</span>` : ""}</div><p>${esc(turn.prompt)}</p>${save}</td>
+            <td>${turn.answer ? `${turn.answer_source === "voice" ? `<span class="iv-source-pill">${esc(copy("语音转写", "Voice"))}</span>` : ""}<p>${esc(turn.answer)}</p>` : `<p class="muted report-empty-answer">${esc(turn.status === "skipped" ? copy("已跳过", "Skipped") : copy("为空", "Empty"))}</p>`}</td>
+            <td>${notes || `<p class="muted">${esc(copy("没有点评。", "No notes."))}</p>`}</td>
+          </tr></tbody>`;
+      }).join("");
+      if (!rows) return "";
+      return `<div class="detail-card turn-report-card"><div class="turn-report-wrap"><table class="turn-report-table p1-p3-report-table">
+          <thead><tr><th>${esc(copy("问题", "Question"))}</th><th>${esc(copy("你的回答", "Your answer"))}</th><th class="band7-head">${esc(copy("面试官判断", "Interviewer notes"))}</th></tr></thead>${rows}</table></div></div>`;
+    }
+
+    function reportDetail(current) {
+      const { session, turns = [] } = current;
+      return `${scoreSummary(session, turns)}${overallReview(session.score)}
+        ${turnTable(turns, session.score)}
+        <p class="iv-voice-note"><span class="iv-dot" aria-hidden="true"></span>${esc(session.score?.limitations || copy("百分制由 AI 根据本次文字回答（含语音转写稿）估计，不评估发音，也不代表真实招聘结果。", "The score is an AI estimate from this session's text answers; no pronunciation, and not a hiring decision."))}</p>`;
+    }
+
+    function reportsPane() {
+      const selected = selectedReport();
+      const items = visibleReports();
+      return `<section id="interviewReports" class="panel speaking-reports-panel">
+          ${reportRail(items, selected?.session.id)}
+          <article id="interviewReportDetail" class="detail-panel">${selected ? reportDetail(selected) : emptyDetail()}</article>
+        </section>`;
+    }
+
+    // Like updateReportRailState in app.js: fade the rail edges and disable the arrows at the ends.
+    function syncReportRail() {
+      const list = byId("interviewReportList");
+      const shell = list?.closest?.(".history-rail-shell");
+      if (!list || !shell) return;
+      const maxScroll = Math.max(0, list.scrollWidth - list.clientWidth);
+      const atStart = list.scrollLeft <= 2;
+      const atEnd = maxScroll <= 2 || list.scrollLeft >= maxScroll - 2;
+      shell.classList.toggle("at-start", atStart);
+      shell.classList.toggle("at-end", atEnd);
+      const navs = shell.querySelectorAll(".history-rail-nav");
+      navs[0]?.toggleAttribute("disabled", atStart);
+      navs[1]?.toggleAttribute("disabled", atEnd);
+    }
+
+    function mountReportRail() {
+      const list = byId("interviewReportList");
+      if (!list) return;
+      list.scrollLeft = data.railScroll || 0;
+      const active = list.querySelector(".history-item.active");
+      if (active && (active.offsetLeft < list.scrollLeft || active.offsetLeft + active.offsetWidth > list.scrollLeft + list.clientWidth)) {
+        list.scrollLeft = Math.max(0, active.offsetLeft - 12);
+      }
+      list.addEventListener("scroll", () => { data.railScroll = list.scrollLeft; syncReportRail(); }, { passive: true });
+      syncReportRail();
     }
 
     // ---- Corpus library: grouped cards like "我的 P1 语料库".
@@ -708,9 +854,10 @@
 
     function syncChrome() {
       const pane = data.pane;
-      const bare = pane === "home" || pane === "report" || pane === "corpus";
+      const bare = pane === "home" || pane === "reports" || pane === "report" || pane === "corpus";
       document.body.classList.toggle("interview-bare", state.view === "interview" && bare);
       document.querySelector?.(".workspace")?.classList.toggle("interview-corpus-workspace", state.view === "interview" && pane === "corpus");
+      document.querySelector?.(".workspace")?.classList.toggle("interview-history-workspace", state.view === "interview" && (pane === "reports" || pane === "report"));
       if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
       document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
         const itemPane = item.dataset.interviewPane;
@@ -740,9 +887,10 @@
         perform(() => request(`/api/interview/sessions/${encodeURIComponent(id)}/`), (payload) => { if (payload.session.part === data.part) acceptSession(payload); });
         return;
       }
-      const content = ({ home, practice, reports, report: reportPane, corpus: corpusPane, custom: customPane })[data.pane]();
+      const content = ({ home, practice, reports: reportsPane, report: reportsPane, corpus: corpusPane, custom: customPane })[data.pane]();
       const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy && data.answer.state !== "thinking" ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
       panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>${editorModal()}`;
+      if (data.pane === "reports" || data.pane === "report") mountReportRail();
     }
 
     // ---- Carousel: same behaviour as home-dashboard.js — the active segment fills (CSS animation)
@@ -898,6 +1046,7 @@
       if (!el || (data.busy && !["close-editor"].includes(el.dataset.interviewAction))) return;
       if (el.tagName === "A") event.preventDefault?.();
       const action = el.dataset.interviewAction;
+      if (action !== "report-filter-toggle") data.reportFilterOpen = false;
       const sessionId = data.current?.session?.id;
       const base = sessionId ? `/api/interview/sessions/${encodeURIComponent(sessionId)}/` : "";
       switch (action) {
@@ -906,6 +1055,19 @@
         case "go-custom": data.customSide = el.dataset.side || data.customSide; setPane("custom"); return;
         case "reports": setPane("reports"); return;
         case "reload-history": loadHistory(); return;
+        case "report-filter-toggle": data.reportFilterOpen = !data.reportFilterOpen; render(); return;
+        case "report-filter":
+          data.reportFilter = REPORT_FILTERS.includes(el.dataset.filter) ? el.dataset.filter : "all";
+          data.railScroll = 0;
+          if (selectedReport() && !visibleReports().some((item) => item.id === data.current.session.id)) data.current = null;
+          render();
+          openFirstReport();
+          return;
+        case "rail-step": {
+          const list = byId("interviewReportList");
+          if (list) list.scrollBy({ left: Number(el.dataset.step) * Math.max(260, Math.floor(list.clientWidth * 0.45)), behavior: "smooth" });
+          return;
+        }
         case "slide-prev": showSlide(data.slide - 1); return;
         case "slide-next": showSlide(data.slide + 1); return;
         case "slide-go": showSlide(Number(el.dataset.index) || 0); return;
@@ -941,9 +1103,10 @@
             // Ask for the 100-point score once, right after the transcript is saved.
             const session = data.current?.session;
             if (session?.status === "completed" && !session.score) {
-              perform(() => request(`/api/interview/sessions/${encodeURIComponent(session.id)}/report/`, { ai_source: currentAiSourcePreference() }), acceptSession);
+              return perform(() => request(`/api/interview/sessions/${encodeURIComponent(session.id)}/report/`, { ai_source: currentAiSourcePreference() }), acceptSession);
             }
-          });
+            return null;
+          }).then(() => { if (data.pane === "report" && !data.sessionsLoaded) loadHistory(); });
           return;
         case "abort": stopRecorder(); perform(() => request(`${base}abort/`, {}), (payload) => { acceptSession(payload); data.current = null; data.pane = "practice"; resetAnswer(); }); return;
         case "score": perform(() => request(`${base}report/`, { ai_source: currentAiSourcePreference() }), acceptSession); return;

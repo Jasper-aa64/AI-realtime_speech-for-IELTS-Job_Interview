@@ -45400,7 +45400,8 @@ body:not(#_):not(#__) .history-rail-shell {
   padding-bottom: 0 !important;
 }
 
-body:not(#_) .workspace.history-workspace {
+body:not(#_) .workspace.history-workspace,
+body:not(#_) .workspace.interview-history-workspace {
   padding-top: calc(126px + var(--safe-top)) !important;
 }
 
@@ -46433,7 +46434,9 @@ body:not(#_) #interviewPanel:not(.hidden) {
 
 /* Scroll regions: home, report and corpus scroll as a whole pane; practice keeps its header and
    scrolls inside each column; reports scroll the list; tailored scrolls each sheet. */
-#interviewPanel :is(.iv-pane--home, .iv-pane--report, .iv-pane--corpus) { overflow-y: auto; overscroll-behavior: contain; }
+#interviewPanel :is(.iv-pane--home, .iv-pane--corpus) { overflow-y: auto; overscroll-behavior: contain; }
+#interviewPanel :is(.iv-pane--reports, .iv-pane--report) > #interviewReports { flex: 1 1 auto; min-height: 0; }
+#interviewReportDetail { overscroll-behavior: contain; }
 #interviewPanel .iv-pane > .iv-history { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 #interviewPanel .iv-pane > .iv-custom { flex: 1 1 auto; min-height: 0; grid-template-rows: minmax(0, 1fr); }
 #interviewPanel .iv-custom > :is(.iv-sheet, .iv-custom-side) { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
@@ -46912,34 +46915,6 @@ body:not(#_) #interviewPanel .iv-history-row:hover:not(:disabled) { background: 
 
 
 
-/* ---------- Report ---------- */
-#interviewPanel .iv-report-head { display: grid; gap: 10px; padding-top: clamp(8px, 2vw, 24px); }
-#interviewPanel .iv-report-head h2 { font-family: var(--ed-serif); font-size: clamp(30px, 3vw, 44px); font-weight: 400; line-height: 1.1; }
-#interviewPanel .iv-report-head p { color: var(--muted); font-family: var(--ed-mono); font-size: 12.5px; }
-
-#interviewPanel .iv-report-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 160px));
-  padding: 18px 0;
-  border-block: 1px solid var(--iv-rule);
-}
-
-#interviewPanel .iv-report-stats div + div { padding-left: 24px; border-left: 1px solid var(--iv-rule); }
-#interviewPanel .iv-report-stats dt { color: var(--muted); font-family: var(--ed-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; }
-#interviewPanel .iv-report-stats dd { padding-top: 6px; font-family: var(--ed-serif); font-size: 40px; line-height: 1; }
-#interviewPanel .iv-coaching { display: grid; gap: 14px; padding: 24px 26px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--accent) 5%, var(--iv-card)); }
-#interviewPanel .iv-feedback { color: var(--ink); font-size: 15px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
-
-#interviewPanel .iv-transcript { border-top: 1px solid var(--iv-rule); }
-#interviewPanel .iv-transcript li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 22px 0; border-bottom: 1px solid var(--iv-rule); }
-#interviewPanel .iv-transcript li.is-follow { padding-left: 28px; }
-#interviewPanel .iv-transcript .iv-q-index { padding-top: 4px; }
-#interviewPanel .iv-transcript li > div { display: grid; gap: 8px; min-width: 0; }
-#interviewPanel .iv-transcript small { color: var(--muted); font-size: 12px; }
-#interviewPanel .iv-transcript h3 { font-family: var(--ed-serif); font-size: 21px; font-weight: 400; line-height: 1.4; }
-#interviewPanel .iv-transcript p { color: var(--ink); font-size: 15px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
-#interviewPanel .iv-transcript li.is-skipped p { color: var(--muted); font-style: italic; }
-
 /* ---------- Guest ---------- */
 #interviewPanel .iv-guest { display: grid; justify-items: start; gap: 22px; max-width: 640px; padding: clamp(40px, 8vh, 96px) 0; }
 #interviewPanel .iv-guest > p:not(.iv-kicker):not(.iv-voice-note) { color: var(--muted); font-size: 16px; line-height: 1.7; }
@@ -47308,33 +47283,20 @@ body:not(#_) #interviewPanel .iv-show-foot .iv-icon-btn { margin: 0; border-radi
 #interviewPanel .iv-meter-text { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.6; }
 #interviewPanel .iv-panel .iv-chips { margin-top: 16px; }
 
-/* ---------- Report ---------- */
-#interviewPanel .iv-pane--report { display: block; }
-#interviewPanel .iv-pane--report > * + * { margin-top: 20px; }
-#interviewPanel .iv-report-head { padding-top: clamp(8px, 2vw, 24px); }
-#interviewPanel .iv-score { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 32px; padding: 22px 0; border-block: 1px solid var(--iv-rule); }
-#interviewPanel .iv-score-total { display: flex; align-items: baseline; gap: 8px; }
-#interviewPanel .iv-score-total strong { font-family: var(--ed-serif); font-size: clamp(64px, 6vw, 96px); font-weight: 400; line-height: 0.9; }
-#interviewPanel .iv-score-total span { color: var(--muted); font-family: var(--ed-mono); font-size: 14px; }
-#interviewPanel .iv-score p { flex: 1 1 320px; color: var(--ink); font-size: 15px; line-height: 1.75; }
-#interviewPanel .iv-score--pending { align-items: center; }
-#interviewPanel .iv-dimensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-#interviewPanel .iv-dimension { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--iv-rule); border-radius: 14px; background: var(--iv-card); }
-#interviewPanel .iv-dimension > div:first-child { display: flex; justify-content: space-between; align-items: baseline; }
-#interviewPanel .iv-dimension span { font-size: 14px; }
-#interviewPanel .iv-dimension b { font-family: var(--ed-serif); font-size: 26px; font-weight: 400; }
-#interviewPanel .iv-dimension b small { color: var(--muted); font-family: var(--ed-mono); font-size: 12px; }
-#interviewPanel .iv-dimension p { color: var(--muted); font-size: 13px; line-height: 1.6; }
-#interviewPanel .iv-boundary { display: grid; gap: 8px; padding: 18px 20px; border: 1px solid color-mix(in srgb, var(--ed-gold) 40%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--ed-gold) 6%, var(--iv-card)); }
-#interviewPanel .iv-boundary p:last-child, #interviewPanel .iv-boundary li { font-size: 14.5px; line-height: 1.75; }
-#interviewPanel .iv-boundary ul { padding-left: 18px; list-style: disc; }
+/* ---------- Reports: IELTS speaking-report rail + detail (shared via the #interviewReports aliases) ---------- */
+#interviewReportDetail .iv-score-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1100px) { #interviewReportDetail .iv-score-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+#interviewReportDetail .iv-report-pending { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 14px; }
+#interviewReportDetail .iv-report-pending p[role="alert"] { color: var(--danger, #b42318); }
+#interviewReportDetail .speaking-score-summary-band strong { white-space: nowrap; }
+#interviewReportDetail .turn-report-table td > p + p { margin-top: 8px; }
+#interviewReportDetail .turn-report-table td p strong { display: block; margin-bottom: 2px; color: var(--muted); font-size: 12.5px; }
+#interviewReportDetail .iv-signal { margin: 0 6px 0 0; }
+#interviewReportDetail .iv-source-pill { display: inline-block; margin-bottom: 6px; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--muted); font-size: 11.5px; }
+#interviewReportDetail > .iv-voice-note { flex: none; margin: 0 0 8px; }
 #interviewPanel .iv-signal { margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-style: normal; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 #interviewPanel .iv-signal.is-strong { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 #interviewPanel .iv-signal.is-weak { background: color-mix(in srgb, var(--ed-gold) 18%, transparent); color: color-mix(in srgb, var(--ed-gold) 80%, var(--ink)); }
-#interviewPanel .iv-note { color: var(--muted); font-size: 13px; line-height: 1.65; }
-#interviewPanel .iv-note--comment { padding-left: 10px; border-left: 2px solid var(--accent); color: var(--ink); }
-#interviewPanel .iv-history-score { min-width: 40px; font-family: var(--ed-serif); font-size: 22px; font-weight: 400; text-align: right; }
-body:not(#_) #interviewPanel .iv-history-row { grid-template-columns: 120px minmax(0, 1fr) auto auto 28px; }
 
 /* ---------- Corpus library: grouped cards like "我的 P1 语料库" ---------- */
 #interviewPanel .iv-pane--corpus { display: block; }

@@ -2481,6 +2481,8 @@ function switchView(view, options = {}) {
   $("#accountProfilePanel")?.classList.toggle("hidden", view !== "accountProfile");
   $("#accountSecurityPanel")?.classList.toggle("hidden", view !== "accountSecurity");
   $(".workspace").classList.toggle("history-workspace", view === "history" || view === "writingReports");
+  // interview.js sets its own workspace layouts; leaving the interview view must clear them.
+  if (view !== "interview") $(".workspace").classList.remove("interview-history-workspace", "interview-corpus-workspace");
   $(".workspace").classList.toggle("writing-workspace", view === "writing");
   const hideWorkspaceHeader = workspaceHeaderHiddenViews.has(view);
   $(".topbar").classList.toggle("hidden", hideWorkspaceHeader);
