@@ -32,6 +32,10 @@ ALIASES = [
     ("#progressTrack", "#interviewProgress", [], False),
     ("#phaseLabel", "#interviewPhase", [], False),
     ("#promptCard", "#interviewPromptCard", [], False),
+    # Resume / JD page <-> daily writing.
+    ("#writingPanel", "#interviewCustom", [], False),
+    ("#writingScoreBtn", "#interviewCustomSubmit", [], False),
+    ("#writingSaveBtn", "#interviewCustomCorpus", [], False),
 ]
 # Speaking-report workspace conditions: shared for the rail/detail, never for writing reports.
 HISTORY_WORKSPACE = (".history-workspace", ".interview-history-workspace")

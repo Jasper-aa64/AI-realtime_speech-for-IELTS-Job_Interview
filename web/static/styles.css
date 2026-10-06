@@ -13784,7 +13784,8 @@ body.theme-dark .agent-assistant-modal .agent-assistant-card {
   gap: 8px;
 }
 
-.writing-submit-row #writingScoreBtn {
+.writing-submit-row #writingScoreBtn,
+.writing-submit-row #interviewCustomSubmit {
   grid-column: auto;
 }
 
@@ -39252,7 +39253,24 @@ body.theme-dark.font-popular .writing-prompt-modal-card,
 body.theme-dark.font-popular .writing-prompt-pattern-panel,
 body.theme-dark.font-popular .writing-prompt-section,
 body.theme-dark.font-popular .writing-prompt-choice,
-body.theme-dark.font-popular .writing-catalog-slot {
+body.theme-dark.font-popular .writing-catalog-slot,
+body.theme-dark.font-popular #interviewCustom,
+body.theme-dark.font-popular #interviewCustom .writing-shell,
+body.theme-dark.font-popular #interviewCustom .writing-calendar-card,
+body.theme-dark.font-popular #interviewCustom .writing-editor-card,
+body.theme-dark.font-popular #interviewCustom .writing-result-card,
+body.theme-dark.font-popular #interviewCustom .writing-prompt-card,
+body.theme-dark.font-popular #interviewCustom .writing-score-summary-card,
+body.theme-dark.font-popular #interviewCustom .writing-saved-report-card,
+body.theme-dark.font-popular #interviewCustom .writing-saved-answer-card,
+body.theme-dark.font-popular #interviewCustom .writing-band-card,
+body.theme-dark.font-popular #interviewCustom .writing-action-panel,
+body.theme-dark.font-popular #interviewCustom .writing-stats-grid div,
+body.theme-dark.font-popular #interviewCustom .writing-calendar,
+body.theme-dark.font-popular #interviewCustom .writing-day,
+body.theme-dark.font-popular #interviewCustom .writing-saved-report-body section,
+body.theme-dark.font-popular #interviewCustom .writing-prompt-image,
+body.theme-dark.font-popular #interviewCustom .writing-report-image {
   background: #080a0c !important;
   border-color: rgba(226, 232, 240, 0.14) !important;
   color: #edf4f7 !important;
@@ -39263,7 +39281,10 @@ body.theme-dark.font-popular #writingPanel .writing-editor-card,
 body.theme-dark.font-popular #writingPanel .writing-result-card,
 body.theme-dark.font-popular #writingPanel .writing-prompt-card,
 body.theme-dark.font-popular .writing-prompt-modal-card,
-body.theme-dark.font-popular .writing-prompt-choice {
+body.theme-dark.font-popular .writing-prompt-choice,
+body.theme-dark.font-popular #interviewCustom .writing-editor-card,
+body.theme-dark.font-popular #interviewCustom .writing-result-card,
+body.theme-dark.font-popular #interviewCustom .writing-prompt-card {
   background: linear-gradient(180deg, #0b0d10, #050607) !important;
 }
 
@@ -39271,7 +39292,11 @@ body.theme-dark.font-popular #writingPanel textarea,
 body.theme-dark.font-popular #writingPanel input,
 body.theme-dark.font-popular #writingPanel select,
 body.theme-dark.font-popular #writingPanel .writing-answer,
-body.theme-dark.font-popular .writing-prompt-modal-card input {
+body.theme-dark.font-popular .writing-prompt-modal-card input,
+body.theme-dark.font-popular #interviewCustom textarea,
+body.theme-dark.font-popular #interviewCustom input,
+body.theme-dark.font-popular #interviewCustom select,
+body.theme-dark.font-popular #interviewCustom .writing-answer {
   background: #030405 !important;
   border-color: rgba(226, 232, 240, 0.16) !important;
   color: #f2f7fa !important;
@@ -39280,7 +39305,9 @@ body.theme-dark.font-popular .writing-prompt-modal-card input {
 body.theme-dark.font-popular #writingPanel .writing-prompt-choice:hover,
 body.theme-dark.font-popular #writingPanel .writing-prompt-choice.active,
 body.theme-dark.font-popular .writing-prompt-choice:hover,
-body.theme-dark.font-popular .writing-prompt-choice.active {
+body.theme-dark.font-popular .writing-prompt-choice.active,
+body.theme-dark.font-popular #interviewCustom .writing-prompt-choice:hover,
+body.theme-dark.font-popular #interviewCustom .writing-prompt-choice.active {
   background: linear-gradient(180deg, #11161c, #07090c) !important;
   border-color: rgba(76, 154, 212, 0.72) !important;
   box-shadow:
@@ -39292,7 +39319,10 @@ body.theme-dark.font-popular #writingPanel .writing-pill,
 body.theme-dark.font-popular #writingPanel .writing-picker-chip,
 body.theme-dark.font-popular #writingPanel .writing-prompt-status,
 body.theme-dark.font-popular .writing-prompt-status,
-body.theme-dark.font-popular .writing-prompt-pattern-badge {
+body.theme-dark.font-popular .writing-prompt-pattern-badge,
+body.theme-dark.font-popular #interviewCustom .writing-pill,
+body.theme-dark.font-popular #interviewCustom .writing-picker-chip,
+body.theme-dark.font-popular #interviewCustom .writing-prompt-status {
   background: rgba(76, 154, 212, 0.14) !important;
   border-color: rgba(76, 154, 212, 0.28) !important;
   color: #dbefff !important;
@@ -39450,7 +39480,8 @@ body.theme-dark.font-popular .turn-report-table td:nth-child(3) .model-answer-ma
 
 /* Third dark theme daily-writing calendar: keep the surrounding writing UI
    graphite, but give the calendar its own readable surface instead of flat black. */
-body.theme-dark.font-popular #writingPanel .writing-calendar-card {
+body.theme-dark.font-popular #writingPanel .writing-calendar-card,
+body.theme-dark.font-popular #interviewCustom .writing-calendar-card {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
     #101418 !important;
@@ -39460,7 +39491,8 @@ body.theme-dark.font-popular #writingPanel .writing-calendar-card {
     0 14px 34px rgba(0, 0, 0, 0.24) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-calendar {
+body.theme-dark.font-popular #writingPanel .writing-calendar,
+body.theme-dark.font-popular #interviewCustom .writing-calendar {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.010)),
     #0b1014 !important;
@@ -39468,30 +39500,35 @@ body.theme-dark.font-popular #writingPanel .writing-calendar {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-weekday {
+body.theme-dark.font-popular #writingPanel .writing-weekday,
+body.theme-dark.font-popular #interviewCustom .writing-weekday {
   color: rgba(214, 226, 235, 0.76) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-day {
+body.theme-dark.font-popular #writingPanel .writing-day,
+body.theme-dark.font-popular #interviewCustom .writing-day {
   background: #141b21 !important;
   border-color: rgba(148, 163, 184, 0.18) !important;
   color: #d7e2eb !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-day.blank {
+body.theme-dark.font-popular #writingPanel .writing-day.blank,
+body.theme-dark.font-popular #interviewCustom .writing-day.blank {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-day.saved {
+body.theme-dark.font-popular #writingPanel .writing-day.saved,
+body.theme-dark.font-popular #interviewCustom .writing-day.saved {
   background: linear-gradient(180deg, rgba(67, 151, 202, 0.25), rgba(20, 75, 112, 0.30)) !important;
   border-color: rgba(110, 184, 226, 0.52) !important;
   color: #d8efff !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-day.scored {
+body.theme-dark.font-popular #writingPanel .writing-day.scored,
+body.theme-dark.font-popular #interviewCustom .writing-day.scored {
   background: linear-gradient(180deg, rgba(52, 184, 128, 0.24), rgba(22, 101, 71, 0.30)) !important;
   border-color: rgba(110, 231, 183, 0.52) !important;
   color: #d9ffed !important;
@@ -39499,12 +39536,15 @@ body.theme-dark.font-popular #writingPanel .writing-day.scored {
 
 /* Third dark theme daily-writing layering: keep the black/graphite direction,
    but separate page, cards, inner prompt, input, stats, and calendar surfaces. */
-body.theme-dark.font-popular #writingPanel .writing-shell {
+body.theme-dark.font-popular #writingPanel .writing-shell,
+body.theme-dark.font-popular #interviewCustom .writing-shell {
   background: transparent !important;
 }
 
 body.theme-dark.font-popular #writingPanel .writing-editor-card,
-body.theme-dark.font-popular #writingPanel .writing-result-card {
+body.theme-dark.font-popular #writingPanel .writing-result-card,
+body.theme-dark.font-popular #interviewCustom .writing-editor-card,
+body.theme-dark.font-popular #interviewCustom .writing-result-card {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.040), rgba(255, 255, 255, 0.008)),
     #0b0e11 !important;
@@ -39514,7 +39554,8 @@ body.theme-dark.font-popular #writingPanel .writing-result-card {
     0 18px 46px rgba(0, 0, 0, 0.42) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-checkin-top {
+body.theme-dark.font-popular #writingPanel .writing-checkin-top,
+body.theme-dark.font-popular #interviewCustom .writing-checkin-top {
   padding: 10px;
   border: 1px solid rgba(226, 232, 240, 0.18);
   border-radius: 14px;
@@ -39524,7 +39565,8 @@ body.theme-dark.font-popular #writingPanel .writing-checkin-top {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-prompt-card {
+body.theme-dark.font-popular #writingPanel .writing-prompt-card,
+body.theme-dark.font-popular #interviewCustom .writing-prompt-card {
   background: linear-gradient(180deg, #15191d, #0d1013) !important;
   border-color: rgba(226, 232, 240, 0.22) !important;
   border-left-color: rgba(95, 166, 212, 0.72) !important;
@@ -39533,7 +39575,8 @@ body.theme-dark.font-popular #writingPanel .writing-prompt-card {
     0 10px 24px rgba(0, 0, 0, 0.22) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-answer {
+body.theme-dark.font-popular #writingPanel .writing-answer,
+body.theme-dark.font-popular #interviewCustom .writing-answer {
   background: #050608 !important;
   border-color: rgba(226, 232, 240, 0.24) !important;
   box-shadow:
@@ -39541,7 +39584,8 @@ body.theme-dark.font-popular #writingPanel .writing-answer {
     inset 0 0 0 1px rgba(0, 0, 0, 0.24) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-stats-grid div {
+body.theme-dark.font-popular #writingPanel .writing-stats-grid div,
+body.theme-dark.font-popular #interviewCustom .writing-stats-grid div {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
     #11161b !important;
@@ -39551,7 +39595,8 @@ body.theme-dark.font-popular #writingPanel .writing-stats-grid div {
     0 5px 12px rgba(0, 0, 0, 0.20) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-calendar {
+body.theme-dark.font-popular #writingPanel .writing-calendar,
+body.theme-dark.font-popular #interviewCustom .writing-calendar {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.060), rgba(255, 255, 255, 0.018)),
     #0f1419 !important;
@@ -39561,7 +39606,8 @@ body.theme-dark.font-popular #writingPanel .writing-calendar {
     0 8px 22px rgba(0, 0, 0, 0.28) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-day {
+body.theme-dark.font-popular #writingPanel .writing-day,
+body.theme-dark.font-popular #interviewCustom .writing-day {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.050), rgba(255, 255, 255, 0.010)),
     #171d23 !important;
@@ -39570,13 +39616,15 @@ body.theme-dark.font-popular #writingPanel .writing-day {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-day.blank {
+body.theme-dark.font-popular #writingPanel .writing-day.blank,
+body.theme-dark.font-popular #interviewCustom .writing-day.blank {
   background: rgba(255, 255, 255, 0.020) !important;
   border-color: rgba(226, 232, 240, 0.06) !important;
   opacity: 0.55;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-day.saved {
+body.theme-dark.font-popular #writingPanel .writing-day.saved,
+body.theme-dark.font-popular #interviewCustom .writing-day.saved {
   background:
     linear-gradient(180deg, rgba(93, 173, 226, 0.46), rgba(24, 86, 126, 0.58)),
     #123245 !important;
@@ -39588,7 +39636,8 @@ body.theme-dark.font-popular #writingPanel .writing-day.saved {
     0 6px 14px rgba(8, 47, 73, 0.28) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-day.scored {
+body.theme-dark.font-popular #writingPanel .writing-day.scored,
+body.theme-dark.font-popular #interviewCustom .writing-day.scored {
   background:
     linear-gradient(180deg, rgba(74, 222, 128, 0.42), rgba(22, 116, 74, 0.58)),
     #123a2a !important;
@@ -39600,7 +39649,8 @@ body.theme-dark.font-popular #writingPanel .writing-day.scored {
     0 6px 14px rgba(20, 83, 45, 0.28) !important;
 }
 
-body.theme-dark.font-popular #writingPanel .writing-legend {
+body.theme-dark.font-popular #writingPanel .writing-legend,
+body.theme-dark.font-popular #interviewCustom .writing-legend {
   color: rgba(218, 229, 238, 0.78) !important;
 }
 
@@ -41987,7 +42037,8 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
 
 @media (prefers-reduced-motion: reduce) {
   .language-takeaway-card-wrap,
-  #writingPanel .writing-day {
+  #writingPanel .writing-day,
+#interviewCustom .writing-day {
     transition: none;
   }
 }
@@ -43990,6 +44041,8 @@ body:not(#_) .language-takeaway-card .takeaway-chinese {
 /* ---------- 5. Actions ---------- */
 /* primary: ink pill */
 body:not(#_) :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
+  .writing-report-edit-btn, #loginSubmitBtn, .hx-cta-primary, .workspace button.primary),
+body:not(#_) :is(#interviewCustomSubmit, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
   .writing-report-edit-btn, #loginSubmitBtn, .hx-cta-primary, .workspace button.primary) {
   min-height: var(--ui-h) !important;
   padding: 0 18px !important;
@@ -44007,18 +44060,26 @@ body:not(#_) :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-ba
 }
 
 body:not(#_) :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
+  .writing-report-edit-btn, #loginSubmitBtn, .workspace button.primary):hover,
+body:not(#_) :is(#interviewCustomSubmit, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
   .writing-report-edit-btn, #loginSubmitBtn, .workspace button.primary):hover {
   opacity: 0.86;
   transform: none !important;
 }
 
 body:not(#_) :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
+  .writing-report-edit-btn, .workspace button.primary):disabled,
+body:not(#_) :is(#interviewCustomSubmit, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
   .writing-report-edit-btn, .workspace button.primary):disabled {
   opacity: 0.4;
 }
 
 /* secondary: hairline pill */
 body:not(#_) :is(#writingSaveBtn, .language-action-button, .language-hide-toggle, .topbar-back-button,
+  #writingRandomBtn, .writing-picker-button, .p1-corpus-entry, .corpus-entry-button, .report-export-btn,
+  .nr-lib-btn, .takeaway-review-start, .agent-assistant-trigger:not(.floating-agent-assistant-trigger),
+  #languageTakeawayStats, #writingTakeawayStats, .workspace button.ghost:not(.icon-button)),
+body:not(#_) :is(#interviewCustomCorpus, .language-action-button, .language-hide-toggle, .topbar-back-button,
   #writingRandomBtn, .writing-picker-button, .p1-corpus-entry, .corpus-entry-button, .report-export-btn,
   .nr-lib-btn, .takeaway-review-start, .agent-assistant-trigger:not(.floating-agent-assistant-trigger),
   #languageTakeawayStats, #writingTakeawayStats, .workspace button.ghost:not(.icon-button)) {
@@ -44038,12 +44099,16 @@ body:not(#_) :is(#writingSaveBtn, .language-action-button, .language-hide-toggle
 
 body:not(#_) :is(#writingSaveBtn, .language-action-button, .language-hide-toggle, .topbar-back-button,
   #writingRandomBtn, .writing-picker-button, .p1-corpus-entry, .corpus-entry-button, .report-export-btn,
+  .nr-lib-btn, .takeaway-review-start, .workspace button.ghost:not(.icon-button)):hover,
+body:not(#_) :is(#interviewCustomCorpus, .language-action-button, .language-hide-toggle, .topbar-back-button,
+  #writingRandomBtn, .writing-picker-button, .p1-corpus-entry, .corpus-entry-button, .report-export-btn,
   .nr-lib-btn, .takeaway-review-start, .workspace button.ghost:not(.icon-button)):hover {
   border-color: var(--ui-hover-line) !important;
   transform: none !important;
 }
 
-body:not(#_) :is(#writingSaveBtn, #writingScoreBtn) {
+body:not(#_) :is(#writingSaveBtn, #writingScoreBtn),
+body:not(#_) :is(#interviewCustomCorpus, #interviewCustomSubmit) {
   min-height: 40px !important;
 }
 
@@ -44189,7 +44254,8 @@ body:not(#_) .workspace :is(textarea, input, select):focus {
 }
 
 /* the writing sheet: no ruled paper, generous plain field */
-body:not(#_) #writingPanel #writingAnswer {
+body:not(#_) #writingPanel #writingAnswer,
+body:not(#_) #interviewCustom #writingAnswer {
   padding: 16px 18px !important;
   background-image: none !important;
   line-height: 1.75 !important;
@@ -44367,6 +44433,8 @@ body:not(#_) .shell .nav .nav-button[data-view].active {
 }
 
 body:not(#_) .shell :is(#writingScoreBtn, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
+  .writing-report-edit-btn, .workspace button.primary, #recordTitle),
+body:not(#_) .shell :is(#interviewCustomSubmit, .p3-start-button, .p3-generate-button, .p3-bank-entry-btn,
   .writing-report-edit-btn, .workspace button.primary, #recordTitle) {
   font-weight: 600 !important;
 }
@@ -44407,39 +44475,47 @@ body:not(#_) :is(.p1-corpus-entry, .corpus-entry-button) :is(span, svg) {
   color: var(--ink) !important;
 }
 
-body:not(#_) #writingPanel .writing-stats-grid > div {
+body:not(#_) #writingPanel .writing-stats-grid > div,
+body:not(#_) #interviewCustom .writing-stats-grid > div {
   border: 0 !important;
   border-radius: var(--ui-r-sm) !important;
   background: var(--ui-well) !important;
   box-shadow: none !important;
 }
 
-body:not(#_) #writingPanel .writing-calendar {
+body:not(#_) #writingPanel .writing-calendar,
+body:not(#_) #interviewCustom .writing-calendar {
   padding: 10px !important;
 }
 
-body:not(#_) #writingPanel .writing-day {
+body:not(#_) #writingPanel .writing-day,
+body:not(#_) #interviewCustom .writing-day {
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   color: var(--ink) !important;
 }
 
-body:not(#_) #writingPanel .writing-day.saved {
+body:not(#_) #writingPanel .writing-day.saved,
+body:not(#_) #interviewCustom .writing-day.saved {
   background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
 }
 
-body:not(#_) #writingPanel .writing-day.scored {
+body:not(#_) #writingPanel .writing-day.scored,
+body:not(#_) #interviewCustom .writing-day.scored {
   background: var(--accent) !important;
   color: #fff !important;
 }
 
-body:not(#_) #writingPanel .writing-day.today {
+body:not(#_) #writingPanel .writing-day.today,
+body:not(#_) #interviewCustom .writing-day.today {
   box-shadow: inset 0 0 0 1px var(--ink) !important;
 }
 
-body:not(#_) #writingPanel .writing-legend i.saved { background: color-mix(in srgb, var(--accent) 12%, transparent) !important; border: 0 !important; }
-body:not(#_) #writingPanel .writing-legend i.scored { background: var(--accent) !important; border: 0 !important; }
+body:not(#_) #writingPanel .writing-legend i.saved,
+body:not(#_) #interviewCustom .writing-legend i.saved { background: color-mix(in srgb, var(--accent) 12%, transparent) !important; border: 0 !important; }
+body:not(#_) #writingPanel .writing-legend i.scored,
+body:not(#_) #interviewCustom .writing-legend i.scored { background: var(--accent) !important; border: 0 !important; }
 
 /* top bar controls on the writing page: same pill height */
 body:not(#_) .global-topbar :is(#writingPromptPickerBtn, #writingRandomBtn) {
@@ -46493,8 +46569,24 @@ body:not(#_) #interviewPanel:not(.hidden) {
 #interviewPanel :is(.iv-pane--reports, .iv-pane--report) > #interviewReports { flex: 1 1 auto; min-height: 0; }
 #interviewReportDetail { overscroll-behavior: contain; }
 #interviewPanel .iv-pane > .iv-history { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-#interviewPanel .iv-pane > .iv-custom { flex: 1 1 auto; min-height: 0; grid-template-rows: minmax(0, 1fr); }
-#interviewPanel .iv-custom > :is(.iv-sheet, .iv-custom-side) { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+/* Resume / JD: the #writingPanel shell (aliased); the switch sits above it instead of in the top bar. */
+#interviewPanel .iv-pane > #interviewCustom { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+#interviewCustom > .writing-shell { flex: 1 1 auto; min-height: 0; }
+#interviewCustom .writing-checkin-top { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* The editor card fills the shell height and the textarea takes what the prompt card leaves. */
+body:not(#_) #interviewCustom .writing-editor-card { height: 100%; min-height: 0; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; }
+/* Only the two cards are surfaces; the section around them (and the switch row) stays page-coloured. */
+body:not(#_):not(#__) #interviewCustom { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+body:not(#_) #interviewCustom .writing-answer { height: 100% !important; min-height: 140px !important; }
+#interviewCustom .iv-custom-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+#interviewCustom .iv-custom-bar p { color: var(--muted); font-size: 13px; }
+#interviewCustom .iv-custom-switch { width: 220px; }
+#interviewCustom .iv-file-pick { position: relative; cursor: pointer; }
+#interviewCustom .iv-file-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+#interviewCustom .iv-custom-list { display: grid; gap: 6px; margin-top: 10px; padding: 0; list-style: none; }
+#interviewCustom .iv-custom-list li { padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 4%, transparent); font-size: 14px; }
+#interviewCustom .iv-custom-role { margin-top: 10px; font-weight: 600; }
+#interviewCustom .iv-custom-empty { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
 #interviewPanel .iv-pane > #interviewPractice { flex: 1 1 auto; min-height: 0; }
 #interviewPractice { display: flex; flex-direction: column; }
 #interviewPractice > #interviewPracticeGrid { flex: 1 1 auto; min-height: 0; }

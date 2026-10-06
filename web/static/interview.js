@@ -843,28 +843,58 @@
     }
 
     // ---- Tailored: resume | JD switch.
+    // ---- Resume / JD: the IELTS daily-writing page (#writingPanel) — prompt card + editor on the
+    // left, the result card with counts and the submit row on the right; #writingPanel rules are
+    // aliased to #interviewCustom.
     function customPane() {
       const side = data.customSide;
+      const resume = side === "resume";
       const profile = data.profile || { resume: {}, jd: {} };
       const modules = profile.resume?.modules || [];
       const count = (kind) => modules.filter((item) => item.kind === kind).length;
-      const resumeSummary = profile.resume?.updated_at
-        ? `<div class="iv-summary-card"><p class="iv-eyebrow">${esc(copy("已拆分", "Split"))} · ${esc(dateText(profile.resume.updated_at))}</p><p>${esc(copy(`自我介绍 · ${count("project")} 个项目 · 技术栈 ${count("tech_stack")} 组 · 奖项 ${count("award")} 项`, `Intro · ${count("project")} projects · ${count("tech_stack")} stack areas · ${count("award")} awards`))}</p><div class="iv-chips">${modules.filter((item) => item.kind === "project").map((item) => `<span class="iv-chip">${esc(item.title)}</span>`).join("")}</div>${button("open-corpus", `${esc(copy("去语料库修改讲述稿", "Edit stories in the corpus"))}${ARROW}`, { cls: "iv-link", attrs: 'data-tab="project"' })}</div>` : "";
-      const jdSummary = profile.jd?.updated_at
-        ? `<div class="iv-summary-card"><p class="iv-eyebrow">${esc(copy("岗位", "Role"))} · ${esc(dateText(profile.jd.updated_at))}</p><p><strong>${esc(profile.jd.summary?.role || "")}</strong></p><ul>${(profile.jd.summary?.requirements || []).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>${button("open-corpus", `${esc(copy("查看岗位题与反问", "See role questions"))}${ARROW}`, { cls: "iv-link", attrs: 'data-tab="jd"' })}</div>` : "";
-      const form = side === "resume"
-        ? `<section class="iv-sheet"><div class="iv-step"><span>01</span><h3>${esc(copy("简历", "Resume"))}</h3></div>
-            <label class="iv-drop"><input type="file" accept="application/pdf,.pdf" data-interview-field="file"><strong>${esc(data.file?.name || copy("选择 PDF 简历", "Choose a PDF resume"))}</strong><small>${esc(copy("最多 2 MB · 扫描件请改用下方粘贴文字", "Up to 2 MB · paste text for scanned files"))}</small></label>
-            <label class="iv-field">${esc(copy("或粘贴简历文字", "Or paste resume text"))}<textarea rows="10" maxlength="24000" data-interview-field="resumeText">${esc(data.resumeText)}</textarea></label>
-            <p class="iv-note">${esc(copy("拆成：自我介绍、每个项目的讲述稿与预判追问、技术栈知识点、奖项。重新拆分不会覆盖你已经改写的答法。", "Splits into intro, a story and likely follow-ups per project, stack questions and awards. Re-splitting never overwrites what you wrote."))}</p>
-            <div class="iv-row"><span class="iv-dock-spacer"></span>${solid("import-resume", profile.resume?.updated_at ? copy("重新拆分简历", "Split again") : copy("拆分简历", "Split resume"))}</div></section>`
-        : `<section class="iv-sheet"><div class="iv-step"><span>01</span><h3>${esc(copy("岗位描述（JD）", "Job description"))}</h3></div>
-            <label class="iv-field"><span class="sr-only">JD</span><textarea rows="14" maxlength="12000" data-interview-field="jdText" placeholder="${esc(copy("粘贴目标岗位的职责与要求……", "Paste the role's responsibilities and requirements…"))}">${esc(data.jdText)}</textarea></label>
-            <p class="iv-note">${esc(copy("生成岗位相关题和反问环节的问题，都会进入语料库。", "Creates role questions and questions to ask; both go to your corpus."))}</p>
-            <div class="iv-row"><span class="iv-dock-spacer"></span>${solid("import-jd", profile.jd?.updated_at ? copy("重新生成", "Regenerate") : copy("生成岗位题与反问", "Generate"))}</div></section>`;
-      return `<div class="iv-switch-row"><div class="iv-seg iv-seg--wide" role="tablist">${button("custom-side", esc(copy("简历", "Resume")), { cls: side === "resume" ? "is-on" : "", attrs: `role="tab" aria-selected="${side === "resume"}" data-side="resume"` })}${button("custom-side", "JD", { cls: side === "jd" ? "is-on" : "", attrs: `role="tab" aria-selected="${side === "jd"}" data-side="jd"` })}</div>
-          <p class="iv-lede">${esc(copy("内容会发送到你选择的 AI 服务；服务器不保存简历文件。", "Content goes to your selected AI service; resume files are not stored."))}</p></div>
-        <div class="iv-custom">${form}<div class="iv-custom-side">${(side === "resume" ? resumeSummary : jdSummary) || `<div class="iv-empty-card"><p>${esc(side === "resume" ? copy("拆分完成后，这里会列出识别到的项目和模块。", "Projects and modules appear here after splitting.") : copy("生成后，这里会显示岗位方向和核心要求。", "The role and its core requirements appear here."))}</p></div>`}</div></div>`;
+      const text = resume ? data.resumeText : data.jdText;
+      const updated = resume ? profile.resume?.updated_at : profile.jd?.updated_at;
+      const switcher = `<div class="writing-task-switch iv-custom-switch" data-active-task="${resume ? "task1" : "task2"}" role="tablist" aria-label="${esc(copy("简历或 JD", "Resume or JD"))}">
+          ${button("custom-side", esc(copy("简历", "Resume")), { cls: `writing-task-option${resume ? " active" : ""}`, attrs: `role="tab" aria-selected="${resume}" data-side="resume"` })}
+          ${button("custom-side", "JD", { cls: `writing-task-option${resume ? "" : " active"}`, attrs: `role="tab" aria-selected="${!resume}" data-side="jd"` })}
+        </div>`;
+      const prompt = resume
+        ? `<div class="writing-prompt-card"><div><span class="writing-pill">${esc(copy("简历", "Resume"))}</span><h2>${esc(copy("把简历拆成可练的语料", "Turn your resume into practice material"))}</h2></div>
+            <p>${esc(copy("拆成：自我介绍、每个项目的讲述稿与预判追问、技术栈知识点、奖项。重新拆分不会覆盖你已经改写的答法。", "Splits into intro, a story and likely follow-ups per project, stack questions and awards. Re-splitting never overwrites what you wrote."))}</p></div>`
+        : `<div class="writing-prompt-card"><div><span class="writing-pill">JD</span><h2>${esc(copy("按目标岗位出题", "Questions for your target role"))}</h2></div>
+            <p>${esc(copy("生成岗位相关题和反问环节的问题，都会进入语料库，在「反问环节」里练。", "Creates role questions and questions to ask; both go to your corpus for the questions round."))}</p></div>`;
+      const hint = resume
+        ? `<div class="writing-frame-hint"><label class="writing-frame-cmd iv-file-pick"><input type="file" accept="application/pdf,.pdf" data-interview-field="file">${esc(data.file?.name || copy("选择 PDF 简历", "Choose a PDF resume"))}</label><span class="writing-frame-hint-dot">·</span><span class="writing-frame-hint-lead">${esc(copy("最多 2 MB，扫描件请粘贴文字", "Up to 2 MB; paste text for scans"))}</span></div>`
+        : `<div class="writing-frame-hint"><span class="writing-frame-hint-lead">${esc(copy("内容会发送到你选择的 AI 服务", "Sent to your selected AI service"))}</span></div>`;
+      const editor = `<article class="writing-editor-card">${prompt}
+          <div class="writing-answer-header"><label class="writing-answer-label" for="interviewCustomText">${esc(resume ? copy("简历文字", "Resume text") : copy("岗位描述", "Job description"))}</label>${hint}</div>
+          <textarea id="interviewCustomText" class="writing-answer" maxlength="${resume ? 24000 : 12000}" data-interview-field="${resume ? "resumeText" : "jdText"}" placeholder="${esc(resume ? copy("或者把简历全文粘贴在这里……", "Or paste the full resume text here…") : copy("粘贴目标岗位的职责与要求……", "Paste the role's responsibilities and requirements…"))}">${esc(text)}</textarea>
+        </article>`;
+      const stats = resume
+        ? [[copy("项目", "Projects"), count("project")], [copy("技术栈", "Stack"), count("tech_stack")], [copy("奖项", "Awards"), count("award")]]
+        : [[copy("核心要求", "Requirements"), (profile.jd?.summary?.requirements || []).length], [copy("岗位题", "Role Qs"), corpusEntries(["jd_question"]).length], [copy("反问", "To ask"), corpusEntries(["reverse_question"]).length]];
+      const detail = resume
+        ? (modules.some((item) => item.kind === "project") ? `<ul class="iv-custom-list">${modules.filter((item) => item.kind === "project").map((item) => `<li>${esc(item.title)}</li>`).join("")}</ul>` : "")
+        : (profile.jd?.summary?.role ? `<p class="iv-custom-role">${esc(profile.jd.summary.role)}</p><ul class="iv-custom-list">${(profile.jd.summary.requirements || []).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "");
+      const empty = `<p class="iv-custom-empty">${esc(resume ? copy("拆分完成后，这里会列出识别到的项目和模块。", "Projects and modules appear here after splitting.") : copy("生成后，这里会显示岗位方向和核心要求。", "The role and its core requirements appear here."))}</p>`;
+      const result = `<aside class="writing-result-card">
+          <div class="writing-card-head"><div><h2>${esc(updated ? (resume ? copy("已拆分", "Split") : copy("已生成", "Generated")) : (resume ? copy("还没有拆分", "Not split yet") : copy("还没有生成", "Not generated yet")))}</h2></div></div>
+          <div class="writing-checkin-top">
+            <div class="writing-stats-grid">${stats.map(([label, value]) => `<div><span>${esc(label)}</span><strong>${esc(updated ? value : 0)}</strong></div>`).join("")}</div>
+            ${updated && detail ? detail : empty}
+          </div>
+          <div class="writing-checkin-bottom">
+            <div class="writing-status-line"><strong id="interviewCustomCount">${esc(copy(`${text.length} 字`, `${text.length} chars`))}</strong><span>${esc(updated ? copy(`上次 ${dateText(updated)}`, `Last ${dateText(updated)}`) : resume ? copy("未拆分", "Not split") : copy("未生成", "Not generated"))}</span></div>
+            <div class="writing-submit-row">
+              ${button("open-corpus", esc(resume ? copy("去语料库", "Open corpus") : copy("看岗位题", "See questions")), { cls: "ghost", attrs: `id="interviewCustomCorpus" data-tab="${resume ? "project" : "jd"}"`, disabled: !updated })}
+              ${button(resume ? "import-resume" : "import-jd", esc(resume ? (updated ? copy("重新拆分简历", "Split again") : copy("拆分简历", "Split resume")) : (updated ? copy("重新生成", "Regenerate") : copy("生成岗位题与反问", "Generate"))), { attrs: 'id="interviewCustomSubmit"' })}
+            </div>
+          </div>
+        </aside>`;
+      return `<section id="interviewCustom" class="panel writing-panel">
+          <div class="iv-custom-bar">${switcher}<p>${esc(copy("内容会发送到你选择的 AI 服务；服务器不保存简历文件。", "Content goes to your selected AI service; resume files are not stored."))}</p></div>
+          <div class="writing-shell">${editor}${result}</div>
+        </section>`;
     }
 
     const PANE_COPY = {
@@ -1029,7 +1059,11 @@
       } else if (field === "editor-text" && data.editor) data.editor.text = el.value;
       else if (field === "editor-question" && data.editor) data.editor.question = el.value;
       else if (field === "file") { data.file = el.files?.[0] || null; render(); }
-      else if (field === "resumeText" || field === "jdText") data[field] = el.value;
+      else if (field === "resumeText" || field === "jdText") {
+        data[field] = el.value;
+        const counter = byId("interviewCustomCount");
+        if (counter) counter.textContent = copy(`${el.value.length} 字`, `${el.value.length} chars`);
+      }
     }
 
     function openEditor(entry) {
