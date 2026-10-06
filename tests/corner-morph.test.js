@@ -98,3 +98,15 @@ test("hover opens and leaving closes for mouse pointers only", () => {
   root.emit("pointerleave", { pointerType: "mouse", relatedTarget: null });
   assert.equal(control.isOpen(), false);
 });
+
+test("contents stay inert to the pointer until the morph settles", async () => {
+  const { Element, morph } = harness();
+  const trigger = new Element({ left: 0, top: 0, right: 44, width: 44, height: 44 });
+  const card = new Element({ left: 0, top: 0, right: 272, width: 272, height: 346 });
+  const control = morph.create({ trigger, card, anchor: "top-right", closedRadius: "22px", openRadius: "22px" });
+  control.open();
+  assert.ok(card.classes.has("is-morphing"));
+  card.last.finish();
+  await settle();
+  assert.equal(card.classes.has("is-morphing"), false);
+});

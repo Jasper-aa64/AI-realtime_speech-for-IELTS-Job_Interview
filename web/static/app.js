@@ -14453,7 +14453,10 @@ function setupQuickSettings() {
     root,
     lift: root.closest(".global-topbar"),
     anchor: "top-right",
-    closedRadius: "999px",
+    // The avatar's own corner is the card's corner: the radius stays the avatar's (21px + the card's 1px border)
+    // the whole way, so the circle grows into a card instead of a pill that snaps square at the end.
+    closedRadius: "22px",
+    openRadius: "22px",
     closedBackground: "var(--switch-bg)",
     hoverBackground: "var(--switch-bg)",
     onOpenChange: (value) => {

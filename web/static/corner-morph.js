@@ -78,6 +78,11 @@
         onOpenChange?.(true);
       }
       const animation = animate(value);
+      // detail.design "Cursor Style While Morphing": the controls only become live once the card has finished
+      // growing, so the cursor does not flicker between text/pointer shapes while the card sweeps under it.
+      card.classList?.add("is-morphing");
+      const settle = () => { if (open === value) card.classList?.remove("is-morphing"); };
+      if (animation) animation.finished.then(settle, () => {}); else settle();
       if (!value) {
         onOpenChange?.(false);
         const finish = () => {

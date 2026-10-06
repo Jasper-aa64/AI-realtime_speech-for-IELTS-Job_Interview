@@ -46806,7 +46806,7 @@ body:not(#_) .quick-settings-card {
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--switch-line);
-  border-radius: 18px;
+  border-radius: 22px;
   background: var(--switch-bg);
   box-shadow: var(--switch-shadow);
   color: var(--ink);
@@ -46814,6 +46814,9 @@ body:not(#_) .quick-settings-card {
 
 body:not(#_) .quick-settings-card[hidden] { display: none !important; }
 body:not(#_) .quick-settings-card[inert] { pointer-events: none; }
+/* While a corner-morph card grows or shrinks, its contents are inert to the pointer (the card itself still counts
+   for hover), so the cursor keeps one shape for the whole morph. */
+body:not(#_) :is(.quick-settings-card, .studio-switch-card).is-morphing * { pointer-events: none !important; cursor: default !important; }
 
 /* Head: the avatar sits exactly where the real one is, so it does not move while the card takes over. */
 body:not(#_) .quick-settings-head {
