@@ -65,7 +65,8 @@ test("knowledge: a tag filter over directions, and one P1 card per topic inside 
   let page = env.screens.render("knowledge");
   assert.match(page, /p2-cat-filter-bar/);
   assert.match(page, /data-ivc-tag="低延迟与性能"/);
-  assert.equal((page.match(/<article class="p1-topic-card /g) || []).length, 4, "SPSC / 硬件基础 / 智能指针 / C++ 综合");
+  assert.equal((page.match(/<article class="p1-topic-card /g) || []).length, 5, "自我介绍 / SPSC / 硬件基础 / 智能指针 / C++ 综合");
+  assert.equal([...page.matchAll(/<h3>([^<]+)<\/h3>/g)][0][1], "自我介绍", "the intro is pinned first");
   env.click({ ivcTag: "低延迟与性能" });
   page = env.screens.render("knowledge");
   const titles = [...page.matchAll(/<h3>([^<]+)<\/h3>/g)].map((m) => m[1]);
@@ -97,10 +98,11 @@ test("a report follow-up with no corpus entry becomes a follow-up under its card
   assert.equal(env.requests.at(-1).body.parent_id, "icp_gw");
 });
 
-test("resume: P2 cards for intro, projects, stack directions and awards, filterable; follow-ups are unlimited", async () => {
+test("resume: P2 cards for projects and awards (no stack, no intro), filterable; follow-ups are unlimited", async () => {
   const env = harness(corpus);
   let page = env.screens.render("resume");
-  assert.equal((page.match(/class="p2-seasonal-card /g) || []).length, 4);
+  assert.equal((page.match(/class="p2-seasonal-card /g) || []).length, 2);
+  assert.doesNotMatch(page, /data-ivc-section="stack"|data-ivc-filter="(stack|intro)"|<h3>技术栈/);
   assert.match(page, /data-p2-bank-card-category="object"/);
   env.click({ ivcFilter: "project" });
   page = env.screens.render("resume");
@@ -130,8 +132,8 @@ test("resume: the P2 category grid lists every kind with a 新增 row, so an emp
   const env = harness([]);
   env.data.categories = [{ id: "cpp", label: "C++ 基础与进阶" }];
   const page = env.screens.render("resume");
-  for (const label of ["项目", "实习", "技术栈", "获奖", "JD 与反问"]) assert.match(page, new RegExp(`新增${label}`));
-  assert.doesNotMatch(page, /新增自我介绍/);
+  for (const label of ["项目", "实习", "获奖", "JD 与反问"]) assert.match(page, new RegExp(`新增${label}`));
+  assert.doesNotMatch(page, /新增自我介绍|新增技术栈/);
   assert.match(page, /从简历生成/);
   env.click({ ivcCreate: "intern" });
   assert.equal(env.ids.ivCardDialog.classes.has("hidden"), false, "the card dialog opens");
@@ -141,16 +143,27 @@ test("resume: the P2 category grid lists every kind with a 新增 row, so an emp
   await settle();
   const created = JSON.parse(JSON.stringify(env.requests.at(-1).body));
   assert.deepEqual([created.kind, created.group, created.title, created.question], ["project", "实习", "某券商交易组", "介绍一下你在「某券商交易组」的实习。"]);
-  env.click({ ivcCreate: "stack" });
-  env.ids.ivCorpusTopic.value = "AI Native";
-  env.ids.ivCorpusQuestion.value = "RAG 和微调怎么选？";
-  env.editor.value = "";
-  env.ids.ivCorpusSave.emit("click");
-  await settle();
-  assert.equal(env.requests.at(-1).body.group, "AI Native");
   const after = env.screens.render("resume");
   assert.match(after, /data-p2-bank-card-category="person"/, "the internship card wears the P2 person colours");
-  assert.match(after, /AI Native/);
+});
+
+test("knowledge: 自我介绍 is a pinned card whose ＋ writes another version of the intro", async () => {
+  const env = harness([{ id: "icp_i", kind: "self_intro", title: "自我介绍", question: "1 分钟中文自我介绍", source: "resume", corpus_text: "我是……" }]);
+  let page = env.screens.render("knowledge");
+  assert.match(page, /data-ivc-tag="自我介绍"/);
+  assert.match(page, /1 分钟中文自我介绍/);
+  env.click({ ivcTag: "自我介绍" });
+  page = env.screens.render("knowledge");
+  assert.doesNotMatch(page, /新题卡/, "the intro has its own ＋ instead of new topic cards");
+  env.click({ ivcNew: "k:intro" });
+  env.ids.ivCorpusQuestion.value = "3 分钟英文自我介绍";
+  env.editor.value = "I am …";
+  env.ids.ivCorpusSave.emit("click");
+  await settle();
+  const created = JSON.parse(JSON.stringify(env.requests.at(-1).body));
+  assert.deepEqual([created.kind, created.title, created.question], ["self_intro", "自我介绍", "3 分钟英文自我介绍"]);
+  const empty = harness([]).screens.render("knowledge");
+  assert.match(empty, /还没有自我介绍/);
 });
 
 test("request failures in the corpus dialogs go to a pop-up, not an inline bar", async () => {

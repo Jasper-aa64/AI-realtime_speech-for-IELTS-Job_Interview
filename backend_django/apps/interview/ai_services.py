@@ -130,14 +130,15 @@ def run_generation(user, kind, inputs, *, ai_source="", related_id=""):
             )
             output, usage = result.text, result.usage
         elif source == "codex_cli":
-            output, usage = run_codex(prompt, task.call_id, timeout=timeout)
+            output, usage = run_codex(prompt, task.call_id, timeout=timeout, effort=getattr(settings, "CODEX_INTERVIEW_EFFORT", "") or None)
         else:
             output, usage = run_claude_cli(prompt, task.call_id, timeout=timeout,
                                           model="haiku" if source == "claude_cli_haiku" else None)
         payload = _validated_output(kind, output, inputs)
         provenance = {"provider": backend, "model": model, "ai_source": source, "task_id": task.task_id,
                       "elapsed_ms": round((time.monotonic() - started) * 1000),
-                      "provider_elapsed_ms": round(result.elapsed_seconds * 1000) if provider is not None else None}
+                      "provider_elapsed_ms": round(result.elapsed_seconds * 1000) if provider is not None else None,
+                      "effort": (getattr(settings, "CODEX_INTERVIEW_EFFORT", "") or "low") if source == "codex_cli" else ""}
         if local:
             # task.usage is a billing record; the CLI's token counts ride along in the result instead.
             succeed_ai_task(task.task_id, {**payload, **provenance, "cli_usage": usage or {}})

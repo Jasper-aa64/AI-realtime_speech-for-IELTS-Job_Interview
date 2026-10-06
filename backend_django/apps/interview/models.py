@@ -163,9 +163,12 @@ class InterviewAssistantMessage(models.Model):
     thread = models.ForeignKey(InterviewAssistantThread, on_delete=models.CASCADE, related_name="messages")
     role = models.CharField(max_length=12, choices=Role.choices)
     content = models.TextField()
-    target = models.CharField(max_length=16, blank=True)
+    mode = models.CharField(max_length=16, blank=True)
     applied = models.JSONField(default=list, blank=True)
     steps = models.JSONField(default=list, blank=True)
+    # How to reverse what this reply wrote (created / updated / deleted rows), and whether that has been done.
+    undo = models.JSONField(default=list, blank=True)
+    undone = models.BooleanField(default=False)
     model = models.CharField(max_length=80, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

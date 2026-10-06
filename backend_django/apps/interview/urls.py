@@ -10,6 +10,7 @@ urlpatterns = [
     path("assistant/", views.assistant_chat, name="interview-assistant"),
     path("assistant/threads/", views.assistant_threads, name="interview-assistant-threads"),
     path("assistant/threads/<str:thread_id>/", views.assistant_thread, name="interview-assistant-thread"),
+    path("assistant/messages/<str:message_id>/undo/", views.assistant_undo, name="interview-assistant-undo"),
     path("profile/resume/commit/", views.profile_resume_commit, name="interview-profile-resume-commit"),
     path("profile/jd/commit/", views.profile_jd_commit, name="interview-profile-jd-commit"),
     path("corpus/", views.corpus_entries, name="interview-corpus"),

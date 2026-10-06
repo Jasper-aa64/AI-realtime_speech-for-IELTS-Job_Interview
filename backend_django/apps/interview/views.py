@@ -158,6 +158,11 @@ def assistant_thread(request, thread_id):
 
 
 @api("POST")
+def assistant_undo(request, message_id):
+    return assistant.undo(request.user, message_id)
+
+
+@api("POST")
 def profile_resume_commit(request):
     return corpus.commit_resume(request.user, json_body(request))
 

@@ -47039,3 +47039,4 @@ body:not(#_) .iv-card-dialog .iv-danger { color: var(--danger, #d9534f); }
   .iv-assistant-side { border-right: 0; padding-right: 0; max-height: 180px; }
   .iv-assistant-chat { height: 70vh; }
 }
+.iv-assistant-targets button.active.is-agent { background: var(--accent); color: #fff; }

@@ -22,7 +22,7 @@ from .text_utils import extract_codex_json_events
 CODEX_REASONING_EFFORT = "low"
 
 
-def run_codex(prompt: str, call_id: str, timeout: int = 45, model: str | None = None) -> tuple[str, dict[str, Any] | None]:
+def run_codex(prompt: str, call_id: str, timeout: int = 45, model: str | None = None, effort: str | None = None) -> tuple[str, dict[str, Any] | None]:
     """Call codex CLI and return output and usage.
 
     The `-` argument is required to make codex exec read from stdin.
@@ -38,7 +38,7 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45, model: str | None = 
     if not shutil.which(codex) and not Path(codex).exists():
         raise RuntimeError("codex CLI not found")
 
-    config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
+    config_args = ["-c", f'model_reasoning_effort="{effort or CODEX_REASONING_EFFORT}"']
     # The app only wants text back: no file writes, no saved session, and a model a ChatGPT login may use.
     chosen_model = (model or getattr(settings, "CODEX_MODEL", "") or "").strip()
     if chosen_model:

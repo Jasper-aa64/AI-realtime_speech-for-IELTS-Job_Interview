@@ -48,15 +48,17 @@ const reply = {
   thread: { id: "iat_1", title: "SPSC 无锁原理", updated_at: "2026-10-06T00:00:00Z" },
   message: { id: "iam_1", role: "user", content: "存一下", target: "knowledge" },
   reply: { id: "iam_2", role: "assistant", content: "已保存。", model: "gpt-6-luna",
-           applied: [{ type: "knowledge", where: "knowledge", label: "知识点语料库 · 低延迟与性能 / <SPSC>", entry_id: "icp_9" }],
+           applied: [{ op: "create", where: "knowledge", label: "知识点语料库 · 低延迟与性能 / <SPSC>", entry_id: "icp_9" },
+                     { op: "delete", where: "resume", label: "简历题卡 · 行情网关", entry_id: null }], undoable: true, undone: false,
            steps: [{ kind: "library", label: "读取语料库快照", detail: "知识点题卡 3 个" }, { kind: "model", label: "生成回答", detail: "gpt-6-luna · 4.2 s" }] },
   entries: [{ id: "icp_9" }],
 };
 
-test("the page lists threads and mounts a Deep Chat with the save-to picker", async () => {
+test("the page lists threads and mounts a Deep Chat with the chat / agent switch", async () => {
   const env = harness({ "/api/interview/assistant/threads/": { threads: [{ id: "iat_1", title: "RAII", updated_at: "" }] } });
   const page = env.assistant.render();
-  assert.match(page, /data-target="knowledge"/);
+  assert.match(page, /data-mode="chat"/);
+  assert.match(page, /data-mode="agent"/);
   assert.match(page, /新对话/);
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(env.ids.ivAssistantThreads.innerHTML, /RAII/);
@@ -64,19 +66,21 @@ test("the page lists threads and mounts a Deep Chat with the save-to picker", as
   assert.equal(typeof env.chat().connect.handler, "function");
 });
 
-test("a message goes to the assistant API with the save target; the reply carries links and the agent trace", async () => {
+test("a message goes to the assistant API with the mode; the reply carries links, undo and the agent trace", async () => {
   const env = harness({ "/api/interview/assistant/threads/": { threads: [] }, "/api/interview/assistant/": reply });
   env.assistant.render();
-  env.assistant.handleClick({ target: { closest: () => ({ dataset: { ivAssistant: "target", target: "knowledge" } }) } });
+  env.assistant.handleClick({ target: { closest: () => ({ dataset: { ivAssistant: "mode", mode: "agent" } }) } });
   let answered;
   await env.chat().connect.handler({ messages: [{ role: "user", text: "存一下" }] }, { onResponse: async (message) => { answered = message; } });
   const sent = env.calls.find((call) => call.url === "/api/interview/assistant/");
   assert.equal(sent.body.message, "存一下");
-  assert.equal(sent.body.target, "knowledge");
+  assert.equal(sent.body.mode, "agent");
   assert.equal(sent.body.thread_id, undefined);
   assert.equal(answered.text, "已保存。");
-  assert.match(answered.html, /class="iv-applied" data-where="knowledge" data-entry="icp_9"/);
+  assert.match(answered.html, /class="iv-applied is-create" data-where="knowledge" data-entry="icp_9"/);
   assert.match(answered.html, /&lt;SPSC&gt;/, "labels are escaped");
+  assert.match(answered.html, /<span class="iv-applied is-delete"><b>✕<\/b>删除 简历题卡 · 行情网关<\/span>/, "deleted cards are not links");
+  assert.match(answered.html, /class="iv-undo" data-message="iam_2"/);
   assert.match(answered.html, /Agent 执行过程 · 2 步/);
   assert.equal(env.corpus.length, 1, "the corpus is refreshed from the reply");
   assert.match(env.ids.ivAssistantThreads.innerHTML, /SPSC 无锁原理/);
@@ -94,6 +98,20 @@ test("failures come back as a Deep Chat error bubble; links open the written car
   const applied = { dataset: { where: "knowledge", entry: "icp_9" }, closest: () => applied };
   env.chat().htmlClassUtilities["iv-applied"].events.click({ target: applied });
   assert.deepEqual(JSON.parse(JSON.stringify(env.opened)), [{ where: "knowledge", entryId: "icp_9" }]);
+});
+
+test("undo posts to the message's undo endpoint and marks the changes undone", async () => {
+  const env = harness({ "/api/interview/assistant/threads/": { threads: [] }, "/api/interview/assistant/": reply,
+                        "/api/interview/assistant/messages/iam_2/undo/": { message: { id: "iam_2", undone: true }, entries: [] } });
+  env.assistant.render();
+  await env.chat().connect.handler({ messages: [{ role: "user", text: "整理" }] }, { onResponse: async () => {} });
+  const agent = { classes: [], classList: { add(name) { agent.classes.push(name); } } };
+  const button = { dataset: { message: "iam_2" }, disabled: false, outerHTML: "", closest: (selector) => (selector === ".iv-undo" ? button : agent) };
+  env.chat().htmlClassUtilities["iv-undo"].events.click({ target: button });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(env.calls.some((call) => call.url === "/api/interview/assistant/messages/iam_2/undo/" && call.method === "POST"));
+  assert.match(button.outerHTML, /已撤销这些修改/);
+  assert.deepEqual(agent.classes, ["is-undone"]);
 });
 
 test("the AI 助手 pane is wired into the interview nav, router and asset routes", () => {

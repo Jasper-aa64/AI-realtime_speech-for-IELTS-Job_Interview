@@ -210,6 +210,8 @@ CODEX_MODEL = os.environ.get("CODEX_MODEL", "gpt-6-luna").strip()
 # The mock interview's AI (interviewer, scoring, resume / JD drafts, AI assistant) runs on this source;
 # "codex_cli" uses the local Codex CLI on the user's own subscription, so it bypasses the app wallet.
 INTERVIEW_AI_SOURCE = os.environ.get("INTERVIEW_AI_SOURCE", "codex_cli").strip()
+# Interview generation (assistant, resume split, scoring) thinks harder than the realtime speaking examiner (low).
+CODEX_INTERVIEW_EFFORT = os.environ.get("CODEX_INTERVIEW_EFFORT", "medium").strip()
 AI_PROVIDER_ENABLE_OPENAI = env_flag("AI_PROVIDER_ENABLE_OPENAI", default=False)
 AI_PROVIDER_ENABLE_CLAUDE = env_flag("AI_PROVIDER_ENABLE_CLAUDE", default=False)
 # HTTP provider endpoint — read from environment; never hardcode secrets here.

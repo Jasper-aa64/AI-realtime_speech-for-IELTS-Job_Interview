@@ -1,8 +1,9 @@
 (function () {
   // The interview corpus screens, opened from the 面试语料库 hub (the IELTS 语料库 hub with interview copy):
   //   knowledge — the P1 corpus page: one card per direction, questions open the editor (>6 open the topic modal)
-  //   resume    — the P2 题卡 grid with its filter: a card per project, per tech-stack direction, the self intro and each
-  //               award; 正文 opens the editor, 追问 opens the P3 follow-up dialog (unlimited, custom follow-ups)
+  //   resume    — the P2 题卡 grid with its filter: a card per project, internship, award and JD; 正文 opens the card
+  //               dialog, 追问 opens the P3 follow-up dialog (unlimited, custom follow-ups). Tech-stack questions and
+  //               the self intro live on the knowledge screen.
   //   jd        — the P1 corpus page again: role questions and questions to ask
   // The editor is the P1 corpus dialog (#ivCorpusDialog) with the IELTS Markdown editor; its "AI 参考" box only appears
   // when it is opened from a report, like the IELTS P1 report. The follow-up dialog is the P2 card's P3 dialog.
@@ -21,9 +22,7 @@
     // Each type wears a P2 category's colours (object / place / event / special).
     { id: "project", label: "项目", color: "#0284c7", tone: "object" },
     { id: "intern", label: "实习", color: "#7c3aed", tone: "person" },
-    { id: "stack", label: "技术栈", color: "#059669", tone: "place" },
     { id: "jd", label: "JD 与反问", color: "#d97706", tone: "event" },
-    { id: "intro", label: "自我介绍", color: "#d97706", tone: "event" },
     { id: "award", label: "获奖", color: "#db2777", tone: "special" },
   ];
   const DOTS = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 6.5h.01"></path><path d="M12 12h.01"></path><path d="M12 17.5h.01"></path></svg>';
@@ -34,8 +33,6 @@
       create: { placeholder: "一句话简述，如 低延迟撮合网关重构（P99 900µs→55µs）", fields: (name) => ({ kind: "project", title: name, question: `介绍一下你的「${name}」项目。` }) } },
     { id: "intern", label: "实习", tone: "person", mark: "实",
       create: { placeholder: "一句话简述，如 某券商交易系统组 · 行情接入", fields: (name) => ({ kind: "project", group: "实习", title: name, question: `介绍一下你在「${name}」的实习。` }) } },
-    { id: "stack", label: "技术栈", tone: "place", mark: "技",
-      create: { placeholder: "技术方向，如 C++ / 低延迟 / AI Native", askQuestion: true, fields: (name) => ({ kind: "knowledge", group: name }) } },
     { id: "award", label: "获奖", tone: "special", mark: "奖",
       create: { placeholder: "一句话简述，如 ACM-ICPC 区域赛银奖", fields: (name) => ({ kind: "award", title: name, question: `讲讲你的「${name}」经历。` }) } },
     // A JD card: 简述 = the role, 正文 = the JD itself; its 追问 are that role's questions and questions to ask.
@@ -46,7 +43,6 @@
     project: { kicker: "项目", bullets: ["项目背景与目标", "你负责的部分", "技术难点与取舍"], close: "最后讲清结果，最好有量化数据。" },
     jd: { kicker: "JD", bullets: [], close: "" },
     intern: { kicker: "实习", bullets: ["公司与团队做什么", "你负责的事情", "遇到的难题与解决"], close: "最后讲清产出和收获。" },
-    intro: { kicker: "自我介绍", bullets: ["你是谁、在读什么", "最能代表你的项目", "技术方向与优势"], close: "并说明为什么适合这个岗位。" },
     award: { kicker: "获奖", bullets: ["什么比赛 / 奖项", "你在团队里做了什么", "最难的一关"], close: "以及这段经历让你学到了什么。" },
   };
 
@@ -80,9 +76,11 @@
     // ---- Knowledge / JD screens: the P1 corpus page.
     // Knowledge: a tag is the direction (entry.group, e.g. 低延迟与性能); inside it every topic (entry.title, e.g.
     // SPSC 队列与背压) is one P1-style card. Resume directions come first, then the curated bank's.
+    // 自我介绍 lives here for now: a pinned direction with one card, each version of the intro one question on it.
+    const INTRO = "自我介绍";
     function knowledgeTags() {
       const curated = (entry) => entry.source === "curated" || String(entry.source_key || "").startsWith("curated:");
-      const tags = new Map();
+      const tags = new Map([[INTRO, { name: INTRO, curated: false, intro: true, rows: entries().filter((entry) => entry.kind === "self_intro") }]]);
       entries().filter((entry) => entry.kind === "knowledge").forEach((entry) => {
         const name = entry.group || "自定义";
         if (!tags.has(name)) tags.set(name, { name, curated: true, rows: [] });
@@ -90,12 +88,17 @@
         item.rows.push(entry);
         if (!curated(entry)) item.curated = false;
       });
-      return [...tags.values()].sort((a, b) => Number(a.curated) - Number(b.curated));
+      return [...tags.values()].sort((a, b) => Number(Boolean(b.intro)) - Number(Boolean(a.intro)) || Number(a.curated) - Number(b.curated));
     }
 
     function knowledgeGroups() {
       const cards = [];
       knowledgeTags().forEach((item) => {
+        if (item.intro) {
+          cards.push({ key: "k:intro", title: INTRO, tag: INTRO, rows: item.rows, add: { kind: "self_intro", title: INTRO },
+            empty: "还没有自我介绍，点右上角 ＋ 写一版（如 1 分钟中文版、3 分钟详细版）。" });
+          return;
+        }
         const topics = new Map();
         item.rows.forEach((entry) => {
           const topic = entry.title || "综合";
@@ -135,7 +138,7 @@
             </div>
           </header>
           <div class="p1-topic-progress" aria-label="完成进度 ${progress}%" data-progress="${progress}"><span style="width: ${progress}%"></span></div>
-          <div class="p1-topic-question-list">${rows || '<p class="iv-empty">还没有题目，点右上角 ＋ 自己出一道。</p>'}</div>
+          <div class="p1-topic-question-list">${rows || `<p class="iv-empty">${esc(group.empty || "还没有题目，点右上角 ＋ 自己出一道。")}</p>`}</div>
         </article>`;
     }
 
@@ -159,41 +162,23 @@
       const all = entries();
       const children = (entry) => all.filter((item) => item.parent_id === entry.id);
       const cards = [];
-      all.filter((entry) => entry.kind === "self_intro").forEach((entry) => cards.push({ type: "intro", entry, title: "自我介绍", follows: children(entry) }));
       all.filter((entry) => entry.kind === "project").sort((a, b) => a.order - b.order)
         .forEach((entry) => cards.push({ type: entry.group === "实习" ? "intern" : "project", entry, title: entry.title || entry.question, follows: children(entry) }));
-      // A tech-stack card is a direction from the resume or one the candidate added (any group that is not a bank
-      // category); questions written on it later join the same group.
-      const bankTags = new Set((source().categories || []).map((item) => item.label));
-      const resumeGroups = new Set(all.filter((entry) => entry.kind === "knowledge" && entry.source !== "curated"
-        && (entry.source === "resume" || !bankTags.has(entry.group || ""))).map((entry) => entry.group || "技术栈"));
-      const stacks = new Map([...resumeGroups].map((group) => [group, []]));
-      all.filter((entry) => entry.kind === "knowledge" && entry.source !== "curated" && resumeGroups.has(entry.group || "技术栈"))
-        .forEach((entry) => stacks.get(entry.group || "技术栈").push(entry));
-      stacks.forEach((rows, group) => cards.push({ type: "stack", group, title: group, follows: rows }));
       all.filter((entry) => entry.kind === "award").sort((a, b) => a.order - b.order)
         .forEach((entry) => cards.push({ type: "award", entry, title: entry.title || entry.question, follows: children(entry) }));
       all.filter((entry) => entry.kind === "jd")
         .forEach((entry) => cards.push({ type: "jd", entry, title: entry.title || entry.question, follows: children(entry) }));
-      return cards.map((card) => ({ ...card, key: card.entry ? card.entry.id : `stack:${card.group}` }));
+      return cards.map((card) => ({ ...card, key: card.entry.id }));
     }
 
+    // Resume cards show the resume's own lines for this experience, rendered as Markdown; the STAR body is behind 正文.
+    // A JD card shows the JD itself.
     function cueHtml(card) {
-      if (card.type !== "stack") {
-        // Resume cards show the resume's own lines for this experience, rendered as Markdown; the STAR body is behind 正文.
-        // A JD card shows the JD itself.
-        const excerpt = unescapeMarkdown(card.type === "jd" ? card.entry.corpus_text : card.entry.resume_excerpt).trim();
-        if (card.type === "jd" && !excerpt) return `<div class="p2-seasonal-cue iv-card-excerpt is-empty"><p>JD 正文待填 · 点「正文」贴上</p></div>`;
-        return excerpt
-          ? `<div class="p2-seasonal-cue iv-card-excerpt">${renderMarkdown(excerpt)}</div>`
-          : `<div class="p2-seasonal-cue iv-card-excerpt is-empty"><p>简历原文待填 · 点「正文」补上</p></div>`;
-      }
-      if (card.type === "stack") {
-        const shown = card.follows.slice(0, 3);
-        return `<div class="p2-seasonal-cue"><ul>${shown.map((entry) => `<li>${esc(entry.question)}</li>`).join("")}</ul>${card.follows.length > 3 ? `<p>还有 ${card.follows.length - 3} 道题。</p>` : ""}</div>`;
-      }
-      const cue = CUES[card.type];
-      return `<div class="p2-seasonal-cue"><ul>${cue.bullets.map((item) => `<li>${esc(item)}</li>`).join("")}</ul><p>${esc(cue.close)}</p></div>`;
+      const excerpt = unescapeMarkdown(card.type === "jd" ? card.entry.corpus_text : card.entry.resume_excerpt).trim();
+      if (card.type === "jd" && !excerpt) return `<div class="p2-seasonal-cue iv-card-excerpt is-empty"><p>JD 正文待填 · 点「正文」贴上</p></div>`;
+      return excerpt
+        ? `<div class="p2-seasonal-cue iv-card-excerpt">${renderMarkdown(excerpt)}</div>`
+        : `<div class="p2-seasonal-cue iv-card-excerpt is-empty"><p>简历原文待填 · 点「正文」补上</p></div>`;
     }
 
     function resumeCard(card) {
@@ -202,17 +187,16 @@
       const total = card.follows.length;
       const saved = card.follows.filter(ready).length;
       const progress = total ? Math.round((saved / total) * 100) : 0;
-      const hasBody = card.type !== "stack";
-      const bodyReady = hasBody ? ready(card.entry) : saved === total && total > 0;
-      const kicker = card.type === "stack" ? "技术栈" : CUES[card.type].kicker;
+      const bodyReady = ready(card.entry);
+      const kicker = CUES[card.type].kicker;
       return `
-        <article class="p2-seasonal-card iv-resume-card${hasBody ? "" : " has-single-action"}" data-ivc-card="${esc(card.key)}" data-p2-bank-card-category="${tone}">
+        <article class="p2-seasonal-card iv-resume-card" data-ivc-card="${esc(card.key)}" data-p2-bank-card-category="${tone}">
           <header>
             <div>
-              <span class="p2-seasonal-card-kicker">${esc(kicker)} · ${esc((card.entry ? card.entry.source === "custom" : card.follows.every((entry) => entry.source === "custom")) ? "自定义" : "简历")}</span>
+              <span class="p2-seasonal-card-kicker">${esc(kicker)} · ${esc(card.entry.source === "custom" ? "自定义" : "简历")}</span>
               <h3>${esc(card.title)}</h3>
             </div>
-            <span class="p2-seasonal-card-state${bodyReady ? " is-ready" : ""}">${hasBody ? `${card.type === "jd" ? "JD" : "STAR"} ${bodyReady ? "已填" : "待填"}` : `答法 ${saved}/${total}`}</span>
+            <span class="p2-seasonal-card-state${bodyReady ? " is-ready" : ""}">${card.type === "jd" ? "JD" : "STAR"} ${bodyReady ? "已填" : "待填"}</span>
           </header>
           <div class="p2-seasonal-body">
             ${cueHtml(card)}
@@ -222,13 +206,13 @@
             </button>
           </div>
           <div class="p2-seasonal-p3-progress" data-progress="${progress}" aria-label="追问完成进度 ${saved}/${total}">
-            <span class="p2-seasonal-p3-progress-label">${card.type === "stack" ? "题目" : card.type === "jd" ? "反问" : "追问"}</span>
+            <span class="p2-seasonal-p3-progress-label">${card.type === "jd" ? "反问" : "追问"}</span>
             <span class="p2-seasonal-p3-progress-track"><span style="width: ${progress}%"></span></span>
             <span class="p2-seasonal-p3-progress-count">${saved}/${total}</span>
           </div>
           <footer>
-            ${hasBody ? `<button type="button" class="p2-seasonal-action primary" data-ivc-body="${esc(card.key)}">正文</button>` : ""}
-            <button type="button" class="p2-seasonal-action${saved ? " is-ready" : ""}" data-ivc-follow="${esc(card.key)}">${card.type === "stack" ? "题目与答法" : card.type === "jd" ? "岗位题与反问" : "追问"}</button>
+            <button type="button" class="p2-seasonal-action primary" data-ivc-body="${esc(card.key)}">正文</button>
+            <button type="button" class="p2-seasonal-action${saved ? " is-ready" : ""}" data-ivc-follow="${esc(card.key)}">${card.type === "jd" ? "岗位题与反问" : "追问"}</button>
           </footer>
         </article>`;
     }
@@ -236,19 +220,15 @@
     function sectionRows(section, cards) {
       return cards.filter((card) => card.type === section.id).map((card, index) => {
         const followed = card.follows.filter(ready).length;
-        const status = card.type === "stack" ? `${card.follows.length} 道题 · 已答 ${followed}`
-          : [`${card.type === "jd" ? "JD" : "STAR"} ${ready(card.entry) ? "已填" : "待填"}`, card.follows.length ? `${card.type === "jd" ? "题目" : "追问"} ${followed}/${card.follows.length}` : ""].filter(Boolean).join(" · ");
-        const items = card.entry
-          ? `<button type="button" role="menuitem" data-ivc-body="${esc(card.key)}">修改</button>
-             <button type="button" role="menuitem" class="danger" data-ivc-delete="${esc(card.key)}">删除</button>`
-          : `<button type="button" role="menuitem" data-ivc-follow="${esc(card.key)}">题目与答法</button>
-             <button type="button" role="menuitem" class="danger" data-ivc-delete="${esc(card.key)}">删除这个方向</button>`;
+        const status = [`${card.type === "jd" ? "JD" : "STAR"} ${ready(card.entry) ? "已填" : "待填"}`, card.follows.length ? `${card.type === "jd" ? "题目" : "追问"} ${followed}/${card.follows.length}` : ""].filter(Boolean).join(" · ");
+        const items = `<button type="button" role="menuitem" data-ivc-body="${esc(card.key)}">修改</button>
+             <button type="button" role="menuitem" class="danger" data-ivc-delete="${esc(card.key)}">删除</button>`;
         const menu = `
           <button type="button" class="corpus-menu-button" data-ivc-menu="${esc(card.key)}" aria-haspopup="menu" aria-expanded="false" aria-label="打开操作菜单" title="更多操作">${DOTS}</button>
           <div class="corpus-card-action-menu hidden" data-ivc-action-menu role="menu" aria-label="题卡操作">${items}</div>`;
         return `
           <div class="p2-material-row">
-            <button type="button" class="p2-material-entry-button has-corpus" ${card.entry ? `data-ivc-body="${esc(card.key)}"` : `data-ivc-follow="${esc(card.key)}"`}>
+            <button type="button" class="p2-material-entry-button has-corpus" data-ivc-body="${esc(card.key)}">
               <span class="p2-material-index">${index + 1}</span>
               <span class="p2-material-copy">
                 <span class="p2-material-title">${esc(card.title)}</span>
@@ -256,7 +236,7 @@
               </span>
             </button>
             <div class="p2-material-actions">
-              <button type="button" class="p2-follow-up-edit-button${followed ? " has-follow-up" : ""}" data-ivc-follow="${esc(card.key)}" aria-label="${card.type === "stack" ? "编辑题目与答法" : "编辑追问"}" title="${card.type === "stack" ? "题目与答法" : "追问"}">${card.type === "stack" ? "题" : "追"}</button>
+              <button type="button" class="p2-follow-up-edit-button${followed ? " has-follow-up" : ""}" data-ivc-follow="${esc(card.key)}" aria-label="编辑追问" title="追问">追</button>
               ${menu}
             </div>
           </div>`;
@@ -266,7 +246,7 @@
     function categoryGrid(cards) {
       const sections = SECTIONS.map((section) => {
         const count = cards.filter((card) => card.type === section.id).length;
-        const add = section.single && count ? "" : `
+        const add = `
           <button type="button" class="p2-add-material-button" data-ivc-create="${section.id}">
             <strong>+</strong><span>新增${esc(section.label)}</span>
           </button>`;
@@ -285,7 +265,7 @@
           <button type="button" class="p2-brainstorm-open-card" data-interview-action="go-custom">
             <span class="p2-brainstorm-card-copy">
               <strong>上传简历，一次生成全部题卡</strong>
-              <span>自动拆成项目、实习、技术栈、获奖和自我介绍；先给你看草稿，改完再加入。</span>
+              <span>自动拆成项目、实习和获奖题卡；技术栈题和自我介绍放进知识点语料库。先给你看草稿，改完再加入。</span>
             </span>
           </button>
         </article>`;
@@ -297,7 +277,7 @@
       const count = (id) => cards.filter((card) => card.type === id).length;
       const visible = filter === "all" ? cards : cards.filter((card) => card.type === filter);
       const filters = `<div class="p2-cat-filter-bar" role="group" aria-label="按类型筛选">
-          ${FILTERS.filter((item) => item.id !== "intro" || count("intro")).map((item) => `<button type="button" class="p2-cat-filter-btn${filter === item.id ? " active" : ""}" data-ivc-filter="${item.id}"${item.color ? ` style="--filter-color:${item.color}"` : ""}>${esc(item.label)} <span>${item.id === "all" ? cards.length : count(item.id)}</span></button>`).join("")}
+          ${FILTERS.map((item) => `<button type="button" class="p2-cat-filter-btn${filter === item.id ? " active" : ""}" data-ivc-filter="${item.id}"${item.color ? ` style="--filter-color:${item.color}"` : ""}>${esc(item.label)} <span>${item.id === "all" ? cards.length : count(item.id)}</span></button>`).join("")}
         </div>`;
       return `<section id="interviewResume" class="p2-corpus-panel" aria-label="简历题卡">
           <div class="p2-corpus-shell">
@@ -339,7 +319,8 @@
           <button type="button" class="p2-cat-filter-btn${tag === "all" ? " active" : ""}" data-ivc-tag="all">全部 <span>${cards.length}</span></button>
           ${tags.map((item) => `<button type="button" class="p2-cat-filter-btn${tag === item.name ? " active" : ""}" data-ivc-tag="${esc(item.name)}">${esc(item.name)} <span>${count(item.name)}</span></button>`).join("")}
         </div>`;
-      const newCard = `<button type="button" class="p1-topic-card iv-new-topic-card" data-ivc-new-topic="${esc(tag === "all" ? (tags[0]?.name || "自定义") : tag)}">
+      // New topic cards go into a real direction; 自我介绍 has its single card and adds versions with its own ＋.
+      const newCard = tag === INTRO ? "" : `<button type="button" class="p1-topic-card iv-new-topic-card" data-ivc-new-topic="${esc(tag === "all" ? (tags.find((item) => !item.intro)?.name || "自定义") : tag)}">
           <span aria-hidden="true">＋</span><strong>新题卡</strong><small>${esc(tag === "all" ? "在一个方向下新建题卡" : `在「${tag}」下新建题卡`)}</small>
         </button>`;
       return p1Page({ kicker: "Knowledge Library", title: "知识点语料库", groups: visible, filters, extra: newCard,
@@ -595,8 +576,8 @@
       const root = byId("ivFollowDialog");
       if (!card || !root) return;
       follow = { key, selected: selected || card.follows[0]?.id || "new", initial: "" };
-      byId("ivFollowDialogMeta").textContent = `简历题卡 · ${card.type === "stack" ? "技术栈" : CUES[card.type].kicker}`;
-      byId("ivFollowDialogTitle").textContent = card.type === "stack" ? `题目与答法：${card.title}` : card.type === "jd" ? `岗位题与反问：${card.title}` : `编辑追问：${card.title}`;
+      byId("ivFollowDialogMeta").textContent = `简历题卡 · ${CUES[card.type].kicker}`;
+      byId("ivFollowDialogTitle").textContent = card.type === "jd" ? `岗位题与反问：${card.title}` : `编辑追问：${card.title}`;
       renderFollow();
       root.classList.remove("hidden");
       markdown.ready(FOLLOW_TEXT);
@@ -614,13 +595,13 @@
               <strong>Q${index + 1}</strong><span>${esc(entry.question)}</span><em>${ready(entry) ? "已填" : "待填"}</em>
             </button>`).join("")}
           <button type="button" class="p2-bank-p3-question-button iv-follow-new${follow.selected === "new" ? " is-active" : ""}" data-ivc-follow-select="new">
-            <strong>＋</strong><span>${card.type === "stack" ? "自己出一道题" : card.type === "jd" ? "写一个反问" : "写一个新追问"}</span><em>自定义</em>
+            <strong>＋</strong><span>${card.type === "jd" ? "写一个反问" : "写一个新追问"}</span><em>自定义</em>
           </button>
         </div>`;
       const editable = !current || ["custom", "practice", "resume"].includes(current.source);
       const question = byId("ivFollowQuestion");
       question.value = current?.question || "";
-      question.placeholder = card.type === "stack" ? "写下题目……" : "面试官可能怎么追问？";
+      question.placeholder = card.type === "jd" ? "想问面试官什么？" : "面试官可能怎么追问？";
       question.readOnly = !editable;
       byId("ivFollowDelete").classList.toggle("hidden", !current || current.source === "curated");
       byId("ivFollowDialogStatus").textContent = "";
@@ -652,8 +633,6 @@
           const body = { corpus_text: text };
           if (question !== current.question) body.question = question;
           payload = await request(`/api/interview/corpus/${encodeURIComponent(current.id)}/`, body, { method: "PATCH" });
-        } else if (card.type === "stack") {
-          payload = await request("/api/interview/corpus/", { kind: "knowledge", group: card.group, question, corpus_text: text });
         } else if (card.type === "jd") {
           payload = await request("/api/interview/corpus/", { kind: "reverse_question", parent_id: card.entry.id, question, corpus_text: text });
         } else {
@@ -699,11 +678,11 @@
 
     // Deleting a card (and its follow-ups) asks first, in the IELTS confirm pop-up.
     function confirmDelete(card) {
-      const ids = card?.entry?.id ? [card.entry.id] : (card?.follows || []).map((entry) => entry.id).filter(Boolean);
+      const ids = card?.entry?.id ? [card.entry.id] : [];
       if (!ids.length) return;
       const overlay = document.createElement("div");
       overlay.className = "confirm-overlay";
-      overlay.innerHTML = `<div class="confirm-dialog"><p>${esc(card.entry ? `删除「${card.title}」和它的追问？` : `删除「${card.title}」方向下的 ${ids.length} 道题？`)}</p>
+      overlay.innerHTML = `<div class="confirm-dialog"><p>${esc(`删除「${card.title}」和它的追问？`)}</p>
         <div class="confirm-actions"><button class="confirm-cancel" type="button">取消</button><button class="confirm-delete" type="button">删除</button></div></div>`;
       overlay.addEventListener("click", async (event) => {
         if (event.target.closest(".confirm-cancel") || event.target === overlay) { overlay.remove(); return; }
@@ -781,10 +760,7 @@
       else if (data.ivcCreate) {
         const section = SECTIONS.find((item) => item.id === data.ivcCreate);
         if (!section) return;
-        if (section.id !== "stack") { openCard(null, section); return; }
-        const fields = section.create.fields("");
-        openEditor({ id: null, source: "custom", kind: fields.kind, group: fields.group || "", title: "", question: section.single ? fields.question : `新${section.label}`, corpus_text: "" },
-          { create: section.create });
+        openCard(null, section);
       } else if (data.ivcDelete) confirmDelete(cardByKey(data.ivcDelete));
       else if (data.ivcTag) { tag = data.ivcTag; rerender(); }
       else if (data.ivcNewTopic !== undefined) openEditor({ id: null, kind: "knowledge", source: "custom", question: "", corpus_text: "", group: data.ivcNewTopic, title: "" }, { newTopic: true });
@@ -793,8 +769,7 @@
       else if (data.ivcPractice) {
         const card = cardByKey(data.ivcPractice);
         if (!card) return;
-        if (card.type === "stack") startPractice("knowledge", { entryIds: card.follows.map((entry) => entry.id) });
-        else if (card.type === "project" || card.type === "intern") startPractice("project", { projectIds: [card.entry.id] });
+        if (card.type === "project" || card.type === "intern") startPractice("project", { projectIds: [card.entry.id] });
         else if (card.type === "jd") startPractice("reverse", { jdText: card.entry.corpus_text || "", reverse: card.follows.filter((e) => e.kind === "reverse_question").map((e) => e.question) });
         else startPractice("full", {});
       }

@@ -662,7 +662,7 @@
       setPane("corpus", { tab: where });
       const entry = (data.corpus || []).find((item) => item.id === entryId);
       if (!entry) return;
-      if (["project", "award", "jd", "self_intro"].includes(entry.kind)) corpusScreens?.openCard(entry);
+      if (["project", "award", "jd"].includes(entry.kind)) corpusScreens?.openCard(entry);
       else corpusScreens?.openEditor(entry);
     }
 
