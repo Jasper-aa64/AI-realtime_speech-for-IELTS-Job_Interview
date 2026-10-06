@@ -421,30 +421,37 @@
       return current?.session?.status === "active" && current.session.part === data.part ? current : null;
     }
 
+    // Stage progress sits where IELTS shows "READY": 自我介绍 1/1 · 项目 0/2 · …
     function stageTrack(session, turns) {
-      const plan = session?.plan?.length ? session.plan : data.part === "full" ? ["self_intro", "project", "knowledge", "award", "reverse"] : [];
+      const plan = session?.plan?.length ? session.plan : [];
       if (!plan.length) return "";
       const currentStage = data.current?.current_turn?.stage;
-      return `<ol class="iv-stage-track">${plan.map((stage) => {
+      return plan.map((stage) => {
         const ofStage = turns.filter((turn) => turn.stage === stage);
-        const done = ofStage.length && ofStage.every((turn) => turn.status !== "pending");
-        const cls = stage === currentStage ? "is-current" : done ? "is-done" : "";
-        return `<li class="${cls}"><span>${esc(stageName(stage))}</span>${ofStage.length ? `<small>${ofStage.filter((turn) => turn.status !== "pending").length}/${ofStage.length}</small>` : ""}</li>`;
-      }).join("")}</ol>`;
+        const answered = ofStage.filter((turn) => turn.status !== "pending").length;
+        const cls = stage === currentStage ? "is-current" : ofStage.length && answered === ofStage.length ? "is-done" : "";
+        return `<b class="iv-stage ${cls}">${esc(stageName(stage))}${ofStage.length ? ` ${answered}/${ofStage.length}` : ""}</b>`;
+      }).join('<i aria-hidden="true">·</i>');
     }
 
+    // Launch options use the IELTS P3 launch panel (p3-launch-section / p3-source-option).
     function launchOptions() {
       const part = data.part;
       const projects = corpusEntries(["project"]).filter((entry) => !entry.orphaned);
+      const section = (label, body) => `<section class="p3-launch-section"><div class="p3-launch-label">${esc(label)}</div>${body}</section>`;
+      const option = (action, active, title, detail, attrs) => button(action, `<strong>${esc(title)}</strong>${detail ? `<small>${esc(detail)}</small>` : ""}`, { cls: `p3-source-option${active ? " active" : ""}`, attrs });
       if ((part === "full" || part === "project") && !projects.length) {
-        return `<div class="iv-launch-note"><strong>${esc(copy("先上传简历", "Upload your resume first"))}</strong><p>${esc(copy("完整面试和项目练习会按你简历里的每个项目提问。", "The full interview and project practice ask about each project on your resume."))}</p>${solid("go-custom", copy("去上传简历", "Upload resume"))}</div>`;
+        return section(copy("先上传简历", "Upload your resume first"), `<div class="p3-plan-empty"><span>${esc(copy("完整面试和项目练习会按你简历里的每个项目提问。", "The full interview and project practice ask about each project on your resume."))}</span></div><div class="p3-start-row">${button("go-custom", esc(copy("去上传简历", "Upload resume")), { cls: "p3-generate-button" })}</div>`);
       }
       if (part === "project") {
-        return `<div class="iv-launch-options"><p class="iv-panel-label">${esc(copy("选择项目（不选则全部）", "Projects (none = all)"))}</p>${projects.map((entry) => `<label class="iv-check"><input type="checkbox" data-interview-field="project" value="${esc(entry.id)}" ${data.launch.projectIds.has(entry.id) ? "checked" : ""}><span>${esc(entry.title || entry.question)}</span></label>`).join("")}</div>`;
+        const grid = projects.map((entry) => option("toggle-project", data.launch.projectIds.has(entry.id), entry.title || entry.question, entry.corpus_text ? copy("已备讲述稿", "Story ready") : copy("还没写讲述稿", "No story yet"), `data-entry-id="${esc(entry.id)}" aria-pressed="${data.launch.projectIds.has(entry.id)}"`)).join("");
+        return section(copy("选择项目（不选则全部）", "Projects (none = all)"), `<div class="p3-source-grid iv-launch-grid" role="group">${grid}</div>`);
       }
       if (part === "knowledge") {
-        const chips = [{ id: "", label: copy("综合（技术栈优先）", "Mixed (stack first)") }, ...data.categories].map((item) => button("launch-category", esc(item.label), { cls: `iv-chip${data.launch.category === item.id ? " is-on" : ""}`, attrs: `data-category="${esc(item.id)}"` })).join("");
-        return `<div class="iv-launch-options"><p class="iv-panel-label">${esc(copy("方向", "Topic"))}</p><div class="iv-chips">${chips}</div><p class="iv-panel-label">${esc(copy("题量", "Questions"))}</p><div class="iv-seg">${[3, 5, 8].map((n) => button("launch-count", String(n), { cls: data.launch.count === n ? "is-on" : "", attrs: `data-count="${n}"` })).join("")}</div></div>`;
+        const topics = [{ id: "", label: copy("综合（技术栈优先）", "Mixed (stack first)") }, ...data.categories]
+          .map((item) => option("launch-category", data.launch.category === item.id, item.label, "", `data-category="${esc(item.id)}"`)).join("");
+        const counts = [3, 5, 8].map((n) => button("launch-count", esc(copy(`${n} 题`, `${n} questions`)), { cls: `p3-mode-option${data.launch.count === n ? " active" : ""}`, attrs: `data-count="${n}"` })).join("");
+        return `${section(copy("方向", "Topic"), `<div class="p3-source-grid iv-launch-grid" role="group">${topics}</div>`)}${section(copy("题量", "Questions"), `<div class="p3-mode-switch p1-mode-switch iv-count-switch" role="group">${counts}</div>`)}`;
       }
       return "";
     }
@@ -452,15 +459,17 @@
     // Same length classes as the IELTS prompt card (short / medium / long).
     function promptCard(textValue, extra = "") {
       const size = textValue.length <= 36 ? "short-prompt" : textValue.length <= 90 ? "medium-prompt" : "long-prompt";
-      return `<div class="prompt-card ${size} ${extra}">${esc(textValue)}</div>`;
+      return `<div id="interviewPromptCard" class="prompt-card ${size} ${extra}">${esc(textValue)}</div>`;
     }
 
     function promptPane(current) {
       if (!current) {
+        // With launch options this pane is the IELTS P3 launch panel; otherwise the idle prompt card.
         const part = PARTS[data.part];
+        const options = launchOptions();
+        if (options) return `<div class="section-label">${esc(copy("开始前", "Before you start"))}</div><div class="iv-launch">${options}</div>`;
         return `<div class="section-label">${esc(copy("面试官", "Interviewer"))}</div>
-          ${promptCard(copy(`点击「开始」，${data.part === "reverse" ? "面试官会请你提问。" : data.part === "knowledge" ? "面试官会连续问知识点。" : "面试官会先请你做自我介绍。"}`, `Press Start. ${pick(part.hint)}`), "iv-prompt-idle")}
-          <p class="iv-prompt-hint">${esc(pick(part.hint))}</p>${launchOptions()}`;
+          ${promptCard(copy(`点击「开始」，${data.part === "reverse" ? "面试官会请你提问。" : "面试官会先请你做自我介绍。"}`, `Press Start. ${pick(part.hint)}`), "iv-prompt-idle")}`;
       }
       const turns = current.turns || [];
       const turn = current.current_turn;
@@ -499,7 +508,7 @@
         if (stateName === "review") { title = copy("重录", "Re-record"); hint = copy("或修改下方文字后提交", "Or edit the text below and submit"); }
         if (stateName === "thinking") { cls = "examiner"; title = copy("面试官", "Interviewer"); hint = copy("正在判断下一步…", "Deciding what to ask next…"); disabled = true; }
       }
-      return `<button type="button" class="record-control ${cls}" data-interview-action="${action}" ${disabled || (data.busy && stateName !== "thinking") ? "disabled" : ""}><span class="iv-record-icon" aria-hidden="true"></span><strong>${esc(title)}</strong><small>${esc(hint)}</small>${cls === "examiner" || cls === "processing" || cls === "loading" ? '<div class="analyzing-dots"><span></span><span></span><span></span></div>' : ""}</button>`;
+      return `<button type="button" id="interviewRecordControl" class="record-control ${cls}" data-interview-action="${action}" ${disabled || (data.busy && stateName !== "thinking") ? "disabled" : ""}><span class="iv-record-icon" aria-hidden="true"></span><strong>${esc(title)}</strong><small>${esc(hint)}</small>${cls === "examiner" || cls === "processing" || cls === "loading" ? '<div class="analyzing-dots"><span></span><span></span><span></span></div>' : ""}</button>`;
     }
 
     function recorderPane(current) {
@@ -519,6 +528,16 @@
         <div class="recorder-status-zone">${status}</div>${editor}`;
     }
 
+    function progressTitle(current, done) {
+      if (!current) return copy("准备就绪", "Ready");
+      const turn = current.current_turn;
+      if (!turn) return copy("· 收尾", "· Wrap-up");
+      if (data.part === "full") return `· ${stageName(turn.stage)}`;
+      return copy(`· 第 ${done + 1} 题`, `· Question ${done + 1}`);
+    }
+
+    // Same shell as #practicePanel (exam-status, phase meter, practice grid); the ids are aliased
+    // to the IELTS ones by scripts/alias_ielts_styles.py.
     function practice() {
       const current = activeSession();
       const turns = current?.turns || [];
@@ -526,21 +545,23 @@
       const pressure = (current?.session?.intensity || data.intensity) === "pressure";
       const tab = PARTS[data.part].corpus;
       const tabLabel = CORPUS_TABS.find((item) => item.id === tab);
-      return `<section class="iv-practice">
-          <div class="iv-practice-head">
-            <div class="iv-practice-title"><strong>${esc(partName(data.part))} ${esc(current ? `· ${stageName(current.current_turn?.stage) || copy("收尾", "Wrap-up")}` : copy("准备就绪", "Ready"))}</strong><small>${current ? `${done} / ${turns.length}` : "READY"}</small></div>
-            <div class="iv-practice-tools"><span class="iv-mode-label">${esc(copy("面试节奏", "Pace"))}</span>
-              <div class="p3-mode-switch${pressure ? " high-intensity" : ""}" role="group" aria-label="${esc(copy("面试强度", "Intensity"))}">
+      const progress = turns.length ? Math.round((done / turns.length) * 100) : 0;
+      return `<section id="interviewPractice" class="panel practice-panel">
+          <div class="exam-status">
+            <div id="interviewStatusText"><strong id="interviewProgress">${esc(partName(data.part))} ${esc(progressTitle(current, done))}</strong><span id="interviewPhase">${current ? stageTrack(current.session, turns) || `${done} / ${turns.length}` : "Ready"}</span></div>
+            <div class="exam-actions">
+              <span class="p1-mode-help">${esc(copy("面试节奏", "Pace"))}</span>
+              <div class="p3-mode-switch p1-mode-switch${pressure ? " high-intensity" : ""}" role="group" aria-label="${esc(copy("面试强度", "Intensity"))}">
                 ${button("intensity", esc(copy("标准模式", "Standard")), { cls: `p3-mode-option${pressure ? "" : " active"}`, attrs: 'data-intensity="standard"', disabled: !!current })}
                 ${button("intensity", esc(copy("追问压力", "Pressure")), { cls: `p3-mode-option${pressure ? " active" : ""}`, attrs: 'data-intensity="pressure"', disabled: !!current })}
               </div>
               <button type="button" class="p1-corpus-entry" data-interview-action="open-corpus" data-tab="${tab}"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg><span>${esc(copy(`我的${tabLabel.zh}语料`, `My ${tabLabel.en.toLowerCase()} corpus`))}</span></button>
             </div>
           </div>
-          ${stageTrack(current?.session, turns)}
-          <div class="practice-grid iv-practice-grid">
-            <article class="prompt-pane">${promptPane(current)}</article>
-            <article class="recorder-pane">${recorderPane(current)}</article>
+          <div class="phase-meter"><span style="width:${progress}%"></span></div>
+          <div id="interviewPracticeGrid" class="practice-grid">
+            <article id="interviewPromptPane" class="prompt-pane">${promptPane(current)}</article>
+            <article id="interviewRecorderPane" class="recorder-pane">${recorderPane(current)}</article>
           </div>
         </section>`;
     }
@@ -1009,9 +1030,6 @@
       else if (field === "editor-question" && data.editor) data.editor.question = el.value;
       else if (field === "file") { data.file = el.files?.[0] || null; render(); }
       else if (field === "resumeText" || field === "jdText") data[field] = el.value;
-      else if (field === "project" && event.type === "change") {
-        el.checked ? data.launch.projectIds.add(el.value) : data.launch.projectIds.delete(el.value);
-      }
     }
 
     function openEditor(entry) {
@@ -1078,6 +1096,12 @@
         case "intensity": data.intensity = el.dataset.intensity; render(); return;
         case "launch-category": data.launch.category = el.dataset.category || ""; render(); return;
         case "launch-count": data.launch.count = Number(el.dataset.count) || 5; render(); return;
+        case "toggle-project": {
+          const ids = data.launch.projectIds;
+          ids.has(el.dataset.entryId) ? ids.delete(el.dataset.entryId) : ids.add(el.dataset.entryId);
+          render();
+          return;
+        }
         case "toggle-peek": data.answer.peek = !data.answer.peek; render(); return;
         case "type-answer": data.answer.typing = true; data.answer.error = ""; render(); byId("interviewAnswer")?.focus?.(); return;
         case "start-session": {

@@ -21,6 +21,17 @@ ALIASES = [
     ("#historyPanel", "#interviewReports", [], True),
     ("#historyList", "#interviewReportList", [], True),
     ("#detailPanel", "#interviewReportDetail", [], True),
+    # Practice shell (P1 practice <-> interview practice). Page-level :has() rules stay IELTS-only.
+    ("#practicePanel", "#interviewPractice", [], False),
+    ("#practiceGrid", "#interviewPracticeGrid", [], False),
+    ("#promptPane", "#interviewPromptPane", [], False),
+    ("#recorderPane", "#interviewRecorderPane", [], False),
+    ("#recordControl", "#interviewRecordControl", [], False),
+    ("#timerValue", "#interviewTimer", [], False),
+    ("#examStatusText", "#interviewStatusText", [], False),
+    ("#progressTrack", "#interviewProgress", [], False),
+    ("#phaseLabel", "#interviewPhase", [], False),
+    ("#promptCard", "#interviewPromptCard", [], False),
 ]
 # Speaking-report workspace conditions: shared for the rail/detail, never for writing reports.
 HISTORY_WORKSPACE = (".history-workspace", ".interview-history-workspace")
@@ -53,8 +64,11 @@ def split_top_level(prelude):
 
 
 def outside_has(selector, token):
-    """True when token appears in selector but not only inside :has(...)."""
-    stripped = re.sub(r":has\((?:[^()]|\([^()]*\))*\)", "", selector)
+    """True when token appears in selector but not only inside :has(...) or :not(...).
+
+    An alias inside :not() would invert the meaning: `x:not(#interviewPractice *)` added next to
+    `x:not(#practicePanel *)` matches everything inside the IELTS panel again."""
+    stripped = re.sub(r":(?:has|not)\((?:[^()]|\([^()]*\))*\)", "", selector)
     return token in stripped
 
 
