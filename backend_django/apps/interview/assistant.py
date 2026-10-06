@@ -7,25 +7,13 @@ them (ai_schema) and applies them here, so the model never touches the database 
 from django.db import transaction
 
 from . import ai_services, corpus
+from .models import InterviewAssistantMessage as Message
+from .models import InterviewAssistantThread as Thread
 from .models import InterviewCorpusEntry as Entry
 from .validation import InterviewError, text
 
 HISTORY = 16
 SECTION_KIND = {"project": (Entry.Kind.PROJECT, ""), "intern": (Entry.Kind.PROJECT, "实习"), "award": (Entry.Kind.AWARD, "")}
-
-
-def _conversation(payload):
-    messages = payload.get("messages")
-    if not isinstance(messages, list) or not messages:
-        raise InterviewError("请先输入问题。")
-    cleaned = []
-    for item in messages[-HISTORY:]:
-        if not isinstance(item, dict) or item.get("role") not in {"user", "assistant"}:
-            raise InterviewError("对话格式不正确。")
-        cleaned.append({"role": item["role"], "content": text(item.get("content"), "message", 8000, required=True)})
-    if cleaned[-1]["role"] != "user":
-        raise InterviewError("最后一条应该是你的问题。")
-    return cleaned
 
 
 def _library(user):
@@ -100,9 +88,80 @@ def apply_actions(user, actions):
     return applied
 
 
-def chat(user, payload):
-    conversation = _conversation(payload)
-    result = ai_services.run_generation(user, "assistant", {"conversation": conversation, "library": _library(user)},
+# A save target picked in the composer is passed to the model as an instruction on the latest message.
+TARGET_NOTES = {
+    "knowledge": "请把要点总结成知识点题卡，保存到「知识点语料库」（沿用已有的 tag 和题卡）。",
+    "resume": "请整理成 简述 + 简历原文 + STAR 正文 的题卡，保存到「简历题卡」。",
+    "jd": "请整理成 JD 卡（JD 正文）和岗位题 / 反问，保存到「JD 与反问」。",
+}
+
+
+def _thread(user, thread_id):
+    thread = Thread.objects.filter(user=user, thread_id=thread_id).first()
+    if not thread:
+        raise InterviewError("这段对话不存在或已删除。", code="not_found", status=404)
+    return thread
+
+
+def _message_payload(message):
+    return {"id": message.message_id, "role": message.role, "content": message.content, "target": message.target,
+            "applied": message.applied, "steps": message.steps, "model": message.model, "created_at": message.created_at.isoformat()}
+
+
+def _thread_payload(thread):
+    return {"id": thread.thread_id, "title": thread.title or "新对话", "updated_at": thread.updated_at.isoformat()}
+
+
+def threads(user):
+    return {"threads": [_thread_payload(t) for t in Thread.objects.filter(user=user).order_by("-updated_at")[:100]]}
+
+
+def thread_detail(user, thread_id):
+    thread = _thread(user, thread_id)
+    return {"thread": _thread_payload(thread), "messages": [_message_payload(m) for m in thread.messages.all()]}
+
+
+def rename(user, thread_id, payload):
+    thread = _thread(user, thread_id)
+    thread.title = text(payload.get("title"), "title", 80, required=True)
+    thread.save(update_fields=["title", "updated_at"])
+    return {"thread": _thread_payload(thread)}
+
+
+def delete(user, thread_id):
+    _thread(user, thread_id).delete()
+    return {"deleted": thread_id}
+
+
+def _steps(library, result, actions, applied):
+    """The agent trace shown under a reply: what it read, which model answered, what it wrote."""
+    steps = [{"kind": "library", "label": "读取语料库快照",
+              "detail": f"知识点题卡 {len(library['knowledge_topics'])} 个 · 简历题卡 {len(library['resume_cards'])} 张 · JD {len(library['jd_cards'])} 张"},
+             {"kind": "model", "label": "生成回答", "detail": f"{result.get('model') or 'AI'} · {round((result.get('elapsed_ms') or 0) / 1000, 1)} s"}]
+    if actions:
+        steps.append({"kind": "validate", "label": "校验写入动作", "detail": f"{len(actions)} 个动作通过校验"})
+        steps += [{"kind": "write", "label": item["label"], "where": item["where"], "entry_id": item["entry_id"]} for item in applied]
+    return steps
+
+
+def send(user, payload):
+    """Answer the next message in a thread (a new thread when none is given); writes only after the model succeeds."""
+    message = text(payload.get("message"), "message", 8000, required=True)
+    target = payload.get("target") if payload.get("target") in TARGET_NOTES else ""
+    thread = _thread(user, payload["thread_id"]) if payload.get("thread_id") else None
+    history = [{"role": m.role, "content": m.content} for m in thread.messages.all()] if thread else []
+    asked = f"{message}\n\n{TARGET_NOTES[target]}" if target else message
+    conversation = (history + [{"role": "user", "content": asked}])[-HISTORY:]
+    library = _library(user)
+    result = ai_services.run_generation(user, "assistant", {"conversation": conversation, "library": library},
                                         ai_source=payload.get("ai_source", ""))
-    applied = apply_actions(user, result["actions"])
-    return {"reply": result["reply"], "applied": applied, "model": result.get("model", ""), **corpus.corpus_listing(user)}
+    with transaction.atomic():
+        if thread is None:
+            thread = Thread.objects.create(user=user, title=(result.get("title") or message.splitlines()[0])[:40])
+        asked_message = Message.objects.create(thread=thread, role=Message.Role.USER, content=message, target=target)
+        applied = apply_actions(user, result["actions"])
+        reply = Message.objects.create(thread=thread, role=Message.Role.ASSISTANT, content=result["reply"], applied=applied,
+                                       steps=_steps(library, result, result["actions"], applied), model=result.get("model", ""))
+        thread.save(update_fields=["updated_at"])
+    return {"thread": _thread_payload(thread), "message": _message_payload(asked_message), "reply": _message_payload(reply),
+            **corpus.corpus_listing(user)}

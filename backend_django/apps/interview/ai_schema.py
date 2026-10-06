@@ -106,7 +106,8 @@ ASSISTANT_PROMPT = (
     "\"title\":\"...\",\"resume_excerpt\":\"...\",\"star\":\"...\",\"follow_ups\":[{\"question\":\"...\",\"answer\":\"...\"}]},"
     "{\"type\":\"jd\",\"title\":\"...\",\"jd\":\"...\",\"questions\":[{\"kind\":\"reverse_question\",\"question\":\"...\","
     "\"answer\":\"...\"}]},{\"type\":\"jd_question\",\"kind\":\"jd_question\",\"question\":\"...\",\"answer\":\"...\"}]}. "
-    "Use \"actions\":[] when nothing should be saved."
+    "Use \"actions\":[] when nothing should be saved. When CONVERSATION has a single message, also return "
+    "\"title\": a short Chinese title (at most 16 characters) for the conversation."
 )
 
 
@@ -229,7 +230,8 @@ def validate(kind, data, inputs):
                 "questions": questions, "reverse_questions": reverse}
     if kind == "assistant":
         return {"reply": text(data.get("reply"), "reply", 16000, required=True),
-                "actions": [_assistant_action(item) for item in _list(data.get("actions"), 12)]}
+                "actions": [_assistant_action(item) for item in _list(data.get("actions"), 12)],
+                "title": text(data.get("title"), "title", 40)}
     if kind == "corpus_draft":
         return {"draft": text(data.get("draft"), "draft", 4000, required=True)}
     if kind == "next_step":

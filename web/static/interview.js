@@ -1,6 +1,6 @@
 (function () {
   const MODES = new Set(["ielts", "interview"]);
-  const PANES = new Set(["home", "practice", "reports", "report", "corpus", "custom"]);
+  const PANES = new Set(["home", "practice", "reports", "report", "corpus", "custom", "assistant"]);
   const MODE_KEY = "ielts-product-mode";
   const ARROW = '<span class="iv-arrow" aria-hidden="true">→</span>';
   // The interview counterpart of Mock + P1/P2/P3.
@@ -37,6 +37,15 @@
       rerender: () => { if (data.pane === "corpus" && state.view === "interview") render(); },
       startPractice: (part, preset) => { launch?.preset(`iv_${part}`, preset); setPane("practice", { part }); },
     }) || null;
+    // AI 助手 (interview-assistant.js): chat; saves into the three corpus screens in agent mode.
+    const assistantChat = window.IELTSInterviewAssistant?.create({
+      state, escapeHtml, currentAiSourcePreference,
+      request: (path, body, options) => api(path, body, options),
+      popup: (message) => popup(message),
+      toast: (message) => toast(message),
+      setCorpus: (list) => { data.corpus = list; window.IELTSInterviewHome?.refresh(); },
+      openApplied: (item) => openApplied(item),
+    }) || null;
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
     const pick = (pair) => copy(pair[0], pair[1]);
     const esc = (value) => escapeHtml(String(value ?? ""));
@@ -70,7 +79,8 @@
       data = freshState();
       launch?.reset();
       corpusScreens?.reset();
-      if (byId("interviewPanel")) render();
+      assistantChat?.reset();
+      if (byId("interviewPanel")) render({ force: true });
       window.IELTSInterviewHome?.refresh();
       ensureOverview();
     }
@@ -182,7 +192,8 @@
         event.preventDefault?.();
         setPane(item.dataset.interviewPane, { part: item.dataset.interviewPart });
       });
-      byId("interviewPanel")?.addEventListener("click", handleAction);
+      byId("interviewPanel")?.addEventListener("click", (event) => { if (!assistantChat?.handleClick(event)) handleAction(event); });
+      byId("interviewPanel")?.addEventListener("keydown", (event) => assistantChat?.handleKey(event));
       // Links on the shared home panel carry data-iv-target ("pane" or "pane:part") in interview mode. Capture
       // phase, so the IELTS router never sees them and the href never navigates.
       document.addEventListener("click", (event) => {
@@ -201,9 +212,9 @@
         setPane("corpus");
       }, true);
       window.IELTSInterviewHome?.setSource(homeNumbers);
-      byId("interviewPanel")?.addEventListener("input", captureInput);
+      byId("interviewPanel")?.addEventListener("input", (event) => { if (!assistantChat?.handleInput(event)) captureInput(event); });
       byId("interviewPanel")?.addEventListener("change", captureInput);
-      window.addEventListener("ielts:ui-language-change", () => { setProductMode(state.productMode); render(); });
+      window.addEventListener("ielts:ui-language-change", () => { setProductMode(state.productMode); render({ force: true }); });
     }
 
     // ---- Feedback without taking page space: errors in the IELTS pop-up (confirm-overlay), progress and success
@@ -500,6 +511,7 @@
     const PANE_COPY = {
       practice: () => [partName(data.part), pick(PARTS[data.part].hint)],
       custom: () => [copy("简历 / JD 定制", "Resume / JD"), copy("把简历和目标岗位拆成可练的语料。", "Turn your resume and target role into practice material.")],
+      assistant: () => [copy("AI 助手", "AI assistant"), copy("随时提问；让它整理进知识点、简历题卡或 JD 与反问。", "Ask anything; have it filed into your knowledge, resume cards or JD questions.")],
     };
 
     function syncNav() {
@@ -536,7 +548,7 @@
       if (byId("viewSubtitle")) byId("viewSubtitle").textContent = entry[1];
     }
 
-    function render() {
+    function render({ force = false } = {}) {
       const panel = byId("interviewPanel");
       if (!panel || !state.desktopCapabilities?.mock_interview) return;
       syncChrome();
@@ -544,8 +556,10 @@
         panel.innerHTML = `<div class="iv-guest"><p class="iv-kicker">Interview Studio</p><h2 class="iv-title"><span class="iv-title-main">Mock Interview</span></h2><p>${esc(copy("登录同一个 IELTS Studio 账号，保存面试回答与练习记录。", "Sign in with your Studio account to save answers and interview history."))}</p>${solid("login", copy("登录并开始", "Sign in and start"))}</div>`;
         return;
       }
+      // The AI 助手 chat is a live component (a reply may be on its way): background refreshes leave it alone.
+      if (data.pane === "assistant" && panel.querySelector("#ivAssistant") && !force) return;
       // Home, practice and reports are shared IELTS panels (home, iv_* and history views), not #interviewPanel.
-      const paneView = ({ corpus: () => corpusScreens?.render(data.corpusTab) || "", custom: customPane })[data.pane];
+      const paneView = ({ corpus: () => corpusScreens?.render(data.corpusTab) || "", custom: customPane, assistant: () => assistantChat?.render() || "" })[data.pane];
       if (!paneView) { panel.innerHTML = ""; return; }
       const content = paneView();
       panel.innerHTML = `<div class="iv-pane iv-pane--${data.pane}">${content}</div>`;
@@ -641,6 +655,15 @@
     function openCorpusFor(view) {
       const part = String(view || "").replace(/^iv_/, "");
       setPane("corpus", { tab: PARTS[part]?.corpus || data.corpusTab });
+    }
+
+    // A "已写入 …" link under an assistant reply: that corpus screen, with the written card or answer open.
+    function openApplied({ where, entryId }) {
+      setPane("corpus", { tab: where });
+      const entry = (data.corpus || []).find((item) => item.id === entryId);
+      if (!entry) return;
+      if (["project", "award", "jd", "self_intro"].includes(entry.kind)) corpusScreens?.openCard(entry);
+      else corpusScreens?.openEditor(entry);
     }
 
     // The report's 编辑语料 on an interview turn: the corpus editor with the reference answer.

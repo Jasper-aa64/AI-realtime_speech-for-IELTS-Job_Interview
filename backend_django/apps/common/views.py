@@ -50,6 +50,7 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "corner-morph.js": "text/javascript; charset=utf-8",
         "interview-home.js": "text/javascript; charset=utf-8",
         "interview-launch.js": "text/javascript; charset=utf-8",
+        "interview-assistant.js": "text/javascript; charset=utf-8",
         "interview-corpus.js": "text/javascript; charset=utf-8",
         "interview.js": "text/javascript; charset=utf-8",
         "view-router.js": "text/javascript; charset=utf-8",

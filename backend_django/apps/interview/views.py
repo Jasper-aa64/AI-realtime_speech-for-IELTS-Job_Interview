@@ -140,7 +140,21 @@ def profile_jd(request):
 
 @api("POST")
 def assistant_chat(request):
-    return assistant.chat(request.user, json_body(request))
+    return assistant.send(request.user, json_body(request))
+
+
+@api("GET")
+def assistant_threads(request):
+    return assistant.threads(request.user)
+
+
+@api("GET", "PATCH", "DELETE")
+def assistant_thread(request, thread_id):
+    if request.method == "PATCH":
+        return assistant.rename(request.user, thread_id, json_body(request))
+    if request.method == "DELETE":
+        return assistant.delete(request.user, thread_id)
+    return assistant.thread_detail(request.user, thread_id)
 
 
 @api("POST")

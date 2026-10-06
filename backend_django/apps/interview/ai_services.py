@@ -5,6 +5,7 @@ errors remain generic, and raw resume/answer text is never logged here.
 """
 
 import json
+import logging
 import uuid
 import time
 
@@ -21,6 +22,8 @@ from apps.speaking.ai_runtime import run_claude_cli, run_codex
 
 from . import ai_schema
 from .validation import InterviewError, custom_questions, text
+
+logger = logging.getLogger(__name__)
 
 # Splitting a whole resume writes several drafts; it needs more tokens and time than one follow-up.
 BUDGETS = {"resume_profile": (7000, 90), "jd_profile": (4000, 60), "score_report": (5000, 90), "assistant": (6000, 150)}
@@ -42,11 +45,15 @@ def _source(user, selected):
 
 
 def _json_output(value):
-    value = text(value, "AI output", 24000, required=True)
+    value = text(value, "AI output", 60000, required=True)
     if value.startswith("```"):
         lines = value.splitlines()
         value = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else value
-    result = json.loads(value)
+    # The first complete object wins: models sometimes add a stray "}" or a remark after the JSON.
+    start = value.find("{")
+    if start < 0:
+        raise ValueError("AI output has no JSON object")
+    result, _end = json.JSONDecoder().raw_decode(value, start)
     if not isinstance(result, dict):
         raise ValueError("AI output is not an object")
     return result
@@ -138,6 +145,7 @@ def run_generation(user, kind, inputs, *, ai_source="", related_id=""):
             succeed_billable_ai_task(task.task_id, {**payload, **provenance}, usage, provider=backend, model=model)
         return {**payload, **provenance}
     except Exception:
+        logger.exception("interview %s generation failed (%s)", kind, source)
         if local:
             fail_ai_task(task.task_id, "Interview AI generation failed", error_code="interview_ai_failed", retryable=False)
         else:

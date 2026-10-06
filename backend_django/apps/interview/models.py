@@ -132,3 +132,42 @@ class InterviewTurn(UserOwnedModel):
     class Meta:
         ordering = ["order", "pk"]
         constraints = [models.UniqueConstraint(fields=["session", "order"], name="interview_unique_turn_order")]
+
+
+def thread_id():
+    return f"iat_{uuid.uuid4().hex}"
+
+
+def message_id():
+    return f"iam_{uuid.uuid4().hex}"
+
+
+class InterviewAssistantThread(UserOwnedModel):
+    """One AI 助手 conversation, listed like a chat history."""
+
+    thread_id = models.CharField(max_length=40, unique=True, default=thread_id)
+    title = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "updated_at"])]
+
+
+class InterviewAssistantMessage(models.Model):
+    """A message in a thread; assistant messages keep what they wrote into the library and the agent trace."""
+
+    class Role(models.TextChoices):
+        USER = "user", "用户"
+        ASSISTANT = "assistant", "助手"
+
+    message_id = models.CharField(max_length=40, unique=True, default=message_id)
+    thread = models.ForeignKey(InterviewAssistantThread, on_delete=models.CASCADE, related_name="messages")
+    role = models.CharField(max_length=12, choices=Role.choices)
+    content = models.TextField()
+    target = models.CharField(max_length=16, blank=True)
+    applied = models.JSONField(default=list, blank=True)
+    steps = models.JSONField(default=list, blank=True)
+    model = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
