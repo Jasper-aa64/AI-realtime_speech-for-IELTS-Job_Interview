@@ -1208,7 +1208,8 @@ const {
 
 const interview = window.IELTSInterview?.createInterview?.({
   state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin,
-  escapeHtml, currentAiSourcePreference,
+  escapeHtml, currentAiSourcePreference, renderMarkdown: renderSpokenAnswerMarkdown,
+  markdown: { ready: ensureCorpusMarkdownEditorReady, get: getCorpusMarkdownValue, set: setCorpusMarkdownValue },
 });
 
 const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy });
@@ -3024,6 +3025,7 @@ function resetPracticeSurface() {
   $("#phaseMeter").style.width = "0%";
   text("promptKicker", "Prompt");
   setPromptHtml("Start a voice practice session to load a question.", "short");
+  interview?.renderLaunch?.(state.view);
   text("followUp", "");
   setRecordButton("ready", "Start", "Record the full section. No typing.");
   text("recordStatus", "Click Start. The examiner will load the questions automatically.");
@@ -3131,6 +3133,9 @@ function setPromptHtml(html, size = "medium") {
   const mascot = document.getElementById("followUpMascot");
   card.className = `prompt-card ${size}-prompt`;
   card.innerHTML = html;
+  // A question on the card replaces the interview launch block; the idle reset draws it again.
+  $("#ivLaunch")?.classList.add("hidden");
+  $("#promptPane")?.classList.remove("has-iv-launch");
   if (mascot) card.appendChild(mascot);
 }
 
@@ -3569,6 +3574,11 @@ function renderTurn(turn) {
   if (isFollowUp) resolveFollowUpThinkingMascot();
   else hideFollowUpThinkingMascot();
   setPromptHtml(`${isFollowUp ? '<span class="prompt-followup-tag">Follow-up question</span>' : ""}<p>${escapeHtml(turn.question)}</p>`, promptSize(turn.question));
+  // Reverse round: the questions the candidate prepared at launch stay in view while they ask.
+  const planned = turn.part === "interview" ? turn.prompt?.planned_questions || [] : [];
+  if (planned.length) {
+    $("followUp").innerHTML = `<div class="iv-planned"><span class="section-label">你准备的反问</span><ol>${planned.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol></div>`;
+  }
 }
 
 function turnProgressLabel(turn) {
@@ -14330,6 +14340,7 @@ function stopAllRuntime(label = "Ready") {
   $("exitPractice")?.classList.add("hidden");
   text("promptKicker", "Prompt");
   setPromptHtml("Start a voice practice session to load a question.", "short");
+  interview?.renderLaunch?.(state.view);
   text("followUp", "");
   setRecordButton("ready", label, "Record the full section. No typing.");
   text("recordStatus", "Click Start. The examiner will load the questions automatically.");

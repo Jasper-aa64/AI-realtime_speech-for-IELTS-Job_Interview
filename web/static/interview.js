@@ -20,13 +20,20 @@
   const KIND_LABELS = { self_intro: ["自我介绍", "Self intro"], project: ["项目讲述", "Project story"], project_followup: ["项目追问", "Project follow-up"], knowledge: ["知识点", "Knowledge"], award: ["奖项", "Award"], jd_question: ["岗位题", "Role question"], reverse_question: ["反问", "Question to ask"] };
   const SOURCE_LABELS = { curated: ["精选题库", "Curated"], resume: ["简历", "Resume"], jd: ["JD", "JD"], custom: ["自定义", "Custom"], practice: ["练习", "Practice"] };
 
-  function createInterview({ state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin, escapeHtml, currentAiSourcePreference }) {
+  function createInterview({ state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin, escapeHtml, currentAiSourcePreference, markdown, renderMarkdown }) {
     let epoch = 0;
     let initialized = false;
     let requestController = null;
     let switcher = null;
     let data = freshState();
     const byId = (id) => document.getElementById(id);
+    // The launch block in the practice panel's PROMPT pane (interview-launch.js).
+    const launch = window.IELTSInterviewLaunch?.create({
+      state, escapeHtml, markdown, currentAiSourcePreference, renderMarkdown: renderMarkdown || ((value) => escapeHtml(String(value || ""))),
+      upload: (path, form) => upload(path, form),
+      source: () => data,
+      onProfile: (payload) => { data.profile = payload.profile; data.corpus = payload.entries || data.corpus; window.IELTSInterviewHome?.refresh(); },
+    }) || null;
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
     const pick = (pair) => copy(pair[0], pair[1]);
     const esc = (value) => escapeHtml(String(value ?? ""));
@@ -58,6 +65,7 @@
       requestController?.abort();
       requestController = null;
       data = freshState();
+      launch?.reset();
       if (byId("interviewPanel")) render();
       window.IELTSInterviewHome?.refresh();
       ensureOverview();
@@ -235,6 +243,8 @@
       if (profile) data.profile = profile.profile;
       if (corpus) data.corpus = corpus.entries || [];
       window.IELTSInterviewHome?.refresh();
+      // The launch block lists corpus projects and categories; redraw it once they arrive.
+      if (/^iv_/.test(state.view || "") && !state.practiceLocked && !byId("ivLaunch")?.classList.contains("hidden")) launch?.render(state.view);
     }
 
     // Numbers the shared home panel shows in interview mode (interview-home.js).
@@ -630,9 +640,14 @@
       }
     }
 
-    // Hooks for app.js's practice panel: extra attempt-start fields, and the corpus button in interview views.
-    function launchOptions(_view) {
-      return {};
+    // Hooks for app.js's practice panel: the launch block, its attempt-start fields, and the corpus button.
+    function launchOptions(view) {
+      return launch?.options(view) || {};
+    }
+
+    function renderLaunch(view) {
+      launch?.render(view);
+      ensureOverview();
     }
 
     function openCorpusFor(view) {
@@ -641,7 +656,7 @@
       setPane("corpus");
     }
 
-    return { initialize, setProductMode, show, resetForAccount, setPane, launchOptions, openCorpusFor, syncNav };
+    return { initialize, setProductMode, show, resetForAccount, setPane, launchOptions, renderLaunch, hideLaunch: () => launch?.hide(), openCorpusFor, syncNav };
   }
   window.IELTSInterview = { createInterview };
 })();

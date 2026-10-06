@@ -26,7 +26,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261006-interview-57">
+    <link rel="stylesheet" href="/styles.css?v=20261006-interview-62">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -487,6 +487,7 @@
             <article id="promptPane" class="prompt-pane">
               <div class="section-label" id="promptKicker">Prompt</div>
               <div id="promptCard" class="prompt-card short-prompt">Start a voice practice session to load a question.</div>
+              <div id="ivLaunch" class="iv-launch hidden" aria-label="本次面试设置"></div>
               <div id="followUp" class="follow-up"></div>
               <button id="browserTtsFallback" class="ghost hidden">Play with browser voice</button>
             </article>
@@ -591,6 +592,48 @@
             </div>
             <div class="p1-corpus-dialog-actions">
               <span id="p1CorpusSaveStatus"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interview launch: the P1 corpus dialog shell with the IELTS Markdown editor (interview-launch.js). -->
+        <div id="ivLaunchDialog" class="p1-corpus-dialog iv-launch-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="ivLaunchDialogTitle">
+          <div class="p1-corpus-dialog-card" data-corpus-dialog-card>
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="ivLaunchDialogMeta"></span>
+                <div class="corpus-dialog-title-line">
+                  <h3 id="ivLaunchDialogTitle"></h3>
+                </div>
+              </div>
+              <div class="iv-launch-dialog-actions">
+                <button id="ivLaunchDialogClose" class="ghost" type="button">取消</button>
+                <button id="ivLaunchDialogSave" type="button">保存</button>
+              </div>
+            </header>
+            <label id="ivLaunchDialogLabel" class="p1-corpus-label" for="ivLaunchText"></label>
+            <textarea id="ivLaunchText" class="p1-corpus-textarea" spellcheck="true"></textarea>
+            <div class="p1-corpus-dialog-actions iv-launch-dialog-foot">
+              <label class="iv-launch-file hidden"><input id="ivLaunchFile" type="file" accept="application/pdf,.pdf"><span id="ivLaunchFileName">选择 PDF 简历</span></label>
+              <small id="ivLaunchDialogNote"></small>
+              <span id="ivLaunchDialogStatus" role="status"></span>
+            </div>
+          </div>
+        </div>
+
+        <div id="ivPickDialog" class="p1-corpus-dialog iv-pick-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="ivPickDialogTitle">
+          <div class="p1-corpus-dialog-card iv-pick-card">
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="ivPickDialogMeta">知识点</span>
+                <h3 id="ivPickDialogTitle"></h3>
+              </div>
+              <button type="button" data-iv-pick="done">完成</button>
+            </header>
+            <div id="ivPickList" class="p1-topic-question-list iv-pick-list"></div>
+            <div class="p1-corpus-dialog-actions iv-pick-foot">
+              <button id="ivPickAll" class="ghost" type="button" data-iv-pick="all">全选本类</button>
+              <button class="ghost" type="button" data-iv-pick="add">＋ 自己出题</button>
             </div>
           </div>
         </div>
@@ -1806,14 +1849,15 @@
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
-    <script src="/native-bridge.js?v=20261006-interview-57"></script>
-    <script src="/corner-morph.js?v=20261006-interview-57"></script>
-    <script src="/interview-home.js?v=20261006-interview-57"></script>
-    <script src="/interview.js?v=20261006-interview-57"></script>
+    <script src="/native-bridge.js?v=20261006-interview-62"></script>
+    <script src="/corner-morph.js?v=20261006-interview-62"></script>
+    <script src="/interview-launch.js?v=20261006-interview-62"></script>
+    <script src="/interview-home.js?v=20261006-interview-62"></script>
+    <script src="/interview.js?v=20261006-interview-62"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>
-    <script src="/app.js?v=20261006-interview-57"></script>
+    <script src="/app.js?v=20261006-interview-62"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
-    <script src="/home-dashboard.js?v=20261006-interview-57"></script>
+    <script src="/home-dashboard.js?v=20261006-interview-62"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>
   </body>
 </html>

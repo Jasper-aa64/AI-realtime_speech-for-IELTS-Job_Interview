@@ -256,3 +256,82 @@ class InterviewExaminerVoiceTests(RuntimeTestBase):
         with patch(TTS, side_effect=fake_tts) as tts:
             examiner_tts_services._volcengine_examiner_tts("Do you work or are you a student?", cache_key="k")
         self.assertNotIn("language", tts.call_args.kwargs)
+
+
+@override_settings(MEDIA_ROOT="/tmp/interview-runtime-test-media")
+class InterviewLaunchOptionTests(RuntimeTestBase):
+    """What the practice panel's launch block sends: picked / custom questions, a project text, a JD, planned questions."""
+
+    def test_knowledge_asks_picked_and_custom_questions_up_to_the_count(self):
+        mine = Entry.objects.create(user=self.user, kind="knowledge", question="讲讲内存序。", group="C++", source="resume",
+                                    source_key="resume:tech:a")
+        payload = self.begin({"mode": "iv_knowledge", "count": 3, "entry_ids": [mine.entry_id],
+                              "question_ids": ["cpp-1"], "custom_questions": ["epoll 和 select 的区别？"]})
+        questions = [turn["question"] for turn in payload["turns"]]
+        self.assertEqual(len(questions), 3)
+        self.assertIn("讲讲内存序。", questions)
+        self.assertIn("epoll 和 select 的区别？", questions)
+        self.assertEqual(payload["turns"][questions.index("epoll 和 select 的区别？")]["prompt"]["source"], "custom")
+
+    def test_knowledge_samples_the_picked_pool_down_to_the_count(self):
+        payload = self.begin({"mode": "iv_knowledge", "count": 2, "custom_questions": ["题一", "题二", "题三", "题四"]})
+        questions = [turn["question"] for turn in payload["turns"]]
+        self.assertEqual(len(questions), 2)
+        self.assertTrue(set(questions) <= {"题一", "题二", "题三", "题四"})
+
+    def test_knowledge_tops_up_from_the_picked_categories(self):
+        payload = self.begin({"mode": "iv_knowledge", "count": 4, "categories": ["cpp"], "custom_questions": ["我的题"]})
+        self.assertEqual(len(payload["turns"]), 4)
+        self.assertEqual(payload["turns"][0]["question"], "我的题")
+        self.assertTrue(all(turn["prompt"]["category"] in {"cpp", "knowledge"} for turn in payload["turns"][1:]))
+
+    def test_project_round_from_a_written_description_needs_no_resume(self):
+        text = "## 撮合网关\n用无锁队列把下单延迟从 80us 降到 12us。"
+        payload = self.begin({"mode": "iv_project", "project_text": text})
+        self.assertEqual(len(payload["turns"]), 1)
+        turn = payload["turns"][0]
+        self.assertEqual(turn["prompt"]["stage"], "project")
+        self.assertIn("撮合网关", turn["question"])
+        self.assertEqual(turn["prompt"]["project_context"], text)
+        with patch(RUN, return_value=decision("follow_up", "12us 怎么测的？")) as run:
+            self.complete(payload["id"], turn["id"])
+        self.assertEqual(run.call_args.args[2]["project_context"], text)
+
+    def test_project_round_combines_picked_projects_and_a_description(self):
+        self.seed_resume()
+        gateway = Entry.objects.get(user=self.user, source_key="resume:project:gw")
+        payload = self.begin({"mode": "iv_project", "project_ids": [gateway.entry_id], "project_text": "行情回放系统"})
+        self.assertEqual([turn["prompt"]["stage"] for turn in payload["turns"]], ["project", "project"])
+        self.assertEqual(payload["turns"][0]["question"], "介绍一下你的「撮合网关」项目。")
+
+    def test_reverse_round_uses_the_session_jd_and_planned_questions(self):
+        planned = ["团队怎么衡量延迟？", "新人怎么上手？", "技术栈会怎么演进？"]
+        payload = self.begin({"mode": "iv_reverse", "jd_text": "低延迟 C++ 开发", "reverse_questions": planned})
+        first = payload["turns"][0]
+        self.assertEqual(first["prompt"]["planned_questions"], planned)
+        attempt = SpeakingAttempt.objects.get(attempt_id=payload["id"])
+        self.assertEqual(attempt.metadata["interview"]["reverse_rounds"], 3)
+        reply = {"reply": "按 P99。", "signal": "strong", "evidence": "好问题"}
+        turn = first
+        for index, question in enumerate(planned):
+            with patch(RUN, return_value=reply) as run:
+                done = self.complete(payload["id"], turn["id"], question)
+            self.assertEqual(run.call_args.args[2]["jd_text"], "低延迟 C++ 开发")
+            self.assertTrue(run.call_args.args[2]["has_jd"])
+            turn = done["next_turn"]
+            if index < 2:
+                self.assertEqual(turn["prompt"]["planned_questions"], planned)
+        self.assertIsNone(turn)
+
+    def test_full_interview_takes_a_session_jd(self):
+        self.seed_resume()
+        payload = self.begin({"mode": "iv_full", "jd_text": "低延迟 C++ 开发"})
+        attempt = SpeakingAttempt.objects.get(attempt_id=payload["id"])
+        self.assertEqual(attempt.metadata["interview"]["jd_text"], "低延迟 C++ 开发")
+
+    def test_bad_launch_input_is_rejected(self):
+        for payload in ({"mode": "iv_knowledge", "custom_questions": "不是列表"},
+                        {"mode": "iv_reverse", "reverse_questions": ["一", "二", "三", "四", "五", "六"]},
+                        {"mode": "iv_project", "project_text": "x" * 8001}):
+            response, _ = self.start(payload)
+            self.assertEqual(response.status_code, 400, payload)

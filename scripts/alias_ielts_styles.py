@@ -20,6 +20,8 @@ ALIASES = [
     ("#writingPanel", "#interviewCustom", [], False),
     ("#writingScoreBtn", "#interviewCustomSubmit", [], False),
     ("#writingSaveBtn", "#interviewCustomCorpus", [], False),
+    # Interview launch block (practice PROMPT pane) <-> the P3 launch panel: numbered steps, check-mark tiles.
+    ("#p3TopicPanel", "#ivLaunch", [], False),
 ]
 # Corpus-view workspace conditions are shared only when the selector is about the P1 library.
 CORPUS_WORKSPACE = (".corpus-workspace", ".interview-corpus-workspace")
@@ -92,9 +94,11 @@ def rewrite(css):
             continue
         if char == "{":
             prelude = css[prelude_start:i]
-            body_is_rules = prelude.lstrip().startswith("@") and re.match(r"\s*@(media|supports|container|layer)", prelude)
+            # A comment right before an at-rule is part of the prelude text; judge the at-rule without it.
+            bare = re.sub(r"/\*.*?\*/", "", prelude, flags=re.S)
+            body_is_rules = re.match(r"\s*@(media|supports|container|layer)", bare)
             in_rule_context = not depth_stack or depth_stack[-1]
-            if in_rule_context and not prelude.lstrip().startswith("@"):
+            if in_rule_context and not bare.lstrip().startswith("@"):
                 selectors = split_top_level(re.sub(r"/\*.*?\*/", "", prelude, flags=re.S))
                 existing = {s.strip() for s in selectors}
                 extra = []

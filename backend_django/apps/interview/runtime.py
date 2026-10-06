@@ -10,7 +10,7 @@ from the candidate's resume / JD / curated bank, the interviewer's next-or-follo
 from django.conf import settings
 
 from . import ai_services, corpus, engine
-from .validation import InterviewError
+from .validation import InterviewError, text
 
 INTERVIEW_MODES = {"iv_full": "full", "iv_project": "project", "iv_knowledge": "knowledge", "iv_reverse": "reverse"}
 ANSWER_SECONDS = {"self_intro": 120, "project": 180, "knowledge": 120, "award": 120, "reverse": 60, "follow_up": 90}
@@ -58,26 +58,36 @@ def make_turn(index, total, *, question, stage, role="main", extra_prompt=None, 
     }
 
 
+# Start-payload fields the practice panel's launch block may send (interview.launchOptions in the frontend).
+LAUNCH_KEYS = ("count", "category", "categories", "project_ids", "entry_ids", "question_ids", "custom_questions",
+               "project_text", "reverse_questions")
+
+
 def build_turns(user, mode, payload):
     """Same return shape as speaking.services._build_turns: (part, title, turns, cue_card, metadata)."""
     part = INTERVIEW_MODES[mode]
     plan_payload = {"part": part, "intensity": payload.get("iv_intensity") or "standard"}
-    for key in ("count", "category", "project_ids", "entry_ids", "question_ids"):
+    for key in LAUNCH_KEYS:
         if key in payload:
             plan_payload[key] = payload[key]
     try:
         part, intensity, plan = engine.build_plan(user, plan_payload)
+        jd_text = text(payload.get("jd_text"), "岗位描述", engine.JD_TEXT_LIMIT)
     except InterviewError as exc:
         raise ValueError(str(exc)) from exc
     turns = [
         make_turn(index, len(plan), question=item["prompt"], stage=item["stage"], extra_prompt={
             "corpus_entry_id": item["corpus_entry_id"], "question_id": item["question_id"],
             "category": item["category"], "source": item["source"], "depth": 0,
+            **{key: item[key] for key in ("project_context", "planned_questions") if item.get(key)},
         })
         for index, item in enumerate(plan)
     ]
+    planned = next((item["planned_questions"] for item in plan if item.get("planned_questions")), [])
     metadata = {"interview": {"part": part, "intensity": intensity,
-                              "plan_stages": [s for s in engine.STAGES if any(t["stage"] == s for t in plan)]}}
+                              "plan_stages": [s for s in engine.STAGES if any(t["stage"] == s for t in plan)],
+                              **({"jd_text": jd_text} if jd_text else {}),
+                              **({"reverse_rounds": len(planned)} if planned else {})}}
     return "interview", engine.PART_TITLES[part], turns, None, metadata
 
 
@@ -149,9 +159,13 @@ def after_answer(attempt, turn, ai_source=""):
     intensity = (meta or {}).get("intensity") or "standard"
     user = attempt.user
     profile = corpus.profile_for(user)
+    # A JD given at launch is this session's JD; otherwise the one saved on the profile.
+    session_jd = (meta or {}).get("jd_text", "")
     if stage == "reverse":
         reverse_turns = [item for item in attempt.turns.all() if _prompt(item).get("stage") == "reverse"]
-        inputs = {"candidate_question": value, "jd_summary": profile.jd_summary, "has_jd": bool(profile.jd_text)}
+        inputs = {"candidate_question": value, "jd_summary": profile.jd_summary, "has_jd": bool(session_jd or profile.jd_text),
+                  **({"jd_text": session_jd[:4000]} if session_jd else {}),
+                  **({"planned_questions": prompt["planned_questions"]} if prompt.get("planned_questions") else {})}
         try:
             result = ai_services.run_generation(user, "reverse_reply", inputs, ai_source=ai_source, related_id=attempt.attempt_id)
         except InterviewError as exc:
@@ -160,10 +174,11 @@ def after_answer(attempt, turn, ai_source=""):
         if result:
             _record(turn, decision={"status": "ready", "action": "reply", "signal": result["signal"], "evidence": result["evidence"]},
                     reply=result["reply"])
-        if len(reverse_turns) < engine.REVERSE_ROUNDS:
+        if len(reverse_turns) < ((meta or {}).get("reverse_rounds") or engine.REVERSE_ROUNDS):
             reply = (result or {}).get("reply", "")
+            planned = {"planned_questions": prompt["planned_questions"]} if prompt.get("planned_questions") else {}
             inserted = _insert_after(attempt, turn, question=engine.REVERSE_MORE, stage="reverse", role="main",
-                                     extra_prompt={"reply": reply, "depth": 0},
+                                     extra_prompt={"reply": reply, "depth": 0, **planned},
                                      examiner_text=f"{reply}\n{engine.REVERSE_MORE}" if reply else None)
             return {"inserted": inserted, "skipped": None}
         return {"inserted": None, "skipped": None}
@@ -178,7 +193,9 @@ def after_answer(attempt, turn, ai_source=""):
               "recent": [{"question": item.question, "answer": _answer(item)[:1200], "stage": _prompt(item).get("stage", "")}
                          for item in reversed(recent)],
               "asked": list(attempt.turns.values_list("question", flat=True)),
-              "jd_role": (profile.jd_summary or {}).get("role", "")}
+              "jd_role": (profile.jd_summary or {}).get("role", ""),
+              **({"project_context": _prompt(root)["project_context"]} if _prompt(root).get("project_context") else {}),
+              **({"jd_text": session_jd[:2000]} if session_jd else {})}
     try:
         result = ai_services.run_generation(user, "next_step", inputs, ai_source=ai_source, related_id=attempt.attempt_id)
     except InterviewError as exc:
@@ -239,8 +256,10 @@ def score(user, attempt, ai_source=""):
         raise ValueError("至少回答一道题才能评分。")
     meta = attempt.metadata.get("interview") if isinstance(attempt.metadata, dict) else {}
     profile = corpus.profile_for(user)
+    session_jd = (meta or {}).get("jd_text", "")
     inputs = {"part": (meta or {}).get("part", ""), "intensity": (meta or {}).get("intensity", "standard"),
-              "has_jd": bool(profile.jd_text), "jd_summary": profile.jd_summary,
+              "has_jd": bool(session_jd or profile.jd_text), "jd_summary": profile.jd_summary,
+              **({"jd_text": session_jd[:4000]} if session_jd else {}),
               "turn_ids": [turn.turn_id for turn in answered],
               "transcript": [{"turn_id": turn.turn_id, "stage": engine.STAGE_LABELS.get(_prompt(turn).get("stage"), ""),
                               "kind": _prompt(turn).get("role", "main"), "question": turn.question,

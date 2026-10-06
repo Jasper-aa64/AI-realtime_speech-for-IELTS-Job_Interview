@@ -41840,7 +41840,8 @@ body:not(.font-popular) :is(.speaking-score-summary-copy, .writing-score-summary
    ===================================================================== */
 @media (min-width: 981px) {
   /* Answer sheet: ruled lines that scroll with the text */
-  #writingPanel #writingAnswer {
+  #writingPanel #writingAnswer,
+#interviewCustom #writingAnswer {
     padding-top: 14px !important;
     line-height: 30px !important;
     background-color: var(--panel) !important;
@@ -41853,13 +41854,16 @@ body:not(.font-popular) :is(.speaking-score-summary-copy, .writing-score-summary
   }
 
   #writingPanel .writing-editor-card,
-  #writingPanel .writing-result-card {
+  #writingPanel .writing-result-card,
+#interviewCustom .writing-editor-card,
+#interviewCustom .writing-result-card {
     border-radius: 20px !important;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 14px 36px rgba(15, 23, 42, 0.05) !important;
   }
 
   /* Prompt: exam-paper card — no heavy left bar, a header rule instead */
-  #writingPanel .writing-prompt-card {
+  #writingPanel .writing-prompt-card,
+#interviewCustom .writing-prompt-card {
     position: relative;
     border-left: 0 !important;
     border-radius: 16px !important;
@@ -41867,7 +41871,8 @@ body:not(.font-popular) :is(.speaking-score-summary-copy, .writing-score-summary
     box-shadow: inset 0 0 0 1px var(--line) !important;
   }
 
-  #writingPanel .writing-prompt-card::before {
+  #writingPanel .writing-prompt-card::before,
+#interviewCustom .writing-prompt-card::before {
     content: "";
     position: absolute;
     inset: 0 0 auto;
@@ -41877,37 +41882,46 @@ body:not(.font-popular) :is(.speaking-score-summary-copy, .writing-score-summary
   }
 
   body:not(.font-popular) #writingPanel .writing-prompt-card h3,
-  body:not(.font-popular) #writingPanel #writingPromptTitle {
+  body:not(.font-popular) #writingPanel #writingPromptTitle,
+body:not(.font-popular) #interviewCustom .writing-prompt-card h3,
+body:not(.font-popular) #interviewCustom #writingPromptTitle {
     font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
   }
 
   /* Check-in: stats as a three-up strip, calendar days as soft tiles */
-  #writingPanel .writing-stats-grid > div {
+  #writingPanel .writing-stats-grid > div,
+#interviewCustom .writing-stats-grid > div {
     border-radius: 12px !important;
   }
 
-  #writingPanel .writing-stats-grid strong {
+  #writingPanel .writing-stats-grid strong,
+#interviewCustom .writing-stats-grid strong {
     font-size: 24px;
     font-variant-numeric: tabular-nums;
   }
 
-  #writingPanel .writing-calendar {
+  #writingPanel .writing-calendar,
+#interviewCustom .writing-calendar {
     gap: 5px !important;
   }
 
-  #writingPanel .writing-day {
+  #writingPanel .writing-day,
+#interviewCustom .writing-day {
     border-radius: 9px !important;
     font-variant-numeric: tabular-nums;
     transition: transform 140ms ease, box-shadow 140ms ease;
   }
 
-  #writingPanel .writing-day:hover {
+  #writingPanel .writing-day:hover,
+#interviewCustom .writing-day:hover {
     transform: translateY(-1px);
     box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
   }
 
   #writingPanel .writing-day.saved,
-  #writingPanel .writing-day.scored {
+  #writingPanel .writing-day.scored,
+#interviewCustom .writing-day.saved,
+#interviewCustom .writing-day.scored {
     font-weight: 800;
   }
 }
@@ -41998,18 +42012,22 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
    selectable tiles with a check mark (theme accent).
    ===================================================================== */
 @media (min-width: 981px) {
-  #p3TopicPanel {
+  #p3TopicPanel,
+#ivLaunch {
     --p3-tone: var(--accent);
     counter-reset: p3-step;
   }
 
   #p3TopicPanel .p3-launch-section,
-  #p3TopicPanel .p3-plan-preview {
+  #p3TopicPanel .p3-plan-preview,
+#ivLaunch .p3-launch-section,
+#ivLaunch .p3-plan-preview {
     border-radius: 18px !important;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 12px 30px rgba(15, 23, 42, 0.05) !important;
   }
 
-  #p3TopicPanel .p3-launch-label {
+  #p3TopicPanel .p3-launch-label,
+#ivLaunch .p3-launch-label {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -42017,7 +42035,8 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
     letter-spacing: 0.06em;
   }
 
-  #p3TopicPanel .p3-launch-label::before {
+  #p3TopicPanel .p3-launch-label::before,
+#ivLaunch .p3-launch-label::before {
     counter-increment: p3-step;
     content: counter(p3-step);
     display: inline-grid;
@@ -42031,19 +42050,22 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
     font-weight: 800;
   }
 
-  #p3TopicPanel .p3-source-option {
+  #p3TopicPanel .p3-source-option,
+#ivLaunch .p3-source-option {
     position: relative;
     border-radius: 14px !important;
     padding-right: 40px !important;
     transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
   }
 
-  #p3TopicPanel .p3-source-option:hover {
+  #p3TopicPanel .p3-source-option:hover,
+#ivLaunch .p3-source-option:hover {
     transform: translateY(-2px);
     box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
   }
 
-  #p3TopicPanel .p3-source-option::after {
+  #p3TopicPanel .p3-source-option::after,
+#ivLaunch .p3-source-option::after {
     content: "";
     position: absolute;
     right: 14px;
@@ -42055,17 +42077,20 @@ body:not(.font-popular) .language-takeaway-card > :first-child:not(.takeaway-chi
     transition: background 160ms ease, border-color 160ms ease;
   }
 
-  #p3TopicPanel .p3-source-option.active {
+  #p3TopicPanel .p3-source-option.active,
+#ivLaunch .p3-source-option.active {
     border-color: var(--p3-tone) !important;
     background: color-mix(in srgb, var(--p3-tone) 7%, var(--panel)) !important;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--p3-tone) 14%, transparent) !important;
   }
 
-  #p3TopicPanel .p3-source-option.active::before {
+  #p3TopicPanel .p3-source-option.active::before,
+#ivLaunch .p3-source-option.active::before {
     display: none !important;
   }
 
-  #p3TopicPanel .p3-source-option.active::after {
+  #p3TopicPanel .p3-source-option.active::after,
+#ivLaunch .p3-source-option.active::after {
     border-color: var(--p3-tone);
     background:
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center / 12px no-repeat,
@@ -43660,7 +43685,8 @@ body:not(#_) :is(
 }
 
 /* Wrappers that used to draw a second box around a sheet */
-body:not(#_) :is(#spellingPracticeCard, .turn-report-wrap, #p3TopicPanel) {
+body:not(#_) :is(#spellingPracticeCard, .turn-report-wrap, #p3TopicPanel),
+body:not(#_) :is(#spellingPracticeCard, .turn-report-wrap, #ivLaunch) {
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -43895,24 +43921,28 @@ body:not(#_) .history-rail-actions {
    appearance and language switches) keep their original sliding pills and colours. */
 
 /* selectable tiles (P3 source): hairline; accent ring = selected */
-body:not(#_) #p3TopicPanel .p3-source-option {
+body:not(#_) #p3TopicPanel .p3-source-option,
+body:not(#_) #ivLaunch .p3-source-option {
   border: 1px solid var(--line) !important;
   border-radius: var(--ui-r-sm) !important;
   background: var(--panel) !important;
   box-shadow: none !important;
 }
 
-body:not(#_) #p3TopicPanel .p3-source-option.active {
+body:not(#_) #p3TopicPanel .p3-source-option.active,
+body:not(#_) #ivLaunch .p3-source-option.active {
   border-color: var(--accent) !important;
   background: var(--panel) !important;
   box-shadow: inset 0 0 0 1px var(--accent) !important;
 }
 
-body:not(#_) #p3TopicPanel .p3-source-option.active strong {
+body:not(#_) #p3TopicPanel .p3-source-option.active strong,
+body:not(#_) #ivLaunch .p3-source-option.active strong {
   color: var(--ink) !important;
 }
 
-body:not(#_) #p3TopicPanel .p3-launch-label::before {
+body:not(#_) #p3TopicPanel .p3-launch-label::before,
+body:not(#_) #ivLaunch .p3-launch-label::before {
   background: transparent !important;
   border: 1px solid var(--line);
   color: var(--muted) !important;
@@ -43921,7 +43951,8 @@ body:not(#_) #p3TopicPanel .p3-launch-label::before {
 }
 
 /* the P3 launch steps are wells; separate them with air, not boxes */
-body:not(#_) #p3TopicPanel .p3-mode-row {
+body:not(#_) #p3TopicPanel .p3-mode-row,
+body:not(#_) #ivLaunch .p3-mode-row {
   border: 0 !important;
   background: var(--ui-well) !important;
   box-shadow: none !important;
@@ -45268,12 +45299,14 @@ body:not(#_) .workspace.history-workspace {
 }
 
 body:not(#_) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible,
-body:not(#_) #practicePanel .exam-status.p1-pixel-flow-visible {
+body:not(#_) #practicePanel .exam-status.p1-pixel-flow-visible,
+body:not(#_) #ivLaunch .p3-mode-row.p3-pixel-flow-visible {
   background-color: #0a1322 !important;
 }
 
 body:not(#_) #p3TopicPanel .p3-mode-row.p3-pixel-flow,
-body:not(#_) #practicePanel .exam-status.p1-pixel-flow {
+body:not(#_) #practicePanel .exam-status.p1-pixel-flow,
+body:not(#_) #ivLaunch .p3-mode-row.p3-pixel-flow {
   transition: background-color 1180ms ease !important;
 }
 
@@ -45905,11 +45938,13 @@ body:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible :is(#pha
   color: rgba(226, 232, 240, 0.78) !important;
 }
 
-body:not(#_):not(#__) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible :is(.p3-launch-label, .p3-mode-help) {
+body:not(#_):not(#__) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible :is(.p3-launch-label, .p3-mode-help),
+body:not(#_):not(#__) #ivLaunch .p3-mode-row.p3-pixel-flow-visible :is(.p3-launch-label, .p3-mode-help) {
   color: rgba(226, 232, 240, 0.82) !important;
 }
 
-body:not(#_):not(#__) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible .p3-launch-label::before {
+body:not(#_):not(#__) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible .p3-launch-label::before,
+body:not(#_):not(#__) #ivLaunch .p3-mode-row.p3-pixel-flow-visible .p3-launch-label::before {
   border-color: rgba(226, 232, 240, 0.4) !important;
   color: rgba(226, 232, 240, 0.82) !important;
 }
@@ -46734,3 +46769,92 @@ body.interview-mode #speakingReportFilterMenu :is([data-speaking-report-filter^=
 body:not(#_) #detailPanel .interview-score-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 1100px) { body:not(#_) #detailPanel .interview-score-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 #detailPanel .interview-score-note { margin: 0 0 8px; font-size: 13px; }
+
+/* ---------- Interview launch: per-mode setup in the practice PROMPT pane (interview-launch.js) ----------
+   Sections and tiles are the P3 launch panel's (#p3TopicPanel rules are aliased to #ivLaunch); the idle
+   "Start a voice practice session" line stays on top, sized down so the setup fits under it. */
+#promptPane.has-iv-launch { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+body:not(#_) #promptPane.has-iv-launch #promptCard { flex: 0 0 auto; min-height: 0 !important; padding: 4px 6px 2px; font-size: 22px !important; }
+#ivLaunch { display: grid; gap: 12px; margin-top: 12px; counter-reset: p3-step; }
+#ivLaunch.hidden { display: none; }
+#ivLaunch .iv-launch-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#ivLaunch .iv-launch-grid--one { display: grid; grid-template-columns: minmax(0, 1fr); }
+#ivLaunch .iv-launch-grid:empty { display: none; }
+#ivLaunch .iv-launch-option small { max-width: none; }
+#ivLaunch .iv-launch-count { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#ivLaunch .iv-launch-help { margin: 0; }
+#ivLaunch .iv-launch-status { margin: 0; color: var(--accent); font-size: 13px; }
+
+#ivLaunch .iv-launch-preview {
+  display: grid; gap: 8px; width: 100%; max-height: 180px; overflow: hidden; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: var(--ui-r-sm, 12px); background: var(--panel); color: var(--ink);
+  text-align: left; font-size: 14px; line-height: 1.55; cursor: pointer;
+}
+#ivLaunch .iv-launch-preview:hover { border-color: var(--accent); }
+#ivLaunch .iv-launch-preview-body > :first-child { margin-top: 0; }
+#ivLaunch .iv-launch-preview-body :is(h1, h2, h3, h4) { margin: 0 0 4px; font-size: 15px; }
+#ivLaunch .iv-launch-preview-body p { margin: 0 0 4px; }
+#ivLaunch .iv-launch-preview em { justify-self: end; color: var(--accent); font-size: 12px; font-style: normal; }
+
+#ivLaunch .iv-launch-questions { display: grid; gap: 6px; }
+#ivLaunch .iv-launch-questions:empty { display: none; }
+#ivLaunch .iv-launch-question {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) 28px; align-items: center; gap: 10px; padding: 9px 10px 9px 12px;
+  border: 1px solid var(--line); border-radius: var(--ui-r-sm, 12px); background: var(--panel);
+}
+#ivLaunch .iv-launch-question > span {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 50%;
+  color: var(--muted); font-family: var(--ed-mono); font-size: 11px;
+}
+#ivLaunch .iv-launch-question p { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.45; }
+#ivLaunch .iv-launch-question button {
+  width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 18px; cursor: pointer;
+}
+#ivLaunch .iv-launch-question button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+#ivLaunch .iv-launch-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#ivLaunch .iv-launch-chip {
+  max-width: 100%; padding: 5px 10px; border: 1px dashed var(--line); border-radius: 999px; background: transparent;
+  color: var(--muted); font-size: 12.5px; text-align: left; cursor: pointer;
+}
+#ivLaunch .iv-launch-chip:hover { border-color: var(--accent); color: var(--ink); }
+
+/* Launch dialogs: the P1 corpus dialog shell. */
+.iv-launch-dialog .iv-launch-dialog-actions { display: flex; gap: 8px; align-items: center; }
+.iv-launch-dialog .iv-launch-dialog-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.iv-launch-dialog .iv-launch-dialog-foot small { flex: 1 1 260px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.iv-launch-dialog #ivLaunchDialogStatus { color: var(--accent); font-size: 13px; }
+.iv-launch-dialog #ivLaunchDialogStatus:empty { display: none; }
+.iv-launch-dialog .iv-launch-file {
+  position: relative; display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px;
+  border: 1px dashed var(--line); border-radius: 10px; color: var(--ink); font-size: 13px; cursor: pointer;
+}
+.iv-launch-dialog .iv-launch-file.hidden { display: none; }
+.iv-launch-dialog .iv-launch-file:hover { border-color: var(--accent); }
+.iv-launch-dialog .iv-launch-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+.iv-pick-dialog .iv-pick-card { grid-template-rows: auto minmax(0, 1fr) auto; }
+.iv-pick-dialog .iv-pick-list { overflow-y: auto; min-height: 0; max-height: min(60vh, 560px); padding: 2px; }
+.iv-pick-dialog .iv-pick-row { position: relative; padding-right: 44px !important; }
+.iv-pick-dialog .iv-pick-row i {
+  position: absolute; right: 14px; top: 50%; width: 18px; height: 18px; margin-top: -9px;
+  border: 1.5px solid var(--line); border-radius: 50%; transition: background 160ms ease, border-color 160ms ease;
+}
+.iv-pick-dialog .iv-pick-row.is-selected { border-color: var(--accent) !important; box-shadow: inset 0 0 0 1px var(--accent) !important; }
+.iv-pick-dialog .iv-pick-row.is-selected i {
+  border-color: var(--accent);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center / 12px no-repeat,
+    var(--accent);
+}
+.iv-pick-dialog .iv-pick-tag {
+  margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent); font-size: 11px; font-style: normal; white-space: nowrap;
+}
+.iv-pick-dialog .iv-pick-empty { margin: 18px 4px; color: var(--muted); font-size: 14px; }
+.iv-pick-dialog .iv-pick-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.iv-pick-dialog .iv-pick-foot .hidden { display: none; }
+body:not(#_) #ivLaunch .p3-source-option.iv-launch-action { padding-right: 18px !important; border-style: dashed !important; }
+body:not(#_) #ivLaunch .p3-source-option.iv-launch-action::after { content: none; }
+#followUp .iv-planned { margin-top: 12px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: var(--ui-r-sm, 12px); text-align: left; }
+#followUp .iv-planned .section-label { margin-bottom: 4px; }
+#followUp .iv-planned ol { margin: 0; padding-left: 20px; color: var(--ink); font-size: 14px; line-height: 1.6; }
