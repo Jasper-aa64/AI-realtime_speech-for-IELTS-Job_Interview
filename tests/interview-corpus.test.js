@@ -167,9 +167,11 @@ test("resume cards are 简述 (the card title) + 简历原文 + STAR 正文, edi
   const env = harness([{ id: "icp_gw", kind: "project", title: "撮合网关重构", question: "介绍一下你的「撮合网关重构」项目。", source: "resume",
     resume_excerpt: "- 主导网关重构\n- P99 900µs→55µs", corpus_text: "", order: 0 }]);
   const page = env.screens.render("resume");
+  const escaped = harness([{ id: "icp_x", kind: "project", title: "x", question: "q", source: "custom", resume_excerpt: "用 LD\\_PRELOAD", corpus_text: "", order: 0 }]);
+  assert.match(escaped.screens.render("resume"), /用 LD_PRELOAD/, "editor escapes are undone");
   assert.match(page, /<h3>撮合网关重构<\/h3>/);
   assert.doesNotMatch(page, /iv-card-summary/);
-  assert.match(page, /<li>主导网关重构<\/li><li>P99 900µs→55µs<\/li>/);
+  assert.match(page, /iv-card-excerpt">- 主导网关重构/, "the excerpt goes through the Markdown renderer");
   assert.match(page, /STAR 待填/);
   env.click({ ivcBody: "icp_gw" });
   assert.equal(env.ids.ivCardName.value, "撮合网关重构");

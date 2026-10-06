@@ -11,6 +11,8 @@
   const CARD_EXCERPT = "ivCardExcerpt";
   // The STAR body of a project / internship / award card.
   const STAR_TEMPLATE = "**S 情境**：\n\n**T 任务**：\n\n**A 行动**：\n\n**R 结果**：\n";
+  // The Markdown editor escapes punctuation (LD\_PRELOAD); undo that before rendering on a card.
+  const unescapeMarkdown = (value) => String(value || "").replace(/\\([\\`*_{}\[\]()#+\-.!|~<>])/g, "$1");
   const excerptLines = (value) => String(value || "").split(/\n+/).map((line) => line.replace(/^\s*(?:[-*•·]|\d+[.)、])\s*/, "").trim()).filter(Boolean);
   const FOLLOW_TEXT = "ivFollowText";
   const MODAL_AFTER = 6;
@@ -173,10 +175,10 @@
 
     function cueHtml(card) {
       if (card.type !== "stack") {
-        // Resume cards show the resume's own lines for this experience; the STAR body is behind 正文.
-        const lines = excerptLines(card.entry.resume_excerpt).slice(0, 4);
-        return lines.length
-          ? `<div class="p2-seasonal-cue iv-card-excerpt"><ul>${lines.map((line) => `<li>${esc(line)}</li>`).join("")}</ul></div>`
+        // Resume cards show the resume's own lines for this experience, rendered as Markdown; the STAR body is behind 正文.
+        const excerpt = unescapeMarkdown(card.entry.resume_excerpt).trim();
+        return excerpt
+          ? `<div class="p2-seasonal-cue iv-card-excerpt">${renderMarkdown(excerpt)}</div>`
           : `<div class="p2-seasonal-cue iv-card-excerpt is-empty"><p>简历原文待填 · 点「正文」补上</p></div>`;
       }
       if (card.type === "stack") {
