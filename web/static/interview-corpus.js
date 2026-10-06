@@ -7,6 +7,11 @@
   // The editor is the P1 corpus dialog (#ivCorpusDialog) with the IELTS Markdown editor; its "AI 参考" box only appears
   // when it is opened from a report, like the IELTS P1 report. The follow-up dialog is the P2 card's P3 dialog.
   const EDITOR_TEXT = "ivCorpusText";
+  const CARD_TEXT = "ivCardText";
+  const CARD_EXCERPT = "ivCardExcerpt";
+  // The STAR body of a project / internship / award card.
+  const STAR_TEMPLATE = "**S 情境**：\n\n**T 任务**：\n\n**A 行动**：\n\n**R 结果**：\n";
+  const excerptLines = (value) => String(value || "").split(/\n+/).map((line) => line.replace(/^\s*(?:[-*•·]|\d+[.)、])\s*/, "").trim()).filter(Boolean);
   const FOLLOW_TEXT = "ivFollowText";
   const MODAL_AFTER = 6;
   const FILTERS = [
@@ -16,20 +21,20 @@
     { id: "intern", label: "实习", color: "#7c3aed", tone: "person" },
     { id: "stack", label: "技术栈", color: "#059669", tone: "place" },
     { id: "intro", label: "自我介绍", color: "#d97706", tone: "event" },
-    { id: "award", label: "奖项", color: "#db2777", tone: "special" },
+    { id: "award", label: "获奖", color: "#db2777", tone: "special" },
   ];
   const DOTS = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 6.5h.01"></path><path d="M12 12h.01"></path><path d="M12 17.5h.01"></path></svg>';
   // The P2 category grid on top of the resume screen: one card per kind, each with its rows and a "新增…" row.
   // `create` turns the name typed in the editor into the new entry's fields.
   const SECTIONS = [
     { id: "project", label: "项目", tone: "object", mark: "项",
-      create: { placeholder: "项目名，如 低延迟撮合网关", fields: (name) => ({ kind: "project", title: name, question: `介绍一下你的「${name}」项目。` }) } },
+      create: { placeholder: "一句话简述，如 低延迟撮合网关重构（P99 900µs→55µs）", fields: (name) => ({ kind: "project", title: name, question: `介绍一下你的「${name}」项目。` }) } },
     { id: "intern", label: "实习", tone: "person", mark: "实",
-      create: { placeholder: "公司 / 团队，如 某券商交易系统组", fields: (name) => ({ kind: "project", group: "实习", title: name, question: `介绍一下你在「${name}」的实习。` }) } },
+      create: { placeholder: "一句话简述，如 某券商交易系统组 · 行情接入", fields: (name) => ({ kind: "project", group: "实习", title: name, question: `介绍一下你在「${name}」的实习。` }) } },
     { id: "stack", label: "技术栈", tone: "place", mark: "技",
       create: { placeholder: "技术方向，如 C++ / 低延迟 / AI Native", askQuestion: true, fields: (name) => ({ kind: "knowledge", group: name }) } },
     { id: "award", label: "获奖", tone: "special", mark: "奖",
-      create: { placeholder: "奖项名，如 ACM 区域赛银牌", fields: (name) => ({ kind: "award", title: name, question: `讲讲你的「${name}」经历。` }) } },
+      create: { placeholder: "一句话简述，如 ACM-ICPC 区域赛银奖", fields: (name) => ({ kind: "award", title: name, question: `讲讲你的「${name}」经历。` }) } },
     { id: "intro", label: "自我介绍", tone: "event", mark: "我", single: true,
       create: { fields: () => ({ kind: "self_intro", title: "自我介绍", question: "请先做一个简单的自我介绍。" }) } },
   ];
@@ -37,7 +42,7 @@
     project: { kicker: "项目", bullets: ["项目背景与目标", "你负责的部分", "技术难点与取舍"], close: "最后讲清结果，最好有量化数据。" },
     intern: { kicker: "实习", bullets: ["公司与团队做什么", "你负责的事情", "遇到的难题与解决"], close: "最后讲清产出和收获。" },
     intro: { kicker: "自我介绍", bullets: ["你是谁、在读什么", "最能代表你的项目", "技术方向与优势"], close: "并说明为什么适合这个岗位。" },
-    award: { kicker: "奖项", bullets: ["什么比赛 / 奖项", "你在团队里做了什么", "最难的一关"], close: "以及这段经历让你学到了什么。" },
+    award: { kicker: "获奖", bullets: ["什么比赛 / 奖项", "你在团队里做了什么", "最难的一关"], close: "以及这段经历让你学到了什么。" },
   };
 
   function create({ state, escapeHtml, request, markdown, renderMarkdown, currentAiSourcePreference, source, setCorpus, rerender, startPractice, popup = (message) => window.alert(message) }) {
@@ -48,6 +53,7 @@
     let tag = "all";
     let editor = null; // { entry, reference, isNew }
     let follow = null; // { card, selected, draft }
+    let cardEdit = null; // { entry | null, section, initial }
     let busy = false;
     let bound = false;
 
@@ -166,6 +172,13 @@
     }
 
     function cueHtml(card) {
+      if (card.type !== "stack") {
+        // Resume cards show the resume's own lines for this experience; the STAR body is behind 正文.
+        const lines = excerptLines(card.entry.resume_excerpt).slice(0, 4);
+        return lines.length
+          ? `<div class="p2-seasonal-cue iv-card-excerpt"><ul>${lines.map((line) => `<li>${esc(line)}</li>`).join("")}</ul></div>`
+          : `<div class="p2-seasonal-cue iv-card-excerpt is-empty"><p>简历原文待填 · 点「正文」补上</p></div>`;
+      }
       if (card.type === "stack") {
         const shown = card.follows.slice(0, 3);
         return `<div class="p2-seasonal-cue"><ul>${shown.map((entry) => `<li>${esc(entry.question)}</li>`).join("")}</ul>${card.follows.length > 3 ? `<p>还有 ${card.follows.length - 3} 道题。</p>` : ""}</div>`;
@@ -190,7 +203,7 @@
               <span class="p2-seasonal-card-kicker">${esc(kicker)} · ${esc((card.entry ? card.entry.source === "custom" : card.follows.every((entry) => entry.source === "custom")) ? "自定义" : "简历")}</span>
               <h3>${esc(card.title)}</h3>
             </div>
-            <span class="p2-seasonal-card-state${bodyReady ? " is-ready" : ""}">${hasBody ? (bodyReady ? "正文已填" : "正文待填") : `答法 ${saved}/${total}`}</span>
+            <span class="p2-seasonal-card-state${bodyReady ? " is-ready" : ""}">${hasBody ? (bodyReady ? "STAR 已填" : "STAR 待填") : `答法 ${saved}/${total}`}</span>
           </header>
           <div class="p2-seasonal-body">
             ${cueHtml(card)}
@@ -215,7 +228,7 @@
       return cards.filter((card) => card.type === section.id).map((card, index) => {
         const followed = card.follows.filter(ready).length;
         const status = card.type === "stack" ? `${card.follows.length} 道题 · 已答 ${followed}`
-          : card.follows.length ? `追问 ${followed}/${card.follows.length}` : (ready(card.entry) ? "正文已填 · 追问待填" : "正文待填");
+          : [ready(card.entry) ? "STAR 已填" : "STAR 待填", card.follows.length ? `追问 ${followed}/${card.follows.length}` : ""].filter(Boolean).join(" · ");
         const items = card.entry
           ? `<button type="button" role="menuitem" data-ivc-body="${esc(card.key)}">修改</button>
              <button type="button" role="menuitem" class="danger" data-ivc-delete="${esc(card.key)}">删除</button>`
@@ -394,6 +407,15 @@
       markdown.ready(EDITOR_TEXT).then((instance) => setTimeout(() => (editableQuestion && isNew ? question.focus() : instance?.focus?.() || byId(EDITOR_TEXT)?.focus()), 0));
     }
 
+    // A new question with nothing typed closes on a click outside / Escape.
+    function dismissEditor() {
+      if (editor?.isNew && !markdown.get(EDITOR_TEXT).trim() && !byId("ivCorpusQuestion").value.trim() && !byId("ivCorpusTopic")?.value.trim()) {
+        closeEditor();
+        return;
+      }
+      saveEditor();
+    }
+
     function closeEditor() {
       editor = null;
       byId("ivCorpusDialog")?.classList.add("hidden");
@@ -466,6 +488,90 @@
         busy = false;
         popup(error.message || "删除失败，请重试。");
       }
+    }
+
+    // ---- Resume card dialog (the P2 素材 dialog): 名称 + 简述, 简历原文, STAR 正文.
+    function openCard(entry, section = null) {
+      const root = byId("ivCardDialog");
+      if (!root) return;
+      const type = section?.id || (entry.kind === "self_intro" ? "intro" : entry.kind === "award" ? "award" : entry.group === "实习" ? "intern" : "project");
+      const meta = SECTIONS.find((item) => item.id === type);
+      cardEdit = { entry, section: meta, initial: { text: entry?.corpus_text || "", excerpt: entry?.resume_excerpt || "", name: entry?.title || "" } };
+      const intro = type === "intro";
+      byId("ivCardDialogMeta").textContent = `简历题卡 · ${meta?.label || ""}`;
+      byId("ivCardDialogTitle").textContent = entry ? (entry.title || entry.question) : `新增${meta?.label || "题卡"}`;
+      byId("ivCardNameField").classList.toggle("hidden", intro);
+      byId("ivCardName").value = entry?.title || "";
+      byId("ivCardName").placeholder = meta?.create?.placeholder || "";
+      markdown.set(CARD_EXCERPT, entry?.resume_excerpt || "");
+      byId("ivCardTextLabel").textContent = intro ? "正文" : "STAR 正文";
+      byId("ivCardStar").classList.toggle("hidden", intro);
+      byId("ivCardDelete").classList.toggle("hidden", !entry?.id);
+      byId("ivCardDialogStatus").textContent = "";
+      markdown.set(CARD_TEXT, entry?.corpus_text || "");
+      root.classList.remove("hidden");
+      // 简历原文 and the STAR body are both IELTS Markdown editors.
+      Promise.all([markdown.ready(CARD_EXCERPT), markdown.ready(CARD_TEXT)])
+        .then(() => setTimeout(() => (intro ? null : byId("ivCardName"))?.focus(), 0));
+    }
+
+    function cardValues() {
+      return { text: markdown.get(CARD_TEXT).trim(), excerpt: markdown.get(CARD_EXCERPT).trim(), name: byId("ivCardName").value.trim() };
+    }
+
+    // A new card with nothing typed closes on a click outside / Escape instead of asking for a name.
+    function dismissCard() {
+      const now = cardValues();
+      if (!cardEdit?.entry && !now.text && !now.excerpt && !now.name) { closeCard(); return; }
+      saveCard();
+    }
+
+    function cardDirty() {
+      if (!cardEdit) return false;
+      const now = cardValues();
+      const was = cardEdit.initial;
+      return !cardEdit.entry || now.text !== was.text.trim() || now.excerpt !== was.excerpt.trim() || now.name !== was.name;
+    }
+
+    function closeCard() {
+      cardEdit = null;
+      byId("ivCardDialog")?.classList.add("hidden");
+      rerender();
+    }
+
+    async function saveCard({ close = true } = {}) {
+      if (!cardEdit || busy) return;
+      const { entry, section } = cardEdit;
+      const status = (value) => { byId("ivCardDialogStatus").textContent = value; };
+      if (entry && !cardDirty()) { if (close) closeCard(); return; }
+      const name = byId("ivCardName").value.trim();
+      const intro = section?.id === "intro";
+      if (!intro && !name) { status("请先写一句简述。"); return; }
+      const card = { resume_excerpt: markdown.get(CARD_EXCERPT).trim(), corpus_text: markdown.get(CARD_TEXT) };
+      busy = true;
+      status("正在保存…");
+      try {
+        let payload;
+        if (entry?.id) {
+          const body = { ...card };
+          if (!intro && name !== entry.title) Object.assign(body, { title: name, question: section.create.fields(name).question });
+          payload = await request(`/api/interview/corpus/${encodeURIComponent(entry.id)}/`, body, { method: "PATCH" });
+        } else {
+          payload = await request("/api/interview/corpus/", { ...section.create.fields(name), ...card });
+        }
+        upsert(payload.entry);
+        busy = false;
+        if (close) closeCard();
+      } catch (error) {
+        busy = false;
+        status("");
+        popup(error.message || "保存失败，请重试。");
+      }
+    }
+
+    function insertStar() {
+      const current = markdown.get(CARD_TEXT).trim();
+      markdown.set(CARD_TEXT, current ? `${current}\n\n${STAR_TEMPLATE}` : STAR_TEMPLATE);
     }
 
     // ---- Follow-ups: the P2 card's P3 dialog. Tabs for every follow-up, plus one for writing a new one.
@@ -571,7 +677,8 @@
     }
 
     async function closeFollow() {
-      if (followDirty() && !(await saveFollow())) return;
+      const blankNew = follow?.selected === "new" && !markdown.get(FOLLOW_TEXT).trim() && !byId("ivFollowQuestion").value.trim();
+      if (!blankNew && followDirty() && !(await saveFollow())) return;
       follow = null;
       byId("ivFollowDialog")?.classList.add("hidden");
       rerender();
@@ -661,13 +768,14 @@
       else if (data.ivcCreate) {
         const section = SECTIONS.find((item) => item.id === data.ivcCreate);
         if (!section) return;
+        if (section.id !== "stack") { openCard(null, section); return; }
         const fields = section.create.fields("");
         openEditor({ id: null, source: "custom", kind: fields.kind, group: fields.group || "", title: "", question: section.single ? fields.question : `新${section.label}`, corpus_text: "" },
           { create: section.create });
       } else if (data.ivcDelete) confirmDelete(cardByKey(data.ivcDelete));
       else if (data.ivcTag) { tag = data.ivcTag; rerender(); }
       else if (data.ivcNewTopic !== undefined) openEditor({ id: null, kind: "knowledge", source: "custom", question: "", corpus_text: "", group: data.ivcNewTopic, title: "" }, { newTopic: true });
-      else if (data.ivcBody) { const card = cardByKey(data.ivcBody); if (card?.entry) openEditor(card.entry); }
+      else if (data.ivcBody) { const card = cardByKey(data.ivcBody); if (card?.entry) openCard(card.entry); }
       else if (data.ivcFollow) openFollow(data.ivcFollow);
       else if (data.ivcPractice) {
         const card = cardByKey(data.ivcPractice);
@@ -692,6 +800,15 @@
         const value = byId("ivCorpusAi")?.dataset.markdownSource || "";
         if (value) markdown.set(EDITOR_TEXT, value);
       });
+      byId("ivCardSave")?.addEventListener("click", () => saveCard());
+      byId("ivCardStar")?.addEventListener("click", insertStar);
+      byId("ivCardDelete")?.addEventListener("click", () => {
+        const entry = cardEdit?.entry;
+        if (!entry?.id) return;
+        const card = cardByKey(entry.id);
+        closeCard();
+        confirmDelete(card || { entry, title: entry.title || entry.question });
+      });
       byId("ivFollowSave")?.addEventListener("click", () => saveFollow());
       byId("ivFollowDelete")?.addEventListener("click", deleteFollow);
       byId("ivFollowList")?.addEventListener("click", async (event) => {
@@ -702,13 +819,14 @@
         renderFollow();
         if (follow.selected === "new") byId("ivFollowQuestion")?.focus();
       });
-      [["ivCorpusDialog", () => saveEditor()], ["ivFollowDialog", closeFollow]].forEach(([id, close]) => {
+      [["ivCorpusDialog", dismissEditor], ["ivFollowDialog", closeFollow], ["ivCardDialog", dismissCard]].forEach(([id, close]) => {
         byId(id)?.addEventListener("pointerdown", (event) => { if (event.target === byId(id)) { event.preventDefault?.(); close(); } });
       });
       // Capture phase: IELTS keydown handlers stop Escape before it bubbles to the document.
       document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
-        if (editor) { event.stopPropagation(); saveEditor(); }
+        if (editor) { event.stopPropagation(); dismissEditor(); }
+        else if (cardEdit) { event.stopPropagation(); dismissCard(); }
         else if (follow) { event.stopPropagation(); closeFollow(); }
         else byId("ivTopicModal")?.classList.add("hidden");
       }, true);
@@ -722,9 +840,11 @@
       byId("ivCorpusDialog")?.classList.add("hidden");
       byId("ivFollowDialog")?.classList.add("hidden");
       byId("ivTopicModal")?.classList.add("hidden");
+      cardEdit = null;
+      byId("ivCardDialog")?.classList.add("hidden");
     }
 
-    return { render, openEditor, openFromReport, savedForTarget, reset, isEditing: () => Boolean(editor || follow) };
+    return { render, openEditor, openCard, openFromReport, savedForTarget, reset, isEditing: () => Boolean(editor || follow || cardEdit) };
   }
 
   window.IELTSInterviewCorpus = { create };

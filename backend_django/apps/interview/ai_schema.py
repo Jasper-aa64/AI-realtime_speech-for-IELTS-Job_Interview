@@ -34,13 +34,16 @@ INSTRUCTIONS = {
         "Split the resume into interview practice material the way Chinese tech interviews run: self introduction, "
         "every project and internship (each one is asked about; mark internships with \"type\":\"internship\"), tech-stack knowledge points grouped by broad area, and awards such as "
         "ACM/ICPC or other contests only if present. For each piece write a first-person spoken draft the candidate could "
-        "say (self intro 150-250 字; project 250-400 字 covering background, own role, key technical decisions, quantified "
-        "result; award 100-200 字). For each project add 2-4 likely follow-up questions with short draft answers. For tech "
+        "say (self intro 150-250 字; project 250-400 字; award 100-200 字). Write every project, internship and award draft "
+        "with the STAR method as four short Markdown parts: **S 情境**, **T 任务**, **A 行动** (own role and key technical "
+        "decisions), **R 结果** (quantified). Each project / internship / award's title is its "
+        "one-line 简述 (what it is plus the headline result, e.g. 低延迟撮合网关重构（P99 900µs→55µs）), and resume_excerpt is "
+        "the resume's own lines for it, copied verbatim. For each project add 2-4 likely follow-up questions with short draft answers. For tech "
         "stack add 1-4 knowledge questions per area (max 6 areas) with concise model answers. Return: "
-        "{\"self_intro\":{\"draft\":\"...\"},\"projects\":[{\"key\":\"short-slug\",\"type\":\"project|internship\",\"title\":\"...\",\"summary\":\"one line\","
+        "{\"self_intro\":{\"draft\":\"...\"},\"projects\":[{\"key\":\"short-slug\",\"type\":\"project|internship\",\"title\":\"...\",\"summary\":\"one line\",\"resume_excerpt\":\"verbatim lines\","
         "\"draft\":\"...\",\"followups\":[{\"question\":\"...\",\"draft\":\"...\"}]}],\"tech_stack\":[{\"group\":\"C++\","
         "\"questions\":[{\"question\":\"...\",\"draft\":\"...\"}]}],\"awards\":[{\"key\":\"short-slug\",\"title\":\"...\","
-        "\"draft\":\"...\"}]}. Use [] when a section has nothing."
+        "\"summary\":\"one line\",\"resume_excerpt\":\"verbatim lines\",\"draft\":\"...\"}]}. Use [] when a section has nothing."
     ),
     "jd_profile": (
         "Read the job description. Summarise the role and its core requirements, write 3-8 interview questions an "
@@ -134,6 +137,7 @@ def validate(kind, data, inputs):
                 "key": item.get("key"), "title": text(item.get("title"), "project title", 200, required=True),
                 "type": "internship" if item.get("type") == "internship" else "project",
                 "summary": text(item.get("summary"), "project summary", 400),
+                "resume_excerpt": text(item.get("resume_excerpt"), "resume excerpt", 3000),
                 "draft": text(item.get("draft"), "project draft", 6000),
                 "followups": [_qa(f) for f in _list(item.get("followups"), 4)],
             })
@@ -149,6 +153,8 @@ def validate(kind, data, inputs):
             if not isinstance(item, dict):
                 raise ValueError("award must be an object")
             awards.append({"key": item.get("key"), "title": text(item.get("title"), "award title", 200, required=True),
+                           "summary": text(item.get("summary"), "award summary", 400),
+                           "resume_excerpt": text(item.get("resume_excerpt"), "resume excerpt", 3000),
                            "draft": text(item.get("draft"), "award draft", 3000)})
         if not projects and not tech and not text((intro or {}).get("draft"), "self intro", 3000):
             raise ValueError("resume produced no material")

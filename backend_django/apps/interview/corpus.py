@@ -45,6 +45,7 @@ def entry_payload(entry):
         "source": entry.source, "source_key": entry.source_key,
         "parent_id": entry.parent.entry_id if entry.parent_id else None, "order": entry.order,
         "orphaned": bool((entry.metadata or {}).get("orphaned")), "summary": (entry.metadata or {}).get("summary", ""),
+        "resume_excerpt": (entry.metadata or {}).get("resume_excerpt", ""),
         "updated_at": entry.updated_at.isoformat(),
     }
 
@@ -59,7 +60,9 @@ def _owned(user, entry_id, *, lock=False):
 
 def _upsert(user, *, source_key, kind, question, source, ai_draft="", group="", title="", parent=None, order=0, metadata=None):
     entry = Entry.objects.select_for_update().filter(user=user, source_key=source_key).first()
-    meta = {**(entry.metadata if entry else {}), **(metadata or {})}
+    # A re-split refreshes the AI's 简述 / 简历原文 unless the candidate has rewritten them.
+    edited = set((entry.metadata or {}).get("user_edited", [])) if entry else set()
+    meta = {**(entry.metadata if entry else {}), **{k: v for k, v in (metadata or {}).items() if k not in edited}}
     meta.pop("orphaned", None)
     if entry is None:
         return Entry.objects.create(user=user, source_key=source_key, kind=kind, question=question, source=source,
@@ -129,7 +132,7 @@ def _apply_resume(user, resume, result):
             question = f"介绍一下你在「{project['title']}」的实习。" if internship else f"介绍一下你的「{project['title']}」项目。"
             parent = _upsert(user, source_key=key, kind=Entry.Kind.PROJECT, question=question, group="实习" if internship else "",
                              source=Entry.Source.RESUME, ai_draft=project["draft"], title=project["title"], order=order,
-                             metadata={"summary": project["summary"]})
+                             metadata={"summary": project.get("summary", ""), "resume_excerpt": project.get("resume_excerpt", "")})
             kept.append(key)
             modules.append({"key": project["key"], "kind": "project", "title": project["title"], "summary": project["summary"]})
             for index, follow in enumerate(project["followups"]):
@@ -147,7 +150,8 @@ def _apply_resume(user, resume, result):
         for order, award in enumerate(result["awards"]):
             key = f"resume:award:{award['key']}"
             _upsert(user, source_key=key, kind=Entry.Kind.AWARD, question=f"讲讲你的「{award['title']}」经历。",
-                    source=Entry.Source.RESUME, ai_draft=award["draft"], title=award["title"], order=order)
+                    source=Entry.Source.RESUME, ai_draft=award["draft"], title=award["title"], order=order,
+                    metadata={"summary": award.get("summary", ""), "resume_excerpt": award.get("resume_excerpt", "")})
             kept.append(key)
             modules.append({"key": award["key"], "kind": "award", "title": award["title"], "summary": ""})
         _mark_orphans(user, "resume:", kept)
@@ -243,8 +247,17 @@ def create_entry(user, payload):
             entry = Entry.objects.create(user=user, kind=kind, source=Entry.Source.CUSTOM,
                                          question=text(payload.get("question"), "question", 1500, required=True),
                                          title=text(payload.get("title"), "title", 200), group=text(payload.get("group"), "group", 80),
-                                         corpus_text=text(payload.get("corpus_text"), "corpus_text", 12000), parent=parent)
+                                         corpus_text=text(payload.get("corpus_text"), "corpus_text", 12000), parent=parent,
+                                         metadata=_card_fields(payload))
     return {"entry": entry_payload(entry)}
+
+
+# A resume card's 简述 and 简历原文 (the STAR body is corpus_text).
+CARD_FIELDS = (("summary", 400), ("resume_excerpt", 3000))
+
+
+def _card_fields(payload):
+    return {name: text(payload.get(name), name, limit) for name, limit in CARD_FIELDS if name in payload}
 
 
 def update_entry(user, entry_id, payload):
@@ -263,6 +276,11 @@ def update_entry(user, entry_id, payload):
             if name in payload:
                 setattr(entry, name, text(payload.get(name), name, limit))
                 fields.append(name)
+        card = _card_fields(payload)
+        if card:
+            edited = sorted(set((entry.metadata or {}).get("user_edited", [])) | set(card))
+            entry.metadata = {**(entry.metadata or {}), **card, "user_edited": edited}
+            fields.append("metadata")
         if not fields:
             raise InterviewError("Nothing to update")
         entry.save(update_fields=[*fields, "updated_at"])

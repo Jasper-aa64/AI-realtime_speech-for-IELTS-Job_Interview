@@ -133,14 +133,13 @@ test("resume: the P2 category grid lists every kind with a 新增 row, so an emp
   for (const label of ["项目", "实习", "技术栈", "获奖", "自我介绍"]) assert.match(page, new RegExp(`新增${label}`));
   assert.match(page, /从简历生成/);
   env.click({ ivcCreate: "intern" });
-  assert.equal(env.ids.ivCorpusTopic.classes.has("hidden"), false, "the name field shows");
-  env.ids.ivCorpusTopic.value = "某券商交易组";
+  assert.equal(env.ids.ivCardDialog.classes.has("hidden"), false, "the card dialog opens");
+  env.ids.ivCardName.value = "某券商交易组";
   env.editor.value = "我在交易组做行情接入";
-  env.ids.ivCorpusSave.emit("click");
+  env.ids.ivCardSave.emit("click");
   await settle();
-  assert.deepEqual(JSON.parse(JSON.stringify(env.requests.at(-1).body)), {
-    kind: "project", group: "实习", title: "某券商交易组", question: "介绍一下你在「某券商交易组」的实习。", corpus_text: "我在交易组做行情接入",
-  });
+  const created = JSON.parse(JSON.stringify(env.requests.at(-1).body));
+  assert.deepEqual([created.kind, created.group, created.title, created.question], ["project", "实习", "某券商交易组", "介绍一下你在「某券商交易组」的实习。"]);
   env.click({ ivcCreate: "stack" });
   env.ids.ivCorpusTopic.value = "AI Native";
   env.ids.ivCorpusQuestion.value = "RAG 和微调怎么选？";
@@ -162,4 +161,45 @@ test("request failures in the corpus dialogs go to a pop-up, not an inline bar",
   await settle();
   assert.deepEqual([...env.popups], ["AI 服务还没有配置"]);
   assert.equal(env.ids.ivCorpusDialogStatus.textContent, "");
+});
+
+test("resume cards are 简述 (the card title) + 简历原文 + STAR 正文, edited in the P2-style card dialog", async () => {
+  const env = harness([{ id: "icp_gw", kind: "project", title: "撮合网关重构", question: "介绍一下你的「撮合网关重构」项目。", source: "resume",
+    resume_excerpt: "- 主导网关重构\n- P99 900µs→55µs", corpus_text: "", order: 0 }]);
+  const page = env.screens.render("resume");
+  assert.match(page, /<h3>撮合网关重构<\/h3>/);
+  assert.doesNotMatch(page, /iv-card-summary/);
+  assert.match(page, /<li>主导网关重构<\/li><li>P99 900µs→55µs<\/li>/);
+  assert.match(page, /STAR 待填/);
+  env.click({ ivcBody: "icp_gw" });
+  assert.equal(env.ids.ivCardName.value, "撮合网关重构");
+  assert.equal(env.ids.ivCardTextLabel.textContent, "STAR 正文");
+  env.ids.ivCardStar.emit("click");
+  assert.match(env.editor.value, /\*\*S 情境\*\*/);
+  env.ids.ivCardName.value = "撮合网关重构（P99 55µs）";
+  env.ids.ivCardSave.emit("click");
+  await settle();
+  const body = JSON.parse(JSON.stringify(env.requests.at(-1).body));
+  assert.equal(body.title, "撮合网关重构（P99 55µs）");
+  assert.equal(body.question, "介绍一下你的「撮合网关重构（P99 55µs）」项目。");
+  assert.equal(body.summary, undefined);
+  assert.match(body.corpus_text, /R 结果/);
+  env.click({ ivcCreate: "award" });
+  env.ids.ivCardName.value = "ACM-ICPC 区域赛银奖";
+  env.editor.value = "";
+  env.ids.ivCardSave.emit("click");
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.requests.at(-1).body)), {
+    kind: "award", title: "ACM-ICPC 区域赛银奖", question: "讲讲你的「ACM-ICPC 区域赛银奖」经历。", resume_excerpt: "", corpus_text: "",
+  });
+});
+
+test("a new card with nothing typed closes on a click outside, without asking for a name", () => {
+  const env = harness([]);
+  env.screens.render("resume");
+  env.click({ ivcCreate: "project" });
+  env.editor.value = "";
+  env.ids.ivCardDialog.emit("pointerdown", { target: env.ids.ivCardDialog, preventDefault() {} });
+  assert.equal(env.ids.ivCardDialog.classes.has("hidden"), true);
+  assert.equal(env.requests.length, 0);
 });

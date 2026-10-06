@@ -46932,3 +46932,38 @@ body:not(#_):not(#__) #interviewCustom .iv-draft-remove:hover { background: colo
 #interviewResume .iv-resume-section[data-ivc-section="award"] header::before { content: "奖"; }
 #interviewResume .iv-resume-section[data-ivc-section="intro"] header::before { content: "我"; }
 #interviewResume .iv-resume-generate .p2-brainstorm-open-card { position: relative; }
+
+/* ---------- Resume card: 简述 + 简历原文 on the card; the P2 素材 dialog with a STAR body ---------- */
+.iv-card-dialog .iv-card-dialog-card { grid-template-rows: auto auto auto auto minmax(260px, 1fr) auto; }
+.iv-card-dialog #ivCardNameField.hidden { display: none; }
+.iv-card-dialog .p2-corpus-form-grid:has(#ivCardNameField.hidden) { display: none; }
+.iv-card-dialog .iv-card-excerpt-field { display: grid; gap: 6px; }
+.iv-card-dialog .iv-card-excerpt-field textarea {
+  width: 100%; min-height: 64px; max-height: 140px; resize: vertical; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.55;
+}
+.iv-card-dialog .iv-card-excerpt-field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+.iv-card-dialog .iv-card-text-row { display: flex; align-items: center; gap: 8px; }
+.iv-card-dialog .iv-card-text-row .p1-corpus-label { margin-right: auto; }
+.iv-card-dialog .iv-card-star.hidden { display: none; }
+.iv-card-dialog .p1-corpus-dialog-actions { display: flex; align-items: center; gap: 12px; }
+.iv-card-dialog #ivCardDialogStatus { color: var(--muted); font-size: 13px; }
+.iv-card-dialog .iv-danger.hidden { display: none; }
+body:not(#_) .iv-card-dialog .iv-danger { color: var(--danger, #d9534f); }
+#interviewResume .iv-card-summary { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+#interviewResume .iv-card-summary.is-empty { opacity: 0.7; font-style: italic; }
+#interviewResume .iv-card-excerpt.is-empty p { color: var(--muted); font-size: 13px; }
+
+/* Card dialog: 名称 / 简述 split evenly; 简历原文 and STAR are both Markdown editors (excerpt shorter). */
+.iv-card-dialog .p2-corpus-form-grid { grid-template-columns: minmax(0, 1fr); }
+.iv-card-dialog .iv-card-dialog-card { grid-template-rows: auto auto auto auto minmax(240px, 1fr) auto; }
+.iv-card-dialog .iv-card-excerpt-field .corpus-editor-frame { height: 150px; min-height: 120px; }
+.iv-card-dialog .iv-card-excerpt-field textarea.iv-card-excerpt-text { min-height: 120px; max-height: none; }
+/* Wider question fields in the corpus editor. */
+.iv-corpus-editor .corpus-dialog-title-line { display: flex; align-items: center; gap: 10px; width: 100%; }
+.iv-corpus-editor .p1-corpus-dialog-head > div:first-child { flex: 1 1 auto; min-width: 0; }
+.iv-corpus-editor .iv-corpus-question { flex: 1 1 auto; min-width: min(640px, 60vw); }
+/* The resume card grid keeps three columns, so a single card stays a third wide. */
+#interviewResume .p2-seasonal-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1180px) { #interviewResume .p2-seasonal-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { #interviewResume .p2-seasonal-card-grid { grid-template-columns: minmax(0, 1fr); } }

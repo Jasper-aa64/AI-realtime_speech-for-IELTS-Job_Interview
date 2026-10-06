@@ -404,7 +404,7 @@
       });
       (draft.tech_stack || []).forEach((group, g) => (group.questions || []).forEach((item, q) =>
         rows.push({ path: `tech_stack.${g}.questions.${q}.draft`, remove: `tech_stack.${g}.questions.${q}`, kind: group.group, title: item.question, body: item.draft })));
-      (draft.awards || []).forEach((award, i) => rows.push({ path: `awards.${i}.draft`, remove: `awards.${i}`, kind: "奖项", title: award.title, body: award.draft }));
+      (draft.awards || []).forEach((award, i) => rows.push({ path: `awards.${i}.draft`, remove: `awards.${i}`, kind: "奖项", title: award.title, body: award.draft, summary: award.summary }));
       return rows;
     }
 

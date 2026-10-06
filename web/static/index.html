@@ -26,7 +26,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261006-interview-76">
+    <link rel="stylesheet" href="/styles.css?v=20261006-interview-79">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -606,9 +606,6 @@
                   <h3 id="ivCorpusDialogTitle">编辑语料</h3>
                   <input id="ivCorpusTopic" class="p3-custom-input iv-corpus-topic hidden" type="text" maxlength="200" placeholder="题卡名，如 SPSC 队列" aria-label="题卡名">
                   <input id="ivCorpusQuestion" class="p3-custom-input iv-corpus-question hidden" type="text" maxlength="1500" placeholder="写下题目……" aria-label="题目">
-                  <button type="button" class="corpus-dictate-button" data-corpus-dictate="ivCorpusText" aria-pressed="false" title="语音转写：点我开始说，再点一下停止">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                  </button>
                 </div>
               </div>
               <button id="ivCorpusSave" type="button">保存语料</button>
@@ -636,6 +633,38 @@
           </div>
         </div>
 
+        <!-- Interview resume card: the P2 素材 dialog — name + 简述, the resume's own lines, then the STAR body (Vditor). -->
+        <div id="ivCardDialog" class="p1-corpus-dialog iv-card-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="ivCardDialogTitle">
+          <div class="p1-corpus-dialog-card p2-corpus-dialog-card iv-card-dialog-card" data-corpus-dialog-card>
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="ivCardDialogMeta"></span>
+                <h3 id="ivCardDialogTitle">编辑题卡</h3>
+              </div>
+              <button id="ivCardSave" type="button">保存题卡</button>
+            </header>
+            <div class="p2-corpus-form-grid">
+              <label id="ivCardNameField">
+                <span id="ivCardNameLabel" class="p1-corpus-label">简述</span>
+                <input id="ivCardName" type="text" maxlength="200">
+              </label>
+            </div>
+            <label class="iv-card-excerpt-field">
+              <span class="p1-corpus-label">简历原文</span>
+              <textarea id="ivCardExcerpt" class="p1-corpus-textarea iv-card-excerpt-text" spellcheck="true"></textarea>
+            </label>
+            <div class="corpus-dictate-label-row iv-card-text-row">
+              <label id="ivCardTextLabel" class="p1-corpus-label" for="ivCardText">STAR 正文</label>
+              <button id="ivCardStar" class="ghost iv-card-star" type="button">插入 STAR 模板</button>
+            </div>
+            <textarea id="ivCardText" class="p1-corpus-textarea" spellcheck="true"></textarea>
+            <div class="p1-corpus-dialog-actions">
+              <button id="ivCardDelete" class="ghost iv-danger hidden" type="button">删除这张题卡</button>
+              <span id="ivCardDialogStatus"></span>
+            </div>
+          </div>
+        </div>
+
         <!-- Interview follow-ups: the P2 card's P3 dialog, with any number of custom follow-ups. -->
         <div id="ivFollowDialog" class="p1-corpus-dialog iv-follow-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="ivFollowDialogTitle">
           <div class="p1-corpus-dialog-card p2-corpus-dialog-card p2-corpus-p3-dialog-card" data-corpus-dialog-card>
@@ -651,9 +680,6 @@
             </div>
             <div class="corpus-dictate-label-row iv-follow-question-row">
               <input id="ivFollowQuestion" class="p3-custom-input" type="text" maxlength="1500" aria-label="追问">
-              <button type="button" class="corpus-dictate-button" data-corpus-dictate="ivFollowText" aria-pressed="false" title="语音转写：点我开始说，再点一下停止">
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-              </button>
             </div>
             <textarea id="ivFollowText" class="p1-corpus-textarea p2-p3-follow-up" spellcheck="true"></textarea>
             <div class="p1-corpus-dialog-actions">
@@ -1916,16 +1942,16 @@
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
-    <script src="/native-bridge.js?v=20261006-interview-76"></script>
-    <script src="/corner-morph.js?v=20261006-interview-76"></script>
-    <script src="/interview-corpus.js?v=20261006-interview-76"></script>
-    <script src="/interview-launch.js?v=20261006-interview-76"></script>
-    <script src="/interview-home.js?v=20261006-interview-76"></script>
-    <script src="/interview.js?v=20261006-interview-76"></script>
+    <script src="/native-bridge.js?v=20261006-interview-79"></script>
+    <script src="/corner-morph.js?v=20261006-interview-79"></script>
+    <script src="/interview-corpus.js?v=20261006-interview-79"></script>
+    <script src="/interview-launch.js?v=20261006-interview-79"></script>
+    <script src="/interview-home.js?v=20261006-interview-79"></script>
+    <script src="/interview.js?v=20261006-interview-79"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>
-    <script src="/app.js?v=20261006-interview-76"></script>
+    <script src="/app.js?v=20261006-interview-79"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
-    <script src="/home-dashboard.js?v=20261006-interview-76"></script>
+    <script src="/home-dashboard.js?v=20261006-interview-79"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>
   </body>
 </html>

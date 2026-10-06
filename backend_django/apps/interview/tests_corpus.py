@@ -56,6 +56,25 @@ class InterviewCorpusTests(TestCase):
         modules = InterviewProfile.objects.get(user=self.user).resume_modules
         self.assertEqual([m["kind"] for m in modules], ["self_intro", "project", "project", "tech_stack", "award"])
 
+    def test_cards_carry_summary_and_resume_excerpt_and_keep_my_edits_on_resplit(self):
+        output = resume_output()
+        output["projects"][0]["resume_excerpt"] = "主导撮合网关重构，P99 900µs→55µs"
+        output["awards"][0]["summary"] = "区域赛银牌"
+        self.import_resume(output)
+        gateway = self.entry("resume:project:gateway")
+        listed = next(e for e in self.client.get("/api/interview/corpus/").json()["entries"] if e["id"] == gateway.entry_id)
+        self.assertEqual((listed["summary"], listed["resume_excerpt"]), ("低延迟撮合网关一句话", "主导撮合网关重构，P99 900µs→55µs"))
+        self.assertEqual(self.entry("resume:award:acm").metadata["summary"], "区域赛银牌")
+        self.patch(f"/api/interview/corpus/{gateway.entry_id}/", {"summary": "我自己写的简述"})
+        output["projects"][0]["summary"] = "AI 新简述"
+        output["projects"][0]["resume_excerpt"] = "AI 新原文"
+        self.import_resume(output)
+        gateway.refresh_from_db()
+        self.assertEqual((gateway.metadata["summary"], gateway.metadata["resume_excerpt"]), ("我自己写的简述", "AI 新原文"))
+        created = self.post("/api/interview/corpus/", {"kind": "project", "title": "手写项目", "question": "介绍一下你的「手写项目」项目。",
+                                                       "summary": "一句话", "resume_excerpt": "简历原文"}).json()["entry"]
+        self.assertEqual((created["summary"], created["resume_excerpt"]), ("一句话", "简历原文"))
+
     def test_internships_become_project_cards_in_the_internship_group(self):
         output = resume_output()
         output["projects"][1]["type"] = "internship"
