@@ -151,3 +151,17 @@ VPS 先不买，完成本地效果验证再评估。
 - **验证**：后端 `manage.py test apps.interview` 40/40；网页 79/79；桌面 4/4。离屏 Qt 实例 + 无 AI 密钥的 8768 测试服务实机走完：开始 → 打字作答 → 面试官失败回退 → 看我的答法 / 存为我的答法 → 跳过 → 完成 → 报告（评分失败可重试）→ 语料库 / 编辑弹窗 / 定制页。
 - **未做 / 待办**：面试官读题语音（TTS）；真实 AI 的追问与评分质量未实测（会产生费用）；用户自己的 `db.sqlite3` 需 `migrate interview`（先问用户）；完整 Django 测试有 12 个与本次无关的既有失败（AI worker 与两个静态资源路由，基线提交上同样失败）。
 
+
+## 面试页面直接复用雅思样式（2026-10-06）
+
+用户要求「样式从雅思搬，很多是同位体」。做法：面试页面直接输出雅思对应页面的结构和类名；雅思样式里按 id 写的规则，用 `scripts/alias_ielts_styles.py` 追加面试 id 的别名选择器（id 换 id，优先级不变；只出现在 `:has()` / `:not()` 里的不追加，避免影响雅思页面）。改了雅思样式后重新跑一遍这个脚本即可，重复跑不会重复添加。
+
+| 面试页面 | 对应雅思页面 | 别名 |
+| --- | --- | --- |
+| 面试首页 | 首页 | `#homePanel` → `#interviewHome` |
+| 面试语料库 + 编辑弹窗 | P1 语料库 | `#p1CorpusPanel` → `#interviewCorpus` |
+| 面试报告 | 口语报告（横向报告栏 + 总分卡 + 总体点评 + 逐题表格） | `#historyPanel` / `#historyList` / `#detailPanel` → `#interviewReports` / `#interviewReportList` / `#interviewReportDetail` |
+| 练习页 | P1 练习（开始前的选项用 P3 的启动面板样式） | `#practicePanel`、`#promptPane`、`#recordControl` 等 10 个 |
+| 简历 / JD 定制 | 每日写作（Task 1/2 开关 = 简历/JD 开关） | `#writingPanel`、`#writingScoreBtn`、`#writingSaveBtn` |
+
+提交：`ab8634d`（首页 / 语料库）、`8bc6be2`（报告）、`c5f0d8e`（练习）、`1deb9eb`（定制）、`d435426`（删掉 144 条不再使用的旧面试样式）。网页测试 79/79；离屏 Qt 实例逐页截图核对（含暗色），雅思写作页改动前后截图逐像素相同。
