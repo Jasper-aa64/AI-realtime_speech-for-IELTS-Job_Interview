@@ -46801,6 +46801,11 @@ body.theme-dark .quick-settings { --switch-shadow: 0 22px 54px rgba(0, 0, 0, 0.5
 body:not(#_) .quick-settings-card {
   position: fixed;
   z-index: 1100;
+  /* Contents hang from the right edge (the avatar's side): while the card is still narrow, the clipped part is on
+     the left, so the copied avatar sits exactly on the real one from the first frame. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   width: 272px;
   box-sizing: border-box;
   overflow: hidden;
