@@ -23,6 +23,7 @@
     const launch = window.IELTSInterviewLaunch?.create({
       state, escapeHtml, markdown, currentAiSourcePreference, renderMarkdown: renderMarkdown || ((value) => escapeHtml(String(value || ""))),
       upload: (path, form) => upload(path, form),
+      popup: (message) => popup(message),
       source: () => data,
       onProfile: (payload) => { data.profile = payload.profile; data.corpus = payload.entries || data.corpus; window.IELTSInterviewHome?.refresh(); },
     }) || null;
@@ -30,6 +31,7 @@
     const corpusScreens = window.IELTSInterviewCorpus?.create({
       state, escapeHtml, markdown, currentAiSourcePreference, renderMarkdown: renderMarkdown || ((value) => escapeHtml(String(value || ""))),
       request: (path, body, options) => api(path, body, options),
+      popup: (message) => popup(message),
       source: () => data,
       setCorpus: (list) => { data.corpus = list; window.IELTSInterviewHome?.refresh(); },
       rerender: () => { if (data.pane === "corpus" && state.view === "interview") render(); },
@@ -54,7 +56,7 @@
 
     function freshState() {
       return {
-        pane: "home", part: "full", busy: false, error: "", notice: "",
+        pane: "home", part: "full", busy: false, notice: "",
         questions: [], categories: [], sessions: [], sessionsLoaded: false,
         corpus: null, corpusTab: "knowledge", profile: null, customSide: "resume", resumeText: "", file: null, jdText: "",
         drafts: { resume: null, jd: null },
@@ -157,7 +159,7 @@
         const closer = event.target.closest?.("[data-studio-close]");
         if (closer?.dataset && "studioClose" in closer.dataset) { if (!switcher?.openedByHover()) menu(false, true); return; }
         const item = event.target.closest("[data-studio-mode]");
-        if (item) changeMode(item.dataset.studioMode, !event.detail).catch((error) => { data.error = error.message; render(); });
+        if (item) changeMode(item.dataset.studioMode, !event.detail).catch((error) => popup(error.message));
       });
       byId("studioModeMenu")?.addEventListener("keydown", (event) => {
         const items = [...byId("studioModeMenu").querySelectorAll("[role=menuitemradio]")];
@@ -204,6 +206,38 @@
       window.addEventListener("ielts:ui-language-change", () => { setProductMode(state.productMode); render(); });
     }
 
+    // ---- Feedback without taking page space: errors in the IELTS pop-up (confirm-overlay), progress and success
+    // in a floating toast.
+    function popup(message) {
+      document.querySelector(".iv-alert-overlay")?.remove();
+      const overlay = document.createElement("div");
+      overlay.className = "confirm-overlay iv-alert-overlay";
+      overlay.innerHTML = `<div class="confirm-dialog" role="alertdialog" aria-modal="true"><p>${esc(message)}</p>
+        <div class="confirm-actions"><button class="confirm-cancel" type="button">${esc(copy("知道了", "OK"))}</button></div></div>`;
+      const close = () => overlay.remove();
+      overlay.addEventListener("click", (event) => { if (event.target === overlay || event.target.closest(".confirm-cancel")) close(); });
+      document.body.appendChild(overlay);
+      overlay.querySelector(".confirm-cancel")?.focus?.();
+    }
+
+    let toastTimer = 0;
+    function toast(message, { busy = false } = {}) {
+      let el = byId("ivToast");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "ivToast";
+        el.className = "iv-toast";
+        el.setAttribute("role", "status");
+        el.setAttribute("aria-live", "polite");
+        document.body.appendChild(el);
+      }
+      window.clearTimeout?.(toastTimer);
+      if (!message) { el.classList.remove("is-visible"); return; }
+      el.innerHTML = `${busy ? '<span class="iv-spinner" aria-hidden="true"></span>' : ""}<span>${esc(message)}</span>`;
+      el.classList.add("is-visible");
+      if (!busy) toastTimer = window.setTimeout?.(() => el.classList.remove("is-visible"), 3200);
+    }
+
     // ---- Requests: one at a time, discarded when the account changes underneath them.
     async function perform(task, apply, { busy = true } = {}) {
       if (data.busy) return;
@@ -215,17 +249,24 @@
       const owner = state.account.user?.id;
       requestController = new AbortController();
       data.busy = busy;
-      data.error = "";
       data.notice = "";
+      if (busy) toast(copy("正在处理…", "Working…"), { busy: true });
       render();
       try {
         const result = await task();
         if (generation !== epoch || owner !== state.account.user?.id || !state.account.authenticated) return;
         apply?.(result);
       } catch (error) {
-        if (generation === epoch && owner === state.account.user?.id) data.error = error.message || copy("请求失败，请重试。", "Request failed; please retry.");
+        // Only what the candidate asked for gets a pop-up; a background refresh fails quietly.
+        if (busy && generation === epoch && owner === state.account.user?.id) popup(error.message || copy("请求失败，请重试。", "Request failed; please retry."));
       } finally {
-        if (generation === epoch && owner === state.account.user?.id) { requestController = null; data.busy = false; render(); }
+        if (generation === epoch && owner === state.account.user?.id) {
+          requestController = null;
+          data.busy = false;
+          if (busy) toast(data.notice);
+          data.notice = "";
+          render();
+        }
       }
     }
 
@@ -314,7 +355,6 @@
       }
       if (part && PARTS[part]) data.part = part;
       data.pane = pane;
-      data.error = "";
       if (pane === "reports" || pane === "report") {
         // Interview reports live on the IELTS report page (history view, interview attempts only).
         data.pane = "reports";
@@ -359,7 +399,7 @@
       }
       const rows = [{ path: "self_intro.draft", kind: "自我介绍", title: "自我介绍", body: draft.self_intro?.draft || "" }];
       (draft.projects || []).forEach((project, i) => {
-        rows.push({ path: `projects.${i}.draft`, remove: `projects.${i}`, kind: "项目", title: project.title, body: project.draft });
+        rows.push({ path: `projects.${i}.draft`, remove: `projects.${i}`, kind: project.type === "internship" ? "实习" : "项目", title: project.title, body: project.draft });
         (project.followups || []).forEach((item, j) => rows.push({ path: `projects.${i}.followups.${j}.draft`, remove: `projects.${i}.followups.${j}`, kind: "追问", title: item.question, body: item.draft, nested: true }));
       });
       (draft.tech_stack || []).forEach((group, g) => (group.questions || []).forEach((item, q) =>
@@ -508,8 +548,7 @@
       const paneView = ({ corpus: () => corpusScreens?.render(data.corpusTab) || "", custom: customPane })[data.pane];
       if (!paneView) { panel.innerHTML = ""; return; }
       const content = paneView();
-      const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
-      panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>`;
+      panel.innerHTML = `<div class="iv-pane iv-pane--${data.pane}">${content}</div>`;
     }
 
     // ---- Inputs and actions

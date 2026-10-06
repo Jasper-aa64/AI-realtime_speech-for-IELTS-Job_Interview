@@ -46400,9 +46400,6 @@ body:not(#_) #interviewPanel:not(.hidden) {
   overflow: hidden;
 }
 
-#interviewPanel > .iv-status-line,
-#interviewPanel > .iv-error { flex: none; }
-
 #interviewPanel .iv-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 #interviewPanel .iv-pane > * { flex: none; }
 
@@ -46459,20 +46456,8 @@ body.theme-dark:not(#_) #interviewPanel { --iv-link: color-mix(in srgb, var(--ac
 #interviewPanel :is(ol, ul) { padding: 0; list-style: none; }
 #interviewPanel .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.iv-status-line { display: flex; align-items: center; gap: 8px; min-height: 0; color: var(--muted); font-size: 12.5px; }
-.iv-status-line:not(:empty) { min-height: 28px; margin-bottom: 8px; }
 .iv-spinner { width: 12px; height: 12px; border: 1.5px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: ivSpin 700ms linear infinite; }
 @keyframes ivSpin { to { transform: rotate(360deg); } }
-
-#interviewPanel .iv-error {
-  margin: 0 0 18px;
-  padding: 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--danger, #d9534f) 45%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--danger, #d9534f) 7%, var(--iv-card));
-  color: var(--ink);
-  font-size: 14px;
-}
 
 /* Kickers / eyebrows */
 #interviewPanel :is(.iv-kicker, .iv-eyebrow) {
@@ -46924,3 +46909,26 @@ body:not(#_):not(#__) #interviewCustom .iv-draft-row span { display: grid; gap: 
 body:not(#_):not(#__) #interviewCustom .iv-draft-row small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body:not(#_):not(#__) #interviewCustom .iv-draft-remove { width: 30px; height: 30px; padding: 0; color: var(--muted); font-size: 18px; line-height: 1; }
 body:not(#_):not(#__) #interviewCustom .iv-draft-remove:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+
+/* ---------- Interview feedback: a floating toast (progress / success); errors use the IELTS confirm pop-up ---------- */
+.iv-toast {
+  position: fixed; left: 50%; bottom: 28px; z-index: 1600; display: inline-flex; align-items: center; gap: 10px;
+  max-width: min(560px, calc(100vw - 32px)); padding: 10px 16px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); color: var(--ink); box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16); font-size: 14px;
+  opacity: 0; transform: translate(-50%, 8px); pointer-events: none; transition: opacity 160ms ease, transform 160ms ease;
+}
+.iv-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.iv-toast .iv-spinner {
+  width: 14px; height: 14px; border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent);
+  border-radius: 50%; animation: iv-toast-spin 0.8s linear infinite;
+}
+@keyframes iv-toast-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .iv-toast { transition: none; } .iv-toast .iv-spinner { animation-duration: 2.4s; } }
+
+/* ---------- Resume screen: the P2 category grid, with interview marks instead of 人/地/事/物/特 ---------- */
+#interviewResume .iv-resume-section[data-ivc-section="project"] header::before { content: "项"; }
+#interviewResume .iv-resume-section[data-ivc-section="intern"] header::before { content: "实"; }
+#interviewResume .iv-resume-section[data-ivc-section="stack"] header::before { content: "技"; }
+#interviewResume .iv-resume-section[data-ivc-section="award"] header::before { content: "奖"; }
+#interviewResume .iv-resume-section[data-ivc-section="intro"] header::before { content: "我"; }
+#interviewResume .iv-resume-generate .p2-brainstorm-open-card { position: relative; }

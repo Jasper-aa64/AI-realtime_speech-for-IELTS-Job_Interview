@@ -23,7 +23,7 @@
       .trim();
   }
 
-  function create({ state, escapeHtml, markdown, upload, currentAiSourcePreference, source, onProfile, renderMarkdown }) {
+  function create({ state, escapeHtml, markdown, upload, currentAiSourcePreference, source, onProfile, renderMarkdown, popup = (message) => window.alert(message) }) {
     const byId = (id) => document.getElementById(id);
     const esc = (value) => escapeHtml(String(value ?? ""));
     let launch = fresh();
@@ -258,7 +258,7 @@
           render();
         } catch (error) {
           launch.busy = false;
-          status(error.message || "拆分失败，请重试。");
+          status(""); popup(error.message || "拆分失败，请重试。");
         }
         return;
       }

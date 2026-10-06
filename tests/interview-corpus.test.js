@@ -8,7 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, "../web/static/interview-cor
 const html = fs.readFileSync(path.join(__dirname, "../web/static/index.html"), "utf8");
 const settle = async () => { for (let i = 0; i < 6; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
 
-function harness(corpus) {
+function harness(corpus, { fail = false } = {}) {
   class Element {
     constructor(id) { this.id = id; this.handlers = {}; this.innerHTML = ""; this.textContent = ""; this.value = ""; this.dataset = {}; this.classes = new Set(["hidden"]);
       this.classList = { add: (n) => this.classes.add(n), remove: (n) => this.classes.delete(n), toggle: (n, on) => (on ? this.classes.add(n) : this.classes.delete(n)), contains: (n) => this.classes.has(n) }; }
@@ -18,25 +18,34 @@ function harness(corpus) {
     focus() {}
   }
   const ids = {};
-  const document = { getElementById: (id) => (ids[id] ||= new Element(id)), addEventListener() {}, createElement: () => new Element(""), body: { appendChild() {} } };
+  const appended = [];
+  const document = { getElementById: (id) => (ids[id] ||= new Element(id)), addEventListener() {}, querySelectorAll: () => [], createElement: () => new Element(""), body: { appendChild: (el) => appended.push(el) } };
   const context = vm.createContext({ window: {}, document, setTimeout: (fn) => fn(), navigator: {} });
   vm.runInContext(source, context);
   const data = { corpus };
   const requests = [];
   const editor = { value: "" };
   const started = [];
+  const popups = [];
   const screens = context.window.IELTSInterviewCorpus.create({
     state: {}, escapeHtml: (v) => String(v), renderMarkdown: (v) => v, currentAiSourcePreference: () => "gpt",
     markdown: { ready: async () => null, get: () => editor.value, set: (_id, v) => { editor.value = v; } },
+    popup: (message) => popups.push(message),
     request: async (url, body, options = {}) => {
       requests.push({ url, body, method: options.method || (body ? "POST" : "GET") });
+      if (fail) throw new Error("AI 服务还没有配置");
       if (options.method === "DELETE") return { deleted: true };
       return { entry: { id: body?.question ? `new_${requests.length}` : url.split("/").at(-2), source: "custom", kind: body?.kind || "knowledge", question: body?.question || "", corpus_text: body?.corpus_text || "", group: body?.group || "", title: body?.title || "", parent_id: body?.parent_id || null } };
     },
     source: () => data, setCorpus: (list) => { data.corpus = list; }, rerender: () => {}, startPractice: (part, preset) => started.push([part, preset]),
   });
-  const click = (attrs) => { const target = { dataset: attrs, closest: () => target }; ids.interviewPanel.emit("click", { target, stopPropagation() {} }); };
-  return { screens, ids, data, requests, editor, click, started };
+  // closest() matches a selector only when it names one of the clicked element's data attributes.
+  const camel = (name) => name.replace(/-(\w)/g, (_m, c) => c.toUpperCase());
+  const click = (attrs) => {
+    const target = { dataset: attrs, closest: (selector) => (selector.split(",").some((part) => { const m = part.match(/\[data-([\w-]+)\]/); return m && camel(m[1]) in attrs; }) ? target : null) };
+    ids.interviewPanel.emit("click", { target, stopPropagation() {} });
+  };
+  return { screens, ids, data, requests, editor, click, started, popups };
 }
 
 const corpus = [
@@ -115,4 +124,42 @@ test("the dialogs are static copies of the IELTS P1 and P2-P3 dialogs, with the 
   assert.match(html, /<textarea id="ivFollowText" class="p1-corpus-textarea p2-p3-follow-up"/);
   assert.match(html, /id="ivCorpusDialog" class="p1-corpus-dialog/);
   assert.match(html, /p1-corpus-ai-box hidden/);
+});
+
+test("resume: the P2 category grid lists every kind with a 新增 row, so an empty resume can be filled by hand", async () => {
+  const env = harness([]);
+  env.data.categories = [{ id: "cpp", label: "C++ 基础与进阶" }];
+  const page = env.screens.render("resume");
+  for (const label of ["项目", "实习", "技术栈", "获奖", "自我介绍"]) assert.match(page, new RegExp(`新增${label}`));
+  assert.match(page, /从简历生成/);
+  env.click({ ivcCreate: "intern" });
+  assert.equal(env.ids.ivCorpusTopic.classes.has("hidden"), false, "the name field shows");
+  env.ids.ivCorpusTopic.value = "某券商交易组";
+  env.editor.value = "我在交易组做行情接入";
+  env.ids.ivCorpusSave.emit("click");
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.requests.at(-1).body)), {
+    kind: "project", group: "实习", title: "某券商交易组", question: "介绍一下你在「某券商交易组」的实习。", corpus_text: "我在交易组做行情接入",
+  });
+  env.click({ ivcCreate: "stack" });
+  env.ids.ivCorpusTopic.value = "AI Native";
+  env.ids.ivCorpusQuestion.value = "RAG 和微调怎么选？";
+  env.editor.value = "";
+  env.ids.ivCorpusSave.emit("click");
+  await settle();
+  assert.equal(env.requests.at(-1).body.group, "AI Native");
+  const after = env.screens.render("resume");
+  assert.match(after, /data-p2-bank-card-category="person"/, "the internship card wears the P2 person colours");
+  assert.match(after, /AI Native/);
+});
+
+test("request failures in the corpus dialogs go to a pop-up, not an inline bar", async () => {
+  const env = harness(corpus, { fail: true });
+  env.screens.render("knowledge");
+  env.screens.openEditor(corpus[3]);
+  env.editor.value = "新答法";
+  env.ids.ivCorpusSave.emit("click");
+  await settle();
+  assert.deepEqual([...env.popups], ["AI 服务还没有配置"]);
+  assert.equal(env.ids.ivCorpusDialogStatus.textContent, "");
 });

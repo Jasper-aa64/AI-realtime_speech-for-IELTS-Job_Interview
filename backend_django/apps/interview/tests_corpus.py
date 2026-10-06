@@ -56,6 +56,14 @@ class InterviewCorpusTests(TestCase):
         modules = InterviewProfile.objects.get(user=self.user).resume_modules
         self.assertEqual([m["kind"] for m in modules], ["self_intro", "project", "project", "tech_stack", "award"])
 
+    def test_internships_become_project_cards_in_the_internship_group(self):
+        output = resume_output()
+        output["projects"][1]["type"] = "internship"
+        self.import_resume(output)
+        replay = self.entry("resume:project:replay")
+        self.assertEqual((replay.group, replay.question), ("实习", "介绍一下你在「行情回放系统」的实习。"))
+        self.assertEqual(self.entry("resume:project:gateway").group, "")
+
     def test_resume_preview_saves_nothing_and_commit_saves_the_edited_draft(self):
         output = resume_output()
         with patch("apps.interview.corpus.ai_services.run_generation", return_value=output):

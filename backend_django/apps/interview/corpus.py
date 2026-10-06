@@ -124,7 +124,10 @@ def _apply_resume(user, resume, result):
         modules.append({"key": "self_intro", "kind": "self_intro", "title": "自我介绍", "summary": ""})
         for order, project in enumerate(result["projects"]):
             key = f"resume:project:{project['key']}"
-            parent = _upsert(user, source_key=key, kind=Entry.Kind.PROJECT, question=f"介绍一下你的「{project['title']}」项目。",
+            # Internships are project cards in the 实习 group (the resume screen's 实习 category).
+            internship = project.get("type") == "internship"
+            question = f"介绍一下你在「{project['title']}」的实习。" if internship else f"介绍一下你的「{project['title']}」项目。"
+            parent = _upsert(user, source_key=key, kind=Entry.Kind.PROJECT, question=question, group="实习" if internship else "",
                              source=Entry.Source.RESUME, ai_draft=project["draft"], title=project["title"], order=order,
                              metadata={"summary": project["summary"]})
             kept.append(key)

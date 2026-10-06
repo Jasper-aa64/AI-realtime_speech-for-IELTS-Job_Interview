@@ -29,6 +29,8 @@ function fixture({ desktop = true, storedMode = "ielts", decisionFails = true, s
   ids.studioModeMenu.querySelector = () => modes.find((el) => el.attrs["aria-checked"] === "true");
   const document = new Element();
   document.body = new Element();
+  document.body.appendChild = () => {};
+  document.createElement = () => new Element();
   document.getElementById = (id) => ids[id];
   document.querySelectorAll = (selector) => selector.includes("data-studio-mode") ? modes : [];
   Object.defineProperty(document, "activeElement", { get: () => focused });

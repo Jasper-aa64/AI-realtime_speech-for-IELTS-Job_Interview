@@ -13,17 +13,34 @@
     { id: "all", label: "全部" },
     // Each type wears a P2 category's colours (object / place / event / special).
     { id: "project", label: "项目", color: "#0284c7", tone: "object" },
+    { id: "intern", label: "实习", color: "#7c3aed", tone: "person" },
     { id: "stack", label: "技术栈", color: "#059669", tone: "place" },
     { id: "intro", label: "自我介绍", color: "#d97706", tone: "event" },
     { id: "award", label: "奖项", color: "#db2777", tone: "special" },
   ];
+  const DOTS = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 6.5h.01"></path><path d="M12 12h.01"></path><path d="M12 17.5h.01"></path></svg>';
+  // The P2 category grid on top of the resume screen: one card per kind, each with its rows and a "新增…" row.
+  // `create` turns the name typed in the editor into the new entry's fields.
+  const SECTIONS = [
+    { id: "project", label: "项目", tone: "object", mark: "项",
+      create: { placeholder: "项目名，如 低延迟撮合网关", fields: (name) => ({ kind: "project", title: name, question: `介绍一下你的「${name}」项目。` }) } },
+    { id: "intern", label: "实习", tone: "person", mark: "实",
+      create: { placeholder: "公司 / 团队，如 某券商交易系统组", fields: (name) => ({ kind: "project", group: "实习", title: name, question: `介绍一下你在「${name}」的实习。` }) } },
+    { id: "stack", label: "技术栈", tone: "place", mark: "技",
+      create: { placeholder: "技术方向，如 C++ / 低延迟 / AI Native", askQuestion: true, fields: (name) => ({ kind: "knowledge", group: name }) } },
+    { id: "award", label: "获奖", tone: "special", mark: "奖",
+      create: { placeholder: "奖项名，如 ACM 区域赛银牌", fields: (name) => ({ kind: "award", title: name, question: `讲讲你的「${name}」经历。` }) } },
+    { id: "intro", label: "自我介绍", tone: "event", mark: "我", single: true,
+      create: { fields: () => ({ kind: "self_intro", title: "自我介绍", question: "请先做一个简单的自我介绍。" }) } },
+  ];
   const CUES = {
     project: { kicker: "项目", bullets: ["项目背景与目标", "你负责的部分", "技术难点与取舍"], close: "最后讲清结果，最好有量化数据。" },
+    intern: { kicker: "实习", bullets: ["公司与团队做什么", "你负责的事情", "遇到的难题与解决"], close: "最后讲清产出和收获。" },
     intro: { kicker: "自我介绍", bullets: ["你是谁、在读什么", "最能代表你的项目", "技术方向与优势"], close: "并说明为什么适合这个岗位。" },
     award: { kicker: "奖项", bullets: ["什么比赛 / 奖项", "你在团队里做了什么", "最难的一关"], close: "以及这段经历让你学到了什么。" },
   };
 
-  function create({ state, escapeHtml, request, markdown, renderMarkdown, currentAiSourcePreference, source, setCorpus, rerender, startPractice }) {
+  function create({ state, escapeHtml, request, markdown, renderMarkdown, currentAiSourcePreference, source, setCorpus, rerender, startPractice, popup = (message) => window.alert(message) }) {
     const byId = (id) => document.getElementById(id);
     const esc = (value) => escapeHtml(String(value ?? ""));
     const entries = () => (source().corpus || []).filter((entry) => !entry.orphaned);
@@ -133,9 +150,12 @@
       const cards = [];
       all.filter((entry) => entry.kind === "self_intro").forEach((entry) => cards.push({ type: "intro", entry, title: "自我介绍", follows: children(entry) }));
       all.filter((entry) => entry.kind === "project").sort((a, b) => a.order - b.order)
-        .forEach((entry) => cards.push({ type: "project", entry, title: entry.title || entry.question, follows: children(entry) }));
-      // A tech-stack card is a direction the resume named; questions written on it later join the same group.
-      const resumeGroups = new Set(all.filter((entry) => entry.kind === "knowledge" && entry.source === "resume").map((entry) => entry.group || "技术栈"));
+        .forEach((entry) => cards.push({ type: entry.group === "实习" ? "intern" : "project", entry, title: entry.title || entry.question, follows: children(entry) }));
+      // A tech-stack card is a direction from the resume or one the candidate added (any group that is not a bank
+      // category); questions written on it later join the same group.
+      const bankTags = new Set((source().categories || []).map((item) => item.label));
+      const resumeGroups = new Set(all.filter((entry) => entry.kind === "knowledge" && entry.source !== "curated"
+        && (entry.source === "resume" || !bankTags.has(entry.group || ""))).map((entry) => entry.group || "技术栈"));
       const stacks = new Map([...resumeGroups].map((group) => [group, []]));
       all.filter((entry) => entry.kind === "knowledge" && entry.source !== "curated" && resumeGroups.has(entry.group || "技术栈"))
         .forEach((entry) => stacks.get(entry.group || "技术栈").push(entry));
@@ -167,7 +187,7 @@
         <article class="p2-seasonal-card iv-resume-card${hasBody ? "" : " has-single-action"}" data-ivc-card="${esc(card.key)}" data-p2-bank-card-category="${tone}">
           <header>
             <div>
-              <span class="p2-seasonal-card-kicker">${esc(kicker)} · ${esc(card.entry?.source === "custom" ? "自定义" : "简历")}</span>
+              <span class="p2-seasonal-card-kicker">${esc(kicker)} · ${esc((card.entry ? card.entry.source === "custom" : card.follows.every((entry) => entry.source === "custom")) ? "自定义" : "简历")}</span>
               <h3>${esc(card.title)}</h3>
             </div>
             <span class="p2-seasonal-card-state${bodyReady ? " is-ready" : ""}">${hasBody ? (bodyReady ? "正文已填" : "正文待填") : `答法 ${saved}/${total}`}</span>
@@ -191,6 +211,65 @@
         </article>`;
     }
 
+    function sectionRows(section, cards) {
+      return cards.filter((card) => card.type === section.id).map((card, index) => {
+        const followed = card.follows.filter(ready).length;
+        const status = card.type === "stack" ? `${card.follows.length} 道题 · 已答 ${followed}`
+          : card.follows.length ? `追问 ${followed}/${card.follows.length}` : (ready(card.entry) ? "正文已填 · 追问待填" : "正文待填");
+        const items = card.entry
+          ? `<button type="button" role="menuitem" data-ivc-body="${esc(card.key)}">修改</button>
+             <button type="button" role="menuitem" class="danger" data-ivc-delete="${esc(card.key)}">删除</button>`
+          : `<button type="button" role="menuitem" data-ivc-follow="${esc(card.key)}">题目与答法</button>
+             <button type="button" role="menuitem" class="danger" data-ivc-delete="${esc(card.key)}">删除这个方向</button>`;
+        const menu = `
+          <button type="button" class="corpus-menu-button" data-ivc-menu="${esc(card.key)}" aria-haspopup="menu" aria-expanded="false" aria-label="打开操作菜单" title="更多操作">${DOTS}</button>
+          <div class="corpus-card-action-menu hidden" data-ivc-action-menu role="menu" aria-label="题卡操作">${items}</div>`;
+        return `
+          <div class="p2-material-row">
+            <button type="button" class="p2-material-entry-button has-corpus" ${card.entry ? `data-ivc-body="${esc(card.key)}"` : `data-ivc-follow="${esc(card.key)}"`}>
+              <span class="p2-material-index">${index + 1}</span>
+              <span class="p2-material-copy">
+                <span class="p2-material-title">${esc(card.title)}</span>
+                <span class="p2-material-status${followed ? " has-follow-up" : " is-empty"}">${esc(status)}</span>
+              </span>
+            </button>
+            <div class="p2-material-actions">
+              <button type="button" class="p2-follow-up-edit-button${followed ? " has-follow-up" : ""}" data-ivc-follow="${esc(card.key)}" aria-label="${card.type === "stack" ? "编辑题目与答法" : "编辑追问"}" title="${card.type === "stack" ? "题目与答法" : "追问"}">${card.type === "stack" ? "题" : "追"}</button>
+              ${menu}
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    function categoryGrid(cards) {
+      const sections = SECTIONS.map((section) => {
+        const count = cards.filter((card) => card.type === section.id).length;
+        const add = section.single && count ? "" : `
+          <button type="button" class="p2-add-material-button" data-ivc-create="${section.id}">
+            <strong>+</strong><span>新增${esc(section.label)}</span>
+          </button>`;
+        return `
+          <article class="p2-topic-card p2-category-entry-card iv-resume-section" data-category="${section.tone}" data-ivc-section="${section.id}" style="--p2-material-row-count: ${Math.max(count, 1)}">
+            <header><h3>${esc(section.label)}</h3><span class="p2-topic-count">${count}</span></header>
+            <div class="p2-topic-material-list">
+              ${sectionRows(section, cards) || '<div class="p2-topic-empty">还没有内容，可以直接新增</div>'}
+              ${add}
+            </div>
+          </article>`;
+      }).join("");
+      const generate = `
+        <article class="p2-topic-card p2-category-entry-card iv-resume-generate" data-category="brainstorm">
+          <header><h3>从简历生成</h3><span class="p2-topic-count">AI</span></header>
+          <button type="button" class="p2-brainstorm-open-card" data-interview-action="go-custom">
+            <span class="p2-brainstorm-card-copy">
+              <strong>上传简历，一次生成全部题卡</strong>
+              <span>自动拆成项目、实习、技术栈、获奖和自我介绍；先给你看草稿，改完再加入。</span>
+            </span>
+          </button>
+        </article>`;
+      return `<section class="p2-category-entry-grid" aria-label="简历分类入口">${sections}${generate}</section>`;
+    }
+
     function resumePage() {
       const cards = resumeCards();
       const count = (id) => cards.filter((card) => card.type === id).length;
@@ -198,7 +277,6 @@
       const filters = `<div class="p2-cat-filter-bar" role="group" aria-label="按类型筛选">
           ${FILTERS.map((item) => `<button type="button" class="p2-cat-filter-btn${filter === item.id ? " active" : ""}" data-ivc-filter="${item.id}"${item.color ? ` style="--filter-color:${item.color}"` : ""}>${esc(item.label)} <span>${item.id === "all" ? cards.length : count(item.id)}</span></button>`).join("")}
         </div>`;
-      const empty = `<div class="iv-empty-card"><p>上传简历后，每个项目、每个技术方向、自我介绍和奖项都会生成一张题卡。</p><button type="button" class="iv-btn iv-btn--solid" data-interview-action="go-custom">上传简历 →</button></div>`;
       return `<section id="interviewResume" class="p2-corpus-panel" aria-label="简历题卡">
           <div class="p2-corpus-shell">
             <header class="p2-corpus-head">
@@ -206,13 +284,14 @@
               <div class="corpus-head-actions"><span class="corpus-page-stat p2-corpus-stat">${cards.length} 张题卡 · 追问 ${cards.reduce((sum, card) => sum + card.follows.length, 0)}</span></div>
             </header>
             <div class="p2-corpus-topics">
+              ${categoryGrid(cards)}
               <section class="p2-seasonal-card-section" aria-label="简历题卡">
                 <header class="p2-seasonal-section-head">
                   <div><span class="corpus-page-kicker">FROM YOUR RESUME</span><h3>我的简历题卡</h3></div>
                   <span>${cards.length} 张题卡</span>
                 </header>
                 ${cards.length ? filters : ""}
-                <div class="p2-seasonal-card-grid">${cards.length ? (visible.map(resumeCard).join("") || '<p class="muted">这个分类还没有题卡。</p>') : empty}</div>
+                <div class="p2-seasonal-card-grid">${cards.length ? (visible.map(resumeCard).join("") || '<p class="muted">这个分类还没有题卡。</p>') : '<p class="muted">在上面新增，或从简历生成，题卡就会出现在这里。</p>'}</div>
               </section>
             </div>
           </div>
@@ -281,14 +360,20 @@
       if (entry) openEditor(entry);
     }
 
-    function openEditor(entry, { reference = "", newTopic = false } = {}) {
+    function openEditor(entry, { reference = "", newTopic = false, create = null } = {}) {
       const root = byId("ivCorpusDialog");
       if (!root) return;
       const isNew = !entry.id && !entry.source_key;
-      editor = { entry, reference, isNew, newTopic, initial: entry.corpus_text || "" };
+      editor = { entry, reference, isNew, newTopic, create, initial: entry.corpus_text || "" };
       const topic = byId("ivCorpusTopic");
-      if (topic) { topic.classList.toggle("hidden", !newTopic); topic.value = ""; }
-      const editableQuestion = isNew || ["custom", "practice"].includes(entry.source);
+      const named = newTopic || Boolean(create?.placeholder);
+      if (topic) {
+        topic.classList.toggle("hidden", !named);
+        topic.value = "";
+        topic.placeholder = create?.placeholder || "题卡名，如 SPSC 队列";
+      }
+      // A new project / internship / award / intro gets its question from the name; a new direction asks for one.
+      const editableQuestion = create ? Boolean(create.askQuestion) : isNew || ["custom", "practice"].includes(entry.source);
       const labels = { self_intro: "自我介绍", project: "项目", project_followup: "追问", knowledge: "知识点", award: "奖项", jd_question: "岗位题", reverse_question: "反问" };
       byId("ivCorpusDialogMeta").textContent = [labels[entry.kind] || "语料", entry.group, entry.kind === "knowledge" ? entry.title : ""].filter(Boolean).join(" · ") || "语料";
       byId("ivCorpusDialogTitle").textContent = entry.question || "新题目";
@@ -319,8 +404,27 @@
       if (!editor || busy) return;
       const { entry, isNew } = editor;
       const text = markdown.get(EDITOR_TEXT);
-      const question = byId("ivCorpusQuestion").classList.contains("hidden") ? entry.question : byId("ivCorpusQuestion").value.trim();
       const status = (value) => { byId("ivCorpusDialogStatus").textContent = value; };
+      if (editor.create) {
+        const name = editor.create.placeholder ? byId("ivCorpusTopic").value.trim() : "";
+        if (editor.create.placeholder && !name) { status("请先写名字。"); return; }
+        const fields = editor.create.fields(name);
+        const asked = byId("ivCorpusQuestion").value.trim();
+        if (editor.create.askQuestion && !asked) { status("请先写第一道题。"); return; }
+        busy = true;
+        status("正在保存…");
+        try {
+          const payload = await request("/api/interview/corpus/", { ...fields, question: editor.create.askQuestion ? asked : fields.question, corpus_text: text });
+          upsert(payload.entry);
+          busy = false;
+          if (close) closeEditor();
+        } catch (error) {
+          busy = false;
+          status(""); popup(error.message || "保存失败，请重试。");
+        }
+        return;
+      }
+      const question = byId("ivCorpusQuestion").classList.contains("hidden") ? entry.question : byId("ivCorpusQuestion").value.trim();
       if (!question) { status("请先写题目。"); return; }
       const topicName = editor.newTopic ? byId("ivCorpusTopic").value.trim() : entry.title || "";
       if (editor.newTopic && !topicName) { status("请先给题卡起个名字。"); return; }
@@ -345,7 +449,7 @@
         else { editor = { ...editor, entry: payload.entry, isNew: false, initial: text }; status("已保存"); }
       } catch (error) {
         busy = false;
-        status(error.message || "保存失败，请重试。");
+        status(""); popup(error.message || "保存失败，请重试。");
       }
     }
 
@@ -360,7 +464,7 @@
         closeEditor();
       } catch (error) {
         busy = false;
-        byId("ivCorpusDialogStatus").textContent = error.message || "删除失败，请重试。";
+        popup(error.message || "删除失败，请重试。");
       }
     }
 
@@ -444,7 +548,7 @@
         return true;
       } catch (error) {
         busy = false;
-        status(error.message || "保存失败，请重试。");
+        status(""); popup(error.message || "保存失败，请重试。");
         return false;
       }
     }
@@ -462,7 +566,7 @@
         renderFollow();
       } catch (error) {
         busy = false;
-        byId("ivFollowDialogStatus").textContent = error.message || "删除失败，请重试。";
+        popup(error.message || "删除失败，请重试。");
       }
     }
 
@@ -471,6 +575,29 @@
       follow = null;
       byId("ivFollowDialog")?.classList.add("hidden");
       rerender();
+    }
+
+    // Deleting a card (and its follow-ups) asks first, in the IELTS confirm pop-up.
+    function confirmDelete(card) {
+      const ids = card?.entry?.id ? [card.entry.id] : (card?.follows || []).map((entry) => entry.id).filter(Boolean);
+      if (!ids.length) return;
+      const overlay = document.createElement("div");
+      overlay.className = "confirm-overlay";
+      overlay.innerHTML = `<div class="confirm-dialog"><p>${esc(card.entry ? `删除「${card.title}」和它的追问？` : `删除「${card.title}」方向下的 ${ids.length} 道题？`)}</p>
+        <div class="confirm-actions"><button class="confirm-cancel" type="button">取消</button><button class="confirm-delete" type="button">删除</button></div></div>`;
+      overlay.addEventListener("click", async (event) => {
+        if (event.target.closest(".confirm-cancel") || event.target === overlay) { overlay.remove(); return; }
+        if (!event.target.closest(".confirm-delete")) return;
+        overlay.remove();
+        try {
+          for (const id of ids) {
+            await request(`/api/interview/corpus/${encodeURIComponent(id)}/`, null, { method: "DELETE" });
+            remove(id);
+          }
+          rerender();
+        } catch (error) { popup(error.message || "删除失败，请重试。"); }
+      });
+      document.body.appendChild(overlay);
     }
 
     // ---- Report: 编辑语料 on an interview turn opens the editor with the reference answer.
@@ -505,7 +632,23 @@
 
     // ---- Events.
     function onPanelClick(event) {
-      const target = event.target.closest?.("[data-ivc-edit],[data-ivc-topic],[data-ivc-new],[data-ivc-new-topic],[data-ivc-tag],[data-ivc-filter],[data-ivc-body],[data-ivc-follow],[data-ivc-practice]");
+      const menuButton = event.target.closest?.("[data-ivc-menu]");
+      document.querySelectorAll?.("[data-ivc-action-menu]").forEach((menu) => {
+        if (menuButton && menu.previousElementSibling === menuButton) return;
+        menu.classList.add("hidden");
+        menu.closest(".p2-material-row")?.classList.remove("is-menu-open");
+        menu.closest(".p2-category-entry-card")?.classList.remove("is-menu-open");
+      });
+      if (menuButton) {
+        const menu = menuButton.nextElementSibling;
+        const open = menu?.classList.contains("hidden");
+        menu?.classList.toggle("hidden", !open);
+        menuButton.setAttribute("aria-expanded", String(Boolean(open)));
+        menuButton.closest(".p2-material-row")?.classList.toggle("is-menu-open", Boolean(open));
+        menuButton.closest(".p2-category-entry-card")?.classList.toggle("is-menu-open", Boolean(open));
+        return;
+      }
+      const target = event.target.closest?.("[data-ivc-edit],[data-ivc-topic],[data-ivc-new],[data-ivc-new-topic],[data-ivc-tag],[data-ivc-filter],[data-ivc-body],[data-ivc-follow],[data-ivc-practice],[data-ivc-create],[data-ivc-delete]");
       if (!target) return;
       const data = target.dataset;
       if (data.ivcNew) {
@@ -515,6 +658,13 @@
       } else if (data.ivcEdit) openEditorByKey(data.ivcEdit);
       else if (data.ivcTopic) openTopicModal(data.ivcTopic);
       else if (data.ivcFilter) { filter = data.ivcFilter; rerender(); }
+      else if (data.ivcCreate) {
+        const section = SECTIONS.find((item) => item.id === data.ivcCreate);
+        if (!section) return;
+        const fields = section.create.fields("");
+        openEditor({ id: null, source: "custom", kind: fields.kind, group: fields.group || "", title: "", question: section.single ? fields.question : `新${section.label}`, corpus_text: "" },
+          { create: section.create });
+      } else if (data.ivcDelete) confirmDelete(cardByKey(data.ivcDelete));
       else if (data.ivcTag) { tag = data.ivcTag; rerender(); }
       else if (data.ivcNewTopic !== undefined) openEditor({ id: null, kind: "knowledge", source: "custom", question: "", corpus_text: "", group: data.ivcNewTopic, title: "" }, { newTopic: true });
       else if (data.ivcBody) { const card = cardByKey(data.ivcBody); if (card?.entry) openEditor(card.entry); }
@@ -523,7 +673,7 @@
         const card = cardByKey(data.ivcPractice);
         if (!card) return;
         if (card.type === "stack") startPractice("knowledge", { entryIds: card.follows.map((entry) => entry.id) });
-        else if (card.type === "project") startPractice("project", { projectIds: [card.entry.id] });
+        else if (card.type === "project" || card.type === "intern") startPractice("project", { projectIds: [card.entry.id] });
         else startPractice("full", {});
       }
     }

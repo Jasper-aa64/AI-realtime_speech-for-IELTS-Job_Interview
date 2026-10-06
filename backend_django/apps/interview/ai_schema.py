@@ -32,12 +32,12 @@ SIGNALS = {"strong", "adequate", "weak"}
 INSTRUCTIONS = {
     "resume_profile": (
         "Split the resume into interview practice material the way Chinese tech interviews run: self introduction, "
-        "every project (each one is asked about), tech-stack knowledge points grouped by broad area, and awards such as "
+        "every project and internship (each one is asked about; mark internships with \"type\":\"internship\"), tech-stack knowledge points grouped by broad area, and awards such as "
         "ACM/ICPC or other contests only if present. For each piece write a first-person spoken draft the candidate could "
         "say (self intro 150-250 字; project 250-400 字 covering background, own role, key technical decisions, quantified "
         "result; award 100-200 字). For each project add 2-4 likely follow-up questions with short draft answers. For tech "
         "stack add 1-4 knowledge questions per area (max 6 areas) with concise model answers. Return: "
-        "{\"self_intro\":{\"draft\":\"...\"},\"projects\":[{\"key\":\"short-slug\",\"title\":\"...\",\"summary\":\"one line\","
+        "{\"self_intro\":{\"draft\":\"...\"},\"projects\":[{\"key\":\"short-slug\",\"type\":\"project|internship\",\"title\":\"...\",\"summary\":\"one line\","
         "\"draft\":\"...\",\"followups\":[{\"question\":\"...\",\"draft\":\"...\"}]}],\"tech_stack\":[{\"group\":\"C++\","
         "\"questions\":[{\"question\":\"...\",\"draft\":\"...\"}]}],\"awards\":[{\"key\":\"short-slug\",\"title\":\"...\","
         "\"draft\":\"...\"}]}. Use [] when a section has nothing."
@@ -132,6 +132,7 @@ def validate(kind, data, inputs):
                 raise ValueError("project must be an object")
             projects.append({
                 "key": item.get("key"), "title": text(item.get("title"), "project title", 200, required=True),
+                "type": "internship" if item.get("type") == "internship" else "project",
                 "summary": text(item.get("summary"), "project summary", 400),
                 "draft": text(item.get("draft"), "project draft", 6000),
                 "followups": [_qa(f) for f in _list(item.get("followups"), 4)],
