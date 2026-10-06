@@ -46279,7 +46279,8 @@ body.theme-dark:not(#_):not(#__) .history-item:is(.tone-p1, .tone-p2, .tone-p3, 
   /* --switch-surface / --switch-ink are read from the sidebar at runtime (interview.js syncSwitchPalette). */
   --switch-surface: #171717;
   --switch-ink: #eef5f3;
-  --switch-bg: color-mix(in srgb, var(--switch-surface) 55%, #000);
+  /* Lighter than the rail it grows out of, so the card reads on a near-black sidebar. */
+  --switch-bg: color-mix(in srgb, var(--switch-surface) 88%, #fff);
   --switch-closed: var(--switch-surface);
   --switch-line: color-mix(in srgb, var(--switch-ink) 12%, transparent);
   --switch-soft: color-mix(in srgb, var(--switch-ink) 7%, transparent);
@@ -46500,18 +46501,6 @@ body:not(#_) .studio-switch-body [role="menuitemradio"]:is(:hover, :focus-visibl
 
 .studio-switch-check { opacity: 0; color: color-mix(in srgb, var(--accent) 55%, #fff); }
 [role="menuitemradio"][aria-checked="true"] .studio-switch-check { opacity: 1; }
-
-.studio-switch-foot {
-  display: flex;
-  justify-content: space-between;
-  margin: 8px 8px 0;
-  padding-top: 10px;
-  border-top: 1px solid color-mix(in srgb, var(--switch-ink) 8%, transparent);
-  color: color-mix(in srgb, var(--switch-ink) 45%, transparent);
-  font-size: 11.5px;
-}
-
-.studio-switch-foot span { display: inline-flex; align-items: center; gap: 4px; }
 
 /* ---------- Sidebar in interview mode: the IELTS rows step aside, interview rows reuse .nav-button ---------- */
 body.interview-mode .nav-primary:not(#interviewNav),
