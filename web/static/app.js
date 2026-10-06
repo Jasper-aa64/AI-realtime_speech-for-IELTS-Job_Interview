@@ -14421,7 +14421,6 @@ function setupQuickSettings() {
   const sourceList = $("quickAiSourceList");
   if (!root || !card || !avatar || !sourceButton || !sourceList) return;
   let open = false;
-  let timer = 0;
   // A native <select> popup lives outside the page, so hovering it would count as leaving the card;
   // the source list is drawn inside the card instead.
   const toggleList = (value) => {
@@ -14444,40 +14443,35 @@ function setupQuickSettings() {
     sourceButton.disabled = !state.account.authenticated || !!source?.disabled;
     $("quickAiSourceNote")?.classList.toggle("hidden", !!state.account.authenticated);
   };
+  // The card grows out of the avatar (top-right corner morph, corner-morph.js); while open the top bar is
+  // lifted above every other layer so nothing paints over the card.
+  const syncAvatar = () => text("quickSettingsAvatar", $("userAvatarDesktop")?.textContent || "");
+  const morph = window.IELTSCornerMorph?.create({
+    trigger: avatar,
+    card,
+    body: card.querySelector(".quick-settings-body"),
+    root,
+    lift: root.closest(".global-topbar"),
+    anchor: "top-right",
+    closedRadius: "999px",
+    closedBackground: "var(--switch-bg)",
+    hoverBackground: "var(--switch-bg)",
+    onOpenChange: (value) => {
+      open = value;
+      if (value) { sync(); syncAvatar(); toggleList(false); }
+    },
+  });
   const show = (value) => {
-    window.clearTimeout(timer);
-    if (open === value) return;
-    open = value;
-    avatar.setAttribute("aria-expanded", String(value));
-    root.classList.toggle("is-open", value);
-    if (value) {
-      sync();
-      toggleList(false);
-      card.hidden = false;
-      card.animate?.([{ opacity: 0, transform: "translateY(-6px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" });
-    } else {
-      const fade = card.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: "ease-out", fill: "forwards" });
-      if (fade) fade.finished.then(() => { if (!open) { card.hidden = true; fade.cancel(); } }, () => {});
-      else card.hidden = true;
-    }
+    if (!morph) { card.hidden = !value; open = value; return; }
+    if (value) morph.open(); else morph.close();
   };
-  root.addEventListener("pointerenter", (event) => {
-    if (event.pointerType !== "mouse") return;
-    window.clearTimeout(timer);
-    if (!open) timer = window.setTimeout(() => show(true), 90);
-  });
-  root.addEventListener("pointerleave", (event) => {
-    if (event.pointerType !== "mouse") return;
-    window.clearTimeout(timer);
-    timer = window.setTimeout(() => show(false), 240);
-  });
   avatar.addEventListener("focus", () => { if (avatar.matches(":focus-visible")) show(true); });
   root.addEventListener("focusout", (event) => { if (event.relatedTarget && !root.contains(event.relatedTarget)) show(false); });
   root.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && open) {
-      if (!sourceList.hidden) { toggleList(false); sourceButton.focus(); return; }
-      show(false);
-      avatar.focus();
+    if (event.key === "Escape" && open && !sourceList.hidden) {
+      event.stopPropagation();
+      toggleList(false);
+      sourceButton.focus();
       return;
     }
     if (!sourceList.hidden && ["ArrowDown", "ArrowUp"].includes(event.key)) {
@@ -14488,6 +14482,7 @@ function setupQuickSettings() {
     }
   });
   card.addEventListener("click", (event) => {
+    if (event.target.closest("[data-quick-close]")) { show(false); return; }
     const mode = event.target.closest("[data-quick-appearance]");
     if (mode) {
       const select = $("appearanceModeSelect");

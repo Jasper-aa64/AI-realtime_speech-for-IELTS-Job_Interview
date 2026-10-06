@@ -46785,28 +46785,60 @@ body:not(#_) #interviewPanel .iv-icon-btn:hover:not(:disabled) { border-color: v
 /* ---------- Top-right avatar: hover card for appearance + AI scoring source ---------- */
 .quick-settings { position: relative; display: inline-flex; }
 
+/* While a corner-morph card is open, the fixed bar that holds it rises above every other layer
+   (report rail, floating buttons, the other bar), so the card can never be painted over. */
+body:not(#_) :is(.nav, .global-topbar).has-corner-morph-open { z-index: 2147483000 !important; }
+
+/* The card grows out of the avatar (corner-morph.js anchors its top-right corner on the avatar's). */
+.quick-settings {
+  --switch-bg: var(--panel);
+  --switch-line: var(--line);
+  --switch-shadow: 0 22px 54px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+body.theme-dark .quick-settings { --switch-shadow: 0 22px 54px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3); }
+
 body:not(#_) .quick-settings-card {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
+  position: fixed;
   z-index: 1100;
-  display: grid;
-  gap: 10px;
-  width: 264px;
+  width: 272px;
   box-sizing: border-box;
-  padding: 16px;
-  border: 1px solid var(--line);
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--switch-line);
   border-radius: 18px;
-  background: var(--panel);
-  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08);
+  background: var(--switch-bg);
+  box-shadow: var(--switch-shadow);
   color: var(--ink);
-  transform-origin: top right;
 }
 
-body.theme-dark:not(#_) .quick-settings-card { box-shadow: 0 22px 54px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3); }
 body:not(#_) .quick-settings-card[hidden] { display: none !important; }
-/* An invisible bridge keeps the hover alive while the pointer crosses the gap from the avatar. */
-.quick-settings-card::before { content: ""; position: absolute; left: 0; right: 0; top: -12px; height: 12px; }
+body:not(#_) .quick-settings-card[inert] { pointer-events: none; }
+
+/* Head: the avatar sits exactly where the real one is, so it does not move while the card takes over. */
+body:not(#_) .quick-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 270px;
+  height: 43px;
+  padding-left: 16px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+body:not(#_) .quick-settings-title { color: var(--muted); font-family: var(--ed-mono); font-size: 11px; letter-spacing: 0.08em; }
+/* The card's 1px border puts its content box 1px inside the 44px avatar button, exactly where the 42px avatar sits. */
+body:not(#_) .quick-settings-avatar { flex: none; align-self: flex-start; width: 42px; height: 42px; min-width: 42px; }
+
+body:not(#_) .quick-settings-body { display: grid; gap: 10px; width: 270px; box-sizing: border-box; padding: 2px 16px 16px; }
+
+/* Theme styles (moved from the sidebar foot): same sliding pill, coloured for the card surface. */
+body:not(#_):not(#__) .quick-settings-themes { min-height: 44px; padding: 4px; gap: 4px; border: 1px solid var(--line); border-radius: 999px; background: transparent; }
+body:not(#_):not(#__) .quick-settings-themes::before { top: 4px; left: 4px; width: calc((100% - 16px) / 3); height: calc(100% - 8px); border: 0; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+body:not(#_):not(#__) .quick-settings-themes.academic::before { transform: translateX(calc(100% + 4px)); }
+body:not(#_):not(#__) .quick-settings-themes.popular::before { transform: translateX(calc((100% + 4px) * 2)); }
+body:not(#_):not(#__) .quick-settings-themes .font-option { height: 34px; min-height: 34px; border-radius: 999px; color: var(--muted); }
+body:not(#_):not(#__) .quick-settings-themes .font-option.active { color: var(--ink); }
+body:not(#_):not(#__) .quick-settings-themes .font-option svg { width: 18px; height: 18px; }
 
 body:not(#_) .quick-settings-label {
   margin: 4px 0 0;

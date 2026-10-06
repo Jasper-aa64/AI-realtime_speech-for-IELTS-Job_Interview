@@ -2,8 +2,6 @@
   const MODES = new Set(["ielts", "interview"]);
   const PANES = new Set(["home", "practice", "reports", "report", "corpus", "custom"]);
   const MODE_KEY = "ielts-product-mode";
-  // detail.design's corner morph: spring stiffness 300, damping 30, mass 1 (ζ≈0.87), sampled over 500 ms.
-  const SPRING = "linear(0, 0.0458, 0.1512, 0.2813, 0.4144, 0.5381, 0.6461, 0.7364, 0.8091, 0.8658, 0.9089, 0.9407, 0.9636, 0.9794, 0.99, 0.9968, 1.0009, 1.0031, 1.0041, 1.0043, 1.0041, 1.0036, 1.003, 1.0025, 1.0019, 1.0015, 1)";
   const ARROW = '<span class="iv-arrow" aria-hidden="true">→</span>';
   // The interview counterpart of Mock + P1/P2/P3.
   const PARTS = {
@@ -33,10 +31,7 @@
     let epoch = 0;
     let initialized = false;
     let requestController = null;
-    let morph = null;
-    let menuOpen = false;
-    let hoverOpened = false;
-    let hoverTimer = null;
+    let switcher = null;
     let recorder = null;
     let data = freshState();
     const byId = (id) => document.getElementById(id);
@@ -90,10 +85,7 @@
     }
 
     // ---- Mode switcher: the brand button grows into the card in place (shared corner, spring size, blur cross-fade).
-    function reducedMotion() {
-      try { return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true; } catch (_error) { return false; }
-    }
-
+    // ---- Mode switcher: the brand button grows into the card in place (corner-morph.js).
     // Colours come from the sidebar the control actually sits on: some appearance styles redefine --nav
     // without repainting the rail, so the token alone can say "white" on a dark sidebar.
     function syncSwitchPalette() {
@@ -110,54 +102,12 @@
       control.dataset.switchTone = light ? "light" : "dark";
     }
 
-    function animateMenu(dropdown, trigger, opening) {
-      if (typeof dropdown.animate !== "function" || typeof trigger.getBoundingClientRect !== "function") return null;
-      morph?.cancel();
-      const from = trigger.getBoundingClientRect();
-      dropdown.style.left = `${Math.round(from.left)}px`;
-      dropdown.style.top = `${Math.round(from.top)}px`;
-      const to = dropdown.getBoundingClientRect();
-      const body = dropdown.querySelector?.(".studio-switch-body");
-      // Closing holds its last frame ("forwards") until the card is hidden, so it never pops back to full size.
-      const timing = (duration, extra = {}) => ({ duration, easing: SPRING, fill: opening ? "none" : "forwards", ...extra });
-      if (reducedMotion()) {
-        morph = dropdown.animate([{ opacity: opening ? 0 : 1 }, { opacity: opening ? 1 : 0 }], timing(120, { easing: "ease-out" }));
-        return morph;
-      }
-      // Opening starts from the hovered trigger's tint; closing ends on the plain rail so the hand-off is seamless.
-      const closed = { width: `${from.width}px`, height: `${from.height}px`, borderRadius: "10px", backgroundColor: opening ? "var(--switch-hover)" : "var(--switch-closed)", borderColor: "transparent", boxShadow: "0 0 0 rgba(0,0,0,0)" };
-      const open = { width: `${to.width}px`, height: `${to.height}px`, borderRadius: "18px", backgroundColor: "var(--switch-bg)", borderColor: "var(--switch-line)", boxShadow: "var(--switch-shadow)" };
-      morph = dropdown.animate(opening ? [closed, open] : [open, closed], timing(opening ? 500 : 380));
-      body?.getAnimations?.().forEach((animation) => animation.cancel());
-      body?.animate?.(
-        opening ? [{ opacity: 0, filter: "blur(4px)" }, { opacity: 1, filter: "blur(0px)" }] : [{ opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(4px)" }],
-        { duration: opening ? 200 : 100, delay: opening ? 60 : 0, easing: "ease-out", fill: opening ? "backwards" : "forwards" },
-      );
-      return morph;
-    }
-
     function menu(open, restoreFocus = false, focusItem = true) {
-      const trigger = byId("studioModeTrigger");
+      if (!switcher) return;
+      if (open) switcher.open(); else switcher.close({ restoreFocus });
       const dropdown = byId("studioModeMenu");
-      if (!trigger || !dropdown) return;
-      window.clearTimeout?.(hoverTimer);
-      if (menuOpen === open) {
-        if (!open && restoreFocus) trigger.focus();
-        return;
-      }
-      menuOpen = open;
-      if (!open) hoverOpened = false;
-      trigger.setAttribute("aria-expanded", String(open));
-      byId("studioModeControl")?.classList.toggle("is-open", open);
-      if (open) { syncSwitchPalette(); dropdown.hidden = false; dropdown.inert = false; }
-      const animation = animateMenu(dropdown, trigger, open);
-      if (!open) {
-        const finish = () => { if (menuOpen) return; dropdown.hidden = true; dropdown.inert = false; animation?.cancel(); dropdown.querySelector?.(".studio-switch-body")?.getAnimations?.().forEach((item) => item.cancel()); };
-        if (animation) { dropdown.inert = true; animation.finished.then(finish, () => {}); } else finish();
-      }
       // The card clips while it grows; a scrolling focus would shift its content out of the shared corner.
-      if (open && focusItem) { dropdown.querySelector('[aria-checked="true"]')?.focus({ preventScroll: true }); dropdown.scrollTop = 0; }
-      else if (!open && restoreFocus) trigger.focus();
+      if (open && focusItem && dropdown) { dropdown.querySelector('[aria-checked="true"]')?.focus({ preventScroll: true }); dropdown.scrollTop = 0; }
     }
 
     async function changeMode(mode, fromKeyboard = true) {
@@ -184,26 +134,17 @@
       try { mode = localStorage.getItem(MODE_KEY) || "ielts"; } catch (_error) { /* Default IELTS. */ }
       setProductMode(mode);
       const trigger = byId("studioModeTrigger");
-      trigger?.addEventListener("click", () => menu(!menuOpen));
-      // Pointer intent opens it like detail.design; a short grace period lets the cursor travel into the card.
-      const control = byId("studioModeControl");
-      control?.addEventListener("pointerenter", (event) => {
-        if (event.pointerType !== "mouse") return;
-        window.clearTimeout?.(hoverTimer);
-        syncSwitchPalette();
-        if (!menuOpen) hoverTimer = window.setTimeout?.(() => { menu(true, false, false); hoverOpened = true; }, 90);
-      });
-      control?.addEventListener("pointerleave", (event) => {
-        if (event.pointerType !== "mouse") return;
-        window.clearTimeout?.(hoverTimer);
-        if (menuOpen) hoverTimer = window.setTimeout?.(() => menu(false), 240);
-      });
+      switcher = window.IELTSCornerMorph?.create({
+        trigger, card: byId("studioModeMenu"), body: byId("studioModeMenu")?.querySelector?.(".studio-switch-body"),
+        root: byId("studioModeControl"), lift: byId("studioModeControl")?.closest?.(".nav"), anchor: "top-left", palette: syncSwitchPalette,
+      }) || null;
+      trigger?.addEventListener("click", () => menu(!switcher?.isOpen()));
       trigger?.addEventListener("keydown", (event) => {
         if (["ArrowDown", "ArrowUp"].includes(event.key)) { event.preventDefault(); menu(true); }
       });
       byId("studioModeMenu")?.addEventListener("click", (event) => {
         const closer = event.target.closest?.("[data-studio-close]");
-        if (closer?.dataset && "studioClose" in closer.dataset) { if (!hoverOpened) menu(false, true); return; }
+        if (closer?.dataset && "studioClose" in closer.dataset) { if (!switcher?.openedByHover()) menu(false, true); return; }
         const item = event.target.closest("[data-studio-mode]");
         if (item) changeMode(item.dataset.studioMode, !event.detail).catch((error) => { data.error = error.message; render(); });
       });
@@ -218,13 +159,11 @@
         if (event.key === "Escape") { event.preventDefault(); menu(false, true); }
         if (event.key === "Tab") menu(false);
       });
-      document.addEventListener("pointerdown", (event) => { if (!byId("studioModeControl")?.contains(event.target)) menu(false); });
       document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
         if (data.editor) { data.editor = null; render(); return; }
-        menu(false, menuOpen);
+        menu(false, !!switcher?.isOpen());
       });
-      window.addEventListener?.("resize", () => menu(false));
       byId("interviewNav")?.addEventListener("click", (event) => {
         const item = event.target.closest("[data-interview-pane]");
         if (!item) return;

@@ -4,6 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 const source = fs.readFileSync(path.join(__dirname, "../web/static/interview.js"), "utf8");
+const morphSource = fs.readFileSync(path.join(__dirname, "../web/static/corner-morph.js"), "utf8");
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const settle = async () => { for (let i = 0; i < 6; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
 
@@ -16,6 +17,7 @@ function fixture({ desktop = true, storedMode = "ielts", decisionFails = true, s
     setAttribute(name, value) { this.attrs[name] = value; }
     focus() { focused = this; }
     contains(node) { return node === this; }
+    getBoundingClientRect() { return { left: 0, top: 0, right: 0, width: 0, height: 0 }; }
     closest() { return this; }
     querySelectorAll() { return []; }
     querySelector() { return null; }
@@ -71,7 +73,9 @@ function fixture({ desktop = true, storedMode = "ielts", decisionFails = true, s
     }
     return details();
   };
-  vm.runInNewContext(source, { window, document, localStorage: { getItem: (key) => store.get(key), setItem: (key, value) => store.set(key, value) }, AbortController, FormData, Blob, fetch: async () => ({ ok: false, text: async () => "{}" }) });
+  const context = vm.createContext({ window, document, localStorage: { getItem: (key) => store.get(key), setItem: (key, value) => store.set(key, value) }, AbortController, FormData, Blob, fetch: async () => ({ ok: false, text: async () => "{}" }) });
+  vm.runInContext(morphSource, context);
+  vm.runInContext(source, context);
   let loginRequested = false;
   let exited = false;
   const app = window.IELTSInterview.createInterview({ state, api, ensureCsrfToken: async () => "csrf", switchView: (view) => { state.view = view; }, exitPractice: async () => { exited = true; state.practiceLocked = false; }, promptGuestLogin: () => { loginRequested = true; }, currentAiSourcePreference: () => "gpt", escapeHtml: (value) => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;") });

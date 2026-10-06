@@ -47,6 +47,7 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "api-client.js": "text/javascript; charset=utf-8",
         "appearance.js": "text/javascript; charset=utf-8",
         "native-bridge.js": "text/javascript; charset=utf-8",
+        "corner-morph.js": "text/javascript; charset=utf-8",
         "interview.js": "text/javascript; charset=utf-8",
         "view-router.js": "text/javascript; charset=utf-8",
         "app.js": "text/javascript; charset=utf-8",
