@@ -57,7 +57,7 @@ class InterviewApiTests(TestCase):
 
     def test_bank_and_category_validation(self):
         payload = self.client.get("/api/interview/questions/?category=low_latency").json()
-        self.assertEqual(len(payload["questions"]), 6)
+        self.assertEqual(len(payload["questions"]), 19)
         self.assertTrue(all(q["category"] == "low_latency" and q["source"] == "curated" for q in payload["questions"]))
         self.assertEqual(len(payload["categories"]), 5)
         self.assertEqual(self.client.get("/api/interview/questions/?category=invalid").status_code, 400)

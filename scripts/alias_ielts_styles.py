@@ -22,11 +22,15 @@ ALIASES = [
     ("#writingSaveBtn", "#interviewCustomCorpus", [], False),
     # Interview launch block (practice PROMPT pane) <-> the P3 launch panel: numbered steps, check-mark tiles.
     ("#p3TopicPanel", "#ivLaunch", [], False),
+    # Resume cards screen <-> the P2 corpus page (题卡 grid, filter bar).
+    ("#p2CorpusPanel", "#interviewResume", [], True),
+    # Corpus editor's reference box <-> the P1 dialog's 7分回答参考 box.
+    ("#p1CorpusAiAnswer", "#ivCorpusAi", [], False),
 ]
 # Corpus-view workspace conditions are shared only when the selector is about the P1 library.
 CORPUS_WORKSPACE = (".corpus-workspace", ".interview-corpus-workspace")
 P1_LIBRARY = re.compile(r"#p1CorpusPanel|\.p1-corpus-(?:shell|head|topics|dialog|label|textarea)|\.p1-topic-")
-OTHER_PANELS = re.compile(r"#(?:corpusPanel|p2CorpusPanel|p2CorpusP3Dialog|languageTakeawayPanel|writingTakeawayPanel|spellingDrillPanel)")
+OTHER_PANELS = re.compile(r"#(?:corpusPanel|p2CorpusP3Dialog|languageTakeawayPanel|writingTakeawayPanel|spellingDrillPanel)")
 
 
 def split_top_level(prelude):

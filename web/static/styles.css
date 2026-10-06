@@ -9785,7 +9785,8 @@ button.corpus-dictate-button.is-recording svg {
   stroke-linejoin: round;
 }
 
-#p1CorpusAiAnswer {
+#p1CorpusAiAnswer,
+#ivCorpusAi {
   color: #111827;
   font-size: 15px;
   line-height: 1.52;
@@ -9795,7 +9796,8 @@ button.corpus-dictate-button.is-recording svg {
   word-break: normal;
 }
 
-#p1CorpusAiAnswer strong {
+#p1CorpusAiAnswer strong,
+#ivCorpusAi strong {
   display: inline;
   color: var(--accent-dark);
   font: inherit;
@@ -9803,11 +9805,13 @@ button.corpus-dictate-button.is-recording svg {
   line-height: inherit;
 }
 
-#p1CorpusAiAnswer p {
+#p1CorpusAiAnswer p,
+#ivCorpusAi p {
   margin: 0;
 }
 
-#p1CorpusAiAnswer p + p {
+#p1CorpusAiAnswer p + p,
+#ivCorpusAi p + p {
   margin-top: 4px;
 }
 
@@ -22286,7 +22290,8 @@ body.theme-dark .writing-prompt-choice-body {
 
 body.theme-dark .writing-prompt-choice-body strong,
 body.theme-dark .writing-prompt-choice-head strong,
-body.theme-dark #p1CorpusAiAnswer {
+body.theme-dark #p1CorpusAiAnswer,
+body.theme-dark #ivCorpusAi {
   color: var(--ink);
 }
 
@@ -30025,7 +30030,8 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 /* P1/P2 corpus library header: compact study header and clearer assistant CTA. */
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head {
   min-height: 72px;
   padding: 12px 26px;
   align-items: center;
@@ -30033,14 +30039,16 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head h2,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head h2,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head h2 {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head h2,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head h2 {
   font-size: clamp(30px, 2.45vw, 42px);
   line-height: 1;
 }
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head p,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head p,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head p {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head p,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head p {
   margin: 2px 0 0;
   font-size: 13px;
   line-height: 1.25;
@@ -30048,20 +30056,23 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head .corpus-page-kicker,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head .corpus-page-kicker {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head .corpus-page-kicker,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head .corpus-page-kicker {
   font-size: 11px;
   line-height: 1;
 }
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .corpus-head-actions,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-head-actions,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-head-actions {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-head-actions,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .corpus-head-actions {
   align-self: center;
 }
 
 body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .corpus-agent-button,
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-agent-button,
-body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-agent-button {
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-agent-button,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .corpus-agent-button {
   background: linear-gradient(180deg, #f0a36c 0%, #c86e42 100%);
   border-color: rgba(255, 187, 126, 0.56);
   color: #1f1008;
@@ -30072,13 +30083,15 @@ body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.
 
 body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .corpus-agent-button svg,
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-agent-button svg,
-body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-agent-button svg {
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-agent-button svg,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .corpus-agent-button svg {
   stroke: #241108;
 }
 
 body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .corpus-agent-button:hover,
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-agent-button:hover,
-body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-agent-button:hover {
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-agent-button:hover,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .corpus-agent-button:hover {
   filter: brightness(1.06);
   transform: translateY(-1px);
 }
@@ -32572,7 +32585,8 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)),
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)),
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) {
   padding: calc(56px + var(--safe-top)) clamp(12px, 1.4vw, 18px) calc(14px + var(--safe-bottom));
   background:
     radial-gradient(circle at 12% 6%, rgba(47, 128, 109, 0.06), transparent 30%),
@@ -32581,13 +32595,15 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-shell,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-shell,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-shell {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-shell,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-shell {
   gap: 12px;
 }
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head {
   min-height: 66px;
   align-items: center;
   padding: 10px 18px;
@@ -32603,7 +32619,8 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head h2,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head h2,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head h2 {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head h2,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head h2 {
   font-size: clamp(24px, 2.15vw, 34px);
   line-height: 1;
   letter-spacing: 0;
@@ -32611,7 +32628,8 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head p,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head p,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head p {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head p,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head p {
   max-width: 760px;
   color: color-mix(in srgb, var(--muted) 82%, #111827);
   font-size: clamp(14px, 1.08vw, 18px);
@@ -32620,7 +32638,8 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head .corpus-page-kicker,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head .corpus-page-kicker {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head .corpus-page-kicker,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head .corpus-page-kicker {
   color: #4b74df;
   font-size: 10px;
   font-weight: 900;
@@ -32629,14 +32648,16 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .corpus-head-actions,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-head-actions,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-head-actions {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-head-actions,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .corpus-head-actions {
   min-width: min(560px, 52%);
   gap: 8px;
 }
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .corpus-agent-button,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-agent-button,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-agent-button {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-agent-button,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .corpus-agent-button {
   height: 40px;
   min-height: 40px;
   padding: 0 15px;
@@ -32649,7 +32670,8 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .corpus-head-actions > span,
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-head-actions > span,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-head-actions > span {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-head-actions > span,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .corpus-head-actions > span {
   min-height: 40px;
   border-color: rgba(75, 116, 223, 0.22);
   background: rgba(75, 116, 223, 0.08);
@@ -32657,7 +32679,8 @@ body.theme-dark .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) .corp
 
 body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)),
-body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) {
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)),
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) {
   background:
     radial-gradient(circle at 14% 10%, rgba(85, 146, 129, 0.12), transparent 34%),
     linear-gradient(180deg, #111827, #0d131d);
@@ -32665,7 +32688,8 @@ body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.
 
 body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)) .p1-corpus-head,
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head,
-body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head {
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .p1-corpus-head,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head {
   background:
     linear-gradient(90deg, rgba(226, 232, 240, 0.045) 1px, transparent 1px),
     linear-gradient(180deg, rgba(226, 232, 240, 0.035) 1px, transparent 1px),
@@ -35864,7 +35888,8 @@ body.theme-dark .p2-material-entry-button .p2-material-index {
 .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .corpus-head-actions > span#p2CorpusStats,
 .corpus-head-actions > span#p1CorpusStats,
 .corpus-head-actions > span#p2CorpusStats,
-.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-head-actions > span#p1CorpusStats {
+.workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) .corpus-head-actions > span#p1CorpusStats,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .corpus-head-actions > span#p2CorpusStats {
   /* Fixed footprint so the chip never resizes with the variable-length stat
      string (loading -> season + count) and never drags the 题库助手 button. */
   flex: 0 0 auto !important;
@@ -38038,7 +38063,10 @@ body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)),
 body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)),
 body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)),
-body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) {
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)),
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)),
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)),
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) {
   background:
     radial-gradient(circle at 12% 8%, rgba(143, 199, 173, 0.08), transparent 34%),
     linear-gradient(180deg, #0f1215 0%, #090b0e 100%) !important;
@@ -38252,7 +38280,10 @@ body.theme-dark .workspace.corpus-workspace:has(#p1CorpusPanel:not(.hidden)),
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)),
 body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)),
 body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)),
-body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)) {
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewCorpus:not(.hidden)),
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)),
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)),
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) {
   background:
     radial-gradient(circle at 12% 8%, rgba(143, 199, 173, 0.08), transparent 34%),
     linear-gradient(180deg, #101316 0%, #080a0d 100%) !important;
@@ -38272,7 +38303,10 @@ body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#intervie
 
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker {
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head .corpus-page-kicker,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-corpus-head .corpus-page-kicker {
   background: transparent !important;
   border-color: transparent !important;
   color: color-mix(in srgb, var(--p2-corpus-accent) 72%, #ffffff) !important;
@@ -39263,42 +39297,78 @@ body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="person"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"],
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="person"],
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"] { --cat-color: #a78bfa; --cat-readable: #ddd6fe; }
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="person"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="person"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="person"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="person"] { --cat-color: #a78bfa; --cat-readable: #ddd6fe; }
 
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="place"],
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="place"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"],
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="place"],
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"] { --cat-color: #34d399; --cat-readable: #bbf7d0; }
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="place"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="place"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="place"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="place"] { --cat-color: #34d399; --cat-readable: #bbf7d0; }
 
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="event"],
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="event"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"],
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="event"],
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"] { --cat-color: #fbbf24; --cat-readable: #fde68a; }
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="event"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="event"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="event"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="event"] { --cat-color: #fbbf24; --cat-readable: #fde68a; }
 
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="object"],
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="object"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"],
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="object"],
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"] { --cat-color: #38bdf8; --cat-readable: #bae6fd; }
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="object"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="object"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="object"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="object"] { --cat-color: #38bdf8; --cat-readable: #bae6fd; }
 
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="special"],
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="special"],
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"],
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card[data-category="special"],
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"] { --cat-color: #f472b6; --cat-readable: #fbcfe8; }
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="special"],
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="special"],
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card[data-category="special"],
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card[data-p2-bank-card-category="special"] { --cat-color: #f472b6; --cat-readable: #fbcfe8; }
 
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card,
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card,
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card,
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card,
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card,
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card {
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--cat-color) 12%, #151b20), #101418) !important;
   border-left-color: var(--cat-color) !important;
@@ -39312,7 +39382,13 @@ body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card:hover,
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card:hover,
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card:hover,
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card:hover {
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card:hover,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card:hover,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card:hover,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card:hover,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card:hover,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card:hover,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card:hover {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--cat-color) 16%, #171f23), #111719) !important;
   border-color: color-mix(in srgb, var(--cat-color) 42%, rgba(214, 222, 228, 0.18)) !important;
@@ -39327,7 +39403,16 @@ body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card header::before,
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card-kicker,
 body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card-state,
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card header::before {
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-category-entry-card header::before,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card-kicker,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card-state,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card header::before,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card-kicker,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card-state,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card header::before,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card-kicker,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card-state,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-category-entry-card header::before {
   background: color-mix(in srgb, var(--cat-color) 18%, transparent) !important;
   border-color: color-mix(in srgb, var(--cat-color) 36%, transparent) !important;
   color: var(--cat-readable, #d7efe3) !important;
@@ -39335,13 +39420,15 @@ body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(
 
 /* P2 bank body status: only the "正文待填" pill is neutral/dim. The card and
    category label keep their original category colour. */
-.workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready) {
+.workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready),
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready) {
   background: rgba(148, 163, 184, 0.12) !important;
   border-color: rgba(148, 163, 184, 0.36) !important;
   color: #64748b !important;
 }
 
-.workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready {
+.workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready,
+.workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready {
   background: color-mix(in srgb, var(--cat-color, #2563eb) 14%, transparent) !important;
   border-color: color-mix(in srgb, var(--cat-color, #2563eb) 42%, transparent) !important;
   color: var(--cat-color, #2563eb) !important;
@@ -39349,7 +39436,10 @@ body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(
 
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready),
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready),
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready) {
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready),
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready),
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready),
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state:not(.is-ready) {
   background: rgba(148, 163, 184, 0.10) !important;
   border-color: rgba(148, 163, 184, 0.22) !important;
   color: #8996a4 !important;
@@ -39357,7 +39447,10 @@ body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(
 
 body.theme-dark .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready,
 body.theme-dark.font-academic .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready,
-body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready {
+body.theme-dark.font-popular .workspace.corpus-workspace:has(#p2CorpusPanel:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready,
+body.theme-dark .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready,
+body.theme-dark.font-academic .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready,
+body.theme-dark.font-popular .workspace.interview-corpus-workspace:has(#interviewResume:not(.hidden)) .p2-seasonal-card .p2-seasonal-card-state.is-ready {
   background: color-mix(in srgb, var(--cat-color, #34d399) 18%, transparent) !important;
   border-color: color-mix(in srgb, var(--cat-color, #34d399) 42%, transparent) !important;
   color: var(--cat-readable, #d7efe3) !important;
@@ -39570,14 +39663,20 @@ body.theme-dark.font-popular .p1-corpus-ai-head > strong {
 }
 
 body.theme-dark.font-academic #p1CorpusAiAnswer,
-body.theme-dark.font-popular #p1CorpusAiAnswer {
+body.theme-dark.font-popular #p1CorpusAiAnswer,
+body.theme-dark.font-academic #ivCorpusAi,
+body.theme-dark.font-popular #ivCorpusAi {
   color: color-mix(in srgb, var(--ink) 82%, #ffffff 18%) !important;
 }
 
 body.theme-dark.font-academic #p1CorpusAiAnswer strong,
 body.theme-dark.font-academic #p1CorpusAiAnswer b,
 body.theme-dark.font-popular #p1CorpusAiAnswer strong,
-body.theme-dark.font-popular #p1CorpusAiAnswer b {
+body.theme-dark.font-popular #p1CorpusAiAnswer b,
+body.theme-dark.font-academic #ivCorpusAi strong,
+body.theme-dark.font-academic #ivCorpusAi b,
+body.theme-dark.font-popular #ivCorpusAi strong,
+body.theme-dark.font-popular #ivCorpusAi b {
   color: color-mix(in srgb, var(--ink) 74%, #ffffff 26%) !important;
   font-weight: 760;
 }
@@ -46440,26 +46539,6 @@ body:not(#_) #interviewPanel .iv-link {
 body:not(#_) #interviewPanel .iv-link:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 4px; }
 body:not(#_) #interviewPanel :is(button, input, textarea, label):focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 3px; }
 
-body:not(#_) #interviewPanel .iv-chip {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 13px;
-  border: 1px solid var(--iv-rule);
-  border-radius: 999px;
-  background: var(--iv-card);
-  box-shadow: none;
-  color: color-mix(in srgb, var(--ink) 85%, transparent);
-  font-size: 13.5px;
-  font-weight: 400;
-  cursor: pointer;
-  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
-}
-
-body:not(#_) #interviewPanel .iv-chip:hover:not(:disabled) { border-color: var(--iv-link); color: var(--iv-link); }
-body:not(#_) #interviewPanel .iv-chip.is-on { border-color: var(--ink); background: var(--ink); color: var(--panel); }
-#interviewPanel .iv-chip sup { top: 0; margin-left: 5px; color: inherit; opacity: 0.55; font-family: var(--ed-mono); font-size: 11px; }
-
 #interviewPanel .iv-voice-note { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
 #interviewPanel .iv-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ed-gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ed-gold) 20%, transparent); }
 
@@ -46486,25 +46565,6 @@ body:not(#_) #interviewPanel .iv-chip.is-on { border-color: var(--ink); backgrou
 #interviewPanel .iv-title-main::after { content: "."; font-style: normal; color: var(--accent); -webkit-text-fill-color: var(--accent); }
 
 #interviewPanel .iv-empty { padding: 22px; color: var(--muted); font-size: 14px; line-height: 1.7; }
-
-body:not(#_) #interviewPanel .iv-icon-btn {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  margin-top: 22px;
-  padding: 0;
-  border: 1px solid var(--iv-rule);
-  border-radius: 10px;
-  background: transparent;
-  box-shadow: none;
-  color: var(--muted);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-body:not(#_) #interviewPanel .iv-icon-btn:hover:not(:disabled) { border-color: var(--danger, #d9534f); color: var(--danger, #d9534f); }
 
 #interviewPanel .iv-empty-card { display: grid; justify-items: start; gap: 18px; padding: 32px; border: 1px dashed color-mix(in srgb, var(--ink) 20%, transparent); border-radius: 18px; color: var(--muted); }
 
@@ -46711,55 +46771,10 @@ body:not(#_) :is(.quick-settings-seg button, .quick-settings-select, .quick-sett
 #interviewPanel .iv-slide-art--3 span:nth-child(2) { left: 44%; width: 48%; height: 14%; }
 #interviewPanel .iv-slide-art--3 span:nth-child(3) { left: 44%; top: 34%; width: 48%; height: 42%; }
 
-
 /* ---------- Corpus library: grouped cards like "我的 P1 语料库" ---------- */
 #interviewPanel .iv-pane--corpus { display: block; }
 
-#interviewPanel .iv-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
-
-#interviewPanel .iv-orphan { color: color-mix(in srgb, var(--ed-gold) 80%, var(--ink)); font-family: var(--ed-sans); font-size: 12px; }
-
-#interviewPanel .iv-muted { color: var(--muted); }
 body:not(#_) #interviewPanel .iv-danger { color: var(--danger, #d9534f); }
-
-#interviewCorpus .iv-topic-foot { padding: 4px 18px 14px; }
-#interviewCorpus .iv-topic-foot:empty { display: none; }
-#interviewCorpus .iv-tabs { margin: 14px 0 16px; }
-#interviewCorpus .iv-orphan { display: block; margin-top: 2px; color: color-mix(in srgb, var(--ed-gold) 80%, var(--ink)); font-size: 12px; }
-
-/* Interview corpus editor: the P1 corpus dialog (5 grid rows), plus a backdrop and an editable question. */
-#interviewPanel .iv-corpus-dialog { position: fixed; inset: 0; z-index: 1300; display: grid; place-items: center; }
-#interviewPanel .iv-corpus-dialog .iv-dialog-backdrop { position: absolute; inset: 0; background: rgba(10, 14, 20, 0.38); }
-#interviewPanel .iv-corpus-dialog .p1-corpus-dialog-card { position: relative; width: min(1100px, calc(100vw - var(--sidebar-width) - 52px)); }
-#interviewPanel .iv-corpus-dialog .p1-corpus-dialog-head { align-items: flex-start; gap: 16px; }
-#interviewPanel .iv-corpus-dialog .p1-corpus-dialog-head > div:first-child { flex: 1; min-width: 0; }
-#interviewPanel .iv-dialog-actions { display: flex; flex: none; align-items: center; gap: 8px; }
-body:not(#_) #interviewPanel .iv-dialog-actions .iv-icon-btn { margin: 0; }
-
-body:not(#_) #interviewPanel .iv-question-input {
-  width: 100%;
-  min-height: 0;
-  margin: 2px 0 0;
-  padding: 2px 0;
-  border: 0;
-  border-bottom: 1px dashed var(--line);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--ink);
-  font-family: var(--ed-serif);
-  font-size: 22px;
-  line-height: 1.35;
-  resize: none;
-  field-sizing: content;
-}
-
-body:not(#_) #interviewPanel .iv-question-input:focus { outline: none; border-bottom-color: var(--accent); }
-#interviewPanel .iv-corpus-dialog .p1-corpus-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-#interviewPanel .iv-corpus-dialog .iv-ai-tools { display: flex; gap: 8px; }
-#interviewPanel .iv-corpus-dialog .iv-ai-tools svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-#interviewPanel .iv-corpus-dialog .iv-draft-text { max-height: 220px; overflow-y: auto; white-space: pre-wrap; line-height: 1.75; }
-#interviewPanel .iv-corpus-dialog .p1-corpus-dialog-actions { display: flex; justify-content: flex-end; min-height: 28px; }
 
 /* ---------- Mock-interview reports on the IELTS report page ---------- */
 /* One filter menu, each mode shows its own options. */
@@ -46858,3 +46873,54 @@ body:not(#_) #ivLaunch .p3-source-option.iv-launch-action::after { content: none
 #followUp .iv-planned { margin-top: 12px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: var(--ui-r-sm, 12px); text-align: left; }
 #followUp .iv-planned .section-label { margin-bottom: 4px; }
 #followUp .iv-planned ol { margin: 0; padding-left: 20px; color: var(--ink); font-size: 14px; line-height: 1.6; }
+
+/* ---------- Interview corpus editors (interview-corpus.js): P1 corpus dialog + P2 card's P3 dialog ---------- */
+.iv-corpus-editor .iv-corpus-question { flex: 1 1 auto; min-width: 0; font-size: 18px; }
+.iv-corpus-editor .iv-corpus-question.hidden { display: none; }
+.iv-corpus-editor .iv-corpus-ai-tools { display: inline-flex; gap: 4px; }
+.iv-corpus-editor .p1-corpus-ai-box.hidden { display: none; }
+.iv-corpus-editor .p1-corpus-dialog-actions,
+.iv-follow-dialog .p1-corpus-dialog-actions { display: flex; align-items: center; gap: 12px; }
+.iv-corpus-editor #ivCorpusDialogStatus,
+.iv-follow-dialog #ivFollowDialogStatus { color: var(--muted); font-size: 13px; }
+.iv-corpus-editor .iv-danger.hidden,
+.iv-follow-dialog .iv-danger.hidden { display: none; }
+body:not(#_) :is(.iv-corpus-editor, .iv-follow-dialog) .iv-danger { color: var(--danger, #d9534f); }
+.iv-follow-dialog .iv-follow-question-row { display: flex; align-items: center; gap: 8px; }
+.iv-follow-dialog .iv-follow-question-row input { flex: 1 1 auto; min-height: 40px; }
+.iv-follow-dialog .iv-follow-new strong { font-family: var(--ed-mono); }
+.iv-follow-dialog .iv-follow-new { border-style: dashed !important; }
+#interviewResume .iv-resume-card.has-single-action footer > * { grid-column: 1 / -1; }
+.iv-corpus-editor .iv-corpus-topic { flex: 0 0 220px; font-size: 15px; }
+.iv-corpus-editor .iv-corpus-topic.hidden { display: none; }
+#interviewCorpus .iv-tag-filter { margin: 4px 0 2px; }
+#interviewCorpus .iv-topic-tag { display: block; margin-bottom: 2px; color: var(--muted); font-family: var(--ed-mono, ui-monospace); font-size: 11px; letter-spacing: 0.06em; }
+#interviewCorpus .iv-new-topic-card {
+  display: grid; place-content: center; justify-items: center; gap: 6px; min-height: 180px; border-style: dashed !important;
+  background: transparent !important; color: var(--muted); cursor: pointer; text-align: center;
+}
+#interviewCorpus .iv-new-topic-card > span { font-size: 26px; line-height: 1; color: var(--accent); }
+#interviewCorpus .iv-new-topic-card strong { color: var(--ink); font-size: 17px; }
+#interviewCorpus .iv-new-topic-card small { font-size: 12.5px; }
+#interviewCorpus .iv-new-topic-card:hover { border-color: var(--accent) !important; }
+.iv-pick-dialog .iv-pick-tag.is-topic { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--muted); }
+
+/* ---------- Resume / JD draft review (定制 → review → add to corpus) ----------
+   The writing page styles every button in #interviewCustom as a pill; these rows reset that explicitly. */
+#interviewCustom .iv-draft-card .writing-checkin-top { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+#interviewCustom .iv-draft-list { overflow-y: auto; max-height: min(52vh, 520px); margin: 0; border-top: 1px solid var(--line); }
+body:not(#_):not(#__) #interviewCustom .iv-draft-row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: center; border-bottom: 1px solid var(--line); }
+body:not(#_):not(#__) #interviewCustom .iv-draft-row > button {
+  min-height: 0; margin: 0; border: 0; border-radius: 8px; box-shadow: none; background: transparent; color: var(--ink);
+  font: inherit; letter-spacing: normal; text-transform: none; cursor: pointer;
+}
+body:not(#_):not(#__) #interviewCustom .iv-draft-row > button:first-child {
+  display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: start; width: 100%; padding: 10px 6px; text-align: left;
+}
+body:not(#_):not(#__) #interviewCustom .iv-draft-row.is-nested > button:first-child { padding-left: 30px; grid-template-columns: 46px minmax(0, 1fr); }
+body:not(#_):not(#__) #interviewCustom .iv-draft-row > button:first-child:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+body:not(#_):not(#__) #interviewCustom .iv-draft-row strong { color: var(--accent); font-size: 12px; font-weight: 700; line-height: 1.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body:not(#_):not(#__) #interviewCustom .iv-draft-row span { display: grid; gap: 2px; min-width: 0; font-size: 14px; line-height: 1.4; }
+body:not(#_):not(#__) #interviewCustom .iv-draft-row small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body:not(#_):not(#__) #interviewCustom .iv-draft-remove { width: 30px; height: 30px; padding: 0; color: var(--muted); font-size: 18px; line-height: 1; }
+body:not(#_):not(#__) #interviewCustom .iv-draft-remove:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }

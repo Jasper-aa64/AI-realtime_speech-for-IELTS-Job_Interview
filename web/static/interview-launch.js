@@ -209,7 +209,7 @@
     };
 
     function openDialog(kind, extra = {}) {
-      const spec = DIALOGS[kind];
+      const spec = kind === "generic" ? extra.spec : DIALOGS[kind];
       const root = byId("ivLaunchDialog");
       if (!spec || !root) return;
       dialog = { kind, ...extra };
@@ -262,6 +262,11 @@
         }
         return;
       }
+      if (kind === "generic") {
+        if (dialog.onSave?.(value) === false) return;
+        closeDialog();
+        return;
+      }
       if (kind === "jd") launch.jd = value;
       else if (kind === "project-text") launch.projectText = value;
       else {
@@ -297,7 +302,9 @@
         `<button type="button" class="iv-pick-row${selected ? " is-selected" : ""}" ${attrs} aria-pressed="${selected}"><strong>${esc(lead)}</strong><span>${esc(textValue)}</span>${extra}<i aria-hidden="true"></i></button>`;
       byId("ivPickList").innerHTML = [
         ...customs.map((question, index) => row(`data-iv-pick="custom" data-index="${index}"`, "自定", question, true, '<em class="iv-pick-tag">本次</em>')),
-        ...group.rows.map((entry, index) => row(`data-iv-pick="entry" data-key="${esc(pickKey(entry))}"`, `Q${index + 1}`, entry.question, launch.picked.has(pickKey(entry)), entry.corpus_text ? '<em class="iv-pick-tag">有语料</em>' : "")),
+        // Rows follow the corpus cards: grouped by topic, each tagged with it.
+        ...[...group.rows].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "zh")).map((entry, index) => row(`data-iv-pick="entry" data-key="${esc(pickKey(entry))}"`, `Q${index + 1}`, entry.question, launch.picked.has(pickKey(entry)),
+          `${entry.title ? `<em class="iv-pick-tag is-topic">${esc(entry.title)}</em>` : ""}${entry.corpus_text ? '<em class="iv-pick-tag">有语料</em>' : ""}`)),
       ].join("") || '<p class="iv-pick-empty">这个分类还没有题目，自己出一道吧。</p>';
       const allPicked = group.rows.length > 0 && group.rows.every((entry) => launch.picked.has(pickKey(entry)));
       byId("ivPickAll").textContent = allPicked ? "清空本类" : "全选本类";
@@ -366,11 +373,12 @@
       [["ivLaunchDialog", closeDialog], ["ivPickDialog", closePicker]].forEach(([id, close]) => {
         byId(id)?.addEventListener("pointerdown", (event) => { if (event.target === byId(id)) { event.preventDefault?.(); close(); } });
       });
+      // Capture phase: IELTS keydown handlers stop Escape before it bubbles to the document.
       document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
-        if (dialog) closeDialog();
-        else if (pickGroup) closePicker();
-      });
+        if (dialog) { event.stopPropagation(); closeDialog(); }
+        else if (pickGroup) { event.stopPropagation(); closePicker(); }
+      }, true);
     }
 
     // ---- The attempt-start payload for each view.
@@ -405,7 +413,27 @@
       return {};
     }
 
-    return { render, hide, options, reset };
+    // A corpus card's 直接练习: start that card's practice with the card already chosen.
+    function preset(view, { projectIds = [], entryIds = [] } = {}) {
+      load();
+      if (view === "iv_project" && projectIds.length) {
+        launch.projectSource = "corpus";
+        launch.projectIds = new Set(projectIds);
+      }
+      if (view === "iv_knowledge" && entryIds.length) {
+        launch.picked = new Set(entryIds.map((id) => `e:${id}`));
+        launch.customs = {};
+        launch.count = COUNTS.find((value) => value >= entryIds.length) || COUNTS[COUNTS.length - 1];
+      }
+      save();
+    }
+
+    // The same Markdown dialog for other screens (the Resume / JD draft review): edits one text, hands it back.
+    function editMarkdown({ meta = "", title = "", label = "", value = "", save = "保存修改", note = "", onSave }) {
+      openDialog("generic", { spec: { meta, title, label, save, note, value: () => value }, onSave });
+    }
+
+    return { render, hide, options, reset, preset, editMarkdown };
   }
 
   window.IELTSInterviewLaunch = { create, plainQuestion };

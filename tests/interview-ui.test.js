@@ -56,7 +56,8 @@ function fixture({ desktop = true, storedMode = "ielts", decisionFails = true, s
     if (url === "/api/interview/corpus/" && !body) return { entries: clone(corpus) };
     if (url === "/api/interview/corpus/") return { entry: { ...clone(corpus[1]), id: "icp_new", corpus_text: body.corpus_text } };
     if (url.startsWith("/api/interview/corpus/") && options.method === "PATCH") return { entry: { ...clone(corpus[0]), corpus_text: body.corpus_text } };
-    if (url === "/api/interview/profile/jd/") return { profile: { resume: {}, jd: { summary: { role: "C++ 开发", requirements: [] }, updated_at: "2026-10-05T00:00:00Z" } }, entries: clone(corpus) };
+    if (url === "/api/interview/profile/jd/") return { job_description: body.job_description, draft: { summary: { role: "C++ 开发", requirements: [] }, questions: [{ question: "讲讲 epoll。", draft: "d" }], reverse_questions: [{ question: "团队怎么衡量延迟？", draft: "d" }] } };
+    if (url === "/api/interview/profile/jd/commit/") return { profile: { resume: {}, jd: { summary: { role: "C++ 开发", requirements: [] }, updated_at: "2026-10-05T00:00:00Z" } }, entries: clone(corpus) };
     if (url === "/api/interview/sessions/") { saved.session.intensity = body.intensity; return details(); }
     if (url.endsWith("/answer/")) {
       const turn = saved.turns.find((item) => url.includes(`/${item.id}/`));
@@ -105,29 +106,29 @@ test("practice runs on the IELTS practice panel: each part opens its iv_* view",
   assert.ok(!env.requests.some((request) => request.url === "/api/interview/sessions/" && request.body), "no hand-written session flow");
 });
 
-test("corpus: curated questions save by key, existing entries patch, JD side generates", async () => {
+test("面试语料库 is the IELTS corpus hub; 定制 generates a draft, then commits the edited draft", async () => {
   const env = fixture(); await env.app.initialize(); env.app.show(); await settle();
   env.app.setPane("corpus"); await settle();
-  assert.match(env.html(), /撮合网关/);
-  await env.action("corpus-tab", { tab: "knowledge" });
-  assert.match(env.html(), /解释 RAII/);
-  await env.action("edit-entry", { sourceKey: "curated:cpp-1" });
-  env.input("editor-text", "我的 RAII 答法");
-  await env.action("save-entry");
-  const created = env.requests.find((request) => request.url === "/api/interview/corpus/" && request.body);
-  assert.deepEqual(created.body, { kind: "knowledge", source_key: "curated:cpp-1", corpus_text: "我的 RAII 答法" });
-  await env.action("corpus-tab", { tab: "project" });
-  await env.action("edit-entry", { entryId: "icp_gw" });
-  await env.action("adopt-draft");
-  await env.action("save-entry");
-  const patched = env.requests.find((request) => request.method === "PATCH");
-  assert.equal(patched.body.corpus_text, "AI 讲述稿");
+  assert.equal(env.state.view, "corpus", "the hub is the IELTS 语料库 view");
+  env.app.setPane("corpus", { tab: "resume" }); await settle();
+  assert.equal(env.state.view, "interview");
+  env.app.openCorpusFor("iv_reverse"); await settle();
+  assert.equal(env.state.view, "interview");
   env.app.setPane("custom"); await settle();
   await env.action("custom-side", { side: "jd" });
   env.input("jdText", "招聘 C++ 开发");
   await env.action("import-jd");
-  assert.equal(env.requests.find((request) => request.url === "/api/interview/profile/jd/").body.job_description, "招聘 C++ 开发");
-  assert.match(env.html(), /C\+\+ 开发/);
+  const preview = env.requests.find((request) => request.url === "/api/interview/profile/jd/");
+  assert.equal(preview.body.preview, true);
+  assert.match(env.html(), /先检查一下草稿/);
+  assert.match(env.html(), /讲讲 epoll/);
+  await env.action("draft-remove", { path: "questions.0" });
+  assert.doesNotMatch(env.html(), /讲讲 epoll/);
+  await env.action("draft-commit");
+  const commit = env.requests.find((request) => request.url === "/api/interview/profile/jd/commit/");
+  assert.deepEqual(commit.body.draft.questions, []);
+  assert.equal(commit.body.job_description, "招聘 C++ 开发");
+  assert.doesNotMatch(env.html(), /先检查一下草稿/);
 });
 
 test("account reset cancels in-flight requests and discards private data", async () => {

@@ -5,20 +5,12 @@
   const ARROW = '<span class="iv-arrow" aria-hidden="true">→</span>';
   // The interview counterpart of Mock + P1/P2/P3.
   const PARTS = {
-    full: { zh: "完整面试", en: "Full interview", hint: ["自我介绍 → 项目 → 知识点 → 奖项 → 反问", "Intro → projects → knowledge → awards → your questions"], corpus: "project" },
-    project: { zh: "项目深挖", en: "Projects", hint: ["介绍项目，再接受追问。", "Present a project, then take follow-ups."], corpus: "project" },
+    full: { zh: "完整面试", en: "Full interview", hint: ["自我介绍 → 项目 → 知识点 → 奖项 → 反问", "Intro → projects → knowledge → awards → your questions"], corpus: "resume" },
+    project: { zh: "项目深挖", en: "Projects", hint: ["介绍项目，再接受追问。", "Present a project, then take follow-ups."], corpus: "resume" },
     knowledge: { zh: "知识点", en: "Knowledge", hint: ["技术栈与通用题库连续问答。", "Rapid questions from your stack and the bank."], corpus: "knowledge" },
     reverse: { zh: "反问环节", en: "Your questions", hint: ["你来提问，面试官回答并点评。", "You ask; the interviewer answers and reviews."], corpus: "jd" },
   };
   const STAGES = { self_intro: ["自我介绍", "Intro"], project: ["项目", "Projects"], knowledge: ["知识点", "Knowledge"], award: ["奖项", "Awards"], reverse: ["反问", "Questions"] };
-  const CORPUS_TABS = [
-    { id: "project", zh: "项目", en: "Projects", kinds: ["project", "project_followup"] },
-    { id: "knowledge", zh: "知识点", en: "Knowledge", kinds: ["knowledge"] },
-    { id: "story", zh: "自我介绍与奖项", en: "Intro & awards", kinds: ["self_intro", "award"] },
-    { id: "jd", zh: "JD 与反问", en: "JD & questions", kinds: ["jd_question", "reverse_question"] },
-  ];
-  const KIND_LABELS = { self_intro: ["自我介绍", "Self intro"], project: ["项目讲述", "Project story"], project_followup: ["项目追问", "Project follow-up"], knowledge: ["知识点", "Knowledge"], award: ["奖项", "Award"], jd_question: ["岗位题", "Role question"], reverse_question: ["反问", "Question to ask"] };
-  const SOURCE_LABELS = { curated: ["精选题库", "Curated"], resume: ["简历", "Resume"], jd: ["JD", "JD"], custom: ["自定义", "Custom"], practice: ["练习", "Practice"] };
 
   function createInterview({ state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin, escapeHtml, currentAiSourcePreference, markdown, renderMarkdown }) {
     let epoch = 0;
@@ -33,6 +25,15 @@
       upload: (path, form) => upload(path, form),
       source: () => data,
       onProfile: (payload) => { data.profile = payload.profile; data.corpus = payload.entries || data.corpus; window.IELTSInterviewHome?.refresh(); },
+    }) || null;
+    // The three corpus screens and their editors (interview-corpus.js).
+    const corpusScreens = window.IELTSInterviewCorpus?.create({
+      state, escapeHtml, markdown, currentAiSourcePreference, renderMarkdown: renderMarkdown || ((value) => escapeHtml(String(value || ""))),
+      request: (path, body, options) => api(path, body, options),
+      source: () => data,
+      setCorpus: (list) => { data.corpus = list; window.IELTSInterviewHome?.refresh(); },
+      rerender: () => { if (data.pane === "corpus" && state.view === "interview") render(); },
+      startPractice: (part, preset) => { launch?.preset(`iv_${part}`, preset); setPane("practice", { part }); },
     }) || null;
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
     const pick = (pair) => copy(pair[0], pair[1]);
@@ -55,8 +56,8 @@
       return {
         pane: "home", part: "full", busy: false, error: "", notice: "",
         questions: [], categories: [], sessions: [], sessionsLoaded: false,
-        corpus: null, corpusTab: "project", profile: null, customSide: "resume", resumeText: "", file: null, jdText: "",
-        editor: null,
+        corpus: null, corpusTab: "knowledge", profile: null, customSide: "resume", resumeText: "", file: null, jdText: "",
+        drafts: { resume: null, jd: null },
       };
     }
 
@@ -66,6 +67,7 @@
       requestController = null;
       data = freshState();
       launch?.reset();
+      corpusScreens?.reset();
       if (byId("interviewPanel")) render();
       window.IELTSInterviewHome?.refresh();
       ensureOverview();
@@ -170,7 +172,6 @@
       });
       document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
-        if (data.editor) { data.editor = null; render(); return; }
         menu(false, !!switcher?.isOpen());
       });
       byId("interviewNav")?.addEventListener("click", (event) => {
@@ -183,13 +184,19 @@
       // Links on the shared home panel carry data-iv-target ("pane" or "pane:part") in interview mode. Capture
       // phase, so the IELTS router never sees them and the href never navigates.
       document.addEventListener("click", (event) => {
-        const target = event.target.closest?.("#homePanel [data-iv-target]");
+        const target = event.target.closest?.("#homePanel [data-iv-target], #corpusPanel [data-iv-target]");
         if (!target || state.productMode !== "interview") return;
         event.preventDefault();
         event.stopPropagation();
         const [pane, part] = target.dataset.ivTarget.split(":");
-        if (pane === "corpus" && part) data.corpusTab = part;
-        setPane(pane, part && pane === "practice" ? { part } : {});
+        setPane(pane, part ? (pane === "practice" ? { part } : { tab: part }) : {});
+      }, true);
+      // The IELTS back button above a corpus screen returns to the interview hub here.
+      document.addEventListener("click", (event) => {
+        if (!event.target.closest?.("#topbarBackCorpusBtn") || state.productMode !== "interview" || state.view !== "interview" || data.pane !== "corpus") return;
+        event.preventDefault();
+        event.stopPropagation();
+        setPane("corpus");
       }, true);
       window.IELTSInterviewHome?.setSource(homeNumbers);
       byId("interviewPanel")?.addEventListener("input", captureInput);
@@ -285,8 +292,17 @@
       if (state.account.authenticated && !data.corpus && !data.busy) loadOverview();
     }
 
-    function setPane(pane, { part } = {}) {
+    function setPane(pane, { part, tab } = {}) {
       if (!PANES.has(pane) || data.busy) return;
+      if (pane === "corpus" && !tab) {
+        // 面试语料库 is the IELTS 语料库 hub with interview copy (interview-home.js); its cards open the screens.
+        data.pane = "library";
+        switchView("corpus", { force: state.view !== "corpus" });
+        syncNav();
+        ensureOverview();
+        return;
+      }
+      if (tab) data.corpusTab = ["knowledge", "resume", "jd"].includes(tab) ? tab : "knowledge";
       if (pane === "home") {
         // The interview home is the IELTS home panel itself, with interview copy swapped in.
         data.pane = "home";
@@ -299,7 +315,6 @@
       if (part && PARTS[part]) data.part = part;
       data.pane = pane;
       data.error = "";
-      data.editor = null;
       if (pane === "reports" || pane === "report") {
         // Interview reports live on the IELTS report page (history view, interview attempts only).
         data.pane = "reports";
@@ -318,117 +333,51 @@
       if (!data.corpus && state.account.authenticated) loadOverview();
     }
 
-    // ---- Corpus helpers
-    function corpusEntries(kinds) {
-      return (data.corpus || []).filter((entry) => kinds.includes(entry.kind));
+    // ---- Drafts: 定制 generates first; the candidate reviews / edits each item, then adds the lot to the corpus.
+    const draftValue = (root, path) => path.split(".").reduce((node, key) => node?.[key], root);
+    function setDraftValue(root, path, value) {
+      const keys = path.split(".");
+      const last = keys.pop();
+      const parent = keys.reduce((node, key) => node?.[key], root);
+      if (parent) parent[last] = value;
+    }
+    function removeDraftItem(root, path) {
+      const keys = path.split(".");
+      const index = Number(keys.pop());
+      const list = keys.reduce((node, key) => node?.[key], root);
+      if (Array.isArray(list)) list.splice(index, 1);
     }
 
-    function corpusStats() {
-      const entries = data.corpus || [];
-      return { total: entries.length, ready: entries.filter((entry) => entry.corpus_text).length };
-    }
-
-    function entryFor(id) {
-      return (data.corpus || []).find((entry) => entry.id === id) || null;
-    }
-
-
-    // ---- Corpus library: grouped cards like "我的 P1 语料库".
-    function corpusGroups(tabId) {
-      const tab = CORPUS_TABS.find((item) => item.id === tabId) || CORPUS_TABS[0];
-      const entries = corpusEntries(tab.kinds);
-      if (tabId === "project") {
-        return entries.filter((entry) => entry.kind === "project").map((project) => ({
-          title: project.title || project.question, orphaned: project.orphaned, project,
-          rows: [project, ...entries.filter((entry) => entry.parent_id === project.id)],
-        }));
+    function draftRows(side) {
+      const draft = data.drafts[side]?.draft;
+      if (!draft) return [];
+      if (side === "jd") {
+        return [
+          ...(draft.questions || []).map((item, i) => ({ path: `questions.${i}.draft`, remove: `questions.${i}`, kind: "岗位题", title: item.question, body: item.draft })),
+          ...(draft.reverse_questions || []).map((item, i) => ({ path: `reverse_questions.${i}.draft`, remove: `reverse_questions.${i}`, kind: "反问", title: item.question, body: item.draft })),
+        ];
       }
-      if (tabId === "story") {
-        return [{ title: copy("自我介绍", "Self intro"), rows: entries.filter((e) => e.kind === "self_intro"), kind: "self_intro" },
-                { title: copy("奖项与竞赛", "Awards"), rows: entries.filter((e) => e.kind === "award"), kind: "award" }];
-      }
-      if (tabId === "jd") {
-        return [{ title: copy("岗位题", "Role questions"), rows: entries.filter((e) => e.kind === "jd_question"), kind: "jd_question" },
-                { title: copy("反问环节", "Questions to ask"), rows: entries.filter((e) => e.kind === "reverse_question"), kind: "reverse_question" }];
-      }
-      const groups = new Map();
-      entries.forEach((entry) => {
-        const key = entry.group || copy("自定义", "Custom");
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(entry);
+      const rows = [{ path: "self_intro.draft", kind: "自我介绍", title: "自我介绍", body: draft.self_intro?.draft || "" }];
+      (draft.projects || []).forEach((project, i) => {
+        rows.push({ path: `projects.${i}.draft`, remove: `projects.${i}`, kind: "项目", title: project.title, body: project.draft });
+        (project.followups || []).forEach((item, j) => rows.push({ path: `projects.${i}.followups.${j}.draft`, remove: `projects.${i}.followups.${j}`, kind: "追问", title: item.question, body: item.draft, nested: true }));
       });
-      return [...groups].map(([title, rows]) => ({ title, rows, kind: "knowledge", group: title }));
+      (draft.tech_stack || []).forEach((group, g) => (group.questions || []).forEach((item, q) =>
+        rows.push({ path: `tech_stack.${g}.questions.${q}.draft`, remove: `tech_stack.${g}.questions.${q}`, kind: group.group, title: item.question, body: item.draft })));
+      (draft.awards || []).forEach((award, i) => rows.push({ path: `awards.${i}.draft`, remove: `awards.${i}`, kind: "奖项", title: award.title, body: award.draft }));
+      return rows;
     }
 
-    function corpusPane() {
-      if (!data.corpus) return `<p class="iv-empty">${esc(copy("正在载入语料…", "Loading corpus…"))}</p>`;
-      const stats = corpusStats();
-      const tab = data.corpusTab;
-      const groups = corpusGroups(tab);
-      const question = (entry, index) => {
-        const ref = entry.id ? `data-entry-id="${esc(entry.id)}"` : `data-source-key="${esc(entry.source_key)}"`;
-        const lead = entry.kind === "project" ? copy("讲", "S") : entry.kind === "project_followup" ? copy("追", "F") : `Q${index + 1}`;
-        const textValue = entry.kind === "project" ? copy("项目讲述稿", "Project story") : entry.question;
-        return `<button type="button" class="${entry.corpus_text ? "has-corpus" : ""}" data-interview-action="edit-entry" ${ref}><strong>${esc(lead)}</strong><span>${esc(textValue)}</span></button>`;
-      };
-      const cards = groups.map((group) => {
-        const ready = group.rows.filter((row) => row.corpus_text).length;
-        const progress = group.rows.length ? Math.round((ready / group.rows.length) * 100) : 0;
-        const add = group.project ? button("new-entry", `＋ ${esc(copy("追问", "Follow-up"))}`, { cls: "iv-link", attrs: `data-kind="project_followup" data-parent="${esc(group.project.id)}"` })
-          : group.kind ? button("new-entry", `＋ ${esc(copy("添加", "Add"))}`, { cls: "iv-link", attrs: `data-kind="${esc(group.kind)}" data-group="${esc(group.group || "")}"` }) : "";
-        return `<article class="p1-topic-card is-complete-list" data-p1-progress="${progress}">
-            <header class="p1-topic-export-header"><div><h3>${esc(group.title)}</h3>${group.orphaned ? `<small class="iv-orphan">${esc(copy("简历中已移除", "Removed from resume"))}</small>` : ""}</div>
-              <div class="p1-topic-card-actions"><span class="p1-topic-count">${ready}/${group.rows.length}</span></div></header>
-            <div class="p1-topic-progress" data-progress="${progress}"><span style="width: ${progress}%"></span></div>
-            <div class="p1-topic-question-list">${group.rows.map(question).join("") || `<p class="iv-empty">${esc(copy("还没有内容。", "Nothing here yet."))}</p>`}</div>
-            <footer class="iv-topic-foot">${add}</footer>
-          </article>`;
-      }).join("");
-      const empty = tab === "project" && !groups.length
-        ? `<div class="iv-empty-card"><p>${esc(copy("上传简历后，每个项目会自动生成一份讲述稿和预判追问。", "Upload your resume to get a story and likely follow-ups for every project."))}</p>${solid("go-custom", copy("上传简历", "Upload resume"))}</div>`
-        : tab === "jd" && !groups.some((group) => group.rows.length)
-          ? `<div class="iv-empty-card"><p>${esc(copy("粘贴目标岗位的 JD，会生成岗位题和反问环节要问的问题。", "Paste a job description to get role questions and questions to ask."))}</p>${solid("go-custom", copy("添加 JD", "Add a JD"), { attrs: 'data-side="jd"' })}</div>` : "";
-      const newKind = tab === "jd" ? "reverse_question" : tab === "story" ? "self_intro" : tab === "project" ? "project" : "knowledge";
-      return `<section id="interviewCorpus" class="p1-corpus-panel" aria-label="${esc(copy("面试语料库", "Interview corpus"))}">
-          <div class="p1-corpus-shell">
-            <header class="p1-corpus-head">
-              <div class="p1-corpus-head-copy"><span class="corpus-page-kicker">Interview Library</span><h2>${esc(copy("面试语料库", "Interview corpus"))}</h2></div>
-              <div class="corpus-head-actions">
-                <button type="button" class="agent-assistant-trigger corpus-agent-button" data-interview-action="new-entry" data-kind="${newKind}"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg><span>${esc(copy("自定义题", "Custom question"))}</span></button>
-                <span class="corpus-page-stat">${esc(copy(`${stats.total} 条 · 已保存 ${stats.ready}`, `${stats.total} items · ${stats.ready} saved`))}</span>
-              </div>
-            </header>
-            <div class="iv-tabs" role="tablist">${CORPUS_TABS.map((item) => button("corpus-tab", `${esc(copy(item.zh, item.en))}<sup>${corpusEntries(item.kinds).length}</sup>`, { cls: `iv-chip${item.id === tab ? " is-on" : ""}`, attrs: `role="tab" aria-selected="${item.id === tab}" data-tab="${item.id}"` })).join("")}</div>
-            ${empty || `<div class="p1-corpus-topics">${cards}</div>`}
-          </div>
-        </section>`;
-    }
-
-    // Same shell as the IELTS P1 corpus dialog: header with save, "my answer", then the AI reference box.
-    function editorModal() {
-      const editor = data.editor;
-      if (!editor) return "";
-      const entry = editor.entry;
-      const editableQuestion = entry.source !== "curated";
-      return `<div class="p1-corpus-dialog iv-corpus-dialog" role="dialog" aria-modal="true" aria-label="${esc(copy("编辑语料", "Edit corpus entry"))}">
-        <div class="iv-dialog-backdrop" data-interview-action="close-editor"></div>
-        <div class="p1-corpus-dialog-card">
-          <header class="p1-corpus-dialog-head">
-            <div><span>${esc(pick(KIND_LABELS[entry.kind] || KIND_LABELS.knowledge))} · ${esc(pick(SOURCE_LABELS[entry.source] || SOURCE_LABELS.custom))}${entry.title ? ` · ${esc(entry.title)}` : ""}</span>
-              <div class="corpus-dialog-title-line">${editableQuestion ? `<textarea class="iv-question-input" rows="1" maxlength="1500" data-interview-field="editor-question" aria-label="${esc(copy("题目", "Question"))}" placeholder="${esc(copy("写下题目……", "Write the question…"))}">${esc(editor.question)}</textarea>` : `<h3>${esc(editor.question)}</h3>`}</div>
-              ${entry.summary ? `<p class="iv-note">${esc(entry.summary)}</p>` : ""}</div>
-            <div class="iv-dialog-actions">${button("close-editor", "×", { cls: "iv-icon-btn", attrs: `aria-label="${esc(copy("关闭", "Close"))}"` })}${button("save-entry", esc(copy("保存语料", "Save")), { cls: "iv-save-entry" })}</div>
-          </header>
-          <label class="p1-corpus-label" for="interviewCorpusText">${esc(copy("我的语料", "My answer"))}</label>
-          <textarea id="interviewCorpusText" class="p1-corpus-textarea" spellcheck="true" data-interview-field="editor-text" placeholder="${esc(copy("用你自己的话写，面试时照着这个思路讲。", "Write it in your own words — the way you'd say it."))}">${esc(editor.text)}</textarea>
-          <div class="p1-corpus-ai-box">
-            <div class="p1-corpus-ai-head"><strong>${esc(copy("AI 参考", "AI reference"))}</strong>
-              <span class="iv-ai-tools">${entry.ai_draft ? button("adopt-draft", '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg>', { attrs: `title="${esc(copy("采用到我的语料", "Use as my answer"))}" aria-label="${esc(copy("采用到我的语料", "Use as my answer"))}"` }) : ""}${entry.id ? button("draft-entry", '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-4M4 4v4h4M4 13a8 8 0 0 0 14.9 4M20 20v-4h-4"></path></svg>', { attrs: `title="${esc(entry.ai_draft ? copy("重新生成 AI 参考", "Regenerate") : copy("生成 AI 参考", "Generate"))}" aria-label="${esc(entry.ai_draft ? copy("重新生成 AI 参考", "Regenerate") : copy("生成 AI 参考", "Generate"))}"` }) : ""}</span></div>
-            <div class="iv-draft-text">${entry.ai_draft ? esc(entry.ai_draft) : `<span class="iv-muted">${esc(copy("还没有 AI 参考。", "No AI reference yet."))}</span>`}</div>
-          </div>
-          <div class="p1-corpus-dialog-actions">${entry.id && entry.source !== "curated" ? quiet("delete-entry", copy("删除这条语料", "Delete"), { cls: "iv-danger" }) : ""}</div>
-        </div>
-      </div>`;
+    function draftReview(side) {
+      const rows = draftRows(side);
+      const plain = (value) => String(value || "").replace(/[#*_`>~\-]+/g, " ").replace(/\s+/g, " ").trim();
+      return `<div class="iv-draft-list">${rows.map((row) => `
+          <div class="iv-draft-row${row.nested ? " is-nested" : ""}">
+            <button type="button" class="${row.body ? "has-corpus" : ""}" data-interview-action="draft-edit" data-path="${esc(row.path)}">
+              <strong>${esc(row.kind)}</strong><span>${esc(row.title)}<small>${esc(plain(row.body).slice(0, 60) || copy("（空）点开填写", "(empty)"))}</small></span>
+            </button>
+            ${row.remove ? `<button type="button" class="iv-draft-remove" data-interview-action="draft-remove" data-path="${esc(row.remove)}" aria-label="${esc(copy("不加入这一条", "Leave this out"))}">×</button>` : ""}
+          </div>`).join("")}</div>`;
     }
 
     // ---- Tailored: resume | JD switch.
@@ -449,9 +398,9 @@
         </div>`;
       const prompt = resume
         ? `<div class="writing-prompt-card"><div><span class="writing-pill">${esc(copy("简历", "Resume"))}</span><h2>${esc(copy("把简历拆成可练的语料", "Turn your resume into practice material"))}</h2></div>
-            <p>${esc(copy("拆成：自我介绍、每个项目的讲述稿与预判追问、技术栈知识点、奖项。重新拆分不会覆盖你已经改写的答法。", "Splits into intro, a story and likely follow-ups per project, stack questions and awards. Re-splitting never overwrites what you wrote."))}</p></div>`
+            <p>${esc(copy("生成：自我介绍、每个项目的讲述稿与预判追问、技术栈题、奖项。先在右边检查、修改，再加入语料库；已经改写过的答法不会被覆盖。", "Generates an intro, a story and likely follow-ups per project, stack questions and awards. Review and edit them on the right, then add them; your own answers are never overwritten."))}</p></div>`
         : `<div class="writing-prompt-card"><div><span class="writing-pill">JD</span><h2>${esc(copy("按目标岗位出题", "Questions for your target role"))}</h2></div>
-            <p>${esc(copy("生成岗位相关题和反问环节的问题，都会进入语料库，在「反问环节」里练。", "Creates role questions and questions to ask; both go to your corpus for the questions round."))}</p></div>`;
+            <p>${esc(copy("生成岗位题和反问环节要问的问题。先在右边检查、修改，再加入语料库，在「JD 与反问」和「反问环节」里练。", "Generates role questions and questions to ask. Review and edit them, then add them to your corpus."))}</p></div>`;
       const hint = resume
         ? `<div class="writing-frame-hint"><label class="writing-frame-cmd iv-file-pick"><input type="file" accept="application/pdf,.pdf" data-interview-field="file">${esc(data.file?.name || copy("选择 PDF 简历", "Choose a PDF resume"))}</label><span class="writing-frame-hint-dot">·</span><span class="writing-frame-hint-lead">${esc(copy("最多 2 MB，扫描件请粘贴文字", "Up to 2 MB; paste text for scans"))}</span></div>`
         : `<div class="writing-frame-hint"><span class="writing-frame-hint-lead">${esc(copy("内容会发送到你选择的 AI 服务", "Sent to your selected AI service"))}</span></div>`;
@@ -461,22 +410,44 @@
         </article>`;
       const stats = resume
         ? [[copy("项目", "Projects"), count("project")], [copy("技术栈", "Stack"), count("tech_stack")], [copy("奖项", "Awards"), count("award")]]
-        : [[copy("核心要求", "Requirements"), (profile.jd?.summary?.requirements || []).length], [copy("岗位题", "Role Qs"), corpusEntries(["jd_question"]).length], [copy("反问", "To ask"), corpusEntries(["reverse_question"]).length]];
+        : [[copy("核心要求", "Requirements"), (profile.jd?.summary?.requirements || []).length], [copy("岗位题", "Role Qs"), (data.corpus || []).filter((e) => e.kind === "jd_question").length], [copy("反问", "To ask"), (data.corpus || []).filter((e) => e.kind === "reverse_question").length]];
       const detail = resume
         ? (modules.some((item) => item.kind === "project") ? `<ul class="iv-custom-list">${modules.filter((item) => item.kind === "project").map((item) => `<li>${esc(item.title)}</li>`).join("")}</ul>` : "")
         : (profile.jd?.summary?.role ? `<p class="iv-custom-role">${esc(profile.jd.summary.role)}</p><ul class="iv-custom-list">${(profile.jd.summary.requirements || []).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "");
-      const empty = `<p class="iv-custom-empty">${esc(resume ? copy("拆分完成后，这里会列出识别到的项目和模块。", "Projects and modules appear here after splitting.") : copy("生成后，这里会显示岗位方向和核心要求。", "The role and its core requirements appear here."))}</p>`;
+      const empty = `<p class="iv-custom-empty">${esc(resume ? copy("生成后，这里会先列出草稿，检查完再加入语料库。", "The draft appears here for review before it goes into your corpus.") : copy("生成后，这里会先列出岗位题和反问草稿，检查完再加入语料库。", "The draft appears here for review before it goes into your corpus."))}</p>`;
+      const pending = data.drafts[side];
+      if (pending) {
+        const rows = draftRows(side);
+        const review = `<aside class="writing-result-card iv-draft-card">
+          <div class="writing-card-head"><div><h2>${esc(copy("先检查一下草稿", "Review the draft"))}</h2></div></div>
+          <div class="writing-checkin-top">
+            <p class="iv-custom-empty">${esc(copy("点开任意一条可以直接改，× 表示这条不加入。确认后一起加入语料库；已经改写过的答法不会被覆盖。", "Open any item to edit it; × leaves it out. Your own answers are never overwritten."))}</p>
+            ${draftReview(side)}
+          </div>
+          <div class="writing-checkin-bottom">
+            <div class="writing-status-line"><strong id="interviewCustomCount">${esc(copy(`${rows.length} 条待确认`, `${rows.length} to review`))}</strong><span>${esc(side === "jd" ? (pending.draft.summary?.role || "") : "")}</span></div>
+            <div class="writing-submit-row">
+              ${button("draft-discard", esc(copy("放弃草稿", "Discard")), { cls: "ghost", attrs: 'id="interviewCustomCorpus"' })}
+              ${button("draft-commit", esc(copy("加入语料库", "Add to corpus")), { attrs: 'id="interviewCustomSubmit"' })}
+            </div>
+          </div>
+        </aside>`;
+        return `<section id="interviewCustom" class="panel writing-panel">
+          <div class="iv-custom-bar">${switcher}<p>${esc(copy("内容会发送到你选择的 AI 服务；服务器不保存简历文件。", "Content goes to your selected AI service; resume files are not stored."))}</p></div>
+          <div class="writing-shell">${editor}${review}</div>
+        </section>`;
+      }
       const result = `<aside class="writing-result-card">
-          <div class="writing-card-head"><div><h2>${esc(updated ? (resume ? copy("已拆分", "Split") : copy("已生成", "Generated")) : (resume ? copy("还没有拆分", "Not split yet") : copy("还没有生成", "Not generated yet")))}</h2></div></div>
+          <div class="writing-card-head"><div><h2>${esc(updated ? (resume ? copy("已加入语料库", "Added") : copy("已生成", "Generated")) : (resume ? copy("还没有生成", "Not generated yet") : copy("还没有生成", "Not generated yet")))}</h2></div></div>
           <div class="writing-checkin-top">
             <div class="writing-stats-grid">${stats.map(([label, value]) => `<div><span>${esc(label)}</span><strong>${esc(updated ? value : 0)}</strong></div>`).join("")}</div>
             ${updated && detail ? detail : empty}
           </div>
           <div class="writing-checkin-bottom">
-            <div class="writing-status-line"><strong id="interviewCustomCount">${esc(copy(`${text.length} 字`, `${text.length} chars`))}</strong><span>${esc(updated ? copy(`上次 ${dateText(updated)}`, `Last ${dateText(updated)}`) : resume ? copy("未拆分", "Not split") : copy("未生成", "Not generated"))}</span></div>
+            <div class="writing-status-line"><strong id="interviewCustomCount">${esc(copy(`${text.length} 字`, `${text.length} chars`))}</strong><span>${esc(updated ? copy(`上次 ${dateText(updated)}`, `Last ${dateText(updated)}`) : resume ? copy("未生成", "Not generated") : copy("未生成", "Not generated"))}</span></div>
             <div class="writing-submit-row">
-              ${button("open-corpus", esc(resume ? copy("去语料库", "Open corpus") : copy("看岗位题", "See questions")), { cls: "ghost", attrs: `id="interviewCustomCorpus" data-tab="${resume ? "project" : "jd"}"`, disabled: !updated })}
-              ${button(resume ? "import-resume" : "import-jd", esc(resume ? (updated ? copy("重新拆分简历", "Split again") : copy("拆分简历", "Split resume")) : (updated ? copy("重新生成", "Regenerate") : copy("生成岗位题与反问", "Generate"))), { attrs: 'id="interviewCustomSubmit"' })}
+              ${button("open-corpus", esc(resume ? copy("去语料库", "Open corpus") : copy("看岗位题", "See questions")), { cls: "ghost", attrs: `id="interviewCustomCorpus" data-tab="${resume ? "resume" : "jd"}"`, disabled: !updated })}
+              ${button(resume ? "import-resume" : "import-jd", esc(resume ? (updated ? copy("重新生成题卡", "Generate again") : copy("生成简历题卡", "Generate cards")) : (updated ? copy("重新生成", "Regenerate") : copy("生成岗位题与反问", "Generate"))), { attrs: 'id="interviewCustomSubmit"' })}
             </div>
           </div>
         </aside>`;
@@ -495,13 +466,14 @@
       const practiceView = /^iv_/.test(state.view || "");
       if (practiceView) { data.pane = "practice"; data.part = state.view.slice(3); }
       if (state.view === "history") data.pane = "reports";
+      if (state.view === "corpus") data.pane = "library";
       const pane = data.pane;
       if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
-      const shown = practiceView || state.view === "history" || (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
+      const shown = practiceView || state.view === "history" || state.view === "corpus" || (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
       document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
         const itemPane = item.dataset.interviewPane;
         const active = itemPane === "practice" ? pane === "practice" && item.dataset.interviewPart === data.part
-          : itemPane === pane || (pane === "report" && itemPane === "reports");
+          : itemPane === pane || (pane === "report" && itemPane === "reports") || (pane === "library" && itemPane === "corpus");
         item.classList.toggle("active", active && shown);
         item.setAttribute("aria-current", active && shown ? "page" : "false");
         item.setAttribute("aria-disabled", String(data.busy));
@@ -511,7 +483,11 @@
     function syncChrome() {
       const pane = data.pane;
       document.body.classList.toggle("interview-bare", state.view === "interview" && pane === "corpus");
+      // Corpus screens sit in the IELTS corpus workspace (its chrome and the many .corpus-workspace rules) too.
       document.querySelector?.(".workspace")?.classList.toggle("interview-corpus-workspace", state.view === "interview" && pane === "corpus");
+      if (state.view === "interview") document.querySelector?.(".workspace")?.classList.toggle("corpus-workspace", pane === "corpus");
+      // A corpus screen has the IELTS back button above it, like the P1 / P2 corpus pages (handled in initialize).
+      if (state.view === "interview") byId("topbarBackCorpusBtn")?.classList.toggle("hidden", pane !== "corpus");
       if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
       syncNav();
       const entry = PANE_COPY[pane]?.();
@@ -529,20 +505,18 @@
         return;
       }
       // Home, practice and reports are shared IELTS panels (home, iv_* and history views), not #interviewPanel.
-      const paneView = ({ corpus: corpusPane, custom: customPane })[data.pane];
+      const paneView = ({ corpus: () => corpusScreens?.render(data.corpusTab) || "", custom: customPane })[data.pane];
       if (!paneView) { panel.innerHTML = ""; return; }
       const content = paneView();
       const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
-      panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>${editorModal()}`;
+      panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>`;
     }
 
     // ---- Inputs and actions
     function captureInput(event) {
       const el = event.target;
       const field = el.dataset.interviewField;
-      if (field === "editor-text" && data.editor) data.editor.text = el.value;
-      else if (field === "editor-question" && data.editor) data.editor.question = el.value;
-      else if (field === "file") { data.file = el.files?.[0] || null; render(); }
+      if (field === "file") { data.file = el.files?.[0] || null; render(); }
       else if (field === "resumeText" || field === "jdText") {
         data[field] = el.value;
         const counter = byId("interviewCustomCount");
@@ -550,36 +524,9 @@
       }
     }
 
-    function openEditor(entry) {
-      data.editor = { entry, text: entry.corpus_text || "", question: entry.question || "" };
-      render();
-      byId("interviewPanel")?.querySelector?.('[data-interview-field="editor-text"]')?.focus?.();
-    }
-
-    function saveEditor() {
-      const { entry, text, question } = data.editor;
-      const upsert = (payload) => {
-        const index = data.corpus.findIndex((item) => (entry.id ? item.id === entry.id : item.source_key === entry.source_key && !item.id));
-        if (index >= 0) data.corpus.splice(index, 1, payload.entry);
-        else data.corpus.push(payload.entry);
-        data.editor = null;
-        data.notice = copy("已保存到语料库。", "Saved to your corpus.");
-      };
-      if (entry.id) {
-        const body = { corpus_text: text };
-        if (entry.source !== "curated" && question.trim() && question !== entry.question) body.question = question;
-        perform(() => request(`/api/interview/corpus/${encodeURIComponent(entry.id)}/`, body, { method: "PATCH" }), upsert);
-      } else if (entry.source_key) {
-        perform(() => request("/api/interview/corpus/", { kind: "knowledge", source_key: entry.source_key, corpus_text: text }), upsert);
-      } else {
-        if (!question.trim()) { data.error = copy("请先写题目。", "Write the question first."); render(); return; }
-        perform(() => request("/api/interview/corpus/", { kind: entry.kind, question, corpus_text: text, group: entry.group || "", parent_id: entry.parent_id || undefined }), upsert);
-      }
-    }
-
     function handleAction(event) {
       const el = event.target.closest("[data-interview-action]");
-      if (!el || (data.busy && !["close-editor"].includes(el.dataset.interviewAction))) return;
+      if (!el || data.busy) return;
       if (el.tagName === "A") event.preventDefault?.();
       const action = el.dataset.interviewAction;
       switch (action) {
@@ -587,54 +534,56 @@
         case "go-practice": setPane("practice", { part: el.dataset.part || "full" }); return;
         case "go-custom": data.customSide = el.dataset.side || data.customSide; setPane("custom"); return;
         case "reports": setPane("reports"); return;
-        case "open-corpus": data.corpusTab = el.dataset.tab || data.corpusTab; setPane("corpus"); return;
-        case "corpus-tab": data.corpusTab = el.dataset.tab; render(); return;
+        case "open-corpus": setPane("corpus", { tab: el.dataset.tab || data.corpusTab }); return;
         case "custom-side": data.customSide = el.dataset.side; render(); return;
-        case "edit-entry": {
-          const entry = el.dataset.entryId ? entryFor(el.dataset.entryId) : (data.corpus || []).find((item) => !item.id && item.source_key === el.dataset.sourceKey);
-          if (entry) openEditor(entry);
-          return;
-        }
-        case "new-entry": openEditor({ id: null, kind: el.dataset.kind || "knowledge", source: "custom", group: el.dataset.group || "", parent_id: el.dataset.parent || null, question: "", corpus_text: "", ai_draft: "" }); return;
-        case "close-editor": data.editor = null; render(); return;
-        case "adopt-draft": if (data.editor) { data.editor.text = data.editor.entry.ai_draft; render(); } return;
-        case "save-entry": saveEditor(); return;
-        case "draft-entry": {
-          const entry = data.editor?.entry;
-          if (!entry?.id) return;
-          perform(() => request(`/api/interview/corpus/${encodeURIComponent(entry.id)}/draft/`, { ai_source: currentAiSourcePreference() }), (payload) => {
-            const index = data.corpus.findIndex((item) => item.id === payload.entry.id);
-            if (index >= 0) data.corpus.splice(index, 1, payload.entry);
-            if (data.editor) data.editor.entry = payload.entry;
-          });
-          return;
-        }
-        case "delete-entry": {
-          const entry = data.editor?.entry;
-          if (!entry?.id) return;
-          perform(() => request(`/api/interview/corpus/${encodeURIComponent(entry.id)}/`, null, { method: "DELETE" }), () => {
-            data.corpus = data.corpus.filter((item) => item.id !== entry.id && item.parent_id !== entry.id);
-            data.editor = null;
-          });
-          return;
-        }
         case "import-resume": {
           const form = new FormData();
           form.append("resume_text", data.resumeText);
           form.append("ai_source", currentAiSourcePreference());
+          form.append("preview", "1");
           if (data.file) form.append("resume_file", data.file);
           perform(() => upload("/api/interview/profile/resume/", form), (payload) => {
-            data.profile = payload.profile; data.corpus = payload.entries; data.file = null;
-            data.notice = copy("简历已拆分，讲述稿都在语料库里。", "Resume split — your stories are in the corpus.");
+            data.drafts.resume = payload; data.file = null;
+            data.notice = copy("题卡草稿已生成，先检查一下再加入语料库。", "Draft ready — review it before adding it to your corpus.");
           });
           return;
         }
         case "import-jd":
-          perform(() => request("/api/interview/profile/jd/", { job_description: data.jdText, ai_source: currentAiSourcePreference() }), (payload) => {
-            data.profile = payload.profile; data.corpus = payload.entries;
-            data.notice = copy("已生成岗位题与反问问题。", "Role questions and questions to ask are ready.");
+          perform(() => request("/api/interview/profile/jd/", { job_description: data.jdText, ai_source: currentAiSourcePreference(), preview: true }), (payload) => {
+            data.drafts.jd = payload;
+            data.notice = copy("岗位题与反问草稿已生成，先检查一下再加入语料库。", "Draft ready — review it before adding it to your corpus.");
           });
           return;
+        case "draft-edit": {
+          const side = data.customSide;
+          const draft = data.drafts[side]?.draft;
+          const row = draftRows(side).find((item) => item.path === el.dataset.path);
+          if (!draft || !row) return;
+          launch?.editMarkdown({
+            meta: copy(`草稿 · ${row.kind}`, `Draft · ${row.kind}`), title: row.title, label: copy("AI 草稿（可直接改）", "AI draft (edit freely)"),
+            value: draftValue(draft, row.path) || "", note: copy("改完点「保存修改」，最后在右下角一起加入语料库。", "Save, then add everything to the corpus."),
+            onSave: (value) => { setDraftValue(draft, row.path, value); render(); },
+          });
+          return;
+        }
+        case "draft-remove": {
+          const draft = data.drafts[data.customSide]?.draft;
+          if (draft) { removeDraftItem(draft, el.dataset.path); render(); }
+          return;
+        }
+        case "draft-discard": data.drafts[data.customSide] = null; render(); return;
+        case "draft-commit": {
+          const side = data.customSide;
+          const pending = data.drafts[side];
+          if (!pending) return;
+          const path = side === "resume" ? "/api/interview/profile/resume/commit/" : "/api/interview/profile/jd/commit/";
+          const body = side === "resume" ? { resume_text: pending.resume_text, draft: pending.draft } : { job_description: pending.job_description, draft: pending.draft };
+          perform(() => request(path, body), (payload) => {
+            data.profile = payload.profile; data.corpus = payload.entries; data.drafts[side] = null;
+            data.notice = side === "resume" ? copy("已加入语料库，去「简历题卡」看看。", "Added — see Resume cards.") : copy("已加入语料库，去「JD 与反问」看看。", "Added — see JD & questions.");
+          });
+          return;
+        }
         default:
           if (PANES.has(action)) setPane(action);
       }
@@ -652,11 +601,19 @@
 
     function openCorpusFor(view) {
       const part = String(view || "").replace(/^iv_/, "");
-      data.corpusTab = PARTS[part]?.corpus || data.corpusTab;
-      setPane("corpus");
+      setPane("corpus", { tab: PARTS[part]?.corpus || data.corpusTab });
     }
 
-    return { initialize, setProductMode, show, resetForAccount, setPane, launchOptions, renderLaunch, hideLaunch: () => launch?.hide(), openCorpusFor, syncNav };
+    // The report's 编辑语料 on an interview turn: the corpus editor with the reference answer.
+    async function openCorpusFromReport(target) {
+      if (!data.corpus) await perform(() => request("/api/interview/corpus/"), (payload) => { data.corpus = payload.entries || []; }, { busy: false });
+      corpusScreens?.openFromReport(target);
+    }
+
+    return {
+      initialize, setProductMode, show, resetForAccount, setPane, launchOptions, renderLaunch, hideLaunch: () => launch?.hide(),
+      openCorpusFor, openCorpusFromReport, corpusSavedForTarget: (target) => corpusScreens?.savedForTarget(target) ?? null, syncNav,
+    };
   }
   window.IELTSInterview = { createInterview };
 })();

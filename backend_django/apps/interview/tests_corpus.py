@@ -56,6 +56,51 @@ class InterviewCorpusTests(TestCase):
         modules = InterviewProfile.objects.get(user=self.user).resume_modules
         self.assertEqual([m["kind"] for m in modules], ["self_intro", "project", "project", "tech_stack", "award"])
 
+    def test_resume_preview_saves_nothing_and_commit_saves_the_edited_draft(self):
+        output = resume_output()
+        with patch("apps.interview.corpus.ai_services.run_generation", return_value=output):
+            response = self.post("/api/interview/profile/resume/", {"resume_text": RESUME, "preview": True})
+        self.assertEqual(response.status_code, 200, response.content)
+        preview = response.json()
+        self.assertEqual(InterviewCorpusEntry.objects.filter(user=self.user).count(), 0)
+        self.assertEqual(preview["resume_text"], RESUME)
+        self.assertNotIn("provider", preview["draft"])
+        draft = preview["draft"]
+        draft["projects"][0]["draft"] = "我改过的讲述稿"
+        draft["projects"].pop()
+        response = self.post("/api/interview/profile/resume/commit/", {"resume_text": preview["resume_text"], "draft": draft})
+        self.assertEqual(response.status_code, 200, response.content)
+        projects = InterviewCorpusEntry.objects.filter(user=self.user, kind="project")
+        self.assertEqual([p.ai_draft for p in projects], ["我改过的讲述稿"])
+        bad = self.post("/api/interview/profile/resume/commit/", {"resume_text": RESUME, "draft": {"projects": "x"}})
+        self.assertEqual(bad.status_code, 400)
+
+    def test_jd_preview_and_commit(self):
+        output = {"summary": {"role": "C++ 开发", "requirements": ["C++17"]},
+                  "questions": [{"question": "讲讲 epoll。", "draft": "d"}],
+                  "reverse_questions": [{"question": "团队怎么衡量延迟？", "draft": "d"}],
+                  "provider": "http_api", "model": "fixture", "task_id": "t", "ai_source": "gpt"}
+        with patch("apps.interview.corpus.ai_services.run_generation", return_value=output):
+            preview = self.post("/api/interview/profile/jd/", {"job_description": "招聘 C++", "preview": True}).json()
+        self.assertEqual(InterviewCorpusEntry.objects.filter(user=self.user).count(), 0)
+        preview["draft"]["reverse_questions"].append({"question": "新人怎么上手？", "draft": ""})
+        response = self.post("/api/interview/profile/jd/commit/", {"job_description": preview["job_description"], "draft": preview["draft"]})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(InterviewCorpusEntry.objects.filter(user=self.user, kind="reverse_question").count(), 2)
+        self.assertEqual(InterviewProfile.objects.get(user=self.user).jd_text, "招聘 C++")
+
+    def test_custom_follow_ups_hang_under_project_intro_and_award_cards(self):
+        self.import_resume(resume_output())
+        for key in ("resume:project:gateway", "resume:self_intro", "resume:award:acm"):
+            parent = self.entry(key)
+            response = self.post("/api/interview/corpus/", {"kind": "project_followup", "parent_id": parent.entry_id,
+                                                            "question": f"{parent.kind} 的追问？"})
+            self.assertEqual(response.status_code, 200, response.content)
+            self.assertEqual(response.json()["entry"]["parent_id"], parent.entry_id)
+        knowledge = InterviewCorpusEntry.objects.filter(user=self.user, kind="knowledge").first()
+        response = self.post("/api/interview/corpus/", {"kind": "project_followup", "parent_id": knowledge.entry_id, "question": "x"})
+        self.assertEqual(response.status_code, 400)
+
     def test_resplit_keeps_my_answer_and_marks_removed_projects(self):
         self.import_resume(resume_output())
         gateway = self.entry("resume:project:gateway")
@@ -84,13 +129,14 @@ class InterviewCorpusTests(TestCase):
     def test_curated_questions_listed_and_saved_once(self):
         listing = self.client.get("/api/interview/corpus/?kind=knowledge").json()["entries"]
         curated = [e for e in listing if e["source"] == "curated"]
-        self.assertEqual(len(curated), 30)
+        self.assertEqual(len(curated), 71)
+        self.assertEqual(curated[0]["title"], "RAII 与资源管理")
         key = curated[0]["source_key"]
         first = self.post("/api/interview/corpus/", {"kind": "knowledge", "source_key": key, "corpus_text": "我的答法"}).json()
         again = self.post("/api/interview/corpus/", {"kind": "knowledge", "source_key": key}).json()
         self.assertEqual(first["entry"]["id"], again["entry"]["id"])
         listing = self.client.get("/api/interview/corpus/?kind=knowledge").json()["entries"]
-        self.assertEqual(len(listing), 30)
+        self.assertEqual(len(listing), 71)
         reword = self.patch(f"/api/interview/corpus/{first['entry']['id']}/", {"question": "改题"})
         self.assertEqual(reword.json()["code"], "read_only_question")
         bad = self.post("/api/interview/corpus/", {"kind": "knowledge", "source_key": "resume:project:x"})

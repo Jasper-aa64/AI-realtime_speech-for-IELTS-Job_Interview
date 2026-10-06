@@ -26,7 +26,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261006-interview-62">
+    <link rel="stylesheet" href="/styles.css?v=20261006-interview-71">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -592,6 +592,73 @@
             </div>
             <div class="p1-corpus-dialog-actions">
               <span id="p1CorpusSaveStatus"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interview corpus editor: the P1 corpus dialog; "AI 参考" only shows when opened from a report (interview-corpus.js). -->
+        <div id="ivCorpusDialog" class="p1-corpus-dialog iv-corpus-editor hidden" role="dialog" aria-modal="true" aria-labelledby="ivCorpusDialogTitle">
+          <div class="p1-corpus-dialog-card" data-corpus-dialog-card>
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="ivCorpusDialogMeta"></span>
+                <div class="corpus-dialog-title-line">
+                  <h3 id="ivCorpusDialogTitle">编辑语料</h3>
+                  <input id="ivCorpusTopic" class="p3-custom-input iv-corpus-topic hidden" type="text" maxlength="200" placeholder="题卡名，如 SPSC 队列" aria-label="题卡名">
+                  <input id="ivCorpusQuestion" class="p3-custom-input iv-corpus-question hidden" type="text" maxlength="1500" placeholder="写下题目……" aria-label="题目">
+                  <button type="button" class="corpus-dictate-button" data-corpus-dictate="ivCorpusText" aria-pressed="false" title="语音转写：点我开始说，再点一下停止">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                  </button>
+                </div>
+              </div>
+              <button id="ivCorpusSave" type="button">保存语料</button>
+            </header>
+            <label class="p1-corpus-label" for="ivCorpusText">我的语料</label>
+            <textarea id="ivCorpusText" class="p1-corpus-textarea" spellcheck="true"></textarea>
+            <div class="p1-corpus-ai-box hidden">
+              <div class="p1-corpus-ai-head">
+                <strong>AI 参考</strong>
+                <span class="iv-corpus-ai-tools">
+                  <button id="ivCorpusAdoptAi" type="button" aria-label="采用到我的语料" title="采用到我的语料">
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"></path></svg>
+                  </button>
+                  <button id="ivCorpusCopyAi" type="button" aria-label="复制 AI 参考" title="复制">
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  </button>
+                </span>
+              </div>
+              <div id="ivCorpusAi"></div>
+            </div>
+            <div class="p1-corpus-dialog-actions">
+              <button id="ivCorpusDelete" class="ghost iv-danger hidden" type="button">删除这条语料</button>
+              <span id="ivCorpusDialogStatus"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interview follow-ups: the P2 card's P3 dialog, with any number of custom follow-ups. -->
+        <div id="ivFollowDialog" class="p1-corpus-dialog iv-follow-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="ivFollowDialogTitle">
+          <div class="p1-corpus-dialog-card p2-corpus-dialog-card p2-corpus-p3-dialog-card" data-corpus-dialog-card>
+            <header class="p1-corpus-dialog-head">
+              <div>
+                <span id="ivFollowDialogMeta"></span>
+                <h3 id="ivFollowDialogTitle">编辑追问</h3>
+              </div>
+              <button id="ivFollowSave" type="button">保存追问</button>
+            </header>
+            <div class="p2-corpus-p3-context">
+              <div id="ivFollowList" class="p2-bank-p3-entry-list"></div>
+            </div>
+            <div class="corpus-dictate-label-row iv-follow-question-row">
+              <input id="ivFollowQuestion" class="p3-custom-input" type="text" maxlength="1500" aria-label="追问">
+              <button type="button" class="corpus-dictate-button" data-corpus-dictate="ivFollowText" aria-pressed="false" title="语音转写：点我开始说，再点一下停止">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+              </button>
+            </div>
+            <textarea id="ivFollowText" class="p1-corpus-textarea p2-p3-follow-up" spellcheck="true"></textarea>
+            <div class="p1-corpus-dialog-actions">
+              <button id="ivFollowDelete" class="ghost iv-danger hidden" type="button">删除这条追问</button>
+              <span id="ivFollowDialogStatus"></span>
             </div>
           </div>
         </div>
@@ -1849,15 +1916,16 @@
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
-    <script src="/native-bridge.js?v=20261006-interview-62"></script>
-    <script src="/corner-morph.js?v=20261006-interview-62"></script>
-    <script src="/interview-launch.js?v=20261006-interview-62"></script>
-    <script src="/interview-home.js?v=20261006-interview-62"></script>
-    <script src="/interview.js?v=20261006-interview-62"></script>
+    <script src="/native-bridge.js?v=20261006-interview-71"></script>
+    <script src="/corner-morph.js?v=20261006-interview-71"></script>
+    <script src="/interview-corpus.js?v=20261006-interview-71"></script>
+    <script src="/interview-launch.js?v=20261006-interview-71"></script>
+    <script src="/interview-home.js?v=20261006-interview-71"></script>
+    <script src="/interview.js?v=20261006-interview-71"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>
-    <script src="/app.js?v=20261006-interview-62"></script>
+    <script src="/app.js?v=20261006-interview-71"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
-    <script src="/home-dashboard.js?v=20261006-interview-62"></script>
+    <script src="/home-dashboard.js?v=20261006-interview-71"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>
   </body>
 </html>

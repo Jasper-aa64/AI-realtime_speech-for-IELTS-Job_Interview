@@ -165,3 +165,24 @@ VPS 先不买，完成本地效果验证再评估。
 | 简历 / JD 定制 | 每日写作（Task 1/2 开关 = 简历/JD 开关） | `#writingPanel`、`#writingScoreBtn`、`#writingSaveBtn` |
 
 提交：`ab8634d`（首页 / 语料库）、`8bc6be2`（报告）、`c5f0d8e`（练习）、`1deb9eb`（定制）、`d435426`（删掉 144 条不再使用的旧面试样式）。网页测试 79/79；离屏 Qt 实例逐页截图核对（含暗色），雅思写作页改动前后截图逐像素相同。
+
+
+## 面试改跑在雅思口语运行时上（2026-10-06）
+
+用户否定了「只搬样式、行为手写」的做法，要求面试是雅思口语的一个新模式。设计：`docs/superpowers/specs/2026-10-06-interview-on-ielts-runtime-design.md`；计划：`docs/superpowers/plans/2026-10-06-interview-on-ielts-runtime-part1.md`（Task 1–9）。上表里「练习页」「面试报告」两行的别名方案已作废：现在它们**就是**雅思的 `#practicePanel` 和 `#historyPanel`。
+
+- **运行时**：面试 = `SpeakingAttempt`，模式 `iv_full / iv_project / iv_knowledge / iv_reverse`（迁移 `speaking/0010`）。前端练习视图同名，`startPractice` 直接发 `mode = state.view`。轮次是雅思形状，`part: "interview"`，`prompt.{stage, role, language: "zh", parent_turn_id, depth}`，`timers.prep_seconds = 3`。所以流程与雅思完全一样：考官读题 → 3 秒准备 → 自动录音 → 服务器 ASR；没识别出来就和雅思一样跳过追问，不允许打字。
+- **面试官**：`apps/interview/runtime.after_answer`，在 `speaking.services.complete_turn` 里调用。标准模式每题 1 层追问，追问压力 3 层（项目 4 层）；反问环节面试官先回答再问「还有其他想了解的吗」；AI 失败直接下一题。标准 / 追问压力开关就是 P1 的开关（`iv_intensity`）。
+- **考官语音**：文字里有中文就用中文音色（`settings.INTERVIEW_EXAMINER_VOICE`，默认 `zh_male_xiaoming`），包括后台预热路径；修过「第二题只读了 P99」的问题。
+- **报告**：百分制存进 `SpeakingReport.report_payload`（`interview_score`、`turns[].band7_version` = 参考回答、`ai_coaching`、`overall_review.markdown`）。报告页就是「口语报告」：`/api/history?domain=interview` 只列面试，筛选项 全部 / 完整面试 / 项目深挖 / 知识点 / 反问环节，⋯ 菜单删除、横向报告栏、空状态都是雅思原件（面试模式下文案改成「面试报告」）。
+- **首页**：就是雅思 `#homePanel`，`interview-home.js` 只换文案、链接和数字（数字来自 `/api/history?domain=interview` 和语料库）。
+- **右上角头像卡 / 左上角模式卡**：`corner-morph.js` 共用一套「从触发器长出来」的动画（detail.design 的弹簧参数，形变中内容不响应指针）；主题 / 外观选择移进了头像卡；两张卡打开时把所在的条提到最顶层。
+- **开始前设置（练习页左侧 PROMPT 区）**：`interview-launch.js`。「Start a voice practice session to load a question.」保留在上方，下面是每个模式的设置，样式就是 P3 启动面板（`#p3TopicPanel` 规则别名到 `#ivLaunch`），编辑都在 P1 语料弹窗壳 + 雅思 Vditor Markdown 编辑器里：
+  - 完整面试：上传简历（PDF 或粘贴，保存即调用简历拆分）+ 本次 JD（默认带出已保存的 JD）。
+  - 项目：写一段项目描述（只练这一段，追问时把描述作为上下文）或选语料库项目；没有项目时默认写描述。
+  - 知识点：按语料库分类列卡片，每类弹窗勾题或「自己出题」（Markdown 写，读题前去掉 Markdown 标记），再选 3/5/8/10 题；选多了随机抽，选少了从所选分类的题库补齐。
+  - 反问：本次 JD + 准备 2～3 个反问；答题时问题列表一直显示在考官问题下方，反问轮数 = 准备的个数。
+  - 设置按账号存在本机 localStorage，刷新不丢。后端新增字段：`custom_questions`、`categories`、`project_text`、`reverse_questions`、`jd_text`（`runtime.LAUNCH_KEYS`）。
+- **别名脚本修复**：注释紧挨着的 `@media` 以前被当成普通规则，里面的规则都没加别名；修好后补上了 21 条（P3 启动面板、写作页的桌面端规则）。
+- **验证**：网页测试 94/94；`manage.py test apps.interview` 全过（含 8 个新的启动参数测试）；`apps.speaking` 整套跑时 `test_start_p1_high_counts_body_questions_and_followups_without_intro` 偶发失败一次，单独连跑 6 次都过，与面试无关。可见 Qt 窗口（8767 服务，用户自己的库，ui_preview 账号）里实测：四种模式的设置 → 开始 → 读题 → 退出后设置还在；报告页用一条模拟评分的面试报告看了详情和 ⋯ → 删除（测试数据已删）。
+- **还没做（Part 2，待写计划）**：三个语料库界面直接用 P1/P2/P3 语料代码（知识点 = P1；简历 = P2 题卡：每个项目、每个技术栈、自我介绍与奖项各一张，带筛选，追问 = P3 追问且可无限自定义；JD 与反问 = P1）；编辑弹窗的「AI 参考」只在从报告打开时出现；简历 / JD 定制改成「直接生成 → 用户编辑 → 加入语料库」；删掉 `interview.js` 里剩下的旧语料库 / 定制页和旧 `/api/interview/sessions` 流程。另外：`.env` 里火山 ASR 仍是注释状态，所有录音都会识别为空。

@@ -14,6 +14,7 @@ urlpatterns = [
     path("corner-morph.js", frontend_asset, {"asset_path": "corner-morph.js"}, name="frontend-corner-morph-js"),
     path("interview-home.js", frontend_asset, {"asset_path": "interview-home.js"}, name="frontend-interview-home-js"),
     path("interview-launch.js", frontend_asset, {"asset_path": "interview-launch.js"}, name="frontend-interview-launch-js"),
+    path("interview-corpus.js", frontend_asset, {"asset_path": "interview-corpus.js"}, name="frontend-interview-corpus-js"),
     path("interview.js", frontend_asset, {"asset_path": "interview.js"}, name="frontend-interview-js"),
     path("", frontend_asset, name="frontend-index"),
     path("index.html", frontend_asset, name="frontend-index-html"),

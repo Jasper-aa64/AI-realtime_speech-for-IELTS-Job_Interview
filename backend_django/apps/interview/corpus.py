@@ -8,7 +8,7 @@ re-split refreshes AI drafts and questions but never overwrites what the candida
 from django.db import transaction
 from django.utils import timezone
 
-from . import ai_services
+from . import ai_schema, ai_services
 from .ai_schema import digest
 from .bank import CATEGORIES, QUESTIONS
 from .models import InterviewCorpusEntry as Entry
@@ -18,6 +18,7 @@ from .validation import InterviewError, resume_input, text
 KINDS = {choice for choice, _ in Entry.Kind.choices}
 EDITABLE_QUESTION_SOURCES = {Entry.Source.CUSTOM, Entry.Source.RESUME, Entry.Source.JD, Entry.Source.PRACTICE}
 SELF_INTRO_QUESTION = "请先做一个简单的自我介绍。"
+FOLLOW_UP_PARENTS = {Entry.Kind.PROJECT, Entry.Kind.SELF_INTRO, Entry.Kind.AWARD}
 CURATED = {question["id"]: question for question in QUESTIONS}
 CATEGORY_LABELS = {item["id"]: item["label"] for item in CATEGORIES}
 
@@ -77,9 +78,42 @@ def _mark_orphans(user, prefix, kept):
         entry.save(update_fields=["metadata", "updated_at"])
 
 
+def _preview(payload):
+    value = payload.get("preview")
+    return value is True or str(value).lower() in {"1", "true", "yes"}
+
+
+def _draft(kind, result):
+    """The schema part of an AI result, without task provenance: what the candidate reviews and edits."""
+    keys = {"resume_profile": ("self_intro", "projects", "tech_stack", "awards"),
+            "jd_profile": ("summary", "questions", "reverse_questions")}[kind]
+    return {key: result[key] for key in keys}
+
+
+def _edited(kind, payload):
+    try:
+        return ai_schema.validate(kind, payload.get("draft"), {})
+    except InterviewError:
+        raise
+    except (ValueError, TypeError, AttributeError):
+        raise InterviewError("草稿里没有可加入语料库的内容。", code="invalid_draft") from None
+
+
+# Resume / JD 定制: generate a draft first (preview), let the candidate edit it, then commit it to the corpus.
 def import_resume(user, payload, upload=None):
     resume = resume_input(payload.get("resume_text", ""), upload)
     result = ai_services.run_generation(user, "resume_profile", {"resume_text": resume}, ai_source=payload.get("ai_source", ""))
+    if _preview(payload):
+        return {"draft": _draft("resume_profile", result), "resume_text": resume}
+    return _apply_resume(user, resume, result)
+
+
+def commit_resume(user, payload):
+    resume = text(payload.get("resume_text"), "resume_text", 24000, required=True)
+    return _apply_resume(user, resume, _edited("resume_profile", payload))
+
+
+def _apply_resume(user, resume, result):
     with transaction.atomic():
         profile = profile_for(user, lock=True)
         kept, modules = [], []
@@ -122,6 +156,17 @@ def import_resume(user, payload, upload=None):
 def import_jd(user, payload):
     jd = text(payload.get("job_description"), "job_description", 12000, required=True)
     result = ai_services.run_generation(user, "jd_profile", {"job_description": jd}, ai_source=payload.get("ai_source", ""))
+    if _preview(payload):
+        return {"draft": _draft("jd_profile", result), "job_description": jd}
+    return _apply_jd(user, jd, result)
+
+
+def commit_jd(user, payload):
+    jd = text(payload.get("job_description"), "job_description", 12000, required=True)
+    return _apply_jd(user, jd, _edited("jd_profile", payload))
+
+
+def _apply_jd(user, jd, result):
     with transaction.atomic():
         profile = profile_for(user, lock=True)
         kept = []
@@ -148,6 +193,11 @@ def corpus_listing(user, kind=""):
     if kind:
         entries = entries.filter(kind=kind)
     saved = [entry_payload(entry) for entry in entries]
+    # A bank question's topic is its card; rows saved before topics existed get it from the bank.
+    for item in saved:
+        curated = CURATED.get(str(item["source_key"] or "").removeprefix("curated:")) if str(item["source_key"] or "").startswith("curated:") else None
+        if curated and not item["title"]:
+            item["title"] = curated["topic"]
     # Curated bank questions appear in the knowledge corpus even before the candidate writes an answer.
     curated = []
     if not kind or kind == Entry.Kind.KNOWLEDGE:
@@ -156,7 +206,7 @@ def corpus_listing(user, kind=""):
             key = f"curated:{question['id']}"
             if key not in taken:
                 curated.append({"id": None, "kind": "knowledge", "group": CATEGORY_LABELS.get(question["category"], question["category"]),
-                                "title": "", "question": question["prompt"], "corpus_text": "", "ai_draft": "",
+                                "title": question["topic"], "question": question["prompt"], "corpus_text": "", "ai_draft": "",
                                 "source": "curated", "source_key": key, "parent_id": None, "order": 0,
                                 "orphaned": False, "summary": "", "updated_at": None})
     return {"entries": saved + curated}
@@ -175,15 +225,16 @@ def create_entry(user, payload):
     parent = None
     if payload.get("parent_id"):
         parent = _owned(user, text(payload.get("parent_id"), "parent_id", 40))
-        if parent.kind != Entry.Kind.PROJECT or kind != Entry.Kind.PROJECT_FOLLOWUP:
-            raise InterviewError("追问只能挂在项目下面。", code="invalid_parent")
+        # Resume cards (a project, the self intro, an award) each keep their own follow-ups, like P2 cards keep P3.
+        if parent.kind not in FOLLOW_UP_PARENTS or kind != Entry.Kind.PROJECT_FOLLOWUP:
+            raise InterviewError("追问只能挂在项目、自我介绍或奖项下面。", code="invalid_parent")
     with transaction.atomic():
         if curated:
             existing = Entry.objects.select_for_update().filter(user=user, source_key=source_key).first()
             if existing:
                 return {"entry": entry_payload(existing)}
             entry = Entry.objects.create(user=user, kind=Entry.Kind.KNOWLEDGE, source=Entry.Source.CURATED, source_key=source_key,
-                                         question=curated["prompt"], group=CATEGORY_LABELS.get(curated["category"], ""),
+                                         question=curated["prompt"], group=CATEGORY_LABELS.get(curated["category"], ""), title=curated["topic"],
                                          corpus_text=text(payload.get("corpus_text"), "corpus_text", 12000))
         else:
             entry = Entry.objects.create(user=user, kind=kind, source=Entry.Source.CUSTOM,

@@ -2,7 +2,7 @@
   // Interview mode shows the IELTS home panel itself (#homePanel, same markup, CSS and carousel script), so the
   // layout is identical by construction; only words, numbers and link targets change. Every node touched keeps its
   // IELTS original, and switching back restores it exactly.
-  const go = (pane, part = "") => ({ href: "?view=interview", "data-view": null, "data-home-mode": null, "data-iv-target": part ? `${pane}:${part}` : pane });
+  const go = (pane, part = "") => ({ href: "?view=interview", "data-view": null, "data-home-mode": null, "data-corpus-home-target": null, "data-iv-target": part ? `${pane}:${part}` : pane });
 
   // [selector inside #homePanel, change, link target?]. `text` replaces the whole text; `label` replaces only the
   // first text node, so an element's children (arrows, counters, nested spans) stay the same nodes.
@@ -43,7 +43,7 @@
     [".hx-stat:nth-of-type(2) dt", { text: "平均分" }],
     [".hx-stat:nth-of-type(2) dd a", {}, go("reports")],
     [".hx-panel > p.hx-panel-label:nth-of-type(1)", { text: "语料准备" }],
-    [".hx-panel > div.hx-chips:nth-of-type(1) a:nth-of-type(1)", { label: "项目讲述稿" }, go("corpus", "project")],
+    [".hx-panel > div.hx-chips:nth-of-type(1) a:nth-of-type(1)", { label: "项目讲述稿" }, go("corpus", "resume")],
     [".hx-panel > div.hx-chips:nth-of-type(1) a:nth-of-type(2)", { label: "知识点" }, go("corpus", "knowledge")],
     [".hx-panel > div.hx-chips:nth-of-type(1) a:nth-of-type(3)", { label: "JD 与反问" }, go("corpus", "jd")],
     [".hx-panel > p.hx-panel-label:nth-of-type(2)", { label: "面试题库 · " }],
@@ -81,7 +81,7 @@
     [".hx-area:nth-of-type(3) .hx-area-index", { text: "03 · Corpus" }],
     [".hx-area:nth-of-type(3) .hx-area-name", { text: "面试语料" }],
     [".hx-area:nth-of-type(3) .hx-area-blurb", { text: "项目讲述稿、知识点答法和反问问题沉淀下来，面试前随时复习。" }],
-    [".hx-area:nth-of-type(3) li:nth-of-type(1) a", {}, go("corpus", "project")],
+    [".hx-area:nth-of-type(3) li:nth-of-type(1) a", {}, go("corpus", "resume")],
     [".hx-area:nth-of-type(3) li:nth-of-type(1) b", { text: "Project" }],
     [".hx-area:nth-of-type(3) li:nth-of-type(1) span", { text: "项目题卡" }],
     [".hx-area:nth-of-type(3) li:nth-of-type(2) a", {}, go("corpus", "knowledge")],
@@ -91,6 +91,46 @@
     [".hx-area:nth-of-type(3) li:nth-of-type(3) b", { text: "JD" }],
     [".hx-area:nth-of-type(3) li:nth-of-type(3) span", { text: "JD 与反问" }],
   ];
+  // The 语料库 hub (#corpusPanel) the same way: its two cards open the knowledge and resume screens, the review lane
+  // holds JD & questions, Resume / JD and the reports.
+  const HUB_COPY = [
+    [".corpus-page-kicker", { text: "Interview Library" }],
+    [".corpus-home-title", { text: "面试语料库" }],
+    [".corpus-home-sub", { text: "把知识点答法、简历题卡和反问问题放在同一个工作台里。" }],
+    [".corpus-card-p1", {}, go("corpus", "knowledge")],
+    [".corpus-card-p1 .corpus-card-mark", { text: "知识点" }],
+    [".corpus-card-p1 .corpus-card-type", { text: "Knowledge corpus" }],
+    [".corpus-card-p1 strong", { text: "我的知识点语料库" }],
+    [".corpus-card-p1 small", { text: "按技术方向整理答法，练习时可直接调出对应语料。" }],
+    [".corpus-card-p1 .cca-topics text:nth-of-type(1)", { text: "C++" }],
+    [".corpus-card-p1 .cca-topics text:nth-of-type(2)", { text: "低延迟" }],
+    [".corpus-card-p1 .cca-topics text:nth-of-type(3)", { text: "并发" }],
+    [".corpus-card-p1 .cca-tag", { text: "答法" }],
+    [".corpus-card-p2", {}, go("corpus", "resume")],
+    [".corpus-card-p2 .corpus-card-mark", { text: "简历" }],
+    [".corpus-card-p2 .corpus-card-type", { text: "Resume cards" }],
+    [".corpus-card-p2 strong", { text: "简历题卡 + 追问" }],
+    [".corpus-card-p2 small", { text: "每个项目、每个技术栈一张题卡，并补好可复用的追问。" }],
+    [".corpus-card-p2 .cca-tag", { text: "项目题卡" }],
+    [".corpus-card-p2 .q1 text", { text: "为什么" }],
+    [".corpus-card-p2 .q2 text", { text: "取舍" }],
+    [".corpus-card-p2 .q3 text", { text: "量化" }],
+    [".corpus-review-lane-head span", { text: "More" }],
+    [".corpus-review-lane-head strong", { text: "岗位与复盘" }],
+    [".corpus-review-link:nth-of-type(1)", {}, go("corpus", "jd")],
+    [".corpus-review-link:nth-of-type(1) b", { text: "JD" }],
+    [".corpus-review-link:nth-of-type(1) span", { text: "JD 与反问" }],
+    [".corpus-review-link:nth-of-type(1) small", { text: "岗位题与反问环节" }],
+    [".corpus-review-link:nth-of-type(2)", {}, go("custom")],
+    [".corpus-review-link:nth-of-type(2) b", { text: "CV" }],
+    [".corpus-review-link:nth-of-type(2) span", { text: "简历 / JD 定制" }],
+    [".corpus-review-link:nth-of-type(2) small", { text: "生成题卡，改完再入库" }],
+    [".corpus-review-link:nth-of-type(3)", {}, go("reports")],
+    [".corpus-review-link:nth-of-type(3) b", { text: "RP" }],
+    [".corpus-review-link:nth-of-type(3) span", { text: "面试报告" }],
+    [".corpus-review-link:nth-of-type(3) small", { text: "百分制与参考回答" }],
+  ];
+  const ROOTS = [["homePanel", COPY], ["corpusPanel", HUB_COPY]];
   // Numbers the IELTS dashboard fills in; saved and restored like the copy.
   const NUMBERS = ['[data-hx-stat="speaking"]', '[data-hx-stat="writing"]', '[data-hx-stat="last"]',
     "[data-hx-due]", '[data-hx-bank="p1"]', '[data-hx-bank="p2"]', '[data-hx-bank="p3"]'];
@@ -104,7 +144,7 @@
   function remember(el) {
     if (saved.some((item) => item.el === el)) return;
     const attrs = {};
-    ["href", "data-view", "data-home-mode", "data-iv-target"].forEach((name) => { attrs[name] = el.getAttribute(name); });
+    ["href", "data-view", "data-home-mode", "data-corpus-home-target", "data-iv-target"].forEach((name) => { attrs[name] = el.getAttribute(name); });
     const text = firstText(el);
     saved.push({ el, html: el.innerHTML, attrs, text, value: text?.nodeValue });
   }
@@ -118,13 +158,17 @@
     if (!root) return;
     if (mode === "interview") {
       active = true;
-      COPY.forEach(([selector, change, attrs]) => {
-        const el = root.querySelector(selector);
-        if (!el) return;
-        remember(el);
-        if (change.text !== undefined) el.textContent = change.text;
-        else if (change.label !== undefined) { const node = firstText(el); if (node) node.nodeValue = change.label; }
-        if (attrs) setAttrs(el, attrs);
+      ROOTS.forEach(([id, table]) => {
+        const scope = document.getElementById(id);
+        if (!scope) return;
+        table.forEach(([selector, change, attrs]) => {
+          const el = scope.querySelector(selector);
+          if (!el) return;
+          remember(el);
+          if (change.text !== undefined) el.textContent = change.text;
+          else if (change.label !== undefined) { const node = firstText(el); if (node) node.nodeValue = change.label; }
+          if (attrs) setAttrs(el, attrs);
+        });
       });
       NUMBERS.forEach((selector) => root.querySelectorAll(selector).forEach((el) => { remember(el); el.textContent = ""; }));
       refresh();

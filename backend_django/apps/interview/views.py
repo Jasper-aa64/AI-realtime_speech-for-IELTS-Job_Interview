@@ -138,6 +138,16 @@ def profile_jd(request):
     return corpus.import_jd(request.user, json_body(request))
 
 
+@api("POST")
+def profile_resume_commit(request):
+    return corpus.commit_resume(request.user, json_body(request))
+
+
+@api("POST")
+def profile_jd_commit(request):
+    return corpus.commit_jd(request.user, json_body(request))
+
+
 @api("GET", "POST")
 def corpus_entries(request):
     if request.method == "GET":

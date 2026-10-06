@@ -2394,7 +2394,7 @@ function setWritingActionPanelCollapsed(collapsed, { persist = false } = {}) {
   }
 }
 
-const SHARED_MODE_VIEWS = new Set(["home", "history"]);
+const SHARED_MODE_VIEWS = new Set(["home", "history", "corpus"]);
 
 function switchView(view, options = {}) {
   if ((view === "interview" || isInterviewView(view)) && !state.desktopCapabilities?.mock_interview) view = "home";
@@ -12089,8 +12089,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
   }
   if (attempt.interview_score) {
     renderInterviewDetail(detailPanel, attempt);
-    if (preserveScroll) detailPanel.scrollTop = previousScrollTop;
-    else detailPanel.scrollTo({ top: 0, behavior: "smooth" });
+    bindReportDetailControls(detailPanel, preserveScroll, previousScrollTop);
     return;
   }
   const score = attempt.ielts_score || {};
@@ -12133,6 +12132,12 @@ function renderDetail(attempt, updateView = true, options = {}) {
     ${p2CueCard}
     ${isMock ? mockTurnSections(attempt, turns) : turnTableSection(attempt, turns, isP2)}
   `;
+  bindReportDetailControls(detailPanel, preserveScroll, previousScrollTop);
+}
+
+// Buttons inside a rendered speaking report (regenerate, 编辑语料库, P3 from P2), scroll restore and warm-ups;
+// shared by the IELTS report and the interview report.
+function bindReportDetailControls(detailPanel, preserveScroll, previousScrollTop) {
   document.querySelectorAll("[data-regenerate-turn]").forEach((button) => {
     button.addEventListener("click", () => regenerateTurnFeedback(button));
   });
@@ -12157,6 +12162,7 @@ function renderDetail(attempt, updateView = true, options = {}) {
       p2QuestionId: button.dataset.p2QuestionId || "",
       followupId: button.dataset.followupId || "",
       entryId: button.dataset.p2CorpusEntryId || "",
+      parentEntryId: button.dataset.parentEntryId || "",
       title: button.dataset.title || "",
       category: button.dataset.category || "",
       label: button.dataset.label || "",
@@ -12284,6 +12290,9 @@ function localReportCorpusSavedState(button) {
     return reportCorpusSavedOverrides.get(overrideKey);
   }
   const kind = button.dataset.corpusKind || "";
+  if (kind === "interview") {
+    return interview?.corpusSavedForTarget?.({ entryId: button.dataset.p2CorpusEntryId || "", questionId: button.dataset.questionId || "", question: button.dataset.question || "" }) ?? null;
+  }
   if (kind === "p1") {
     const questionId = button.dataset.questionId || "";
     if (!questionId) return null;
@@ -14138,6 +14147,24 @@ function p3CorpusTargetForTurn(turn) {
 }
 
 function corpusTargetForTurn(turn, attempt) {
+  // Interview turns save into the interview corpus; a follow-up hangs under the card its root question came from.
+  if (turn?.part === "interview") {
+    const turns = attempt?.turns || [];
+    let root = turn;
+    for (let guard = 0; root?.prompt?.parent_turn_id && guard < 8; guard += 1) {
+      root = turns.find((item) => item.id === root.prompt.parent_turn_id) || null;
+    }
+    const followUp = turn.prompt?.role === "follow_up";
+    return {
+      kind: "interview",
+      question: turn.question || "",
+      displayQuestion: turn.question || "",
+      entryId: followUp ? "" : turn.prompt?.corpus_entry_id || "",
+      questionId: followUp ? "" : turn.prompt?.question_id || "",
+      parentEntryId: followUp ? root?.prompt?.corpus_entry_id || "" : "",
+      topic: turn.prompt?.stage || "",
+    };
+  }
   // A generated follow-up (P1 identity / P3 adaptive) has no editable corpus of
   // its own — it was produced on the fly. Its corpus lives on the ORIGINAL
   // question it was adapted from, so resolve the source turn and target that.
@@ -14156,6 +14183,10 @@ function corpusTargetForTurn(turn, attempt) {
 
 async function openReportCorpusTarget(target) {
   if (!target) return;
+  if (target.kind === "interview") {
+    await interview?.openCorpusFromReport?.({ ...target, stage: target.topic, aiAnswer: target.aiAnswer || "" });
+    return;
+  }
   if (target.kind === "p1") {
     await openP1CorpusEditor({
       question_id: target.questionId || "",
@@ -14245,6 +14276,7 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
         data-p2-question-id="${escapeHtml(corpusTarget.p2QuestionId || "")}"
         data-followup-id="${escapeHtml(corpusTarget.followupId || "")}"
         data-p2-corpus-entry-id="${escapeHtml(corpusTarget.entryId || "")}"
+        data-parent-entry-id="${escapeHtml(corpusTarget.parentEntryId || "")}"
         data-title="${escapeHtml(corpusTarget.title || "")}"
         data-category="${escapeHtml(corpusTarget.category || "")}"
         data-label="${escapeHtml(corpusTarget.label || "")}"><svg class="corpus-edit-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11M4 12h7M4 17h5"></path><path d="m15.5 15.5 4-4a1.4 1.4 0 0 1 2 2l-4 4-2.6.6z"></path></svg><span class="corpus-edit-label">编辑语料库</span></button>`
