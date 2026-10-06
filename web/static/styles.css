@@ -46934,7 +46934,6 @@ body:not(#_):not(#__) #interviewCustom .iv-draft-remove:hover { background: colo
 #interviewResume .iv-resume-generate .p2-brainstorm-open-card { position: relative; }
 
 /* ---------- Resume card: 简述 + 简历原文 on the card; the P2 素材 dialog with a STAR body ---------- */
-.iv-card-dialog .iv-card-dialog-card { grid-template-rows: auto auto auto auto minmax(260px, 1fr) auto; }
 .iv-card-dialog #ivCardNameField.hidden { display: none; }
 .iv-card-dialog .p2-corpus-form-grid:has(#ivCardNameField.hidden) { display: none; }
 .iv-card-dialog .iv-card-excerpt-field { display: grid; gap: 6px; }
@@ -46956,9 +46955,6 @@ body:not(#_) .iv-card-dialog .iv-danger { color: var(--danger, #d9534f); }
 
 /* Card dialog: 名称 / 简述 split evenly; 简历原文 and STAR are both Markdown editors (excerpt shorter). */
 .iv-card-dialog .p2-corpus-form-grid { grid-template-columns: minmax(0, 1fr); }
-.iv-card-dialog .iv-card-dialog-card { grid-template-rows: auto auto auto auto minmax(240px, 1fr) auto; }
-.iv-card-dialog .iv-card-excerpt-field .corpus-editor-frame { height: 150px; min-height: 120px; }
-.iv-card-dialog .iv-card-excerpt-field textarea.iv-card-excerpt-text { min-height: 120px; max-height: none; }
 /* Wider question fields in the corpus editor. */
 .iv-corpus-editor .corpus-dialog-title-line { display: flex; align-items: center; gap: 10px; width: 100%; }
 .iv-corpus-editor .p1-corpus-dialog-head > div:first-child { flex: 1 1 auto; min-width: 0; }
@@ -46967,3 +46963,15 @@ body:not(#_) .iv-card-dialog .iv-danger { color: var(--danger, #d9534f); }
 #interviewResume .p2-seasonal-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 1180px) { #interviewResume .p2-seasonal-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { #interviewResume .p2-seasonal-card-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Card dialog: 简述 on top, then 简历原文 | STAR 正文 side by side, each a full-height Markdown editor. */
+.iv-card-dialog .iv-card-dialog-card { grid-template-rows: auto auto minmax(340px, 1fr) auto; }
+.iv-card-dialog .iv-card-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 16px; min-height: 0; }
+.iv-card-dialog .iv-card-col { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; min-height: 0; }
+.iv-card-dialog .iv-card-col-head { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+.iv-card-dialog .iv-card-col-head .p1-corpus-label { margin: 0 auto 0 0; }
+.iv-card-dialog .iv-card-col .corpus-editor-frame { height: 100%; min-height: 0; }
+.iv-card-dialog .iv-card-col textarea.p1-corpus-textarea { height: 100%; min-height: 240px; }
+@media (max-width: 900px) {
+  .iv-card-dialog .iv-card-columns { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(240px, auto); }
+}

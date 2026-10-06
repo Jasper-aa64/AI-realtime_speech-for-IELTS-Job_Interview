@@ -26,7 +26,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261006-interview-79">
+    <link rel="stylesheet" href="/styles.css?v=20261006-interview-80">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -649,15 +649,20 @@
                 <input id="ivCardName" type="text" maxlength="200">
               </label>
             </div>
-            <label class="iv-card-excerpt-field">
-              <span class="p1-corpus-label">简历原文</span>
-              <textarea id="ivCardExcerpt" class="p1-corpus-textarea iv-card-excerpt-text" spellcheck="true"></textarea>
-            </label>
-            <div class="corpus-dictate-label-row iv-card-text-row">
-              <label id="ivCardTextLabel" class="p1-corpus-label" for="ivCardText">STAR 正文</label>
-              <button id="ivCardStar" class="ghost iv-card-star" type="button">插入 STAR 模板</button>
+            <!-- Left: the resume's own lines; right: the STAR body. Both are Markdown editors. -->
+            <div class="iv-card-columns">
+              <div class="iv-card-col iv-card-excerpt-field">
+                <div class="iv-card-col-head"><label class="p1-corpus-label" for="ivCardExcerpt">简历原文</label></div>
+                <textarea id="ivCardExcerpt" class="p1-corpus-textarea iv-card-excerpt-text" spellcheck="true"></textarea>
+              </div>
+              <div class="iv-card-col iv-card-text-col">
+                <div class="iv-card-col-head iv-card-text-row">
+                  <label id="ivCardTextLabel" class="p1-corpus-label" for="ivCardText">STAR 正文</label>
+                  <button id="ivCardStar" class="ghost iv-card-star" type="button">插入 STAR 模板</button>
+                </div>
+                <textarea id="ivCardText" class="p1-corpus-textarea" spellcheck="true"></textarea>
+              </div>
             </div>
-            <textarea id="ivCardText" class="p1-corpus-textarea" spellcheck="true"></textarea>
             <div class="p1-corpus-dialog-actions">
               <button id="ivCardDelete" class="ghost iv-danger hidden" type="button">删除这张题卡</button>
               <span id="ivCardDialogStatus"></span>
@@ -1942,16 +1947,16 @@
     <script src="/realtime-pcm-uplink.js?v=20260530-realtime-pcm-uplink"></script>
     <script src="/speaking-audio-preprocessor-runtime.js?v=20260530-speaking-audio-preprocessor-runtime"></script>
     <script src="/api-client.js?v=20260612-p1-clear-confirmed-1"></script>
-    <script src="/native-bridge.js?v=20261006-interview-79"></script>
-    <script src="/corner-morph.js?v=20261006-interview-79"></script>
-    <script src="/interview-corpus.js?v=20261006-interview-79"></script>
-    <script src="/interview-launch.js?v=20261006-interview-79"></script>
-    <script src="/interview-home.js?v=20261006-interview-79"></script>
-    <script src="/interview.js?v=20261006-interview-79"></script>
+    <script src="/native-bridge.js?v=20261006-interview-80"></script>
+    <script src="/corner-morph.js?v=20261006-interview-80"></script>
+    <script src="/interview-corpus.js?v=20261006-interview-80"></script>
+    <script src="/interview-launch.js?v=20261006-interview-80"></script>
+    <script src="/interview-home.js?v=20261006-interview-80"></script>
+    <script src="/interview.js?v=20261006-interview-80"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>
-    <script src="/app.js?v=20261006-interview-79"></script>
+    <script src="/app.js?v=20261006-interview-80"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
-    <script src="/home-dashboard.js?v=20261006-interview-79"></script>
+    <script src="/home-dashboard.js?v=20261006-interview-80"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>
   </body>
 </html>
