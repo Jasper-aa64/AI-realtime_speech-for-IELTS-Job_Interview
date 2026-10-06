@@ -414,8 +414,12 @@
     }
 
     // A corpus card's 直接练习: start that card's practice with the card already chosen.
-    function preset(view, { projectIds = [], entryIds = [] } = {}) {
+    function preset(view, { projectIds = [], entryIds = [], jdText = "", reverse = [] } = {}) {
       load();
+      if (view === "iv_reverse") {
+        if (jdText) launch.jd = jdText;
+        if (reverse.length) launch.reverse = reverse.slice(0, REVERSE_MAX);
+      }
       if (view === "iv_project" && projectIds.length) {
         launch.projectSource = "corpus";
         launch.projectIds = new Set(projectIds);

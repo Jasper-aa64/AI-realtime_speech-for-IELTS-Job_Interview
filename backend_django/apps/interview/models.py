@@ -42,6 +42,7 @@ class InterviewCorpusEntry(UserOwnedModel):
         AWARD = "award", "奖项"
         JD_QUESTION = "jd_question", "岗位题"
         REVERSE_QUESTION = "reverse_question", "反问"
+        JD = "jd", "JD"
 
     class Source(models.TextChoices):
         CURATED = "curated", "精选题库"

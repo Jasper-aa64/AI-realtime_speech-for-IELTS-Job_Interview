@@ -46987,3 +46987,6 @@ body:not(#_) .iv-card-dialog .iv-danger { color: var(--danger, #d9534f); }
 #interviewResume .iv-card-excerpt ol li { list-style: decimal; }
 #interviewResume .iv-card-excerpt strong { color: var(--ink); font-weight: 700; }
 #interviewResume .iv-card-excerpt code { font-family: var(--ed-mono, ui-monospace); font-size: 0.92em; }
+/* JD card dialog: one column, the JD itself. */
+.iv-card-dialog.is-jd .iv-card-columns { grid-template-columns: minmax(0, 1fr); }
+.iv-card-dialog.is-jd .iv-card-excerpt-field { display: none; }

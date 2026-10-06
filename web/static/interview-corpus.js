@@ -22,6 +22,7 @@
     { id: "project", label: "项目", color: "#0284c7", tone: "object" },
     { id: "intern", label: "实习", color: "#7c3aed", tone: "person" },
     { id: "stack", label: "技术栈", color: "#059669", tone: "place" },
+    { id: "jd", label: "JD 与反问", color: "#d97706", tone: "event" },
     { id: "intro", label: "自我介绍", color: "#d97706", tone: "event" },
     { id: "award", label: "获奖", color: "#db2777", tone: "special" },
   ];
@@ -37,11 +38,13 @@
       create: { placeholder: "技术方向，如 C++ / 低延迟 / AI Native", askQuestion: true, fields: (name) => ({ kind: "knowledge", group: name }) } },
     { id: "award", label: "获奖", tone: "special", mark: "奖",
       create: { placeholder: "一句话简述，如 ACM-ICPC 区域赛银奖", fields: (name) => ({ kind: "award", title: name, question: `讲讲你的「${name}」经历。` }) } },
-    { id: "intro", label: "自我介绍", tone: "event", mark: "我", single: true,
-      create: { fields: () => ({ kind: "self_intro", title: "自我介绍", question: "请先做一个简单的自我介绍。" }) } },
+    // A JD card: 简述 = the role, 正文 = the JD itself; its 追问 are that role's questions and questions to ask.
+    { id: "jd", label: "JD 与反问", tone: "event", mark: "岗",
+      create: { placeholder: "岗位简述，如 某券商 · C++ 低延迟开发", fields: (name) => ({ kind: "jd", title: name, question: `「${name}」岗位 JD` }) } },
   ];
   const CUES = {
     project: { kicker: "项目", bullets: ["项目背景与目标", "你负责的部分", "技术难点与取舍"], close: "最后讲清结果，最好有量化数据。" },
+    jd: { kicker: "JD", bullets: [], close: "" },
     intern: { kicker: "实习", bullets: ["公司与团队做什么", "你负责的事情", "遇到的难题与解决"], close: "最后讲清产出和收获。" },
     intro: { kicker: "自我介绍", bullets: ["你是谁、在读什么", "最能代表你的项目", "技术方向与优势"], close: "并说明为什么适合这个岗位。" },
     award: { kicker: "获奖", bullets: ["什么比赛 / 奖项", "你在团队里做了什么", "最难的一关"], close: "以及这段经历让你学到了什么。" },
@@ -170,13 +173,17 @@
       stacks.forEach((rows, group) => cards.push({ type: "stack", group, title: group, follows: rows }));
       all.filter((entry) => entry.kind === "award").sort((a, b) => a.order - b.order)
         .forEach((entry) => cards.push({ type: "award", entry, title: entry.title || entry.question, follows: children(entry) }));
+      all.filter((entry) => entry.kind === "jd")
+        .forEach((entry) => cards.push({ type: "jd", entry, title: entry.title || entry.question, follows: children(entry) }));
       return cards.map((card) => ({ ...card, key: card.entry ? card.entry.id : `stack:${card.group}` }));
     }
 
     function cueHtml(card) {
       if (card.type !== "stack") {
         // Resume cards show the resume's own lines for this experience, rendered as Markdown; the STAR body is behind 正文.
-        const excerpt = unescapeMarkdown(card.entry.resume_excerpt).trim();
+        // A JD card shows the JD itself.
+        const excerpt = unescapeMarkdown(card.type === "jd" ? card.entry.corpus_text : card.entry.resume_excerpt).trim();
+        if (card.type === "jd" && !excerpt) return `<div class="p2-seasonal-cue iv-card-excerpt is-empty"><p>JD 正文待填 · 点「正文」贴上</p></div>`;
         return excerpt
           ? `<div class="p2-seasonal-cue iv-card-excerpt">${renderMarkdown(excerpt)}</div>`
           : `<div class="p2-seasonal-cue iv-card-excerpt is-empty"><p>简历原文待填 · 点「正文」补上</p></div>`;
@@ -205,7 +212,7 @@
               <span class="p2-seasonal-card-kicker">${esc(kicker)} · ${esc((card.entry ? card.entry.source === "custom" : card.follows.every((entry) => entry.source === "custom")) ? "自定义" : "简历")}</span>
               <h3>${esc(card.title)}</h3>
             </div>
-            <span class="p2-seasonal-card-state${bodyReady ? " is-ready" : ""}">${hasBody ? (bodyReady ? "STAR 已填" : "STAR 待填") : `答法 ${saved}/${total}`}</span>
+            <span class="p2-seasonal-card-state${bodyReady ? " is-ready" : ""}">${hasBody ? `${card.type === "jd" ? "JD" : "STAR"} ${bodyReady ? "已填" : "待填"}` : `答法 ${saved}/${total}`}</span>
           </header>
           <div class="p2-seasonal-body">
             ${cueHtml(card)}
@@ -215,13 +222,13 @@
             </button>
           </div>
           <div class="p2-seasonal-p3-progress" data-progress="${progress}" aria-label="追问完成进度 ${saved}/${total}">
-            <span class="p2-seasonal-p3-progress-label">${card.type === "stack" ? "题目" : "追问"}</span>
+            <span class="p2-seasonal-p3-progress-label">${card.type === "stack" ? "题目" : card.type === "jd" ? "反问" : "追问"}</span>
             <span class="p2-seasonal-p3-progress-track"><span style="width: ${progress}%"></span></span>
             <span class="p2-seasonal-p3-progress-count">${saved}/${total}</span>
           </div>
           <footer>
             ${hasBody ? `<button type="button" class="p2-seasonal-action primary" data-ivc-body="${esc(card.key)}">正文</button>` : ""}
-            <button type="button" class="p2-seasonal-action${saved ? " is-ready" : ""}" data-ivc-follow="${esc(card.key)}">${card.type === "stack" ? "题目与答法" : "追问"}</button>
+            <button type="button" class="p2-seasonal-action${saved ? " is-ready" : ""}" data-ivc-follow="${esc(card.key)}">${card.type === "stack" ? "题目与答法" : card.type === "jd" ? "岗位题与反问" : "追问"}</button>
           </footer>
         </article>`;
     }
@@ -230,7 +237,7 @@
       return cards.filter((card) => card.type === section.id).map((card, index) => {
         const followed = card.follows.filter(ready).length;
         const status = card.type === "stack" ? `${card.follows.length} 道题 · 已答 ${followed}`
-          : [ready(card.entry) ? "STAR 已填" : "STAR 待填", card.follows.length ? `追问 ${followed}/${card.follows.length}` : ""].filter(Boolean).join(" · ");
+          : [`${card.type === "jd" ? "JD" : "STAR"} ${ready(card.entry) ? "已填" : "待填"}`, card.follows.length ? `${card.type === "jd" ? "题目" : "追问"} ${followed}/${card.follows.length}` : ""].filter(Boolean).join(" · ");
         const items = card.entry
           ? `<button type="button" role="menuitem" data-ivc-body="${esc(card.key)}">修改</button>
              <button type="button" role="menuitem" class="danger" data-ivc-delete="${esc(card.key)}">删除</button>`
@@ -290,7 +297,7 @@
       const count = (id) => cards.filter((card) => card.type === id).length;
       const visible = filter === "all" ? cards : cards.filter((card) => card.type === filter);
       const filters = `<div class="p2-cat-filter-bar" role="group" aria-label="按类型筛选">
-          ${FILTERS.map((item) => `<button type="button" class="p2-cat-filter-btn${filter === item.id ? " active" : ""}" data-ivc-filter="${item.id}"${item.color ? ` style="--filter-color:${item.color}"` : ""}>${esc(item.label)} <span>${item.id === "all" ? cards.length : count(item.id)}</span></button>`).join("")}
+          ${FILTERS.filter((item) => item.id !== "intro" || count("intro")).map((item) => `<button type="button" class="p2-cat-filter-btn${filter === item.id ? " active" : ""}" data-ivc-filter="${item.id}"${item.color ? ` style="--filter-color:${item.color}"` : ""}>${esc(item.label)} <span>${item.id === "all" ? cards.length : count(item.id)}</span></button>`).join("")}
         </div>`;
       return `<section id="interviewResume" class="p2-corpus-panel" aria-label="简历题卡">
           <div class="p2-corpus-shell">
@@ -496,8 +503,10 @@
     function openCard(entry, section = null) {
       const root = byId("ivCardDialog");
       if (!root) return;
-      const type = section?.id || (entry.kind === "self_intro" ? "intro" : entry.kind === "award" ? "award" : entry.group === "实习" ? "intern" : "project");
-      const meta = SECTIONS.find((item) => item.id === type);
+      const type = section?.id || (entry.kind === "self_intro" ? "intro" : entry.kind === "award" ? "award" : entry.kind === "jd" ? "jd" : entry.group === "实习" ? "intern" : "project");
+      const meta = SECTIONS.find((item) => item.id === type) || { id: "intro", label: "自我介绍", create: { fields: () => ({ kind: "self_intro", title: "自我介绍", question: "请先做一个简单的自我介绍。" }) } };
+      const jd = type === "jd";
+      root.classList.toggle("is-jd", jd);
       cardEdit = { entry, section: meta, initial: { text: entry?.corpus_text || "", excerpt: entry?.resume_excerpt || "", name: entry?.title || "" } };
       const intro = type === "intro";
       byId("ivCardDialogMeta").textContent = `简历题卡 · ${meta?.label || ""}`;
@@ -506,8 +515,8 @@
       byId("ivCardName").value = entry?.title || "";
       byId("ivCardName").placeholder = meta?.create?.placeholder || "";
       markdown.set(CARD_EXCERPT, entry?.resume_excerpt || "");
-      byId("ivCardTextLabel").textContent = intro ? "正文" : "STAR 正文";
-      byId("ivCardStar").classList.toggle("hidden", intro);
+      byId("ivCardTextLabel").textContent = jd ? "JD 正文" : intro ? "正文" : "STAR 正文";
+      byId("ivCardStar").classList.toggle("hidden", intro || jd);
       byId("ivCardDelete").classList.toggle("hidden", !entry?.id);
       byId("ivCardDialogStatus").textContent = "";
       markdown.set(CARD_TEXT, entry?.corpus_text || "");
@@ -587,7 +596,7 @@
       if (!card || !root) return;
       follow = { key, selected: selected || card.follows[0]?.id || "new", initial: "" };
       byId("ivFollowDialogMeta").textContent = `简历题卡 · ${card.type === "stack" ? "技术栈" : CUES[card.type].kicker}`;
-      byId("ivFollowDialogTitle").textContent = card.type === "stack" ? `题目与答法：${card.title}` : `编辑追问：${card.title}`;
+      byId("ivFollowDialogTitle").textContent = card.type === "stack" ? `题目与答法：${card.title}` : card.type === "jd" ? `岗位题与反问：${card.title}` : `编辑追问：${card.title}`;
       renderFollow();
       root.classList.remove("hidden");
       markdown.ready(FOLLOW_TEXT);
@@ -605,7 +614,7 @@
               <strong>Q${index + 1}</strong><span>${esc(entry.question)}</span><em>${ready(entry) ? "已填" : "待填"}</em>
             </button>`).join("")}
           <button type="button" class="p2-bank-p3-question-button iv-follow-new${follow.selected === "new" ? " is-active" : ""}" data-ivc-follow-select="new">
-            <strong>＋</strong><span>${card.type === "stack" ? "自己出一道题" : "写一个新追问"}</span><em>自定义</em>
+            <strong>＋</strong><span>${card.type === "stack" ? "自己出一道题" : card.type === "jd" ? "写一个反问" : "写一个新追问"}</span><em>自定义</em>
           </button>
         </div>`;
       const editable = !current || ["custom", "practice", "resume"].includes(current.source);
@@ -645,6 +654,8 @@
           payload = await request(`/api/interview/corpus/${encodeURIComponent(current.id)}/`, body, { method: "PATCH" });
         } else if (card.type === "stack") {
           payload = await request("/api/interview/corpus/", { kind: "knowledge", group: card.group, question, corpus_text: text });
+        } else if (card.type === "jd") {
+          payload = await request("/api/interview/corpus/", { kind: "reverse_question", parent_id: card.entry.id, question, corpus_text: text });
         } else {
           payload = await request("/api/interview/corpus/", { kind: "project_followup", parent_id: card.entry.id, question, corpus_text: text });
         }
@@ -784,6 +795,7 @@
         if (!card) return;
         if (card.type === "stack") startPractice("knowledge", { entryIds: card.follows.map((entry) => entry.id) });
         else if (card.type === "project" || card.type === "intern") startPractice("project", { projectIds: [card.entry.id] });
+        else if (card.type === "jd") startPractice("reverse", { jdText: card.entry.corpus_text || "", reverse: card.follows.filter((e) => e.kind === "reverse_question").map((e) => e.question) });
         else startPractice("full", {});
       }
     }

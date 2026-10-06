@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.ai.http_provider import HttpApiProviderConfig, HttpApiProviderResult
@@ -220,6 +220,7 @@ class InterviewApiTests(TestCase):
         self.assertEqual(len(self.client.get("/api/interview/sessions/").json()["sessions"]), 100)
 
 
+@override_settings(INTERVIEW_AI_SOURCE="")
 class InterviewAiLifecycleTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="ai-owner", password="test-password")
@@ -273,6 +274,26 @@ class InterviewAiLifecycleTests(TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertEqual(AITask.objects.count(), 0)
         self.assertNotIn("secret-value", response.content.decode())
+
+
+class InterviewLocalCodexTests(TestCase):
+    """By default the interview's AI runs on the local Codex CLI: no wallet balance needed, nothing charged."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="codex-owner", password="test-password")
+        self.client.force_login(self.user)
+
+    @override_settings(INTERVIEW_AI_SOURCE="codex_cli", CODEX_MODEL="gpt-6-luna")
+    def test_codex_runs_without_balance_and_is_not_billed(self):
+        output = json.dumps({"questions": [{"prompt": "讲讲你的实习", "category": "projects", "difficulty": "intermediate"}]})
+        with patch("apps.interview.ai_services.run_codex", return_value=(output, {"input_tokens": 10, "output_tokens": 5})) as codex:
+            response = self.client.post("/api/interview/custom-questions/", json.dumps({"resume_text": "C++ 实习", "job_description": "C++", "count": 1}),
+                                        content_type="application/json")
+        self.assertEqual(response.status_code, 200, response.content)
+        codex.assert_called_once()
+        task = AITask.objects.get(task_type="interview_custom_questions")
+        self.assertEqual((task.status, task.provider, task.model), ("succeeded", "codex_cli", "gpt-6-luna"))
+        self.assertIsNone(task.usage_id)
 
 
 class PdfBoundsTests(TestCase):

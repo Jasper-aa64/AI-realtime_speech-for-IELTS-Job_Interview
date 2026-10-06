@@ -205,6 +205,11 @@ AI_PROVIDER_MODE = str(os.environ.get("AI_PROVIDER_MODE", "local_safe")).strip()
 AI_DEFAULT_PROVIDER = str(os.environ.get("AI_DEFAULT_PROVIDER", "codex")).strip().lower() or "codex"
 AI_ALLOW_MOCK_SUCCESS = env_flag("AI_ALLOW_MOCK_SUCCESS", default=False)
 AI_PROVIDER_ENABLE_CODEX = env_flag("AI_PROVIDER_ENABLE_CODEX", default=True)
+# Model passed to `codex exec -m` (the local Codex CLI). gpt-6-luna works with a ChatGPT-account login.
+CODEX_MODEL = os.environ.get("CODEX_MODEL", "gpt-6-luna").strip()
+# The mock interview's AI (interviewer, scoring, resume / JD drafts, AI assistant) runs on this source;
+# "codex_cli" uses the local Codex CLI on the user's own subscription, so it bypasses the app wallet.
+INTERVIEW_AI_SOURCE = os.environ.get("INTERVIEW_AI_SOURCE", "codex_cli").strip()
 AI_PROVIDER_ENABLE_OPENAI = env_flag("AI_PROVIDER_ENABLE_OPENAI", default=False)
 AI_PROVIDER_ENABLE_CLAUDE = env_flag("AI_PROVIDER_ENABLE_CLAUDE", default=False)
 # HTTP provider endpoint — read from environment; never hardcode secrets here.

@@ -7,6 +7,7 @@ urlpatterns = [
     path("profile/", views.profile, name="interview-profile"),
     path("profile/resume/", views.profile_resume, name="interview-profile-resume"),
     path("profile/jd/", views.profile_jd, name="interview-profile-jd"),
+    path("assistant/", views.assistant_chat, name="interview-assistant"),
     path("profile/resume/commit/", views.profile_resume_commit, name="interview-profile-resume-commit"),
     path("profile/jd/commit/", views.profile_jd_commit, name="interview-profile-jd-commit"),
     path("corpus/", views.corpus_entries, name="interview-corpus"),

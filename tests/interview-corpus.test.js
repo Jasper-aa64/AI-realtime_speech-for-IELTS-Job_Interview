@@ -130,7 +130,8 @@ test("resume: the P2 category grid lists every kind with a 新增 row, so an emp
   const env = harness([]);
   env.data.categories = [{ id: "cpp", label: "C++ 基础与进阶" }];
   const page = env.screens.render("resume");
-  for (const label of ["项目", "实习", "技术栈", "获奖", "自我介绍"]) assert.match(page, new RegExp(`新增${label}`));
+  for (const label of ["项目", "实习", "技术栈", "获奖", "JD 与反问"]) assert.match(page, new RegExp(`新增${label}`));
+  assert.doesNotMatch(page, /新增自我介绍/);
   assert.match(page, /从简历生成/);
   env.click({ ivcCreate: "intern" });
   assert.equal(env.ids.ivCardDialog.classes.has("hidden"), false, "the card dialog opens");

@@ -19,6 +19,8 @@ KINDS = {choice for choice, _ in Entry.Kind.choices}
 EDITABLE_QUESTION_SOURCES = {Entry.Source.CUSTOM, Entry.Source.RESUME, Entry.Source.JD, Entry.Source.PRACTICE}
 SELF_INTRO_QUESTION = "请先做一个简单的自我介绍。"
 FOLLOW_UP_PARENTS = {Entry.Kind.PROJECT, Entry.Kind.SELF_INTRO, Entry.Kind.AWARD}
+# A JD card's follow-ups are that role's questions: role questions and questions to ask.
+JD_CHILDREN = {Entry.Kind.JD_QUESTION, Entry.Kind.REVERSE_QUESTION}
 CURATED = {question["id"]: question for question in QUESTIONS}
 CATEGORY_LABELS = {item["id"]: item["label"] for item in CATEGORIES}
 
@@ -176,18 +178,27 @@ def commit_jd(user, payload):
 def _apply_jd(user, jd, result):
     with transaction.atomic():
         profile = profile_for(user, lock=True)
-        kept = []
+        # Every JD is its own card (简述 = role, 正文 = the JD); its questions hang under it, and re-generating the
+        # same JD only retires that JD's old questions.
+        role = result["summary"]["role"] or "目标岗位"
+        prefix = f"jd:{digest(jd)}:"
+        card = _upsert(user, source_key=f"{prefix}card", kind=Entry.Kind.JD, question=f"「{role}」岗位 JD", source=Entry.Source.JD,
+                       title=role, metadata={"requirements": result["summary"].get("requirements", [])})
+        if not card.corpus_text:
+            card.corpus_text = jd
+            card.save(update_fields=["corpus_text", "updated_at"])
+        kept = [f"{prefix}card"]
         for index, item in enumerate(result["questions"]):
-            key = f"jd:q:{digest(item['question'])}"
+            key = f"{prefix}q:{digest(item['question'])}"
             _upsert(user, source_key=key, kind=Entry.Kind.JD_QUESTION, question=item["question"], source=Entry.Source.JD,
-                    ai_draft=item["draft"], group=result["summary"]["role"], order=index)
+                    ai_draft=item["draft"], group=role, parent=card, order=index)
             kept.append(key)
         for index, item in enumerate(result["reverse_questions"]):
-            key = f"jd:reverse:{digest(item['question'])}"
+            key = f"{prefix}reverse:{digest(item['question'])}"
             _upsert(user, source_key=key, kind=Entry.Kind.REVERSE_QUESTION, question=item["question"], source=Entry.Source.JD,
-                    ai_draft=item["draft"], order=index)
+                    ai_draft=item["draft"], parent=card, order=index)
             kept.append(key)
-        _mark_orphans(user, "jd:", kept)
+        _mark_orphans(user, prefix, kept)
         profile.jd_text, profile.jd_summary, profile.jd_updated_at = jd, result["summary"], timezone.now()
         profile.save()
     return {"profile": profile_payload(profile), **corpus_listing(user)}
@@ -232,9 +243,12 @@ def create_entry(user, payload):
     parent = None
     if payload.get("parent_id"):
         parent = _owned(user, text(payload.get("parent_id"), "parent_id", 40))
-        # Resume cards (a project, the self intro, an award) each keep their own follow-ups, like P2 cards keep P3.
-        if parent.kind not in FOLLOW_UP_PARENTS or kind != Entry.Kind.PROJECT_FOLLOWUP:
-            raise InterviewError("追问只能挂在项目、自我介绍或奖项下面。", code="invalid_parent")
+        # Resume cards (a project, the self intro, an award) each keep their own follow-ups, like P2 cards keep P3;
+        # a JD card keeps its role questions and questions to ask.
+        allowed = (parent.kind in FOLLOW_UP_PARENTS and kind == Entry.Kind.PROJECT_FOLLOWUP) or \
+                  (parent.kind == Entry.Kind.JD and kind in JD_CHILDREN)
+        if not allowed:
+            raise InterviewError("追问只能挂在项目、实习、奖项或 JD 题卡下面。", code="invalid_parent")
     with transaction.atomic():
         if curated:
             existing = Entry.objects.select_for_update().filter(user=user, source_key=source_key).first()

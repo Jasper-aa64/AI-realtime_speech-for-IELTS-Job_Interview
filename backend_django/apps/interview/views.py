@@ -5,7 +5,7 @@ from django.db import OperationalError
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 
-from . import corpus, engine, services
+from . import assistant, corpus, engine, services
 from .models import InterviewSession
 from .validation import InterviewError
 
@@ -136,6 +136,11 @@ def profile_resume(request):
 @api("POST")
 def profile_jd(request):
     return corpus.import_jd(request.user, json_body(request))
+
+
+@api("POST")
+def assistant_chat(request):
+    return assistant.chat(request.user, json_body(request))
 
 
 @api("POST")

@@ -102,6 +102,23 @@ class InterviewCorpusTests(TestCase):
         bad = self.post("/api/interview/profile/resume/commit/", {"resume_text": RESUME, "draft": {"projects": "x"}})
         self.assertEqual(bad.status_code, 400)
 
+    def test_each_jd_is_a_card_holding_its_questions(self):
+        output = {"summary": {"role": "C++ 低延迟开发", "requirements": []},
+                  "questions": [{"question": "讲讲 epoll。", "draft": "d"}],
+                  "reverse_questions": [{"question": "团队怎么衡量延迟？", "draft": "d"}]}
+        response = self.post("/api/interview/profile/jd/commit/", {"job_description": "招聘 C++ 低延迟开发", "draft": output})
+        self.assertEqual(response.status_code, 200, response.content)
+        card = InterviewCorpusEntry.objects.get(user=self.user, kind="jd")
+        self.assertEqual((card.title, card.corpus_text), ("C++ 低延迟开发", "招聘 C++ 低延迟开发"))
+        self.assertEqual(sorted(card.children.values_list("kind", flat=True)), ["jd_question", "reverse_question"])
+        follow = self.post("/api/interview/corpus/", {"kind": "reverse_question", "parent_id": card.entry_id, "question": "新人怎么上手？"})
+        self.assertEqual(follow.status_code, 200, follow.content)
+        other = self.post("/api/interview/profile/jd/commit/", {"job_description": "招聘 AI 工程师",
+                                                                "draft": {**output, "summary": {"role": "AI 工程师", "requirements": []}}})
+        self.assertEqual(other.status_code, 200)
+        self.assertEqual(InterviewCorpusEntry.objects.filter(user=self.user, kind="jd").count(), 2, "a second JD is a second card")
+        self.assertFalse((InterviewCorpusEntry.objects.get(pk=card.pk).metadata or {}).get("orphaned"))
+
     def test_jd_preview_and_commit(self):
         output = {"summary": {"role": "C++ 开发", "requirements": ["C++17"]},
                   "questions": [{"question": "讲讲 epoll。", "draft": "d"}],
@@ -150,7 +167,7 @@ class InterviewCorpusTests(TestCase):
             response = self.post("/api/interview/profile/jd/", {"job_description": "招聘 C++ 低延迟开发"})
         self.assertEqual(response.status_code, 200, response.content)
         kinds = sorted(e["kind"] for e in response.json()["entries"] if e["id"])
-        self.assertEqual(kinds, ["jd_question", "reverse_question"])
+        self.assertEqual(kinds, ["jd", "jd_question", "reverse_question"])
         self.assertEqual(response.json()["profile"]["jd"]["summary"]["role"], "C++ 低延迟开发")
 
     def test_curated_questions_listed_and_saved_once(self):
