@@ -74,7 +74,9 @@ INSTRUCTIONS = {
         "technical_depth 30, project_expression 25, structure 20, role_fit 15, communication 10. If there is no job "
         "description, score role_fit from how well answers match the stated target and say so. Be strict and evidence "
         "based. Return: {\"dimensions\":{\"technical_depth\":{\"score\":0,\"evidence\":\"...\"},...},\"boundary\":\"the "
-        "candidate's demonstrated knowledge limits\",\"per_turn\":[{\"turn_id\":\"...\",\"comment\":\"...\"}],"
+        "candidate's demonstrated knowledge limits\",\"per_turn\":[{\"turn_id\":\"...\",\"comment\":\"...\","
+        "\"reference_answer\":\"a strong spoken answer to that exact question, in the question's language, built on the "
+        "candidate's own facts where they gave any\"}],"
         "\"next_steps\":[\"...\"],\"summary\":\"two or three sentences\"}."
     ),
 }
@@ -196,7 +198,8 @@ def validate(kind, data, inputs):
         per_turn = []
         for item in _list(data.get("per_turn"), 40):
             if isinstance(item, dict) and item.get("turn_id") in known:
-                per_turn.append({"turn_id": item["turn_id"], "comment": text(item.get("comment"), "comment", 800)})
+                per_turn.append({"turn_id": item["turn_id"], "comment": text(item.get("comment"), "comment", 800),
+                                 "reference_answer": text(item.get("reference_answer"), "reference answer", 1500)})
         return {"total": sum(d["score"] for d in scored), "dimensions": scored,
                 "boundary": text(data.get("boundary"), "boundary", 1200),
                 "per_turn": per_turn,

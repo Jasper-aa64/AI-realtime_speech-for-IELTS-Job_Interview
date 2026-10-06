@@ -6876,8 +6876,7 @@ body.theme-dark .language-takeaway-dict-toggle[data-dictionary-mode="en"] .dict-
 
 .exam-status.p1-pixel-flow #examStatusText,
 .exam-status.p1-pixel-flow .exam-actions,
-.exam-status.p1-pixel-flow .p2-corpus-prep,
-.exam-status.p1-pixel-flow #interviewStatusText {
+.exam-status.p1-pixel-flow .p2-corpus-prep {
   position: relative;
   z-index: 3;
 }
@@ -6919,8 +6918,7 @@ body.theme-dark .language-takeaway-dict-toggle[data-dictionary-mode="en"] .dict-
   overflow: hidden !important;
 }
 
-.practice-panel.p3-starting #practiceGrid,
-.practice-panel.p3-starting #interviewPracticeGrid {
+.practice-panel.p3-starting #practiceGrid {
   opacity: 0;
   pointer-events: none;
 }
@@ -37329,33 +37327,27 @@ body.theme-dark .p3-mode-row .p3-mode-switch.high-intensity .p3-mode-option {
 
 .exam-status.p1-pixel-flow #examStatusText,
 .exam-status.p1-pixel-flow .exam-actions,
-.exam-status.p1-pixel-flow .p2-corpus-prep,
-.exam-status.p1-pixel-flow #interviewStatusText {
+.exam-status.p1-pixel-flow .p2-corpus-prep {
   position: relative !important;
   z-index: 3 !important;
 }
 
 .exam-status #progressTrack,
-.exam-status #phaseLabel,
-.exam-status #interviewProgress,
-.exam-status #interviewPhase {
+.exam-status #phaseLabel {
   transition:
     color 680ms ease,
     text-shadow 680ms ease !important;
 }
 
 .exam-status.p1-pixel-flow.p1-pixel-flow-visible #progressTrack,
-.exam-status.p1-pixel-flow.p1-pixel-flow-visible #phaseLabel,
-.exam-status.p1-pixel-flow.p1-pixel-flow-visible #interviewProgress,
-.exam-status.p1-pixel-flow.p1-pixel-flow-visible #interviewPhase {
+.exam-status.p1-pixel-flow.p1-pixel-flow-visible #phaseLabel {
   color: #f8fafc !important;
   text-shadow:
     0 1px 0 rgba(2, 6, 23, 0.6),
     0 0 12px rgba(14, 165, 233, 0.18) !important;
 }
 
-.practice-panel.p3-starting #practiceGrid,
-.practice-panel.p3-starting #interviewPracticeGrid {
+.practice-panel.p3-starting #practiceGrid {
   opacity: 0 !important;
   pointer-events: none !important;
 }
@@ -40531,8 +40523,7 @@ body.theme-dark .language-takeaway-popup.spelling-add-card {
   border-color: rgba(148, 163, 184, 0.30) !important;
 }
 
-body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-entry .p3-bank-entry-btn,
-body.theme-dark:not(.font-academic):not(.font-popular) #interviewPractice .p3-bank-entry .p3-bank-entry-btn {
+body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-entry .p3-bank-entry-btn {
   background: linear-gradient(180deg, #14543f 0%, #0d3f31 100%) !important;
   border: 1px solid rgba(145, 231, 196, 0.44) !important;
   color: #f7fffb !important;
@@ -40543,18 +40534,12 @@ body.theme-dark:not(.font-academic):not(.font-popular) #interviewPractice .p3-ba
 }
 
 body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-entry .p3-bank-entry-btn:hover,
-body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-entry .p3-bank-entry-btn:focus-visible,
-body.theme-dark:not(.font-academic):not(.font-popular) #interviewPractice .p3-bank-entry .p3-bank-entry-btn:hover,
-body.theme-dark:not(.font-academic):not(.font-popular) #interviewPractice .p3-bank-entry .p3-bank-entry-btn:focus-visible {
+body.theme-dark:not(.font-academic):not(.font-popular) #practicePanel .p3-bank-entry .p3-bank-entry-btn:focus-visible {
   background: linear-gradient(180deg, #176a4e 0%, #0f4d3b 100%) !important;
   color: #ffffff !important;
 }
 
-/* Final guard: keep P1 as the geometry source of truth. P2/mock use the same
-   full-bleed header shell so switching views does not shrink the header while
-   the pressure pixel layer is fading. */
-#practicePanel .exam-status,
-#interviewPractice .exam-status {
+#practicePanel .exam-status {
   isolation: isolate !important;
   overflow: visible !important;
   margin: -18px -18px 0 !important;
@@ -40569,8 +40554,7 @@ body.theme-dark:not(.font-academic):not(.font-popular) #interviewPractice .p3-ba
     box-shadow 520ms ease !important;
 }
 
-#practicePanel .exam-status.p1-pixel-flow,
-#interviewPractice .exam-status.p1-pixel-flow {
+#practicePanel .exam-status.p1-pixel-flow {
   overflow: hidden !important;
 }
 
@@ -43735,18 +43719,8 @@ body:not(#_) :is(.language-takeaway-panel, .language-book-shell, #writingReports
   background-image: none !important;
 }
 
-/* ---------- 2. Sheets ---------- */
 body:not(#_) :is(
   #practicePanel,
-  .hx-show, .hx-panel, .hx-area-grid,
-  .detail-card, .history-rail-shell,
-  .writing-editor-card, .writing-result-card,
-  .corpus-top-cards,
-  .language-book-head, .spelling-practice-card > .nr-card,
-  .modal-card, .p1-corpus-dialog-card
-),
-body:not(#_) :is(
-  #interviewPractice,
   .hx-show, .hx-panel, .hx-area-grid,
   .detail-card, .history-rail-shell,
   .writing-editor-card, .writing-result-card,
@@ -43780,16 +43754,8 @@ body:not(#_) :is(.history-list .history-item, .corpus-home-card, .corpus-review-
   box-shadow: none !important;
 }
 
-/* ---------- 3. Wells ---------- */
 body:not(#_) :is(
   #promptPane, #recorderPane,
-  .writing-prompt-card, .writing-calendar,
-  .nr-prompt,
-  .writing-draft-summary > section, .writing-draft-flow > span,
-  .p3-launch-section, .p3-plan-preview
-),
-body:not(#_) :is(
-  #interviewPromptPane, #interviewRecorderPane,
   .writing-prompt-card, .writing-calendar,
   .nr-prompt,
   .writing-draft-summary > section, .writing-draft-flow > span,
@@ -43802,21 +43768,17 @@ body:not(#_) :is(
   box-shadow: none !important;
 }
 
-body:not(#_) #promptPane #promptCard,
-body:not(#_) #interviewPromptPane #interviewPromptCard {
+body:not(#_) #promptPane #promptCard {
   background: transparent !important;
 }
 
 body:not(#_) .writing-prompt-card::before,
 body:not(#_) #promptPane #promptCard::before,
-body:not(#_) .nr-prompt::before,
-body:not(#_) #interviewPromptPane #interviewPromptCard::before {
+body:not(#_) .nr-prompt::before {
   display: none !important;
 }
 
-/* the left rule beside the P1/P2 prompt */
-body:not(#_) #promptPane #promptCard,
-body:not(#_) #interviewPromptPane #interviewPromptCard {
+body:not(#_) #promptPane #promptCard {
   border-left: 0 !important;
   box-shadow: none !important;
 }
@@ -43882,11 +43844,8 @@ body:not(#_) .takeaway-section-heading .tk-sec-num {
   margin-right: 8px;
 }
 
-/* the question itself reads in the serif voice */
 body:not(#_) #promptPane #promptCard,
-body:not(#_) #promptPane #promptCard :is(h1, h2, h3, p, strong),
-body:not(#_) #interviewPromptPane #interviewPromptCard,
-body:not(#_) #interviewPromptPane #interviewPromptCard :is(h1, h2, h3, p, strong) {
+body:not(#_) #promptPane #promptCard :is(h1, h2, h3, p, strong) {
   font-family: var(--ed-serif) !important;
   font-weight: 400 !important;
   letter-spacing: -0.005em !important;
@@ -43898,8 +43857,7 @@ body:not(#_) :is(.writing-stats-grid strong, .nr-gloss, .score-cell.has-meter st
   font-weight: 400 !important;
 }
 
-body:not(#_) :is(#timerValue, .inline-timer, .nr-progress-text, .nr-stat b, #spellingDrillStats b),
-body:not(#_) :is(#interviewTimer, .inline-timer, .nr-progress-text, .nr-stat b, #spellingDrillStats b) {
+body:not(#_) :is(#timerValue, .inline-timer, .nr-progress-text, .nr-stat b, #spellingDrillStats b) {
   font-family: var(--ed-mono) !important;
   font-weight: 500 !important;
   font-variant-numeric: tabular-nums;
@@ -44200,37 +44158,30 @@ body:not(#_) .turn-report-group {
   box-shadow: none !important;
 }
 
-/* ---------- Practice: flat record button, quiet header ---------- */
-body:not(#_) #recordControl,
-body:not(#_) #interviewRecordControl {
+body:not(#_) #recordControl {
   box-shadow: none !important;
 }
 
-body:not(#_) #practicePanel .phase-meter,
-body:not(#_) #interviewPractice .phase-meter {
+body:not(#_) #practicePanel .phase-meter {
   height: 3px !important;
   background: color-mix(in srgb, var(--ink) 7%, transparent) !important;
 }
 
-body:not(#_) #practicePanel .exam-status,
-body:not(#_) #interviewPractice .exam-status {
+body:not(#_) #practicePanel .exam-status {
   border: 0 !important;
   border-bottom: 1px solid var(--line) !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
-body:not(#_) #practicePanel #progressTrack,
-body:not(#_) #interviewPractice #interviewProgress {
+body:not(#_) #practicePanel #progressTrack {
   font-family: var(--ed-serif) !important;
   font-size: 20px !important;
   font-weight: 400 !important;
 }
 
 body:not(#_) #practicePanel #phaseLabel,
-body:not(#_) #practicePanel .p1-mode-help,
-body:not(#_) #interviewPractice #interviewPhase,
-body:not(#_) #interviewPractice .p1-mode-help {
+body:not(#_) #practicePanel .p1-mode-help {
   font-family: var(--ed-mono) !important;
   font-size: 11px !important;
   letter-spacing: 0.06em;
@@ -44315,21 +44266,13 @@ body:not(#_) .shell :is(#interviewCustomSubmit, .p3-start-button, .p3-generate-b
   font-weight: 600 !important;
 }
 
-/* the serif voice never goes bold */
 body:not(#_) .shell :is(#viewTitle, .corpus-home-title, .detail-card h2, .detail-card > h3, .p3-skills-head h3,
   .writing-saved-report-head h2, .language-book-head h2, .spelling-drill-head h2, #writingPromptTitle,
   .writing-card-head h2, .takeaway-section-heading, .hx-area-name, .hx-show-title, .hx-title-main, .hx-title-top,
   #progressTrack, .history-item-band, .writing-stats-grid strong, .nr-gloss, .score-cell strong,
   .corpus-home-card strong, .corpus-review-lane-head strong, .nav-exam-lead-title, .brand span,
   .overall-review-card h3, .writing-overall-head h3, .hx-stat strong, .language-takeaway-card .takeaway-source,
-  #promptCard, #promptCard *),
-body:not(#_) .shell :is(#viewTitle, .corpus-home-title, .detail-card h2, .detail-card > h3, .p3-skills-head h3,
-  .writing-saved-report-head h2, .language-book-head h2, .spelling-drill-head h2, #writingPromptTitle,
-  .writing-card-head h2, .takeaway-section-heading, .hx-area-name, .hx-show-title, .hx-title-main, .hx-title-top,
-  #interviewProgress, .history-item-band, .writing-stats-grid strong, .nr-gloss, .score-cell strong,
-  .corpus-home-card strong, .corpus-review-lane-head strong, .nav-exam-lead-title, .brand span,
-  .overall-review-card h3, .writing-overall-head h3, .hx-stat strong, .language-takeaway-card .takeaway-source,
-  #interviewPromptCard, #interviewPromptCard *) {
+  #promptCard, #promptCard *) {
   font-weight: 400 !important;
 }
 
@@ -44656,18 +44599,15 @@ body:not(#_) :is(.p3-next-drill, .p3-skill-highlight, .p3-skill-item) {
 }
 
 @media (max-width: 760px) {
-  body:not(#_) #practicePanel #practiceGrid,
-body:not(#_) #interviewPractice #interviewPracticeGrid {
+  body:not(#_) #practicePanel #practiceGrid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  body:not(#_) #practicePanel :is(#promptPane, #recorderPane),
-body:not(#_) #interviewPractice :is(#interviewPromptPane, #interviewRecorderPane) {
+  body:not(#_) #practicePanel :is(#promptPane, #recorderPane) {
     min-width: 0 !important;
   }
 
-  body:not(#_) #promptPane #promptCard,
-body:not(#_) #interviewPromptPane #interviewPromptCard {
+  body:not(#_) #promptPane #promptCard {
     font-size: 26px !important;
     overflow-wrap: anywhere;
   }
@@ -45406,17 +45346,13 @@ body:not(#_) .workspace.interview-history-workspace {
   }
 }
 
-/* 标准练习 / 追问压力: the original sliding pill (blue→teal / orange→red) and the
-   pixel-flow ignition stay as designed — the flat panels above must not paint over them. */
 body:not(#_) #p3TopicPanel .p3-mode-row.p3-pixel-flow-visible,
-body:not(#_) #practicePanel .exam-status.p1-pixel-flow-visible,
-body:not(#_) #interviewPractice .exam-status.p1-pixel-flow-visible {
+body:not(#_) #practicePanel .exam-status.p1-pixel-flow-visible {
   background-color: #0a1322 !important;
 }
 
 body:not(#_) #p3TopicPanel .p3-mode-row.p3-pixel-flow,
-body:not(#_) #practicePanel .exam-status.p1-pixel-flow,
-body:not(#_) #interviewPractice .exam-status.p1-pixel-flow {
+body:not(#_) #practicePanel .exam-status.p1-pixel-flow {
   transition: background-color 1180ms ease !important;
 }
 
@@ -46040,14 +45976,11 @@ body:not(#_) #accountSecurityPanel .account-action-row {
   }
 }
 
-/* ---------- 追问压力 in light mode: the header turns dark (#0a1322), so its text turns light ---------- */
-body:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible :is(#progressTrack, #examStatusText strong),
-body:not(#_):not(#__) #interviewPractice .exam-status.p1-pixel-flow-visible :is(#interviewProgress, #interviewStatusText strong) {
+body:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible :is(#progressTrack, #examStatusText strong) {
   color: #f1f5f9 !important;
 }
 
-body:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible :is(#phaseLabel, .p1-mode-help, #examStatusText span),
-body:not(#_):not(#__) #interviewPractice .exam-status.p1-pixel-flow-visible :is(#interviewPhase, .p1-mode-help, #interviewStatusText span) {
+body:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible :is(#phaseLabel, .p1-mode-help, #examStatusText span) {
   color: rgba(226, 232, 240, 0.78) !important;
 }
 
@@ -46442,27 +46375,14 @@ body:not(#_) #interviewCustom .writing-answer { height: 100% !important; min-hei
 #interviewCustom .iv-custom-list li { padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 4%, transparent); font-size: 14px; }
 #interviewCustom .iv-custom-role { margin-top: 10px; font-weight: 600; }
 #interviewCustom .iv-custom-empty { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
-#interviewPanel .iv-pane > #interviewPractice { flex: 1 1 auto; min-height: 0; }
-#interviewPractice { display: flex; flex-direction: column; }
-#interviewPractice > #interviewPracticeGrid { flex: 1 1 auto; min-height: 0; }
-#interviewPracticeGrid > #interviewPromptPane { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-/* Typing an answer: the answer box takes the room and the record button steps down to a small disc. */
-#interviewPracticeGrid > #interviewRecorderPane { overflow-y: auto; overscroll-behavior: contain; }
-body:not(#_) #interviewRecorderPane:has(.iv-answer-box) .record-row { min-height: 0; }
-body:not(#_) #interviewRecorderPane:has(.iv-answer-box) #interviewRecordControl { width: 132px !important; height: 132px !important; min-width: 0 !important; min-height: 0 !important; }
-body:not(#_) #interviewRecorderPane:has(.iv-answer-box) #interviewRecordControl :is(small, .iv-record-icon) { display: none; }
-#interviewPromptPane .iv-launch { display: grid; gap: 14px; padding-top: 4px; }
-#interviewPromptPane .iv-launch-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-#interviewPromptPane .p3-launch-section .iv-count-switch { display: inline-grid; grid-template-columns: repeat(3, minmax(76px, auto)); width: fit-content; }
-#interviewPromptPane .iv-launch-grid .p3-source-option { min-height: 0; justify-content: center; }
 
 body.interview-bare:has(#interviewPanel:not(.hidden)) .topbar,
 body.interview-bare:has(#interviewPanel:not(.hidden)) #viewTitleBlock { display: none !important; }
 body[data-interview-pane]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview"; }
-body[data-interview-pane="practice"][data-interview-part="full"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Mock"; }
-body[data-interview-pane="practice"][data-interview-part="project"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Projects"; }
-body[data-interview-pane="practice"][data-interview-part="knowledge"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Knowledge"; }
-body[data-interview-pane="practice"][data-interview-part="reverse"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Your questions"; }
+body.interview-mode[data-interview-pane="practice"][data-interview-part="full"]:has(#practicePanel:not(.hidden)) { --ed-eyebrow: "Interview · Mock"; }
+body.interview-mode[data-interview-pane="practice"][data-interview-part="project"]:has(#practicePanel:not(.hidden)) { --ed-eyebrow: "Interview · Projects"; }
+body.interview-mode[data-interview-pane="practice"][data-interview-part="knowledge"]:has(#practicePanel:not(.hidden)) { --ed-eyebrow: "Interview · Knowledge"; }
+body.interview-mode[data-interview-pane="practice"][data-interview-part="reverse"]:has(#practicePanel:not(.hidden)) { --ed-eyebrow: "Interview · Your questions"; }
 body[data-interview-pane="reports"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Reports"; }
 body[data-interview-pane="custom"]:has(#interviewPanel:not(.hidden)) { --ed-eyebrow: "Interview · Tailored"; }
 
@@ -46633,11 +46553,6 @@ body:not(#_) #interviewPanel .iv-icon-btn {
 body:not(#_) #interviewPanel .iv-icon-btn:hover:not(:disabled) { border-color: var(--danger, #d9534f); color: var(--danger, #d9534f); }
 
 #interviewPanel .iv-empty-card { display: grid; justify-items: start; gap: 18px; padding: 32px; border: 1px dashed color-mix(in srgb, var(--ink) 20%, transparent); border-radius: 18px; color: var(--muted); }
-
-/* ---------- Session ---------- */
-
-#interviewPanel .iv-answer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-#interviewPanel .iv-count { color: var(--muted); font-family: var(--ed-mono); font-size: 12px; }
 
 /* ---------- Guest ---------- */
 #interviewPanel .iv-guest { display: grid; justify-items: start; gap: 22px; max-width: 640px; padding: clamp(40px, 8vh, 96px) 0; }
@@ -46832,92 +46747,6 @@ body:not(#_) .quick-settings-link {
 
 body:not(#_) :is(.quick-settings-seg button, .quick-settings-select, .quick-settings-link):focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; }
 
-/* =====================================================================
-   MOCK INTERVIEW v2 — practice panel (IELTS practice layout), carousel,
-   100-point report, interview corpus library, editor, resume/JD switch.
-   ===================================================================== */
-
-/* ---------- Practice: the #practicePanel shell itself (ids aliased by scripts/alias_ielts_styles.py) ---------- */
-#interviewPhase .iv-stage { font-weight: inherit; }
-#interviewPhase .iv-stage.is-done { color: var(--accent); }
-#interviewPhase .iv-stage.is-current { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-#interviewPhase i { margin: 0 6px; font-style: normal; opacity: 0.5; }
-
-#interviewPanel .iv-prompt-idle { color: color-mix(in srgb, var(--ink) 80%, transparent); }
-#interviewPanel .iv-prompt-hint { color: var(--muted); font-size: 13.5px; line-height: 1.6; }
-
-#interviewPanel .iv-follow-tag {
-  align-self: flex-start;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
-  font-size: 12.5px;
-  font-weight: 500;
-}
-#interviewPanel .iv-follow-tag.is-probe { background: color-mix(in srgb, var(--ed-gold) 16%, transparent); color: color-mix(in srgb, var(--ed-gold) 80%, var(--ink)); }
-
-#interviewPanel .iv-reply {
-  display: grid;
-  gap: 4px;
-  padding: 12px 14px;
-  border-left: 3px solid var(--ed-gold);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--ed-gold) 7%, transparent);
-}
-#interviewPanel .iv-reply span { color: var(--muted); font-family: var(--ed-mono); font-size: 11px; letter-spacing: 0.08em; }
-#interviewPanel .iv-reply p { color: var(--ink); font-size: 14.5px; line-height: 1.7; }
-
-#interviewPanel .iv-peek-body {
-  margin-top: 8px;
-  padding: 12px 14px;
-  border: 1px dashed color-mix(in srgb, var(--accent) 40%, transparent);
-  border-radius: 12px;
-  white-space: pre-wrap;
-}
-#interviewPanel .iv-peek-body small { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
-#interviewPanel .iv-peek-body p { color: var(--ink); font-size: 14px; line-height: 1.75; }
-
-/* Recorder pane: the IELTS record-control with an interview icon */
-#interviewPanel .iv-record-icon { width: 34px; height: 34px; border-radius: 50%; background: currentColor; opacity: 0.9; transition: border-radius 200ms ease; }
-#interviewPanel .record-control.recording .iv-record-icon { border-radius: 8px; }
-#interviewPanel .iv-record-error { color: var(--danger, #d9534f); }
-#interviewPanel .iv-answer-box { display: grid; gap: 10px; margin-top: 12px; }
-
-body:not(#_) #interviewPanel .iv-answer-box textarea {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 140px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg) 60%, var(--panel));
-  color: var(--ink);
-  font: inherit;
-  font-size: 15px;
-  line-height: 1.75;
-  resize: vertical;
-}
-
-body:not(#_) #interviewPanel .iv-answer-box textarea:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent); }
-#interviewPanel .iv-answer-foot,
-#interviewPanel .iv-answer-alt { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
-#interviewPanel .iv-answer-alt { justify-content: center; margin-top: 10px; }
-#interviewPanel .iv-count { color: var(--muted); font-family: var(--ed-mono); font-size: 12px; }
-
-#interviewPanel .iv-slide-art {
-  position: relative;
-  display: block;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  border-radius: 12px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--bg)), color-mix(in srgb, var(--ed-gold) 14%, var(--bg)));
-}
-
-#interviewPanel .iv-slide-art span { position: absolute; border-radius: 10px; background: color-mix(in srgb, var(--panel) 82%, transparent); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); }
-#interviewPanel .iv-slide-art span:nth-child(1) { left: 8%; top: 12%; width: 46%; height: 64%; }
-#interviewPanel .iv-slide-art span:nth-child(2) { left: 58%; top: 12%; width: 34%; height: 30%; }
-#interviewPanel .iv-slide-art span:nth-child(3) { left: 58%; top: 48%; width: 34%; height: 28%; }
 #interviewPanel .iv-slide-art--1 span:nth-child(1) { width: 84%; height: 30%; }
 #interviewPanel .iv-slide-art--1 span:nth-child(2) { left: 8%; top: 48%; width: 40%; }
 #interviewPanel .iv-slide-art--1 span:nth-child(3) { left: 52%; top: 48%; width: 40%; }
@@ -46952,8 +46781,6 @@ body:not(#_) #interviewPanel .iv-answer-box textarea:focus { outline: none; bord
 
 #interviewPanel .iv-muted { color: var(--muted); }
 body:not(#_) #interviewPanel .iv-danger { color: var(--danger, #d9534f); }
-
-#interviewPanel .iv-dock-spacer { flex: 1 1 auto; }
 
 #interviewCorpus .iv-topic-foot { padding: 4px 18px 14px; }
 #interviewCorpus .iv-topic-foot:empty { display: none; }

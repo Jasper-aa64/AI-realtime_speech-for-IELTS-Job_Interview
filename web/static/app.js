@@ -285,7 +285,10 @@ const SPEAKING_AUDIO_IDB_STORE = "pendingTurnAudio";
 const SPEAKING_AUDIO_IDB_VERSION = 1;
 const SPEAKING_AUDIO_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const QUESTION_BANK_SCOPES = new Set(["current", "new", "retained", "archive", "all"]);
-const PRACTICE_VIEWS = new Set(["mock", "p1", "p2", "p3"]);
+// Mock-interview practice views share the IELTS practice panel; their names are the attempt modes.
+const INTERVIEW_PRACTICE_VIEWS = new Set(["iv_full", "iv_project", "iv_knowledge", "iv_reverse"]);
+const INTERVIEW_STAGE_LABELS = { self_intro: "自我介绍", project: "项目", knowledge: "知识点", award: "奖项", reverse: "反问" };
+const PRACTICE_VIEWS = new Set(["mock", "p1", "p2", "p3", ...INTERVIEW_PRACTICE_VIEWS]);
 const SPEAKING_PART_VIEWS = new Set(["p1", "p2", "p3", "mock"]);
 const SPEAKING_REPORT_FILTERS = new Set(["all", "p1", "p2", "p3", "mock"]);
 const SPEAKING_REPORT_STATUSES = new Set(["unscored", "scoring", "failed", "ready"]);
@@ -641,6 +644,10 @@ const uiTranslations = {
 };
 const viewCopy = {
   interview: ["模拟面试", "技术问题、项目经历与针对岗位的练习。"],
+  iv_full: ["完整面试", "自我介绍 → 项目 → 知识点 → 奖项 → 反问"],
+  iv_project: ["项目深挖", "介绍项目，再接受追问。"],
+  iv_knowledge: ["知识点", "技术栈与精选题库连续问答。"],
+  iv_reverse: ["反问环节", "你来提问，面试官回答。"],
   home: ["首页", "口语、写作和语料复习的综合训练工作台。"],
   mock: ["Mock 模考", "完整模拟 P1、P2 和 P3 的口语考试流程。"],
   p1: ["Part 1 短问短答", "练习 IELTS 风格的短问短答流程。"],
@@ -663,6 +670,10 @@ const viewCopy = {
 };
 const viewCopyEn = {
   interview: ["Mock interview", "Technical questions, project experience, and role-specific practice."],
+  iv_full: ["Full interview", "Intro → projects → knowledge → awards → your questions"],
+  iv_project: ["Projects", "Present a project, then take follow-ups."],
+  iv_knowledge: ["Knowledge", "Rapid questions from your stack and the bank."],
+  iv_reverse: ["Your questions", "You ask; the interviewer answers."],
   home: ["Home", "A focused workspace for speaking, writing, and corpus review."],
   mock: ["Mock", "Run a full P1, P2, and P3 speaking exam flow."],
   p1: ["Part 1", "Practice short questions in an IELTS-style interview flow."],
@@ -780,7 +791,9 @@ function updatePracticeHeaderProgress(turn = state.currentTurn) {
 }
 
 function syncP1ModeHelp(helpEl, { isP1, isHigh, collapsed }) {
-  const nextText = isHigh ? "每题都会追问" : "原题节奏练习";
+  const nextText = isInterviewView(state.view)
+    ? (isHigh ? "面试官会连续追问" : "每题最多追问一次")
+    : (isHigh ? "每题都会追问" : "原题节奏练习");
   window.clearTimeout(state.p1ModeHelpTimer);
   state.p1ModeHelpTimer = null;
   helpEl.classList.toggle("hidden", !isP1);
@@ -805,7 +818,7 @@ function syncP1ModeHelp(helpEl, { isP1, isHigh, collapsed }) {
 }
 
 function syncP1IntensityPanel() {
-  const isP1 = state.view === "p1";
+  const isP1 = state.view === "p1" || isInterviewView(state.view);
   const isHigh = state.p1Intensity === "high";
   const switchEl = $("p1ModeSwitch");
   if (switchEl) {
@@ -826,7 +839,7 @@ function syncP1IntensityPanel() {
 
 function syncP1StatusPixelFlow() {
   const status = document.querySelector(".exam-status");
-  const shouldShowP1 = state.view === "p1" && state.p1Intensity === "high";
+  const shouldShowP1 = (state.view === "p1" || isInterviewView(state.view)) && state.p1Intensity === "high";
   const shouldShowP3 = state.view === "p3" && state.practiceLocked && state.p3Intensity === "high";
   const shouldShow = shouldShowP1 || shouldShowP3;
   status?.classList.toggle(
@@ -894,6 +907,10 @@ function isStandaloneCorpusView(view) {
 
 function isKnownWritingTaskType(value) {
   return WRITING_TASK_TYPES.has(value);
+}
+
+function isInterviewView(view) {
+  return INTERVIEW_PRACTICE_VIEWS.has(String(view || ""));
 }
 
 function isSpeakingPartView(part) {
@@ -2371,9 +2388,9 @@ function setWritingActionPanelCollapsed(collapsed, { persist = false } = {}) {
 const SHARED_MODE_VIEWS = new Set(["home"]);
 
 function switchView(view, options = {}) {
-  if (view === "interview" && !state.desktopCapabilities?.mock_interview) view = "home";
+  if ((view === "interview" || isInterviewView(view)) && !state.desktopCapabilities?.mock_interview) view = "home";
   // Views both modes share (the home panel swaps its copy) keep the current mode; IELTS-only views switch to IELTS.
-  if (view === "interview") interview?.setProductMode("interview");
+  if (view === "interview" || isInterviewView(view)) interview?.setProductMode("interview");
   else if (!SHARED_MODE_VIEWS.has(view) && !accountViews.has(view) && !authViews.has(view)) interview?.setProductMode("ielts");
   if (!isKnownView(view)) view = "home";
   if (protectedViews.has(view) && !state.account.authenticated && !options.skipAuthGate) {
@@ -2498,6 +2515,7 @@ function switchView(view, options = {}) {
   syncP1IntensityPanel();
   if (view === "history") loadHistory();
   if (view === "interview") interview?.show();
+  if (state.productMode === "interview") interview?.syncNav?.();
   if (view === "corpus") loadCorpusHome();
   if (view === "takeawayBook") {
     prefetchTakeawayBackgroundAssets();
@@ -2533,7 +2551,9 @@ function switchView(view, options = {}) {
   if (view !== "accountSecurity") $("#accountSecurityPanel")?.classList.add("hidden");
   if (view === "login") prepareLoginView(options.authMessage || "");
   if (view === "forgotPassword") loadPasswordResetAvailability();
-  $("#openP1CorpusBtn")?.classList.toggle("hidden", view !== "p1");
+  $("#openP1CorpusBtn")?.classList.toggle("hidden", view !== "p1" && !isInterviewView(view));
+  const p1CorpusLabel = $("#openP1CorpusBtn")?.querySelector("span");
+  if (p1CorpusLabel) p1CorpusLabel.textContent = isInterviewView(view) ? "我的面试语料库" : t("p1.corpusButton");
   $("#openP2CorpusBtn")?.classList.toggle("hidden", view !== "p2");
   if (view !== "p2") {
     closeP2CorpusPeek();
@@ -3410,6 +3430,8 @@ async function startPractice() {
       english_name: names.englishName,
       ...(mode === "p2" && p2PinnedCueId ? { p2_cue_id: p2PinnedCueId } : {}),
       ...(mode === "p1" ? { p1_intensity: state.p1Intensity } : {}),
+      // The P1 standard / pressure switch drives the interviewer's follow-up depth.
+      ...(isInterviewView(mode) ? { iv_intensity: state.p1Intensity === "high" ? "pressure" : "standard", ...(interview?.launchOptions?.(mode) || {}) } : {}),
       ...(mode === "p3" ? { p3_intensity: state.p3Intensity } : {}),
       ...(mode === "p3" ? { p3_focus: state.p3Focus } : {}),
       ...(mode === "p3" && state.p3Plan ? { p3_plan: state.p3Plan } : {}),
@@ -3543,6 +3565,10 @@ function renderTurn(turn) {
 
 function turnProgressLabel(turn) {
   if (!turn) return "";
+  if (turn.part === "interview") {
+    const stage = INTERVIEW_STAGE_LABELS[turn.prompt?.stage] || "面试";
+    return turn.prompt?.role === "follow_up" ? `${stage} -> 追问` : `${stage} -> ${turn.display_index || (turn.index ?? 0) + 1}`;
+  }
   const part = String(turn.part || "").toUpperCase();
   if (isP1IntroTurn(turn) || turn.counts_toward_total === false) {
     return turn.prompt?.role === "follow_up" ? `${part} -> Follow-up` : `${part} -> Intro`;
@@ -4434,6 +4460,7 @@ function playBrowserExaminerFallback(sessionId, turn, reason = "browser-fallback
   setExaminerListeningUi(turn);
   text("recordStatus", "Examiner audio is reconnecting. Using a browser voice for this question.");
   const utterance = new window.SpeechSynthesisUtterance(utteranceText);
+  if (turn.prompt?.language === "zh") utterance.lang = "zh-CN";
   state.browserTtsUtterance = utterance;
   let settled = false;
   const finish = () => {
@@ -15255,7 +15282,10 @@ function bindEvents() {
     "p2CorpusPeekDialog",
   ].forEach(bindP2DialogDrag);
   window.addEventListener("resize", keepOpenCorpusPeekWindowsInBounds);
-  $("openP1CorpusBtn")?.addEventListener("click", openP1CorpusLibrary);
+  $("openP1CorpusBtn")?.addEventListener("click", (event) => {
+    if (isInterviewView(state.view)) { interview?.openCorpusFor?.(state.view); return; }
+    openP1CorpusLibrary(event);
+  });
   $("openP2CorpusBtn")?.addEventListener("click", openP2CorpusLibrary);
   $("topbarBackCorpusBtn")?.addEventListener("click", closeCorpusWindowOrReturn);
   bindCorpusOverlayClose("p1CorpusDialog", saveAndCloseP1CorpusEditor);

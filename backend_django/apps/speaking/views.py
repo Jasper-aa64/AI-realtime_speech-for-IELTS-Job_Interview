@@ -71,7 +71,8 @@ def history_view(request):
     auth_error = require_user(request)
     if auth_error:
         return auth_error
-    return JsonResponse(history(request.user))
+    domain = "interview" if request.GET.get("domain") == "interview" else "ielts"
+    return JsonResponse(history(request.user, domain))
 
 
 @require_http_methods(["GET", "DELETE"])

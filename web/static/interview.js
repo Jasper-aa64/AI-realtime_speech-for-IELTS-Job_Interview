@@ -26,7 +26,6 @@
     let initialized = false;
     let requestController = null;
     let switcher = null;
-    let recorder = null;
     let data = freshState();
     const byId = (id) => document.getElementById(id);
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
@@ -48,12 +47,11 @@
 
     function freshState() {
       return {
-        pane: "home", part: "full", intensity: "standard", busy: false, error: "", notice: "",
+        pane: "home", part: "full", busy: false, error: "", notice: "",
         questions: [], categories: [], sessions: [], sessionsLoaded: false, current: null, report: null,
         corpus: null, corpusTab: "project", profile: null, customSide: "resume", resumeText: "", file: null, jdText: "",
         reportFilter: "all", reportFilterOpen: false, railScroll: 0,
-        editor: null, launch: { category: "", count: 5, projectIds: new Set() },
-        answer: { state: "idle", text: "", source: "typed", typing: false, error: "", peek: false },
+        editor: null,
       };
     }
 
@@ -61,7 +59,6 @@
       epoch += 1;
       requestController?.abort();
       requestController = null;
-      stopRecorder();
       data = freshState();
       if (byId("interviewPanel")) render();
       window.IELTSInterviewHome?.refresh();
@@ -239,8 +236,6 @@
       if (history) { data.sessions = history.sessions || []; data.sessionsLoaded = true; }
       if (profile) data.profile = profile.profile;
       if (corpus) data.corpus = corpus.entries || [];
-      const active = data.sessions.find((item) => item.status === "active" && item.part);
-      if (active && !data.current) data.pendingResumeId = active.id;
       window.IELTSInterviewHome?.refresh();
     }
 
@@ -267,7 +262,7 @@
       return perform(() => Promise.all([
         request("/api/interview/questions/"), request("/api/interview/sessions/"),
         request("/api/interview/profile/"), request("/api/interview/corpus/"),
-      ]), acceptOverview);
+      ]), acceptOverview, { busy: false }); // background refresh: never blocks navigation
     }
 
     function loadHistory() {
@@ -304,17 +299,15 @@
         else window.IELTSInterviewHome?.refresh();
         return;
       }
-      if (data.answer.state === "recording") stopRecorder();
       if (part && PARTS[part]) data.part = part;
       data.pane = pane;
       data.error = "";
       data.editor = null;
       if (pane === "practice") {
-        const session = data.current?.session;
-        if (!session || session.status !== "active" || session.part !== data.part) {
-          if (session?.status !== "active") data.current = null;
-          resetAnswer();
-        }
+        // Interview practice is the IELTS practice panel itself (views iv_full / iv_project / …).
+        switchView(`iv_${data.part}`, { force: state.view !== `iv_${data.part}` });
+        syncNav();
+        return;
       }
       switchView("interview", { force: state.view !== "interview" });
       render();
@@ -329,7 +322,7 @@
       const summary = data.sessions.find((item) => item.id === session.id);
       if (summary) Object.assign(summary, session);
       else if (session.id && data.sessionsLoaded) data.sessions.unshift(session);
-      data.pane = session.status === "active" ? "practice" : "report";
+      data.pane = "report";
     }
 
     // ---- Corpus helpers
@@ -348,157 +341,6 @@
 
     // Links inside interview panes (reports empty state).
     const link = (action, content, { cls = "", attrs = "" } = {}) => `<a class="${cls}" href="?view=interview" data-interview-action="${action}" ${attrs}>${content}</a>`;
-
-    // ---- Practice: the IELTS practice panel, with the interviewer in the prompt pane.
-    function activeSession() {
-      const current = data.current;
-      return current?.session?.status === "active" && current.session.part === data.part ? current : null;
-    }
-
-    // Stage progress sits where IELTS shows "READY": 自我介绍 1/1 · 项目 0/2 · …
-    function stageTrack(session, turns) {
-      const plan = session?.plan?.length ? session.plan : [];
-      if (!plan.length) return "";
-      const currentStage = data.current?.current_turn?.stage;
-      return plan.map((stage) => {
-        const ofStage = turns.filter((turn) => turn.stage === stage);
-        const answered = ofStage.filter((turn) => turn.status !== "pending").length;
-        const cls = stage === currentStage ? "is-current" : ofStage.length && answered === ofStage.length ? "is-done" : "";
-        return `<b class="iv-stage ${cls}">${esc(stageName(stage))}${ofStage.length ? ` ${answered}/${ofStage.length}` : ""}</b>`;
-      }).join('<i aria-hidden="true">·</i>');
-    }
-
-    // Launch options use the IELTS P3 launch panel (p3-launch-section / p3-source-option).
-    function launchOptions() {
-      const part = data.part;
-      const projects = corpusEntries(["project"]).filter((entry) => !entry.orphaned);
-      const section = (label, body) => `<section class="p3-launch-section"><div class="p3-launch-label">${esc(label)}</div>${body}</section>`;
-      const option = (action, active, title, detail, attrs) => button(action, `<strong>${esc(title)}</strong>${detail ? `<small>${esc(detail)}</small>` : ""}`, { cls: `p3-source-option${active ? " active" : ""}`, attrs });
-      if ((part === "full" || part === "project") && !projects.length) {
-        return section(copy("先上传简历", "Upload your resume first"), `<div class="p3-plan-empty"><span>${esc(copy("完整面试和项目练习会按你简历里的每个项目提问。", "The full interview and project practice ask about each project on your resume."))}</span></div><div class="p3-start-row">${button("go-custom", esc(copy("去上传简历", "Upload resume")), { cls: "p3-generate-button" })}</div>`);
-      }
-      if (part === "project") {
-        const grid = projects.map((entry) => option("toggle-project", data.launch.projectIds.has(entry.id), entry.title || entry.question, entry.corpus_text ? copy("已备讲述稿", "Story ready") : copy("还没写讲述稿", "No story yet"), `data-entry-id="${esc(entry.id)}" aria-pressed="${data.launch.projectIds.has(entry.id)}"`)).join("");
-        return section(copy("选择项目（不选则全部）", "Projects (none = all)"), `<div class="p3-source-grid iv-launch-grid" role="group">${grid}</div>`);
-      }
-      if (part === "knowledge") {
-        const topics = [{ id: "", label: copy("综合（技术栈优先）", "Mixed (stack first)") }, ...data.categories]
-          .map((item) => option("launch-category", data.launch.category === item.id, item.label, "", `data-category="${esc(item.id)}"`)).join("");
-        const counts = [3, 5, 8].map((n) => button("launch-count", esc(copy(`${n} 题`, `${n} questions`)), { cls: `p3-mode-option${data.launch.count === n ? " active" : ""}`, attrs: `data-count="${n}"` })).join("");
-        return `${section(copy("方向", "Topic"), `<div class="p3-source-grid iv-launch-grid" role="group">${topics}</div>`)}${section(copy("题量", "Questions"), `<div class="p3-mode-switch p1-mode-switch iv-count-switch" role="group">${counts}</div>`)}`;
-      }
-      return "";
-    }
-
-    // Same length classes as the IELTS prompt card (short / medium / long).
-    function promptCard(textValue, extra = "") {
-      const size = textValue.length <= 36 ? "short-prompt" : textValue.length <= 90 ? "medium-prompt" : "long-prompt";
-      return `<div id="interviewPromptCard" class="prompt-card ${size} ${extra}">${esc(textValue)}</div>`;
-    }
-
-    function promptPane(current) {
-      if (!current) {
-        // With launch options this pane is the IELTS P3 launch panel; otherwise the idle prompt card.
-        const part = PARTS[data.part];
-        const options = launchOptions();
-        if (options) return `<div class="section-label">${esc(copy("开始前", "Before you start"))}</div><div class="iv-launch">${options}</div>`;
-        return `<div class="section-label">${esc(copy("面试官", "Interviewer"))}</div>
-          ${promptCard(copy(`点击「开始」，${data.part === "reverse" ? "面试官会请你提问。" : "面试官会先请你做自我介绍。"}`, `Press Start. ${pick(part.hint)}`), "iv-prompt-idle")}`;
-      }
-      const turns = current.turns || [];
-      const turn = current.current_turn;
-      const previous = [...turns].reverse().find((item) => item.status !== "pending");
-      const parentDecision = turn?.parent_turn_id ? turns.find((item) => item.id === turn.parent_turn_id)?.decision : null;
-      const tag = turn?.kind === "follow_up"
-        ? `<span class="iv-follow-tag ${parentDecision?.action === "probe" ? "is-probe" : ""}">${esc(parentDecision?.action === "probe" ? copy("换个角度 · 摸清边界", "New angle · finding the limit") : copy("追问 · 往深处挖", "Follow-up · going deeper"))}</span>` : "";
-      const reply = previous?.stage === "reverse" && previous.reply ? `<div class="iv-reply"><span>${esc(copy("面试官", "Interviewer"))}</span><p>${esc(previous.reply)}</p></div>` : "";
-      const failed = previous?.decision?.status === "failed" ? `<p class="iv-prompt-hint">${esc(copy("面试官这次没能追问，已进入下一题。", "The interviewer could not follow up this time; moved on."))}</p>` : "";
-      const corpus = turn?.corpus_entry_id ? entryFor(turn.corpus_entry_id) : null;
-      const peek = corpus && (corpus.corpus_text || corpus.ai_draft)
-        ? `<div class="iv-peek">${button("toggle-peek", esc(data.answer.peek ? copy("收起我的答法", "Hide my answer") : copy("看看我的答法", "Peek at my answer")), { cls: "iv-link" })}${data.answer.peek ? `<div class="iv-peek-body"><small>${esc(corpus.corpus_text ? copy("我的答法", "My answer") : copy("AI 参考", "AI reference"))}</small><p>${esc(corpus.corpus_text || corpus.ai_draft)}</p></div>` : ""}</div>` : "";
-      const saveLast = previous && previous.status === "completed" ? `<div class="iv-save-last">${button("save-corpus", esc(copy("把上一题回答存为我的答法", "Save last answer to my corpus")), { cls: "iv-link", attrs: `data-turn-id="${esc(previous.id)}"` })}</div>` : "";
-      if (!turn) {
-        return `<div class="section-label">${esc(copy("面试官", "Interviewer"))}</div>${reply}${promptCard(copy("今天就到这里，辛苦了。", "That's all for today — thank you."))}<p class="iv-prompt-hint">${esc(copy("点击「完成」生成百分制报告。", "Press Finish to get your 100-point report."))}</p>${saveLast}`;
-      }
-      return `<div class="section-label">${esc(copy("面试官", "Interviewer"))} · ${esc(stageName(turn.stage))}</div>${failed}${reply}${tag}
-        ${promptCard(turn.prompt)}${peek}${saveLast}`;
-    }
-
-    function recordControl(current) {
-      const turn = current?.current_turn;
-      const stateName = data.answer.state;
-      let cls = "";
-      let title = copy("开始", "Start");
-      let hint = copy("面试官会马上提问", "The interviewer will ask right away");
-      let action = "start-session";
-      let disabled = false;
-      if (data.busy && !current) { cls = "loading"; title = copy("准备中", "Preparing"); hint = copy("正在生成面试计划…", "Building the interview plan…"); disabled = true; }
-      else if (current && !turn) { cls = "turn"; title = copy("完成", "Finish"); hint = copy("生成百分制报告", "Get the 100-point report"); action = "finish"; }
-      else if (current) {
-        action = "record-start";
-        title = copy("回答", "Answer"); hint = copy("点击开始录音", "Tap to start recording"); cls = "turn";
-        if (stateName === "recording") { cls = "recording"; title = copy("结束", "Stop"); hint = copy("再次点击结束录音", "Tap again to stop"); action = "record-stop"; }
-        if (stateName === "processing") { cls = "processing"; title = copy("转写中", "Transcribing"); hint = copy("正在把录音转成文字…", "Turning your recording into text…"); disabled = true; }
-        if (stateName === "review") { title = copy("重录", "Re-record"); hint = copy("或修改下方文字后提交", "Or edit the text below and submit"); }
-        if (stateName === "thinking") { cls = "examiner"; title = copy("面试官", "Interviewer"); hint = copy("正在判断下一步…", "Deciding what to ask next…"); disabled = true; }
-      }
-      return `<button type="button" id="interviewRecordControl" class="record-control ${cls}" data-interview-action="${action}" ${disabled || (data.busy && stateName !== "thinking") ? "disabled" : ""}><span class="iv-record-icon" aria-hidden="true"></span><strong>${esc(title)}</strong><small>${esc(hint)}</small>${cls === "examiner" || cls === "processing" || cls === "loading" ? '<div class="analyzing-dots"><span></span><span></span><span></span></div>' : ""}</button>`;
-    }
-
-    function recorderPane(current) {
-      const turn = current?.current_turn;
-      const showText = turn && (data.answer.state === "review" || data.answer.typing);
-      const status = data.answer.error ? `<div class="record-status iv-record-error" role="alert">${esc(data.answer.error)}</div>`
-        : `<div class="record-status">${esc(!current ? copy("麦克风会在开始录音时请求权限。", "The microphone is requested when you start recording.")
-          : data.answer.state === "review" ? copy("转写完成，可以修改后提交。", "Transcribed — edit if needed, then submit.")
-          : data.answer.typing ? copy("打字作答：写好后提交。", "Typing: submit when ready.")
-          : turn ? copy("录音结束后自动转写；也可以改为打字。", "Recordings are transcribed automatically; you can also type.") : "")}</div>`;
-      const editor = showText ? `<div class="iv-answer-box"><textarea id="interviewAnswer" rows="6" maxlength="6000" data-interview-field="answer" placeholder="${esc(copy("先说结论，再讲背景、你做了什么、结果和取舍……", "Conclusion first, then context, what you did, results and trade-offs…"))}">${esc(data.answer.text)}</textarea>
-          <div class="iv-answer-foot"><span id="interviewAnswerCount" class="iv-count">${data.answer.text.length} / 6000</span><span class="iv-dock-spacer"></span>${quiet("skip", copy("跳过本题", "Skip"))}${solid("submit-answer", copy("提交回答", "Submit"))}</div></div>`
-        : turn && data.answer.state === "idle" ? `<div class="iv-answer-alt">${quiet("type-answer", copy("改为打字作答", "Type instead"))}${quiet("skip", copy("跳过本题", "Skip"))}</div>` : "";
-      return `<div class="section-label">${esc(copy("你的回答", "Your answer"))}</div>
-        <div class="inline-timer" id="interviewTimer">${timerText()}</div>
-        <div class="record-row">${recordControl(current)}${current ? `<button type="button" class="icon-exit-button" data-interview-action="abort" aria-label="${esc(copy("结束本场", "End session"))}" title="${esc(copy("结束本场（保留已答内容）", "End session (keeps answers)"))}"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"></path></svg></button>` : ""}</div>
-        <div class="recorder-status-zone">${status}</div>${editor}`;
-    }
-
-    function progressTitle(current, done) {
-      if (!current) return copy("准备就绪", "Ready");
-      const turn = current.current_turn;
-      if (!turn) return copy("· 收尾", "· Wrap-up");
-      if (data.part === "full") return `· ${stageName(turn.stage)}`;
-      return copy(`· 第 ${done + 1} 题`, `· Question ${done + 1}`);
-    }
-
-    // Same shell as #practicePanel (exam-status, phase meter, practice grid); the ids are aliased
-    // to the IELTS ones by scripts/alias_ielts_styles.py.
-    function practice() {
-      const current = activeSession();
-      const turns = current?.turns || [];
-      const done = turns.filter((turn) => turn.status !== "pending").length;
-      const pressure = (current?.session?.intensity || data.intensity) === "pressure";
-      const tab = PARTS[data.part].corpus;
-      const tabLabel = CORPUS_TABS.find((item) => item.id === tab);
-      const progress = turns.length ? Math.round((done / turns.length) * 100) : 0;
-      return `<section id="interviewPractice" class="panel practice-panel">
-          <div class="exam-status">
-            <div id="interviewStatusText"><strong id="interviewProgress">${esc(partName(data.part))} ${esc(progressTitle(current, done))}</strong><span id="interviewPhase">${current ? stageTrack(current.session, turns) || `${done} / ${turns.length}` : "Ready"}</span></div>
-            <div class="exam-actions">
-              <span class="p1-mode-help">${esc(copy("面试节奏", "Pace"))}</span>
-              <div class="p3-mode-switch p1-mode-switch${pressure ? " high-intensity" : ""}" role="group" aria-label="${esc(copy("面试强度", "Intensity"))}">
-                ${button("intensity", esc(copy("标准模式", "Standard")), { cls: `p3-mode-option${pressure ? "" : " active"}`, attrs: 'data-intensity="standard"', disabled: !!current })}
-                ${button("intensity", esc(copy("追问压力", "Pressure")), { cls: `p3-mode-option${pressure ? " active" : ""}`, attrs: 'data-intensity="pressure"', disabled: !!current })}
-              </div>
-              <button type="button" class="p1-corpus-entry" data-interview-action="open-corpus" data-tab="${tab}"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg><span>${esc(copy(`我的${tabLabel.zh}语料`, `My ${tabLabel.en.toLowerCase()} corpus`))}</span></button>
-            </div>
-          </div>
-          <div class="phase-meter"><span style="width:${progress}%"></span></div>
-          <div id="interviewPracticeGrid" class="practice-grid">
-            <article id="interviewPromptPane" class="prompt-pane">${promptPane(current)}</article>
-            <article id="interviewRecorderPane" class="recorder-pane">${recorderPane(current)}</article>
-          </div>
-        </section>`;
-    }
 
     // ---- Reports: the IELTS speaking-report layout (#historyPanel) — a horizontal rail of report
     // cards, then the score summary, overall review and per-question table for the selected session.
@@ -838,8 +680,11 @@
     };
 
     function syncNav() {
+      const practiceView = /^iv_/.test(state.view || "");
+      if (practiceView) { data.pane = "practice"; data.part = state.view.slice(3); }
       const pane = data.pane;
-      const shown = (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
+      if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
+      const shown = practiceView || (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
       document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
         const itemPane = item.dataset.interviewPane;
         const active = itemPane === "practice" ? pane === "practice" && item.dataset.interviewPart === data.part
@@ -872,111 +717,19 @@
         panel.innerHTML = `<div class="iv-guest"><p class="iv-kicker">Interview Studio</p><h2 class="iv-title"><span class="iv-title-main">Mock Interview</span></h2><p>${esc(copy("登录同一个 IELTS Studio 账号，保存面试回答与练习记录。", "Sign in with your Studio account to save answers and interview history."))}</p>${solid("login", copy("登录并开始", "Sign in and start"))}</div>`;
         return;
       }
-      if (data.pendingResumeId && data.pane === "practice" && !data.current && !data.busy) {
-        const id = data.pendingResumeId;
-        data.pendingResumeId = null;
-        perform(() => request(`/api/interview/sessions/${encodeURIComponent(id)}/`), (payload) => { if (payload.session.part === data.part) acceptSession(payload); });
-        return;
-      }
-      // Home is the shared IELTS home panel, not part of #interviewPanel.
-      if (data.pane === "home") { panel.innerHTML = ""; return; }
-      const content = ({ practice, reports: reportsPane, report: reportsPane, corpus: corpusPane, custom: customPane })[data.pane]();
-      const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy && data.answer.state !== "thinking" ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
+      // Home and practice are shared IELTS panels (home view, iv_* practice views), not part of #interviewPanel.
+      if (data.pane === "home" || data.pane === "practice") { panel.innerHTML = ""; return; }
+      const content = ({ reports: reportsPane, report: reportsPane, corpus: corpusPane, custom: customPane })[data.pane]();
+      const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
       panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>${editorModal()}`;
       if (data.pane === "reports" || data.pane === "report") mountReportRail();
-    }
-
-    // ---- Recording: MediaRecorder -> upload -> server ASR -> editable transcript.
-    function timerText() {
-      if (!recorder?.startedAt) return "00:00";
-      const seconds = Math.floor((Date.now() - recorder.startedAt) / 1000);
-      return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
-    }
-
-    function resetAnswer() {
-      data.answer = { state: "idle", text: "", source: "typed", typing: false, error: "", peek: false };
-    }
-
-    function stopRecorder() {
-      if (!recorder) return;
-      window.clearInterval?.(recorder.tick);
-      try { if (recorder.media?.state === "recording") recorder.media.stop(); } catch (_error) { /* already stopped */ }
-      recorder.stream?.getTracks?.().forEach((track) => track.stop());
-      recorder = null;
-    }
-
-    async function startRecording() {
-      const devices = typeof navigator !== "undefined" ? navigator.mediaDevices : null;
-      if (!devices?.getUserMedia || typeof MediaRecorder !== "function") {
-        data.answer.error = copy("当前环境不支持录音，请改为打字作答。", "Recording is unavailable here; please type your answer.");
-        data.answer.typing = true;
-        render();
-        return;
-      }
-      try {
-        const stream = await devices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-        const mimeType = MediaRecorder.isTypeSupported?.("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
-        const media = new MediaRecorder(stream, { mimeType });
-        recorder = { stream, media, chunks: [], startedAt: Date.now(), mimeType };
-        media.ondataavailable = (event) => { if (event.data?.size) recorder?.chunks.push(event.data); };
-        media.start(250);
-        recorder.tick = window.setInterval(() => { const el = byId("interviewTimer"); if (el) el.textContent = timerText(); }, 250);
-        data.answer = { ...data.answer, state: "recording", error: "", typing: false };
-        render();
-      } catch (_error) {
-        stopRecorder();
-        data.answer.error = copy("无法使用麦克风，请检查权限，或改为打字作答。", "Microphone unavailable — check permission or type instead.");
-        render();
-      }
-    }
-
-    async function stopRecording() {
-      const active = recorder;
-      if (!active) return;
-      window.clearInterval(active.tick);
-      await new Promise((resolve) => { active.media.onstop = resolve; active.media.stop(); });
-      active.stream.getTracks().forEach((track) => track.stop());
-      recorder = null;
-      const blob = new Blob(active.chunks, { type: active.mimeType });
-      const turn = data.current?.current_turn;
-      if (!turn || !blob.size) { resetAnswer(); render(); return; }
-      data.answer.state = "processing";
-      const form = new FormData();
-      form.append("audio", blob, "answer.webm");
-      await perform(() => upload(`/api/interview/sessions/${encodeURIComponent(data.current.session.id)}/turns/${encodeURIComponent(turn.id)}/audio/`, form), (payload) => {
-        data.answer = { ...data.answer, state: "review", text: payload.transcript, source: "voice", error: "" };
-      }, { busy: false });
-      if (data.answer.state === "processing") {
-        data.answer = { ...data.answer, state: "idle", typing: true, error: data.error || copy("转写失败，请重录或打字作答。", "Transcription failed; record again or type.") };
-        data.error = "";
-        render();
-      }
-    }
-
-    function submitAnswer() {
-      const session = data.current?.session;
-      const turn = data.current?.current_turn;
-      const answer = data.answer.text.trim();
-      if (!session || !turn) return;
-      if (!answer) { data.answer.error = copy("回答是空的：录一段或打几句再提交。", "Your answer is empty."); render(); return; }
-      data.answer.state = "thinking";
-      perform(() => request(`/api/interview/sessions/${encodeURIComponent(session.id)}/turns/${encodeURIComponent(turn.id)}/answer/`, { answer, answer_source: data.answer.source, ai_source: currentAiSourcePreference() }),
-        (payload) => { acceptSession(payload); resetAnswer(); }).then(() => {
-        // A failed submit keeps the text so it can be sent again.
-        if (data.answer.state === "thinking") { data.answer.state = "review"; render(); }
-      });
     }
 
     // ---- Inputs and actions
     function captureInput(event) {
       const el = event.target;
       const field = el.dataset.interviewField;
-      if (field === "answer") {
-        data.answer.text = el.value;
-        if (data.answer.state !== "review") data.answer.source = "typed";
-        const counter = byId("interviewAnswerCount");
-        if (counter) counter.textContent = `${el.value.length} / 6000`;
-      } else if (field === "editor-text" && data.editor) data.editor.text = el.value;
+      if (field === "editor-text" && data.editor) data.editor.text = el.value;
       else if (field === "editor-question" && data.editor) data.editor.question = el.value;
       else if (field === "file") { data.file = el.files?.[0] || null; render(); }
       else if (field === "resumeText" || field === "jdText") {
@@ -1043,48 +796,8 @@
         case "open-corpus": data.corpusTab = el.dataset.tab || data.corpusTab; setPane("corpus"); return;
         case "corpus-tab": data.corpusTab = el.dataset.tab; render(); return;
         case "custom-side": data.customSide = el.dataset.side; render(); return;
-        case "intensity": data.intensity = el.dataset.intensity; render(); return;
-        case "launch-category": data.launch.category = el.dataset.category || ""; render(); return;
-        case "launch-count": data.launch.count = Number(el.dataset.count) || 5; render(); return;
-        case "toggle-project": {
-          const ids = data.launch.projectIds;
-          ids.has(el.dataset.entryId) ? ids.delete(el.dataset.entryId) : ids.add(el.dataset.entryId);
-          render();
-          return;
-        }
-        case "toggle-peek": data.answer.peek = !data.answer.peek; render(); return;
-        case "type-answer": data.answer.typing = true; data.answer.error = ""; render(); byId("interviewAnswer")?.focus?.(); return;
-        case "start-session": {
-          const body = { part: data.part, intensity: data.intensity };
-          if (data.part === "knowledge") Object.assign(body, { category: data.launch.category, count: data.launch.count });
-          if (data.part === "project" && data.launch.projectIds.size) body.project_ids = [...data.launch.projectIds];
-          resetAnswer();
-          perform(() => request("/api/interview/sessions/", body), acceptSession);
-          return;
-        }
-        case "record-start": startRecording(); return;
-        case "record-stop": stopRecording(); return;
-        case "submit-answer": submitAnswer(); return;
-        case "skip": {
-          const turn = data.current?.current_turn;
-          if (!turn) return;
-          stopRecorder();
-          perform(() => request(`${base}turns/${encodeURIComponent(turn.id)}/skip/`, {}), (payload) => { acceptSession(payload); resetAnswer(); });
-          return;
-        }
-        case "finish":
-          perform(() => request(`${base}finish/`, {}), acceptSession).then(() => {
-            // Ask for the 100-point score once, right after the transcript is saved.
-            const session = data.current?.session;
-            if (session?.status === "completed" && !session.score) {
-              return perform(() => request(`/api/interview/sessions/${encodeURIComponent(session.id)}/report/`, { ai_source: currentAiSourcePreference() }), acceptSession);
-            }
-            return null;
-          }).then(() => { if (data.pane === "report" && !data.sessionsLoaded) loadHistory(); });
-          return;
-        case "abort": stopRecorder(); perform(() => request(`${base}abort/`, {}), (payload) => { acceptSession(payload); data.current = null; data.pane = "practice"; resetAnswer(); }); return;
         case "score": perform(() => request(`${base}report/`, { ai_source: currentAiSourcePreference() }), acceptSession); return;
-        case "open-session": perform(() => request(`/api/interview/sessions/${encodeURIComponent(el.dataset.sessionId)}/`), (payload) => { acceptSession(payload); resetAnswer(); }); return;
+        case "open-session": perform(() => request(`/api/interview/sessions/${encodeURIComponent(el.dataset.sessionId)}/`), acceptSession); return;
         case "save-corpus": perform(() => request(`${base}turns/${encodeURIComponent(el.dataset.turnId)}/save-corpus/`, {}), (payload) => {
           const index = (data.corpus || []).findIndex((item) => item.id === payload.entry.id);
           if (data.corpus) index >= 0 ? data.corpus.splice(index, 1, payload.entry) : data.corpus.push(payload.entry);
@@ -1140,7 +853,18 @@
       }
     }
 
-    return { initialize, setProductMode, show, resetForAccount, setPane };
+    // Hooks for app.js's practice panel: extra attempt-start fields, and the corpus button in interview views.
+    function launchOptions(_view) {
+      return {};
+    }
+
+    function openCorpusFor(view) {
+      const part = String(view || "").replace(/^iv_/, "");
+      data.corpusTab = PARTS[part]?.corpus || data.corpusTab;
+      setPane("corpus");
+    }
+
+    return { initialize, setProductMode, show, resetForAccount, setPane, launchOptions, openCorpusFor, syncNav };
   }
   window.IELTSInterview = { createInterview };
 })();

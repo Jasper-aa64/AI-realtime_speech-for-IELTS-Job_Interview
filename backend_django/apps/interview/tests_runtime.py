@@ -18,8 +18,7 @@ def fake_tts(text, *args, **kwargs):
     return {"provider": "volcengine", "status": "generated", "audio_url": "/api/tts-audio/examiner/x.mp3"}
 
 
-@override_settings(MEDIA_ROOT="/tmp/interview-runtime-test-media")
-class InterviewRuntimeStartTests(TestCase):
+class RuntimeTestBase(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="runtime-owner", password="pw")
         self.client.force_login(self.user)
@@ -41,6 +40,22 @@ class InterviewRuntimeStartTests(TestCase):
             response = self.client.post("/api/attempts/start", json.dumps(payload), content_type="application/json")
         return response, tts
 
+    def begin(self, payload):
+        response, _ = self.start(payload)
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+    def complete(self, attempt_id, turn_id, transcript="我的回答"):
+        with patch(TTS, side_effect=fake_tts):
+            response = self.client.post(f"/api/attempts/{attempt_id}/turns/{turn_id}/complete",
+                                        json.dumps({"transcript": transcript, "transcript_source": "test_client"}),
+                                        content_type="application/json")
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+
+@override_settings(MEDIA_ROOT="/tmp/interview-runtime-test-media")
+class InterviewRuntimeStartTests(RuntimeTestBase):
     def test_full_interview_needs_a_resume(self):
         response, _ = self.start({"mode": "iv_full"})
         self.assertEqual(response.status_code, 400)
@@ -87,3 +102,157 @@ class InterviewRuntimeStartTests(TestCase):
         # The P1 opener may come from the pre-warmed fixed clips; any live synthesis must stay English.
         for call in tts.call_args_list:
             self.assertEqual(call.kwargs.get("language", "en"), "en")
+
+
+RUN = "apps.interview.runtime.ai_services.run_generation"
+
+
+def decision(action="next", prompt="", signal="adequate"):
+    return {"action": action, "prompt": prompt, "signal": signal, "evidence": "依据", "boundary": "", "task_id": "t"}
+
+
+@override_settings(MEDIA_ROOT="/tmp/interview-runtime-test-media")
+class InterviewRuntimeDecisionTests(RuntimeTestBase):
+    """After each answer the interviewer decides, inside complete_turn, what the next turn is."""
+
+    def test_standard_mode_follows_up_once_then_moves_on(self):
+        self.seed_resume()
+        attempt = self.begin({"mode": "iv_project"})
+        first = attempt["turns"][0]
+        with patch(RUN, return_value=decision("follow_up", "为什么选无锁队列？", "strong")) as run:
+            done = self.complete(attempt["id"], first["id"])
+        self.assertEqual(run.call_args.args[1], "next_step")
+        follow = done["next_turn"]
+        self.assertEqual(follow["prompt"]["role"], "follow_up")
+        self.assertEqual(follow["question"], "为什么选无锁队列？")
+        self.assertEqual(follow["prompt"]["parent_turn_id"], first["id"])
+        self.assertEqual(follow["timers"]["speak_seconds"], 90)
+        self.assertEqual(follow["prompt"]["language"], "zh")
+        with patch(RUN) as run:
+            done = self.complete(attempt["id"], follow["id"])
+        run.assert_not_called()
+        self.assertEqual(done["next_turn"]["question"], "介绍一下你的「行情回放」项目。")
+        saved = SpeakingTurn.objects.get(attempt__attempt_id=attempt["id"], turn_id=follow["id"])
+        self.assertEqual(saved.metadata["decision"]["reason"], "depth_limit")
+
+    def test_pressure_mode_probes_three_times_on_knowledge(self):
+        attempt = self.begin({"mode": "iv_knowledge", "count": 1, "iv_intensity": "pressure"})
+        turn = attempt["turns"][0]
+        for prompt in ["追问一", "追问二", "追问三"]:
+            with patch(RUN, return_value=decision("probe", prompt, "weak")):
+                turn = self.complete(attempt["id"], turn["id"])["next_turn"]
+            self.assertEqual(turn["question"], prompt)
+        with patch(RUN) as run:
+            done = self.complete(attempt["id"], turn["id"])
+        run.assert_not_called()
+        self.assertIsNone(done["next_turn"])
+
+    def test_empty_answer_skips_the_interviewer(self):
+        attempt = self.begin({"mode": "iv_knowledge", "count": 2})
+        with patch(RUN) as run:
+            done = self.complete(attempt["id"], attempt["turns"][0]["id"], transcript="")
+        run.assert_not_called()
+        self.assertIn("跳过追问", done["follow_up_skipped"]["message"])
+        self.assertEqual(done["next_turn"]["id"], attempt["turns"][1]["id"])
+
+    def test_ai_failure_moves_on(self):
+        from .validation import InterviewError
+
+        attempt = self.begin({"mode": "iv_knowledge", "count": 2})
+        with patch(RUN, side_effect=InterviewError("AI 服务失败", code="ai_generation_failed", status=502)):
+            done = self.complete(attempt["id"], attempt["turns"][0]["id"])
+        self.assertEqual(done["next_turn"]["id"], attempt["turns"][1]["id"])
+        saved = SpeakingTurn.objects.get(attempt__attempt_id=attempt["id"], turn_id=attempt["turns"][0]["id"])
+        self.assertEqual(saved.metadata["decision"]["status"], "failed")
+
+    def test_reverse_round_reads_the_reply_then_asks_again(self):
+        attempt = self.begin({"mode": "iv_reverse"})
+        reply = {"reply": "团队按 P99 看延迟。", "signal": "strong", "evidence": "问到了核心指标"}
+        with patch(RUN, return_value=reply) as run:
+            done = self.complete(attempt["id"], attempt["turns"][0]["id"], "团队怎么衡量延迟？")
+        self.assertEqual(run.call_args.args[1], "reverse_reply")
+        nxt = done["next_turn"]
+        self.assertEqual(nxt["prompt"]["stage"], "reverse")
+        self.assertEqual(nxt["prompt"]["reply"], "团队按 P99 看延迟。")
+        self.assertTrue(nxt["examiner_text"].startswith("团队按 P99 看延迟。"))
+        with patch(RUN, return_value=reply):
+            done = self.complete(attempt["id"], nxt["id"], "新人怎么上手？")
+        self.assertIsNone(done["next_turn"])
+
+
+def score_result(turn_ids, reference="先说结论：RAII 把资源绑定到对象生命周期。"):
+    from . import ai_schema
+
+    dims = {key: {"score": maximum // 2, "evidence": f"{label}依据"} for key, label, maximum in ai_schema.DIMENSIONS}
+    raw = {"dimensions": dims, "summary": "表达清楚", "boundary": "并发细节", "next_steps": ["多讲量化结果"],
+           "per_turn": [{"turn_id": tid, "comment": "开头先给结论", "reference_answer": reference} for tid in turn_ids]}
+    return ai_schema.validate("score_report", raw, {"turn_ids": turn_ids})
+
+
+@override_settings(MEDIA_ROOT="/tmp/interview-runtime-test-media")
+class InterviewRuntimeReportTests(RuntimeTestBase):
+    """The 100-point report is a speaking report: same history, detail and delete endpoints."""
+
+    def finish_knowledge(self, answer="我的回答"):
+        attempt = self.begin({"mode": "iv_knowledge", "count": 1})
+        tid = attempt["turns"][0]["id"]
+        with patch(RUN, return_value=decision()):
+            done = self.complete(attempt["id"], tid, answer)
+        self.assertIsNone(done["next_turn"])
+        return attempt["id"], tid
+
+    def score(self, attempt_id, result):
+        with patch(RUN, return_value=result):
+            return self.client.post(f"/api/attempts/{attempt_id}/score", json.dumps({}), content_type="application/json")
+
+    def test_score_returns_a_ready_100_point_report(self):
+        attempt_id, tid = self.finish_knowledge()
+        response = self.score(attempt_id, score_result([tid]))
+        self.assertEqual(response.status_code, 200, response.content)
+        report = response.json()
+        self.assertEqual(report["report_status"], "ready")
+        self.assertEqual(report["interview_score"]["total"], 49)
+        self.assertEqual(len(report["interview_score"]["dimensions"]), 5)
+        self.assertIsNone(report.get("ielts_score"))
+        turn = report["turns"][0]
+        self.assertEqual(turn["band7_version"], "先说结论：RAII 把资源绑定到对象生命周期。")
+        self.assertIn("开头先给结论", turn["ai_coaching"])
+        self.assertEqual(turn["prompt"]["stage"], "knowledge")
+        detail = self.client.get(f"/api/history/{attempt_id}").json()
+        self.assertEqual(detail["interview_score"]["total"], 49)
+
+    def test_history_is_split_by_domain(self):
+        attempt_id, tid = self.finish_knowledge()
+        self.score(attempt_id, score_result([tid]))
+        interview = self.client.get("/api/history?domain=interview").json()["items"]
+        self.assertEqual([item["id"] for item in interview], [attempt_id])
+        self.assertEqual(interview[0]["interview_total"], 49)
+        ielts = self.client.get("/api/history").json()["items"]
+        self.assertNotIn(attempt_id, [item["id"] for item in ielts])
+        self.assertEqual(self.client.delete(f"/api/history/{attempt_id}").status_code, 200)
+        self.assertEqual(self.client.get("/api/history?domain=interview").json()["items"], [])
+
+    def test_sessions_without_any_answer_stay_out_of_history(self):
+        attempt = self.begin({"mode": "iv_knowledge", "count": 1})
+        self.complete(attempt["id"], attempt["turns"][0]["id"], transcript="")
+        self.assertEqual(self.client.get("/api/history?domain=interview").json()["items"], [])
+        response = self.client.post(f"/api/attempts/{attempt['id']}/score", json.dumps({}), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("至少回答", response.json()["error"])
+
+
+@override_settings(MEDIA_ROOT="/tmp/interview-runtime-test-media")
+class InterviewExaminerVoiceTests(RuntimeTestBase):
+    def test_background_and_refresh_synthesis_read_chinese_questions_in_chinese(self):
+        """Later questions are warmed in the background from DB rows that carry no prompt; they must still be zh."""
+        from apps.speaking import examiner_tts_services
+
+        attempt = self.begin({"mode": "iv_knowledge", "count": 2})
+        second = SpeakingTurn.objects.get(attempt__attempt_id=attempt["id"], turn_id=attempt["turns"][1]["id"])
+        with patch(TTS, side_effect=fake_tts) as tts:
+            examiner_tts_services._synthesize_examiner_tts(attempt["id"], second, second.question)
+        self.assertEqual(tts.call_args.kwargs.get("language"), "zh")
+        self.assertTrue(tts.call_args.kwargs.get("voice", "").startswith("zh_"))
+        with patch(TTS, side_effect=fake_tts) as tts:
+            examiner_tts_services._volcengine_examiner_tts("Do you work or are you a student?", cache_key="k")
+        self.assertNotIn("language", tts.call_args.kwargs)

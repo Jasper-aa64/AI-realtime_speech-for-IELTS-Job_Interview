@@ -19,17 +19,6 @@ ALIASES = [
     ("#historyPanel", "#interviewReports", [], True),
     ("#historyList", "#interviewReportList", [], True),
     ("#detailPanel", "#interviewReportDetail", [], True),
-    # Practice shell (P1 practice <-> interview practice). Page-level :has() rules stay IELTS-only.
-    ("#practicePanel", "#interviewPractice", [], False),
-    ("#practiceGrid", "#interviewPracticeGrid", [], False),
-    ("#promptPane", "#interviewPromptPane", [], False),
-    ("#recorderPane", "#interviewRecorderPane", [], False),
-    ("#recordControl", "#interviewRecordControl", [], False),
-    ("#timerValue", "#interviewTimer", [], False),
-    ("#examStatusText", "#interviewStatusText", [], False),
-    ("#progressTrack", "#interviewProgress", [], False),
-    ("#phaseLabel", "#interviewPhase", [], False),
-    ("#promptCard", "#interviewPromptCard", [], False),
     # Resume / JD page <-> daily writing.
     ("#writingPanel", "#interviewCustom", [], False),
     ("#writingScoreBtn", "#interviewCustomSubmit", [], False),

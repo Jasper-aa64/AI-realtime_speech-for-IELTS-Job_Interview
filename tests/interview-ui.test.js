@@ -91,66 +91,17 @@ async function started(options) {
   return env;
 }
 
-test("full interview: start, type an answer, interviewer moves on, finish and auto-score", async () => {
-  const env = await started();
-  assert.match(env.html(), /点击「开始」/);
-  await env.action("start-session");
-  const created = env.requests.find((request) => request.url === "/api/interview/sessions/" && request.body);
-  assert.deepEqual(created.body, { part: "full", intensity: "standard" });
-  assert.match(env.html(), /请先做一个简单的自我介绍/);
-  await env.action("type-answer");
-  env.input("answer", "我是张三 <script>x</script>");
-  await env.action("submit-answer");
-  const answered = env.requests.find((request) => request.url.endsWith("/answer/"));
-  assert.deepEqual([answered.body.answer, answered.body.answer_source, answered.body.ai_source], ["我是张三 <script>x</script>", "typed", "gpt"]);
-  assert.match(env.html(), /面试官这次没能追问/);
-  assert.match(env.html(), /撮合网关/);
-  await env.action("toggle-peek");
-  assert.match(env.html(), /AI 讲述稿/);
-  await env.action("skip");
-  assert.match(env.html(), /data-interview-action="finish"/);
-  await env.action("finish");
-  assert.ok(env.requests.some((request) => request.url.endsWith("/report/")));
-  // The report reuses the IELTS speaking-report layout: rail card + score summary + turn table.
-  assert.match(env.html(), /id="interviewReports"/);
-  assert.match(env.html(), /history-item-band-value">72</);
-  assert.match(env.html(), /<strong>72 \/ 100<\/strong>/);
-  assert.match(env.html(), /turn-report-table/);
-  assert.match(env.html(), /并发细节/);
-  assert.match(env.html(), /&lt;script>/);
-  assert.doesNotMatch(env.html(), /<script>x/);
-  assert.ok(env.requests.every((request) => request.url.endsWith("/")));
-});
-
-test("follow-up from the interviewer is labelled; pressure intensity is sent", async () => {
-  const env = await started({ decisionFails: false });
-  await env.action("intensity", { intensity: "pressure" });
-  await env.action("start-session");
-  assert.equal(env.requests.find((request) => request.url === "/api/interview/sessions/" && request.body).body.intensity, "pressure");
-  await env.action("type-answer"); env.input("answer", "回答"); await env.action("submit-answer");
-  assert.match(env.html(), /追问 · 往深处挖/);
-  assert.match(env.html(), /你在之前的团队里负责什么/);
-});
-
-test("recording falls back to typing when the microphone API is unavailable; empty answers are refused", async () => {
-  const env = await started();
-  await env.action("start-session");
-  await env.action("record-start");
-  assert.match(env.html(), /当前环境不支持录音/);
-  assert.match(env.html(), /id="interviewAnswer"/);
-  await env.action("submit-answer");
-  assert.match(env.html(), /回答是空的/);
-  assert.ok(!env.requests.some((request) => request.url.endsWith("/answer/")));
-});
-
-test("score failure keeps the transcript and offers a retry", async () => {
-  const env = await started({ scoreFails: true });
-  await env.action("start-session");
-  await env.action("skip"); await env.action("skip");
-  await env.action("finish");
-  assert.match(env.html(), /AI 服务还没有配置/);
-  assert.match(env.html(), /data-interview-action="score"/);
-  assert.match(env.html(), /请先做一个简单的自我介绍/);
+test("practice runs on the IELTS practice panel: each part opens its iv_* view", async () => {
+  const env = fixture(); await env.app.initialize(); env.app.show(); await settle();
+  for (const part of ["full", "project", "knowledge", "reverse"]) {
+    env.app.setPane("practice", { part });
+    assert.equal(env.state.view, `iv_${part}`);
+  }
+  assert.equal(env.html(), "", "the interview panel renders nothing for practice; the IELTS panel does");
+  assert.equal(JSON.stringify(env.app.launchOptions("iv_knowledge")), "{}");
+  env.app.openCorpusFor("iv_knowledge"); await settle();
+  assert.equal(env.state.view, "interview");
+  assert.ok(!env.requests.some((request) => request.url === "/api/interview/sessions/" && request.body), "no hand-written session flow");
 });
 
 test("corpus: curated questions save by key, existing entries patch, JD side generates", async () => {

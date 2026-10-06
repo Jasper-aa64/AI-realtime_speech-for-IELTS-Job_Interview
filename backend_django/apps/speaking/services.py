@@ -1851,7 +1851,16 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
             }
 
     stream_follow_up = bool(payload.get("stream_follow_up"))
-    inserted_follow_up = _insert_p1_identity_follow_up(attempt, turn, stream_pending=stream_follow_up)
+    from apps.interview import runtime as interview_runtime
+
+    interview_outcome = None
+    if interview_runtime.is_interview_mode(attempt.mode):
+        # The interviewer decides next / follow-up / probe here; its turn (if any) becomes the next turn.
+        ai_source = str(getattr(getattr(attempt.user, "profile", None), "report_ai_source", "") or "").strip()
+        interview_outcome = interview_runtime.after_answer(attempt, turn, ai_source=ai_source)
+        inserted_follow_up = interview_outcome["inserted"]
+    else:
+        inserted_follow_up = _insert_p1_identity_follow_up(attempt, turn, stream_pending=stream_follow_up)
     turns = list(attempt.turns.all().order_by("sequence"))
     next_turn = next((item for item in turns if item.sequence > turn.sequence and _turn_status(item) != "completed"), None)
     if inserted_follow_up is not None:
@@ -1938,6 +1947,7 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
             if p1_identity_follow_up_skipped
             else {}
         ),
+        **({"follow_up_skipped": interview_outcome["skipped"]} if interview_outcome and interview_outcome["skipped"] else {}),
     }
 
 
@@ -4213,6 +4223,16 @@ def create_speaking_report_task(user, attempt_id: str, payload: dict[str, Any] |
 
 
 def score_attempt(user, attempt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    from apps.interview import runtime as interview_runtime
+
+    attempt = SpeakingAttempt.objects.filter(user=user, attempt_id=str(attempt_id or "").strip()).first()
+    if attempt is not None and interview_runtime.is_interview_mode(attempt.mode):
+        # The 100-point interview report is scored in the request; the payload is the finished report.
+        ai_source = str((payload or {}).get("provider") or getattr(getattr(user, "profile", None), "report_ai_source", "") or "").strip()
+        try:
+            return interview_runtime.score(user, attempt, ai_source=ai_source)
+        except ValueError as exc:
+            raise SpeakingError(str(exc)) from exc
     return create_speaking_report_task(user, attempt_id, payload)
 
 

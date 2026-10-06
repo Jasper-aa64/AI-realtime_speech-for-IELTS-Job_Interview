@@ -65,6 +65,12 @@ def _hydrate_report_turns_from_db(payload: dict[str, Any], attempt: SpeakingAtte
 def report_is_valid(attempt: SpeakingAttempt) -> bool:
     if attempt.status != SpeakingAttempt.Status.SCORED:
         return False
+    from apps.interview.runtime import is_interview_mode
+
+    if is_interview_mode(attempt.mode):
+        # Interview reports carry a 100-point score instead of IELTS bands.
+        payload = attempt.report.report_payload if hasattr(attempt, "report") and isinstance(attempt.report.report_payload, dict) else {}
+        return isinstance((payload.get("interview_score") or {}).get("total"), int)
     if not hasattr(attempt, "report") or attempt.report.overall_band is None:
         return False
     turns = list(attempt.turns.all())
@@ -533,13 +539,19 @@ def history_item(attempt: SpeakingAttempt) -> dict[str, Any]:
         "status": attempt.status,
         "report_status": "ready",
         "overall_band": float(attempt.report.overall_band) if attempt.report.overall_band is not None else score.get("overall_band"),
+        "interview_total": (payload.get("interview_score") or {}).get("total"),
         "turn_count": attempt.turns.count(),
     }
 
 
-def history(user) -> dict[str, Any]:
+def history(user, domain: str = "ielts") -> dict[str, Any]:
+    from apps.interview.runtime import INTERVIEW_MODES, has_answers
+
+    # IELTS and the mock interview share the speaking runtime; each history shows only its own attempts.
+    modes = SpeakingAttempt.objects.filter(user=user)
+    modes = modes.filter(mode__in=list(INTERVIEW_MODES)) if domain == "interview" else modes.exclude(mode__in=list(INTERVIEW_MODES))
     attempts = list(
-        SpeakingAttempt.objects.filter(user=user)
+        modes
         .exclude(status=SpeakingAttempt.Status.ABORTED)
         .select_related("report")
         .prefetch_related("turns")
@@ -558,6 +570,8 @@ def history(user) -> dict[str, Any]:
             task_by_attempt.setdefault(task.related_id, task)
     items: list[dict[str, Any]] = []
     for attempt in attempts:
+        if domain == "interview" and not has_answers(attempt):
+            continue
         task = task_by_attempt.get(attempt.attempt_id)
         report_status = speaking_report_status(attempt, task)
         if report_status == "ready":

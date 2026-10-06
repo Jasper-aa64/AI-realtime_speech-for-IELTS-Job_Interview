@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import re
 import sys
 import threading
 import time
@@ -29,14 +30,19 @@ def _cached_examiner_url(role: str, cache_key: str) -> str | None:
     return _facade_attr("_cached_tts_url", _cached_tts_url)(role, cache_key)
 
 
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+
+
 def _volcengine_examiner_tts(text: str, *, role: str = "examiner", cache_key: str, language: str = "en") -> dict[str, Any]:
     tts = _facade_attr("volcengine_tts", volcengine_tts)
-    if language == "en":
+    # Every examiner clip (first question, background warm-up, on-demand refresh) comes through here, and some
+    # callers rebuild the turn without its prompt; so the text decides: Chinese text is read by the interviewer's
+    # Chinese voice. IELTS questions never contain Chinese.
+    if language == "en" and not _CJK.search(text or ""):
         return tts(text, role=role, cache_key=cache_key)
-    # Interview turns are read in Chinese with the interviewer's voice.
     from apps.interview.runtime import examiner_voice
 
-    return tts(text, role=role, cache_key=f"{language}_{cache_key}", voice=examiner_voice(), language=language)
+    return tts(text, role=role, cache_key=cache_key, voice=examiner_voice(), language="zh")
 
 
 def _threading_module() -> Any:
