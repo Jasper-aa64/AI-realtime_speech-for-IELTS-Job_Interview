@@ -40181,9 +40181,10 @@ body.theme-dark.font-popular .spelling-drill-panel .nr-lib-item {
 body.theme-dark.font-popular .spelling-drill-panel .nr-drill-body,
 body.theme-dark.font-popular .spelling-drill-panel .nr-slot,
 body.theme-dark.font-popular .spelling-drill-panel .nr-answer {
+  /* A shade of the card's own navy, not near-black: the drill band read as a black hole in the dark theme. */
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.030), rgba(255, 255, 255, 0.010)),
-    #090d11 !important;
+    color-mix(in srgb, var(--panel) 82%, #000) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
 }
 
@@ -40191,7 +40192,7 @@ body.theme-dark.font-popular .spelling-drill-panel .nr-note-slot,
 body.theme-dark.font-popular .spelling-drill-panel .nr-spell-note,
 body.theme-dark.font-popular .spelling-drill-panel .nr-input,
 body.theme-dark.font-popular .spelling-drill-panel .nr-inline-answer {
-  background: #05070a !important;
+  background: color-mix(in srgb, var(--panel) 70%, #000) !important;
   border-color: rgba(226, 232, 240, 0.22) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.035),
