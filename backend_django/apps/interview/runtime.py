@@ -215,6 +215,20 @@ def _coaching(turn, comment):
     return "\n\n".join(lines)
 
 
+def _review_markdown(result):
+    parts = []
+    if result.get("summary"):
+        parts.append(f"#### 总体点评\n\n{result['summary']}")
+    evidence = [f"- **{d['label']} {d['score']}/{d['max']}** {d['evidence']}" for d in result.get("dimensions", []) if d.get("evidence")]
+    if evidence:
+        parts.append("#### 评分依据\n\n" + "\n".join(evidence))
+    if result.get("boundary"):
+        parts.append(f"#### 能力边界\n\n{result['boundary']}")
+    if result.get("next_steps"):
+        parts.append("#### 下一步练习\n\n" + "\n".join(f"- {step}" for step in result["next_steps"]))
+    return "\n\n".join(parts)
+
+
 def score(user, attempt, ai_source=""):
     from apps.speaking.models import SpeakingAttempt, SpeakingReport
     from apps.speaking.report_services import report_payload
@@ -239,11 +253,16 @@ def score(user, attempt, ai_source=""):
         raise ValueError(str(exc)) from exc
     per_turn = {item["turn_id"]: item for item in result.get("per_turn", [])}
     payload_turns = []
+    stage_counts = {}
     for turn in turns:
         note = per_turn.get(turn.turn_id, {})
+        stage = _prompt(turn).get("stage", "")
+        if _prompt(turn).get("role") != "follow_up":
+            stage_counts[stage] = stage_counts.get(stage, 0) + 1
         reference = note.get("reference_answer", "")
         payload_turns.append({
-            "id": turn.turn_id, "part": "interview", "question": turn.question, "prompt": _prompt(turn),
+            "id": turn.turn_id, "part": "interview", "index": max(stage_counts.get(stage, 1) - 1, 0),
+            "question": turn.question, "prompt": _prompt(turn),
             "transcript_raw": turn.transcript_raw, "transcript_cleaned": turn.transcript_cleaned,
             "display_transcript": "", "display_transcript_markdown": "",
             "transcript_status": "captured" if _answer(turn) else "missing",
@@ -257,7 +276,7 @@ def score(user, attempt, ai_source=""):
     interview_score["limitations"] = engine.SCORE_LIMITATION
     payload = {"id": attempt.attempt_id, "mode": attempt.mode, "part": attempt.part, "title": attempt.title,
                "interview_score": interview_score, "ielts_score": None, "turns": payload_turns,
-               "overall_review": {"comment": result.get("summary", ""), "review_points": result.get("next_steps", [])}}
+               "overall_review": {"markdown": _review_markdown(result)}}
     SpeakingReport.objects.update_or_create(
         attempt=attempt, defaults={"user": user, "report_payload": payload, "feedback_summary": result.get("summary", "")},
     )

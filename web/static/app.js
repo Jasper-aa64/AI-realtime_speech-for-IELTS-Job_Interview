@@ -290,10 +290,16 @@ const INTERVIEW_PRACTICE_VIEWS = new Set(["iv_full", "iv_project", "iv_knowledge
 const INTERVIEW_STAGE_LABELS = { self_intro: "自我介绍", project: "项目", knowledge: "知识点", award: "奖项", reverse: "反问" };
 const PRACTICE_VIEWS = new Set(["mock", "p1", "p2", "p3", ...INTERVIEW_PRACTICE_VIEWS]);
 const SPEAKING_PART_VIEWS = new Set(["p1", "p2", "p3", "mock"]);
-const SPEAKING_REPORT_FILTERS = new Set(["all", "p1", "p2", "p3", "mock"]);
+const SPEAKING_REPORT_FILTERS = new Set(["all", "p1", "p2", "p3", "mock", ...INTERVIEW_PRACTICE_VIEWS]);
+// Interview report cards reuse the IELTS tag tones: full -> Mock, projects -> P2, knowledge -> P1, questions -> P3.
+const INTERVIEW_REPORT_TAGS = { iv_full: ["mock", "MOCK"], iv_project: ["p2", "PROJ"], iv_knowledge: ["p1", "STACK"], iv_reverse: ["p3", "ASK"] };
 const SPEAKING_REPORT_STATUSES = new Set(["unscored", "scoring", "failed", "ready"]);
 const SPEAKING_REPORT_FILTER_LABELS = {
   all: "全部",
+  iv_full: "完整面试",
+  iv_project: "项目深挖",
+  iv_knowledge: "知识点",
+  iv_reverse: "反问环节",
   p1: "P1",
   p2: "P2",
   p3: "P3",
@@ -716,6 +722,8 @@ function tf(key, values = {}, fallback = "") {
 
 function viewCopyFor(view) {
   const langCopy = currentUiLanguage() === "en" ? viewCopyEn : viewCopy;
+  // The report page is shared; in interview mode it lists interview reports.
+  if (view === "history" && state.productMode === "interview") return currentUiLanguage() === "en" ? ["Interview Reports", ""] : ["面试报告", ""];
   return langCopy[view] || viewCopy[view] || viewCopy.home;
 }
 
@@ -2301,7 +2309,7 @@ function applyLanguageTakeawaysPayload(payload) {
 }
 
 async function prefetchSpeakingHistory(token) {
-  const payload = await api("/api/history");
+  const payload = await api(speakingHistoryUrl());
   if (!prefetchCanApply(token)) return;
   const items = payload.items || [];
   state.historyItems = items;
@@ -2385,7 +2393,7 @@ function setWritingActionPanelCollapsed(collapsed, { persist = false } = {}) {
   }
 }
 
-const SHARED_MODE_VIEWS = new Set(["home"]);
+const SHARED_MODE_VIEWS = new Set(["home", "history"]);
 
 function switchView(view, options = {}) {
   if ((view === "interview" || isInterviewView(view)) && !state.desktopCapabilities?.mock_interview) view = "home";
@@ -7011,7 +7019,7 @@ async function loadHistory(showBusy = true) {
   }
   const navScroll = captureNavScrollState();
   const action = async () => {
-    const payload = await api("/api/history");
+    const payload = await api(speakingHistoryUrl());
     state.historyItems = payload.items || [];
     reconcileSpeakingHistoryDetailCache(state.historyItems);
     renderHistoryList(state.historyItems);
@@ -7064,8 +7072,19 @@ function speakingReportStatus(item = {}) {
   return item.ielts_score || item.overall_band != null ? "ready" : "unscored";
 }
 
-function visibleSpeakingHistoryItems(items = state.historyItems) {
+// IELTS and the mock interview share the report page; each mode lists its own attempts.
+function speakingHistoryUrl() {
+  return state.productMode === "interview" ? "/api/history?domain=interview" : "/api/history";
+}
+
+function currentSpeakingReportFilter() {
   const filter = SPEAKING_REPORT_FILTERS.has(state.speakingReportFilter) ? state.speakingReportFilter : "all";
+  // A filter from the other mode (e.g. P2 while in interview mode) means "all".
+  return filter === "all" || isInterviewView(filter) === (state.productMode === "interview") ? filter : "all";
+}
+
+function visibleSpeakingHistoryItems(items = state.historyItems) {
+  const filter = currentSpeakingReportFilter();
   if (filter === "all") return items;
   return items.filter((item) => speakingReportPart(item) === filter);
 }
@@ -7170,7 +7189,7 @@ function closeWritingReportFilterMenu() {
 }
 
 function syncSpeakingReportFilterUi() {
-  const filter = SPEAKING_REPORT_FILTERS.has(state.speakingReportFilter) ? state.speakingReportFilter : "all";
+  const filter = currentSpeakingReportFilter();
   text("speakingReportFilterLabel", SPEAKING_REPORT_FILTER_LABELS[filter] || "全部");
   document.querySelectorAll("[data-speaking-report-filter]").forEach((button) => {
     const active = button.dataset.speakingReportFilter === filter;
@@ -7271,8 +7290,11 @@ function setupReportRails() {
 }
 
 function speakingReportEmptyRailHtml(emptyKind = "filtered") {
-  const title = emptyKind === "all" ? "还没有口语报告" : "这个分类暂无报告";
-  const subtitle = emptyKind === "all" ? "完成一次口语练习后，报告会出现在这里。" : "换个分类看看，或完成一次对应练习。";
+  const interviewMode = state.productMode === "interview";
+  const title = emptyKind === "all" ? (interviewMode ? "还没有面试报告" : "还没有口语报告") : "这个分类暂无报告";
+  const subtitle = emptyKind === "all"
+    ? (interviewMode ? "完成一次面试练习后，报告会出现在这里。" : "完成一次口语练习后，报告会出现在这里。")
+    : "换个分类看看，或完成一次对应练习。";
   return `
     <div class="history-empty-state report-empty-rail-card">
       <span class="report-empty-rail-icon" aria-hidden="true">
@@ -7286,6 +7308,9 @@ function speakingReportEmptyRailHtml(emptyKind = "filtered") {
 
 function speakingReportEmptyDetailHtml(emptyKind = "filtered") {
   const isAllEmpty = emptyKind === "all";
+  // Interview mode shares this page; its empty state points at the interview parts instead of P1 / Mock.
+  const interviewMode = state.productMode === "interview";
+  const firstMode = interviewMode ? "iv_knowledge" : "p1";
   return `
     <section class="detail-card report-empty-detail-card">
       <div class="report-empty-orbit" aria-hidden="true">
@@ -7296,17 +7321,24 @@ function speakingReportEmptyDetailHtml(emptyKind = "filtered") {
         </svg>
       </div>
       <div class="report-empty-copy">
-        <span class="section-label">Speaking Reports</span>
-        <h2>${isAllEmpty ? "还没有口语报告" : "这个分类下还没有报告"}</h2>
-        <p>${isAllEmpty ? "完成 P1、P2、P3 或 Mock 后，这里会沉淀评分、逐题反馈和可复盘的回答记录。" : "当前筛选没有匹配的报告。可以切换到全部，或者从对应练习开始生成新的报告。"}</p>
+        <span class="section-label">${interviewMode ? "Interview Reports" : "Speaking Reports"}</span>
+        <h2>${isAllEmpty ? (interviewMode ? "还没有面试报告" : "还没有口语报告") : "这个分类下还没有报告"}</h2>
+        <p>${isAllEmpty
+          ? (interviewMode ? "完成完整面试、项目、知识点或反问后，这里会沉淀百分制评分、逐题点评和参考回答。" : "完成 P1、P2、P3 或 Mock 后，这里会沉淀评分、逐题反馈和可复盘的回答记录。")
+          : "当前筛选没有匹配的报告。可以切换到全部，或者从对应练习开始生成新的报告。"}</p>
       </div>
       <div class="report-empty-actions">
         ${isAllEmpty ? `
+          ${interviewMode ? `
+          <a class="report-empty-primary" data-home-mode="iv_knowledge" href="?view=iv_knowledge">开始知识点练习</a>
+          <a class="report-empty-secondary" data-home-mode="iv_full" href="?view=iv_full">完整面试</a>
+          ` : `
           <a class="report-empty-primary" data-home-mode="p1" href="?view=p1">开始 P1 练习</a>
           <a class="report-empty-secondary" data-home-mode="mock" href="?view=mock">完整模拟</a>
+          `}
         ` : `
           <button type="button" class="report-empty-primary" data-speaking-report-filter="all">查看全部报告</button>
-          <a class="report-empty-secondary" data-home-mode="p1" href="?view=p1">去练一题</a>
+          <a class="report-empty-secondary" data-home-mode="${firstMode}" href="?view=${firstMode}">去练一题</a>
         `}
       </div>
     </section>
@@ -7370,7 +7402,8 @@ function renderHistoryList(items, options = {}) {
   }
   list.innerHTML = visibleItems.map((item) => {
     const part = (item.mode || item.part || "").toLowerCase();
-    const tagClass = isSpeakingPartView(part) ? part : "";
+    const interviewTag = INTERVIEW_REPORT_TAGS[part];
+    const tagClass = interviewTag ? interviewTag[0] : (isSpeakingPartView(part) ? part : "");
     const toneClass = part === "mock" ? "tone-mock" : `tone-${tagClass || "neutral"}`;
     const reportStatus = speakingReportStatus(item);
     const isFailed = reportStatus === "failed";
@@ -7381,12 +7414,14 @@ function renderHistoryList(items, options = {}) {
       : (isFailed ? " is-failed" : (isUnscored ? " is-unscored" : ""));
     const bandText = isScoring
       ? "评分中"
-      : (isFailed ? "评分失败" : (isUnscored ? "未评分" : reportBandScoreHtml(item.overall_band ?? "—")));
+      : (isFailed ? "评分失败" : (isUnscored ? "未评分" : (interviewTag
+        ? `<em class="history-item-band-label">Score</em><b class="history-item-band-value">${escapeHtml(item.interview_total ?? "—")}</b>`
+        : reportBandScoreHtml(item.overall_band ?? "—"))));
     return `
     <div class="history-item-wrap">
       <button class="history-item ${toneClass} ${state.activeHistoryId === item.id ? "active" : ""}" data-attempt-id="${escapeHtml(item.id)}">
         <div class="history-item-top">
-          <span class="history-item-tag ${tagClass}">${escapeHtml(part.toUpperCase())}</span>
+          <span class="history-item-tag ${tagClass}">${escapeHtml(interviewTag ? interviewTag[1] : part.toUpperCase())}</span>
           ${item.is_sample ? `<span class="report-sample-badge">示例</span>` : ""}
           <span class="history-item-band${bandClass}">${bandText}</span>
         </div>
@@ -7681,7 +7716,7 @@ async function openReportManager() {
   $("reportManagerBtn")?.classList.add("hidden"); // don't show the trigger over the dialog
   renderReportManager();
   await Promise.all([
-    api("/api/history").then((p) => { state.historyItems = p.items || []; }).catch(() => {}),
+    api(speakingHistoryUrl()).then((p) => { state.historyItems = p.items || []; }).catch(() => {}),
     api("/api/writing/reports").then((p) => { state.writing.reportEntries = p.items || []; }).catch(() => {}),
   ]);
   if (!dialog.classList.contains("hidden")) renderReportManager();
@@ -11277,6 +11312,14 @@ function showSpeakingScoreCompleteModal(attempt) {
   if (notificationKey && state.speaking.scoreCompletionNotifiedIds.has(notificationKey)) return;
   if (notificationKey) state.speaking.scoreCompletionNotifiedIds.add(notificationKey);
   state.speaking.scoreCompletionModalAttempt = attempt;
+  if (attempt.interview_score) {
+    text("speakingScoreCompleteTitle", "面试报告已完成");
+    text("speakingScoreCompleteText", "百分制报告已经生成，可以打开查看逐题点评和参考回答。");
+    text("speakingScoreCompleteBand", `${attempt.interview_score.total ?? "—"} / 100`);
+    $("speakingScoreCompleteCriteria")?.classList.add("hidden");
+    $("speakingScoreCompleteModal")?.classList.remove("hidden");
+    return;
+  }
   const score = attempt.ielts_score || null;
   text("speakingScoreCompleteTitle", "口语分析已完成");
   text("speakingScoreCompleteText", score
@@ -11950,6 +11993,36 @@ function showWritingReportError(error) {
   $("writingReportDetail").innerHTML = `<div class="detail-card"><p class="error">${escapeHtml(message)}</p></div>`;
 }
 
+// Mock-interview report: the IELTS summary card with a 100-point score and five dimensions instead of bands,
+// then the same overall review card and per-question table (reference answer + the interviewer's judgement).
+function renderInterviewDetail(detailPanel, attempt) {
+  const score = attempt.interview_score || {};
+  const turns = attempt.turns || [];
+  const answered = turns.filter((turn) => !reportTurnAnswerIsEmpty(turn)).length;
+  const cells = (score.dimensions || []).map((dim) => scoreCell(dim.label, dim.score, `满分 ${dim.max}`)).join("");
+  detailPanel.innerHTML = `
+    <div class="detail-card speaking-score-summary-card speaking-report-ready-card" data-report-status="ready">
+      <div class="speaking-score-summary-head">
+        <div class="speaking-score-summary-copy">
+          <span class="section-label">模拟面试 · 百分制估分</span>
+          <h2>${escapeHtml(viewTitleFor(attempt.mode) || attempt.title || "")} 报告</h2>
+          <p class="muted">${escapeHtml(attempt.title || "")} · ${answered} 题已答</p>
+        </div>
+        <div class="speaking-score-summary-side">
+          <div class="speaking-score-summary-band">
+            <span>Overall</span>
+            <strong>${escapeHtml(score.total ?? "—")} / 100</strong>
+          </div>
+        </div>
+      </div>
+      <div class="score-row compact speaking-score-summary-grid interview-score-grid">${cells}</div>
+    </div>
+    ${overallReviewSection(attempt.overall_review || {}, attempt)}
+    ${turnTableSection(attempt, turns, false)}
+    ${score.limitations ? `<p class="muted interview-score-note">${escapeHtml(score.limitations)}</p>` : ""}
+  `;
+}
+
 function renderDetail(attempt, updateView = true, options = {}) {
   if (updateView) switchView("history");
   const detailPanel = $("detailPanel");
@@ -12002,6 +12075,12 @@ function renderDetail(attempt, updateView = true, options = {}) {
     } else {
       detailPanel.scrollTo({ top: 0, behavior: "smooth" });
     }
+    return;
+  }
+  if (attempt.interview_score) {
+    renderInterviewDetail(detailPanel, attempt);
+    if (preserveScroll) detailPanel.scrollTop = previousScrollTop;
+    else detailPanel.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
   const score = attempt.ielts_score || {};
@@ -12817,9 +12896,10 @@ function reportQuestionHeaderHtml(countCorpus) {
 function turnTableSection(attempt, turns, isP2 = false) {
   const reportTurns = turns.filter(shouldRenderReportTurn);
   const tableClass = isP2 ? "turn-report-table p2-report-table" : "turn-report-table p1-p3-report-table";
+  const referenceHead = attempt?.interview_score ? "参考回答" : "7分回答参考";
   const headers = isP2
-    ? '<th>我的原文</th><th class="band7-head">7分回答参考</th>'
-    : `${reportQuestionHeaderHtml(!isP2)}<th>Your recording</th><th class="band7-head">7分回答参考</th>`;
+    ? `<th>我的原文</th><th class="band7-head">${referenceHead}</th>`
+    : `${reportQuestionHeaderHtml(!isP2)}<th>Your recording</th><th class="band7-head">${referenceHead}</th>`;
   const bodyHtml = reportTurns.map((turn) => turnReportGroup(attempt.id, turn, attempt, isP2)).join("");
   return `
     <div class="detail-card turn-report-card${isP2 ? " p2-report-card" : ""}">
@@ -14191,7 +14271,10 @@ function turnReportRow(attemptId, turn, attempt, isP2 = false) {
   }
 
   // Non-P2 layout: two rows - content row + AI coaching row
-  const questionCell = `<td><div class="question-header"><strong>${escapeHtml(turn.part.toUpperCase())} ${turn.index + 1}</strong>${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}</div><p>${escapeHtml(turn.question)}</p>${p3TurnDiscussionMoves(turn)}${corpusButton ? `<div class="question-cell-actions">${corpusButton}</div>` : ""}</td>`;
+  const questionLabel = turn.part === "interview"
+    ? `${INTERVIEW_STAGE_LABELS[turn.prompt?.stage] || "面试"}${isFollowUp ? "" : ` ${(turn.index ?? 0) + 1}`}`
+    : `${turn.part.toUpperCase()} ${turn.index + 1}`;
+  const questionCell = `<td><div class="question-header"><strong>${escapeHtml(questionLabel)}</strong>${isFollowUp ? '<span class="follow-up-pill">Follow-up</span>' : ""}</div><p>${escapeHtml(turn.question)}</p>${p3TurnDiscussionMoves(turn)}${corpusButton ? `<div class="question-cell-actions">${corpusButton}</div>` : ""}</td>`;
   return `
     <tr class="p1-p3-content-row">
       ${questionCell}
@@ -15905,6 +15988,12 @@ function bindEvents() {
     const exportButton = event.target.closest("[data-report-export]");
     if (exportButton) {
       openReportHtmlPage(exportButton.dataset.reportExport || "speaking");
+      return;
+    }
+    const practiceLink = event.target.closest("[data-home-mode]");
+    if (practiceLink && !isNewTabNavigationEvent(event)) {
+      event.preventDefault();
+      navigatePracticeMode(practiceLink.dataset.homeMode);
       return;
     }
     const filterButton = event.target.closest("[data-speaking-report-filter]");

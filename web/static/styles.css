@@ -1549,13 +1549,11 @@ body.font-popular .nav-divider {
 }
 
 .workspace.history-workspace #historyPanel,
-.workspace.history-workspace .writing-reports-panel,
-.workspace.interview-history-workspace #interviewReports {
+.workspace.history-workspace .writing-reports-panel {
   grid-row: 1 / -1;
 }
 
-.workspace.history-workspace #historyPanel,
-.workspace.interview-history-workspace #interviewReports {
+.workspace.history-workspace #historyPanel {
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -11053,8 +11051,7 @@ button.corpus-dictate-button.is-recording svg {
   font-size: 13px;
 }
 
-#historyPanel,
-#interviewReports {
+#historyPanel {
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -11068,8 +11065,7 @@ button.corpus-dictate-button.is-recording svg {
 }
 
 #historyPanel.is-loading > .page-center-loading,
-.writing-reports-panel.is-loading > .page-center-loading,
-#interviewReports.is-loading > .page-center-loading {
+.writing-reports-panel.is-loading > .page-center-loading {
   position: absolute;
   inset: 0;
   z-index: 8;
@@ -14667,8 +14663,7 @@ body.theme-dark .corpus-loading-card {
 }
 
 #detailPanel > .page-center-loading,
-#writingReportDetail > .page-center-loading,
-#interviewReportDetail > .page-center-loading {
+#writingReportDetail > .page-center-loading {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
@@ -17251,8 +17246,7 @@ button.ghost {
 }
 
 #detailPanel > .report-empty-detail-card,
-#writingReportDetail > .report-empty-detail-card,
-#interviewReportDetail > .report-empty-detail-card {
+#writingReportDetail > .report-empty-detail-card {
   flex: 1 1 auto;
   min-height: min(620px, calc(100dvh - 310px));
 }
@@ -20896,8 +20890,7 @@ body.theme-dark .page-center-loading,
 body.theme-dark .corpus-editor-loading,
 body.theme-dark #historyPanel.is-loading > .page-center-loading,
 body.theme-dark .writing-reports-panel.is-loading > .page-center-loading,
-body.theme-dark .writing-panel > .page-center-loading,
-body.theme-dark #interviewReports.is-loading > .page-center-loading {
+body.theme-dark .writing-panel > .page-center-loading {
   background: rgba(8, 16, 25, 0.70);
   color: var(--muted);
 }
@@ -36947,8 +36940,7 @@ body.theme-dark .p1-topic-card.is-modal-only::after {
 
 /* Report toolbars need the full top-right area; onboarding remains available elsewhere. */
 body:has(#historyPanel:not(.hidden)) .ob-launch,
-body:has(#writingReportsPanel:not(.hidden)) .ob-launch,
-body:has(#interviewReports:not(.hidden)) .ob-launch {
+body:has(#writingReportsPanel:not(.hidden)) .ob-launch {
   display: none !important;
 }
 
@@ -37958,16 +37950,14 @@ body.theme-dark .spelling-add-gloss {
 /* Report screens only: neutral black-gray backgrounds. Do not bleed into
    practice, corpus, spelling, account, or the writing composer. */
 body.theme-dark:has(#historyPanel:not(.hidden)) .workspace,
-body.theme-dark:has(#writingReportsPanel:not(.hidden)) .workspace,
-body.theme-dark:has(#interviewReports:not(.hidden)) .workspace {
+body.theme-dark:has(#writingReportsPanel:not(.hidden)) .workspace {
   background:
     linear-gradient(180deg, rgba(15, 18, 22, 0.90), rgba(8, 10, 13, 0.96)),
     #080a0d !important;
 }
 
 body.theme-dark #historyPanel,
-body.theme-dark #writingReportsPanel,
-body.theme-dark #interviewReports {
+body.theme-dark #writingReportsPanel {
   background: transparent !important;
 }
 
@@ -37986,11 +37976,7 @@ body.theme-dark #writingReportsPanel .writing-saved-report-card,
 body.theme-dark #historyPanel .writing-saved-answer-card,
 body.theme-dark #writingReportsPanel .writing-saved-answer-card,
 body.theme-dark #historyPanel .turn-report-card,
-body.theme-dark #writingReportsPanel .turn-report-card,
-body.theme-dark #interviewReports .history-rail-shell,
-body.theme-dark #interviewReports .detail-card,
-body.theme-dark #interviewReports .speaking-score-summary-card,
-body.theme-dark #interviewReports .turn-report-card {
+body.theme-dark #writingReportsPanel .turn-report-card {
   background: linear-gradient(180deg, #171a20 0%, #0f1216 100%) !important;
   border-color: rgba(225, 229, 235, 0.15) !important;
 }
@@ -38683,10 +38669,7 @@ body.theme-dark.font-popular .workspace.interview-corpus-workspace .p1-topic-car
    writing reports, P2 editors, or generic table components. */
 body.theme-dark #historyPanel .turn-report-table.p1-p3-report-table th,
 body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-table th,
-body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table th,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table th,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table th,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table th {
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table th {
   background: #182126 !important;
   border-color: rgba(157, 183, 173, 0.22) !important;
   color: #dce7e2 !important;
@@ -38726,19 +38709,7 @@ body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-tabl
 body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table td,
 body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table td.ai-coaching-cell,
 body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-content-row > td,
-body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-coaching-row > td,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table td,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table td.ai-coaching-cell,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table .p1-p3-content-row > td,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table .p1-p3-coaching-row > td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table td.ai-coaching-cell,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table .p1-p3-content-row > td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table .p1-p3-coaching-row > td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table td.ai-coaching-cell,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table .p1-p3-content-row > td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table .p1-p3-coaching-row > td {
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .p1-p3-coaching-row > td {
   background: linear-gradient(180deg, #12191b, #0e1416) !important;
   border-color: rgba(157, 183, 173, 0.22) !important;
   color: #dce7e2 !important;
@@ -38755,19 +38726,7 @@ body.theme-dark.font-academic #historyPanel .turn-report-table.p1-p3-report-tabl
 body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr:first-child > td,
 body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr:last-child > td,
 body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:first-child,
-body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:last-child,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr:first-child > td,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr:last-child > td,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr > td:first-child,
-body.theme-dark #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr > td:last-child,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr:first-child > td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr:last-child > td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr > td:first-child,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr > td:last-child,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr:first-child > td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr:last-child > td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr > td:first-child,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-table .turn-report-group tr > td:last-child {
+body.theme-dark.font-popular #historyPanel .turn-report-table.p1-p3-report-table .turn-report-group tr > td:last-child {
   border-color: rgba(157, 183, 173, 0.22) !important;
 }
 
@@ -38775,10 +38734,7 @@ body.theme-dark.font-popular #interviewReports .turn-report-table.p1-p3-report-t
    match the newer P1/P3 and writing report tables. */
 body.theme-dark #historyPanel .turn-report-table.p2-report-table th,
 body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table th,
-body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table th,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table th,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table th,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table th {
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table th {
   background: #182126 !important;
   border-color: rgba(157, 183, 173, 0.22) !important;
   color: #dce7e2 !important;
@@ -38795,19 +38751,7 @@ body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table .
 body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table td,
 body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table td.ai-coaching-cell,
 body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .p2-content-row > td,
-body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .p2-coaching-row > td,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table td,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table td.ai-coaching-cell,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table .p2-content-row > td,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table .p2-coaching-row > td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table td.ai-coaching-cell,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table .p2-content-row > td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table .p2-coaching-row > td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table td.ai-coaching-cell,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table .p2-content-row > td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table .p2-coaching-row > td {
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .p2-coaching-row > td {
   background: linear-gradient(180deg, #12191b, #0e1416) !important;
   border-color: rgba(157, 183, 173, 0.22) !important;
   color: #dce7e2 !important;
@@ -38824,19 +38768,7 @@ body.theme-dark.font-academic #historyPanel .turn-report-table.p2-report-table .
 body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr:first-child > td,
 body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr:last-child > td,
 body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:first-child,
-body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:last-child,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table .turn-report-group tr:first-child > td,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table .turn-report-group tr:last-child > td,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table .turn-report-group tr > td:first-child,
-body.theme-dark #interviewReports .turn-report-table.p2-report-table .turn-report-group tr > td:last-child,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table .turn-report-group tr:first-child > td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table .turn-report-group tr:last-child > td,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table .turn-report-group tr > td:first-child,
-body.theme-dark.font-academic #interviewReports .turn-report-table.p2-report-table .turn-report-group tr > td:last-child,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table .turn-report-group tr:first-child > td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table .turn-report-group tr:last-child > td,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table .turn-report-group tr > td:first-child,
-body.theme-dark.font-popular #interviewReports .turn-report-table.p2-report-table .turn-report-group tr > td:last-child {
+body.theme-dark.font-popular #historyPanel .turn-report-table.p2-report-table .turn-report-group tr > td:last-child {
   border-color: rgba(157, 183, 173, 0.22) !important;
 }
 
@@ -39120,8 +39052,7 @@ body.theme-dark.font-popular .p3-skill-item.weak span {
 /* Report rails: third dark theme keeps cards readable without recoloring global
    task buttons or the other two themes. */
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab,
-body.theme-dark.font-popular #historyPanel .history-item,
-body.theme-dark.font-popular #interviewReports .history-item {
+body.theme-dark.font-popular #historyPanel .history-item {
   background:
     linear-gradient(180deg, rgba(20, 25, 29, 0.99), rgba(13, 17, 21, 0.99)) !important;
   border-color: rgba(118, 137, 150, 0.28) !important;
@@ -39133,9 +39064,7 @@ body.theme-dark.font-popular #interviewReports .history-item {
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab:hover,
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab.active,
 body.theme-dark.font-popular #historyPanel .history-item:hover,
-body.theme-dark.font-popular #historyPanel .history-item.active,
-body.theme-dark.font-popular #interviewReports .history-item:hover,
-body.theme-dark.font-popular #interviewReports .history-item.active {
+body.theme-dark.font-popular #historyPanel .history-item.active {
   background:
     linear-gradient(180deg, rgba(21, 31, 38, 0.99), rgba(12, 19, 25, 0.99)) !important;
   border-color: rgba(70, 151, 211, 0.74) !important;
@@ -39146,8 +39075,7 @@ body.theme-dark.font-popular #interviewReports .history-item.active {
 }
 
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-tag,
-body.theme-dark.font-popular #historyPanel .history-item .history-item-tag,
-body.theme-dark.font-popular #interviewReports .history-item .history-item-tag {
+body.theme-dark.font-popular #historyPanel .history-item .history-item-tag {
   background: #d7ecff !important;
   border: 1px solid rgba(215, 236, 255, 0.45) !important;
   color: #15608f !important;
@@ -39155,31 +39083,27 @@ body.theme-dark.font-popular #interviewReports .history-item .history-item-tag {
 }
 
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-tag.p1,
-body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p1,
-body.theme-dark.font-popular #interviewReports .history-item .history-item-tag.p1 {
+body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p1 {
   background: #d7f8e6 !important;
   border-color: rgba(167, 243, 208, 0.50) !important;
   color: #116b43 !important;
 }
 
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-tag.p2,
-body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p2,
-body.theme-dark.font-popular #interviewReports .history-item .history-item-tag.p2 {
+body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p2 {
   background: #d7ecff !important;
   border-color: rgba(147, 197, 253, 0.50) !important;
   color: #155e91 !important;
 }
 
-body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p3,
-body.theme-dark.font-popular #interviewReports .history-item .history-item-tag.p3 {
+body.theme-dark.font-popular #historyPanel .history-item .history-item-tag.p3 {
   background: #ece6ff !important;
   border-color: rgba(196, 181, 253, 0.50) !important;
   color: #5c3eb0 !important;
 }
 
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-band,
-body.theme-dark.font-popular #historyPanel .history-item .history-item-band,
-body.theme-dark.font-popular #interviewReports .history-item .history-item-band {
+body.theme-dark.font-popular #historyPanel .history-item .history-item-band {
   background: rgba(16, 68, 105, 0.92) !important;
   border: 1px solid rgba(96, 165, 218, 0.40) !important;
   color: #e8f5ff !important;
@@ -39187,14 +39111,12 @@ body.theme-dark.font-popular #interviewReports .history-item .history-item-band 
 }
 
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab strong,
-body.theme-dark.font-popular #historyPanel .history-item strong,
-body.theme-dark.font-popular #interviewReports .history-item strong {
+body.theme-dark.font-popular #historyPanel .history-item strong {
   color: #f1f6f8 !important;
 }
 
 body.theme-dark.font-popular #writingReportsPanel .writing-report-tab .history-item-time,
-body.theme-dark.font-popular #historyPanel .history-item .history-item-time,
-body.theme-dark.font-popular #interviewReports .history-item .history-item-time {
+body.theme-dark.font-popular #historyPanel .history-item .history-item-time {
   color: #aebbc2 !important;
 }
 
@@ -40470,8 +40392,7 @@ body:not(.theme-dark) :is(
   font-weight: 780 !important;
 }
 
-body:not(.theme-dark) :is(#historyPanel, #detailPanel) .turn-report-table :is(.p1-p3-content-row > td:nth-child(3), .p2-content-row > td:nth-child(2)) :is(.model-answer-markdown strong, strong),
-body:not(.theme-dark) :is(#interviewReports, #interviewReportDetail) .turn-report-table :is(.p1-p3-content-row > td:nth-child(3), .p2-content-row > td:nth-child(2)) :is(.model-answer-markdown strong, strong) {
+body:not(.theme-dark) :is(#historyPanel, #detailPanel) .turn-report-table :is(.p1-p3-content-row > td:nth-child(3), .p2-content-row > td:nth-child(2)) :is(.model-answer-markdown strong, strong) {
   color: #2563eb !important;
   font-weight: 780 !important;
 }
@@ -43714,7 +43635,8 @@ body.theme-dark {
 body:not(#_) .workspace,
 body:not(#_) .workspace:has(#homePanel:not(.hidden)),
 body:not(#_) .workspace:not(:has(#practicePanel:not(.hidden))),
-body:not(#_) :is(.language-takeaway-panel, .language-book-shell, #writingReportsPanel, #historyPanel, #writingPanel) {
+body:not(#_) :is(.language-takeaway-panel, .language-book-shell, #writingReportsPanel, #historyPanel, #writingPanel),
+body:not(#_) :is(.language-takeaway-panel, .language-book-shell, #writingReportsPanel, #historyPanel, #interviewCustom) {
   background: var(--bg) !important;
   background-image: none !important;
 }
@@ -45334,8 +45256,7 @@ body:not(#_):not(#__) .history-rail-shell {
   padding-bottom: 0 !important;
 }
 
-body:not(#_) .workspace.history-workspace,
-body:not(#_) .workspace.interview-history-workspace {
+body:not(#_) .workspace.history-workspace {
   padding-top: calc(126px + var(--safe-top)) !important;
 }
 
@@ -46354,8 +46275,6 @@ body:not(#_) #interviewPanel:not(.hidden) {
 /* Scroll regions: home, report and corpus scroll as a whole pane; practice keeps its header and
    scrolls inside each column; reports scroll the list; tailored scrolls each sheet. */
 #interviewPanel :is(.iv-pane--home, .iv-pane--corpus) { overflow-y: auto; overscroll-behavior: contain; }
-#interviewPanel :is(.iv-pane--reports, .iv-pane--report) > #interviewReports { flex: 1 1 auto; min-height: 0; }
-#interviewReportDetail { overscroll-behavior: contain; }
 
 /* Resume / JD: the #writingPanel shell (aliased); the switch sits above it instead of in the top bar. */
 #interviewPanel .iv-pane > #interviewCustom { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
@@ -46757,20 +46676,6 @@ body:not(#_) :is(.quick-settings-seg button, .quick-settings-select, .quick-sett
 #interviewPanel .iv-slide-art--3 span:nth-child(2) { left: 44%; width: 48%; height: 14%; }
 #interviewPanel .iv-slide-art--3 span:nth-child(3) { left: 44%; top: 34%; width: 48%; height: 42%; }
 
-/* ---------- Reports: IELTS speaking-report rail + detail (shared via the #interviewReports aliases) ---------- */
-#interviewReportDetail .iv-score-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-@media (max-width: 1100px) { #interviewReportDetail .iv-score-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-#interviewReportDetail .iv-report-pending { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 14px; }
-#interviewReportDetail .iv-report-pending p[role="alert"] { color: var(--danger, #b42318); }
-#interviewReportDetail .speaking-score-summary-band strong { white-space: nowrap; }
-#interviewReportDetail .turn-report-table td > p + p { margin-top: 8px; }
-#interviewReportDetail .turn-report-table td p strong { display: block; margin-bottom: 2px; color: var(--muted); font-size: 12.5px; }
-#interviewReportDetail .iv-signal { margin: 0 6px 0 0; }
-#interviewReportDetail .iv-source-pill { display: inline-block; margin-bottom: 6px; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--muted); font-size: 11.5px; }
-#interviewReportDetail > .iv-voice-note { flex: none; margin: 0 0 8px; }
-#interviewPanel .iv-signal { margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-style: normal; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-#interviewPanel .iv-signal.is-strong { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
-#interviewPanel .iv-signal.is-weak { background: color-mix(in srgb, var(--ed-gold) 18%, transparent); color: color-mix(in srgb, var(--ed-gold) 80%, var(--ink)); }
 
 /* ---------- Corpus library: grouped cards like "我的 P1 语料库" ---------- */
 #interviewPanel .iv-pane--corpus { display: block; }
@@ -46820,3 +46725,12 @@ body:not(#_) #interviewPanel .iv-question-input:focus { outline: none; border-bo
 #interviewPanel .iv-corpus-dialog .iv-ai-tools svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #interviewPanel .iv-corpus-dialog .iv-draft-text { max-height: 220px; overflow-y: auto; white-space: pre-wrap; line-height: 1.75; }
 #interviewPanel .iv-corpus-dialog .p1-corpus-dialog-actions { display: flex; justify-content: flex-end; min-height: 28px; }
+
+/* ---------- Mock-interview reports on the IELTS report page ---------- */
+/* One filter menu, each mode shows its own options. */
+body:not(.interview-mode) #speakingReportFilterMenu [data-speaking-report-filter^="iv_"],
+body.interview-mode #speakingReportFilterMenu :is([data-speaking-report-filter^="p"], [data-speaking-report-filter="mock"]) { display: none !important; }
+/* Five 100-point dimensions instead of three IELTS criteria. */
+body:not(#_) #detailPanel .interview-score-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1100px) { body:not(#_) #detailPanel .interview-score-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+#detailPanel .interview-score-note { margin: 0 0 8px; font-size: 13px; }

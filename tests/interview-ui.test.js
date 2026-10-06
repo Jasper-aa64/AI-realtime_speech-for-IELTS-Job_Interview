@@ -48,7 +48,8 @@ function fixture({ desktop = true, storedMode = "ielts", decisionFails = true, s
   const details = () => clone({ ...saved, current_turn: saved.session.status === "active" ? saved.turns.find((turn) => turn.status === "pending") || null : null });
   const api = async (url, body, options = {}) => {
     requests.push({ url, body: clone(body ?? null), method: options.method || (body === null || body === undefined ? "GET" : "POST"), signal: options.signal });
-    if (deferred && url === "/api/interview/sessions/" && !body) return deferred;
+    if (deferred && url === "/api/history?domain=interview") return deferred;
+    if (url === "/api/history?domain=interview") return { items: [] };
     if (url === "/api/interview/questions/") return { questions: [], categories: [{ id: "cpp", label: "C++ 基础与进阶" }] };
     if (url === "/api/interview/sessions/" && !body) return { sessions: [] };
     if (url === "/api/interview/profile/") return { profile: { resume: { modules: [], updated_at: "2026-10-05T00:00:00Z" }, jd: { summary: {} } } };
@@ -133,10 +134,10 @@ test("account reset cancels in-flight requests and discards private data", async
   const env = fixture(); await env.app.initialize();
   let resolve; env.setDeferred(new Promise((done) => { resolve = done; }));
   env.app.show(); await settle();
-  const pending = env.requests.find((request) => request.url === "/api/interview/sessions/");
+  const pending = env.requests.find((request) => request.url === "/api/history?domain=interview");
   env.state.account.user = { id: 2 }; env.app.resetForAccount();
   assert.equal(pending.signal.aborted, true);
-  resolve({ sessions: [{ id: "secret", title: "Previous user's private interview", status: "active", part: "full" }] }); await settle();
+  resolve({ items: [{ id: "secret", title: "Previous user's private interview", interview_total: 90 }] }); await settle();
   assert.doesNotMatch(env.html(), /Previous user's private interview/);
 });
 

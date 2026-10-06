@@ -19,7 +19,6 @@
   ];
   const KIND_LABELS = { self_intro: ["自我介绍", "Self intro"], project: ["项目讲述", "Project story"], project_followup: ["项目追问", "Project follow-up"], knowledge: ["知识点", "Knowledge"], award: ["奖项", "Award"], jd_question: ["岗位题", "Role question"], reverse_question: ["反问", "Question to ask"] };
   const SOURCE_LABELS = { curated: ["精选题库", "Curated"], resume: ["简历", "Resume"], jd: ["JD", "JD"], custom: ["自定义", "Custom"], practice: ["练习", "Practice"] };
-  const SIGNALS = { strong: ["答得扎实", "Strong"], adequate: ["基本到位", "Adequate"], weak: ["还有缺口", "Gaps"] };
 
   function createInterview({ state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin, escapeHtml, currentAiSourcePreference }) {
     let epoch = 0;
@@ -48,9 +47,8 @@
     function freshState() {
       return {
         pane: "home", part: "full", busy: false, error: "", notice: "",
-        questions: [], categories: [], sessions: [], sessionsLoaded: false, current: null, report: null,
+        questions: [], categories: [], sessions: [], sessionsLoaded: false,
         corpus: null, corpusTab: "project", profile: null, customSide: "resume", resumeText: "", file: null, jdText: "",
-        reportFilter: "all", reportFilterOpen: false, railScroll: 0,
         editor: null,
       };
     }
@@ -85,7 +83,6 @@
       try { localStorage.setItem(MODE_KEY, mode); } catch (_error) { /* Session-only preference. */ }
     }
 
-    // ---- Mode switcher: the brand button grows into the card in place (shared corner, spring size, blur cross-fade).
     // ---- Mode switcher: the brand button grows into the card in place (corner-morph.js).
     // Colours come from the sidebar the control actually sits on: some appearance styles redefine --nav
     // without repainting the rail, so the token alone can say "white" on a dark sidebar.
@@ -233,7 +230,8 @@
     function acceptOverview([bank, history, profile, corpus]) {
       data.questions = bank?.questions || [];
       data.categories = bank?.categories || [];
-      if (history) { data.sessions = history.sessions || []; data.sessionsLoaded = true; }
+      // Finished interviews are speaking attempts; the IELTS history endpoint lists them under domain=interview.
+      if (history) { data.sessions = history.items || []; data.sessionsLoaded = true; }
       if (profile) data.profile = profile.profile;
       if (corpus) data.corpus = corpus.entries || [];
       window.IELTSInterviewHome?.refresh();
@@ -242,14 +240,14 @@
     // Numbers the shared home panel shows in interview mode (interview-home.js).
     function homeNumbers() {
       if (!state.account.authenticated) return null;
-      const finished = data.sessions.filter((item) => item.part && item.status !== "active");
-      const scored = finished.filter((item) => item.score?.status === "ready");
+      const finished = data.sessions;
+      const scored = finished.filter((item) => Number.isFinite(item.interview_total));
       const entries = data.corpus || [];
       const kind = (...kinds) => entries.filter((entry) => kinds.includes(entry.kind) && !entry.orphaned);
       return {
         sessions: data.sessionsLoaded ? finished.length : null,
-        average: scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score.total, 0) / scored.length) : null,
-        last: finished[0]?.created_at || null,
+        average: scored.length ? Math.round(scored.reduce((sum, item) => sum + item.interview_total, 0) / scored.length) : null,
+        last: finished[0]?.timestamp || null,
         projectReady: kind("project").filter((entry) => entry.corpus_text).length,
         knowledgeReady: kind("knowledge").filter((entry) => entry.corpus_text).length,
         jdCount: kind("jd_question", "reverse_question").length,
@@ -260,20 +258,9 @@
 
     function loadOverview() {
       return perform(() => Promise.all([
-        request("/api/interview/questions/"), request("/api/interview/sessions/"),
+        request("/api/interview/questions/"), request("/api/history?domain=interview"),
         request("/api/interview/profile/"), request("/api/interview/corpus/"),
       ]), acceptOverview, { busy: false }); // background refresh: never blocks navigation
-    }
-
-    function loadHistory() {
-      return perform(() => request("/api/interview/sessions/"), (payload) => { data.sessions = payload.sessions || []; data.sessionsLoaded = true; });
-    }
-
-    // The reports page opens the newest finished session, like the IELTS report rail.
-    function openFirstReport() {
-      if (!["reports", "report"].includes(data.pane) || selectedReport() || data.busy) return;
-      const first = visibleReports()[0];
-      if (first) perform(() => request(`/api/interview/sessions/${encodeURIComponent(first.id)}/`), acceptSession);
     }
 
     function loadCorpus() {
@@ -303,6 +290,13 @@
       data.pane = pane;
       data.error = "";
       data.editor = null;
+      if (pane === "reports" || pane === "report") {
+        // Interview reports live on the IELTS report page (history view, interview attempts only).
+        data.pane = "reports";
+        switchView("history", { force: true });
+        syncNav();
+        return;
+      }
       if (pane === "practice") {
         // Interview practice is the IELTS practice panel itself (views iv_full / iv_project / …).
         switchView(`iv_${data.part}`, { force: state.view !== `iv_${data.part}` });
@@ -311,18 +305,7 @@
       }
       switchView("interview", { force: state.view !== "interview" });
       render();
-      if (pane === "reports") loadHistory().then(openFirstReport);
-      else if (!data.corpus && state.account.authenticated) loadOverview();
-    }
-
-    function acceptSession(payload) {
-      data.current = payload;
-      const session = payload.session || {};
-      if (session.part) data.part = session.part;
-      const summary = data.sessions.find((item) => item.id === session.id);
-      if (summary) Object.assign(summary, session);
-      else if (session.id && data.sessionsLoaded) data.sessions.unshift(session);
-      data.pane = "report";
+      if (!data.corpus && state.account.authenticated) loadOverview();
     }
 
     // ---- Corpus helpers
@@ -339,186 +322,6 @@
       return (data.corpus || []).find((entry) => entry.id === id) || null;
     }
 
-    // Links inside interview panes (reports empty state).
-    const link = (action, content, { cls = "", attrs = "" } = {}) => `<a class="${cls}" href="?view=interview" data-interview-action="${action}" ${attrs}>${content}</a>`;
-
-    // ---- Reports: the IELTS speaking-report layout (#historyPanel) — a horizontal rail of report
-    // cards, then the score summary, overall review and per-question table for the selected session.
-    const REPORT_TAGS = { full: ["mock", "MOCK"], project: ["p2", "PROJ"], knowledge: ["p1", "STACK"], reverse: ["p3", "ASK"] };
-    const REPORT_FILTERS = ["all", "full", "project", "knowledge", "reverse"];
-    const RAIL_ICON = (path) => `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="${path}"></path></svg>`;
-
-    function selectedReport() {
-      const current = data.current;
-      return current?.session && current.session.status !== "active" ? current : null;
-    }
-
-    function visibleReports() {
-      // Before the list loads (straight after finishing a session), the rail shows just that session.
-      const sessions = data.sessionsLoaded ? data.sessions : [selectedReport()?.session].filter(Boolean);
-      return sessions.filter((session) => session.status !== "active" && (data.reportFilter === "all" || session.part === data.reportFilter));
-    }
-
-    function reportFilterLabel(filter) {
-      return filter === "all" ? copy("全部", "All") : partName(filter);
-    }
-
-    function reportRail(items, selectedId) {
-      const cards = items.map((session) => {
-        const [tag, label] = REPORT_TAGS[session.part] || ["", "TEXT"];
-        const score = session.score;
-        const scoring = data.busy && selectedId === session.id && session.status === "completed" && score?.status !== "ready";
-        const band = scoring ? ["is-scoring", esc(copy("评分中", "Scoring"))]
-          : score?.status === "ready" ? ["", `<em class="history-item-band-label">${esc(copy("得分", "Score"))}</em><b class="history-item-band-value">${esc(score.total)}</b>`]
-          : score?.status === "failed" ? ["is-failed", esc(copy("评分失败", "Failed"))]
-          : ["is-unscored", esc(session.status === "completed" ? copy("未评分", "Unscored") : copy("已结束", "Ended"))];
-        return `<div class="history-item-wrap"><button type="button" class="history-item tone-${tag || "neutral"}${selectedId === session.id ? " active" : ""}" data-interview-action="open-session" data-session-id="${esc(session.id)}" ${data.busy ? "disabled" : ""}>
-            <div class="history-item-top"><span class="history-item-tag ${tag}">${label}</span>${session.intensity === "pressure" ? `<span class="report-sample-badge">${esc(copy("压力", "Pressure"))}</span>` : ""}<span class="history-item-band ${band[0]}">${band[1]}</span></div>
-            <strong class="history-item-title">${esc(session.title || partName(session.part))}</strong>
-            <small class="history-item-time">${esc(dateText(session.created_at))}</small>
-          </button></div>`;
-      }).join("");
-      const empty = `<div class="history-empty-state report-empty-rail-card"><span class="report-empty-rail-icon" aria-hidden="true">${RAIL_ICON("M7 8h10M7 12h6M5 4h14a2 2 0 0 1 2 2v11.5a2 2 0 0 1-2 2H8l-5 3V6a2 2 0 0 1 2-2Z")}</span>
-          <strong>${esc(data.reportFilter === "all" ? copy("还没有面试报告", "No reports yet") : copy("这个分类暂无报告", "Nothing in this filter"))}</strong>
-          <small>${esc(data.reportFilter === "all" ? copy("练完一场面试，报告会出现在这里。", "Finish a session to see its report here.") : copy("换个分类看看，或练一场对应的面试。", "Try another filter or practise this part."))}</small></div>`;
-      const loading = `<div class="report-rail-loading-card" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><strong>${esc(copy("正在加载面试报告", "Loading reports"))}</strong><small>${esc(copy("正在读取练习记录。", "Reading your sessions."))}</small></div>`;
-      const options = REPORT_FILTERS.map((filter) => `<button type="button" role="option" aria-selected="${data.reportFilter === filter}" data-interview-action="report-filter" data-filter="${filter}">${esc(reportFilterLabel(filter))}</button>`).join("");
-      return `<div class="history-rail-shell speaking-report-rail-shell at-start">
-          <div class="history-rail-head">
-            <div><strong>Reports</strong><span>${esc(copy("横向滑动", "Swipe"))}</span></div>
-            <div class="report-filter speaking-report-filter report-filter-compact">
-              <button type="button" class="report-filter-button" data-interview-action="report-filter-toggle" aria-haspopup="listbox" aria-expanded="${!!data.reportFilterOpen}"><span>${esc(reportFilterLabel(data.reportFilter))}</span>${RAIL_ICON("m7 10 5 5 5-5")}</button>
-              <div class="report-filter-menu${data.reportFilterOpen ? "" : " hidden"}" role="listbox" aria-label="${esc(copy("筛选面试报告", "Filter reports"))}">${options}</div>
-            </div>
-            <div class="history-rail-actions" aria-label="${esc(copy("报告滚动", "Report rail controls"))}">
-              <button type="button" class="history-rail-nav" data-interview-action="rail-step" data-step="-1" aria-label="${esc(copy("上一组", "Previous"))}">${RAIL_ICON("m15 18-6-6 6-6")}</button>
-              <button type="button" class="history-rail-nav" data-interview-action="rail-step" data-step="1" aria-label="${esc(copy("下一组", "Next"))}">${RAIL_ICON("m9 18 6-6-6-6")}</button>
-            </div>
-          </div>
-          <div class="history-rail-window"><div id="interviewReportList" class="history-list">${cards || (data.sessionsLoaded ? empty : loading)}</div></div>
-        </div>`;
-    }
-
-    function emptyDetail() {
-      const none = data.sessionsLoaded && !data.busy && !visibleReports().length;
-      if (!none) return `<div class="page-center-loading" role="status" aria-live="polite"><div><span class="spinner" aria-hidden="true"></span><div><strong>${esc(copy("正在加载面试报告", "Loading the report"))}</strong><span>${esc(copy("正在读取报告详情。", "Reading the report details."))}</span></div></div></div>`;
-      const all = data.reportFilter === "all";
-      return `<section class="detail-card report-empty-detail-card">
-          <div class="report-empty-orbit" aria-hidden="true"><span></span><svg viewBox="0 0 24 24"><path d="M8 9h8M8 13h5"></path><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7l-5 3v-3H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path></svg></div>
-          <div class="report-empty-copy"><span class="section-label">Interview Reports</span>
-            <h2>${esc(all ? copy("还没有面试报告", "No interview reports yet") : copy("这个分类下还没有报告", "No reports in this filter"))}</h2>
-            <p>${esc(all ? copy("练完一场完整面试或分段练习后，这里会沉淀百分制评分、能力边界和逐题点评。", "Finish a full interview or a single part to get a 100-point score, your boundary and per-question notes.") : copy("当前筛选没有匹配的报告。可以切换到全部，或者练一场对应的面试。", "Nothing matches this filter. Show all, or practise this part."))}</p></div>
-          <div class="report-empty-actions">${all
-            ? `${link("go-practice", esc(copy("开始完整面试", "Start a full interview")), { cls: "report-empty-primary", attrs: 'data-part="full"' })}${link("go-practice", esc(copy("练一个项目", "Practise a project")), { cls: "report-empty-secondary", attrs: 'data-part="project"' })}`
-            : `<button type="button" class="report-empty-primary" data-interview-action="report-filter" data-filter="all">${esc(copy("查看全部报告", "Show all reports"))}</button>${link("go-practice", esc(copy("去练一场", "Practise now")), { cls: "report-empty-secondary", attrs: `data-part="${esc(data.reportFilter)}"` })}`}</div>
-        </section>`;
-    }
-
-    function scoreSummary(session, turns) {
-      const score = session.score;
-      const ready = score?.status === "ready";
-      const answered = turns.filter((turn) => turn.status === "completed").length;
-      const cells = ready
-        ? score.dimensions.map((dim) => `<div class="score-cell"><span>${esc(dim.label)}<small>${esc(copy(`满分 ${dim.max}`, `of ${dim.max}`))}</small></span><strong>${esc(dim.score)}</strong></div>`).join("")
-        : "";
-      const pending = score?.status === "failed"
-        ? `<div class="iv-report-pending"><p role="alert">${esc(score.error || copy("评分生成失败。", "Scoring failed."))}</p>${solid("score", copy("重新生成百分制报告", "Retry scoring"))}</div>`
-        : session.status === "completed"
-          ? `<div class="iv-report-pending"><p>${esc(data.busy ? copy("正在生成百分制报告…", "Scoring…") : copy("这一场还没有评分。", "This session is not scored yet."))}</p>${data.busy ? "" : solid("score", copy("生成百分制报告", "Get the 100-point report"))}</div>`
-          : `<div class="iv-report-pending"><p>${esc(copy("这一场提前结束了，只保留了已答内容，不生成评分。", "This session ended early; answers are kept but not scored."))}</p></div>`;
-      return `<div class="detail-card speaking-score-summary-card${ready ? " speaking-report-ready-card" : ""}" data-report-status="${esc(score?.status || "none")}">
-          <div class="speaking-score-summary-head">
-            <div class="speaking-score-summary-copy">
-              <span class="section-label">${esc(copy("模拟面试 · 百分制估分", "Mock interview · 100-point estimate"))}</span>
-              <h2>${esc(partName(session.part) || session.title)} ${esc(copy("报告", "report"))}</h2>
-              <p class="muted">${esc(session.title)} · ${esc(copy(`${answered} 题已答`, `${answered} answered`))} · ${esc(session.intensity === "pressure" ? copy("追问压力", "Pressure") : copy("标准模式", "Standard"))} · ${esc(dateText(session.created_at))}</p>
-            </div>
-            <div class="speaking-score-summary-side">
-              ${button("go-practice", esc(copy("再练一场", "Practice again")), { cls: "report-export-btn", attrs: `data-part="${esc(session.part || "full")}"` })}
-              <div class="speaking-score-summary-band"><span>Overall</span><strong>${ready ? `${esc(score.total)} / 100` : "—"}</strong></div>
-            </div>
-          </div>
-          ${ready ? `<div class="score-row compact speaking-score-summary-grid iv-score-grid">${cells}</div>` : pending}
-        </div>`;
-    }
-
-    function overallReview(score) {
-      if (score?.status !== "ready") return "";
-      const body = `${score.summary ? `<h4>${esc(copy("总体点评", "Overall"))}</h4><p>${esc(score.summary)}</p>` : ""}
-        ${score.dimensions?.some((dim) => dim.evidence) ? `<h4>${esc(copy("评分依据", "Why these scores"))}</h4><ul>${score.dimensions.filter((dim) => dim.evidence).map((dim) => `<li><strong>${esc(dim.label)} ${esc(dim.score)}/${esc(dim.max)}</strong> ${esc(dim.evidence)}</li>`).join("")}</ul>` : ""}
-        ${score.boundary ? `<h4>${esc(copy("能力边界", "Knowledge boundary"))}</h4><p>${esc(score.boundary)}</p>` : ""}
-        ${score.next_steps?.length ? `<h4>${esc(copy("下一步练习", "Next steps"))}</h4><ul>${score.next_steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ul>` : ""}`;
-      return `<div class="detail-card overall-review-card"><div class="overall-review-head"><h3>Overall Review & Practice Focus</h3></div><div class="overall-review-content">${body}</div></div>`;
-    }
-
-    function turnTable(turns, score) {
-      const comments = Object.fromEntries((score?.per_turn || []).map((item) => [item.turn_id, item.comment]));
-      const counters = {};
-      const rows = turns.filter((turn) => turn.status !== "pending").map((turn) => {
-        const follow = turn.kind === "follow_up";
-        if (!follow) counters[turn.stage] = (counters[turn.stage] || 0) + 1;
-        const signal = turn.decision?.signal ? `<em class="iv-signal is-${esc(turn.decision.signal)}">${esc(pick(SIGNALS[turn.decision.signal] || SIGNALS.adequate))}</em>` : "";
-        const save = turn.status === "completed"
-          ? `<div class="question-cell-actions"><button type="button" class="ghost corpus-edit-button" data-interview-action="save-corpus" data-turn-id="${esc(turn.id)}" ${data.busy ? "disabled" : ""}><svg class="corpus-edit-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11M4 12h7M4 17h5"></path><path d="m15.5 15.5 4-4a1.4 1.4 0 0 1 2 2l-4 4-2.6.6z"></path></svg><span class="corpus-edit-label">${esc(copy("存为我的答法", "Save to corpus"))}</span></button></div>` : "";
-        const notes = [
-          turn.reply ? `<p><strong>${esc(copy("面试官回答", "Interviewer"))}</strong>${esc(turn.reply)}</p>` : "",
-          turn.decision?.evidence ? `<p>${signal}${esc(turn.decision.evidence)}</p>` : signal ? `<p>${signal}</p>` : "",
-          turn.decision?.boundary ? `<p class="muted">${esc(copy("边界：", "Boundary: "))}${esc(turn.decision.boundary)}</p>` : "",
-          comments[turn.id] ? `<p>${esc(comments[turn.id])}</p>` : "",
-        ].join("");
-        return `<tbody class="turn-report-group p1-p3-turn-group"><tr class="p1-p3-content-row">
-            <td><div class="question-header"><strong>${esc(stageName(turn.stage) || copy("问题", "Question"))}${follow ? "" : ` ${counters[turn.stage]}`}</strong>${follow ? `<span class="follow-up-pill">${esc(copy("追问", "Follow-up"))}</span>` : ""}</div><p>${esc(turn.prompt)}</p>${save}</td>
-            <td>${turn.answer ? `${turn.answer_source === "voice" ? `<span class="iv-source-pill">${esc(copy("语音转写", "Voice"))}</span>` : ""}<p>${esc(turn.answer)}</p>` : `<p class="muted report-empty-answer">${esc(turn.status === "skipped" ? copy("已跳过", "Skipped") : copy("为空", "Empty"))}</p>`}</td>
-            <td>${notes || `<p class="muted">${esc(copy("没有点评。", "No notes."))}</p>`}</td>
-          </tr></tbody>`;
-      }).join("");
-      if (!rows) return "";
-      return `<div class="detail-card turn-report-card"><div class="turn-report-wrap"><table class="turn-report-table p1-p3-report-table">
-          <thead><tr><th>${esc(copy("问题", "Question"))}</th><th>${esc(copy("你的回答", "Your answer"))}</th><th class="band7-head">${esc(copy("面试官判断", "Interviewer notes"))}</th></tr></thead>${rows}</table></div></div>`;
-    }
-
-    function reportDetail(current) {
-      const { session, turns = [] } = current;
-      return `${scoreSummary(session, turns)}${overallReview(session.score)}
-        ${turnTable(turns, session.score)}
-        <p class="iv-voice-note"><span class="iv-dot" aria-hidden="true"></span>${esc(session.score?.limitations || copy("百分制由 AI 根据本次文字回答（含语音转写稿）估计，不评估发音，也不代表真实招聘结果。", "The score is an AI estimate from this session's text answers; no pronunciation, and not a hiring decision."))}</p>`;
-    }
-
-    function reportsPane() {
-      const selected = selectedReport();
-      const items = visibleReports();
-      return `<section id="interviewReports" class="panel speaking-reports-panel">
-          ${reportRail(items, selected?.session.id)}
-          <article id="interviewReportDetail" class="detail-panel">${selected ? reportDetail(selected) : emptyDetail()}</article>
-        </section>`;
-    }
-
-    // Like updateReportRailState in app.js: fade the rail edges and disable the arrows at the ends.
-    function syncReportRail() {
-      const list = byId("interviewReportList");
-      const shell = list?.closest?.(".history-rail-shell");
-      if (!list || !shell) return;
-      const maxScroll = Math.max(0, list.scrollWidth - list.clientWidth);
-      const atStart = list.scrollLeft <= 2;
-      const atEnd = maxScroll <= 2 || list.scrollLeft >= maxScroll - 2;
-      shell.classList.toggle("at-start", atStart);
-      shell.classList.toggle("at-end", atEnd);
-      const navs = shell.querySelectorAll(".history-rail-nav");
-      navs[0]?.toggleAttribute("disabled", atStart);
-      navs[1]?.toggleAttribute("disabled", atEnd);
-    }
-
-    function mountReportRail() {
-      const list = byId("interviewReportList");
-      if (!list) return;
-      list.scrollLeft = data.railScroll || 0;
-      const active = list.querySelector(".history-item.active");
-      if (active && (active.offsetLeft < list.scrollLeft || active.offsetLeft + active.offsetWidth > list.scrollLeft + list.clientWidth)) {
-        list.scrollLeft = Math.max(0, active.offsetLeft - 12);
-      }
-      list.addEventListener("scroll", () => { data.railScroll = list.scrollLeft; syncReportRail(); }, { passive: true });
-      syncReportRail();
-    }
 
     // ---- Corpus library: grouped cards like "我的 P1 语料库".
     function corpusGroups(tabId) {
@@ -675,16 +478,16 @@
 
     const PANE_COPY = {
       practice: () => [partName(data.part), pick(PARTS[data.part].hint)],
-      reports: () => [copy("面试报告", "Interview reports"), copy("每一场的百分制、能力边界和逐题点评。", "Scores, boundaries and per-question notes for every session.")],
       custom: () => [copy("简历 / JD 定制", "Resume / JD"), copy("把简历和目标岗位拆成可练的语料。", "Turn your resume and target role into practice material.")],
     };
 
     function syncNav() {
       const practiceView = /^iv_/.test(state.view || "");
       if (practiceView) { data.pane = "practice"; data.part = state.view.slice(3); }
+      if (state.view === "history") data.pane = "reports";
       const pane = data.pane;
       if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
-      const shown = practiceView || (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
+      const shown = practiceView || state.view === "history" || (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
       document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
         const itemPane = item.dataset.interviewPane;
         const active = itemPane === "practice" ? pane === "practice" && item.dataset.interviewPart === data.part
@@ -697,10 +500,8 @@
 
     function syncChrome() {
       const pane = data.pane;
-      const bare = pane === "home" || pane === "reports" || pane === "report" || pane === "corpus";
-      document.body.classList.toggle("interview-bare", state.view === "interview" && bare);
+      document.body.classList.toggle("interview-bare", state.view === "interview" && pane === "corpus");
       document.querySelector?.(".workspace")?.classList.toggle("interview-corpus-workspace", state.view === "interview" && pane === "corpus");
-      document.querySelector?.(".workspace")?.classList.toggle("interview-history-workspace", state.view === "interview" && (pane === "reports" || pane === "report"));
       if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
       syncNav();
       const entry = PANE_COPY[pane]?.();
@@ -717,12 +518,12 @@
         panel.innerHTML = `<div class="iv-guest"><p class="iv-kicker">Interview Studio</p><h2 class="iv-title"><span class="iv-title-main">Mock Interview</span></h2><p>${esc(copy("登录同一个 IELTS Studio 账号，保存面试回答与练习记录。", "Sign in with your Studio account to save answers and interview history."))}</p>${solid("login", copy("登录并开始", "Sign in and start"))}</div>`;
         return;
       }
-      // Home and practice are shared IELTS panels (home view, iv_* practice views), not part of #interviewPanel.
-      if (data.pane === "home" || data.pane === "practice") { panel.innerHTML = ""; return; }
-      const content = ({ reports: reportsPane, report: reportsPane, corpus: corpusPane, custom: customPane })[data.pane]();
+      // Home, practice and reports are shared IELTS panels (home, iv_* and history views), not #interviewPanel.
+      const paneView = ({ corpus: corpusPane, custom: customPane })[data.pane];
+      if (!paneView) { panel.innerHTML = ""; return; }
+      const content = paneView();
       const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
       panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>${editorModal()}`;
-      if (data.pane === "reports" || data.pane === "report") mountReportRail();
     }
 
     // ---- Inputs and actions
@@ -771,38 +572,14 @@
       if (!el || (data.busy && !["close-editor"].includes(el.dataset.interviewAction))) return;
       if (el.tagName === "A") event.preventDefault?.();
       const action = el.dataset.interviewAction;
-      if (action !== "report-filter-toggle") data.reportFilterOpen = false;
-      const sessionId = data.current?.session?.id;
-      const base = sessionId ? `/api/interview/sessions/${encodeURIComponent(sessionId)}/` : "";
       switch (action) {
         case "login": promptGuestLogin(copy("登录后保存面试记录与回答。", "Sign in to save interview practice."), { returnView: "interview" }); return;
         case "go-practice": setPane("practice", { part: el.dataset.part || "full" }); return;
         case "go-custom": data.customSide = el.dataset.side || data.customSide; setPane("custom"); return;
         case "reports": setPane("reports"); return;
-        case "reload-history": loadHistory(); return;
-        case "report-filter-toggle": data.reportFilterOpen = !data.reportFilterOpen; render(); return;
-        case "report-filter":
-          data.reportFilter = REPORT_FILTERS.includes(el.dataset.filter) ? el.dataset.filter : "all";
-          data.railScroll = 0;
-          if (selectedReport() && !visibleReports().some((item) => item.id === data.current.session.id)) data.current = null;
-          render();
-          openFirstReport();
-          return;
-        case "rail-step": {
-          const list = byId("interviewReportList");
-          if (list) list.scrollBy({ left: Number(el.dataset.step) * Math.max(260, Math.floor(list.clientWidth * 0.45)), behavior: "smooth" });
-          return;
-        }
         case "open-corpus": data.corpusTab = el.dataset.tab || data.corpusTab; setPane("corpus"); return;
         case "corpus-tab": data.corpusTab = el.dataset.tab; render(); return;
         case "custom-side": data.customSide = el.dataset.side; render(); return;
-        case "score": perform(() => request(`${base}report/`, { ai_source: currentAiSourcePreference() }), acceptSession); return;
-        case "open-session": perform(() => request(`/api/interview/sessions/${encodeURIComponent(el.dataset.sessionId)}/`), acceptSession); return;
-        case "save-corpus": perform(() => request(`${base}turns/${encodeURIComponent(el.dataset.turnId)}/save-corpus/`, {}), (payload) => {
-          const index = (data.corpus || []).findIndex((item) => item.id === payload.entry.id);
-          if (data.corpus) index >= 0 ? data.corpus.splice(index, 1, payload.entry) : data.corpus.push(payload.entry);
-          data.notice = copy("已存为你的答法。", "Saved to your corpus.");
-        }); return;
         case "edit-entry": {
           const entry = el.dataset.entryId ? entryFor(el.dataset.entryId) : (data.corpus || []).find((item) => !item.id && item.source_key === el.dataset.sourceKey);
           if (entry) openEditor(entry);

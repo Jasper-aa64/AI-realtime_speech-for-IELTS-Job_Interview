@@ -16,18 +16,11 @@ import sys
 # anchor -> (alias, extra rewrites applied only to the alias selector, alias page-level :has() rules too?)
 ALIASES = [
     ("#p1CorpusPanel", "#interviewCorpus", [], True),
-    ("#historyPanel", "#interviewReports", [], True),
-    ("#historyList", "#interviewReportList", [], True),
-    ("#detailPanel", "#interviewReportDetail", [], True),
     # Resume / JD page <-> daily writing.
     ("#writingPanel", "#interviewCustom", [], False),
     ("#writingScoreBtn", "#interviewCustomSubmit", [], False),
     ("#writingSaveBtn", "#interviewCustomCorpus", [], False),
 ]
-# Speaking-report workspace conditions: shared for the rail/detail, never for writing reports.
-HISTORY_WORKSPACE = (".history-workspace", ".interview-history-workspace")
-SPEAKING_REPORT = re.compile(r"#historyPanel|#historyList|#detailPanel|\.history-rail|\.history-list|\.speaking-report")
-WRITING = re.compile(r"writing", re.I)
 # Corpus-view workspace conditions are shared only when the selector is about the P1 library.
 CORPUS_WORKSPACE = (".corpus-workspace", ".interview-corpus-workspace")
 P1_LIBRARY = re.compile(r"#p1CorpusPanel|\.p1-corpus-(?:shell|head|topics|dialog|label|textarea)|\.p1-topic-")
@@ -72,16 +65,12 @@ def alias_for(selector):
             for pattern, replacement in rewrites:
                 candidate = re.sub(pattern, replacement, candidate)
             candidate = candidate.replace(".workspace" + CORPUS_WORKSPACE[0], ".workspace" + CORPUS_WORKSPACE[1])
-            candidate = candidate.replace(HISTORY_WORKSPACE[0], HISTORY_WORKSPACE[1])
             for other_anchor, other_alias, _rewrites, _has in ALIASES:
                 candidate = candidate.replace(other_anchor, other_alias)
-            if not WRITING.search(original) or anchor not in ("#historyPanel", "#historyList", "#detailPanel"):
-                aliases.append(candidate)
+            aliases.append(candidate)
             break
     if not aliases and CORPUS_WORKSPACE[0] in original and P1_LIBRARY.search(original) and not OTHER_PANELS.search(original):
         aliases.append(original.replace(CORPUS_WORKSPACE[0], CORPUS_WORKSPACE[1]))
-    if not aliases and HISTORY_WORKSPACE[0] in original and SPEAKING_REPORT.search(original) and not WRITING.search(original):
-        aliases.append(original.replace(HISTORY_WORKSPACE[0], HISTORY_WORKSPACE[1]))
     return [a for a in aliases if a != original]
 
 
