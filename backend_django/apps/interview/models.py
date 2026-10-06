@@ -171,6 +171,8 @@ class InterviewAssistantMessage(models.Model):
     # How to reverse what this reply wrote (created / updated / deleted rows), and whether that has been done.
     undo = models.JSONField(default=list, blank=True)
     undone = models.BooleanField(default=False)
+    # Files sent with a user message: name and kind only (the files themselves are not kept).
+    attachments = models.JSONField(default=list, blank=True)
     model = models.CharField(max_length=80, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -23,6 +23,7 @@ from apps.ai.http_provider import HttpApiProvider, HttpApiProviderConfig
 from apps.ai.models import AITask
 from apps.ai.orchestration import AIOrchestrationError, create_billable_ai_task
 from apps.ai.services import task_payload
+from apps.billing import metering
 from apps.billing.services import combine_usage_records
 from .ai_config import (
     SPEAKING_AI_CALL_MODE_HTTP,
@@ -2331,7 +2332,15 @@ def stream_follow_up_sse_events(user, attempt_id: str, turn_id: str) -> Iterator
         target_turn.refresh_from_db()
         yield _sse_payload({"event": "done", "turn": _turn_payload(target_turn)})
 
-    return generate()
+    def metered() -> Iterator[str]:
+        # The stream is consumed after the request middleware has finished, so it binds the user for metering itself.
+        token = metering.bind(user)
+        try:
+            yield from generate()
+        finally:
+            metering.unbind(token)
+
+    return metered()
 
 
 def _stream_http_follow_up(

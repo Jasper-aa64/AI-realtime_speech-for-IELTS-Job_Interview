@@ -140,6 +140,9 @@ def profile_jd(request):
 
 @api("POST")
 def assistant_chat(request):
+    # A message with files arrives as multipart (fields + files); a plain message as JSON.
+    if request.content_type.startswith("multipart/"):
+        return assistant.send(request.user, request.POST.dict(), request.FILES.getlist("files"))
     return assistant.send(request.user, json_body(request))
 
 

@@ -21,7 +21,8 @@ class AssistantTests(TestCase):
 
     def ask(self, message, result, **extra):
         output = ai_schema.validate("assistant", result, {})
-        with patch(RUN, return_value={**output, "model": "gpt-6-luna", "elapsed_ms": 4200, "effort": "medium"}) as run:
+        with patch(RUN, return_value={**output, "model": "gpt-6-luna", "elapsed_ms": 4200, "effort": "medium",
+                                      "charged_u": 12345, "usage": {"input_tokens": 1000, "output_tokens": 200}}) as run:
             response = self.client.post("/api/interview/assistant/", json.dumps({"message": message, **extra}), content_type="application/json")
         return response, run
 
@@ -37,8 +38,9 @@ class AssistantTests(TestCase):
         body = response.json()
         self.assertEqual(body["reply"]["content"], "因为只有一个生产者和一个消费者……")
         self.assertEqual(body["reply"]["applied"], [])
-        self.assertEqual([step["kind"] for step in body["reply"]["steps"]], ["library", "model"])
+        self.assertEqual([step["kind"] for step in body["reply"]["steps"]], ["library", "model", "cost"])
         self.assertIn("gpt-6-luna · 推理 medium · 4.2 s", body["reply"]["steps"][1]["detail"])
+        self.assertEqual(body["reply"]["steps"][2]["detail"], "¥0.0123 · 1,000 / 200 tokens")
         self.assertEqual(body["thread"]["title"], "SPSC 无锁原理")
         self.assertEqual(Entry.objects.count(), 0)
         inputs = run.call_args.args[2]
@@ -173,3 +175,43 @@ class AssistantOutputParsingTests(TestCase):
         self.assertEqual((result["reply"], result["actions"][0]["topic"]), ("已保存", "内存对齐"))
         with self.assertRaises(ValueError):
             _validated_output("assistant", "没有 JSON", {})
+
+
+class AssistantAttachmentTests(TestCase):
+    """Files on a message: PDF text goes into the prompt, images to the model; set_profile saves an attached resume."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="attach-owner", password="pw")
+        self.client.force_login(self.user)
+
+    def test_pdf_text_and_image_reach_the_model_and_resume_can_be_saved(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import InterviewProfile
+        output = ai_schema.validate("assistant", {"reply": "已保存简历", "actions": [
+            {"type": "set_profile", "field": "resume", "attachment": "cv.pdf"}]}, {})
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+        with patch("apps.interview.attachments.extract_pdf", return_value="张三 · C++ 实习 · 行情网关重构，P99 降到 55µs" * 3), \
+                patch(RUN, return_value=output) as run, \
+                patch("apps.interview.assistant.ai_services.images_supported", return_value=True):
+            response = self.client.post("/api/interview/assistant/", {
+                "message": "这是我的简历，帮我定制", "mode": "agent",
+                "files": [SimpleUploadedFile("cv.pdf", b"%PDF-1.4 fake"), SimpleUploadedFile("jd.png", png)],
+            })
+        self.assertEqual(response.status_code, 200, response.content)
+        conversation = run.call_args.args[2]["conversation"]
+        self.assertIn("PDF「cv.pdf」text", conversation[-1]["content"])
+        images = run.call_args.kwargs["images"]
+        self.assertEqual(len(images), 1)
+        self.assertFalse(__import__("os").path.exists(images[0]), "temporary images are removed after the call")
+        body = response.json()
+        self.assertEqual([item["kind"] for item in body["message"]["attachments"]], ["pdf", "image"])
+        self.assertEqual(body["reply"]["steps"][0]["kind"], "files")
+        self.assertIn("行情网关重构", InterviewProfile.objects.get(user=self.user).resume_text)
+        self.client.post(f"/api/interview/assistant/messages/{body['reply']['id']}/undo/")
+        self.assertEqual(InterviewProfile.objects.get(user=self.user).resume_text, "")
+
+    def test_unsupported_and_oversized_files_are_refused(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        response = self.client.post("/api/interview/assistant/", {"message": "看看", "files": [SimpleUploadedFile("a.exe", b"MZ\x90\x00")]})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("不是 PDF 或图片", response.json()["error"])

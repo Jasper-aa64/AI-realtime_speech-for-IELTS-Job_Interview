@@ -15,7 +15,8 @@ from django.db import transaction
 from apps.ai.orchestration import (
     AIOrchestrationError, create_billable_ai_task, fail_billable_ai_task, succeed_billable_ai_task,
 )
-from apps.ai.services import claim_ai_task, create_ai_task, fail_ai_task, succeed_ai_task
+from apps.ai.services import claim_ai_task
+from apps.billing import metering
 from apps.accounts.models import UserProfile
 from apps.speaking.ai_provider_services import _speaking_http_provider
 from apps.speaking.ai_runtime import run_claude_cli, run_codex
@@ -30,6 +31,11 @@ BUDGETS = {"resume_profile": (7000, 90), "jd_profile": (4000, 60), "score_report
 LOCAL_CLI = {"codex_cli", "claude_cli", "claude_cli_haiku"}
 # The local CLI starts a whole agent session per call; give it room beyond the HTTP budgets.
 CLI_MIN_TIMEOUT = {"resume_profile": 240, "score_report": 180, "assistant": 180}
+
+
+def images_supported(user, ai_source=""):
+    """Only the local Codex CLI is given image files; other sources get a note that images were not sent."""
+    return _source(user, ai_source) == "codex_cli"
 
 
 def _source(user, selected):
@@ -91,7 +97,7 @@ def _prompt(kind, inputs):
     return boundary + instructions[kind] + "\nCANDIDATE DATA:\n" + json.dumps(inputs, ensure_ascii=False)
 
 
-def run_generation(user, kind, inputs, *, ai_source="", related_id=""):
+def run_generation(user, kind, inputs, *, ai_source="", related_id="", images=None):
     source = _source(user, ai_source)
     prompt = _prompt(kind, inputs)
     max_tokens, timeout = BUDGETS.get(kind, (2200, 30))
@@ -105,50 +111,48 @@ def run_generation(user, kind, inputs, *, ai_source="", related_id=""):
         raise InterviewError("AI 服务还没有配置，暂时无法生成；精选题库练习不受影响。", code="ai_unavailable", status=502) from None
     backend = "http_api" if provider is not None else source
     model = provider.config.model if provider is not None else ("haiku" if source == "claude_cli_haiku" else source)
-    local = provider is None
-    if local and source == "codex_cli":
+    if provider is None and source == "codex_cli":
         model = getattr(settings, "CODEX_MODEL", "") or model
     try:
         # Pending rows cannot be seen/claimed by the general worker before this
         # request claims its own synchronous task in the same transaction.
         with transaction.atomic():
-            # A local CLI runs on the candidate's own subscription: recorded as a task, never charged to the wallet.
-            create = create_ai_task if local else create_billable_ai_task
-            task, _ = create(
+            # Every source is billed by its token usage at the current price snapshot (local CLIs included).
+            task, _ = create_billable_ai_task(
                 user=user, task_type=f"interview_{kind}", idempotency_key=f"interview:{user.pk}:{uuid.uuid4().hex}",
                 provider=backend, model=model, related_type="interview_session", related_id=related_id,
                 prompt_version="interview-v1", request_payload=inputs, max_attempts=1,
             )
             claim_ai_task(task.task_id, worker_id="interview-sync-request")
     except AIOrchestrationError:
-        raise InterviewError("账户余额不足，无法调用 AI。", code="ai_balance_required") from None
+        raise InterviewError("账户余额不足，无法调用 AI，请先充值。", code="ai_balance_required", status=402) from None
     try:
         started = time.monotonic()
-        if provider is not None:
-            result = provider.complete_chat(
-                [{"role": "user", "content": prompt}], max_tokens=max_tokens, timeout_seconds=timeout, stream=False,
-            )
-            output, usage = result.text, result.usage
-        elif source == "codex_cli":
-            output, usage = run_codex(prompt, task.call_id, timeout=timeout, effort=getattr(settings, "CODEX_INTERVIEW_EFFORT", "") or None)
-        else:
-            output, usage = run_claude_cli(prompt, task.call_id, timeout=timeout,
-                                          model="haiku" if source == "claude_cli_haiku" else None)
+        # This task settles its own usage below, so the per-call meter stays out of it.
+        with metering.suspended():
+            if provider is not None:
+                result = provider.complete_chat(
+                    [{"role": "user", "content": prompt}], max_tokens=max_tokens, timeout_seconds=timeout, stream=False,
+                )
+                output, usage = result.text, result.usage
+            elif source == "codex_cli":
+                output, usage = run_codex(prompt, task.call_id, timeout=timeout, effort=getattr(settings, "CODEX_INTERVIEW_EFFORT", "") or None,
+                                          images=images or None)
+            else:
+                output, usage = run_claude_cli(prompt, task.call_id, timeout=timeout,
+                                              model="haiku" if source == "claude_cli_haiku" else None)
         payload = _validated_output(kind, output, inputs)
         provenance = {"provider": backend, "model": model, "ai_source": source, "task_id": task.task_id,
                       "elapsed_ms": round((time.monotonic() - started) * 1000),
                       "provider_elapsed_ms": round(result.elapsed_seconds * 1000) if provider is not None else None,
                       "effort": (getattr(settings, "CODEX_INTERVIEW_EFFORT", "") or "low") if source == "codex_cli" else ""}
-        if local:
-            # task.usage is a billing record; the CLI's token counts ride along in the result instead.
-            succeed_ai_task(task.task_id, {**payload, **provenance, "cli_usage": usage or {}})
-        else:
-            succeed_billable_ai_task(task.task_id, {**payload, **provenance}, usage, provider=backend, model=model)
-        return {**payload, **provenance}
+        settled = succeed_billable_ai_task(task.task_id, {**payload, **provenance}, usage, provider=backend, model=model)
+        billing = (settled.result_payload or {}).get("billing") or {}
+        return {**payload, **provenance, "charged_u": int(billing.get("charged_u") or 0), "usage": usage or {}}
+    except AIOrchestrationError:
+        fail_billable_ai_task(task.task_id, "Interview AI settlement failed", error_code="interview_ai_unsettled", retryable=False)
+        raise InterviewError("账户余额不足以结算这次 AI 调用，请先充值。", code="ai_balance_required", status=402) from None
     except Exception:
         logger.exception("interview %s generation failed (%s)", kind, source)
-        if local:
-            fail_ai_task(task.task_id, "Interview AI generation failed", error_code="interview_ai_failed", retryable=False)
-        else:
-            fail_billable_ai_task(task.task_id, "Interview AI generation failed", error_code="interview_ai_failed", retryable=False)
+        fail_billable_ai_task(task.task_id, "Interview AI generation failed", error_code="interview_ai_failed", retryable=False)
         raise InterviewError("AI 生成失败，已保存的回答没有变化，请重试。", code="ai_generation_failed", status=502) from None

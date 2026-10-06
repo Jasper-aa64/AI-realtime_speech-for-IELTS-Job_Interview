@@ -8,7 +8,10 @@ change records how to reverse it, and a reply's changes can be undone as a whole
 from django.conf import settings
 from django.db import transaction
 
+from apps.billing.models import TokenWallet
+
 from . import ai_services, assistant_ielts, corpus
+from .attachments import Attachments
 from .models import InterviewAssistantMessage as Message
 from .models import InterviewAssistantThread as Thread
 from .models import InterviewCorpusEntry as Entry
@@ -98,6 +101,10 @@ def _owned(user, entry_id):
 
 
 def _knowledge(user, action):
+    if action["tag"] == "自我介绍":  # the knowledge page's pinned 自我介绍 card holds self_intro entries
+        entry = Entry.objects.create(user=user, kind=Entry.Kind.SELF_INTRO, source=Entry.Source.CUSTOM, title="自我介绍",
+                                     question=action["question"], corpus_text=action["answer"])
+        return _change("create", entry, {"op": "created", "entry_id": entry.entry_id})
     existing = Entry.objects.filter(user=user, kind=Entry.Kind.KNOWLEDGE, group=action["tag"], question=action["question"]).first()
     if existing:
         # The same question again adds to the answer rather than overwriting what is there.
@@ -160,17 +167,40 @@ def _delete(user, action):
     return change
 
 
+PROFILE_FIELDS = {"resume": ("resume_text", "简历原文"), "jd": ("jd_text", "目标岗位 JD")}
+
+
+def _set_profile(user, action, files=None):
+    """The candidate's saved resume / JD text (used by later chats and the interviewer), from an attached file or text."""
+    field, label = PROFILE_FIELDS[action["field"]]
+    texts = dict((files.texts if files else []))
+    value = texts.get(action.get("attachment", "")) or action.get("text", "")
+    if not value:
+        raise InterviewError("没有可保存的简历 / JD 文字（附件需要是带文字的 PDF）。")
+    profile = corpus.profile_for(user, lock=True)
+    before = {name: getattr(profile, name) for name in ("resume_text", "jd_text")}
+    setattr(profile, field, value[:24000])
+    profile.save(update_fields=[field, "updated_at"])
+    item = {"op": "update", "where": "resume" if field == "resume_text" else "jd", "label": label, "entry_id": None}
+    return item, {"op": "profile", "before": before}
+
+
 WRITERS = {"knowledge": _knowledge, "resume_card": _resume_card, "jd": _jd, "jd_question": _jd_question,
            "update": _update, "delete": _delete}
 
 
-def apply_actions(user, actions, domain="interview"):
+def apply_actions(user, actions, domain="interview", files=None):
     """Applies what it can: an action naming a missing card (or breaking a rule) is skipped, not fatal."""
     applied, skipped, undo = [], [], []
     for action in actions:
         try:
             with transaction.atomic():
-                item, record = (assistant_ielts.write(user, action) if domain == "ielts" else WRITERS[action["type"]](user, action))
+                if domain == "ielts":
+                    item, record = assistant_ielts.write(user, action)
+                elif action["type"] == "set_profile":
+                    item, record = _set_profile(user, action, files)
+                else:
+                    item, record = WRITERS[action["type"]](user, action)
         except InterviewError as exc:
             skipped.append({"kind": "skip", "label": f"跳过{OP_WORD.get(action['type'], '写入')}", "detail": str(exc)})
             continue
@@ -193,7 +223,7 @@ def _thread(user, thread_id):
 
 
 def _message_payload(message):
-    return {"id": message.message_id, "role": message.role, "content": message.content, "mode": message.mode,
+    return {"id": message.message_id, "role": message.role, "content": message.content, "mode": message.mode, "attachments": message.attachments,
             "applied": message.applied, "steps": message.steps, "model": message.model,
             "undoable": bool(message.undo) and not message.undone, "undone": message.undone,
             "created_at": message.created_at.isoformat()}
@@ -210,9 +240,14 @@ def _engine():
     return " · ".join(part for part in ("本机 Codex", settings.CODEX_MODEL, getattr(settings, "CODEX_INTERVIEW_EFFORT", "")) if part)
 
 
+def _balance(user):
+    """The wallet balance shown in the assistant (every reply is charged by its token usage); None before any wallet."""
+    return TokenWallet.objects.filter(user=user).values_list("balance_u", flat=True).first()
+
+
 def threads(user, domain="interview"):
     listed = Thread.objects.filter(user=user, domain=_domain(domain)).order_by("-updated_at")[:100]
-    return {"threads": [_thread_payload(t) for t in listed], "engine": _engine()}
+    return {"threads": [_thread_payload(t) for t in listed], "engine": _engine(), "balance_u": _balance(user)}
 
 
 def thread_detail(user, thread_id):
@@ -235,19 +270,32 @@ def delete(user, thread_id):
 def _history_entry(message):
     """An assistant turn carries a note of what it changed, so the model knows its own past actions."""
     content = message.content
+    if message.role == Message.Role.USER and message.attachments:
+        content += "\n\n[附件：" + "、".join(item["name"] for item in message.attachments) + "（内容只随当时那条消息发送）]"
     if message.role == Message.Role.ASSISTANT and message.applied:
         done = "；".join(f"{OP_WORD[item['op']]} {item['label']}" for item in message.applied)
         content += f"\n\n[本轮已执行：{done}{'（用户已撤销）' if message.undone else ''}]"
     return {"role": message.role, "content": content}
 
 
-def _steps(library, result, actions, applied, skipped, domain="interview"):
-    """The agent trace shown under a reply: what it read, which model answered, what it changed."""
+def _yuan(amount_u):
+    return f"¥{amount_u / 1_000_000:.4f}".rstrip("0").rstrip(".") if amount_u else "¥0"
+
+
+def _steps(library, result, actions, applied, skipped, domain="interview", attached=None):
+    """The agent trace shown under a reply: what it read, which model answered, what it cost, what it changed."""
     effort = f" · 推理 {result['effort']}" if result.get("effort") else ""
     read = (assistant_ielts.library_detail(library) if domain == "ielts"
             else f"你的题卡 {len(library['cards'])} 张 · 题库方向 {len(library['bank_topics'])} 个")
-    steps = [{"kind": "library", "label": "读取语料库快照", "detail": read},
-             {"kind": "model", "label": "生成回答", "detail": f"{result.get('model') or 'AI'}{effort} · {round((result.get('elapsed_ms') or 0) / 1000, 1)} s"}]
+    steps = []
+    if attached and attached.items:
+        files = "、".join(f"{item['name']}（{'PDF 文字' if item['kind'] == 'pdf' and not item.get('scanned') else '图片'}）" for item in attached.items)
+        steps.append({"kind": "files", "label": "读取附件", "detail": files})
+    usage = result.get("usage") or {}
+    tokens = f" · {int(usage.get('input_tokens') or 0):,} / {int(usage.get('output_tokens') or 0):,} tokens" if usage else ""
+    steps += [{"kind": "library", "label": "读取语料库快照", "detail": read},
+              {"kind": "model", "label": "生成回答", "detail": f"{result.get('model') or 'AI'}{effort} · {round((result.get('elapsed_ms') or 0) / 1000, 1)} s"},
+              {"kind": "cost", "label": "扣除额度", "detail": f"{_yuan(int(result.get('charged_u') or 0))}{tokens}"}]
     rejected = result.get("rejected") or 0
     if actions or rejected:
         detail = f"{len(actions)} 个动作通过校验" + (f"，{rejected} 个格式不对已丢弃" if rejected else "")
@@ -257,28 +305,36 @@ def _steps(library, result, actions, applied, skipped, domain="interview"):
     return steps + skipped
 
 
-def send(user, payload):
+def send(user, payload, files=None):
     """Answer the next message in a thread (a new thread when none is given); writes only after the model succeeds."""
-    message = text(payload.get("message"), "message", 8000, required=True)
+    with Attachments(files) as attached:
+        return _send(user, payload, attached)
+
+
+def _send(user, payload, attached):
+    message = text(payload.get("message"), "message", 8000, required=not attached.items) or "请看附件。"
     mode = payload.get("mode") if payload.get("mode") in MODES else "chat"
     thread = _thread(user, payload["thread_id"]) if payload.get("thread_id") else None
     domain = thread.domain if thread else _domain(payload.get("domain"))
     history = [_history_entry(m) for m in thread.messages.all()] if thread else []
-    conversation = (history + [{"role": "user", "content": message}])[-HISTORY:]
+    see_images = ai_services.images_supported(user, payload.get("ai_source", ""))
+    asked_text = message + attached.prompt_block(see_images)
+    conversation = (history + [{"role": "user", "content": asked_text}])[-HISTORY:]
     library = assistant_ielts.library(user, agent=mode == "agent") if domain == "ielts" else _library(user)
     result = ai_services.run_generation(user, "assistant", {"domain": domain, "mode": mode, "conversation": conversation, "library": library},
-                                        ai_source=payload.get("ai_source", ""))
+                                        ai_source=payload.get("ai_source", ""), images=attached.images if see_images else None)
     actions = result["actions"] if mode == "agent" else []
     with transaction.atomic():
         if thread is None:
             thread = Thread.objects.create(user=user, domain=domain, title=(result.get("title") or message.splitlines()[0])[:40])
-        asked = Message.objects.create(thread=thread, role=Message.Role.USER, content=message, mode=mode)
-        applied, skipped, undo = apply_actions(user, actions, domain)
+        asked = Message.objects.create(thread=thread, role=Message.Role.USER, content=message, mode=mode, attachments=attached.items)
+        applied, skipped, undo = apply_actions(user, actions, domain, attached)
         reply = Message.objects.create(thread=thread, role=Message.Role.ASSISTANT, content=result["reply"], mode=mode,
-                                       applied=applied, undo=undo, steps=_steps(library, result, actions, applied, skipped, domain),
+                                       applied=applied, undo=undo, steps=_steps(library, result, actions, applied, skipped, domain, attached),
                                        model=result.get("model", ""))
         thread.save(update_fields=["updated_at"])
-    payload = {"thread": _thread_payload(thread), "message": _message_payload(asked), "reply": _message_payload(reply)}
+    payload = {"thread": _thread_payload(thread), "message": _message_payload(asked), "reply": _message_payload(reply),
+               "charged_u": result.get("charged_u", 0), "balance_u": _balance(user)}
     # Interview replies carry the refreshed interview corpus; IELTS pages reload their own corpora when they change.
     return {**payload, **corpus.corpus_listing(user)} if domain == "interview" else {**payload, "ielts_changed": bool(applied)}
 
@@ -294,6 +350,11 @@ def undo(user, message_id):
         for record in reversed(message.undo):
             if "table" in record:  # an IELTS row: put back its state before the write
                 assistant_ielts.restore(user, record)
+            elif record["op"] == "profile":
+                profile = corpus.profile_for(user, lock=True)
+                for name, value in record["before"].items():
+                    setattr(profile, name, value)
+                profile.save(update_fields=[*record["before"], "updated_at"])
             elif record["op"] == "created":
                 Entry.objects.filter(user=user, entry_id=record["entry_id"]).delete()
             elif record["op"] == "updated":

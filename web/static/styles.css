@@ -46834,14 +46834,41 @@ body:not(#_) #promptPane.has-iv-launch #promptCard { flex: 0 0 auto; min-height:
 .iv-launch-dialog .iv-launch-file:hover { border-color: var(--accent); }
 .iv-launch-dialog .iv-launch-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
-.iv-pick-dialog .iv-pick-card { grid-template-rows: auto minmax(0, 1fr) auto; }
-.iv-pick-dialog .iv-pick-list { overflow-y: auto; min-height: 0; max-height: min(60vh, 560px); padding: 2px; }
-.iv-pick-dialog .iv-pick-row { position: relative; padding-right: 44px !important; }
+/* Knowledge picker: the category's questions on topic cards (题卡) in a grid, like the knowledge library. */
+body:not(#_) .iv-pick-dialog .iv-pick-card { grid-template-rows: auto minmax(0, 1fr) auto; width: min(1120px, calc(100vw - 48px)); max-width: none; }
+.iv-pick-dialog .iv-pick-list { overflow-y: auto; min-height: 0; max-height: min(68vh, 720px); padding: 2px 2px 4px; }
+.iv-pick-dialog .iv-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.iv-pick-dialog .iv-pick-topic {
+  display: grid; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.iv-pick-dialog .iv-pick-topic.has-picked { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent); }
+.iv-pick-dialog .iv-pick-topic header {
+  display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 2.5%, var(--panel));
+}
+.iv-pick-dialog .iv-pick-topic h4 { flex: 1; min-width: 0; margin: 0; overflow: hidden; color: var(--ink); font-size: 15px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+.iv-pick-dialog .iv-pick-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+body:not(#_) .iv-pick-dialog .iv-pick-topic-all {
+  min-height: 0; height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent;
+  color: var(--ink); font-size: 12px; box-shadow: none; cursor: pointer;
+}
+body:not(#_) .iv-pick-dialog .iv-pick-topic-all:hover { border-color: var(--accent); color: var(--accent); }
+.iv-pick-dialog .iv-pick-rows { display: grid; }
+body:not(#_) .iv-pick-dialog .iv-pick-row {
+  position: relative; display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 0; margin: 0; padding: 11px 44px 11px 16px;
+  border: 0; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 0; background: transparent;
+  color: var(--ink); font-size: 13.5px; line-height: 1.5; text-align: left; box-shadow: none; cursor: pointer;
+}
+body:not(#_) .iv-pick-dialog .iv-pick-row:first-child { border-top: 0; }
+body:not(#_) .iv-pick-dialog .iv-pick-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.iv-pick-dialog .iv-pick-row strong { flex: none; min-width: 26px; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.75; }
+.iv-pick-dialog .iv-pick-row span { flex: 1; min-width: 0; }
 .iv-pick-dialog .iv-pick-row i {
   position: absolute; right: 14px; top: 50%; width: 18px; height: 18px; margin-top: -9px;
   border: 1.5px solid var(--line); border-radius: 50%; transition: background 160ms ease, border-color 160ms ease;
 }
-.iv-pick-dialog .iv-pick-row.is-selected { border-color: var(--accent) !important; box-shadow: inset 0 0 0 1px var(--accent) !important; }
+body:not(#_) .iv-pick-dialog .iv-pick-row.is-selected { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .iv-pick-dialog .iv-pick-row.is-selected i {
   border-color: var(--accent);
   background:
@@ -47058,11 +47085,14 @@ body:not(#_) #ivAssistant .iv-as-rename:focus {
   border: 1px solid var(--accent) !important; border-radius: 6px !important; background-color: var(--panel) !important; box-shadow: none !important;
 }
 #ivAssistant .iv-as-note { margin: 0; padding: 8px 10px; color: var(--muted); font-size: 12.5px; }
-#ivAssistant .iv-as-engine {
-  display: flex; align-items: center; gap: 7px; min-height: 18px; padding: 9px 8px 0; border-top: 1px solid var(--line);
-  color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+#ivAssistant .iv-as-foot-meta { display: grid; gap: 5px; padding: 9px 8px 0; border-top: 1px solid var(--line); }
+#ivAssistant .iv-as-engine, #ivAssistant .iv-as-wallet {
+  display: flex; align-items: center; gap: 7px; min-height: 16px; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden;
 }
-#ivAssistant .iv-as-engine:empty { display: none; }
+#ivAssistant .iv-as-engine span:last-child { overflow: hidden; text-overflow: ellipsis; }
+#ivAssistant .iv-as-wallet { justify-content: space-between; }
+#ivAssistant .iv-as-wallet b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+#ivAssistant .iv-as-engine:empty, #ivAssistant .iv-as-wallet:empty { display: none; }
 #ivAssistant .iv-as-engine-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 18%, transparent); }
 #ivAssistant .iv-as-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #ivAssistant .iv-as-bar {
@@ -47160,3 +47190,4 @@ body:not(#_) #ivAssistant .iv-as-rename:focus {
 #ivDock .iv-as-modes { border-color: var(--dock-line); background: color-mix(in srgb, var(--ink) 5%, var(--dock-bg)); }
 #ivDock .iv-as-modes button.active { background: var(--dock-raised); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--dock-line); }
 #ivDock .iv-dock-chat { flex: 1; min-height: 0; display: flex; padding: 0 2px; }
+#ivDock .iv-dock-menu-wallet { margin: 6px 8px 2px; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }

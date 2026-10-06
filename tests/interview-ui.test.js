@@ -108,7 +108,7 @@ test("practice runs on the IELTS practice panel: each part opens its iv_* view",
   assert.ok(!env.requests.some((request) => request.url === "/api/interview/sessions/" && request.body), "no hand-written session flow");
 });
 
-test("面试语料库 is the IELTS corpus hub; 定制 generates a draft, then commits the edited draft", async () => {
+test("面试语料库 is the IELTS corpus hub; 简历 / JD 定制 opens the AI 助手", async () => {
   const env = fixture(); await env.app.initialize(); env.app.show(); await settle();
   env.app.setPane("corpus"); await settle();
   assert.equal(env.state.view, "corpus", "the hub is the IELTS 语料库 view");
@@ -117,20 +117,8 @@ test("面试语料库 is the IELTS corpus hub; 定制 generates a draft, then co
   env.app.openCorpusFor("iv_reverse"); await settle();
   assert.equal(env.state.view, "interview");
   env.app.setPane("custom"); await settle();
-  await env.action("custom-side", { side: "jd" });
-  env.input("jdText", "招聘 C++ 开发");
-  await env.action("import-jd");
-  const preview = env.requests.find((request) => request.url === "/api/interview/profile/jd/");
-  assert.equal(preview.body.preview, true);
-  assert.match(env.html(), /先检查一下草稿/);
-  assert.match(env.html(), /讲讲 epoll/);
-  await env.action("draft-remove", { path: "questions.0" });
-  assert.doesNotMatch(env.html(), /讲讲 epoll/);
-  await env.action("draft-commit");
-  const commit = env.requests.find((request) => request.url === "/api/interview/profile/jd/commit/");
-  assert.deepEqual(commit.body.draft.questions, []);
-  assert.equal(commit.body.job_description, "招聘 C++ 开发");
-  assert.doesNotMatch(env.html(), /先检查一下草稿/);
+  assert.equal(env.state.view, "assistant", "定制 is done by the assistant now");
+  assert.ok(!env.requests.some((request) => request.url.startsWith("/api/interview/profile/jd")), "no separate draft flow");
 });
 
 test("account reset cancels in-flight requests and discards private data", async () => {

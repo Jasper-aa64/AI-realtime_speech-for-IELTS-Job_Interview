@@ -91,7 +91,9 @@ ASSISTANT_BASE = (
     "You are the candidate's mock-interview coach inside their practice app (Chinese tech interviews: C++, low latency, "
     "systems, projects, behavioural). Answer the latest user message in Chinese Markdown (use fenced code blocks for "
     "code), using the earlier conversation for context. Assistant turns may end with a note in square brackets saying "
-    "what that turn changed in the library; LIBRARY always shows the current state. "
+    "what that turn changed in the library; LIBRARY always shows the current state. The latest user message may end "
+    "with ATTACHMENTS: text extracted from PDFs the user attached, and images (resume screenshots, JD photos, notes) "
+    "attached to this request that you can look at. "
 )
 ASSISTANT_CHAT = ASSISTANT_BASE + (
     "You are in CHAT mode: you cannot change the library. If the user asks to save, edit, reorganise or delete cards, "
@@ -117,7 +119,13 @@ ASSISTANT_AGENT = ASSISTANT_BASE + (
     "{\"type\":\"jd_question\",\"kind\":\"jd_question|reverse_question\",\"question\":\"...\",\"answer\":\"...\"}; "
     "edit {\"type\":\"update\",\"id\":\"icp_...\", plus only the fields to change among \"group\",\"title\",\"question\","
     "\"answer\" (replaces it; \"\" clears it),\"append_answer\",\"resume_excerpt\"}; delete {\"type\":\"delete\",\"id\":\"icp_...\"} "
-    "(a card's follow-ups go with it). Use ids exactly as in LIBRARY. "
+    "(a card's follow-ups go with it); save the candidate's resume or target JD text (used by later chats and the "
+    "interviewer) {\"type\":\"set_profile\",\"field\":\"resume|jd\",\"attachment\":\"<attached PDF file name>\"} "
+    "(or \"text\" instead of attachment). When the user sends a resume or a JD (as a file or pasted) and asks to "
+    "customise / split / turn it into cards (简历 / JD 定制), save it with set_profile and create the cards: projects and "
+    "internships as resume_card written with the STAR method, awards as resume_card section award, a JD card with role "
+    "questions and 2-3 questions to ask; tech-stack questions and the self intro go into knowledge (self intro as tag "
+    "自我介绍). Use ids exactly as in LIBRARY. "
     "Return JSON only, no Markdown fences: {\"reply\":\"...\",\"actions\":[...]}. "
 )
 IELTS_BASE = (
@@ -125,6 +133,8 @@ IELTS_BASE = (
     "learner aiming for band 7+). Answer the latest user message in Chinese Markdown, writing model answers, sample "
     "sentences and expressions in natural English, using the earlier conversation for context. Assistant turns may end "
     "with a note in square brackets saying what that turn changed in the library; LIBRARY always shows the current state. "
+    "The latest user message may end with ATTACHMENTS: text from attached PDFs, and attached images you can look at "
+    "(essays, cue cards, notes). "
 )
 IELTS_CHAT = IELTS_BASE + (
     "You are in CHAT mode: you cannot change the library. If the user asks to save, edit or delete corpus items, answer "
@@ -224,6 +234,11 @@ def _assistant_action(item):
     if kind == "jd_question":
         return {"type": kind, "kind": item.get("kind") if item.get("kind") in QUESTION_KINDS else "jd_question",
                 "question": text(item.get("question"), "question", 1500, required=True), "answer": text(item.get("answer"), "answer", 6000)}
+    if kind == "set_profile":
+        if item.get("field") not in {"resume", "jd"}:
+            raise ValueError("set_profile field must be resume or jd")
+        return {"type": kind, "field": item["field"], "attachment": text(item.get("attachment"), "attachment", 120),
+                "text": text(item.get("text"), "text", 24000)}
     if kind == "update":
         fields = {name: text(item.get(name), name, limit) for name, limit in UPDATE_FIELDS if isinstance(item.get(name), str)}
         if not fields:

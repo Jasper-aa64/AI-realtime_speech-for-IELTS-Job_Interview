@@ -341,3 +341,34 @@ class BillingApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(non_object_usage.status_code, 400)
+
+
+class MeteringTests(TestCase):
+    """Per-call metering: AI calls made for a signed-in user are charged; suspended / anonymous calls are not."""
+
+    def setUp(self):
+        from apps.billing.services import recharge_wallet
+        self.user = get_user_model().objects.create_user(username="metered", password="pw")
+        recharge_wallet(self.user, 100)
+
+    def balance(self):
+        from apps.billing.services import wallet_payload
+        return wallet_payload(self.user)["balance_u"]
+
+    def test_charges_bound_user_once_per_call_and_skips_suspended_and_anonymous(self):
+        from apps.billing import metering
+        usage = {"input_tokens": 1_000_000, "cached_input_tokens": 0, "output_tokens": 0}
+        start = self.balance()
+        metering.charge("no-user", usage, provider="codex_cli", model="gpt-6-luna")
+        self.assertEqual(self.balance(), start)
+        with metering.billed_to(self.user):
+            metering.charge("same-id", usage, provider="codex_cli", model="gpt-6-luna")
+            metering.charge("same-id", usage, provider="codex_cli", model="gpt-6-luna")
+            with metering.suspended():
+                metering.charge("inside-task", usage, provider="codex_cli", model="gpt-6-luna")
+        self.assertEqual(start - self.balance(), 2 * 12_000_000, "two calls at 12 RMB per 1M input tokens")
+
+    def test_insufficient_balance_is_logged_not_raised(self):
+        from apps.billing import metering
+        with metering.billed_to(self.user), self.assertLogs("apps.billing.metering", level="WARNING"):
+            self.assertIsNone(metering.charge("huge", {"input_tokens": 10_000_000_000, "output_tokens": 0}, provider="codex_cli", model="x"))

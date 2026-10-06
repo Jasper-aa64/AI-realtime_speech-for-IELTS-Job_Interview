@@ -10,6 +10,8 @@ from typing import Any, Callable, Iterator
 
 from django.conf import settings
 
+from apps.billing import metering
+
 
 DEFAULT_HTTP_TIMEOUT_SECONDS = 8.0
 DEFAULT_HTTP_TEMPERATURE = 0.2
@@ -261,6 +263,7 @@ class HttpApiProvider:
         clean_text = str(text or "").strip()
         if not clean_text:
             raise HttpApiProviderError("HTTP AI provider returned empty output", error_code="http_api_provider_empty_output")
+        metering.charge("http_chat", usage, provider="http_api", model=self.config.model)
         return HttpApiProviderResult(
             text=clean_text,
             usage=usage,
@@ -302,12 +305,15 @@ class HttpApiProvider:
         try:
             with self._opener.open(request, timeout=timeout_seconds or self.config.timeout_seconds) as response:
                 yielded = False
+                final_usage = None
                 for payload in self._iter_stream_payloads(response):
                     content, usage = self._stream_payload_content(
                         payload,
                         extra_secrets=(self.config.api_key,),
                         include_final_response=not yielded,
                     )
+                    if usage is not None:
+                        final_usage = usage
                     if usage is not None and on_usage is not None:
                         on_usage(usage)
                     if content:
@@ -318,6 +324,7 @@ class HttpApiProvider:
                         "HTTP AI provider returned empty output",
                         error_code="http_api_provider_empty_output",
                     )
+                metering.charge("http_stream", final_usage, provider="http_api", model=self.config.model)
         except urllib.error.HTTPError as exc:
             detail = ""
             try:

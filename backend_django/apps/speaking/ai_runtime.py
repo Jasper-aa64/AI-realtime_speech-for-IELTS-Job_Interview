@@ -18,11 +18,14 @@ from django.conf import settings
 from apps.ai.cli_paths import resolve_claude_cli_path, resolve_codex_cli_path
 from .text_utils import extract_codex_json_events
 
+from apps.billing import metering
+
 
 CODEX_REASONING_EFFORT = "low"
 
 
-def run_codex(prompt: str, call_id: str, timeout: int = 45, model: str | None = None, effort: str | None = None) -> tuple[str, dict[str, Any] | None]:
+def run_codex(prompt: str, call_id: str, timeout: int = 45, model: str | None = None, effort: str | None = None,
+              images: list[str] | None = None) -> tuple[str, dict[str, Any] | None]:
     """Call codex CLI and return output and usage.
 
     The `-` argument is required to make codex exec read from stdin.
@@ -44,12 +47,14 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45, model: str | None = 
     if chosen_model:
         config_args += ["-m", chosen_model]
     config_args += ["-s", "read-only", "--ephemeral", "--skip-git-repo-check"]
+    # Images go first: `-i` takes several values and stops at the next flag (config_args starts with -c).
+    image_args = ["-i", *images] if images else []
     codex_cwd = str(Path(settings.BASE_DIR).parent)
     last_error: RuntimeError | None = None
     for _attempt in range(2):
         try:
             result = subprocess.run(
-                [codex, "exec", "--json", *config_args, "-"],
+                [codex, "exec", "--json", *image_args, *config_args, "-"],
                 input=prompt,
                 text=True,
                 encoding="utf-8",
@@ -65,7 +70,7 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45, model: str | None = 
             continue
         except Exception:
             result = subprocess.run(
-                [codex, "exec", *config_args, "-"],
+                [codex, "exec", *image_args, *config_args, "-"],
                 input=prompt,
                 text=True,
                 encoding="utf-8",
@@ -91,6 +96,7 @@ def run_codex(prompt: str, call_id: str, timeout: int = 45, model: str | None = 
             last_error = RuntimeError(f"codex returned only event stream without model output for {call_id}")
             continue
 
+        metering.charge(call_id, usage, provider="codex_cli", model=chosen_model or "codex-cli")
         return output, usage
 
     raise last_error or RuntimeError(f"codex returned no usable output for {call_id}")
@@ -200,4 +206,5 @@ def run_claude_cli(
     if raw_usage:
         usage = _claude_cli_usage_payload({**raw_usage, "total_cost_usd": parsed.get("total_cost_usd")})
 
+    metering.charge(call_id, usage, provider="claude_cli", model=model or "claude-cli")
     return text, usage

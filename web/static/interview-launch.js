@@ -292,6 +292,7 @@
       root.classList.remove("hidden");
     }
 
+    // Questions sit on topic cards (题卡), like the knowledge library: a grid to scan instead of one long column.
     function renderPicker() {
       const group = groups().find((item) => item.label === pickGroup) || { label: pickGroup, rows: [] };
       const customs = launch.customs[group.label] || [];
@@ -300,12 +301,30 @@
       byId("ivPickDialogMeta").textContent = `知识点 · 已选 ${groupPicked(group)} / ${total}`;
       const row = (attrs, lead, textValue, selected, extra = "") =>
         `<button type="button" class="iv-pick-row${selected ? " is-selected" : ""}" ${attrs} aria-pressed="${selected}"><strong>${esc(lead)}</strong><span>${esc(textValue)}</span>${extra}<i aria-hidden="true"></i></button>`;
-      byId("ivPickList").innerHTML = [
-        ...customs.map((question, index) => row(`data-iv-pick="custom" data-index="${index}"`, "自定", question, true, '<em class="iv-pick-tag">本次</em>')),
-        // Rows follow the corpus cards: grouped by topic, each tagged with it.
-        ...[...group.rows].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "zh")).map((entry, index) => row(`data-iv-pick="entry" data-key="${esc(pickKey(entry))}"`, `Q${index + 1}`, entry.question, launch.picked.has(pickKey(entry)),
-          `${entry.title ? `<em class="iv-pick-tag is-topic">${esc(entry.title)}</em>` : ""}${entry.corpus_text ? '<em class="iv-pick-tag">有语料</em>' : ""}`)),
-      ].join("") || '<p class="iv-pick-empty">这个分类还没有题目，自己出一道吧。</p>';
+      const topics = new Map();
+      group.rows.forEach((entry) => {
+        const topic = entry.title || "综合";
+        if (!topics.has(topic)) topics.set(topic, []);
+        topics.get(topic).push(entry);
+      });
+      const card = (title, picked, count, body, toggle = "") => `
+        <article class="iv-pick-topic${picked ? " has-picked" : ""}">
+          <header><h4>${esc(title)}</h4><span class="iv-pick-count">${picked}/${count}</span>${toggle}</header>
+          <div class="iv-pick-rows">${body}</div>
+        </article>`;
+      const cards = [...topics.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh")).map(([topic, rows]) => {
+        const picked = rows.filter((entry) => launch.picked.has(pickKey(entry))).length;
+        const all = picked === rows.length;
+        return card(topic, picked, rows.length,
+          rows.map((entry, index) => row(`data-iv-pick="entry" data-key="${esc(pickKey(entry))}"`, `Q${index + 1}`, entry.question, launch.picked.has(pickKey(entry)),
+            entry.corpus_text ? '<em class="iv-pick-tag">有语料</em>' : "")).join(""),
+          `<button type="button" class="iv-pick-topic-all" data-iv-pick="topic" data-topic="${esc(topic)}">${all ? "清空" : "全选"}</button>`);
+      });
+      if (customs.length) {
+        cards.unshift(card("本次自定", customs.length, customs.length,
+          customs.map((question, index) => row(`data-iv-pick="custom" data-index="${index}"`, "自定", question, true, '<em class="iv-pick-tag">点击移除</em>')).join("")));
+      }
+      byId("ivPickList").innerHTML = cards.length ? `<div class="iv-pick-grid">${cards.join("")}</div>` : '<p class="iv-pick-empty">这个分类还没有题目，自己出一道吧。</p>';
       const allPicked = group.rows.length > 0 && group.rows.every((entry) => launch.picked.has(pickKey(entry)));
       byId("ivPickAll").textContent = allPicked ? "清空本类" : "全选本类";
       byId("ivPickAll").classList.toggle("hidden", !group.rows.length);
@@ -327,6 +346,10 @@
         if (launch.picked.has(key)) launch.picked.delete(key); else launch.picked.add(key);
       } else if (action === "custom") {
         launch.customs[pickGroup]?.splice(Number(target.dataset.index), 1);
+      } else if (action === "topic" && group) {
+        const keys = group.rows.filter((entry) => (entry.title || "综合") === target.dataset.topic).map(pickKey);
+        const all = keys.every((key) => launch.picked.has(key));
+        keys.forEach((key) => (all ? launch.picked.delete(key) : launch.picked.add(key)));
       } else if (action === "all" && group) {
         const keys = group.rows.map(pickKey);
         const all = keys.every((key) => launch.picked.has(key));

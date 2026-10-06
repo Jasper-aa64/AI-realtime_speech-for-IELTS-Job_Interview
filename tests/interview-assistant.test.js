@@ -23,6 +23,12 @@ function harness(responses = {}, { productMode = "interview" } = {}) {
     querySelectorAll: () => [],
   };
   const calls = [];
+  const uploads = [];
+  const upload = async (url, form) => {
+    uploads.push({ url, form });
+    const reply = responses[url];
+    return typeof reply === "function" ? reply(form) : reply || {};
+  };
   const request = async (url, body = null, options = {}) => {
     calls.push({ url, body, method: options.method || (body ? "POST" : "GET") });
     const reply = responses[url];
@@ -34,17 +40,17 @@ function harness(responses = {}, { productMode = "interview" } = {}) {
   const ieltsChanges = [];
   const context = vm.createContext({
     window: { setTimeout: (fn) => fn() }, document, customElements: { get: () => true },
-    getComputedStyle: () => ({ getPropertyValue: () => "" }), CSS: { escape: (v) => v }, encodeURIComponent,
+    getComputedStyle: () => ({ getPropertyValue: () => "" }), CSS: { escape: (v) => v }, encodeURIComponent, FormData, Blob,
   });
   vm.runInContext(source, context);
   const assistant = context.window.IELTSInterviewAssistant.create({
     state: { uiLanguage: "zh", productMode, account: { authenticated: true, user: { id: 7 } } },
     escapeHtml: (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"),
-    request, popup: () => {}, toast: () => {}, setCorpus: (list) => corpus.push(list), openApplied: (item) => opened.push(item),
+    request, upload, popup: () => {}, toast: () => {}, setCorpus: (list) => corpus.push(list), openApplied: (item) => opened.push(item),
     onIeltsChanged: () => ieltsChanges.push(true),
     currentAiSourcePreference: () => "gpt",
   });
-  return { assistant, ids, calls, opened, corpus, ieltsChanges, context, chat: () => ids.ivAssistantChat.firstChild };
+  return { assistant, ids, calls, uploads, opened, corpus, ieltsChanges, context, chat: () => ids.ivAssistantChat.firstChild };
 }
 
 const reply = {
@@ -165,6 +171,31 @@ test("the AI 助手 is a shared view: IELTS nav above 积累, its own panel, mod
   assert.match(app, /const SHARED_MODE_VIEWS = new Set\(\["home", "history", "corpus", "assistant"\]\)/);
   assert.match(app, /if \(view === "assistant"\) interview\?\.showAssistant\?\.\(\)/);
   assert.match(app, /onIeltsCorpusChanged: \(\) =>/);
+});
+
+test("attachments: Deep Chat's FormData becomes a multipart upload with the message, mode and files", async () => {
+  const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [] }, "/api/interview/assistant/": reply });
+  env.assistant.render();
+  assert.equal(env.chat().mixedFiles.files.acceptedFormats, ".pdf,.png,.jpg,.jpeg,.webp,.gif");
+  const body = new FormData();
+  body.append("files", new Blob(["%PDF"], { type: "application/pdf" }), "cv.pdf");
+  body.append("message1", JSON.stringify({ role: "user", text: "这是我的简历" }));
+  let answered;
+  await env.chat().connect.handler(body, { onResponse: async (message) => { answered = message; } });
+  assert.equal(env.uploads.length, 1);
+  const form = env.uploads[0].form;
+  assert.equal(form.get("message"), "这是我的简历");
+  assert.equal(form.get("domain"), "interview");
+  assert.equal(form.getAll("files").length, 1);
+  assert.equal(answered.text, "已保存。");
+  assert.ok(!env.calls.some((call) => call.url === "/api/interview/assistant/"), "files never go through the JSON request");
+});
+
+test("简历 / JD 定制: prepare() opens a new Agent chat with the request in the composer", async () => {
+  const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [] } });
+  env.assistant.render();
+  env.assistant.prepare("jd");
+  assert.match(env.chat().defaultInput.text, /JD 定制/);
 });
 
 test("the AI 助手 pane is wired into the interview nav, router and asset routes", () => {

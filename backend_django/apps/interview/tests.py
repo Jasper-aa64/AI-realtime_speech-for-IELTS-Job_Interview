@@ -277,23 +277,37 @@ class InterviewAiLifecycleTests(TestCase):
 
 
 class InterviewLocalCodexTests(TestCase):
-    """By default the interview's AI runs on the local Codex CLI: no wallet balance needed, nothing charged."""
+    """The interview's AI runs on the local Codex CLI and is billed by token usage like every other AI call."""
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="codex-owner", password="test-password")
         self.client.force_login(self.user)
 
-    @override_settings(INTERVIEW_AI_SOURCE="codex_cli", CODEX_MODEL="gpt-6-luna")
-    def test_codex_runs_without_balance_and_is_not_billed(self):
+    def ask(self):
         output = json.dumps({"questions": [{"prompt": "讲讲你的实习", "category": "projects", "difficulty": "intermediate"}]})
-        with patch("apps.interview.ai_services.run_codex", return_value=(output, {"input_tokens": 10, "output_tokens": 5})) as codex:
+        with patch("apps.interview.ai_services.run_codex", return_value=(output, {"input_tokens": 1_000_000, "output_tokens": 0})) as codex:
             response = self.client.post("/api/interview/custom-questions/", json.dumps({"resume_text": "C++ 实习", "job_description": "C++", "count": 1}),
                                         content_type="application/json")
+        return response, codex
+
+    @override_settings(INTERVIEW_AI_SOURCE="codex_cli", CODEX_MODEL="gpt-6-luna")
+    def test_codex_needs_balance_and_is_charged_by_usage(self):
+        from apps.billing.models import TokenWallet
+        from apps.billing.services import ensure_wallet, recharge_wallet, wallet_payload
+        ensure_wallet(self.user)
+        TokenWallet.objects.filter(user=self.user).update(balance_u=0)  # spend the starter grant
+        refused, codex = self.ask()
+        self.assertEqual(refused.status_code, 402, refused.content)
+        codex.assert_not_called()
+        recharge_wallet(self.user, 50)
+        before = wallet_payload(self.user)["balance_u"]
+        response, codex = self.ask()
         self.assertEqual(response.status_code, 200, response.content)
         codex.assert_called_once()
-        task = AITask.objects.get(task_type="interview_custom_questions")
-        self.assertEqual((task.status, task.provider, task.model), ("succeeded", "codex_cli", "gpt-6-luna"))
-        self.assertIsNone(task.usage_id)
+        task = AITask.objects.get(task_type="interview_custom_questions", status="succeeded")
+        self.assertEqual((task.provider, task.model), ("codex_cli", "gpt-6-luna"))
+        self.assertIsNotNone(task.usage_id)
+        self.assertEqual(before - wallet_payload(self.user)["balance_u"], 12_000_000, "1M input tokens at the default snapshot")
 
 
 class PdfBoundsTests(TestCase):
