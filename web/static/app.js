@@ -2368,10 +2368,13 @@ function setWritingActionPanelCollapsed(collapsed, { persist = false } = {}) {
   }
 }
 
+const SHARED_MODE_VIEWS = new Set(["home"]);
+
 function switchView(view, options = {}) {
   if (view === "interview" && !state.desktopCapabilities?.mock_interview) view = "home";
+  // Views both modes share (the home panel swaps its copy) keep the current mode; IELTS-only views switch to IELTS.
   if (view === "interview") interview?.setProductMode("interview");
-  else if (!accountViews.has(view) && !authViews.has(view)) interview?.setProductMode("ielts");
+  else if (!SHARED_MODE_VIEWS.has(view) && !accountViews.has(view) && !authViews.has(view)) interview?.setProductMode("ielts");
   if (!isKnownView(view)) view = "home";
   if (protectedViews.has(view) && !state.account.authenticated && !options.skipAuthGate) {
     state.account.returnView = view;
@@ -17543,7 +17546,7 @@ async function init() {
   const route = requestedRouteState();
   applyRouteState(route);
   const urlView = route.view;
-  let savedView = urlView || (state.productMode === "interview" ? "interview" : "home");
+  let savedView = urlView || "home";
   if (!isKnownView(savedView)) savedView = "home";
   switchView(savedView, { force: true, skipPersist: Boolean(urlView), skipUrl: true });
   if (route.autoStartP2 && route.p2CueId) {

@@ -20,12 +20,6 @@
   const KIND_LABELS = { self_intro: ["自我介绍", "Self intro"], project: ["项目讲述", "Project story"], project_followup: ["项目追问", "Project follow-up"], knowledge: ["知识点", "Knowledge"], award: ["奖项", "Award"], jd_question: ["岗位题", "Role question"], reverse_question: ["反问", "Question to ask"] };
   const SOURCE_LABELS = { curated: ["精选题库", "Curated"], resume: ["简历", "Resume"], jd: ["JD", "JD"], custom: ["自定义", "Custom"], practice: ["练习", "Practice"] };
   const SIGNALS = { strong: ["答得扎实", "Strong"], adequate: ["基本到位", "Adequate"], weak: ["还有缺口", "Gaps"] };
-  const SLIDES = [
-    { kicker: "Mock interview", title: ["完整面试", "Full interview"], body: ["自我介绍、项目、知识点、奖项、反问，一场走完。", "Intro, projects, knowledge, awards and your questions in one run."], pane: "practice", part: "full" },
-    { kicker: "Projects", title: ["项目讲述", "Project stories"], body: ["每个项目一份讲述稿，面试官现场追问。", "One story per project, then live follow-ups."], pane: "practice", part: "project" },
-    { kicker: "Knowledge", title: ["知识点", "Knowledge"], body: ["技术栈题与精选题库，答完可存成你的标准答法。", "Stack and curated questions; keep your best answers."], pane: "practice", part: "knowledge" },
-    { kicker: "Report", title: ["百分制报告", "100-point report"], body: ["五个维度打分，标出能力边界和下一步。", "Five dimensions, your knowledge boundary and next steps."], pane: "reports" },
-  ];
 
   function createInterview({ state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin, escapeHtml, currentAiSourcePreference }) {
     let epoch = 0;
@@ -59,7 +53,7 @@
         corpus: null, corpusTab: "project", profile: null, customSide: "resume", resumeText: "", file: null, jdText: "",
         reportFilter: "all", reportFilterOpen: false, railScroll: 0,
         editor: null, launch: { category: "", count: 5, projectIds: new Set() },
-        answer: { state: "idle", text: "", source: "typed", typing: false, error: "", peek: false }, slide: 0,
+        answer: { state: "idle", text: "", source: "typed", typing: false, error: "", peek: false },
       };
     }
 
@@ -70,6 +64,14 @@
       stopRecorder();
       data = freshState();
       if (byId("interviewPanel")) render();
+      window.IELTSInterviewHome?.refresh();
+      ensureOverview();
+    }
+
+    // The shared home panel needs the interview numbers whenever interview mode is on, whatever view loaded first.
+    function ensureOverview() {
+      if (state.productMode !== "interview" || !state.account.authenticated || data.busy) return;
+      if (!data.sessionsLoaded || !data.corpus) loadOverview();
     }
 
     function setProductMode(mode) {
@@ -81,6 +83,8 @@
       if (byId("studioModeLabel")) byId("studioModeLabel").textContent = name;
       if (byId("studioModeCurrent")) byId("studioModeCurrent").textContent = name;
       document.querySelectorAll("[data-studio-mode]").forEach((el) => el.setAttribute("aria-checked", String(el.dataset.studioMode === mode)));
+      window.IELTSInterviewHome?.apply(mode);
+      if (mode === "interview") ensureOverview();
       try { localStorage.setItem(MODE_KEY, mode); } catch (_error) { /* Session-only preference. */ }
     }
 
@@ -115,7 +119,10 @@
         // Starting an interview must use the existing complete IELTS abort path.
         if (state.practiceLocked) await exitPractice();
         setProductMode(mode);
-        switchView(mode === "interview" ? "interview" : "home", { force: true });
+        // Both modes land on the home panel; interview mode swaps its copy (interview-home.js).
+        data.pane = "home";
+        switchView("home", { force: true });
+        syncNav();
       }
       // Collapse onto the trigger as it now reads (the label width changes with the mode). Only keyboard users
       // get focus handed back; after a pointer pick a focus ring on the brand would read as a flicker.
@@ -171,12 +178,18 @@
         setPane(item.dataset.interviewPane, { part: item.dataset.interviewPart });
       });
       byId("interviewPanel")?.addEventListener("click", handleAction);
-      byId("interviewPanel")?.addEventListener("animationend", (event) => {
-        if (data.pane === "home" && event.target.closest?.(".hx-seg.is-on")) showSlide(data.slide + 1);
-      });
-      const hold = (event, on) => event.target.closest?.(".hx-show")?.classList.toggle("is-paused", on);
-      byId("interviewPanel")?.addEventListener("pointerover", (event) => hold(event, true));
-      byId("interviewPanel")?.addEventListener("pointerout", (event) => { if (!event.relatedTarget?.closest?.(".hx-show")) hold(event, false); });
+      // Links on the shared home panel carry data-iv-target ("pane" or "pane:part") in interview mode. Capture
+      // phase, so the IELTS router never sees them and the href never navigates.
+      document.addEventListener("click", (event) => {
+        const target = event.target.closest?.("#homePanel [data-iv-target]");
+        if (!target || state.productMode !== "interview") return;
+        event.preventDefault();
+        event.stopPropagation();
+        const [pane, part] = target.dataset.ivTarget.split(":");
+        if (pane === "corpus" && part) data.corpusTab = part;
+        setPane(pane, part && pane === "practice" ? { part } : {});
+      }, true);
+      window.IELTSInterviewHome?.setSource(homeNumbers);
       byId("interviewPanel")?.addEventListener("input", captureInput);
       byId("interviewPanel")?.addEventListener("change", captureInput);
       window.addEventListener("ielts:ui-language-change", () => { setProductMode(state.productMode); render(); });
@@ -228,6 +241,26 @@
       if (corpus) data.corpus = corpus.entries || [];
       const active = data.sessions.find((item) => item.status === "active" && item.part);
       if (active && !data.current) data.pendingResumeId = active.id;
+      window.IELTSInterviewHome?.refresh();
+    }
+
+    // Numbers the shared home panel shows in interview mode (interview-home.js).
+    function homeNumbers() {
+      if (!state.account.authenticated) return null;
+      const finished = data.sessions.filter((item) => item.part && item.status !== "active");
+      const scored = finished.filter((item) => item.score?.status === "ready");
+      const entries = data.corpus || [];
+      const kind = (...kinds) => entries.filter((entry) => kinds.includes(entry.kind) && !entry.orphaned);
+      return {
+        sessions: data.sessionsLoaded ? finished.length : null,
+        average: scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score.total, 0) / scored.length) : null,
+        last: finished[0]?.created_at || null,
+        projectReady: kind("project").filter((entry) => entry.corpus_text).length,
+        knowledgeReady: kind("knowledge").filter((entry) => entry.corpus_text).length,
+        jdCount: kind("jd_question", "reverse_question").length,
+        projects: kind("project").length,
+        knowledge: kind("knowledge").length,
+      };
     }
 
     function loadOverview() {
@@ -254,12 +287,23 @@
 
     function show() {
       if (!state.desktopCapabilities?.mock_interview) return;
+      // ?view=interview with no pane chosen yet means the interview home, which is the shared home panel.
+      if (data.pane === "home" && state.account.authenticated) { setPane("home"); return; }
       render();
       if (state.account.authenticated && !data.corpus && !data.busy) loadOverview();
     }
 
     function setPane(pane, { part } = {}) {
       if (!PANES.has(pane) || data.busy) return;
+      if (pane === "home") {
+        // The interview home is the IELTS home panel itself, with interview copy swapped in.
+        data.pane = "home";
+        switchView("home", { force: state.view !== "home" });
+        syncNav();
+        if (!data.corpus && state.account.authenticated) loadOverview();
+        else window.IELTSInterviewHome?.refresh();
+        return;
+      }
       if (data.answer.state === "recording") stopRecorder();
       if (part && PARTS[part]) data.part = part;
       data.pane = pane;
@@ -302,57 +346,8 @@
       return (data.corpus || []).find((entry) => entry.id === id) || null;
     }
 
-    // ---- Home: the IELTS home markup (hx-*), styled by the shared #homePanel/#interviewHome rules.
+    // Links inside interview panes (reports empty state).
     const link = (action, content, { cls = "", attrs = "" } = {}) => `<a class="${cls}" href="?view=interview" data-interview-action="${action}" ${attrs}>${content}</a>`;
-
-    function home() {
-      const studio = data.sessions.filter((item) => item.part);
-      const scored = studio.filter((item) => item.score?.status === "ready");
-      const average = scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score.total, 0) / scored.length) : null;
-      const stats = corpusStats();
-      const resume = data.profile?.resume?.updated_at;
-      const stat = (dt, dd, attrs = "") => `<div class="hx-stat"><dt>${esc(dt)}</dt><dd ${attrs}>${dd}</dd></div>`;
-      const slides = SLIDES.map((slide, index) => link("slide-open", `
-          <span class="hx-slide-media"><span class="iv-slide-art iv-slide-art--${index}" aria-hidden="true"><span></span><span></span><span></span></span><span class="hx-slide-chip">${esc(slide.kicker)}</span></span>
-          <span class="hx-slide-body"><strong>${esc(pick(slide.title))}</strong><span>${esc(pick(slide.body))}</span></span>`,
-        { cls: `hx-slide${index === data.slide ? " is-active" : ""}`, attrs: `data-index="${index}" aria-roledescription="slide" ${index === data.slide ? "" : 'aria-hidden="true" tabindex="-1"'}` })).join("");
-      const segs = SLIDES.map((_slide, index) => `<button type="button" class="hx-seg${index === data.slide ? " is-on" : ""}${index < data.slide ? " is-done" : ""}" data-interview-action="slide-go" data-index="${index}" aria-label="${index + 1} / ${SLIDES.length}"><i></i></button>`).join("");
-      const areaLink = (action, label, text, attrs = "") => `<li>${link(action, `<b>${esc(label)}</b><span>${esc(text)}</span><i aria-hidden="true">→</i>`, { attrs })}</li>`;
-      return `<section id="interviewHome" class="hx-home" aria-label="${esc(copy("面试首页", "Interview home"))}">
-          <div class="hx-hero">
-            <div class="hx-intro">
-              <p class="hx-kicker">Interview Studio</p>
-              <h2 class="hx-title"><span class="hx-title-top">${esc(copy("把做过的系统，讲成面试官想听的答案", "Turn what you built into answers that land"))}</span><em class="hx-title-main">Mock Interview</em></h2>
-              <p class="hx-topics"><span>${esc(copy("项目", "Projects"))}</span><i aria-hidden="true">|</i><span>${esc(copy("知识点", "Knowledge"))}</span><i aria-hidden="true">|</i><span>${esc(copy("语料", "Corpus"))}</span><i aria-hidden="true">|</i><span>${esc(copy("报告", "Reports"))}</span></p>
-              <div class="hx-actions">${link("go-practice", `${esc(copy("开始完整面试", "Start a full interview"))} <span aria-hidden="true">→</span>`, { cls: "hx-btn hx-btn--solid", attrs: 'data-part="full"' })}${link("go-custom", `${esc(resume ? copy("更新简历 / JD", "Update resume / JD") : copy("上传简历", "Upload resume"))} <span aria-hidden="true">→</span>`, { cls: "hx-btn" })}</div>
-            </div>
-            <section class="hx-show" aria-roledescription="carousel" aria-label="${esc(copy("功能一览", "Highlights"))}">
-              <div class="hx-stage">${slides}<span class="hx-count" aria-hidden="true"><b data-hx-count>${pad(data.slide + 1)}</b><i>/</i>${pad(SLIDES.length)}</span></div>
-              <div class="hx-bar"><div class="hx-progress">${segs}</div>
-                <button type="button" class="hx-nav" data-interview-action="slide-prev" aria-label="${esc(copy("上一张", "Previous"))}"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M10 3 5 8l5 5"></path></svg></button>
-                <button type="button" class="hx-nav" data-interview-action="slide-next" aria-label="${esc(copy("下一张", "Next"))}"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="m6 3 5 5-5 5"></path></svg></button></div>
-            </section>
-            <aside class="hx-panel" aria-label="${esc(copy("面试数据", "Interview data"))}">
-              <dl class="hx-stats">${stat(copy("面试场次", "Sessions"), data.sessionsLoaded ? link("reports", String(studio.length)) : "–")}${stat(copy("平均分", "Average"), average ?? "–")}${stat(copy("最近练习", "Last"), studio[0] ? esc(dateText(studio[0].created_at, false)) : "–", 'class="hx-stat-date"')}</dl>
-              <p class="hx-panel-label">${esc(copy("语料待完善", "Corpus to finish"))}</p>
-              <div class="hx-chips">${CORPUS_TABS.map((tab) => { const entries = corpusEntries(tab.kinds); const left = entries.filter((e) => !e.corpus_text).length; return link("open-corpus", `${esc(copy(tab.zh, tab.en))}<sup>${left || ""}</sup>`, { cls: `hx-chip${left ? " is-due" : ""}`, attrs: `data-tab="${tab.id}"` }); }).join("")}</div>
-              <p class="hx-panel-label">${esc(copy("练习", "Practice"))} · <span>${esc(resume ? copy(`简历已拆分 · 已备 ${stats.ready}/${stats.total}`, `Resume split · ${stats.ready}/${stats.total} ready`) : copy("还没上传简历", "No resume yet"))}</span></p>
-              <div class="hx-chips">${Object.keys(PARTS).map((part) => link("go-practice", esc(partName(part)), { cls: "hx-chip", attrs: `data-part="${part}"` })).join("")}${link("go-custom", `${esc(copy("简历 / JD", "Resume / JD"))} →`, { cls: "hx-chip hx-chip--more" })}</div>
-            </aside>
-          </div>
-          <section class="hx-areas" aria-label="${esc(copy("练习路径", "Practice paths"))}">
-            <header class="hx-sec-head"><p class="hx-eyebrow">Practice paths</p>${link("open-corpus", `${esc(copy("进入面试语料库", "Open the corpus"))} <span aria-hidden="true">→</span>`, { cls: "hx-sec-more", attrs: 'data-tab="project"' })}</header>
-            <div class="hx-area-grid">
-              <article class="hx-area"><span class="hx-area-index">01 · Interview</span><h3 class="hx-area-name">${esc(copy("面试练习", "Practice"))}</h3><p class="hx-area-blurb">${esc(copy("面试官按你的回答追问或换题，追问压力会一直问到你的边界。", "The interviewer follows up or moves on; pressure mode digs to your limit."))}</p>
-                <ul class="hx-area-links">${areaLink("go-practice", "Mock", copy("完整面试", "Full interview"), 'data-part="full"')}${areaLink("go-practice", "Project", copy("项目深挖", "Projects"), 'data-part="project"')}${areaLink("go-practice", "Stack", copy("知识点", "Knowledge"), 'data-part="knowledge"')}${areaLink("go-practice", "Ask", copy("反问环节", "Your questions"), 'data-part="reverse"')}</ul></article>
-              <article class="hx-area"><span class="hx-area-index">02 · Corpus</span><h3 class="hx-area-name">${esc(copy("面试语料", "Corpus"))}</h3><p class="hx-area-blurb">${esc(copy("项目讲述稿、知识点答法、自我介绍和反问，像雅思语料一样随时调出。", "Stories, answers, intro and questions to ask — ready like the IELTS corpus."))}</p>
-                <ul class="hx-area-links">${CORPUS_TABS.map((tab) => areaLink("open-corpus", tab.id === "story" ? "Intro" : tab.id === "jd" ? "JD" : tab.id === "project" ? "Project" : "Stack", copy(tab.zh, tab.en), `data-tab="${tab.id}"`)).join("")}</ul></article>
-              <article class="hx-area"><span class="hx-area-index">03 · Review</span><h3 class="hx-area-name">${esc(copy("面试报告", "Reports"))}</h3><p class="hx-area-blurb">${esc(copy("百分制五维打分，标出能力边界，逐题点评可直接存成你的答法。", "100-point score in five dimensions, your boundary, notes you can keep."))}</p>
-                <ul class="hx-area-links">${studio.slice(0, 2).map((item) => areaLink("open-session", item.score?.status === "ready" ? String(item.score.total) : "—", item.title, `data-session-id="${esc(item.id)}"`)).join("")}${areaLink("reports", "All", copy("全部报告", "All reports"))}${areaLink("go-custom", "CV", copy("简历 / JD 定制", "Resume / JD"))}</ul></article>
-            </div>
-          </section>
-        </section>`;
-    }
 
     // ---- Practice: the IELTS practice panel, with the interviewer in the prompt pane.
     function activeSession() {
@@ -842,6 +837,19 @@
       custom: () => [copy("简历 / JD 定制", "Resume / JD"), copy("把简历和目标岗位拆成可练的语料。", "Turn your resume and target role into practice material.")],
     };
 
+    function syncNav() {
+      const pane = data.pane;
+      const shown = (state.view === "interview" && pane !== "home") || (state.view === "home" && pane === "home");
+      document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
+        const itemPane = item.dataset.interviewPane;
+        const active = itemPane === "practice" ? pane === "practice" && item.dataset.interviewPart === data.part
+          : itemPane === pane || (pane === "report" && itemPane === "reports");
+        item.classList.toggle("active", active && shown);
+        item.setAttribute("aria-current", active && shown ? "page" : "false");
+        item.setAttribute("aria-disabled", String(data.busy));
+      });
+    }
+
     function syncChrome() {
       const pane = data.pane;
       const bare = pane === "home" || pane === "reports" || pane === "report" || pane === "corpus";
@@ -849,14 +857,7 @@
       document.querySelector?.(".workspace")?.classList.toggle("interview-corpus-workspace", state.view === "interview" && pane === "corpus");
       document.querySelector?.(".workspace")?.classList.toggle("interview-history-workspace", state.view === "interview" && (pane === "reports" || pane === "report"));
       if (document.body.dataset) { document.body.dataset.interviewPane = pane; document.body.dataset.interviewPart = data.part; }
-      document.querySelectorAll("#interviewNav [data-interview-pane]").forEach((item) => {
-        const itemPane = item.dataset.interviewPane;
-        const active = itemPane === "practice" ? pane === "practice" && item.dataset.interviewPart === data.part
-          : itemPane === pane || (pane === "report" && itemPane === "reports");
-        item.classList.toggle("active", active && state.view === "interview");
-        item.setAttribute("aria-current", active ? "page" : "false");
-        item.setAttribute("aria-disabled", String(data.busy));
-      });
+      syncNav();
       const entry = PANE_COPY[pane]?.();
       if (!entry || state.view !== "interview") return;
       if (byId("viewTitle")) byId("viewTitle").textContent = entry[0];
@@ -877,32 +878,12 @@
         perform(() => request(`/api/interview/sessions/${encodeURIComponent(id)}/`), (payload) => { if (payload.session.part === data.part) acceptSession(payload); });
         return;
       }
-      const content = ({ home, practice, reports: reportsPane, report: reportsPane, corpus: corpusPane, custom: customPane })[data.pane]();
+      // Home is the shared IELTS home panel, not part of #interviewPanel.
+      if (data.pane === "home") { panel.innerHTML = ""; return; }
+      const content = ({ practice, reports: reportsPane, report: reportsPane, corpus: corpusPane, custom: customPane })[data.pane]();
       const status = `<div id="interviewStatus" class="iv-status-line" role="status" aria-live="polite">${data.busy && data.answer.state !== "thinking" ? `<span class="iv-spinner" aria-hidden="true"></span>${esc(copy("正在处理…", "Working…"))}` : esc(data.notice)}</div>`;
       panel.innerHTML = `${status}${data.error ? `<div class="iv-error" role="alert">${esc(data.error)}</div>` : ""}<div class="iv-pane iv-pane--${data.pane}">${content}</div>${editorModal()}`;
       if (data.pane === "reports" || data.pane === "report") mountReportRail();
-    }
-
-    // ---- Carousel: same behaviour as home-dashboard.js — the active segment fills (CSS animation)
-    // and its animationend advances; hover/focus pauses. Classes only, no re-render.
-    function showSlide(index) {
-      data.slide = (index + SLIDES.length) % SLIDES.length;
-      const show = byId("interviewPanel")?.querySelector?.("#interviewHome .hx-show");
-      if (!show) return;
-      show.querySelectorAll(".hx-slide").forEach((slide, i) => {
-        const on = i === data.slide;
-        slide.classList.toggle("is-active", on);
-        slide.toggleAttribute("aria-hidden", !on);
-        slide.tabIndex = on ? 0 : -1;
-      });
-      show.querySelectorAll(".hx-seg").forEach((seg, i) => {
-        seg.classList.toggle("is-on", i === data.slide);
-        seg.classList.toggle("is-done", i < data.slide);
-        const bar = seg.querySelector("i");
-        if (bar && i === data.slide) { bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = ""; }
-      });
-      const count = show.querySelector("[data-hx-count]");
-      if (count) count.textContent = pad(data.slide + 1);
     }
 
     // ---- Recording: MediaRecorder -> upload -> server ASR -> editable transcript.
@@ -1059,10 +1040,6 @@
           if (list) list.scrollBy({ left: Number(el.dataset.step) * Math.max(260, Math.floor(list.clientWidth * 0.45)), behavior: "smooth" });
           return;
         }
-        case "slide-prev": showSlide(data.slide - 1); return;
-        case "slide-next": showSlide(data.slide + 1); return;
-        case "slide-go": showSlide(Number(el.dataset.index) || 0); return;
-        case "slide-open": { const slide = SLIDES[Number(el.dataset.index)] || SLIDES[0]; setPane(slide.pane, { part: slide.part }); return; }
         case "open-corpus": data.corpusTab = el.dataset.tab || data.corpusTab; setPane("corpus"); return;
         case "corpus-tab": data.corpusTab = el.dataset.tab; render(); return;
         case "custom-side": data.customSide = el.dataset.side; render(); return;

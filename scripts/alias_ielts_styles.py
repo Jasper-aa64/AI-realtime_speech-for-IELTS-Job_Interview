@@ -1,7 +1,8 @@
 """Share IELTS page styles with their mock-interview counterparts.
 
-For every style rule whose selector names an IELTS page anchor (for example #homePanel),
-append an alias selector for the interview counterpart (#interviewHome) to the same rule.
+For every style rule whose selector names an IELTS page anchor (for example #p1CorpusPanel),
+append an alias selector for the interview counterpart (#interviewCorpus) to the same rule.
+(The interview home needs no alias: it is the IELTS #homePanel itself, see interview-home.js.)
 The IELTS selectors are left untouched, and each alias swaps an id for an id (or a class for
 a class), so specificity and cascade order are identical on both sides. Re-running is a no-op:
 aliases already present are not added twice.
@@ -13,10 +14,7 @@ import re
 import sys
 
 # anchor -> (alias, extra rewrites applied only to the alias selector, alias page-level :has() rules too?)
-# Home layout rules that reach html/body/.workspace through :has(#homePanel) are not shared: the
-# interview keeps its fixed-height shell (the user asked for no whole-window scrolling).
 ALIASES = [
-    ("#homePanel", "#interviewHome", [(r"\.view-home(?![\w-])", "")], False),
     ("#p1CorpusPanel", "#interviewCorpus", [], True),
     ("#historyPanel", "#interviewReports", [], True),
     ("#historyList", "#interviewReportList", [], True),

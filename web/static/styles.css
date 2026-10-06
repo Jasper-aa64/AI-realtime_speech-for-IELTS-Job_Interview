@@ -42327,13 +42327,11 @@ body.view-home .workspace:has(#homePanel:not(.hidden)) {
     var(--bg) !important;
 }
 
-body.theme-dark.view-home #homePanel.hx-home,
-body.theme-dark #interviewHome.hx-home {
+body.theme-dark.view-home #homePanel.hx-home {
   --hx-link: color-mix(in srgb, var(--accent) 55%, #fff);
 }
 
-body.view-home #homePanel.hx-home,
-body #interviewHome.hx-home {
+body.view-home #homePanel.hx-home {
   --hx-rule: color-mix(in srgb, var(--line) 100%, transparent);
   --hx-card: var(--panel);
   width: min(100%, 1320px);
@@ -42348,8 +42346,7 @@ body #interviewHome.hx-home {
   color: var(--ink);
 }
 
-#homePanel .hx-hero,
-#interviewHome .hx-hero {
+#homePanel .hx-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr) minmax(0, 0.98fr);
   grid-template-areas: "intro show panel";
@@ -42358,17 +42355,14 @@ body #interviewHome.hx-home {
   padding: clamp(18px, 3vw, 40px) 0 clamp(28px, 4vw, 52px);
 }
 
-/* Intro: centred kicker, asymmetric lockup like the blog's "Hi, I'm / Jasper." */
-#homePanel .hx-intro,
-#interviewHome .hx-intro {
+#homePanel .hx-intro {
   grid-area: intro;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-#homePanel .hx-kicker,
-#interviewHome .hx-kicker {
+#homePanel .hx-kicker {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -42383,25 +42377,21 @@ body #interviewHome.hx-home {
 }
 
 #homePanel .hx-kicker::before,
-#homePanel .hx-kicker::after,
-#interviewHome .hx-kicker::before,
-#interviewHome .hx-kicker::after {
+#homePanel .hx-kicker::after {
   content: "";
   width: 22px;
   height: 1px;
   background: var(--ed-gold);
 }
 
-#homePanel .hx-title,
-#interviewHome .hx-title {
+#homePanel .hx-title {
   display: flex;
   flex-direction: column;
   margin: 0;
   font-weight: 400;
 }
 
-#homePanel .hx-title-top,
-#interviewHome .hx-title-top {
+#homePanel .hx-title-top {
   align-self: flex-start;
   color: var(--muted);
   font-family: var(--ed-serif);
@@ -42410,8 +42400,7 @@ body #interviewHome.hx-home {
   line-height: 1.3;
 }
 
-#homePanel .hx-title-main,
-#interviewHome .hx-title-main {
+#homePanel .hx-title-main {
   align-self: flex-end;
   display: inline-block;
   margin: 0 0 -0.14em -0.2em;
@@ -42429,16 +42418,14 @@ body #interviewHome.hx-home {
   color: transparent;
 }
 
-#homePanel .hx-title-main::after,
-#interviewHome .hx-title-main::after {
+#homePanel .hx-title-main::after {
   content: ".";
   font-style: normal;
   color: var(--accent);
   -webkit-text-fill-color: var(--accent);
 }
 
-#homePanel .hx-topics,
-#interviewHome .hx-topics {
+#homePanel .hx-topics {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -42449,15 +42436,13 @@ body #interviewHome.hx-home {
   font-size: clamp(15px, 1.2vw, 17px);
 }
 
-#homePanel .hx-topics i,
-#interviewHome .hx-topics i {
+#homePanel .hx-topics i {
   color: var(--ed-gold);
   font-style: normal;
   font-weight: 300;
 }
 
-#homePanel .hx-actions,
-#interviewHome .hx-actions {
+#homePanel .hx-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -42465,8 +42450,7 @@ body #interviewHome.hx-home {
   margin-top: 28px;
 }
 
-#homePanel .hx-btn,
-#interviewHome .hx-btn {
+#homePanel .hx-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -42482,49 +42466,40 @@ body #interviewHome.hx-home {
   transition: background-color 250ms var(--ed-ease), color 250ms var(--ed-ease), border-color 250ms var(--ed-ease), transform 250ms var(--ed-ease);
 }
 
-#homePanel .hx-btn span,
-#interviewHome .hx-btn span {
+#homePanel .hx-btn span {
   transition: transform 250ms var(--ed-ease);
 }
 
-#homePanel .hx-btn:hover,
-#interviewHome .hx-btn:hover {
+#homePanel .hx-btn:hover {
   border-color: var(--ink);
 }
 
-#homePanel .hx-btn:hover span,
-#interviewHome .hx-btn:hover span {
+#homePanel .hx-btn:hover span {
   transform: translateX(3px);
 }
 
-#homePanel .hx-btn:active,
-#interviewHome .hx-btn:active {
+#homePanel .hx-btn:active {
   transform: scale(0.98);
 }
 
-#homePanel .hx-btn--solid,
-#interviewHome .hx-btn--solid {
+#homePanel .hx-btn--solid {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--panel);
 }
 
-#homePanel .hx-btn--solid:hover,
-#interviewHome .hx-btn--solid:hover {
+#homePanel .hx-btn--solid:hover {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
 }
 
-#homePanel :is(.hx-btn, .hx-chip, .hx-area-links a, .hx-slide, .hx-nav, .hx-seg, .hx-stat a, .hx-sec-more):focus-visible,
-#interviewHome :is(.hx-btn, .hx-chip, .hx-area-links a, .hx-slide, .hx-nav, .hx-seg, .hx-stat a, .hx-sec-more):focus-visible {
+#homePanel :is(.hx-btn, .hx-chip, .hx-area-links a, .hx-slide, .hx-nav, .hx-seg, .hx-stat a, .hx-sec-more):focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   outline-offset: 3px;
 }
 
-/* Carousel: a single framed picture with glass labels, segmented progress */
-#homePanel .hx-show,
-#interviewHome .hx-show {
+#homePanel .hx-show {
   grid-area: show;
   display: flex;
   flex-direction: column;
@@ -42537,14 +42512,12 @@ body #interviewHome.hx-home {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 18px 40px rgba(15, 23, 42, 0.07);
 }
 
-#homePanel .hx-stage,
-#interviewHome .hx-stage {
+#homePanel .hx-stage {
   position: relative;
   display: grid;
 }
 
-#homePanel .hx-slide,
-#interviewHome .hx-slide {
+#homePanel .hx-slide {
   grid-area: 1 / 1;
   display: flex;
   flex-direction: column;
@@ -42556,15 +42529,13 @@ body #interviewHome.hx-home {
   transition: opacity 450ms ease, visibility 0s linear 450ms;
 }
 
-#homePanel .hx-slide.is-active,
-#interviewHome .hx-slide.is-active {
+#homePanel .hx-slide.is-active {
   opacity: 1;
   visibility: visible;
   transition: opacity 450ms ease, visibility 0s;
 }
 
-#homePanel .hx-slide-media,
-#interviewHome .hx-slide-media {
+#homePanel .hx-slide-media {
   position: relative;
   display: block;
   aspect-ratio: 16 / 10;
@@ -42573,8 +42544,7 @@ body #interviewHome.hx-home {
   background: var(--bg);
 }
 
-#homePanel .hx-slide-media img,
-#interviewHome .hx-slide-media img {
+#homePanel .hx-slide-media img {
   width: 100%;
   height: 100%;
   display: block;
@@ -42584,18 +42554,15 @@ body #interviewHome.hx-home {
   transition: transform 1.2s var(--ed-ease);
 }
 
-#homePanel .hx-slide:hover .hx-slide-media img,
-#interviewHome .hx-slide:hover .hx-slide-media img {
+#homePanel .hx-slide:hover .hx-slide-media img {
   transform: scale(1.06);
 }
 
-body.theme-dark #homePanel .hx-slide-media img,
-body.theme-dark #interviewHome .hx-slide-media img {
+body.theme-dark #homePanel .hx-slide-media img {
   filter: brightness(0.85);
 }
 
-#homePanel .hx-slide-chip,
-#interviewHome .hx-slide-chip {
+#homePanel .hx-slide-chip {
   position: absolute;
   left: 10px;
   top: 10px;
@@ -42612,16 +42579,14 @@ body.theme-dark #interviewHome .hx-slide-media img {
   -webkit-backdrop-filter: blur(10px) saturate(1.3);
 }
 
-#homePanel .hx-slide-body,
-#interviewHome .hx-slide-body {
+#homePanel .hx-slide-body {
   display: grid;
   gap: 4px;
   padding: 2px 6px 0;
   padding-right: 64px;
 }
 
-#homePanel .hx-slide-body strong,
-#interviewHome .hx-slide-body strong {
+#homePanel .hx-slide-body strong {
   font-family: var(--ed-serif);
   font-size: 23px;
   font-weight: 400;
@@ -42629,13 +42594,11 @@ body.theme-dark #interviewHome .hx-slide-media img {
   transition: color 200ms ease;
 }
 
-#homePanel .hx-slide:hover .hx-slide-body strong,
-#interviewHome .hx-slide:hover .hx-slide-body strong {
+#homePanel .hx-slide:hover .hx-slide-body strong {
   color: var(--hx-link, var(--accent));
 }
 
-#homePanel .hx-slide-body span,
-#interviewHome .hx-slide-body span {
+#homePanel .hx-slide-body span {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -42645,8 +42608,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   line-height: 1.55;
 }
 
-#homePanel .hx-count,
-#interviewHome .hx-count {
+#homePanel .hx-count {
   position: absolute;
   right: 6px;
   bottom: 4px;
@@ -42658,35 +42620,30 @@ body.theme-dark #interviewHome .hx-slide-media img {
   pointer-events: none;
 }
 
-#homePanel .hx-count b,
-#interviewHome .hx-count b {
+#homePanel .hx-count b {
   color: var(--ink);
   font-size: 15px;
   font-weight: 600;
 }
 
-#homePanel .hx-count i,
-#interviewHome .hx-count i {
+#homePanel .hx-count i {
   font-style: normal;
 }
 
-#homePanel .hx-bar,
-#interviewHome .hx-bar {
+#homePanel .hx-bar {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 6px 2px;
 }
 
-#homePanel .hx-progress,
-#interviewHome .hx-progress {
+#homePanel .hx-progress {
   flex: 1;
   display: flex;
   gap: 6px;
 }
 
-#homePanel .hx-seg,
-#interviewHome .hx-seg {
+#homePanel .hx-seg {
   position: relative;
   flex: 1;
   height: 18px;
@@ -42697,9 +42654,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
 }
 
 #homePanel .hx-seg::before,
-#homePanel .hx-seg i,
-#interviewHome .hx-seg::before,
-#interviewHome .hx-seg i {
+#homePanel .hx-seg i {
   content: "";
   position: absolute;
   left: 0;
@@ -42710,36 +42665,30 @@ body.theme-dark #interviewHome .hx-slide-media img {
   border-radius: 2px;
 }
 
-#homePanel .hx-seg::before,
-#interviewHome .hx-seg::before {
+#homePanel .hx-seg::before {
   background: var(--hx-rule);
 }
 
-#homePanel .hx-seg i,
-#interviewHome .hx-seg i {
+#homePanel .hx-seg i {
   background: var(--accent);
   transform: scaleX(0);
   transform-origin: left;
 }
 
-#homePanel .hx-seg.is-done i,
-#interviewHome .hx-seg.is-done i {
+#homePanel .hx-seg.is-done i {
   transform: scaleX(1);
   opacity: 0.4;
 }
 
-#homePanel .hx-seg.is-on i,
-#interviewHome .hx-seg.is-on i {
+#homePanel .hx-seg.is-on i {
   animation: hx-seg-fill 5s linear forwards;
 }
 
-#homePanel .hx-show:is(.is-paused, .is-hidden) .hx-seg.is-on i,
-#interviewHome .hx-show:is(.is-paused, .is-hidden) .hx-seg.is-on i {
+#homePanel .hx-show:is(.is-paused, .is-hidden) .hx-seg.is-on i {
   animation-play-state: paused;
 }
 
-#homePanel .hx-show.no-auto .hx-seg.is-on i,
-#interviewHome .hx-show.no-auto .hx-seg.is-on i {
+#homePanel .hx-show.no-auto .hx-seg.is-on i {
   animation: none;
   transform: scaleX(1);
 }
@@ -42748,8 +42697,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   to { transform: scaleX(1); }
 }
 
-#homePanel .hx-nav,
-#interviewHome .hx-nav {
+#homePanel .hx-nav {
   width: 30px;
   height: 30px;
   display: inline-grid;
@@ -42763,14 +42711,12 @@ body.theme-dark #interviewHome .hx-slide-media img {
   transition: color 200ms ease, border-color 200ms ease;
 }
 
-#homePanel .hx-nav:hover,
-#interviewHome .hx-nav:hover {
+#homePanel .hx-nav:hover {
   border-color: var(--ink);
   color: var(--ink);
 }
 
-#homePanel .hx-nav svg path,
-#interviewHome .hx-nav svg path {
+#homePanel .hx-nav svg path {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -42778,9 +42724,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   stroke-linejoin: round;
 }
 
-/* Notebook panel: three equal figures, then tag-cloud chips */
-#homePanel .hx-panel,
-#interviewHome .hx-panel {
+#homePanel .hx-panel {
   grid-area: panel;
   min-width: 0;
   padding: clamp(20px, 2.2vw, 28px);
@@ -42790,8 +42734,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 10px 28px rgba(15, 23, 42, 0.06);
 }
 
-#homePanel .hx-stats,
-#interviewHome .hx-stats {
+#homePanel .hx-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: 24px;
@@ -42800,16 +42743,14 @@ body.theme-dark #interviewHome .hx-slide-media img {
   border-bottom: 1px solid var(--hx-rule);
 }
 
-#homePanel .hx-stat,
-#interviewHome .hx-stat {
+#homePanel .hx-stat {
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-#homePanel .hx-stat + .hx-stat::before,
-#interviewHome .hx-stat + .hx-stat::before {
+#homePanel .hx-stat + .hx-stat::before {
   content: "";
   position: absolute;
   top: 0;
@@ -42818,8 +42759,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   border-left: 1px solid var(--hx-rule);
 }
 
-#homePanel .hx-stat dt,
-#interviewHome .hx-stat dt {
+#homePanel .hx-stat dt {
   color: var(--muted);
   font-family: var(--ed-mono);
   font-size: 11.5px;
@@ -42827,8 +42767,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   text-transform: uppercase;
 }
 
-#homePanel .hx-stat dd,
-#interviewHome .hx-stat dd {
+#homePanel .hx-stat dd {
   margin: auto 0 0;
   padding-top: 6px;
   color: var(--ink);
@@ -42839,25 +42778,21 @@ body.theme-dark #interviewHome .hx-slide-media img {
   white-space: nowrap;
 }
 
-#homePanel .hx-stat dd a,
-#interviewHome .hx-stat dd a {
+#homePanel .hx-stat dd a {
   color: inherit;
   text-decoration: none;
   transition: color 200ms ease;
 }
 
-#homePanel .hx-stat dd a:hover,
-#interviewHome .hx-stat dd a:hover {
+#homePanel .hx-stat dd a:hover {
   color: var(--accent);
 }
 
-#homePanel .hx-stat-date time,
-#interviewHome .hx-stat-date time {
+#homePanel .hx-stat-date time {
   display: block;
 }
 
-#homePanel .hx-stat-year,
-#interviewHome .hx-stat-year {
+#homePanel .hx-stat-year {
   display: block;
   margin: 4px 0;
   color: var(--muted);
@@ -42867,14 +42802,12 @@ body.theme-dark #interviewHome .hx-slide-media img {
   letter-spacing: 0.06em;
 }
 
-#homePanel .hx-stat-sep,
-#interviewHome .hx-stat-sep {
+#homePanel .hx-stat-sep {
   margin: 0 0.06em;
   color: var(--ed-gold);
 }
 
-#homePanel .hx-panel-label,
-#interviewHome .hx-panel-label {
+#homePanel .hx-panel-label {
   margin: 16px 0 12px;
   color: var(--muted);
   font-family: var(--ed-mono);
@@ -42883,20 +42816,17 @@ body.theme-dark #interviewHome .hx-slide-media img {
   text-transform: uppercase;
 }
 
-#homePanel .hx-panel-label span,
-#interviewHome .hx-panel-label span {
+#homePanel .hx-panel-label span {
   text-transform: none;
 }
 
-#homePanel .hx-chips,
-#interviewHome .hx-chips {
+#homePanel .hx-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-#homePanel .hx-chip,
-#interviewHome .hx-chip {
+#homePanel .hx-chip {
   display: inline-flex;
   align-items: center;
   height: 32px;
@@ -42910,14 +42840,12 @@ body.theme-dark #interviewHome .hx-slide-media img {
   transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
 }
 
-#homePanel .hx-chip:hover,
-#interviewHome .hx-chip:hover {
+#homePanel .hx-chip:hover {
   border-color: var(--hx-link, var(--accent));
   color: var(--hx-link, var(--accent));
 }
 
-#homePanel .hx-chip sup,
-#interviewHome .hx-chip sup {
+#homePanel .hx-chip sup {
   top: 0;
   margin-left: 4px;
   color: var(--muted);
@@ -42925,39 +42853,32 @@ body.theme-dark #interviewHome .hx-slide-media img {
   font-size: 11px;
 }
 
-#homePanel .hx-chip sup:empty,
-#interviewHome .hx-chip sup:empty {
+#homePanel .hx-chip sup:empty {
   display: none;
 }
 
-#homePanel .hx-chip.is-due,
-#interviewHome .hx-chip.is-due {
+#homePanel .hx-chip.is-due {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-#homePanel .hx-chip.is-due sup,
-#interviewHome .hx-chip.is-due sup {
+#homePanel .hx-chip.is-due sup {
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--accent);
   color: #fff;
 }
 
-#homePanel .hx-chip--more,
-#interviewHome .hx-chip--more {
+#homePanel .hx-chip--more {
   border-style: dashed;
   background: transparent;
   color: var(--hx-link, var(--accent));
 }
 
-/* Training paths: section head + one ruled grid, columns divided by hairlines */
-#homePanel .hx-areas,
-#interviewHome .hx-areas {
+#homePanel .hx-areas {
   padding-top: clamp(8px, 2vw, 20px);
 }
 
-#homePanel .hx-sec-head,
-#interviewHome .hx-sec-head {
+#homePanel .hx-sec-head {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -42967,8 +42888,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   border-bottom: 1px solid var(--hx-rule);
 }
 
-#homePanel .hx-eyebrow,
-#interviewHome .hx-eyebrow {
+#homePanel .hx-eyebrow {
   flex-basis: 100%;
   display: inline-flex;
   align-items: center;
@@ -42982,16 +42902,14 @@ body.theme-dark #interviewHome .hx-slide-media img {
   text-transform: uppercase;
 }
 
-#homePanel .hx-eyebrow::before,
-#interviewHome .hx-eyebrow::before {
+#homePanel .hx-eyebrow::before {
   content: "";
   width: 22px;
   height: 1px;
   background: var(--ed-gold);
 }
 
-#homePanel .hx-sec-head h2,
-#interviewHome .hx-sec-head h2 {
+#homePanel .hx-sec-head h2 {
   margin: 0;
   font-family: var(--ed-serif);
   font-size: clamp(24px, 2vw, 30px);
@@ -43000,20 +42918,16 @@ body.theme-dark #interviewHome .hx-slide-media img {
   letter-spacing: -0.015em;
 }
 
-/* Training paths: the eyebrow is the whole heading, so it shares a row with the link */
-#homePanel .hx-areas .hx-sec-head,
-#interviewHome .hx-areas .hx-sec-head {
+#homePanel .hx-areas .hx-sec-head {
   align-items: center;
 }
 
-#homePanel .hx-areas .hx-eyebrow,
-#interviewHome .hx-areas .hx-eyebrow {
+#homePanel .hx-areas .hx-eyebrow {
   flex-basis: auto;
   margin: 0;
 }
 
-#homePanel .hx-sec-more,
-#interviewHome .hx-sec-more {
+#homePanel .hx-sec-more {
   display: inline-flex;
   gap: 6px;
   margin-left: auto;
@@ -43023,18 +42937,15 @@ body.theme-dark #interviewHome .hx-slide-media img {
   text-decoration: none;
 }
 
-#homePanel .hx-sec-more span,
-#interviewHome .hx-sec-more span {
+#homePanel .hx-sec-more span {
   transition: transform 250ms var(--ed-ease);
 }
 
-#homePanel .hx-sec-more:hover span,
-#interviewHome .hx-sec-more:hover span {
+#homePanel .hx-sec-more:hover span {
   transform: translateX(3px);
 }
 
-#homePanel .hx-area-grid,
-#interviewHome .hx-area-grid {
+#homePanel .hx-area-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
@@ -43044,8 +42955,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 10px 28px rgba(15, 23, 42, 0.06);
 }
 
-#homePanel .hx-area,
-#interviewHome .hx-area {
+#homePanel .hx-area {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -43054,13 +42964,11 @@ body.theme-dark #interviewHome .hx-slide-media img {
   border-right: 1px solid var(--hx-rule);
 }
 
-#homePanel .hx-area:last-child,
-#interviewHome .hx-area:last-child {
+#homePanel .hx-area:last-child {
   border-right: 0;
 }
 
-#homePanel .hx-area::before,
-#interviewHome .hx-area::before {
+#homePanel .hx-area::before {
   content: "";
   position: absolute;
   top: 16px;
@@ -43071,16 +42979,14 @@ body.theme-dark #interviewHome .hx-slide-media img {
   transform: rotate(-1.8deg);
 }
 
-#homePanel .hx-area-index,
-#interviewHome .hx-area-index {
+#homePanel .hx-area-index {
   color: var(--ed-gold);
   font-family: var(--ed-mono);
   font-size: 12px;
   letter-spacing: 0.04em;
 }
 
-#homePanel .hx-area-name,
-#interviewHome .hx-area-name {
+#homePanel .hx-area-name {
   align-self: flex-start;
   margin: 0;
   padding-bottom: 4px;
@@ -43092,34 +42998,29 @@ body.theme-dark #interviewHome .hx-slide-media img {
   transition: background-size 450ms var(--ed-ease), color 200ms ease;
 }
 
-#homePanel .hx-area:hover .hx-area-name,
-#interviewHome .hx-area:hover .hx-area-name {
+#homePanel .hx-area:hover .hx-area-name {
   background-size: 100% 2px;
   color: var(--hx-link, var(--accent));
 }
 
-#homePanel .hx-area-blurb,
-#interviewHome .hx-area-blurb {
+#homePanel .hx-area-blurb {
   margin: 0;
   color: var(--muted);
   font-size: 14.5px;
   line-height: 1.6;
 }
 
-#homePanel .hx-area-links,
-#interviewHome .hx-area-links {
+#homePanel .hx-area-links {
   margin: 4px 0 0;
   padding: 8px 0 0;
   list-style: none;
 }
 
-#homePanel .hx-area-links li + li,
-#interviewHome .hx-area-links li + li {
+#homePanel .hx-area-links li + li {
   border-top: 1px dashed var(--hx-rule);
 }
 
-#homePanel .hx-area-links a,
-#interviewHome .hx-area-links a {
+#homePanel .hx-area-links a {
   display: grid;
   grid-template-columns: 74px minmax(0, 1fr) auto;
   align-items: center;
@@ -43129,8 +43030,7 @@ body.theme-dark #interviewHome .hx-slide-media img {
   text-decoration: none;
 }
 
-#homePanel .hx-area-links b,
-#interviewHome .hx-area-links b {
+#homePanel .hx-area-links b {
   color: var(--muted);
   font-family: var(--ed-mono);
   font-size: 11.5px;
@@ -43139,14 +43039,12 @@ body.theme-dark #interviewHome .hx-slide-media img {
   text-transform: uppercase;
 }
 
-#homePanel .hx-area-links span,
-#interviewHome .hx-area-links span {
+#homePanel .hx-area-links span {
   font-size: 15.5px;
   font-weight: 500;
 }
 
-#homePanel .hx-area-links i,
-#interviewHome .hx-area-links i {
+#homePanel .hx-area-links i {
   display: grid;
   place-items: center;
   width: 28px;
@@ -43159,13 +43057,11 @@ body.theme-dark #interviewHome .hx-slide-media img {
   transition: all 300ms var(--ed-ease);
 }
 
-#homePanel .hx-area-links a:hover span,
-#interviewHome .hx-area-links a:hover span {
+#homePanel .hx-area-links a:hover span {
   color: var(--hx-link, var(--accent));
 }
 
-#homePanel .hx-area-links a:hover i,
-#interviewHome .hx-area-links a:hover i {
+#homePanel .hx-area-links a:hover i {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
@@ -43187,42 +43083,35 @@ body.theme-dark #interviewHome .hx-slide-media img {
 }
 
 @media (max-width: 860px) {
-  #homePanel .hx-hero,
-#interviewHome .hx-hero {
+  #homePanel .hx-hero {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "intro" "panel" "show";
   }
 
-  #homePanel .hx-slide,
-#interviewHome .hx-slide {
+  #homePanel .hx-slide {
     display: flex;
   }
 
-  #homePanel .hx-title-main,
-#interviewHome .hx-title-main {
+  #homePanel .hx-title-main {
     font-size: clamp(48px, 13vw, 72px);
   }
 
-  #homePanel .hx-area-grid,
-#interviewHome .hx-area-grid {
+  #homePanel .hx-area-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  #homePanel .hx-area,
-#interviewHome .hx-area {
+  #homePanel .hx-area {
     border-right: 0;
     border-bottom: 1px solid var(--hx-rule);
   }
 
-  #homePanel .hx-area:last-child,
-#interviewHome .hx-area:last-child {
+  #homePanel .hx-area:last-child {
     border-bottom: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #homePanel :is(.hx-slide, .hx-slide-media img, .hx-btn, .hx-area-name, .hx-area-links i),
-#interviewHome :is(.hx-slide, .hx-slide-media img, .hx-btn, .hx-area-name, .hx-area-links i) {
+  #homePanel :is(.hx-slide, .hx-slide-media img, .hx-btn, .hx-area-name, .hx-area-links i) {
     transition: none;
   }
 }
@@ -44349,16 +44238,12 @@ body:not(#_) #interviewPractice .p1-mode-help {
   color: var(--muted) !important;
 }
 
-/* ---------- Ornaments: only the eyebrow dash survives ---------- */
 body:not(#_) #homePanel .hx-area::before,
-body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-home-card::after,
-body:not(#_) #interviewHome .hx-area::before {
+body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-home-card::after {
   display: none !important;
 }
 
-/* The wordmark carries the theme colour: ink on "IELTS" melting into the accent on "Studio". */
-body:not(#_) #homePanel .hx-title-main,
-body:not(#_) #interviewHome .hx-title-main {
+body:not(#_) #homePanel .hx-title-main {
   background: linear-gradient(100deg, var(--ink) 8%, var(--accent) 62%, color-mix(in srgb, var(--accent) 70%, var(--ink)) 100%) !important;
   -webkit-background-clip: text !important;
   background-clip: text !important;
@@ -44366,15 +44251,13 @@ body:not(#_) #interviewHome .hx-title-main {
   color: transparent !important;
 }
 
-body.theme-dark:not(#_) #homePanel .hx-title-main,
-body.theme-dark:not(#_) #interviewHome .hx-title-main {
+body.theme-dark:not(#_) #homePanel .hx-title-main {
   background: linear-gradient(100deg, var(--ink) 8%, color-mix(in srgb, var(--accent) 70%, #fff) 62%, var(--accent) 100%) !important;
   -webkit-background-clip: text !important;
   background-clip: text !important;
 }
 
-body:not(#_) #homePanel .hx-topics i,
-body:not(#_) #interviewHome .hx-topics i {
+body:not(#_) #homePanel .hx-topics i {
   color: var(--line) !important;
 }
 
@@ -44719,10 +44602,8 @@ body:not(#_) :is(.workspace, .global-topbar, .modal, .p1-corpus-dialog) :is(butt
   font-weight: 500 !important;
 }
 
-/* index labels ("01 · Speaking", "01 · P1"): muted mono, gold stays on the eyebrow dash only */
 body:not(#_) #homePanel .hx-area-index,
-body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-card-mark,
-body:not(#_) #interviewHome .hx-area-index {
+body:not(#_) .workspace.corpus-workspace:has(#corpusPanel:not(.hidden)) #corpusPanel .corpus-card-mark {
   color: var(--muted) !important;
 }
 
@@ -45356,11 +45237,7 @@ body:not(#_) .history-item:is(.tone-p1, .tone-p2, .tone-p3, .tone-mock) .history
 @font-face { font-family: "Charis SIL"; font-style: italic; font-weight: 700; font-display: swap; src: url("/assets/fonts/charis-sil/charis-sil-latin-ext-700-italic.woff2") format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
 @font-face { font-family: "Charis SIL"; font-style: italic; font-weight: 700; font-display: swap; src: url("/assets/fonts/charis-sil/charis-sil-latin-700-italic.woff2") format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 
-/* The home wordmark and the stat figures (口语报告 / 写作篇数 / 最近练习) keep the original
-   display face (user's call); the year label inside the date stays mono. Everything
-   else uses the Charter / Songti pairing above. */
-body:not(#_) #homePanel :is(.hx-title-main, .hx-stat dd),
-body:not(#_) #interviewHome :is(.hx-title-main, .hx-stat dd) {
+body:not(#_) #homePanel :is(.hx-title-main, .hx-stat dd) {
   font-family: "Instrument Serif", "Charter", "Charis SIL", Georgia, serif !important;
 }
 
@@ -45400,9 +45277,7 @@ body.theme-dark:not(#_):not(#__) :is(.vditor-reset, .vditor-ir, .vditor-wysiwyg,
   color: #8fb8ff !important;
 }
 
-/* Home carousel arrows: the flex row squeezed them to 30x42 (ovals). Fixed circles. */
-body:not(#_) #homePanel .hx-nav,
-body:not(#_) #interviewHome .hx-nav {
+body:not(#_) #homePanel .hx-nav {
   flex: 0 0 40px !important;
   width: 40px !important;
   min-width: 40px !important;
@@ -47080,9 +46955,6 @@ body:not(#_) #interviewPanel .iv-danger { color: var(--danger, #d9534f); }
 
 #interviewPanel .iv-dock-spacer { flex: 1 1 auto; }
 
-/* "Mock Interview" is two letters longer than "IELTS Studio": one step smaller so it never clips. */
-body:not(#_) #interviewHome .hx-title-main { font-size: clamp(44px, 4.3vw, 76px) !important; }
-#interviewHome .hx-slide-media .iv-slide-art { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; border-radius: inherit; }
 #interviewCorpus .iv-topic-foot { padding: 4px 18px 14px; }
 #interviewCorpus .iv-topic-foot:empty { display: none; }
 #interviewCorpus .iv-tabs { margin: 14px 0 16px; }

@@ -91,6 +91,8 @@
   let loading = false;
   async function refreshStats() {
     if (loading || panel.classList.contains("hidden")) return;
+    // In interview mode the same panel shows interview numbers (interview-home.js owns them).
+    if (window.IELTSInterviewHome?.isActive()) { window.IELTSInterviewHome.refresh(); return; }
     loading = true;
     const [history, writing, bank] = await Promise.all([
       getJSON("/api/history"),
@@ -98,6 +100,8 @@
       getJSON("/api/question-bank/summary"),
     ]);
     loading = false;
+    // Interview mode may have switched on while these requests were in flight (it waits for the desktop bridge).
+    if (window.IELTSInterviewHome?.isActive()) { window.IELTSInterviewHome.refresh(); return; }
 
     const items = Array.isArray(history?.items) ? history.items : null;
     setText('[data-hx-stat="speaking"]', items ? String(items.length) : "–");
@@ -123,6 +127,7 @@
   /* Due counts mirror the sidebar badges, which the app already keeps current. */
   const dueTargets = [...panel.querySelectorAll("[data-hx-due]")];
   const syncDue = () => {
+    if (window.IELTSInterviewHome?.isActive()) return;
     dueTargets.forEach((sup) => {
       const dot = document.getElementById(sup.dataset.hxDue);
       const n = dot && !dot.classList.contains("hidden") ? Number(dot.getAttribute("data-count") || 0) : 0;

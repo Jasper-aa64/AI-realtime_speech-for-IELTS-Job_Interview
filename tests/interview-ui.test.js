@@ -199,7 +199,8 @@ test("mode menu keyboard, Escape, outside close, and IELTS abort are functional"
   env.ids.studioModeTrigger.emit("click"); env.document.emit("pointerdown", { target: {} }); assert.equal(env.ids.studioModeMenu.hidden, true);
   env.app.setProductMode("ielts"); env.state.practiceLocked = true;
   env.ids.studioModeMenu.emit("click", { target: env.modes[1] }); await settle();
-  assert.equal(env.exited(), true); assert.equal(env.state.view, "interview");
+  // Switching modes lands on the shared home panel; interview mode swaps its copy.
+  assert.equal(env.exited(), true); assert.equal(env.state.view, "home"); assert.equal(env.state.productMode, "interview");
 });
 
 test("browser capability absence keeps mode hidden; guests never call authenticated interview APIs", async () => {
