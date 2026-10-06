@@ -15,7 +15,7 @@
   // holds the card) is raised above every other layer so nothing on the page can paint over the card.
   function create({
     trigger, card, body = null, root = trigger, lift = null, anchor = "top-left",
-    palette = null, onOpenChange = null, closedRadius = "10px", openRadius = "18px",
+    palette = null, onOpenChange = null, keepOpen = null, closedRadius = "10px", openRadius = "18px",
     closedBackground = "var(--switch-closed)", hoverBackground = "var(--switch-hover)",
   }) {
     let open = false;
@@ -26,14 +26,21 @@
 
     function place() {
       const from = trigger.getBoundingClientRect();
-      if (anchor === "top-right") {
+      if (anchor.endsWith("right")) {
         card.style.left = "auto";
         card.style.right = `${Math.round(window.innerWidth - from.right)}px`;
       } else {
         card.style.right = "auto";
         card.style.left = `${Math.round(from.left)}px`;
       }
-      card.style.top = `${Math.round(from.top)}px`;
+      // A bottom anchor grows upwards from the trigger's bottom edge (a corner dock).
+      if (anchor.startsWith("bottom")) {
+        card.style.top = "auto";
+        card.style.bottom = `${Math.round(window.innerHeight - from.bottom)}px`;
+      } else {
+        card.style.bottom = "auto";
+        card.style.top = `${Math.round(from.top)}px`;
+      }
       return from;
     }
 
@@ -111,7 +118,8 @@
         if (event.pointerType !== "mouse") return;
         if (zones.some((other) => other !== zone && other.contains?.(event.relatedTarget))) return;
         window.clearTimeout?.(timer);
-        if (open) timer = window.setTimeout?.(() => set(false), HOVER_OUT_MS);
+        // keepOpen: a card the user is working in (typing, reading a reply) does not close when the cursor wanders.
+        if (open && !keepOpen?.()) timer = window.setTimeout?.(() => set(false), HOVER_OUT_MS);
       });
     });
     document.addEventListener("pointerdown", (event) => {

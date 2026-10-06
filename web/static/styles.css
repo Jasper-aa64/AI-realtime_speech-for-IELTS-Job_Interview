@@ -46993,50 +46993,149 @@ body:not(#_) .iv-card-dialog .iv-danger { color: var(--danger, #d9534f); }
 .iv-card-dialog.is-jd .iv-card-columns { grid-template-columns: minmax(0, 1fr); }
 .iv-card-dialog.is-jd .iv-card-excerpt-field { display: none; }
 
-/* ---------- AI 助手: thread list + Deep Chat (vendor/deep-chat) filling the workspace ---------- */
-.iv-pane--assistant { height: 100%; }
-.iv-assistant {
-  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; height: calc(100vh - 200px); min-height: 460px;
+
+/* Interview home: "Mock Interview" is a word longer than the IELTS wordmark; a little smaller keeps it calm. */
+body.interview-mode:not(#_):not(#__) #homePanel .hx-title-main { font-size: clamp(44px, 4vw, 58px) !important; }
+
+/* ---------- AI 助手 page: a framed app — thread rail, header with the mode switch, centred chat column ---------- */
+#ivAssistant {
+  display: grid; grid-template-columns: 252px minmax(0, 1fr); height: calc(100vh - 84px); min-height: 480px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.05);
 }
-.iv-assistant-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding-right: 14px; border-right: 1px solid var(--line); }
-.iv-assistant-new {
-  display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--radius-lg);
-  background: var(--panel); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
-  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+#ivAssistant button { box-shadow: none; text-transform: none; letter-spacing: normal; min-height: 0; }
+#ivAssistant .iv-as-side {
+  display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 14px 10px 10px;
+  border-right: 1px solid var(--line); background: color-mix(in srgb, var(--ink) 2.5%, var(--panel));
 }
-.iv-assistant-new:hover { border-color: var(--border-strong); box-shadow: var(--shadow-xs); }
-.iv-assistant-threads { display: grid; align-content: start; gap: 2px; overflow-y: auto; min-height: 0; }
-.iv-assistant-thread { position: relative; display: flex; align-items: center; border-radius: var(--radius-md); }
-.iv-assistant-thread > button:first-child, .iv-assistant-rename {
-  flex: 1; min-width: 0; padding: 8px 10px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink);
-  font: inherit; font-size: 13.5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+#ivAssistant .iv-as-side-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 0 8px; }
+#ivAssistant .iv-as-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; font-weight: 650; }
+#ivAssistant .iv-as-brand svg { color: var(--accent); }
+:is(#ivAssistant, #ivDock) .iv-as-icon {
+  display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); cursor: pointer;
 }
-.iv-assistant-rename { cursor: text; outline: 1px solid var(--accent); background: var(--panel); }
-.iv-assistant-thread:hover, .iv-assistant-thread.active { background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.iv-assistant-thread.active > button:first-child { font-weight: 600; }
-.iv-assistant-thread-menu {
-  flex: none; width: 24px; height: 24px; margin-right: 2px; border: 0; border-radius: 6px; background: transparent; color: var(--muted);
-  font-size: 13px; cursor: pointer; opacity: 0; transition: opacity var(--motion-fast);
+:is(#ivAssistant, #ivDock) .iv-as-icon:hover, :is(#ivAssistant, #ivDock) .iv-as-icon[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+#ivAssistant .iv-as-search {
+  display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); color: var(--muted); transition: border-color var(--motion-fast);
 }
-.iv-assistant-thread:hover .iv-assistant-thread-menu, .iv-assistant-thread.active .iv-assistant-thread-menu, .iv-assistant-thread-menu:focus-visible { opacity: 1; }
-.iv-assistant-thread-menu:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
-.iv-assistant-note { margin: 0; padding: 6px 10px; color: var(--muted); font-size: 12.5px; }
-.iv-assistant-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.iv-assistant-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.iv-assistant-bar .iv-assistant-note { padding: 0; }
-.iv-assistant-targets { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
-.iv-assistant-targets button {
-  padding: 5px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer;
-  transition: background var(--motion-fast), color var(--motion-fast);
+#ivAssistant .iv-as-search:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+#ivAssistant .iv-as-search input {
+  flex: 1; min-width: 0; height: 100%; min-height: 0; padding: 0; border: 0; border-radius: 0; outline: none; box-shadow: none;
+  background: transparent; color: var(--ink); font-size: 13px;
 }
-.iv-assistant-targets button:hover { color: var(--ink); }
-.iv-assistant-targets button.active { background: var(--ink); color: var(--panel); font-weight: 600; }
-.iv-assistant-chat { flex: 1; min-height: 0; display: flex; }
-.iv-assistant-chat deep-chat { flex: 1; min-width: 0; height: 100%; }
-.iv-assistant-loading { margin: auto; color: var(--muted); font-size: 13.5px; }
-@media (max-width: 760px) {
-  .iv-assistant { grid-template-columns: 1fr; height: auto; }
-  .iv-assistant-side { border-right: 0; padding-right: 0; max-height: 180px; }
-  .iv-assistant-chat { height: 70vh; }
+#ivAssistant .iv-as-search input::-webkit-search-cancel-button { display: none; }
+#ivAssistant .iv-as-threads { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 1px; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+#ivAssistant .iv-as-group { margin: 12px 10px 4px; color: var(--muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; }
+#ivAssistant .iv-as-group:first-child { margin-top: 2px; }
+#ivAssistant .iv-as-thread { position: relative; display: flex; align-items: center; border-radius: 8px; }
+#ivAssistant .iv-as-thread:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+#ivAssistant .iv-as-thread.active { background: color-mix(in srgb, var(--ink) 8.5%, transparent); }
+#ivAssistant .iv-as-thread-open {
+  flex: 1; min-width: 0; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink);
+  font-size: 13.5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
 }
-.iv-assistant-targets button.active.is-agent { background: var(--accent); color: #fff; }
+#ivAssistant .iv-as-thread.active .iv-as-thread-open { font-weight: 600; }
+#ivAssistant .iv-as-thread-actions { position: absolute; right: 4px; display: none; gap: 2px; }
+#ivAssistant .iv-as-thread:is(:hover, :focus-within) .iv-as-thread-actions { display: flex; }
+#ivAssistant .iv-as-thread:is(:hover, :focus-within) .iv-as-thread-open { padding-right: 64px; }
+#ivAssistant .iv-as-thread-actions button {
+  display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer;
+}
+#ivAssistant .iv-as-thread-actions button:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink); }
+#ivAssistant .iv-as-thread-actions button[data-iv-assistant="delete"]:hover { color: #dc2626; }
+#ivAssistant .iv-as-rename {
+  flex: 1; min-width: 0; height: 30px; min-height: 0; margin: 2px 4px; padding: 0 8px; border: 1px solid var(--accent); border-radius: 6px;
+  outline: none; background: var(--panel); color: var(--ink); font-size: 13.5px;
+}
+#ivAssistant .iv-as-note { margin: 0; padding: 8px 10px; color: var(--muted); font-size: 12.5px; }
+#ivAssistant .iv-as-engine {
+  display: flex; align-items: center; gap: 7px; min-height: 18px; padding: 9px 8px 0; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#ivAssistant .iv-as-engine:empty { display: none; }
+#ivAssistant .iv-as-engine-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 18%, transparent); }
+#ivAssistant .iv-as-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#ivAssistant .iv-as-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; height: 52px; padding: 0 16px 0 22px;
+  border-bottom: 1px solid var(--line);
+}
+#ivAssistant .iv-as-title {
+  min-width: 0; margin: 0; overflow: hidden; color: var(--ink); font-family: inherit; font-size: 15px; font-style: normal; font-weight: 600;
+  letter-spacing: 0; white-space: nowrap; text-overflow: ellipsis;
+}
+:is(#ivAssistant, #ivDock) .iv-as-modes {
+  display: inline-flex; flex: none; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 3.5%, var(--panel));
+}
+:is(#ivAssistant, #ivDock) .iv-as-modes button {
+  height: 26px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: var(--muted);
+  font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+:is(#ivAssistant, #ivDock) .iv-as-modes button:hover { color: var(--ink); }
+:is(#ivAssistant, #ivDock) .iv-as-modes button.active { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--line); }
+:is(#ivAssistant, #ivDock) .iv-as-modes button.active.is-agent { color: var(--accent); }
+:is(#ivAssistant, #ivDock) .iv-as-modes.is-compact button { height: 22px; padding: 0 9px; font-size: 12px; }
+#ivAssistant .iv-as-chat { flex: 1; min-height: 0; display: flex; padding: 0 max(12px, calc((100% - 840px) / 2)); }
+#ivAssistant .iv-as-chat deep-chat, #ivDock .iv-dock-chat deep-chat { flex: 1; min-width: 0; height: 100%; }
+#ivAssistant .iv-as-foot { flex: none; margin: 0; padding: 0 16px 10px; color: var(--muted); font-size: 11.5px; text-align: center; }
+.iv-assistant-loading { margin: auto; color: var(--muted); font-size: 13px; }
+@media (max-width: 860px) {
+  #ivAssistant { grid-template-columns: 1fr; height: auto; }
+  #ivAssistant .iv-as-side { max-height: 200px; border-right: 0; border-bottom: 1px solid var(--line); }
+  #ivAssistant .iv-as-main { height: 70vh; }
+}
+
+/* ---------- AI 助手 dock: a small corner button that grows into a compact chat (corner-morph.js) ---------- */
+#ivDock {
+  --dock-closed: var(--panel);
+  --dock-hover: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  /* corner-morph animates to these */
+  --switch-bg: var(--panel);
+  --switch-line: var(--line);
+  --switch-shadow: 0 24px 64px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+  position: fixed; right: calc(18px + var(--safe-right)); bottom: calc(18px + var(--safe-bottom)); z-index: 900;
+}
+body.theme-dark #ivDock { --switch-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35); }
+/* Hidden while a practice session runs (the sidebar lock marks the title block), so it never covers the exam. */
+#ivDock[hidden], body:has(#viewTitleBlock.locked-flow) #ivDock { display: none; }
+#ivDock button { box-shadow: none; text-transform: none; letter-spacing: normal; min-height: 0; }
+#ivDock .iv-dock-trigger {
+  display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--dock-closed); color: var(--accent); cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+#ivDock .iv-dock-trigger:hover, #ivDock.is-open .iv-dock-trigger { background: var(--dock-hover); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+#ivDock .iv-dock-trigger svg { width: 17px; height: 17px; }
+#ivDock .iv-dock-card {
+  position: fixed; z-index: 901; display: flex; width: min(420px, calc(100vw - 32px)); height: min(640px, calc(100vh - 40px));
+  overflow: hidden; border: 1px solid var(--switch-line); border-radius: 16px; background: var(--switch-bg); box-shadow: var(--switch-shadow);
+}
+#ivDock .iv-dock-card[hidden] { display: none; }
+#ivDock .iv-dock-card.is-morphing { pointer-events: none; }
+#ivDock .iv-dock-body { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+#ivDock .iv-dock-head {
+  position: relative; display: flex; align-items: center; gap: 6px; flex: none; height: 48px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--line);
+}
+#ivDock .iv-dock-mark { display: grid; place-items: center; color: var(--accent); }
+#ivDock .iv-dock-title { flex: 1; min-width: 0; overflow: hidden; color: var(--ink); font-size: 13.5px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+#ivDock .iv-dock-head .iv-as-modes { margin-right: 2px; }
+#ivDock .iv-dock-menu {
+  position: absolute; top: 44px; right: 8px; z-index: 3; display: grid; grid-template-columns: minmax(0, 1fr); width: 240px; max-height: 360px; overflow-y: auto; padding: 6px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+}
+#ivDock .iv-dock-menu[hidden] { display: none; }
+#ivDock .iv-dock-menu-label { margin: 4px 8px 6px; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+#ivDock .iv-dock-menu-empty { margin: 2px 8px 6px; color: var(--muted); font-size: 12.5px; }
+#ivDock .iv-dock-menu button {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 8px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--ink); font-size: 13px; text-align: left; cursor: pointer;
+}
+#ivDock .iv-dock-menu button span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#ivDock .iv-dock-menu button svg { flex: none; color: var(--muted); }
+#ivDock .iv-dock-menu button[aria-checked="true"] { font-weight: 600; }
+#ivDock .iv-dock-menu button[aria-checked="true"] svg { color: var(--accent); }
+#ivDock .iv-dock-menu button:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+#ivDock .iv-dock-menu hr { margin: 6px 4px; border: 0; border-top: 1px solid var(--line); }
+#ivDock .iv-dock-chat { flex: 1; min-height: 0; display: flex; padding: 0 2px; }

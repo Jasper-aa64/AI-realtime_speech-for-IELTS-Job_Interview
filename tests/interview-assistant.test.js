@@ -12,7 +12,7 @@ const urls = fs.readFileSync(path.join(__dirname, "../backend_django/config/urls
 // A stand-in for the Deep Chat element: the module only sets properties on it and calls its handler.
 function harness(responses = {}) {
   const ids = {};
-  const element = (id) => ({ id, innerHTML: "", firstChild: null, children: [], appendChild(child) { this.children.push(child); },
+  const element = (id) => ({ id, innerHTML: "", textContent: "", firstChild: null, isConnected: true, children: [], appendChild(child) { this.children.push(child); },
     replaceChildren(child) { this.firstChild = child; }, addEventListener() {} });
   const document = {
     getElementById: (id) => (ids[id] ||= element(id)),
@@ -20,6 +20,7 @@ function harness(responses = {}) {
     documentElement: { classList: { contains: () => false } },
     body: {},
     querySelector: () => null,
+    querySelectorAll: () => [],
   };
   const calls = [];
   const request = async (url, body = null, options = {}) => {
@@ -41,7 +42,7 @@ function harness(responses = {}) {
     request, popup: () => {}, toast: () => {}, setCorpus: (list) => corpus.push(list), openApplied: (item) => opened.push(item),
     currentAiSourcePreference: () => "gpt",
   });
-  return { assistant, ids, calls, opened, corpus, chat: () => ids.ivAssistantChat.firstChild };
+  return { assistant, ids, calls, opened, corpus, context, chat: () => ids.ivAssistantChat.firstChild };
 }
 
 const reply = {
@@ -55,13 +56,14 @@ const reply = {
 };
 
 test("the page lists threads and mounts a Deep Chat with the chat / agent switch", async () => {
-  const env = harness({ "/api/interview/assistant/threads/": { threads: [{ id: "iat_1", title: "RAII", updated_at: "" }] } });
+  const env = harness({ "/api/interview/assistant/threads/": { threads: [{ id: "iat_1", title: "RAII", updated_at: "" }], engine: "本机 Codex · gpt-6-luna · medium" } });
   const page = env.assistant.render();
   assert.match(page, /data-mode="chat"/);
   assert.match(page, /data-mode="agent"/);
   assert.match(page, /新对话/);
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(env.ids.ivAssistantThreads.innerHTML, /RAII/);
+  assert.match(env.ids.ivAssistantEngine.innerHTML, /gpt-6-luna · medium/);
   assert.equal(env.chat().tag, "deep-chat");
   assert.equal(typeof env.chat().connect.handler, "function");
 });
@@ -81,7 +83,8 @@ test("a message goes to the assistant API with the mode; the reply carries links
   assert.match(answered.html, /&lt;SPSC&gt;/, "labels are escaped");
   assert.match(answered.html, /<span class="iv-applied is-delete"><b>✕<\/b>删除 简历题卡 · 行情网关<\/span>/, "deleted cards are not links");
   assert.match(answered.html, /class="iv-undo" data-message="iam_2"/);
-  assert.match(answered.html, /Agent 执行过程 · 2 步/);
+  assert.match(answered.html, /执行过程 · 2 步/);
+  assert.match(answered.html, /class="iv-copy" data-message="iam_2"/, "every reply can be copied");
   assert.equal(env.corpus.length, 1, "the corpus is refreshed from the reply");
   assert.match(env.ids.ivAssistantThreads.innerHTML, /SPSC 无锁原理/);
   // The next message continues the same thread.
@@ -112,6 +115,29 @@ test("undo posts to the message's undo endpoint and marks the changes undone", a
   assert.ok(env.calls.some((call) => call.url === "/api/interview/assistant/messages/iam_2/undo/" && call.method === "POST"));
   assert.match(button.outerHTML, /已撤销这些修改/);
   assert.deepEqual(agent.classes, ["is-undone"]);
+});
+
+test("copy puts the reply's Markdown on the clipboard", async () => {
+  const env = harness({ "/api/interview/assistant/threads/": { threads: [] }, "/api/interview/assistant/": reply });
+  env.assistant.render();
+  await env.chat().connect.handler({ messages: [{ role: "user", text: "整理" }] }, { onResponse: async () => {} });
+  const copied = [];
+  env.context.navigator = { clipboard: { writeText: async (value) => copied.push(value) } };
+  const added = [];
+  const button = { dataset: { message: "iam_2" }, classList: { add: (name) => added.push(name), remove() {} }, innerHTML: "", closest: () => button };
+  env.chat().htmlClassUtilities["iv-copy"].events.click({ target: button });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(copied, ["已保存。"]);
+  assert.deepEqual(added, ["is-done"]);
+});
+
+test("the dock is wired: syncDock is called from the interview router; the dock grows from the bottom-right corner", () => {
+  assert.match(interview, /assistantChat\?\.syncDock\(\{ visible:/);
+  assert.match(interview, /data\.pane === "assistant"/);
+  assert.match(source, /anchor: "bottom-right"/);
+  assert.match(source, /keepOpen: \(\) => dock\.pinned/);
+  const morph = fs.readFileSync(path.join(__dirname, "../web/static/corner-morph.js"), "utf8");
+  assert.match(morph, /anchor\.startsWith\("bottom"\)/);
 });
 
 test("the AI 助手 pane is wired into the interview nav, router and asset routes", () => {

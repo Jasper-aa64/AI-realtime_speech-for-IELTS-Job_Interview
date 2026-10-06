@@ -5,6 +5,7 @@ validates them (ai_schema) and applies them here, so the model never touches the
 change records how to reverse it, and a reply's changes can be undone as a whole.
 """
 
+from django.conf import settings
 from django.db import transaction
 
 from . import ai_services, corpus
@@ -197,8 +198,15 @@ def _thread_payload(thread):
     return {"id": thread.thread_id, "title": thread.title or "新对话", "updated_at": thread.updated_at.isoformat()}
 
 
+def _engine():
+    """What answers, for the chip in the assistant's corner: the local Codex model and its reasoning effort."""
+    if getattr(settings, "INTERVIEW_AI_SOURCE", "") != "codex_cli":
+        return ""
+    return " · ".join(part for part in ("本机 Codex", settings.CODEX_MODEL, getattr(settings, "CODEX_INTERVIEW_EFFORT", "")) if part)
+
+
 def threads(user):
-    return {"threads": [_thread_payload(t) for t in Thread.objects.filter(user=user).order_by("-updated_at")[:100]]}
+    return {"threads": [_thread_payload(t) for t in Thread.objects.filter(user=user).order_by("-updated_at")[:100]], "engine": _engine()}
 
 
 def thread_detail(user, thread_id):

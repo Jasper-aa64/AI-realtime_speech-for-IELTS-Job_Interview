@@ -45,7 +45,13 @@
       toast: (message) => toast(message),
       setCorpus: (list) => { data.corpus = list; window.IELTSInterviewHome?.refresh(); },
       openApplied: (item) => openApplied(item),
+      openPage: () => setPane("assistant"),
     }) || null;
+    // The corner dock (the assistant in miniature) is on every interview page but the AI 助手 pane itself.
+    function syncDock() {
+      assistantChat?.syncDock({ visible: state.productMode === "interview" && Boolean(state.account.authenticated)
+        && Boolean(state.desktopCapabilities?.mock_interview) && !(state.view === "interview" && data.pane === "assistant") });
+    }
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
     const pick = (pair) => copy(pair[0], pair[1]);
     const esc = (value) => escapeHtml(String(value ?? ""));
@@ -83,6 +89,7 @@
       if (byId("interviewPanel")) render({ force: true });
       window.IELTSInterviewHome?.refresh();
       ensureOverview();
+      syncDock();
     }
 
     // The shared home panel needs the interview numbers whenever interview mode is on, whatever view loaded first.
@@ -94,7 +101,7 @@
     function setProductMode(mode) {
       if (!MODES.has(mode) || (mode === "interview" && !state.desktopCapabilities?.mock_interview)) mode = "ielts";
       state.productMode = mode;
-      const name = mode === "interview" ? copy("模拟面试", "Mock Interview") : "IELTS Studio";
+      const name = mode === "interview" ? "Interview" : "IELTS Studio"; // the brand reads like "IELTS Studio", in both languages
       document.body.classList.toggle("interview-mode", mode === "interview");
       byId("interviewNav")?.classList.toggle("hidden", mode !== "interview");
       if (byId("studioModeLabel")) byId("studioModeLabel").textContent = name;
@@ -102,6 +109,7 @@
       document.querySelectorAll("[data-studio-mode]").forEach((el) => el.setAttribute("aria-checked", String(el.dataset.studioMode === mode)));
       window.IELTSInterviewHome?.apply(mode);
       if (mode === "interview") ensureOverview();
+      syncDock();
       try { localStorage.setItem(MODE_KEY, mode); } catch (_error) { /* Session-only preference. */ }
     }
 
@@ -530,11 +538,13 @@
         item.setAttribute("aria-current", active && shown ? "page" : "false");
         item.setAttribute("aria-disabled", String(data.busy));
       });
+      syncDock();
     }
 
     function syncChrome() {
       const pane = data.pane;
-      document.body.classList.toggle("interview-bare", state.view === "interview" && pane === "corpus");
+      // Corpus screens and the AI 助手 use the whole page (no title block).
+      document.body.classList.toggle("interview-bare", state.view === "interview" && (pane === "corpus" || pane === "assistant"));
       // Corpus screens sit in the IELTS corpus workspace (its chrome and the many .corpus-workspace rules) too.
       document.querySelector?.(".workspace")?.classList.toggle("interview-corpus-workspace", state.view === "interview" && pane === "corpus");
       if (state.view === "interview") document.querySelector?.(".workspace")?.classList.toggle("corpus-workspace", pane === "corpus");
