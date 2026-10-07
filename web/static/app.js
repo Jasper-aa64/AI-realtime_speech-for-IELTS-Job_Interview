@@ -866,10 +866,13 @@ function syncP1StatusPixelFlow() {
   if (shouldShow) {
     status.classList.add("p1-pixel-flow");
     if (!state.p1StatusPixelFlow) {
-      state.p1StatusPixelFlow = createPixelFlowField(status, "pressure");
+      state.p1StatusPixelFlow = createPixelFlowField(status, "grid", { themed: true });
       state.p1StatusPixelFlowHost = status;
     }
     state.p1StatusPixelFlow.play?.();
+    // Commit the hidden state (canvas at opacity 0, wash off) before turning it visible; otherwise both class changes
+    // land in one style pass, the canvas skips its fade and shows at full brightness until the wash catches up.
+    void getComputedStyle(status.querySelector(".p2-pixel-flow-canvas") || status).opacity;
     window.requestAnimationFrame(() => {
       if (p1PressureOn()) status.classList.add("p1-pixel-flow-visible");
     });
@@ -885,7 +888,7 @@ function syncP1StatusPixelFlow() {
       if (!state.p1StatusPixelFlow) {
         scheduleIdleTask(() => {
           if (state.p1StatusPixelFlow || !(p1PressureHost() || state.view === "p3") || document.querySelector(".exam-status") !== status) return;
-          state.p1StatusPixelFlow = createPixelFlowField(status, "pressure", { paused: true });
+          state.p1StatusPixelFlow = createPixelFlowField(status, "grid", { themed: true, paused: true });
           state.p1StatusPixelFlowHost = status;
         }, 600);
       }
@@ -907,9 +910,10 @@ function syncP3IntensityPixelFlow() {
   if (shouldShow) {
     box.classList.add("p3-pixel-flow");
     if (!state.p3IntensityPixelFlow) {
-      state.p3IntensityPixelFlow = createPixelFlowField(box, "pressure", { reverse: true });
+      state.p3IntensityPixelFlow = createPixelFlowField(box, "grid", { reverse: true, themed: true });
     }
     state.p3IntensityPixelFlow.play?.();
+    void getComputedStyle(box.querySelector(".p2-pixel-flow-canvas") || box).opacity; // commit opacity 0 first (see header)
     window.requestAnimationFrame(() => {
       if (state.view === "p3" && !state.practiceLocked && state.p3Intensity === "high") {
         box.classList.add("p3-pixel-flow-visible");
@@ -926,7 +930,7 @@ function syncP3IntensityPixelFlow() {
       if (!state.p3IntensityPixelFlow) {
         scheduleIdleTask(() => {
           if (state.p3IntensityPixelFlow || state.view !== "p3" || state.practiceLocked) return;
-          state.p3IntensityPixelFlow = createPixelFlowField(box, "pressure", { reverse: true, paused: true });
+          state.p3IntensityPixelFlow = createPixelFlowField(box, "grid", { reverse: true, themed: true, paused: true });
         }, 600);
       }
     } else {

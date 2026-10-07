@@ -47252,39 +47252,65 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
 #ivDock .iv-composer { border-color: var(--dock-line); background: var(--dock-raised); box-shadow: none; }
 #ivDock[data-tone="light"] .iv-composer { background: color-mix(in srgb, var(--ink) 3%, #fff); }
 
-/* ---------- 追问压力 pixel flow (createPixelFlowField "grid" with themed, canvas.is-themed) ----------
-   Same flow as before: dense and bright at one edge, thinning out toward the other. No ignite keyframes (the bright
-   flash at switch-on); the canvas just fades in. Dark keeps its look (navy slab, glow filter). Light keeps the header
-   light with a faint cool tint and draws deeper pixels unfiltered; a soft wash behind the title, ink text. */
+/* ---------- 追问压力 pixel flow (canvas.is-themed): the same look in light and dark ----------
+   No ignite keyframes (the bright flash at switch-on). Switching on, the navy backdrop and the darkening wash arrive
+   fast (260ms) and only the pixels fade in slowly, so it never shows bright pixels on the page first and then darkens;
+   switching off keeps the slow 1180ms fade (set on the persistent classes). */
 body:not(#_):not(#__) .p2-pixel-flow-canvas.is-themed {
-  /* no ignite flash; the canvas fades in on the same 1180ms curve as the dark wash over it, so it never shows
-     brighter first and then dims */
   animation: none !important;
-  transition: opacity 1180ms ease !important;
 }
-body:not(.theme-dark):not(#_):not(#__) .p2-pixel-flow-canvas.is-themed {
-  filter: none !important;
+/* the pre-built (paused) canvas rests at opacity 0, so switching on is one 0 → 1 fade; resting at 1 it would show at
+   full brightness the moment it plays and only then start its fade */
+body:not(#_) .p2-pixel-flow-canvas.is-themed {
+  opacity: 0;
 }
-body:not(.theme-dark):not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible,
-body:not(.theme-dark):not(#_):not(#__) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row.p3-pixel-flow-visible {
-  background-color: color-mix(in srgb, #0891b2 4%, var(--panel)) !important;
+body:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow.p1-pixel-flow-visible,
+body:not(#_):not(#__) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row.p3-pixel-flow.p3-pixel-flow-visible {
+  transition: background-color 260ms ease !important;
+}
+body:not(#_) .exam-status.p1-pixel-flow.p1-pixel-flow-visible::before,
+body:not(#_) .p3-mode-row.p3-pixel-flow.p3-pixel-flow-visible::after {
+  transition: opacity 260ms ease, background 260ms ease !important;
+}
+
+/* 标准 / 追问 hint beside the switch (「每题最多追问一次」 / 「面试官会连续追问」): readable size and contrast */
+body:not(#_):not(#__) #practicePanel .p1-mode-help {
+  --p1-help-opacity: 1;
+  font-size: 13px !important;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--ink) 80%, transparent) !important;
+}
+body:not(#_):not(#__):not(#___) #practicePanel .exam-status.p1-pixel-flow-visible .p1-mode-help {
+  color: #f1f5f9 !important;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.55) !important;
+}
+
+/* light theme: the 追问压力 pixels a touch brighter and the navy wash over them lighter, so the flow reads clearly */
+body:not(.theme-dark):not(#_):not(#__) :is(.exam-status.p1-pixel-flow, .p3-mode-row.p3-pixel-flow) .p2-pixel-flow-canvas.is-themed {
+  filter: saturate(2.3) brightness(2.6) contrast(1.2) !important;
 }
 body:not(.theme-dark):not(#_) .exam-status.p1-pixel-flow::before,
 body:not(.theme-dark):not(#_) .p3-mode-row.p3-pixel-flow::after {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--panel) 58%, transparent) 0%, transparent 28%, transparent 100%) !important;
+  background:
+    linear-gradient(90deg, rgba(8, 14, 24, 0.3), rgba(8, 14, 24, 0) 40%, rgba(8, 14, 24, 0.2)),
+    rgba(6, 16, 28, 0.14) !important;
 }
-body:not(.theme-dark):not(#_) .p3-mode-row.p3-pixel-flow::after {
-  background: linear-gradient(270deg, color-mix(in srgb, var(--panel) 58%, transparent) 0%, transparent 28%, transparent 100%) !important;
+
+/* 还没有报告 card in the report rail: the size of a normal report card, plain white (panel in dark), no glow */
+body:not(#_):not(#__) .history-list .report-empty-rail-card {
+  width: 200px !important;
+  min-width: 200px !important;
+  max-width: 200px !important;
+  min-height: 118px;
+  padding: 14px 16px !important;
+  border: 1px solid var(--line) !important;
+  background: #fff !important;
+  background-image: none !important;
+  box-shadow: none !important;
 }
-body:not(.theme-dark):not(#_):not(#__):not(#___) #practicePanel .exam-status.p1-pixel-flow-visible :is(#progressTrack, #examStatusText strong) {
-  color: var(--ink) !important;
-  text-shadow: 0 0 12px var(--panel), 0 0 3px var(--panel) !important;
+body.theme-dark:not(#_):not(#__) .history-list .report-empty-rail-card {
+  background: var(--panel) !important;
 }
-body:not(.theme-dark):not(#_):not(#__):not(#___) #practicePanel .exam-status.p1-pixel-flow-visible :is(#phaseLabel, .p1-mode-help, #examStatusText span) {
-  color: var(--muted) !important;
-  text-shadow: 0 0 8px var(--panel) !important;
-}
-body:not(.theme-dark):not(#_):not(#__):not(#___) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row.p3-pixel-flow-visible :is(.p3-launch-label, .p3-mode-help) {
-  color: var(--ink) !important;
-  text-shadow: 0 0 8px var(--panel) !important;
+body:not(#_):not(#__) .history-list .report-empty-rail-card :is(strong, small) {
+  white-space: normal;
 }

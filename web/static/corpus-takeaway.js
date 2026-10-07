@@ -2956,25 +2956,21 @@
       // time so the first switch to 追问压力 has nothing heavy left to do.
       let paused = options && options.paused === true;
       const canvas = document.createElement("canvas");
-      // themed (the 追问压力 headers): light theme draws its own deeper palette; CSS leaves that canvas unfiltered.
-      const themed = options && options.themed === true;
-      canvas.className = mode === "pressure" || themed ? "p2-pixel-flow-canvas is-themed" : "p2-pixel-flow-canvas";
+      // themed: the 追问压力 headers' canvas (CSS drops the old ignite flash for it; same look in both themes)
+      canvas.className = options && options.themed === true ? "p2-pixel-flow-canvas is-themed" : "p2-pixel-flow-canvas";
       if (paused) canvas.style.visibility = "hidden";
       host.appendChild(canvas);
       const ctx = canvas.getContext("2d");
       const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
-      const rgbOf = (hex) => {
-        const n = parseInt(hex.slice(1), 16);
-        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-      };
-      // Dark theme: pale pastels glowing on the dark backdrop. Light theme (themed headers): the same hues deeper, so
-      // the pixels read on the light header instead of washing out (and no white crest blend there).
-      const palette = ["#5eead4", "#34d399", "#22d3ee", "#7dd3fc", "#93c5fd", "#a5b4fc", "#c4b5fd"].map(rgbOf);
-      const lightPalette = ["#14b8a6", "#10b981", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1", "#8b5cf6"].map(rgbOf);
+      const palette = ["#5eead4", "#34d399", "#22d3ee", "#7dd3fc", "#93c5fd", "#a5b4fc", "#c4b5fd"]
+        .map((hex) => {
+          const n = parseInt(hex.slice(1), 16);
+          return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        });
       const cell = 9;  // logical px per grid cell (block + gap) → small, dense pixels
       const block = 7; // painted grid square size
       // Stable per-cell colour + phase so the grid shimmers without flickering.
-      const colorAt = (c, r, pal = palette) => pal[(c * 7 + r * 13 + ((c * r) % 5)) % pal.length];
+      const colorAt = (c, r) => palette[(c * 7 + r * 13 + ((c * r) % 5)) % palette.length];
       // Well-distributed per-cell random (no row/column structure → no diagonal).
       const hash = (c, r) => { const s = Math.sin(c * 127.1 + r * 311.7) * 43758.5453; return s - Math.floor(s); };
       // Deterministic fragment pool for scatter mode. Positions use the R2
@@ -3002,7 +2998,6 @@
       let start = 0;
       // Per-cell / per-column values that never change with time, rebuilt on resize (drawGrid only does the waves).
       let cellRnd = new Float32Array(0);
-      let cellKeep = new Float32Array(0);  // light variant: each cell's own density threshold
       let colSoft = new Float32Array(0);
       let colWhite = new Float32Array(0);
       let colFlow = new Float32Array(0);
@@ -3038,11 +3033,8 @@
         canvas.style.width = `${w}px`;
         canvas.style.height = `${h}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        if (mode === "pressure") texture = null;  // rebaked at the new size on the next frame
         cellRnd = new Float32Array(cols * rows);
         for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) cellRnd[r * cols + c] = hash(c, r);
-        cellKeep = new Float32Array(cols * rows);
-        for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) cellKeep[r * cols + c] = hash(c + 71, r + 37);
         colSoft = new Float32Array(cols);
         colWhite = new Float32Array(cols);
         colFlow = new Float32Array(cols);
@@ -3057,96 +3049,7 @@
         if (reduceMotion && !paused) draw(0);
       }
 
-      // ---- light theme of the 追问压力 headers ("pressure" mode): a fine dot matrix that is dense and lively at the bright edge and thins out
-      // toward the far one: one continuous field whose brightness ripples along the bar (the dark grid's waves), and a
-      // dot lights only while the light at its spot beats its own threshold, so the far side stays sparse. Lit dots grow a little and take on colour (teal → indigo). No switch-on flash (CSS fades the
-      // canvas in). Dark: glowing pastels with white crests; light: one shade deeper.
-      const DOT = 8;  // dot pitch (px)
-      const FLOW_STOPS = {
-        dark: ["#5eead4", "#22d3ee", "#7dd3fc", "#a5b4fc"].map(rgbOf),
-        light: ["#0d9488", "#0891b2", "#0369a1", "#4338ca"].map(rgbOf),
-      };
-      const stopColor = (stops, u) => {
-        const x = Math.min(0.9999, Math.max(0, u)) * (stops.length - 1);
-        const i = Math.floor(x);
-        const f = x - i;
-        const a = stops[i];
-        const b = stops[i + 1];
-        return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
-      };
-      // How much light reaches a point u (0 = bright edge, 1 = far edge): full for the first third, then easing off.
-      const envelope = (u) => (u < 0.3 ? 1 : u < 0.9 ? 1 - ((u - 0.3) / 0.6) * 0.82 : 0.18 * (1 - (u - 0.9) / 0.1));
-      let dotCols = 0;
-      let dotRows = 0;
-      let dotNoise = new Float32Array(0);
-      let dotKeep = new Float32Array(0);
-      let dotColor = [];
-      let dotEnv = new Float32Array(0);
-      let texture = null;
-      let textureDark = null;
-
-      function bakeFlowTexture(w, h, dpr) {
-        // the resting dot matrix (fading toward the far edge), drawn once per size and theme and blitted every frame
-        const dark = document.body.classList.contains("theme-dark");
-        dotCols = Math.ceil(w / DOT) + 1;
-        dotRows = Math.ceil(h / DOT) + 1;
-        dotNoise = new Float32Array(dotCols * dotRows);
-        dotKeep = new Float32Array(dotCols * dotRows);
-        for (let r = 0; r < dotRows; r += 1) {
-          for (let c = 0; c < dotCols; c += 1) {
-            dotNoise[r * dotCols + c] = hash(c + 3, r + 11);
-            dotKeep[r * dotCols + c] = hash(c + 71, r + 37);
-          }
-        }
-        const stops = dark ? FLOW_STOPS.dark : FLOW_STOPS.light;
-        dotColor = Array.from({ length: dotCols }, (_, c) => stopColor(stops, (reverse ? dotCols - 1 - c : c) / dotCols));
-        dotEnv = Float32Array.from({ length: dotCols }, (_, c) => envelope((reverse ? dotCols - 1 - c : c) / dotCols));
-        texture = document.createElement("canvas");
-        texture.width = Math.round(w * dpr);
-        texture.height = Math.round(h * dpr);
-        const tctx = texture.getContext("2d");
-        tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const ink = dark ? "148, 163, 184" : "51, 65, 85";
-        for (let c = 0; c < dotCols; c += 1) {
-          tctx.fillStyle = `rgba(${ink}, ${((dark ? 0.06 : 0.04) + (dark ? 0.12 : 0.1) * dotEnv[c]).toFixed(3)})`;
-          for (let r = 0; r < dotRows; r += 1) tctx.fillRect(c * DOT + 3, r * DOT + 3, 2, 2);
-        }
-        textureDark = dark;
-      }
-
-      function drawFlow(t, dark) {
-        if (!texture || textureDark !== dark) bakeFlowTexture(width, height, Math.min(window.devicePixelRatio || 1, 2));
-        ctx.drawImage(texture, 0, 0, width, height);
-        const peak = dark ? 0.95 : 0.85;
-        const dir = reverse ? 1 : -1;
-        for (let c = 0; c < dotCols; c += 1) {
-          // one continuous field: the same three incommensurate waves as the dark grid ripple the brightness along the
-          // bar (no travelling clumps), under the envelope that keeps the bright edge dense and the far edge sparse
-          const x = c;
-          const flow = 0.5
-            + 0.22 * Math.sin(x * 0.19 + dir * t * 5.2)
-            + 0.16 * Math.sin(x * 0.45 + dir * t * 4.1 + 2.1)
-            + 0.12 * Math.sin(x * 1.02 + dir * t * 6.3 + 0.7);
-          const colLight = dotEnv[c] * (0.5 + 0.5 * flow);
-          if (colLight < 0.06) continue;
-          const rgb = dotColor[c];
-          for (let r = 0; r < dotRows; r += 1) {
-            const i = r * dotCols + c;
-            if (colLight < dotKeep[i] * 0.8) continue;  // density follows the light: full at the bright edge, thinning out
-            const lit = Math.min(1, colLight * (0.72 + 0.56 * dotNoise[i]));
-            const crest = dark ? lit * lit * lit * 0.6 : 0;
-            const rr = (rgb[0] + (255 - rgb[0]) * crest) | 0;
-            const gg = (rgb[1] + (255 - rgb[1]) * crest) | 0;
-            const bb = (rgb[2] + (255 - rgb[2]) * crest) | 0;
-            const size = 2.4 + lit * 2.4;  // brighter dots are a little larger, around the same centre
-            const off = (DOT - size) / 2;
-            ctx.fillStyle = `rgba(${rr}, ${gg}, ${bb}, ${(0.3 + lit * (peak - 0.3)).toFixed(3)})`;
-            ctx.fillRect(c * DOT + off, r * DOT + off, size, size);
-          }
-        }
-      }
-
-      function drawGrid(t, light = false) {
+      function drawGrid(t) {
         // Soft VERTICAL band. Brightness over time comes ONLY from the moving column
         // waves (depends on c and t, never on r → never diagonal), so it reads as a
         // coherent flow, not random blinking. A static per-cell texture grains the
@@ -3154,10 +3057,8 @@
         // intensity just eases off toward the trailing edge.
         //   reverse=false (default): flow LEFT→RIGHT, bright on the LEFT  (P1 header).
         //   reverse=true:            flow RIGHT→LEFT, bright on the RIGHT (P3 box).
-        // Light (themed headers only): deeper hues at full strength, no white crests — same flow and same falloff.
-        const baseA = light ? 0.2 : 0.16;
-        const peakA = light ? 1 : 0.9;
-        const pal = light ? lightPalette : palette;
+        const baseA = 0.16;
+        const peakA = 0.9;
         // dir = -1 keeps the original rightward wave march (sin(c*k - t*w)); +1 flips
         // it to march leftward.
         const dir = reverse ? 1 : -1;
@@ -3175,17 +3076,10 @@
             const flow = colFlow[c];
             const rnd = cellRnd[r * cols + c];                     // static texture, no time → no random blink
             const lit = (0.4 + 0.6 * flow) * (0.32 + 0.68 * rnd);
-            let alpha = (baseA + (peakA - baseA) * lit) * soft;
-            if (light) {
-              // On a light page faint cells still show as a tint, so the falloff thins the cells out instead: a cell
-              // is drawn while the flow at its column beats its own threshold (dense at the bright edge, sparse toward
-              // the far one, popping in and out as the waves pass) and is drawn solid.
-              if (soft * (0.25 + 0.75 * flow) < cellKeep[r * cols + c] * 0.95) continue;
-              alpha = 0.5 + 0.45 * lit;
-            }
+            const alpha = (baseA + (peakA - baseA) * lit) * soft;
             if (alpha < 0.03) continue;
-            const rgb = colorAt(c, r, pal);
-            const wAmt = light ? 0 : Math.min(1, Math.max(0, (flow * rnd - (0.82 - 0.5 * colWhite[c])) / 0.18)) * soft;
+            const rgb = colorAt(c, r);
+            const wAmt = Math.min(1, Math.max(0, (flow * rnd - (0.82 - 0.5 * colWhite[c])) / 0.18)) * soft;
             const rr = Math.round(rgb[0] + (255 - rgb[0]) * wAmt);
             const gg = Math.round(rgb[1] + (255 - rgb[1]) * wAmt);
             const bb = Math.round(rgb[2] + (255 - rgb[2]) * wAmt);
@@ -3244,11 +3138,7 @@
         const dark = document.body.classList.contains("theme-dark");
         const t = elapsed / 1000;
         if (mode === "scatter") drawScatter(t, dark);
-        // "pressure" (the 追问压力 headers): dark keeps the original grid flow, light draws the dot-matrix flow
-        else if (mode === "pressure") {
-          if (dark) drawGrid(t);
-          else drawFlow(t, false);
-        } else drawGrid(t, themed && !dark);
+        else drawGrid(t);
       }
 
       function frame(now) {
