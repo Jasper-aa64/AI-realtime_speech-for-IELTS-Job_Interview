@@ -13,8 +13,9 @@ assert.match(
   "Light-mode brainstorm pixel canvas should keep the stronger bright filter.",
 );
 // The 追问压力 headers (P1 / P3 / interview) draw their own light palette, unfiltered, and never flash on switch-on.
-assert.match(cssSource, /\.p2-pixel-flow-canvas\.is-themed\s*{\s*animation:\s*none !important;/);
+assert.match(cssSource, /\.p2-pixel-flow-canvas\.is-themed\s*{[\s\S]{0,240}animation:\s*none !important;/);
 assert.match(cssSource, /body:not\(\.theme-dark\):not\(#_\):not\(#__\) \.p2-pixel-flow-canvas\.is-themed\s*{\s*filter:\s*none !important;/);
 assert.match(flowSource, /const lightPalette = \[/);
+assert.match(flowSource, /mode === "pressure"/);
 
 console.log("Light pixel-flow brightness regression checks passed.");
