@@ -8,6 +8,7 @@
   // IELTS Markdown editor. launchOptions(view) turns the choices into the attempt-start payload.
   const COUNTS = [3, 5, 8, 10];
   const REVERSE_MAX = 3;
+  const FOLD_AT = 4; // a picker topic card with more questions shows the first 4 (the 4th fading out) behind 展开
   const DIALOG_TEXT = "ivLaunchText";
 
   // Questions are read aloud by the examiner, so Markdown marks are dropped from a question written in the editor.
@@ -29,6 +30,7 @@
     let launch = fresh();
     let dialog = null; // { kind, group? } while the Markdown dialog is open
     let pickGroup = null; // the knowledge category whose picker is open
+    const pickOpen = new Set(); // topic cards unfolded in the open picker (long cards show FOLD_AT questions, like the P1 library)
     let bound = false;
     let loadedFor = null;
 
@@ -288,6 +290,7 @@
       const root = byId("ivPickDialog");
       if (!root) return;
       pickGroup = label;
+      pickOpen.clear();
       renderPicker();
       root.classList.remove("hidden");
     }
@@ -307,11 +310,17 @@
         if (!topics.has(topic)) topics.set(topic, []);
         topics.get(topic).push(entry);
       });
-      const card = (title, picked, count, body, toggle = "") => `
-        <article class="iv-pick-topic${picked ? " has-picked" : ""}">
+      // A card with more than FOLD_AT questions shows that many, the last fading out, and ends in a 展开 pill (P1 library style).
+      const card = (title, picked, count, body, toggle = "") => {
+        const long = count > FOLD_AT;
+        const open = pickOpen.has(title);
+        const more = long ? `<button type="button" class="iv-pick-more" data-iv-pick="fold" data-topic="${esc(title)}" aria-expanded="${open}">${open ? "收起" : `展开全部 ${count} 题`}</button>` : "";
+        return `
+        <article class="iv-pick-topic${picked ? " has-picked" : ""}${long && !open ? " is-folded" : ""}">
           <header><h4>${esc(title)}</h4><span class="iv-pick-count">${picked}/${count}</span>${toggle}</header>
-          <div class="iv-pick-rows">${body}</div>
+          <div class="iv-pick-rows">${body}</div>${more}
         </article>`;
+      };
       const cards = [...topics.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh")).map(([topic, rows]) => {
         const picked = rows.filter((entry) => launch.picked.has(pickKey(entry))).length;
         const all = picked === rows.length;
@@ -344,6 +353,9 @@
       if (action === "entry") {
         const key = target.dataset.key;
         if (launch.picked.has(key)) launch.picked.delete(key); else launch.picked.add(key);
+      } else if (action === "fold") {
+        const topic = target.dataset.topic;
+        if (pickOpen.has(topic)) pickOpen.delete(topic); else pickOpen.add(topic);
       } else if (action === "custom") {
         launch.customs[pickGroup]?.splice(Number(target.dataset.index), 1);
       } else if (action === "topic" && group) {

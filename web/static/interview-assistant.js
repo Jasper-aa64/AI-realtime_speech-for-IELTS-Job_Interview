@@ -163,8 +163,9 @@
         : message.undoable ? `<button type="button" class="iv-undo" data-message="${esc(message.id)}">${ICON.undo}<span>${esc(copy("撤销这些修改", "Undo these changes"))}</span></button>` : "";
       const rows = steps.map((step) => `<li class="is-${esc(step.kind)}"><span>${STEP_MARK[step.kind] || "·"}</span><strong>${esc(step.label)}</strong>${step.detail ? `<em>${esc(step.detail)}</em>` : ""}</li>`).join("");
       const trace = steps.length ? `<details class="iv-trace"><summary>${esc(copy(`执行过程 · ${steps.length} 步`, `Trace · ${steps.length} steps`))}</summary><ol>${rows}</ol></details>` : "";
-      return `<div class="iv-agent${message.undone ? " is-undone" : ""}">${links || undo ? `<div class="iv-applied-list">${links}${undo}</div>` : ""}
-          <div class="iv-meta"><button type="button" class="iv-copy" data-message="${esc(message.id)}" title="${esc(copy("复制回答", "Copy reply"))}">${ICON.copy}<span>${esc(copy("复制", "Copy"))}</span></button>${trace}</div></div>`;
+      // Order under a reply: what changed (+ undo), the trace, then the copy action on its own row.
+      return `<div class="iv-agent${message.undone ? " is-undone" : ""}">${links || undo ? `<div class="iv-applied-list">${links}${undo}</div>` : ""}${trace}
+          <div class="iv-meta"><button type="button" class="iv-copy" data-message="${esc(message.id)}" title="${esc(copy("复制回答", "Copy reply"))}">${ICON.copy}<span>${esc(copy("复制", "Copy"))}</span></button></div></div>`;
     }
 
     function toDeepChat(message) {
@@ -232,11 +233,11 @@
           color: ${c.muted}; font: inherit; cursor: pointer; }
         .iv-copy:hover { background: color-mix(in srgb, ${c.ink} 7%, transparent); color: ${c.ink}; }
         .iv-copy.is-done { color: ${c.accent}; }
+        .iv-trace { color: ${c.muted}; }
         .iv-trace summary { cursor: pointer; width: fit-content; list-style: none; padding: 3px 0; }
         .iv-trace summary:hover { color: ${c.ink}; }
         .iv-trace summary::-webkit-details-marker { display: none; }
         .iv-trace summary::before { content: "▸"; display: inline-block; width: 12px; transition: transform 160ms ease; }
-        .iv-trace[open] { flex-basis: 100%; }
         .iv-trace[open] summary::before { transform: rotate(90deg); }
         .iv-trace ol { margin: 4px 0 2px; padding: 0 0 0 4px; list-style: none; display: grid; gap: 3px; border-left: 2px solid ${c.line}; }
         .iv-trace li { display: flex; gap: 8px; align-items: baseline; padding-left: 10px; }
