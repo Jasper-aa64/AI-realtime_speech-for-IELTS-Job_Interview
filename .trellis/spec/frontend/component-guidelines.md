@@ -82,7 +82,8 @@ a static UI served by the local/backend API server.
   workspace switcher trigger and switcher header. It retains `studio-logo.svg`'s
   original pixel body, eyes, folds, limbs and raised right arm, with a tight
   viewBox. The bulb is omitted from the asset and positioned as an independent
-  overlay 4 CSS pixels below its original relation to the raised hand. Reuse the
+  overlay 6 CSS pixels below and 2 pixels left of its original relation to the
+  raised hand. Reuse the
   existing `fuBulbPop` / `fuBulbRay` 650ms bounce and ray reveal, then hold the bulb
   and rays visible with no repeating translation / rotation. Only the shared
   keyframes' final opacity / transform accept CSS variables; their defaults must

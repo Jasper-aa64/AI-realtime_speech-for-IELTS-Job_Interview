@@ -47422,7 +47422,7 @@ body:not(#_) .shell .nav .brand-logo > .brand-mark {
 body:not(#_) .shell .nav .brand-bulb {
   /* Match the original mascot's bulb / raised-hand coordinates after its tight viewBox crop. */
   position: absolute; z-index: 1;
-  top: calc(var(--brain-size) * -0.24643 + 4px); right: calc(var(--brain-size) * -0.28571);
+  top: calc(var(--brain-size) * -0.24643 + 6px); right: calc(var(--brain-size) * -0.28571 + 2px);
   display: block; width: calc(var(--brain-size) * 0.42857); height: calc(var(--brain-size) * 0.46429); min-width: 0;
   pointer-events: none; opacity: 0; transform: translateY(8px) scale(0.2);
   transform-origin: center bottom; line-height: 0;

@@ -21,6 +21,6 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "Final refinement complete: bulb lowered another2px(total4px), reuses existing fuBulbPop/fuBulbRay650ms with brand-only held end state; original follow-up defaults preserved.116frontend tests, review, syntax/diff and native visual check pass. Unrelated changes preserved.",
+  "notes": "Latest placement done: shared bulb down another2px andleft2px(totaldown6px,left2px). Existing reused animation unchanged. Reviewer and diffcheck pass; stylecache8. Unrelated changes preserved.",
   "meta": {}
 }

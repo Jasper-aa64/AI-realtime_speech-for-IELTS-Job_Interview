@@ -39,3 +39,6 @@ User asks to lower bulb again and reuse an existing in-interface bulb animation.
 
 ### Reused animation validation
 Existing 116 frontend tests pass after the shared keyframe change. Reviewer confirms unchanged follow-up default frames and brand-only visible ending overrides; syntax/diff checks pass. Native CUA refreshed the app, opened the workspace switcher, and confirmed the bulb sits at its lower raised-hand position with no bobbing after the pop. Saved reused-bulb-animation.png in chat outputs and closed the menu.
+
+## Placement adjustment
+Move the shared brand bulb down another 2 CSS pixels (total +6px from original alignment) and left by 2 CSS pixels (add +2px to right). Apply consistently to all three top-left positions. Preserve reused animation, no other behavior changes. Refresh stylesheet cache.
