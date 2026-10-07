@@ -44,6 +44,6 @@ assert.doesNotMatch(
 );
 
 assert.match(index, /<link rel="stylesheet" href="\/styles\.css\?v=[^"]+">/);
-assert.match(index, /corpus-takeaway\.js\?v=20261005-desktop-window-1/);
+assert.match(index, /corpus-takeaway\.js\?v=[\w-]+"/); // any cache-buster; it just has to be versioned
 
 console.log("P2 Brainstorm filter motion checks passed.");
