@@ -8653,7 +8653,9 @@ body.theme-dark .p2-brainstorm-entry-card[data-category="brainstorm"] > header >
   z-index: 3;
 }
 
-.p2-brainstorm-open-card {
+/* Keep the P2 home card on its resting surface throughout interaction. */
+.p2-brainstorm-open-card,
+.p2-brainstorm-entry-card > .p2-brainstorm-open-card:is(:hover, :focus-visible) {
   flex: 1 1 auto;
   overflow: hidden;
   isolation: isolate;
@@ -8679,6 +8681,11 @@ body.theme-dark .p2-brainstorm-entry-card[data-category="brainstorm"] > header >
     linear-gradient(135deg, color-mix(in srgb, var(--cat-light) 78%, #fff) 0%, #fff 76%),
     radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--cat-mid) 44%, transparent), transparent 34%);
   outline: none;
+}
+
+.p2-brainstorm-entry-card > .p2-brainstorm-open-card:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--ink) 55%, transparent);
+  outline-offset: -3px;
 }
 
 .p2-brainstorm-card-mark {
@@ -21849,6 +21856,7 @@ body.theme-dark .p2-topic-material-list button.has-corpus {
 }
 
 body.theme-dark .p2-brainstorm-open-card,
+body.theme-dark .p2-brainstorm-entry-card > .p2-brainstorm-open-card:is(:hover, :focus-visible),
 body.theme-dark .p2-brainstorm-row,
 body.theme-dark .p2-brainstorm-input {
   background: var(--dark-surface);

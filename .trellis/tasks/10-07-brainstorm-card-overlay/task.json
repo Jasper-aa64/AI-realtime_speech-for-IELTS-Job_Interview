@@ -1,0 +1,29 @@
+{
+  "id": "brainstorm-card-overlay",
+  "name": "brainstorm-card-overlay",
+  "title": "Remove green overlay from Brainstorm card interaction",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "codex",
+  "assignee": "codex",
+  "createdAt": "2026-10-07",
+  "completedAt": "2026-10-07",
+  "branch": "ui-polish",
+  "base_branch": "ui-polish",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "web/static/styles.css",
+    "web/static/index.html"
+  ],
+  "notes": "Scoped background parity for home card hover/focus in light and dark; inset keyboard focus outline. Independent cascade review and git diff check passed. Native app reloaded and resting card visually inspected; hover/focus states verified by cascade review. No new reusable convention to add.",
+  "meta": {}
+}
