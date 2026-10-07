@@ -55,6 +55,12 @@
     attach: svg('<path d="m20.5 11.5-8.3 8.3a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>', 17),
     send: svg('<path d="M12 19V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/>', 17),
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 12),
+    // The corner button: the studio mascot's brain body (assets/brand/studio-logo.svg) redrawn square to fill the
+    // button — its pink, fold lines and pixel eyes in the logo's colours; the button's rounded corners replace the
+    // stepped ones and its border is the logo's outline pink.
+    brain: '<svg class="iv-brain" viewBox="0 0 20 20" aria-hidden="true" shape-rendering="crispEdges"><rect width="20" height="20" fill="#f6bcca"/>'
+      + '<path d="M10 3.2V16.8M4.2 5.6H7.2M12.8 5.6H15.8M3.8 14.4H6.8M13.2 14.4H16.2" fill="none" stroke="#b15775" stroke-width="1.2" opacity="0.85"/>'
+      + '<g class="iv-brain-eyes" fill="#3a2530"><rect x="5.6" y="9" width="2" height="2"/><rect x="12.4" y="9" width="2" height="2"/></g></svg>',
   };
   const MAX_FILES = 6;
   const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -790,7 +796,7 @@
       root.className = "iv-dock";
       root.hidden = true;
       root.innerHTML = `
-        <button type="button" id="ivDockTrigger" class="iv-dock-trigger" aria-label="${esc(copy("AI 助手", "AI assistant"))}" aria-expanded="false" aria-controls="ivDockCard" title="${esc(copy("AI 助手", "AI assistant"))}">${ICON.spark}</button>
+        <button type="button" id="ivDockTrigger" class="iv-dock-trigger" aria-label="${esc(copy("AI 助手", "AI assistant"))}" aria-expanded="false" aria-controls="ivDockCard" title="${esc(copy("AI 助手", "AI assistant"))}">${ICON.brain}</button>
         <section id="ivDockCard" class="iv-dock-card" role="dialog" aria-label="${esc(copy("AI 助手", "AI assistant"))}" hidden>
           <div class="iv-dock-body">
             <header class="iv-dock-head">

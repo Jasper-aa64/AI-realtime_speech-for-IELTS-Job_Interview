@@ -47386,3 +47386,42 @@ body:not(#_):not(#__):not(#___) #practicePanel .exam-status #examStatusText {
 body:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-status.p1-pixel-flow-visible #examStatusText {
   background: rgba(6, 12, 22, 0.36);
 }
+
+/* AI 助手 corner button: the mascot's brain body fills it (ICON.brain), outlined in the logo's darker pink; the dock
+   card grows out of the same pink (corner-morph reads --dock-closed / --dock-hover); the eyes blink now and then */
+#ivDock {
+  --dock-closed: #f6bcca;
+  --dock-hover: #f9cbd6;
+}
+body:not(#_) #ivDock .iv-dock-trigger {
+  overflow: hidden;
+  padding: 0;
+  border: 1.5px solid #c46d87;
+  background: #f6bcca;
+  box-shadow: 0 1px 2px rgba(124, 79, 93, 0.25), 0 8px 18px rgba(124, 79, 93, 0.22);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+body:not(#_) #ivDock .iv-dock-trigger:hover,
+body:not(#_) #ivDock.is-open .iv-dock-trigger {
+  background: #f9cbd6;
+  border-color: #b15775;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(124, 79, 93, 0.25), 0 12px 24px rgba(124, 79, 93, 0.26);
+}
+body:not(#_) #ivDock .iv-dock-trigger svg.iv-brain {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+#ivDock .iv-brain-eyes rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ivBrainBlink 5.6s ease-in-out infinite;
+}
+#ivDock .iv-brain-eyes rect + rect { animation-delay: 0.04s; }
+@keyframes ivBrainBlink {
+  0%, 91%, 100% { transform: scaleY(1); }
+  94% { transform: scaleY(0.15); }
+  97% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) { #ivDock .iv-brain-eyes rect { animation: none; } }
