@@ -47314,3 +47314,33 @@ body.theme-dark:not(#_):not(#__) .history-list .report-empty-rail-card {
 body:not(#_):not(#__) .history-list .report-empty-rail-card :is(strong, small) {
   white-space: normal;
 }
+
+/* P3 训练强度 box: the hint under the switch (「每个主问题后追加追问…」) and the step label read clearly — a sans face at a
+   readable size; on the 追问压力 pixel flow the hint sits on a small dark pill, white, so the pixels never cut through it */
+body:not(#_):not(#__):not(#___) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row :is(.p3-mode-help, .p3-launch-label) {
+  font-family: "PingFang SC", "Hiragino Sans GB", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif !important;
+  letter-spacing: 0.02em !important;
+}
+body:not(#_):not(#__):not(#___) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row .p3-mode-help {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+}
+body:not(#_):not(#__):not(#___) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row .p3-launch-label {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+body:not(#_):not(#__):not(#___):not(#____) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row.p3-pixel-flow-visible .p3-mode-help {
+  align-self: center;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(6, 12, 22, 0.62);
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45) !important;
+}
+body:not(#_):not(#__):not(#___):not(#____) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row.p3-pixel-flow-visible .p3-launch-label {
+  color: #f1f5f9 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) !important;
+}
