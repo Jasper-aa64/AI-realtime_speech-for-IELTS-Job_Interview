@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component scope and focus"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality verification"}
+{"file": "docs/frontend-ui-conventions.md", "reason": "UI conventions"}

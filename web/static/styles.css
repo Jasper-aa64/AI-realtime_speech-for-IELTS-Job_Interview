@@ -47420,6 +47420,8 @@ body:not(#_) .shell .nav .brand-logo {
   position: relative; display: inline-flex; flex: 0 0 var(--brain-size);
   width: var(--brain-size); height: var(--brain-size); min-width: var(--brain-size);
   overflow: visible; line-height: 0; isolation: isolate;
+  /* Shrink the paired mascot and bulb visually, retaining their reserved space and alignment. */
+  transform: scale(0.92); transform-origin: center;
 }
 body:not(#_) .shell .nav .brand-logo > .brand-mark {
   display: block; flex: none; box-sizing: border-box;
