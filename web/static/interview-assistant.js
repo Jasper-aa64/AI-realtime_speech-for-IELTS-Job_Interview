@@ -52,7 +52,13 @@
     copy: svg('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>', 14),
     check: svg('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 14),
     undo: svg('<path d="M3 12a9 9 0 1 0 2.64-6.36L3 8.3"/><path d="M3 3.5v4.8h4.8"/>', 14),
+    attach: svg('<path d="m20.5 11.5-8.3 8.3a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>', 17),
+    send: svg('<path d="M12 19V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/>', 17),
+    close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 12),
   };
+  const MAX_FILES = 6;
+  const MAX_FILE_BYTES = 8 * 1024 * 1024;
+  const CHARACTER_LIMIT = 8000;
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -82,7 +88,12 @@
     let epoch = 0;
     let chat = null; // the Deep Chat element, in whichever host is showing
     let dock = null; // { root, morph, pinned }
-    let pendingInput = ""; // text placed in the composer of the next new chat (简历 / JD 定制)
+    // The composer is ours (Deep Chat's own input is hidden): one draft per host, so the page and the dock each keep
+    // what was typed and attached; a send goes through chat.submitUserMessage({text, files}).
+    const drafts = { page: { text: "", files: [] }, dock: { text: "", files: [] } };
+    let busy = false; // a reply is on its way; the composer stays editable but cannot send
+    let tones = ""; // the palette the current chat was built with
+    let restyle = false; // the appearance changed while a reply was on its way
     let balance = null; // wallet balance (u); every reply is charged by its token usage
     let lastCost = null;
     const yuan = (amount, digits = 2) => `¥${(Number(amount || 0) / 1_000_000).toFixed(digits)}`;
@@ -189,6 +200,19 @@
 
     function auxiliaryStyle(c, compact) {
       return `
+        #input { display: none !important; }
+        #messages { padding: ${compact ? "4px 14px 12px" : "12px max(20px, calc((100% - 760px) / 2)) 28px"}; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, ${c.ink} 18%, transparent) transparent; }
+        .iv-assistant-intro { margin: auto; }
+        .iv-example { display: grid; gap: 6px; align-content: start; padding: ${compact ? "10px 12px" : "14px 16px"}; border: 1px solid ${c.line}; border-radius: 12px;
+          background: transparent; color: ${c.ink}; text-align: left; font: inherit; font-size: ${compact ? 12.5 : 13.5}px; line-height: 1.55; cursor: pointer;
+          transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease; }
+        .iv-example:hover { border-color: color-mix(in srgb, ${c.ink} 28%, ${c.line}); background: color-mix(in srgb, ${c.ink} 4%, transparent); }
+        .iv-example:active { transform: translateY(1px); }
+        .iv-example:focus-visible { outline: 2px solid color-mix(in srgb, ${c.accent} 70%, transparent); outline-offset: 2px; }
+        .iv-example-mode { justify-self: start; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, #0ea5e9 14%, transparent); color: ${c.muted};
+          font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+        .iv-example-mode.is-agent { background: color-mix(in srgb, #f97316 16%, transparent); }
+        .iv-example-text { color: ${c.ink}; }
         .iv-agent { display: grid; gap: 6px; margin-top: 2px; font-size: ${compact ? 12.5 : 13}px; line-height: 1.5; }
         .iv-applied-list { display: flex; flex-wrap: wrap; gap: 6px; }
         .iv-applied { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid color-mix(in srgb, ${c.accent} 40%, ${c.line});
@@ -243,19 +267,20 @@
       intro.className = "iv-assistant-intro";
       intro.style.cssText = `display:grid;justify-items:center;gap:${compact ? 8 : 10}px;text-align:center;padding:${compact ? "12px 14px" : "24px 12px"};max-width:640px;width:100%;box-sizing:border-box;font-family:inherit`;
       const shown = compact ? examples().slice(0, 2) : examples();
-      const note = MODES.find((item) => item.id === mode).note;
       intro.innerHTML = `
         <div style="width:${compact ? 34 : 44}px;height:${compact ? 34 : 44}px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb, ${c.accent} 14%, ${c.panel});color:${c.accent}">${ICON.spark}</div>
         <div style="font-size:${compact ? 16 : 21}px;font-weight:650;color:${c.ink}">${esc(copy("有什么想问的？", "What would you like to ask?"))}</div>
-        <div style="font-size:${compact ? 12.5 : 13.5}px;color:${c.muted};line-height:1.6;max-width:460px">${esc(copy(`当前是${mode === "agent" ? " Agent 模式" : "聊天模式"}：${note[0]}。`, `${mode === "agent" ? "Agent" : "Chat"} mode: ${note[1]}.`))}</div>
+        <div style="font-size:${compact ? 12.5 : 13.5}px;color:${c.muted};line-height:1.6;max-width:460px">${esc(domain() === "ielts"
+          ? copy("问口语和写作，或让 Agent 帮你写语料。", "Ask about speaking and writing, or let Agent write corpus items.")
+          : copy("问技术题和项目怎么讲，或让 Agent 帮你整理语料。", "Ask technical questions, or let Agent tidy your corpus."))}</div>
         <div style="display:grid;grid-template-columns:${compact ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:8px;width:100%;margin-top:${compact ? 4 : 10}px">
-          ${shown.map((item, index) => `<button type="button" data-example="${index}" style="padding:${compact ? "9px 12px" : "12px 14px"};border:1px solid ${c.line};border-radius:10px;background:${c.panel};color:${c.ink};text-align:left;font:inherit;font-size:${compact ? 12.5 : 13.5}px;line-height:1.5;cursor:pointer"><span style="display:block;font-size:11px;color:${c.muted};margin-bottom:2px">${item.mode === "agent" ? "Agent" : copy("聊天", "Chat")}</span>${esc(copy(item.zh, item.en))}</button>`).join("")}
+          ${shown.map((item, index) => `<button type="button" class="iv-example" data-example="${index}"><span class="iv-example-mode${item.mode === "agent" ? " is-agent" : ""}">${item.mode === "agent" ? "Agent" : copy("聊天", "Chat")}</span><span class="iv-example-text">${esc(copy(item.zh, item.en))}</span></button>`).join("")}
         </div>`;
       intro.addEventListener("click", (event) => {
         const example = examples()[Number(event.target.closest?.("[data-example]")?.dataset.example)];
         if (!example || !chat) return;
         setMode(example.mode);
-        chat.submitUserMessage({ text: copy(example.zh, example.en) });
+        fillComposer(compact ? "dock" : "page", copy(example.zh, example.en));
       });
       return intro;
     }
@@ -279,37 +304,13 @@
                               styles: { bubble: { backgroundColor: "transparent", padding: "6px 0" } } } },
         error: { bubble: { backgroundColor: dark ? "#3a1d1d" : "#fef2f2", color: dark ? "#fecaca" : "#b91c1c", borderRadius: "10px", fontSize: "13px" } },
       };
-      el.textInput = {
-        characterLimit: 8000,
-        placeholder: { text: compact ? copy("问点什么…", "Ask something…")
-          : domain() === "ielts" ? copy("问一个口语 / 写作问题，或贴一段你的回答…", "Ask about speaking / writing, or paste an answer…")
-          : copy("问一个问题，或粘贴一段经历 / JD…", "Ask, or paste an experience / a JD…"), style: { color: c.muted } },
-        styles: {
-          container: { width: compact ? "calc(100% - 24px)" : "calc(100% - 48px)", maxHeight: compact ? "140px" : "220px", border: `1px solid ${c.line}`, borderRadius: compact ? "12px" : "14px",
-                       backgroundColor: compact ? `color-mix(in srgb, ${c.ink} 4%, ${c.panel})` : c.panel,
-                       boxShadow: compact ? "none" : "0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06)", padding: "2px 42px 2px 38px" },
-          text: { color: c.ink, padding: compact ? "8px 10px" : "11px 12px", fontSize: size },
-          focus: { border: `1px solid color-mix(in srgb, ${c.accent} 70%, ${c.line})` },
-        },
-      };
-      const round = { borderRadius: "8px", width: "28px", height: "28px", padding: "3px", marginBottom: compact ? "3px" : "5px", marginRight: "5px" };
-      el.submitButtonStyles = {
-        position: "inside-end",
-        submit: { container: { default: { ...round, backgroundColor: c.ink } }, svg: { styles: { default: { filter: dark ? "none" : "invert(1)" } } } },
-        loading: { container: { default: { ...round, backgroundColor: "transparent" } } },
-        disabled: { container: { default: { ...round, backgroundColor: c.line } } },
-      };
-      el.inputAreaStyle = { backgroundColor: "transparent", padding: compact ? "6px 0 10px" : "8px 0 6px" };
-      // PDF (resumes, JDs; scanned ones are read as images) and images, by the paperclip or by dropping them on the chat.
-      el.mixedFiles = {
-        files: { acceptedFormats: ACCEPTED_FILES, maxNumberOfFiles: 6 },
-        button: { position: "inside-start", styles: { container: { default: { width: "28px", height: "28px", marginBottom: compact ? "3px" : "5px", marginLeft: "4px", borderRadius: "8px" },
-                                                                    hover: { backgroundColor: `color-mix(in srgb, ${c.ink} 8%, transparent)` } },
-                                                       svg: { styles: { default: { filter: dark ? "invert(0.85)" : "none", opacity: "0.65" } } } } },
-      };
-      el.dragAndDrop = { backgroundColor: `color-mix(in srgb, ${c.accent} 12%, ${c.panel})`, border: `2px dashed ${c.accent}`, borderRadius: "14px" };
-      if (pendingInput && !history.length) { el.defaultInput = { text: pendingInput }; pendingInput = ""; }
-      el.scrollButton = true;
+      // Deep Chat's own input row is hidden (auxiliaryStyle); messages arrive from our composer via submitUserMessage.
+      el.textInput = { characterLimit: CHARACTER_LIMIT };
+      el.inputAreaStyle = { display: "none" };
+      // Accepting files makes Deep Chat show them in the user bubble and hand the handler FormData.
+      el.mixedFiles = { files: { acceptedFormats: ACCEPTED_FILES, maxNumberOfFiles: MAX_FILES } };
+      el.dragAndDrop = false;
+      el.scrollButton = false;
       el.errorMessages = { displayServiceErrorMessages: true };
       el.auxiliaryStyle = auxiliaryStyle(c, compact);
       el.htmlClassUtilities = {
@@ -333,11 +334,174 @@
       if (!force && chat && chat.parentElement === host && chat.dataset.owner === owner) return;
       chat = buildChat(host.id === "ivDockChat");
       chat.dataset.owner = owner;
+      tones = JSON.stringify(palette());
       host.replaceChildren(chat);
+      attachComposer(host.id === "ivDockChat" ? "dock" : "page");
     }
 
     function pageHost() { const el = byId("ivAssistantChat"); return el?.isConnected ? el : null; }
     function activeHost() { return pageHost() || (dock?.morph.isOpen() ? byId("ivDockChat") : null); }
+
+    // ---- Composer: textarea that grows with its text, attachment chips, a toolbar with the paperclip, the sliding
+    // 聊天 / Agent switch and the send button. Files come from the paperclip, a paste, or a drop anywhere on the column.
+    const composerSlot = (key) => byId(key === "dock" ? "ivDockComposer" : "ivAssistantComposer");
+    const composerOf = (key) => { const slot = composerSlot(key); return slot?.isConnected && slot.firstElementChild?.dataset?.composer === key ? slot.firstElementChild : null; };
+    const fileSize = (bytes) => bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    const placeholder = (key) => key === "dock" ? copy("问点什么，或拖入图片 / PDF", "Ask something, or drop an image / PDF")
+      : domain() === "ielts" ? copy("问一个口语 / 写作问题，或贴一段你的回答", "Ask about speaking / writing, or paste an answer")
+      : copy("问一个问题，粘贴一段经历 / JD，或附上简历", "Ask, paste an experience / a JD, or attach your resume");
+    const modeNote = () => copy(...MODES.find((item) => item.id === mode).note);
+
+    function attachComposer(key) {
+      const slot = composerSlot(key);
+      if (!slot?.isConnected || typeof slot.replaceChildren !== "function" || composerOf(key)) return;
+      slot.replaceChildren(buildComposer(key));
+      syncComposer(key);
+    }
+
+    function buildComposer(key) {
+      const draft = drafts[key];
+      const root = document.createElement("form");
+      root.className = `iv-composer${key === "dock" ? " is-compact" : ""}`;
+      root.dataset.composer = key;
+      root.noValidate = true;
+      root.innerHTML = `
+        <div class="iv-composer-files" hidden></div>
+        <textarea class="iv-composer-input" rows="1" maxlength="${CHARACTER_LIMIT}" placeholder="${esc(placeholder(key))}" aria-label="${esc(copy("输入消息", "Message"))}"></textarea>
+        <div class="iv-composer-bar">
+          <button type="button" class="iv-composer-tool" data-composer="attach" title="${esc(copy("添加图片或 PDF（也可以粘贴或拖进来）", "Add images or PDFs (paste or drop works too)"))}" aria-label="${esc(copy("添加附件", "Attach files"))}">${ICON.attach}</button>
+          <div class="iv-mode-switch" data-iv-modes data-mode="${mode}" role="radiogroup" aria-label="${esc(copy("模式", "Mode"))}">${modeButtons()}</div>
+          ${key === "dock" ? "" : `<span class="iv-composer-note" data-iv-mode-note>${esc(modeNote())}</span>`}
+          <span class="iv-composer-count" hidden></span>
+          <button type="submit" class="iv-composer-send" aria-label="${esc(copy("发送", "Send"))}" title="${esc(copy("发送（Enter）", "Send (Enter)"))}">${ICON.send}<span class="iv-composer-spinner" aria-hidden="true"></span></button>
+        </div>
+        <input type="file" class="iv-composer-picker" accept="${ACCEPTED_FILES}" multiple hidden>`;
+      const $ = (selector) => root.querySelector?.(selector) || null;
+      const input = $(".iv-composer-input");
+      const picker = $(".iv-composer-picker");
+      if (input) {
+        input.value = draft.text;
+        input.addEventListener("input", () => { draft.text = input.value; syncComposer(key); });
+        input.addEventListener("keydown", (event) => {
+          // Enter sends, Shift+Enter breaks the line; never while an IME is composing (Chinese input confirms with Enter).
+          if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+          event.preventDefault();
+          submit(key);
+        });
+        input.addEventListener("paste", (event) => {
+          const files = [...(event.clipboardData?.files || [])];
+          if (!files.length) return;
+          if (!event.clipboardData.getData("text")) event.preventDefault();
+          addFiles(key, files);
+        });
+      }
+      picker?.addEventListener("change", () => { addFiles(key, [...picker.files]); picker.value = ""; });
+      root.addEventListener("submit", (event) => { event.preventDefault(); submit(key); });
+      root.addEventListener("click", (event) => {
+        const el = event.target.closest?.("[data-composer], [data-iv-assistant=mode]");
+        if (!el) return;
+        if (el.dataset.ivAssistant === "mode") { event.stopPropagation(); setMode(el.dataset.mode); input?.focus(); return; }
+        if (el.dataset.composer === "attach") picker?.click();
+        if (el.dataset.composer === "remove") { removeFile(key, Number(el.dataset.index)); input?.focus(); }
+      });
+      wireDrop(key, root);
+      return root;
+    }
+
+    // The whole column takes dropped files (page: the chat column; dock: the card), with a highlight while dragging.
+    function wireDrop(key, root) {
+      const zone = key === "dock" ? byId("ivDockCard") : byId("ivAssistantMain");
+      if (!zone?.addEventListener || zone.dataset.dropWired) return;
+      zone.dataset.dropWired = "1";
+      let depth = 0;
+      const hasFiles = (event) => [...(event.dataTransfer?.types || [])].includes("Files");
+      zone.addEventListener("dragenter", (event) => { if (!hasFiles(event)) return; event.preventDefault(); depth += 1; zone.classList.add("is-dropping"); });
+      zone.addEventListener("dragover", (event) => { if (hasFiles(event)) event.preventDefault(); });
+      zone.addEventListener("dragleave", () => { depth = Math.max(0, depth - 1); if (!depth) zone.classList.remove("is-dropping"); });
+      zone.addEventListener("drop", (event) => {
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+        depth = 0;
+        zone.classList.remove("is-dropping");
+        addFiles(key, [...event.dataTransfer.files]);
+        composerOf(key)?.querySelector(".iv-composer-input")?.focus();
+      });
+    }
+
+    function addFiles(key, list) {
+      const draft = drafts[key];
+      const accepted = ACCEPTED_FILES.split(",");
+      const problems = [];
+      for (const file of list) {
+        const extension = `.${String(file.name || "").split(".").pop().toLowerCase()}`;
+        if (!accepted.includes(extension)) problems.push(copy(`「${file.name}」不是 PDF 或图片`, `"${file.name}" is not a PDF or an image`));
+        else if (file.size > MAX_FILE_BYTES) problems.push(copy(`「${file.name}」超过 8 MB`, `"${file.name}" is over 8 MB`));
+        else if (draft.files.length >= MAX_FILES) { problems.push(copy(`一次最多附 ${MAX_FILES} 个文件`, `Up to ${MAX_FILES} files per message`)); break; }
+        else draft.files.push({ file, kind: extension === ".pdf" ? "pdf" : "image", url: extension === ".pdf" ? "" : URL.createObjectURL(file) });
+      }
+      if (problems.length) toast(problems.join("；"));
+      syncComposer(key);
+    }
+
+    function removeFile(key, index) {
+      const [item] = drafts[key].files.splice(index, 1);
+      if (item?.url) URL.revokeObjectURL(item.url);
+      syncComposer(key);
+    }
+
+    // Repaints the parts of a composer that follow its draft and the busy state (the textarea itself is left alone).
+    function syncComposer(key) {
+      const root = composerOf(key);
+      if (!root) return;
+      const draft = drafts[key];
+      const input = root.querySelector(".iv-composer-input");
+      if (input && input.value !== draft.text) input.value = draft.text;
+      // Empty: the natural one-row height (a placeholder that wraps while the dock is still growing must not count).
+      if (input) { input.style.height = ""; if (draft.text) input.style.height = `${Math.min(input.scrollHeight, key === "dock" ? 132 : 240)}px`; }
+      const files = root.querySelector(".iv-composer-files");
+      if (files) {
+        files.hidden = !draft.files.length;
+        files.innerHTML = draft.files.map((item, index) => `<div class="iv-file is-${item.kind}" title="${esc(item.file.name)}">
+            ${item.url ? `<img src="${esc(item.url)}" alt="">` : `<span class="iv-file-badge">PDF</span>`}
+            <span class="iv-file-text"><b>${esc(item.file.name)}</b><em>${item.kind === "pdf" ? "PDF" : copy("图片", "Image")} · ${fileSize(item.file.size)}</em></span>
+            <button type="button" class="iv-file-remove" data-composer="remove" data-index="${index}" aria-label="${esc(copy("移除", "Remove"))} ${esc(item.file.name)}">${ICON.close}</button>
+          </div>`).join("");
+      }
+      const count = root.querySelector(".iv-composer-count");
+      if (count) { count.hidden = draft.text.length < CHARACTER_LIMIT - 1000; count.textContent = `${draft.text.length} / ${CHARACTER_LIMIT}`; }
+      const send = root.querySelector(".iv-composer-send");
+      if (send) {
+        send.disabled = busy || (!draft.text.trim() && !draft.files.length);
+        send.classList.toggle("is-busy", busy);
+        send.setAttribute("aria-label", busy ? copy("正在回答", "Answering") : copy("发送", "Send"));
+      }
+    }
+    const syncComposers = () => { syncComposer("page"); syncComposer("dock"); };
+
+    function submit(key) {
+      const draft = drafts[key];
+      const text = draft.text.trim();
+      const host = key === "dock" ? byId("ivDockChat") : pageHost();
+      if (busy || (!text && !draft.files.length) || !chat || chat.parentElement !== host) return;
+      busy = true;
+      chat.submitUserMessage(draft.files.length ? { text, files: draft.files.map((item) => item.file) } : { text });
+      draft.files.forEach((item) => item.url && URL.revokeObjectURL(item.url));
+      draft.files = [];
+      draft.text = "";
+      syncComposers();
+    }
+
+    // Puts text in a composer (an example, 简历 / JD 定制) and focuses it; a "……" placeholder in it is selected for typing over.
+    function fillComposer(key, text) {
+      drafts[key].text = text;
+      syncComposer(key);
+      const input = composerOf(key)?.querySelector(".iv-composer-input");
+      if (!input) return;
+      input.focus();
+      const gap = text.indexOf("……");
+      if (gap >= 0) input.setSelectionRange(gap, gap + 2);
+      else input.setSelectionRange(text.length, text.length);
+    }
 
     // Deep Chat hands the handler JSON ({messages}) for text, or FormData (files + message1…N as JSON) with attachments.
     function readBody(body) {
@@ -386,6 +550,10 @@
         paint();
       } catch (error) {
         if (generation === epoch && history === log) signals.onResponse({ error: error.message || copy("助手暂时没有回应，请重试。", "No reply; please retry.") });
+      } finally {
+        busy = false;
+        syncComposers();
+        if (restyle) { restyle = false; restyleChat(); }
       }
     }
 
@@ -430,12 +598,20 @@
 
     // ---- Mode
     function modeButtons() {
-      return MODES.map((item) => `<button type="button" role="radio" aria-checked="${item.id === mode}" class="${item.id === mode ? "active" : ""}${item.id === "agent" ? " is-agent" : ""}" data-iv-assistant="mode" data-mode="${item.id}" title="${esc(copy(item.note[0], item.note[1]))}">${esc(copy(item.zh, item.en))}</button>`).join("");
+      return MODES.map((item) => `<button type="button" role="radio" aria-checked="${item.id === mode}" class="iv-mode-option${item.id === mode ? " active" : ""}" data-iv-assistant="mode" data-mode="${item.id}" title="${esc(copy(item.note[0], item.note[1]))}">${esc(copy(item.zh, item.en))}</button>`).join("");
     }
+    // Same sliding pill as 标准模式 / 追问压力: the track's data-mode moves it, so the switch animates instead of re-rendering.
     function setMode(next) {
       mode = next === "agent" ? "agent" : "chat";
       try { localStorage.setItem(MODE_KEY, mode); } catch (_error) { /* per-viewer convenience only */ }
-      document.querySelectorAll("[data-iv-modes]").forEach((el) => { el.innerHTML = modeButtons(); });
+      document.querySelectorAll("[data-iv-modes]").forEach((el) => {
+        el.dataset.mode = mode;
+        el.querySelectorAll("[data-mode]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.mode === mode);
+          button.setAttribute("aria-checked", String(button.dataset.mode === mode));
+        });
+      });
+      document.querySelectorAll("[data-iv-mode-note]").forEach((el) => { el.textContent = modeNote(); });
     }
 
     // ---- Page
@@ -488,7 +664,7 @@
       ensureOwner();
       if (threads === null) loadThreads();
       // Mount after the pane is in the DOM.
-      window.setTimeout(() => { const host = pageHost(); if (host && !host.firstChild) mount(host, { force: true }); }, 0);
+      window.setTimeout(() => { const host = pageHost(); if (host && !host.firstChild) mount(host, { force: true }); else attachComposer("page"); }, 0);
       return `<section id="ivAssistant" class="iv-assistant" data-domain="${domain()}">
           <aside class="iv-as-side" aria-label="${esc(copy("对话列表", "Chats"))}">
             <div class="iv-as-side-head">
@@ -502,13 +678,14 @@
               <div id="ivAssistantWallet" class="iv-as-wallet" title="${esc(copy("每条回复按 token 用量扣除额度", "Each reply is charged by its token usage"))}">${walletLine()}</div>
             </div>
           </aside>
-          <div class="iv-as-main">
-            <header class="iv-as-bar">
-              <h2 id="ivAssistantTitle" class="iv-as-title">${esc(threadTitle())}</h2>
-              <div class="iv-as-modes" data-iv-modes role="radiogroup" aria-label="${esc(copy("模式", "Mode"))}">${modeButtons()}</div>
-            </header>
+          <div id="ivAssistantMain" class="iv-as-main">
+            <header class="iv-as-bar"><h2 id="ivAssistantTitle" class="iv-as-title">${esc(threadTitle())}</h2></header>
             <div id="ivAssistantChat" class="iv-as-chat"></div>
-            <p class="iv-as-foot">${esc(copy("Enter 发送 · Shift+Enter 换行 · 回答由 AI 生成，重要信息请核对", "Enter to send · Shift+Enter for a new line · AI answers can be wrong"))}</p>
+            <div class="iv-as-dock">
+              <div id="ivAssistantComposer" class="iv-as-composer"></div>
+              <p class="iv-as-foot">${esc(copy("Enter 发送，Shift+Enter 换行 · 回答由 AI 生成，重要信息请核对", "Enter to send, Shift+Enter for a new line · AI answers can be wrong"))}</p>
+            </div>
+            <div class="iv-as-drop" aria-hidden="true"><span>${ICON.attach}${esc(copy("松开即可添加图片或 PDF", "Drop to attach images or PDFs"))}</span></div>
           </div>
         </section>`;
     }
@@ -564,7 +741,7 @@
       const id = el.dataset.thread;
       if (action === "new") openThread(null);
       else if (action === "open" && id !== current) openThread(id);
-      else if (action === "mode") { setMode(el.dataset.mode); chat?.focusInput?.(); }
+      else if (action === "mode") setMode(el.dataset.mode);
       else if (action === "rename") renameThread(id);
       else if (action === "delete") {
         confirm(copy("删除这段对话？已经写入语料库的内容不受影响。", "Delete this chat? Anything saved to your corpus stays."), async () => {
@@ -621,12 +798,13 @@
             <header class="iv-dock-head">
               <span class="iv-dock-mark" aria-hidden="true">${ICON.spark}</span>
               <strong id="ivDockTitle" class="iv-dock-title">${esc(copy("AI 助手", "AI assistant"))}</strong>
-              <div class="iv-as-modes is-compact" data-iv-modes role="radiogroup" aria-label="${esc(copy("模式", "Mode"))}">${modeButtons()}</div>
               <button type="button" class="iv-as-icon" data-iv-dock="new" title="${esc(copy("新对话", "New chat"))}" aria-label="${esc(copy("新对话", "New chat"))}">${ICON.compose}</button>
               <button type="button" id="ivDockMenuButton" class="iv-as-icon" data-iv-dock="menu" title="${esc(copy("最近的会话", "Recent chats"))}" aria-label="${esc(copy("最近的会话", "Recent chats"))}" aria-haspopup="menu" aria-expanded="false">${ICON.dots}</button>
               <div id="ivDockMenu" class="iv-dock-menu" role="menu" hidden></div>
             </header>
             <div id="ivDockChat" class="iv-dock-chat"></div>
+            <div id="ivDockComposer" class="iv-dock-composer"></div>
+            <div class="iv-as-drop" aria-hidden="true"><span>${ICON.attach}${esc(copy("松开即可添加", "Drop to attach"))}</span></div>
           </div>
         </section>`;
       document.body.appendChild(root);
@@ -690,6 +868,8 @@
       history = [];
       chat = null;
       search = "";
+      busy = false;
+      Object.values(drafts).forEach((draft) => { draft.files.forEach((item) => item.url && URL.revokeObjectURL(item.url)); draft.text = ""; draft.files = []; });
       closeDock();
       if (byId("ivDockChat")) byId("ivDockChat").replaceChildren();
     }
@@ -697,6 +877,18 @@
     // The page wires its own events (it lives in #assistantPanel, outside the interview panel).
     document.addEventListener?.("click", (event) => { handleClick(event); });
     document.addEventListener?.("input", (event) => { handleInput(event); });
+    window.addEventListener?.("resize", () => syncComposers());
+    // Deep Chat takes its colours at mount; a theme / appearance switch rebuilds it (from history) in the new palette.
+    function restyleChat() {
+      if (dock && !dock.root.hidden) liftDock();
+      const host = activeHost();
+      if (!chat || !host || JSON.stringify(palette()) === tones) return;
+      if (busy) { restyle = true; return; }
+      mount(host, { force: true });
+    }
+    if (typeof MutationObserver !== "undefined" && document.body) {
+      new MutationObserver(() => restyleChat()).observe(document.body, { attributes: true, attributeFilter: ["class", "style", "data-theme"] });
+    }
     document.addEventListener?.("dblclick", (event) => {
       const el = event.target.closest?.("#ivAssistant .iv-as-thread-open");
       if (el) renameThread(el.dataset.thread);
@@ -708,13 +900,14 @@
       ensureOwner();
       current = null;
       history = [];
-      pendingInput = copy(...(TAILOR_PROMPTS[side] || TAILOR_PROMPTS.resume));
+      drafts.page.text = copy(...(TAILOR_PROMPTS[side] || TAILOR_PROMPTS.resume));
       const host = pageHost();
       if (host) mount(host, { force: true });
       paint();
+      window.setTimeout(() => fillComposer("page", drafts.page.text), 0);
     }
 
-    return { render, handleClick, handleInput, handleKey: () => false, reset, syncDock, prepare };
+    return { render, handleClick, handleInput, handleKey: () => false, reset, syncDock, prepare, draft: (key = "page") => ({ ...drafts[key] }) };
   }
 
   window.IELTSInterviewAssistant = { create };

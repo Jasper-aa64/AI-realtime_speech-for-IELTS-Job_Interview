@@ -12,11 +12,11 @@ const urls = fs.readFileSync(path.join(__dirname, "../backend_django/config/urls
 // A stand-in for the Deep Chat element: the module only sets properties on it and calls its handler.
 function harness(responses = {}, { productMode = "interview" } = {}) {
   const ids = {};
-  const element = (id) => ({ id, innerHTML: "", textContent: "", firstChild: null, isConnected: true, children: [], appendChild(child) { this.children.push(child); },
-    replaceChildren(child) { this.firstChild = child; }, addEventListener() {} });
+  const element = (id) => ({ id, innerHTML: "", textContent: "", firstChild: null, firstElementChild: null, isConnected: true, dataset: {}, children: [], appendChild(child) { this.children.push(child); },
+    replaceChildren(child) { this.firstChild = child; this.firstElementChild = child; }, addEventListener() {} });
   const document = {
     getElementById: (id) => (ids[id] ||= element(id)),
-    createElement: (tag) => ({ tag, style: {}, dataset: {}, children: [], appendChild(child) { this.children.push(child); }, addEventListener() {} }),
+    createElement: (tag) => ({ tag, style: {}, dataset: {}, children: [], appendChild(child) { this.children.push(child); }, addEventListener() {}, querySelector: () => null }),
     documentElement: { classList: { contains: () => false } },
     body: {},
     querySelector: () => null,
@@ -63,12 +63,19 @@ const reply = {
   entries: [{ id: "icp_9" }],
 };
 
-test("the page lists threads and mounts a Deep Chat with the chat / agent switch", async () => {
+test("the page lists threads and mounts a Deep Chat under our own composer with the sliding chat / agent switch", async () => {
   const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [{ id: "iat_1", title: "RAII", updated_at: "" }], engine: "本机 Codex · gpt-6-luna · medium" } });
   const page = env.assistant.render();
-  assert.match(page, /data-mode="chat"/);
-  assert.match(page, /data-mode="agent"/);
+  assert.match(page, /id="ivAssistantComposer"/);
   assert.match(page, /新对话/);
+  const composer = env.ids.ivAssistantComposer.firstElementChild;
+  assert.equal(composer.dataset.composer, "page");
+  assert.match(composer.innerHTML, /class="iv-mode-switch" data-iv-modes data-mode="chat"/);
+  assert.match(composer.innerHTML, /data-mode="agent"/);
+  assert.match(composer.innerHTML, /accept="\.pdf,\.png,\.jpg,\.jpeg,\.webp,\.gif"/);
+  assert.equal(env.chat().scrollButton, false, "no jump-to-bottom button");
+  assert.equal(env.chat().dragAndDrop, false, "the column takes drops, not Deep Chat");
+  assert.match(env.chat().auxiliaryStyle, /#input \{ display: none !important; \}/);
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(env.ids.ivAssistantThreads.innerHTML, /RAII/);
   assert.match(env.ids.ivAssistantEngine.innerHTML, /gpt-6-luna · medium/);
@@ -195,7 +202,7 @@ test("简历 / JD 定制: prepare() opens a new Agent chat with the request in t
   const env = harness({ "/api/interview/assistant/threads/?domain=interview": { threads: [] } });
   env.assistant.render();
   env.assistant.prepare("jd");
-  assert.match(env.chat().defaultInput.text, /JD 定制/);
+  assert.match(env.assistant.draft("page").text, /JD 定制/);
 });
 
 test("the AI 助手 pane is wired into the interview nav, router and asset routes", () => {
@@ -205,4 +212,11 @@ test("the AI 助手 pane is wired into the interview nav, router and asset route
   assert.match(urls, /path\("interview-assistant\.js"/);
   assert.ok(fs.existsSync(path.join(__dirname, "../web/static/vendor/deep-chat-2.5.1.bundle.js")));
   assert.ok(fs.existsSync(path.join(__dirname, "../web/static/vendor/highlight-11.12.0.min.js")));
+});
+
+test("examples go into the composer instead of being sent; Enter never sends mid-IME", () => {
+  const intro = source.slice(source.indexOf("function introPanel"), source.indexOf("function buildChat"));
+  assert.match(intro, /fillComposer\(compact \? "dock" : "page", copy\(example\.zh, example\.en\)\)/);
+  assert.doesNotMatch(intro, /submitUserMessage/);
+  assert.match(source, /event\.isComposing \|\| event\.keyCode === 229/);
 });
