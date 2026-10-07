@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QEventLoop>
+#include <QIcon>
 #include <QLibraryInfo>
 #include <QLocale>
 #include <QSettings>
@@ -27,6 +28,9 @@ int main(int argc, char *argv[]) {
     QApplication::setApplicationName(QStringLiteral("IELTS Studio"));
     QApplication::setOrganizationName(QStringLiteral("IELTS Studio"));
     QApplication::setApplicationVersion(QStringLiteral(STUDIO_VERSION));
+    QIcon studioIcon(QStringLiteral(":/brand/studio-brain-512.png"));
+    studioIcon.addFile(QStringLiteral(":/brand/studio-brain-1024.png"));
+    QApplication::setWindowIcon(studioIcon);
 
     // Chinese titles for Qt's own strings (macOS app menu: 隐藏、退出…).
     QTranslator qtTranslator;

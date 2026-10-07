@@ -12,6 +12,21 @@ Qt 6 + QtWebEngine 外壳，加载服务器上的 IELTS Studio 网页界面。�
     cmake --build build-desktop -j
     ctest --test-dir build-desktop --output-on-failure
 
+## 品牌图标
+
+网页品牌、AI 助手、网站图标和桌面图标共用
+`web/static/assets/brand/studio-brain.svg` 中的粉色圆角大脑。灯泡是网页上的独立悬浮装饰。
+SVG 可眨眼，并遵循系统减少动态效果设置；导出的 PNG、ICO、ICNS 保持睁眼。
+
+在 macOS 仓库根目录重建所有图标（需要 `brew install librsvg`，ICNS 使用系统 `iconutil`）：
+
+    python3 scripts/generate_brand_icons.py
+
+非 macOS 可加 `--skip-icns` 更新网页和 Qt 窗口图标。网站 ICO 包含 16、32、48 像素，
+触屏图标为 180 像素。桌面 PNG 为 512、1024 像素，ICNS 包含标准 16、32、128、256、512
+逻辑尺寸的 1x/2x 图层。构建时 ICNS 放入应用 `Contents/Resources`，由 `CFBundleIconFile`
+引用；Qt 窗口图标通过编译进应用的资源读取，无需运行时查找仓库路径。
+
 ## 运行
 
     open "build-desktop/IELTS Studio.app"

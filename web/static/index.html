@@ -7,7 +7,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IELTS Speaking Studio</title>
-    <link rel="icon" href="/assets/brand/ielts-pencil-favicon.svg?v=20260614-favicon-bg-1" type="image/svg+xml">
+    <link rel="icon" href="/assets/brand/studio-brain.ico?v=20261007-rounded-brain-2" sizes="16x16 32x32 48x48" type="image/x-icon">
+    <link rel="icon" href="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/brand/studio-brain-180.png?v=20261007-rounded-brain-2" sizes="180x180">
     <link rel="preload" href="/assets/takeaway/pencil-paper-study-bg.webp" as="image" type="image/webp">
     <link rel="preload" href="/assets/takeaway/pencil-card-paper-light.webp" as="image" type="image/webp">
     <link rel="preload" href="/assets/takeaway/pencil-card-paper-dark.webp" as="image" type="image/webp">
@@ -26,7 +28,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261006-interview-132">
+    <link rel="stylesheet" href="/styles.css?v=20261007-rounded-brain-2">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -120,10 +122,7 @@
       </button>
 
       <button id="agentAssistantBtn" class="agent-assistant-trigger floating-agent-assistant-trigger" type="button" title="题库助手" aria-label="题库助手" data-i18n-title="action.questionAssistant" data-i18n-aria="action.questionAssistant">
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M12 3l1.9 4.8L19 10l-5.1 2.2L12 17l-1.9-4.8L5 10l5.1-2.2L12 3z"></path>
-          <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"></path>
-        </svg>
+        <img class="assistant-brain" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true">
         <span data-i18n="action.questionAssistant">题库助手</span>
       </button>
 
@@ -131,9 +130,9 @@
         <div class="nav-top">
           <div class="nav-top-left">
             <div id="studioModeControl" class="studio-mode-control hidden">
-              <button id="studioModeTrigger" class="studio-switch-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="studioModeMenu"><img class="brand-mark" src="/assets/brand/studio-logo.svg?v=20261005-blog-logo-2" alt="" aria-hidden="true"><span id="studioModeLabel">IELTS Studio</span><svg class="studio-switch-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4-4 4 4M8 14l4 4 4-4"/></svg></button>
+              <button id="studioModeTrigger" class="studio-switch-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="studioModeMenu"><span class="brand-logo"><img class="brand-mark" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true"><span class="brand-bulb" aria-hidden="true"><svg viewBox="-6 -8 12 13"><g class="brand-bulb-rays" stroke="#f59e0b" stroke-width="0.9" stroke-linecap="round"><line x1="0" y1="-5.6" x2="0" y2="-7.2"/><line x1="-4.1" y1="-3.6" x2="-5.4" y2="-4.7"/><line x1="4.1" y1="-3.6" x2="5.4" y2="-4.7"/></g><circle cx="0" cy="-1.6" r="3.5" fill="#fde68a" stroke="#f59e0b" stroke-width="0.8"/><rect x="-1.8" y="1.2" width="3.6" height="2" fill="#9ca3af"/></svg></span></span><span id="studioModeLabel">IELTS Studio</span><svg class="studio-switch-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4-4 4 4M8 14l4 4 4-4"/></svg></button>
               <div id="studioModeMenu" class="studio-switch-card" role="menu" aria-label="切换工作区" hidden>
-                <div class="studio-switch-head" data-studio-close><img class="brand-mark" src="/assets/brand/studio-logo.svg?v=20261005-blog-logo-2" alt="" aria-hidden="true"><span id="studioModeCurrent">IELTS Studio</span><kbd>esc</kbd></div>
+                <div class="studio-switch-head" data-studio-close><span class="brand-logo"><img class="brand-mark" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true"><span class="brand-bulb" aria-hidden="true"><svg viewBox="-6 -8 12 13"><g class="brand-bulb-rays" stroke="#f59e0b" stroke-width="0.9" stroke-linecap="round"><line x1="0" y1="-5.6" x2="0" y2="-7.2"/><line x1="-4.1" y1="-3.6" x2="-5.4" y2="-4.7"/><line x1="4.1" y1="-3.6" x2="5.4" y2="-4.7"/></g><circle cx="0" cy="-1.6" r="3.5" fill="#fde68a" stroke="#f59e0b" stroke-width="0.8"/><rect x="-1.8" y="1.2" width="3.6" height="2" fill="#9ca3af"/></svg></span></span><span id="studioModeCurrent">IELTS Studio</span><kbd>esc</kbd></div>
                 <div class="studio-switch-body">
                   <p class="studio-switch-label">工作区</p>
                   <button type="button" role="menuitemradio" aria-checked="true" data-studio-mode="ielts"><span class="studio-switch-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5C4 5 5 4 6.5 4H12v16H6.5C5 20 4 19 4 17.5zM12 4h5.5C19 4 20 5 20 6.5v11c0 1.5-1 2.5-2.5 2.5H12"/><path d="M7 8.5h2M15 8.5h2M15 12h2"/></svg></span><span class="studio-switch-text"><strong>IELTS Studio</strong><small>口语 · 写作 · 语料</small></span><svg class="studio-switch-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></button>
@@ -142,7 +141,7 @@
               </div>
             </div>
             <div class="brand">
-              <img class="brand-mark" src="/assets/brand/studio-logo.svg?v=20261005-blog-logo-2" alt="" aria-hidden="true">
+              <span class="brand-logo"><img class="brand-mark" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true"><span class="brand-bulb" aria-hidden="true"><svg viewBox="-6 -8 12 13"><g class="brand-bulb-rays" stroke="#f59e0b" stroke-width="0.9" stroke-linecap="round"><line x1="0" y1="-5.6" x2="0" y2="-7.2"/><line x1="-4.1" y1="-3.6" x2="-5.4" y2="-4.7"/><line x1="4.1" y1="-3.6" x2="5.4" y2="-4.7"/></g><circle cx="0" cy="-1.6" r="3.5" fill="#fde68a" stroke="#f59e0b" stroke-width="0.8"/><rect x="-1.8" y="1.2" width="3.6" height="2" fill="#9ca3af"/></svg></span></span>
               <span data-i18n="app.title">IELTS Studio</span>
             </div>
             <div class="status" id="bankStatus">Loading bank...</div>
@@ -550,10 +549,7 @@
               </div>
               <div class="corpus-head-actions">
                 <button id="p1CorpusAgentBtn" class="agent-assistant-trigger corpus-agent-button" type="button" title="题库助手" aria-label="P1 题库助手">
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path>
-                    <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
+                  <img class="assistant-brain" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true">
                   <span>题库助手</span>
                 </button>
                 <span id="p1CorpusStats" class="corpus-page-stat">Loading...</span>
@@ -991,10 +987,7 @@
               </div>
               <div class="corpus-head-actions">
                 <button id="p2CorpusAgentBtn" class="agent-assistant-trigger corpus-agent-button" type="button" title="题库助手" aria-label="P2 题库助手">
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path>
-                    <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
+                  <img class="assistant-brain" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true">
                   <span>题库助手</span>
                 </button>
                 <span id="p2CorpusStats" class="corpus-page-stat p2-corpus-stat" data-i18n="common.loading">加载中...</span>
@@ -1953,7 +1946,7 @@
     <script src="/corner-morph.js?v=20261006-interview-132"></script>
     <script src="/interview-corpus.js?v=20261006-interview-132"></script>
     <script src="/interview-launch.js?v=20261006-interview-132"></script>
-    <script src="/interview-assistant.js?v=20261006-interview-132"></script>
+    <script src="/interview-assistant.js?v=20261007-rounded-brain-2"></script>
     <script src="/interview-home.js?v=20261006-interview-132"></script>
     <script src="/interview.js?v=20261006-interview-132"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>

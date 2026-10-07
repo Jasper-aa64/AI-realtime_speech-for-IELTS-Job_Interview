@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/brand">
+    <file alias="studio-brain-512.png">assets/studio-brain-512.png</file>
+    <file alias="studio-brain-1024.png">assets/studio-brain-1024.png</file>
+  </qresource>
+</RCC>

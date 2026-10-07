@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <title>IELTS Studio brain</title>
+  <!-- Canonical rounded brain body. Bulbs are separate page decorations; raster exports keep eyes open. -->
+  <style>
+    .brain-eyes { transform-box: fill-box; transform-origin: center; animation: brain-blink 6.4s infinite; }
+    @keyframes brain-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.12); } }
+    @media (prefers-reduced-motion: reduce) { .brain-eyes { animation: none; } }
+  </style>
+  <rect x=".55" y=".55" width="18.9" height="18.9" rx="4.2" fill="#f6bcca" stroke="#c46d87" stroke-width="1.1"/>
+  <path d="M10 3.2V16.8M4.2 5.6H7.2M12.8 5.6H15.8M3.8 14.4H6.8M13.2 14.4H16.2" fill="none" stroke="#b15775" stroke-width="1.2" opacity=".85"/>
+  <g class="brain-eyes" fill="#3a2530" shape-rendering="crispEdges">
+    <rect x="5.38" y="8.78" width="2.44" height="2.44"/>
+    <rect x="12.18" y="8.78" width="2.44" height="2.44"/>
+  </g>
+</svg>

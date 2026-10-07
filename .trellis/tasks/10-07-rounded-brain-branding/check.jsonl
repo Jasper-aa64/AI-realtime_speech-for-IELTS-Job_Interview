@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "UI conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Logo components"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification"}
+{"file": "docs/frontend-ui-conventions.md", "reason": "Square controls"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Desktop icon assets"}

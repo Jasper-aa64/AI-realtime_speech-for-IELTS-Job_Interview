@@ -3,6 +3,7 @@ project(IELTSStudioDesktop VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets WebEngineWidgets WebChannel Test)
 qt_standard_project_setup()
@@ -20,12 +21,15 @@ add_library(studio_core STATIC
 target_include_directories(studio_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(studio_core PUBLIC Qt6::Widgets Qt6::WebEngineWidgets Qt6::WebChannel)
 
-qt_add_executable(IELTSStudio MACOSX_BUNDLE src/main.cpp)
+set(STUDIO_BUNDLE_ICON assets/studio-brain.icns)
+set_source_files_properties(${STUDIO_BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+qt_add_executable(IELTSStudio MACOSX_BUNDLE src/main.cpp resources.qrc ${STUDIO_BUNDLE_ICON})
 set_target_properties(IELTSStudio PROPERTIES
     OUTPUT_NAME "IELTS Studio"
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
     MACOSX_BUNDLE_GUI_IDENTIFIER com.ieltsstudio.desktop
     MACOSX_BUNDLE_BUNDLE_NAME "IELTS Studio"
+    MACOSX_BUNDLE_ICON_FILE "studio-brain.icns"
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
 )

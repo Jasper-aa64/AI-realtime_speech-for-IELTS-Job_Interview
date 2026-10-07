@@ -42,7 +42,6 @@
   const OP_MARK = { create: "✓", update: "✎", delete: "✕" };
   const svg = (paths, size = 16) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
   const ICON = {
-    spark: svg('<path d="M12 3l1.9 4.8L19 10l-5.1 2.2L12 17l-1.9-4.8L5 10l5.1-2.2z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z"/>'),
     compose: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
     search: svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 15),
     rename: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/>', 14),
@@ -55,12 +54,8 @@
     attach: svg('<path d="m20.5 11.5-8.3 8.3a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>', 17),
     send: svg('<path d="M12 19V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/>', 17),
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 12),
-    // The corner button: the studio mascot's brain body (assets/brand/studio-logo.svg) redrawn square to fill the
-    // button — its pink, fold lines and pixel eyes in the logo's colours; the button's rounded corners replace the
-    // stepped ones and its border is the logo's outline pink.
-    brain: '<svg class="iv-brain" viewBox="0 0 20 20" aria-hidden="true" shape-rendering="crispEdges"><rect width="20" height="20" fill="#f6bcca"/>'
-      + '<path d="M10 3.2V16.8M4.2 5.6H7.2M12.8 5.6H15.8M3.8 14.4H6.8M13.2 14.4H16.2" fill="none" stroke="#b15775" stroke-width="1.2" opacity="0.85"/>'
-      + '<g class="iv-brain-eyes" fill="#3a2530"><rect x="5.6" y="9" width="2" height="2"/><rect x="12.4" y="9" width="2" height="2"/></g></svg>',
+    // One identity asset across the corner trigger, headers and welcome state.
+    brain: '<img class="assistant-brain" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true">',
   };
   const MAX_FILES = 6;
   const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -271,7 +266,7 @@
       intro.style.cssText = `display:grid;justify-items:center;gap:${compact ? 8 : 10}px;text-align:center;padding:${compact ? "12px 14px" : "24px 12px"};max-width:640px;width:100%;box-sizing:border-box;font-family:inherit`;
       const shown = compact ? examples().slice(0, 2) : examples();
       intro.innerHTML = `
-        <div style="width:${compact ? 34 : 44}px;height:${compact ? 34 : 44}px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb, ${c.accent} 14%, ${c.panel});color:${c.accent}">${ICON.spark}</div>
+        <div style="width:${compact ? 34 : 44}px;height:${compact ? 34 : 44}px;display:grid;place-items:center">${ICON.brain.replace('class="assistant-brain"', 'style="display:block;width:100%;height:100%"')}</div>
         <div style="font-size:${compact ? 16 : 21}px;font-weight:650;color:${c.ink}">${esc(copy("有什么想问的？", "What would you like to ask?"))}</div>
         <div style="font-size:${compact ? 12.5 : 13.5}px;color:${c.muted};line-height:1.6;max-width:460px">${esc(domain() === "ielts"
           ? copy("问口语和写作，或让 Agent 帮你写语料。", "Ask about speaking and writing, or let Agent write corpus items.")
@@ -674,7 +669,7 @@
       return `<section id="ivAssistant" class="iv-assistant" data-domain="${domain()}">
           <aside class="iv-as-side" aria-label="${esc(copy("对话列表", "Chats"))}">
             <div class="iv-as-side-head">
-              <span class="iv-as-brand">${ICON.spark}<span>${esc(copy("AI 助手", "AI assistant"))}</span></span>
+              <span class="iv-as-brand">${ICON.brain}<span>${esc(copy("AI 助手", "AI assistant"))}</span></span>
               <button type="button" class="iv-as-icon" data-iv-assistant="new" title="${esc(copy("新对话", "New chat"))}" aria-label="${esc(copy("新对话", "New chat"))}">${ICON.compose}</button>
             </div>
             <label class="iv-as-search">${ICON.search}<input id="ivAssistantSearch" type="search" autocomplete="off" placeholder="${esc(copy("搜索对话", "Search chats"))}" value="${esc(search)}"></label>
@@ -800,7 +795,7 @@
         <section id="ivDockCard" class="iv-dock-card" role="dialog" aria-label="${esc(copy("AI 助手", "AI assistant"))}" hidden>
           <div class="iv-dock-body">
             <header class="iv-dock-head">
-              <span class="iv-dock-mark" aria-hidden="true">${ICON.spark}</span>
+              <span class="iv-dock-mark" aria-hidden="true">${ICON.brain}</span>
               <strong id="ivDockTitle" class="iv-dock-title">${esc(copy("AI 助手", "AI assistant"))}</strong>
               <button type="button" class="iv-as-icon" data-iv-dock="new" title="${esc(copy("新对话", "New chat"))}" aria-label="${esc(copy("新对话", "New chat"))}">${ICON.compose}</button>
               <button type="button" id="ivDockMenuButton" class="iv-as-icon" data-iv-dock="menu" title="${esc(copy("最近的会话", "Recent chats"))}" aria-label="${esc(copy("最近的会话", "Recent chats"))}" aria-haspopup="menu" aria-expanded="false">${ICON.dots}</button>

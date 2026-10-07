@@ -69,3 +69,22 @@ a static UI served by the local/backend API server.
 - Rendering backend reports as raw JSON instead of learner-readable sections.
 - Sampling questions client-side when a session-start API contract exists.
 - Assuming every failed API response is valid JSON.
+
+## Brand Identity
+
+- Use `/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2` for the
+  top-left brand, AI assistant navigation, corner trigger, headers and welcome
+  state. The canonical mark is the pink rounded-square body with fold lines and
+  pixel eyes; do not draw a separate inline copy or add limbs / a bulb to it.
+- Browser ICO, touch PNG and desktop ICNS / window PNG are generated from that
+  same SVG by `scripts/generate_brand_icons.py`; regenerate those exports when
+  the source changes.
+- Keep the top-left `.brand-logo` square and larger than the wordmark. Place
+  `.brand-bulb` absolutely, decorative and pointer-transparent, so hover, keyboard
+  focus and an open workspace switcher can show it without shifting layout.
+  Preserve clipping during the card morph and allow overflow after it settles.
+- Limit wordmark typography rules to direct text spans excluding `.brand-logo`.
+  Decorative span wrappers must never inherit wordmark clamps or clipping.
+- The shared SVG owns blinking. Reduced motion disables blinking and shows
+  the idea bulb statically on interaction, without popping, floating or rays
+  pulsing. Raster icon exports always use the open-eye frame.
