@@ -2952,8 +2952,12 @@
       // flow RIGHT→LEFT (bright on the right). Per-instance so the P1 header can keep
       // left→right while the P3 box runs right→left.
       const reverse = options && options.reverse === true;
+      // paused: build the canvas now but draw nothing (hidden) until play() — lets a page warm the field up in idle
+      // time so the first switch to 追问压力 has nothing heavy left to do.
+      let paused = options && options.paused === true;
       const canvas = document.createElement("canvas");
       canvas.className = "p2-pixel-flow-canvas";
+      if (paused) canvas.style.visibility = "hidden";
       host.appendChild(canvas);
       const ctx = canvas.getContext("2d");
       const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
@@ -2991,6 +2995,11 @@
       let height = 0;
       let rafId = 0;
       let start = 0;
+      // Per-cell / per-column values that never change with time, rebuilt on resize (drawGrid only does the waves).
+      let cellRnd = new Float32Array(0);
+      let colSoft = new Float32Array(0);
+      let colWhite = new Float32Array(0);
+      let colFlow = new Float32Array(0);
 
       // Pointer-link state for scatter mode: a FIXED maximum number of the nearest
       // fragments get tethered to the cursor with a line, so moving the mouse looks
@@ -3023,7 +3032,20 @@
         canvas.style.width = `${w}px`;
         canvas.style.height = `${h}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        if (reduceMotion) draw(0);
+        cellRnd = new Float32Array(cols * rows);
+        for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) cellRnd[r * cols + c] = hash(c, r);
+        colSoft = new Float32Array(cols);
+        colWhite = new Float32Array(cols);
+        colFlow = new Float32Array(cols);
+        for (let c = 0; c < cols; c += 1) {
+          const uRaw = (c * cell) / w;
+          const u = reverse ? 1 - uRaw : uRaw;
+          // u = distance from the BRIGHT edge: the first 1/3 stays fullest, then eases off, the far quarter dims harder,
+          // the last eighth goes dark; a little white at the brightest crests near the bright edge.
+          colSoft[c] = u >= 0.875 ? 0 : u >= 0.75 ? 0.55 * (1 - (u - 0.75) / 0.125) : u >= 1 / 3 ? 1 - ((u - 1 / 3) / (0.75 - 1 / 3)) * 0.45 : 1;
+          colWhite[c] = u < 0.4 ? 0.7 * Math.pow(1 - u / 0.4, 0.35) : 0;
+        }
+        if (reduceMotion && !paused) draw(0);
       }
 
       function drawGrid(t) {
@@ -3039,41 +3061,29 @@
         // dir = -1 keeps the original rightward wave march (sin(c*k - t*w)); +1 flips
         // it to march leftward.
         const dir = reverse ? 1 : -1;
+        // The waves depend only on the column and time: three incommensurate waves sum into an irregular flow.
+        for (let c = 0; c < cols; c += 1) {
+          colFlow[c] = 0.5
+            + 0.22 * Math.sin(c * 0.17 + dir * t * 8.32)
+            + 0.16 * Math.sin(c * 0.41 + dir * t * 6.76 + 2.1)
+            + 0.12 * Math.sin(c * 0.93 + dir * t * 9.1 + 0.7);
+        }
         for (let r = 0; r < rows; r += 1) {
           for (let c = 0; c < cols; c += 1) {
-            const x = c * cell;
-            const rnd = hash(c, r);                                // static texture, no time → no random blink
-            // Three waves at incommensurate scales sum into an irregular, non-periodic
-            // flow — keeps the directional trend but breaks the too-regular even
-            // spacing. Raised baseline avoids hard dark gaps.
-            const flow = 0.5
-              + 0.22 * Math.sin(c * 0.17 + dir * t * 8.32)
-              + 0.16 * Math.sin(c * 0.41 + dir * t * 6.76 + 2.1)
-              + 0.12 * Math.sin(c * 0.93 + dir * t * 9.1 + 0.7);
-            const lit = (0.4 + 0.6 * flow) * (0.32 + 0.68 * rnd); // wider per-cell grain → more randomness
-            // u = distance from the BRIGHT edge (left edge normally, right edge when
-            // reversed). The first 1/3 from that edge stays fullest, then intensity
-            // eases off, the far quarter dims harder, and the last eighth goes dark.
-            const uRaw = x / width;
-            const u = reverse ? 1 - uRaw : uRaw;
-            let soft;
-            if (u >= 0.875) soft = 0;                              // trailing 1/8 fully dark
-            else if (u >= 0.75) soft = 0.55 * (1 - (u - 0.75) / 0.125); // trailing 1/4: 0.55 → 0
-            else if (u >= 1 / 3) soft = 1 - ((u - 1 / 3) / (0.75 - 1 / 3)) * 0.45; // ease 1 → 0.55
-            else soft = 1;                                         // bright 1/3 stays brightest
-            let alpha = (baseA + (peakA - baseA) * lit) * soft;
+            const soft = colSoft[c];
+            if (soft === 0) continue;
+            const flow = colFlow[c];
+            const rnd = cellRnd[r * cols + c];                     // static texture, no time → no random blink
+            const lit = (0.4 + 0.6 * flow) * (0.32 + 0.68 * rnd);
+            const alpha = (baseA + (peakA - baseA) * lit) * soft;
             if (alpha < 0.03) continue;
             const rgb = colorAt(c, r);
-            // A little pure white at the brightest crest cells (on the bright edge).
-            // The white probability eases off smoothly toward the dark edge: ~0.7 at
-            // the bright edge, fading to 0 by 2/5 in.
-            const leftWhite = u < 0.4 ? 0.7 * Math.pow(1 - u / 0.4, 0.35) : 0;
-            const wAmt = Math.min(1, Math.max(0, (flow * rnd - (0.82 - 0.5 * leftWhite)) / 0.18)) * soft;
+            const wAmt = Math.min(1, Math.max(0, (flow * rnd - (0.82 - 0.5 * colWhite[c])) / 0.18)) * soft;
             const rr = Math.round(rgb[0] + (255 - rgb[0]) * wAmt);
             const gg = Math.round(rgb[1] + (255 - rgb[1]) * wAmt);
             const bb = Math.round(rgb[2] + (255 - rgb[2]) * wAmt);
             ctx.fillStyle = `rgba(${rr}, ${gg}, ${bb}, ${alpha.toFixed(3)})`;
-            ctx.fillRect(x, r * cell, block, block);
+            ctx.fillRect(c * cell, r * cell, block, block);
           }
         }
       }
@@ -3139,7 +3149,7 @@
       const observer = new ResizeObserver(() => resize());
       observer.observe(host);
       resize();
-      if (!reduceMotion) rafId = window.requestAnimationFrame(frame);
+      if (!reduceMotion && !paused) rafId = window.requestAnimationFrame(frame);
 
       // The canvas host is pointer-events:none (so card clicks pass through), so the
       // cursor is tracked on the document and mapped into canvas-local coordinates.
@@ -3150,6 +3160,22 @@
       }
 
       return {
+        play() {
+          if (!paused) return;
+          paused = false;
+          canvas.style.visibility = "";
+          start = 0;
+          if (reduceMotion) draw(0);
+          else rafId = window.requestAnimationFrame(frame);
+        },
+        pause() {
+          if (paused) return;
+          paused = true;
+          if (rafId) window.cancelAnimationFrame(rafId);
+          rafId = 0;
+          ctx.clearRect(0, 0, width, height);
+          canvas.style.visibility = "hidden";
+        },
         destroy() {
           if (rafId) window.cancelAnimationFrame(rafId);
           observer.disconnect();

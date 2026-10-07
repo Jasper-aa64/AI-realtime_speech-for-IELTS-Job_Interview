@@ -847,38 +847,55 @@ function syncP1IntensityPanel() {
   syncP1StatusPixelFlow();
 }
 
+// 追问压力 lights the practice header with the pixel flow — IELTS P1, every interview practice view, and P3 once running.
+const p1PressureHost = () => state.view === "p1" || isInterviewView(state.view);
+const p1PressureOn = () => (p1PressureHost() && state.p1Intensity === "high")
+  || (state.view === "p3" && state.practiceLocked && state.p3Intensity === "high");
+
 function syncP1StatusPixelFlow() {
   const status = document.querySelector(".exam-status");
-  const shouldShowP1 = (state.view === "p1" || isInterviewView(state.view)) && state.p1Intensity === "high";
-  const shouldShowP3 = state.view === "p3" && state.practiceLocked && state.p3Intensity === "high";
-  const shouldShow = shouldShowP1 || shouldShowP3;
-  status?.classList.toggle(
-    "pressure-header-shell",
-    state.view === "p1" || shouldShowP3,
-  );
+  const shouldShow = p1PressureOn();
+  status?.classList.toggle("pressure-header-shell", p1PressureHost() || (state.view === "p3" && shouldShow));
   window.clearTimeout(state.p1StatusPixelFlowTimer);
   state.p1StatusPixelFlowTimer = null;
   if (!status) return;
+  if (state.p1StatusPixelFlow && state.p1StatusPixelFlowHost !== status) {
+    state.p1StatusPixelFlow.destroy?.();
+    state.p1StatusPixelFlow = null;
+  }
   if (shouldShow) {
     status.classList.add("p1-pixel-flow");
     if (!state.p1StatusPixelFlow) {
       state.p1StatusPixelFlow = createPixelFlowField(status, "grid");
+      state.p1StatusPixelFlowHost = status;
     }
+    state.p1StatusPixelFlow.play?.();
     window.requestAnimationFrame(() => {
-      if ((state.view === "p1" && state.p1Intensity === "high")
-        || (state.view === "p3" && state.practiceLocked && state.p3Intensity === "high")) {
-        status.classList.add("p1-pixel-flow-visible");
-      }
+      if (p1PressureOn()) status.classList.add("p1-pixel-flow-visible");
     });
     return;
   }
   status.classList.remove("p1-pixel-flow-visible");
-  if (!status.classList.contains("p1-pixel-flow")) return;
-  state.p1StatusPixelFlowTimer = window.setTimeout(() => {
-    state.p1StatusPixelFlow?.destroy?.();
-    state.p1StatusPixelFlow = null;
+  // Pages that can switch to 追问压力 keep a paused, hidden field ready (built in idle time), so the first switch only
+  // flips classes instead of building a canvas mid-click; it is destroyed once you leave them.
+  const settle = () => {
     status.classList.remove("p1-pixel-flow");
-  }, 1220);
+    if (p1PressureHost() || state.view === "p3") {
+      state.p1StatusPixelFlow?.pause?.();
+      if (!state.p1StatusPixelFlow) {
+        scheduleIdleTask(() => {
+          if (state.p1StatusPixelFlow || !(p1PressureHost() || state.view === "p3") || document.querySelector(".exam-status") !== status) return;
+          state.p1StatusPixelFlow = createPixelFlowField(status, "grid", { paused: true });
+          state.p1StatusPixelFlowHost = status;
+        }, 600);
+      }
+    } else {
+      state.p1StatusPixelFlow?.destroy?.();
+      state.p1StatusPixelFlow = null;
+    }
+  };
+  if (status.classList.contains("p1-pixel-flow")) state.p1StatusPixelFlowTimer = window.setTimeout(settle, 1220);
+  else settle();
 }
 
 function syncP3IntensityPixelFlow() {
@@ -892,6 +909,7 @@ function syncP3IntensityPixelFlow() {
     if (!state.p3IntensityPixelFlow) {
       state.p3IntensityPixelFlow = createPixelFlowField(box, "grid", { reverse: true });
     }
+    state.p3IntensityPixelFlow.play?.();
     window.requestAnimationFrame(() => {
       if (state.view === "p3" && !state.practiceLocked && state.p3Intensity === "high") {
         box.classList.add("p3-pixel-flow-visible");
@@ -900,11 +918,24 @@ function syncP3IntensityPixelFlow() {
     return;
   }
   box.classList.remove("p3-pixel-flow-visible");
-  state.p3IntensityPixelFlowTimer = window.setTimeout(() => {
-    state.p3IntensityPixelFlow?.destroy?.();
-    state.p3IntensityPixelFlow = null;
+  const settle = () => {
     box.classList.remove("p3-pixel-flow");
-  }, 1220);
+    if (state.view === "p3" && !state.practiceLocked) {
+      // same warm-up as the header: a paused field waits for the first switch
+      state.p3IntensityPixelFlow?.pause?.();
+      if (!state.p3IntensityPixelFlow) {
+        scheduleIdleTask(() => {
+          if (state.p3IntensityPixelFlow || state.view !== "p3" || state.practiceLocked) return;
+          state.p3IntensityPixelFlow = createPixelFlowField(box, "grid", { reverse: true, paused: true });
+        }, 600);
+      }
+    } else {
+      state.p3IntensityPixelFlow?.destroy?.();
+      state.p3IntensityPixelFlow = null;
+    }
+  };
+  if (box.classList.contains("p3-pixel-flow")) state.p3IntensityPixelFlowTimer = window.setTimeout(settle, 1220);
+  else settle();
 }
 
 function isPracticeView(view) {
