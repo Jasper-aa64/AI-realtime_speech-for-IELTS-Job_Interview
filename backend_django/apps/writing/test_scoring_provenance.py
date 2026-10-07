@@ -1,7 +1,7 @@
 import json
 
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 
 from apps.accounts.models import UserProfile
 from apps.ai.services import claim_ai_task
@@ -10,6 +10,8 @@ from apps.writing.services import complete_score_task, create_score_task, fallba
 from apps.writing.tests import ai_score_payload, paragraph_answer
 
 
+# These cover routing by the user's AI source preference, which applies when writing is not pinned to the local Codex CLI.
+@override_settings(WRITING_AI_SOURCE="")
 class WritingScoringProvenanceTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="scoring-provenance-user", password="test-pass")

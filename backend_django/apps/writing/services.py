@@ -718,9 +718,15 @@ def create_score_task(user, entry_id: str, payload: dict[str, Any] | None = None
     # so the task row never silently records the internal codex default.
     profile_source = str(getattr(getattr(user, "profile", None), "report_ai_source", "") or "").strip().lower()
     requested_provider = str(payload.get("provider") or "").strip()
+    codex_only = str(getattr(settings, "WRITING_AI_SOURCE", "") or "").strip() == "codex_cli"
     if not requested_provider:
-        requested_provider = "claude" if profile_source == "claude" else ("openai" if profile_source in {"gpt", "openai"} else "")
+        if codex_only:  # writing scores run on the local Codex CLI (settings.WRITING_AI_SOURCE)
+            requested_provider = "codex"
+        else:
+            requested_provider = "claude" if profile_source == "claude" else ("openai" if profile_source in {"gpt", "openai"} else "")
     requested_model = str(payload.get("model") or "").strip()
+    if not requested_model and requested_provider == "codex" and codex_only:
+        requested_model = str(getattr(settings, "CODEX_MODEL", "") or "").strip()
     if not requested_model:
         if requested_provider == "claude":
             requested_model = str(os.environ.get("CLAUDE_CLI_MODEL") or "").strip() or "sonnet"

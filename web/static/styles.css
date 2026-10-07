@@ -47095,13 +47095,20 @@ body:not(#_) #ivAssistant .iv-as-rename:focus {
 }
 body.theme-dark .iv-composer { background: color-mix(in srgb, var(--panel) 88%, #fff 3%); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 14px 34px -14px rgba(0, 0, 0, 0.6); }
 .iv-composer:focus-within { border-color: color-mix(in srgb, var(--ink) 26%, transparent); }
+/* auto-grow: the textarea and an invisible copy of its text (::after) share one grid cell, so the copy sets the height */
+.iv-composer-grow { display: grid; min-width: 0; --iv-grow-max: 240px; }
+.iv-composer.is-compact .iv-composer-grow { --iv-grow-max: 132px; }
+.iv-composer-grow::after { content: attr(data-value) " "; visibility: hidden; pointer-events: none; overflow: hidden; }
 body:not(#_):not(#__) .iv-composer .iv-composer-input,
-body:not(#_):not(#__) .iv-composer .iv-composer-input:focus {
-  /* the workspace's global field style is !important; this textarea is part of the composer surface */
-  display: block; width: 100%; min-height: 26px; max-height: 240px; margin: 0; padding: 4px 2px 6px; resize: none; overflow-y: auto; outline: none;
+body:not(#_):not(#__) .iv-composer .iv-composer-input:focus,
+.iv-composer-grow::after {
+  /* the workspace's global field style is !important; textarea and copy must wrap identically */
+  grid-area: 1 / 1 / 2 / 2; display: block; width: 100%; height: auto !important; min-height: 26px !important; max-height: var(--iv-grow-max) !important;
+  box-sizing: border-box; margin: 0; padding: 4px 2px 6px !important; resize: none; outline: none;
   border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
-  color: var(--ink); font: inherit; font-size: 15px; line-height: 1.6;
+  color: var(--ink); font: inherit; font-size: 15px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal;
 }
+body:not(#_):not(#__) .iv-composer .iv-composer-input { overflow-y: auto; scrollbar-width: thin; }
 .iv-composer .iv-composer-input::placeholder { color: color-mix(in srgb, var(--muted) 85%, transparent); }
 .iv-composer-files { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 8px; }
 .iv-composer-files[hidden] { display: none; }
@@ -47142,7 +47149,7 @@ body:not(#_):not(#__) .iv-composer .iv-composer-input:focus {
 .iv-composer .iv-composer-send.is-busy .iv-composer-spinner { display: block; }
 @keyframes iv-spin { to { transform: rotate(360deg); } }
 .iv-composer.is-compact { gap: 0; padding: 8px 8px 6px 12px; border-radius: 16px; }
-body:not(#_):not(#__) .iv-composer.is-compact .iv-composer-input { max-height: 132px; font-size: 13.5px; }
+:is(body:not(#_):not(#__) .iv-composer.is-compact .iv-composer-input, .iv-composer.is-compact .iv-composer-grow::after) { font-size: 13.5px !important; }
 .iv-composer.is-compact :is(.iv-composer-tool, .iv-composer-send) { width: 30px; height: 30px; }
 .iv-composer.is-compact .iv-composer-spinner { inset: 7px; }
 

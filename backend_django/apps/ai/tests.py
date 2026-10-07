@@ -902,6 +902,26 @@ class AIWorkerCommandTests(TestCase):
         AI_HTTP_BASE_URL="https://ai.example/v1",
         AI_HTTP_API_KEY="test-key",
         AI_HTTP_MODEL="gpt-5.4-mini",
+        WRITING_AI_SOURCE="codex_cli",
+        CODEX_MODEL="gpt-6-luna",
+        CODEX_WRITING_EFFORT="medium",
+    )
+    def test_writing_score_runs_on_local_codex_model_and_effort_even_with_http_configured(self):
+        _user, entry, created = self.create_writing_score_task(username="worker-codex-luna-user", prompt_id="worker-codex-luna-prompt")
+        task = AITask.objects.get(task_id=created["task"]["id"])
+        self.assertEqual((task.request_payload["requested_provider"], task.request_payload["requested_model"]), ("codex", "gpt-6-luna"))
+        with patch("apps.ai.provider_adapters.run_codex", side_effect=RuntimeError("stop after the call")) as run_codex, \
+                patch("apps.ai.provider_adapters.HttpWritingScoreAdapter._execute_provider", side_effect=AssertionError("HTTP must not be used")) as http:
+            call_command("run_ai_tasks", "--limit", "1", stdout=StringIO())
+        self.assertEqual(http.call_count, 0)
+        self.assertEqual(run_codex.call_count, 1)
+        self.assertEqual((run_codex.call_args.kwargs["model"], run_codex.call_args.kwargs["effort"]), ("gpt-6-luna", "medium"))
+
+    @override_settings(
+        AI_HTTP_BASE_URL="https://ai.example/v1",
+        AI_HTTP_API_KEY="test-key",
+        AI_HTTP_MODEL="gpt-5.4-mini",
+        WRITING_AI_SOURCE="",
     )
     def test_run_ai_tasks_prefers_http_writing_score_when_http_provider_is_configured(self):
         user = get_user_model().objects.create_user(username="worker-http-success-user", password="test-pass")
@@ -963,6 +983,7 @@ class AIWorkerCommandTests(TestCase):
                     {
                         "text": json.dumps(http_payload),
                         "usage": {"input_tokens": 900, "output_tokens": 300},
+                        "model": "gpt-5.4-mini",
                     },
                 )()
 
@@ -988,6 +1009,7 @@ class AIWorkerCommandTests(TestCase):
         AI_HTTP_BASE_URL="https://ai.example/v1",
         AI_HTTP_API_KEY="test-key",
         AI_HTTP_MODEL="gpt-5.4-mini",
+        WRITING_AI_SOURCE="",
     )
     def test_run_ai_tasks_requeues_http_writing_score_when_connection_drops(self):
         from apps.ai.http_provider import HttpApiProviderError
@@ -1025,6 +1047,7 @@ class AIWorkerCommandTests(TestCase):
         AI_HTTP_BASE_URL="https://ai.example/v1",
         AI_HTTP_API_KEY="test-key",
         AI_HTTP_MODEL="gpt-5.4-mini",
+        WRITING_AI_SOURCE="",
     )
     def test_run_ai_tasks_requeues_http_writing_score_on_provider_502(self):
         from apps.ai.http_provider import HttpApiProviderError

@@ -359,7 +359,8 @@ class CodexCliClient:
         self.executable = executable
         self.cwd = cwd
 
-    def run(self, prompt: str, call_id: str, timeout: int = 120, max_attempts: int = 2) -> tuple[str, dict[str, Any] | None]:
+    def run(self, prompt: str, call_id: str, timeout: int = 120, max_attempts: int = 2, *, model: str | None = None,
+            effort: str | None = None) -> tuple[str, dict[str, Any] | None]:
         if os.environ.get("IELTS_WEB_DISABLE_CODEX") == "1":
             raise RuntimeError("codex disabled by IELTS_WEB_DISABLE_CODEX=1")
 
@@ -367,7 +368,13 @@ class CodexCliClient:
         if not shutil.which(codex) and not Path(codex).exists():
             raise RuntimeError("codex CLI not found")
 
-        config_args = ["-c", f'model_reasoning_effort="{CODEX_REASONING_EFFORT}"']
+        # Text only, on the app's model (not whatever ~/.codex/config.toml defaults to): no file writes, no saved session.
+        chosen_model = str(model or getattr(settings, "CODEX_MODEL", "") or "").strip()
+        chosen_effort = str(effort or CODEX_REASONING_EFFORT).strip()
+        config_args = ["-c", f'model_reasoning_effort="{chosen_effort}"']
+        if chosen_model:
+            config_args += ["-m", chosen_model]
+        config_args += ["-s", "read-only", "--ephemeral", "--skip-git-repo-check"]
         cwd = self.cwd or str(Path(settings.BASE_DIR).parent)
         # Ensure node is findable: the AI worker may run with a minimal PATH
         # (/usr/bin:/bin only), but codex is a Node.js script whose shebang
@@ -409,6 +416,8 @@ class CodexCliClient:
             if not has_real_content:
                 last_error = RuntimeError(f"codex returned only event stream for {call_id}")
                 continue
+            if usage is not None:
+                usage = {**usage, "provider": "codex", "model": chosen_model, "effort": chosen_effort}
             return output, usage
         raise last_error or RuntimeError(f"codex returned no usable output for {call_id}")
 
@@ -416,8 +425,9 @@ class CodexCliClient:
 _DEFAULT_CODEX_CLIENT = CodexCliClient()
 
 
-def run_codex(prompt: str, call_id: str, timeout: int = 120, max_attempts: int = 2) -> tuple[str, dict[str, Any] | None]:
-    return _DEFAULT_CODEX_CLIENT.run(prompt, call_id, timeout=timeout, max_attempts=max_attempts)
+def run_codex(prompt: str, call_id: str, timeout: int = 120, max_attempts: int = 2, *, model: str | None = None,
+              effort: str | None = None) -> tuple[str, dict[str, Any] | None]:
+    return _DEFAULT_CODEX_CLIENT.run(prompt, call_id, timeout=timeout, max_attempts=max_attempts, model=model, effort=effort)
 
 
 CLAUDE_CLI_QUOTA_PHRASES = ("limit reached", "quota", "rate limit", "overloaded", "capacity")
@@ -595,8 +605,10 @@ class CodexWritingScoreAdapter(AiTaskTemplate):
         output, usage = run_codex(
             self._report_prompt(request_payload),
             f"writing_score_{task.task_id}_report",
-            timeout=180,
+            timeout=240,
             max_attempts=1,
+            model=str(request_payload.get("requested_model") or "") or None,
+            effort=getattr(settings, "CODEX_WRITING_EFFORT", "") or None,
         )
         return extract_json_object(output), usage
 

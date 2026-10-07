@@ -368,7 +368,7 @@
       root.noValidate = true;
       root.innerHTML = `
         <div class="iv-composer-files" hidden></div>
-        <textarea class="iv-composer-input" rows="1" maxlength="${CHARACTER_LIMIT}" placeholder="${esc(placeholder(key))}" aria-label="${esc(copy("输入消息", "Message"))}"></textarea>
+        <div class="iv-composer-grow" data-value=""><textarea class="iv-composer-input" rows="1" maxlength="${CHARACTER_LIMIT}" placeholder="${esc(placeholder(key))}" aria-label="${esc(copy("输入消息", "Message"))}"></textarea></div>
         <div class="iv-composer-bar">
           <button type="button" class="iv-composer-tool" data-composer="attach" title="${esc(copy("添加图片或 PDF（也可以粘贴或拖进来）", "Add images or PDFs (paste or drop works too)"))}" aria-label="${esc(copy("添加附件", "Attach files"))}">${ICON.attach}</button>
           <div class="iv-mode-switch" data-iv-modes data-mode="${mode}" role="radiogroup" aria-label="${esc(copy("模式", "Mode"))}">${modeButtons()}</div>
@@ -382,7 +382,12 @@
       const picker = $(".iv-composer-picker");
       if (input) {
         input.value = draft.text;
-        input.addEventListener("input", () => { draft.text = input.value; syncComposer(key); });
+        input.addEventListener("input", () => {
+          draft.text = input.value;
+          syncComposer(key);
+          // Typing or pasting at the end keeps the caret in view once the box has hit its cap and scrolls.
+          if (input.selectionEnd === input.value.length) window.requestAnimationFrame?.(() => { input.scrollTop = input.scrollHeight; });
+        });
         input.addEventListener("keydown", (event) => {
           // Enter sends, Shift+Enter breaks the line; never while an IME is composing (Chinese input confirms with Enter).
           if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
@@ -457,8 +462,10 @@
       const draft = drafts[key];
       const input = root.querySelector(".iv-composer-input");
       if (input && input.value !== draft.text) input.value = draft.text;
-      // Empty: the natural one-row height (a placeholder that wraps while the dock is still growing must not count).
-      if (input) { input.style.height = ""; if (draft.text) input.style.height = `${Math.min(input.scrollHeight, key === "dock" ? 132 : 240)}px`; }
+      // The box grows by CSS, not by measuring: an invisible copy of the text shares the textarea's grid cell and sets its
+      // height (capped, then the textarea scrolls), so it is right even when the composer was built on a hidden page.
+      const grow = root.querySelector(".iv-composer-grow");
+      if (grow) grow.dataset.value = draft.text;
       const files = root.querySelector(".iv-composer-files");
       if (files) {
         files.hidden = !draft.files.length;
@@ -878,7 +885,6 @@
     // The page wires its own events (it lives in #assistantPanel, outside the interview panel).
     document.addEventListener?.("click", (event) => { handleClick(event); });
     document.addEventListener?.("input", (event) => { handleInput(event); });
-    window.addEventListener?.("resize", () => syncComposers());
     // Deep Chat takes its colours at mount; a theme / appearance switch rebuilds it (from history) in the new palette.
     function restyleChat() {
       if (dock && !dock.root.hidden) liftDock();

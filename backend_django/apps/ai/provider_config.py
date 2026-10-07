@@ -223,7 +223,8 @@ def resolve_provider_route(
         )
 
     if requested_provider == DEFAULT_REQUESTED_PROVIDER:
-        if _http_provider_configured():
+        # WRITING_AI_SOURCE=codex_cli keeps writing scores on the local Codex CLI even when an HTTP API is configured.
+        if _http_provider_configured() and _setting_text("WRITING_AI_SOURCE") != "codex_cli":
             return ProviderRoute(
                 task_type=normalized_task_type,
                 requested_provider=requested_provider,
