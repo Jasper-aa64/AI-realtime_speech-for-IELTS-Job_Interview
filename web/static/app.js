@@ -1212,12 +1212,24 @@ const interview = window.IELTSInterview?.createInterview?.({
   state, api, ensureCsrfToken, switchView, exitPractice, promptGuestLogin,
   escapeHtml, currentAiSourcePreference, renderMarkdown: renderSpokenAnswerMarkdown,
   markdown: { ready: ensureCorpusMarkdownEditorReady, get: getCorpusMarkdownValue, set: setCorpusMarkdownValue },
-  // The AI 助手 in IELTS mode edits the speaking corpora and Takeaway: drop the cached copies, reload what is showing.
+  // The AI 助手 in IELTS mode edits the speaking corpora and Takeaway (and undoes): the page on screen refreshes in place
+  // (it keeps its cards while the new ones load), the other cached copies are dropped and reload when opened.
   onIeltsCorpusChanged: () => {
-    clearQuestionBankScopedCaches();
-    state.languageTakeaway.items = [];
-    state.languageTakeaway.loaded = false;
+    const view = state.view;
+    if (view !== "p1Corpus" && view !== "p2Corpus") clearQuestionBankScopedCaches();
+    state.p1Corpus.loadingPromise = null;
+    state.p2Corpus.loadingPromise = null;
+    if (view !== "takeawayBook") {
+      state.languageTakeaway.items = [];
+      state.languageTakeaway.loaded = false;
+    }
     state.languageTakeaway.loadingPromise = null;
+    ({
+      p1Corpus: () => loadP1Corpus(),
+      p2Corpus: () => loadP2Corpus({ force: true }),
+      takeawayBook: () => loadLanguageTakeaways({ refresh: true }),
+      corpus: () => loadCorpusHome(),
+    })[view]?.();
   },
   openIeltsCorpus: (where) => switchView({ p1: "p1Corpus", p2: "p2Corpus", takeaway: "takeawayBook" }[where] || "corpus", { force: true }),
 });

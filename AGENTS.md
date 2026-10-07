@@ -39,6 +39,29 @@ matching `min-width`/`min-height` and `box-sizing: border-box`, or a stray globa
 `min-height` stretches them into tall rectangles. See
 `docs/frontend-ui-conventions.md`.
 
+## Mac dev stack (Qt desktop window on 127.0.0.1:8767): web server + AI worker are a pair
+
+Hard rule, added 2026-10-07 after it was missed repeatedly: on the Mac dev machine,
+whenever you start or restart the Django dev server, start or restart the AI
+worker with it, in the same environment. Writing scores and speaking reports
+are queued `AITask`s that only `run_ai_worker` executes. With only the web
+server up they sit at 「排队中」 forever, 0 attempts, no error. Restart both
+after backend code changes too: the worker imports the old code until it is
+restarted.
+
+```bash
+cd ~/Documents/trading-study/AI-realtime_speech-for-IELTS-Job_Interview && set -a && . ./.env && set +a && unset DJANGO_DB_NAME
+.venv-django/bin/python backend_django/manage.py runserver 127.0.0.1:8767 --noreload   # process 1
+.venv-django/bin/python backend_django/manage.py run_ai_worker --interval-seconds 2 --idle-interval-seconds 5   # process 2
+```
+
+After (re)starting, confirm both are running before reporting done:
+`ps aux | grep -E "runserver 127.0.0.1:8767|run_ai_worker" | grep -v grep`
+must show two processes. Agent harnesses that cap background commands (for
+example two hours) stop both. When that happens, say so and restart both, never
+just one. This applies to the Mac dev stack only. The Windows rule below
+(the worker is not auto-started there) still stands.
+
 ## Local Startup / Public Access
 
 When asked to start, restart, expose, debug public access, diagnose `502 Bad Gateway`, the backend "randomly dropping", or work with NSSM / Windows services for this project, read this guide first:

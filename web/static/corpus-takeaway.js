@@ -3164,7 +3164,8 @@
 
     async function loadCorpusHome() {}
 
-    async function loadLanguageTakeaways() {
+    // refresh: refetch even when cached, keeping the current cards on screen (no loading spinner) until the new ones land.
+    async function loadLanguageTakeaways({ refresh = false } = {}) {
       const stats = $("languageTakeawayStats");
       const list = $("languageTakeawayList");
       if (!state.account.authenticated) {
@@ -3178,13 +3179,13 @@
         renderTakeawayReviewSurfaces("language");
         return;
       }
-      if (state.languageTakeaway.loaded) {
+      if (state.languageTakeaway.loaded && !refresh) {
         renderLanguageTakeawayToggle();
         renderLanguageTakeaways();
         if (stats) stats.textContent = `${state.languageTakeaway.items.length} 条`;
         renderTakeawayReviewSurfaces("language");
         return;
-      } else {
+      } else if (!refresh || !state.languageTakeaway.loaded) {
         if (stats) stats.textContent = "Loading...";
         if (list) list.innerHTML = '<div class="page-center-loading takeaway-page-loading" role="status" aria-live="polite"><div><span class="spinner"></span><div><strong>正在加载 Takeaway</strong><span>按记忆曲线整理你的语料卡片…</span></div></div></div>';
       }

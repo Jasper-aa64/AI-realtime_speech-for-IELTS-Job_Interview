@@ -45,11 +45,21 @@
       upload: (path, form) => upload(path, form),
       popup: (message) => popup(message),
       toast: (message) => toast(message),
-      setCorpus: (list) => { data.corpus = list; window.IELTSInterviewHome?.refresh(); },
+      setCorpus: (list) => { data.corpus = list; window.IELTSInterviewHome?.refresh(); refreshShown(); },
       openApplied: (item) => openApplied(item),
       openPage: () => openAssistantPage(),
       onIeltsChanged: () => onIeltsCorpusChanged(),
     }) || null;
+    // After the AI 助手 changes (or undoes changes to) the corpus, the page behind it redraws in place: the corpus screen,
+    // or a practice launch block (its knowledge picker counts the cards). Scroll stays put; never mid-session.
+    function refreshShown() {
+      const scroller = document.querySelector(".workspace");
+      const top = scroller?.scrollTop || 0;
+      if (state.view === "interview" && data.pane === "corpus") render();
+      else if (String(state.view || "").startsWith("iv_") && !state.practiceLocked) renderLaunch(state.view);
+      else return;
+      if (scroller) scroller.scrollTop = top;
+    }
     // The AI 助手 is its own view (shared by both modes); the corner dock is on every other page.
     function syncDock() {
       byId("ieltsAssistantNav")?.classList.toggle("hidden", !state.desktopCapabilities?.mock_interview);

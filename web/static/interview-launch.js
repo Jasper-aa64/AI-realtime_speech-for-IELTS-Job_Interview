@@ -191,6 +191,7 @@
       if (!host || !show) return;
       save();
       host.innerHTML = `${block()}${launch.status ? `<p class="iv-launch-status" role="status">${esc(launch.status)}</p>` : ""}`;
+      if (pickGroup) renderPicker(); // an open knowledge picker follows corpus changes (e.g. the AI 助手 deleting a card)
     }
 
     function hide() {
