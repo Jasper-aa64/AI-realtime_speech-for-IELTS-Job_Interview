@@ -239,7 +239,47 @@ def corpus_listing(user, kind=""):
 
     listing = saved + curated
     knowledge = sorted((item for item in listing if item["kind"] == Entry.Kind.KNOWLEDGE), key=knowledge_rank)
+    profile = InterviewProfile.objects.filter(user=user).only("knowledge_layout").first()
+    knowledge = apply_layout(knowledge, profile.knowledge_layout if profile else {})
     return {"entries": [item for item in listing if item["kind"] != Entry.Kind.KNOWLEDGE] + knowledge}
+
+
+def _tag(item):
+    return item.get("group") or "自定义"
+
+
+def _topic(item):
+    return item.get("title") or "综合"
+
+
+def knowledge_outline(knowledge):
+    """[(direction, [topic, ...]), ...] in the order the entries come (first appearance)."""
+    outline = {}
+    for item in knowledge:
+        topics = outline.setdefault(_tag(item), [])
+        if _topic(item) not in topics:
+            topics.append(_topic(item))
+    return list(outline.items())
+
+
+def _ordered(names, preferred):
+    preferred = [name for name in dict.fromkeys(preferred or []) if name in names]
+    return preferred + [name for name in names if name not in preferred]
+
+
+def apply_layout(knowledge, layout):
+    """Reorders knowledge entries by the candidate's layout: directions, then topic cards inside each; questions keep their order."""
+    if not layout:
+        return knowledge
+    buckets = {}
+    for item in knowledge:
+        buckets.setdefault((_tag(item), _topic(item)), []).append(item)
+    outline = dict(knowledge_outline(knowledge))
+    ordered = []
+    for tag in _ordered(list(outline), layout.get("tags")):
+        for topic in _ordered(outline[tag], (layout.get("topics") or {}).get(tag)):
+            ordered += buckets[(tag, topic)]
+    return ordered
 
 
 def create_entry(user, payload):

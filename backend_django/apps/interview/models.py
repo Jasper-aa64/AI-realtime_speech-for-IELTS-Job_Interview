@@ -26,6 +26,9 @@ class InterviewProfile(UserOwnedModel):
     jd_text = models.TextField(blank=True)
     jd_summary = models.JSONField(default=dict, blank=True)
     jd_updated_at = models.DateTimeField(null=True, blank=True)
+    # The candidate's own order for the knowledge library: {"tags": [direction, ...], "topics": {direction: [topic, ...]}}.
+    # Names listed come first in that order; anything not listed keeps the default order (bank order, then own as added).
+    knowledge_layout = models.JSONField(default=dict, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user"], name="interview_one_profile_per_user")]

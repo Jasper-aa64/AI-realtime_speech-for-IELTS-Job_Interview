@@ -46,7 +46,8 @@ class AssistantTests(TestCase):
         inputs = run.call_args.args[2]
         self.assertEqual(inputs["mode"], "chat")
         self.assertEqual(inputs["conversation"], [{"role": "user", "content": "SPSC 队列为什么不用锁？"}])
-        self.assertIn("C++ 基础与进阶 / RAII 与资源管理", inputs["library"]["bank_topics"])
+        cpp = next(item for item in inputs["library"]["layout"] if item["tag"] == "C++ 基础与进阶")
+        self.assertIn("RAII 与资源管理", cpp["topics"])
 
     def test_chat_mode_never_writes_even_if_the_model_returns_actions(self):
         response, _ = self.ask("存一下", {"reply": "请切到 Agent 模式", "actions": [{"type": "jd_question", "question": "讲讲 epoll", "answer": ""}]})
@@ -173,8 +174,8 @@ class AssistantOutputParsingTests(TestCase):
         raw = '{"reply":"已保存","actions":[{"type":"knowledge","tag":"低延迟与性能","topic":"内存对齐","question":"为什么对齐？","answer":"避免伪共享"}]}"}'
         result = _validated_output("assistant", raw, {})
         self.assertEqual((result["reply"], result["actions"][0]["topic"]), ("已保存", "内存对齐"))
-        with self.assertRaises(ValueError):
-            _validated_output("assistant", "没有 JSON", {})
+        # no JSON at all: the text itself is the reply, with no actions (not a failed turn)
+        self.assertEqual(_validated_output("assistant", "没有 JSON", {})["reply"], "没有 JSON")
 
 
 class AssistantAttachmentTests(TestCase):
@@ -215,3 +216,52 @@ class AssistantAttachmentTests(TestCase):
         response = self.client.post("/api/interview/assistant/", {"message": "看看", "files": [SimpleUploadedFile("a.exe", b"MZ\x90\x00")]})
         self.assertEqual(response.status_code, 400)
         self.assertIn("不是 PDF 或图片", response.json()["error"])
+
+
+class AssistantReorderTests(TestCase):
+    """Agent reorders the knowledge library (move / swap / sort topic cards or directions); undo puts it back."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="reorder-owner", password="pw")
+        self.client.force_login(self.user)
+
+    def agent(self, message, actions):
+        output = ai_schema.validate("assistant", {"reply": "好的", "actions": actions}, {})
+        with patch(RUN, return_value={**output, "model": "gpt-6-luna", "elapsed_ms": 1000}) as run:
+            response = self.client.post("/api/interview/assistant/", json.dumps({"message": message, "mode": "agent"}), content_type="application/json")
+        return response, run
+
+    def outline(self):
+        from . import corpus
+        return dict(corpus.knowledge_outline([e for e in self.client.get("/api/interview/corpus/").json()["entries"] if e["kind"] == "knowledge"]))
+
+    def tags(self):
+        from . import corpus
+        return [tag for tag, _ in corpus.knowledge_outline([e for e in self.client.get("/api/interview/corpus/").json()["entries"] if e["kind"] == "knowledge"])]
+
+    def test_move_a_topic_to_the_end_swap_and_undo(self):
+        topics = self.outline()["低延迟与性能"]
+        first, second = topics[0], topics[1]
+        response, run = self.agent("把第一张题卡放到最后", [{"type": "reorder", "tag": "低延迟与性能", "topics": topics[1:] + [first]}])
+        self.assertEqual(response.status_code, 200, response.content)
+        layout = next(item for item in run.call_args.args[2]["library"]["layout"] if item["tag"] == "低延迟与性能")
+        self.assertEqual(layout["topics"], topics, "the agent sees the order on screen")
+        self.assertEqual(self.outline()["低延迟与性能"], topics[1:] + [first])
+        self.assertEqual(response.json()["reply"]["applied"][0]["label"], "知识点语料库 · 调整「低延迟与性能」的题卡顺序")
+        # a partial list moves only the named cards to the front; unknown names are ignored
+        self.agent("交换前两张", [{"type": "reorder", "tag": "低延迟与性能", "topics": [second, "不存在的题卡", first]}])
+        now = self.outline()["低延迟与性能"]
+        self.assertEqual(now[:2], [second, first])
+        self.assertEqual(sorted(now), sorted(topics))
+        undo = self.client.post(f"/api/interview/assistant/messages/{response.json()['reply']['id']}/undo/")
+        self.assertEqual(undo.status_code, 200, undo.content)
+        self.assertEqual(self.outline()["低延迟与性能"], topics)
+
+    def test_directions_reorder_and_unknown_names_are_skipped(self):
+        tags = self.tags()
+        response, _ = self.agent("把行为与沟通放最前面", [{"type": "reorder", "tags": ["行为与沟通"]}])
+        self.assertEqual(self.tags(), ["行为与沟通"] + [tag for tag in tags if tag != "行为与沟通"])
+        response, _ = self.agent("乱排", [{"type": "reorder", "tag": "不存在", "topics": ["x"]}])
+        self.assertEqual(response.json()["reply"]["applied"], [])
+        self.assertTrue(any(step["kind"] == "skip" for step in response.json()["reply"]["steps"]))
+

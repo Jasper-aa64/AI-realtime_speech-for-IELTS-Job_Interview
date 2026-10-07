@@ -104,13 +104,17 @@ ASSISTANT_AGENT = ASSISTANT_BASE + (
     "You are in AGENT mode: besides answering, you manage the candidate's library by returning actions, which the "
     "server applies right after your reply. Do exactly what the user asks - create, edit, merge, reorganise or delete "
     "cards - and nothing they did not ask for; when they only ask a question, return no actions. Your reply must "
-    "describe the actions you return (what was created / changed / deleted) and must never claim a change that is not "
-    "in actions. If the request is ambiguous (e.g. which card), ask instead of guessing and return no actions. "
+    "describe the actions you return (what was created / changed / deleted / reordered) and must never claim a change "
+    "that is not in actions. You act only through the actions of this reply: never promise to do something later "
+    "(\"我会…\" with no action). If no action below can do what is asked, say plainly that it is not supported. If the "
+    "request is ambiguous (e.g. which card), ask instead of guessing and return no actions; \"the new one\" / \"刚新增的\" "
+    "means the card created most recently in this conversation. "
     "LIBRARY.cards lists the candidate's own cards with ids: kind knowledge (group = direction/tag, title = topic card, "
     "question, answer), project / award (title = one-line 简述, resume_excerpt, answer = STAR body; group 实习 marks an "
     "internship), project_followup (a follow-up under parent), jd (title = role, answer = JD text), jd_question / "
     "reverse_question (parent = JD card if any). An answer ending with …(共 N 字) is truncated: to change it either "
-    "use append_answer or restate the whole answer. LIBRARY.bank_topics are read-only bank topics (reuse their names). "
+    "use append_answer or restate the whole answer. LIBRARY.layout lists every knowledge direction with its topic cards "
+    "in display order (bank topics included; reuse their names). "
     "Actions: create {\"type\":\"knowledge\",\"tag\":\"...\",\"topic\":\"...\",\"question\":\"...\",\"answer\":\"...\"}; "
     "{\"type\":\"resume_card\",\"section\":\"project|intern|award\",\"title\":\"...\",\"resume_excerpt\":\"...\",\"star\":\"**S 情境** ... "
     "**T 任务** ... **A 行动** ... **R 结果** ...\",\"follow_ups\":[{\"question\":\"...\",\"answer\":\"...\"}]} (only facts from "
@@ -119,7 +123,11 @@ ASSISTANT_AGENT = ASSISTANT_BASE + (
     "{\"type\":\"jd_question\",\"kind\":\"jd_question|reverse_question\",\"question\":\"...\",\"answer\":\"...\"}; "
     "edit {\"type\":\"update\",\"id\":\"icp_...\", plus only the fields to change among \"group\",\"title\",\"question\","
     "\"answer\" (replaces it; \"\" clears it),\"append_answer\",\"resume_excerpt\"}; delete {\"type\":\"delete\",\"id\":\"icp_...\"} "
-    "(a card's follow-ups go with it); save the candidate's resume or target JD text (used by later chats and the "
+    "(a card's follow-ups go with it); reorder the knowledge library (move / swap / sort topic cards or directions; "
+    "LIBRARY.layout is the current order, as on screen) {\"type\":\"reorder\",\"tag\":\"<direction>\",\"topics\":[every topic "
+    "card of that direction, in the new order]} or {\"type\":\"reorder\",\"tags\":[every direction, in the new order]} "
+    "(\"move X to the end\" = the full list with X last; \"swap the first two\" = the full list with those two exchanged); "
+    "save the candidate's resume or target JD text (used by later chats and the "
     "interviewer) {\"type\":\"set_profile\",\"field\":\"resume|jd\",\"attachment\":\"<attached PDF file name>\"} "
     "(or \"text\" instead of attachment). When the user sends a resume or a JD (as a file or pasted) and asks to "
     "customise / split / turn it into cards (简历 / JD 定制), save it with set_profile and create the cards: projects and "
@@ -246,6 +254,18 @@ def _assistant_action(item):
         return {"type": kind, "id": text(item.get("id"), "id", 240, required=True), **fields}
     if kind == "delete":
         return {"type": kind, "id": text(item.get("id"), "id", 240, required=True)}
+    if kind == "reorder":
+        def names(key):
+            return [text(name, key, 200, required=True) for name in _list(item.get(key), 80) if isinstance(name, str) and name.strip()]
+        if item.get("tag") is not None:  # topic cards inside one direction
+            topics = names("topics")
+            if not topics:
+                raise ValueError("reorder needs topics")
+            return {"type": kind, "tag": text(item.get("tag"), "tag", 80, required=True), "topics": topics}
+        tags = names("tags")
+        if not tags:
+            raise ValueError("reorder needs tags or tag + topics")
+        return {"type": kind, "tags": tags}
     raise ValueError(f"unknown action {kind}")
 
 

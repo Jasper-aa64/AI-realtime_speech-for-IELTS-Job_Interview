@@ -66,7 +66,15 @@ def _json_output(value):
 
 
 def _validated_output(kind, value, inputs):
-    if kind in ai_schema.INSTRUCTIONS or kind == "assistant":
+    if kind == "assistant":
+        try:
+            parsed = _json_output(value)
+        except ValueError:
+            # The model sometimes answers in plain text instead of the JSON envelope: show that as the reply (no actions)
+            # rather than failing the whole turn.
+            parsed = {"reply": text(value, "AI output", 60000, required=True), "actions": []}
+        return ai_schema.validate(kind, parsed, inputs)
+    if kind in ai_schema.INSTRUCTIONS:
         return ai_schema.validate(kind, _json_output(value), inputs)
     if kind == "custom_questions":
         questions = custom_questions(_json_output(value).get("questions"), source="ai_generated")

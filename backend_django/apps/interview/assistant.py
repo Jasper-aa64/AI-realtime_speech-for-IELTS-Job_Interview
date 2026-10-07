@@ -24,7 +24,7 @@ SNAPSHOT_CARDS = 240
 CLIP = 1500  # longer answers reach the model truncated, with their full length
 SECTION_KIND = {"project": (Entry.Kind.PROJECT, ""), "intern": (Entry.Kind.PROJECT, "实习"), "award": (Entry.Kind.AWARD, "")}
 AREA = {"knowledge": "知识点语料库", "resume": "简历题卡", "jd": "JD 与反问"}
-OP_WORD = {"create": "新建", "update": "修改", "delete": "删除"}
+OP_WORD = {"create": "新建", "update": "修改", "delete": "删除", "reorder": "调整顺序"}
 SNAPSHOT_FIELDS = ("kind", "group", "title", "question", "corpus_text", "ai_draft", "source", "source_key", "order", "metadata")
 UPDATED_FIELDS = ("group", "title", "question", "corpus_text", "metadata")
 
@@ -48,9 +48,9 @@ def _card(entry):
 def _library(user):
     """The candidate's own cards with ids (so the agent can edit and delete them) plus the bank's topic names."""
     own = [e for e in Entry.objects.filter(user=user).select_related("parent") if not (e.metadata or {}).get("orphaned")]
-    bank = sorted({f"{e['group']} / {e['title']}" for e in corpus.corpus_listing(user, "knowledge")["entries"] if e["id"] is None})
+    outline = corpus.knowledge_outline(corpus.corpus_listing(user, "knowledge")["entries"])
     profile = corpus.profile_for(user)
-    return {"cards": [_card(e) for e in own[:SNAPSHOT_CARDS]], "bank_topics": bank[:150],
+    return {"cards": [_card(e) for e in own[:SNAPSHOT_CARDS]], "layout": [{"tag": tag, "topics": topics} for tag, topics in outline],
             "resume": profile.resume_text[:4000], "jd_summary": profile.jd_summary}
 
 
@@ -185,8 +185,34 @@ def _set_profile(user, action, files=None):
     return item, {"op": "profile", "before": before}
 
 
+def _reorder(user, action):
+    """Topic cards inside a direction, or the directions themselves: names listed first, in that order; the rest keep theirs."""
+    outline = dict(corpus.knowledge_outline(corpus.corpus_listing(user, "knowledge")["entries"]))
+    profile = corpus.profile_for(user, lock=True)
+    before = profile.knowledge_layout or {}
+    layout = {"tags": list(before.get("tags") or []), "topics": dict(before.get("topics") or {})}
+    if "tag" in action:
+        tag = action["tag"]
+        if tag not in outline:
+            raise InterviewError(f"知识点语料库里没有「{tag}」这个方向。")
+        known = [name for name in action["topics"] if name in outline[tag]]
+        if not known:
+            raise InterviewError(f"「{tag}」里没有这些题卡：{'、'.join(action['topics'][:4])}")
+        layout["topics"][tag] = list(dict.fromkeys(known)) + [name for name in outline[tag] if name not in known]
+        label = f"知识点语料库 · 调整「{tag}」的题卡顺序"
+    else:
+        known = [name for name in action["tags"] if name in outline]
+        if not known:
+            raise InterviewError(f"知识点语料库里没有这些方向：{'、'.join(action['tags'][:4])}")
+        layout["tags"] = list(dict.fromkeys(known)) + [name for name in outline if name not in known]
+        label = "知识点语料库 · 调整方向顺序"
+    profile.knowledge_layout = layout
+    profile.save(update_fields=["knowledge_layout", "updated_at"])
+    return {"op": "update", "where": "knowledge", "label": label, "entry_id": None}, {"op": "layout", "before": before}
+
+
 WRITERS = {"knowledge": _knowledge, "resume_card": _resume_card, "jd": _jd, "jd_question": _jd_question,
-           "update": _update, "delete": _delete}
+           "update": _update, "delete": _delete, "reorder": _reorder}
 
 
 def apply_actions(user, actions, domain="interview", files=None):
@@ -286,7 +312,7 @@ def _steps(library, result, actions, applied, skipped, domain="interview", attac
     """The agent trace shown under a reply: what it read, which model answered, what it cost, what it changed."""
     effort = f" · 推理 {result['effort']}" if result.get("effort") else ""
     read = (assistant_ielts.library_detail(library) if domain == "ielts"
-            else f"你的题卡 {len(library['cards'])} 张 · 题库方向 {len(library['bank_topics'])} 个")
+            else f"你的题卡 {len(library['cards'])} 张 · 知识点方向 {len(library['layout'])} 个")
     steps = []
     if attached and attached.items:
         files = "、".join(f"{item['name']}（{'PDF 文字' if item['kind'] == 'pdf' and not item.get('scanned') else '图片'}）" for item in attached.items)
@@ -355,6 +381,10 @@ def undo(user, message_id):
                 for name, value in record["before"].items():
                     setattr(profile, name, value)
                 profile.save(update_fields=[*record["before"], "updated_at"])
+            elif record["op"] == "layout":
+                profile = corpus.profile_for(user, lock=True)
+                profile.knowledge_layout = record["before"]
+                profile.save(update_fields=["knowledge_layout", "updated_at"])
             elif record["op"] == "created":
                 Entry.objects.filter(user=user, entry_id=record["entry_id"]).delete()
             elif record["op"] == "updated":
