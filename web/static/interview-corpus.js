@@ -75,20 +75,18 @@
 
     // ---- Knowledge / JD screens: the P1 corpus page.
     // Knowledge: a tag is the direction (entry.group, e.g. 低延迟与性能); inside it every topic (entry.title, e.g.
-    // SPSC 队列与背压) is one P1-style card. Resume directions come first, then the curated bank's.
+    // SPSC 队列与背压) is one P1-style card. Order is the server's (bank order, then the candidate's own in the order
+    // added), so a new direction or topic goes last and nothing moves when a card is added or answered.
     // 自我介绍 lives here for now: a pinned direction with one card, each version of the intro one question on it.
     const INTRO = "自我介绍";
     function knowledgeTags() {
-      const curated = (entry) => entry.source === "curated" || String(entry.source_key || "").startsWith("curated:");
-      const tags = new Map([[INTRO, { name: INTRO, curated: false, intro: true, rows: entries().filter((entry) => entry.kind === "self_intro") }]]);
+      const tags = new Map([[INTRO, { name: INTRO, intro: true, rows: entries().filter((entry) => entry.kind === "self_intro") }]]);
       entries().filter((entry) => entry.kind === "knowledge").forEach((entry) => {
         const name = entry.group || "自定义";
-        if (!tags.has(name)) tags.set(name, { name, curated: true, rows: [] });
-        const item = tags.get(name);
-        item.rows.push(entry);
-        if (!curated(entry)) item.curated = false;
+        if (!tags.has(name)) tags.set(name, { name, rows: [] });
+        tags.get(name).rows.push(entry);
       });
-      return [...tags.values()].sort((a, b) => Number(Boolean(b.intro)) - Number(Boolean(a.intro)) || Number(a.curated) - Number(b.curated));
+      return [...tags.values()]; // 自我介绍 is inserted first; the rest keep the server's order
     }
 
     function knowledgeGroups() {

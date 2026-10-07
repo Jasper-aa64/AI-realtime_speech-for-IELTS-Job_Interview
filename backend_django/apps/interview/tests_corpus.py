@@ -238,3 +238,34 @@ class InterviewSchemaTests(TestCase):
         dims["structure"]["score"] = 21
         with self.assertRaises(ValueError):
             ai_schema.validate("score_report", {"dimensions": dims}, {})
+
+
+class KnowledgeOrderTests(TestCase):
+    """The knowledge library keeps one order: bank questions in bank order, the candidate's own after, as added."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="order-owner", password="pw")
+        self.client.force_login(self.user)
+
+    def knowledge(self):
+        return [entry for entry in self.client.get("/api/interview/corpus/").json()["entries"] if entry["kind"] == "knowledge"]
+
+    def add(self, data):
+        response = self.client.post("/api/interview/corpus/", json.dumps({"kind": "knowledge", **data}), content_type="application/json")
+        self.assertIn(response.status_code, (200, 201), response.content)
+        return response.json()["entry"]
+
+    def test_new_directions_go_last_and_answering_a_bank_question_does_not_move_it(self):
+        from .bank import QUESTIONS
+        before = [entry["source_key"] for entry in self.knowledge()]
+        self.assertEqual(before, [f"curated:{question['id']}" for question in QUESTIONS])
+        # an answer to a bank question in the middle of the bank: same place
+        middle = QUESTIONS[len(QUESTIONS) // 2]
+        self.add({"source_key": f"curated:{middle['id']}", "group": "x", "question": middle["prompt"], "corpus_text": "我的答案"})
+        self.assertEqual([entry["source_key"] for entry in self.knowledge()], before)
+        # own questions, in a direction whose name sorts first, and one inside a bank topic: appended, in the order added
+        first = self.add({"group": "AAA 新方向", "title": "新题卡", "question": "第一道自己的题"})
+        second = self.add({"group": QUESTIONS[0]["category"], "title": QUESTIONS[0]["topic"], "question": "第二道自己的题"})
+        listed = self.knowledge()
+        self.assertEqual([entry["source_key"] for entry in listed[:len(before)]], before)
+        self.assertEqual([entry["id"] for entry in listed[len(before):]], [first["id"], second["id"]])

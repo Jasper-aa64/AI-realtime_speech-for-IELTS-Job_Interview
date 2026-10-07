@@ -90,8 +90,8 @@
         map.get(key).push(entry);
       });
       Object.keys(launch.customs).forEach((key) => { if (!map.has(key)) map.set(key, []); });
-      const curated = (rows) => rows.every((entry) => entry.source === "curated" || String(entry.source_key || "").startsWith("curated:"));
-      return [...map].map(([label, rows]) => ({ label, rows })).sort((a, b) => Number(curated(a.rows)) - Number(curated(b.rows)));
+      // The server's order (bank first, the candidate's own after, in the order added) — same as the knowledge library.
+      return [...map].map(([label, rows]) => ({ label, rows }));
     }
 
     function pickKey(entry) {
@@ -306,7 +306,7 @@
         if (!topics.has(topic)) topics.set(topic, []);
         topics.get(topic).push(entry);
       });
-      return [...topics.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh"));
+      return [...topics.entries()]; // first appearance = the library's order
     };
     const pickRow = (attrs, lead, question, picked, tag = "") =>
       `<button type="button" class="${picked ? "has-corpus" : ""}" ${attrs} aria-pressed="${picked}"><strong>${esc(lead)}</strong><span>${esc(question)}${tag}</span></button>`;

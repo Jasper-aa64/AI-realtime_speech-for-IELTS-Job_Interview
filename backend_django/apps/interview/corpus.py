@@ -210,6 +210,8 @@ def corpus_listing(user, kind=""):
     entries = Entry.objects.filter(user=user).select_related("parent")
     if kind:
         entries = entries.filter(kind=kind)
+    entries = list(entries)
+    added = {entry.entry_id: entry.pk for entry in entries}
     saved = [entry_payload(entry) for entry in entries]
     # A bank question's topic is its card; rows saved before topics existed get it from the bank.
     for item in saved:
@@ -227,7 +229,17 @@ def corpus_listing(user, kind=""):
                                 "title": question["topic"], "question": question["prompt"], "corpus_text": "", "ai_draft": "",
                                 "source": "curated", "source_key": key, "parent_id": None, "order": 0,
                                 "orphaned": False, "summary": "", "updated_at": None})
-    return {"entries": saved + curated}
+    # Knowledge keeps one stable order, so nothing jumps around: bank questions in bank order whether or not they have an
+    # answer yet, then the candidate's own questions in the order they were added (a new direction / topic goes last).
+    bank_rank = {f"curated:{question['id']}": index for index, question in enumerate(QUESTIONS)}
+
+    def knowledge_rank(item):
+        key = str(item.get("source_key") or "")
+        return (0, bank_rank[key]) if key in bank_rank else (1, added.get(item.get("id"), 0))
+
+    listing = saved + curated
+    knowledge = sorted((item for item in listing if item["kind"] == Entry.Kind.KNOWLEDGE), key=knowledge_rank)
+    return {"entries": [item for item in listing if item["kind"] != Entry.Kind.KNOWLEDGE] + knowledge}
 
 
 def create_entry(user, payload):
