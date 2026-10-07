@@ -47322,20 +47322,24 @@ body:not(#_):not(#__):not(#___) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row :is(.
   letter-spacing: 0.02em !important;
 }
 body:not(#_):not(#__):not(#___) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row .p3-mode-help {
+  /* the pill's box exists in both modes (transparent in 标准), so switching never changes the layout */
+  align-self: center;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  padding: 4px 14px;
+  margin-block: -4px !important;  /* the pill's padding takes no layout space: the box keeps its original height */
+  border-radius: 999px;
+  background: transparent;
   font-size: 15px !important;
   font-weight: 500 !important;
-  line-height: 1.5 !important;
+  line-height: 1.35 !important;
+  transition: background-color 260ms ease, color 260ms ease !important;
 }
 body:not(#_):not(#__):not(#___) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row .p3-launch-label {
   font-size: 14px !important;
   font-weight: 500 !important;
 }
 body:not(#_):not(#__):not(#___):not(#____) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row.p3-pixel-flow-visible .p3-mode-help {
-  align-self: center;
-  width: fit-content;
-  max-width: calc(100% - 24px);
-  padding: 4px 14px;
-  border-radius: 999px;
   background: rgba(6, 12, 22, 0.62);
   color: #ffffff !important;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45) !important;
