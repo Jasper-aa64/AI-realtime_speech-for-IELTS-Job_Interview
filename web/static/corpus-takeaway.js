@@ -2958,7 +2958,7 @@
       const canvas = document.createElement("canvas");
       // themed (the 追问压力 headers): light theme draws its own deeper palette; CSS leaves that canvas unfiltered.
       const themed = options && options.themed === true;
-      canvas.className = themed ? "p2-pixel-flow-canvas is-themed" : "p2-pixel-flow-canvas";
+      canvas.className = mode === "pressure" || themed ? "p2-pixel-flow-canvas is-themed" : "p2-pixel-flow-canvas";
       if (paused) canvas.style.visibility = "hidden";
       host.appendChild(canvas);
       const ctx = canvas.getContext("2d");
@@ -3038,6 +3038,7 @@
         canvas.style.width = `${w}px`;
         canvas.style.height = `${h}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (mode === "pressure") texture = null;  // rebaked at the new size on the next frame
         cellRnd = new Float32Array(cols * rows);
         for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) cellRnd[r * cols + c] = hash(c, r);
         cellKeep = new Float32Array(cols * rows);
@@ -3054,6 +3055,104 @@
           colWhite[c] = u < 0.4 ? 0.7 * Math.pow(1 - u / 0.4, 0.35) : 0;
         }
         if (reduceMotion && !paused) draw(0);
+      }
+
+      // ---- light theme of the 追问压力 headers ("pressure" mode): a fine dot matrix that is dense and lively at the bright edge and thins out
+      // toward the far one. A shimmering source sits at the bright edge; soft bands with a gently wavy front drift away
+      // from it and weaken as they go; a dot lights only while the light at its spot beats its own threshold, so the far
+      // side stays sparse. Lit dots grow a little and take on colour (teal → indigo). No switch-on flash (CSS fades the
+      // canvas in). Dark: glowing pastels with white crests; light: one shade deeper.
+      const DOT = 8;  // dot pitch (px)
+      const FLOW_STOPS = {
+        dark: ["#5eead4", "#22d3ee", "#7dd3fc", "#a5b4fc"].map(rgbOf),
+        light: ["#0d9488", "#0891b2", "#0369a1", "#4338ca"].map(rgbOf),
+      };
+      const BANDS = [
+        { speed: 2.2, width: 7, strength: 0.9, offset: 0.05 },
+        { speed: 1.4, width: 11, strength: 0.6, offset: 0.45 },
+        { speed: 3.1, width: 4.5, strength: 0.55, offset: 0.75 },
+      ];
+      const stopColor = (stops, u) => {
+        const x = Math.min(0.9999, Math.max(0, u)) * (stops.length - 1);
+        const i = Math.floor(x);
+        const f = x - i;
+        const a = stops[i];
+        const b = stops[i + 1];
+        return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+      };
+      // How much light reaches a point u (0 = bright edge, 1 = far edge): full for the first third, then easing off.
+      const envelope = (u) => (u < 0.3 ? 1 : u < 0.9 ? 1 - ((u - 0.3) / 0.6) * 0.82 : 0.18 * (1 - (u - 0.9) / 0.1));
+      let dotCols = 0;
+      let dotRows = 0;
+      let dotNoise = new Float32Array(0);
+      let dotKeep = new Float32Array(0);
+      let dotColor = [];
+      let dotEnv = new Float32Array(0);
+      let texture = null;
+      let textureDark = null;
+
+      function bakeFlowTexture(w, h, dpr) {
+        // the resting dot matrix (fading toward the far edge), drawn once per size and theme and blitted every frame
+        const dark = document.body.classList.contains("theme-dark");
+        dotCols = Math.ceil(w / DOT) + 1;
+        dotRows = Math.ceil(h / DOT) + 1;
+        dotNoise = new Float32Array(dotCols * dotRows);
+        dotKeep = new Float32Array(dotCols * dotRows);
+        for (let r = 0; r < dotRows; r += 1) {
+          for (let c = 0; c < dotCols; c += 1) {
+            dotNoise[r * dotCols + c] = hash(c + 3, r + 11);
+            dotKeep[r * dotCols + c] = hash(c + 71, r + 37);
+          }
+        }
+        const stops = dark ? FLOW_STOPS.dark : FLOW_STOPS.light;
+        dotColor = Array.from({ length: dotCols }, (_, c) => stopColor(stops, (reverse ? dotCols - 1 - c : c) / dotCols));
+        dotEnv = Float32Array.from({ length: dotCols }, (_, c) => envelope((reverse ? dotCols - 1 - c : c) / dotCols));
+        texture = document.createElement("canvas");
+        texture.width = Math.round(w * dpr);
+        texture.height = Math.round(h * dpr);
+        const tctx = texture.getContext("2d");
+        tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const ink = dark ? "148, 163, 184" : "51, 65, 85";
+        for (let c = 0; c < dotCols; c += 1) {
+          tctx.fillStyle = `rgba(${ink}, ${((dark ? 0.06 : 0.04) + (dark ? 0.12 : 0.1) * dotEnv[c]).toFixed(3)})`;
+          for (let r = 0; r < dotRows; r += 1) tctx.fillRect(c * DOT + 3, r * DOT + 3, 2, 2);
+        }
+        textureDark = dark;
+      }
+
+      function drawFlow(t, dark) {
+        if (!texture || textureDark !== dark) bakeFlowTexture(width, height, Math.min(window.devicePixelRatio || 1, 2));
+        ctx.drawImage(texture, 0, 0, width, height);
+        const span = dotCols + 30;
+        const peak = dark ? 0.95 : 0.85;
+        for (let r = 0; r < dotRows; r += 1) {
+          // a slow per-row sway gives the fronts a soft, living edge instead of a straight column
+          const sway = 1.5 * Math.sin(r * 0.55 + t * 1.1) + 0.7 * Math.sin(r * 1.3 - t * 0.7);
+          for (let c = 0; c < dotCols; c += 1) {
+            const x = (reverse ? dotCols - 1 - c : c) + sway;
+            // the source: always lit near the bright edge, shimmering
+            let v = Math.max(0, 1 - x / (dotCols * 0.16)) * (0.75 + 0.25 * Math.sin(t * 2.3 + r * 0.9 + x * 0.4));
+            for (const band of BANDS) {
+              const pos = ((band.offset * span + band.speed * t * 10) % span) - 10;
+              const d = (x - pos) / band.width;
+              v += band.strength * Math.exp(-d * d);
+            }
+            const i = r * dotCols + c;
+            const light = Math.min(1, v * dotEnv[c]);
+            // sparse toward the far edge: a dot lights only while the light beats its own threshold
+            if (light < 0.08 || light < dotKeep[i] * 0.7) continue;
+            const lit = Math.min(1, light * (0.8 + 0.4 * dotNoise[i]));
+            const rgb = dotColor[c];
+            const crest = dark ? lit * lit * lit * 0.6 : 0;
+            const rr = (rgb[0] + (255 - rgb[0]) * crest) | 0;
+            const gg = (rgb[1] + (255 - rgb[1]) * crest) | 0;
+            const bb = (rgb[2] + (255 - rgb[2]) * crest) | 0;
+            const size = 2.2 + lit * 2.6;  // lit dots grow from ~2px to ~5px around the same centre
+            const off = (DOT - size) / 2;
+            ctx.fillStyle = `rgba(${rr}, ${gg}, ${bb}, ${(0.35 + lit * (peak - 0.35)).toFixed(3)})`;
+            ctx.fillRect(c * DOT + off, r * DOT + off, size, size);
+          }
+        }
       }
 
       function drawGrid(t, light = false) {
@@ -3154,7 +3253,11 @@
         const dark = document.body.classList.contains("theme-dark");
         const t = elapsed / 1000;
         if (mode === "scatter") drawScatter(t, dark);
-        else drawGrid(t, themed && !dark);
+        // "pressure" (the 追问压力 headers): dark keeps the original grid flow, light draws the dot-matrix flow
+        else if (mode === "pressure") {
+          if (dark) drawGrid(t);
+          else drawFlow(t, false);
+        } else drawGrid(t, themed && !dark);
       }
 
       function frame(now) {

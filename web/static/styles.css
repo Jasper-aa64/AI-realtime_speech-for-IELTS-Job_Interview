@@ -47257,8 +47257,10 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
    flash at switch-on); the canvas just fades in. Dark keeps its look (navy slab, glow filter). Light keeps the header
    light with a faint cool tint and draws deeper pixels unfiltered; a soft wash behind the title, ink text. */
 body:not(#_):not(#__) .p2-pixel-flow-canvas.is-themed {
+  /* no ignite flash; the canvas fades in on the same 1180ms curve as the dark wash over it, so it never shows
+     brighter first and then dims */
   animation: none !important;
-  transition: opacity 900ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  transition: opacity 1180ms ease !important;
 }
 body:not(.theme-dark):not(#_):not(#__) .p2-pixel-flow-canvas.is-themed {
   filter: none !important;
