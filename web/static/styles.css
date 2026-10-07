@@ -47348,3 +47348,41 @@ body:not(#_):not(#__):not(#___):not(#____) :is(#p3TopicPanel, #ivLaunch) .p3-mod
   color: #f1f5f9 !important;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) !important;
 }
+
+/* the header hint (「每题最多追问一次」 / 「面试官会连续追问」) on a pill: a light tint in 标准, the dark pill on the 追问压力
+   flow; same box in both modes and its padding takes no layout space */
+body:not(#_):not(#__):not(#___) #practicePanel .exam-actions .p1-mode-help {
+  padding: 3px 11px !important;
+  margin-block: -3px !important;
+  border-radius: 999px !important;
+  background: transparent !important;  /* light theme + 标准: the plain white header needs no pill */
+  font-family: "PingFang SC", "Hiragino Sans GB", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  line-height: 1.35 !important;
+}
+body:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-status.p1-pixel-flow-visible .exam-actions .p1-mode-help {
+  background: rgba(6, 12, 22, 0.62) !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45) !important;
+}
+body:not(#_):not(#__):not(#___) #practicePanel .exam-actions .p1-mode-help:not(.is-collapsed):not(.hidden) {
+  max-width: 200px !important;  /* room for the pill's padding (the collapse animation still shrinks it during a session) */
+}
+body.theme-dark:not(#_):not(#__):not(#___) #practicePanel .exam-actions .p1-mode-help {
+  background: color-mix(in srgb, var(--ink) 9%, transparent) !important;  /* dark 标准: a subtle pill */
+}
+
+/* the header title (「知识点 准备就绪」 / READY) on the 追问压力 flow: a lighter backdrop than the hint's pill, taking no
+   layout space (negative margin = padding), so the title reads over the brightest pixels at the leading edge */
+body:not(#_):not(#__):not(#___) #practicePanel .exam-status #examStatusText {
+  width: fit-content;
+  padding: 6px 12px;
+  margin: -6px -12px;
+  border-radius: 12px;
+  background: transparent;
+  transition: background-color 260ms ease;
+}
+body:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-status.p1-pixel-flow-visible #examStatusText {
+  background: rgba(6, 12, 22, 0.36);
+}
