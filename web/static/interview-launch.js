@@ -8,7 +8,7 @@
   // IELTS Markdown editor. launchOptions(view) turns the choices into the attempt-start payload.
   const COUNTS = [3, 5, 8, 10];
   const REVERSE_MAX = 3;
-  const FOLD_AT = 4; // a picker topic card with more questions shows the first 4 (the 4th fading out) behind 展开
+  const MODAL_AFTER = 6; // like the P1 library: a topic card with more questions opens its full list in a popup
   const DIALOG_TEXT = "ivLaunchText";
 
   // Questions are read aloud by the examiner, so Markdown marks are dropped from a question written in the editor.
@@ -30,7 +30,7 @@
     let launch = fresh();
     let dialog = null; // { kind, group? } while the Markdown dialog is open
     let pickGroup = null; // the knowledge category whose picker is open
-    const pickOpen = new Set(); // topic cards unfolded in the open picker (long cards show FOLD_AT questions, like the P1 library)
+    let pickTopic = null; // the topic whose full list is open in the P1-style popup above the picker
     let bound = false;
     let loadedFor = null;
 
@@ -290,57 +290,104 @@
       const root = byId("ivPickDialog");
       if (!root) return;
       pickGroup = label;
-      pickOpen.clear();
+      pickTopic = null;
       renderPicker();
       root.classList.remove("hidden");
     }
 
-    // Questions sit on topic cards (题卡), like the knowledge library: a grid to scan instead of one long column.
-    function renderPicker() {
-      const group = groups().find((item) => item.label === pickGroup) || { label: pickGroup, rows: [] };
-      const customs = launch.customs[group.label] || [];
-      const total = group.rows.length + customs.length;
-      byId("ivPickDialogTitle").textContent = group.label;
-      byId("ivPickDialogMeta").textContent = `知识点 · 已选 ${groupPicked(group)} / ${total}`;
-      const row = (attrs, lead, textValue, selected, extra = "") =>
-        `<button type="button" class="iv-pick-row${selected ? " is-selected" : ""}" ${attrs} aria-pressed="${selected}"><strong>${esc(lead)}</strong><span>${esc(textValue)}</span>${extra}<i aria-hidden="true"></i></button>`;
+    // Questions sit on the P1 library's topic cards (same markup and styles as 知识点语料库): a ticked row is picked.
+    // A topic with more than MODAL_AFTER questions folds and opens its full list in the P1 popup.
+    const pickIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m3 7 2.5 2.5L10 5"/><path d="m3 15 2.5 2.5L10 13"/><path d="M14 7h7M14 15h7"/></svg>';
+    const pickTopics = (group) => {
       const topics = new Map();
       group.rows.forEach((entry) => {
         const topic = entry.title || "综合";
         if (!topics.has(topic)) topics.set(topic, []);
         topics.get(topic).push(entry);
       });
-      // A card with more than FOLD_AT questions shows that many, the last fading out, and ends in a 展开 pill (P1 library style).
-      const card = (title, picked, count, body, toggle = "") => {
-        const long = count > FOLD_AT;
-        const open = pickOpen.has(title);
-        const more = long ? `<button type="button" class="iv-pick-more" data-iv-pick="fold" data-topic="${esc(title)}" aria-expanded="${open}">${open ? "收起" : `展开全部 ${count} 题`}</button>` : "";
-        return `
-        <article class="iv-pick-topic${picked ? " has-picked" : ""}${long && !open ? " is-folded" : ""}">
-          <header><h4>${esc(title)}</h4><span class="iv-pick-count">${picked}/${count}</span>${toggle}</header>
-          <div class="iv-pick-rows">${body}</div>${more}
+      return [...topics.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh"));
+    };
+    const pickRow = (attrs, lead, question, picked, tag = "") =>
+      `<button type="button" class="${picked ? "has-corpus" : ""}" ${attrs} aria-pressed="${picked}"><strong>${esc(lead)}</strong><span>${esc(question)}${tag}</span></button>`;
+    const corpusTag = (entry) => (entry.corpus_text ? '<em class="iv-pick-tag">有语料</em>' : "");
+
+    function pickCard(title, rows, { custom = false } = {}) {
+      const picked = custom ? rows.length : rows.filter((entry) => launch.picked.has(pickKey(entry))).length;
+      const progress = rows.length ? Math.round((picked / rows.length) * 100) : 0;
+      const modal = !custom && rows.length > MODAL_AFTER;
+      const body = custom
+        ? rows.map((question, index) => pickRow(`data-iv-pick="custom" data-index="${index}" title="点击移除"`, `自定`, question, true)).join("")
+        : rows.map((entry, index) => pickRow(modal ? 'tabindex="-1" aria-hidden="true"' : `data-iv-pick="entry" data-key="${esc(pickKey(entry))}"`,
+          `Q${index + 1}`, entry.question, launch.picked.has(pickKey(entry)), corpusTag(entry))).join("");
+      const all = picked === rows.length;
+      const toggle = custom ? "" : `<button type="button" class="p1-topic-copy-button" data-iv-pick="topic" data-topic="${esc(title)}" title="${all ? "清空这一组" : "全选这一组"}" aria-label="${all ? "清空" : "全选"}「${esc(title)}」">${pickIcon}</button>`;
+      return `
+        <article class="p1-topic-card ${modal ? "is-modal-only" : "is-complete-list"}${custom ? " is-custom" : ""}" data-p1-progress="${progress}" ${modal ? `data-iv-pick="open" data-topic="${esc(title)}"` : ""}>
+          <header class="p1-topic-export-header">
+            <div><h3>${esc(title)}</h3></div>
+            <div class="p1-topic-card-actions">${toggle}<span class="p1-topic-count">${picked}/${rows.length}</span></div>
+          </header>
+          <div class="p1-topic-progress" aria-label="已选 ${progress}%" data-progress="${progress}"><span style="width: ${progress}%"></span></div>
+          <div class="p1-topic-question-list">${body}</div>
         </article>`;
-      };
-      const cards = [...topics.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh")).map(([topic, rows]) => {
-        const picked = rows.filter((entry) => launch.picked.has(pickKey(entry))).length;
-        const all = picked === rows.length;
-        return card(topic, picked, rows.length,
-          rows.map((entry, index) => row(`data-iv-pick="entry" data-key="${esc(pickKey(entry))}"`, `Q${index + 1}`, entry.question, launch.picked.has(pickKey(entry)),
-            entry.corpus_text ? '<em class="iv-pick-tag">有语料</em>' : "")).join(""),
-          `<button type="button" class="iv-pick-topic-all" data-iv-pick="topic" data-topic="${esc(topic)}">${all ? "清空" : "全选"}</button>`);
-      });
-      if (customs.length) {
-        cards.unshift(card("本次自定", customs.length, customs.length,
-          customs.map((question, index) => row(`data-iv-pick="custom" data-index="${index}"`, "自定", question, true, '<em class="iv-pick-tag">点击移除</em>')).join("")));
-      }
-      byId("ivPickList").innerHTML = cards.length ? `<div class="iv-pick-grid">${cards.join("")}</div>` : '<p class="iv-pick-empty">这个分类还没有题目，自己出一道吧。</p>';
+    }
+
+    function renderPicker() {
+      const group = groups().find((item) => item.label === pickGroup) || { label: pickGroup, rows: [] };
+      const customs = launch.customs[group.label] || [];
+      const total = group.rows.length + customs.length;
+      byId("ivPickDialogTitle").textContent = group.label;
+      byId("ivPickDialogMeta").textContent = `知识点 · 已选 ${groupPicked(group)} / ${total}`;
+      const cards = pickTopics(group).map(([topic, rows]) => pickCard(topic, rows));
+      if (customs.length) cards.unshift(pickCard("本次自定", customs, { custom: true }));
+      byId("ivPickList").innerHTML = cards.length ? `<div class="p1-corpus-topics iv-pick-topics">${cards.join("")}</div>` : '<p class="iv-pick-empty">这个分类还没有题目，自己出一道吧。</p>';
       const allPicked = group.rows.length > 0 && group.rows.every((entry) => launch.picked.has(pickKey(entry)));
       byId("ivPickAll").textContent = allPicked ? "清空本类" : "全选本类";
       byId("ivPickAll").classList.toggle("hidden", !group.rows.length);
+      renderPickTopic();
+    }
+
+    // The P1 「点击卡片查看全部」 popup, over the picker: the topic's whole list; a click ticks / unticks a question.
+    function renderPickTopic() {
+      let modal = byId("ivPickTopicModal");
+      const group = groups().find((item) => item.label === pickGroup);
+      const rows = group && pickTopic ? pickTopics(group).find(([topic]) => topic === pickTopic)?.[1] : null;
+      if (!rows) {
+        modal?.classList.add("hidden");
+        return;
+      }
+      if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "ivPickTopicModal";
+        document.body.appendChild(modal);
+        modal.addEventListener("click", (event) => {
+          if (event.target === modal || event.target.closest?.("[data-iv-pick-close]")) { pickTopic = null; renderPickTopic(); return; }
+          onPick(event);
+        });
+      }
+      const picked = rows.filter((entry) => launch.picked.has(pickKey(entry))).length;
+      const all = picked === rows.length;
+      modal.className = "p1-topic-modal-backdrop iv-pick-topic-modal";
+      modal.innerHTML = `
+        <section class="p1-topic-modal" role="dialog" aria-modal="true" aria-label="${esc(pickTopic)}">
+          <header>
+            <div><span>${esc(pickGroup)}</span><h3>${esc(pickTopic)}</h3></div>
+            <div class="iv-pick-topic-actions">
+              <button type="button" class="iv-pick-topic-all" data-iv-pick="topic" data-topic="${esc(pickTopic)}">${all ? "清空" : "全选"}</button>
+              <strong>${picked}/${rows.length}</strong>
+            </div>
+          </header>
+          <div class="p1-topic-modal-list">${rows.map((entry, index) => pickRow(`data-iv-pick="entry" data-key="${esc(pickKey(entry))}"`,
+            `Q${index + 1}`, entry.question, launch.picked.has(pickKey(entry)), corpusTag(entry))).join("")}
+          </div>
+        </section>`;
+      modal.classList.remove("hidden");
     }
 
     function closePicker() {
       pickGroup = null;
+      pickTopic = null;
+      renderPickTopic();
       byId("ivPickDialog")?.classList.add("hidden");
       render();
     }
@@ -353,9 +400,8 @@
       if (action === "entry") {
         const key = target.dataset.key;
         if (launch.picked.has(key)) launch.picked.delete(key); else launch.picked.add(key);
-      } else if (action === "fold") {
-        const topic = target.dataset.topic;
-        if (pickOpen.has(topic)) pickOpen.delete(topic); else pickOpen.add(topic);
+      } else if (action === "open") {
+        pickTopic = target.dataset.topic;
       } else if (action === "custom") {
         launch.customs[pickGroup]?.splice(Number(target.dataset.index), 1);
       } else if (action === "topic" && group) {
@@ -412,6 +458,7 @@
       document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
         if (dialog) { event.stopPropagation(); closeDialog(); }
+        else if (pickTopic) { event.stopPropagation(); pickTopic = null; renderPickTopic(); }
         else if (pickGroup) { event.stopPropagation(); closePicker(); }
       }, true);
     }

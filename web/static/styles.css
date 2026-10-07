@@ -46837,59 +46837,17 @@ body:not(#_) #promptPane.has-iv-launch #promptCard { flex: 0 0 auto; min-height:
 /* Knowledge picker: the category's questions on topic cards (题卡) in a grid, like the knowledge library. */
 body:not(#_) .iv-pick-dialog .iv-pick-card { grid-template-rows: auto minmax(0, 1fr) auto; width: min(1120px, calc(100vw - 48px)); max-width: none; }
 .iv-pick-dialog .iv-pick-list { overflow-y: auto; min-height: 0; max-height: min(68vh, 720px); padding: 2px 2px 4px; }
-/* cards in a row share one height (stretch); a long card folds like the P1 library */
-.iv-pick-dialog .iv-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: stretch; }
-.iv-pick-dialog .iv-pick-topic {
-  display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
-  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+/* the picker reuses the P1 library's topic cards (.p1-topic-card) and its 「点击卡片查看全部」 popup */
+.iv-pick-dialog .iv-pick-topics { margin: 0; padding: 4px 2px 6px; }
+body:not(#_):not(#__) #ivPickDialog .p1-topic-question-list button.has-corpus::after { content: "已选" !important; }
+#ivPickTopicModal { z-index: 9100 !important; }
+#ivPickTopicModal .iv-pick-topic-actions { display: flex; align-items: center; gap: 10px; }
+body:not(#_) #ivPickTopicModal .iv-pick-topic-all {
+  min-height: 0; height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent;
+  color: var(--ink); font-size: 12.5px; box-shadow: none; cursor: pointer;
 }
-.iv-pick-dialog .iv-pick-topic.has-picked { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent); }
-.iv-pick-dialog .iv-pick-topic header {
-  display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--ink) 2.5%, var(--panel));
-}
-.iv-pick-dialog .iv-pick-topic h4 { flex: 1; min-width: 0; margin: 0; overflow: hidden; color: var(--ink); font-size: 15px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
-.iv-pick-dialog .iv-pick-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-body:not(#_) .iv-pick-dialog .iv-pick-topic-all {
-  min-height: 0; height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent;
-  color: var(--ink); font-size: 12px; box-shadow: none; cursor: pointer;
-}
-body:not(#_) .iv-pick-dialog .iv-pick-topic-all:hover { border-color: var(--accent); color: var(--accent); }
-.iv-pick-dialog .iv-pick-rows { display: grid; align-content: start; }
-body:not(#_) .iv-pick-dialog .iv-pick-topic.is-folded .iv-pick-row:nth-child(n + 5) { display: none; }
-.iv-pick-dialog .iv-pick-topic.is-folded .iv-pick-rows {
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 calc(100% - 40px), transparent 100%);
-  mask-image: linear-gradient(180deg, #000 0%, #000 calc(100% - 40px), transparent 100%);
-}
-/* the 展开 / 收起 pill: P1's 「点击卡片查看全部」 hairline pill, pinned to the card's bottom */
-body:not(#_) .iv-pick-dialog .iv-pick-more {
-  flex: none; height: 32px; min-height: 0; margin: auto 14px 12px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px;
-  background: var(--panel); color: var(--muted); font-size: 12.5px; font-weight: 400; box-shadow: none; cursor: pointer;
-  transition: border-color var(--motion-fast), color var(--motion-fast);
-}
-body:not(#_) .iv-pick-dialog .iv-pick-more:hover { border-color: color-mix(in srgb, var(--ink) 30%, var(--line)); color: var(--ink); }
-.iv-pick-dialog .iv-pick-topic.is-folded .iv-pick-more { margin-top: auto; }
-body:not(#_) .iv-pick-dialog .iv-pick-row {
-  position: relative; display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 0; margin: 0; padding: 11px 44px 11px 16px;
-  border: 0; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 0; background: transparent;
-  color: var(--ink); font-size: 13.5px; line-height: 1.5; text-align: left; box-shadow: none; cursor: pointer;
-}
-body:not(#_) .iv-pick-dialog .iv-pick-row:first-child { border-top: 0; }
-body:not(#_) .iv-pick-dialog .iv-pick-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
-.iv-pick-dialog .iv-pick-row strong { flex: none; min-width: 26px; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.75; }
-.iv-pick-dialog .iv-pick-row span { flex: 1; min-width: 0; }
-.iv-pick-dialog .iv-pick-row i {
-  position: absolute; right: 14px; top: 50%; width: 18px; height: 18px; margin-top: -9px;
-  border: 1.5px solid var(--line); border-radius: 50%; transition: background 160ms ease, border-color 160ms ease;
-}
-body:not(#_) .iv-pick-dialog .iv-pick-row.is-selected { background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.iv-pick-dialog .iv-pick-row.is-selected i {
-  border-color: var(--accent);
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center / 12px no-repeat,
-    var(--accent);
-}
-.iv-pick-dialog .iv-pick-tag {
+body:not(#_) #ivPickTopicModal .iv-pick-topic-all:hover { border-color: var(--accent); color: var(--accent); }
+:is(.iv-pick-dialog, #ivPickTopicModal) .iv-pick-tag {
   margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent); font-size: 11px; font-style: normal; white-space: nowrap;
 }
