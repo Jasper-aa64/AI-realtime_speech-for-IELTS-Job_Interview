@@ -94,9 +94,6 @@
     let busy = false; // a reply is on its way; the composer stays editable but cannot send
     let tones = ""; // the palette the current chat was built with
     let restyle = false; // the appearance changed while a reply was on its way
-    let balance = null; // wallet balance (u); every reply is charged by its token usage
-    let lastCost = null;
-    const yuan = (amount, digits = 2) => `¥${(Number(amount || 0) / 1_000_000).toFixed(digits)}`;
     const byId = (id) => document.getElementById(id);
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
     const esc = (value) => escapeHtml(String(value ?? ""));
@@ -122,7 +119,6 @@
         if (generation !== epoch) return;
         threads = payload.threads || [];
         engine = payload.engine || "";
-        if (payload.balance_u !== undefined && payload.balance_u !== null) balance = payload.balance_u;
       } catch (_error) {
         if (generation === epoch) threads = threads || [];
       }
@@ -543,8 +539,6 @@
         }
         if (generation !== epoch) return;
         log.push(payload.message, payload.reply);
-        if (payload.balance_u !== undefined && payload.balance_u !== null) balance = payload.balance_u;
-        if (payload.charged_u !== undefined) lastCost = payload.charged_u;
         if (payload.entries) setCorpus(payload.entries);
         if (payload.ielts_changed) onIeltsChanged();
         threads = [payload.thread, ...(threads || []).filter((item) => item.id !== payload.thread.id)];
@@ -657,13 +651,11 @@
     }
 
     const engineChip = () => engine ? `<span class="iv-as-engine-dot" aria-hidden="true"></span><span>${esc(engine)}</span>` : "";
-    const walletLine = () => balance === null ? "" : `<span>${esc(copy("余额", "Balance"))} <b>${yuan(balance)}</b></span>${lastCost !== null ? `<span>${esc(copy("上一条", "Last reply"))} ${yuan(lastCost, 4)}</span>` : ""}`;
 
     function paint() {
       if (byId("ivAssistantThreads")) byId("ivAssistantThreads").innerHTML = threadList();
       if (byId("ivAssistantTitle")) byId("ivAssistantTitle").textContent = threadTitle();
       if (byId("ivAssistantEngine")) byId("ivAssistantEngine").innerHTML = engineChip();
-      if (byId("ivAssistantWallet")) byId("ivAssistantWallet").innerHTML = walletLine();
       if (byId("ivDockTitle")) byId("ivDockTitle").textContent = current ? threadTitle() : copy("AI 助手", "AI assistant");
       if (byId("ivDockMenu") && !byId("ivDockMenu").hidden) byId("ivDockMenu").innerHTML = dockMenu();
     }
@@ -683,7 +675,6 @@
             <div id="ivAssistantThreads" class="iv-as-threads">${threadList()}</div>
             <div class="iv-as-foot-meta">
               <div id="ivAssistantEngine" class="iv-as-engine" title="${esc(copy("回答由本机 Codex 生成", "Answered by local Codex"))}">${engineChip()}</div>
-              <div id="ivAssistantWallet" class="iv-as-wallet" title="${esc(copy("每条回复按 token 用量扣除额度", "Each reply is charged by its token usage"))}">${walletLine()}</div>
             </div>
           </aside>
           <div id="ivAssistantMain" class="iv-as-main">
@@ -778,8 +769,7 @@
             : `<p class="iv-dock-menu-empty">${esc(copy("还没有对话", "No chats yet"))}</p>`}
           <hr>
           <button type="button" role="menuitem" data-iv-dock="new">${ICON.compose}<span>${esc(copy("新对话", "New chat"))}</span></button>
-          <button type="button" role="menuitem" data-iv-dock="page">${ICON.expand}<span>${esc(copy("打开完整页面", "Open full page"))}</span></button>
-          ${balance === null ? "" : `<p class="iv-dock-menu-wallet">${esc(copy("余额", "Balance"))} ${yuan(balance)}${lastCost !== null ? ` · ${esc(copy("上一条", "last"))} ${yuan(lastCost, 4)}` : ""}</p>`}`;
+          <button type="button" role="menuitem" data-iv-dock="page">${ICON.expand}<span>${esc(copy("打开完整页面", "Open full page"))}</span></button>`;
     }
 
     function toggleDockMenu(open) {

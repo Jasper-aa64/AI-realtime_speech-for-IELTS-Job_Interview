@@ -47058,13 +47058,11 @@ body:not(#_) #ivAssistant .iv-as-rename:focus {
 }
 #ivAssistant .iv-as-note { margin: 0; padding: 8px 10px; color: var(--muted); font-size: 12.5px; }
 #ivAssistant .iv-as-foot-meta { display: grid; gap: 5px; padding: 10px 10px 0; border-top: 1px solid var(--line); }
-#ivAssistant .iv-as-engine, #ivAssistant .iv-as-wallet {
+#ivAssistant .iv-as-engine {
   display: flex; align-items: center; gap: 7px; min-height: 16px; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden;
 }
 #ivAssistant .iv-as-engine span:last-child { overflow: hidden; text-overflow: ellipsis; }
-#ivAssistant .iv-as-wallet { justify-content: space-between; }
-#ivAssistant .iv-as-wallet b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-#ivAssistant .iv-as-engine:empty, #ivAssistant .iv-as-wallet:empty { display: none; }
+#ivAssistant .iv-as-engine:empty { display: none; }
 #ivAssistant .iv-as-engine-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 18%, transparent); }
 #ivAssistant .iv-as-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #ivAssistant .iv-as-bar { display: flex; align-items: center; flex: none; height: 64px; padding: 0 84px 0 28px; }
@@ -47255,4 +47253,3 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
 #ivDock .iv-dock-composer { flex: none; padding: 0 10px 10px; }
 #ivDock .iv-composer { border-color: var(--dock-line); background: var(--dock-raised); box-shadow: none; }
 #ivDock[data-tone="light"] .iv-composer { background: color-mix(in srgb, var(--ink) 3%, #fff); }
-#ivDock .iv-dock-menu-wallet { margin: 6px 8px 2px; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
