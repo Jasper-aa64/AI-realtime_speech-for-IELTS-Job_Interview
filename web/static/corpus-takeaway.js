@@ -2956,20 +2956,25 @@
       // time so the first switch to 追问压力 has nothing heavy left to do.
       let paused = options && options.paused === true;
       const canvas = document.createElement("canvas");
-      canvas.className = "p2-pixel-flow-canvas";
+      // themed (the 追问压力 headers): light theme draws its own deeper palette; CSS leaves that canvas unfiltered.
+      const themed = options && options.themed === true;
+      canvas.className = themed ? "p2-pixel-flow-canvas is-themed" : "p2-pixel-flow-canvas";
       if (paused) canvas.style.visibility = "hidden";
       host.appendChild(canvas);
       const ctx = canvas.getContext("2d");
       const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
-      const palette = ["#5eead4", "#34d399", "#22d3ee", "#7dd3fc", "#93c5fd", "#a5b4fc", "#c4b5fd"]
-        .map((hex) => {
-          const n = parseInt(hex.slice(1), 16);
-          return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-        });
+      const rgbOf = (hex) => {
+        const n = parseInt(hex.slice(1), 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      };
+      // Dark theme: pale pastels glowing on the dark backdrop. Light theme (themed headers): the same hues deeper, so
+      // the pixels read on the light header instead of washing out (and no white crest blend there).
+      const palette = ["#5eead4", "#34d399", "#22d3ee", "#7dd3fc", "#93c5fd", "#a5b4fc", "#c4b5fd"].map(rgbOf);
+      const lightPalette = ["#14b8a6", "#10b981", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1", "#8b5cf6"].map(rgbOf);
       const cell = 9;  // logical px per grid cell (block + gap) → small, dense pixels
       const block = 7; // painted grid square size
       // Stable per-cell colour + phase so the grid shimmers without flickering.
-      const colorAt = (c, r) => palette[(c * 7 + r * 13 + ((c * r) % 5)) % palette.length];
+      const colorAt = (c, r, pal = palette) => pal[(c * 7 + r * 13 + ((c * r) % 5)) % pal.length];
       // Well-distributed per-cell random (no row/column structure → no diagonal).
       const hash = (c, r) => { const s = Math.sin(c * 127.1 + r * 311.7) * 43758.5453; return s - Math.floor(s); };
       // Deterministic fragment pool for scatter mode. Positions use the R2
@@ -2997,6 +3002,7 @@
       let start = 0;
       // Per-cell / per-column values that never change with time, rebuilt on resize (drawGrid only does the waves).
       let cellRnd = new Float32Array(0);
+      let cellKeep = new Float32Array(0);  // light variant: each cell's own density threshold
       let colSoft = new Float32Array(0);
       let colWhite = new Float32Array(0);
       let colFlow = new Float32Array(0);
@@ -3034,6 +3040,8 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         cellRnd = new Float32Array(cols * rows);
         for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) cellRnd[r * cols + c] = hash(c, r);
+        cellKeep = new Float32Array(cols * rows);
+        for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) cellKeep[r * cols + c] = hash(c + 71, r + 37);
         colSoft = new Float32Array(cols);
         colWhite = new Float32Array(cols);
         colFlow = new Float32Array(cols);
@@ -3048,7 +3056,7 @@
         if (reduceMotion && !paused) draw(0);
       }
 
-      function drawGrid(t) {
+      function drawGrid(t, light = false) {
         // Soft VERTICAL band. Brightness over time comes ONLY from the moving column
         // waves (depends on c and t, never on r → never diagonal), so it reads as a
         // coherent flow, not random blinking. A static per-cell texture grains the
@@ -3056,8 +3064,10 @@
         // intensity just eases off toward the trailing edge.
         //   reverse=false (default): flow LEFT→RIGHT, bright on the LEFT  (P1 header).
         //   reverse=true:            flow RIGHT→LEFT, bright on the RIGHT (P3 box).
-        const baseA = 0.16;
-        const peakA = 0.9;
+        // Light (themed headers only): deeper hues at full strength, no white crests — same flow and same falloff.
+        const baseA = light ? 0.2 : 0.16;
+        const peakA = light ? 1 : 0.9;
+        const pal = light ? lightPalette : palette;
         // dir = -1 keeps the original rightward wave march (sin(c*k - t*w)); +1 flips
         // it to march leftward.
         const dir = reverse ? 1 : -1;
@@ -3075,10 +3085,17 @@
             const flow = colFlow[c];
             const rnd = cellRnd[r * cols + c];                     // static texture, no time → no random blink
             const lit = (0.4 + 0.6 * flow) * (0.32 + 0.68 * rnd);
-            const alpha = (baseA + (peakA - baseA) * lit) * soft;
+            let alpha = (baseA + (peakA - baseA) * lit) * soft;
+            if (light) {
+              // On a light page faint cells still show as a tint, so the falloff thins the cells out instead: a cell
+              // is drawn while the flow at its column beats its own threshold (dense at the bright edge, sparse toward
+              // the far one, popping in and out as the waves pass) and is drawn solid.
+              if (soft * (0.25 + 0.75 * flow) < cellKeep[r * cols + c] * 0.95) continue;
+              alpha = 0.5 + 0.45 * lit;
+            }
             if (alpha < 0.03) continue;
-            const rgb = colorAt(c, r);
-            const wAmt = Math.min(1, Math.max(0, (flow * rnd - (0.82 - 0.5 * colWhite[c])) / 0.18)) * soft;
+            const rgb = colorAt(c, r, pal);
+            const wAmt = light ? 0 : Math.min(1, Math.max(0, (flow * rnd - (0.82 - 0.5 * colWhite[c])) / 0.18)) * soft;
             const rr = Math.round(rgb[0] + (255 - rgb[0]) * wAmt);
             const gg = Math.round(rgb[1] + (255 - rgb[1]) * wAmt);
             const bb = Math.round(rgb[2] + (255 - rgb[2]) * wAmt);
@@ -3137,7 +3154,7 @@
         const dark = document.body.classList.contains("theme-dark");
         const t = elapsed / 1000;
         if (mode === "scatter") drawScatter(t, dark);
-        else drawGrid(t);
+        else drawGrid(t, themed && !dark);
       }
 
       function frame(now) {

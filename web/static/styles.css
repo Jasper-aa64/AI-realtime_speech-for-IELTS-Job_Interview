@@ -40466,9 +40466,7 @@ body.theme-dark .writing-fix-popover button {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24) !important;
 }
 
-body:not(.theme-dark) .p2-brainstorm-head-field .p2-pixel-flow-canvas,
-body:not(.theme-dark) .exam-status.p1-pixel-flow .p2-pixel-flow-canvas,
-body:not(.theme-dark) .p3-mode-row.p3-pixel-flow .p2-pixel-flow-canvas {
+body:not(.theme-dark) .p2-brainstorm-head-field .p2-pixel-flow-canvas {
   filter: saturate(5.2) brightness(5.15) contrast(1.52) drop-shadow(0 0 12px rgba(56, 189, 248, 0.42)) !important;
 }
 
@@ -47253,3 +47251,38 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
 #ivDock .iv-dock-composer { flex: none; padding: 0 10px 10px; }
 #ivDock .iv-composer { border-color: var(--dock-line); background: var(--dock-raised); box-shadow: none; }
 #ivDock[data-tone="light"] .iv-composer { background: color-mix(in srgb, var(--ink) 3%, #fff); }
+
+/* ---------- 追问压力 pixel flow (createPixelFlowField "grid" with themed, canvas.is-themed) ----------
+   Same flow as before: dense and bright at one edge, thinning out toward the other. No ignite keyframes (the bright
+   flash at switch-on); the canvas just fades in. Dark keeps its look (navy slab, glow filter). Light keeps the header
+   light with a faint cool tint and draws deeper pixels unfiltered; a soft wash behind the title, ink text. */
+body:not(#_):not(#__) .p2-pixel-flow-canvas.is-themed {
+  animation: none !important;
+  transition: opacity 900ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+body:not(.theme-dark):not(#_):not(#__) .p2-pixel-flow-canvas.is-themed {
+  filter: none !important;
+}
+body:not(.theme-dark):not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible,
+body:not(.theme-dark):not(#_):not(#__) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row.p3-pixel-flow-visible {
+  background-color: color-mix(in srgb, #0891b2 4%, var(--panel)) !important;
+}
+body:not(.theme-dark):not(#_) .exam-status.p1-pixel-flow::before,
+body:not(.theme-dark):not(#_) .p3-mode-row.p3-pixel-flow::after {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--panel) 58%, transparent) 0%, transparent 28%, transparent 100%) !important;
+}
+body:not(.theme-dark):not(#_) .p3-mode-row.p3-pixel-flow::after {
+  background: linear-gradient(270deg, color-mix(in srgb, var(--panel) 58%, transparent) 0%, transparent 28%, transparent 100%) !important;
+}
+body:not(.theme-dark):not(#_):not(#__):not(#___) #practicePanel .exam-status.p1-pixel-flow-visible :is(#progressTrack, #examStatusText strong) {
+  color: var(--ink) !important;
+  text-shadow: 0 0 12px var(--panel), 0 0 3px var(--panel) !important;
+}
+body:not(.theme-dark):not(#_):not(#__):not(#___) #practicePanel .exam-status.p1-pixel-flow-visible :is(#phaseLabel, .p1-mode-help, #examStatusText span) {
+  color: var(--muted) !important;
+  text-shadow: 0 0 8px var(--panel) !important;
+}
+body:not(.theme-dark):not(#_):not(#__):not(#___) :is(#p3TopicPanel, #ivLaunch) .p3-mode-row.p3-pixel-flow-visible :is(.p3-launch-label, .p3-mode-help) {
+  color: var(--ink) !important;
+  text-shadow: 0 0 8px var(--panel) !important;
+}
