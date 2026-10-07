@@ -82,8 +82,11 @@ a static UI served by the local/backend API server.
   workspace switcher trigger and switcher header. It retains `studio-logo.svg`'s
   original pixel body, eyes, folds, limbs and raised right arm, with a tight
   viewBox. The bulb is omitted from the asset and positioned as an independent
-  overlay in its original relation to the raised hand. It pops in once and then
-  stays in place; only the rays twinkle, with no recurring translation / rotation.
+  overlay 4 CSS pixels below its original relation to the raised hand. Reuse the
+  existing `fuBulbPop` / `fuBulbRay` 650ms bounce and ray reveal, then hold the bulb
+  and rays visible with no repeating translation / rotation. Only the shared
+  keyframes' final opacity / transform accept CSS variables; their defaults must
+  preserve the existing follow-up mascot's fade-out / fly-away behavior.
 - The corner assistant popup header shows its title and controls without a
   small brain icon. The full-page title above the search / chat list also shows
   text alone. Keep the centered welcome brain.

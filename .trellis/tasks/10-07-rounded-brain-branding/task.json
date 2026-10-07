@@ -21,6 +21,6 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "Branding complete with user corrections: global top-left uses old raised-hand pixel mascot; rounded icons retain 22% eyes; both assistant title icons removed; bulb fixed after pop and lowered 2 CSS pixels. Frontend 116 tests and final syntax/diff/asset review pass. Unrelated changes preserved.",
+  "notes": "Final refinement complete: bulb lowered another2px(total4px), reuses existing fuBulbPop/fuBulbRay650ms with brand-only held end state; original follow-up defaults preserved.116frontend tests, review, syntax/diff and native visual check pass. Unrelated changes preserved.",
   "meta": {}
 }

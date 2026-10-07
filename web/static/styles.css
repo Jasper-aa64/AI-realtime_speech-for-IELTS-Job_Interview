@@ -2969,7 +2969,7 @@ h1 {
   50% { transform: scale(0.95); }
   62% { transform: scale(1.06); }
   72% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(0.8) translateY(-3px); }
+  100% { opacity: var(--idea-bulb-end-opacity, 0); transform: var(--idea-bulb-end-transform, scale(0.8) translateY(-3px)); }
 }
 
 @keyframes fuBulbRay {
@@ -2978,7 +2978,7 @@ h1 {
   50% { opacity: 0.4; }
   65% { opacity: 1; }
   80% { opacity: 0.6; }
-  100% { opacity: 0; }
+  100% { opacity: var(--idea-ray-end-opacity, 0); }
 }
 
 @keyframes fuHoldArm {
@@ -47422,23 +47422,21 @@ body:not(#_) .shell .nav .brand-logo > .brand-mark {
 body:not(#_) .shell .nav .brand-bulb {
   /* Match the original mascot's bulb / raised-hand coordinates after its tight viewBox crop. */
   position: absolute; z-index: 1;
-  top: calc(var(--brain-size) * -0.24643 + 2px); right: calc(var(--brain-size) * -0.28571);
+  top: calc(var(--brain-size) * -0.24643 + 4px); right: calc(var(--brain-size) * -0.28571);
   display: block; width: calc(var(--brain-size) * 0.42857); height: calc(var(--brain-size) * 0.46429); min-width: 0;
   pointer-events: none; opacity: 0; transform: translateY(8px) scale(0.2);
   transform-origin: center bottom; line-height: 0;
 }
 .brand-bulb svg { display: block; width: 100%; height: 100%; overflow: visible; }
 body:not(#_) :is(.brand:hover, .brand:focus-within, .studio-switch-trigger:hover, .studio-switch-trigger:focus-visible, .studio-mode-control.is-open) .brand-bulb {
-  animation: brandBulbPop 320ms cubic-bezier(0.2, 0.8, 0.3, 1.25) forwards;
+  --idea-bulb-end-opacity: 1;
+  --idea-bulb-end-transform: scale(1);
+  animation: fuBulbPop 650ms ease-out forwards;
 }
 body:not(#_) :is(.brand:hover, .brand:focus-within, .studio-switch-trigger:hover, .studio-switch-trigger:focus-visible, .studio-mode-control.is-open) .brand-bulb-rays {
-  animation: brandBulbTwinkle 2.4s ease-in-out 320ms infinite;
+  --idea-ray-end-opacity: 1;
+  animation: fuBulbRay 650ms ease-out forwards;
 }
-@keyframes brandBulbPop {
-  from { opacity: 0; transform: translateY(8px) scale(0.2) rotate(-12deg); }
-  to { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
-}
-@keyframes brandBulbTwinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 /* Preserve the morph's clipping while it grows; once settled the decoration may extend above the card. */
 body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
 @media (min-width: 981px) {
