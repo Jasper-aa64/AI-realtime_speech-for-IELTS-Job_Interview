@@ -21,6 +21,6 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "Rounded brain branding finished; exact 22% larger eyes; frontend 116 and Qt 4 tests passed; native visual QA normal/narrow, open bulb and assistant. Existing unrelated changes preserved.",
+  "notes": "Branding complete with user corrections: global top-left uses old raised-hand pixel mascot; rounded icons retain 22% eyes; both assistant title icons removed; bulb fixed after pop and lowered 2 CSS pixels. Frontend 116 tests and final syntax/diff/asset review pass. Unrelated changes preserved.",
   "meta": {}
 }

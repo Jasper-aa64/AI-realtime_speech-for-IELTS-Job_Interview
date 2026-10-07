@@ -20,3 +20,16 @@ Visually inspect web/desktop at normal and narrow sidebar, light/dark, resting/h
 - CUA actual window: resting logo and assistant navigation/corner/header/welcome match; open switcher bulb extends without clipping or shifting the wordmark. Sidebar checked at about 180 and 150 CSS pixels, restored to prior width. Screenshots saved in the chat outputs directory.
 - Reduced-motion rules reviewed statically. Dark appearance was not exercised in this run: the app window closed during the appearance inspection. No server or worker restarted.
 - Unrelated database, existing handoff report and prior workspace journal changes are excluded.
+
+## Follow-up correction from user
+The top-left brand is a special exception: use the previous pixel brain mascot shape, not the rounded square body. Preserve the enlarged brain-first footprint and independent floating bulb (no bulb in resting image). Apply this special mascot consistently to regular brand, desktop switcher trigger and switcher card head. Assistant/nav/browser/app icon keep rounded brain with 22% eyes. Remove the small brain from the top-left of the corner assistant popup header; preserve title and centered welcome brain. Also remove the small icon before AI 助手 above the full-page search/chat list, preserving text title and centered welcome icon. The mascot must keep the original raised right arm paired with the separate floating bulb; do not lower it. Bump CSS/assistant script caches.
+
+Final animation preference: after the bulb pops out, it remains fixed next to the raised hand. Remove the repeating vertical float/bob/rotation; keep pop-in and ray twinkle. Reduced motion stays static.
+
+Final placement preference: lower the bulb by 2 CSS pixels from the original paired-hand alignment, consistently in all top-left brand slots.
+
+## Follow-up verification
+- Original mascot body, eyes, folds, feet and raised right arm match studio-logo.svg exactly; all three global top-left slots use the new tightly cropped mascot asset.
+- Both full-page chat-list and corner-popup title icons removed, centered welcome image preserved. Bulb animation now has one 320ms pop and ray twinkle, no recurring translation/rotation; shared position lowered 2 CSS pixels.
+- Existing 116 frontend tests passed after initial follow-up; later changes are SVG pose, icon removal and CSS animation/offset only. Final JS syntax, SVG parsing and diff checks pass; reviewer found no defects.
+- Actual native screenshot confirms the old pixel mascot and raised hand paired with bulb. App interaction was interrupted by ongoing user control; final animation/offset verified from CSS rather than forcing more actions.

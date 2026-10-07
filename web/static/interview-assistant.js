@@ -669,7 +669,7 @@
       return `<section id="ivAssistant" class="iv-assistant" data-domain="${domain()}">
           <aside class="iv-as-side" aria-label="${esc(copy("对话列表", "Chats"))}">
             <div class="iv-as-side-head">
-              <span class="iv-as-brand">${ICON.brain}<span>${esc(copy("AI 助手", "AI assistant"))}</span></span>
+              <span class="iv-as-brand"><span>${esc(copy("AI 助手", "AI assistant"))}</span></span>
               <button type="button" class="iv-as-icon" data-iv-assistant="new" title="${esc(copy("新对话", "New chat"))}" aria-label="${esc(copy("新对话", "New chat"))}">${ICON.compose}</button>
             </div>
             <label class="iv-as-search">${ICON.search}<input id="ivAssistantSearch" type="search" autocomplete="off" placeholder="${esc(copy("搜索对话", "Search chats"))}" value="${esc(search)}"></label>
@@ -795,7 +795,6 @@
         <section id="ivDockCard" class="iv-dock-card" role="dialog" aria-label="${esc(copy("AI 助手", "AI assistant"))}" hidden>
           <div class="iv-dock-body">
             <header class="iv-dock-head">
-              <span class="iv-dock-mark" aria-hidden="true">${ICON.brain}</span>
               <strong id="ivDockTitle" class="iv-dock-title">${esc(copy("AI 助手", "AI assistant"))}</strong>
               <button type="button" class="iv-as-icon" data-iv-dock="new" title="${esc(copy("新对话", "New chat"))}" aria-label="${esc(copy("新对话", "New chat"))}">${ICON.compose}</button>
               <button type="button" id="ivDockMenuButton" class="iv-as-icon" data-iv-dock="menu" title="${esc(copy("最近的会话", "Recent chats"))}" aria-label="${esc(copy("最近的会话", "Recent chats"))}" aria-haspopup="menu" aria-expanded="false">${ICON.dots}</button>
