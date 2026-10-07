@@ -3058,20 +3058,14 @@
       }
 
       // ---- light theme of the 追问压力 headers ("pressure" mode): a fine dot matrix that is dense and lively at the bright edge and thins out
-      // toward the far one. A shimmering source sits at the bright edge; soft bands with a gently wavy front drift away
-      // from it and weaken as they go; a dot lights only while the light at its spot beats its own threshold, so the far
-      // side stays sparse. Lit dots grow a little and take on colour (teal → indigo). No switch-on flash (CSS fades the
+      // toward the far one: one continuous field whose brightness ripples along the bar (the dark grid's waves), and a
+      // dot lights only while the light at its spot beats its own threshold, so the far side stays sparse. Lit dots grow a little and take on colour (teal → indigo). No switch-on flash (CSS fades the
       // canvas in). Dark: glowing pastels with white crests; light: one shade deeper.
       const DOT = 8;  // dot pitch (px)
       const FLOW_STOPS = {
         dark: ["#5eead4", "#22d3ee", "#7dd3fc", "#a5b4fc"].map(rgbOf),
         light: ["#0d9488", "#0891b2", "#0369a1", "#4338ca"].map(rgbOf),
       };
-      const BANDS = [
-        { speed: 2.2, width: 7, strength: 0.9, offset: 0.05 },
-        { speed: 1.4, width: 11, strength: 0.6, offset: 0.45 },
-        { speed: 3.1, width: 4.5, strength: 0.55, offset: 0.75 },
-      ];
       const stopColor = (stops, u) => {
         const x = Math.min(0.9999, Math.max(0, u)) * (stops.length - 1);
         const i = Math.floor(x);
@@ -3123,33 +3117,30 @@
       function drawFlow(t, dark) {
         if (!texture || textureDark !== dark) bakeFlowTexture(width, height, Math.min(window.devicePixelRatio || 1, 2));
         ctx.drawImage(texture, 0, 0, width, height);
-        const span = dotCols + 30;
         const peak = dark ? 0.95 : 0.85;
-        for (let r = 0; r < dotRows; r += 1) {
-          // a slow per-row sway gives the fronts a soft, living edge instead of a straight column
-          const sway = 1.5 * Math.sin(r * 0.55 + t * 1.1) + 0.7 * Math.sin(r * 1.3 - t * 0.7);
-          for (let c = 0; c < dotCols; c += 1) {
-            const x = (reverse ? dotCols - 1 - c : c) + sway;
-            // the source: always lit near the bright edge, shimmering
-            let v = Math.max(0, 1 - x / (dotCols * 0.16)) * (0.75 + 0.25 * Math.sin(t * 2.3 + r * 0.9 + x * 0.4));
-            for (const band of BANDS) {
-              const pos = ((band.offset * span + band.speed * t * 10) % span) - 10;
-              const d = (x - pos) / band.width;
-              v += band.strength * Math.exp(-d * d);
-            }
+        const dir = reverse ? 1 : -1;
+        for (let c = 0; c < dotCols; c += 1) {
+          // one continuous field: the same three incommensurate waves as the dark grid ripple the brightness along the
+          // bar (no travelling clumps), under the envelope that keeps the bright edge dense and the far edge sparse
+          const x = c;
+          const flow = 0.5
+            + 0.22 * Math.sin(x * 0.19 + dir * t * 5.2)
+            + 0.16 * Math.sin(x * 0.45 + dir * t * 4.1 + 2.1)
+            + 0.12 * Math.sin(x * 1.02 + dir * t * 6.3 + 0.7);
+          const colLight = dotEnv[c] * (0.5 + 0.5 * flow);
+          if (colLight < 0.06) continue;
+          const rgb = dotColor[c];
+          for (let r = 0; r < dotRows; r += 1) {
             const i = r * dotCols + c;
-            const light = Math.min(1, v * dotEnv[c]);
-            // sparse toward the far edge: a dot lights only while the light beats its own threshold
-            if (light < 0.08 || light < dotKeep[i] * 0.7) continue;
-            const lit = Math.min(1, light * (0.8 + 0.4 * dotNoise[i]));
-            const rgb = dotColor[c];
+            if (colLight < dotKeep[i] * 0.8) continue;  // density follows the light: full at the bright edge, thinning out
+            const lit = Math.min(1, colLight * (0.72 + 0.56 * dotNoise[i]));
             const crest = dark ? lit * lit * lit * 0.6 : 0;
             const rr = (rgb[0] + (255 - rgb[0]) * crest) | 0;
             const gg = (rgb[1] + (255 - rgb[1]) * crest) | 0;
             const bb = (rgb[2] + (255 - rgb[2]) * crest) | 0;
-            const size = 2.2 + lit * 2.6;  // lit dots grow from ~2px to ~5px around the same centre
+            const size = 2.4 + lit * 2.4;  // brighter dots are a little larger, around the same centre
             const off = (DOT - size) / 2;
-            ctx.fillStyle = `rgba(${rr}, ${gg}, ${bb}, ${(0.35 + lit * (peak - 0.35)).toFixed(3)})`;
+            ctx.fillStyle = `rgba(${rr}, ${gg}, ${bb}, ${(0.3 + lit * (peak - 0.3)).toFixed(3)})`;
             ctx.fillRect(c * DOT + off, r * DOT + off, size, size);
           }
         }
