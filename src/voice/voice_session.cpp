@@ -66,6 +66,7 @@ const char* ToString(VoiceState state) {
 nlohmann::json VoiceOptions::StartSessionPayload() const {
     nlohmann::json p;
     p["asr"]["extra"]["end_smooth_window_ms"] = end_smooth_window_ms;
+    p["asr"]["extra"]["enable_custom_vad"] = enable_custom_vad;
     p["tts"]["speaker"] = speaker;
     // pcm 是 32 位 float；引擎和设备都按 16 位处理，所以要 pcm_s16le
     p["tts"]["audio_config"] = {{"channel", 1}, {"format", "pcm_s16le"}, {"sample_rate", output_sample_rate}};
@@ -188,10 +189,17 @@ VoiceOptions VoiceOptionsFromJson(const nlohmann::json& root) {
                                                                               : HalfDuplexMode::kKeepAlive;
     o.playback_chunk_ms = NumberOr<int>(voice, "playback_chunk_ms", o.playback_chunk_ms);
     o.max_playback_ms = NumberOr<int>(voice, "max_playback_ms", o.max_playback_ms);
+    o.output_gain = std::clamp(NumberOr<double>(voice, "output_gain", o.output_gain), 0.0, 1.0);
     o.voiced_margin_db = NumberOr<double>(voice, "voiced_margin_db", o.voiced_margin_db);
     o.voiced_min_dbfs = NumberOr<double>(voice, "voiced_min_dbfs", o.voiced_min_dbfs);
+    o.min_voiced_run = NumberOr<int>(voice, "min_voiced_run", o.min_voiced_run);
+    if (voice.contains("enable_custom_vad") && voice["enable_custom_vad"].is_boolean()) {
+        o.enable_custom_vad = voice["enable_custom_vad"].get<bool>();
+    }
     if (voice.contains("extra_start_session")) o.extra_start_session = voice["extra_start_session"];
     o.metrics_dir = StringOr(voice, "metrics_dir", "");
+    o.input_device = StringOr(voice, "input_device", "");
+    o.output_device = StringOr(voice, "output_device", "");
     if (voice.contains("dump_pcm") && voice["dump_pcm"].is_boolean()) o.dump_pcm = voice["dump_pcm"].get<bool>();
     o.end_smooth_window_ms = std::clamp(o.end_smooth_window_ms, 500, 50000);
     return o;
@@ -407,6 +415,8 @@ private:
         metrics_.Open(opt_.metrics_path, epoch_);
         metrics_.Write({{"ev", "session_start"},
                         {"wall", Timestamp()},
+                        {"enable_custom_vad", opt_.enable_custom_vad},
+                        {"output_gain", opt_.output_gain},
                         {"model", opt_.model},
                         {"speaker", opt_.speaker},
                         {"end_smooth_window_ms", opt_.end_smooth_window_ms},
@@ -416,6 +426,7 @@ private:
                         {"playback_chunk_ms", opt_.playback_chunk_ms},
                         {"voiced_margin_db", opt_.voiced_margin_db},
                         {"voiced_min_dbfs", opt_.voiced_min_dbfs},
+                        {"min_voiced_run", opt_.min_voiced_run},
                         {"noise_floor_packets", opt_.noise_floor_packets},
                         {"pcm_dump", opt_.pcm_dump_path}});
 
@@ -425,6 +436,8 @@ private:
                 device_->OpenOutput(opt_.output_sample_rate, chunk_frames_);
                 devices_open_ = true;
                 output_latency_ms_ = device_->OutputLatencySeconds() * 1000.0;
+                metrics_.Write({{"ev", "audio_devices"}, {"devices", device_->Describe()},
+                                {"output_latency_ms", output_latency_ms_}});
                 if (!opt_.pcm_dump_path.empty()) {
                     pcm_dump_.open(opt_.pcm_dump_path, std::ios::binary);
                     pcm_times_.open(opt_.pcm_dump_path + ".times");
@@ -530,7 +543,11 @@ private:
         ++listen_id_;
         listen_at_ = Clock::now();
         listen_start_packet_ = mic_packets_.load();
+        listen_start_packet_atomic_.store(listen_start_packet_);
+        speech_onset_ns_.store(0);
+        speech_onset_packet_.store(-1);
         last_partial_at_ = Clock::time_point{};
+        last_partial_text_.clear();
         partial_count_ = 0;
         accept_asr_ = true;
         user_stop_valid_ = false;
@@ -690,6 +707,9 @@ private:
             carry_byte_ = bytes[i];
             carry_valid_ = true;
         }
+        if (opt_.output_gain < 1.0) {
+            for (auto& v : samples) v = static_cast<int16_t>(v * opt_.output_gain);
+        }
         const std::uint64_t id = speak_id_;
         for (std::size_t at = 0; at < samples.size(); at += chunk_frames_) {
             const std::size_t n = std::min<std::size_t>(chunk_frames_, samples.size() - at);
@@ -739,7 +759,13 @@ private:
     }
 
     void OnAsrInfo(Clock::time_point at) {
-        metrics_.Write({{"ev", "asr_info"}, {"listen", listen_id_}, {"accepted", accept_asr_}}, at);
+        nlohmann::json line{{"ev", "asr_info"}, {"listen", listen_id_}, {"accepted", accept_asr_}};
+        if (const auto onset = speech_onset_ns_.load()) {
+            line["speech_onset_packet"] = speech_onset_packet_.load();
+            line["since_speech_onset_ms"] =
+                std::chrono::duration<double, std::milli>(at - Clock::time_point(Clock::duration(onset))).count();
+        }
+        metrics_.Write(line, at);
         if (!accept_asr_) return;
         VoiceEvent e;
         e.type = VoiceEvent::Type::kUserStarted;
@@ -761,7 +787,9 @@ private:
         e.at_ms = Ms(at);
         if (interim) {
             nlohmann::json line{{"ev", "asr_partial"}, {"listen", listen_id_}, {"chars", text.size()},
+                                {"changed", text != last_partial_text_},
                                 {"listening", state_.load() == VoiceState::kListening}};
+            last_partial_text_ = text;
             if (last_partial_at_ != Clock::time_point{} && state_.load() == VoiceState::kListening) {
                 line["interval_ms"] = std::chrono::duration<double, std::milli>(at - last_partial_at_).count();
             }
@@ -792,6 +820,8 @@ private:
                             {"packet_at_event", packet_now},
                             {"listen_start_packet", listen_start_packet_},
                             {"last_voiced_packet", voiced_packet},
+                            {"speech_onset_packet", speech_onset_packet_.load()},
+                            {"min_voiced_run", opt_.min_voiced_run},
                             {"floor_dbfs", floor_db_.load()},
                             {"threshold_dbfs", threshold_db_.load()},
                             {"end_smooth_window_ms", opt_.end_smooth_window_ms}};
@@ -836,6 +866,7 @@ private:
         std::vector<double> floor_samples;
         bool floor_ready = false;
         double threshold = 0.0;
+        int run = 0;  // 连续有声的包数
         while (capture_running_.load()) {
             const std::size_t n = device_->Read(buf.data(), buf.size());
             if (n == 0) {
@@ -865,8 +896,17 @@ private:
                                     {"packets", floor_samples.size()}});
                 }
             } else if (db >= threshold) {
-                last_voiced_packet_.store(index);
-                last_voiced_end_ns_.store(now.time_since_epoch().count());
+                if (++run >= opt_.min_voiced_run) {
+                    last_voiced_packet_.store(index);
+                    last_voiced_end_ns_.store(now.time_since_epoch().count());
+                    if (run == opt_.min_voiced_run && speech_onset_ns_.load() == 0 &&
+                        index - (opt_.min_voiced_run - 1) >= static_cast<std::int64_t>(listen_start_packet_atomic_.load())) {
+                        speech_onset_packet_.store(index - (opt_.min_voiced_run - 1));
+                        speech_onset_ns_.store(now.time_since_epoch().count());
+                    }
+                }
+            } else {
+                run = 0;
             }
             mic_packets_.fetch_add(1);  // 先记下声音判断，再让控制线程看到新的包号
 
@@ -982,6 +1022,7 @@ private:
     Clock::time_point listen_at_;
     std::uint64_t listen_start_packet_ = 0;
     Clock::time_point last_partial_at_;
+    std::string last_partial_text_;
     int partial_count_ = 0;
     bool accept_asr_ = false;
     Clock::time_point user_stop_at_;
@@ -996,6 +1037,9 @@ private:
     std::atomic<std::uint64_t> mic_packets_{0};
     std::atomic<std::int64_t> last_voiced_packet_{-1};
     std::atomic<Clock::rep> last_voiced_end_ns_{0};
+    std::atomic<std::uint64_t> listen_start_packet_atomic_{0};
+    std::atomic<Clock::rep> speech_onset_ns_{0};
+    std::atomic<std::int64_t> speech_onset_packet_{-1};
     std::atomic<double> floor_db_{0.0};
     std::atomic<double> threshold_db_{0.0};
     std::ofstream pcm_dump_;

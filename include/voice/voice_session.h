@@ -45,13 +45,20 @@ struct VoiceOptions {
     std::string system_role;
     std::string speaking_style;
     int end_smooth_window_ms = 1500;               ///< 服务端判断说完的平滑窗口，[500, 50000]
+    /// asr.extra.enable_custom_vad：文档里 end_smooth_window_ms 属于"自定义判停参数"，默认关；
+    /// 关着时实测 2000 ms 窗口不生效（900 ms 的停顿就被判说完），所以默认开
+    bool enable_custom_vad = true;
     nlohmann::json extra_start_session;            ///< 合并进 StartSession payload 的额外字段
+
+    std::string input_device;                      ///< 设备名包含这段文字就用它；空串用系统默认（壳和 voice_probe 用）
+    std::string output_device;
 
     int input_sample_rate = 16000;
     int packet_ms = 20;                            ///< 上行每包时长（20 ms = 320 帧 = 640 字节）
     int output_sample_rate = 24000;
     int playback_chunk_ms = 40;                    ///< 下行写设备的块大小
     int max_playback_ms = 60000;                   ///< 播放队列上限，超过丢最旧的块
+    double output_gain = 1.0;                      ///< 播放音量系数（0~1），不改系统音量
 
     SpeakMethod speak_method = SpeakMethod::kAuto;
     HalfDuplexMode half_duplex = HalfDuplexMode::kKeepAlive;
@@ -60,10 +67,13 @@ struct VoiceOptions {
     std::chrono::milliseconds speak_start_timeout{10000};  ///< Speak 后这么久没收到要播的 TTS 就报错
     std::chrono::milliseconds stop_timeout{4000};           ///< Stop 的总时限
 
-    // 计时：麦克风包的 RMS 比开头 1 秒底噪高出 voiced_margin_db 算"有声音"
-    int noise_floor_packets = 50;                  ///< 底噪取打开麦克风后前 50 包（1 s）的中位数
-    double voiced_margin_db = 15.0;
+    // 计时："用户停下"= 收听期间最后一段语音的结束时刻。
+    // 一包（20 ms）的 RMS 比底噪高出 voiced_margin_db 算有声；连续 min_voiced_run 包有声才算一段语音
+    // （键盘声、扬声器开关的爆音只有一两包，不算）。底噪 = 打开麦克风后前 noise_floor_packets 包 RMS 的中位数。
+    int noise_floor_packets = 50;                  ///< 1 s
+    double voiced_margin_db = 20.0;
     double voiced_min_dbfs = -55.0;                ///< 阈值至少这么高，防止底噪极低时被呼吸声触发
+    int min_voiced_run = 3;                        ///< 60 ms
 
     std::string metrics_path;                      ///< 计时日志（JSON 行）；空则不写
     std::string pcm_dump_path;                     ///< 麦克风原始 PCM（16 kHz s16le），旁边 .times 记每包时刻；空则不存

@@ -556,3 +556,7 @@ add_test(
     NAME voice_session_test
     COMMAND voice_session_test
 )
+
+# 开发用：直接驱动 VoiceSession 连真实服务（验收计时用，见 tools/voice_probe.cpp）
+add_executable(voice_probe tools/voice_probe.cpp)
+target_link_libraries(voice_probe PRIVATE voice_engine spdlog::spdlog)

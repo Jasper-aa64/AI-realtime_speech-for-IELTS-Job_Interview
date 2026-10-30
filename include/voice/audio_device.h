@@ -31,11 +31,18 @@ public:
     virtual void Write(const int16_t* samples, std::size_t frames) = 0;
     /// 输出设备的延迟（秒），算"扬声器出声"时刻用；不知道时返回 0
     virtual double OutputLatencySeconds() const { return 0.0; }
+    /// 实际打开的设备名，写进计时日志
+    virtual std::string Describe() const { return {}; }
     virtual void CloseOutput() = 0;
 };
 
-/// PortAudio 实现（默认输入、输出设备）。构造时初始化 PortAudio，析构时释放。
-std::unique_ptr<AudioDevice> CreatePortAudioDevice();
+/**
+ * @brief PortAudio 实现。构造时初始化 PortAudio，析构时释放。
+ * @param input_name、output_name 设备名里包含这段文字就选它（例如 "MacBook Air"）；空串用系统默认设备。
+ *        找不到时 OpenInput / OpenOutput 抛异常，信息里列出可用设备名。
+ */
+std::unique_ptr<AudioDevice> CreatePortAudioDevice(const std::string& input_name = {},
+                                                   const std::string& output_name = {});
 
 /**
  * @brief 不打开流，只检查 PortAudio 能初始化、有默认输入和输出设备
