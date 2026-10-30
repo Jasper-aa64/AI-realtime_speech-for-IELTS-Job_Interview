@@ -6,6 +6,8 @@
 #include "common/logger.h"
 #include "common/protocol.h"
 
+#include <nlohmann/json.hpp>
+
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/core.hpp>
@@ -342,6 +344,11 @@ TEST(RealtimeClientTest, ConnectWaitsForSessionStarted) {
     EXPECT_EQ(ev[1], events::START_SESSION);
     EXPECT_EQ(server.Malformed(), 0);
     EXPECT_EQ(client.ReceiveResponse().event, events::SESSION_STARTED);
+
+    // 火山文档把 dialog.extra.model 标为必传
+    const auto start_session = server.Frames()[1];
+    const auto payload = nlohmann::json::parse(start_session.payload.begin(), start_session.payload.end());
+    EXPECT_EQ(payload["dialog"]["extra"]["model"], "1.2.1.1");
 }
 
 // 证书校验开着、又不信任测试证书时，连接失败并说明是 TLS

@@ -37,6 +37,8 @@ TEST(ConfigTest, LoadDefaultConfig)
     EXPECT_EQ(config.dialog_config.city, "北京");
     EXPECT_EQ(config.dialog_config.recv_timeout, 10);
     EXPECT_EQ(config.dialog_config.input_mod, "audio");
+    EXPECT_EQ(config.dialog_config.model, "1.2.1.1");
+    EXPECT_EQ(config.GenerateStartSessionRequest()["dialog"]["extra"]["model"], "1.2.1.1");
 
     // tts
     EXPECT_EQ(config.tts_config.sample_rate, 24000);

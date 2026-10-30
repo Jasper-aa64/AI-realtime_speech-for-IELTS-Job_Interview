@@ -98,6 +98,7 @@ void Config::LoadFromFile(const std::string& path) {
     dialog_config.audit_response = Require<std::string>(dialog, "audit_response");
     dialog_config.recv_timeout = Require<int>(dialog, "recv_timeout");
     dialog_config.input_mod = Require<std::string>(dialog, "input_mod");
+    dialog_config.model = dialog.value("model", std::string("1.2.1.1"));
 
     const auto& tts = RequireObject(root, "tts");
     tts_config.speaker = Require<std::string>(tts, "speaker");
@@ -221,6 +222,7 @@ nlohmann::json Config::GenerateStartSessionRequest() const {
     request["dialog"]["extra"]["audit_response"] = dialog_config.audit_response;
     request["dialog"]["extra"]["recv_timeout"] = dialog_config.recv_timeout;
     request["dialog"]["extra"]["input_mod"] = dialog_config.input_mod;
+    request["dialog"]["extra"]["model"] = dialog_config.model;
 
     return request;
 }

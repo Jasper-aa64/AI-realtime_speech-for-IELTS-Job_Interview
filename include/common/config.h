@@ -106,6 +106,7 @@ struct DialogConfig {
     std::string audit_response;             // 审核触发时的回复话术
     int recv_timeout = 0;                   // 接收超时时间（秒）
     std::string input_mod;                  // 输入模式："audio"=语音输入，"text"=文本输入
+    std::string model = "1.2.1.1";          // 端到端模型版本（必传）：1.2.1.1=O2.0，2.2.0.0=SC2.0
 
     /// @brief 构造函数，初始化system_role和speaking_style为面试官角色
     DialogConfig();
