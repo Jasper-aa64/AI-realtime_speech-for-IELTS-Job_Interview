@@ -1,6 +1,9 @@
 #include <QApplication>
+#include <QDir>
+#include <QPermissions>
 #include <QCommandLineParser>
 #include <QEventLoop>
+#include <QFile>
 #include <QIcon>
 #include <QLibraryInfo>
 #include <QLocale>
@@ -11,6 +14,9 @@
 #include <QWebEngineProfile>
 
 #include "browser_window.h"
+#include "common/logger.h"
+#include "realtime_voice_engine.h"
+#include "voice_settings.h"
 #include "server_settings.h"
 #include "studio_profile.h"
 
@@ -51,6 +57,16 @@ int main(int argc, char *argv[]) {
 
     QSettings settings;
     QUrl server = studio::ServerSettings::load(settings);
+
+    // Realtime voice: the engine logs through spdlog; the bundle's working directory is not writable.
+    QDir().mkpath(studio::VoiceSettings::defaultMetricsDir());
+    interview::common::Logger::Init((studio::VoiceSettings::defaultMetricsDir() + QStringLiteral("/engine.log")).toStdString());
+    const QString voiceConfig = studio::VoiceSettings::configPath(settings);
+    studio::setVoiceBackend(studio::realtimeVoiceBackend(voiceConfig));
+    // Ask for the microphone up front, but only when a voice config exists; without one native voice stays off
+    // and nobody needs to see the prompt. capabilities() re-checks on every call.
+    if (QFile::exists(voiceConfig) && app.checkPermission(QMicrophonePermission{}) == Qt::PermissionStatus::Undetermined)
+        app.requestPermission(QMicrophonePermission{}, &app, [](const QPermission &) {});
     if (parser.isSet(serverOption)) {
         const auto override = studio::ServerSettings::normalize(parser.value(serverOption));
         if (!override) {

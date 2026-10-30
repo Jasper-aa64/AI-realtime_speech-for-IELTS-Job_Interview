@@ -17,6 +17,8 @@ add_library(studio_core STATIC
     src/browser_window.cpp src/browser_window.h
     src/native_bridge.cpp src/native_bridge.h
     src/popup_relay.cpp src/popup_relay.h
+    src/voice_bridge.cpp src/voice_bridge.h
+    src/voice_settings.cpp src/voice_settings.h
 )
 target_include_directories(studio_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(studio_core PUBLIC Qt6::Widgets Qt6::WebEngineWidgets Qt6::WebChannel)
@@ -34,7 +36,12 @@ set_target_properties(IELTSStudio PROPERTIES
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
 )
 target_compile_definitions(IELTSStudio PRIVATE STUDIO_VERSION="${PROJECT_VERSION}")
-target_link_libraries(IELTSStudio PRIVATE studio_core)
+# Realtime voice engine (Boost.Beast, OpenSSL, PortAudio, spdlog, nlohmann_json) shared with the root project.
+# Configure with the vcpkg toolchain (classic mode) as in desktop/README.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/voice_engine.cmake)
+add_library(studio_voice STATIC src/realtime_voice_engine.cpp src/realtime_voice_engine.h)
+target_link_libraries(studio_voice PUBLIC studio_core PRIVATE voice_engine)
+target_link_libraries(IELTSStudio PRIVATE studio_core studio_voice voice_engine spdlog::spdlog)
 
 enable_testing()
 

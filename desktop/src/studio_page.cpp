@@ -9,14 +9,18 @@
 
 #include "navigation_policy.h"
 #include "native_bridge.h"
+#include "voice_bridge.h"
 
 namespace studio {
 
 StudioPage::StudioPage(QWebEngineProfile *profile, const QUrl &server, QObject *parent)
     : QWebEnginePage(profile, parent), m_server(server) {
     auto *channel = new QWebChannel(this);
-    auto *bridge = new NativeBridge([this] { return isSameOrigin(url(), m_server); }, channel);
+    const auto trusted = [this] { return isSameOrigin(url(), m_server); };
+    const VoiceBackend &backend = voiceBackend();
+    auto *bridge = new NativeBridge(trusted, [backend] { return backend.available && backend.available(nullptr); }, channel);
     channel->registerObject(QStringLiteral("studioNative"), bridge);
+    channel->registerObject(QStringLiteral("studioVoice"), new VoiceBridge(trusted, backend, channel));
     setWebChannel(channel, QWebEngineScript::MainWorld);
     QFile runtime(QStringLiteral(":/qtwebchannel/qwebchannel.js"));
     if (runtime.open(QIODevice::ReadOnly)) {
