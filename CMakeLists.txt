@@ -522,3 +522,37 @@ add_test(
     NAME interview_test
     COMMAND interview_test
 )
+
+# ==================== Voice Engine ====================
+# 实时语音引擎库（cmake/voice_engine.cmake）和它的测试：假 TLS 服务端 + 假音频设备
+
+include(${PROJECT_SOURCE_DIR}/cmake/voice_engine.cmake)
+
+add_executable(
+    voice_session_test
+    tests/voice_session_test.cpp
+)
+
+target_include_directories(
+    voice_session_test
+    PRIVATE
+    ${VCPKG_GLOBAL}/include
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(
+    voice_session_test
+    PRIVATE
+    voice_engine
+    ${VCPKG_GLOBAL}/lib/libgtest.a
+    spdlog::spdlog
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Boost::thread
+)
+
+add_test(
+    NAME voice_session_test
+    COMMAND voice_session_test
+)
