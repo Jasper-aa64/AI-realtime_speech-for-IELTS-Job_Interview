@@ -12,8 +12,11 @@
 #include <boost/beast/websocket/ssl.hpp>
 #include <nlohmann/json.hpp>
 #include <openssl/ssl.h>
+#include <openssl/x509.h>
 
 #include <atomic>
+#include <cstdlib>
+#include <fstream>
 #include <condition_variable>
 #include <deque>
 #include <future>
@@ -63,7 +66,43 @@ bool IsErrorResponse(const common::ParsedResponse& response) {
     return response.message_type == "SERVER_ERROR_RESPONSE" || response.message_type == "SERVER_ERROR";
 }
 
+bool FileExists(const std::string& path) {
+    return !path.empty() && std::ifstream(path).good();
+}
+
 } // namespace
+
+std::string ResolveDefaultCaFile() {
+    std::vector<std::string> candidates;
+    if (const char* env = std::getenv("SSL_CERT_FILE")) {
+        candidates.emplace_back(env);
+    }
+    candidates.emplace_back(X509_get_default_cert_file());
+#ifdef __APPLE__
+    // vcpkg / Homebrew 的 OpenSSL 默认路径指向它们自己的前缀，那里通常没有 CA 包；
+    // macOS 系统自带一份 PEM 格式的根证书。
+    candidates.emplace_back("/etc/ssl/cert.pem");
+    candidates.emplace_back("/private/etc/ssl/cert.pem");
+    candidates.emplace_back("/opt/homebrew/etc/ca-certificates/cert.pem");
+    candidates.emplace_back("/opt/homebrew/etc/openssl@3/cert.pem");
+    candidates.emplace_back("/usr/local/etc/openssl@3/cert.pem");
+#endif
+    for (const auto& path : candidates) {
+        if (FileExists(path)) {
+            return path;
+        }
+    }
+#ifdef __APPLE__
+    std::string tried;
+    for (const auto& path : candidates) {
+        tried += (tried.empty() ? "" : ", ") + path;
+    }
+    throw std::runtime_error("No CA certificate file found for TLS verification (tried " + tried +
+                             "). Set ws.ca_file to a PEM bundle; verification stays on.");
+#else
+    return {};
+#endif
+}
 
 // 连接由一个 I/O 线程独占：ws_ 的读、写、关闭只在这个线程上执行。
 // 其他线程只通过 net::post 把任务投给它，所以同一时刻不会有两个线程用 ws_。
@@ -95,10 +134,12 @@ public:
         ParseUrl();
         if (opt_.tls_verify) {
             ssl_ctx_.set_verify_mode(ssl::verify_peer);
-            if (opt_.ca_file.empty()) {
+            const std::string ca_file = opt_.ca_file.empty() ? ResolveDefaultCaFile() : opt_.ca_file;
+            if (ca_file.empty()) {
                 ssl_ctx_.set_default_verify_paths();
             } else {
-                ssl_ctx_.load_verify_file(opt_.ca_file);
+                ssl_ctx_.load_verify_file(ca_file);
+                LOG_INFO("TLS CA file: {}", ca_file);
             }
         } else {
             ssl_ctx_.set_verify_mode(ssl::verify_none);
@@ -205,6 +246,21 @@ public:
             EnqueueControl(std::move(m));
         });
         LOG_INFO("Sent prompt query: {}", prompt);
+    }
+
+    void SendEvent(uint32_t event, const nlohmann::json& payload) {
+        auto link = CurrentLink();
+        if (!connected_ || !link.ioc) {
+            throw std::runtime_error("Not connected");
+        }
+        auto message = common::Protocol::BuildFullRequest(event, link.session_id, payload);
+        net::post(*link.ioc, [this, event, m = std::move(message)]() mutable {
+            if (state_ != State::kOpen) {
+                LOG_WARNING("Dropped event {}: connection is no longer open", event);
+                return;
+            }
+            EnqueueControl(std::move(m));
+        });
     }
 
     common::ParsedResponse ReceiveResponse() {
@@ -503,7 +559,9 @@ private:
         case common::events::CONNECTION_STARTED: {
             LOG_INFO("Connection started, starting session");
             // payload 里带会话参数（采样率、音频格式、VAD/TTS等配置）
-            auto payload = common::Config::Instance().GenerateStartSessionRequest();
+            auto payload = opt_.start_session.is_null()
+                ? common::Config::Instance().GenerateStartSessionRequest()
+                : opt_.start_session;
             WriteDuringConnect(common::Protocol::BuildFullRequest(
                 common::events::START_SESSION, session_id_, payload));
             return;
@@ -870,6 +928,10 @@ void RealtimeClient::SendAudioData(const std::vector<uint8_t>& audio) {
 
 void RealtimeClient::SendTextQuery(const std::string& text) {
     pimpl_->SendTextQuery(text);
+}
+
+void RealtimeClient::SendEvent(uint32_t event, const nlohmann::json& payload) {
+    pimpl_->SendEvent(event, payload);
 }
 
 common::ParsedResponse RealtimeClient::ReceiveResponse() {

@@ -32,7 +32,19 @@ struct RealtimeClientOptions {
     std::chrono::milliseconds finish_session_wait{2000};   ///< Close 发完 FINISH_SESSION 后等 SESSION_FINISHED 的时限
     std::chrono::milliseconds close_timeout{5000};         ///< Close 的总时限，超时直接关 socket
     std::size_t max_audio_backlog_bytes = 16000;           ///< 待发音频上限（默认约 0.5 s 的 16 kHz int16），超过丢最旧的
+    /// StartSession 的完整 payload；为 null 时用 Config::Instance().GenerateStartSessionRequest()
+    nlohmann::json start_session;
 };
+
+/**
+ * @brief tls_verify 开、ca_file 为空时选用的 CA 文件
+ *
+ * 依次看 SSL_CERT_FILE 环境变量、OpenSSL 编译时的默认 CA 文件；macOS 上再找系统自带的
+ * /etc/ssl/cert.pem 等。找到第一个存在的文件就返回它的路径。
+ * 非 macOS 都找不到时返回空串（交给 OpenSSL 的默认 CA 目录）；macOS 都找不到时抛异常，
+ * 不静默关掉校验。
+ */
+std::string ResolveDefaultCaFile();
 
 /// @brief 发送统计，所有字段单调递增
 struct RealtimeClientStats {
@@ -141,6 +153,17 @@ public:
      * @throws std::runtime_error 未连接
      */
     void SendTextQuery(const std::string& text);
+
+    /**
+     * @brief 发送一个带 JSON payload 的会话内控制事件（SayHello、ChatTTSText 等）
+     *
+     * 和 SendTextQuery 一样只投递给 I/O 线程、立刻返回，控制帧优先于音频、不会被丢弃。
+     *
+     * @param event 事件号（common::events 里的常量）
+     * @param payload 原样发送的 JSON
+     * @throws std::runtime_error 未连接
+     */
+    void SendEvent(uint32_t event, const nlohmann::json& payload);
 
     /**
      * @brief 接收服务器响应（阻塞）

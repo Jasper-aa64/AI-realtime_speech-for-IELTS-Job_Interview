@@ -42,13 +42,22 @@ namespace events {
     constexpr uint32_t SESSION_FINISHED = 152;      // 服务器->客户端：会话已结束
     constexpr uint32_t SESSION_ENDED = 153;         // 服务器->客户端：会话已终止
 
+    constexpr uint32_t USAGE_RESPONSE = 154;        // 服务器->客户端：本轮用量
+
     // 任务和查询事件（200-599）
-    constexpr uint32_t TASK_REQUEST = 200;          // 客户端->服务器：任务请求
+    constexpr uint32_t TASK_REQUEST = 200;          // 客户端->服务器：任务请求（上行音频）
+    constexpr uint32_t SAY_HELLO = 300;             // 客户端->服务器：打招呼文本 {"content"}
+    constexpr uint32_t CHAT_TTS_TEXT = 500;         // 客户端->服务器：指定文本合成 {"start","content","end"}，须在 ASR_ENDED 之后
     constexpr uint32_t CHAT_TEXT_QUERY = 501;       // 客户端->服务器：文本对话查询
+    constexpr uint32_t CHAT_RESPONSE = 550;         // 服务器->客户端：模型回复文本
+    constexpr uint32_t CHAT_ENDED = 559;            // 服务器->客户端：模型回复文本结束
+    constexpr uint32_t DIALOG_COMMON_ERROR = 599;   // 服务器->客户端：通话过程中的错误 {"status_code","message"}
 
     // TTS（文本转语音）事件（350-399）
-    constexpr uint32_t TTS_START = 350;             // 服务器->客户端：TTS开始播放
-    constexpr uint32_t TTS_END = 359;               // 服务器->客户端：TTS播放结束
+    constexpr uint32_t TTS_START = 350;             // 服务器->客户端：TTSSentenceStart {"tts_type","text","reply_id"}
+    constexpr uint32_t TTS_SENTENCE_END = 351;      // 服务器->客户端：分句结束
+    constexpr uint32_t TTS_RESPONSE = 352;          // 服务器->客户端：TTS 音频（二进制 payload）
+    constexpr uint32_t TTS_END = 359;               // 服务器->客户端：TTSEnded，一轮合成结束
 
     // ASR（语音识别）事件（450-499）
     constexpr uint32_t USER_START_SPEAKING = 450;   // 服务器->客户端：检测到用户开始说话
