@@ -12,6 +12,7 @@
 //   speaker：用 say 从扬声器外放（声音要够大服务端才识别，实测约 -20 dBFS 才行）。--duration-seconds 时一直循环到时间到，最后打印统计。
 // 计时日志写到配置里 voice.metrics_dir（或 --metrics-dir）。
 #include "voice/voice_session.h"
+#include "voice/injecting_device.h"
 #include "common/logger.h"
 
 #include <atomic>
@@ -71,54 +72,6 @@ struct Waiter {
     }
 };
 
-// 真实麦克风 + 数字叠加的回答音频。输出照常走真实设备。
-class MixInDevice : public AudioDevice {
-public:
-    explicit MixInDevice(std::unique_ptr<AudioDevice> inner) : inner_(std::move(inner)) {}
-
-    void Inject(std::vector<int16_t> samples) {
-        std::lock_guard<std::mutex> lock(mu_);
-        pending_ = std::move(samples);
-        at_ = 0;
-        end_at_ = Clock::time_point{};
-    }
-    bool Injecting() {
-        std::lock_guard<std::mutex> lock(mu_);
-        return at_ < pending_.size();
-    }
-    Clock::time_point InjectEnd() {
-        std::lock_guard<std::mutex> lock(mu_);
-        return end_at_;
-    }
-
-    void OpenInput(int rate, int frames) override { inner_->OpenInput(rate, frames); }
-    std::size_t Read(int16_t* out, std::size_t frames) override {
-        const std::size_t n = inner_->Read(out, frames);
-        std::lock_guard<std::mutex> lock(mu_);
-        if (at_ < pending_.size()) {
-            for (std::size_t i = 0; i < n && at_ < pending_.size(); ++i, ++at_) {
-                const int v = out[i] + pending_[at_];
-                out[i] = static_cast<int16_t>(std::max(-32768, std::min(32767, v)));
-            }
-            if (at_ >= pending_.size()) end_at_ = Clock::now();
-        }
-        return n;
-    }
-    void CloseInput() override { inner_->CloseInput(); }
-    void OpenOutput(int rate, int frames) override { inner_->OpenOutput(rate, frames); }
-    void Write(const int16_t* samples, std::size_t frames) override { inner_->Write(samples, frames); }
-    double OutputLatencySeconds() const override { return inner_->OutputLatencySeconds(); }
-    std::string Describe() const override { return inner_->Describe() + " (+injected answer audio)"; }
-    void CloseOutput() override { inner_->CloseOutput(); }
-
-private:
-    std::unique_ptr<AudioDevice> inner_;
-    std::mutex mu_;
-    std::vector<int16_t> pending_;
-    std::size_t at_ = 0;
-    Clock::time_point end_at_;
-};
-
 // say -o 生成 WAV（16 kHz 单声道 s16le），读出 data 块；去掉末尾的静音，回答的"停下"就是最后一个采样
 std::vector<int16_t> SynthesizeAnswer(const std::string& voice, const std::string& text, double gain) {
     const std::string path = "/tmp/voice_probe_answer.wav";
@@ -135,25 +88,7 @@ std::vector<int16_t> SynthesizeAnswer(const std::string& voice, const std::strin
     if (posix_spawn(&pid, argv[0], nullptr, nullptr, argv.data(), environ) != 0) return {};
     int status = 0;
     waitpid(pid, &status, 0);
-    std::ifstream in(path, std::ios::binary);
-    std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    std::size_t pos = 12;
-    std::vector<int16_t> samples;
-    while (pos + 8 <= bytes.size()) {
-        const std::string id(bytes.data() + pos, 4);
-        uint32_t size = 0;
-        std::memcpy(&size, bytes.data() + pos + 4, 4);
-        if (id == "data") {
-            const std::size_t n = std::min<std::size_t>(size, bytes.size() - pos - 8) / 2;
-            samples.resize(n);
-            std::memcpy(samples.data(), bytes.data() + pos + 8, n * 2);
-            break;
-        }
-        pos += 8 + size + (size & 1);
-    }
-    while (!samples.empty() && std::abs(samples.back()) < 64) samples.pop_back();
-    for (auto& v : samples) v = static_cast<int16_t>(v * gain);
-    return samples;
+    return LoadWav16k(path, gain);
 }
 
 const char* TypeName(VoiceEvent::Type t) {
@@ -251,13 +186,13 @@ int main(int argc, char** argv) {
 
     Waiter w;
     const auto t0 = Clock::now();
-    MixInDevice* mixer = nullptr;
+    InjectingAudioDevice* mixer = nullptr;
     std::unique_ptr<AudioDevice> device = CreatePortAudioDevice(o.input_device, o.output_device);
     std::vector<int16_t> answer_pcm;
     if (!answer.empty() && answer_mode == "inject") {
         answer_pcm = SynthesizeAnswer(say_voice, answer, answer_gain);
         std::printf("injected answer: %.2f s of audio, gain %.2f\n", answer_pcm.size() / 16000.0, answer_gain);
-        auto mix = std::make_unique<MixInDevice>(std::move(device));
+        auto mix = std::make_unique<InjectingAudioDevice>(std::move(device));
         mixer = mix.get();
         device = std::move(mix);
     }

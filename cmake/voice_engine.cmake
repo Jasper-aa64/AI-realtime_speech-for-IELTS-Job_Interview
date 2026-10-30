@@ -19,6 +19,7 @@ find_package(boost_thread CONFIG REQUIRED)
 add_library(voice_engine STATIC
     ${VOICE_ENGINE_ROOT}/src/voice/voice_session.cpp
     ${VOICE_ENGINE_ROOT}/src/voice/portaudio_device.cpp
+    ${VOICE_ENGINE_ROOT}/src/voice/injecting_device.cpp
     ${VOICE_ENGINE_ROOT}/src/services/realtime_client.cpp
     ${VOICE_ENGINE_ROOT}/src/common/protocol.cpp
     ${VOICE_ENGINE_ROOT}/src/common/logger.cpp
