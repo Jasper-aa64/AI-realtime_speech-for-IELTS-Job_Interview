@@ -333,9 +333,8 @@ target_link_libraries(
     protocol_test
     PRIVATE
     ${VCPKG_GLOBAL}/lib/libgtest.a
-    ${VCPKG_LOCAL}/lib/libspdlog.a
-    ${VCPKG_LOCAL}/lib/libfmt.a
-    ${VCPKG_LOCAL}/lib/libz.a
+    spdlog::spdlog
+    ZLIB::ZLIB
 )
 
 add_test(
@@ -364,8 +363,7 @@ target_link_libraries(
     logger_test
     PRIVATE
     ${VCPKG_GLOBAL}/lib/libgtest.a
-    ${VCPKG_LOCAL}/lib/libspdlog.a
-    ${VCPKG_LOCAL}/lib/libfmt.a
+    spdlog::spdlog
 )
 
 add_test(
@@ -380,6 +378,7 @@ find_package(CURL CONFIG REQUIRED)
 find_package(podofo CONFIG REQUIRED)
 find_package(portaudio CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(LibLZMA REQUIRED)
 find_package(unofficial-brotli CONFIG REQUIRED)
@@ -470,7 +469,7 @@ target_link_libraries(
     spdlog::spdlog
     OpenSSL::SSL
     OpenSSL::Crypto
-    ${VCPKG_LOCAL}/lib/libz.a
+    ZLIB::ZLIB
     Boost::thread
     Boost::chrono
     Boost::date_time
