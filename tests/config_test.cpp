@@ -14,14 +14,14 @@ TEST(ConfigTest, LoadDefaultConfig)
     );
 
     // audio input
-    EXPECT_EQ(config.input_audio_config.chunk, 3200);
+    EXPECT_EQ(config.input_audio_config.chunk, 320);
     EXPECT_EQ(config.input_audio_config.channels, 1);
     EXPECT_EQ(config.input_audio_config.sample_rate, 16000);
     EXPECT_EQ(config.input_audio_config.bit_size, 16);
     EXPECT_EQ(config.input_audio_config.format, "pcm");
 
     // audio output
-    EXPECT_EQ(config.output_audio_config.chunk, 4800);
+    EXPECT_EQ(config.output_audio_config.chunk, 480);
     EXPECT_EQ(config.output_audio_config.channels, 1);
     EXPECT_EQ(config.output_audio_config.sample_rate, 24000);
     EXPECT_EQ(config.output_audio_config.bit_size, 16);

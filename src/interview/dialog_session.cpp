@@ -15,9 +15,23 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
+#include <cstdint>
+#include <atomic>
+#include <algorithm>
 
 namespace interview {
 namespace session {
+
+namespace {
+
+// 单调毫秒时间戳，供延迟计时使用（与墙钟无关，不受系统时间调整影响）。
+int64_t NowMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+} // namespace
 
 class DialogSession::DialogSessionImpl {
 public:
@@ -34,6 +48,14 @@ public:
     // 暂存候选人最新待处理回答
     std::string pending_answer;
     std::mutex  pending_answer_mutex;
+
+    // 两段延迟计时（转发包第3组数字）：
+    //   段1 = 用户停下说话 → 服务端判定说完（含 end_smooth_window_ms 等待）
+    //   段2 = 服务端判定说完 → 最终转写推到界面
+    std::atomic<int64_t> user_start_at_ms{0};        // USER_START_SPEAKING 到达时间
+    std::atomic<int64_t> last_voice_chunk_at_ms{0};  // 最近一次非静音麦克风数据发出的时间
+    std::atomic<int64_t> user_stop_at_ms{0};         // USER_STOP_SPEAKING 到达时间
+    std::atomic<int64_t> final_asr_display_at_ms{0}; // 最终转写推到界面的时间
 
     // 保存最终总结文本
     std::string final_summary;
@@ -237,6 +259,9 @@ public:
                 return;
             }
             TransitionToState(common::InterviewState::kCandidateSpeaking);
+            // 新一段回答开始：记录起点，并清掉上一段的最终转写显示时间
+            user_start_at_ms = NowMs();
+            final_asr_display_at_ms = 0;
             // 候选人抢话：立即清空 TTS 队列并重置计数
             {
                 std::lock_guard<std::mutex> lock(audio_queue_mutex);
@@ -263,6 +288,13 @@ public:
                         int qidx = interview_session ? interview_session->GetCurrentQuestionIndex() + 1 : 1;
                         dialog_content_callback("candidate", text, qidx);
                     }
+                    final_asr_display_at_ms = NowMs();
+                    // 服务端先判定说完、最终转写后到（少见顺序）：段2 以转写显示为终点补记
+                    int64_t stop_at = user_stop_at_ms.load();
+                    if (stop_at > 0) {
+                        LOG_INFO("[延迟两段报告] 段2 判定说完→界面显示: {} ms",
+                                 final_asr_display_at_ms.load() - stop_at);
+                    }
                     {
                         std::lock_guard<std::mutex> lock(pending_answer_mutex);
                         pending_answer = std::move(text);
@@ -283,6 +315,24 @@ public:
             }
             TransitionToState(common::InterviewState::kInterviewerThinking);
             LOG_INFO("[候选人说话结束]");
+
+            // 两段延迟报告：
+            //   段1 = 最后一次非静音音频发出 → USER_STOP_SPEAKING（服务端判定说完）
+            //   段2 = USER_STOP_SPEAKING → 最终转写推到界面
+            // 最终转写通常先于 STOP 事件到达，此时段2为0或小正数；
+            // 若转写还没到（少见），段2记 -1，由 ASR_RESULT 分支补记。
+            user_stop_at_ms = NowMs();
+            int64_t start_at   = user_start_at_ms.load();
+            int64_t voice_at   = last_voice_chunk_at_ms.load();
+            int64_t display_at = final_asr_display_at_ms.load();
+            int64_t seg1 = (start_at > 0 && voice_at >= start_at)
+                               ? std::max<int64_t>(0, user_stop_at_ms.load() - voice_at)
+                               : -1;
+            int64_t seg2 = (start_at > 0 && display_at >= start_at)
+                               ? std::max<int64_t>(0, user_stop_at_ms.load() - display_at)
+                               : -1;
+            LOG_INFO("[延迟两段报告] 段1 停下→服务端判定说完: {} ms | 段2 判定说完→界面显示: {} ms",
+                     seg1, seg2);
         }
         // SESSION_FINISHED/SESSION_ENDED：会话结束
         else if (event == common::events::SESSION_FINISHED || event == common::events::SESSION_ENDED) {
@@ -303,6 +353,21 @@ public:
                 auto t0 = std::chrono::steady_clock::now();
                 auto audio_data = audio_manager->ReadAudio();
                 auto t1 = std::chrono::steady_clock::now();
+
+                // 段1 起点：用户停下说话的近似时刻 = 最后一次非静音数据从麦克风发出的时间。
+                // TTS 播放期间发的是静音帧，不计入（is_playing_audio 时跳过）。
+                if (!is_playing_audio) {
+                    bool has_voice = false;
+                    for (int16_t sample : audio_data) {
+                        if (sample != 0) {
+                            has_voice = true;
+                            break;
+                        }
+                    }
+                    if (has_voice) {
+                        last_voice_chunk_at_ms = NowMs();
+                    }
+                }
 
                 std::vector<uint8_t> audio_bytes(audio_data.size() * 2);
                 if (!is_playing_audio) {

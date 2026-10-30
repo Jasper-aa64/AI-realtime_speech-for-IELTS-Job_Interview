@@ -52,8 +52,8 @@ using AudioConfig = common::AudioConfig;
  * 使用示例：
  * @code
  * // 创建音频管理器
- * AudioConfig input_cfg{3200, 1, 16000, 16, "pcm"};
- * AudioConfig output_cfg{4800, 1, 24000, 16, "pcm"};
+ * AudioConfig input_cfg{320, 1, 16000, 16, "pcm"};
+ * AudioConfig output_cfg{480, 1, 24000, 16, "pcm"};
  * AudioDeviceManager manager(input_cfg, output_cfg);
  *
  * // 打开音频流
@@ -63,7 +63,7 @@ using AudioConfig = common::AudioConfig;
  * // 麦克风线程
  * std::thread mic_thread([&]() {
  *     while (running) {
- *         auto audio = manager.ReadAudio();  // 阻塞读取3200个采样点
+ *         auto audio = manager.ReadAudio();  // 阻塞读取320个采样点
  *         ProcessAudio(audio);
  *     }
  * });
@@ -122,7 +122,7 @@ public:
      * - 声道数：1（单声道）
      * - 格式：paInt16（16位整数）
      * - 采样率：16000 Hz
-     * - 缓冲区：3200帧（200ms @ 16kHz）
+     * - 缓冲区：320帧（20ms @ 16kHz）
      * - 延迟：低延迟模式
      *
      * @throws std::runtime_error 没有输入设备或打开失败
@@ -145,7 +145,7 @@ public:
      * - 声道数：1（单声道）
      * - 格式：paFloat32（32位浮点）
      * - 采样率：24000 Hz（匹配TTS输出）
-     * - 缓冲区：4800帧（200ms @ 24kHz）
+     * - 缓冲区：480帧（20ms @ 24kHz）
      * - 延迟：低延迟模式
      *
      * @throws std::runtime_error 没有输出设备或打开失败
@@ -160,14 +160,14 @@ public:
      *
      * 读取流程：
      * 1. 调用Pa_ReadStream()
-     * 2. 等待缓冲区填满（约200ms @ 16kHz）
+     * 2. 等待缓冲区填满（约20ms @ 16kHz）
      * 3. 返回int16数组
      *
      * 返回数据：
      * - 格式：int16_t数组
-     * - 大小：chunk * channels（默认3200个采样点）
-     * - 时长：200ms（3200 / 16000 = 0.2秒）
-     * - 字节数：6400字节（3200 * 2）
+     * - 大小：chunk * channels（默认320个采样点）
+     * - 时长：20ms（320 / 16000 = 0.02秒）
+     * - 字节数：640字节（320 * 2）
      *
      * 错误处理：
      * - Input overflow（缓冲区溢出）：记录警告但继续返回数据
@@ -177,7 +177,7 @@ public:
      * - 麦克风线程循环调用
      * - 每10ms发送一次给服务器
      *
-     * @return int16音频样本数组（3200个采样点）
+     * @return int16音频样本数组（320个采样点）
      * @throws std::runtime_error 输入流未打开或读取失败
      */
     std::vector<int16_t> ReadAudio();
