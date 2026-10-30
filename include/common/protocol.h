@@ -38,6 +38,7 @@ namespace events {
     // 会话控制事件（100-199）
     constexpr uint32_t START_SESSION = 100;         // 客户端->服务器：开始会话
     constexpr uint32_t FINISH_SESSION = 102;        // 客户端->服务器：结束会话
+    constexpr uint32_t SESSION_STARTED = 150;       // 服务器->客户端：会话已开始
     constexpr uint32_t SESSION_FINISHED = 152;      // 服务器->客户端：会话已结束
     constexpr uint32_t SESSION_ENDED = 153;         // 服务器->客户端：会话已终止
 

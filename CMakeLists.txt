@@ -442,6 +442,46 @@ add_test(
     COMMAND services_test
 )
 
+# ==================== Realtime Client Test ====================
+# 连接层测试：进程内起一个假的 TLS WebSocket 服务端，不连真实服务、不用麦克风
+
+add_executable(
+    realtime_client_test
+    tests/realtime_client_test.cpp
+    src/services/realtime_client.cpp
+    src/common/config.cpp
+    src/common/logger.cpp
+    src/common/protocol.cpp
+)
+
+target_include_directories(
+    realtime_client_test
+    PRIVATE
+    ${VCPKG_LOCAL}/include
+    ${VCPKG_GLOBAL}/include
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(
+    realtime_client_test
+    PRIVATE
+    ${VCPKG_GLOBAL}/lib/libgtest.a
+    spdlog::spdlog
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ${VCPKG_LOCAL}/lib/libz.a
+    Boost::thread
+    Boost::chrono
+    Boost::date_time
+    Boost::atomic
+)
+
+add_test(
+    NAME realtime_client_test
+    COMMAND realtime_client_test
+)
+
 # ==================== Interview Test ====================
 
 add_executable(

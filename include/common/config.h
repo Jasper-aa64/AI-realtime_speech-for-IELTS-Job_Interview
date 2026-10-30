@@ -74,6 +74,8 @@ struct AudioConfig {
 struct WebSocketConfig {
     std::string base_url;                                     // WebSocket服务器地址（wss=加密连接）
     std::map<std::string, std::string> headers;  // HTTP请求头，包含认证信息
+    bool tls_verify = true;                      // 校验服务端证书和主机名（ws.tls_verify，默认开）
+    std::string ca_file;                         // 自定义 CA 文件（ws.ca_file），为空用系统默认路径
 
     /// @brief 构造函数，初始化认证头信息
     WebSocketConfig();

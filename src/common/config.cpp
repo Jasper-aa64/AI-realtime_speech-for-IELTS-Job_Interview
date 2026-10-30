@@ -82,6 +82,8 @@ void Config::LoadFromFile(const std::string& path) {
     for (const auto& item : headers_obj.items()) {
         ws_config.headers[item.key()] = item.value().get<std::string>();
     }
+    ws_config.tls_verify = ws.value("tls_verify", true);
+    ws_config.ca_file = ws.value("ca_file", std::string());
     auto connect_id_it = ws_config.headers.find("X-Api-Connect-Id");
     if (connect_id_it == ws_config.headers.end() || connect_id_it->second.empty()) {
         ws_config.headers["X-Api-Connect-Id"] = common::GenerateUUID();
