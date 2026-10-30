@@ -5,6 +5,7 @@
 #include "services/realtime_client.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <condition_variable>
@@ -810,8 +811,10 @@ private:
     }
 
     void OnAsrEnded(Clock::time_point at) {
-        const auto voiced_packet = last_voiced_packet_.load();
-        const auto voiced_end_ns = last_voiced_end_ns_.load();
+        std::int64_t voiced_packet = -1;
+        Clock::time_point voiced_at;
+        const bool found = LastSpeechBefore(at, static_cast<std::int64_t>(listen_start_packet_), &voiced_packet, &voiced_at);
+        const auto voiced_end_ns = found ? voiced_at.time_since_epoch().count() : 0;
         const auto packet_now = mic_packets_.load();
         nlohmann::json line{{"ev", "asr_ended"},
                             {"listen", listen_id_},
@@ -859,6 +862,29 @@ private:
 
     // ---- 采集线程 ----
 
+    // 最近的语音包（属于 >= min_voiced_run 连续有声的包）：459 到达时按时间找它之前最后一个，
+    // 不受控制线程处理 459 时采集线程又读进几包的影响
+    void RememberSpeech(std::int64_t index, Clock::time_point at) {
+        std::lock_guard<std::mutex> lock(marks_mu_);
+        marks_[marks_next_ % marks_.size()] = {index, at};
+        ++marks_next_;
+    }
+
+    bool LastSpeechBefore(Clock::time_point limit, std::int64_t min_index, std::int64_t* index, Clock::time_point* at) {
+        std::lock_guard<std::mutex> lock(marks_mu_);
+        const std::size_t n = std::min<std::size_t>(marks_next_, marks_.size());
+        for (std::size_t k = 1; k <= n; ++k) {
+            const auto& m = marks_[(marks_next_ - k) % marks_.size()];
+            if (m.index < min_index) return false;
+            if (m.at < limit) {
+                *index = m.index;
+                *at = m.at;
+                return true;
+            }
+        }
+        return false;
+    }
+
     void CaptureLoop() {
         std::vector<int16_t> buf(static_cast<std::size_t>(packet_frames_));
         std::vector<uint8_t> bytes(buf.size() * 2);
@@ -899,6 +925,7 @@ private:
                 if (++run >= opt_.min_voiced_run) {
                     last_voiced_packet_.store(index);
                     last_voiced_end_ns_.store(now.time_since_epoch().count());
+                    RememberSpeech(index, now);
                     if (run == opt_.min_voiced_run && speech_onset_ns_.load() == 0 &&
                         index - (opt_.min_voiced_run - 1) >= static_cast<std::int64_t>(listen_start_packet_atomic_.load())) {
                         speech_onset_packet_.store(index - (opt_.min_voiced_run - 1));
@@ -1044,6 +1071,13 @@ private:
     std::atomic<double> threshold_db_{0.0};
     std::ofstream pcm_dump_;
     std::ofstream pcm_times_;
+    struct SpeechMark {
+        std::int64_t index = -1;
+        Clock::time_point at;
+    };
+    std::mutex marks_mu_;
+    std::array<SpeechMark, 1024> marks_{};  // 约 20 s 的语音包
+    std::size_t marks_next_ = 0;
 
     // 和播放线程共享
     std::thread playback_;

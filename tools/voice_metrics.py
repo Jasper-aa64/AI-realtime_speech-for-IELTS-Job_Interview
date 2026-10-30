@@ -138,7 +138,9 @@ def summarise(path):
         print(f"   offline check: floor {floor:.1f} dBFS (online {online_floor:.1f}), threshold {threshold:.1f} dBFS")
         worst = 0
         for e in ended:
-            off = offline_last_speech(dbs, e["listen_start_packet"], e["packet_at_event"], threshold, head.get("min_voiced_run", 3))
+            # 只看 459 到达之前读进来的包（和引擎一样按时间截止）
+            limit = max([i for i, t in enumerate(times) if t < e["t_ms"]], default=-1)
+            off = offline_last_speech(dbs, e["listen_start_packet"], limit, threshold, head.get("min_voiced_run", 3))
             on = e["last_voiced_packet"]
             diff = abs(off - on)
             worst = max(worst, diff)

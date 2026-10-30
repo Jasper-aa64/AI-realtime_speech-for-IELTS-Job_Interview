@@ -343,7 +343,8 @@ const DEFAULT_ENGLISH_NAME = "Jasper";
 const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
 const UI_LANGUAGES = new Set(["zh", "en"]);
 const RECORD_CONTROL_DISABLED_STATUSES = new Set(["loading", "examiner_loading", "examiner_playing", "processing", "scoring", "turn_saved"]);
-const PRACTICE_BUSY_STATUSES = new Set(["preparing", "recording", "processing", "scoring"]);
+// native_*: desktop realtime voice answer in progress (interview-voice.js)
+const PRACTICE_BUSY_STATUSES = new Set(["preparing", "recording", "processing", "scoring", "native_speaking", "native_listening", "native_review"]);
 const TURN_RENDER_BUSY_STATUSES = new Set(["examiner_loading", "examiner_playing", "preparing", "recording", "processing"]);
 const EXAMINER_PLAYBACK_STATUSES = new Set(["examiner_loading", "examiner_playing"]);
 const RECOVERABLE_PRACTICE_ERROR_STATUSES = new Set(["recording", "preparing", "processing", "turn_saved", "completion_failed"]);
@@ -1268,6 +1269,21 @@ const interview = window.IELTSInterview?.createInterview?.({
   },
   openIeltsCorpus: (where) => switchView({ p1: "p1Corpus", p2: "p2Corpus", takeaway: "takeawayBook" }[where] || "corpus", { force: true }),
 });
+
+// Desktop realtime voice answers in interview mode; inert unless the shell reports native_audio.
+const interviewVoice = window.IELTSInterviewVoice?.create?.({
+  state,
+  text,
+  setRecordButton,
+  isActive: (sessionId) => isActivePracticeSession(sessionId),
+  submit: (answer) => submitNativeVoiceAnswer(answer).catch(showError),
+  // Back to the existing recording flow for this turn (server TTS, then record).
+  fallback: (sessionId) => {
+    if (!isActivePracticeSession(sessionId) || !state.currentTurn) return;
+    state.status = "idle";
+    beginExaminerPhase(sessionId).catch(showError);
+  },
+}) || null;
 
 const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy });
 if (!viewRouter) {
@@ -4731,6 +4747,11 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
   }
   clearTimer();
   const turn = state.currentTurn;
+  if (interviewVoice?.handles(turn)) {
+    stopExaminerPlayback("native-voice");
+    await interviewVoice.runTurn(sessionId, turn);
+    return;
+  }
   await playExaminerTurn(turn, sessionId);
 }
 
@@ -5246,6 +5267,20 @@ async function startRecording(sessionId = state.practiceSessionId) {
   startRecordingTimer(state.currentTurn.timers.speak_seconds, sessionId);
 }
 
+// Desktop realtime voice: the answer is the (edited) transcript; no audio is recorded or uploaded.
+async function submitNativeVoiceAnswer(answer) {
+  if (!state.attempt || !state.currentTurn) return;
+  state.audioChunks = [];
+  state.transcript = answer;
+  state.transcriptFinal = answer;
+  state.transcriptInterim = "";
+  state.transcriptStatus = answer ? "captured" : "missing";
+  state.transcriptSource = "desktop_realtime_asr";
+  setRecordButton("processing", "Saving", "Uploading this answer.");
+  text("recordStatus", "Saving this answer...");
+  await finalizeTurn("audio/webm");
+}
+
 function stopRecording() {
   if (state.status !== "recording") return;
   state.status = "processing";
@@ -5750,7 +5785,8 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
     userScopeKey: speakingAudioUserScopeKey(),
     createdAt: Date.now(),
   };
-  await putPendingTurnAudio(pendingAudioRecord).catch(() => null);
+  // A desktop realtime voice answer has a transcript and no recording: nothing to keep or upload.
+  if (blob.size > 0) await putPendingTurnAudio(pendingAudioRecord).catch(() => null);
   state.speaking.retryCompletion = {
     attempt,
     turn,
@@ -5795,6 +5831,7 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
     // the public quick-tunnel often resets a large upload mid-flight — a single
     // attempt would otherwise lose the whole answer.
     const uploadAudio = async () => {
+      if (blob.size === 0) return {};
       const token = await ensureCsrfToken();
       const uploadHeaders = { "Content-Type": mimeType.split(";")[0] };
       if (token) uploadHeaders["X-CSRFToken"] = token;
@@ -6302,6 +6339,7 @@ async function resumeSpeakingAnalysisFromStorage() {
 
 async function scoreAttempt() {
   if (!state.attempt) return;
+  interviewVoice?.endSession();
   const attemptId = state.attempt.id;
   // Remember the launching practice view too, so a mid-analysis refresh resumes
   // on the right part. Preserve any previously stored view (e.g. when resume
@@ -14451,6 +14489,7 @@ async function exitPractice() {
   state.startAbortController?.abort();
   state.startAbortController = null;
   stopExaminerPlayback("exit-practice");
+  interviewVoice?.endSession();
   // Tear down the peek popup + lightbulb buttons right away so the red-X feels
   // instant; otherwise they linger until the abort round-trip (and the full
   // resetPracticeSurface below) completes.
@@ -16007,6 +16046,7 @@ function bindEvents() {
   });
   window.addEventListener("beforeunload", autosaveOpenCorpusEditors);
   $("recordControl")?.addEventListener("click", () => {
+    if (interviewVoice?.onRecordControl()) return;
     if (state.status === "recording") {
       stopRecording();
     } else if (state.status === "preparing") {
