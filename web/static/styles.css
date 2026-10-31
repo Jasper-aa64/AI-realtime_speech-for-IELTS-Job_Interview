@@ -47199,6 +47199,8 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
 @media (min-width: 861px) {
   #ivAssistant { position: relative; transition: grid-template-columns 220ms ease; }
   #ivAssistant.is-side-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  /* the floating list leaves the grid, so the chat would auto-place into the 0-width first column; pin it to the second */
+  #ivAssistant .iv-as-main { grid-column: 2; grid-row: 1; }
   #ivAssistant.is-side-collapsed .iv-as-bar { padding-left: 16px; }
   #ivAssistant.is-side-collapsed .iv-as-bar-side { display: grid; }
   #ivAssistant.is-side-collapsed .iv-as-edge { display: block; position: absolute; z-index: 19; top: 0; bottom: 0; left: 0; width: 14px; }
