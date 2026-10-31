@@ -47901,3 +47901,10 @@ body:not(#_):not(#__):not(#___) #promptPane:has(> .iv-interviewer:not(.hidden)):
 /* No rubber-band bounce on the page itself: pulling past the top or bottom used to drag the whole page and show the
    window's white backing behind it (glaring in dark mode). Inner scroll areas keep their own behaviour. */
 html, body { overscroll-behavior: none; }
+
+/* Takeaway / 写作积累: the 今天到期 card in the top bar moved down with the avatar row, so the page's header card starts a
+   little lower and the two no longer touch */
+@media (min-width: 981px) {
+  body.view-takeawayBook:not(#_):not(#__) #takeawayBookPanel > .language-book-shell,
+  body.view-writingTakeawayBook:not(#_):not(#__) #writingTakeawayBookPanel > .language-book-shell { margin-top: 14px !important; }
+}
