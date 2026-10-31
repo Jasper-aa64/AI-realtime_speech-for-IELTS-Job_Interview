@@ -44120,12 +44120,18 @@ body:not(#_) :is(.writing-saved-report-head, .writing-score-summary-head) :is(.w
   color: var(--ink) !important;
 }
 
+/* 开始 button's due count: a red notification dot with the number, like the sidebar due dots */
 body:not(#_) .takeaway-review-start-badge {
-  background: var(--accent) !important;
-  box-shadow: none !important;
+  background: #ef4444 !important;
+  box-shadow: 0 0 0 2px var(--panel) !important;
   color: #fff !important;
   font-family: var(--ed-mono) !important;
   font-weight: 600 !important;
+  animation: navReviewCountIn 0.46s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:not(#_) .takeaway-review-start-badge { animation: none; }
 }
 
 /* the top-bar review panel: a plain hairline pill */

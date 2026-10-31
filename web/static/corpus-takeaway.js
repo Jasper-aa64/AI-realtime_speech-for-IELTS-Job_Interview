@@ -3384,6 +3384,9 @@
       }
       const exprSorted = sortTakeawaysByCreatedAsc(expr);
       const normalSorted = sortTakeawaysByCreatedAsc(normal);
+      // Emptying the list collapses it and clamps scrollTop to 0; put it back afterwards so a re-render
+      // (开始, A / D, reveal) doesn't snap to the top and the smooth jump to the target card starts from here.
+      const keepScrollTop = list.scrollTop;
       list.innerHTML = "";
       const ordinaryLabel = kind === "writing" ? "积累的写作表达" : "积累的口语表达";
       let sectionNum = 0;
@@ -3401,6 +3404,7 @@
       };
       renderSection(ordinaryLabel, normalSorted);
       renderSection("表达替换", exprSorted);
+      list.scrollTop = keepScrollTop;
     }
 
     function updateTakeawayCardReveal(kind, entryId, options = {}) {
