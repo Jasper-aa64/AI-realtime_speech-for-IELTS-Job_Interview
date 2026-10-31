@@ -28,7 +28,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261031-ielts-captions-1">
+    <link rel="stylesheet" href="/styles.css?v=20261031-header-1">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -213,7 +213,6 @@
             <h1 id="viewTitle">首页</h1>
             <p id="viewSubtitle">选择今天要练的口语模式。</p>
           </div>
-          <div id="practiceHeaderProgress" class="practice-header-progress hidden" aria-live="polite"></div>
         </header>
 
         <div id="busyBar" class="busy-bar hidden" role="status" aria-live="polite">
@@ -410,11 +409,11 @@
                   <path d="M10.7 21.75h2.6"></path>
                 </svg>
               </button>
-              <span id="p1ModeHelp" class="p1-mode-help hidden">原题节奏练习</span>
               <div id="p1ModeSwitch" class="p3-mode-switch p1-mode-switch hidden" role="group" aria-label="Part 1 mode">
                 <button type="button" class="p3-mode-option active" data-p1-intensity="normal">标准模式</button>
                 <button type="button" class="p3-mode-option" data-p1-intensity="high">追问压力</button>
               </div>
+              <span id="p1ModeHelp" class="p1-mode-help hidden">原题节奏练习</span>
               <button id="openP1CorpusBtn" class="p1-corpus-entry hidden" type="button">
                 <svg aria-hidden="true" viewBox="0 0 24 24">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
@@ -497,6 +496,7 @@
             <article id="recorderPane" class="recorder-pane">
               <div class="section-label">Voice answer</div>
               <div class="inline-timer" id="timerValue">00:00</div>
+              <div id="practiceHeaderProgress" class="practice-header-progress hidden" aria-live="polite"></div>
               <div class="record-row">
                 <button id="recordControl" class="record-control" type="button">
                   <span id="recordIcon"></span>
@@ -1950,7 +1950,7 @@
     <script src="/interview-launch.js?v=20261031-voice-1"></script>
     <script src="/interview-assistant.js?v=20261031-assistant-side-3"></script>
     <script src="/interview-home.js?v=20261031-voice-1"></script>
-    <script src="/interview.js?v=20261031-voice-1"></script>
+    <script src="/interview.js?v=20261031-corpus-back-1"></script>
     <script src="/interview-voice.js?v=20261031-ielts-captions-1"></script>
     <script src="/interviewer-avatar.js?v=20261031-avatar-2"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>

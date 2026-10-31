@@ -19,6 +19,7 @@
     let requestController = null;
     let switcher = null;
     let data = freshState();
+    let corpusReturnPart = ""; // the practice part whose 我的面试语料库 button opened the corpus screen
     const byId = (id) => document.getElementById(id);
     // The launch block in the practice panel's PROMPT pane (interview-launch.js).
     const launch = window.IELTSInterviewLaunch?.create({
@@ -241,12 +242,14 @@
         const [pane, part] = target.dataset.ivTarget.split(":");
         setPane(pane, part ? (pane === "practice" ? { part } : { tab: part }) : {});
       }, true);
-      // The IELTS back button above a corpus screen returns to the interview hub here.
+      // The IELTS back button above a corpus screen returns to the practice page that opened it, else the interview hub.
       document.addEventListener("click", (event) => {
         if (!event.target.closest?.("#topbarBackCorpusBtn") || state.productMode !== "interview" || state.view !== "interview" || data.pane !== "corpus") return;
         event.preventDefault();
         event.stopPropagation();
-        setPane("corpus");
+        const part = corpusReturnPart;
+        if (part) setPane("practice", { part });
+        else setPane("corpus");
       }, true);
       window.IELTSInterviewHome?.setSource(homeNumbers);
       window.addEventListener("ielts:ui-language-change", () => { setProductMode(state.productMode); render({ force: true }); });
@@ -381,6 +384,7 @@
 
     function setPane(pane, { part, tab } = {}) {
       if (!PANES.has(pane) || data.busy) return;
+      corpusReturnPart = "";
       if (pane === "assistant") { openAssistantPage(); return; }
       if (pane === "custom") { openTailor(); return; }
       if (pane === "corpus" && !tab) {
@@ -504,9 +508,11 @@
       ensureOverview();
     }
 
+    // 我的面试语料库 on a practice page: that part's corpus screen; its back button comes back to the page.
     function openCorpusFor(view) {
       const part = String(view || "").replace(/^iv_/, "");
       setPane("corpus", { tab: PARTS[part]?.corpus || data.corpusTab });
+      if (PARTS[part]) corpusReturnPart = part;
     }
 
     // A "已写入 …" link under an assistant reply: that corpus screen, with the written card or answer open.

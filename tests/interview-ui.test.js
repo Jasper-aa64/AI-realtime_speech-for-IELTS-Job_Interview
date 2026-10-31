@@ -121,6 +121,20 @@ test("面试语料库 is the IELTS corpus hub; 简历 / JD 定制 opens the AI �
   assert.ok(!env.requests.some((request) => request.url.startsWith("/api/interview/profile/jd")), "no separate draft flow");
 });
 
+test("返回 above a corpus screen opened from a practice page goes back to that page; from the hub it goes to the hub", async () => {
+  const env = fixture({ storedMode: "interview" }); await env.app.initialize(); env.app.show(); await settle();
+  env.state.productMode = "interview";
+  const back = () => env.document.emit("click", { target: { closest: (selector) => (selector === "#topbarBackCorpusBtn" ? {} : null) }, preventDefault() {}, stopPropagation() {} });
+  env.app.setPane("practice", { part: "project" });
+  env.app.openCorpusFor("iv_project"); await settle();
+  assert.equal(env.state.view, "interview");
+  back();
+  assert.equal(env.state.view, "iv_project");
+  env.app.setPane("corpus", { tab: "resume" }); await settle();         // opened from the hub this time
+  back();
+  assert.equal(env.state.view, "corpus");
+});
+
 test("account reset cancels in-flight requests and discards private data", async () => {
   const env = fixture(); await env.app.initialize();
   let resolve; env.setDeferred(new Promise((done) => { resolve = done; }));

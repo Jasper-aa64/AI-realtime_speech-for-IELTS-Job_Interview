@@ -47747,11 +47747,6 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
   }
   body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status :is(.p2-pixel-flow-canvas),
   body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status::before { border-radius: 0 !important; }
-  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status > .exam-actions { position: relative; }
-  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status #p1ModeHelp {
-    position: absolute !important; right: calc(100% + 12px); top: 0; bottom: 0; height: fit-content; margin: auto 0 !important;
-    white-space: nowrap;
-  }
 
   /* the avatar stays where it is on every page (moving it with a transform would also re-anchor its fixed hover card);
      on the lit 追问压力 strip it turns to glass instead of a plain black disc */
@@ -47800,14 +47795,18 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
   transition: opacity 160ms ease, visibility 0s linear 160ms;
 }
 
-/* Interview practice header: the 标准模式 / 追问压力 switch is the centre of the strip. Its neighbours hang off it
-   outside the layout (hint on the left, 「我的面试语料库」 on the right) and the strip's side insets are equal. */
+/* IELTS question progress (「2/13」): a fixed spot centred above the record circle, in the pane's top row, so showing
+   or hiding it moves nothing. */
 @media (min-width: 981px) {
-  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel > .exam-status { padding-right: 36px !important; }
-  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status #openP1CorpusBtn {
-    position: absolute !important; left: calc(100% + 12px); top: 0; bottom: 0; height: fit-content; margin: auto 0 !important;
-    white-space: nowrap;
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane > .practice-header-progress {
+    grid-column: 1 / -1; grid-row: 1; align-self: end; justify-self: center; margin: 0 0 14px !important;
   }
+}
+
+/* Practice header: 标准模式 / 追问压力, then its hint, then the corpus button, in one row; the row as a whole sits in
+   the middle of the strip. */
+@media (min-width: 981px) {
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status :is(#p1ModeHelp, #openP1CorpusBtn) { white-space: nowrap; }
 }
 
 /* Interview practice: the voice pane is a sheet too, the same as the question sheet beside it (same tint, corners and
