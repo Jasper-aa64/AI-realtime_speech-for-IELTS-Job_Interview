@@ -47787,10 +47787,10 @@ body:not(#_):not(#__):not(#___) .exam-actions .p1-mode-help.is-fading { opacity:
   body.practice-layout:not(#_):not(#__):not(#___) #practicePanel .practice-intro { gap: 4px; }
 }
 
-/* 「我的面试语料库」 hides once an interview practice starts (it could not be used then); its slot stays, so the
-   mode switch does not move */
-body:not(#_):not(#__) #openP1CorpusBtn { transition: opacity 160ms ease, visibility 0s linear 0s; }
-body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
+/* The corpus button (我的面试语料库 / 我的 P1 语料库 / 我的 P2 串题素材库) hides once a practice starts (it could not
+   be used then); its slot stays, so nothing in the header moves */
+body:not(#_):not(#__) :is(#openP1CorpusBtn, #openP2CorpusBtn) { transition: opacity 160ms ease, visibility 0s linear 0s; }
+body:not(#_):not(#__) :is(#openP1CorpusBtn, #openP2CorpusBtn).is-flow-hidden {
   opacity: 0 !important; visibility: hidden !important; pointer-events: none !important;
   transition: opacity 160ms ease, visibility 0s linear 160ms;
 }
@@ -47800,6 +47800,48 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
 @media (min-width: 981px) {
   body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane > .practice-header-progress {
     grid-column: 1 / -1; grid-row: 1; align-self: end; justify-self: center; margin: 0 0 14px !important;
+  }
+}
+
+/* The header's two groups — the 查看语料 bulbs and the mode controls (switch, hint, corpus button) — are plain
+   wrappers everywhere else; on the practice layout they share one centred cell, so the bulbs that appear during a
+   session sit where the faded controls were instead of being pushed aside by their slots. The P2 「链接素材」 picker
+   takes the right-hand column. */
+.exam-actions > :is(.exam-peeks, .exam-modes) { display: contents; }
+@media (min-width: 981px) {
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status > .exam-actions {
+    display: grid !important; grid-template-areas: "stack"; justify-items: center; align-items: center;
+  }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel .exam-actions > :is(.exam-peeks, .exam-modes) {
+    grid-area: stack; display: flex; align-items: center; gap: 12px;
+  }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status > #p2CorpusPrepPanel {
+    grid-column: 3; grid-row: 1; justify-self: end; width: min(320px, 100%); max-width: none;
+  }
+}
+
+/* Practice header during a session: 标准模式 / 追问压力 and its hint fade out where they stand (their slots stay)
+   instead of collapsing, so the centred row does not slide when a practice starts or ends. */
+@media (min-width: 981px) {
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-actions .p1-mode-switch {
+    transition: opacity 160ms ease, visibility 0s linear 0s !important;
+  }
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-actions .p1-mode-help {
+    transition: opacity 160ms ease, visibility 0s linear 0s, color 200ms ease, text-shadow 200ms ease, background-color 200ms ease !important;
+  }
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel.p1-started .exam-actions .p1-mode-switch,
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-actions .p1-mode-switch.is-collapsed {
+    width: 214px !important; min-width: 214px !important; max-width: 214px !important;
+    padding-left: 5px !important; padding-right: 5px !important; border-width: 1px !important;
+  }
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel.p1-started .exam-actions .p1-mode-help,
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-actions .p1-mode-help.is-collapsed {
+    max-width: 200px !important;
+  }
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel.p1-started .exam-actions :is(.p1-mode-switch, .p1-mode-help),
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-actions :is(.p1-mode-switch, .p1-mode-help).is-collapsed {
+    opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; transform: none !important;
+    transition: opacity 160ms ease, visibility 0s linear 160ms !important;
   }
 }
 

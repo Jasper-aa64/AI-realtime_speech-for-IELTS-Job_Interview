@@ -2887,8 +2887,8 @@ function isDesktopShell() {
 }
 
 function syncDesktopFlowLock() {
-  // 面试练习开始后不再显示“我的面试语料库”（占位不变，模式切换不会挪动）
-  $("openP1CorpusBtn")?.classList.toggle("is-flow-hidden", !!state.practiceLocked && isInterviewView(state.view));
+  // 练习开始后不再显示语料库按钮（我的面试语料库 / 我的 P1 语料库 / 我的 P2 串题素材库），占位不变，顶部什么都不挪
+  ["openP1CorpusBtn", "openP2CorpusBtn"].forEach((id) => $(id)?.classList.toggle("is-flow-hidden", !!state.practiceLocked && isPracticeView(state.view)));
   const held = isDesktopShell() && !!state.practiceLocked;
   ["openP1CorpusBtn", "openP2CorpusBtn"].forEach((id) => {
     const button = $(id);

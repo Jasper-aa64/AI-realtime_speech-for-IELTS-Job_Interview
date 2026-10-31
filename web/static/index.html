@@ -28,7 +28,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261031-header-1">
+    <link rel="stylesheet" href="/styles.css?v=20261031-header-3">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -381,54 +381,58 @@
             </div>
             <section id="p2CorpusPrepPanel" class="p2-corpus-prep hidden"></section>
             <div class="exam-actions">
-              <button id="peekP1CorpusBtn" class="p1-corpus-peek-button hidden" type="button" aria-label="查看这道 P1 题的语料" title="查看语料提示">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
-                  <path d="M9.6 20h4.8"></path>
-                  <path d="M10.7 21.75h2.6"></path>
-                </svg>
-              </button>
-              <button id="peekP2CorpusBtn" class="p1-corpus-peek-button p2-corpus-peek-button hidden" type="button" aria-label="查看我为这道题准备的题库正文" title="我准备的本题正文">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
-                  <path d="M9.6 20h4.8"></path>
-                  <path d="M10.7 21.75h2.6"></path>
-                </svg>
-              </button>
-              <button id="peekP2CorpusBodyBtn" class="p1-corpus-peek-button p2-corpus-peek-button p2-corpus-body-peek-button hidden" type="button" aria-label="查看这道题链接的串题素材" title="查看链接的串题素材">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M6 3h9l4 4v13.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 20.5v-16A1.5 1.5 0 0 1 5.5 3z"></path>
-                  <path d="M14.5 3v4.5H19"></path>
-                  <path d="M8 12.5h8M8 16h8M8 9h3"></path>
-                </svg>
-              </button>
-              <button id="peekP3CorpusBtn" class="p1-corpus-peek-button p3-corpus-peek-button hidden" type="button" aria-label="查看 P3 追问素材" title="查看 P3 追问素材">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
-                  <path d="M9.6 20h4.8"></path>
-                  <path d="M10.7 21.75h2.6"></path>
-                </svg>
-              </button>
-              <div id="p1ModeSwitch" class="p3-mode-switch p1-mode-switch hidden" role="group" aria-label="Part 1 mode">
-                <button type="button" class="p3-mode-option active" data-p1-intensity="normal">标准模式</button>
-                <button type="button" class="p3-mode-option" data-p1-intensity="high">追问压力</button>
+              <div class="exam-peeks">
+                <button id="peekP1CorpusBtn" class="p1-corpus-peek-button hidden" type="button" aria-label="查看这道 P1 题的语料" title="查看语料提示">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
+                    <path d="M9.6 20h4.8"></path>
+                    <path d="M10.7 21.75h2.6"></path>
+                  </svg>
+                </button>
+                <button id="peekP2CorpusBtn" class="p1-corpus-peek-button p2-corpus-peek-button hidden" type="button" aria-label="查看我为这道题准备的题库正文" title="我准备的本题正文">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
+                    <path d="M9.6 20h4.8"></path>
+                    <path d="M10.7 21.75h2.6"></path>
+                  </svg>
+                </button>
+                <button id="peekP2CorpusBodyBtn" class="p1-corpus-peek-button p2-corpus-peek-button p2-corpus-body-peek-button hidden" type="button" aria-label="查看这道题链接的串题素材" title="查看链接的串题素材">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M6 3h9l4 4v13.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 20.5v-16A1.5 1.5 0 0 1 5.5 3z"></path>
+                    <path d="M14.5 3v4.5H19"></path>
+                    <path d="M8 12.5h8M8 16h8M8 9h3"></path>
+                  </svg>
+                </button>
+                <button id="peekP3CorpusBtn" class="p1-corpus-peek-button p3-corpus-peek-button hidden" type="button" aria-label="查看 P3 追问素材" title="查看 P3 追问素材">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 3.75a6.25 6.25 0 0 0-3.9 11.1c.6.46 1 1.1 1 1.8V17h5.8v-.35c0-.7.4-1.34 1-1.8A6.25 6.25 0 0 0 12 3.75z"></path>
+                    <path d="M9.6 20h4.8"></path>
+                    <path d="M10.7 21.75h2.6"></path>
+                  </svg>
+                </button>
               </div>
-              <span id="p1ModeHelp" class="p1-mode-help hidden">原题节奏练习</span>
-              <button id="openP1CorpusBtn" class="p1-corpus-entry hidden" type="button">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                </svg>
-                <span data-i18n="p1.corpusButton">我的 P1 语料库</span>
-              </button>
-              <button id="openP2CorpusBtn" class="corpus-entry-button p2-corpus-entry hidden" type="button">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M12 2 2 7l10 5 10-5-10-5z"></path>
-                  <path d="M2 12l10 5 10-5"></path>
-                  <path d="M2 17l10 5 10-5"></path>
-                </svg>
-                <span data-i18n="p2.corpusButton">我的 P2 串题素材库</span>
-              </button>
+              <div class="exam-modes">
+                <div id="p1ModeSwitch" class="p3-mode-switch p1-mode-switch hidden" role="group" aria-label="Part 1 mode">
+                  <button type="button" class="p3-mode-option active" data-p1-intensity="normal">标准模式</button>
+                  <button type="button" class="p3-mode-option" data-p1-intensity="high">追问压力</button>
+                </div>
+                <span id="p1ModeHelp" class="p1-mode-help hidden">原题节奏练习</span>
+                <button id="openP1CorpusBtn" class="p1-corpus-entry hidden" type="button">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                  </svg>
+                  <span data-i18n="p1.corpusButton">我的 P1 语料库</span>
+                </button>
+                <button id="openP2CorpusBtn" class="corpus-entry-button p2-corpus-entry hidden" type="button">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 2 2 7l10 5 10-5-10-5z"></path>
+                    <path d="M2 12l10 5 10-5"></path>
+                    <path d="M2 17l10 5 10-5"></path>
+                  </svg>
+                  <span data-i18n="p2.corpusButton">我的 P2 串题素材库</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1954,7 +1958,7 @@
     <script src="/interview-voice.js?v=20261031-ielts-captions-1"></script>
     <script src="/interviewer-avatar.js?v=20261031-avatar-2"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>
-    <script src="/app.js?v=20261031-ielts-captions-1"></script>
+    <script src="/app.js?v=20261031-header-2"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
     <script src="/home-dashboard.js?v=20261031-voice-1"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>
