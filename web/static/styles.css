@@ -47845,6 +47845,18 @@ body:not(#_):not(#__) :is(#openP1CorpusBtn, #openP2CorpusBtn).is-flow-hidden {
   }
 }
 
+/* The mode hint holds a slot as wide as its longest wording (IELTS 「原题节奏练习」 / 「每题都会追问」, 6 characters;
+   interview up to 「实时语音，面试官随时追问」, 12), so switching 标准 / 追问压力 only swaps the words and the centred row
+   never shifts. */
+@media (min-width: 981px) {
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-actions .p1-mode-help {
+    box-sizing: border-box; min-width: calc(6em + 22px); text-align: center;
+  }
+  body.practice-layout.interview-mode:not(#_):not(#__):not(#___):not(#____) #practicePanel .exam-actions .p1-mode-help {
+    min-width: calc(12em + 22px);
+  }
+}
+
 /* Practice header: 标准模式 / 追问压力, then its hint, then the corpus button, in one row; the row as a whole sits in
    the middle of the strip. */
 @media (min-width: 981px) {
