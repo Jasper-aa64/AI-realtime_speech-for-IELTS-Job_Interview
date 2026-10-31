@@ -66,7 +66,7 @@ function harness({ active = true, reducedMotion = false } = {}) {
   return { api, flags, fire, avatar, on, timers };
 }
 
-test("it sits under the PROMPT label and shows only on interview practice pages", () => {
+test("it sits under the PROMPT label and shows only on practice pages (interview and IELTS)", () => {
   const env = harness({ active: false });
   env.api.sync();
   assert.equal(env.avatar(), undefined);                  // not built until a page needs it
@@ -153,7 +153,7 @@ test("leaving the page stops its timers", () => {
 
 test("app.js feeds it the record status, each answer's judgement and the page; the asset is routed", () => {
   assert.match(html, /<script src="\/interviewer-avatar\.js\?v=[^"]+"><\/script>[\s\S]*<script src="\/app\.js\?v=/);
-  assert.match(app, /window\.IELTSInterviewer\?\.create\?\.\(\{ host: \(\) => \$\("promptPane"\), active: \(\) => isInterviewView\(state\.view\) \}\);/);
+  assert.match(app, /window\.IELTSInterviewer\?\.create\?\.\(\{ host: \(\) => \$\("promptPane"\), active: \(\) => isPracticeView\(state\.view\) \}\);/);
   assert.match(app, /const look = RECORD_STATUS_LOOK\[status\] \|\| status;\n  window\.IELTSInterviewer\?\.setStatus\?\.\(look\);/);
   assert.match(app, /window\.IELTSInterviewer\?\.react\?\.\(payload\?\.interview_signal\);/);
   assert.match(app, /window\.IELTSInterviewer\?\.sync\?\.\(\);/);

@@ -1324,7 +1324,7 @@ const interviewVoice = window.IELTSInterviewVoice?.create?.({
 
 const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy });
 // The pixel interviewer above the question (interview practice pages): talks, listens, thinks, reacts to each answer.
-window.IELTSInterviewer?.create?.({ host: () => $("promptPane"), active: () => isInterviewView(state.view) });
+window.IELTSInterviewer?.create?.({ host: () => $("promptPane"), active: () => isPracticeView(state.view) }); // interview and IELTS practice alike
 if (!viewRouter) {
   throw new Error("IELTSViewRouter module failed to initialize.");
 }
