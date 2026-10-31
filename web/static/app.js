@@ -822,6 +822,25 @@ function mirrorPracticeChrome() {
 }
 mirrorPracticeChrome();
 
+// The practice header's 查看语料 bulbs (with the P2 链接素材 picker) sit centred over the Voice answer pane: CSS reads
+// that pane's centre, measured against the header's action group, from --voice-center-x.
+function syncPracticeHeaderAnchor() {
+  const actions = document.querySelector("#practicePanel > .exam-status > .exam-actions");
+  const pane = document.getElementById("recorderPane");
+  const box = actions?.getBoundingClientRect();
+  const target = pane?.getBoundingClientRect();
+  if (!box || !target?.width) return;
+  actions.style.setProperty("--voice-center-x", `${Math.round(target.left + target.width / 2 - box.left)}px`);
+}
+if (window.ResizeObserver) {
+  const headerAnchorObserver = new ResizeObserver(syncPracticeHeaderAnchor);
+  ["#practicePanel > .exam-status", "#practicePanel > .exam-status > .exam-actions", "#recorderPane"].forEach((selector) => {
+    const node = document.querySelector(selector);
+    if (node) headerAnchorObserver.observe(node);
+  });
+}
+window.addEventListener("resize", syncPracticeHeaderAnchor);
+
 function syncP1ModeHelp(helpEl, { isP1, isHigh, collapsed }) {
   const nextText = isInterviewView(state.view)
     ? (isHigh ? (state.desktopCapabilities?.native_audio ? "实时语音，面试官随时追问" : "面试官随时追问") : "每题最多追问一次")
