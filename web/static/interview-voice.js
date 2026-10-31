@@ -1,7 +1,8 @@
 (function () {
   // 桌面壳的实时语音回答（面试模式）：念题 → 收听 → 实时显示转写 → 说完自动提交最终转写（走原来的文字回答路径）。
-  // 追问压力就是实时语音模式：只在选了追问压力、且 studioNative.capabilities().native_audio 为 true 时启用
-  // （IELTSNativeBridge.voice 不为 null）。标准模式照旧录音、上传、评分，同一个引擎只在录音期间显示字幕（不提交）。
+  // 追问压力就是实时语音模式：只在面试选了追问压力、且 studioNative.capabilities().native_audio 为 true 时启用
+  // （IELTSNativeBridge.voice 不为 null）。面试标准模式和雅思各 Part 照旧录音、上传、评分，同一个引擎在录音期间显示字幕，
+  // 录音结束后这段字幕就是这一题的文字稿（finishCaptions）。
   // 普通浏览器拿到的 voice 是 null，这里什么都不做。出错、断线或超时都回落到原来的录音流程。
   // review = 说完了、正在提交；retry = 没听到回答，等用户点“再说一次”
   const STATUSES = Object.freeze({ speaking: "native_speaking", listening: "native_listening", review: "native_review", retry: "native_retry" });
@@ -10,6 +11,9 @@
   const SILENCE_TIMEOUT_MS = 20000; // 开始收听后一直没识别到说话
   const SUBMIT_DELAY_MS = 600;      // 最终转写在页面上停留一下再提交
   const FINAL_WAIT_MS = 4000;       // 手动“说完了”之后等最终转写的上限
+  const CAPTION_FLUSH_MS = 1500;    // 录音停了以后等字幕最后一段的上限
+  const CAPTION_PARTS = new Set(["interview", "p1", "p2", "p3"]);
+  const IELTS_PRACTICE_VIEWS = new Set(["p1", "p2", "p3", "mock"]);
 
   let active = null; // the page's controller, so app.js can call IELTSInterviewVoice.sync() before it holds one
 
@@ -17,7 +21,7 @@
     let voice = null;
     let session = "closed";      // closed / starting / ready / error
     let turn = null;             // { sessionId, id, final, live, timer, submitTimer }
-    let caption = null;          // 标准模式字幕：{ id, final, live, active }
+    let caption = null;          // 录音字幕：{ id, final, live, active, flush }
     let waiter = null;           // { reasons:Set, resolve, reject, timer }
     const failedTurns = new Set();
 
@@ -32,20 +36,20 @@
     });
 
     function voiceReady() {
-      return !!voice && state.productMode === "interview" && state.desktopCapabilities?.native_audio === true;
+      return !!voice && state.desktopCapabilities?.native_audio === true;
     }
-    // 追问压力：实时语音作答
+    // 面试追问压力：实时语音作答
     function enabled() {
-      return voiceReady() && state.p1Intensity === "high";
+      return voiceReady() && state.productMode === "interview" && state.p1Intensity === "high";
     }
-    // 标准模式：录音作答，实时引擎只显示字幕
+    // 录音作答（面试标准模式、雅思两档）：实时引擎出字幕
     function captionsEnabled() {
-      return voiceReady() && state.p1Intensity !== "high";
+      return voiceReady() && !enabled();
     }
 
-    // 这一题的录音由实时引擎出字幕（app.js 据此不启动浏览器转写）
+    // 这一题的录音由实时引擎出字幕（app.js 据此不启动浏览器转写，交卷时用字幕当文字稿）
     function ownsCaptions(currentTurn) {
-      return captionsEnabled() && currentTurn?.part === "interview" && !turn;
+      return captionsEnabled() && CAPTION_PARTS.has(currentTurn?.part) && !turn;
     }
 
     function handles(currentTurn) {
@@ -53,7 +57,7 @@
     }
 
     // ---- 转写区：标题行（“实时转写”+ 收听指示点）+ 文字区（已定稿的文字 + 正在识别的一句，收听时末尾有光标），放在状态区里。
-    // 只要在面试练习页且桌面壳能用实时语音就一直显示（两种模式都显示；提交、换题时只清空），所以开始、换题时下面不会冒出来又消失。
+    // 只要在练习页（面试、雅思）且桌面壳能用实时语音就一直显示（两种模式都显示；提交、换题时只清空），所以开始、换题时下面不会冒出来又消失。
     function panel() {
       let el = document.getElementById("ivVoicePanel");
       if (el) return el;
@@ -68,9 +72,10 @@
       return el;
     }
 
-    // 面试练习页 + 桌面壳能用实时语音时显示转写区（追问压力是作答，标准模式是字幕），其余时候隐藏
+    // 练习页 + 桌面壳能用实时语音时显示转写区（面试追问压力是作答，其余是录音字幕），其余时候隐藏
     function sync() {
-      const show = voiceReady() && /^iv_/.test(String(state.view || ""));
+      const view = String(state.view || "");
+      const show = voiceReady() && (/^iv_/.test(view) || IELTS_PRACTICE_VIEWS.has(view));
       if (!show && !document.getElementById("ivVoicePanel")) return;
       panel().classList.toggle("hidden", !show);
       if (show) paintTranscript();
@@ -89,15 +94,15 @@
       if (atBottom || !shown?.final) body.scrollTop = body.scrollHeight;
     }
 
-    // ---- 标准模式字幕：录音开始时让引擎只听，停顿后自动接着听，字幕整段累积；录音结束就停。只显示，不提交，出错也不影响录音。
+    // ---- 录音字幕：录音开始时让引擎只听，停顿后自动接着听，字幕整段累积；录音结束就停。出错也不影响录音。
     // 面试官读题时先把会话连好，录音一开始就能出字。
     function warmCaptions(currentTurn) {
-      if (!captionsEnabled() || currentTurn?.part !== "interview" || turn) return;
+      if (!captionsEnabled() || !CAPTION_PARTS.has(currentTurn?.part) || turn) return;
       ensureSession().catch(() => { /* captions only: the recording goes on without them */ });
     }
 
     async function startCaptions(currentTurn) {
-      if (!captionsEnabled() || currentTurn?.part !== "interview" || turn) return;
+      if (!captionsEnabled() || !CAPTION_PARTS.has(currentTurn?.part) || turn) return;
       caption = { id: currentTurn.id, final: "", live: "", active: true };
       sync();
       try {
@@ -117,6 +122,26 @@
       caption.active = false;
       try { voice?.stopListening(); } catch (_error) { /* shell already gone */ }
       paintTranscript();
+    }
+
+    // 交卷时取这一题的字幕当文字稿。停下时还有正在识别的一句，引擎会补上它的最终结果，等一会儿；等不到就用识别中的文字。
+    function finishCaptions(turnId) {
+      stopCaptions();
+      const current = caption?.id === turnId ? caption : null;
+      if (!current) return Promise.resolve("");
+      const text = () => joinSegments(current.final, current.live).trim();
+      if (!current.live) return Promise.resolve(text());
+      return new Promise((resolve) => {
+        const timer = window.setTimeout(() => { current.flush = null; resolve(text()); }, CAPTION_FLUSH_MS);
+        current.flush = () => { window.clearTimeout(timer); current.flush = null; resolve(text()); };
+      });
+    }
+
+    // 中文段落直接相接，英文（雅思）段落之间补一个空格
+    function joinSegments(before, after) {
+      if (!before || !after) return before || after || "";
+      return /[\u3000-\u9fff\uff00-\uffef]$/.test(before) || /^[\u3000-\u9fff\uff00-\uffef]/.test(after) || /\s$/.test(before)
+        ? before + after : `${before} ${after}`;
     }
 
     // ---- 和桥的往返：等某个状态原因（speak_finished / user_stopped / ready），带超时 ----
@@ -165,9 +190,10 @@
     function onFinal(value) {
       // 字幕：每段的最终结果接在前面（录音刚停时最后一段也收）
       if (!turn && caption) {
-        caption.final = [caption.final, value].filter(Boolean).join("");
+        caption.final = joinSegments(caption.final, value);
         caption.live = "";
         paintTranscript();
+        caption.flush?.();
         return;
       }
       if (!turn) return;
@@ -341,7 +367,7 @@
       session = "closed";
     }
 
-    active = { enabled, handles, ownsCaptions, runTurn, onRecordControl, endSession, sync, warmCaptions, startCaptions, stopCaptions, statuses: STATUSES };
+    active = { enabled, handles, ownsCaptions, runTurn, onRecordControl, endSession, sync, warmCaptions, startCaptions, stopCaptions, finishCaptions, statuses: STATUSES };
     return active;
   }
 

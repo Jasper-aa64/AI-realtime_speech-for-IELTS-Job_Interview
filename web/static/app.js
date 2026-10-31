@@ -26,6 +26,7 @@ const state = {
   transcriptInterim: "",
   transcriptStatus: "missing",
   transcriptSource: "browser_dictation",
+  captionTurnId: "", // the turn whose recording the desktop shell is captioning
   dictationFinalWait: null,
   browserTtsUtterance: null,
   activeHistoryId: null,
@@ -5293,6 +5294,7 @@ async function startRecording(sessionId = state.practiceSessionId) {
   state.dictationLastError = "";
   // 桌面壳标准模式：字幕由实时引擎显示，不再启动浏览器转写，也不显示它的提示
   const liveCaptions = !!interviewVoice?.ownsCaptions?.(state.currentTurn);
+  state.captionTurnId = liveCaptions ? state.currentTurn.id : "";
   if (liveCaptions) setDictationStatus("", "");
   else setDictationStatus("starting", state.speaking.captureDevice?.avoidBrowserDictation
     ? "检测到蓝牙耳机输入风险，已优先使用非蓝牙麦克风录音，并关闭浏览器转写以避免耳机通话模式。"
@@ -5318,7 +5320,7 @@ async function startRecording(sessionId = state.practiceSessionId) {
   setRecordButton("recording", "Stop", "Recording. Press to finish early.");
   text("recordStatus", "Recording in progress...");
   startRecordingTimer(state.currentTurn.timers.speak_seconds, sessionId);
-  interviewVoice?.startCaptions?.(state.currentTurn); // desktop 标准模式: live captions only, the recording is what gets scored
+  interviewVoice?.startCaptions?.(state.currentTurn); // desktop shell: live captions while recording; they become the transcript
 }
 
 // Desktop realtime voice: the answer is the (edited) transcript; no audio is recorded or uploaded.
@@ -5812,6 +5814,18 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
   if (!retrySnapshot) {
     await waitForFinalDictation();
     setDictationStatus("", "");
+    // Desktop shell captions stood in for browser dictation on this turn: they are its transcript.
+    if (state.captionTurnId === turn.id) {
+      state.captionTurnId = "";
+      const captions = await interviewVoice?.finishCaptions?.(turn.id);
+      if (captions) {
+        state.transcript = captions;
+        state.transcriptFinal = captions;
+        state.transcriptInterim = "";
+        state.transcriptStatus = "captured";
+        state.transcriptSource = "desktop_realtime_captions";
+      }
+    }
   }
   const audioPreprocessingMetrics = retrySnapshot?.audioPreprocessingMetrics || await waitForSpeakingAudioPreprocessorTurnMetrics();
   const realtimeAsrMetrics = retrySnapshot?.realtimeAsrMetrics || realtimePcmUplinkController.metrics();

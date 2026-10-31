@@ -258,6 +258,56 @@ test("ordinary browsers (no voice object) and IELTS turns never use realtime voi
   assert.equal(standard.controller.handles(turn), false);
 });
 
+test("IELTS pages caption the recording in both intensities, English segments keep their spaces", async () => {
+  const env = harness();
+  Object.assign(env.state, { productMode: "ielts", view: "p1", p1Intensity: "high" });
+  await env.flush();
+  env.controller.sync();
+  assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), false);
+  const p1 = { id: "p1-1", part: "p1", question: "Do you like music?" };
+  assert.equal(env.controller.handles(p1), false);                       // IELTS always records
+  assert.equal(env.controller.ownsCaptions(p1), true);                   // 追问压力 too
+  const starting = env.controller.startCaptions(p1);
+  env.voice.stateChanged.fire("ready", "");
+  await starting;
+  env.voice.finalTranscript.fire("Yes, I do.");
+  env.voice.finalTranscript.fire("Mostly jazz.");
+  assert.equal(env.ids.ivVoiceAnswer.textContent, "Yes, I do. Mostly jazz.");
+  for (const view of ["p2", "p3", "mock"]) {
+    env.state.view = view;
+    env.controller.sync();
+    assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), false, view);
+  }
+});
+
+test("finishCaptions hands over the captions as the transcript, waiting briefly for the sentence still being recognised", async () => {
+  const env = harness();
+  env.state.p1Intensity = "normal";
+  await env.flush();
+  const starting = env.controller.startCaptions(turn);
+  env.voice.stateChanged.fire("ready", "");
+  await starting;
+  env.voice.finalTranscript.fire("我负责网关。");
+  env.voice.partialTranscript.fire("延迟降");
+  const finished = env.controller.finishCaptions(turn.id);
+  assert.equal(env.voice.calls.at(-1), "stopListening");
+  env.voice.finalTranscript.fire("延迟降了三成。");                        // the engine flushes the last sentence
+  assert.equal(await finished, "我负责网关。延迟降了三成。");
+  // the last sentence never lands: the words recognised so far are used after the wait
+  const again = harness();
+  again.state.p1Intensity = "normal";
+  await again.flush();
+  const s2 = again.controller.startCaptions(turn);
+  again.voice.stateChanged.fire("ready", "");
+  await s2;
+  again.voice.partialTranscript.fire("只说了半句");
+  const pending = again.controller.finishCaptions(turn.id);
+  again.fire(1500);
+  assert.equal(await pending, "只说了半句");
+  // another turn's captions are never handed over
+  assert.equal(await again.controller.finishCaptions("other"), "");
+});
+
 test("app.js routes interview turns through the voice controller and submits without audio", () => {
   assert.match(html, /<script src="\/interview-voice\.js\?v=[^"]+"><\/script>/);
   assert.match(app, /if \(interviewVoice\?\.handles\(turn\)\)/);
@@ -268,6 +318,9 @@ test("app.js routes interview turns through the voice controller and submits wit
   assert.match(app, /if \(!liveCaptions\) startDictation\(\);/);
   assert.match(app, /interviewVoice\?\.stopCaptions\?\.\(\);/);
   assert.match(app, /interviewVoice\?\.warmCaptions\?\.\(turn\);/);
+  assert.match(app, /state\.captionTurnId = liveCaptions \? state\.currentTurn\.id : "";/);
+  assert.match(app, /const captions = await interviewVoice\?\.finishCaptions\?\.\(turn\.id\);/);
+  assert.match(app, /state\.transcriptSource = "desktop_realtime_captions";/);
   assert.match(app, /state\.transcriptSource = "desktop_realtime_asr";/);
   assert.match(app, /if \(blob\.size === 0\) return \{\};/);
   assert.match(app, /if \(blob\.size > 0\) await putPendingTurnAudio/);

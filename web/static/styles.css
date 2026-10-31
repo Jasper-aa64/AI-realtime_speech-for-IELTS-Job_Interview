@@ -47618,10 +47618,10 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
   body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane #recordStatus {
     height: calc(2 * 1.32em); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel {
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel {
     flex: 1 1 auto; align-self: stretch; min-height: 0; margin-top: 12px;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel.hidden { display: none !important; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel.hidden { display: none !important; }
 }
 /* The realtime transcript, styled like live-caption / meeting-notes panes: no outline, a faint tinted sheet; a small
    「实时转写」 head whose dot breathes red while it listens; the text scrolls under a soft top fade, the words still
@@ -47817,7 +47817,7 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
     background: color-mix(in srgb, var(--ink) 5%, var(--bg)) !important; border: 0 !important; border-radius: 18px !important;
     box-shadow: none !important; padding: 16px !important;
   }
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel #recorderPane .iv-voice-panel { background: var(--bg); }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel #recorderPane .iv-voice-panel { background: var(--bg); }
 }
 
 /* Interview practice: no progress meter line above the two sheets; the page intro uses the header hint's typeface
