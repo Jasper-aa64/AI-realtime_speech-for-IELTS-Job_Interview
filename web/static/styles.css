@@ -47289,8 +47289,9 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
   #ivAssistant.is-side-collapsed .iv-as-side {
     /* floating, it looks exactly like the pinned list (same box, one hairline on the right), just laid over the chat */
     position: absolute; z-index: 20; top: 0; bottom: 0; left: 0; width: 248px;
-    opacity: 0; visibility: hidden; pointer-events: none;
-    transition: opacity 110ms ease-out, visibility 0s linear 110ms;
+    opacity: 0; visibility: hidden;
+    /* leaving it, it lingers a moment before fading (still usable meanwhile, so coming back keeps it open) */
+    transition: opacity 110ms ease-out 350ms, visibility 0s linear 460ms;
   }
   /* the click that collapses it hides it at once */
   #ivAssistant.is-side-dismissed .iv-as-side { transition: none; }
@@ -47881,3 +47882,7 @@ body.theme-dark .iv-interviewer {
   .iv-interviewer .iv-iv-head, .iv-interviewer .iv-iv-layer, .iv-interviewer .iv-iv-layer rect { animation: none !important; }
   .iv-interviewer [data-layer="think"].is-on rect { opacity: 1; }
 }
+
+/* No rubber-band bounce on the page itself: pulling past the top or bottom used to drag the whole page and show the
+   window's white backing behind it (glaring in dark mode). Inner scroll areas keep their own behaviour. */
+html, body { overscroll-behavior: none; }
