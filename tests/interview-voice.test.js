@@ -152,6 +152,7 @@ test("标准模式: the engine only captions the recording — continuous across
   env.controller.sync();
   assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), false);       // the caption area is there in 标准 too
   assert.equal(env.controller.handles(turn), false);                     // the answer itself is recorded
+  assert.equal(env.controller.ownsCaptions(turn), true);                 // so app.js skips browser dictation
   const starting = env.controller.startCaptions(turn);
   assert.deepEqual(env.voice.calls, ["startSession"]);
   env.voice.stateChanged.fire("ready", "");
@@ -179,6 +180,7 @@ test("标准模式: the engine only captions the recording — continuous across
 test("追问压力 answers by voice, so recording captions never start there", async () => {
   const env = harness();
   await env.flush();
+  assert.equal(env.controller.ownsCaptions(turn), false);
   await env.controller.startCaptions(turn);
   assert.deepEqual(env.voice.calls, []);
 });
@@ -262,6 +264,8 @@ test("app.js routes interview turns through the voice controller and submits wit
   assert.match(app, /if \(interviewVoice\?\.onRecordControl\(\)\) return;/);
   assert.match(app, /window\.IELTSInterviewVoice\?\.sync\?\.\(\);/);
   assert.match(app, /interviewVoice\?\.startCaptions\?\.\(state\.currentTurn\);/);
+  assert.match(app, /const liveCaptions = !!interviewVoice\?\.ownsCaptions\?\.\(state\.currentTurn\);/);
+  assert.match(app, /if \(!liveCaptions\) startDictation\(\);/);
   assert.match(app, /interviewVoice\?\.stopCaptions\?\.\(\);/);
   assert.match(app, /interviewVoice\?\.warmCaptions\?\.\(turn\);/);
   assert.match(app, /state\.transcriptSource = "desktop_realtime_asr";/);

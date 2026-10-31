@@ -47752,14 +47752,10 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
     white-space: nowrap;
   }
 
-  /* the avatar on the strip: centred on the header row, and no longer a plain black disc */
-  body.interview-mode:not(#_):not(#__) .shell:has(#practicePanel:not(.hidden)) .global-topbar-actions { transform: translateY(var(--iv-avatar-drop, 22px)); }
-  body.interview-mode:not(#_):not(#__) .shell:has(#practicePanel:not(.hidden)) .user-avatar {
-    background: color-mix(in srgb, var(--ink) 7%, var(--bg)) !important; color: var(--ink) !important;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent) !important;
+  /* the avatar stays where it is on every page (moving it with a transform would also re-anchor its fixed hover card);
+     on the lit 追问压力 strip it turns to glass instead of a plain black disc */
+  body.interview-mode:not(#_):not(#__) .shell:has(.exam-status.p1-pixel-flow-visible) .user-avatar:not(.quick-settings-avatar) {
     transition: background-color 260ms ease, color 260ms ease, box-shadow 260ms ease;
-  }
-  body.interview-mode:not(#_):not(#__) .shell:has(.exam-status.p1-pixel-flow-visible) .user-avatar {
     background: rgba(255, 255, 255, 0.14) !important; color: #f8fafc !important;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34), 0 2px 10px rgba(2, 6, 23, 0.35) !important;
     -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
@@ -47769,4 +47765,46 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
 /* left and right columns end on the same line: the transcript's bottom edge meets the question sheet's */
 @media (min-width: 981px) {
   body.interview-mode:not(#_):not(#__):not(#___) #practicePanel #recorderPane { padding-bottom: 0 !important; }
+}
+
+/* 标准 / 追问压力 hint (「原题节奏练习」 / 「每题都会追问」 …): switching modes just fades the text out and back in place */
+body:not(#_):not(#__):not(#___) .exam-actions .p1-mode-help {
+  transform: none !important;
+  filter: none !important;
+  transition: max-width 240ms ease, margin 220ms ease, opacity 140ms ease, color 200ms ease, text-shadow 200ms ease,
+    background-color 200ms ease !important;
+}
+body:not(#_):not(#__):not(#___) .exam-actions .p1-mode-help.is-fading { opacity: 0 !important; }
+
+/* The top-right avatar (and the AI 助手 trigger beside it) sits a little lower on every page. Relative offset, not a
+   transform: a transform would become the containing block of the fixed hover card and throw its morph off. The
+   report-manager button stacked under the avatar follows. */
+@media (min-width: 981px) {
+  body:not(#_) .global-topbar-actions { position: relative; top: 8px; }
+  body:not(#_) .report-manager-fab { top: 64px; }
+}
+
+/* Interview practice header: the page intro (「知识点」 / 「技术栈与精选题库连续问答。」) reads larger */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .practice-intro b { font-size: 21px; }
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .practice-intro small { font-size: 14px; }
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .practice-intro { gap: 4px; }
+}
+
+/* 「我的面试语料库」 hides once an interview practice starts (it could not be used then); its slot stays, so the
+   mode switch does not move */
+body:not(#_):not(#__) #openP1CorpusBtn { transition: opacity 160ms ease, visibility 0s linear 0s; }
+body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
+  opacity: 0 !important; visibility: hidden !important; pointer-events: none !important;
+  transition: opacity 160ms ease, visibility 0s linear 160ms;
+}
+
+/* Interview practice header: the 标准模式 / 追问压力 switch is the centre of the strip. Its neighbours hang off it
+   outside the layout (hint on the left, 「我的面试语料库」 on the right) and the strip's side insets are equal. */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__):not(#___):not(#____) #practicePanel > .exam-status { padding-right: 36px !important; }
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status #openP1CorpusBtn {
+    position: absolute !important; left: calc(100% + 12px); top: 0; bottom: 0; height: fit-content; margin: auto 0 !important;
+    white-space: nowrap;
+  }
 }

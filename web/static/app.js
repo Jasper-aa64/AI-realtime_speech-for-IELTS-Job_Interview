@@ -833,19 +833,17 @@ function syncP1ModeHelp(helpEl, { isP1, isHigh, collapsed }) {
     helpEl.textContent = nextText;
     helpEl.dataset.modeHelpText = nextText;
     helpEl.classList.toggle("is-high", isHigh);
-    helpEl.classList.remove("is-switching", "is-entering");
+    helpEl.classList.remove("is-fading");
     return;
   }
-  helpEl.classList.add("is-switching");
-  helpEl.classList.remove("is-entering");
+  // 原地淡出 → 换字 → 淡入，不位移、不发光
+  helpEl.classList.add("is-fading");
   state.p1ModeHelpTimer = window.setTimeout(() => {
     helpEl.textContent = nextText;
     helpEl.dataset.modeHelpText = nextText;
     helpEl.classList.toggle("is-high", isHigh);
-    helpEl.classList.remove("is-switching");
-    helpEl.classList.add("is-entering");
-    window.setTimeout(() => helpEl.classList.remove("is-entering"), 320);
-  }, 150);
+    helpEl.classList.remove("is-fading");
+  }, 140);
 }
 
 function syncP1IntensityPanel() {
@@ -2881,6 +2879,8 @@ function isDesktopShell() {
 }
 
 function syncDesktopFlowLock() {
+  // 面试练习开始后不再显示“我的面试语料库”（占位不变，模式切换不会挪动）
+  $("openP1CorpusBtn")?.classList.toggle("is-flow-hidden", !!state.practiceLocked && isInterviewView(state.view));
   const held = isDesktopShell() && !!state.practiceLocked;
   ["openP1CorpusBtn", "openP2CorpusBtn"].forEach((id) => {
     const button = $(id);
@@ -5281,7 +5281,10 @@ async function startRecording(sessionId = state.practiceSessionId) {
   state.transcriptSource = "browser_dictation";
   state.dictationRestartCount = 0;
   state.dictationLastError = "";
-  setDictationStatus("starting", state.speaking.captureDevice?.avoidBrowserDictation
+  // 桌面壳标准模式：字幕由实时引擎显示，不再启动浏览器转写，也不显示它的提示
+  const liveCaptions = !!interviewVoice?.ownsCaptions?.(state.currentTurn);
+  if (liveCaptions) setDictationStatus("", "");
+  else setDictationStatus("starting", state.speaking.captureDevice?.avoidBrowserDictation
     ? "检测到蓝牙耳机输入风险，已优先使用非蓝牙麦克风录音，并关闭浏览器转写以避免耳机通话模式。"
     : "浏览器转写启动中；如果开头静音，系统会自动重新监听。");
   const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -5301,7 +5304,7 @@ async function startRecording(sessionId = state.practiceSessionId) {
   state.mediaRecorder.start();
   state.cancelRecording = false;
   maybeStartSpeakingAudioPreprocessor(stream, sessionId);
-  startDictation();
+  if (!liveCaptions) startDictation();
   setRecordButton("recording", "Stop", "Recording. Press to finish early.");
   text("recordStatus", "Recording in progress...");
   startRecordingTimer(state.currentTurn.timers.speak_seconds, sessionId);

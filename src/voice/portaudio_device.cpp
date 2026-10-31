@@ -2,8 +2,15 @@
 
 #include <portaudio.h>
 
+#ifdef __APPLE__
+#include <CoreAudio/CoreAudio.h>
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+
 #include <mutex>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace interview {
 namespace voice {
@@ -14,10 +21,75 @@ std::string PaText(PaError err) {
     return Pa_GetErrorText(err);
 }
 
+#ifdef __APPLE__
+UInt32 TransportType(AudioDeviceID device) {
+    AudioObjectPropertyAddress address{kAudioDevicePropertyTransportType, kAudioObjectPropertyScopeGlobal,
+                                       kAudioObjectPropertyElementMain};
+    UInt32 transport = 0;
+    UInt32 size = sizeof(transport);
+    if (AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &transport) != noErr) return 0;
+    return transport;
+}
+
+std::string DeviceName(AudioDeviceID device) {
+    AudioObjectPropertyAddress address{kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal,
+                                       kAudioObjectPropertyElementMain};
+    CFStringRef cf = nullptr;
+    UInt32 size = sizeof(cf);
+    if (AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &cf) != noErr || !cf) return {};
+    char buffer[256] = {};
+    const bool ok = CFStringGetCString(cf, buffer, sizeof(buffer), kCFStringEncodingUTF8);
+    CFRelease(cf);
+    return ok ? buffer : std::string();
+}
+
+// 系统默认输入是蓝牙耳机时返回内置麦克风的名字，否则返回空。打开蓝牙耳机的麦克风会把耳机切到通话模式
+// （输出从 44.1 kHz 掉到 16 kHz），页面上的声音会被打断、音质变差；网页录音也是这样避开蓝牙麦克风的。
+std::string BuiltInInputInsteadOfBluetooth() {
+    AudioObjectPropertyAddress address{kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyScopeGlobal,
+                                       kAudioObjectPropertyElementMain};
+    AudioDeviceID current = kAudioObjectUnknown;
+    UInt32 size = sizeof(current);
+    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &current) != noErr) return {};
+    const UInt32 transport = TransportType(current);
+    if (transport != kAudioDeviceTransportTypeBluetooth && transport != kAudioDeviceTransportTypeBluetoothLE) return {};
+
+    address.mSelector = kAudioHardwarePropertyDevices;
+    if (AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &address, 0, nullptr, &size) != noErr) return {};
+    std::vector<AudioDeviceID> devices(size / sizeof(AudioDeviceID));
+    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, devices.data()) != noErr) return {};
+    for (AudioDeviceID device : devices) {
+        if (TransportType(device) != kAudioDeviceTransportTypeBuiltIn) continue;
+        AudioObjectPropertyAddress streams{kAudioDevicePropertyStreams, kAudioObjectPropertyScopeInput,
+                                           kAudioObjectPropertyElementMain};
+        UInt32 bytes = 0;
+        if (AudioObjectGetPropertyDataSize(device, &streams, 0, nullptr, &bytes) != noErr || bytes == 0) continue;
+        return DeviceName(device);
+    }
+    return {};
+}
+#endif
+
+PaDeviceIndex FindDevice(const std::string& name, bool input);
+
+// 没指定输入设备时的默认输入：一般是系统默认，默认是蓝牙耳机时换成内置麦克风（找不到就还用系统默认）
+PaDeviceIndex DefaultInput() {
+#ifdef __APPLE__
+    const std::string built_in = BuiltInInputInsteadOfBluetooth();
+    if (!built_in.empty()) {
+        try {
+            return FindDevice(built_in, true);
+        } catch (const std::exception&) {
+        }
+    }
+#endif
+    return Pa_GetDefaultInputDevice();
+}
+
 // 阻塞模式的 PortAudio 流；读只在采集线程、写只在播放线程上调用，打开/关闭由引擎在这两个线程之外串行做。
-// 名字里包含 name 且有对应方向声道的设备；name 为空返回系统默认
+// 名字里包含 name 且有对应方向声道的设备；name 为空返回默认（输入见 DefaultInput）
 PaDeviceIndex FindDevice(const std::string& name, bool input) {
-    if (name.empty()) return input ? Pa_GetDefaultInputDevice() : Pa_GetDefaultOutputDevice();
+    if (name.empty()) return input ? DefaultInput() : Pa_GetDefaultOutputDevice();
     const int count = Pa_GetDeviceCount();
     std::string available;
     for (int i = 0; i < count; ++i) {

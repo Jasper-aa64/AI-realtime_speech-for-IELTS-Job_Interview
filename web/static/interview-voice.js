@@ -43,6 +43,11 @@
       return voiceReady() && state.p1Intensity !== "high";
     }
 
+    // 这一题的录音由实时引擎出字幕（app.js 据此不启动浏览器转写）
+    function ownsCaptions(currentTurn) {
+      return captionsEnabled() && currentTurn?.part === "interview" && !turn;
+    }
+
     function handles(currentTurn) {
       return enabled() && currentTurn?.part === "interview" && !!String(currentTurn.question || "").trim() && !failedTurns.has(currentTurn.id);
     }
@@ -336,7 +341,7 @@
       session = "closed";
     }
 
-    active = { enabled, handles, runTurn, onRecordControl, endSession, sync, warmCaptions, startCaptions, stopCaptions, statuses: STATUSES };
+    active = { enabled, handles, ownsCaptions, runTurn, onRecordControl, endSession, sync, warmCaptions, startCaptions, stopCaptions, statuses: STATUSES };
     return active;
   }
 

@@ -40,3 +40,8 @@ endif()
 target_link_libraries(voice_engine
     PUBLIC nlohmann_json::nlohmann_json
     PRIVATE spdlog::spdlog ${VOICE_ENGINE_PORTAUDIO} OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB Boost::thread)
+
+# portaudio_device.cpp 在 macOS 上直接查 CoreAudio（默认输入是不是蓝牙耳机）
+if(APPLE)
+    target_link_libraries(voice_engine PRIVATE "-framework CoreAudio" "-framework CoreFoundation")
+endif()
