@@ -169,7 +169,7 @@ test("leaving the page stops its timers", () => {
 
 test("app.js feeds it the record status, each answer's judgement and the page; the asset is routed", () => {
   assert.match(html, /<script src="\/interviewer-avatar\.js\?v=[^"]+"><\/script>[\s\S]*<script src="\/app\.js\?v=/);
-  assert.match(app, /window\.IELTSInterviewer\?\.create\?\.\(\{\n  host: \(\) => \$\("promptPane"\),\n  active: \(\) => isPracticeView\(state\.view\),\n  anchors: \(\) => \(\{ circle: \$\("recordControl"\)/);
+  assert.match(app, /window\.IELTSInterviewer\?\.create\?\.\(\{\n  host: \(\) => \$\("promptPane"\),\n  active: \(\) => isPracticeView\(state\.view\) && !!state\.practiceLocked, \/\/ [^\n]+\n  anchors: \(\) => \(\{ circle: \$\("recordControl"\)/);
   assert.match(app, /const look = RECORD_STATUS_LOOK\[status\] \|\| status;\n  window\.IELTSInterviewer\?\.setStatus\?\.\(look\);/);
   assert.match(app, /window\.IELTSInterviewer\?\.react\?\.\(payload\?\.interview_signal\);/);
   assert.match(app, /window\.IELTSInterviewer\?\.sync\?\.\(\);/);

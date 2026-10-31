@@ -1347,7 +1347,7 @@ const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy 
 // Interview and IELTS practice alike; it lines up with the record circle and starts the question where the transcript starts.
 window.IELTSInterviewer?.create?.({
   host: () => $("promptPane"),
-  active: () => isPracticeView(state.view),
+  active: () => isPracticeView(state.view) && !!state.practiceLocked, // before Start the prompt shows only its intro line
   anchors: () => ({ circle: $("recordControl"), text: $("ivVoicePanel")?.classList.contains("hidden") === false ? $("ivVoicePanel") : $("#recorderPane .recorder-status-zone") }),
 });
 if (!viewRouter) {

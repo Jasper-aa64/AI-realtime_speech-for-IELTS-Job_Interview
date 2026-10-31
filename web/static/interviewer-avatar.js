@@ -182,7 +182,9 @@
     }
 
     // ---- 和右栏对齐（桌面宽度）：底边落在“人像竖直居中对准录音大圆”时的位置，从底边往上长到 PROMPT 标签下面；
-    // 题目从转写区的顶边开始。题目太长放不下时题目往上让、底边跟着上移。参照物不在（P3 选题、窄屏）时交回 CSS 的默认位置。
+    // 题目从转写区的顶边开始。题目太长（P2 题卡）时题目往上让、人整个跟着上移，大小不变，可以上到 PROMPT 标签旁边
+    // （标签在最左，和人不重叠）；到顶了还放不下才缩小差的那一点，题目永远完整显示。
+    // 参照物不在（P3 选题、窄屏）时交回 CSS 的默认位置。
     let alignFrame = 0;
     function scheduleAlign() {
       if (alignFrame) return;
@@ -226,12 +228,23 @@
       const top = BASE.findIndex((row) => /[^.]/.test(row));
       const mid = (top + BASE.length) / 2 / BASE.length;
       const center = c.top + c.height / 2 - p.top;
-      const bottom = Math.min(center + c.height * 1.15 * (1 - mid), textTop - 10);
+      const home = center + c.height * 1.15 * (1 - mid);
       const reach = Math.min(top, ...OVER.think.map(([, y]) => y)) / BASE.length; // the 思考 dots must clear the label too
-      const size = Math.max(96, Math.min(c.height * 1.35, (bottom - ceiling) / (1 - reach)));
+      const normal = Math.max(96, Math.min(c.height * 1.35, (home - ceiling) / (1 - reach)));
+      const bottom = Math.min(home, textTop - 10);
+      const label = labelBox(pane.querySelector("#promptKicker")); // the label's text, not its full-width box
+      const roof = label && label.right < p.left + p.width / 2 - normal / 2 ? 8 : ceiling;
+      const size = Math.max(96, Math.min(normal, (bottom - roof) / (1 - reach)));
       pane.style.setProperty("--iv-avatar-top", `${Math.round(bottom - size)}px`);
       pane.style.setProperty("--iv-avatar-size", `${Math.round(size)}px`);
       pane.style.setProperty("--iv-text-pad", `${Math.round(textTop - cardTop)}px`);
+    }
+
+    function labelBox(node) {
+      if (!node || !document.createRange) return null;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return range.getBoundingClientRect();
     }
 
     function paint() {
@@ -312,6 +325,7 @@
 
     // look = 录音按钮的外观状态（native_* 已映射成 examiner_playing / recording / processing）
     function setStatus(look) {
+      sync(); // Start and exit flip the practice lock together with the record button, so show / hide follows it here too
       const next = PHASE_BY_LOOK[look] || "idle";
       if (next === phase) return;
       phase = next;
