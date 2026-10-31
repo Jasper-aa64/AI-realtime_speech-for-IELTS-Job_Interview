@@ -3001,6 +3001,18 @@
       let colSoft = new Float32Array(0);
       let colWhite = new Float32Array(0);
       let colFlow = new Float32Array(0);
+      // ~900 cells a frame: reuse the rgba() strings (alpha in 0.01 steps) instead of building and parsing new ones.
+      const fillStyles = new Map();
+      const fillStyleFor = (r, g, b, a) => {
+        const step = Math.round(a * 100);
+        const key = ((r * 256 + g) * 256 + b) * 101 + step;
+        let style = fillStyles.get(key);
+        if (!style) {
+          style = `rgba(${r}, ${g}, ${b}, ${(step / 100).toFixed(2)})`;
+          fillStyles.set(key, style);
+        }
+        return style;
+      };
 
       // Pointer-link state for scatter mode: a FIXED maximum number of the nearest
       // fragments get tethered to the cursor with a line, so moving the mouse looks
@@ -3083,7 +3095,7 @@
             const rr = Math.round(rgb[0] + (255 - rgb[0]) * wAmt);
             const gg = Math.round(rgb[1] + (255 - rgb[1]) * wAmt);
             const bb = Math.round(rgb[2] + (255 - rgb[2]) * wAmt);
-            ctx.fillStyle = `rgba(${rr}, ${gg}, ${bb}, ${alpha.toFixed(3)})`;
+            ctx.fillStyle = fillStyleFor(rr, gg, bb, alpha);
             ctx.fillRect(c * cell, r * cell, block, block);
           }
         }
@@ -3151,6 +3163,12 @@
       observer.observe(host);
       resize();
       if (!reduceMotion && !paused) rafId = window.requestAnimationFrame(frame);
+      // A paused field is built in idle time: run a few frames into the hidden canvas now so the first visible frame
+      // after the switch isn't the one compiling drawGrid and filling the style cache (it cost a dropped frame).
+      if (paused) {
+        for (let i = 0; i < 4; i += 1) draw(i * 16);
+        ctx.clearRect(0, 0, width, height);
+      }
 
       // The canvas host is pointer-events:none (so card clicks pass through), so the
       // cursor is tracked on the document and mapped into canvas-local coordinates.
