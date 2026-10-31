@@ -47649,3 +47649,20 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
 @media (prefers-reduced-motion: reduce) {
   #recorderPane .iv-voice-panel.is-listening .iv-voice-transcript::after { animation: none; }
 }
+
+/* Interview practice pages (trial): no page title block above the practice card, and the voice pane drops its own
+   card so the circle, status and transcript sit straight on the practice panel. The practice card fills the window
+   height and its two panes fill the card, so their height comes from the window, never from what is in them (a long
+   transcript cannot grow the page and shift the circle). */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__) .shell:has(#practicePanel:not(.hidden)) #viewTitleBlock { display: none !important; }
+  body.interview-mode:not(#_):not(#__) .workspace:has(> #practicePanel:not(.hidden)) { grid-template-rows: auto minmax(0, 1fr) !important; }
+  body.interview-mode:not(#_):not(#__) .workspace > #practicePanel:not(.hidden) {
+    align-self: stretch !important; height: auto !important; min-height: 0 !important; max-height: none !important;
+    grid-template-rows: auto auto minmax(0, 1fr) !important;
+  }
+  body.interview-mode:not(#_):not(#__) #practicePanel > #practiceGrid { min-height: 0 !important; height: auto !important; align-self: stretch !important; }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane {
+    background: transparent !important; border: 0 !important; box-shadow: none !important;
+  }
+}
