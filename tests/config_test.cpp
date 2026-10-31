@@ -14,7 +14,7 @@ TEST(ConfigTest, LoadDefaultConfig)
     );
 
     // audio input
-    EXPECT_EQ(config.input_audio_config.chunk, 3200);
+    EXPECT_EQ(config.input_audio_config.chunk, 320);  // 20 ms at 16 kHz
     EXPECT_EQ(config.input_audio_config.channels, 1);
     EXPECT_EQ(config.input_audio_config.sample_rate, 16000);
     EXPECT_EQ(config.input_audio_config.bit_size, 16);

@@ -1,7 +1,7 @@
 {
   "audio": {
     "input": {
-      "chunk": 3200,
+      "chunk": 320,
       "channels": 1,
       "sample_rate": 16000,
       "bit_size": 16,
