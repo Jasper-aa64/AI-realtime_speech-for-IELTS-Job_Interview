@@ -47622,15 +47622,24 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
   }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel.hidden { display: none !important; }
 }
-/* The realtime transcript, styled like live-caption / meeting-notes panes: no outline and no header, a faint tinted
-   sheet; the text scrolls under a soft top fade, the words still being recognised are lighter and, while it listens,
-   end in a blinking caret. */
+/* The realtime transcript, styled like live-caption / meeting-notes panes: no outline, a faint tinted sheet; a small
+   「实时转写」 head whose dot breathes red while it listens; the text scrolls under a soft top fade, the words still
+   being recognised are lighter and, while it listens, end in a blinking caret. */
 #recorderPane .iv-voice-panel {
   display: flex; flex-direction: column; overflow: hidden; border-radius: 14px;
   background: color-mix(in srgb, var(--ink) 3.5%, transparent);
 }
+#recorderPane .iv-voice-head {
+  flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px 2px;
+  color: var(--muted); font-family: var(--ed-mono, ui-monospace, monospace); font-size: 11px; letter-spacing: 0.08em;
+}
+#recorderPane .iv-voice-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 55%, transparent);
+  transition: background-color 200ms ease;
+}
+#recorderPane .iv-voice-panel.is-listening .iv-voice-dot { background: #ef4444; animation: ivVoiceBreath 1.6s ease-in-out infinite; }
 #recorderPane .iv-voice-body {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 16px; scrollbar-width: none; /* follows the newest words; wheel / trackpad still scroll */
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 16px 14px; scrollbar-width: none; /* follows the newest words; wheel / trackpad still scroll */
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px); mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
 }
 #recorderPane .iv-voice-body::-webkit-scrollbar { display: none; }
@@ -47645,9 +47654,13 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
 #recorderPane .iv-voice-panel.is-empty:not(.is-listening) .iv-voice-placeholder { display: block; }
 #recorderPane .iv-voice-panel.is-empty:not(.is-listening) .iv-voice-transcript { display: none; }
 #recorderPane .iv-voice-panel.is-empty .iv-voice-body { overflow: hidden; }
+@keyframes ivVoiceBreath {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45); }
+  50% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+}
 @keyframes ivVoiceCaret { to { visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) {
-  #recorderPane .iv-voice-panel.is-listening .iv-voice-transcript::after { animation: none; }
+  #recorderPane .iv-voice-panel.is-listening .iv-voice-dot, #recorderPane .iv-voice-panel.is-listening .iv-voice-transcript::after { animation: none; }
 }
 
 /* Interview practice pages (trial): no page title block above the practice card, and the voice pane drops its own
@@ -47720,4 +47733,40 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
     box-shadow: none !important;
   }
   body.interview-mode:not(#_):not(#__) #practicePanel > #practiceGrid { column-gap: 28px !important; }
+}
+
+/* Interview practice header as one full-width strip: edge to edge (app sidebar to window edge) and from the very top,
+   square corners, the 追问压力 pixel flow filling all of it; the avatar sits on the strip, centred on its content row.
+   The 标准 / 追问 hint hangs left of the switch outside the layout, so swapping its text never moves the switch. */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__) .workspace:has(> #practicePanel:not(.hidden)) { padding-top: var(--safe-top, 0px) !important; row-gap: 0 !important; }
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status {
+    margin: -18px -36px 0 -36px !important; padding-left: 36px !important; padding-right: 76px !important;
+    border-radius: 0 !important;
+  }
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status :is(.p2-pixel-flow-canvas),
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status::before { border-radius: 0 !important; }
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status > .exam-actions { position: relative; }
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status #p1ModeHelp {
+    position: absolute !important; right: calc(100% + 12px); top: 0; bottom: 0; height: fit-content; margin: auto 0 !important;
+    white-space: nowrap;
+  }
+
+  /* the avatar on the strip: centred on the header row, and no longer a plain black disc */
+  body.interview-mode:not(#_):not(#__) .shell:has(#practicePanel:not(.hidden)) .global-topbar-actions { transform: translateY(var(--iv-avatar-drop, 22px)); }
+  body.interview-mode:not(#_):not(#__) .shell:has(#practicePanel:not(.hidden)) .user-avatar {
+    background: color-mix(in srgb, var(--ink) 7%, var(--bg)) !important; color: var(--ink) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent) !important;
+    transition: background-color 260ms ease, color 260ms ease, box-shadow 260ms ease;
+  }
+  body.interview-mode:not(#_):not(#__) .shell:has(.exam-status.p1-pixel-flow-visible) .user-avatar {
+    background: rgba(255, 255, 255, 0.14) !important; color: #f8fafc !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34), 0 2px 10px rgba(2, 6, 23, 0.35) !important;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+}
+
+/* left and right columns end on the same line: the transcript's bottom edge meets the question sheet's */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel #recorderPane { padding-bottom: 0 !important; }
 }

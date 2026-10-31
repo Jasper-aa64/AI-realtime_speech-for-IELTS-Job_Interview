@@ -38,7 +38,7 @@
       return enabled() && currentTurn?.part === "interview" && !!String(currentTurn.question || "").trim() && !failedTurns.has(currentTurn.id);
     }
 
-    // ---- 转写区：文字区（已定稿的文字 + 正在识别的一句，收听时末尾有光标），放在状态文字下面（状态区里）。
+    // ---- 转写区：标题行（“实时转写”+ 收听指示点）+ 文字区（已定稿的文字 + 正在识别的一句，收听时末尾有光标），放在状态区里。
     // 只要在追问压力的实时语音页面就一直显示（提交、换题时只清空），所以开始、换题时下面不会冒出来又消失。
     function panel() {
       let el = document.getElementById("ivVoicePanel");
@@ -47,7 +47,8 @@
       el.id = "ivVoicePanel";
       el.className = "iv-voice-panel is-empty hidden";
       el.setAttribute("aria-label", "实时转写");
-      el.innerHTML = `<div class="iv-voice-body" id="ivVoiceBody" aria-live="polite"><p class="iv-voice-transcript"><span id="ivVoiceAnswer" class="iv-voice-final"></span><span id="ivVoiceLive" class="iv-voice-live"></span></p>
+      el.innerHTML = `<header class="iv-voice-head"><span class="iv-voice-dot" aria-hidden="true"></span><span>实时转写</span></header>
+        <div class="iv-voice-body" id="ivVoiceBody" aria-live="polite"><p class="iv-voice-transcript"><span id="ivVoiceAnswer" class="iv-voice-final"></span><span id="ivVoiceLive" class="iv-voice-live"></span></p>
         <p class="iv-voice-placeholder">开始回答后，你说的话会实时出现在这里</p></div>`;
       (document.querySelector("#recorderPane .recorder-status-zone") || document.getElementById("recorderPane") || document.body).appendChild(el);
       return el;
