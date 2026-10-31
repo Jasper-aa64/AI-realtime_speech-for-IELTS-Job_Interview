@@ -345,7 +345,10 @@ const WRITING_HIGHLIGHT_STORAGE_KEY = "writing-prompt-highlights";
 const UI_LANGUAGES = new Set(["zh", "en"]);
 const RECORD_CONTROL_DISABLED_STATUSES = new Set(["loading", "examiner_loading", "examiner_playing", "processing", "scoring", "turn_saved"]);
 // native_*: desktop realtime voice answer in progress (interview-voice.js)
-const PRACTICE_BUSY_STATUSES = new Set(["preparing", "recording", "processing", "scoring", "native_speaking", "native_listening", "native_review"]);
+const PRACTICE_BUSY_STATUSES = new Set(["preparing", "recording", "processing", "scoring", "native_speaking", "native_listening", "native_review", "native_retry"]);
+// The desktop realtime-voice states wear the recording flow's looks (colour, pulse, timer colour, dots):
+// the examiner reading the question, the candidate speaking, the answer being submitted.
+const RECORD_STATUS_LOOK = { native_speaking: "examiner_playing", native_listening: "recording", native_review: "processing" };
 const TURN_RENDER_BUSY_STATUSES = new Set(["examiner_loading", "examiner_playing", "preparing", "recording", "processing"]);
 const EXAMINER_PLAYBACK_STATUSES = new Set(["examiner_loading", "examiner_playing"]);
 const RECOVERABLE_PRACTICE_ERROR_STATUSES = new Set(["recording", "preparing", "processing", "turn_saved", "completion_failed"]);
@@ -3194,7 +3197,8 @@ function restoreNavScrollState(snapshot) {
 function setRecordButton(status, title, hint) {
   const navScroll = captureNavScrollState();
   state.status = status;
-  $("#recordControl").className = `record-control ${status}`;
+  const look = RECORD_STATUS_LOOK[status] || status;
+  $("#recordControl").className = `record-control ${status}${look !== status ? ` ${look}` : ""}`;
   $("#recordControl").disabled = isRecordControlDisabledStatus(status);
   text("recordTitle", title);
   text("recordHint", hint);
@@ -3203,12 +3207,12 @@ function setRecordButton(status, title, hint) {
   timerEl?.classList.remove("timer-analyzing");
   // Analyzing dots
   const dotsEl = $("#analyzingDots");
-  const isAnalyzing = status === "processing" || status === "scoring";
+  const isAnalyzing = look === "processing" || look === "scoring";
   dotsEl?.classList.toggle("hidden", !isAnalyzing);
 
-  if (status === "preparing") {
+  if (look === "preparing") {
     if (timerEl) timerEl.style.color = "#3b82f6"; // blue
-  } else if (status === "recording") {
+  } else if (look === "recording") {
     if (timerEl) timerEl.style.color = "#ef4444"; // red
   } else if (isAnalyzing) {
     if (timerEl) {

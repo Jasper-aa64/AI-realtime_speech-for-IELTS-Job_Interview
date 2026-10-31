@@ -27,7 +27,7 @@ function fakeVoice() {
 function harness({ voice = fakeVoice(), nativeAudio = true } = {}) {
   class Element {
     constructor(id) { this.id = id; this.handlers = {}; this.textContent = ""; this.value = ""; this.disabled = false; this.children = [];
-      this.classes = new Set(); this.parentNode = null; this.attrs = {}; this.scrollTop = 0; this.scrollHeight = 0;
+      this.classes = new Set(); this.parentNode = null; this.attrs = {}; this.scrollTop = 0; this.scrollHeight = 0; this.clientHeight = 0;
       this.classList = { add: (n) => this.classes.add(n), remove: (n) => this.classes.delete(n), toggle: (n, on) => (on ? this.classes.add(n) : this.classes.delete(n)), contains: (n) => this.classes.has(n) }; }
     set innerHTML(markup) { // build the panel's children from their ids
       for (const [, tag, id] of markup.matchAll(/<(\w+)[^>]*?\sid="(\w+)"/g)) { const child = ids[id] ||= new Element(id); child.tag = tag; this.children.push(child); }
@@ -139,6 +139,7 @@ test("no speech at all: nothing is submitted and the record button listens again
   assert.equal(env.voice.calls.at(-1), "stopListening");
   env.fire(4000);                       // no final transcript either
   assert.equal(env.log.submitted.length, 0);
+  assert.equal(env.state.status, "native_retry");
   assert.equal(env.controller.onRecordControl(), true);
   assert.equal(env.state.status, "native_listening");
   assert.equal(env.voice.calls.at(-1), "startListening");

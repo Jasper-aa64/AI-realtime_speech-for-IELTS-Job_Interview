@@ -47579,15 +47579,15 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
 }
 
 /* ---------- Interview practice panes ----------
-   Voice pane: the record circle sits exactly in the middle (a 1fr track above and below it, the label and timer in the
-   top one); the status line keeps a fixed 18px under the circle and the realtime transcript (desktop shell) fills the
-   rest of the bottom track, scrolling inside it, so neither moves the circle. Prompt pane: the question sits a little
-   above centre. IELTS keeps its layout. */
+   Voice pane: the record circle sits a little above the middle (3 : 5 tracks above and below it, the label and timer
+   in the top one); the status line keeps a fixed 18px under the circle and a fixed two-line height, and the realtime
+   transcript (desktop shell) fills the rest of the bottom track, scrolling inside it — nothing shifts while a turn
+   runs. Prompt pane: the question sits a little above centre. IELTS keeps its layout. */
 @media (min-width: 981px) {
   body.interview-mode:not(#_):not(#__) #practicePanel #promptCard { padding-bottom: 56px !important; }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane {
     display: grid !important; grid-template-columns: minmax(0, 1fr) auto !important;
-    grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr) !important; align-content: stretch !important;
+    grid-template-rows: minmax(0, 3fr) auto minmax(0, 5fr) !important; align-content: stretch !important;
     padding-bottom: 16px !important;
   }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .section-label { grid-column: 1; grid-row: 1; align-self: start; }
@@ -47605,6 +47605,9 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
     height: auto !important; min-height: 0; margin-top: 18px !important; padding: 0 !important; overflow: hidden;
   }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .recorder-status-zone > :not(.iv-voice-panel) { flex: none; }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane #recordStatus {
+    height: calc(2 * 1.32em); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel {
     flex: 1 1 auto; align-self: stretch; min-height: 0; margin-top: 12px; padding: 12px 16px; overflow-y: auto;
     border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--panel) 70%, transparent);

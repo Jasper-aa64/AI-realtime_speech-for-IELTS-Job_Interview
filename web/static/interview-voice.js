@@ -3,7 +3,8 @@
   // 追问压力就是实时语音模式：只在选了追问压力、且 studioNative.capabilities().native_audio 为 true 时启用
   // （IELTSNativeBridge.voice 不为 null）；标准模式照旧录音。
   // 普通浏览器拿到的 voice 是 null，这里什么都不做。出错、断线或超时都回落到原来的录音流程。
-  const STATUSES = Object.freeze({ speaking: "native_speaking", listening: "native_listening", review: "native_review" });
+  // review = 说完了、正在提交；retry = 没听到回答，等用户点“再说一次”
+  const STATUSES = Object.freeze({ speaking: "native_speaking", listening: "native_listening", review: "native_review", retry: "native_retry" });
   const START_TIMEOUT_MS = 15000;   // 连接 + StartSession
   const SPEAK_TIMEOUT_MS = 45000;   // 念一道题（含首包）
   const SILENCE_TIMEOUT_MS = 20000; // 开始收听后一直没识别到说话
@@ -55,10 +56,12 @@
 
     function paintTranscript() {
       const el = panel();
+      // Follow the newest words while the box is scrolled to the bottom; a reader who scrolled up keeps their place.
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
       el.querySelector("#ivVoiceAnswer").textContent = turn?.final || "";
       el.querySelector("#ivVoiceLive").textContent = turn?.live || "";
       el.classList.toggle("is-empty", !turn?.final && !turn?.live);
-      el.scrollTop = el.scrollHeight;
+      if (atBottom || !turn?.final) el.scrollTop = el.scrollHeight;
     }
 
     // ---- 和桥的往返：等某个状态原因（speak_finished / user_stopped / ready），带超时 ----
@@ -107,7 +110,7 @@
       window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
         try { voice?.markTranscriptShown(String(id)); } catch (_error) { /* timing only */ }
       }));
-      if (state.status === STATUSES.review) scheduleSubmit();
+      if (state.status === STATUSES.review || state.status === STATUSES.retry) scheduleSubmit();
     }
 
     function onError(code, message) {
@@ -182,7 +185,7 @@
       turn.timer = window.setTimeout(() => {
         if (!turn || state.status !== STATUSES.review) return;
         if (turn.live) { turn.final = turn.live; turn.live = ""; paintTranscript(); scheduleSubmit(); return; }
-        setRecordButton(STATUSES.review, "再说一次", "没有听到回答，点这里重新开始收听。");
+        setRecordButton(STATUSES.retry, "再说一次", "没有听到回答，点这里重新开始收听。");
         text("recordStatus", "没有听到声音，点大圆再说一次。");
       }, FINAL_WAIT_MS);
     }
@@ -238,10 +241,11 @@
         toReview();
         return true;
       }
-      if (state.status === STATUSES.review) {
-        if (!turn.final && !turn.submitTimer) listen();
+      if (state.status === STATUSES.retry) {
+        listen();
         return true;
       }
+      if (state.status === STATUSES.review) return true;
       return state.status === STATUSES.speaking;
     }
 
