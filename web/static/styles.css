@@ -47818,3 +47818,13 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
   }
   body.interview-mode:not(#_):not(#__):not(#___) #practicePanel #recorderPane .iv-voice-panel { background: var(--bg); }
 }
+
+/* Interview practice: no progress meter line above the two sheets; the page intro uses the header hint's typeface
+   (the 「实时语音，面试官随时追问」 pill) instead of the serif */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .phase-meter { visibility: hidden !important; } /* keeps its grid row and the gap */
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .practice-intro :is(b, small) {
+    font-family: "PingFang SC", "Hiragino Sans GB", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif !important;
+    font-weight: 500 !important;
+  }
+}
