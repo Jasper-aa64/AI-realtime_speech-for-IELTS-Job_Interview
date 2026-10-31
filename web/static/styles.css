@@ -47594,28 +47594,28 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
    transcript (desktop shell) fills the rest of the bottom track, scrolling inside it — nothing shifts while a turn
    runs. Prompt pane: the question sits a little above centre. IELTS keeps its layout. */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__) #practicePanel #promptCard { padding-bottom: 56px !important; }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane {
+  body.practice-layout:not(#_):not(#__) #practicePanel #promptCard { padding-bottom: 56px !important; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane {
     display: grid !important; grid-template-columns: minmax(0, 1fr) auto !important;
     grid-template-rows: minmax(0, 2fr) auto minmax(0, 5fr) !important; align-content: stretch !important;
     padding-bottom: 16px !important;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .section-label { grid-column: 1; grid-row: 1; align-self: start; }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .inline-timer { grid-column: 2; grid-row: 1; align-self: start; }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .record-row {
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane > .section-label { grid-column: 1; grid-row: 1; align-self: start; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane > .inline-timer { grid-column: 2; grid-row: 1; align-self: start; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane > .record-row {
     grid-column: 1 / -1; grid-row: 2; align-self: center !important; margin: 0 !important;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane #recordControl {
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane #recordControl {
     width: clamp(170px, calc(100vh - 450px), 280px) !important;
     height: clamp(170px, calc(100vh - 450px), 280px) !important;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .recorder-status-zone {
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane > .recorder-status-zone {
     grid-column: 1 / -1; grid-row: 3; align-self: stretch; position: static !important; inset: auto !important;
     display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: flex-start !important;
     height: auto !important; min-height: 0; margin-top: 18px !important; padding: 0 !important; overflow: hidden;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .recorder-status-zone > :not(.iv-voice-panel) { flex: none; }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane #recordStatus {
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane > .recorder-status-zone > :not(.iv-voice-panel) { flex: none; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane #recordStatus {
     height: calc(2 * 1.32em); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel {
@@ -47669,14 +47669,14 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
    height and its two panes fill the card, so their height comes from the window, never from what is in them (a long
    transcript cannot grow the page and shift the circle). */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__) .shell:has(#practicePanel:not(.hidden)) #viewTitleBlock { display: none !important; }
-  body.interview-mode:not(#_):not(#__) .workspace:has(> #practicePanel:not(.hidden)) { grid-template-rows: auto minmax(0, 1fr) !important; }
-  body.interview-mode:not(#_):not(#__) .workspace > #practicePanel:not(.hidden) {
+  body.practice-layout:not(#_):not(#__) .shell:has(#practicePanel:not(.hidden)) #viewTitleBlock { display: none !important; }
+  body.practice-layout:not(#_):not(#__) .workspace:has(> #practicePanel:not(.hidden)) { grid-template-rows: auto minmax(0, 1fr) !important; }
+  body.practice-layout:not(#_):not(#__) .workspace > #practicePanel:not(.hidden) {
     align-self: stretch !important; height: auto !important; min-height: 0 !important; max-height: none !important;
     grid-template-rows: auto auto minmax(0, 1fr) !important;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel > #practiceGrid { min-height: 0 !important; height: auto !important; align-self: stretch !important; }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane {
+  body.practice-layout:not(#_):not(#__) #practicePanel > #practiceGrid { min-height: 0 !important; height: auto !important; align-self: stretch !important; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane {
     background: transparent !important; border: 0 !important; box-shadow: none !important;
   }
 }
@@ -47686,40 +47686,40 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
    circle instead of on its own line under it. */
 .practice-intro, .record-live { display: none; }
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__) .workspace > #practicePanel {
+  body.practice-layout:not(#_):not(#__) .workspace > #practicePanel {
     background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
   }
   /* no empty band left of the avatar: the practice area starts at the top, its header stopping short of the avatar */
-  body.interview-mode:not(#_):not(#__) .workspace:has(> #practicePanel:not(.hidden)) { padding-top: calc(var(--safe-top, 0px) + 4px) !important; }
-  body.interview-mode:not(#_):not(#__) #practicePanel > .exam-status { width: auto !important; margin-right: 28px !important; }
-  body.interview-mode:not(#_):not(#__) #practicePanel > .exam-status {
+  body.practice-layout:not(#_):not(#__) .workspace:has(> #practicePanel:not(.hidden)) { padding-top: calc(var(--safe-top, 0px) + 4px) !important; }
+  body.practice-layout:not(#_):not(#__) #practicePanel > .exam-status { width: auto !important; margin-right: 28px !important; }
+  body.practice-layout:not(#_):not(#__) #practicePanel > .exam-status {
     display: grid !important; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important; align-items: center !important;
     column-gap: 16px !important;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel > .exam-status > #examStatusText { grid-column: 1; justify-self: start; min-width: 0; }
-  body.interview-mode:not(#_):not(#__) #practicePanel > .exam-status > .exam-actions { grid-column: 2; justify-self: center; }
-  body.interview-mode:not(#_):not(#__) #practicePanel #examStatusText > :is(#progressTrack, #phaseLabel) { display: none !important; }
-  body.interview-mode:not(#_):not(#__) #practicePanel #examStatusText > .practice-intro {
+  body.practice-layout:not(#_):not(#__) #practicePanel > .exam-status > #examStatusText { grid-column: 1; justify-self: start; min-width: 0; }
+  body.practice-layout:not(#_):not(#__) #practicePanel > .exam-status > .exam-actions { grid-column: 2; justify-self: center; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #examStatusText > :is(#progressTrack, #phaseLabel) { display: none !important; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #examStatusText > .practice-intro {
     display: grid; gap: 3px; min-width: 0;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel .practice-intro b {
+  body.practice-layout:not(#_):not(#__) #practicePanel .practice-intro b {
     overflow: hidden; color: inherit; font-size: 17px; font-weight: 500; line-height: 1.25; white-space: nowrap; text-overflow: ellipsis;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel .practice-intro small {
+  body.practice-layout:not(#_):not(#__) #practicePanel .practice-intro small {
     overflow: hidden; color: color-mix(in srgb, currentColor 62%, transparent); font-size: 12.5px; line-height: 1.3;
     white-space: nowrap; text-overflow: ellipsis;
   }
   /* on the lit 追问压力 header the intro reads light, like the status text it replaces */
-  body.interview-mode:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible .practice-intro b {
+  body.practice-layout:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible .practice-intro b {
     color: #f8fafc !important; text-shadow: 0 1px 6px rgba(2, 6, 23, 0.6);
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible .practice-intro small {
+  body.practice-layout:not(#_):not(#__) #practicePanel .exam-status.p1-pixel-flow-visible .practice-intro small {
     color: rgba(226, 232, 240, 0.86) !important; text-shadow: 0 1px 6px rgba(2, 6, 23, 0.7);
   }
   /* the status goes into the circle, replacing the fixed hint line there */
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane #recordStatus,
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane #recordHint { display: none !important; }
-  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane .record-live:not(:empty) {
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane #recordStatus,
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane #recordHint { display: none !important; }
+  body.practice-layout:not(#_):not(#__) #practicePanel #recorderPane .record-live:not(:empty) {
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
     max-width: 76%; margin: 0 auto; font-size: 13.5px; line-height: 1.45; text-align: center; opacity: 0.94;
   }
@@ -47729,33 +47729,33 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
    the prompt pane is a tinted sheet (the same tint family as the AI 助手 list and the transcript, a step stronger
    than the page), the voice pane stays open on the page. No outlines. */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__) #practicePanel #promptPane {
+  body.practice-layout:not(#_):not(#__) #practicePanel #promptPane {
     background: color-mix(in srgb, var(--ink) 5%, var(--bg)) !important; border: 0 !important; border-radius: 18px !important;
     box-shadow: none !important;
   }
-  body.interview-mode:not(#_):not(#__) #practicePanel > #practiceGrid { column-gap: 28px !important; }
+  body.practice-layout:not(#_):not(#__) #practicePanel > #practiceGrid { column-gap: 28px !important; }
 }
 
 /* Interview practice header as one full-width strip: edge to edge (app sidebar to window edge) and from the very top,
    square corners, the 追问压力 pixel flow filling all of it; the avatar sits on the strip, centred on its content row.
    The 标准 / 追问 hint hangs left of the switch outside the layout, so swapping its text never moves the switch. */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__) .workspace:has(> #practicePanel:not(.hidden)) { padding-top: var(--safe-top, 0px) !important; row-gap: 0 !important; }
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status {
+  body.practice-layout:not(#_):not(#__) .workspace:has(> #practicePanel:not(.hidden)) { padding-top: var(--safe-top, 0px) !important; row-gap: 0 !important; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status {
     margin: -18px -36px 0 -36px !important; padding-left: 36px !important; padding-right: 76px !important;
     border-radius: 0 !important;
   }
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status :is(.p2-pixel-flow-canvas),
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status::before { border-radius: 0 !important; }
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status > .exam-actions { position: relative; }
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status #p1ModeHelp {
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status :is(.p2-pixel-flow-canvas),
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status::before { border-radius: 0 !important; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status > .exam-actions { position: relative; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status #p1ModeHelp {
     position: absolute !important; right: calc(100% + 12px); top: 0; bottom: 0; height: fit-content; margin: auto 0 !important;
     white-space: nowrap;
   }
 
   /* the avatar stays where it is on every page (moving it with a transform would also re-anchor its fixed hover card);
      on the lit 追问压力 strip it turns to glass instead of a plain black disc */
-  body.interview-mode:not(#_):not(#__) .shell:has(.exam-status.p1-pixel-flow-visible) .user-avatar:not(.quick-settings-avatar) {
+  body.practice-layout:not(#_):not(#__) .shell:has(.exam-status.p1-pixel-flow-visible) .user-avatar:not(.quick-settings-avatar) {
     transition: background-color 260ms ease, color 260ms ease, box-shadow 260ms ease;
     background: rgba(255, 255, 255, 0.14) !important; color: #f8fafc !important;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34), 0 2px 10px rgba(2, 6, 23, 0.35) !important;
@@ -47765,7 +47765,7 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
 
 /* left and right columns end on the same line: the transcript's bottom edge meets the question sheet's */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel #recorderPane { padding-bottom: 0 !important; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel #recorderPane { padding-bottom: 0 !important; }
 }
 
 /* 标准 / 追问压力 hint (「原题节奏练习」 / 「每题都会追问」 …): switching modes just fades the text out and back in place */
@@ -47787,9 +47787,9 @@ body:not(#_):not(#__):not(#___) .exam-actions .p1-mode-help.is-fading { opacity:
 
 /* Interview practice header: the page intro (「知识点」 / 「技术栈与精选题库连续问答。」) reads larger */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .practice-intro b { font-size: 21px; }
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .practice-intro small { font-size: 14px; }
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .practice-intro { gap: 4px; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel .practice-intro b { font-size: 21px; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel .practice-intro small { font-size: 14px; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel .practice-intro { gap: 4px; }
 }
 
 /* 「我的面试语料库」 hides once an interview practice starts (it could not be used then); its slot stays, so the
@@ -47803,8 +47803,8 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
 /* Interview practice header: the 标准模式 / 追问压力 switch is the centre of the strip. Its neighbours hang off it
    outside the layout (hint on the left, 「我的面试语料库」 on the right) and the strip's side insets are equal. */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__):not(#___):not(#____) #practicePanel > .exam-status { padding-right: 36px !important; }
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel > .exam-status #openP1CorpusBtn {
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel > .exam-status { padding-right: 36px !important; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status #openP1CorpusBtn {
     position: absolute !important; left: calc(100% + 12px); top: 0; bottom: 0; height: fit-content; margin: auto 0 !important;
     white-space: nowrap;
   }
@@ -47813,7 +47813,7 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
 /* Interview practice: the voice pane is a sheet too, the same as the question sheet beside it (same tint, corners and
    inset; both end on one line); inside it the transcript reads as a recessed page-coloured panel. */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__):not(#___):not(#____) #practicePanel #recorderPane {
+  body.practice-layout:not(#_):not(#__):not(#___):not(#____) #practicePanel #recorderPane {
     background: color-mix(in srgb, var(--ink) 5%, var(--bg)) !important; border: 0 !important; border-radius: 18px !important;
     box-shadow: none !important; padding: 16px !important;
   }
@@ -47823,8 +47823,8 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
 /* Interview practice: no progress meter line above the two sheets; the page intro uses the header hint's typeface
    (the 「实时语音，面试官随时追问」 pill) instead of the serif */
 @media (min-width: 981px) {
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .phase-meter { visibility: hidden !important; } /* keeps its grid row and the gap */
-  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel .practice-intro :is(b, small) {
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel .phase-meter { visibility: hidden !important; } /* keeps its grid row and the gap */
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel .practice-intro :is(b, small) {
     font-family: "PingFang SC", "Hiragino Sans GB", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif !important;
     font-weight: 500 !important;
   }
@@ -47913,3 +47913,15 @@ html, body { overscroll-behavior: none; }
    Without this it was promoted for the fade and dropped again as the fade ended, and re-rastering the filtered canvas
    then stalled a frame for ~200 ms on some first switches. */
 :is(.exam-status.p1-pixel-flow, .p3-mode-row.p3-pixel-flow) .p2-pixel-flow-canvas { will-change: opacity, filter; }
+
+/* IELTS pages on the shared practice layout:
+   - P2 hides the status text block (it held Ready / phase); it now holds the page intro, so it shows there too
+   - P3 before starting: the practice panel no longer scrolls as a whole (that clipped the full-width header strip);
+     the launch settings under the header scroll on their own, the strip stays put */
+@media (min-width: 981px) {
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel > .exam-status > #examStatusText.hidden { display: block !important; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel.p3-launch-mode { overflow: visible !important; }
+  body.practice-layout:not(#_):not(#__):not(#___) #practicePanel.p3-launch-mode > #p3TopicPanel {
+    min-height: 0 !important; overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: thin;
+  }
+}

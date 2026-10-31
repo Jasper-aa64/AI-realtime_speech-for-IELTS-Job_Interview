@@ -2700,6 +2700,8 @@ function switchView(view, options = {}) {
   }
   $("#examStatusText")?.classList.remove("hidden");
   $("#exitPractice")?.classList.toggle("hidden", !state.practiceLocked || !isPracticeView(view));
+  // IELTS and interview practice pages share one layout (header strip, two sheets filling the window)
+  document.body.classList.toggle("practice-layout", isPracticeView(view));
   updateAgentAssistantVisibility(view);
   if (isPracticeView(view)) {
     if (hasPendingSpeakingAnalysisForView(view)) {
