@@ -47710,3 +47710,14 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
     max-width: 76%; margin: 0 auto; font-size: 13.5px; line-height: 1.45; text-align: center; opacity: 0.94;
   }
 }
+
+/* Interview practice: with the outer card gone, the two columns read apart as "question sheet | open answer area" —
+   the prompt pane is a tinted sheet (the same tint family as the AI 助手 list and the transcript, a step stronger
+   than the page), the voice pane stays open on the page. No outlines. */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__) #practicePanel #promptPane {
+    background: color-mix(in srgb, var(--ink) 5%, var(--bg)) !important; border: 0 !important; border-radius: 18px !important;
+    box-shadow: none !important;
+  }
+  body.interview-mode:not(#_):not(#__) #practicePanel > #practiceGrid { column-gap: 28px !important; }
+}
