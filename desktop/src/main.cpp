@@ -34,9 +34,14 @@ int main(int argc, char *argv[]) {
     QApplication::setApplicationName(QStringLiteral("IELTS Studio"));
     QApplication::setOrganizationName(QStringLiteral("IELTS Studio"));
     QApplication::setApplicationVersion(QStringLiteral(STUDIO_VERSION));
+#ifndef Q_OS_MACOS
+    // On macOS this would replace the Dock icon while the app runs, and the full-bleed PNG has none of the margin the
+    // system gives the bundle's .icns, so the running icon looked a size larger than every other app. The Dock keeps
+    // the bundle icon there (macOS windows show no icon anyway).
     QIcon studioIcon(QStringLiteral(":/brand/studio-brain-512.png"));
     studioIcon.addFile(QStringLiteral(":/brand/studio-brain-1024.png"));
     QApplication::setWindowIcon(studioIcon);
+#endif
 
     // Chinese titles for Qt's own strings (macOS app menu: 隐藏、退出…).
     QTranslator qtTranslator;
