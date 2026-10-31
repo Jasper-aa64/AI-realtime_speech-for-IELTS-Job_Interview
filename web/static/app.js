@@ -14636,7 +14636,9 @@ function showError(error) {
   if (recoverActivePracticeAfterError(error)) return;
   setBusy("");
   setRecordButton("ready", "Try Again", "上次尝试失败，准备好后重新开始。");
-  text("recordStatus", "出现问题，请重试。");
+  // The reason goes into the status line itself (inside the circle on interview pages): the summary sheet below only
+  // slides up for reports, so a message left there alone was never seen and the page just looked broken.
+  text("recordStatus", message ? `开始失败：${message}` : "出现问题，请重试。");
   $("summaryPanel").classList.remove("hidden");
   $("summaryPanel").innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
 }
