@@ -60,7 +60,7 @@ function harness({ voice = fakeVoice(), nativeAudio = true } = {}) {
   };
   const context = vm.createContext({ window, document });
   vm.runInContext(source, context);
-  const state = { productMode: "interview", p1Intensity: "high", desktopCapabilities: { native_audio: nativeAudio }, status: "idle", currentTurn: null };
+  const state = { productMode: "interview", view: "iv_project", p1Intensity: "high", desktopCapabilities: { native_audio: nativeAudio }, status: "idle", currentTurn: null };
   const log = { submitted: [], fallbacks: [], status: [] };
   const controller = context.window.IELTSInterviewVoice.create({
     state,
@@ -118,6 +118,27 @@ test("speak, listen, live transcript, then the final transcript is submitted thr
   env.fire(600);
   assert.deepEqual(env.log.submitted, ["我负责交易网关的延迟优化。"]);
   assert.equal(env.log.fallbacks.length, 0);
+});
+
+test("the transcript area is there from the start and stays through submit, so nothing below jumps", async () => {
+  const env = harness();
+  await env.flush();
+  // shown as soon as the shell's voice is ready on a 追问压力 page, before any question
+  assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), false);
+  assert.equal(env.ids.ivVoicePanel.classes.has("is-empty"), true);
+  await listening(env);
+  assert.equal(env.ids.ivVoicePanel.classes.has("is-listening"), true);
+  env.voice.finalTranscript.fire("答完了。");
+  env.voice.stateChanged.fire("ready", "user_stopped");
+  assert.equal(env.ids.ivVoicePanel.classes.has("is-listening"), false);
+  env.fire(600);
+  // after submit it is emptied, not hidden
+  assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), false);
+  assert.equal(env.ids.ivVoiceAnswer.textContent, "");
+  // 标准模式 records instead: the area goes away
+  env.state.p1Intensity = "normal";
+  env.controller.sync();
+  assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), true);
 });
 
 test("pressing 说完了 before the final transcript arrives submits it once it lands", async () => {
@@ -197,6 +218,7 @@ test("app.js routes interview turns through the voice controller and submits wit
   assert.match(html, /<script src="\/interview-voice\.js\?v=[^"]+"><\/script>/);
   assert.match(app, /if \(interviewVoice\?\.handles\(turn\)\)/);
   assert.match(app, /if \(interviewVoice\?\.onRecordControl\(\)\) return;/);
+  assert.match(app, /window\.IELTSInterviewVoice\?\.sync\?\.\(\);/);
   assert.match(app, /state\.transcriptSource = "desktop_realtime_asr";/);
   assert.match(app, /if \(blob\.size === 0\) return \{\};/);
   assert.match(app, /if \(blob\.size > 0\) await putPendingTurnAudio/);

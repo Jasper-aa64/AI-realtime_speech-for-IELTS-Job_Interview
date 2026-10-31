@@ -850,6 +850,7 @@ function syncP1IntensityPanel() {
   });
   $("#practicePanel")?.classList.toggle("p1-started", isP1 && state.practiceLocked);
   syncP1StatusPixelFlow();
+  window.IELTSInterviewVoice?.sync?.(); // the realtime transcript area follows the view and 标准 / 追问压力
 }
 
 // 追问压力 lights the practice header with the pixel flow — IELTS P1, every interview practice view, and P3 once running.

@@ -47579,7 +47579,7 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
 }
 
 /* ---------- Interview practice panes ----------
-   Voice pane: the record circle sits a little above the middle (3 : 5 tracks above and below it, the label and timer
+   Voice pane: the record circle sits above the middle (2 : 5 tracks above and below it, the label and timer
    in the top one); the status line keeps a fixed 18px under the circle and a fixed two-line height, and the realtime
    transcript (desktop shell) fills the rest of the bottom track, scrolling inside it — nothing shifts while a turn
    runs. Prompt pane: the question sits a little above centre. IELTS keeps its layout. */
@@ -47587,7 +47587,7 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
   body.interview-mode:not(#_):not(#__) #practicePanel #promptCard { padding-bottom: 56px !important; }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane {
     display: grid !important; grid-template-columns: minmax(0, 1fr) auto !important;
-    grid-template-rows: minmax(0, 3fr) auto minmax(0, 5fr) !important; align-content: stretch !important;
+    grid-template-rows: minmax(0, 2fr) auto minmax(0, 5fr) !important; align-content: stretch !important;
     padding-bottom: 16px !important;
   }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .section-label { grid-column: 1; grid-row: 1; align-self: start; }
@@ -47609,13 +47609,34 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
     height: calc(2 * 1.32em); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel {
-    flex: 1 1 auto; align-self: stretch; min-height: 0; margin-top: 12px; padding: 12px 16px; overflow-y: auto;
-    border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--panel) 70%, transparent);
+    flex: 1 1 auto; align-self: stretch; min-height: 0; margin-top: 12px;
   }
   body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane .iv-voice-panel.hidden { display: none !important; }
 }
-#recorderPane .iv-voice-transcript { margin: 0; font-size: 15px; line-height: 1.7; text-align: left; white-space: pre-wrap; }
-#recorderPane .iv-voice-final { color: var(--ink); }
+/* The realtime transcript, styled like live-caption / meeting-notes panes: no outline and no header, a faint tinted
+   sheet; the text scrolls under a soft top fade, the words still being recognised are lighter and, while it listens,
+   end in a blinking caret. */
+#recorderPane .iv-voice-panel {
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
+}
+#recorderPane .iv-voice-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 16px; scrollbar-width: none; /* follows the newest words; wheel / trackpad still scroll */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px); mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+#recorderPane .iv-voice-body::-webkit-scrollbar { display: none; }
+#recorderPane .iv-voice-transcript { margin: 0; color: var(--ink); font-size: 15px; line-height: 1.75; text-align: left; white-space: pre-wrap; }
 #recorderPane .iv-voice-live { color: var(--muted); }
 #recorderPane .iv-voice-final:not(:empty) + .iv-voice-live:not(:empty)::before { content: " "; }
-#recorderPane .iv-voice-panel.is-empty .iv-voice-transcript::before { content: "实时转写会出现在这里"; color: var(--muted); opacity: 0.7; }
+#recorderPane .iv-voice-panel.is-listening .iv-voice-transcript::after {
+  content: ""; display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; vertical-align: -0.16em;
+  border-radius: 1px; background: var(--accent); animation: ivVoiceCaret 1s steps(2, start) infinite;
+}
+#recorderPane .iv-voice-placeholder { display: none; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.75; opacity: 0.75; }
+#recorderPane .iv-voice-panel.is-empty:not(.is-listening) .iv-voice-placeholder { display: block; }
+#recorderPane .iv-voice-panel.is-empty:not(.is-listening) .iv-voice-transcript { display: none; }
+#recorderPane .iv-voice-panel.is-empty .iv-voice-body { overflow: hidden; }
+@keyframes ivVoiceCaret { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  #recorderPane .iv-voice-panel.is-listening .iv-voice-transcript::after { animation: none; }
+}

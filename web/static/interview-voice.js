@@ -11,6 +11,8 @@
   const SUBMIT_DELAY_MS = 600;      // 最终转写在页面上停留一下再提交
   const FINAL_WAIT_MS = 4000;       // 手动“说完了”之后等最终转写的上限
 
+  let active = null; // the page's controller, so app.js can call IELTSInterviewVoice.sync() before it holds one
+
   function create({ state, text, setRecordButton, submit, fallback, isActive }) {
     let voice = null;
     let session = "closed";      // closed / starting / ready / error
@@ -25,6 +27,7 @@
       voice.partialTranscript.connect(onPartial);
       voice.finalTranscript.connect(onFinal);
       voice.error.connect(onError);
+      sync();
     });
 
     function enabled() {
@@ -35,33 +38,39 @@
       return enabled() && currentTurn?.part === "interview" && !!String(currentTurn.question || "").trim() && !failedTurns.has(currentTurn.id);
     }
 
-    // ---- 面板：只显示转写（已定稿的文字 + 正在识别的一句），放在状态文字下面（状态区里），不影响大圆的位置 ----
+    // ---- 转写区：文字区（已定稿的文字 + 正在识别的一句，收听时末尾有光标），放在状态文字下面（状态区里）。
+    // 只要在追问压力的实时语音页面就一直显示（提交、换题时只清空），所以开始、换题时下面不会冒出来又消失。
     function panel() {
       let el = document.getElementById("ivVoicePanel");
       if (el) return el;
-      el = document.createElement("div");
+      el = document.createElement("section");
       el.id = "ivVoicePanel";
-      el.className = "iv-voice-panel hidden";
-      el.setAttribute("aria-live", "polite");
-      el.innerHTML = `<p class="iv-voice-transcript"><span id="ivVoiceAnswer" class="iv-voice-final"></span><span id="ivVoiceLive" class="iv-voice-live"></span></p>`;
+      el.className = "iv-voice-panel is-empty hidden";
+      el.setAttribute("aria-label", "实时转写");
+      el.innerHTML = `<div class="iv-voice-body" id="ivVoiceBody" aria-live="polite"><p class="iv-voice-transcript"><span id="ivVoiceAnswer" class="iv-voice-final"></span><span id="ivVoiceLive" class="iv-voice-live"></span></p>
+        <p class="iv-voice-placeholder">开始回答后，你说的话会实时出现在这里</p></div>`;
       (document.querySelector("#recorderPane .recorder-status-zone") || document.getElementById("recorderPane") || document.body).appendChild(el);
       return el;
     }
 
-    function showPanel(show) {
-      const el = panel();
-      el.classList.toggle("hidden", !show);
+    // 实时语音页面（面试练习页 + 追问压力 + 桌面壳能用实时语音）显示转写区，其余时候隐藏
+    function sync() {
+      const show = enabled() && /^iv_/.test(String(state.view || ""));
+      if (!show && !document.getElementById("ivVoicePanel")) return;
+      panel().classList.toggle("hidden", !show);
       if (show) paintTranscript();
     }
 
     function paintTranscript() {
       const el = panel();
-      // Follow the newest words while the box is scrolled to the bottom; a reader who scrolled up keeps their place.
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+      const body = el.querySelector("#ivVoiceBody") || el;
+      // Follow the newest words while the text is scrolled to the bottom; a reader who scrolled up keeps their place.
+      const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 24;
       el.querySelector("#ivVoiceAnswer").textContent = turn?.final || "";
       el.querySelector("#ivVoiceLive").textContent = turn?.live || "";
       el.classList.toggle("is-empty", !turn?.final && !turn?.live);
-      if (atBottom || !turn?.final) el.scrollTop = el.scrollHeight;
+      el.classList.toggle("is-listening", !!turn && state.status === STATUSES.listening);
+      if (atBottom || !turn?.final) body.scrollTop = body.scrollHeight;
     }
 
     // ---- 和桥的往返：等某个状态原因（speak_finished / user_stopped / ready），带超时 ----
@@ -142,8 +151,8 @@
     // ---- 一道题 ----
     async function runTurn(sessionId, currentTurn) {
       turn = { sessionId, id: currentTurn.id, final: "", live: "", timer: 0, submitTimer: 0 };
-      showPanel(true);
       setRecordButton(STATUSES.speaking, "念题中", "面试官正在读题，读完自动开始收听。");
+      sync();
       text("recordStatus", "实时语音：正在连接并读题…");
       try {
         await ensureSession();
@@ -162,9 +171,9 @@
       if (!turn) return;
       turn.final = "";
       turn.live = "";
-      paintTranscript();
       setRecordButton(STATUSES.listening, "说完了", "正在听你回答；停顿过长会自动结束，也可以点这里结束。");
       text("recordStatus", "实时语音：正在听…");
+      paintTranscript();
       window.clearTimeout(turn.timer);
       turn.timer = window.setTimeout(() => {
         if (turn && state.status === STATUSES.listening) {
@@ -180,6 +189,7 @@
       if (!turn) return;
       window.clearTimeout(turn.timer);
       setRecordButton(STATUSES.review, "提交中", "识别完成后自动提交。");
+      paintTranscript();
       if (turn.final) { scheduleSubmit(); return; }
       text("recordStatus", "正在等最后几个字的识别结果…");
       turn.timer = window.setTimeout(() => {
@@ -213,7 +223,7 @@
       window.clearTimeout(turn.submitTimer);
       turn = null;
       clearWaiter();
-      showPanel(false);
+      sync();
       submit(answer);
     }
 
@@ -227,7 +237,7 @@
       }
       try { if (state.status === STATUSES.listening) voice?.stopListening(); } catch (_error) { /* already gone */ }
       turn = null;
-      showPanel(false);
+      sync();
       setRecordButton("idle", "Start", "No typing. Record your answer aloud.");
       text("recordStatus", `${reason}。已改用录音回答。`);
       if (current) fallback(current.sessionId, reason);
@@ -254,15 +264,16 @@
       clearWaiter();
       if (turn) { window.clearTimeout(turn.timer); window.clearTimeout(turn.submitTimer); }
       turn = null;
-      if (document.getElementById("ivVoicePanel")) showPanel(false);
+      sync();
       if (voice && session !== "closed") {
         try { voice.endSession(); } catch (_error) { /* shell already gone */ }
       }
       session = "closed";
     }
 
-    return { enabled, handles, runTurn, onRecordControl, endSession, statuses: STATUSES };
+    active = { enabled, handles, runTurn, onRecordControl, endSession, sync, statuses: STATUSES };
+    return active;
   }
 
-  window.IELTSInterviewVoice = Object.freeze({ create, STATUSES });
+  window.IELTSInterviewVoice = Object.freeze({ create, STATUSES, sync: () => active?.sync() });
 })();
