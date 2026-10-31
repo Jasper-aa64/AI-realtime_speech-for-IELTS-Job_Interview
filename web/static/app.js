@@ -45,6 +45,7 @@ const state = {
   p1ModeHelpTimer: null,
   p1StatusPixelFlow: null,
   p1StatusPixelFlowTimer: null,
+  p1StatusPixelFlowOffFrame: 0,
   p3Intensity: "normal",
   p3IntensityPixelFlow: null,
   p3IntensityPixelFlowTimer: null,
@@ -859,12 +860,16 @@ function syncP1StatusPixelFlow() {
   status?.classList.toggle("pressure-header-shell", p1PressureHost() || (state.view === "p3" && shouldShow));
   window.clearTimeout(state.p1StatusPixelFlowTimer);
   state.p1StatusPixelFlowTimer = null;
+  window.cancelAnimationFrame(state.p1StatusPixelFlowOffFrame);
+  state.p1StatusPixelFlowOffFrame = 0;
   if (!status) return;
   if (state.p1StatusPixelFlow && state.p1StatusPixelFlowHost !== status) {
     state.p1StatusPixelFlow.destroy?.();
     state.p1StatusPixelFlow = null;
   }
   if (shouldShow) {
+    // Still lit (项目 → 知识点 → 反问 pass through the "interview" view for a moment): keep the flow as it is, no fade.
+    if (status.classList.contains("p1-pixel-flow-visible") && state.p1StatusPixelFlow) return;
     status.classList.add("p1-pixel-flow");
     if (!state.p1StatusPixelFlow) {
       state.p1StatusPixelFlow = createPixelFlowField(status, "grid", { themed: true });
@@ -879,6 +884,19 @@ function syncP1StatusPixelFlow() {
     });
     return;
   }
+  // Turning off waits a frame: a view switch that lands on another 追问压力 page in the same task cancels it, so the
+  // header stays lit instead of fading out and back in.
+  if (status.classList.contains("p1-pixel-flow-visible")) {
+    state.p1StatusPixelFlowOffFrame = window.requestAnimationFrame(() => {
+      state.p1StatusPixelFlowOffFrame = 0;
+      if (!p1PressureOn()) syncP1StatusPixelFlowOff(status);
+    });
+    return;
+  }
+  syncP1StatusPixelFlowOff(status);
+}
+
+function syncP1StatusPixelFlowOff(status) {
   status.classList.remove("p1-pixel-flow-visible");
   // Pages that can switch to 追问压力 keep a paused, hidden field ready (built in idle time), so the first switch only
   // flips classes instead of building a canvas mid-click; it is destroyed once you leave them.
