@@ -28,7 +28,7 @@
     <script>window.IELTSAppearance.bootstrapAppearance();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js" as="script">
-    <link rel="stylesheet" href="/styles.css?v=20261031-iv-trial-2">
+    <link rel="stylesheet" href="/styles.css?v=20261031-iv-trial-6">
   </head>
   <body class="app-booting">
     <div class="shell">
@@ -378,6 +378,7 @@
             <div id="examStatusText">
               <strong id="progressTrack">Choose a mode to begin.</strong>
               <span id="phaseLabel">Ready</span>
+              <span id="practiceIntro" class="practice-intro" aria-hidden="true"><b id="practiceIntroTitle"></b><small id="practiceIntroSub"></small></span>
             </div>
             <section id="p2CorpusPrepPanel" class="p2-corpus-prep hidden"></section>
             <div class="exam-actions">
@@ -501,6 +502,7 @@
                   <span id="recordIcon"></span>
                   <strong id="recordTitle">Start</strong>
                   <small id="recordHint">No typing. Record your answer aloud.</small>
+                  <small id="recordLive" class="record-live" aria-hidden="true"></small>
                   <div id="analyzingDots" class="analyzing-dots hidden">
                     <span></span><span></span><span></span>
                   </div>
@@ -1951,7 +1953,7 @@
     <script src="/interview.js?v=20261031-voice-1"></script>
     <script src="/interview-voice.js?v=20261031-voice-6"></script>
     <script src="/view-router.js?v=20261005-desktop-window-1"></script>
-    <script src="/app.js?v=20261031-pressure-voice-3"></script>
+    <script src="/app.js?v=20261031-pressure-voice-4"></script>
     <script src="/onboarding.js?v=20261005-onboarding-14"></script>
     <script src="/home-dashboard.js?v=20261031-voice-1"></script>
     <script src="/report-meters.js?v=20261005-ui-redesign-31"></script>

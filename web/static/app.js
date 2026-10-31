@@ -805,6 +805,22 @@ function updatePracticeHeaderProgress(turn = state.currentTurn) {
   }
 }
 
+// Interview practice pages show the page's intro in the practice header and the live status inside the record circle
+// (the page title block and the status line under the circle are hidden there); both mirror the elements other code
+// already writes, so every place that sets the title or the status keeps working unchanged.
+function mirrorPracticeChrome() {
+  const pairs = [["viewTitle", "practiceIntroTitle"], ["viewSubtitle", "practiceIntroSub"], ["recordStatus", "recordLive"]];
+  for (const [fromId, toId] of pairs) {
+    const from = document.getElementById(fromId);
+    const to = document.getElementById(toId);
+    if (!from || !to) continue;
+    const copy = () => { to.textContent = from.textContent; };
+    copy();
+    new MutationObserver(copy).observe(from, { childList: true, characterData: true, subtree: true });
+  }
+}
+mirrorPracticeChrome();
+
 function syncP1ModeHelp(helpEl, { isP1, isHigh, collapsed }) {
   const nextText = isInterviewView(state.view)
     ? (isHigh ? (state.desktopCapabilities?.native_audio ? "实时语音，面试官随时追问" : "面试官随时追问") : "每题最多追问一次")
