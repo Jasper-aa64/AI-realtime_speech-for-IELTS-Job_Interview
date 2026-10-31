@@ -47199,7 +47199,8 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
 #ivAssistant .iv-as-side-head .iv-as-brand { min-width: 0; }
 #ivAssistant .iv-as-edge { display: none; }
 @media (min-width: 861px) {
-  #ivAssistant { position: relative; transition: grid-template-columns 220ms ease; }
+  /* pinning / collapsing is instant: no column animation */
+  #ivAssistant { position: relative; }
   #ivAssistant.is-side-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
   /* the floating list leaves the grid, so the chat would auto-place into the 0-width first column; pin it to the second */
   #ivAssistant .iv-as-main { grid-column: 2; grid-row: 1; }
@@ -47209,13 +47210,15 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
     position: absolute; z-index: 20; top: 3px; bottom: 10px; left: -8px; width: 268px; padding: 14px 12px 14px 8px;
     border: 1px solid var(--line); border-radius: 14px; background: var(--bg);
     box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
-    opacity: 0; transform: translateY(-6px) scale(0.985); transform-origin: 24px 24px; visibility: hidden; pointer-events: none;
-    transition: opacity 160ms ease, transform 180ms ease, visibility 0s linear 180ms;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 110ms ease-out, visibility 0s linear 110ms;
   }
+  /* the click that collapses it hides it at once */
+  #ivAssistant.is-side-dismissed .iv-as-side { transition: none; }
   #ivAssistant.is-side-collapsed .iv-as-side .iv-as-side-head { padding-left: 45px; }
   #ivAssistant.is-side-collapsed:not(.is-side-dismissed):is(:has(.iv-as-edge:hover), :has(.iv-as-side:hover), :has(.iv-as-side:focus-within), :has(.iv-as-side-toggle:hover)) .iv-as-side {
-    opacity: 1; transform: none; visibility: visible; pointer-events: auto;
-    transition: opacity 160ms ease, transform 180ms ease, visibility 0s;
+    opacity: 1; visibility: visible; pointer-events: auto;
+    transition: opacity 80ms ease-out, visibility 0s;
   }
 }
 @media (prefers-reduced-motion: reduce) {
