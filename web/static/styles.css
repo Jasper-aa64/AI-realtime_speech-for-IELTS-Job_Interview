@@ -47084,6 +47084,8 @@ body.interview-mode:not(#_):not(#__) #homePanel .hx-title-main { font-size: clam
    top-right corner, so the slim header leaves it room. */
 #assistantPanel { padding: 0; border: 0; background: transparent; }
 body.view-assistant:not(#_):not(#__) .workspace { padding-top: var(--safe-top) !important; padding-bottom: var(--safe-bottom) !important; padding-right: 0 !important; }
+/* the chat list's tinted sheet meets the app sidebar directly (no strip of page colour between them) */
+@media (min-width: 861px) { body.view-assistant:not(#_):not(#__) .workspace { padding-left: 0 !important; } }
 #ivAssistant {
   display: grid; grid-template-columns: 248px minmax(0, 1fr); height: calc(100dvh - var(--safe-top) - var(--safe-bottom)); min-height: 480px;
   border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: hidden;
@@ -47264,8 +47266,16 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
    One toggle sits at the page's top-left corner and never moves. Pinned, the list takes its column with its head row
    starting right of the toggle; collapsed, the list takes no room and fades in on the spot, the same box laid over the
    chat, while the pointer is on the toggle, the left edge or the list. */
-#ivAssistant .iv-as-side-toggle { position: absolute; z-index: 21; top: 13px; left: 0; width: 38px; height: 38px; border-radius: 10px; }
-#ivAssistant .iv-as-side-head { padding-left: 46px; }
+#ivAssistant .iv-as-side-toggle { position: absolute; z-index: 21; top: 13px; left: 6px; width: 38px; height: 38px; border-radius: 10px; }
+#ivAssistant .iv-as-side-head { padding-left: 42px; }
+/* the chat list is its own sheet: a shade off the chat column, with a matching hairline (pinned and floating alike) */
+@media (min-width: 861px) {
+  #ivAssistant .iv-as-side {
+    padding-left: 10px;
+    background: color-mix(in srgb, var(--ink) 3.5%, var(--bg));
+    border-right-color: color-mix(in srgb, var(--ink) 9%, var(--bg));
+  }
+}
 #ivAssistant .iv-as-side-head .iv-as-brand { min-width: 0; }
 #ivAssistant .iv-as-edge { display: none; }
 @media (min-width: 861px) {
@@ -47274,12 +47284,11 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
   #ivAssistant.is-side-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
   /* the floating list leaves the grid, so the chat would auto-place into the 0-width first column; pin it to the second */
   #ivAssistant .iv-as-main { grid-column: 2; grid-row: 1; }
-  #ivAssistant.is-side-collapsed .iv-as-bar { padding-left: 56px; }
+  #ivAssistant.is-side-collapsed .iv-as-bar { padding-left: 60px; }
   #ivAssistant.is-side-collapsed .iv-as-edge { display: block; position: absolute; z-index: 19; top: 0; bottom: 0; left: 0; width: 14px; }
   #ivAssistant.is-side-collapsed .iv-as-side {
     /* floating, it looks exactly like the pinned list (same box, one hairline on the right), just laid over the chat */
     position: absolute; z-index: 20; top: 0; bottom: 0; left: 0; width: 248px;
-    background: var(--bg);
     opacity: 0; visibility: hidden; pointer-events: none;
     transition: opacity 110ms ease-out, visibility 0s linear 110ms;
   }
