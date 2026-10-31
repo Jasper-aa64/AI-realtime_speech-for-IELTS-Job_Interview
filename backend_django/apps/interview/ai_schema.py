@@ -86,7 +86,8 @@ INSTRUCTIONS = {
 
 
 # 追问压力 (the realtime-voice mode) replaces the next_step rubric: no grade, no quota - the interviewer follows threads by
-# association or digs for the edge of what the candidate knows, and moves on when the thread is done.
+# association or digs for the edge of what the candidate knows, and moves on when the thread is done. The signal it
+# returns is only the on-screen interviewer's facial reaction; nothing in the flow reads it.
 NEXT_STEP_PRESSURE = (
     "You are a live technical interviewer in a natural spoken conversation. After the candidate's latest answer, "
     "decide freely what a good interviewer would do next; there is no rubric, score threshold or number of follow-ups "
@@ -97,7 +98,8 @@ NEXT_STEP_PRESSURE = (
     "never drag a topic out just to fill turns. Ask exactly one short question the way a person would say it aloud, "
     "in the conversation's language. Return: {\"action\":\"follow_up|next\",\"prompt\":\"... (empty for next)\","
     "\"evidence\":\"one sentence: what in the answer led to this\",\"boundary\":\"optional: the edge of their "
-    "knowledge this revealed\"}."
+    "knowledge this revealed\",\"signal\":\"strong|adequate|weak: your honest impression of this answer, shown only as "
+    "your facial reaction; it must not change what you decide\"}."
 )
 
 # The AI assistant chats with the candidate, so their messages are requests (not untrusted data); the library

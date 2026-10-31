@@ -174,6 +174,24 @@ class InterviewRuntimeDecisionTests(RuntimeTestBase):
         standard = ai_schema.validate("next_step", {"action": "next"}, {"intensity": "standard", "asked": []})
         self.assertEqual(standard["signal"], "adequate")
 
+    def test_answer_response_carries_the_interviewer_signal(self):
+        attempt = self.begin({"mode": "iv_knowledge", "count": 2})
+        with patch(RUN, return_value=decision("next", signal="strong")):
+            done = self.complete(attempt["id"], attempt["turns"][0]["id"])
+        self.assertEqual(done["interview_signal"], "strong")
+        with patch(RUN):
+            skipped = self.complete(attempt["id"], attempt["turns"][1]["id"], transcript="")
+        self.assertEqual(skipped["interview_signal"], "")
+
+    def test_pressure_asks_for_a_reaction_signal_that_does_not_steer(self):
+        from . import ai_schema
+
+        text = ai_schema.prompt("next_step", {"intensity": "pressure", "asked": []})
+        self.assertIn('"signal":"strong|adequate|weak', text)
+        self.assertIn("facial reaction", text)
+        kept = ai_schema.validate("next_step", {"action": "next", "signal": "weak"}, {"intensity": "pressure", "asked": []})
+        self.assertEqual(kept["signal"], "weak")
+
     def test_empty_answer_skips_the_interviewer(self):
         attempt = self.begin({"mode": "iv_knowledge", "count": 2})
         with patch(RUN) as run:

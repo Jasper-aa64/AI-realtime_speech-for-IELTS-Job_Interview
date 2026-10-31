@@ -1949,6 +1949,9 @@ def complete_turn(user, attempt_id: str, turn_id: str, payload: dict[str, Any]) 
             else {}
         ),
         **({"follow_up_skipped": interview_outcome["skipped"]} if interview_outcome and interview_outcome["skipped"] else {}),
+        # The interviewer's read of this answer (strong / adequate / weak, "" when there is none) for the page's avatar.
+        **({"interview_signal": ((turn.metadata or {}).get("decision") or {}).get("signal") or ""}
+           if interview_outcome is not None else {}),
     }
 
 

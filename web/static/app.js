@@ -865,6 +865,7 @@ function syncP1IntensityPanel() {
   $("#practicePanel")?.classList.toggle("p1-started", isP1 && state.practiceLocked);
   syncP1StatusPixelFlow();
   window.IELTSInterviewVoice?.sync?.(); // the realtime transcript area follows the view and 标准 / 追问压力
+  window.IELTSInterviewer?.sync?.();
 }
 
 // 追问压力 lights the practice header with the pixel flow — IELTS P1, every interview practice view, and P3 once running.
@@ -1322,6 +1323,8 @@ const interviewVoice = window.IELTSInterviewVoice?.create?.({
 }) || null;
 
 const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy });
+// The pixel interviewer above the question (interview practice pages): talks, listens, thinks, reacts to each answer.
+window.IELTSInterviewer?.create?.({ host: () => $("promptPane"), active: () => isInterviewView(state.view) });
 if (!viewRouter) {
   throw new Error("IELTSViewRouter module failed to initialize.");
 }
@@ -3215,6 +3218,7 @@ function setRecordButton(status, title, hint) {
   const navScroll = captureNavScrollState();
   state.status = status;
   const look = RECORD_STATUS_LOOK[status] || status;
+  window.IELTSInterviewer?.setStatus?.(look);
   $("#recordControl").className = `record-control ${status}${look !== status ? ` ${look}` : ""}`;
   $("#recordControl").disabled = isRecordControlDisabledStatus(status);
   text("recordTitle", title);
@@ -5851,7 +5855,7 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
       let lastError = null;
       for (let tryIndex = 1; tryIndex <= 3; tryIndex += 1) {
         try {
-          return await api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
+          const payload = await api(`/api/attempts/${attempt.id}/turns/${turn.id}/complete`, completeTurnPayload(
             turn,
             transcriptSnapshot,
             transcriptStatusSnapshot,
@@ -5861,6 +5865,8 @@ async function finalizeTurn(mimeType, retrySnapshot = null) {
             realtimeAsrMetrics,
             streamFollowUp,
           ));
+          window.IELTSInterviewer?.react?.(payload?.interview_signal); // nod / smile / sweat at this answer
+          return payload;
         } catch (error) {
           // api() tags HTTP errors with .status; a bare network drop has none.
           // Only retry the latter — complete_turn is idempotent so a re-send is safe.

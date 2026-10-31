@@ -18,6 +18,7 @@ urlpatterns = [
     path("interview-corpus.js", frontend_asset, {"asset_path": "interview-corpus.js"}, name="frontend-interview-corpus-js"),
     path("interview.js", frontend_asset, {"asset_path": "interview.js"}, name="frontend-interview-js"),
     path("interview-voice.js", frontend_asset, {"asset_path": "interview-voice.js"}, name="frontend-interview-voice-js"),
+    path("interviewer-avatar.js", frontend_asset, {"asset_path": "interviewer-avatar.js"}, name="frontend-interviewer-avatar-js"),
     path("", frontend_asset, name="frontend-index"),
     path("index.html", frontend_asset, name="frontend-index-html"),
     path("shared-ui.js", frontend_asset, {"asset_path": "shared-ui.js"}, name="frontend-shared-ui-js"),

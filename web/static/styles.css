@@ -47828,3 +47828,56 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
     font-weight: 500 !important;
   }
 }
+
+/* The pixel interviewer above the question (interviewer-avatar.js). A fixed-height slot under the PROMPT label, so the
+   question keeps its place whatever he does; colours follow the theme; it steps from pixel to pixel (no smoothing). */
+.iv-interviewer {
+  --ivp-hair: #3f2d22; --ivp-skin: #f2c7a3; --ivp-skin-shade: #d9a47e; --ivp-glasses: #1e293b; --ivp-mouth: #a8432f;
+  --ivp-mouth-in: #5b1d14; --ivp-jacket: #3b4a63; --ivp-jacket-shade: #2a3549; --ivp-shirt: #f8fafc; --ivp-tie: #c2410c;
+  --ivp-desk: #b08968; --ivp-desk-shade: #9a7454; --ivp-sweat: #7dd3fc; --ivp-sweat-hi: #e0f2fe; --ivp-think: var(--muted);
+  flex: none; display: grid; place-items: center; height: 168px; margin: 6px 0 0;
+}
+body.theme-dark .iv-interviewer {
+  --ivp-hair: #5a4232; --ivp-jacket: #4a5b78; --ivp-jacket-shade: #36435a; --ivp-shirt: #e2e8f0; --ivp-desk: #6b5442;
+  --ivp-desk-shade: #574334;
+}
+.iv-interviewer.hidden, #promptPane.has-iv-launch .iv-interviewer { display: none; }
+.iv-interviewer svg { display: block; width: 156px; height: 156px; overflow: visible; }
+.iv-interviewer .iv-iv-layer { display: none; }
+.iv-interviewer .iv-iv-layer.is-on { display: inline; }
+.iv-interviewer .px-H, .iv-interviewer .px-B { fill: var(--ivp-hair); }
+.iv-interviewer .px-S { fill: var(--ivp-skin); }
+.iv-interviewer .px-s { fill: var(--ivp-skin-shade); }
+.iv-interviewer .px-G, .iv-interviewer .px-E { fill: var(--ivp-glasses); }
+.iv-interviewer .px-M { fill: var(--ivp-mouth); }
+.iv-interviewer .px-m { fill: var(--ivp-mouth-in); }
+.iv-interviewer .px-J { fill: var(--ivp-jacket); }
+.iv-interviewer .px-j { fill: var(--ivp-jacket-shade); }
+.iv-interviewer .px-T { fill: var(--ivp-shirt); }
+.iv-interviewer .px-R { fill: var(--ivp-tie); }
+.iv-interviewer .px-D { fill: var(--ivp-desk); }
+.iv-interviewer .px-d { fill: var(--ivp-desk-shade); }
+.iv-interviewer .px-w { fill: var(--ivp-sweat); }
+.iv-interviewer .px-W { fill: var(--ivp-sweat-hi); }
+.iv-interviewer .px-t { fill: var(--ivp-think); }
+/* listening: leans a pixel toward the answer side */
+.iv-interviewer[data-phase="listening"] .iv-iv-head { transform: translateX(1px); }
+/* strong answer: two nods */
+.iv-interviewer[data-reaction="nod"] .iv-iv-head { animation: ivNod 900ms steps(1, end) 1; }
+@keyframes ivNod { 0%, 50% { transform: translateY(0); } 25%, 75% { transform: translateY(1px); } }
+/* weak answer: the drop slides down the temple */
+.iv-interviewer [data-layer="sweat"].is-on { animation: ivSweat 1300ms steps(3, end) infinite; }
+@keyframes ivSweat { from { transform: translateY(0); opacity: 1; } to { transform: translateY(3px); opacity: 0.35; } }
+/* thinking: the three dots light up one after another */
+.iv-interviewer [data-layer="think"].is-on rect { animation: ivThink 1200ms steps(1, end) infinite; opacity: 0.25; }
+.iv-interviewer [data-layer="think"].is-on rect:nth-child(2) { animation-delay: 200ms; }
+.iv-interviewer [data-layer="think"].is-on rect:nth-child(3) { animation-delay: 400ms; }
+@keyframes ivThink { 0%, 60% { opacity: 0.25; } 20%, 50% { opacity: 1; } }
+@media (max-width: 980px) {
+  .iv-interviewer { height: 108px; }
+  .iv-interviewer svg { width: 96px; height: 96px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .iv-interviewer .iv-iv-head, .iv-interviewer .iv-iv-layer, .iv-interviewer .iv-iv-layer rect { animation: none !important; }
+  .iv-interviewer [data-layer="think"].is-on rect { opacity: 1; }
+}
