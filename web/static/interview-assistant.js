@@ -55,7 +55,7 @@
     attach: svg('<path d="m20.5 11.5-8.3 8.3a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>', 17),
     send: svg('<path d="M12 19V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/>', 17),
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 12),
-    sidebar: svg('<rect x="3.5" y="5" width="17" height="14" rx="3.2"/><path d="M8.5 9v6"/>', 18),
+    sidebar: svg('<rect x="3.5" y="5" width="17" height="14" rx="3.2"/><path d="M8.5 9v6"/>', 22),
     // One identity asset across the corner trigger, headers and welcome state.
     brain: '<img class="assistant-brain" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true">',
   };
@@ -152,6 +152,8 @@
     }
 
     const threadTitle = () => (threads || []).find((item) => item.id === current)?.title || copy("新对话", "New chat");
+    // The page header names a real chat only; a fresh one leaves it empty (no 「新对话」 placeholder).
+    const pageTitle = () => (current ? threadTitle() : "");
 
     // ---- Deep Chat messages
     function footerHtml(message) {
@@ -661,7 +663,7 @@
 
     function paint() {
       if (byId("ivAssistantThreads")) byId("ivAssistantThreads").innerHTML = threadList();
-      if (byId("ivAssistantTitle")) byId("ivAssistantTitle").textContent = threadTitle();
+      if (byId("ivAssistantTitle")) byId("ivAssistantTitle").textContent = pageTitle();
       if (byId("ivAssistantEngine")) byId("ivAssistantEngine").innerHTML = engineChip();
       if (byId("ivDockTitle")) byId("ivDockTitle").textContent = current ? threadTitle() : copy("AI 助手", "AI assistant");
       if (byId("ivDockMenu") && !byId("ivDockMenu").hidden) byId("ivDockMenu").innerHTML = dockMenu();
@@ -674,9 +676,9 @@
       window.setTimeout(() => { const host = pageHost(); if (host && !host.firstChild) mount(host, { force: true }); else attachComposer("page"); }, 0);
       return `<section id="ivAssistant" class="iv-assistant${sideCollapsed ? " is-side-collapsed" : ""}" data-domain="${domain()}">
           <div class="iv-as-edge" aria-hidden="true"></div>
+          ${sideToggle()}
           <aside class="iv-as-side" aria-label="${esc(copy("对话列表", "Chats"))}">
             <div class="iv-as-side-head">
-              ${sideToggle()}
               <span class="iv-as-brand"><span>${esc(copy("AI 助手", "AI assistant"))}</span></span>
               <button type="button" class="iv-as-icon" data-iv-assistant="new" title="${esc(copy("新对话", "New chat"))}" aria-label="${esc(copy("新对话", "New chat"))}">${ICON.compose}</button>
             </div>
@@ -687,7 +689,7 @@
             </div>
           </aside>
           <div id="ivAssistantMain" class="iv-as-main">
-            <header class="iv-as-bar">${sideToggle("iv-as-bar-side")}<h2 id="ivAssistantTitle" class="iv-as-title">${esc(threadTitle())}</h2></header>
+            <header class="iv-as-bar"><h2 id="ivAssistantTitle" class="iv-as-title">${esc(pageTitle())}</h2></header>
             <div id="ivAssistantChat" class="iv-as-chat"></div>
             <div class="iv-as-dock">
               <div id="ivAssistantComposer" class="iv-as-composer"></div>
@@ -698,9 +700,10 @@
         </section>`;
     }
 
-    function sideToggle(extra = "") {
-      const label = sideCollapsed ? copy("固定侧边栏", "Pin sidebar") : copy("收起侧边栏", "Hide sidebar");
-      return `<button type="button" class="iv-as-icon iv-as-side-toggle ${extra}" data-iv-assistant="side" title="${esc(label)}" aria-label="${esc(label)}" aria-pressed="${sideCollapsed ? "false" : "true"}">${ICON.sidebar}</button>`;
+    // One toggle at the page's top-left corner, the same spot pinned, collapsed and while the list floats in.
+    function sideToggle() {
+      const label = sideCollapsed ? copy("显示侧边栏", "Show sidebar") : copy("收起侧边栏", "Hide sidebar");
+      return `<button type="button" class="iv-as-icon iv-as-side-toggle" data-iv-assistant="side" title="${esc(label)}" aria-label="${esc(label)}" aria-pressed="${sideCollapsed ? "false" : "true"}">${ICON.sidebar}</button>`;
     }
 
     function toggleSide() {
@@ -712,9 +715,8 @@
       // Collapsing hides the panel at once even though the pointer is still on it; it can float in again once the
       // pointer has left it.
       root.classList.toggle("is-side-dismissed", sideCollapsed);
-      root.querySelectorAll(".iv-as-side-toggle").forEach((button) => {
-        button.outerHTML = sideToggle(button.classList.contains("iv-as-bar-side") ? "iv-as-bar-side" : "");
-      });
+      const button = root.querySelector(".iv-as-side-toggle");
+      if (button) button.outerHTML = sideToggle();
     }
 
     function confirm(message, onYes) {
