@@ -189,7 +189,8 @@ def after_answer(attempt, turn, ai_source=""):
         return {"inserted": None, "skipped": None}
     recent = [item for item in attempt.turns.filter(sequence__lte=turn.sequence).order_by("-sequence")[:4] if _answer(item)]
     inputs = {"stage": engine.STAGE_LABELS.get(stage, stage), "intensity": intensity, "question": turn.question,
-              "answer": value[:6000], "depth": depth, "max_depth": limit, "root_question": root.question,
+              "answer": value[:6000], "depth": depth, **({} if intensity == "pressure" else {"max_depth": limit}),
+              "root_question": root.question,
               "recent": [{"question": item.question, "answer": _answer(item)[:1200], "stage": _prompt(item).get("stage", "")}
                          for item in reversed(recent)],
               "asked": list(attempt.turns.values_list("question", flat=True)),

@@ -80,19 +80,19 @@ class StudioEngineTests(TestCase):
         self.assertEqual(after["turns"][1]["decision"]["reason"], "depth_limit")
         self.assertEqual(after["current_turn"]["prompt"], "介绍一下你的「行情回放」项目。")
 
-    def test_pressure_mode_keeps_probing_until_the_limit(self):
+    def test_pressure_mode_follows_up_until_the_interviewer_moves_on(self):
         self.seed_resume()
         session = self.start(part="knowledge", intensity="pressure", count=1)
-        prompts = ["追问一", "追问二", "追问三"]
+        prompts = ["追问一", "追问二", "追问三", "追问四"]
         for prompt in prompts:
-            with patch(RUN, return_value=decision("probe", prompt, "weak")):
+            with patch(RUN, return_value=decision("follow_up", prompt, "")) as run:
                 session = self.answer(session)
             self.assertEqual(session["current_turn"]["prompt"], prompt)
-        with patch(RUN) as run:
+            self.assertNotIn("max_depth", run.call_args.args[2])
+        with patch(RUN, return_value=decision("next")):
             session = self.answer(session)
-        run.assert_not_called()
         self.assertIsNone(session["current_turn"])
-        self.assertEqual([t["kind"] for t in session["turns"]], ["main", "follow_up", "follow_up", "follow_up"])
+        self.assertEqual([t["kind"] for t in session["turns"]], ["main"] + ["follow_up"] * 4)
 
     def test_ai_failure_moves_on_without_inventing_a_question(self):
         self.seed_resume()

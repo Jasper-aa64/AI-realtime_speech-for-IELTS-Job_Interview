@@ -135,17 +135,44 @@ class InterviewRuntimeDecisionTests(RuntimeTestBase):
         saved = SpeakingTurn.objects.get(attempt__attempt_id=attempt["id"], turn_id=follow["id"])
         self.assertEqual(saved.metadata["decision"]["reason"], "depth_limit")
 
-    def test_pressure_mode_probes_three_times_on_knowledge(self):
+    def test_pressure_mode_lets_the_interviewer_decide_when_a_thread_is_done(self):
+        from . import ai_schema
+
         attempt = self.begin({"mode": "iv_knowledge", "count": 1, "iv_intensity": "pressure"})
         turn = attempt["turns"][0]
-        for prompt in ["追问一", "追问二", "追问三"]:
-            with patch(RUN, return_value=decision("probe", prompt, "weak")):
+        # no fixed number of follow-ups: five in a row are fine while the interviewer keeps finding threads
+        for prompt in ["追问一", "追问二", "追问三", "追问四", "追问五"]:
+            with patch(RUN, return_value=decision("follow_up", prompt, "")) as run:
                 turn = self.complete(attempt["id"], turn["id"])["next_turn"]
             self.assertEqual(turn["question"], prompt)
+            inputs = run.call_args.args[2]
+            self.assertNotIn("max_depth", inputs)  # the model is never handed a quota
+            self.assertIn("no rubric", ai_schema.prompt("next_step", inputs))
+        with patch(RUN, return_value=decision("next")):
+            done = self.complete(attempt["id"], turn["id"])
+        self.assertIsNone(done["next_turn"])
+
+    def test_pressure_mode_still_has_a_safety_stop(self):
+        from . import engine
+
+        attempt = self.begin({"mode": "iv_knowledge", "count": 1, "iv_intensity": "pressure"})
+        turn = attempt["turns"][0]
+        for index in range(engine.DEPTH["pressure"]["default"]):
+            with patch(RUN, return_value=decision("follow_up", f"追问{index}", "")):
+                turn = self.complete(attempt["id"], turn["id"])["next_turn"]
         with patch(RUN) as run:
             done = self.complete(attempt["id"], turn["id"])
         run.assert_not_called()
         self.assertIsNone(done["next_turn"])
+
+    def test_pressure_decision_invents_no_grade(self):
+        from . import ai_schema
+
+        result = ai_schema.validate("next_step", {"action": "follow_up", "prompt": "那内存序呢？", "evidence": "提到了无锁"},
+                                    {"intensity": "pressure", "asked": []})
+        self.assertEqual(result["signal"], "")
+        standard = ai_schema.validate("next_step", {"action": "next"}, {"intensity": "standard", "asked": []})
+        self.assertEqual(standard["signal"], "adequate")
 
     def test_empty_answer_skips_the_interviewer(self):
         attempt = self.begin({"mode": "iv_knowledge", "count": 2})

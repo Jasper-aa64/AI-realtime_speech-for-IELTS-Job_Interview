@@ -31,7 +31,9 @@ REVERSE_MORE = "还有其他想了解的吗？没有的话我们今天就到这�
 REVERSE_ROUNDS = 2
 FALLBACK_INTRO = "请先做一个简单的自我介绍。"
 # Follow-up depth per main question: standard keeps one; pressure digs until the limit shows.
-DEPTH = {"standard": {"default": 1}, "pressure": {"default": 3, "project": 4}}
+# 标准: one follow-up per question. 追问压力: the interviewer decides when a thread is done; this is only a safety stop
+# against an endless chain (never shown to the model).
+DEPTH = {"standard": {"default": 1}, "pressure": {"default": 8}}
 AUDIO_LIMIT = 15 * 1024 * 1024
 # Launch-panel limits: a knowledge pool, questions written for one session, a project text, a JD, planned questions.
 PICK_LIMIT = 30
@@ -260,7 +262,8 @@ def answer(user, session_id, turn_id, value, *, answer_source="typed", ai_source
         else:
             asked = list(session.turns.values_list("prompt", flat=True))
             inputs = {"stage": STAGE_LABELS.get(turn.stage, turn.stage), "intensity": session.intensity,
-                      "question": turn.prompt, "answer": value, "depth": depth, "max_depth": limit,
+                      "question": turn.prompt, "answer": value, "depth": depth,
+                      **({} if session.intensity == "pressure" else {"max_depth": limit}),
                       "root_question": root.prompt, "recent": _recent(session, turn), "asked": asked,
                       "jd_role": (profile.jd_summary or {}).get("role", "")}
     try:
