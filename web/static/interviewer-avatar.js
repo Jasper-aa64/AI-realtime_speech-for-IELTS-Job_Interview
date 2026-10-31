@@ -2,88 +2,104 @@
   // 面试练习页左栏的像素面试官：念题时说话，回答时看向右边在听，等 AI 时眼睛往上在想；
   // 每题答完按面试官的判断反应一下（strong 点头 + 笑，adequate 淡淡一笑，weak 皱眉流汗）。
   // 只是表情，不影响流程。动作由 app.js 喂进来：setStatus(录音按钮的状态)、react(判断)、sync()（跟随页面显示/隐藏）。
-  // 64×64 的像素格（由形状栅格化生成）：BASE 是不变的部分（"." 透明），OVER 是可切换的眼睛 / 嘴 / 眉毛 / 汗珠 / 思考点。
-  // 头部 = 第 0-34 行，点头时只有它动。
+  // 80×80 的像素格（由形状栅格化生成）：BASE 是不变的部分（"." 透明），OVER 是可切换的眼睛 / 嘴 / 眉毛 / 汗珠 / 思考点。
+  // 头部 = 第 0-45 行，点头时只有它动。
   const BASE = [
-    "................................................................",
-    "................................................................",
-    "................................................................",
-    "................................................................",
-    "................................................................",
-    "................................................................",
-    "................................................................",
-    "................................................................",
-    "............................hhhHHHHH............................",
-    ".........................HhhHHHHHHHhhHH.........................",
-    "........................HhHHHHHHHHHHHhHH........................",
-    ".......................HhHHHHHHHHHHHHHHhH.......................",
-    "......................HHHHHHHHHHHHHHHHHHhH......................",
-    "....................HHHHHHHHHHHHHHHHHHHHHHHH....................",
-    "....................HHHHHHHHHHHHHHHHHHHHHHHH....................",
-    "....................HHHHHHHHHHHHHHHHHHHHHHHH....................",
-    "...................HHHHHHHHHHHssssHHHHHHHHHHH...................",
-    "...................HHssssHHHHHSSSSsssssHHHHHH...................",
-    "...................HHSSSSsssssSSSSSSSSSssssHH...................",
-    "..................HHHSSSBBBBBSSSSSSBBBBBSSSHHH..................",
-    "..................HHHSSBSSSSSBSSSSBSSSSSBSSHHH..................",
-    "..................HHHSSSSSSSSSSSSSSSSSSSSSSHHH..................",
-    "..................HHHSGGGGGGGSSSSSSGGGGGGGSHHH..................",
-    "..................SGGGLllLLLLGSSSSGLllLLLLGGGS..................",
-    "..................SSSGLlLLLLLGGGGGGLlLLLLLGSSS..................",
-    ".................SSSSGLLLLLLLGSSSSGLLLLLLLGSSSS.................",
-    ".................SSsSGLLLLLLLGSSSSGLLLLLLLGSsSS.................",
-    "..................SsSGLLLLLLLGSSSSGLLLLLLLGSsS..................",
-    "..................SSSSGGGGGGGSSSsSSGGGGGGGSSSS..................",
-    "...................S.SSSSSSSSSSSsSSSSSSSSSS.S...................",
-    ".....................SSSSSSSSSSSssSSSSSSSSS.....................",
-    "......................SSSSSSSSSsssSSSSSSSS......................",
-    "......................SSSSSSSSSSSSSSSSSSSS......................",
-    ".......................sSSSSSSSSSSSSSSSSs.......................",
-    "........................sSSSSSSSSSSSSSSs........................",
-    ".........................sSSSSSSSSSSSSs.........................",
-    "..........................sssSSSSSSsss..........................",
-    "...........................ssssssssss...........................",
-    "...........................SSSSSSSSSS...........................",
-    "...........................SSSSSSSSSS...........................",
-    "...........................SSSSSSSSSS...........................",
-    ".........................TTTTTTTTTTTTTT.........................",
-    "...................JJJJJJTTTTTRRRRTTTTTJJJJJJ...................",
-    "...............JJJJJJJJJJjTTTTRrRRTTTjJJJJJJJJJJJ...............",
-    "............JJJJJJJJJJJJJJjTTTRRRRTTjJJJJJJJJJJJJJJJ............",
-    "............JJJJJJJJJJJJJJjJTTRRRRTTjJJJJJJJJJJJJJJJ............",
-    "..........JJJJJJJJJJJJJJJJJjJTRrRRTjJJJJJJJJJJJJJJJJJJ..........",
-    "........JJJJJJJJJJJJJJJJJJJJjTRRRRjJJJJJJJJJJJJJJJJJJJJJ........",
-    "......JJJJJJJJJJJJJJJJJJJJJJjJRRRRjJJJJJJJJJJJJJJJJJJJJJJJ......",
-    ".....JJJJJJJJJJJJJJJJJJJJJJJJjRrRRJJJJJJJJJJJJJJJJJJJJJJJJJ.....",
-    ".....JJJJJJJJJJJJJJJJJJJJJJJJJRRRRJJJJJJJJJJJJJJJJJJJJJJJJJ.....",
-    ".....JJJJJJJJJJJJJJJJJJJJJJJJJRRRRJJJJJJJJJJJJJJJJJJJJJJJJJ.....",
-    ".....JJJJJJJJJJJJJJJJJJJJJJJJJJRRJJJJJJJJJJJJJJJJJJJJJJJJJJ.....",
-    ".....JJJJJJJJJJJJJJJJJJJJJJJJJJRRJJJJJJJJJJJJJJJJJJJJJJJJJJ.....",
-    ".....JJJJJJJJJJJJJJJJJJJJJJJJJJRRJJJJJJJJJJJJJJJJJJJJJJJJJJ.....",
-    ".....JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ.....",
-    ".....JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ.....",
-    "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
-    "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
-    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "................................................................................",
+    "................................................................................",
+    "................................................................................",
+    "................................................................................",
+    "................................................................................",
+    "................................................................................",
+    "................................................................................",
+    "................................................................................",
+    ".................................kkkhhhhhkkkkkk.................................",
+    "..............................kkkHhhHhhhHhhHHHHkkk..............................",
+    ".............................kHHkHHhhHHHHHHHHhhHHHk.............................",
+    "...........................khhHHkHHHHHHHHHHHHHHhhHHkk...........................",
+    "..........................khHHHHHkHHHHHHHHHHHHHHHhHHHk..........................",
+    "..........................hHHHHHHkHHHHHHHHHHHHHHHHhHHk..........................",
+    ".........................kHHHHHHHkHHHHHHHHHHHHHHHHHHHHk.........................",
+    ".........................hHHHHHHHHHHHHHHHHHHHHHHHHHHHHk.........................",
+    "........................kHHHHHHHHHHHHHHHHHHHHHHHkkHHHHHk........................",
+    "........................kHHHHHHHHHHHHHHHHkkkkHkksskHHHHk........................",
+    "........................kHHHHHHHkkkHkkkkksssskssSSskHHHk........................",
+    "........................kHHHHkHksssksssssSSSSsSSSSSkHHHk........................",
+    "........................kHHkksksSSSsSSSSSSSSSSSSSSSkkHHk........................",
+    ".......................kHHkssSsSSSSSSSSSSSSSSSSSSSSsskHHk.......................",
+    ".......................kHHkSSBBBBBBBSSSSSSSSBBBBBBBSSkHHk.......................",
+    ".......................kHHkSBBBBBBBBBSSSSSSBBBBBBBBBSkHHk.......................",
+    ".......................kHHkSSSSSSSSSSSSSSSSSSSSSSSSSSkHHk.......................",
+    ".......................kHHkSGGGGGGGGGSSSSSSSGGGGGGGGGkHHk.......................",
+    ".......................kkkkGLllLLLLLLGSSSSSGLllLLLLLLGkkk.......................",
+    ".......................SSGGGLlLLLLLLLGGGGGGGLlLLLLLLLGGSS.......................",
+    ".......................SSSHGLLLLLLLLLGSSSSSGLLLLLLLLLGSSS.......................",
+    ".......................SSsSGLLLLLLLLLGSSSSSGLLLLLLLLLGsSS.......................",
+    ".......................SSsSGLLLLLLLLLGSSSSSGLLLLLLLLLGsSS.......................",
+    ".......................SSsSGLLLLLLLLLGSSSSSGLLLLLLLLLGsSS.......................",
+    ".......................SSSSGLLLLLLLLLGSSSSSGLLLLLLLLLGSSS.......................",
+    "........................SSSSGGGGGGGGGSSSSnSSGGGGGGGGGSSS........................",
+    "..........................SSSSSSSSSSSSSSSnSSSSSSSSSSSS..........................",
+    "...........................sSSSSSSSSSSSSSnSSSSSSSSSSs...........................",
+    "...........................sSSSSSSSSSSnSSSnSSSSSSSSSs...........................",
+    "............................sSSSSSSSSSSnnnSSSSSSSSSs............................",
+    "............................sSSSSSSSSSSSSSSSSSSSSSSs............................",
+    ".............................sSSSSSSSSSSSSSSSSSSSSs.............................",
+    "..............................sSSSSSSSSSSSSSSSSSSs..............................",
+    "...............................sSSSSSSSSSSSSSSSSs...............................",
+    "................................sSSSSSSSSSSSSSSs................................",
+    "................................sSSSSSSSSSSSSSSs................................",
+    ".................................ssssssssssssss.................................",
+    "...................................ssssssssss...................................",
+    "...................................sSSSSSSSSs...................................",
+    "...................................sSSSSSSSSs...................................",
+    "................................TTTTSSSSSSSSTTTT................................",
+    "..............................qqqTTTTSSSSSSTTTTqqq..............................",
+    ".........................qqqqqJJJTTTTSSSSSSTTTTJJJqqqqq.........................",
+    ".....................qqqqqJJJJJJTTTTTTSSSSTTTTTTJJJJJJqqqqq.....................",
+    "..................qqqqqqqJJJJJTTjqTTTTSSSSTTTTqjTTJJJJJqqqqqqq..................",
+    "...............qqqqqqJJJJJJJJJjqqqqTTTTssTTTTqqqqjJJJJJJJJJqqqqqq...............",
+    ".............qqqqqJJJJJJJJJJjqqqqqqUUUUssUUUUqqqqqqjJJJJJJJJJJqqqqq.............",
+    "...........qqqqJJJJJJJJJJJJJjqqqqqqTTTTTTTTTTqqqqqqjJJJJJJJJJJJJJqqqq...........",
+    "..........qqqJJJJJJJJJJJJJJJJjqqqqqqTTTTTTTTqqqqqqjJJJJJJJJJJJJJJJJqqq..........",
+    "..........qJJJJJJJJJJJJJJJJJJjqqqqqqTTTTTTTTqqqqqqjJJJJJJJJJJJJJJJJJJq..........",
+    "..........jJJJJJJJJJJJJJJJJJJJjqqqqqqTTTTTTqqqqqqjJJJJJJJJJJJJJJJJJJJj..........",
+    ".........jjJJJJJJJJJJJJJJJJJJJJjqqqqqTTUTTTqqqqqjJJJJJJJJJJJJJJJJJJJJjj.........",
+    ".........jjJJJJJJJJJJJJJJJJJJJJjqqqqqqTTTTqqqqqqjJJJJJJJJJJJJJJJJJJJJjj.........",
+    ".........jjjJJJJJJJJJJJJJJJJJJJJjqqqqqTTTTqqqqqjJJJJJJJJJJJJJJJJJJJJjjj.........",
+    "........jjjjJJJJJJJJJJJJJJJJJJJJJjqqqqTTTTqqqqjJJJJJJJJJJJJJJJJJJJJJjjjj........",
+    "........jjjjJJJJJJJJJJJJJJJJJJJJJjqqqqqUTqqqqqjJJJJJJJJJJJJJJJJJJJJJjjjj........",
+    "........jjjjjJJJJJJJJJJJJJJJJJJJJJjqqqqTTqqqqjJJJJJJJJJJJJJJJJJJJJJjjjjj........",
+    "........jjjjjJJJJJJJJJJJJJJJJJJJJJjqqqqqqqqqqjJJJJJJJJJJJJJJJJJJJJJjjjjj........",
+    "........jjjjjJJJJJJJJJJJJJJJJJJJJJJjqqqqqqqqjJJJJJJJJJJJJJJJJJJJJJJjjjjj........",
+    "........jjjjjjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjjjjjj........",
+    "........jjjjjjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjjjjjj........",
+    "........jjjjjjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjjjjjj........",
+    "........jjjjjjjJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJjjjjjjj........",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+    "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   ];
-  const HEAD_ROWS = 35;
+  const HEAD_ROWS = 46;
   const OVER = {
-    "eyes-open": [[24, 25, "e"], [25, 25, "e"], [26, 25, "e"], [24, 26, "e"], [25, 26, "e"], [26, 26, "e"], [25, 25, "E"], [25, 26, "E"], [26, 26, "E"], [37, 25, "e"], [38, 25, "e"], [39, 25, "e"], [37, 26, "e"], [38, 26, "e"], [39, 26, "e"], [38, 25, "E"], [38, 26, "E"], [39, 26, "E"]],
-    "eyes-side": [[24, 25, "e"], [25, 25, "e"], [26, 25, "e"], [24, 26, "e"], [25, 26, "e"], [26, 26, "e"], [26, 25, "E"], [26, 26, "E"], [27, 26, "E"], [37, 25, "e"], [38, 25, "e"], [39, 25, "e"], [37, 26, "e"], [38, 26, "e"], [39, 26, "e"], [39, 25, "E"], [39, 26, "E"], [40, 26, "E"]],
-    "eyes-up": [[24, 25, "e"], [25, 25, "e"], [26, 25, "e"], [24, 26, "e"], [25, 26, "e"], [26, 26, "e"], [25, 24, "E"], [25, 25, "E"], [26, 25, "E"], [37, 25, "e"], [38, 25, "e"], [39, 25, "e"], [37, 26, "e"], [38, 26, "e"], [39, 26, "e"], [38, 24, "E"], [38, 25, "E"], [39, 25, "E"]],
-    "eyes-blink": [[23, 26, "E"], [24, 26, "E"], [25, 26, "E"], [26, 26, "E"], [27, 26, "E"], [36, 26, "E"], [37, 26, "E"], [38, 26, "E"], [39, 26, "E"], [40, 26, "E"]],
-    "mouth-closed": [[29, 34, "M"], [30, 34, "M"], [31, 34, "M"], [32, 34, "M"], [33, 34, "M"], [34, 34, "M"], [35, 34, "M"]],
-    "mouth-mid": [[29, 34, "M"], [30, 34, "M"], [31, 34, "M"], [32, 34, "M"], [33, 34, "M"], [34, 34, "M"], [35, 34, "M"], [30, 35, "m"], [31, 35, "m"], [32, 35, "m"], [33, 35, "m"], [34, 35, "m"]],
-    "mouth-open": [[29, 33, "M"], [30, 33, "M"], [31, 33, "M"], [32, 33, "M"], [33, 33, "M"], [34, 33, "M"], [35, 33, "M"], [29, 34, "m"], [30, 34, "m"], [31, 34, "m"], [32, 34, "m"], [33, 34, "m"], [34, 34, "m"], [35, 34, "m"], [29, 35, "m"], [30, 35, "m"], [31, 35, "m"], [32, 35, "m"], [33, 35, "m"], [34, 35, "m"], [35, 35, "m"], [30, 36, "M"], [31, 36, "M"], [32, 36, "M"], [33, 36, "M"], [34, 36, "M"], [30, 34, "W"], [31, 34, "W"], [32, 34, "W"], [33, 34, "W"], [34, 34, "W"]],
-    "mouth-smile": [[28, 33, "M"], [36, 33, "M"], [29, 34, "M"], [30, 34, "M"], [31, 34, "M"], [32, 34, "M"], [33, 34, "M"], [34, 34, "M"], [35, 34, "M"], [30, 35, "m"], [31, 35, "m"], [32, 35, "m"], [33, 35, "m"], [34, 35, "m"], [24, 31, "b"], [25, 31, "b"], [39, 31, "b"], [40, 31, "b"]],
-    "mouth-frown": [[29, 34, "M"], [30, 34, "M"], [31, 34, "M"], [32, 34, "M"], [33, 34, "M"], [34, 34, "M"], [35, 34, "M"], [28, 35, "M"], [36, 35, "M"]],
-    "brows-worry": [[23, 19, "S"], [24, 19, "S"], [25, 19, "S"], [26, 19, "S"], [27, 19, "S"], [28, 19, "S"], [29, 19, "S"], [23, 20, "S"], [24, 20, "S"], [25, 20, "S"], [26, 20, "S"], [27, 20, "S"], [28, 20, "S"], [29, 20, "S"], [34, 19, "S"], [35, 19, "S"], [36, 19, "S"], [37, 19, "S"], [38, 19, "S"], [39, 19, "S"], [40, 19, "S"], [34, 20, "S"], [35, 20, "S"], [36, 20, "S"], [37, 20, "S"], [38, 20, "S"], [39, 20, "S"], [40, 20, "S"], [23, 21, "B"], [24, 21, "B"], [25, 20, "B"], [26, 20, "B"], [27, 19, "B"], [28, 18, "B"], [29, 18, "B"], [40, 21, "B"], [39, 21, "B"], [38, 20, "B"], [37, 20, "B"], [36, 19, "B"], [35, 18, "B"], [34, 18, "B"]],
-    "sweat": [[48, 15, "w"], [47, 16, "w"], [48, 16, "w"], [49, 16, "w"], [46, 17, "w"], [47, 17, "W"], [48, 17, "w"], [49, 17, "w"], [46, 18, "w"], [47, 18, "w"], [48, 18, "w"], [49, 18, "w"], [47, 19, "w"], [48, 19, "w"]],
-    "think": [[50, 9, "t"], [51, 9, "t"], [50, 10, "t"], [51, 10, "t"], [54, 6, "t"], [55, 6, "t"], [54, 7, "t"], [55, 7, "t"], [58, 3, "t"], [59, 3, "t"], [58, 4, "t"], [59, 4, "t"]],
+    "eyes-open": [[30, 29, "e"], [31, 29, "e"], [32, 29, "e"], [33, 29, "e"], [34, 29, "e"], [30, 30, "e"], [31, 30, "e"], [32, 30, "e"], [33, 30, "e"], [34, 30, "e"], [30, 28, "E"], [31, 28, "E"], [32, 28, "E"], [33, 28, "E"], [34, 28, "E"], [32, 29, "i"], [33, 29, "i"], [32, 30, "E"], [33, 30, "i"], [46, 29, "e"], [47, 29, "e"], [48, 29, "e"], [49, 29, "e"], [50, 29, "e"], [46, 30, "e"], [47, 30, "e"], [48, 30, "e"], [49, 30, "e"], [50, 30, "e"], [46, 28, "E"], [47, 28, "E"], [48, 28, "E"], [49, 28, "E"], [50, 28, "E"], [48, 29, "i"], [49, 29, "i"], [48, 30, "E"], [49, 30, "i"]],
+    "eyes-side": [[30, 29, "e"], [31, 29, "e"], [32, 29, "e"], [33, 29, "e"], [34, 29, "e"], [30, 30, "e"], [31, 30, "e"], [32, 30, "e"], [33, 30, "e"], [34, 30, "e"], [30, 28, "E"], [31, 28, "E"], [32, 28, "E"], [33, 28, "E"], [34, 28, "E"], [33, 29, "i"], [34, 29, "i"], [33, 30, "E"], [34, 30, "i"], [46, 29, "e"], [47, 29, "e"], [48, 29, "e"], [49, 29, "e"], [50, 29, "e"], [46, 30, "e"], [47, 30, "e"], [48, 30, "e"], [49, 30, "e"], [50, 30, "e"], [46, 28, "E"], [47, 28, "E"], [48, 28, "E"], [49, 28, "E"], [50, 28, "E"], [49, 29, "i"], [50, 29, "i"], [49, 30, "E"], [50, 30, "i"]],
+    "eyes-up": [[30, 29, "e"], [31, 29, "e"], [32, 29, "e"], [33, 29, "e"], [34, 29, "e"], [30, 30, "e"], [31, 30, "e"], [32, 30, "e"], [33, 30, "e"], [34, 30, "e"], [30, 28, "E"], [31, 28, "E"], [32, 28, "E"], [33, 28, "E"], [34, 28, "E"], [32, 28, "i"], [33, 28, "i"], [32, 29, "E"], [33, 29, "i"], [46, 29, "e"], [47, 29, "e"], [48, 29, "e"], [49, 29, "e"], [50, 29, "e"], [46, 30, "e"], [47, 30, "e"], [48, 30, "e"], [49, 30, "e"], [50, 30, "e"], [46, 28, "E"], [47, 28, "E"], [48, 28, "E"], [49, 28, "E"], [50, 28, "E"], [48, 28, "i"], [49, 28, "i"], [48, 29, "E"], [49, 29, "i"]],
+    "eyes-blink": [[30, 29, "s"], [31, 29, "s"], [32, 29, "s"], [33, 29, "s"], [34, 29, "s"], [30, 30, "E"], [31, 30, "E"], [32, 30, "E"], [33, 30, "E"], [34, 30, "E"], [46, 29, "s"], [47, 29, "s"], [48, 29, "s"], [49, 29, "s"], [50, 29, "s"], [46, 30, "E"], [47, 30, "E"], [48, 30, "E"], [49, 30, "E"], [50, 30, "E"]],
+    "mouth-closed": [[37, 40, "M"], [38, 40, "M"], [39, 40, "M"], [40, 40, "M"], [41, 40, "M"], [42, 40, "M"], [43, 40, "M"], [36, 39, "n"], [44, 39, "n"]],
+    "mouth-mid": [[37, 40, "M"], [38, 40, "M"], [39, 40, "M"], [40, 40, "M"], [41, 40, "M"], [42, 40, "M"], [43, 40, "M"], [38, 41, "m"], [39, 41, "m"], [40, 41, "m"], [41, 41, "m"], [42, 41, "m"]],
+    "mouth-open": [[37, 39, "M"], [38, 39, "M"], [39, 39, "M"], [40, 39, "M"], [41, 39, "M"], [42, 39, "M"], [43, 39, "M"], [37, 40, "m"], [38, 40, "m"], [39, 40, "m"], [40, 40, "m"], [41, 40, "m"], [42, 40, "m"], [43, 40, "m"], [37, 41, "m"], [38, 41, "m"], [39, 41, "m"], [40, 41, "m"], [41, 41, "m"], [42, 41, "m"], [43, 41, "m"], [38, 42, "M"], [39, 42, "M"], [40, 42, "M"], [41, 42, "M"], [42, 42, "M"], [38, 40, "W"], [39, 40, "W"], [40, 40, "W"], [41, 40, "W"], [42, 40, "W"]],
+    "mouth-smile": [[35, 39, "M"], [45, 39, "M"], [36, 40, "M"], [37, 40, "M"], [38, 40, "M"], [39, 40, "M"], [40, 40, "M"], [41, 40, "M"], [42, 40, "M"], [43, 40, "M"], [44, 40, "M"], [38, 41, "M"], [39, 41, "M"], [40, 41, "M"], [41, 41, "M"], [42, 41, "M"], [29, 36, "b"], [30, 36, "b"], [31, 36, "b"], [49, 36, "b"], [50, 36, "b"], [51, 36, "b"]],
+    "mouth-frown": [[37, 40, "M"], [38, 40, "M"], [39, 40, "M"], [40, 40, "M"], [41, 40, "M"], [42, 40, "M"], [43, 40, "M"], [36, 41, "M"], [44, 41, "M"]],
+    "brows-worry": [[28, 22, "S"], [29, 22, "S"], [30, 22, "S"], [31, 22, "S"], [32, 22, "S"], [33, 22, "S"], [34, 22, "S"], [35, 22, "S"], [36, 22, "S"], [28, 23, "S"], [29, 23, "S"], [30, 23, "S"], [31, 23, "S"], [32, 23, "S"], [33, 23, "S"], [34, 23, "S"], [35, 23, "S"], [36, 23, "S"], [43, 22, "S"], [44, 22, "S"], [45, 22, "S"], [46, 22, "S"], [47, 22, "S"], [48, 22, "S"], [49, 22, "S"], [50, 22, "S"], [51, 22, "S"], [43, 23, "S"], [44, 23, "S"], [45, 23, "S"], [46, 23, "S"], [47, 23, "S"], [48, 23, "S"], [49, 23, "S"], [50, 23, "S"], [51, 23, "S"], [28, 24, "B"], [29, 24, "B"], [30, 23, "B"], [31, 23, "B"], [32, 22, "B"], [33, 22, "B"], [34, 21, "B"], [35, 21, "B"], [36, 21, "B"], [51, 24, "B"], [50, 24, "B"], [49, 23, "B"], [48, 23, "B"], [47, 22, "B"], [46, 22, "B"], [45, 21, "B"], [44, 21, "B"], [43, 21, "B"]],
+    "sweat": [[59, 17, "w"], [58, 18, "w"], [59, 18, "w"], [60, 18, "w"], [57, 19, "w"], [58, 19, "W"], [59, 19, "w"], [60, 19, "w"], [57, 20, "w"], [58, 20, "w"], [59, 20, "w"], [60, 20, "w"], [57, 21, "w"], [58, 21, "w"], [59, 21, "w"], [60, 21, "w"], [58, 22, "w"], [59, 22, "w"]],
+    "think": [[62, 12, "t"], [63, 12, "t"], [62, 13, "t"], [63, 13, "t"], [67, 8, "t"], [68, 8, "t"], [67, 9, "t"], [68, 9, "t"], [72, 4, "t"], [73, 4, "t"], [72, 5, "t"], [73, 5, "t"]],
   };
   const PHASE_BY_LOOK = {
     examiner_playing: "speaking",
@@ -124,13 +140,13 @@
 
   function markup() {
     const layer = (name) => `<g class="iv-iv-layer" data-layer="${name}">${rects(OVER[name])}</g>`;
-    return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges" aria-hidden="true" focusable="false">
+    return `<svg viewBox="0 0 ${BASE.length} ${BASE.length}" shape-rendering="crispEdges" aria-hidden="true" focusable="false">
       <g class="iv-iv-body">${rects(baseCells(HEAD_ROWS, BASE.length))}</g>
       <g class="iv-iv-head">${rects(baseCells(0, HEAD_ROWS))}${Object.keys(OVER).map(layer).join("")}</g>
     </svg>`;
   }
 
-  function create({ host, active }) {
+  function create({ host, active, anchors }) {
     let el = null;
     let phase = "idle";
     let mouth = "closed";
@@ -153,7 +169,59 @@
       const kicker = pane.querySelector("#promptKicker");
       if (kicker) kicker.after(el);
       else pane.prepend(el);
+      watchLayout(pane);
       return el;
+    }
+
+    // ---- 和右栏对齐（桌面宽度）：竖直中心对准录音大圆、比大圆大一些；题目从转写区的顶边开始。
+    // 题目太长放不下时题目往上让、人跟着缩小。参照物不在（P3 选题、窄屏）时交回 CSS 的默认位置。
+    let alignFrame = 0;
+    function scheduleAlign() {
+      if (alignFrame) return;
+      alignFrame = window.requestAnimationFrame?.(() => { alignFrame = 0; align(); }) || 0;
+    }
+    function watchLayout(pane) {
+      const { circle, text } = anchors?.() || {};
+      if (window.ResizeObserver) {
+        const observer = new window.ResizeObserver(scheduleAlign);
+        [pane, circle, text].forEach((target) => target && observer.observe(target));
+      }
+      const card = pane.querySelector?.("#promptCard");
+      if (card && window.MutationObserver) {
+        new window.MutationObserver(scheduleAlign).observe(card, { childList: true, subtree: true, characterData: true });
+      }
+      window.addEventListener?.("resize", scheduleAlign);
+    }
+    function align() {
+      const pane = host();
+      if (!pane || !el) return;
+      const { circle, text } = anchors?.() || {};
+      const card = pane.querySelector("#promptCard");
+      const c = circle?.getBoundingClientRect?.();
+      const t = text?.getBoundingClientRect?.();
+      const wide = window.matchMedia?.("(min-width: 981px)").matches === true;
+      if (el.classList.contains("hidden") || !card || !c?.height || !t?.height || !wide) {
+        pane.classList.remove("iv-aligned");
+        return;
+      }
+      pane.classList.add("iv-aligned"); // the avatar leaves the flow first, so the card's own top is measured without it
+      const p = pane.getBoundingClientRect();
+      const box = card.getBoundingClientRect();
+      const kids = [...card.children].filter((child) => window.getComputedStyle(child).position !== "absolute");
+      const contentHeight = kids.length ? kids[kids.length - 1].getBoundingClientRect().bottom - kids[0].getBoundingClientRect().top : 0;
+      const padBottom = parseFloat(window.getComputedStyle(card).paddingBottom) || 0;
+      const cardTop = box.top - p.top;
+      const textTop = Math.max(cardTop, Math.min(t.top - p.top, box.bottom - p.top - padBottom - contentHeight));
+      const kicker = pane.querySelector("#promptKicker")?.getBoundingClientRect();
+      const ceiling = (kicker ? kicker.bottom : p.top) - p.top + 6;
+      // centre the drawn figure (hair to desk), not the canvas: the rows above the hair are room for the 思考 dots
+      const top = BASE.findIndex((row) => /[^.]/.test(row));
+      const mid = (top + BASE.length) / 2 / BASE.length;
+      const center = c.top + c.height / 2 - p.top;
+      const size = Math.max(96, Math.min(c.height * 1.15, (center - ceiling) / mid, (textTop - 10 - center) / (1 - mid)));
+      pane.style.setProperty("--iv-avatar-top", `${Math.round(center - size * mid)}px`);
+      pane.style.setProperty("--iv-avatar-size", `${Math.round(size)}px`);
+      pane.style.setProperty("--iv-text-pad", `${Math.round(textTop - cardTop)}px`);
     }
 
     function paint() {
@@ -204,10 +272,12 @@
       if (!show) {
         setMouthCycle(false);
         window.clearTimeout(blinkTimer);
+        host()?.classList.remove("iv-aligned");
         return;
       }
       if (wasHidden) scheduleBlink();
       paint();
+      scheduleAlign();
     }
 
     // look = 录音按钮的外观状态（native_* 已映射成 examiner_playing / recording / processing）

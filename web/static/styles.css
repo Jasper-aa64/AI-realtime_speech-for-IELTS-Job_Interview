@@ -47876,16 +47876,18 @@ body:not(#_):not(#__) :is(#openP1CorpusBtn, #openP2CorpusBtn).is-flow-hidden {
    the pair sits around the middle and a longer question never moves him. Colours follow the theme; pixel steps, no
    smoothing. */
 .iv-interviewer {
-  --ivp-hair: #3f2d22; --ivp-hair-hi: #6b4c39; --ivp-skin: #f2c7a3; --ivp-skin-shade: #dca981; --ivp-glasses: #1e293b;
-  --ivp-lens: #f7dcc4; --ivp-glint: #ffffff; --ivp-eye-white: #ffffff; --ivp-mouth: #a8432f; --ivp-mouth-in: #5b1d14;
-  --ivp-teeth: #fff7ed; --ivp-blush: #f4a3a3; --ivp-jacket: #3b4a63; --ivp-jacket-shade: #2a3549; --ivp-shirt: #f8fafc;
-  --ivp-tie: #c2410c; --ivp-tie-shade: #9a3412; --ivp-desk: #b08968; --ivp-desk-shade: #9a7454; --ivp-sweat: #7dd3fc;
+  --ivp-hair: #3f2d22; --ivp-hair-hi: #6e4f3b; --ivp-hair-dark: #2a1d15; --ivp-skin: #f2c9a6; --ivp-skin-shade: #deae86;
+  --ivp-skin-deep: #c99670; --ivp-brow: #3a2a20; --ivp-glasses: #1f2937; --ivp-lens: #f6dcc6; --ivp-glint: #ffffff;
+  --ivp-eye-white: #ffffff; --ivp-iris: #4b3a2e; --ivp-mouth: #b0533f; --ivp-mouth-in: #5b1d14; --ivp-teeth: #fff7ed;
+  --ivp-blush: #f3a8a0; --ivp-jacket: #3b4a63; --ivp-jacket-shade: #2c384d; --ivp-jacket-hi: #56678a; --ivp-shirt: #f8fafc;
+  --ivp-shirt-shade: #cbd5e1; --ivp-desk: #b08968; --ivp-desk-shade: #9a7454; --ivp-desk-hi: #c9a382; --ivp-sweat: #7dd3fc;
   --ivp-think: var(--muted);
   flex: 1 1 0; min-height: 0; position: relative;
 }
 body.theme-dark .iv-interviewer {
-  --ivp-hair: #5a4232; --ivp-hair-hi: #7a5a45; --ivp-jacket: #4a5b78; --ivp-jacket-shade: #36435a; --ivp-shirt: #e2e8f0;
-  --ivp-desk: #6b5442; --ivp-desk-shade: #574334;
+  --ivp-hair: #5a4232; --ivp-hair-hi: #7a5a45; --ivp-hair-dark: #3f2d22; --ivp-jacket: #4a5b78; --ivp-jacket-shade: #36435a;
+  --ivp-jacket-hi: #64779c; --ivp-shirt: #e2e8f0; --ivp-shirt-shade: #a9b6c8; --ivp-desk: #6b5442; --ivp-desk-shade: #574334;
+  --ivp-desk-hi: #80664f;
 }
 body:not(#_):not(#__):not(#___) #promptPane:has(> .iv-interviewer:not(.hidden)):not(.has-iv-launch) > #promptCard {
   flex: 1 1 0; min-height: 0; align-content: start; padding-top: 14px !important; padding-bottom: 16px !important;
@@ -47895,15 +47897,31 @@ body:not(#_):not(#__):not(#___) #promptPane:has(> .iv-interviewer:not(.hidden)):
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
   display: block; height: min(312px, calc(100% - 22px)); width: auto; aspect-ratio: 1; overflow: visible;
 }
+/* Lined up with the answer pane (interviewer-avatar.js measures it): the avatar is centred on the record circle and the
+   question starts where the transcript starts. */
+@media (min-width: 981px) {
+  #promptPane.iv-aligned { position: relative; }
+  #promptPane.iv-aligned > .iv-interviewer { position: absolute !important; inset: 0; flex: none; pointer-events: none; }
+  #promptPane.iv-aligned > .iv-interviewer svg { top: var(--iv-avatar-top); bottom: auto; height: var(--iv-avatar-size); }
+  body:not(#_):not(#__):not(#___):not(#____) #promptPane.iv-aligned:has(> .iv-interviewer:not(.hidden)):not(.has-iv-launch) > #promptCard {
+    flex: 1 1 auto; padding-top: var(--iv-text-pad) !important;
+  }
+}
 .iv-interviewer .iv-iv-layer { display: none; }
 .iv-interviewer .iv-iv-layer.is-on { display: inline; }
-.iv-interviewer .px-H, .iv-interviewer .px-B { fill: var(--ivp-hair); }
+.iv-interviewer .px-H { fill: var(--ivp-hair); }
+.iv-interviewer .px-B { fill: var(--ivp-brow); }
 .iv-interviewer .px-h { fill: var(--ivp-hair-hi); }
+.iv-interviewer .px-k { fill: var(--ivp-hair-dark); }
+.iv-interviewer .px-n { fill: var(--ivp-skin-deep); }
+.iv-interviewer .px-i { fill: var(--ivp-iris); }
+.iv-interviewer .px-q { fill: var(--ivp-jacket-hi); }
+.iv-interviewer .px-U { fill: var(--ivp-shirt-shade); }
+.iv-interviewer .px-x { fill: var(--ivp-desk-hi); }
 .iv-interviewer .px-L { fill: var(--ivp-lens); }
 .iv-interviewer .px-l { fill: var(--ivp-glint); }
 .iv-interviewer .px-e { fill: var(--ivp-eye-white); }
 .iv-interviewer .px-b { fill: var(--ivp-blush); }
-.iv-interviewer .px-r { fill: var(--ivp-tie-shade); }
 .iv-interviewer .px-S { fill: var(--ivp-skin); }
 .iv-interviewer .px-s { fill: var(--ivp-skin-shade); }
 .iv-interviewer .px-G, .iv-interviewer .px-E { fill: var(--ivp-glasses); }
@@ -47912,7 +47930,6 @@ body:not(#_):not(#__):not(#___) #promptPane:has(> .iv-interviewer:not(.hidden)):
 .iv-interviewer .px-J { fill: var(--ivp-jacket); }
 .iv-interviewer .px-j { fill: var(--ivp-jacket-shade); }
 .iv-interviewer .px-T { fill: var(--ivp-shirt); }
-.iv-interviewer .px-R { fill: var(--ivp-tie); }
 .iv-interviewer .px-D { fill: var(--ivp-desk); }
 .iv-interviewer .px-d { fill: var(--ivp-desk-shade); }
 .iv-interviewer .px-w { fill: var(--ivp-sweat); }
@@ -47965,4 +47982,20 @@ html, body { overscroll-behavior: none; }
   body.practice-layout:not(#_):not(#__):not(#___) #practicePanel.p3-launch-mode > #p3TopicPanel {
     min-height: 0 !important; overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: thin;
   }
+}
+
+/* P3 selected question card: two columns — the card (category, progress, title, bullets) on the left, its Q1–Q6
+   rounds stacked on the right behind a hairline. */
+body:not(#_):not(#__) .p3-bank-context-card:has(.p3-bank-round-strip) {
+  display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(200px, 0.42fr); column-gap: 28px;
+  grid-auto-rows: min-content; align-content: start;
+}
+body:not(#_):not(#__) .p3-bank-context-card:has(.p3-bank-round-strip) > :not(.p3-bank-round-strip) { grid-column: 1; }
+body:not(#_):not(#__) .p3-bank-context-card > .p3-bank-round-strip {
+  grid-column: 2; grid-row: 1 / span 3; align-self: stretch; margin: 0 !important;
+  display: flex; flex-direction: column; justify-content: center; gap: 10px;
+  padding-left: 28px; border-left: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+body:not(#_):not(#__) .p3-bank-context-card > .p3-bank-round-strip .p3-bank-round-chip {
+  justify-content: center; min-height: 40px; padding: 8px 14px; font-size: 14px; letter-spacing: 0.04em; border-radius: 10px;
 }

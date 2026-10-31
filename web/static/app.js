@@ -1325,7 +1325,12 @@ const interviewVoice = window.IELTSInterviewVoice?.create?.({
 
 const viewRouter = window.IELTSViewRouter?.createViewRouter?.({ state, viewCopy });
 // The pixel interviewer above the question (interview practice pages): talks, listens, thinks, reacts to each answer.
-window.IELTSInterviewer?.create?.({ host: () => $("promptPane"), active: () => isPracticeView(state.view) }); // interview and IELTS practice alike
+// Interview and IELTS practice alike; it lines up with the record circle and starts the question where the transcript starts.
+window.IELTSInterviewer?.create?.({
+  host: () => $("promptPane"),
+  active: () => isPracticeView(state.view),
+  anchors: () => ({ circle: $("recordControl"), text: $("ivVoicePanel")?.classList.contains("hidden") === false ? $("ivVoicePanel") : $("#recorderPane .recorder-status-zone") }),
+});
 if (!viewRouter) {
   throw new Error("IELTSViewRouter module failed to initialize.");
 }
