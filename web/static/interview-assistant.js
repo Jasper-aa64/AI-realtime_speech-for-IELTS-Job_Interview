@@ -11,6 +11,7 @@
   const DEEP_CHAT = "/vendor/deep-chat-2.5.1.bundle.js";
   const HIGHLIGHT = "/vendor/highlight-11.12.0.min.js";
   const MODE_KEY = "iv-assistant-mode";
+  const SIDE_KEY = "iv-assistant-side-collapsed";
   const DOCK_RECENT = 8;
   const MODES = [
     { id: "chat", zh: "聊天", en: "Chat", note: ["只回答，不改语料库", "Answers only; your corpus is untouched"] },
@@ -54,6 +55,7 @@
     attach: svg('<path d="m20.5 11.5-8.3 8.3a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>', 17),
     send: svg('<path d="M12 19V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/>', 17),
     close: svg('<path d="M6 6l12 12M18 6 6 18"/>', 12),
+    sidebar: svg('<rect x="3.5" y="5" width="17" height="14" rx="3.2"/><path d="M8.5 9v6"/>', 18),
     // One identity asset across the corner trigger, headers and welcome state.
     brain: '<img class="assistant-brain" src="/assets/brand/studio-brain.svg?v=20261007-rounded-brain-2" alt="" aria-hidden="true">',
   };
@@ -99,6 +101,10 @@
     const copy = (zh, en) => state.uiLanguage === "en" ? en : zh;
     const esc = (value) => escapeHtml(String(value ?? ""));
     try { mode = localStorage.getItem(MODE_KEY) === "agent" ? "agent" : "chat"; } catch (_error) { /* per-viewer convenience only */ }
+    // The chat list can be tucked away (like Claude's sidebar): collapsed, it only slides in while the pointer is at the
+    // left edge or over the toggle.
+    let sideCollapsed = false;
+    try { sideCollapsed = localStorage.getItem(SIDE_KEY) === "1"; } catch (_error) { /* per-viewer convenience only */ }
     const domain = () => (state.productMode === "ielts" ? "ielts" : "interview");
     const examples = () => EXAMPLES[domain()];
 
@@ -666,9 +672,11 @@
       if (threads === null) loadThreads();
       // Mount after the pane is in the DOM.
       window.setTimeout(() => { const host = pageHost(); if (host && !host.firstChild) mount(host, { force: true }); else attachComposer("page"); }, 0);
-      return `<section id="ivAssistant" class="iv-assistant" data-domain="${domain()}">
+      return `<section id="ivAssistant" class="iv-assistant${sideCollapsed ? " is-side-collapsed" : ""}" data-domain="${domain()}">
+          <div class="iv-as-edge" aria-hidden="true"></div>
           <aside class="iv-as-side" aria-label="${esc(copy("对话列表", "Chats"))}">
             <div class="iv-as-side-head">
+              ${sideToggle()}
               <span class="iv-as-brand"><span>${esc(copy("AI 助手", "AI assistant"))}</span></span>
               <button type="button" class="iv-as-icon" data-iv-assistant="new" title="${esc(copy("新对话", "New chat"))}" aria-label="${esc(copy("新对话", "New chat"))}">${ICON.compose}</button>
             </div>
@@ -679,7 +687,7 @@
             </div>
           </aside>
           <div id="ivAssistantMain" class="iv-as-main">
-            <header class="iv-as-bar"><h2 id="ivAssistantTitle" class="iv-as-title">${esc(threadTitle())}</h2></header>
+            <header class="iv-as-bar">${sideToggle("iv-as-bar-side")}<h2 id="ivAssistantTitle" class="iv-as-title">${esc(threadTitle())}</h2></header>
             <div id="ivAssistantChat" class="iv-as-chat"></div>
             <div class="iv-as-dock">
               <div id="ivAssistantComposer" class="iv-as-composer"></div>
@@ -688,6 +696,25 @@
             <div class="iv-as-drop" aria-hidden="true"><span>${ICON.attach}${esc(copy("松开即可添加图片或 PDF", "Drop to attach images or PDFs"))}</span></div>
           </div>
         </section>`;
+    }
+
+    function sideToggle(extra = "") {
+      const label = sideCollapsed ? copy("固定侧边栏", "Pin sidebar") : copy("收起侧边栏", "Hide sidebar");
+      return `<button type="button" class="iv-as-icon iv-as-side-toggle ${extra}" data-iv-assistant="side" title="${esc(label)}" aria-label="${esc(label)}" aria-pressed="${sideCollapsed ? "false" : "true"}">${ICON.sidebar}</button>`;
+    }
+
+    function toggleSide() {
+      sideCollapsed = !sideCollapsed;
+      try { localStorage.setItem(SIDE_KEY, sideCollapsed ? "1" : "0"); } catch (_error) { /* per-viewer convenience only */ }
+      const root = byId("ivAssistant");
+      if (!root) return;
+      root.classList.toggle("is-side-collapsed", sideCollapsed);
+      // Collapsing hides the panel at once even though the pointer is still on it; it can float in again once the
+      // pointer has left it.
+      root.classList.toggle("is-side-dismissed", sideCollapsed);
+      root.querySelectorAll(".iv-as-side-toggle").forEach((button) => {
+        button.outerHTML = sideToggle(button.classList.contains("iv-as-bar-side") ? "iv-as-bar-side" : "");
+      });
     }
 
     function confirm(message, onYes) {
@@ -739,7 +766,8 @@
       if (!el) return false;
       const action = el.dataset.ivAssistant;
       const id = el.dataset.thread;
-      if (action === "new") openThread(null);
+      if (action === "side") toggleSide();
+      else if (action === "new") openThread(null);
       else if (action === "open" && id !== current) openThread(id);
       else if (action === "mode") setMode(el.dataset.mode);
       else if (action === "rename") renameThread(id);
@@ -875,6 +903,12 @@
     // The page wires its own events (it lives in #assistantPanel, outside the interview panel).
     document.addEventListener?.("click", (event) => { handleClick(event); });
     document.addEventListener?.("input", (event) => { handleInput(event); });
+    // Once the pointer is anywhere outside the collapsed list, the edge and the toggles, hovering may float it in again.
+    document.addEventListener?.("pointermove", (event) => {
+      const root = byId("ivAssistant");
+      if (!root?.classList.contains("is-side-dismissed")) return;
+      if (!event.target.closest?.(".iv-as-side, .iv-as-edge, .iv-as-side-toggle")) root.classList.remove("is-side-dismissed");
+    }, { passive: true });
     // Deep Chat takes its colours at mount; a theme / appearance switch rebuilds it (from history) in the new palette.
     function restyleChat() {
       if (dock && !dock.root.hidden) liftDock();

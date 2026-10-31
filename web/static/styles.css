@@ -47190,7 +47190,34 @@ body.theme-dark :is(.iv-composer, #ivDock) .iv-mode-option { color: #9fb0c2; }
 .iv-composer.is-compact .iv-mode-option { min-width: 50px; height: 24px; padding: 0 10px; font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .iv-mode-switch::before { transition: none; } }
 
+/* ---------- AI 助手 sidebar toggle (like Claude's): pinned, the list takes its column; collapsed, it takes none and
+   floats in over the chat while the pointer is at the left edge, over the list, or over the title-bar toggle ---------- */
+#ivAssistant .iv-as-side-head { justify-content: flex-start; gap: 4px; padding-left: 2px; }
+#ivAssistant .iv-as-side-head .iv-as-brand { flex: 1; min-width: 0; padding-left: 2px; }
+#ivAssistant .iv-as-bar-side { display: none; margin-right: 8px; }
+#ivAssistant .iv-as-edge { display: none; }
+@media (min-width: 861px) {
+  #ivAssistant { position: relative; transition: grid-template-columns 220ms ease; }
+  #ivAssistant.is-side-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  #ivAssistant.is-side-collapsed .iv-as-bar { padding-left: 16px; }
+  #ivAssistant.is-side-collapsed .iv-as-bar-side { display: grid; }
+  #ivAssistant.is-side-collapsed .iv-as-edge { display: block; position: absolute; z-index: 19; top: 0; bottom: 0; left: 0; width: 14px; }
+  #ivAssistant.is-side-collapsed .iv-as-side {
+    position: absolute; z-index: 20; top: 10px; bottom: 10px; left: 0; width: 260px; padding: 14px 12px 14px 10px;
+    border: 1px solid var(--line); border-left: 0; border-radius: 0 14px 14px 0; background: var(--bg);
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18); transform: translateX(calc(-100% - 24px)); visibility: hidden;
+    transition: transform 200ms ease, visibility 0s linear 200ms;
+  }
+  #ivAssistant.is-side-collapsed:not(.is-side-dismissed):is(:has(.iv-as-edge:hover), :has(.iv-as-side:hover), :has(.iv-as-side:focus-within), :has(.iv-as-bar-side:hover)) .iv-as-side {
+    transform: none; visibility: visible; transition: transform 200ms ease, visibility 0s;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #ivAssistant, #ivAssistant.is-side-collapsed .iv-as-side { transition: none; }
+}
+
 @media (max-width: 860px) {
+  #ivAssistant .iv-as-side-toggle { display: none; }
   #ivAssistant { grid-template-columns: 1fr; height: auto; }
   #ivAssistant .iv-as-side { max-height: 200px; padding-right: 0; border-right: 0; border-bottom: 1px solid var(--line); }
   #ivAssistant .iv-as-main { height: 78vh; }
