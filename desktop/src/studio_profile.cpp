@@ -55,6 +55,8 @@ QWebEngineProfile *createStudioProfile(QObject *parent, bool testProfile) {
     settings->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
     // Examiner TTS starts playing without a fresh click.
     settings->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, false);
+    // Off by default in QtWebEngine, which turns every scrollTo({behavior: "smooth"}) into an instant jump.
+    settings->setAttribute(QWebEngineSettings::ScrollAnimatorEnabled, true);
 
     profile->scripts()->insert(hideSpeechRecognitionScript());
 
