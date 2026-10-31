@@ -2691,6 +2691,8 @@ function switchView(view, options = {}) {
   }
   if (view === "p3") {
     syncP3LaunchPanel();
+    // Also builds the paused 追问压力 pixel flow when idle, so the first switch only fades it in (like the P1 header).
+    syncP3IntensityPixelFlow();
     // Warm the P2 corpus the moment P3 opens so the first "浏览题卡" pops instantly.
     prefetchP3BankPracticeAssets().catch(() => {});
   } else {

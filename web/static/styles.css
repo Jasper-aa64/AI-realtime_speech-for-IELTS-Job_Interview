@@ -47908,3 +47908,8 @@ html, body { overscroll-behavior: none; }
   body.view-takeawayBook:not(#_):not(#__) #takeawayBookPanel > .language-book-shell,
   body.view-writingTakeawayBook:not(#_):not(#__) #writingTakeawayBookPanel > .language-book-shell { margin-top: 14px !important; }
 }
+
+/* 追问压力 pixel flow (P1 / interview header, P3 launch row): the canvas stays on its own compositor layer for good.
+   Without this it was promoted for the fade and dropped again as the fade ended, and re-rastering the filtered canvas
+   then stalled a frame for ~200 ms on some first switches. */
+:is(.exam-status.p1-pixel-flow, .p3-mode-row.p3-pixel-flow) .p2-pixel-flow-canvas { will-change: opacity, filter; }
