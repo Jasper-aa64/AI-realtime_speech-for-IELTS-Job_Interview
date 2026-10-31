@@ -4791,6 +4791,7 @@ async function beginExaminerPhase(sessionId = state.practiceSessionId) {
     await interviewVoice.runTurn(sessionId, turn);
     return;
   }
+  interviewVoice?.warmCaptions?.(turn); // connect while the examiner reads, so captions start with the recording
   await playExaminerTurn(turn, sessionId);
 }
 
@@ -5304,6 +5305,7 @@ async function startRecording(sessionId = state.practiceSessionId) {
   setRecordButton("recording", "Stop", "Recording. Press to finish early.");
   text("recordStatus", "Recording in progress...");
   startRecordingTimer(state.currentTurn.timers.speak_seconds, sessionId);
+  interviewVoice?.startCaptions?.(state.currentTurn); // desktop 标准模式: live captions only, the recording is what gets scored
 }
 
 // Desktop realtime voice: the answer is the (edited) transcript; no audio is recorded or uploaded.
@@ -5327,6 +5329,7 @@ function stopRecording() {
   setRecordButton("processing", "Saving", "Uploading this answer.");
   text("recordStatus", "Saving this answer...");
   recordRealtimePhaseMetric({ recordingStoppedAt: Date.now() });
+  interviewVoice?.stopCaptions?.();
   stopDictation();
   stopSpeakingAudioPreprocessor("recording-stopped");
   if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {

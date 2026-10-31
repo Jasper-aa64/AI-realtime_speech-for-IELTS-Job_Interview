@@ -135,10 +135,52 @@ test("the transcript area is there from the start and stays through submit, so n
   // after submit it is emptied, not hidden
   assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), false);
   assert.equal(env.ids.ivVoiceAnswer.textContent, "");
-  // 标准模式 records instead: the area goes away
+  // 标准模式 records but keeps the area for live captions
   env.state.p1Intensity = "normal";
   env.controller.sync();
+  assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), false);
+  // off the interview practice pages it goes away
+  env.state.view = "home";
+  env.controller.sync();
   assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), true);
+});
+
+test("标准模式: the engine only captions the recording — continuous across pauses, nothing submitted", async () => {
+  const env = harness();
+  env.state.p1Intensity = "normal";
+  await env.flush();
+  env.controller.sync();
+  assert.equal(env.ids.ivVoicePanel.classes.has("hidden"), false);       // the caption area is there in 标准 too
+  assert.equal(env.controller.handles(turn), false);                     // the answer itself is recorded
+  const starting = env.controller.startCaptions(turn);
+  assert.deepEqual(env.voice.calls, ["startSession"]);
+  env.voice.stateChanged.fire("ready", "");
+  await starting;
+  assert.equal(env.voice.calls.at(-1), "startListening");
+  assert.equal(env.ids.ivVoicePanel.classes.has("is-listening"), true);
+  env.voice.partialTranscript.fire("我负责");
+  assert.equal(env.ids.ivVoiceLive.textContent, "我负责");
+  env.voice.finalTranscript.fire("我负责网关。");
+  env.voice.stateChanged.fire("ready", "user_stopped");                  // a pause ends one segment…
+  assert.equal(env.voice.calls.at(-1), "startListening");                // …and listening goes on
+  env.voice.finalTranscript.fire("延迟降了三成。");
+  assert.equal(env.ids.ivVoiceAnswer.textContent, "我负责网关。延迟降了三成。");
+  env.controller.stopCaptions();                                         // recording stopped
+  assert.equal(env.voice.calls.at(-1), "stopListening");
+  env.voice.finalTranscript.fire("验证用了回放。");                        // the last segment flushed after stop
+  env.voice.stateChanged.fire("ready", "user_stopped");
+  assert.equal(env.voice.calls.filter((c) => c === "startListening").length, 2); // no restart once stopped
+  assert.equal(env.ids.ivVoiceAnswer.textContent, "我负责网关。延迟降了三成。验证用了回放。");
+  assert.equal(env.ids.ivVoicePanel.classes.has("is-listening"), false);
+  assert.deepEqual(env.log.submitted, []);
+  assert.deepEqual(env.log.fallbacks, []);
+});
+
+test("追问压力 answers by voice, so recording captions never start there", async () => {
+  const env = harness();
+  await env.flush();
+  await env.controller.startCaptions(turn);
+  assert.deepEqual(env.voice.calls, []);
 });
 
 test("pressing 说完了 before the final transcript arrives submits it once it lands", async () => {
@@ -219,6 +261,9 @@ test("app.js routes interview turns through the voice controller and submits wit
   assert.match(app, /if \(interviewVoice\?\.handles\(turn\)\)/);
   assert.match(app, /if \(interviewVoice\?\.onRecordControl\(\)\) return;/);
   assert.match(app, /window\.IELTSInterviewVoice\?\.sync\?\.\(\);/);
+  assert.match(app, /interviewVoice\?\.startCaptions\?\.\(state\.currentTurn\);/);
+  assert.match(app, /interviewVoice\?\.stopCaptions\?\.\(\);/);
+  assert.match(app, /interviewVoice\?\.warmCaptions\?\.\(turn\);/);
   assert.match(app, /state\.transcriptSource = "desktop_realtime_asr";/);
   assert.match(app, /if \(blob\.size === 0\) return \{\};/);
   assert.match(app, /if \(blob\.size > 0\) await putPendingTurnAudio/);

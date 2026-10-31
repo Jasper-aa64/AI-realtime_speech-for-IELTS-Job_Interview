@@ -1,7 +1,7 @@
 (function () {
   // 桌面壳的实时语音回答（面试模式）：念题 → 收听 → 实时显示转写 → 说完自动提交最终转写（走原来的文字回答路径）。
   // 追问压力就是实时语音模式：只在选了追问压力、且 studioNative.capabilities().native_audio 为 true 时启用
-  // （IELTSNativeBridge.voice 不为 null）；标准模式照旧录音。
+  // （IELTSNativeBridge.voice 不为 null）。标准模式照旧录音、上传、评分，同一个引擎只在录音期间显示字幕（不提交）。
   // 普通浏览器拿到的 voice 是 null，这里什么都不做。出错、断线或超时都回落到原来的录音流程。
   // review = 说完了、正在提交；retry = 没听到回答，等用户点“再说一次”
   const STATUSES = Object.freeze({ speaking: "native_speaking", listening: "native_listening", review: "native_review", retry: "native_retry" });
@@ -17,6 +17,7 @@
     let voice = null;
     let session = "closed";      // closed / starting / ready / error
     let turn = null;             // { sessionId, id, final, live, timer, submitTimer }
+    let caption = null;          // 标准模式字幕：{ id, final, live, active }
     let waiter = null;           // { reasons:Set, resolve, reject, timer }
     const failedTurns = new Set();
 
@@ -30,8 +31,16 @@
       sync();
     });
 
+    function voiceReady() {
+      return !!voice && state.productMode === "interview" && state.desktopCapabilities?.native_audio === true;
+    }
+    // 追问压力：实时语音作答
     function enabled() {
-      return !!voice && state.productMode === "interview" && state.p1Intensity === "high" && state.desktopCapabilities?.native_audio === true;
+      return voiceReady() && state.p1Intensity === "high";
+    }
+    // 标准模式：录音作答，实时引擎只显示字幕
+    function captionsEnabled() {
+      return voiceReady() && state.p1Intensity !== "high";
     }
 
     function handles(currentTurn) {
@@ -39,7 +48,7 @@
     }
 
     // ---- 转写区：标题行（“实时转写”+ 收听指示点）+ 文字区（已定稿的文字 + 正在识别的一句，收听时末尾有光标），放在状态区里。
-    // 只要在追问压力的实时语音页面就一直显示（提交、换题时只清空），所以开始、换题时下面不会冒出来又消失。
+    // 只要在面试练习页且桌面壳能用实时语音就一直显示（两种模式都显示；提交、换题时只清空），所以开始、换题时下面不会冒出来又消失。
     function panel() {
       let el = document.getElementById("ivVoicePanel");
       if (el) return el;
@@ -54,9 +63,9 @@
       return el;
     }
 
-    // 实时语音页面（面试练习页 + 追问压力 + 桌面壳能用实时语音）显示转写区，其余时候隐藏
+    // 面试练习页 + 桌面壳能用实时语音时显示转写区（追问压力是作答，标准模式是字幕），其余时候隐藏
     function sync() {
-      const show = enabled() && /^iv_/.test(String(state.view || ""));
+      const show = voiceReady() && /^iv_/.test(String(state.view || ""));
       if (!show && !document.getElementById("ivVoicePanel")) return;
       panel().classList.toggle("hidden", !show);
       if (show) paintTranscript();
@@ -67,11 +76,42 @@
       const body = el.querySelector("#ivVoiceBody") || el;
       // Follow the newest words while the text is scrolled to the bottom; a reader who scrolled up keeps their place.
       const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 24;
-      el.querySelector("#ivVoiceAnswer").textContent = turn?.final || "";
-      el.querySelector("#ivVoiceLive").textContent = turn?.live || "";
-      el.classList.toggle("is-empty", !turn?.final && !turn?.live);
-      el.classList.toggle("is-listening", !!turn && state.status === STATUSES.listening);
-      if (atBottom || !turn?.final) body.scrollTop = body.scrollHeight;
+      const shown = turn || caption;
+      el.querySelector("#ivVoiceAnswer").textContent = shown?.final || "";
+      el.querySelector("#ivVoiceLive").textContent = shown?.live || "";
+      el.classList.toggle("is-empty", !shown?.final && !shown?.live);
+      el.classList.toggle("is-listening", turn ? state.status === STATUSES.listening : !!caption?.active);
+      if (atBottom || !shown?.final) body.scrollTop = body.scrollHeight;
+    }
+
+    // ---- 标准模式字幕：录音开始时让引擎只听，停顿后自动接着听，字幕整段累积；录音结束就停。只显示，不提交，出错也不影响录音。
+    // 面试官读题时先把会话连好，录音一开始就能出字。
+    function warmCaptions(currentTurn) {
+      if (!captionsEnabled() || currentTurn?.part !== "interview" || turn) return;
+      ensureSession().catch(() => { /* captions only: the recording goes on without them */ });
+    }
+
+    async function startCaptions(currentTurn) {
+      if (!captionsEnabled() || currentTurn?.part !== "interview" || turn) return;
+      caption = { id: currentTurn.id, final: "", live: "", active: true };
+      sync();
+      try {
+        await ensureSession();
+      } catch (_error) {
+        if (caption?.id === currentTurn.id) caption.active = false;
+        paintTranscript();
+        return;
+      }
+      if (!caption?.active || caption.id !== currentTurn.id) return;
+      voice.startListening();
+      paintTranscript();
+    }
+
+    function stopCaptions() {
+      if (!caption?.active) return;
+      caption.active = false;
+      try { voice?.stopListening(); } catch (_error) { /* shell already gone */ }
+      paintTranscript();
     }
 
     // ---- 和桥的往返：等某个状态原因（speak_finished / user_stopped / ready），带超时 ----
@@ -99,18 +139,32 @@
         waiter = null;
         resolve(key);
       }
+      // 字幕：引擎听到停顿自己结束一段，录音还在就接着听
+      if (!turn && caption?.active && reason === "user_stopped") {
+        try { voice.startListening(); } catch (_error) { caption.active = false; }
+        paintTranscript();
+        return;
+      }
       if (!turn) return;
       if (reason === "user_started") window.clearTimeout(turn.timer);
       if (reason === "user_stopped" && state.status === STATUSES.listening) toReview();
     }
 
     function onPartial(value) {
+      if (!turn && caption?.active) { caption.live = value; paintTranscript(); return; }
       if (!turn || state.status !== STATUSES.listening) return;
       turn.live = value;
       paintTranscript();
     }
 
     function onFinal(value) {
+      // 字幕：每段的最终结果接在前面（录音刚停时最后一段也收）
+      if (!turn && caption) {
+        caption.final = [caption.final, value].filter(Boolean).join("");
+        caption.live = "";
+        paintTranscript();
+        return;
+      }
       if (!turn) return;
       turn.final = value;
       turn.live = "";
@@ -134,23 +188,32 @@
         return;
       }
       if (turn && (fatal || state.status === STATUSES.listening)) toRecording(`实时语音出错（${code}）：${message || ""}`);
+      else if (!turn && caption?.active) { caption.active = false; paintTranscript(); }
     }
 
-    async function ensureSession() {
-      if (session === "ready") return;
-      session = "starting";
-      const started = waitFor(["ready"], START_TIMEOUT_MS);
-      if (voice.startSession() === false) {
-        // startSession 同步失败时已经发了 error 信号，waiter 会被拒绝；这里兜底
-        clearWaiter();
-        throw Object.assign(new Error("实时语音不可用"), { code: "unavailable" });
+    // 同时发起的连接（读题时预连 + 录音开始）共用一个，不重复 startSession
+    let starting = null;
+    function ensureSession() {
+      if (session === "ready") return Promise.resolve();
+      if (!starting) {
+        starting = (async () => {
+          session = "starting";
+          const started = waitFor(["ready"], START_TIMEOUT_MS);
+          if (voice.startSession() === false) {
+            // startSession 同步失败时已经发了 error 信号，waiter 会被拒绝；这里兜底
+            clearWaiter();
+            throw Object.assign(new Error("实时语音不可用"), { code: "unavailable" });
+          }
+          await started;
+          session = "ready";
+        })().finally(() => { starting = null; });
       }
-      await started;
-      session = "ready";
+      return starting;
     }
 
     // ---- 一道题 ----
     async function runTurn(sessionId, currentTurn) {
+      caption = null;
       turn = { sessionId, id: currentTurn.id, final: "", live: "", timer: 0, submitTimer: 0 };
       setRecordButton(STATUSES.speaking, "念题中", "面试官正在读题，读完自动开始收听。");
       sync();
@@ -265,6 +328,7 @@
       clearWaiter();
       if (turn) { window.clearTimeout(turn.timer); window.clearTimeout(turn.submitTimer); }
       turn = null;
+      caption = null;
       sync();
       if (voice && session !== "closed") {
         try { voice.endSession(); } catch (_error) { /* shell already gone */ }
@@ -272,7 +336,7 @@
       session = "closed";
     }
 
-    active = { enabled, handles, runTurn, onRecordControl, endSession, sync, statuses: STATUSES };
+    active = { enabled, handles, runTurn, onRecordControl, endSession, sync, warmCaptions, startCaptions, stopCaptions, statuses: STATUSES };
     return active;
   }
 
