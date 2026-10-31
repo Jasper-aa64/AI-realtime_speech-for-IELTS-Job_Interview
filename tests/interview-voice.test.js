@@ -27,26 +27,27 @@ function fakeVoice() {
 function harness({ voice = fakeVoice(), nativeAudio = true } = {}) {
   class Element {
     constructor(id) { this.id = id; this.handlers = {}; this.textContent = ""; this.value = ""; this.disabled = false; this.children = [];
-      this.classes = new Set(); this.parentNode = null;
+      this.classes = new Set(); this.parentNode = null; this.attrs = {}; this.scrollTop = 0; this.scrollHeight = 0;
       this.classList = { add: (n) => this.classes.add(n), remove: (n) => this.classes.delete(n), toggle: (n, on) => (on ? this.classes.add(n) : this.classes.delete(n)), contains: (n) => this.classes.has(n) }; }
     set innerHTML(markup) { // build the panel's children from their ids
       for (const [, tag, id] of markup.matchAll(/<(\w+)[^>]*?\sid="(\w+)"/g)) { const child = ids[id] ||= new Element(id); child.tag = tag; this.children.push(child); }
     }
     set className(value) { value.split(/\s+/).filter(Boolean).forEach((n) => this.classes.add(n)); }
     querySelector(selector) { return selector.startsWith("#") ? ids[selector.slice(1)] || null : null; }
+    setAttribute(name, value) { this.attrs[name] = value; }
     insertBefore(child) { child.parentNode = this; ids[child.id] = child; }
     addEventListener(type, callback) { (this.handlers[type] ||= []).push(callback); }
     emit(type, event = {}) { (this.handlers[type] || []).forEach((callback) => callback(event)); }
   }
   const ids = {};
   const recorderPane = new Element("recorderPane");
-  const recordRow = new Element("recordRow");
-  recordRow.parentNode = recorderPane;
+  const statusZone = new Element("statusZone");
+  statusZone.parentNode = recorderPane;
   ids.recorderPane = recorderPane;
   const document = {
     getElementById: (id) => ids[id] || null,
     createElement: () => new Element(""),
-    querySelector: (selector) => (selector === "#recorderPane .record-row" ? recordRow : null),
+    querySelector: (selector) => (selector === "#recorderPane .recorder-status-zone" ? statusZone : null),
   };
   const timers = [];
   const window = {
@@ -68,12 +69,24 @@ function harness({ voice = fakeVoice(), nativeAudio = true } = {}) {
     fallback: (sessionId, reason) => log.fallbacks.push(reason),
   });
   const flush = () => new Promise((resolve) => setImmediate(resolve));
-  return { controller, voice, state, ids, log, flush, timers };
+  // run the newest pending timer armed for `ms`
+  const fire = (ms) => { const t = timers.filter((x) => x.ms === ms).at(-1); assert.ok(t, `a ${ms} ms timer is armed`); t.fn(); };
+  return { controller, voice, state, ids, log, flush, timers, fire };
 }
 
 const turn = { id: "t1", part: "interview", question: "介绍一个你做过的项目。" };
 
-test("speak, listen, live partials, final into the answer box, edit and submit through the existing path", async () => {
+async function listening(env) {
+  await env.flush();
+  env.state.currentTurn = turn;
+  const running = env.controller.runTurn(1, turn);
+  env.voice.stateChanged.fire("ready", "");
+  await env.flush();
+  env.voice.stateChanged.fire("ready", "speak_finished");
+  await running;
+}
+
+test("speak, listen, live transcript, then the final transcript is submitted through the existing path", async () => {
   const env = harness();
   await env.flush();
   env.state.currentTurn = turn;
@@ -88,27 +101,45 @@ test("speak, listen, live partials, final into the answer box, edit and submit t
   await running;
   assert.equal(env.state.status, "native_listening");
   assert.equal(env.voice.calls.at(-1), "startListening");
+  // the transcript sits under the status line, not between the record button and the status
+  assert.equal(env.ids.ivVoicePanel.parentNode, env.ids.recorderPane);
 
   env.voice.partialTranscript.fire("我负责");
   assert.equal(env.ids.ivVoiceLive.textContent, "我负责");
   env.voice.finalTranscript.fire("我负责交易网关的延迟优化。");
+  assert.equal(env.ids.ivVoiceAnswer.textContent, "我负责交易网关的延迟优化。");
+  assert.equal(env.ids.ivVoiceLive.textContent, "");
+  assert.equal(env.voice.calls.at(-1), "shown:t1");  // timing (2) reported after the text is on the page
   env.voice.stateChanged.fire("ready", "user_stopped");
   assert.equal(env.state.status, "native_review");
-  assert.equal(env.ids.ivVoiceAnswer.value, "我负责交易网关的延迟优化。");
-  assert.equal(env.voice.calls.at(-1), "shown:t1");  // timing (2) reported after the text is on the page
-  assert.equal(env.ids.ivVoiceSubmit.disabled, false);
+  assert.equal(env.log.submitted.length, 0);         // it stays on the page for a moment first
+  env.fire(600);
+  assert.deepEqual(env.log.submitted, ["我负责交易网关的延迟优化。"]);
+  assert.equal(env.log.fallbacks.length, 0);
+});
 
-  // "继续说" appends a second utterance to what is already in the box
+test("pressing 说完了 before the final transcript arrives submits it once it lands", async () => {
+  const env = harness();
+  await listening(env);
+  env.voice.partialTranscript.fire("延迟降了");
+  assert.equal(env.controller.onRecordControl(), true);
+  assert.equal(env.voice.calls.at(-1), "stopListening");
+  assert.equal(env.state.status, "native_review");
+  env.voice.finalTranscript.fire("延迟降了三成。");
+  env.fire(600);
+  assert.deepEqual(env.log.submitted, ["延迟降了三成。"]);
+});
+
+test("no speech at all: nothing is submitted and the record button listens again", async () => {
+  const env = harness();
+  await listening(env);
+  env.fire(20000);                      // silence timeout
+  assert.equal(env.voice.calls.at(-1), "stopListening");
+  env.fire(4000);                       // no final transcript either
+  assert.equal(env.log.submitted.length, 0);
   assert.equal(env.controller.onRecordControl(), true);
   assert.equal(env.state.status, "native_listening");
-  env.voice.finalTranscript.fire("延迟降了三成。");
-  assert.equal(env.ids.ivVoiceAnswer.value, "我负责交易网关的延迟优化。\n延迟降了三成。");
-  env.voice.stateChanged.fire("ready", "user_stopped");
-
-  env.ids.ivVoiceAnswer.value += "（已核对）";
-  env.ids.ivVoiceSubmit.emit("click");
-  assert.deepEqual(env.log.submitted, ["我负责交易网关的延迟优化。\n延迟降了三成。（已核对）"]);
-  assert.equal(env.log.fallbacks.length, 0);
+  assert.equal(env.voice.calls.at(-1), "startListening");
 });
 
 test("a disconnect while listening falls back to recording and that turn stays on recording", async () => {

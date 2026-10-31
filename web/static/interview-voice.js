@@ -1,16 +1,18 @@
 (function () {
-  // 桌面壳的实时语音回答（面试模式）：念题 → 收听 → 实时显示中间转写 → 最终转写进回答框，可改后提交。
+  // 桌面壳的实时语音回答（面试模式）：念题 → 收听 → 实时显示转写 → 说完自动提交最终转写（走原来的文字回答路径）。
   // 只在 studioNative.capabilities().native_audio 为 true 时启用（IELTSNativeBridge.voice 不为 null）；
   // 普通浏览器拿到的 voice 是 null，这里什么都不做。出错、断线或超时都回落到原来的录音流程。
   const STATUSES = Object.freeze({ speaking: "native_speaking", listening: "native_listening", review: "native_review" });
   const START_TIMEOUT_MS = 15000;   // 连接 + StartSession
   const SPEAK_TIMEOUT_MS = 45000;   // 念一道题（含首包）
   const SILENCE_TIMEOUT_MS = 20000; // 开始收听后一直没识别到说话
+  const SUBMIT_DELAY_MS = 600;      // 最终转写在页面上停留一下再提交
+  const FINAL_WAIT_MS = 4000;       // 手动“说完了”之后等最终转写的上限
 
   function create({ state, text, setRecordButton, submit, fallback, isActive }) {
     let voice = null;
     let session = "closed";      // closed / starting / ready / error
-    let turn = null;             // { sessionId, id, base, final, timer }
+    let turn = null;             // { sessionId, id, final, live, timer, submitTimer }
     let waiter = null;           // { reasons:Set, resolve, reject, timer }
     const failedTurns = new Set();
 
@@ -31,42 +33,32 @@
       return enabled() && currentTurn?.part === "interview" && !!String(currentTurn.question || "").trim() && !failedTurns.has(currentTurn.id);
     }
 
-    // ---- 面板：回答框、实时转写、提交 / 改用录音 ----
+    // ---- 面板：只显示转写（已定稿的文字 + 正在识别的一句），固定在状态文字下面 ----
     function panel() {
       let el = document.getElementById("ivVoicePanel");
       if (el) return el;
       el = document.createElement("div");
       el.id = "ivVoicePanel";
       el.className = "iv-voice-panel hidden";
-      el.innerHTML = `
-        <div class="iv-voice-live" id="ivVoiceLive" aria-live="polite"></div>
-        <textarea id="ivVoiceAnswer" class="iv-voice-answer" spellcheck="true" placeholder="实时转写会出现在这里，说完可以修改后提交"></textarea>
-        <div class="iv-voice-actions">
-          <button id="ivVoiceSubmit" class="primary" type="button" disabled>提交回答</button>
-          <button id="ivVoiceFallback" class="ghost" type="button">改用录音</button>
-        </div>`;
-      const anchor = document.querySelector("#recorderPane .record-row");
-      (anchor?.parentNode || document.getElementById("recorderPane") || document.body).insertBefore(el, anchor?.nextSibling || null);
-      el.querySelector("#ivVoiceSubmit").addEventListener("click", () => submitAnswer());
-      el.querySelector("#ivVoiceFallback").addEventListener("click", () => toRecording("用户改用录音"));
-      el.querySelector("#ivVoiceAnswer").addEventListener("input", syncSubmit);
+      el.setAttribute("aria-live", "polite");
+      el.innerHTML = `<p class="iv-voice-transcript"><span id="ivVoiceAnswer" class="iv-voice-final"></span><span id="ivVoiceLive" class="iv-voice-live"></span></p>`;
+      const zone = document.querySelector("#recorderPane .recorder-status-zone");
+      (zone?.parentNode || document.getElementById("recorderPane") || document.body).insertBefore(el, zone?.nextSibling || null);
       return el;
     }
 
     function showPanel(show) {
       const el = panel();
       el.classList.toggle("hidden", !show);
-      if (show) {
-        el.querySelector("#ivVoiceLive").textContent = "";
-        el.querySelector("#ivVoiceAnswer").value = "";
-        syncSubmit();
-      }
+      if (show) paintTranscript();
     }
 
-    function answerBox() { return panel().querySelector("#ivVoiceAnswer"); }
-    function syncSubmit() {
-      const button = panel().querySelector("#ivVoiceSubmit");
-      button.disabled = !answerBox().value.trim() || state.status === STATUSES.speaking;
+    function paintTranscript() {
+      const el = panel();
+      el.querySelector("#ivVoiceAnswer").textContent = turn?.final || "";
+      el.querySelector("#ivVoiceLive").textContent = turn?.live || "";
+      el.classList.toggle("is-empty", !turn?.final && !turn?.live);
+      el.scrollTop = el.scrollHeight;
     }
 
     // ---- 和桥的往返：等某个状态原因（speak_finished / user_stopped / ready），带超时 ----
@@ -101,21 +93,21 @@
 
     function onPartial(value) {
       if (!turn || state.status !== STATUSES.listening) return;
-      panel().querySelector("#ivVoiceLive").textContent = value;
+      turn.live = value;
+      paintTranscript();
     }
 
     function onFinal(value) {
       if (!turn) return;
       turn.final = value;
-      const box = answerBox();
-      box.value = [turn.base, value].filter(Boolean).join(turn.base ? "\n" : "");
-      panel().querySelector("#ivVoiceLive").textContent = "";
-      syncSubmit();
+      turn.live = "";
+      paintTranscript();
       // 计时 ②：最终转写真正画到页面上之后再回报
       const id = turn.id;
       window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
         try { voice?.markTranscriptShown(String(id)); } catch (_error) { /* timing only */ }
       }));
+      if (state.status === STATUSES.review) scheduleSubmit();
     }
 
     function onError(code, message) {
@@ -146,7 +138,7 @@
 
     // ---- 一道题 ----
     async function runTurn(sessionId, currentTurn) {
-      turn = { sessionId, id: currentTurn.id, base: "", final: "", timer: 0 };
+      turn = { sessionId, id: currentTurn.id, final: "", live: "", timer: 0, submitTimer: 0 };
       showPanel(true);
       setRecordButton(STATUSES.speaking, "念题中", "面试官正在读题，读完自动开始收听。");
       text("recordStatus", "实时语音：正在连接并读题…");
@@ -165,27 +157,44 @@
 
     function listen() {
       if (!turn) return;
-      turn.base = answerBox().value.trim();
-      panel().querySelector("#ivVoiceLive").textContent = "";
+      turn.final = "";
+      turn.live = "";
+      paintTranscript();
       setRecordButton(STATUSES.listening, "说完了", "正在听你回答；停顿过长会自动结束，也可以点这里结束。");
       text("recordStatus", "实时语音：正在听…");
-      syncSubmit();
       window.clearTimeout(turn.timer);
       turn.timer = window.setTimeout(() => {
         if (turn && state.status === STATUSES.listening) {
           voice.stopListening();
-          toReview("没有听到声音。可以点“继续说”再试，或改用录音。");
+          toReview();
         }
       }, SILENCE_TIMEOUT_MS);
       voice.startListening();
     }
 
-    function toReview(message = "") {
+    // 说完（自动判定或点“说完了”）：有最终转写就自动提交；还没到就等一会儿，等不到就用已识别的文字；什么都没有就让用户再说一次。
+    function toReview() {
       if (!turn) return;
       window.clearTimeout(turn.timer);
-      setRecordButton(STATUSES.review, "继续说", "接着补充回答；确认无误后点“提交回答”。");
-      text("recordStatus", message || "识别完成，可以修改后提交，或点“继续说”补充。");
-      syncSubmit();
+      setRecordButton(STATUSES.review, "提交中", "识别完成后自动提交。");
+      if (turn.final) { scheduleSubmit(); return; }
+      text("recordStatus", "正在等最后几个字的识别结果…");
+      turn.timer = window.setTimeout(() => {
+        if (!turn || state.status !== STATUSES.review) return;
+        if (turn.live) { turn.final = turn.live; turn.live = ""; paintTranscript(); scheduleSubmit(); return; }
+        setRecordButton(STATUSES.review, "再说一次", "没有听到回答，点这里重新开始收听。");
+        text("recordStatus", "没有听到声音，点大圆再说一次。");
+      }, FINAL_WAIT_MS);
+    }
+
+    function scheduleSubmit() {
+      if (!turn || turn.submitTimer) return;
+      window.clearTimeout(turn.timer);
+      text("recordStatus", "识别完成，正在提交…");
+      turn.submitTimer = window.setTimeout(() => {
+        if (turn) turn.submitTimer = 0;
+        submitAnswer();
+      }, SUBMIT_DELAY_MS);
     }
 
     function stillCurrent(sessionId, turnId) {
@@ -194,10 +203,11 @@
 
     function submitAnswer() {
       if (!turn) return;
-      const answer = answerBox().value.trim();
+      const answer = String(turn.final || "").trim();
       if (!answer) return;
       if (state.status === STATUSES.listening) voice.stopListening();
       window.clearTimeout(turn.timer);
+      window.clearTimeout(turn.submitTimer);
       turn = null;
       clearWaiter();
       showPanel(false);
@@ -209,6 +219,7 @@
       clearWaiter();
       if (current) {
         window.clearTimeout(current.timer);
+        window.clearTimeout(current.submitTimer);
         failedTurns.add(current.id);
       }
       try { if (state.status === STATUSES.listening) voice?.stopListening(); } catch (_error) { /* already gone */ }
@@ -219,16 +230,16 @@
       if (current) fallback(current.sessionId, reason);
     }
 
-    // 录音大按钮在实时语音期间的含义：收听中 = 说完了；识别完 = 继续说。返回 true 表示已处理。
+    // 录音大按钮在实时语音期间的含义：收听中 = 说完了；没听到回答时 = 再说一次；提交中不响应。返回 true 表示已处理。
     function onRecordControl() {
       if (!turn) return false;
       if (state.status === STATUSES.listening) {
         voice.stopListening();
-        toReview("正在等最后几个字的识别结果…");
+        toReview();
         return true;
       }
       if (state.status === STATUSES.review) {
-        listen();
+        if (!turn.final && !turn.submitTimer) listen();
         return true;
       }
       return state.status === STATUSES.speaking;
@@ -237,7 +248,7 @@
     // 退出练习、开始评分时释放麦克风
     function endSession() {
       clearWaiter();
-      if (turn) window.clearTimeout(turn.timer);
+      if (turn) { window.clearTimeout(turn.timer); window.clearTimeout(turn.submitTimer); }
       turn = null;
       if (document.getElementById("ivVoicePanel")) showPanel(false);
       if (voice && session !== "closed") {

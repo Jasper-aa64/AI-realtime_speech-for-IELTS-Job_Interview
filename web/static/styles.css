@@ -47577,3 +47577,37 @@ body:not(#_) .studio-switch-card:not(.is-morphing) { overflow: visible; }
   body:not(#_) #ivDock .iv-dock-trigger { transition: none; }
   body:not(#_) #ivDock .iv-dock-trigger:hover, body:not(#_) #ivDock.is-open .iv-dock-trigger { transform: none; }
 }
+
+/* ---------- Interview practice voice pane: the stack starts at the top, not centred in the card ----------
+   Record circle a little smaller, the status line a fixed 18px under it, and the realtime transcript (desktop shell)
+   in the room left below the status — it scrolls inside that room, so nothing above it moves. IELTS keeps its layout. */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane {
+    display: grid !important; grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto auto auto minmax(0, 1fr) !important; align-content: start !important;
+    padding-bottom: 16px !important;
+  }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .section-label { grid-column: 1; grid-row: 1; }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .inline-timer { grid-column: 2; grid-row: 1; }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .record-row {
+    grid-column: 1 / -1; grid-row: 2; align-self: start !important; margin-top: 14px !important;
+  }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane #recordControl {
+    width: clamp(150px, calc(100vh - 520px), 220px) !important;
+    height: clamp(150px, calc(100vh - 520px), 220px) !important;
+  }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .recorder-status-zone {
+    grid-column: 1 / -1; grid-row: 3; position: static !important; inset: auto !important; height: auto !important;
+    margin-top: 18px !important; padding: 0 !important;
+  }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .iv-voice-panel {
+    grid-column: 1 / -1; grid-row: 4; min-height: 0; margin-top: 14px; padding: 12px 16px; overflow-y: auto;
+    border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--panel) 70%, transparent);
+  }
+  body.interview-mode:not(#_):not(#__) #practicePanel #recorderPane > .iv-voice-panel.hidden { display: none !important; }
+}
+#recorderPane .iv-voice-transcript { margin: 0; font-size: 15px; line-height: 1.7; text-align: left; white-space: pre-wrap; }
+#recorderPane .iv-voice-final { color: var(--ink); }
+#recorderPane .iv-voice-live { color: var(--muted); }
+#recorderPane .iv-voice-final:not(:empty) + .iv-voice-live:not(:empty)::before { content: " "; }
+#recorderPane .iv-voice-panel.is-empty .iv-voice-transcript::before { content: "实时转写会出现在这里"; color: var(--muted); opacity: 0.7; }
