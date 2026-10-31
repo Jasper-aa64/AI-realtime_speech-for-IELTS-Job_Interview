@@ -47830,23 +47830,39 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
   }
 }
 
-/* The pixel interviewer above the question (interviewer-avatar.js). A fixed-height slot under the PROMPT label, so the
-   question keeps its place whatever he does; colours follow the theme; it steps from pixel to pixel (no smoothing). */
+/* The pixel interviewer above the question (interviewer-avatar.js), 64×64 pixels drawn up to 312px. The prompt pane splits
+   into two equal halves: he stands at the bottom of the top half, the question starts at the top of the bottom half, so
+   the pair sits around the middle and a longer question never moves him. Colours follow the theme; pixel steps, no
+   smoothing. */
 .iv-interviewer {
-  --ivp-hair: #3f2d22; --ivp-skin: #f2c7a3; --ivp-skin-shade: #d9a47e; --ivp-glasses: #1e293b; --ivp-mouth: #a8432f;
-  --ivp-mouth-in: #5b1d14; --ivp-jacket: #3b4a63; --ivp-jacket-shade: #2a3549; --ivp-shirt: #f8fafc; --ivp-tie: #c2410c;
-  --ivp-desk: #b08968; --ivp-desk-shade: #9a7454; --ivp-sweat: #7dd3fc; --ivp-sweat-hi: #e0f2fe; --ivp-think: var(--muted);
-  flex: none; display: grid; place-items: center; height: 168px; margin: 6px 0 0;
+  --ivp-hair: #3f2d22; --ivp-hair-hi: #6b4c39; --ivp-skin: #f2c7a3; --ivp-skin-shade: #dca981; --ivp-glasses: #1e293b;
+  --ivp-lens: #f7dcc4; --ivp-glint: #ffffff; --ivp-eye-white: #ffffff; --ivp-mouth: #a8432f; --ivp-mouth-in: #5b1d14;
+  --ivp-teeth: #fff7ed; --ivp-blush: #f4a3a3; --ivp-jacket: #3b4a63; --ivp-jacket-shade: #2a3549; --ivp-shirt: #f8fafc;
+  --ivp-tie: #c2410c; --ivp-tie-shade: #9a3412; --ivp-desk: #b08968; --ivp-desk-shade: #9a7454; --ivp-sweat: #7dd3fc;
+  --ivp-think: var(--muted);
+  flex: 1 1 0; min-height: 0; position: relative;
 }
 body.theme-dark .iv-interviewer {
-  --ivp-hair: #5a4232; --ivp-jacket: #4a5b78; --ivp-jacket-shade: #36435a; --ivp-shirt: #e2e8f0; --ivp-desk: #6b5442;
-  --ivp-desk-shade: #574334;
+  --ivp-hair: #5a4232; --ivp-hair-hi: #7a5a45; --ivp-jacket: #4a5b78; --ivp-jacket-shade: #36435a; --ivp-shirt: #e2e8f0;
+  --ivp-desk: #6b5442; --ivp-desk-shade: #574334;
+}
+body:not(#_):not(#__):not(#___) #promptPane:has(> .iv-interviewer:not(.hidden)):not(.has-iv-launch) > #promptCard {
+  flex: 1 1 0; min-height: 0; align-content: start; padding-top: 14px !important; padding-bottom: 16px !important;
 }
 .iv-interviewer.hidden, #promptPane.has-iv-launch .iv-interviewer { display: none; }
-.iv-interviewer svg { display: block; width: 156px; height: 156px; overflow: visible; }
+.iv-interviewer svg {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  display: block; height: min(312px, calc(100% - 22px)); width: auto; aspect-ratio: 1; overflow: visible;
+}
 .iv-interviewer .iv-iv-layer { display: none; }
 .iv-interviewer .iv-iv-layer.is-on { display: inline; }
 .iv-interviewer .px-H, .iv-interviewer .px-B { fill: var(--ivp-hair); }
+.iv-interviewer .px-h { fill: var(--ivp-hair-hi); }
+.iv-interviewer .px-L { fill: var(--ivp-lens); }
+.iv-interviewer .px-l { fill: var(--ivp-glint); }
+.iv-interviewer .px-e { fill: var(--ivp-eye-white); }
+.iv-interviewer .px-b { fill: var(--ivp-blush); }
+.iv-interviewer .px-r { fill: var(--ivp-tie-shade); }
 .iv-interviewer .px-S { fill: var(--ivp-skin); }
 .iv-interviewer .px-s { fill: var(--ivp-skin-shade); }
 .iv-interviewer .px-G, .iv-interviewer .px-E { fill: var(--ivp-glasses); }
@@ -47859,13 +47875,13 @@ body.theme-dark .iv-interviewer {
 .iv-interviewer .px-D { fill: var(--ivp-desk); }
 .iv-interviewer .px-d { fill: var(--ivp-desk-shade); }
 .iv-interviewer .px-w { fill: var(--ivp-sweat); }
-.iv-interviewer .px-W { fill: var(--ivp-sweat-hi); }
+.iv-interviewer .px-W { fill: var(--ivp-teeth); }
 .iv-interviewer .px-t { fill: var(--ivp-think); }
 /* listening: leans a pixel toward the answer side */
 .iv-interviewer[data-phase="listening"] .iv-iv-head { transform: translateX(1px); }
 /* strong answer: two nods */
 .iv-interviewer[data-reaction="nod"] .iv-iv-head { animation: ivNod 900ms steps(1, end) 1; }
-@keyframes ivNod { 0%, 50% { transform: translateY(0); } 25%, 75% { transform: translateY(1px); } }
+@keyframes ivNod { 0%, 50% { transform: translateY(0); } 25%, 75% { transform: translateY(2px); } }
 /* weak answer: the drop slides down the temple */
 .iv-interviewer [data-layer="sweat"].is-on { animation: ivSweat 1300ms steps(3, end) infinite; }
 @keyframes ivSweat { from { transform: translateY(0); opacity: 1; } to { transform: translateY(3px); opacity: 0.35; } }
@@ -47875,8 +47891,7 @@ body.theme-dark .iv-interviewer {
 .iv-interviewer [data-layer="think"].is-on rect:nth-child(3) { animation-delay: 400ms; }
 @keyframes ivThink { 0%, 60% { opacity: 0.25; } 20%, 50% { opacity: 1; } }
 @media (max-width: 980px) {
-  .iv-interviewer { height: 108px; }
-  .iv-interviewer svg { width: 96px; height: 96px; }
+  .iv-interviewer { flex: none; height: 168px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .iv-interviewer .iv-iv-head, .iv-interviewer .iv-iv-layer, .iv-interviewer .iv-iv-layer rect { animation: none !important; }
