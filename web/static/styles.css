@@ -47808,3 +47808,13 @@ body:not(#_):not(#__) #openP1CorpusBtn.is-flow-hidden {
     white-space: nowrap;
   }
 }
+
+/* Interview practice: the voice pane is a sheet too, the same as the question sheet beside it (same tint, corners and
+   inset; both end on one line); inside it the transcript reads as a recessed page-coloured panel. */
+@media (min-width: 981px) {
+  body.interview-mode:not(#_):not(#__):not(#___):not(#____) #practicePanel #recorderPane {
+    background: color-mix(in srgb, var(--ink) 5%, var(--bg)) !important; border: 0 !important; border-radius: 18px !important;
+    box-shadow: none !important; padding: 16px !important;
+  }
+  body.interview-mode:not(#_):not(#__):not(#___) #practicePanel #recorderPane .iv-voice-panel { background: var(--bg); }
+}
