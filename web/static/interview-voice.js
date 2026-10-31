@@ -1,6 +1,7 @@
 (function () {
   // 桌面壳的实时语音回答（面试模式）：念题 → 收听 → 实时显示转写 → 说完自动提交最终转写（走原来的文字回答路径）。
-  // 只在 studioNative.capabilities().native_audio 为 true 时启用（IELTSNativeBridge.voice 不为 null）；
+  // 追问压力就是实时语音模式：只在选了追问压力、且 studioNative.capabilities().native_audio 为 true 时启用
+  // （IELTSNativeBridge.voice 不为 null）；标准模式照旧录音。
   // 普通浏览器拿到的 voice 是 null，这里什么都不做。出错、断线或超时都回落到原来的录音流程。
   const STATUSES = Object.freeze({ speaking: "native_speaking", listening: "native_listening", review: "native_review" });
   const START_TIMEOUT_MS = 15000;   // 连接 + StartSession
@@ -26,14 +27,14 @@
     });
 
     function enabled() {
-      return !!voice && state.productMode === "interview" && state.desktopCapabilities?.native_audio === true;
+      return !!voice && state.productMode === "interview" && state.p1Intensity === "high" && state.desktopCapabilities?.native_audio === true;
     }
 
     function handles(currentTurn) {
       return enabled() && currentTurn?.part === "interview" && !!String(currentTurn.question || "").trim() && !failedTurns.has(currentTurn.id);
     }
 
-    // ---- 面板：只显示转写（已定稿的文字 + 正在识别的一句），固定在状态文字下面 ----
+    // ---- 面板：只显示转写（已定稿的文字 + 正在识别的一句），放在状态文字下面（状态区里），不影响大圆的位置 ----
     function panel() {
       let el = document.getElementById("ivVoicePanel");
       if (el) return el;
@@ -42,8 +43,7 @@
       el.className = "iv-voice-panel hidden";
       el.setAttribute("aria-live", "polite");
       el.innerHTML = `<p class="iv-voice-transcript"><span id="ivVoiceAnswer" class="iv-voice-final"></span><span id="ivVoiceLive" class="iv-voice-live"></span></p>`;
-      const zone = document.querySelector("#recorderPane .recorder-status-zone");
-      (zone?.parentNode || document.getElementById("recorderPane") || document.body).insertBefore(el, zone?.nextSibling || null);
+      (document.querySelector("#recorderPane .recorder-status-zone") || document.getElementById("recorderPane") || document.body).appendChild(el);
       return el;
     }
 

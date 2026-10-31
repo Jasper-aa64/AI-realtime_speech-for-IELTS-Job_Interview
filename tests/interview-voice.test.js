@@ -36,6 +36,7 @@ function harness({ voice = fakeVoice(), nativeAudio = true } = {}) {
     querySelector(selector) { return selector.startsWith("#") ? ids[selector.slice(1)] || null : null; }
     setAttribute(name, value) { this.attrs[name] = value; }
     insertBefore(child) { child.parentNode = this; ids[child.id] = child; }
+    appendChild(child) { child.parentNode = this; ids[child.id] = child; }
     addEventListener(type, callback) { (this.handlers[type] ||= []).push(callback); }
     emit(type, event = {}) { (this.handlers[type] || []).forEach((callback) => callback(event)); }
   }
@@ -44,6 +45,7 @@ function harness({ voice = fakeVoice(), nativeAudio = true } = {}) {
   const statusZone = new Element("statusZone");
   statusZone.parentNode = recorderPane;
   ids.recorderPane = recorderPane;
+  ids.statusZone = statusZone;
   const document = {
     getElementById: (id) => ids[id] || null,
     createElement: () => new Element(""),
@@ -58,7 +60,7 @@ function harness({ voice = fakeVoice(), nativeAudio = true } = {}) {
   };
   const context = vm.createContext({ window, document });
   vm.runInContext(source, context);
-  const state = { productMode: "interview", desktopCapabilities: { native_audio: nativeAudio }, status: "idle", currentTurn: null };
+  const state = { productMode: "interview", p1Intensity: "high", desktopCapabilities: { native_audio: nativeAudio }, status: "idle", currentTurn: null };
   const log = { submitted: [], fallbacks: [], status: [] };
   const controller = context.window.IELTSInterviewVoice.create({
     state,
@@ -101,8 +103,8 @@ test("speak, listen, live transcript, then the final transcript is submitted thr
   await running;
   assert.equal(env.state.status, "native_listening");
   assert.equal(env.voice.calls.at(-1), "startListening");
-  // the transcript sits under the status line, not between the record button and the status
-  assert.equal(env.ids.ivVoicePanel.parentNode, env.ids.recorderPane);
+  // the transcript sits in the status zone under the status line, not between the record button and the status
+  assert.equal(env.ids.ivVoicePanel.parentNode, env.ids.statusZone);
 
   env.voice.partialTranscript.fire("我负责");
   assert.equal(env.ids.ivVoiceLive.textContent, "我负责");
@@ -183,6 +185,11 @@ test("ordinary browsers (no voice object) and IELTS turns never use realtime voi
   const ielts = harness();
   await ielts.flush();
   assert.equal(ielts.controller.handles({ id: "p1", part: "p1", question: "Do you like music?" }), false);
+  // 追问压力 is the realtime-voice mode; 标准 keeps recording
+  const standard = harness();
+  await standard.flush();
+  standard.state.p1Intensity = "normal";
+  assert.equal(standard.controller.handles(turn), false);
 });
 
 test("app.js routes interview turns through the voice controller and submits without audio", () => {
