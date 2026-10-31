@@ -53,6 +53,7 @@ def frontend_asset(request, asset_path: str = "index.html"):
         "interview-assistant.js": "text/javascript; charset=utf-8",
         "interview-corpus.js": "text/javascript; charset=utf-8",
         "interview.js": "text/javascript; charset=utf-8",
+        "interview-voice.js": "text/javascript; charset=utf-8",
         "view-router.js": "text/javascript; charset=utf-8",
         "app.js": "text/javascript; charset=utf-8",
         "onboarding.js": "text/javascript; charset=utf-8",
