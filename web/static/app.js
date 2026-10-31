@@ -12130,7 +12130,7 @@ function renderInterviewDetail(detailPanel, attempt) {
     </div>
     ${overallReviewSection(attempt.overall_review || {}, attempt)}
     ${turnTableSection(attempt, turns, false)}
-    ${score.limitations ? `<p class="muted interview-score-note">${escapeHtml(score.limitations)}</p>` : ""}
+    ${reportScoringModelMetaHtml({ provider: score.scoring_provider, model: score.scoring_model })}
   `;
 }
 

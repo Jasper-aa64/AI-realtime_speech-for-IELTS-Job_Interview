@@ -292,7 +292,9 @@ def score(user, attempt, ai_source=""):
             "decision": (turn.metadata or {}).get("decision") or {}, "reply": (turn.metadata or {}).get("reply", ""),
         })
     interview_score = {key: result[key] for key in ("total", "dimensions", "summary", "boundary", "next_steps")}
-    interview_score["limitations"] = engine.SCORE_LIMITATION
+    # The model that actually produced this score (recorded by the provider call), shown at the foot of the report.
+    interview_score["scoring_provider"] = result.get("provider", "")
+    interview_score["scoring_model"] = result.get("model", "")
     payload = {"id": attempt.attempt_id, "mode": attempt.mode, "part": attempt.part, "title": attempt.title,
                "interview_score": interview_score, "ielts_score": None, "turns": payload_turns,
                "overall_review": {"markdown": _review_markdown(result)}}

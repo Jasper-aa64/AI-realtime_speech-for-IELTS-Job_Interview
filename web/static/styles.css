@@ -46777,7 +46777,6 @@ body.interview-mode #speakingReportFilterMenu :is([data-speaking-report-filter^=
 /* Five 100-point dimensions instead of three IELTS criteria. */
 body:not(#_) #detailPanel .interview-score-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 1100px) { body:not(#_) #detailPanel .interview-score-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-#detailPanel .interview-score-note { margin: 0 0 8px; font-size: 13px; }
 
 /* ---------- Interview launch: per-mode setup in the practice PROMPT pane (interview-launch.js) ----------
    Sections and tiles are the P3 launch panel's (#p3TopicPanel rules are aliased to #ivLaunch); the idle

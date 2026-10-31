@@ -207,11 +207,15 @@ class InterviewRuntimeReportTests(RuntimeTestBase):
 
     def test_score_returns_a_ready_100_point_report(self):
         attempt_id, tid = self.finish_knowledge()
-        response = self.score(attempt_id, score_result([tid]))
+        response = self.score(attempt_id, {**score_result([tid]), "provider": "http_api", "model": "claude-sonnet-4-6"})
         self.assertEqual(response.status_code, 200, response.content)
         report = response.json()
         self.assertEqual(report["report_status"], "ready")
         self.assertEqual(report["interview_score"]["total"], 49)
+        # The report names the model that generated it instead of the old disclaimer.
+        self.assertEqual(report["interview_score"]["scoring_model"], "claude-sonnet-4-6")
+        self.assertEqual(report["interview_score"]["scoring_provider"], "http_api")
+        self.assertNotIn("limitations", report["interview_score"])
         self.assertEqual(len(report["interview_score"]["dimensions"]), 5)
         self.assertIsNone(report.get("ielts_score"))
         turn = report["turns"][0]
