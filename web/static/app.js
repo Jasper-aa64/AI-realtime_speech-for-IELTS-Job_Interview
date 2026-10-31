@@ -4454,7 +4454,9 @@ function isP1DynamicFollowUpBoundary(turn, nextTurn) {
 
 function turnRequiresSynchronousComplete(turn, nextTurn) {
   if (!nextTurn) return true;
-  return isP1WorkStudyIdentityTurn(turn)
+  // The interviewer decides follow-up / next after every interview answer; moving on locally would skip its follow-up.
+  return turn?.part === "interview"
+    || isP1WorkStudyIdentityTurn(turn)
     || isP1DynamicFollowUpBoundary(turn, nextTurn)
     || isP3DynamicFollowUpBoundary(turn, nextTurn);
 }
