@@ -197,7 +197,10 @@ class HttpApiProvider:
 
     def __init__(self, config: HttpApiProviderConfig | None = None):
         self.config = config or load_http_api_provider_config()
-        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        # System proxies are ignored (a directly reachable relay is faster without them); AI_HTTP_PROXY routes this
+        # client through one explicitly, for an endpoint that is only reachable through it.
+        proxy = _setting_or_env("AI_HTTP_PROXY")
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": proxy, "https": proxy} if proxy else {}))
 
     def complete_chat(
         self,

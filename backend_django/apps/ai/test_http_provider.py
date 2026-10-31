@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.error
+import urllib.request
 from io import BytesIO
 from unittest.mock import patch
 
@@ -55,6 +56,24 @@ class _FinalEventThenTimeoutResponse:
 
 
 class HttpApiProviderTests(SimpleTestCase):
+    @staticmethod
+    def _proxies(provider):
+        # an empty ProxyHandler registers no openers, so no handler at all also means "no proxy"
+        handler = next((h for h in provider._opener.handlers if isinstance(h, urllib.request.ProxyHandler)), None)
+        return handler.proxies if handler else {}
+
+    @patch.dict(os.environ, {"https_proxy": "http://127.0.0.1:9999"}, clear=False)
+    def test_system_proxy_is_ignored_by_default(self):
+        config = HttpApiProviderConfig("https://relay.example/v1", "secret-fixture", "fixture-model")
+        with override_settings(AI_HTTP_PROXY=""):
+            self.assertEqual(self._proxies(HttpApiProvider(config)), {})
+
+    def test_ai_http_proxy_routes_the_provider_through_that_proxy(self):
+        config = HttpApiProviderConfig("https://api.example/v1", "secret-fixture", "fixture-model")
+        with override_settings(AI_HTTP_PROXY="http://127.0.0.1:7890"):
+            proxies = self._proxies(HttpApiProvider(config))
+        self.assertEqual(proxies, {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"})
+
     @override_settings(AI_HTTP_BASE_URL="", AI_HTTP_API_KEY="", AI_HTTP_MODEL="")
     @patch.dict(os.environ, {}, clear=True)
     def test_missing_config_is_explicit(self):
